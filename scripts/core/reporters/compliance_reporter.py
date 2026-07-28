@@ -111,7 +111,7 @@ def write_pci_dss_report(findings: list[dict[str, Any]], output_path: Path) -> N
     # Sort requirements numerically
     sorted_requirements = sorted(
         by_requirement.keys(),
-        key=lambda x: tuple(map(lambda y: int(y) if y.isdigit() else 0, x.split("."))),
+        key=lambda x: tuple(int(y) if y.isdigit() else 0 for y in x.split(".")),
     )
 
     for req in sorted_requirements:

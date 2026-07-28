@@ -7,8 +7,9 @@ Tests metadata capture from three sources:
 3. CI environment (capture_ci_metadata)
 """
 
-from unittest.mock import patch, MagicMock
 import subprocess
+from unittest.mock import MagicMock, patch
+
 from scripts.core.attestation.metadata_capture import MetadataCapture
 
 

@@ -37,16 +37,18 @@ from __future__ import annotations
 import logging
 import os
 import re
-import subprocess
 import shutil
-import yaml
+import subprocess
 from pathlib import Path
 
-from .repository_scanner import scan_repository
-from .image_scanner import scan_image
+import yaml
+
 from scripts.core.config import RetryConfig
 from scripts.core.secure_temp import secure_temp_dir
 from scripts.core.validation import sanitize_subprocess_output
+
+from .image_scanner import scan_image
+from .repository_scanner import scan_repository
 
 logger = logging.getLogger(__name__)
 
@@ -186,7 +188,7 @@ def scan_gitlab_repo(
         logger.error(
             f"GitLab token missing for {full_path}: set GITLAB_TOKEN env var or pass --gitlab-token"
         )
-        statuses = {tool: False for tool in tools}
+        statuses = dict.fromkeys(tools, False)
         return full_path, statuses
 
     # Create secure temporary directory for clone (0o700 permissions, auto-cleanup)
@@ -252,7 +254,7 @@ def scan_gitlab_repo(
                 logger.error(
                     f"GitLab clone failed for {full_path}: git returned {result.returncode} - {stderr_msg}"
                 )
-                statuses = {tool: False for tool in tools}
+                statuses = dict.fromkeys(tools, False)
                 return full_path, statuses
 
             # Create temporary results directory
@@ -327,7 +329,7 @@ def scan_gitlab_repo(
                 f"GitLab clone timeout for {full_path}: git clone exceeded {timeout}s timeout",
                 exc_info=True,
             )
-            statuses = {tool: False for tool in tools}
+            statuses = dict.fromkeys(tools, False)
             return full_path, statuses
         except Exception as e:
             # Any other error - return failure for all tools
@@ -335,6 +337,6 @@ def scan_gitlab_repo(
                 f"GitLab scan failed for {full_path}: {type(e).__name__}: {e}",
                 exc_info=True,
             )
-            statuses = {tool: False for tool in tools}
+            statuses = dict.fromkeys(tools, False)
             return full_path, statuses
         # Note: No finally block needed - secure_temp_dir context manager handles cleanup

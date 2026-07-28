@@ -716,8 +716,8 @@ def _auto_fix_tools(
     if missing_deps:
         # Import dependency installation functions (lazy import to avoid circular deps)
         from scripts.cli.tool_installer import (
-            install_dependency,
             get_manual_dependency_command,
+            install_dependency,
         )
         from scripts.core.install_config import DEPENDENCY_DISPLAY_NAMES
 

@@ -18,13 +18,12 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import sys
 import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from conftest import IS_WINDOWS, skip_on_windows
@@ -39,7 +38,7 @@ class TestDatabaseRecovery:
 
     def test_sqlite_corruption_detection(self, tmp_path: Path):
         """Verify corrupted database is detected gracefully."""
-        from scripts.core.history_db import init_database, get_connection
+        from scripts.core.history_db import get_connection, init_database
 
         db_path = tmp_path / "corrupted.db"
 
@@ -85,7 +84,7 @@ class TestDatabaseRecovery:
 
     def test_transaction_rollback_on_failure(self, tmp_path: Path):
         """Verify transactions are rolled back on failure."""
-        from scripts.core.history_db import init_database, get_connection
+        from scripts.core.history_db import get_connection, init_database
 
         db_path = tmp_path / "rollback.db"
 
@@ -130,7 +129,7 @@ class TestDatabaseRecovery:
 
     def test_database_missing_tables(self, tmp_path: Path):
         """Verify handling of database with missing tables."""
-        from scripts.core.history_db import init_database, get_connection
+        from scripts.core.history_db import get_connection, init_database
 
         db_path = tmp_path / "empty.db"
 
@@ -181,7 +180,7 @@ class TestDiskSpaceRecovery:
 
     def test_disk_full_during_db_insert(self, tmp_path: Path):
         """Verify graceful handling when disk is full during DB insert."""
-        from scripts.core.history_db import init_database, get_connection
+        from scripts.core.history_db import get_connection, init_database
 
         db_path = tmp_path / "test.db"
 
@@ -353,7 +352,7 @@ class TestConcurrentAccessRecovery:
 
     def test_concurrent_db_writes(self, tmp_path: Path):
         """Verify concurrent database writes are handled."""
-        from scripts.core.history_db import init_database, get_connection
+        from scripts.core.history_db import get_connection, init_database
 
         db_path = tmp_path / "concurrent.db"
         errors = []
@@ -417,7 +416,7 @@ class TestConcurrentAccessRecovery:
 
         threads = []
         for i in range(5):
-            data = {"thread": i, "data": [j for j in range(100)]}
+            data = {"thread": i, "data": list(range(100))}
             t = threading.Thread(target=write_json, args=(data,))
             threads.append(t)
             t.start()
@@ -445,7 +444,7 @@ class TestProcessTerminationRecovery:
 
     def test_cleanup_on_keyboard_interrupt(self, tmp_path: Path):
         """Verify cleanup runs on KeyboardInterrupt."""
-        from scripts.core.history_db import init_database, get_connection
+        from scripts.core.history_db import get_connection, init_database
 
         db_path = tmp_path / "interrupt.db"
 
@@ -497,7 +496,7 @@ class TestProcessTerminationRecovery:
 
     def test_database_connection_cleanup(self, tmp_path: Path):
         """Verify database connections are closed on error."""
-        from scripts.core.history_db import init_database, get_connection
+        from scripts.core.history_db import get_connection, init_database
 
         db_path = tmp_path / "cleanup.db"
 
@@ -574,7 +573,7 @@ class TestMemoryErrorRecovery:
             f.write("]}")
 
         # Should be able to read
-        with open(large_file, "r", encoding="utf-8") as f:
+        with open(large_file, encoding="utf-8") as f:
             data = json.load(f)
 
         assert len(data["results"]) == 1000
@@ -590,8 +589,9 @@ class TestNetworkErrorRecovery:
 
     def test_gitlab_connection_timeout(self):
         """Verify GitLab connection timeout is handled."""
-        import requests
         from unittest.mock import patch
+
+        import requests
 
         with patch("requests.get") as mock_get:
             mock_get.side_effect = requests.Timeout("Connection timed out")

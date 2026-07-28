@@ -51,9 +51,9 @@ import json
 import re
 import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from datetime import datetime, timezone
 
 try:
     import yaml
@@ -259,7 +259,7 @@ def save_versions(data: dict) -> None:
     data["version_history"].insert(
         0,
         {
-            "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            "date": datetime.now(UTC).strftime("%Y-%m-%d"),
             "action": "Automated version update",
             "tools_updated": [],
             "updated_by": "update_versions.py",
@@ -588,7 +588,7 @@ def update_tool_version(tool: str, new_version: str) -> bool:
             versions["version_history"].insert(
                 0,
                 {
-                    "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                    "date": datetime.now(UTC).strftime("%Y-%m-%d"),
                     "action": f"Updated {tool}",
                     "tools_updated": [
                         {

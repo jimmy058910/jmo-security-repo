@@ -24,12 +24,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from scripts.cli.installers.base import InstallMethod
 from scripts.cli.installers.binary_installer import (
     BinaryInstaller,
     PlatformInfo,
     get_platform_info,
 )
-from scripts.cli.installers.base import InstallMethod
 
 # ========== Helpers ==========
 

@@ -8,19 +8,19 @@ import pytest
 
 from scripts.cli.history_commands import (
     cmd_history,
-    cmd_history_store,
-    cmd_history_list,
-    cmd_history_show,
-    cmd_history_query,
-    cmd_history_prune,
-    cmd_history_export,
-    cmd_history_stats,
     cmd_history_diff,
-    cmd_history_trends,
-    cmd_history_optimize,
+    cmd_history_export,
+    cmd_history_list,
     cmd_history_migrate,
-    cmd_history_verify,
+    cmd_history_optimize,
+    cmd_history_prune,
+    cmd_history_query,
     cmd_history_repair,
+    cmd_history_show,
+    cmd_history_stats,
+    cmd_history_store,
+    cmd_history_trends,
+    cmd_history_verify,
     parse_time_delta,
 )
 
@@ -1710,8 +1710,9 @@ class TestRepairInteractive:
 
     def test_repair_cancelled_by_user(self, sample_database, capsys, monkeypatch):
         """Test repair cancelled when user says no."""
-        from scripts.cli.history_commands import cmd_history_repair
         from io import StringIO
+
+        from scripts.cli.history_commands import cmd_history_repair
 
         # Mock stdin to return "n"
         monkeypatch.setattr("sys.stdin", StringIO("n\n"))
@@ -1729,8 +1730,9 @@ class TestRepairInteractive:
 
     def test_repair_json_output_success(self, sample_database, capsys, monkeypatch):
         """Test repair with JSON output on success."""
-        from scripts.cli.history_commands import cmd_history_repair
         from unittest.mock import patch
+
+        from scripts.cli.history_commands import cmd_history_repair
 
         class Args:
             db = str(sample_database)
@@ -1754,8 +1756,9 @@ class TestRepairInteractive:
 
     def test_repair_failure_output(self, sample_database, capsys, monkeypatch):
         """Test repair with failure output."""
-        from scripts.cli.history_commands import cmd_history_repair
         from unittest.mock import patch
+
+        from scripts.cli.history_commands import cmd_history_repair
 
         class Args:
             db = str(sample_database)
@@ -1817,6 +1820,7 @@ class TestVerifyAndMigrate:
     def test_migrate_valid_database(self, sample_database, capsys):
         """Test migrate on a valid database with mocked migrations."""
         from unittest.mock import patch
+
         from scripts.cli.history_commands import cmd_history_migrate
 
         class Args:

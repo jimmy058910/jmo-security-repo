@@ -18,7 +18,6 @@ import logging
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -36,10 +35,10 @@ class DeveloperStats:
     email: str
     findings_resolved: int = 0
     findings_introduced: int = 0
-    focus_areas: List[str] = field(default_factory=list)  # File paths
-    top_tools: List[str] = field(default_factory=list)  # Tools finding their fixes
-    cwe_categories: Set[str] = field(default_factory=set)  # CWE IDs addressed
-    severity_breakdown: Dict[str, int] = field(
+    focus_areas: list[str] = field(default_factory=list)  # File paths
+    top_tools: list[str] = field(default_factory=list)  # Tools finding their fixes
+    cwe_categories: set[str] = field(default_factory=set)  # CWE IDs addressed
+    severity_breakdown: dict[str, int] = field(
         default_factory=dict
     )  # Severity -> count
 
@@ -54,10 +53,10 @@ class TeamStats:
     """Aggregated statistics for a team."""
 
     team_name: str
-    members: List[str] = field(default_factory=list)  # Emails
+    members: list[str] = field(default_factory=list)  # Emails
     total_resolved: int = 0
     total_introduced: int = 0
-    top_remediators: List[DeveloperStats] = field(default_factory=list)
+    top_remediators: list[DeveloperStats] = field(default_factory=list)
 
     @property
     def net_contribution(self) -> int:
@@ -105,8 +104,8 @@ class DeveloperAttribution:
             raise ValueError(f"Not a git repository: {self.repo_path}")
 
     def analyze_remediation_by_developer(
-        self, resolved_fingerprints: Set[str], history_db
-    ) -> List[DeveloperStats]:
+        self, resolved_fingerprints: set[str], history_db
+    ) -> list[DeveloperStats]:
         """
         Attribute resolved findings to developers via git blame.
 
@@ -126,7 +125,7 @@ class DeveloperAttribution:
             dev_stats = attrib.analyze_remediation_by_developer(resolved, db)
             print(f"Top remediator: {dev_stats[0].name}")
         """
-        developer_map: Dict[str, Dict] = {}  # email -> stats dict
+        developer_map: dict[str, dict] = {}  # email -> stats dict
 
         logger.info(
             f"Analyzing {len(resolved_fingerprints)} resolved findings for attribution"
@@ -211,7 +210,7 @@ class DeveloperAttribution:
         logger.info(f"Attributed findings to {len(results)} developers")
         return results
 
-    def _git_blame_line(self, file_path: str, line_num: int) -> Optional[Dict]:
+    def _git_blame_line(self, file_path: str, line_num: int) -> dict | None:
         """
         Run git blame for a specific line in a file.
 
@@ -287,8 +286,8 @@ class DeveloperAttribution:
         return None
 
     def aggregate_by_team(
-        self, developer_stats: List[DeveloperStats], team_mapping: Dict[str, str]
-    ) -> List[TeamStats]:
+        self, developer_stats: list[DeveloperStats], team_mapping: dict[str, str]
+    ) -> list[TeamStats]:
         """
         Aggregate developer statistics by team.
 
@@ -309,7 +308,7 @@ class DeveloperAttribution:
             for team in team_stats:
                 print(f"{team.team_name}: {team.total_resolved} resolved")
         """
-        team_map: Dict[str, Dict] = {}  # team_name -> aggregated data
+        team_map: dict[str, dict] = {}  # team_name -> aggregated data
 
         for dev in developer_stats:
             team_name = team_mapping.get(dev.email, "Unknown")
@@ -354,7 +353,7 @@ class DeveloperAttribution:
 
     def get_developer_velocity(
         self, developer_email: str, history_db, days: int = 30
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """
         Calculate remediation velocity metrics for a specific developer.
 
@@ -395,7 +394,7 @@ class DeveloperAttribution:
 # ============================================================================
 
 
-def load_team_mapping(team_file_path: Path) -> Dict[str, str]:
+def load_team_mapping(team_file_path: Path) -> dict[str, str]:
     """
     Load team mapping from JSON file.
 
@@ -415,7 +414,7 @@ def load_team_mapping(team_file_path: Path) -> Dict[str, str]:
     """
     import json
 
-    with open(team_file_path, "r") as f:
+    with open(team_file_path) as f:
         return json.load(f)  # type: ignore[no-any-return]  # JSON parse returns Any, caller validates structure
 
 

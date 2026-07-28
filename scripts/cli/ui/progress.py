@@ -75,7 +75,7 @@ class ParallelInstallProgress:
     failed: int = 0
     skipped: int = 0
     current_tools: list[str] = field(default_factory=list)
-    results: list["InstallResult"] = field(default_factory=list)
+    results: list[InstallResult] = field(default_factory=list)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
     _cancelled: threading.Event = field(default_factory=threading.Event, repr=False)
 

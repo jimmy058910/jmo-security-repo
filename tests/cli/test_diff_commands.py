@@ -8,10 +8,10 @@ from pathlib import Path
 import pytest
 
 from scripts.cli.diff_commands import (
-    cmd_diff,
+    _filter_by_category,
     _filter_by_severity,
     _filter_by_tool,
-    _filter_by_category,
+    cmd_diff,
 )
 from scripts.core.diff_engine import DiffResult, DiffSource
 
@@ -658,8 +658,9 @@ class TestDetectGitContext:
 
     def test_detect_git_context_success(self, monkeypatch, tmp_path):
         """Test successful git context detection."""
-        from scripts.cli.diff_commands import detect_git_context
         from unittest.mock import Mock
+
+        from scripts.cli.diff_commands import detect_git_context
 
         # Clear CI environment variables that would make is_pr=True
         for var in [
@@ -706,8 +707,9 @@ class TestDetectGitContext:
 
     def test_detect_git_context_github_pr(self, monkeypatch):
         """Test GitHub PR detection via GITHUB_REF env var."""
-        from scripts.cli.diff_commands import detect_git_context
         from unittest.mock import Mock
+
+        from scripts.cli.diff_commands import detect_git_context
 
         def mock_run(cmd, **kwargs):
             result = Mock()
@@ -735,8 +737,9 @@ class TestDetectGitContext:
 
     def test_detect_git_context_gitlab_mr(self, monkeypatch):
         """Test GitLab MR detection via CI env vars."""
-        from scripts.cli.diff_commands import detect_git_context
         from unittest.mock import Mock
+
+        from scripts.cli.diff_commands import detect_git_context
 
         def mock_run(cmd, **kwargs):
             result = Mock()
@@ -1656,7 +1659,7 @@ class TestCmdDiffExceptionHandling:
         _original_write = diff_json_reporter.write_json_diff
 
         def mock_write_json_diff(*args, **kwargs):
-            raise IOError("Failed to write file")
+            raise OSError("Failed to write file")
 
         monkeypatch.setattr(diff_json_reporter, "write_json_diff", mock_write_json_diff)
 
@@ -1772,8 +1775,9 @@ class TestUnicodeFallback:
 
     def test_can_encode_unicode_with_utf8(self, monkeypatch):
         """Test Unicode detection with UTF-8 encoding."""
-        from scripts.cli.diff_commands import _can_encode_unicode
         from unittest.mock import MagicMock
+
+        from scripts.cli.diff_commands import _can_encode_unicode
 
         mock_stdout = MagicMock()
         mock_stdout.encoding = "utf-8"
@@ -1784,8 +1788,9 @@ class TestUnicodeFallback:
 
     def test_can_encode_unicode_with_cp1252(self, monkeypatch):
         """Test Unicode detection with cp1252 encoding (Windows)."""
-        from scripts.cli.diff_commands import _can_encode_unicode
         from unittest.mock import MagicMock
+
+        from scripts.cli.diff_commands import _can_encode_unicode
 
         mock_stdout = MagicMock()
         mock_stdout.encoding = "cp1252"
@@ -1796,8 +1801,9 @@ class TestUnicodeFallback:
 
     def test_safe_print_with_unicode(self, monkeypatch, capsys):
         """Test safe_print with Unicode characters."""
-        from scripts.cli.diff_commands import safe_print
         from unittest.mock import MagicMock
+
+        from scripts.cli.diff_commands import safe_print
 
         mock_stdout = MagicMock()
         mock_stdout.encoding = "utf-8"

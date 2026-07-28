@@ -14,10 +14,10 @@ from __future__ import annotations
 import csv
 import json
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 
-def export_to_csv(analysis: Dict[str, Any], output_path: Path) -> None:
+def export_to_csv(analysis: dict[str, Any], output_path: Path) -> None:
     """
     Export trend report to CSV for Excel/BI tools.
 
@@ -114,7 +114,7 @@ def export_to_csv(analysis: Dict[str, Any], output_path: Path) -> None:
             )
 
 
-def export_to_prometheus(analysis: Dict[str, Any], output_path: Path) -> None:
+def export_to_prometheus(analysis: dict[str, Any], output_path: Path) -> None:
     """
     Export as Prometheus metrics format.
 
@@ -213,7 +213,7 @@ jmo_scan_count {scan_count}
     output_path.write_text(metrics)
 
 
-def export_to_grafana(analysis: Dict[str, Any], output_path: Path) -> None:
+def export_to_grafana(analysis: dict[str, Any], output_path: Path) -> None:
     """
     Export as Grafana dashboard JSON.
 
@@ -390,7 +390,7 @@ def export_to_grafana(analysis: Dict[str, Any], output_path: Path) -> None:
     output_path.write_text(json.dumps(dashboard, indent=2))
 
 
-def export_for_dashboard(analysis: Dict[str, Any], output_path: Path) -> None:
+def export_for_dashboard(analysis: dict[str, Any], output_path: Path) -> None:
     """
     Export trend data optimized for React dashboard consumption.
 

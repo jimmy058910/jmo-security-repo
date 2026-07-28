@@ -369,9 +369,9 @@ class TestRunDiffWizardHistoryMode:
 
     def test_diff_wizard_history_mode_insufficient_scans(self, tmp_path):
         """Test diff wizard when < 2 scans in history."""
-        from scripts.cli.wizard import run_diff_wizard
-
         import sqlite3
+
+        from scripts.cli.wizard import run_diff_wizard
 
         # Create DB with only 1 scan
         db_path = tmp_path / ".jmo" / "history.db"
@@ -445,9 +445,9 @@ class TestRunDiffWizardErrorHandling:
 
     def test_diff_wizard_keyboard_interrupt_during_selection(self, tmp_path):
         """Test diff wizard handles KeyboardInterrupt during scan selection."""
-        from scripts.cli.wizard import run_diff_wizard
-
         import sqlite3
+
+        from scripts.cli.wizard import run_diff_wizard
 
         # Create DB with scans matching the real schema
         db_path = tmp_path / ".jmo" / "history.db"
@@ -782,9 +782,9 @@ class TestRunDiffWizardExceptionHandling:
         The ValueError catch at line 180/197 re-raises KeyboardInterrupt,
         returning exit code 130.
         """
-        from scripts.cli.wizard import run_diff_wizard
-
         import sqlite3
+
+        from scripts.cli.wizard import run_diff_wizard
 
         # Create valid DB with proper schema
         db_path = tmp_path / ".jmo" / "history.db"

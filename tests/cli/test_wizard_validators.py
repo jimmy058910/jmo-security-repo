@@ -17,7 +17,6 @@ from unittest.mock import MagicMock, patch
 
 # Suppress Pyright import warning - module exists at runtime
 # pyright: reportMissingImports=false
-
 from scripts.cli.wizard_flows.validators import (
     check_docker_running,
     detect_docker,

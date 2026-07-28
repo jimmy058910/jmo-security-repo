@@ -52,8 +52,9 @@ def test_colors_supports_color_tty_unix():
 
 def test_colors_supports_color_windows_with_term():
     """Test supports_color on Windows with TERM set."""
-    from scripts.cli.tool_commands import Colors
     import os
+
+    from scripts.cli.tool_commands import Colors
 
     with patch.object(sys.stdout, "isatty", return_value=True):
         with patch.object(sys, "platform", "win32"):
@@ -63,8 +64,9 @@ def test_colors_supports_color_windows_with_term():
 
 def test_colors_supports_color_windows_with_wt_session():
     """Test supports_color on Windows Terminal."""
-    from scripts.cli.tool_commands import Colors
     import os
+
+    from scripts.cli.tool_commands import Colors
 
     with patch.object(sys.stdout, "isatty", return_value=True):
         with patch.object(sys, "platform", "win32"):
@@ -74,8 +76,9 @@ def test_colors_supports_color_windows_with_wt_session():
 
 def test_colors_supports_color_windows_no_env():
     """Test supports_color on Windows without terminal env vars."""
-    from scripts.cli.tool_commands import Colors
     import os
+
+    from scripts.cli.tool_commands import Colors
 
     with patch.object(sys.stdout, "isatty", return_value=True):
         with patch.object(sys, "platform", "win32"):
@@ -92,7 +95,7 @@ def test_colors_supports_color_windows_no_env():
 
 def test_colorize_no_color_support():
     """Test colorize returns plain text when color not supported."""
-    from scripts.cli.tool_commands import colorize, Colors
+    from scripts.cli.tool_commands import Colors, colorize
 
     with patch.object(Colors, "supports_color", return_value=False):
         result = colorize("test", "red")
@@ -101,7 +104,7 @@ def test_colorize_no_color_support():
 
 def test_colorize_with_color_support():
     """Test colorize returns colored text when supported."""
-    from scripts.cli.tool_commands import colorize, Colors
+    from scripts.cli.tool_commands import Colors, colorize
 
     with patch.object(Colors, "supports_color", return_value=True):
         result = colorize("test", "red")
@@ -112,7 +115,7 @@ def test_colorize_with_color_support():
 
 def test_colorize_green():
     """Test colorize with green color."""
-    from scripts.cli.tool_commands import colorize, Colors
+    from scripts.cli.tool_commands import Colors, colorize
 
     with patch.object(Colors, "supports_color", return_value=True):
         result = colorize("success", "green")
@@ -121,7 +124,7 @@ def test_colorize_green():
 
 def test_colorize_unknown_color():
     """Test colorize with unknown color returns plain text."""
-    from scripts.cli.tool_commands import colorize, Colors
+    from scripts.cli.tool_commands import Colors, colorize
 
     with patch.object(Colors, "supports_color", return_value=True):
         result = colorize("test", "purple")  # Not in color_map
@@ -1829,6 +1832,7 @@ class TestCmdToolsDebugComprehensive:
     def test_debug_tool_version_timeout(self):
         """Test debug when version command times out."""
         import subprocess
+
         from scripts.cli.tool_commands import cmd_tools_debug
 
         mock_status = MagicMock()
@@ -2082,6 +2086,7 @@ class TestCmdToolsDebugSubprocessExecution:
     def test_debug_file_command_timeout(self, capsys):
         """Test debug when file command times out."""
         import subprocess
+
         from scripts.cli.tool_commands import cmd_tools_debug
 
         mock_manager = MagicMock()
@@ -2113,6 +2118,7 @@ class TestCmdToolsDebugSubprocessExecution:
     def test_debug_version_command_timeout(self, capsys):
         """Test debug when version command times out."""
         import subprocess
+
         from scripts.cli.tool_commands import cmd_tools_debug
 
         mock_manager = MagicMock()
@@ -2954,6 +2960,7 @@ class TestUninstallToolsExecution:
     def test_uninstall_tools_npm_exception(self, capsys):
         """Test _uninstall_tools npm uninstall with exception."""
         import subprocess as subprocess_module
+
         from scripts.cli.tool_commands import _uninstall_tools
 
         mock_tool_info = MagicMock()

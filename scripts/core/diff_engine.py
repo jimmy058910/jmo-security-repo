@@ -21,7 +21,7 @@ import logging
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -72,9 +72,9 @@ class ModifiedFinding:
     """
 
     fingerprint: str
-    changes: Dict[str, List[Any]]
-    baseline: Dict[str, Any]
-    current: Dict[str, Any]
+    changes: dict[str, list[Any]]
+    baseline: dict[str, Any]
+    current: dict[str, Any]
     risk_delta: str
 
 
@@ -95,13 +95,13 @@ class DiffResult:
         statistics: Summary statistics dict
     """
 
-    new: List[Dict[str, Any]] = field(default_factory=list)
-    resolved: List[Dict[str, Any]] = field(default_factory=list)
-    unchanged: List[Dict[str, Any]] = field(default_factory=list)
-    modified: List[ModifiedFinding] = field(default_factory=list)
+    new: list[dict[str, Any]] = field(default_factory=list)
+    resolved: list[dict[str, Any]] = field(default_factory=list)
+    unchanged: list[dict[str, Any]] = field(default_factory=list)
+    modified: list[ModifiedFinding] = field(default_factory=list)
     baseline_source: DiffSource = None  # type: ignore[assignment]  # Dataclass default for optional field
     current_source: DiffSource = None  # type: ignore[assignment]  # Dataclass default for optional field
-    statistics: Dict[str, Any] = field(default_factory=dict)
+    statistics: dict[str, Any] = field(default_factory=dict)
 
 
 # ============================================================================
@@ -201,7 +201,7 @@ class DiffEngine:
         self,
         baseline_scan_id: str,
         current_scan_id: str,
-        db_path: Optional[Path] = None,
+        db_path: Path | None = None,
     ) -> DiffResult:
         """
         Compare two scans from SQLite history database.
@@ -285,7 +285,7 @@ class DiffEngine:
     # Private Methods - Loading
     # ========================================================================
 
-    def _load_directory_findings(self, results_dir: Path) -> List[Dict[str, Any]]:
+    def _load_directory_findings(self, results_dir: Path) -> list[dict[str, Any]]:
         """Load findings from results directory summaries/findings.json."""
         findings_path = results_dir / "summaries" / "findings.json"
 
@@ -296,7 +296,7 @@ class DiffEngine:
             )
 
         try:
-            with open(findings_path, "r", encoding="utf-8") as f:
+            with open(findings_path, encoding="utf-8") as f:
                 data = json.load(f)
         except json.JSONDecodeError as e:
             raise ValueError(f"Invalid JSON in {findings_path}: {e}")
@@ -316,7 +316,7 @@ class DiffEngine:
         logger.debug(f"Loaded {len(findings)} findings from {findings_path}")
         return list(findings)
 
-    def _load_sqlite_findings(self, conn, scan_id: str) -> List[Dict[str, Any]]:
+    def _load_sqlite_findings(self, conn, scan_id: str) -> list[dict[str, Any]]:
         """Load findings from SQLite database."""
         from scripts.core.history_db import get_findings_for_scan
 
@@ -354,7 +354,7 @@ class DiffEngine:
         return findings
 
     def _extract_source_info(
-        self, results_dir: Path, findings: List[Dict[str, Any]]
+        self, results_dir: Path, findings: list[dict[str, Any]]
     ) -> DiffSource:
         """Extract metadata from findings.json if available."""
         findings_json = results_dir / "summaries" / "findings.json"
@@ -392,8 +392,8 @@ class DiffEngine:
 
     def _compare_findings(
         self,
-        baseline_findings: List[Dict[str, Any]],
-        current_findings: List[Dict[str, Any]],
+        baseline_findings: list[dict[str, Any]],
+        current_findings: list[dict[str, Any]],
         baseline_source: DiffSource,
         current_source: DiffSource,
     ) -> DiffResult:
@@ -467,10 +467,10 @@ class DiffEngine:
 
     def _detect_modifications(
         self,
-        baseline_index: Dict[str, Dict],
-        current_index: Dict[str, Dict],
-        unchanged_fps: Set[str],
-    ) -> List[ModifiedFinding]:
+        baseline_index: dict[str, dict],
+        current_index: dict[str, dict],
+        unchanged_fps: set[str],
+    ) -> list[ModifiedFinding]:
         """
         Detect metadata changes in unchanged findings.
 
@@ -548,7 +548,7 @@ class DiffEngine:
 
         return modified
 
-    def _extract_priority(self, finding: Dict[str, Any]) -> float:
+    def _extract_priority(self, finding: dict[str, Any]) -> float:
         """
         Extract priority score from finding.
 
@@ -583,7 +583,7 @@ class DiffEngine:
         }
         return severity_scores.get(finding.get("severity", "INFO"), 0)
 
-    def _flatten_compliance(self, compliance: Dict[str, Any]) -> List[str]:
+    def _flatten_compliance(self, compliance: dict[str, Any]) -> list[str]:
         """
         Flatten compliance object to list of framework IDs.
 
@@ -607,7 +607,7 @@ class DiffEngine:
         return flat
 
     def _calculate_risk_delta(
-        self, baseline: Dict[str, Any], current: Dict[str, Any]
+        self, baseline: dict[str, Any], current: dict[str, Any]
     ) -> str:
         """
         Calculate risk trend: improved, worsened, unchanged.
@@ -664,11 +664,11 @@ class DiffEngine:
 
     def _calculate_statistics(
         self,
-        new: List[Dict],
-        resolved: List[Dict],
-        unchanged: List[Dict],
-        modified: List[ModifiedFinding],
-    ) -> Dict[str, Any]:
+        new: list[dict],
+        resolved: list[dict],
+        unchanged: list[dict],
+        modified: list[ModifiedFinding],
+    ) -> dict[str, Any]:
         """
         Calculate summary statistics for diff.
 
@@ -682,7 +682,7 @@ class DiffEngine:
             Statistics dict with counts and trends
         """
 
-        def severity_counts(findings: List[Dict]) -> Dict[str, int]:
+        def severity_counts(findings: list[dict]) -> dict[str, int]:
             """Count findings by severity."""
             counts = Counter(f.get("severity", "INFO") for f in findings)
             # Ensure all severity levels present
@@ -715,8 +715,8 @@ class DiffEngine:
         }
 
     def _count_modification_types(
-        self, modified: List[ModifiedFinding]
-    ) -> Dict[str, int]:
+        self, modified: list[ModifiedFinding]
+    ) -> dict[str, int]:
         """
         Count how many modifications of each type occurred.
 
@@ -735,7 +735,7 @@ class DiffEngine:
         self,
         baseline_id: str,
         current_id: str,
-        db_path: Optional[Path] = None,
+        db_path: Path | None = None,
     ) -> DiffResult:
         """
         Generate diff with trend analysis context (Phase 5 integration).

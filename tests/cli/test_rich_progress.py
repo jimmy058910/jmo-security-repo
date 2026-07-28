@@ -17,7 +17,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-
 from scripts.cli.rich_progress import (
     RichScanProgressTracker,
     create_progress_tracker,

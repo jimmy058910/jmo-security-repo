@@ -12,6 +12,7 @@ Target Coverage: ≥90%
 """
 
 from pathlib import Path
+
 import pytest
 
 
@@ -129,8 +130,9 @@ def test_jmo_yml_environment_variable_override(jmo_yml_path, monkeypatch):
 
 def test_jmo_yml_profile_precedence_over_global(jmo_yml_path):
     """Test that profile defaults override global policy defaults."""
-    from scripts.core.config import load_config
     import yaml
+
+    from scripts.core.config import load_config
 
     # Read jmo.yml to check profile override structure
     jmo_data = yaml.safe_load(jmo_yml_path.read_text(encoding="utf-8"))

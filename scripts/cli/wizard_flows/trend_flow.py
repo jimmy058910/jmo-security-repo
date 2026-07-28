@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from scripts.cli.wizard_flows.ui_helpers import safe_print, prompt_choice
+from scripts.cli.wizard_flows.ui_helpers import prompt_choice, safe_print
 
 if TYPE_CHECKING:
     pass  # No type-only imports needed currently
@@ -272,10 +272,10 @@ def _run_trend_command_interactive(
     try:
         from scripts.cli.trend_commands import (  # type: ignore[attr-defined]  # Dynamic import for optional trend analysis
             cmd_trends_analyze,
-            cmd_trends_regressions,
-            cmd_trends_velocity,
             cmd_trends_developers,
+            cmd_trends_regressions,
             cmd_trends_score,
+            cmd_trends_velocity,
         )
 
         # Build args using dataclass
@@ -340,8 +340,8 @@ def _compare_scans_interactive(db_path: Path) -> None:
     colorize = _get_colorize()
 
     try:
-        from scripts.core.history_db import list_recent_scans
         from scripts.cli.trend_commands import cmd_trends_compare
+        from scripts.core.history_db import list_recent_scans
 
         # Load recent scans
         scans = list_recent_scans(db_path, limit=20)

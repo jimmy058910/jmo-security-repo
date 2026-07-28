@@ -4,11 +4,11 @@ Tests for Repository Scanner
 Tests the repository_scanner module with various scenarios.
 """
 
-import pytest
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import sys
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 
@@ -890,8 +890,8 @@ class TestRepositoryScanner:
             assert statuses["bandit"] is True
 
             # Stubs should be written for missing tools only
-            assert "semgrep" in [call for call in stub_calls]
-            assert "bandit" in [call for call in stub_calls]
+            assert "semgrep" in list(stub_calls)
+            assert "bandit" in list(stub_calls)
             assert len(stub_calls) == 2  # Only semgrep and bandit
 
     def test_timeout_writes_stub_file(self, tmp_path):

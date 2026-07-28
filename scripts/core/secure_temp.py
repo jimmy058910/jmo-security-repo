@@ -35,9 +35,10 @@ import os
 import shutil
 import stat
 import tempfile
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, Iterator
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     pass

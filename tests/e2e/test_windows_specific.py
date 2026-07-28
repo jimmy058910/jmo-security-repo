@@ -11,7 +11,6 @@ Usage:
 
 from __future__ import annotations
 
-
 from tests.conftest import windows_only
 
 
@@ -226,7 +225,7 @@ class TestWindowsFileOperations:
         test_file.write_text("x = 1", encoding="utf-8")
 
         # Open file to lock it (Windows-specific behavior)
-        with open(test_file, "r") as _locked:
+        with open(test_file) as _locked:
             result = jmo_runner(
                 [
                     "scan",

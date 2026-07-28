@@ -20,10 +20,10 @@ from scripts.core.schema_validator import (
     JSONSCHEMA_AVAILABLE,
     SCHEMA_PATH,
     load_schema,
+    validate_directory,
     validate_finding,
     validate_findings,
     validate_findings_file,
-    validate_directory,
 )
 
 # Skip all tests if jsonschema is not installed

@@ -13,10 +13,10 @@ import json
 import pytest
 
 from scripts.core.trend_exporters import (
-    export_to_csv,
-    export_to_prometheus,
-    export_to_grafana,
     export_for_dashboard,
+    export_to_csv,
+    export_to_grafana,
+    export_to_prometheus,
 )
 
 # ============================================================================

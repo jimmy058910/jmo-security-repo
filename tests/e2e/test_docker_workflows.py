@@ -1233,7 +1233,7 @@ class TestDockerBasicScanByVariant:
         if not docker_available():
             pytest.skip("Docker not available")
 
-    def test_deep_basic_scan(self, tmp_path: "Path"):
+    def test_deep_basic_scan(self, tmp_path: Path):
         """Deep variant can perform a basic repository scan."""
         image = f"{DOCKER_REGISTRY}:deep"
         if not image_exists(image):
@@ -1270,7 +1270,7 @@ class TestDockerBasicScanByVariant:
             1,
         ), f"Scan failed with exit code {result.returncode}: {result.stderr}"
 
-    def test_balanced_basic_scan(self, tmp_path: "Path"):
+    def test_balanced_basic_scan(self, tmp_path: Path):
         """Balanced variant can perform a basic repository scan."""
         image = f"{DOCKER_REGISTRY}:balanced"
         if not image_exists(image):
@@ -1306,7 +1306,7 @@ class TestDockerBasicScanByVariant:
             1,
         ), f"Scan failed with exit code {result.returncode}: {result.stderr}"
 
-    def test_fast_basic_scan(self, tmp_path: "Path"):
+    def test_fast_basic_scan(self, tmp_path: Path):
         """Fast variant can perform a basic repository scan."""
         image = f"{DOCKER_REGISTRY}:fast"
         if not image_exists(image):

@@ -13,10 +13,9 @@ Tests cover:
 
 import json
 import subprocess
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-
-from scripts.cli.scan_utils import tool_exists, write_stub, run_cmd, TOOL_INSTALL_HINTS
+from scripts.cli.scan_utils import TOOL_INSTALL_HINTS, run_cmd, tool_exists, write_stub
 
 # ========== Category 1: tool_exists() Tests ==========
 

@@ -18,7 +18,7 @@ import logging
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import pytest
 
@@ -89,7 +89,7 @@ def create_large_codebase(
 
 def create_bulk_findings(
     count: int, scan_id_prefix: str = "load"
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Generate bulk findings for load testing.
 
@@ -100,7 +100,7 @@ def create_bulk_findings(
     Returns:
         List of CommonFinding dicts
     """
-    findings: List[Dict[str, Any]] = []
+    findings: list[dict[str, Any]] = []
 
     severities = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
     tools = ["trivy", "semgrep", "trufflehog", "checkov", "bandit"]

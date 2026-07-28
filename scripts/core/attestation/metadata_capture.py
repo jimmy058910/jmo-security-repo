@@ -10,10 +10,10 @@ Used by ProvenanceGenerator to populate buildDefinition.externalParameters
 and runDetails metadata fields.
 """
 
+import logging
 import os
 import subprocess
-import logging
-from typing import Dict, Any, Optional, List
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -23,19 +23,18 @@ class MetadataCapture:
 
     def __init__(self):
         """Initialize metadata capture."""
-        pass
 
     def from_scan_args(
         self,
-        profile: Optional[str] = None,
-        tools: Optional[List[str]] = None,
-        repos: Optional[List[str]] = None,
-        images: Optional[List[str]] = None,
-        urls: Optional[List[str]] = None,
-        threads: Optional[int] = None,
-        timeout: Optional[int] = None,
+        profile: str | None = None,
+        tools: list[str] | None = None,
+        repos: list[str] | None = None,
+        images: list[str] | None = None,
+        urls: list[str] | None = None,
+        threads: int | None = None,
+        timeout: int | None = None,
         **kwargs,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Capture scan parameters from command-line arguments.
 
@@ -52,7 +51,7 @@ class MetadataCapture:
         Returns:
             Dict of scan metadata
         """
-        metadata: Dict[str, Any] = {}
+        metadata: dict[str, Any] = {}
 
         if profile is not None:
             metadata["profile"] = profile
@@ -81,7 +80,7 @@ class MetadataCapture:
 
         return metadata
 
-    def capture_git_context(self, repo_path: str) -> Dict[str, Any]:
+    def capture_git_context(self, repo_path: str) -> dict[str, Any]:
         """
         Capture Git context from repository.
 
@@ -91,7 +90,7 @@ class MetadataCapture:
         Returns:
             Dict with commit, branch, tag (if available)
         """
-        git_context: Dict[str, Any] = {}
+        git_context: dict[str, Any] = {}
 
         try:
             # Get commit SHA
@@ -136,7 +135,7 @@ class MetadataCapture:
 
         return git_context
 
-    def capture_ci_metadata(self) -> Dict[str, Any]:
+    def capture_ci_metadata(self) -> dict[str, Any]:
         """
         Capture CI-specific metadata.
 
@@ -147,7 +146,7 @@ class MetadataCapture:
         Returns:
             Dict with CI provider and metadata
         """
-        ci_metadata: Dict[str, Any] = {}
+        ci_metadata: dict[str, Any] = {}
 
         # Detect CI provider
         if os.getenv("GITHUB_ACTIONS") == "true":

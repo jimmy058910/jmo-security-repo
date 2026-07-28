@@ -20,15 +20,15 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from scripts.cli.policy_commands import (
+    cmd_policy,
+    cmd_policy_install,
+    cmd_policy_list,
+    cmd_policy_show,
+    cmd_policy_test,
+    cmd_policy_validate,
+    discover_policies,
     get_builtin_policies_dir,
     get_user_policies_dir,
-    discover_policies,
-    cmd_policy_list,
-    cmd_policy_validate,
-    cmd_policy_test,
-    cmd_policy_show,
-    cmd_policy_install,
-    cmd_policy,
 )
 
 # =============================================================================

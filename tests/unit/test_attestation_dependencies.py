@@ -263,8 +263,8 @@ class TestAttestationEnvironment:
         """Test that all components are available for attestation."""
         # Check all dependencies
         try:
-            import sigstore  # noqa: F401
             import cryptography  # noqa: F401
+            import sigstore  # noqa: F401
 
             has_sigstore = True
         except ImportError:

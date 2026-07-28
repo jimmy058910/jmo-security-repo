@@ -9,8 +9,8 @@ import pytest
 from scripts.core.diff_engine import DiffResult, DiffSource, ModifiedFinding
 from scripts.core.reporters.diff_html_reporter import (
     INLINE_THRESHOLD,
-    write_html_diff,
     _write_html_diff_vanilla,
+    write_html_diff,
 )
 
 

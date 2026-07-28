@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Tests for ProgressTracker in scripts/cli/jmo.py."""
 
-import pytest
-from unittest.mock import patch
-from argparse import Namespace
-
 # Import ProgressTracker from jmo.py
 import sys
+from argparse import Namespace
 from pathlib import Path
+from unittest.mock import patch
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from scripts.cli.jmo import ProgressTracker

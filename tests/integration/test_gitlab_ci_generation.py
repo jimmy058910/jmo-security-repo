@@ -1,12 +1,13 @@
 """Integration tests for GitLab CI workflow generation."""
 
 import yaml
+
 from scripts.core.schedule_manager import (
-    ScheduleManager,
+    JobTemplateSpec,
     ScanSchedule,
+    ScheduleManager,
     ScheduleMetadata,
     ScheduleSpec,
-    JobTemplateSpec,
 )
 from scripts.core.workflow_generators.gitlab_ci import GitLabCIGenerator
 

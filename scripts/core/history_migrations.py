@@ -24,9 +24,9 @@ import logging
 import sqlite3
 import time
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from scripts.core.history_db import get_connection
 
@@ -66,7 +66,6 @@ class Migration(ABC):
         Returns:
             Version string in semver format
         """
-        pass
 
     @abstractmethod
     def migrate_up(self, conn: sqlite3.Connection) -> None:
@@ -82,7 +81,6 @@ class Migration(ABC):
         Raises:
             Exception: On migration failure (will trigger rollback)
         """
-        pass
 
     @abstractmethod
     def migrate_down(self, conn: sqlite3.Connection) -> None:
@@ -96,12 +94,11 @@ class Migration(ABC):
         Args:
             conn: Database connection
         """
-        pass
 
 
 def discover_migrations(
-    current_version: str, target_version: str, migrations_dir: Optional[Path] = None
-) -> List[Migration]:
+    current_version: str, target_version: str, migrations_dir: Path | None = None
+) -> list[Migration]:
     """
     Find all migrations between current and target version.
 
@@ -128,7 +125,7 @@ def discover_migrations(
         logger.warning(f"Migrations directory not found: {migrations_dir}")
         return []
 
-    migrations: List[Migration] = []
+    migrations: list[Migration] = []
 
     # Find all migration files
     migration_files = sorted(migrations_dir.glob("v*.py"))
@@ -181,9 +178,7 @@ def discover_migrations(
     return migrations
 
 
-def run_migrations(
-    db_path: Path, target_version: Optional[str] = None
-) -> Dict[str, Any]:
+def run_migrations(db_path: Path, target_version: str | None = None) -> dict[str, Any]:
     """
     Apply all pending migrations up to target version.
 
@@ -245,8 +240,8 @@ def run_migrations(
         f"Found {len(migrations)} migrations to apply: {[m.version for m in migrations]}"
     )
 
-    applied: List[str] = []
-    errors: List[Dict[str, Any]] = []
+    applied: list[str] = []
+    errors: list[dict[str, Any]] = []
     rollback_performed = False
 
     for migration in migrations:
@@ -266,7 +261,7 @@ def run_migrations(
                     (
                         migration.version,
                         int(time.time()),
-                        datetime.now(timezone.utc).isoformat(),
+                        datetime.now(UTC).isoformat(),
                     ),
                 )
 

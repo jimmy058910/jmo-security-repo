@@ -65,7 +65,7 @@ def write_simple_html(findings: list[dict[str, Any]], out_path: str | Path) -> N
     )
 
     # Generate summary statistics
-    sev_counts = {sev: 0 for sev in SEV_ORDER}
+    sev_counts = dict.fromkeys(SEV_ORDER, 0)
     for f in findings:
         sev_counts[f.get("severity", "INFO")] += 1
 

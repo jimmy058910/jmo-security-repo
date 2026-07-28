@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING, Any
 from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from scripts.core.tool_utils import tool_exists
 

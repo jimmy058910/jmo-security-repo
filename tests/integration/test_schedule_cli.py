@@ -10,14 +10,15 @@ Tests cover:
 
 import json
 import os
-import subprocess
-import sys
-from pathlib import Path
-import pytest
-import yaml
 
 # Skip all tests on Windows (cron not supported)
 import platform
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+import yaml
 
 pytestmark = pytest.mark.skipif(
     platform.system() == "Windows", reason="Local cron not supported on Windows"

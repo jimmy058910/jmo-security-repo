@@ -52,11 +52,11 @@ Integrates with ToolRunner for parallel execution and resilient error handling.
 
 from __future__ import annotations
 
-from pathlib import Path
 from collections.abc import Callable
+from pathlib import Path
 
 from ...core.config import RetryConfig
-from ...core.tool_runner import ToolRunner, ToolDefinition
+from ...core.tool_runner import ToolDefinition, ToolRunner
 from ..path_sanitizers import _sanitize_path_component, _validate_output_path
 from ..scan_utils import find_tool, write_stub
 

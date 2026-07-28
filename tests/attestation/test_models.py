@@ -13,14 +13,14 @@ Tests the dataclass models used in SLSA provenance and in-toto statements:
 """
 
 from scripts.core.attestation.models import (
-    Digest,
-    Subject,
+    BuildDefinition,
     Builder,
+    Digest,
+    InTotoStatement,
     Metadata,
     RunDetails,
-    BuildDefinition,
     SLSAProvenance,
-    InTotoStatement,
+    Subject,
 )
 
 

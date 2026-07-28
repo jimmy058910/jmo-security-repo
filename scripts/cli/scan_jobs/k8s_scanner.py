@@ -9,11 +9,11 @@ Integrates with ToolRunner for execution management.
 
 from __future__ import annotations
 
-from pathlib import Path
 from collections.abc import Callable
+from pathlib import Path
 
 from ...core.config import RetryConfig
-from ...core.tool_runner import ToolRunner, ToolDefinition
+from ...core.tool_runner import ToolDefinition, ToolRunner
 from ..scan_utils import find_tool, write_stub
 
 

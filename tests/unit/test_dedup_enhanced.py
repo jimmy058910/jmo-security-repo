@@ -13,13 +13,14 @@ Test Coverage Target: ≥95%
 """
 
 import json
-import pytest
 from pathlib import Path
+
+import pytest
 
 from scripts.core.dedup_enhanced import (
     FindingCluster,
-    SimilarityCalculator,
     FindingClusterer,
+    SimilarityCalculator,
 )
 
 
@@ -46,8 +47,8 @@ def test_module_imports():
     """Test that all classes import successfully."""
     from scripts.core.dedup_enhanced import (
         FindingCluster,
-        SimilarityCalculator,
         FindingClusterer,
+        SimilarityCalculator,
     )
 
     assert FindingCluster is not None
@@ -528,7 +529,7 @@ def test_consensus_finding_structure():
     # Check structure
     assert "detected_by" in consensus
     assert len(consensus["detected_by"]) == 2
-    assert set(t["name"] for t in consensus["detected_by"]) == {"trivy", "semgrep"}
+    assert {t["name"] for t in consensus["detected_by"]} == {"trivy", "semgrep"}
 
     assert "context" in consensus
     assert "duplicates" in consensus["context"]
@@ -935,9 +936,9 @@ def test_new_default_threshold():
 def test_lsh_imports():
     """Test that LSH classes import successfully."""
     from scripts.core.dedup_enhanced import (
-        UnionFind,
-        LSHSignatureGenerator,
         LSHClusterer,
+        LSHSignatureGenerator,
+        UnionFind,
     )
 
     assert UnionFind is not None
@@ -1125,6 +1126,7 @@ def test_lsh_clusterer_basic():
 def test_lsh_clusterer_large_dataset():
     """Test LSH clusterer performance with large dataset."""
     import time
+
     from scripts.core.dedup_enhanced import LSHClusterer
 
     clusterer = LSHClusterer()
@@ -1273,6 +1275,7 @@ def test_lsh_performance_1000_findings():
     The performance target is <10 seconds (more lenient for CI variability).
     """
     import time
+
     from scripts.core.dedup_enhanced import LSHClusterer
 
     clusterer = LSHClusterer()

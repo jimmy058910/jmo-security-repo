@@ -218,8 +218,8 @@ class TestCheckToolsForProfile:
         mock_print_step,
     ):
         """Non-interactive (yes) mode should continue with available tools."""
-        from scripts.cli.wizard import check_tools_for_profile
         from scripts.cli.tool_manager import ToolStatusType
+        from scripts.cli.wizard import check_tools_for_profile
 
         # Setup mocks
         mock_detect_platform.return_value = "linux"
@@ -969,8 +969,8 @@ class TestInteractiveChoices:
         mock_auto_fix,
     ):
         """Choice 1 triggers auto-fix."""
-        from scripts.cli.wizard import check_tools_for_profile
         from scripts.cli.tool_manager import ToolStatusType
+        from scripts.cli.wizard import check_tools_for_profile
 
         # Setup
         mock_detect_platform.return_value = "linux"
@@ -1033,8 +1033,8 @@ class TestInteractiveChoices:
         mock_print_step,
     ):
         """Choice 2 continues with available tools only."""
-        from scripts.cli.wizard import check_tools_for_profile
         from scripts.cli.tool_manager import ToolStatusType
+        from scripts.cli.wizard import check_tools_for_profile
 
         mock_detect_platform.return_value = "linux"
         mock_colorize.return_value = lambda text, color: text
@@ -1096,8 +1096,8 @@ class TestInteractiveChoices:
         mock_print_step,
     ):
         """Choice 4 cancels the wizard."""
-        from scripts.cli.wizard import check_tools_for_profile
         from scripts.cli.tool_manager import ToolStatusType
+        from scripts.cli.wizard import check_tools_for_profile
 
         mock_detect_platform.return_value = "linux"
         mock_colorize.return_value = lambda text, color: text
@@ -1171,8 +1171,8 @@ class TestCrashDetection:
         capsys,
     ):
         """Tool with startup crash should display crash info."""
-        from scripts.cli.wizard import check_tools_for_profile
         from scripts.cli.tool_manager import ToolStatusType
+        from scripts.cli.wizard import check_tools_for_profile
 
         mock_detect_platform.return_value = "linux"
         mock_get_filtered.return_value = ["checkov"]

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import csv
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from scripts.core.suppress import Suppression
 
@@ -46,7 +46,7 @@ def write_csv(
     out_path: str | Path,
     columns: list[str] | None = None,
     include_header: bool = True,
-    suppressions: Optional[dict[str, Suppression]] = None,
+    suppressions: dict[str, Suppression] | None = None,
 ) -> None:
     """Write findings to CSV file.
 
@@ -84,7 +84,7 @@ def write_csv(
 def _extract_row(
     finding: dict[str, Any],
     columns: list[str],
-    suppressions: Optional[dict[str, Suppression]] = None,
+    suppressions: dict[str, Suppression] | None = None,
 ) -> list[str]:
     """Extract CSV row from finding based on column spec.
 

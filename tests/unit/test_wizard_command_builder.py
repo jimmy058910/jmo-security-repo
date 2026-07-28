@@ -17,8 +17,6 @@ Architecture Note:
 
 from unittest.mock import MagicMock
 
-
-from scripts.cli.wizard_generators import JMO_DOCKER_IMAGE_FULL
 from scripts.cli.wizard_flows.command_builder import (
     build_command_parts,
     build_gitlab_args,
@@ -28,6 +26,7 @@ from scripts.cli.wizard_flows.command_builder import (
     build_repo_args,
     build_url_args,
 )
+from scripts.cli.wizard_generators import JMO_DOCKER_IMAGE_FULL
 
 # ========== Category 1: Repository Arguments ==========
 

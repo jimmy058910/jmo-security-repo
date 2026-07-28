@@ -3,14 +3,15 @@
 import os
 import subprocess
 import sys
+from datetime import UTC
 from pathlib import Path
-from typing import Dict, Any, List, Set, Optional, Tuple
+from typing import Any
 
 from scripts.core.diff_engine import DiffEngine, DiffResult, ModifiedFinding
 from scripts.core.reporters import (
+    diff_html_reporter,
     diff_json_reporter,
     diff_md_reporter,
-    diff_html_reporter,
     diff_sarif_reporter,
 )
 from scripts.core.unicode_utils import UNICODE_FALLBACKS
@@ -18,8 +19,8 @@ from scripts.core.unicode_utils import UNICODE_FALLBACKS
 # Optional Rich library for enhanced terminal output
 try:
     from rich.console import Console
-    from rich.table import Table
     from rich.panel import Panel
+    from rich.table import Table
     from rich.tree import Tree
 
     RICH_AVAILABLE = True
@@ -54,7 +55,7 @@ def safe_print(text: str, file=None) -> None:
         print(result, file=file)
 
 
-def detect_git_context() -> Optional[Dict[str, Any]]:
+def detect_git_context() -> dict[str, Any] | None:
     """
     Detect Git context for auto-detection mode.
 
@@ -126,8 +127,8 @@ def detect_git_context() -> Optional[Dict[str, Any]]:
 
 
 def auto_detect_scans(
-    git_context: Optional[Dict[str, Any]] = None,
-) -> Optional[Tuple[str, str]]:
+    git_context: dict[str, Any] | None = None,
+) -> tuple[str, str] | None:
     """
     Auto-detect baseline and current scan directories/IDs.
 
@@ -174,7 +175,7 @@ def auto_detect_scans(
     return None
 
 
-def suggest_output_format(git_context: Optional[Dict[str, Any]] = None) -> str:
+def suggest_output_format(git_context: dict[str, Any] | None = None) -> str:
     """
     Suggest output format based on context.
 
@@ -482,15 +483,15 @@ def cmd_diff(args) -> int:
     return 0
 
 
-def _build_json_output(diff: DiffResult) -> Dict[str, Any]:
+def _build_json_output(diff: DiffResult) -> dict[str, Any]:
     """Build JSON output structure for stdout."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     return {
         "meta": {
             "diff_version": "1.0.0",
             "jmo_version": "1.0.0",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "baseline": {
                 "source_type": diff.baseline_source.source_type,
                 "path": diff.baseline_source.path,
@@ -522,7 +523,7 @@ def _build_json_output(diff: DiffResult) -> Dict[str, Any]:
     }
 
 
-def _filter_by_severity(diff: DiffResult, severities: Set[str]) -> DiffResult:
+def _filter_by_severity(diff: DiffResult, severities: set[str]) -> DiffResult:
     """Filter diff result by severity levels."""
     new = [f for f in diff.new if f.get("severity") in severities]
     resolved = [f for f in diff.resolved if f.get("severity") in severities]
@@ -572,7 +573,7 @@ def _filter_by_severity(diff: DiffResult, severities: Set[str]) -> DiffResult:
     )
 
 
-def _filter_by_tool(diff: DiffResult, tools: Set[str]) -> DiffResult:
+def _filter_by_tool(diff: DiffResult, tools: set[str]) -> DiffResult:
     """Filter diff result by tool names."""
     new = [f for f in diff.new if f.get("tool", {}).get("name") in tools]
     resolved = [f for f in diff.resolved if f.get("tool", {}).get("name") in tools]
@@ -625,10 +626,10 @@ def _filter_by_tool(diff: DiffResult, tools: Set[str]) -> DiffResult:
 def _filter_by_category(diff: DiffResult, category: str) -> DiffResult:
     """Filter to show only specific category (new, resolved, or modified)."""
     # Initialize with proper types to satisfy mypy across all branches
-    new: List[Dict[str, Any]] = []
-    resolved: List[Dict[str, Any]] = []
-    unchanged: List[Dict[str, Any]] = []
-    modified: List[ModifiedFinding] = []
+    new: list[dict[str, Any]] = []
+    resolved: list[dict[str, Any]] = []
+    unchanged: list[dict[str, Any]] = []
+    modified: list[ModifiedFinding] = []
 
     if category == "new":
         new = diff.new

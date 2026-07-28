@@ -8,6 +8,7 @@ This test suite covers:
 """
 
 from pathlib import Path
+
 import pytest
 
 # ============================================================================
@@ -73,7 +74,7 @@ class TestDeduplicationConfigLoading:
 
     def test_load_config_deduplication_default(self, tmp_path):
         """Test load_config includes default deduplication config."""
-        from scripts.core.config import load_config, DeduplicationConfig
+        from scripts.core.config import DeduplicationConfig, load_config
 
         yaml_content = """
 tools:
@@ -249,9 +250,10 @@ class TestCSVTriageColumn:
 
     def test_write_csv_with_suppressions(self, tmp_path, sample_finding):
         """Test write_csv correctly passes suppressions to extract_row."""
+        import csv
+
         from scripts.core.reporters.csv_reporter import write_csv
         from scripts.core.suppress import Suppression
-        import csv
 
         suppressions = {
             "test-fingerprint-123": Suppression(
@@ -262,7 +264,7 @@ class TestCSVTriageColumn:
         out_path = tmp_path / "findings.csv"
         write_csv([sample_finding], out_path, suppressions=suppressions)
 
-        with open(out_path, "r", newline="", encoding="utf-8") as f:
+        with open(out_path, newline="", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             rows = list(reader)
 
@@ -333,8 +335,9 @@ class TestProvenanceToolVersions:
 
     def test_get_tool_uri_with_github_repo(self):
         """Test _get_tool_uri generates GitHub URL correctly."""
-        from scripts.core.attestation.provenance import ProvenanceGenerator
         from unittest.mock import MagicMock
+
+        from scripts.core.attestation.provenance import ProvenanceGenerator
 
         generator = ProvenanceGenerator()
 
@@ -351,8 +354,9 @@ class TestProvenanceToolVersions:
 
     def test_get_tool_uri_with_pypi_package(self):
         """Test _get_tool_uri generates PyPI URL correctly."""
-        from scripts.core.attestation.provenance import ProvenanceGenerator
         from unittest.mock import MagicMock
+
+        from scripts.core.attestation.provenance import ProvenanceGenerator
 
         generator = ProvenanceGenerator()
 
@@ -369,8 +373,9 @@ class TestProvenanceToolVersions:
 
     def test_get_tool_uri_fallback(self):
         """Test _get_tool_uri generates URN fallback."""
-        from scripts.core.attestation.provenance import ProvenanceGenerator
         from unittest.mock import MagicMock
+
+        from scripts.core.attestation.provenance import ProvenanceGenerator
 
         generator = ProvenanceGenerator()
 

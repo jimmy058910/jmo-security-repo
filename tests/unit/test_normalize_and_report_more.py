@@ -1,8 +1,7 @@
 import json
 import sys
-from pathlib import Path
-
 import types
+from pathlib import Path
 
 import scripts.core.normalize_and_report as nr
 
@@ -104,9 +103,7 @@ class TestDedupMemoryEfficient:
         # New approach keeps first occurrence (better for traceability)
         # Dict approach keeps last occurrence (Python dict behavior)
         # Verify same unique IDs returned
-        assert set(f["id"] for f in efficient_result) == set(
-            f["id"] for f in dict_result
-        )
+        assert {f["id"] for f in efficient_result} == {f["id"] for f in dict_result}
         assert len(efficient_result) == len(dict_result)
 
 
@@ -244,7 +241,7 @@ def test_dedupe_keeps_single(tmp_path: Path, monkeypatch):
     # Use trufflehog.json (gitleaks removed in v0.5.0)
     _write(repo / "trufflehog.json", "[]")
 
-    def dup(_plugin_class, _path, profiling=False):  # noqa: ARG001
+    def dup(_plugin_class, _path, profiling=False):
         return [
             {"id": "DUP", "schemaVersion": "1.0.0"},
             {"id": "DUP", "schemaVersion": "1.0.0"},

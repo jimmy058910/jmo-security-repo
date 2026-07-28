@@ -14,9 +14,9 @@ Supported CI environments:
 - Local (non-CI)
 """
 
-import os
 import logging
-from typing import Optional, Dict, Any
+import os
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ class CIDetector:
     3. Config file (jmo.yml: attestation.auto_attest)
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         """
         Initialize CI detector.
 
@@ -65,7 +65,7 @@ class CIDetector:
         else:
             return "local"
 
-    def should_auto_attest(self, cli_flag: Optional[bool] = None) -> bool:
+    def should_auto_attest(self, cli_flag: bool | None = None) -> bool:
         """
         Determine if auto-attestation should be enabled.
 
@@ -105,7 +105,7 @@ class CIDetector:
         logger.debug("Auto-attestation disabled (default)")
         return False
 
-    def _parse_bool_env(self, value: str) -> Optional[bool]:
+    def _parse_bool_env(self, value: str) -> bool | None:
         """
         Parse boolean environment variable.
 

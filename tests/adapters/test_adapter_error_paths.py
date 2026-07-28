@@ -1,12 +1,11 @@
 import json
 from pathlib import Path
 
-
 from scripts.core.adapters.bandit_adapter import BanditAdapter
-from scripts.core.adapters.semgrep_adapter import SemgrepAdapter
-from scripts.core.adapters.syft_adapter import SyftAdapter
 from scripts.core.adapters.checkov_adapter import CheckovAdapter
 from scripts.core.adapters.hadolint_adapter import HadolintAdapter
+from scripts.core.adapters.semgrep_adapter import SemgrepAdapter
+from scripts.core.adapters.syft_adapter import SyftAdapter
 
 
 def _write(p: Path, obj):

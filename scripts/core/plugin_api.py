@@ -14,11 +14,12 @@ NOT for community plugin development.
 
 from __future__ import annotations
 
+import hashlib
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
-import hashlib
+from typing import Any
 
 
 @dataclass
@@ -105,7 +106,6 @@ class AdapterPlugin(ABC):
         Returns:
             PluginMetadata: Plugin metadata including name, version, etc.
         """
-        pass
 
     @abstractmethod
     def parse(self, output_path: Path) -> list[Finding]:
@@ -121,7 +121,6 @@ class AdapterPlugin(ABC):
             FileNotFoundError: If output file doesn't exist
             ValueError: If output cannot be parsed
         """
-        pass
 
     def validate(self, output_path: Path) -> bool:
         """Validate that output file exists and is parseable.

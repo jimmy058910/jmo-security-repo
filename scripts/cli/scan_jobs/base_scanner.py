@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
-import re
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from scripts.cli.scan_orchestrator import ScanConfig
@@ -28,7 +28,7 @@ class ScanResult:
 class BaseScanner(ABC):
     """Abstract base class for target scanners."""
 
-    def __init__(self, config: "ScanConfig"):
+    def __init__(self, config: ScanConfig):
         """Initialize scanner with configuration.
 
         Args:
@@ -51,7 +51,6 @@ class BaseScanner(ABC):
         Returns:
             ScanResult with execution summary
         """
-        pass
 
     @abstractmethod
     def get_applicable_tools(self, tools: list[str]) -> list[str]:
@@ -63,7 +62,6 @@ class BaseScanner(ABC):
         Returns:
             Filtered list of applicable tools
         """
-        pass
 
     def _create_output_dir(
         self, base_dir: Path, target_type: str, safe_name: str

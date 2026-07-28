@@ -1,12 +1,13 @@
 """Unit tests for plugin API (plugin_api.py)."""
 
-import pytest
 from pathlib import Path
 
+import pytest
+
 from scripts.core.plugin_api import (
+    AdapterPlugin,
     Finding,
     PluginMetadata,
-    AdapterPlugin,
     adapter_plugin,
 )
 

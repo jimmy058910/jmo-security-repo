@@ -21,7 +21,6 @@ import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
 
 
 @dataclass
@@ -31,7 +30,7 @@ class BenchmarkResult:
     name: str
     duration_ms: float
     passed: bool
-    target_ms: Optional[float] = None
+    target_ms: float | None = None
 
 
 @dataclass
@@ -43,10 +42,10 @@ class ComparisonResult:
     current_ms: float
     change_pct: float
     regression: bool
-    target_ms: Optional[float] = None
+    target_ms: float | None = None
 
 
-def parse_pytest_json(json_path: Path) -> List[BenchmarkResult]:
+def parse_pytest_json(json_path: Path) -> list[BenchmarkResult]:
     """
     Parse pytest JSON output to extract benchmark results.
 
@@ -59,10 +58,10 @@ def parse_pytest_json(json_path: Path) -> List[BenchmarkResult]:
     if not json_path.exists():
         return []
 
-    with open(json_path, "r") as f:
+    with open(json_path) as f:
         data = json.load(f)
 
-    results: List[BenchmarkResult] = []
+    results: list[BenchmarkResult] = []
 
     # Parse pytest results (if using pytest-benchmark plugin)
     if "benchmarks" in data:
@@ -93,10 +92,10 @@ def parse_pytest_json(json_path: Path) -> List[BenchmarkResult]:
 
 
 def compare_benchmarks(
-    baseline: List[BenchmarkResult],
-    current: List[BenchmarkResult],
+    baseline: list[BenchmarkResult],
+    current: list[BenchmarkResult],
     threshold_pct: float = 20.0,
-) -> List[ComparisonResult]:
+) -> list[ComparisonResult]:
     """
     Compare baseline and current benchmark results.
 
@@ -109,7 +108,7 @@ def compare_benchmarks(
         List of ComparisonResult objects
     """
     baseline_map = {b.name: b for b in baseline}
-    comparisons: List[ComparisonResult] = []
+    comparisons: list[ComparisonResult] = []
 
     for curr in current:
         base = baseline_map.get(curr.name)
@@ -154,7 +153,7 @@ def compare_benchmarks(
 
 
 def format_markdown_report(
-    comparisons: List[ComparisonResult], threshold_pct: float
+    comparisons: list[ComparisonResult], threshold_pct: float
 ) -> str:
     """
     Format comparison results as Markdown for GitHub PR comments.

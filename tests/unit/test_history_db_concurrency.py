@@ -28,8 +28,8 @@ import pytest
 
 from scripts.core.history_db import (
     init_database,
-    store_scan,
     list_scans,
+    store_scan,
 )
 
 # ============================================================================
@@ -379,7 +379,6 @@ def test_database_corruption_recovery(concurrency_db, sample_findings, tmp_path)
         conn.row_factory = sqlite3.Row
         scans = list(list_scans(conn, limit=10))
         # If we get here, database somehow still works (unexpected but acceptable)
-        pass
     except sqlite3.DatabaseError:
         # Expected - database corrupted
         pass

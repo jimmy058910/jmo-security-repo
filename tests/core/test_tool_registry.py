@@ -8,8 +8,8 @@ from scripts.core.tool_registry import (
     PROFILE_TOOLS,
     TOOL_PLATFORM_REQUIREMENTS,
     get_platform_status,
-    get_tools_for_profile_filtered,
     get_skipped_tools_for_profile,
+    get_tools_for_profile_filtered,
 )
 
 
@@ -194,9 +194,9 @@ class TestIntegration:
             for platform in ["linux", "macos", "windows"]:
                 all_tools = set(PROFILE_TOOLS.get(profile, []))
                 filtered = set(get_tools_for_profile_filtered(profile, platform))
-                skipped = set(
+                skipped = {
                     t[0] for t in get_skipped_tools_for_profile(profile, platform)
-                )
+                }
 
                 # Filtered and skipped should be disjoint
                 assert filtered.isdisjoint(skipped), f"Overlap in {profile}/{platform}"

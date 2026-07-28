@@ -11,10 +11,11 @@ This test suite validates the ToolRegistry class and related utilities:
 Target Coverage: >= 85%
 """
 
+import sys
 from pathlib import Path
 from unittest.mock import patch
+
 import pytest
-import sys
 
 # ========== Category 1: Constants and Profile Mappings ==========
 
@@ -271,7 +272,7 @@ def test_toolregistry_get_tool():
 
 def test_toolregistry_get_tools_for_profile():
     """Test ToolRegistry.get_tools_for_profile returns correct tools."""
-    from scripts.core.tool_registry import ToolRegistry, PROFILE_TOOLS
+    from scripts.core.tool_registry import PROFILE_TOOLS, ToolRegistry
 
     registry = ToolRegistry()
 
@@ -333,7 +334,7 @@ def test_toolregistry_get_profile_names():
 
 def test_toolregistry_get_profile_tool_count():
     """Test ToolRegistry.get_profile_tool_count returns correct counts."""
-    from scripts.core.tool_registry import ToolRegistry, PROFILE_TOOLS
+    from scripts.core.tool_registry import PROFILE_TOOLS, ToolRegistry
 
     registry = ToolRegistry()
 
@@ -408,7 +409,7 @@ def test_detect_platform_windows():
 
 def test_get_install_hint_macos_brew():
     """Test get_install_hint returns brew install for macOS."""
-    from scripts.core.tool_registry import get_install_hint, ToolInfo
+    from scripts.core.tool_registry import ToolInfo, get_install_hint
 
     tool = ToolInfo(
         name="trivy",
@@ -424,7 +425,7 @@ def test_get_install_hint_macos_brew():
 
 def test_get_install_hint_macos_pip():
     """Test get_install_hint returns pip install for Python tools on macOS."""
-    from scripts.core.tool_registry import get_install_hint, ToolInfo
+    from scripts.core.tool_registry import ToolInfo, get_install_hint
 
     tool = ToolInfo(
         name="bandit",
@@ -440,7 +441,7 @@ def test_get_install_hint_macos_pip():
 
 def test_get_install_hint_linux_apt():
     """Test get_install_hint returns apt install for Linux when available."""
-    from scripts.core.tool_registry import get_install_hint, ToolInfo
+    from scripts.core.tool_registry import ToolInfo, get_install_hint
 
     tool = ToolInfo(
         name="shellcheck",
@@ -456,7 +457,7 @@ def test_get_install_hint_linux_apt():
 
 def test_get_install_hint_linux_pip():
     """Test get_install_hint returns pip install for Python tools on Linux."""
-    from scripts.core.tool_registry import get_install_hint, ToolInfo
+    from scripts.core.tool_registry import ToolInfo, get_install_hint
 
     tool = ToolInfo(
         name="checkov",
@@ -472,7 +473,7 @@ def test_get_install_hint_linux_pip():
 
 def test_get_install_hint_windows():
     """Test get_install_hint returns pip for Windows Python tools."""
-    from scripts.core.tool_registry import get_install_hint, ToolInfo
+    from scripts.core.tool_registry import ToolInfo, get_install_hint
 
     tool = ToolInfo(
         name="bandit",
@@ -488,7 +489,7 @@ def test_get_install_hint_windows():
 
 def test_get_install_hint_npm_package():
     """Test get_install_hint returns npm install for npm packages."""
-    from scripts.core.tool_registry import get_install_hint, ToolInfo
+    from scripts.core.tool_registry import ToolInfo, get_install_hint
 
     tool = ToolInfo(
         name="cdxgen",
@@ -504,7 +505,7 @@ def test_get_install_hint_npm_package():
 
 def test_get_install_hint_github_repo_fallback():
     """Test get_install_hint falls back to GitHub repo link."""
-    from scripts.core.tool_registry import get_install_hint, ToolInfo
+    from scripts.core.tool_registry import ToolInfo, get_install_hint
 
     tool = ToolInfo(
         name="custom-tool",
@@ -520,7 +521,7 @@ def test_get_install_hint_github_repo_fallback():
 
 def test_get_install_hint_with_notes():
     """Test get_install_hint includes install notes when present."""
-    from scripts.core.tool_registry import get_install_hint, ToolInfo
+    from scripts.core.tool_registry import ToolInfo, get_install_hint
 
     tool = ToolInfo(
         name="zap",
@@ -536,7 +537,7 @@ def test_get_install_hint_with_notes():
 
 def test_get_install_hint_auto_detect_platform():
     """Test get_install_hint auto-detects platform when not specified."""
-    from scripts.core.tool_registry import get_install_hint, ToolInfo
+    from scripts.core.tool_registry import ToolInfo, get_install_hint
 
     tool = ToolInfo(
         name="bandit",

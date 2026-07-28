@@ -1,9 +1,9 @@
 """Tests for simple HTML reporter (email-compatible static HTML table)."""
 
 from scripts.core.reporters.simple_html_reporter import (
-    write_simple_html,
     _escape_html,
     _truncate_text,
+    write_simple_html,
 )
 
 

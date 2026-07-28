@@ -5,7 +5,8 @@ import math
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, TYPE_CHECKING, Any as AnyType
+from typing import TYPE_CHECKING, Any
+from typing import Any as AnyType
 
 if TYPE_CHECKING:
     import yaml as YamlModule

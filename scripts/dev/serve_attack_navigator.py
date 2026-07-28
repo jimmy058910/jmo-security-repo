@@ -248,7 +248,6 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
 
     def log_message(self, format, *args):
         """Suppress HTTP server logs."""
-        pass
 
 
 def serve_and_open(json_file: Path):

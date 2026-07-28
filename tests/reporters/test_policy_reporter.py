@@ -21,7 +21,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -41,10 +41,10 @@ class MockPolicyResult:
 
     policy_name: str
     passed: bool
-    violations: List[Dict[str, Any]] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
+    violations: list[dict[str, Any]] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
     message: str = ""
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def violation_count(self) -> int:

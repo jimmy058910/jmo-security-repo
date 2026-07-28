@@ -15,8 +15,9 @@ Target Coverage: ≥90%
 
 import json
 from pathlib import Path
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 
 @pytest.fixture
@@ -485,8 +486,8 @@ def test_display_scan_summary_no_findings(capsys):
 
 def test_export_violations_json(tmp_path):
     """Test exporting violations to JSON file."""
-    from scripts.core.policy_engine import PolicyResult
     from scripts.cli.wizard_flows.policy_flow import _export_violations_json
+    from scripts.core.policy_engine import PolicyResult
 
     result = PolicyResult(
         policy_name="zero-secrets",
@@ -522,8 +523,8 @@ def test_export_violations_json(tmp_path):
 
 def test_export_violations_markdown(tmp_path):
     """Test exporting violations to Markdown file."""
-    from scripts.core.policy_engine import PolicyResult
     from scripts.cli.wizard_flows.policy_flow import _export_violations_markdown
+    from scripts.core.policy_engine import PolicyResult
 
     result = PolicyResult(
         policy_name="owasp-top-10",
@@ -658,8 +659,9 @@ def test_policy_evaluation_menu_metadata_fallback(
 
 def test_parse_policy_choice_custom_selection(sample_policy_metadata):
     """Test parsing custom selection (e.g., '1,3,5')."""
-    from scripts.cli.wizard_flows.policy_flow import _parse_policy_choice
     from unittest.mock import patch
+
+    from scripts.cli.wizard_flows.policy_flow import _parse_policy_choice
 
     # Convert PolicyMetadata objects to dicts
     policies_with_metadata = [
@@ -721,11 +723,12 @@ def test_display_policy_violations_interactive_all_passed():
 
 def test_display_policy_violations_interactive_navigation(capsys):
     """Test violation viewer navigation between policies."""
+    from unittest.mock import patch
+
     from scripts.cli.wizard_flows.policy_flow import (
         display_policy_violations_interactive,
     )
     from scripts.core.policy_engine import PolicyResult
-    from unittest.mock import patch
 
     results = {
         "zero-secrets": PolicyResult(
@@ -765,9 +768,10 @@ def test_display_policy_violations_interactive_navigation(capsys):
 
 def test_display_violation():
     """Test _display_violation function."""
-    from scripts.cli.wizard_flows.policy_flow import _display_violation
     import sys
     from io import StringIO
+
+    from scripts.cli.wizard_flows.policy_flow import _display_violation
 
     violation = {
         "category": "SECRET",
@@ -803,8 +807,9 @@ def test_policy_evaluation_menu_interactive_skip(
     mock_engine_class, mock_glob, tmp_path, sample_findings, capsys
 ):
     """Test interactive mode with user choosing to skip."""
-    from scripts.cli.wizard_flows.policy_flow import policy_evaluation_menu
     from unittest.mock import patch
+
+    from scripts.cli.wizard_flows.policy_flow import policy_evaluation_menu
 
     # Mock PolicyEngine
     mock_engine = MagicMock()
@@ -838,9 +843,10 @@ def test_policy_evaluation_menu_interactive_view_violations(
     mock_engine_class, mock_glob, tmp_path, sample_findings, capsys
 ):
     """Test interactive mode with viewing violations."""
+    from unittest.mock import patch
+
     from scripts.cli.wizard_flows.policy_flow import policy_evaluation_menu
     from scripts.core.policy_engine import PolicyResult
-    from unittest.mock import patch
 
     # Mock PolicyEngine
     mock_engine = MagicMock()
@@ -881,12 +887,13 @@ def test_policy_evaluation_menu_interactive_view_violations(
 
 def test_display_policy_violations_interactive_export_json(tmp_path, capsys):
     """Test violation viewer with JSON export action."""
+    import os
+    from unittest.mock import patch
+
     from scripts.cli.wizard_flows.policy_flow import (
         display_policy_violations_interactive,
     )
     from scripts.core.policy_engine import PolicyResult
-    from unittest.mock import patch
-    import os
 
     results = {
         "zero-secrets": PolicyResult(
@@ -919,12 +926,13 @@ def test_display_policy_violations_interactive_export_json(tmp_path, capsys):
 
 def test_display_policy_violations_interactive_export_markdown(tmp_path, capsys):
     """Test violation viewer with Markdown export action."""
+    import os
+    from unittest.mock import patch
+
     from scripts.cli.wizard_flows.policy_flow import (
         display_policy_violations_interactive,
     )
     from scripts.core.policy_engine import PolicyResult
-    from unittest.mock import patch
-    import os
 
     results = {
         "owasp-top-10": PolicyResult(
@@ -962,11 +970,12 @@ def test_display_policy_violations_interactive_export_markdown(tmp_path, capsys)
 
 def test_display_policy_violations_interactive_more_than_10_violations(capsys):
     """Test violation viewer with >10 violations showing truncation."""
+    from unittest.mock import patch
+
     from scripts.cli.wizard_flows.policy_flow import (
         display_policy_violations_interactive,
     )
     from scripts.core.policy_engine import PolicyResult
-    from unittest.mock import patch
 
     # Create 15 violations
     violations = [
@@ -993,11 +1002,12 @@ def test_display_policy_violations_interactive_more_than_10_violations(capsys):
 
 def test_display_policy_violations_interactive_invalid_choice(capsys):
     """Test violation viewer with invalid choice input."""
+    from unittest.mock import patch
+
     from scripts.cli.wizard_flows.policy_flow import (
         display_policy_violations_interactive,
     )
     from scripts.core.policy_engine import PolicyResult
-    from unittest.mock import patch
 
     results = {
         "zero-secrets": PolicyResult(
@@ -1017,11 +1027,12 @@ def test_display_policy_violations_interactive_invalid_choice(capsys):
 
 def test_display_policy_violations_interactive_previous_navigation(capsys):
     """Test violation viewer navigation to previous policy."""
+    from unittest.mock import patch
+
     from scripts.cli.wizard_flows.policy_flow import (
         display_policy_violations_interactive,
     )
     from scripts.core.policy_engine import PolicyResult
-    from unittest.mock import patch
 
     results = {
         "policy-1": PolicyResult(
@@ -1102,8 +1113,9 @@ def test_policy_evaluation_menu_noninteractive_mode(
 
 def test_parse_policy_choice_custom_with_out_of_range_numbers(sample_policy_metadata):
     """Test custom selection with out-of-range numbers filters invalid indices."""
-    from scripts.cli.wizard_flows.policy_flow import _parse_policy_choice
     from unittest.mock import patch
+
+    from scripts.cli.wizard_flows.policy_flow import _parse_policy_choice
 
     # Convert PolicyMetadata objects to dicts (5 policies)
     policies_with_metadata = [
@@ -1130,8 +1142,9 @@ def test_parse_policy_choice_custom_with_out_of_range_numbers(sample_policy_meta
 
 def test_parse_policy_choice_custom_with_non_numeric_values(sample_policy_metadata):
     """Test custom selection filters non-numeric values gracefully."""
-    from scripts.cli.wizard_flows.policy_flow import _parse_policy_choice
     from unittest.mock import patch
+
+    from scripts.cli.wizard_flows.policy_flow import _parse_policy_choice
 
     policies_with_metadata = [
         (
@@ -1158,8 +1171,9 @@ def test_parse_policy_choice_custom_with_non_numeric_values(sample_policy_metada
 
 def test_parse_policy_choice_custom_with_empty_input(sample_policy_metadata):
     """Test custom selection with empty input returns empty list."""
-    from scripts.cli.wizard_flows.policy_flow import _parse_policy_choice
     from unittest.mock import patch
+
+    from scripts.cli.wizard_flows.policy_flow import _parse_policy_choice
 
     policies_with_metadata = [
         (
@@ -1181,11 +1195,12 @@ def test_parse_policy_choice_custom_with_empty_input(sample_policy_metadata):
 
 def test_display_policy_violations_interactive_empty_results():
     """Test violation viewer with empty results dict (no policies evaluated)."""
+    import sys
+    from io import StringIO
+
     from scripts.cli.wizard_flows.policy_flow import (
         display_policy_violations_interactive,
     )
-    import sys
-    from io import StringIO
 
     captured_output = StringIO()
     sys.stdout = captured_output
@@ -1212,8 +1227,9 @@ def test_show_all_violations_paginated_zero_violations(capsys):
 
 def test_show_all_violations_paginated_single_page(capsys):
     """Test pagination with single page (<=20 violations)."""
-    from scripts.cli.wizard_flows.policy_flow import _show_all_violations_paginated
     from unittest.mock import patch
+
+    from scripts.cli.wizard_flows.policy_flow import _show_all_violations_paginated
 
     violations = [{"category": "TEST", "message": f"Violation {i}"} for i in range(5)]
 
@@ -1227,8 +1243,9 @@ def test_show_all_violations_paginated_single_page(capsys):
 
 def test_show_all_violations_paginated_navigation(capsys):
     """Test pagination navigation (next, prev, quit)."""
-    from scripts.cli.wizard_flows.policy_flow import _show_all_violations_paginated
     from unittest.mock import patch
+
+    from scripts.cli.wizard_flows.policy_flow import _show_all_violations_paginated
 
     # Create 25 violations (2 pages with page_size=20)
     violations = [{"category": "TEST", "message": f"Violation {i}"} for i in range(25)]
@@ -1244,8 +1261,9 @@ def test_show_all_violations_paginated_navigation(capsys):
 
 def test_show_all_violations_paginated_invalid_choice(capsys):
     """Test pagination with invalid choice."""
-    from scripts.cli.wizard_flows.policy_flow import _show_all_violations_paginated
     from unittest.mock import patch
+
+    from scripts.cli.wizard_flows.policy_flow import _show_all_violations_paginated
 
     violations = [{"category": "TEST", "message": f"Violation {i}"} for i in range(25)]
 
@@ -1259,11 +1277,12 @@ def test_show_all_violations_paginated_invalid_choice(capsys):
 
 def test_display_policy_violations_interactive_show_all_option(capsys):
     """Test violation viewer 'Show all violations' option."""
+    from unittest.mock import patch
+
     from scripts.cli.wizard_flows.policy_flow import (
         display_policy_violations_interactive,
     )
     from scripts.core.policy_engine import PolicyResult
-    from unittest.mock import patch
 
     # Create 5 violations
     violations = [{"category": "TEST", "message": f"Problem {i}"} for i in range(5)]
@@ -1286,11 +1305,12 @@ def test_display_policy_violations_interactive_show_all_option(capsys):
 
 def test_display_policy_violations_interactive_next_at_last_policy(capsys):
     """Test navigation 'next' when already at last policy shows message."""
+    from unittest.mock import patch
+
     from scripts.cli.wizard_flows.policy_flow import (
         display_policy_violations_interactive,
     )
     from scripts.core.policy_engine import PolicyResult
-    from unittest.mock import patch
 
     # Single failed policy
     results = {
@@ -1311,11 +1331,12 @@ def test_display_policy_violations_interactive_next_at_last_policy(capsys):
 
 def test_display_policy_violations_interactive_prev_at_first_policy(capsys):
     """Test navigation 'prev' when already at first policy shows message."""
+    from unittest.mock import patch
+
     from scripts.cli.wizard_flows.policy_flow import (
         display_policy_violations_interactive,
     )
     from scripts.core.policy_engine import PolicyResult
-    from unittest.mock import patch
 
     results = {
         "first-policy": PolicyResult(
@@ -1340,10 +1361,11 @@ def test_display_policy_violations_interactive_prev_at_first_policy(capsys):
 
 def test_export_violations_json_file_write_error(tmp_path, capsys):
     """Test JSON export with file write error."""
-    from scripts.core.policy_engine import PolicyResult
-    from scripts.cli.wizard_flows.policy_flow import _export_violations_json
-    from unittest.mock import patch
     import os
+    from unittest.mock import patch
+
+    from scripts.cli.wizard_flows.policy_flow import _export_violations_json
+    from scripts.core.policy_engine import PolicyResult
 
     result = PolicyResult(
         policy_name="test-policy",
@@ -1366,10 +1388,11 @@ def test_export_violations_json_file_write_error(tmp_path, capsys):
 
 def test_export_violations_markdown_file_write_error(tmp_path, capsys):
     """Test Markdown export with file write error."""
-    from scripts.core.policy_engine import PolicyResult
-    from scripts.cli.wizard_flows.policy_flow import _export_violations_markdown
-    from unittest.mock import patch
     import os
+    from unittest.mock import patch
+
+    from scripts.cli.wizard_flows.policy_flow import _export_violations_markdown
+    from scripts.core.policy_engine import PolicyResult
 
     result = PolicyResult(
         policy_name="test-policy",
@@ -1391,9 +1414,10 @@ def test_export_violations_markdown_file_write_error(tmp_path, capsys):
 
 def test_display_violation_empty_path():
     """Test _display_violation with empty path (Fix 3.4)."""
-    from scripts.cli.wizard_flows.policy_flow import _display_violation
     import sys
     from io import StringIO
+
+    from scripts.cli.wizard_flows.policy_flow import _display_violation
 
     violation = {
         "category": "TEST",
@@ -1415,9 +1439,10 @@ def test_display_violation_empty_path():
 
 def test_display_violation_whitespace_path():
     """Test _display_violation with whitespace-only path."""
-    from scripts.cli.wizard_flows.policy_flow import _display_violation
     import sys
     from io import StringIO
+
+    from scripts.cli.wizard_flows.policy_flow import _display_violation
 
     violation = {
         "category": "TEST",
@@ -1521,9 +1546,10 @@ def test_extract_severity_tag():
 
 def test_display_violation_hardening_policy():
     """Test _display_violation with hardening policy type."""
-    from scripts.cli.wizard_flows.policy_flow import _display_violation
     import sys
     from io import StringIO
+
+    from scripts.cli.wizard_flows.policy_flow import _display_violation
 
     violation = {
         "category": "Unknown",
@@ -1546,9 +1572,10 @@ def test_display_violation_hardening_policy():
 
 def test_display_violation_long_message():
     """Test _display_violation truncates messages over 200 chars."""
-    from scripts.cli.wizard_flows.policy_flow import _display_violation
     import sys
     from io import StringIO
+
+    from scripts.cli.wizard_flows.policy_flow import _display_violation
 
     violation = {
         "category": "TEST",

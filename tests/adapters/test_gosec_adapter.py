@@ -13,7 +13,6 @@ Tests cover:
 import json
 from pathlib import Path
 
-
 from scripts.core.adapters.gosec_adapter import GosecAdapter
 
 

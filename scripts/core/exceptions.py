@@ -32,8 +32,6 @@ class JmoSecurityException(Exception):
     propagate normally.
     """
 
-    pass
-
 
 class ToolNotFoundException(JmoSecurityException):
     """Raised when a required security tool is not installed or not found in PATH.

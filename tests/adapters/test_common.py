@@ -8,9 +8,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 from scripts.core.adapters.common import (
+    _flatten_to_dicts,
     safe_load_json_file,
     safe_load_ndjson_file,
-    _flatten_to_dicts,
 )
 
 

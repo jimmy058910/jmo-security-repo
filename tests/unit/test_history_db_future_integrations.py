@@ -19,21 +19,21 @@ from unittest.mock import patch
 import pytest
 
 from scripts.core.history_db import (
-    # React Dashboard helpers
-    get_dashboard_summary,
-    get_timeline_data,
-    get_finding_details_batch,
-    search_findings,
-    # MCP Server helpers
-    get_finding_context,
-    get_scan_diff_for_ai,
-    get_recurring_findings,
     # Compliance helpers
     get_compliance_summary,
     get_compliance_trend,
     # Core functions for test setup
     get_connection,
+    # React Dashboard helpers
+    get_dashboard_summary,
+    # MCP Server helpers
+    get_finding_context,
+    get_finding_details_batch,
+    get_recurring_findings,
+    get_scan_diff_for_ai,
+    get_timeline_data,
     init_database,
+    search_findings,
 )
 
 # ============================================================================

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from scripts.core.normalize_and_report import gather_results, PROFILE_TIMINGS
+from scripts.core.normalize_and_report import PROFILE_TIMINGS, gather_results
 
 
 def _write(p: Path, s: str):

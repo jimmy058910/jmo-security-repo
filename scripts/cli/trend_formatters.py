@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any
 
 from rich.console import Console
 
@@ -30,7 +30,7 @@ console = Console()
 # ============================================================================
 
 
-def format_terminal_report(analysis: Dict[str, Any], verbose: bool = False) -> str:
+def format_terminal_report(analysis: dict[str, Any], verbose: bool = False) -> str:
     """
     Format trend analysis for rich terminal display.
 
@@ -98,7 +98,7 @@ def format_terminal_report(analysis: Dict[str, Any], verbose: bool = False) -> s
     return "\n".join(output_lines)
 
 
-def _format_security_score(security_score: Dict[str, Any]) -> str:
+def _format_security_score(security_score: dict[str, Any]) -> str:
     """Format security score as gauge with color coding."""
     lines = []
     lines.append(
@@ -162,7 +162,7 @@ def _format_security_score(security_score: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _format_severity_trends(severity_trends: Dict[str, Any]) -> str:
+def _format_severity_trends(severity_trends: dict[str, Any]) -> str:
     """Format severity trends with sparklines."""
     lines = []
     lines.append(
@@ -221,7 +221,7 @@ def _format_severity_trends(severity_trends: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _create_sparkline(counts: List[int], severity: str = "") -> str:
+def _create_sparkline(counts: list[int], severity: str = "") -> str:
     """
     Create ASCII sparkline chart.
 
@@ -257,7 +257,7 @@ def _create_sparkline(counts: List[int], severity: str = "") -> str:
     return sparkline
 
 
-def _format_improvement_metrics(improvement: Dict[str, Any]) -> str:
+def _format_improvement_metrics(improvement: dict[str, Any]) -> str:
     """Format improvement metrics comparing first and last scan."""
     lines = []
     lines.append(
@@ -303,7 +303,7 @@ def _format_improvement_metrics(improvement: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _format_regressions(regressions: List[Dict[str, Any]]) -> str:
+def _format_regressions(regressions: list[dict[str, Any]]) -> str:
     """Format regression alerts as a table."""
     lines = []
     lines.append(
@@ -342,7 +342,7 @@ def _format_regressions(regressions: List[Dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-def _format_insights(insights: List[Dict[str, Any]], verbose: bool = False) -> str:
+def _format_insights(insights: list[dict[str, Any]], verbose: bool = False) -> str:
     """Format automated insights with priority grouping."""
     lines = []
     lines.append(
@@ -385,7 +385,7 @@ def _format_insights(insights: List[Dict[str, Any]], verbose: bool = False) -> s
     return "\n".join(lines)
 
 
-def _format_top_rules(top_rules: List[Dict[str, Any]]) -> str:
+def _format_top_rules(top_rules: list[dict[str, Any]]) -> str:
     """Format top rules by frequency."""
     lines = []
     lines.append(
@@ -427,7 +427,7 @@ def _format_top_rules(top_rules: List[Dict[str, Any]]) -> str:
 
 
 def format_comparison(
-    scan1: Dict[str, Any], scan2: Dict[str, Any], diff: Dict[str, Any]
+    scan1: dict[str, Any], scan2: dict[str, Any], diff: dict[str, Any]
 ) -> str:
     """
     Format side-by-side comparison of two scans.
@@ -495,7 +495,7 @@ def format_comparison(
 # ============================================================================
 
 
-def format_json_report(analysis: Dict[str, Any]) -> str:
+def format_json_report(analysis: dict[str, Any]) -> str:
     """
     Format trend analysis as JSON for machine consumption.
 
@@ -513,7 +513,7 @@ def format_json_report(analysis: Dict[str, Any]) -> str:
 # ============================================================================
 
 
-def format_html_report(analysis: Dict[str, Any]) -> str:
+def format_html_report(analysis: dict[str, Any]) -> str:
     """
     Generate interactive HTML report with Chart.js visualizations.
 

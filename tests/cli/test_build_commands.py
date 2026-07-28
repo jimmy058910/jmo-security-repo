@@ -602,7 +602,7 @@ def test_add_build_args_has_local_flag():
 
 def test_add_build_args_default_values():
     """Test add_build_args has correct default values."""
-    from scripts.cli.build_commands import add_build_args, DEFAULT_REGISTRY, DEFAULT_ORG
+    from scripts.cli.build_commands import DEFAULT_ORG, DEFAULT_REGISTRY, add_build_args
 
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers()

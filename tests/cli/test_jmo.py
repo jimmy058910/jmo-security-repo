@@ -24,13 +24,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from scripts.cli.jmo import (
-    _iter_repos,
-    _iter_images,
     _iter_iac_files,
+    _iter_images,
+    _iter_repos,
     _iter_urls,
     _merge_dict,
-    parse_args,
     main,
+    parse_args,
 )
 
 # ========== Category 1: Argument Parsing Tests ==========

@@ -12,7 +12,6 @@ import platform
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
 
 from scripts.core.tool_utils import tool_exists
 
@@ -65,7 +64,7 @@ def _check_docker() -> bool:
     return True
 
 
-def _find_repo_root() -> Optional[Path]:
+def _find_repo_root() -> Path | None:
     """Find the repository root (directory containing Dockerfile)."""
     # Start from current directory and walk up
     current = Path.cwd()
@@ -120,7 +119,7 @@ def _build_image(
     local: bool = False,
     no_cache: bool = False,
     push: bool = False,
-    platform_target: Optional[str] = None,
+    platform_target: str | None = None,
 ) -> int:
     """Build a single Docker image variant."""
     dockerfile = VARIANTS.get(variant)

@@ -72,4 +72,3 @@ class Migration_1_0_0_to_1_1_0(Migration):
         For this example, we leave it as a no-op.
         """
         # Rollback not implemented (SQLite limitation)
-        pass

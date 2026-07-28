@@ -4,15 +4,14 @@
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
-
 from scripts.cli.wizard_flows import (
-    RepoFlow,
-    EntireStackFlow,
     CICDFlow,
-    DeploymentFlow,
     DependencyFlow,
-    TargetDetector,
+    DeploymentFlow,
+    EntireStackFlow,
     PromptHelper,
+    RepoFlow,
+    TargetDetector,
 )
 
 

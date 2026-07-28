@@ -32,10 +32,10 @@ Usage:
 from __future__ import annotations
 
 import importlib.util
+import logging
 import sys
 import time
 from pathlib import Path
-import logging
 from typing import TYPE_CHECKING
 
 from scripts.core.plugin_api import AdapterPlugin, PluginMetadata

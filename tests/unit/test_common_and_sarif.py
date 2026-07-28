@@ -1,8 +1,8 @@
 from scripts.core.common_finding import (
     Severity,
-    normalize_severity,
-    fingerprint,
     extract_code_snippet,
+    fingerprint,
+    normalize_severity,
 )
 from scripts.core.reporters.sarif_reporter import _severity_to_level
 

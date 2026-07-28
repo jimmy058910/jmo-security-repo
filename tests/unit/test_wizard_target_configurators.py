@@ -19,7 +19,6 @@ Architecture Note:
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-
 from scripts.cli.wizard_flows.target_configurators import (
     configure_gitlab_target,
     configure_iac_target,

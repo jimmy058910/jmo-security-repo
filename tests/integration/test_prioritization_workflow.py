@@ -16,7 +16,7 @@ import pytest
 
 from scripts.core.epss_integration import EPSSScore
 from scripts.core.kev_integration import KEVEntry
-from scripts.core.normalize_and_report import gather_results, _enrich_with_priority
+from scripts.core.normalize_and_report import _enrich_with_priority, gather_results
 from scripts.core.reporters.basic_reporter import to_markdown_summary
 from scripts.core.reporters.html_reporter import write_html
 

@@ -19,8 +19,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
-    from scripts.core.tool_registry import ToolInfo
     from scripts.cli.installers.models import InstallResult
+    from scripts.core.tool_registry import ToolInfo
 
 
 class InstallMethod(Enum):

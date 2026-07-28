@@ -74,7 +74,7 @@ License: MIT
 import json
 import logging
 from pathlib import Path
-from typing import Any, List, Dict
+from typing import Any
 
 from scripts.core.policy_engine import PolicyEngine, PolicyResult
 
@@ -82,11 +82,11 @@ logger = logging.getLogger(__name__)
 
 
 def evaluate_policies(
-    findings: List[Dict[str, Any]],
-    policy_names: List[str],
+    findings: list[dict[str, Any]],
+    policy_names: list[str],
     builtin_dir: Path,
     user_dir: Path,
-) -> Dict[str, PolicyResult]:
+) -> dict[str, PolicyResult]:
     """
     Evaluate findings against specified policies.
 
@@ -134,7 +134,7 @@ def evaluate_policies(
 
 
 def write_policy_report(
-    policy_results: Dict[str, PolicyResult], output_path: Path
+    policy_results: dict[str, PolicyResult], output_path: Path
 ) -> None:
     """
     Write policy evaluation results to Markdown report.
@@ -202,7 +202,7 @@ def write_policy_report(
 
 
 def write_policy_json(
-    policy_results: Dict[str, PolicyResult], output_path: Path
+    policy_results: dict[str, PolicyResult], output_path: Path
 ) -> None:
     """
     Write policy evaluation results to JSON file.
@@ -215,7 +215,7 @@ def write_policy_json(
         logger.info("No policy results to write")
         return
 
-    data: Dict[str, Any] = {
+    data: dict[str, Any] = {
         "schemaVersion": "1.0.0",
         "policies": [],
     }
@@ -237,7 +237,7 @@ def write_policy_json(
 
 
 def write_policy_summary_md(
-    policy_results: Dict[str, PolicyResult], output_path: Path
+    policy_results: dict[str, PolicyResult], output_path: Path
 ) -> None:
     """
     Write concise policy summary for inclusion in main SUMMARY.md.

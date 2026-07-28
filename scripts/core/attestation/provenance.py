@@ -19,20 +19,20 @@ import logging
 import os
 import sys
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Any
 
-from .constants import SLSA_VERSION, INTOTO_VERSION, JMO_BUILD_TYPE
+from .constants import INTOTO_VERSION, JMO_BUILD_TYPE, SLSA_VERSION
 from .models import (
-    Digest,
-    Subject,
+    BuildDefinition,
     Builder,
+    Digest,
+    InTotoStatement,
     Metadata,
     RunDetails,
-    BuildDefinition,
     SLSAProvenance,
-    InTotoStatement,
+    Subject,
 )
 
 logger = logging.getLogger(__name__)
@@ -102,7 +102,7 @@ class ProvenanceGenerator:
         """
         return hashlib.sha512(data).hexdigest()
 
-    def generate_digests(self, file_path: Path) -> Dict[str, str]:
+    def generate_digests(self, file_path: Path) -> dict[str, str]:
         """Generate multiple hash digests for a file.
 
         SLSA recommends multiple hash algorithms for defense-in-depth.
@@ -122,7 +122,7 @@ class ProvenanceGenerator:
             "sha512": self._calculate_sha512(data),
         }
 
-    def _create_subject(self, findings_path: Path) -> List[Subject]:
+    def _create_subject(self, findings_path: Path) -> list[Subject]:
         """Create subject list for in-toto statement.
 
         Args:
@@ -141,7 +141,7 @@ class ProvenanceGenerator:
 
         return [subject]
 
-    def _get_tool_versions(self, tools: List[str]) -> List[Dict[str, Any]]:
+    def _get_tool_versions(self, tools: list[str]) -> list[dict[str, Any]]:
         """Get version information for specified tools.
 
         Loads tool version data from the ToolRegistry and formats it as
@@ -215,8 +215,8 @@ class ProvenanceGenerator:
     def _create_build_definition(
         self,
         profile: str,
-        tools: List[str],
-        targets: List[str],
+        tools: list[str],
+        targets: list[str],
         threads: int = 4,
         timeout: int = 600,
     ) -> BuildDefinition:
@@ -256,9 +256,9 @@ class ProvenanceGenerator:
 
     def _create_run_details(
         self,
-        invocation_id: Optional[str] = None,
-        started_on: Optional[str] = None,
-        finished_on: Optional[str] = None,
+        invocation_id: str | None = None,
+        started_on: str | None = None,
+        finished_on: str | None = None,
     ) -> RunDetails:
         """Create run details with builder and timing metadata.
 
@@ -274,7 +274,7 @@ class ProvenanceGenerator:
             invocation_id = str(uuid.uuid4())
 
         if started_on is None:
-            started_on = datetime.now(timezone.utc).isoformat()
+            started_on = datetime.now(UTC).isoformat()
 
         # Detect CI environment and set builder ID accordingly
         builder_id = self._detect_builder_id()
@@ -322,14 +322,14 @@ class ProvenanceGenerator:
         self,
         findings_path: Path,
         profile: str,
-        tools: List[str],
-        targets: List[str],
+        tools: list[str],
+        targets: list[str],
         threads: int = 4,
         timeout: int = 600,
-        invocation_id: Optional[str] = None,
-        started_on: Optional[str] = None,
-        finished_on: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        invocation_id: str | None = None,
+        started_on: str | None = None,
+        finished_on: str | None = None,
+    ) -> dict[str, Any]:
         """Generate complete SLSA provenance document.
 
         Args:

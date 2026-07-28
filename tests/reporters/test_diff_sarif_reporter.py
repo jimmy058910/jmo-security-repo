@@ -6,9 +6,9 @@ import pytest
 
 from scripts.core.diff_engine import DiffResult, DiffSource, ModifiedFinding
 from scripts.core.reporters.diff_sarif_reporter import (
-    write_sarif_diff,
-    _map_severity_to_sarif,
     _convert_location_to_sarif,
+    _map_severity_to_sarif,
+    write_sarif_diff,
 )
 
 

@@ -13,7 +13,8 @@ These tests focus on missing coverage areas:
 """
 
 import sys
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 # Skip all tests in this module on Windows (cron not supported)
@@ -23,11 +24,11 @@ pytestmark = pytest.mark.skipif(
 
 from scripts.core.cron_installer import CronInstaller  # noqa: E402
 from scripts.core.schedule_manager import (  # noqa: E402
+    BackendConfig,
+    JobTemplateSpec,
     ScanSchedule,
     ScheduleMetadata,
     ScheduleSpec,
-    BackendConfig,
-    JobTemplateSpec,
 )
 
 

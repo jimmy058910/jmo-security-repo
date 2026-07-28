@@ -982,7 +982,7 @@ def map_cwe_to_owasp_top10_2021(cwes: list[str]) -> list[str]:
         if cwe_clean in CWE_TO_OWASP_TOP10_2021:
             owasp_categories.update(CWE_TO_OWASP_TOP10_2021[cwe_clean])
 
-    return sorted(list(owasp_categories))
+    return sorted(owasp_categories)
 
 
 def map_cwe_to_top25_2024(cwes: list[str]) -> list[dict[str, Any]]:
@@ -1238,7 +1238,7 @@ def enrich_finding_with_compliance(finding: dict[str, Any]) -> dict[str, Any]:
         owasp_categories.update(rule_owasp)
 
     if owasp_categories:
-        compliance["owaspTop10_2021"] = sorted(list(owasp_categories))
+        compliance["owaspTop10_2021"] = sorted(owasp_categories)
 
     # CWE Top 25 2024
     if cwes:

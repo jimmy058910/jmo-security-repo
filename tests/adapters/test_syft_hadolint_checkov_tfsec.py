@@ -1,9 +1,9 @@
 import json
 from pathlib import Path
 
-from scripts.core.adapters.syft_adapter import SyftAdapter
-from scripts.core.adapters.hadolint_adapter import HadolintAdapter
 from scripts.core.adapters.checkov_adapter import CheckovAdapter
+from scripts.core.adapters.hadolint_adapter import HadolintAdapter
+from scripts.core.adapters.syft_adapter import SyftAdapter
 
 
 def write(p: Path, obj):

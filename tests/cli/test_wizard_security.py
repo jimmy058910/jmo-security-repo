@@ -5,10 +5,11 @@ Tests that wizard.py properly sanitizes user inputs and avoids shell=True
 This addresses finding HIGH-002 (Command Injection)
 """
 
-import pytest
 from pathlib import Path
 
-from scripts.cli.wizard import generate_command_list, WizardConfig
+import pytest
+
+from scripts.cli.wizard import WizardConfig, generate_command_list
 
 
 def create_test_config(**overrides):

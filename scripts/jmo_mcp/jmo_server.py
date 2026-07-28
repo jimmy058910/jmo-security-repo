@@ -29,12 +29,12 @@ Environment Variables:
 
 from __future__ import annotations
 
-import os
 import hashlib
 import logging
-from pathlib import Path
-from datetime import datetime, timezone
+import os
+from datetime import UTC, datetime
 from functools import wraps
+from pathlib import Path
 
 # NOTE: This import will fail until mcp[cli] is installed
 # To install: pip install "mcp[cli]" or uv add "mcp[cli]"
@@ -49,8 +49,8 @@ except ImportError:
     )
 
 from scripts.jmo_mcp.utils.findings_loader import FindingsLoader
-from scripts.jmo_mcp.utils.source_context import SourceContextExtractor
 from scripts.jmo_mcp.utils.rate_limiter import RateLimiter
+from scripts.jmo_mcp.utils.source_context import SourceContextExtractor
 
 # Configure logging
 logging.basicConfig(
@@ -432,7 +432,7 @@ def mark_resolved(
         #    via jmo.yml: show_resolved: true/false)
         # 5. Support bulk resolution import/export for team workflows
 
-        timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        timestamp = datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
         logger.info(
             f"mark_resolved: {finding_id} → {resolution} "

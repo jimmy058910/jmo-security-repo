@@ -5,10 +5,11 @@ from __future__ import annotations
 import json
 import os
 import uuid
-from dataclasses import dataclass, asdict, field
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
 from croniter import croniter
 
 
@@ -21,7 +22,7 @@ class ScheduleMetadata:
     labels: dict[str, str] = field(default_factory=dict)
     annotations: dict[str, str] = field(default_factory=dict)
     creationTimestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: datetime.now(UTC).isoformat()
     )
     generation: int = 1
 
@@ -110,7 +111,7 @@ class ScanSchedule:
         backend: str = "github-actions",
         labels: dict[str, str] | None = None,
         **kwargs,
-    ) -> "ScanSchedule":
+    ) -> ScanSchedule:
         """Convenience factory for creating schedules with simplified args.
 
         This method provides a simpler API for tests and CLI usage:
@@ -207,7 +208,7 @@ class ScheduleManager:
                 "kind": "ScheduleManifest",
                 "metadata": {
                     "version": "2.0.0",
-                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "created_at": datetime.now(UTC).isoformat(),
                 },
                 "schedules": [],
             }
@@ -224,7 +225,7 @@ class ScheduleManager:
             raise ValueError(f"Invalid cron syntax: {e}")
 
         # Compute next run time
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         cron = croniter(schedule.spec.schedule, now)
         schedule.status.nextScheduleTime = cron.get_next(datetime).isoformat()
 

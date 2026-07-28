@@ -8,15 +8,16 @@ Tests the AttestationVerifier class which handles:
 - Policy checking
 """
 
-import json
 import hashlib
-from unittest.mock import patch, MagicMock
-from scripts.core.attestation.verifier import AttestationVerifier, VerificationResult
+import json
+from unittest.mock import MagicMock, patch
+
 from scripts.core.attestation.tamper_detector import (
     TamperIndicator,
-    TamperSeverity,
     TamperIndicatorType,
+    TamperSeverity,
 )
+from scripts.core.attestation.verifier import AttestationVerifier, VerificationResult
 
 
 class TestVerifierInitialization:
