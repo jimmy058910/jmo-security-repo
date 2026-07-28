@@ -136,7 +136,7 @@ pre-commit==4.6.0
     # via -r requirements-dev.in
 py-cpuinfo==9.0.0
     # via pytest-benchmark
-pyasn1==0.6.3
+pyasn1==0.6.4
     # via sigstore
 pycparser==3.0 ; implementation_name != 'PyPy' and platform_python_implementation != 'PyPy'
     # via cffi
