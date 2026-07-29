@@ -1,7 +1,7 @@
 """Tests for scripts.core.unicode_utils module.
 
-Covers safe_print() and UNICODE_FALLBACKS with edge cases including
-empty strings, ASCII-only, mixed Unicode/ASCII, CJK, and emoji.
+Covers safe_print(), safe_write() and UNICODE_FALLBACKS with edge cases
+including empty strings, ASCII-only, mixed Unicode/ASCII, CJK, and emoji.
 """
 
 from __future__ import annotations
@@ -11,7 +11,12 @@ from unittest.mock import patch
 
 import pytest
 
-from scripts.core.unicode_utils import UNICODE_FALLBACKS, safe_print
+from scripts.core.unicode_utils import (
+    UNICODE_FALLBACKS,
+    harden_console_streams,
+    safe_print,
+    safe_write,
+)
 
 
 class _FakeStdout(StringIO):
@@ -32,6 +37,26 @@ class _NoEncodingStdout(StringIO):
     @property  # type: ignore[override]
     def encoding(self) -> None:  # type: ignore[override]
         return None
+
+
+class _StrictStream(StringIO):
+    """Stream that rejects unencodable text, exactly as a real console does.
+
+    StringIO alone accepts anything, so it cannot catch the bug these helpers
+    exist to prevent. This raises on write like a genuine encoded stream.
+    """
+
+    def __init__(self, encoding: str) -> None:
+        super().__init__()
+        self._encoding = encoding
+
+    @property
+    def encoding(self) -> str:
+        return self._encoding
+
+    def write(self, s: str) -> int:
+        s.encode(self._encoding)
+        return super().write(s)
 
 
 class TestUnicodeFallbacks:
@@ -170,3 +195,129 @@ class TestSafePrint:
             safe_print("\u2705 one \u2705 two \u2705 three")
         output = mock_stdout.getvalue()
         assert output.count("[OK]") == 3
+
+    def test_character_absent_from_fallback_table_does_not_raise(self) -> None:
+        """A character with no fallback entry must degrade, not crash.
+
+        Regression: the old implementation re-ran the same substitution in its
+        except handler. For a character absent from UNICODE_FALLBACKS that is a
+        no-op, so the retry raised again -- uncaught -- and killed the command.
+        """
+        stream = _StrictStream("cp1252")
+        with patch("scripts.core.unicode_utils.sys.stdout", stream):
+            safe_print("Rocket: \U0001f680")  # not in UNICODE_FALLBACKS
+        assert "Rocket: ?" in stream.getvalue()
+
+    def test_writes_to_supplied_stream(self) -> None:
+        stream = _FakeStdout("cp1252")
+        safe_print("\u2705 done", stream=stream)
+        assert stream.getvalue() == "[OK] done\n"
+
+
+class TestSafeWrite:
+    """Tests for safe_write() -- the no-newline analogue of safe_print()."""
+
+    def test_appends_no_newline(self) -> None:
+        stream = _FakeStdout("utf-8")
+        safe_write("no newline", stream=stream)
+        assert stream.getvalue() == "no newline"
+
+    def test_defaults_to_stdout(self) -> None:
+        stream = _FakeStdout("cp1252")
+        with patch("scripts.core.unicode_utils.sys.stdout", stream):
+            safe_write("\u2705 ok")
+        assert stream.getvalue() == "[OK] ok"
+
+    def test_unicode_passthrough_on_utf8(self) -> None:
+        stream = _StrictStream("utf-8")
+        safe_write("scan \U0001f50d done", stream=stream)
+        assert stream.getvalue() == "scan \U0001f50d done"
+
+    @pytest.mark.parametrize("codec", ["cp1252", "cp437", "cp850"])
+    def test_degrades_on_every_legacy_console_codec(self, codec: str) -> None:
+        """cp437/cp850 are the trap: they contain box-drawing but not emoji.
+
+        A guard that recognises unsafe encodings by *name* passes them through
+        and crashes. Probing the actual text against the actual codec does not.
+        """
+        stream = _StrictStream(codec)
+        safe_write("\u2705 Score \u2500\u2500\n", stream=stream)
+        assert stream.getvalue() == "[OK] Score --\n"
+
+    def test_character_absent_from_fallback_table_does_not_raise(self) -> None:
+        stream = _StrictStream("cp437")
+        safe_write("Rocket: \U0001f680", stream=stream)
+        assert "Rocket: ?" in stream.getvalue()
+
+    def test_custom_fallbacks(self) -> None:
+        stream = _StrictStream("cp1252")
+        safe_write("\u2764 love", stream=stream, fallbacks={"\u2764": "<heart>"})
+        assert stream.getvalue() == "<heart> love"
+
+    def test_no_encoding_attribute_defaults_to_utf8(self) -> None:
+        stream = _NoEncodingStdout()
+        safe_write("\u2705 test", stream=stream)
+        assert "\u2705" in stream.getvalue()
+
+    def test_unknown_codec_degrades_instead_of_raising(self) -> None:
+        """An unresolvable encoding name must not become a LookupError."""
+        stream = _FakeStdout("not-a-real-codec")
+        safe_write("\u2705 ok", stream=stream)
+        assert "[OK] ok" in stream.getvalue()
+
+
+class TestHardenConsoleStreams:
+    """Tests for harden_console_streams().
+
+    This is the guarantee the fallback table cannot give: it covers every write
+    on the stream, including ones from rich, argparse and third-party code that
+    no call-site audit reaches.
+    """
+
+    class _Reconfigurable:
+        def __init__(self) -> None:
+            self.calls: list[dict[str, str]] = []
+
+        def reconfigure(self, **kwargs: str) -> None:
+            self.calls.append(kwargs)
+
+    def test_sets_replace_on_both_streams(self) -> None:
+        out, err = self._Reconfigurable(), self._Reconfigurable()
+        with (
+            patch("scripts.core.unicode_utils.sys.stdout", out),
+            patch("scripts.core.unicode_utils.sys.stderr", err),
+        ):
+            harden_console_streams()
+        assert out.calls == [{"errors": "replace"}]
+        assert err.calls == [{"errors": "replace"}]
+
+    def test_does_not_touch_encoding(self) -> None:
+        """Forcing UTF-8 onto a cp437 console yields mojibake, not a fix."""
+        out = self._Reconfigurable()
+        with (
+            patch("scripts.core.unicode_utils.sys.stdout", out),
+            patch("scripts.core.unicode_utils.sys.stderr", self._Reconfigurable()),
+        ):
+            harden_console_streams()
+        assert "encoding" not in out.calls[0]
+
+    def test_tolerates_stream_without_reconfigure(self) -> None:
+        """pytest capture objects and plain file-likes have no reconfigure()."""
+        with (
+            patch("scripts.core.unicode_utils.sys.stdout", StringIO()),
+            patch("scripts.core.unicode_utils.sys.stderr", StringIO()),
+        ):
+            harden_console_streams()  # must not raise
+
+    def test_tolerates_reconfigure_raising(self) -> None:
+        """A detached or closed stream must not take the whole CLI down."""
+
+        class _Detached:
+            def reconfigure(self, **_: str) -> None:
+                raise ValueError("underlying buffer has been detached")
+
+        with (
+            patch("scripts.core.unicode_utils.sys.stdout", _Detached()),
+            patch("scripts.core.unicode_utils.sys.stderr", _Detached()),
+        ):
+            harden_console_streams()  # must not raise
