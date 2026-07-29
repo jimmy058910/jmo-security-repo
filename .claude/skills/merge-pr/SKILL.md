@@ -35,8 +35,10 @@ Ship a feature/chore/fix branch to `main` following JMo Security project policy 
 - **PR-direct-to-main** — no `dev` staging hop. v1.0.3 had 41 commits drift on `dev` for 11 days requiring reconciliation PR #339.
 - **Squash-merge style** — recent practice (PRs #358 onward) consolidates feature-branch commits into one main commit with `(#NNN)` suffix.
 - **`dev` mirrors `main`** — invariant maintained by syncing `dev` from `main` immediately after every merge.
-- **Atomic remote cleanup** — `gh pr merge --delete-branch` removes the remote branch atomically with merge.
+- **Atomic remote cleanup** — `gh pr merge --delete-branch` removes the remote branch atomically with merge. Note it also attempts a *local* delete, which fails when a worktree holds the branch — see Step 8.
 - **CI is a hard gate** — never merge red CI without explicit user override.
+- **Worktrees are the norm here, not the exception** — the primary checkout is shared with an always-on peer agent, so branch work happens in linked worktrees. Steps 2 and 8 both need adjusting for that; each says how.
+- **Read logs, not ticks, for jobs marked `continue-on-error`** — `ci.yml`'s `windows-2022` shard is non-blocking, so `gh pr checks` reports **pass** over a real failure. Before merging anything that could plausibly affect Windows, open that job's log and compare `N passed / N skipped` against `main`. A shifted *skip* count is as much a signal as a failure — that is how a silently-uncollected 120-test suite was caught in PR #683.
 
 ## When to Use
 
@@ -180,15 +182,35 @@ The `--ff-only` is critical — it prevents accidental merge commits if dev sile
 
 ### Step 8: Local branch cleanup
 
+**Check for a worktree first.** Git refuses to delete a branch that any worktree holds, so on a worktree-based flow `git branch -D` exits 1 *after* the merge has already succeeded — an alarming non-zero exit for a step that is pure cleanup. Remove the worktree before the branch.
+
 ```bash
-git checkout main  # or stay on dev, either is fine
+# 1. Is $BRANCH checked out in a linked worktree?
+WT=$(git worktree list --porcelain \
+     | awk -v b="refs/heads/$BRANCH" '/^worktree /{w=$2} /^branch /{if($2==b) print w}')
+
+if [ -n "$WT" ]; then
+  # NEVER remove a worktree blind. Confirm it holds nothing unpushed first.
+  git -C "$WT" status --porcelain          # must be empty
+  git -C "$WT" stash list                  # must be empty
+  git diff --quiet main "$BRANCH" \
+    && echo "safe: squash absorbed the tree" \
+    || echo "STOP: $BRANCH still differs from main"
+
+  git worktree remove "$WT"   # add --force only after the checks above pass
+fi
+
+# 2. Now the branch is deletable
 git branch -D "$BRANCH"  # force-delete needed because squash != merge
 
-# Prune the now-stale origin/$BRANCH ref
+# 3. Prune the now-stale origin/$BRANCH ref
 git remote prune origin
+git worktree prune
 ```
 
 Force-delete (`-D`) is required — `git branch -d` (lowercase) refuses to delete branches that aren't strictly merged into HEAD. With squash-merge style, the squashed commit on main has a different SHA than the feature-branch tip, so git considers the branch "unmerged" by SHA. The `-D` flag is the standard workaround.
+
+**Do not `git checkout main` to escape the worktree problem.** In this repo the primary checkout is shared with an always-on peer agent; switching its branch out from under that agent is worse than a failed cleanup step. Remove the worktree instead, and leave the primary checkout on whatever branch it was on.
 
 ### Step 9: Summary
 
@@ -214,6 +236,8 @@ echo "  - Otherwise, branch off main for the next change-set."
 | CI `--watch` exits 1 with all checks shown as `pending` | Network/`gh` auth issue, not real CI failure | `gh auth status`, retry the watch |
 | `dev has N commits not on main` | Someone pushed to dev between steps 6 and 7 | Manual resolve (`git checkout dev && git merge main` or `git rebase main`) |
 | `git branch -D` says "branch not found" | Already cleaned up | Idempotent; safe to ignore |
+| `gh pr merge --delete-branch` exits 1 with `cannot delete branch ... used by worktree` | **The merge already succeeded.** Only the local-branch delete failed, because a linked worktree holds the branch | Not an error to fix — finish Step 8's worktree removal, then `git branch -D`. Verify the merge landed (`gh pr view <N> --json state`) before assuming anything went wrong |
+| Local `make fmt && make lint` in Step 2 lints the wrong code | The working tree is on `dev`/`main`, not the feature branch (normal when the branch lives in a worktree) | Run them **in the worktree** (`cd "$WT" && make fmt lint`), or skip and rely on CI — which ran the full pre-commit suite against the actual PR head. State which you did |
 
 ## Examples
 
