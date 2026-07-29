@@ -165,7 +165,9 @@ class TamperDetector:
         indicators: list[TamperIndicator] = []
 
         try:
-            attestation_data = json.loads(Path(attestation_path).read_text())
+            attestation_data = json.loads(
+                Path(attestation_path).read_text(encoding="utf-8")
+            )
         except (
             Exception
         ) as e:  # Acceptable: file scanning safety — skip unreadable attestations
@@ -324,7 +326,9 @@ class TamperDetector:
         indicators: list[TamperIndicator] = []
 
         try:
-            current_data = json.loads(Path(attestation_path).read_text())
+            current_data = json.loads(
+                Path(attestation_path).read_text(encoding="utf-8")
+            )
             current_builder = (
                 current_data.get("predicate", {})
                 .get("runDetails", {})
@@ -352,7 +356,9 @@ class TamperDetector:
         # Compare with historical attestations
         for historical_path in historical_attestations:
             try:
-                historical_data = json.loads(Path(historical_path).read_text())
+                historical_data = json.loads(
+                    Path(historical_path).read_text(encoding="utf-8")
+                )
                 historical_builder = (
                     historical_data.get("predicate", {})
                     .get("runDetails", {})
@@ -425,7 +431,9 @@ class TamperDetector:
         indicators: list[TamperIndicator] = []
 
         try:
-            current_data = json.loads(Path(attestation_path).read_text())
+            current_data = json.loads(
+                Path(attestation_path).read_text(encoding="utf-8")
+            )
             build_def = current_data.get("predicate", {}).get("buildDefinition", {})
 
             # Try externalParameters.tools first (ProvenanceGenerator format)
@@ -456,7 +464,9 @@ class TamperDetector:
         # Compare with historical attestations
         for historical_path in historical_attestations:
             try:
-                historical_data = json.loads(Path(historical_path).read_text())
+                historical_data = json.loads(
+                    Path(historical_path).read_text(encoding="utf-8")
+                )
                 historical_build_def = historical_data.get("predicate", {}).get(
                     "buildDefinition", {}
                 )
@@ -543,7 +553,9 @@ class TamperDetector:
         indicators: list[TamperIndicator] = []
 
         try:
-            attestation_data = json.loads(Path(attestation_path).read_text())
+            attestation_data = json.loads(
+                Path(attestation_path).read_text(encoding="utf-8")
+            )
         except (
             Exception
         ) as e:  # Acceptable: file scanning safety — skip unreadable attestations
@@ -566,7 +578,9 @@ class TamperDetector:
         if len(tools) >= 5:
             try:
                 if Path(subject_path).exists():
-                    subject_data = json.loads(Path(subject_path).read_text())
+                    subject_data = json.loads(
+                        Path(subject_path).read_text(encoding="utf-8")
+                    )
                     findings_count = len(subject_data.get("findings", []))
 
                     if findings_count == 0:

@@ -314,7 +314,7 @@ def _cmd_schedule_export(args, manager: ScheduleManager) -> int:
 
     # Output
     if args.output:
-        Path(args.output).write_text(workflow)
+        Path(args.output).write_text(workflow, encoding="utf-8")
         _success(f"Exported to {args.output}")
     else:
         print(workflow, end="")

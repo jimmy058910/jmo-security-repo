@@ -174,7 +174,7 @@ class TestLargeRepositoryScanning:
         for tool_file in (results_dir / "individual-repos" / "large-repo").glob(
             "*.json"
         ):
-            with open(tool_file) as f:
+            with open(tool_file, encoding="utf-8") as f:
                 tool_findings = json.load(f)
                 all_findings.extend(
                     tool_findings if isinstance(tool_findings, list) else []
@@ -237,7 +237,7 @@ class TestLargeRepositoryScanning:
         for tool_file in (results_dir / "individual-repos" / "enterprise-repo").glob(
             "*.json"
         ):
-            with open(tool_file) as f:
+            with open(tool_file, encoding="utf-8") as f:
                 tool_findings = json.load(f)
                 all_findings.extend(
                     tool_findings if isinstance(tool_findings, list) else []
@@ -298,7 +298,7 @@ class TestLargeRepositoryScanning:
         combined_findings = []
         for repo_dir in (results_dir / "individual-repos").iterdir():
             for tool_file in repo_dir.glob("*.json"):
-                with open(tool_file) as f:
+                with open(tool_file, encoding="utf-8") as f:
                     tool_findings = json.load(f)
                     combined_findings.extend(
                         tool_findings if isinstance(tool_findings, list) else []

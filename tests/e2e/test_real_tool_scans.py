@@ -141,7 +141,7 @@ class TestRealToolScans:
         trivy_output = image_results / "trivy.json"
         assert trivy_output.exists(), "Trivy output should exist"
 
-        with open(trivy_output) as f:
+        with open(trivy_output, encoding="utf-8") as f:
             trivy_data = json.load(f)
 
         # Trivy format varies - check both array and Results field
@@ -267,7 +267,7 @@ def safe_process(user_input):
         semgrep_output = repo_results / "semgrep.json"
         assert semgrep_output.exists(), "Semgrep output should exist"
 
-        with open(semgrep_output) as f:
+        with open(semgrep_output, encoding="utf-8") as f:
             semgrep_data = json.load(f)
 
         # Semgrep format: {"results": [...], "errors": [...]}
@@ -380,7 +380,7 @@ def main():
 
         # TruffleHog outputs NDJSON (one JSON object per line)
         secrets_found = []
-        with open(trufflehog_output) as f:
+        with open(trufflehog_output, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if line:
@@ -501,7 +501,7 @@ resource "aws_s3_bucket" "secure_example" {
         checkov_output = iac_results / "checkov.json"
         assert checkov_output.exists(), "Checkov output should exist"
 
-        with open(checkov_output) as f:
+        with open(checkov_output, encoding="utf-8") as f:
             checkov_data = json.load(f)
 
         # Checkov format: {"results": {"failed_checks": [...], "passed_checks": [...]}}

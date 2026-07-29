@@ -48,7 +48,7 @@ def write_yaml(
         )
         if schema_path.exists():
             try:
-                with open(schema_path) as f:
+                with open(schema_path, encoding="utf-8") as f:
                     schema = json.load(f)
                 for idx, finding in enumerate(findings):
                     try:

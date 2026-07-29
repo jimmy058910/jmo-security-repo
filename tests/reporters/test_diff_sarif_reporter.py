@@ -103,7 +103,7 @@ def test_sarif_schema_compliance(tmp_path, sample_diff_result):
     out_path = tmp_path / "diff.sarif"
     write_sarif_diff(sample_diff_result, out_path)
 
-    with open(out_path) as f:
+    with open(out_path, encoding="utf-8") as f:
         sarif = json.load(f)
 
     # Check top-level structure
@@ -118,7 +118,7 @@ def test_sarif_tool_metadata(tmp_path, sample_diff_result):
     out_path = tmp_path / "diff.sarif"
     write_sarif_diff(sample_diff_result, out_path)
 
-    with open(out_path) as f:
+    with open(out_path, encoding="utf-8") as f:
         sarif = json.load(f)
 
     tool = sarif["runs"][0]["tool"]["driver"]
@@ -132,7 +132,7 @@ def test_sarif_diff_metadata(tmp_path, sample_diff_result):
     out_path = tmp_path / "diff.sarif"
     write_sarif_diff(sample_diff_result, out_path)
 
-    with open(out_path) as f:
+    with open(out_path, encoding="utf-8") as f:
         sarif = json.load(f)
 
     props = sarif["runs"][0]["properties"]
@@ -150,7 +150,7 @@ def test_sarif_new_findings(tmp_path, sample_diff_result):
     out_path = tmp_path / "diff.sarif"
     write_sarif_diff(sample_diff_result, out_path)
 
-    with open(out_path) as f:
+    with open(out_path, encoding="utf-8") as f:
         sarif = json.load(f)
 
     results = sarif["runs"][0]["results"]
@@ -170,7 +170,7 @@ def test_sarif_resolved_findings(tmp_path, sample_diff_result):
     out_path = tmp_path / "diff.sarif"
     write_sarif_diff(sample_diff_result, out_path)
 
-    with open(out_path) as f:
+    with open(out_path, encoding="utf-8") as f:
         sarif = json.load(f)
 
     results = sarif["runs"][0]["results"]
@@ -192,7 +192,7 @@ def test_sarif_modified_findings(tmp_path, sample_diff_result):
     out_path = tmp_path / "diff.sarif"
     write_sarif_diff(sample_diff_result, out_path)
 
-    with open(out_path) as f:
+    with open(out_path, encoding="utf-8") as f:
         sarif = json.load(f)
 
     results = sarif["runs"][0]["results"]
@@ -263,7 +263,7 @@ def test_sarif_valid_json(tmp_path, sample_diff_result):
     write_sarif_diff(sample_diff_result, out_path)
 
     # Should parse without errors
-    with open(out_path) as f:
+    with open(out_path, encoding="utf-8") as f:
         data = json.load(f)
 
     assert isinstance(data, dict)
@@ -383,7 +383,7 @@ def test_sarif_empty_diff(tmp_path):
     out_path = tmp_path / "empty-diff.sarif"
     write_sarif_diff(diff, out_path)
 
-    with open(out_path) as f:
+    with open(out_path, encoding="utf-8") as f:
         sarif = json.load(f)
 
     assert len(sarif["runs"][0]["results"]) == 0

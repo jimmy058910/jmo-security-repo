@@ -225,7 +225,7 @@ class TestWindowsFileOperations:
         test_file.write_text("x = 1", encoding="utf-8")
 
         # Open file to lock it (Windows-specific behavior)
-        with open(test_file) as _locked:
+        with open(test_file, encoding="utf-8") as _locked:
             result = jmo_runner(
                 [
                     "scan",

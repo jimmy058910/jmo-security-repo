@@ -258,7 +258,7 @@ def test_cli_directory_mode_json(sample_scan_directories, tmp_path, monkeypatch)
     assert output_path.exists()
 
     # Verify JSON structure
-    with open(output_path) as f:
+    with open(output_path, encoding="utf-8") as f:
         data = json.load(f)
 
     assert "meta" in data
@@ -321,7 +321,7 @@ def test_cli_sqlite_mode(sample_sqlite_db, tmp_path):
     assert result == 0
     assert output_path.exists()
 
-    with open(output_path) as f:
+    with open(output_path, encoding="utf-8") as f:
         data = json.load(f)
 
     assert data["statistics"]["total_new"] == 1
@@ -350,7 +350,7 @@ def test_cli_no_modifications(sample_scan_directories, tmp_path):
 
     assert result == 0
 
-    with open(output_path) as f:
+    with open(output_path, encoding="utf-8") as f:
         data = json.load(f)
 
     # No modified findings when detection disabled
@@ -380,7 +380,7 @@ def test_cli_severity_filter(sample_scan_directories, tmp_path):
 
     assert result == 0
 
-    with open(output_path) as f:
+    with open(output_path, encoding="utf-8") as f:
         data = json.load(f)
 
     # Only HIGH finding should be in new (Semgrep ERROR maps to HIGH)
@@ -414,7 +414,7 @@ def test_cli_tool_filter(sample_scan_directories, tmp_path):
 
     assert result == 0
 
-    with open(output_path) as f:
+    with open(output_path, encoding="utf-8") as f:
         data = json.load(f)
 
     # Only semgrep findings
@@ -444,7 +444,7 @@ def test_cli_only_new(sample_scan_directories, tmp_path):
 
     assert result == 0
 
-    with open(output_path) as f:
+    with open(output_path, encoding="utf-8") as f:
         data = json.load(f)
 
     # Only new findings should be present

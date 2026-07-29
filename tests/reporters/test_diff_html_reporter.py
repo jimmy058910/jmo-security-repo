@@ -256,7 +256,7 @@ def test_html_external_mode(tmp_path):
     json_path = tmp_path / "diff-data.json"
     assert json_path.exists()
 
-    with open(json_path) as f:
+    with open(json_path, encoding="utf-8") as f:
         data = json.load(f)
     assert len(data["new"]) == 1001
 

@@ -58,7 +58,7 @@ def parse_pytest_json(json_path: Path) -> list[BenchmarkResult]:
     if not json_path.exists():
         return []
 
-    with open(json_path) as f:
+    with open(json_path, encoding="utf-8") as f:
         data = json.load(f)
 
     results: list[BenchmarkResult] = []
@@ -296,7 +296,7 @@ def main():
         # Set output for GitHub Actions (using GITHUB_OUTPUT env file)
         github_output = os.environ.get("GITHUB_OUTPUT")
         if github_output:
-            with open(github_output, "a") as f:
+            with open(github_output, "a", encoding="utf-8") as f:
                 f.write("regression_detected=true\n")
         sys.exit(1)
     else:
@@ -304,7 +304,7 @@ def main():
         # Set output for GitHub Actions (using GITHUB_OUTPUT env file)
         github_output = os.environ.get("GITHUB_OUTPUT")
         if github_output:
-            with open(github_output, "a") as f:
+            with open(github_output, "a", encoding="utf-8") as f:
                 f.write("regression_detected=false\n")
 
 

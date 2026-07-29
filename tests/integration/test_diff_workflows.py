@@ -111,7 +111,7 @@ class TestDirectoryDiffWorkflows:
         assert output_path.exists(), "JSON output should exist"
 
         # Validate JSON structure
-        with open(output_path) as f:
+        with open(output_path, encoding="utf-8") as f:
             diff = json.load(f)
 
         assert "meta" in diff
@@ -293,7 +293,7 @@ class TestDirectoryDiffWorkflows:
         assert result.returncode == 0, f"Diff failed: {result.stderr}"
         assert output_path.exists()
 
-        with open(output_path) as f:
+        with open(output_path, encoding="utf-8") as f:
             sarif = json.load(f)
 
         assert sarif["version"] == "2.1.0"
@@ -357,7 +357,7 @@ class TestFilteringCombinations:
         assert result.returncode == 0
         assert output_path.exists()
 
-        with open(output_path) as f:
+        with open(output_path, encoding="utf-8") as f:
             diff = json.load(f)
 
         # Should only see HIGH finding
@@ -417,7 +417,7 @@ class TestFilteringCombinations:
         assert result.returncode == 0
         assert output_path.exists()
 
-        with open(output_path) as f:
+        with open(output_path, encoding="utf-8") as f:
             diff = json.load(f)
 
         assert diff["statistics"]["total_new"] == 1
@@ -478,7 +478,7 @@ class TestFilteringCombinations:
         assert result.returncode == 0
         assert output_path.exists()
 
-        with open(output_path) as f:
+        with open(output_path, encoding="utf-8") as f:
             diff = json.load(f)
 
         # Should only see new findings
@@ -545,7 +545,7 @@ class TestCICDIntegrationPatterns:
         assert result.returncode == 0
         assert output_path.exists()
 
-        with open(output_path) as f:
+        with open(output_path, encoding="utf-8") as f:
             diff = json.load(f)
 
         # Security gate check
@@ -610,7 +610,7 @@ class TestCICDIntegrationPatterns:
         assert result.returncode == 0
         assert output_path.exists()
 
-        with open(output_path) as f:
+        with open(output_path, encoding="utf-8") as f:
             diff = json.load(f)
 
         # Verify remediation tracking

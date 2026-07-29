@@ -130,7 +130,7 @@ class TestV1WorkflowIntegration:
         findings_json = results_dir / "summaries" / "findings.json"
         assert findings_json.exists(), "findings.json should exist"
 
-        with open(findings_json) as f:
+        with open(findings_json, encoding="utf-8") as f:
             data = json.load(f)
 
         # v1.0.0 metadata wrapper validation

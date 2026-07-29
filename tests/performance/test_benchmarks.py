@@ -245,7 +245,7 @@ class TestPerformanceBenchmarks:
 
         # Write findings.json (store_scan expects this file)
         findings_json = results_dir / "summaries" / "findings.json"
-        with open(findings_json, "w") as f:
+        with open(findings_json, "w", encoding="utf-8") as f:
             json.dump(scan_data["findings"], f)
 
         # Create dummy target directory to avoid detection errors
@@ -356,7 +356,7 @@ class TestPerformanceBenchmarks:
 
             # Write findings.json
             findings_json = scan_results_dir / "summaries" / "findings.json"
-            with open(findings_json, "w") as f:
+            with open(findings_json, "w", encoding="utf-8") as f:
                 json.dump(scan_data["findings"], f)
 
             # Create dummy target directory

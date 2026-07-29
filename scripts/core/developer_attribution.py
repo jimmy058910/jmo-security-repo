@@ -414,7 +414,7 @@ def load_team_mapping(team_file_path: Path) -> dict[str, str]:
     """
     import json
 
-    with open(team_file_path) as f:
+    with open(team_file_path, encoding="utf-8") as f:
         return json.load(f)  # type: ignore[no-any-return]  # JSON parse returns Any, caller validates structure
 
 

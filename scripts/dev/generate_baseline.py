@@ -155,7 +155,7 @@ def load_findings(results_dir: Path) -> list[dict[str, Any]]:
         logger.warning(f"No findings.json found in {results_dir}")
         return []
 
-    with open(findings_file) as f:
+    with open(findings_file, encoding="utf-8") as f:
         data = json.load(f)
 
     # Handle both list and dict formats
@@ -292,10 +292,10 @@ def validate_baseline(baseline_path: Path) -> bool:
         logger.error(f"Schema file not found: {SCHEMA_FILE}")
         return False
 
-    with open(SCHEMA_FILE) as f:
+    with open(SCHEMA_FILE, encoding="utf-8") as f:
         schema = json.load(f)
 
-    with open(baseline_path) as f:
+    with open(baseline_path, encoding="utf-8") as f:
         baseline = json.load(f)
 
     try:
@@ -377,7 +377,7 @@ def main() -> int:
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Write baseline
-        with open(output_path, "w") as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             json.dump(baseline, f, indent=2)
             f.write("\n")
 

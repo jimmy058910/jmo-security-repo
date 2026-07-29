@@ -108,7 +108,7 @@ def test_e2e_directory_diff_json(temp_workspace, sample_findings):
     assert output_path.exists()
 
     # Validate JSON structure
-    with open(output_path) as f:
+    with open(output_path, encoding="utf-8") as f:
         diff = json.load(f)
 
     assert "meta" in diff
@@ -201,7 +201,7 @@ def test_e2e_modification_detection(temp_workspace, sample_findings):
     assert result.returncode == 0
 
     # Validate modification detected
-    with open(output_path) as f:
+    with open(output_path, encoding="utf-8") as f:
         diff = json.load(f)
 
     assert diff["statistics"]["total_modified"] == 1
@@ -272,7 +272,7 @@ def test_e2e_ci_workflow(temp_workspace, sample_findings):
     assert result.returncode == 0
 
     # Validate filtering worked
-    with open(output_path) as f:
+    with open(output_path, encoding="utf-8") as f:
         diff = json.load(f)
 
     # Should only see CRITICAL finding
@@ -337,7 +337,7 @@ def test_e2e_filtering_combinations(temp_workspace, sample_findings):
 
     assert result.returncode == 0
 
-    with open(output_path) as f:
+    with open(output_path, encoding="utf-8") as f:
         diff = json.load(f)
 
     # Should only see: c1 (HIGH + semgrep + new)
@@ -414,10 +414,10 @@ def test_e2e_no_modifications_flag(temp_workspace, sample_findings):
     assert result_without.returncode == 0
 
     # Validate difference
-    with open(output_with) as f:
+    with open(output_with, encoding="utf-8") as f:
         diff_with = json.load(f)
 
-    with open(output_without) as f:
+    with open(output_without, encoding="utf-8") as f:
         diff_without = json.load(f)
 
     # With modifications: should detect severity change
@@ -565,7 +565,7 @@ def test_e2e_sarif_output(temp_workspace, sample_findings):
     assert output_path.exists()
 
     # Validate SARIF structure
-    with open(output_path) as f:
+    with open(output_path, encoding="utf-8") as f:
         sarif = json.load(f)
 
     assert sarif["version"] == "2.1.0"

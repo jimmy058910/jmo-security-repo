@@ -30,7 +30,7 @@ def cross_tool_fixtures():
     fixtures_path = (
         Path(__file__).parent.parent / "fixtures" / "cross_tool_findings.json"
     )
-    with open(fixtures_path) as f:
+    with open(fixtures_path, encoding="utf-8") as f:
         return json.load(f)
 
 

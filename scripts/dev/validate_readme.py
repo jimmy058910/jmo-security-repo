@@ -170,7 +170,7 @@ def check_dockerhub_local_consistency(
         # Get version from pyproject.toml
         pyproject_path = Path("pyproject.toml")
         if pyproject_path.exists():
-            pyproject_content = pyproject_path.read_text()
+            pyproject_content = pyproject_path.read_text(encoding="utf-8")
             current_version_match = re.search(
                 r'version\s*=\s*"(\d+\.\d+\.\d+)"', pyproject_content
             )
@@ -208,7 +208,7 @@ def check_dockerhub_sync_config() -> list[dict[str, str]]:
         )
         return issues
 
-    content = release_yml.read_text()
+    content = release_yml.read_text(encoding="utf-8")
 
     # Check for docker-hub-readme job
     if "docker-hub-readme:" not in content:
@@ -342,7 +342,7 @@ def validate_dockerhub(args) -> tuple[bool, list[dict]]:
         )
         return False, all_issues
 
-    local_dockerhub_readme = dockerhub_readme_path.read_text()
+    local_dockerhub_readme = dockerhub_readme_path.read_text(encoding="utf-8")
     print(f"\n📄 Local Docker Hub README: {len(local_dockerhub_readme)} bytes")
 
     # Check local file consistency

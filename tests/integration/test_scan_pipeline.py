@@ -61,7 +61,7 @@ def load_findings(results_dir: Path) -> list[dict[str, Any]]:
     if not findings_file.exists():
         return []
 
-    with open(findings_file) as f:
+    with open(findings_file, encoding="utf-8") as f:
         data = json.load(f)
 
     if isinstance(data, list):
@@ -79,7 +79,7 @@ def count_raw_findings(results_dir: Path) -> int:
     if individual_dir.exists():
         for json_file in individual_dir.glob("*.json"):
             try:
-                with open(json_file) as f:
+                with open(json_file, encoding="utf-8") as f:
                     data = json.load(f)
                 if isinstance(data, list):
                     total += len(data)
@@ -245,7 +245,7 @@ class TestScanReporting:
         findings_file = results_dir / "findings.json"
         if findings_file.exists():
             # Should be valid JSON
-            with open(findings_file) as f:
+            with open(findings_file, encoding="utf-8") as f:
                 data = json.load(f)
 
             # Should be list or dict with findings

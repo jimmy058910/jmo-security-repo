@@ -84,7 +84,7 @@ def test_empty_baseline(temp_workspace, sample_finding):
     assert result.returncode == 0, f"Diff failed: {result.stderr}"
     assert output_path.exists()
 
-    with open(output_path) as f:
+    with open(output_path, encoding="utf-8") as f:
         diff = json.load(f)
 
     # All current findings are new
@@ -132,7 +132,7 @@ def test_empty_current(temp_workspace, sample_finding):
 
     assert result.returncode == 0
 
-    with open(output_path) as f:
+    with open(output_path, encoding="utf-8") as f:
         diff = json.load(f)
 
     # All baseline findings resolved
@@ -185,7 +185,7 @@ def test_identical_scans(temp_workspace, sample_finding):
 
     assert result.returncode == 0
 
-    with open(output_path) as f:
+    with open(output_path, encoding="utf-8") as f:
         diff = json.load(f)
 
     # No changes
@@ -248,7 +248,7 @@ def test_large_diff_10k_findings(temp_workspace, sample_finding):
     assert result.returncode == 0
     assert elapsed < 5.0, f"Diff took {elapsed:.2f}s (expected <5s for 10K findings)"
 
-    with open(output_path) as f:
+    with open(output_path, encoding="utf-8") as f:
         diff = json.load(f)
 
     assert diff["statistics"]["total_new"] == 5000
@@ -409,7 +409,7 @@ def test_mixed_schema_versions(temp_workspace, sample_finding):
 
     assert result.returncode == 0
 
-    with open(output_path) as f:
+    with open(output_path, encoding="utf-8") as f:
         diff = json.load(f)
 
     # Should handle gracefully
@@ -462,7 +462,7 @@ def test_modification_detection_disabled(temp_workspace, sample_finding):
 
     assert result.returncode == 0
 
-    with open(output_path) as f:
+    with open(output_path, encoding="utf-8") as f:
         diff = json.load(f)
 
     # Should treat as unchanged (no modification detection)
@@ -518,7 +518,7 @@ def test_filter_combinations(temp_workspace, sample_finding):
 
     assert result.returncode == 0
 
-    with open(output_path) as f:
+    with open(output_path, encoding="utf-8") as f:
         diff = json.load(f)
 
     # Should only see: c1 (HIGH + semgrep + new)
@@ -605,7 +605,7 @@ def test_only_new_filter(temp_workspace, sample_finding):
 
     assert result.returncode == 0
 
-    with open(output_path) as f:
+    with open(output_path, encoding="utf-8") as f:
         diff = json.load(f)
 
     # Only new findings
@@ -663,7 +663,7 @@ def test_only_resolved_filter(temp_workspace, sample_finding):
 
     assert result.returncode == 0
 
-    with open(output_path) as f:
+    with open(output_path, encoding="utf-8") as f:
         diff = json.load(f)
 
     # Only resolved findings
