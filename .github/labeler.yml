@@ -1,4 +1,4 @@
-# Configuration for actions/labeler@v6
+# Configuration for actions/labeler@v7
 # https://github.com/actions/labeler
 #
 # Auto-applies labels to PRs based on file paths changed. The label set
