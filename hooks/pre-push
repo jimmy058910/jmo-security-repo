@@ -36,19 +36,10 @@ for module in "${critical_modules[@]}"; do
   fi
 done
 
-# 3. Verify requirements-dev.txt is in sync (if requirements-dev.in was modified)
-if git diff --name-only @{u} HEAD 2>/dev/null | grep -q "requirements-dev.in"; then
-  echo "  Checking requirements-dev.txt is in sync..."
-  if ! git diff --name-only @{u} HEAD 2>/dev/null | grep -q "requirements-dev.txt"; then
-    echo "WARNING: requirements-dev.in modified but requirements-dev.txt not updated"
-    echo "Fix: Run 'make deps-compile' and commit requirements-dev.txt"
-    echo ""
-    read -p "Continue anyway? (y/N) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-      exit 1
-    fi
-  fi
-fi
+# Lockfile freshness is NOT checked here. It used to be (comparing
+# requirements-dev.in against requirements-dev.txt), but the `uv-lock`
+# pre-commit hook now runs `uv lock --check` at commit time, which is strictly
+# earlier and non-interactive. This hook keeps only checks that pre-commit
+# cannot do.
 
 echo "Pre-push checks passed!"
