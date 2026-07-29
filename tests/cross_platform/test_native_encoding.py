@@ -44,17 +44,29 @@ LEGACY_CODECS = ["cp1252", "cp437", "cp850"]
 
 
 def _run(*args: str, codec: str) -> subprocess.CompletedProcess[str]:
-    """Invoke the real CLI with stdio pinned to a legacy codec."""
+    """Invoke the real CLI with stdio pinned to a legacy codec.
+
+    The parent must decode with the SAME codec it pinned on the child. Plain
+    `text=True` decodes with the parent's locale codec instead, which breaks two
+    ways: on Linux it is UTF-8, and cp850's 0x9E ("x" in the score formula) is
+    not valid UTF-8, so the test itself dies with UnicodeDecodeError; on Windows
+    subprocess decodes in a reader thread, where the same error is swallowed and
+    the captured output silently goes missing.
+
+    errors="replace" keeps this test measuring the product rather than its own
+    plumbing -- any traceback we assert on is ASCII, so it survives regardless.
+    """
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = codec
     return subprocess.run(
         [sys.executable, "-m", "scripts.cli.jmo", *args],
         capture_output=True,
-        text=True,
         timeout=60,
         cwd=str(REPO_ROOT),
         env=env,
         check=False,
+        encoding=codec,
+        errors="replace",
     )
 
 
