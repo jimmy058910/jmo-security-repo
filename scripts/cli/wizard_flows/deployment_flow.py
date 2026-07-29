@@ -186,7 +186,7 @@ class DeploymentFlow(BaseWizardFlow):
         env_file = Path.cwd() / ".env"
         if env_file.exists():
             try:
-                content = env_file.read_text()
+                content = env_file.read_text(encoding="utf-8")
                 if "ENVIRONMENT=production" in content or "ENV=production" in content:
                     return "production"
                 elif "ENVIRONMENT=staging" in content or "ENV=staging" in content:
@@ -197,7 +197,7 @@ class DeploymentFlow(BaseWizardFlow):
         # Check kubernetes manifests for namespace
         for k8s_file in Path.cwd().glob("**/k8s/**/*.yml"):
             try:
-                content = k8s_file.read_text()
+                content = k8s_file.read_text(encoding="utf-8")
                 if "namespace: production" in content:
                     return "production"
                 elif "namespace: staging" in content:

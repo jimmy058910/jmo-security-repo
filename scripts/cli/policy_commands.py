@@ -304,7 +304,7 @@ def cmd_policy_show(args: argparse.Namespace) -> int:
     # Show first 20 lines of policy
     print("\nPolicy Content (first 20 lines):")
     print("-" * 80)
-    lines = policy_path.read_text().split("\n")
+    lines = policy_path.read_text(encoding="utf-8").split("\n")
     for line in lines[:20]:
         print(line)
     if len(lines) > 20:

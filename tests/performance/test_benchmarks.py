@@ -309,8 +309,8 @@ class TestPerformanceBenchmarks:
         baseline_json = baseline_path / "summaries" / "findings.json"
         current_json = current_path / "summaries" / "findings.json"
 
-        baseline_json.write_text(json.dumps(baseline_findings))
-        current_json.write_text(json.dumps(current_findings))
+        baseline_json.write_text(json.dumps(baseline_findings), encoding="utf-8")
+        current_json.write_text(json.dumps(current_findings), encoding="utf-8")
 
         # Benchmark diff computation
         start = time.time()
@@ -474,7 +474,8 @@ class TestPerformanceBenchmarks:
                     },
                     "findings": findings,
                 }
-            )
+            ),
+            encoding="utf-8",
         )
 
         # Benchmark dashboard generation
@@ -494,7 +495,7 @@ class TestPerformanceBenchmarks:
         assert dashboard_path.stat().st_size > 0, "Dashboard should not be empty"
 
         # For >1000 findings, should use external mode
-        dashboard_content = dashboard_path.read_text()
+        dashboard_content = dashboard_path.read_text(encoding="utf-8")
         assert (
             "findings-data.json" in dashboard_content
             or "findings.json" in dashboard_content
@@ -544,10 +545,10 @@ class TestPerformanceBenchmarks:
 
         # Write tool outputs
         (individual_dir / "trivy.json").write_text(
-            json.dumps({"findings": findings[:5000]})
+            json.dumps({"findings": findings[:5000]}), encoding="utf-8"
         )
         (individual_dir / "semgrep.json").write_text(
-            json.dumps({"findings": findings[5000:]})
+            json.dumps({"findings": findings[5000:]}), encoding="utf-8"
         )
 
         # Measure peak memory during processing

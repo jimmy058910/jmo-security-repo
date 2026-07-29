@@ -50,7 +50,7 @@ def test_empty_baseline(temp_workspace, sample_finding):
     """Handle empty baseline (all current findings are new)."""
     # Empty baseline
     baseline_json = temp_workspace["baseline"] / "summaries" / "findings.json"
-    baseline_json.write_text(json.dumps([], indent=2))
+    baseline_json.write_text(json.dumps([], indent=2), encoding="utf-8")
 
     # Current has 50 findings
     current_findings = [
@@ -60,7 +60,7 @@ def test_empty_baseline(temp_workspace, sample_finding):
         for i in range(50)
     ]
     current_json = temp_workspace["current"] / "summaries" / "findings.json"
-    current_json.write_text(json.dumps(current_findings, indent=2))
+    current_json.write_text(json.dumps(current_findings, indent=2), encoding="utf-8")
 
     # Run diff
     output_path = temp_workspace["workspace"] / "diff.json"
@@ -105,11 +105,11 @@ def test_empty_current(temp_workspace, sample_finding):
         for i in range(30)
     ]
     baseline_json = temp_workspace["baseline"] / "summaries" / "findings.json"
-    baseline_json.write_text(json.dumps(baseline_findings, indent=2))
+    baseline_json.write_text(json.dumps(baseline_findings, indent=2), encoding="utf-8")
 
     # Empty current
     current_json = temp_workspace["current"] / "summaries" / "findings.json"
-    current_json.write_text(json.dumps([], indent=2))
+    current_json.write_text(json.dumps([], indent=2), encoding="utf-8")
 
     # Run diff
     output_path = temp_workspace["workspace"] / "diff.json"
@@ -161,8 +161,8 @@ def test_identical_scans(temp_workspace, sample_finding):
     baseline_json = temp_workspace["baseline"] / "summaries" / "findings.json"
     current_json = temp_workspace["current"] / "summaries" / "findings.json"
 
-    baseline_json.write_text(json.dumps(findings, indent=2))
-    current_json.write_text(json.dumps(findings, indent=2))
+    baseline_json.write_text(json.dumps(findings, indent=2), encoding="utf-8")
+    current_json.write_text(json.dumps(findings, indent=2), encoding="utf-8")
 
     # Run diff
     output_path = temp_workspace["workspace"] / "diff.json"
@@ -220,8 +220,8 @@ def test_large_diff_10k_findings(temp_workspace, sample_finding):
     baseline_json = temp_workspace["baseline"] / "summaries" / "findings.json"
     current_json = temp_workspace["current"] / "summaries" / "findings.json"
 
-    baseline_json.write_text(json.dumps(baseline_findings, indent=2))
-    current_json.write_text(json.dumps(current_findings, indent=2))
+    baseline_json.write_text(json.dumps(baseline_findings, indent=2), encoding="utf-8")
+    current_json.write_text(json.dumps(current_findings, indent=2), encoding="utf-8")
 
     # Run diff with timing
     output_path = temp_workspace["workspace"] / "diff.json"
@@ -287,9 +287,11 @@ def test_unicode_in_messages(temp_workspace, sample_finding):
     current_json = temp_workspace["current"] / "summaries" / "findings.json"
 
     baseline_json.write_text(
-        json.dumps(baseline_findings, indent=2, ensure_ascii=False)
+        json.dumps(baseline_findings, indent=2, ensure_ascii=False), encoding="utf-8"
     )
-    current_json.write_text(json.dumps(current_findings, indent=2, ensure_ascii=False))
+    current_json.write_text(
+        json.dumps(current_findings, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
 
     # Run diff
     output_path = temp_workspace["workspace"] / "diff.json"
@@ -329,11 +331,11 @@ def test_malformed_findings_json(temp_workspace):
     """Handle malformed findings.json gracefully."""
     # Malformed JSON in baseline
     baseline_json = temp_workspace["baseline"] / "summaries" / "findings.json"
-    baseline_json.write_text("{invalid json")
+    baseline_json.write_text("{invalid json", encoding="utf-8")
 
     # Valid current
     current_json = temp_workspace["current"] / "summaries" / "findings.json"
-    current_json.write_text(json.dumps([], indent=2))
+    current_json.write_text(json.dumps([], indent=2), encoding="utf-8")
 
     # Run diff
     output_path = temp_workspace["workspace"] / "diff.json"
@@ -385,8 +387,8 @@ def test_mixed_schema_versions(temp_workspace, sample_finding):
     baseline_json = temp_workspace["baseline"] / "summaries" / "findings.json"
     current_json = temp_workspace["current"] / "summaries" / "findings.json"
 
-    baseline_json.write_text(json.dumps(baseline_findings, indent=2))
-    current_json.write_text(json.dumps(current_findings, indent=2))
+    baseline_json.write_text(json.dumps(baseline_findings, indent=2), encoding="utf-8")
+    current_json.write_text(json.dumps(current_findings, indent=2), encoding="utf-8")
 
     # Run diff
     output_path = temp_workspace["workspace"] / "diff.json"
@@ -437,8 +439,8 @@ def test_modification_detection_disabled(temp_workspace, sample_finding):
     baseline_json = temp_workspace["baseline"] / "summaries" / "findings.json"
     current_json = temp_workspace["current"] / "summaries" / "findings.json"
 
-    baseline_json.write_text(json.dumps(baseline_findings, indent=2))
-    current_json.write_text(json.dumps(current_findings, indent=2))
+    baseline_json.write_text(json.dumps(baseline_findings, indent=2), encoding="utf-8")
+    current_json.write_text(json.dumps(current_findings, indent=2), encoding="utf-8")
 
     # Run diff WITHOUT modifications
     output_path = temp_workspace["workspace"] / "diff.json"
@@ -488,8 +490,8 @@ def test_filter_combinations(temp_workspace, sample_finding):
     baseline_json = temp_workspace["baseline"] / "summaries" / "findings.json"
     current_json = temp_workspace["current"] / "summaries" / "findings.json"
 
-    baseline_json.write_text(json.dumps(baseline_findings, indent=2))
-    current_json.write_text(json.dumps(current_findings, indent=2))
+    baseline_json.write_text(json.dumps(baseline_findings, indent=2), encoding="utf-8")
+    current_json.write_text(json.dumps(current_findings, indent=2), encoding="utf-8")
 
     # Run diff with: --severity HIGH --tool semgrep --only new
     output_path = temp_workspace["workspace"] / "diff.json"
@@ -579,8 +581,8 @@ def test_only_new_filter(temp_workspace, sample_finding):
     baseline_json = temp_workspace["baseline"] / "summaries" / "findings.json"
     current_json = temp_workspace["current"] / "summaries" / "findings.json"
 
-    baseline_json.write_text(json.dumps(baseline_findings, indent=2))
-    current_json.write_text(json.dumps(current_findings, indent=2))
+    baseline_json.write_text(json.dumps(baseline_findings, indent=2), encoding="utf-8")
+    current_json.write_text(json.dumps(current_findings, indent=2), encoding="utf-8")
 
     # Run diff with --only new
     output_path = temp_workspace["workspace"] / "diff.json"
@@ -637,8 +639,8 @@ def test_only_resolved_filter(temp_workspace, sample_finding):
     baseline_json = temp_workspace["baseline"] / "summaries" / "findings.json"
     current_json = temp_workspace["current"] / "summaries" / "findings.json"
 
-    baseline_json.write_text(json.dumps(baseline_findings, indent=2))
-    current_json.write_text(json.dumps(current_findings, indent=2))
+    baseline_json.write_text(json.dumps(baseline_findings, indent=2), encoding="utf-8")
+    current_json.write_text(json.dumps(current_findings, indent=2), encoding="utf-8")
 
     # Run diff with --only resolved
     output_path = temp_workspace["workspace"] / "diff.json"

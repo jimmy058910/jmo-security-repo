@@ -1,4 +1,7 @@
+import os
 from pathlib import Path
+
+import pytest
 
 from scripts.cli.jmo import cmd_ci, cmd_scan
 
@@ -9,6 +12,9 @@ def test_scan_skips_missing_tools_and_runs_available(tmp_path: Path, monkeypatch
     v1.0.0 Architecture: Missing tools are skipped entirely (no stubs).
     Only available/installed tools produce output files.
     """
+    # Read the REAL CI flag before the monkeypatch below sets it for the scan.
+    in_ci = os.environ.get("CI") == "true" or os.environ.get("GITHUB_ACTIONS") == "true"
+
     # Set CI=true to skip interactive prompts
     monkeypatch.setenv("CI", "true")
 
@@ -41,16 +47,41 @@ def test_scan_skips_missing_tools_and_runs_available(tmp_path: Path, monkeypatch
     rc = cmd_scan(Args())
     assert rc == 0, "Scan should succeed even with missing tools"
 
-    # Verify results directory structure exists
+    # The contract that holds on every machine: a per-repo output directory is
+    # created for each discovered repo whether or not any tool ran.
+    outputs = {}
     for repo in (r1, r2):
         outdir = Path(Args.results_dir) / "individual-repos" / repo.name
-        # At least one output file should exist (from available tools)
-        json_files = list(outdir.glob("*.json"))
-        assert len(json_files) > 0, f"Expected at least one output file in {outdir}"
+        assert outdir.exists(), f"Expected results directory {outdir}"
+        outputs[repo.name] = list(outdir.glob("*.json"))
 
-        # If specific tools are installed, verify their output exists
-        # Note: These assertions are conditional based on tool availability
-        # The test primarily verifies scan succeeds with missing tools
+    # Output files require a requested tool that both RESOLVES and SUCCEEDS, so
+    # this half is environment-dependent.
+    #
+    # On CI, `.venv/Scripts` is on PATH and supplies bandit (a dev dependency),
+    # so output is always produced -- never skip there, or the coverage rots
+    # silently the way #683/#693 did.
+    #
+    # On a developer box the set can legitimately come up empty. Measured case:
+    # semgrep resolves from a user-site install but, on a non-UTF-8 console,
+    # crashes inside its own config_resolver (it writes the downloaded ruleset
+    # with the locale codec and the ruleset contains U+202A). It exits 2, which
+    # jmo accepts as an OK return code, and writes no file.
+    if not any(outputs.values()):
+        if in_ci:
+            pytest.fail(
+                "No tool produced output on CI. `.venv/Scripts` should supply "
+                f"bandit; check the PATH step. Requested: {Args.tools}"
+            )
+        pytest.skip(
+            "None of the requested tools both resolved and succeeded on this "
+            f"machine (requested: {Args.tools}); nothing to assert about output."
+        )
+
+    # Some tool worked, so it must have worked for EVERY repo -- this catches a
+    # scan that silently processes only the first target.
+    for name, json_files in outputs.items():
+        assert json_files, f"Repo {name!r} got no output while others did"
 
 
 def test_ci_composes_scan_and_report(tmp_path: Path, monkeypatch):

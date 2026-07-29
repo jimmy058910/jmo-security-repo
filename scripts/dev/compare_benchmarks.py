@@ -280,7 +280,7 @@ def main():
     report = format_markdown_report(comparisons, args.threshold)
 
     # Write to file
-    args.output.write_text(report)
+    args.output.write_text(report, encoding="utf-8")
     print(f"✅ Benchmark comparison report written to: {args.output}")
 
     # Print summary to console

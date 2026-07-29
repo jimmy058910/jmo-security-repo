@@ -190,7 +190,7 @@ def load_versions() -> dict[str, Any]:
         logger.error("versions.yaml not found at %s", VERSIONS_FILE)
         sys.exit(1)
 
-    with VERSIONS_FILE.open() as f:
+    with VERSIONS_FILE.open(encoding="utf-8") as f:
         data: dict[str, Any] = yaml.safe_load(f)
         return data
 
@@ -280,7 +280,7 @@ def run_tool(
         # Check if output was written to file or stdout
         if not output_file.exists() and result.stdout:
             # Tool wrote to stdout, save it
-            output_file.write_text(result.stdout)
+            output_file.write_text(result.stdout, encoding="utf-8")
             logger.info("Captured stdout to %s", output_file)
         elif output_file.exists():
             logger.info("Output written to %s", output_file)
@@ -290,7 +290,7 @@ def run_tool(
                 "%s produced no output (may be valid if no findings)", tool_name
             )
             # Create empty JSON for consistency
-            output_file.write_text("[]")
+            output_file.write_text("[]", encoding="utf-8")
 
         # Log any errors (but don't fail - some tools exit non-zero when findings exist)
         if result.returncode != 0:
@@ -403,7 +403,7 @@ def generate_golden_files(tool_name: str, update: bool = False) -> bool:
 
     # Step 3: Save expected findings
     expected_path = golden_version_dir / "expected-findings.json"
-    with expected_path.open("w") as f:
+    with expected_path.open("w", encoding="utf-8") as f:
         json.dump(expected_findings, f, indent=2, default=str)
     logger.info(
         "Saved %d expected findings to %s", len(expected_findings), expected_path
@@ -421,7 +421,7 @@ def generate_golden_files(tool_name: str, update: bool = False) -> bool:
         ],
     }
     metadata_path = golden_version_dir / "metadata.json"
-    with metadata_path.open("w") as f:
+    with metadata_path.open("w", encoding="utf-8") as f:
         json.dump(metadata, f, indent=2)
 
     logger.info("Golden files generated successfully for %s", tool_name)
@@ -445,7 +445,7 @@ def check_current_versions() -> bool:
             # Load metadata to show info
             metadata_path = golden_version_dir / "metadata.json"
             if metadata_path.exists():
-                with metadata_path.open() as f:
+                with metadata_path.open(encoding="utf-8") as f:
                     metadata = json.load(f)
                 logger.info(
                     "✅ %s v%s: %d findings (generated %s)",

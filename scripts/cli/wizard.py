@@ -1193,7 +1193,7 @@ def offer_policy_evaluation_after_scan(results_dir: str, profile: str, args) -> 
         return
 
     try:
-        findings_data = json.loads(findings_path.read_text())
+        findings_data = json.loads(findings_path.read_text(encoding="utf-8"))
         # Handle both v1.0.0 wrapper format and legacy list format
         if isinstance(findings_data, dict) and "findings" in findings_data:
             findings = findings_data["findings"]

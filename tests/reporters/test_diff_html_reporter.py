@@ -138,7 +138,7 @@ def test_html_react_path(tmp_path, sample_diff_result):
         write_html_diff(sample_diff_result, out_path)
 
     assert out_path.exists()
-    content = out_path.read_text()
+    content = out_path.read_text(encoding="utf-8")
 
     # Verify React template used
     assert "React Dashboard" in content
@@ -155,7 +155,7 @@ def test_html_vanilla_fallback(tmp_path, sample_diff_result, caplog):
         write_html_diff(sample_diff_result, out_path)
 
     assert out_path.exists()
-    content = out_path.read_text()
+    content = out_path.read_text(encoding="utf-8")
 
     # Verify vanilla template used
     assert "Security Diff Report" in content
@@ -182,7 +182,7 @@ def test_html_inline_mode(tmp_path, sample_diff_result):
     _write_html_diff_vanilla(sample_diff_result, out_path)
 
     assert out_path.exists()
-    content = out_path.read_text()
+    content = out_path.read_text(encoding="utf-8")
 
     # Verify inline mode
     assert "window.DIFF_DATA = {" in content
@@ -246,7 +246,7 @@ def test_html_external_mode(tmp_path):
     _write_html_diff_vanilla(diff, out_path)
 
     assert out_path.exists()
-    content = out_path.read_text()
+    content = out_path.read_text(encoding="utf-8")
 
     # Verify external mode
     assert 'fetch("diff-data.json")' in content
@@ -267,7 +267,7 @@ def test_html_dark_mode(tmp_path, sample_diff_result):
 
     _write_html_diff_vanilla(sample_diff_result, out_path)
 
-    content = out_path.read_text()
+    content = out_path.read_text(encoding="utf-8")
 
     # Verify dark mode styles
     assert "body.dark-mode" in content
@@ -281,7 +281,7 @@ def test_html_metadata_section(tmp_path, sample_diff_result):
 
     _write_html_diff_vanilla(sample_diff_result, out_path)
 
-    content = out_path.read_text()
+    content = out_path.read_text(encoding="utf-8")
 
     # Verify metadata present
     assert "baseline-results/" in content
@@ -297,7 +297,7 @@ def test_html_summary_statistics(tmp_path, sample_diff_result):
 
     _write_html_diff_vanilla(sample_diff_result, out_path)
 
-    content = out_path.read_text()
+    content = out_path.read_text(encoding="utf-8")
 
     # Verify statistics rendering logic
     assert "renderSummary" in content
@@ -312,7 +312,7 @@ def test_html_new_findings_section(tmp_path, sample_diff_result):
 
     _write_html_diff_vanilla(sample_diff_result, out_path)
 
-    content = out_path.read_text()
+    content = out_path.read_text(encoding="utf-8")
 
     # Verify new findings rendering
     assert "renderNewFindings" in content
@@ -326,7 +326,7 @@ def test_html_resolved_findings_section(tmp_path, sample_diff_result):
 
     _write_html_diff_vanilla(sample_diff_result, out_path)
 
-    content = out_path.read_text()
+    content = out_path.read_text(encoding="utf-8")
 
     # Verify resolved findings rendering
     assert "renderResolvedFindings" in content
@@ -339,7 +339,7 @@ def test_html_modified_findings_section(tmp_path, sample_diff_result):
 
     _write_html_diff_vanilla(sample_diff_result, out_path)
 
-    content = out_path.read_text()
+    content = out_path.read_text(encoding="utf-8")
 
     # Verify modified findings rendering
     assert "renderModifiedFindings" in content
@@ -353,7 +353,7 @@ def test_html_severity_badges(tmp_path, sample_diff_result):
 
     _write_html_diff_vanilla(sample_diff_result, out_path)
 
-    content = out_path.read_text()
+    content = out_path.read_text(encoding="utf-8")
 
     # Verify severity styles
     assert ".sev-CRITICAL" in content
@@ -369,7 +369,7 @@ def test_html_filters(tmp_path, sample_diff_result):
 
     _write_html_diff_vanilla(sample_diff_result, out_path)
 
-    content = out_path.read_text()
+    content = out_path.read_text(encoding="utf-8")
 
     # Verify filters
     assert "renderFilters" in content
@@ -384,7 +384,7 @@ def test_html_responsive_design(tmp_path, sample_diff_result):
 
     _write_html_diff_vanilla(sample_diff_result, out_path)
 
-    content = out_path.read_text()
+    content = out_path.read_text(encoding="utf-8")
 
     # Verify responsive styles
     assert "@media (max-width: 768px)" in content
@@ -397,7 +397,7 @@ def test_html_security_headers(tmp_path, sample_diff_result):
 
     _write_html_diff_vanilla(sample_diff_result, out_path)
 
-    content = out_path.read_text()
+    content = out_path.read_text(encoding="utf-8")
 
     # Verify security meta tags
     assert "Content-Security-Policy" in content
@@ -412,7 +412,7 @@ def test_html_self_contained(tmp_path, sample_diff_result):
 
     _write_html_diff_vanilla(sample_diff_result, out_path)
 
-    content = out_path.read_text()
+    content = out_path.read_text(encoding="utf-8")
 
     # Verify no external dependencies
     assert "https://cdn" not in content
@@ -472,7 +472,7 @@ def test_html_json_escaping(tmp_path):
     out_path = tmp_path / "xss-test.html"
     _write_html_diff_vanilla(diff, out_path)
 
-    content = out_path.read_text()
+    content = out_path.read_text(encoding="utf-8")
 
     # Verify dangerous characters escaped in JSON data
     assert "<\\/script>" in content  # Escaped in JSON data
@@ -540,7 +540,7 @@ def test_html_empty_diff(tmp_path):
     out_path = tmp_path / "empty-diff.html"
     _write_html_diff_vanilla(diff, out_path)
 
-    content = out_path.read_text()
+    content = out_path.read_text(encoding="utf-8")
 
     # Verify empty state handling
     assert "0" in content  # Statistics should show zeros

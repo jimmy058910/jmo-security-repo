@@ -259,7 +259,7 @@ class TestLanguageDetection:
         # Create file with minimal content
         file_full_path = repo_root / file_path
         file_full_path.parent.mkdir(parents=True, exist_ok=True)
-        file_full_path.write_text("test content\n")
+        file_full_path.write_text("test content\n", encoding="utf-8")
 
         extractor = SourceContextExtractor(repo_root)
         context = extractor.get_context(file_path, 1)
@@ -272,7 +272,7 @@ class TestLanguageDetection:
         repo_root.mkdir()
 
         unknown_file = repo_root / "test.xyz"
-        unknown_file.write_text("test content\n")
+        unknown_file.write_text("test content\n", encoding="utf-8")
 
         extractor = SourceContextExtractor(repo_root)
         context = extractor.get_context("test.xyz", 1)
@@ -322,7 +322,7 @@ class TestGetFullFileContent:
         repo_root.mkdir()
 
         empty_file = repo_root / "empty.py"
-        empty_file.write_text("")
+        empty_file.write_text("", encoding="utf-8")
 
         extractor = SourceContextExtractor(repo_root)
         result = extractor.get_full_file_content("empty.py")
@@ -343,7 +343,8 @@ class TestEdgeCases:
 
         unicode_file = repo_root / "unicode.py"
         unicode_file.write_text(
-            "# -*- coding: utf-8 -*-\n# Comment with émojis 🔥\nprint('Hello 世界')\n"
+            "# -*- coding: utf-8 -*-\n# Comment with émojis 🔥\nprint('Hello 世界')\n",
+            encoding="utf-8",
         )
 
         extractor = SourceContextExtractor(repo_root)
@@ -359,7 +360,7 @@ class TestEdgeCases:
 
         long_file = repo_root / "long.py"
         long_line = "x = " + "a" * 10000 + "\n"
-        long_file.write_text(long_line)
+        long_file.write_text(long_line, encoding="utf-8")
 
         extractor = SourceContextExtractor(repo_root)
         context = extractor.get_context("long.py", 1)
@@ -436,7 +437,7 @@ class TestEdgeCases:
         special_dir.mkdir(parents=True)
 
         special_file = special_dir / "file-name_123.py"
-        special_file.write_text("print('test')\n")
+        special_file.write_text("print('test')\n", encoding="utf-8")
 
         extractor = SourceContextExtractor(repo_root)
         context = extractor.get_context(
@@ -454,7 +455,7 @@ class TestEdgeCases:
 
         # Create original file
         original_file = repo_root / "original.py"
-        original_file.write_text("print('original')\n")
+        original_file.write_text("print('original')\n", encoding="utf-8")
 
         # Create symlink (skip on Windows if not supported)
         try:
@@ -480,7 +481,7 @@ class TestPathTraversalPrevention:
 
         # Create a file outside repo root
         outside_file = tmp_path / "secret.txt"
-        outside_file.write_text("secret data\n")
+        outside_file.write_text("secret data\n", encoding="utf-8")
 
         extractor = SourceContextExtractor(repo_root)
         result = extractor.get_context("../secret.txt", 1)
@@ -505,7 +506,7 @@ class TestPathTraversalPrevention:
         repo_root.mkdir()
 
         outside_file = tmp_path / "secret.txt"
-        outside_file.write_text("secret data\n")
+        outside_file.write_text("secret data\n", encoding="utf-8")
 
         extractor = SourceContextExtractor(repo_root)
         result = extractor.get_full_file_content("../secret.txt")
@@ -518,7 +519,7 @@ class TestPathTraversalPrevention:
         repo_root = tmp_path / "repo"
         repo_root.mkdir()
         (repo_root / "src").mkdir()
-        (repo_root / "src" / "main.py").write_text("print('hello')\n")
+        (repo_root / "src" / "main.py").write_text("print('hello')\n", encoding="utf-8")
 
         extractor = SourceContextExtractor(repo_root)
         result = extractor.get_context("src/main.py", 1)

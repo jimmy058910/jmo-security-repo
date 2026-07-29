@@ -187,7 +187,7 @@ class CICDFlow(BaseWizardFlow):
         # GitHub Actions: look for "image:" or "container:" fields
         for workflow_file in github_actions:
             try:
-                content = workflow_file.read_text()
+                content = workflow_file.read_text(encoding="utf-8")
                 # Match patterns like "image: nginx:latest" or "container: python:3.10"
                 import re
 
@@ -203,7 +203,7 @@ class CICDFlow(BaseWizardFlow):
             try:
                 import yaml
 
-                ci_config = yaml.safe_load(gitlab_ci.read_text())
+                ci_config = yaml.safe_load(gitlab_ci.read_text(encoding="utf-8"))
                 if isinstance(ci_config, dict):
                     # Global image
                     if "image" in ci_config:
@@ -227,7 +227,7 @@ class CICDFlow(BaseWizardFlow):
         # Jenkinsfile: look for "docker.image" or similar
         if jenkinsfile and jenkinsfile.exists():
             try:
-                content = jenkinsfile.read_text()
+                content = jenkinsfile.read_text(encoding="utf-8")
                 import re
 
                 for match in re.finditer(

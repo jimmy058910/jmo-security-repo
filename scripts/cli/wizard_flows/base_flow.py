@@ -128,7 +128,7 @@ class TargetDetector:
         compose_file = search_dir / "docker-compose.yml"
         if compose_file.exists():
             try:
-                compose = yaml.safe_load(compose_file.read_text())
+                compose = yaml.safe_load(compose_file.read_text(encoding="utf-8"))
                 for service in compose.get("services", {}).values():
                     if "image" in service:
                         images.append(service["image"])
@@ -138,7 +138,7 @@ class TargetDetector:
         # From Dockerfiles (extract FROM lines)
         for dockerfile in search_dir.glob("**/Dockerfile*"):
             try:
-                content = dockerfile.read_text()
+                content = dockerfile.read_text(encoding="utf-8")
                 for match in re.finditer(r"FROM\s+([\w/:@.-]+)", content):
                     images.append(match.group(1))
             except (FileNotFoundError, UnicodeDecodeError):
@@ -192,7 +192,7 @@ class TargetDetector:
         compose_file = search_dir / "docker-compose.yml"
         if compose_file.exists():
             try:
-                compose = yaml.safe_load(compose_file.read_text())
+                compose = yaml.safe_load(compose_file.read_text(encoding="utf-8"))
                 for service in compose.get("services", {}).values():
                     ports = service.get("ports", [])
                     for port in ports:

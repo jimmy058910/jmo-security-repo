@@ -40,7 +40,7 @@ class TestCrossPlatformCompatibility:
         # Create test repo
         repo = tmp_path / "linux-test-repo"
         repo.mkdir()
-        (repo / "app.py").write_text("print('Hello Linux')\n")
+        (repo / "app.py").write_text("print('Hello Linux')\n", encoding="utf-8")
         (repo / ".git").mkdir()
 
         results_dir = tmp_path / "results"
@@ -112,7 +112,7 @@ class TestCrossPlatformCompatibility:
         # Step 5: Verify case sensitivity
         # Linux is case-sensitive, so App.py != app.py
         upper_file = repo / "App.py"
-        upper_file.write_text("print('Case test')\n")
+        upper_file.write_text("print('Case test')\n", encoding="utf-8")
 
         assert (repo / "app.py").exists()
         assert (repo / "App.py").exists()
@@ -132,7 +132,7 @@ class TestCrossPlatformCompatibility:
         # Create test repo
         repo = tmp_path / "macos-test-repo"
         repo.mkdir()
-        (repo / "app.py").write_text("print('Hello macOS')\n")
+        (repo / "app.py").write_text("print('Hello macOS')\n", encoding="utf-8")
         (repo / ".git").mkdir()
 
         results_dir = tmp_path / "results"
@@ -210,9 +210,15 @@ class TestCrossPlatformCompatibility:
             assert str(repo).startswith("/")
             assert "Users" in str(repo) or "private" in str(repo) or "tmp" in str(repo)
 
+    # Runs only INSIDE WSL, where sys.platform is "linux" -- there is no win32
+    # interpreter under WSL. Do not add "win32" back: on native Windows a leading
+    # "/" is drive-RELATIVE, so os.path.exists("/mnt/c") resolves to C:\mnt\c and
+    # returns True on any box that happens to have that directory. The guard then
+    # opens and the test asserts POSIX path semantics (line 306) that native
+    # Windows cannot satisfy.
     @pytest.mark.skipif(
-        sys.platform not in ["win32", "linux"] or not os.path.exists("/mnt/c"),
-        reason="Windows/WSL only",
+        sys.platform != "linux" or not os.path.exists("/mnt/c"),
+        reason="WSL only (Linux kernel with Windows drives mounted at /mnt)",
     )
     def test_windows_wsl_full_scan(self, tmp_path):
         """
@@ -230,7 +236,7 @@ class TestCrossPlatformCompatibility:
 
         # Create file with CRLF line endings (Windows style)
         test_code = "print('Hello Windows')\r\nprint('Testing CRLF')\r\n"
-        (repo / "app.py").write_text(test_code)
+        (repo / "app.py").write_text(test_code, encoding="utf-8")
         (repo / ".git").mkdir()
 
         results_dir = tmp_path / "results"
@@ -315,7 +321,7 @@ class TestCrossPlatformCompatibility:
 
         # Step 6: Verify line ending handling
         # Read file and check line endings preserved
-        content = (repo / "app.py").read_text()
+        content = (repo / "app.py").read_text(encoding="utf-8")
         # Python text mode normalizes line endings by default
         # Verify content is readable regardless of line ending style
         assert "Hello Windows" in content
@@ -338,7 +344,7 @@ class TestCrossPlatformCompatibility:
         repo = tmp_path / "path-test-repo"
         repo.mkdir()
         (repo / "src").mkdir()
-        (repo / "src" / "app.py").write_text("print('test')\n")
+        (repo / "src" / "app.py").write_text("print('test')\n", encoding="utf-8")
         (repo / ".git").mkdir()
 
         results_dir = tmp_path / "results"

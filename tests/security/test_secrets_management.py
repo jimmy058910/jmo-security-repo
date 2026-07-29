@@ -56,7 +56,7 @@ class TestSecretsManagement:
                 if "__pycache__" in str(py_file) or "test_" in py_file.name:
                     continue
 
-                content = py_file.read_text()
+                content = py_file.read_text(encoding="utf-8")
                 lines = content.split("\n")
 
                 for line_num, line in enumerate(lines, 1):
@@ -93,7 +93,7 @@ class TestSecretsManagement:
                 # Module doesn't exist, skip
                 continue
 
-            content = module.read_text()
+            content = module.read_text(encoding="utf-8")
 
             # Should use os.environ or os.getenv for sensitive data
             uses_env_vars = (
@@ -246,7 +246,7 @@ class TestSecretsManagement:
                     continue
 
                 try:
-                    content = file.read_text()
+                    content = file.read_text(encoding="utf-8")
                 except (UnicodeDecodeError, PermissionError):
                     continue
 
@@ -296,7 +296,7 @@ class TestSecretsManagement:
                     continue
 
                 try:
-                    content = file.read_text()
+                    content = file.read_text(encoding="utf-8")
                 except (UnicodeDecodeError, PermissionError):
                     continue
 
@@ -338,7 +338,7 @@ class TestSecretsManagement:
                 ):  # Skip self
                     continue
 
-                content = py_file.read_text()
+                content = py_file.read_text(encoding="utf-8")
                 lines = content.split("\n")
 
                 for line_num, line in enumerate(lines, 1):
