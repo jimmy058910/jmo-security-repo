@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
 """Drift guards for the dependency-audit path and the pinned-uv convention.
 
-Two invariants that have each been broken before and are invisible until CI
-goes red for an unrelated-looking reason:
+Invariants that have each been broken before and are invisible until CI goes
+red for an unrelated-looking reason:
 
-1. The two pip-audit `--ignore-vuln` advisories must survive refactors. Both
-   were adopted because no remediation existed: PYSEC-2025-183 is a disputed
-   pyjwt advisory with no fix version, and GHSA-qp9x-wp8f-qgjj could not be
-   resolved while sigstore capped tuf<7 (tracked in #539). Dropping an ignore
-   whose advisory is still live turns every CI run red with nothing to do
-   about it.
+1. A pip-audit `--ignore-vuln` is only justified while there is nothing to
+   adopt. PYSEC-2025-183 is a disputed pyjwt advisory with no fix version, so
+   the ignore is the only available lever and must survive refactors.
 
-2. Exactly one uv version is pinned across every site (the PR #488 convention).
+2. The converse also needs guarding: an ignore whose fix has become reachable
+   must NOT come back. GHSA-qp9x-wp8f-qgjj (tuf) was dropped in #539 once
+   sigstore 4.5.0 lifted the `tuf<7` cap and the lock moved to the fixed
+   7.0.0. Re-adding it would silently mask a regression rather than paper over
+   an unfixable finding -- verified: forcing `tuf<7` back into the lock makes
+   pip-audit report it with fix version 7.0.0 available.
+
+3. Exactly one uv version is pinned across every site (the PR #488 convention).
    The uv.lock migration multiplied the number of pinned sites from ~4 to ~16;
    a single stale pin means one job resolves differently from the rest, which
    is precisely the class of bug this migration removed.
@@ -28,7 +32,14 @@ AUDIT_SCRIPT = REPO_ROOT / "scripts" / "dev" / "audit_deps.sh"
 CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 PRE_COMMIT = REPO_ROOT / ".pre-commit-config.yaml"
 
-REQUIRED_IGNORES = ("PYSEC-2025-183", "GHSA-qp9x-wp8f-qgjj")
+# Advisories with no reachable fix -- the ignore is the only lever, keep it.
+REQUIRED_IGNORES = ("PYSEC-2025-183",)
+
+# Advisories whose fix IS reachable -- an ignore here masks a regression.
+# Maps advisory -> the fix that made it retired, for the failure message.
+RETIRED_IGNORES = {
+    "GHSA-qp9x-wp8f-qgjj": "tuf 7.0.0 (sigstore 4.5.0 lifted the tuf<7 cap) -- issue #539",
+}
 
 # The single pinned uv version. Bump here and at every site in one commit.
 PINNED_UV_VERSION = "0.11.15"
@@ -54,13 +65,33 @@ def test_audit_script_exists_and_is_bash() -> None:
     assert AUDIT_SCRIPT.read_text(encoding="utf-8").startswith("#!/usr/bin/env bash")
 
 
-def test_audit_script_preserves_both_ignores() -> None:
+def test_audit_script_preserves_unfixable_ignores() -> None:
+    """Ignores with no reachable fix must survive refactors."""
     text = AUDIT_SCRIPT.read_text(encoding="utf-8")
     for advisory in REQUIRED_IGNORES:
         assert advisory in text, (
-            f"{advisory} is no longer ignored in audit_deps.sh. Confirm the "
-            "advisory is genuinely resolved in the current lock before "
-            "removing the ignore -- see the script's header comment and #539."
+            f"{advisory} is no longer ignored in audit_deps.sh. It has no fix "
+            "version, so the ignore is the only available lever -- removing it "
+            "turns CI red with nothing to upgrade to. See the script header."
+        )
+
+
+def test_audit_script_does_not_readd_retired_ignores() -> None:
+    """An ignore whose fix is reachable must not come back -- it masks regressions."""
+    # Only the executable invocation matters; the header comment documents the
+    # removal by name and must stay readable.
+    invocation = [
+        ln
+        for ln in AUDIT_SCRIPT.read_text(encoding="utf-8").splitlines()
+        if "--ignore-vuln" in ln and not ln.lstrip().startswith("#")
+    ]
+    joined = "\n".join(invocation)
+    for advisory, fix in RETIRED_IGNORES.items():
+        assert advisory not in joined, (
+            f"{advisory} was re-added to audit_deps.sh, but its fix is "
+            f"reachable: {fix}. Suppressing it now hides a regression instead "
+            "of papering over an unfixable finding. Upgrade the dependency "
+            "rather than restoring the ignore."
         )
 
 

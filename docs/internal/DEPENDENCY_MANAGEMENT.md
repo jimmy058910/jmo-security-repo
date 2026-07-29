@@ -105,14 +105,23 @@ uv export --frozen --quiet --format requirements.txt --no-emit-project --no-hash
 
 The export is universal, so the audited set includes platform-conditional entries such as `pywin32==312 ; sys_platform == 'win32'` no matter which OS runs the audit. A Linux-only audit would silently skip Windows-only dependencies.
 
-Two advisories are ignored, both documented with full reasoning in the script's header:
+### The ignore policy
+
+**An `--ignore-vuln` is only justified while there is nothing to adopt.** The moment a fix becomes reachable, the ignore stops protecting you and starts hiding a regression — so it must be removed, not kept "just in case".
+
+One advisory is currently ignored, documented with full reasoning in the script's header:
 
 | Advisory | Why it is ignored |
 |----------|-------------------|
-| `PYSEC-2025-183` | Disputed pyjwt "weak encryption" advisory. No fix version exists; the maintainer's position is that key length is the calling application's choice. Transitive dev-only via `mcp`. |
-| `GHSA-qp9x-wp8f-qgjj` | tuf delegation path matching, fixed in tuf 7.0.0. Adopted when every sigstore release capped `tuf<7`, making the fix unreachable. Tracking: [#539](https://github.com/jimmy058910/jmo-security-repo/issues/539). |
+| `PYSEC-2025-183` | Disputed pyjwt "weak encryption" advisory. **No fix version exists**, so the ignore is the only available lever. The maintainer's position is that key length is the calling application's choice. Transitive dev-only via `mcp`. Not firing at pyjwt 2.13.0, but retained in case a future resolve lands on a covered version. |
 
-Do not remove either ignore without first confirming the advisory is genuinely absent from the current lock. `tests/unit/test_dep_audit_drift.py` asserts both survive refactoring.
+**Retired — do not re-add:**
+
+| Advisory | Why it was dropped |
+|----------|--------------------|
+| `GHSA-qp9x-wp8f-qgjj` | tuf delegation path matching. Adopted when every sigstore release capped `tuf<7`, making the fix unreachable. sigstore 4.5.0 lifted that cap and the lock now resolves **tuf 7.0.0** — the fixed version — so the ignore was masking regressions rather than papering over an unfixable finding. Removed 2026-07-29, closing [#539](https://github.com/jimmy058910/jmo-security-repo/issues/539). Verified: forcing `tuf<7` back into the lock makes pip-audit report it with fix version 7.0.0 available. |
+
+`tests/unit/test_dep_audit_drift.py` enforces both directions — the unfixable ignore must survive refactors, and the retired one must not come back.
 
 ---
 
