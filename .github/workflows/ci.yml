@@ -22,6 +22,9 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up Python 3.12
+        # Kept alongside the setup-uv step below: several steps in this job
+        # (yamllint, the SARIF validator) pip-install standalone tools and run
+        # before the project venv exists, so they need a system interpreter.
         uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -62,58 +65,48 @@ jobs:
           dockerfile: Dockerfile.deep
           failure-threshold: warning
 
-      - name: Validate requirements-dev.txt Python version
-        run: |
-          python -m pip install uv==0.11.15  # pinned: matches lockfile regen version (companion to PR #488)
-          python scripts/dev/update_dependencies.py --validate
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
+          python-version: '3.12'  # preserves the pin actions/setup-python held
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
-      - name: Check deps-compile freshness
-        # The freshness check is a PR-time validation: "did this PR author forget to
-        # run `make deps-compile`?" It has no purpose on push events (main is the
-        # source of truth) or workflow_dispatch. Dependabot-authored PRs are also
-        # excluded because Dependabot's pip resolver emits structurally different
-        # (but functionally equivalent) lockfiles from uv -- different extras
-        # markers, platform_python_implementation guards, etc. Enforcing byte-for-byte
-        # match against uv output on Dependabot output was a category error.
-        #
-        # Scoped to a single condition: pull_request events from non-Dependabot authors.
-        # This replaces the two-condition (user.login + github.ref) gate from PR #323,
-        # which missed push-to-main events that inherit Dependabot-format lockfiles
-        # after Dependabot PRs merge. See release.rules.md troubleshooting table.
-        if: >-
-          github.event_name == 'pull_request' &&
-          github.event.pull_request.user.login != 'dependabot[bot]'
+      - name: Verify uv.lock is up to date
+        # Semantic check: "is uv.lock consistent with pyproject.toml?" This runs
+        # UNCONDITIONALLY, unlike the deps-compile byte-diff gate it replaces.
+        # That gate had to be scoped to non-Dependabot pull_request events because
+        # Dependabot's pip resolver emitted a structurally different file than
+        # `uv pip compile` -- so it could not be trusted on push or on bot PRs,
+        # and main routinely sat in a format that failed the next human PR.
+        # Dependabot now regenerates uv.lock *with uv*, so bot and human PRs are
+        # resolver-symmetric and pass the identical gate.
+        # History: PRs #321, #323, #677, #682.
+        run: uv lock --check
+
+      - name: Install dependencies
+        run: uv sync --locked --group dev
+
+      - name: Put the project venv on PATH
+        shell: bash
+        # Keeps every existing bare `pytest` / `black` / `ruff` invocation working
+        # unchanged. Windows runners put scripts in .venv/Scripts, POSIX in
+        # .venv/bin; the conditional means a job that later gains a Windows matrix
+        # entry does not silently break.
         run: |
-          python -m pip install uv==0.11.15  # pinned: matches lockfile regen version (companion to PR #488)
-          uv pip compile --universal --python-version 3.12 -o requirements-dev.txt requirements-dev.in
-          git diff --exit-code -- requirements-dev.txt || (echo "requirements-dev.txt is out of date. Run: make deps-compile" && exit 1)
+          if [ -d .venv/Scripts ]; then
+            cygpath -w "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+          else
+            echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          fi
 
       - name: Audit Python dependencies for vulnerabilities
+        # Ignored advisories and their reasoning live in the script -- one place,
+        # two callers (this job and the pip-audit pre-commit hook).
         run: |
           pip install pip-audit
-          # Audit dependencies for known vulnerabilities (CVEs)
-          # Uses OSV database for comprehensive vulnerability coverage
-          #
-          # Ignored advisories (with reasoning):
-          # - PYSEC-2025-183 (CVE-2025-45768): "pyjwt weak encryption" — DISPUTED
-          #   by the maintainer ("key length is chosen by the application that
-          #   uses the library"); no fix version exists; pyjwt is a transitive
-          #   dev-only dep via `mcp` (requirements-dev.txt), not used in
-          #   production paths. Source:
-          #   https://api.osv.dev/v1/vulns/PYSEC-2025-183
-          # - GHSA-qp9x-wp8f-qgjj ("tuf platform-dependent delegation path
-          #   matching", CVSS 4.0 medium): fixed in tuf 7.0.0, but NOT adoptable.
-          #   tuf is a transitive dev-only dep via `sigstore` (SLSA attestation),
-          #   and every sigstore release caps tuf<7.0.0, so the fix is
-          #   unresolvable until sigstore catches up. Drop this ignore then.
-          #   Tracking: #539. Source:
-          #   https://github.com/advisories/GHSA-qp9x-wp8f-qgjj
-          pip-audit -r requirements-dev.txt --progress-spinner=off \
-            --ignore-vuln PYSEC-2025-183 \
-            --ignore-vuln GHSA-qp9x-wp8f-qgjj || {
-            echo "::warning::Vulnerable dependencies detected. Review and update."
-            exit 1
-          }
+          bash scripts/dev/audit_deps.sh
 
       - name: "Guardrails: forbid tracked venv/artifacts"
         run: bash scripts/dev/guardrails_check.sh
@@ -154,9 +147,7 @@ jobs:
 
       - name: "Lint Preview (subset of lint-full)"
         run: |
-          # Install lint dependencies
-          python -m pip install --upgrade 'pip<25.3'
-          pip install -r requirements-dev.txt
+          # mypy/ruff come from the uv-synced venv already on PATH.
 
           # Run critical lint checks (catches 80% of nightly failures early)
           echo "::group::Markdownlint"
@@ -270,34 +261,36 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v7
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v9.0.0
         with:
-          python-version: '3.12'
-          cache: pip
-          cache-dependency-path: requirements-dev.txt
+          version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
+          python-version: '3.12'  # preserves the pin actions/setup-python held
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
-      - name: Install dependencies (with retry)
-        env:
-          PIP_DISABLE_PIP_VERSION_CHECK: "1"
-          PIP_DEFAULT_TIMEOUT: "60"
+      - name: Install dependencies
+        # Replaces two pip installs wrapped in 3-attempt retry loops. uv sync is
+        # a single atomic operation with its own network retries, and it installs
+        # the project editable as well, so the separate `pip install -e .` goes away.
+        run: uv sync --locked --group dev
+
+      - name: Put the project venv on PATH
+        shell: bash
+        # This matrix spans ubuntu, macOS and Windows. Windows needs a
+        # WINDOWS-style path: Git Bash resolves POSIX entries like
+        # /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine, but the
+        # Python process inherits the raw PATH string and shutil.which() on Windows
+        # cannot interpret a POSIX path -- so every external tool lookup (bandit,
+        # semgrep, trivy...) silently returns None and tool-discovery tests fail
+        # while everything else passes. cygpath -w fixes it; the POSIX branch only
+        # ever runs on Linux/macOS.
         run: |
-          python -m pip install --upgrade 'pip<25.3'
-          for attempt in 1 2 3; do
-            echo "[deps] attempt ${attempt} to install requirements-dev.txt"
-            if pip install -r requirements-dev.txt; then
-              break
-            fi
-            sleep 5
-          done
-          # Install project in editable mode
-          for attempt in 1 2 3; do
-            echo "[deps] attempt ${attempt} to install project in editable mode"
-            if pip install -e .; then
-              break
-            fi
-            sleep 5
-          done
+          if [ -d .venv/Scripts ]; then
+            cygpath -w "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+          else
+            echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          fi
 
       - name: Run sharded tests with coverage (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
@@ -651,15 +644,26 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v7
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v9.0.0
         with:
-          python-version: '3.12'
+          version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
+          python-version: '3.12'  # preserves the pin actions/setup-python held
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
       - name: Install dev dependencies
+        run: uv sync --locked --group dev
+
+      - name: Put the project venv on PATH
+        shell: bash
+        # pre-commit, black, ruff and shfmt are invoked bare in later steps.
         run: |
-          python -m pip install --upgrade 'pip<25.3'
-          pip install -r requirements-dev.txt
+          if [ -d .venv/Scripts ]; then
+            cygpath -w "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+          else
+            echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          fi
 
       - name: Cache pre-commit environments
         uses: actions/cache@v6
@@ -789,20 +793,28 @@ jobs:
               - 'Dockerfile.*'
               - 'tests/integration/test_tool_contracts.py'
 
-      - name: Set up Python 3.12
+      - name: Set up uv
         if: steps.changes.outputs.versions == 'true'
-        uses: actions/setup-python@v7
+        uses: astral-sh/setup-uv@v9.0.0
         with:
-          python-version: '3.12'
-          cache: pip
-          cache-dependency-path: requirements-dev.txt
+          version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
+          python-version: '3.12'  # preserves the pin actions/setup-python held
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
       - name: Install JMo Security and test dependencies
         if: steps.changes.outputs.versions == 'true'
+        run: uv sync --locked --group dev
+
+      - name: Put the project venv on PATH
+        if: steps.changes.outputs.versions == 'true'
+        shell: bash
         run: |
-          pip install --upgrade pip setuptools wheel
-          pip install -e .
-          pip install -r requirements-dev.txt
+          if [ -d .venv/Scripts ]; then
+            cygpath -w "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+          else
+            echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          fi
 
       - name: Install security tools for contract tests
         if: steps.changes.outputs.versions == 'true'

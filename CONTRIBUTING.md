@@ -19,7 +19,7 @@ Be respectful and constructive. We expect contributors to follow a standard code
 - Recommended commands:
 
 ```bash
-pip install -e ".[dev]"                # Install in editable mode with dev deps
+uv sync --group dev                    # Install dev deps + project (editable) from uv.lock
 make pre-commit-install                # Setup pre-commit hooks
 jmo tools install --profile balanced   # Install security tools (17 tools)
 make test                              # Run unit tests and coverage

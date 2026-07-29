@@ -34,13 +34,13 @@ Features:
 """
 
 import argparse
+import hashlib
+import os
+import platform
+import shutil
 import subprocess
 import sys
-import shutil
 from pathlib import Path
-import hashlib
-import platform
-import os
 
 # Get project root
 PROJECT_ROOT = Path(__file__).parent.parent.parent.resolve()

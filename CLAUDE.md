@@ -90,7 +90,7 @@ When creating plans (via `/plan` or plan mode): be extremely concise, present a 
 ### Development Setup
 
 ```bash
-pip install -e ".[dev]"                # Install in editable mode with dev deps
+uv sync --group dev                    # Install dev deps + project (editable) from uv.lock
 make pre-commit-install                # Setup pre-commit hooks
 jmo tools install --profile balanced   # Install security tools
 make test-fast                         # Fast parallel tests (recommended for dev)

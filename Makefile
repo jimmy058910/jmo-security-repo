@@ -1,6 +1,6 @@
 # Makefile - Developer shortcuts for terminal-first workflow
 
-.PHONY: help fmt lint typecheck test test-fast test-parallel test-profile test-e2e test-e2e-visual test-e2e-report verify clean tools verify-env analyze-completeness verify-completeness dev-deps dev-setup pre-commit-install pre-commit-run install-git-hooks upgrade-pip deps-compile deps-sync deps-refresh uv-sync docker-build docker-build-all docker-build-local docker-push docker-test validate-readme check-pypi-readme collect-metrics metrics verify-badges samples-clean samples-scan samples-report samples-verify regenerate-samples dist dist-clean dist-verify clean-build clean-test clean-caches clean-all
+.PHONY: help fmt lint typecheck test test-fast test-parallel test-profile test-e2e test-e2e-visual test-e2e-report verify clean tools verify-env analyze-completeness verify-completeness dev-deps dev-setup pre-commit-install pre-commit-run install-git-hooks upgrade-pip deps-sync deps-lock deps-upgrade docker-build docker-build-all docker-build-local docker-push docker-test validate-readme check-pypi-readme collect-metrics metrics verify-badges samples-clean samples-scan samples-report samples-verify regenerate-samples dist dist-clean dist-verify clean-build clean-test clean-caches clean-all
 
 # Prefer workspace venv if available
 PY := $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
@@ -25,12 +25,9 @@ help:
 	@echo "  analyze-completeness - Run repository completeness analyzer (doc-code drift detection)"
 	@echo "  dev-deps  - Install Python dev dependencies"
 	@echo "  upgrade-pip - Upgrade pip/setuptools/wheel in current Python env"
-	@echo "  deps-compile - Use uv to compile requirements-dev.in -> requirements-dev.txt (universal, all platforms)"
-	@echo "  deps-sync    - Use uv to sync the environment to requirements-dev.txt"
-	@echo "  deps-refresh - Recompile + sync dev deps (uv)"
-	@echo "  deps-validate - Validate requirements-dev.txt Python version and conflicts"
-	@echo "  deps-upgrade  - Upgrade all dependencies to latest versions (use with caution)"
-	@echo "  deps-check-outdated - Check for outdated packages"
+	@echo "  deps-sync    - Install/refresh the dev environment from uv.lock (uv sync)"
+	@echo "  deps-lock    - Regenerate uv.lock from pyproject.toml (uv lock)"
+	@echo "  deps-upgrade - Upgrade all locked deps to latest compatible (uv lock --upgrade)"
 	@echo "  pre-commit-install - Install git hooks (pre-commit)"
 	@echo "  pre-commit-run     - Run pre-commit on all files"
 	@echo "  install-git-hooks  - Install git hooks (pre-push with Python 3.11 support)"
@@ -190,34 +187,30 @@ verify-completeness:  ## Verify no critical completeness issues (for CI)
 	echo ""; \
 	echo "✅ No critical completeness issues (total: $$TOTAL)"
 
-dev-deps:
-	$(PY) -m pip install -r requirements-dev.txt || true
-	@if ! command -v pre-commit >/dev/null 2>&1; then $(PY) -m pip install pre-commit || true; fi
+dev-deps: deps-sync
 
 upgrade-pip:
 	$(PY) -m pip install -U pip setuptools wheel
 
-deps-compile:
-	@$(PY) -m pip install -q uv==0.11.15  # pinned: matches ci.yml deps-compile (PR #488)
-	@if [ -f requirements-dev.in ]; then uv pip compile --universal --python-version 3.12 -o requirements-dev.txt requirements-dev.in; else echo 'requirements-dev.in not found'; exit 1; fi
-
+# Local dev uses plain `uv sync` (not --locked) on purpose: it refreshes a stale
+# lock automatically and the change shows up in `git diff`. CI and pre-commit use
+# the strict form (`uv sync --locked` / `uv lock --check`) so a stale lock can
+# never merge. A local hard-fail would add a manual step protecting nothing the
+# CI gate does not already cover.
 deps-sync:
-	@command -v uv >/dev/null 2>&1 || $(PY) -m pip install uv
-	@if [ -f requirements-dev.txt ]; then uv pip sync requirements-dev.txt; else echo 'requirements-dev.txt not found'; exit 1; fi
+	@command -v uv >/dev/null 2>&1 || $(PY) -m pip install uv==0.11.15  # pinned (PR #488)
+	uv sync --group dev
 
-deps-refresh: upgrade-pip deps-compile deps-sync
-
-deps-validate:
-	@$(PY) scripts/dev/update_dependencies.py --validate
+deps-lock:
+	@command -v uv >/dev/null 2>&1 || $(PY) -m pip install uv==0.11.15  # pinned (PR #488)
+	uv lock
 
 deps-upgrade:
-	@echo "WARNING: This will upgrade ALL dependencies to latest versions"
+	@echo "WARNING: This will upgrade ALL locked dependencies to latest compatible versions"
 	@echo "Press Ctrl+C to cancel, or Enter to continue..."
 	@read dummy
-	@$(PY) scripts/dev/update_dependencies.py --upgrade
-
-deps-check-outdated:
-	@$(PY) scripts/dev/update_dependencies.py --check-outdated
+	@command -v uv >/dev/null 2>&1 || $(PY) -m pip install uv==0.11.15  # pinned (PR #488)
+	uv lock --upgrade
 
 pre-commit-install:
 	@if command -v pre-commit >/dev/null 2>&1; then pre-commit install; else echo 'pre-commit not found. Run: make dev-deps'; fi
@@ -238,11 +231,9 @@ install-git-hooks:
 		echo "ERROR: hooks/pre-push not found"; exit 1; \
 	fi
 
-# Convenience target: install dev deps and the package in editable mode so
-# `from scripts...` imports work without tweaking PYTHONPATH.
-dev-setup:
-	$(PY) -m pip install -r requirements-dev.txt
-	$(PY) -m pip install -e .
+# Convenience target: `uv sync` installs the dev group AND the project itself in
+# editable mode, so `from scripts...` imports work without tweaking PYTHONPATH.
+dev-setup: deps-sync
 
 clean:
 	rm -rf .pytest_cache .ruff_cache __pycache__ */__pycache__ *.pyc *.pyo .mypy_cache
