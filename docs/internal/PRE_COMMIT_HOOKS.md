@@ -4,7 +4,7 @@
 
 JMo Security uses [pre-commit](https://pre-commit.com/) to enforce code quality, security, and consistency before commits reach the repository.
 
-**Key Feature:** The `deps-compile` hook automatically re-executes with Python 3.12+ if run with an older Python version, preventing dependency version mismatches.
+**Key Feature:** The `uv-lock` hook fails the commit when `uv.lock` and `pyproject.toml` disagree, so a stale lockfile can never reach CI.
 
 ---
 
@@ -76,55 +76,40 @@ Once installed, hooks run automatically:
 
 #### Dependency Management
 
-1. **deps-compile** — Auto-compile requirements-dev.txt with Python 3.12+
-2. **pip-audit** — Scan requirements-dev.txt for known CVEs (OSV database)
+1. **uv-lock** — Verify `uv.lock` matches `pyproject.toml`
+2. **pip-audit** — Scan the locked dependency set for known CVEs (OSV database)
 
 ---
 
 ## Hook Details
 
-### deps-compile (Critical)
+### uv-lock (Critical)
 
-**Purpose:** Ensures `requirements-dev.txt` is always compiled with Python 3.12+ to match CI/CD environments.
+**Purpose:** Ensures `uv.lock` stays consistent with the dependencies declared in `pyproject.toml`.
 
 **Behavior:**
 
-1. Triggers when `requirements-dev.in` is modified
-2. Detects active Python version
-3. If Python <3.12, **automatically re-executes with Python 3.12**
-4. Compiles dependencies with correct Python version
-5. Fails if no Python 3.12+ found on system
+1. Triggers when `pyproject.toml` or `uv.lock` is modified
+2. Installs the pinned `uv==0.11.15` if `uv` is not already available
+3. Runs `uv lock --check`
+4. Fails the commit if the lock is stale
 
-**Example Output (Auto-Reexec):**
-
-```bash
-$ git commit -m "deps: update pytest"
-[warn] Python 3.8 detected, re-executing with python3.12...
-[ok] Python 3.12 (meets requirement ≥3.12)
-[info] Running uv pip compile --universal --python-version 3.12 (will preserve existing versions if compatible)
-[ok] requirements-dev.txt compiled successfully
-[ok] No dependency conflicts detected
-```
-
-**Example Output (No Python 3.12+):**
+**Example Output (stale lock):**
 
 ```bash
-$ git commit -m "deps: update pytest"
-[error] Python 3.12+ required (detected 3.8)
-[hint] No Python 3.12+ found on system
-[hint] Install: sudo apt install python3.12  # Ubuntu/Debian
-[hint] Or: brew install python@3.12  # macOS
+$ git commit -m "deps: add tabulate"
+The lockfile at `uv.lock` needs to be updated, but `--check` was provided.
+ERROR: uv.lock is out of date with pyproject.toml.
+Run: make deps-lock
 ```
+
+Fix with `make deps-lock && git add uv.lock`.
 
 **Why This Matters:**
 
-Running `make deps-compile` with Python 3.8 can cause:
+`uv.lock` is the single source of installed versions for local development and every CI job. A commit that changes `pyproject.toml` without regenerating the lock produces an environment nobody can reproduce, and CI's `uv sync --locked` hard-fails on it. Catching it at commit time keeps that feedback local.
 
-- Dependency conflicts
-- Package downgrades
-- CI incompatibility (CI uses Python 3.12)
-
-The hook automatically uses the correct Python version, preventing these issues.
+**Why it is a local hook, not `astral-sh/uv-pre-commit`:** `maintenance.yml` runs `pre-commit autoupdate` weekly, which would drift a third-party hook's rev away from the uv version pinned at every other site — reintroducing the resolver divergence the uv.lock migration removed.
 
 ### bandit (Security)
 
@@ -212,22 +197,21 @@ git push
 git commit --no-verify -m "emergency fix"
 
 # Skip specific hook
-SKIP=deps-compile git commit -m "fix: typo in docs"
+SKIP=uv-lock git commit -m "fix: typo in docs"
 
 # Skip multiple hooks
-SKIP=deps-compile,mypy git commit -m "WIP: draft changes"
+SKIP=uv-lock,mypy git commit -m "WIP: draft changes"
 ```
 
 **When to skip:**
 
 - Emergency hotfixes (revert later)
 - WIP commits (clean up before push)
-- Dependency updates (when you know Python version is correct)
 
 **Never skip:**
 
 - Security hooks (detect-private-key, bandit)
-- Dependency compilation (unless you manually verified Python 3.12+)
+- `uv-lock` on a commit that touches `pyproject.toml` — CI's `uv sync --locked` will fail anyway, just later and further from the change
 
 ### Updating Hooks
 
@@ -250,25 +234,18 @@ git commit -m "deps(pre-commit): update hooks"
 
 ## Troubleshooting
 
-### Error: "deps-compile requires Python 3.12+"
+### Error: "uv.lock is out of date with pyproject.toml"
 
-**Cause:** No Python 3.12+ interpreter found on system.
+**Cause:** Dependencies were changed in `pyproject.toml` without regenerating the lock.
 
 **Fix:**
 
 ```bash
-# Ubuntu/Debian
-sudo apt update
-sudo apt install python3.12
-
-# macOS (Homebrew)
-brew install python@3.12
-
-# Verify installation
-python3.12 --version
+make deps-lock
+git add uv.lock
 ```
 
-### Error: "hook id 'deps-compile' is unknown"
+### Error: "hook id 'uv-lock' is unknown"
 
 **Cause:** Pre-commit hooks not installed.
 
@@ -280,43 +257,31 @@ make pre-commit-install
 
 ### Error: "uv not installed"
 
-**Cause:** `uv` not available in active Python environment.
+**Cause:** `uv` not available on PATH. The hook installs it automatically, so this only appears if that install fails.
 
 **Fix:**
 
 ```bash
-# Install uv
-pip install uv
-
-# Verify
+python -m pip install uv==0.11.15   # pinned: matches every other site
 uv --version
 ```
 
-### Error: "Cannot install package because of conflicting dependencies"
+### A dependency resolves to an unexpected version
 
-**Cause:** Dependency conflicts in `requirements-dev.in`.
+**Cause:** Declarations are floors (`>=`), so a fresh resolve floats to the newest compatible release.
 
 **Fix:**
 
-1. Check conflicts:
+1. See what actually moved:
 
    ```bash
-   python3.12 scripts/dev/update_dependencies.py --validate
+   git diff uv.lock
    ```
 
-2. Review error messages for conflicting packages
-
-3. Pin conflicting package in `requirements-dev.in`:
+2. If a major bump is unwanted, add an upper bound in `pyproject.toml` with a comment saying why (see `mcp[cli]>=1.0.0,<2` for the pattern), then:
 
    ```bash
-   # Example: checkov requires packaging<24.0
-   echo "packaging<24.0  # Required by checkov" >> requirements-dev.in
-   ```
-
-4. Recompile:
-
-   ```bash
-   make deps-compile
+   make deps-lock
    ```
 
 ### Hook takes too long
@@ -366,15 +331,17 @@ The CI workflow (`.github/workflows/ci.yml`) runs hooks automatically:
 
 ### Skipped Hooks in CI
 
-Some hooks are skipped in CI for performance:
+Some hooks are skipped for performance or because CI covers them separately:
 
 ```yaml
-# .github/workflows/ci.yml
+# .github/workflows/scheduled.yml -- Lint (full pre-commit suite)
 env:
-  SKIP: deps-compile  # Handled separately in CI
+  SKIP: bandit,yamllint
 ```
 
-**Rationale:** CI already validates `requirements-dev.txt` in a separate step with explicit Python version control.
+`bandit` is already covered by `make lint`, and `yamllint` is skipped there only to avoid descending into third-party pre-commit cache fixtures.
+
+**`uv-lock` is deliberately NOT skipped.** Its predecessor (`deps-compile`) had to be, because Dependabot's pip resolver left `requirements-dev.txt` in a non-canonical format after every bot merge, so `main` could not satisfy the check. Dependabot now regenerates `uv.lock` with uv, making the lock on `main` canonical by construction — the check is safe to run everywhere, and `ci.yml` runs `uv lock --check` on every event and author.
 
 ---
 
@@ -386,7 +353,7 @@ env:
 - ✅ **Run `make pre-commit-run` before pushing** to catch all issues
 - ✅ **Update hooks monthly** with `pre-commit autoupdate`
 - ✅ **Fix hook failures** instead of skipping
-- ✅ **Use Python 3.12+ for development** to avoid auto-reexec overhead
+- ✅ **Regenerate `uv.lock` in the same commit** as any `pyproject.toml` dependency change
 
 ### ❌ DON'T
 
@@ -394,7 +361,7 @@ env:
 - ❌ **Never commit with `--no-verify`** unless emergency
 - ❌ **Never modify `.pre-commit-config.yaml` without testing**
 - ❌ **Never pin hook versions** (use `autoupdate` instead)
-- ❌ **Never compile requirements-dev.txt manually** (use hook or `make deps-compile`)
+- ❌ **Never hand-edit `uv.lock`** (use `make deps-lock`)
 
 ---
 
@@ -453,8 +420,8 @@ repos:
 | bandit | scripts/*.py | 5-15s | No |
 | shellcheck | *.sh | 2-5s | Yes |
 | actionlint | .github/workflows/*.yml | 3-8s | No |
-| deps-compile | requirements-dev.in | 30-60s | N/A |
-| pip-audit | requirements-dev.{in,txt} | 30-60s | N/A |
+| uv-lock | pyproject.toml, uv.lock | 1-3s | N/A |
+| pip-audit | pyproject.toml, uv.lock | 30-60s | N/A |
 
 **Total (typical commit):** 30-60 seconds
 **Total (deps update):** 90-120 seconds (includes pip-audit network call)
@@ -488,26 +455,27 @@ repos:
 
 ## Lessons Learned
 
-### Python Version Detection
+### One gate, everywhere, for everyone
 
-The `deps-compile` hook includes automatic Python version detection:
+`uv-lock` replaced a `deps-compile` gate that compared a freshly compiled
+`requirements-dev.txt` byte-for-byte against the committed one. That gate could
+never run unconditionally: Dependabot edited the generated file with its own pip
+resolver, whose output differed structurally from uv's, so the check had to be
+scoped to non-Dependabot pull requests. `main` then routinely held a format that
+failed the next human PR.
 
-- Hook auto-detects and re-executes with Python 3.12+
-- Prevents dependency mismatches automatically
-- Zero manual intervention required
+The lesson is that **a gate you have to exempt writers from is not a gate.** The
+fix was removing the second writer, not refining the exemption. `uv lock --check`
+is resolver-symmetric, so bot and human commits face the identical check with no
+event scoping and no SKIP list.
 
-**Impact:**
+**Prevention mechanisms:**
 
-- **Time saved:** 5-10 minutes per dependency update (no manual debugging)
-- **Error prevention:** Catches Python version issues before commit
-- **Developer experience:** Seamless workflow regardless of active Python
-
-### Prevention Mechanisms
-
-1. **Auto-reexec:** Script detects Python version and re-runs with correct version
-2. **Clear errors:** If no Python 3.12+ found, provides installation instructions
-3. **CI validation:** GitHub Actions validates Python version independently
-4. **Documentation:** This guide prevents future confusion
+1. **Commit-time check:** `uv-lock` fails locally before a stale lock reaches CI
+2. **CI check:** `uv lock --check` runs on every event and author
+3. **Same resolver everywhere:** Dependabot regenerates `uv.lock` with uv
+4. **Drift guards:** `tests/unit/test_dep_audit_drift.py` and
+   `tests/unit/test_uv_lock_platform_coverage.py`
 
 ---
 

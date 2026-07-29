@@ -159,7 +159,7 @@ docker run --rm \
 
 ```yaml
 - name: Install dev dependencies
-  run: pip install -r requirements-dev.txt
+  run: uv sync --locked --group dev
 ```
 
 Compare against the `e2e-tool-integration` job pattern in `.github/workflows/scheduled.yml`.

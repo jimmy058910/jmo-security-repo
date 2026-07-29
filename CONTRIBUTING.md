@@ -65,28 +65,26 @@ make dev-setup
 pip install -e ".[reporting]"
 ```
 
-- Update Python tooling/deps:
+- Refresh your environment after pulling:
 
 ```bash
-python -m pip install -U pip setuptools wheel
-make dev-deps   # re-installs latest unpinned dev deps from requirements-dev.txt
+make deps-sync   # installs/removes packages to match uv.lock exactly
 ```
-
-Notes:
-
-- `requirements-dev.txt` is intentionally lightweight. For reproducible, pinned dev deps, this repo now includes a `requirements-dev.in` and Make targets for uv.
 
 ### Reproducible dev deps (uv)
 
-Use uv:
+Dev dependencies are declared once, in `pyproject.toml` under `[dependency-groups] dev`
+(PEP 735), and locked in a tracked, universal `uv.lock`:
 
 ```bash
-make upgrade-pip         # optional but recommended
-make deps-compile        # compile requirements-dev.in -> requirements-dev.txt (via uv)
-make deps-sync           # sync your env to requirements-dev.txt (installs/removes as needed)
+make deps-sync     # install/refresh your env from uv.lock
+make deps-lock     # regenerate uv.lock after editing pyproject.toml
+make deps-upgrade  # float everything to latest compatible (deliberate refresh)
 ```
 
-CI note: Pull requests include an automated check that `requirements-dev.txt` matches `requirements-dev.in`. If it fails, run `make deps-compile` locally, commit the updated `requirements-dev.txt`, and push.
+CI note: pull requests check that `uv.lock` is consistent with `pyproject.toml`
+(`uv lock --check`). If it fails, run `make deps-lock`, commit `uv.lock`, and push.
+Full detail in [docs/internal/DEPENDENCY_MANAGEMENT.md](docs/internal/DEPENDENCY_MANAGEMENT.md).
 
 ### External security tools (CLI)
 
@@ -154,7 +152,7 @@ pre-commit autoupdate
 ### When to bump project dependencies
 
 - Runtime deps live in `pyproject.toml`. If you need newer features or fixes from `PyYAML`/`jsonschema` (used for reporting), bump the constraints under `[project.optional-dependencies]` and open a PR with a brief note in `CHANGELOG.md`.
-- Dev-only tools are managed via `requirements-dev.txt` and pre-commit; prefer updating them via `pre-commit autoupdate` and re-running `make dev-deps`.
+- Dev-only tools are declared in `pyproject.toml`'s `[dependency-groups] dev` and pinned by `uv.lock`; prefer updating them via `pre-commit autoupdate` plus `make deps-upgrade`, then `make deps-sync`.
 
 If you’re unsure which path to use, open an issue and we’ll help you choose between bumping project deps vs. updating local dev tooling.
 
@@ -768,7 +766,7 @@ A pre-push git hook is installed in `.git/hooks/pre-push` that automatically che
 
 1. **Untracked Python files** in `scripts/` directory
 2. **Missing critical modules** (compliance_frameworks, exceptions, tool_runner, etc.)
-3. **Out-of-sync requirements files** (requirements-dev.in vs requirements-dev.txt)
+3. *(Lockfile freshness is no longer checked here — the `uv-lock` pre-commit hook catches it earlier, at commit time.)*
 
 The hook runs automatically before every push and takes ~5 seconds. To bypass in emergencies:
 
@@ -797,18 +795,19 @@ python3 -c "import scripts.core.your_new_module"
 
 **Solution:** The pre-push hook catches this before it breaks Dependabot, preventing cascading failures.
 
-#### Requirements file synchronization
+#### Lockfile synchronization
 
-When modifying `requirements-dev.in`:
+When changing dependencies in `pyproject.toml`:
 
 ```bash
-# After editing requirements-dev.in
-make deps-compile  # Regenerate requirements-dev.txt
-git add requirements-dev.in requirements-dev.txt
+# After editing pyproject.toml
+make deps-lock     # Regenerate uv.lock
+make deps-sync     # Apply it to your environment
+git add pyproject.toml uv.lock
 git commit -m "deps: update development dependencies"
 ```
 
-**CI validation:** Pull requests automatically check that `requirements-dev.txt` matches `requirements-dev.in`. If the check fails, run `make deps-compile` and commit the updated file.
+**CI validation:** pull requests run `uv lock --check` on every event and author. If it fails, run `make deps-lock` and commit `uv.lock`.
 
 ## Weekly Maintenance Routine
 
@@ -831,7 +830,7 @@ To prevent technical debt accumulation and nightly CI failures, maintainers shou
    # Get the failed run ID
    gh run view <run-id> --log-failed
 
-   # Categorize failures (actionlint, markdownlint, mypy, deps-compile)
+   # Categorize failures (actionlint, markdownlint, mypy, uv-lock)
    # Follow jmo-ci-debugger skill pattern #14
    ```
 
@@ -853,7 +852,7 @@ To prevent technical debt accumulation and nightly CI failures, maintainers shou
 
 **Nightly CI catches issues that PR checks miss:**
 
-- **PR checks (quick-checks):** Fast validation (2-3 min), runs actionlint, yamllint, deps-compile freshness
+- **PR checks (quick-checks):** Fast validation (2-3 min), runs actionlint, yamllint, `uv lock --check` freshness
 - **Nightly lint-full:** Comprehensive validation (8-12 min), runs full pre-commit suite including markdownlint, mypy, ruff, bandit
 
 **Common cascade pattern:**
@@ -940,25 +939,25 @@ pre-commit run markdownlint --all-files
 npx markdownlint-cli2 --fix "**/*.md" "#node_modules"
 ```
 
-#### 2. Requirements Drift (deps-compile freshness)
+#### 2. Lockfile Drift (`uv lock --check`)
 
 **Symptoms:**
 
 ```text
-requirements-dev.txt is out of date. Run: make deps-compile
+The lockfile at `uv.lock` needs to be updated, but `--check` was provided.
 ```
 
-**Root Cause:** Local `uv pip compile --universal --python-version 3.12` uses absolute paths, CI uses relative paths.
+**Root Cause:** `pyproject.toml` dependencies changed without regenerating the lock.
 
 **Quick Fix:**
 
 ```bash
-# Regenerate with relative paths
-make deps-compile
-
-# Verify no absolute paths
-grep "/home/" requirements-dev.txt && echo "❌ Absolute paths detected!"
+make deps-lock
+git add uv.lock
 ```
+
+Unlike the gate it replaced, this check is resolver-symmetric — Dependabot
+regenerates `uv.lock` with uv too, so bot PRs pass exactly the same check.
 
 #### 3. Pre-commit Hook Version Drift
 
