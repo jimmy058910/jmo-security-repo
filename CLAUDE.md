@@ -40,6 +40,52 @@ JMo Security is a terminal-first security audit toolkit orchestrating 27+ scanne
 make fmt && make lint && make test
 ```
 
+### Merge Authorization: an Evidence Gate, not a Second Approval
+
+In an **attended session** (the user is present and has said to ship it), merge is
+gated on evidence rather than a second approval. Before merging you must:
+
+1. **Name** the specific verification that could catch *this* change's failure
+   mode **and that CI cannot provide**.
+2. **Run it**, and put the **actual numbers** in the PR description.
+3. Merge only if that passes **and** CI is green.
+
+**Stop and ask** if the gate can't run, is inconclusive, or the change grew
+beyond its stated scope. For many PRs (a dependency bump) the honest answer is
+"CI is sufficient" — say so and merge.
+
+> **Why evidence and not approval.** On PR #695, CI went green *before* the
+> native-console run finished — and that run is what found 3 regressions. Merging
+> on CI green would have shipped them; asking the user would have had them
+> approving on the same blind signal. What protected `main` was a verification CI
+> **structurally could not perform**. That is the thing worth requiring.
+>
+> **Unattended runs are different.** The weekly-maintenance routine's auto-merge
+> tier is a separate, narrower carve-out — see `C:\Projects\CLAUDE.md`. Do not
+> read this section as widening it.
+
+**The two verifications this repo has learned it needs** (see
+[testing.cross-platform.rules.md](.claude/rules/testing.cross-platform.rules.md)):
+
+- **Diff failing-test ID *sets*, never counts.** A change can fix N tests and
+  break N others, leaving every count identical. That is not hypothetical — it
+  happened on #695.
+- **Read the `windows-2022` shard's job log, not its check tick.** It is
+  `continue-on-error: true` and reports green over exit-code-1 failures. A shifted
+  **skip** count is as much a signal as a failure.
+
+### Plans Are Hypotheses Until Measured
+
+A plan written without running anything is a set of predictions, not a spec.
+The #694 encoding plan had **8 measured-false claims**, including a reproduction
+that could never fail (it exited at argparse before reaching the bug) and a
+scoping premise — "153 `PLW1514` sites = the read-side failure class" — that
+turned out nearly disjoint from the actual failures (fixing all 153 fixed **0**).
+
+So: **spend the first hour measuring, then plan.** When executing someone else's
+plan, verify its central claims before building on them, and when one is wrong,
+fix the plan rather than working around it.
+
 ### Artifact Guardrails (CI blocks these)
 
 - No `venv/`, `__pycache__/`, `build/`, `dist/` in git
