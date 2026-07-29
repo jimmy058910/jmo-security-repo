@@ -223,7 +223,7 @@ class ToolRunner:
         Returns:
             ToolResult with execution status and metadata
         """
-        start_time = time.time()
+        start_time = time.perf_counter()
         rc = tool.retry_config
         attempt = 0
         last_error = ""
@@ -248,7 +248,7 @@ class ToolRunner:
 
                 # Check if return code is acceptable
                 if result.returncode in tool.ok_return_codes:
-                    duration = time.time() - start_time
+                    duration = time.perf_counter() - start_time
                     return ToolResult(
                         tool=tool.name,
                         status="success",
@@ -307,7 +307,7 @@ class ToolRunner:
 
             except FileNotFoundError:
                 # Tool not found - never retry
-                duration = time.time() - start_time
+                duration = time.perf_counter() - start_time
                 return ToolResult(
                     tool=tool.name,
                     status="error",
@@ -348,7 +348,7 @@ class ToolRunner:
                 break
 
         # All retries exhausted for the last failure type
-        duration = time.time() - start_time
+        duration = time.perf_counter() - start_time
         return ToolResult(
             tool=tool.name,
             status="retry_exhausted" if attempt > 1 else "error",
