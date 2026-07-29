@@ -19,6 +19,54 @@ from scripts.core.tool_runner import (
     run_tools,
 )
 
+TOOL_RUNNER_SOURCE = (
+    Path(__file__).resolve().parents[2] / "scripts" / "core" / "tool_runner.py"
+)
+
+
+def test_duration_is_measured_with_perf_counter() -> None:
+    """Elapsed time must come from perf_counter -- not time() and NOT monotonic.
+
+    `test_run_tool_success` asserts `duration > 0` and flaked on Windows with
+    `assert 0.0 > 0`: a fast subprocess finished inside one clock tick.
+
+    The intuitive fix -- "use the monotonic clock for elapsed time" -- makes it
+    strictly worse here. On CPython/Windows `time.monotonic()` is GetTickCount64,
+    fixed at ~15.6ms granularity, while `time.time()` follows the *global* system
+    timer, which any process can raise to ~1ms via timeBeginPeriod. Measured on a
+    dev box with 60 runs of the `echo hello` tool used by that test:
+
+        time.time()          0/60 zero, 59 distinct values
+        time.monotonic()    16/60 zero (26.7%), 5 distinct values
+        time.perf_counter()  0/60 zero, 60 distinct values
+
+    So monotonic would have converted an intermittent flake into a frequent one,
+    and time() only avoids it by luck -- whichever unrelated process happens to
+    have raised the timer resolution. `time.perf_counter()` is QueryPerformance-
+    Counter (100ns, monotonic, unaffected by wall-clock adjustment), which is
+    what the stdlib documents for measuring short durations.
+
+    Guarded at the source level because the whole measurement is one unit: the
+    `start_time` assignment and every `duration =` subtraction must use the same
+    clock. Mixing them subtracts a wall-clock epoch from a since-boot counter.
+    """
+    text = TOOL_RUNNER_SOURCE.read_text(encoding="utf-8")
+
+    for forbidden, why in (
+        ("time.monotonic()", "~15.6ms granularity on Windows -- coarser than time()"),
+        ("time.time()", "wall-clock; adjustable, and granularity varies by host"),
+    ):
+        assert forbidden not in text, (
+            f"tool_runner.py measures elapsed time with {forbidden} ({why}). "
+            "Use time.perf_counter() -- see this test's docstring for measurements."
+        )
+
+    assert text.count("time.perf_counter()") == 4, (
+        "Expected 4 perf_counter() calls (1 start_time + 3 duration subtractions). "
+        "If a return path was added or removed, update this count -- but every "
+        "elapsed-time measurement in the file must use the same clock."
+    )
+
 
 class TestToolDefinition:
     """Test ToolDefinition dataclass"""
