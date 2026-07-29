@@ -1003,7 +1003,7 @@ def run_wizard(
         if emit_make:
             command = generate_command(config)
             content = generate_makefile_target(config, command)
-            Path(emit_make).write_text(content)
+            Path(emit_make).write_text(content, encoding="utf-8")
             print(f"\n{_colorize('Generated:', 'green')} {emit_make}")
             return 0
 
@@ -1013,7 +1013,7 @@ def run_wizard(
             script_path = Path(emit_script)
             try:
                 script_path.parent.mkdir(parents=True, exist_ok=True)
-                script_path.write_text(content)
+                script_path.write_text(content, encoding="utf-8")
             except OSError as e:
                 print(f"Error: Could not write to {emit_script}: {e}")
                 return 1
@@ -1029,7 +1029,7 @@ def run_wizard(
             content = generate_github_actions(config, PROFILES)
             gha_path = Path(emit_gha)
             gha_path.parent.mkdir(parents=True, exist_ok=True)
-            gha_path.write_text(content)
+            gha_path.write_text(content, encoding="utf-8")
             print(f"\n{_colorize('Generated:', 'green')} {emit_gha}")
             return 0
 

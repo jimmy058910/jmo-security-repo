@@ -1377,7 +1377,9 @@ def _check_reporter_json() -> CheckResult:
         from scripts.core.reporters.basic_reporter import write_json
 
         findings = [_make_sample_finding()]
-        with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w") as f:
+        with tempfile.NamedTemporaryFile(
+            encoding="utf-8", suffix=".json", delete=False, mode="w"
+        ) as f:
             tmp_path = Path(f.name)
         try:
             write_json(findings, tmp_path)
@@ -1431,7 +1433,9 @@ def _check_reporter_html() -> CheckResult:
         from scripts.core.reporters.simple_html_reporter import write_simple_html
 
         findings = [_make_sample_finding()]
-        with tempfile.NamedTemporaryFile(suffix=".html", delete=False, mode="w") as f:
+        with tempfile.NamedTemporaryFile(
+            encoding="utf-8", suffix=".html", delete=False, mode="w"
+        ) as f:
             tmp_path = Path(f.name)
         try:
             write_simple_html(findings, tmp_path)
@@ -1490,7 +1494,9 @@ def _check_reporter_csv() -> CheckResult:
         from scripts.core.reporters.csv_reporter import write_csv
 
         findings = [_make_sample_finding()]
-        with tempfile.NamedTemporaryFile(suffix=".csv", delete=False, mode="w") as f:
+        with tempfile.NamedTemporaryFile(
+            encoding="utf-8", suffix=".csv", delete=False, mode="w"
+        ) as f:
             tmp_path = Path(f.name)
         try:
             write_csv(findings, tmp_path)
@@ -1555,7 +1561,9 @@ def _check_reporter_utf8() -> CheckResult:
         utf8_message = "SQL injection (\u00e9l\u00e8ve) in \u2018query\u2019 \u2014 \u00fc\u00f1\u00ee\u00e7\u00f6d\u00e9"
         finding = _make_sample_finding(message=utf8_message)
 
-        with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w") as f:
+        with tempfile.NamedTemporaryFile(
+            encoding="utf-8", suffix=".json", delete=False, mode="w"
+        ) as f:
             tmp_path = Path(f.name)
         try:
             write_json([finding], tmp_path)
@@ -1662,7 +1670,9 @@ def _check_full_dashboard_html() -> CheckResult:
             _make_sample_finding(id=f"dash_{i}", severity=sev, ruleId=f"RULE-{i}")
             for i, sev in enumerate(["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"])
         ]
-        with tempfile.NamedTemporaryFile(suffix=".html", delete=False, mode="w") as f:
+        with tempfile.NamedTemporaryFile(
+            encoding="utf-8", suffix=".html", delete=False, mode="w"
+        ) as f:
             tmp_path = Path(f.name)
         try:
             write_simple_html(findings, tmp_path)
@@ -1735,7 +1745,9 @@ def _check_full_json_roundtrip() -> CheckResult:
         findings = [
             _make_sample_finding(id=f"rt_{i}", ruleId=f"RULE-{i}") for i in range(5)
         ]
-        with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w") as f:
+        with tempfile.NamedTemporaryFile(
+            encoding="utf-8", suffix=".json", delete=False, mode="w"
+        ) as f:
             tmp_path = Path(f.name)
         try:
             write_json(findings, tmp_path)

@@ -135,7 +135,7 @@ def export_to_prometheus(analysis: dict[str, Any], output_path: Path) -> None:
 
     if not by_severity:
         # Write empty metrics if no data
-        output_path.write_text("# No trend data available\n")
+        output_path.write_text("# No trend data available\n", encoding="utf-8")
         return
 
     # Get latest counts (last value in each severity list)
@@ -210,7 +210,7 @@ jmo_scan_count {scan_count}
             safe_rule = rule_id.replace("-", "_").replace(".", "_")
             metrics += f'jmo_rule_findings{{rule="{safe_rule}"}} {count}\n'
 
-    output_path.write_text(metrics)
+    output_path.write_text(metrics, encoding="utf-8")
 
 
 def export_to_grafana(analysis: dict[str, Any], output_path: Path) -> None:
@@ -387,7 +387,7 @@ def export_to_grafana(analysis: dict[str, Any], output_path: Path) -> None:
         "overwrite": True,
     }
 
-    output_path.write_text(json.dumps(dashboard, indent=2))
+    output_path.write_text(json.dumps(dashboard, indent=2), encoding="utf-8")
 
 
 def export_for_dashboard(analysis: dict[str, Any], output_path: Path) -> None:
@@ -461,4 +461,6 @@ def export_for_dashboard(analysis: dict[str, Any], output_path: Path) -> None:
         "top_rules": analysis.get("top_rules", [])[:10],  # Top 10 rules
     }
 
-    output_path.write_text(json.dumps(dashboard_data, indent=2, default=str))
+    output_path.write_text(
+        json.dumps(dashboard_data, indent=2, default=str), encoding="utf-8"
+    )

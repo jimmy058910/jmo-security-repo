@@ -2220,7 +2220,7 @@ def _check_first_run() -> bool:
     try:
         import yaml
 
-        with open(config_path) as f:
+        with open(config_path, encoding="utf-8") as f:
             config = yaml.safe_load(f) or {}
         return not config.get("onboarding_completed", False)
     except (FileNotFoundError, OSError) as e:
@@ -2284,7 +2284,7 @@ def _collect_email_opt_in(args) -> None:
                     "onboarding_completed": True,
                     "pending_subscription": not subscribed,
                 }
-                with open(config_path, "w") as f:
+                with open(config_path, "w", encoding="utf-8") as f:
                     yaml.dump(config, f)
 
                 if subscribed and welcomed:
@@ -2313,7 +2313,7 @@ def _collect_email_opt_in(args) -> None:
                 import yaml
 
                 config = {"onboarding_completed": True}
-                with open(config_path, "w") as f:
+                with open(config_path, "w", encoding="utf-8") as f:
                     yaml.dump(config, f)
         except ImportError:
             # email_service module not available (resend not installed)
@@ -2325,7 +2325,7 @@ def _collect_email_opt_in(args) -> None:
                 "email_opt_in": True,
                 "onboarding_completed": True,
             }
-            with open(config_path, "w") as f:
+            with open(config_path, "w", encoding="utf-8") as f:
                 yaml.dump(config, f)
             _log(
                 args,
@@ -2343,7 +2343,7 @@ def _collect_email_opt_in(args) -> None:
                 "email_opt_in": True,
                 "onboarding_completed": True,
             }
-            with open(config_path, "w") as f:
+            with open(config_path, "w", encoding="utf-8") as f:
                 yaml.dump(config, f)
             _log(args, "DEBUG", f"Email collection error (non-blocking): {e}")
     else:
@@ -2354,7 +2354,7 @@ def _collect_email_opt_in(args) -> None:
         import yaml
 
         config = {"onboarding_completed": True}
-        with open(config_path, "w") as f:
+        with open(config_path, "w", encoding="utf-8") as f:
             yaml.dump(config, f)
 
 
@@ -2373,7 +2373,7 @@ def _show_kofi_reminder(args) -> None:
         try:
             import yaml
 
-            with open(config_path) as f:
+            with open(config_path, encoding="utf-8") as f:
                 config = yaml.safe_load(f) or {}
         except (ImportError, OSError) as e:
             logger.debug(f"Failed to load config file: {e}")
@@ -2389,7 +2389,7 @@ def _show_kofi_reminder(args) -> None:
     try:
         import yaml
 
-        with open(config_path, "w") as f:
+        with open(config_path, "w", encoding="utf-8") as f:
             yaml.safe_dump(config, f, default_flow_style=False)
     except (ImportError, OSError, PermissionError, UnicodeEncodeError) as e:
         logger.debug(
@@ -3547,7 +3547,7 @@ def cmd_attest(args) -> int:
     # Load scan arguments if provided
     scan_args = {}
     if hasattr(args, "scan_args") and args.scan_args:
-        with open(args.scan_args) as f:
+        with open(args.scan_args, encoding="utf-8") as f:
             scan_args = json.load(f)
 
     # Get tools list
@@ -3573,7 +3573,7 @@ def cmd_attest(args) -> int:
     # Save attestation
     attestation_path = Path(output_path)
     attestation_path.parent.mkdir(parents=True, exist_ok=True)
-    attestation_path.write_text(json.dumps(statement, indent=2))
+    attestation_path.write_text(json.dumps(statement, indent=2), encoding="utf-8")
 
     _log(args, "INFO", f"Generated attestation: {output_path}")
 

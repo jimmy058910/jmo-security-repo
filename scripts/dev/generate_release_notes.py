@@ -42,7 +42,7 @@ def extract_changelog_section(
     if not changelog_path.exists():
         raise FileNotFoundError(f"CHANGELOG.md not found at {changelog_path}")
 
-    changelog = changelog_path.read_text()
+    changelog = changelog_path.read_text(encoding="utf-8")
 
     # Pattern to match: ## [version] or ## version (both formats supported)
     # Extract everything between this heading and the next ## heading (or end of file)

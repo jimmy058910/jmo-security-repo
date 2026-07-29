@@ -298,7 +298,7 @@ class PolicyEngine:
         if not test_data_path.exists():
             raise FileNotFoundError(f"Test data not found: {test_data_path}")
 
-        with open(test_data_path) as f:
+        with open(test_data_path, encoding="utf-8") as f:
             test_data = json.load(f)
 
         if not isinstance(test_data, dict):
@@ -319,7 +319,7 @@ class PolicyEngine:
             Package name in data.* format (e.g., "data.jmo.policy.secrets"), or None
         """
         try:
-            content = policy_path.read_text()
+            content = policy_path.read_text(encoding="utf-8")
             import re
 
             # Look for package declaration (e.g., "package jmo.policy.secrets")
@@ -380,7 +380,7 @@ class PolicyEngine:
                             return cast(dict[str, Any], metadata)
 
             # Fallback: parse file manually for metadata
-            content = policy_path.read_text()
+            content = policy_path.read_text(encoding="utf-8")
             import re
 
             # Look for metadata object definition

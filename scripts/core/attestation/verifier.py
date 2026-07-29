@@ -133,7 +133,7 @@ class AttestationVerifier:
 
         # Load attestation
         try:
-            with open(attestation_path) as f:
+            with open(attestation_path, encoding="utf-8") as f:
                 attestation_data = json.load(f)
 
             # Parse as InTotoStatement
