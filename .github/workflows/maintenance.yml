@@ -171,19 +171,6 @@ jobs:
           # Apply any formatting changes from updated hooks
           pre-commit run --all-files || true
 
-      - name: Recompile requirements-dev.txt with pinned uv (self-heal Dependabot drift)
-        # Dependabot's pip resolver writes requirements-dev.txt in a format that
-        # differs from `uv pip compile --universal` (extras + env-markers), and bot
-        # PRs skip the deps-compile freshness gate (ci.yml:87, see release.rules.md).
-        # That leaves main in Dependabot-format until the NEXT human PR's deps-compile
-        # fails on it. Recompiling here on the weekly cron keeps main canonical so
-        # human PRs are never ambushed. uv is pinned to match ci.yml byte-for-byte;
-        # the pre-commit deps-compile hook installs uv UNPINNED, so this explicit
-        # step runs last and has the final say on the lockfile's format.
-        run: |
-          python3 -m pip install uv==0.11.15  # pinned: matches ci.yml deps-compile (PR #488)
-          uv pip compile --universal --python-version 3.12 -o requirements-dev.txt requirements-dev.in
-
       - name: Commit changes
         id: commit
         run: |
@@ -196,7 +183,7 @@ jobs:
 
           # Stage changes
           git add versions.yaml Dockerfile.deep Dockerfile.balanced Dockerfile.slim Dockerfile.fast \
-                 .pre-commit-config.yaml requirements-dev.txt
+                 .pre-commit-config.yaml
           # Stage any files reformatted by updated hooks
           git add -u -- scripts/ tests/ hooks/
 
@@ -211,11 +198,7 @@ jobs:
           cat > commit_message.txt << 'COMMIT_MSG'
           chore(deps): weekly auto-update of security tools and pre-commit hooks
 
-          Automated weekly update of security tools, pre-commit hooks, and a
-          canonical recompile of requirements-dev.txt (pinned uv 0.11.15) that
-          clears any Dependabot-introduced lockfile drift.
-
-          Co-Authored-By: Claude <noreply@anthropic.com>
+          Automated weekly update of security tools and pre-commit hooks.
           COMMIT_MSG
 
           # Commit changes
@@ -261,7 +244,6 @@ jobs:
             echo ""
             echo "- **Security tools**: \`update_versions.py --update-all --level=$BUMP_LEVEL\`, Dockerfiles synced"
             echo "- **Pre-commit hooks**: \`pre-commit autoupdate\`, formatting applied"
-            echo "- **Python lockfile**: \`requirements-dev.txt\` recompiled with pinned \`uv 0.11.15\` to clear Dependabot-format drift"
             echo ""
             echo "### Auto-Merge Policy"
             echo ""
@@ -572,17 +554,25 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v7
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v9
         with:
-          python-version: '3.12'
-          cache: pip
-          cache-dependency-path: requirements-dev.txt
+          version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
+          python-version: '3.12'  # preserves the pin actions/setup-python held
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
       - name: Install dependencies
+        run: uv sync --locked --group dev
+
+      - name: Put the project venv on PATH
+        shell: bash
         run: |
-          pip install --upgrade pip
-          pip install -r requirements-dev.txt
+          if [ -d .venv/Scripts ]; then
+            echo "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+          else
+            echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          fi
 
       - name: Run repository completeness analysis
         run: |
