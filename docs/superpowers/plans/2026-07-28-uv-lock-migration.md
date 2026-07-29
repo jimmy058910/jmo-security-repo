@@ -45,6 +45,24 @@ The fresh resolve produced **`tuf==7.0.0`** alongside `sigstore==4.5.0`. `GHSA-q
 
 The spec says preserve both ignores, so this plan preserves both. An ignore for an advisory that is no longer present is inert (pip-audit does not error on unused ignores), so keeping it costs nothing and keeps this PR's scope honest. **Report it in the PR 1 body as a follow-up**, so issue #539 can be closed and the ignore dropped in a separate, properly-scoped change. Do not drop it here — that would be an unreviewed security-posture change riding along in a migration PR.
 
+### Trap: the first `uv lock` is a mass upgrade, not a translation
+
+`requirements-dev.in` carried no upper bounds, so the initial `uv lock` re-resolved every dependency to latest — **30 of 94 shared packages changed version**, including `mcp 1.28.1 → 2.0.0` and `tuf 6.0.0 → 7.0.0`. mcp 2.0 replaces `httpx` with `httpx2` and drops `pydantic-settings` and `httpx-sse`.
+
+That turned a mechanical migration into a silent dependency upgrade. On CI it appeared as: ubuntu shard 1 skips 9 → 46, Windows skips 94 → 214, and one hard failure in `tests/integration/test_cli_scan_ci.py`. **The Windows job's `continue-on-error: true` showed a green tick over `1 failed, 7577 passed`** — the tick is not evidence; read the log.
+
+Fix: cap `mcp[cli]>=1.0.0,<2` in the dev group. The locked package *set* then matches the pre-migration `requirements-dev.txt` exactly.
+
+**Diagnostic worth reusing** — compare package sets, don't eyeball the lock:
+
+```bash
+MSYS_NO_PATHCONV=1 git show origin/main:requirements-dev.txt > old.txt
+uv export --frozen --quiet --format requirements.txt --no-emit-project --no-hashes -o new.txt
+# diff the name sets first, then the versions for shared names
+```
+
+A package present in the old resolve and absent from the new one is a regression. Version-only drift within minor/patch is what a lock refresh legitimately does.
+
 ---
 
 ## File Structure
