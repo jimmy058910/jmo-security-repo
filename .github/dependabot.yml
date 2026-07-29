@@ -9,8 +9,14 @@
 version: 2
 
 updates:
-  # Python dependencies (requirements-dev.txt via uv pip compile --universal)
-  - package-ecosystem: "pip"
+  # Python dependencies (pyproject.toml [dependency-groups] + uv.lock).
+  # The `uv` ecosystem regenerates uv.lock WITH uv, so bot output is canonical
+  # by construction -- Dependabot and CI use the same resolver for the first
+  # time. Under the old `pip` ecosystem, Dependabot rewrote the uv-generated
+  # requirements-dev.txt with its own Linux-only pip resolver, which dropped
+  # platform-conditional deps (pywin32 via mcp) and failed the next human PR's
+  # freshness gate. See PRs #677, #682.
+  - package-ecosystem: "uv"
     directory: "/"
     schedule:
       interval: "weekly"
