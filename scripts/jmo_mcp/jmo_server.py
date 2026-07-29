@@ -6,7 +6,7 @@ Provides standardized interface for AI tools (GitHub Copilot, Claude Code, OpenA
 to query security findings and suggest fixes.
 
 Architecture:
-- Framework: FastMCP (Official Anthropic SDK)
+- Framework: MCPServer (Official Anthropic SDK; named FastMCP before mcp 2.0)
 - Tools: get_security_findings, apply_fix, mark_resolved
 - Resources: finding://{id} for full context
 - Transport: stdio, HTTP, SSE
@@ -38,8 +38,12 @@ from pathlib import Path
 
 # NOTE: This import will fail until mcp[cli] is installed
 # To install: pip install "mcp[cli]" or uv add "mcp[cli]"
+#
+# mcp 2.0 renamed the server framework: `mcp.server.fastmcp.FastMCP` became
+# `mcp.server.mcpserver.MCPServer` (re-exported from `mcp.server`). There is no
+# compatibility shim, so the old path raises ModuleNotFoundError on 2.x.
 try:
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server import MCPServer
 except ImportError:
     raise ImportError(
         "MCP SDK not installed. Install with:\n"
@@ -87,7 +91,7 @@ logger.info(
 )
 
 # Initialize MCP server
-mcp = FastMCP("JMo Security")
+mcp = MCPServer("JMo Security")
 
 # Initialize utilities (lazy-loaded on first use to handle missing files gracefully)
 _findings_loader: FindingsLoader | None = None

@@ -11,6 +11,7 @@ Install with: pip install "jmo-security[mcp]"
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -22,8 +23,13 @@ _MCP_SKIP_REASON = "MCP SDK unavailable"
 
 try:
     # MCP requires pydantic v2+ (which has TypeAdapter)
-    # Try importing the actual MCP module
-    from mcp.server.fastmcp import FastMCP  # noqa: F401
+    # Try importing the actual MCP module.
+    #
+    # This MUST probe the same symbol jmo_server.py imports. mcp 2.0 renamed
+    # FastMCP -> MCPServer with no shim; probing a stale path makes
+    # pytest_ignore_collect below drop this entire tree, and uncollected tests
+    # cannot fail -- CI stays green over the hole. See the CI guard below.
+    from mcp.server import MCPServer  # noqa: F401
     from pydantic import TypeAdapter  # noqa: F401
 
     _MCP_AVAILABLE = True
@@ -32,6 +38,26 @@ except ImportError as e:
         f"MCP SDK not properly installed: {e}. "
         "Install with: pip install 'jmo-security[mcp]' "
         "or ensure pydantic>=2.11.0 is installed."
+    )
+
+# The silent skip below is correct for local dev -- a contributor without the
+# optional mcp extra should not be blocked. It is NEVER correct in CI, where
+# mcp[cli] is a declared member of `[dependency-groups] dev` and so cannot be
+# legitimately absent. Left ungated, an SDK rename degrades to "235 tests stop
+# running" with every check still green, because uncollected tests cannot fail.
+#
+# That is not hypothetical: mcp 2.0 renamed FastMCP -> MCPServer with no shim,
+# and this file's availability probe is what would have swallowed it.
+#
+# Raised at import time so it surfaces as a hard collection error rather than a
+# skip. The equivalent guard cannot live in a test file under tests/jmo_mcp/ --
+# it would be dropped by the very failure it exists to detect.
+if not _MCP_AVAILABLE and os.environ.get("CI") == "true":
+    raise RuntimeError(
+        f"MCP SDK unavailable in CI: {_MCP_SKIP_REASON}\n"
+        "mcp[cli] is a declared dev dependency, so this means the environment "
+        "is broken or an SDK import path changed -- not that MCP is optional "
+        "here. Skipping tests/jmo_mcp/ would report green over a real hole."
     )
 
 

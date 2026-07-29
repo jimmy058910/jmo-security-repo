@@ -12,7 +12,7 @@ Supported AI Tools:
 - Custom MCP clients
 
 Architecture:
-- FastMCP framework (Official Anthropic SDK)
+- MCPServer framework (Official Anthropic SDK; named FastMCP before mcp 2.0)
 - Tools: get_security_findings, apply_fix, mark_resolved
 - Resources: finding://{id} for full context
 - Transport: stdio, HTTP, SSE

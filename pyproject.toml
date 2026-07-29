@@ -92,12 +92,18 @@ dev = [
     "croniter",
     "types-croniter",
     # MCP Server dependencies (Feature #2: AI Remediation)
-    # Capped below 2.0 to match what the pre-migration lockfile actually resolved
-    # (mcp 1.28.1). mcp 2.0 replaces httpx with httpx2 and drops pydantic-settings
-    # and httpx-sse, which changes ~100 tests' collection/skip status and breaks
-    # tests/integration/test_cli_scan_ci.py. Adopting it is a real upgrade that
-    # deserves its own PR; Dependabot will propose it as an ungrouped major bump.
-    "mcp[cli]>=1.0.0,<2",           # Official Anthropic MCP SDK with FastMCP framework
+    # The `<2` cap is GONE — mcp 2.0 was adopted deliberately, which is exactly
+    # what that cap was waiting for. Do not re-add a cap for 3.x: per the
+    # upper-bounds policy a cap exists only to hold back a *known-breaking*
+    # major, and no mcp 3.0 exists. Dependabot proposed `<3` (#686); that would
+    # re-arm the same trap on no evidence, so it was closed rather than merged.
+    #
+    # For the record, the cap's stated reasons resolved as follows: mcp 2.0 does
+    # swap httpx -> httpx2 and drop pydantic-settings + httpx-sse, but no
+    # first-party code imports any of the three. The `tests/integration/
+    # test_cli_scan_ci.py` breakage attributed to it was a misdiagnosis — that
+    # was a GITHUB_PATH POSIX-path bug on Windows, fixed in f605ac2.
+    "mcp[cli]>=1.0.0",              # Official Anthropic MCP SDK with FastMCP framework
     # Security floors for mcp's transitive web deps (pip-audit fixable CVEs, 2026-06):
     #   starlette>=1.3.1: CVE-2026-48817/48818/54282/54283
     #   python-multipart>=0.0.31: CVE-2026-53538/53539/53540
