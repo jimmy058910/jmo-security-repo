@@ -20,7 +20,7 @@ Every task's requirements implicitly include this section.
 - **In a worktree, `.git` is a FILE, not a directory.** Write temp files and commit messages to the scratchpad (`C:\Users\Jimmy\AppData\Local\Temp\claude\C--Projects-jmo-security-repo\58b23cf7-76b8-4158-89b1-5248c43f5320\scratchpad`), never to `.git/`.
 - **Never run `pip install -e .` in this worktree** — it poisons imports for every other worktree on this machine. The primary repo's `.venv` is broken (silent 0-test false-green). Local verification uses `uv` in the worktree only.
 - **uv is pinned to `0.11.15` at every site**, including `setup-uv`'s `version:` input (PR #488 convention). One version string, no exceptions.
-- **`astral-sh/setup-uv@v9`** — verified current major on 2026-07-28. The spec sketched `@v7`; v9 is correct.
+- **`astral-sh/setup-uv@v9.0.0`** — pinned to the exact release, not a floating major. astral-sh publishes bare major tags only through `v7`; `v8` and `v9` exist as full semver only, so `@v9` fails with `Unable to resolve action astral-sh/setup-uv@v9, unable to find version v9` (hit on the first CI run of PR #683). An exact pin also matches this repo's pin-everything convention, and Dependabot's github-actions ecosystem will bump it.
 - **`uv export --format requirements.txt`** — the format value is dotted. The spec wrote `requirements-txt`, which uv rejects. Verified against uv 0.11.19's CLI (`--format <FORMAT> [possible values: requirements.txt, pylock.toml, cyclonedx1.5]`).
 - **Preserve both pip-audit ignores, verbatim:** `PYSEC-2025-183` (disputed pyjwt advisory, transitive dev-only via `mcp`) and `GHSA-qp9x-wp8f-qgjj` (tuf<7 capped by sigstore, tracked in issue #539).
 - **Conventional commits** (`feat:`, `fix:`, `chore:`, `ci:`, `docs:`, `test:`, `refactor:`). **No AI-attribution markers** in any commit message or PR body.
@@ -97,7 +97,7 @@ Every install site in Tasks 7–10 is replaced by this exact block. It appears ~
 
 ```yaml
       - name: Set up uv
-        uses: astral-sh/setup-uv@v9
+        uses: astral-sh/setup-uv@v9.0.0
         with:
           version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
           python-version: '3.12'  # preserves the pin actions/setup-python held
@@ -891,7 +891,7 @@ Delete both the `Validate requirements-dev.txt Python version` step (`ci.yml:65-
         # With the uv ecosystem, Dependabot regenerates uv.lock *with uv*, so bot
         # and human PRs are resolver-symmetric and pass the identical gate.
         # History: PR #321, #323, #677, #682.
-        uses: astral-sh/setup-uv@v9
+        uses: astral-sh/setup-uv@v9.0.0
         with:
           version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
           enable-cache: true
@@ -956,7 +956,7 @@ Replace both the `Set up Python 3.12` step (`ci.yml:273-278`) and the `Install d
 
 ```yaml
       - name: Set up uv
-        uses: astral-sh/setup-uv@v9
+        uses: astral-sh/setup-uv@v9.0.0
         with:
           version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
           python-version: '3.12'  # preserves the pin actions/setup-python held
@@ -1046,7 +1046,7 @@ runs:
   using: composite
   steps:
     - name: Set up uv
-      uses: astral-sh/setup-uv@v9
+      uses: astral-sh/setup-uv@v9.0.0
       with:
         version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
         python-version: ${{ inputs.python-version }}

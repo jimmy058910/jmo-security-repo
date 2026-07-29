@@ -19,7 +19,7 @@ runs:
   using: composite
   steps:
     - name: Set up uv
-      uses: astral-sh/setup-uv@v9
+      uses: astral-sh/setup-uv@v9.0.0
       with:
         version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
         python-version: ${{ inputs.python-version }}
