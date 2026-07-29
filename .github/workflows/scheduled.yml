@@ -74,9 +74,15 @@ jobs:
 
       - name: Put the project venv on PATH
         shell: bash
+        # Windows needs a WINDOWS-style path here. Git Bash resolves POSIX entries
+        # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
+        # but the Python process inherits the raw PATH string, and shutil.which()
+        # on Windows cannot interpret a POSIX path. Every external tool lookup
+        # (bandit, semgrep, trivy...) then silently returns None. cygpath -w fixes
+        # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then
-            echo "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+            cygpath -w "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
           else
             echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           fi
@@ -262,9 +268,15 @@ jobs:
 
       - name: Put the project venv on PATH
         shell: bash
+        # Windows needs a WINDOWS-style path here. Git Bash resolves POSIX entries
+        # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
+        # but the Python process inherits the raw PATH string, and shutil.which()
+        # on Windows cannot interpret a POSIX path. Every external tool lookup
+        # (bandit, semgrep, trivy...) then silently returns None. cygpath -w fixes
+        # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then
-            echo "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+            cygpath -w "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
           else
             echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           fi
@@ -314,9 +326,15 @@ jobs:
 
       - name: Put the project venv on PATH
         shell: bash
+        # Windows needs a WINDOWS-style path here. Git Bash resolves POSIX entries
+        # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
+        # but the Python process inherits the raw PATH string, and shutil.which()
+        # on Windows cannot interpret a POSIX path. Every external tool lookup
+        # (bandit, semgrep, trivy...) then silently returns None. cygpath -w fixes
+        # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then
-            echo "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+            cygpath -w "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
           else
             echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           fi
@@ -418,9 +436,15 @@ jobs:
 
       - name: Put the project venv on PATH
         shell: bash
+        # Windows needs a WINDOWS-style path here. Git Bash resolves POSIX entries
+        # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
+        # but the Python process inherits the raw PATH string, and shutil.which()
+        # on Windows cannot interpret a POSIX path. Every external tool lookup
+        # (bandit, semgrep, trivy...) then silently returns None. cygpath -w fixes
+        # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then
-            echo "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+            cygpath -w "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
           else
             echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           fi
@@ -549,9 +573,15 @@ jobs:
 
       - name: Put the project venv on PATH
         shell: bash
+        # Windows needs a WINDOWS-style path here. Git Bash resolves POSIX entries
+        # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
+        # but the Python process inherits the raw PATH string, and shutil.which()
+        # on Windows cannot interpret a POSIX path. Every external tool lookup
+        # (bandit, semgrep, trivy...) then silently returns None. cygpath -w fixes
+        # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then
-            echo "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+            cygpath -w "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
           else
             echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           fi
@@ -617,9 +647,15 @@ jobs:
 
       - name: Put the project venv on PATH
         shell: bash
+        # Windows needs a WINDOWS-style path here. Git Bash resolves POSIX entries
+        # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
+        # but the Python process inherits the raw PATH string, and shutil.which()
+        # on Windows cannot interpret a POSIX path. Every external tool lookup
+        # (bandit, semgrep, trivy...) then silently returns None. cygpath -w fixes
+        # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then
-            echo "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+            cygpath -w "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
           else
             echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           fi
@@ -742,9 +778,15 @@ jobs:
 
       - name: Put the project venv on PATH
         shell: bash
+        # Windows needs a WINDOWS-style path here. Git Bash resolves POSIX entries
+        # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
+        # but the Python process inherits the raw PATH string, and shutil.which()
+        # on Windows cannot interpret a POSIX path. Every external tool lookup
+        # (bandit, semgrep, trivy...) then silently returns None. cygpath -w fixes
+        # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then
-            echo "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+            cygpath -w "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
           else
             echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           fi
@@ -853,9 +895,15 @@ jobs:
 
       - name: Put the project venv on PATH
         shell: bash
+        # Windows needs a WINDOWS-style path here. Git Bash resolves POSIX entries
+        # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
+        # but the Python process inherits the raw PATH string, and shutil.which()
+        # on Windows cannot interpret a POSIX path. Every external tool lookup
+        # (bandit, semgrep, trivy...) then silently returns None. cygpath -w fixes
+        # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then
-            echo "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+            cygpath -w "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
           else
             echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           fi
@@ -916,9 +964,15 @@ jobs:
 
       - name: Put the project venv on PATH
         shell: bash
+        # Windows needs a WINDOWS-style path here. Git Bash resolves POSIX entries
+        # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
+        # but the Python process inherits the raw PATH string, and shutil.which()
+        # on Windows cannot interpret a POSIX path. Every external tool lookup
+        # (bandit, semgrep, trivy...) then silently returns None. cygpath -w fixes
+        # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then
-            echo "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+            cygpath -w "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
           else
             echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           fi
@@ -1007,9 +1061,15 @@ jobs:
 
       - name: Put the project venv on PATH
         shell: bash
+        # Windows needs a WINDOWS-style path here. Git Bash resolves POSIX entries
+        # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
+        # but the Python process inherits the raw PATH string, and shutil.which()
+        # on Windows cannot interpret a POSIX path. Every external tool lookup
+        # (bandit, semgrep, trivy...) then silently returns None. cygpath -w fixes
+        # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then
-            echo "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+            cygpath -w "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
           else
             echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           fi
@@ -1207,9 +1267,15 @@ jobs:
 
       - name: Put the project venv on PATH
         shell: bash
+        # Windows needs a WINDOWS-style path here. Git Bash resolves POSIX entries
+        # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
+        # but the Python process inherits the raw PATH string, and shutil.which()
+        # on Windows cannot interpret a POSIX path. Every external tool lookup
+        # (bandit, semgrep, trivy...) then silently returns None. cygpath -w fixes
+        # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then
-            echo "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+            cygpath -w "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
           else
             echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           fi

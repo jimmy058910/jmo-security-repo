@@ -36,7 +36,7 @@ runs:
       shell: bash
       run: |
         if [ -d .venv/Scripts ]; then
-          echo "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+          cygpath -w "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
         else
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
         fi

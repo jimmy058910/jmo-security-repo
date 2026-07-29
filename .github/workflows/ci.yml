@@ -96,7 +96,7 @@ jobs:
         # entry does not silently break.
         run: |
           if [ -d .venv/Scripts ]; then
-            echo "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+            cygpath -w "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
           else
             echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           fi
@@ -277,11 +277,17 @@ jobs:
 
       - name: Put the project venv on PATH
         shell: bash
-        # This matrix spans ubuntu, macOS and Windows: Windows runners put
-        # scripts in .venv/Scripts, POSIX in .venv/bin.
+        # This matrix spans ubuntu, macOS and Windows. Windows needs a
+        # WINDOWS-style path: Git Bash resolves POSIX entries like
+        # /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine, but the
+        # Python process inherits the raw PATH string and shutil.which() on Windows
+        # cannot interpret a POSIX path -- so every external tool lookup (bandit,
+        # semgrep, trivy...) silently returns None and tool-discovery tests fail
+        # while everything else passes. cygpath -w fixes it; the POSIX branch only
+        # ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then
-            echo "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+            cygpath -w "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
           else
             echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           fi
@@ -654,7 +660,7 @@ jobs:
         # pre-commit, black, ruff and shfmt are invoked bare in later steps.
         run: |
           if [ -d .venv/Scripts ]; then
-            echo "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+            cygpath -w "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
           else
             echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           fi
@@ -805,7 +811,7 @@ jobs:
         shell: bash
         run: |
           if [ -d .venv/Scripts ]; then
-            echo "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+            cygpath -w "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
           else
             echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           fi
