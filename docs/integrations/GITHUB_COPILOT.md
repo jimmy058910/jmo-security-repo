@@ -39,7 +39,7 @@ security scan results, enabling:
 ```text
 ┌─────────────────┐      MCP Protocol      ┌──────────────────┐
 │ GitHub Copilot  │ ←─────────────────────→ │  JMo MCP Server  │
-│   (VS Code)     │      (stdio/JSON-RPC)   │  (FastMCP)       │
+│   (VS Code)     │      (stdio/JSON-RPC)   │  (MCPServer)     │
 └─────────────────┘                         └──────────────────┘
                                                       │
                                                       ↓

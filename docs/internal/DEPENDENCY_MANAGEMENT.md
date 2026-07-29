@@ -86,7 +86,17 @@ git add pyproject.toml uv.lock
 
 ### Upper bounds: only to hold back a known-breaking major
 
-Constraints are floors by default. The one deliberate cap today is `mcp[cli]>=1.0.0,<2`: mcp 2.0 replaces `httpx` with `httpx2` and drops `pydantic-settings` and `httpx-sse`, which changes what roughly a hundred tests collect and breaks `tests/integration/test_cli_scan_ci.py`. The cap holds the project on the 1.x line until that upgrade is done deliberately, with the test work attached. Dependabot will keep proposing it as an ungrouped major bump.
+Constraints are floors by default. **There is no upper bound in the tree today.** The one that existed, `mcp[cli]>=1.0.0,<2`, was retired when mcp 2.0 was adopted — which is precisely what a cap is for: hold the line until the upgrade is done deliberately, then remove it.
+
+That cap is worth keeping as the worked example, because a cap is not free and its stated reasons did not survive contact evenly:
+
+| Reason the cap gave | What was actually true |
+|---|---|
+| mcp 2.0 swaps `httpx`→`httpx2`, drops `pydantic-settings` + `httpx-sse` | Correct — but no first-party code imports any of the three, so the blast radius was one renamed symbol |
+| "changes what roughly a hundred tests collect" | Correct **and the real hazard**: `mcp.server.fastmcp.FastMCP` became `mcp.server.MCPServer` with no shim, and `tests/jmo_mcp/conftest.py` turned that ImportError into a silent collection drop. Green CI over 235 missing tests |
+| "breaks `tests/integration/test_cli_scan_ci.py`" | **Wrong.** That was an unrelated `GITHUB_PATH` POSIX-path bug on Windows, fixed in `f605ac2` |
+
+Two lessons. First, write down *how you will verify the upgrade*, not just why you are deferring it — the acceptance check here was a collection count, and no status check would ever have produced it. Second, a cap is a claim about the future that decays; re-verify its reasons before renewing it. Dependabot proposed `<2`→`<3` (#686); that was closed rather than merged, because no mcp 3.0 exists and a cap against an unknown major is not a known-breaking one.
 
 This matters generally, because **an unbounded declaration means the next from-scratch `uv lock` is an upgrade, not a translation.** The migration's first resolve moved 30 of 94 packages this way. If you ever regenerate the lock from nothing, diff the resulting package set against the previous one before assuming they are equivalent:
 

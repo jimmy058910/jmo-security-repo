@@ -3345,8 +3345,11 @@ def _check_mcp_dependencies() -> tuple[bool, str | None]:
         return False, "pydantic_v1"
 
     # Check 2: Is MCP SDK installed?
+    # Probe the same symbol jmo_server.py imports. mcp 2.0 renamed FastMCP ->
+    # MCPServer with no compatibility shim, so probing the old path would report
+    # "mcp_missing" for an SDK that is in fact installed and working.
     try:
-        from mcp.server.fastmcp import FastMCP  # noqa: F401
+        from mcp.server import MCPServer  # noqa: F401
     except ImportError:
         return False, "mcp_missing"
 
