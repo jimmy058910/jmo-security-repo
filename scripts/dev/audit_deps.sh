@@ -11,22 +11,26 @@
 # any tracked requirements*.txt is a file Dependabot would try to manage, which
 # is the exact second-writer problem this migration removed.
 #
-# Ignored advisories -- verify before removing either:
+# Ignored advisories -- an ignore is only justified when there is nothing to
+# adopt. Verify that is still true before adding one, and drop it the moment a
+# fix becomes reachable (see the tuf note below for why that matters).
 #
 #   PYSEC-2025-183 (CVE-2025-45768) "pyjwt weak encryption" -- DISPUTED by the
 #     maintainer ("key length is chosen by the application that uses the
-#     library"). No fix version exists. pyjwt is a transitive dev-only dep via
-#     `mcp`, not used in production paths.
+#     library"). No fix version exists, so there is nothing to upgrade to.
+#     pyjwt is a transitive dev-only dep via `mcp`, not used in production
+#     paths. Not currently firing at pyjwt 2.13.0, but kept because the ignore
+#     remains the only available lever if a future resolve lands on a version
+#     the advisory covers.
 #     https://api.osv.dev/v1/vulns/PYSEC-2025-183
 #
-#   GHSA-qp9x-wp8f-qgjj "tuf platform-dependent delegation path matching"
-#     (CVSS 4.0 medium) -- fixed in tuf 7.0.0. Adopted when every sigstore
-#     release capped tuf<7.0.0, making the fix unreachable. As of the uv.lock
-#     migration the lock resolves tuf 7.0.0 (sigstore 4.5.0 lifted the cap), so
-#     this ignore is likely inert and #539 may be closeable. Kept for now
-#     because dropping it is a security-posture change that deserves its own
-#     review, not a rider on a dependency migration.
-#     https://github.com/advisories/GHSA-qp9x-wp8f-qgjj
+# Removed 2026-07-29 (issue #539): GHSA-qp9x-wp8f-qgjj (tuf delegation path
+# matching). It was adopted when every sigstore release capped tuf<7.0.0,
+# making the fix unreachable. sigstore 4.5.0 lifted that cap and the lock now
+# resolves tuf 7.0.0 -- the fixed version -- so the ignore had stopped
+# protecting anything and started masking regressions instead. Verified: with
+# `tuf<7` forced back into the lock, pip-audit reports the advisory with fix
+# version 7.0.0 available. Do NOT re-add it; if it fires, upgrade tuf.
 #
 # Usage: scripts/dev/audit_deps.sh
 set -euo pipefail
@@ -56,5 +60,4 @@ uv export \
   --output-file "$REQ_FILE"
 
 pip-audit -r "$REQ_FILE" --progress-spinner=off \
-  --ignore-vuln PYSEC-2025-183 \
-  --ignore-vuln GHSA-qp9x-wp8f-qgjj
+  --ignore-vuln PYSEC-2025-183
