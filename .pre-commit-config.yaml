@@ -131,14 +131,18 @@ repos:
         entry: python3 scripts/dev/check_yaml_env_tilde.py
         pass_filenames: false
 
-  # Local hook: keep requirements-dev.txt fresh when requirements-dev.in changes
-  # IMPORTANT: Uses Python 3.10+ to match CI/CD environments (prevents version mismatches)
+  # Local hook: keep uv.lock consistent with pyproject.toml.
+  #
+  # This is a LOCAL hook rather than astral-sh/uv-pre-commit on purpose:
+  # maintenance.yml runs `pre-commit autoupdate` weekly, which would bump a
+  # third-party hook's rev independently of the uv version pinned at every other
+  # site — reintroducing exactly the resolver divergence this migration removed.
   - repo: local
     hooks:
-      - id: deps-compile
-        name: deps-compile (validate Python 3.10+ and generate requirements-dev.txt)
+      - id: uv-lock
+        name: uv-lock (uv.lock matches pyproject.toml)
         language: system
-        files: ^requirements-dev\.in$
+        files: ^(pyproject\.toml|uv\.lock)$
         pass_filenames: false
         # Strategy: Check python first (Windows), then python3 (Unix), verify it's real Python not Windows stub
         # If none available, fail with clear error message
@@ -147,28 +151,23 @@ repos:
             if command -v "$p" >/dev/null 2>&1 && "$p" --version >/dev/null 2>&1; then PY="$p"; break; fi;
           done;
           [ -z "$PY" ] && { echo "ERROR: Python not found"; exit 1; };
-          $PY -m pip install --quiet uv==0.11.15 2>/dev/null || true;
-          $PY scripts/dev/update_dependencies.py --compile ||
-          { echo "ERROR: deps-compile requires Python 3.10+.
-          Install python3.10, python3.11, or python3.12"; exit 1; }'
+          command -v uv >/dev/null 2>&1 || $PY -m pip install --quiet uv==0.11.15;
+          uv lock --check ||
+          { echo "ERROR: uv.lock is out of date with pyproject.toml.
+          Run: make deps-lock"; exit 1; }'
 
-  # Local hook: scan requirements-dev.txt for CVEs via pip-audit (OSV database).
-  # Matches CI's pip-audit step so CVE-introducing dep bumps fail locally before
-  # they reach CI (the 2026-04-15 Dependabot triage session hit 4 CVE cascades
-  # mid-flight; catching at commit time prevents that).
-  # Only runs when requirements files change — keeps normal commits fast.
+  # Local hook: scan the locked dependency set for CVEs via pip-audit (OSV).
+  # Calls the same script CI does, so a CVE-introducing dep bump fails locally
+  # before it reaches CI (the 2026-04-15 Dependabot triage session hit 4 CVE
+  # cascades mid-flight; catching at commit time prevents that).
+  # Only runs when the dependency declaration or the lock changes.
+  # Ignored advisories and their full reasoning live in the script.
   - repo: local
     hooks:
       - id: pip-audit
-        name: pip-audit (CVE scan of requirements-dev.txt)
+        name: pip-audit (CVE scan of uv.lock)
         language: python
         additional_dependencies: ["pip-audit>=2.9"]
-        # PYSEC-2025-183 (CVE-2025-45768): disputed pyjwt weak-encryption
-        # advisory, no fix version, transitive dev-only via mcp. Mirrors
-        # the same ignore applied in .github/workflows/ci.yml's pip-audit
-        # step. See that file for the full reasoning + OSV link.
-        # GHSA-qp9x-wp8f-qgjj (tuf, CVSS 4.0): fix in tuf 7.0.0 not adoptable
-        # while sigstore caps tuf<7. Tracking: #539.
-        entry: pip-audit -r requirements-dev.txt --progress-spinner=off --ignore-vuln PYSEC-2025-183 --ignore-vuln GHSA-qp9x-wp8f-qgjj
+        entry: bash scripts/dev/audit_deps.sh
         pass_filenames: false
-        files: ^requirements-dev\.(in|txt)$
+        files: ^(pyproject\.toml|uv\.lock)$
