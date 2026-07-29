@@ -36,6 +36,63 @@ Identical result on mcp 1.29.0 and mcp 2.0, with byte-identical failing-test ID 
 | Read-side decode (`UnicodeDecodeError`) | 36 failures + 22 errors | `ruff PLW1514` (153 sites) | Test-only, but masks the above |
 | Residual (non-encoding) | 2 failures | — | Needs triage |
 
+## Corrections — measured during execution (2026-07-29)
+
+Seven claims above and below were checked against the machine and did not hold.
+Each correction here is a measurement, not a preference.
+
+1. **Task 1's reproduction was vacuous.** `jmo trends --results-dir <tmp>` exits
+   **2** at argparse (`invalid choice`) and never reaches `trend_commands.py:140`,
+   so `assert "UnicodeEncodeError" not in result.stderr` passes on every platform
+   forever. `jmo trends explain all` is the real reproduction — it needs no history
+   database and exits 1.
+
+2. **It is not only cp1252.** Piped stdout gets the ANSI codepage (cp1252); a real
+   console gets the OEM codepage (**cp437/cp850**). Those two *contain* the
+   box-drawing character `─` that every copy of `_can_encode_unicode()` probed
+   with, so the probe answered "safe" and the write crashed anyway. Deciding by
+   encoding *name* cannot work; probe the actual text against the stream's codec.
+
+3. **`safe_print()` itself crashed.** For any character absent from
+   `UNICODE_FALLBACKS`, its `except` handler re-ran the same substitution (a no-op)
+   and printed again, raising a second time uncaught. `scripts/` emits ~74 such
+   characters, so the table can never be the guarantee — it is a quality layer, and
+   the guarantee is a final `errors="replace"` pass.
+
+4. **Four copies of the helper existed, not one** — `diff_commands`,
+   `history_commands`, `trend_commands`, `wizard_flows/ui_helpers`. Consolidated
+   into `unicode_utils`, with an AST drift guard so a fifth fails CI.
+
+5. **`safe_stdout_write` + a 206-call-site audit is the wrong mechanism.**
+   `sys.stdout.reconfigure(errors="replace")` at the CLI entry point covers all of
+   them at once, plus `rich`, argparse and third-party output that no call-site
+   audit reaches. Measured: no-op on UTF-8, and JSON output is unaffected because
+   `format_json_report` already emits pure ASCII via `ensure_ascii=True`.
+
+6. **`PYTHONIOENCODING` overrides `PYTHONUTF8`.** Measured: with `PYTHONUTF8=1`
+   set, `sys.flags.utf8_mode == 1` yet `sys.stdout.encoding == 'cp1252'`. Pinning
+   `PYTHONIOENCODING` in the child therefore makes the write-side guard
+   load-bearing on *every* platform and inside *every* existing shard — not only on
+   a Windows box with `PYTHONUTF8` unset.
+
+7. **`PLW1514` does not cover the read-side class.** Ruff flags `p.read_text()`
+   only when it can prove the receiver is a `Path`; it does **not** flag
+   `(tmp_path / "x.html").read_text()`, because it cannot type a `/` division
+   result — and that is the dominant idiom in pytest. `test_html_security.py`
+   reports "All checks passed!" while being the source of all 22 errors. An AST
+   scan that needs no type inference finds **1198** unspecified-encoding sites
+   against ruff's 153. Consequences: fixing the 153 alone does not reach 0
+   failures, and a lint rule cannot be the durable guard — the
+   `windows-native-encoding` CI job must run the **full suite**, not just
+   `-m native_encoding`, or it cannot see this class at all.
+
+8. **There are three residual non-encoding failures, not two.**
+   `test_cli_history_repair` is unlisted. Precise split of the 43:
+   **42 `UnicodeDecodeError`**, **3 `UnicodeEncodeError`**, **3 `AssertionError`**.
+
+Sequencing consequence: because the CI job must run the full suite, it goes red
+until the read-side work lands, so it ships in the **last** PR, not the first.
+
 ## File Structure
 
 | File | Responsibility | Change |
