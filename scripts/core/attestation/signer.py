@@ -244,7 +244,7 @@ class SigstoreSigner:
             logger.info(f"Signature bundle saved: {bundle_path}")
 
             # Parse bundle for individual components
-            bundle_data = json.loads(bundle_path.read_text())
+            bundle_data = json.loads(bundle_path.read_text(encoding="utf-8"))
 
             # Extract signature
             message_sig = bundle_data.get("messageSignature", {})
@@ -266,12 +266,12 @@ class SigstoreSigner:
             signature_path = attestation_path_obj.with_suffix(
                 attestation_path_obj.suffix + ".sig"
             )
-            signature_path.write_text(signature_b64)
+            signature_path.write_text(signature_b64, encoding="utf-8")
 
             certificate_path = attestation_path_obj.with_suffix(
                 attestation_path_obj.suffix + ".crt"
             )
-            certificate_path.write_text(certificate_b64)
+            certificate_path.write_text(certificate_b64, encoding="utf-8")
 
             logger.info("✅ Signing complete")
             logger.info(f"  Signature: {signature_path}")

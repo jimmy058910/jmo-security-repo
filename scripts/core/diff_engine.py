@@ -361,7 +361,7 @@ class DiffEngine:
 
         if findings_json.exists():
             try:
-                data = json.loads(findings_json.read_text())
+                data = json.loads(findings_json.read_text(encoding="utf-8"))
                 # Handle both formats:
                 # 1. Plain list: [finding1, finding2, ...]
                 # 2. v1.0.0 wrapper: {"meta": {...}, "statistics": {...}, "findings": [...]}

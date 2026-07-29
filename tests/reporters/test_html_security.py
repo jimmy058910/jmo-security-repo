@@ -51,7 +51,7 @@ class TestSecurityHeaders:
         """Generate HTML dashboard and return its content."""
         out_path = tmp_path / "dashboard.html"
         write_html(sample_findings, out_path)
-        return out_path.read_text()
+        return out_path.read_text(encoding="utf-8")
 
     def test_csp_header_present(self, generated_html):
         """CSP meta tag should be present."""
@@ -216,7 +216,7 @@ class TestSecurityHeadersOrder:
         ]
         out_path = tmp_path / "dashboard.html"
         write_html(findings, out_path)
-        return out_path.read_text()
+        return out_path.read_text(encoding="utf-8")
 
     def test_security_headers_before_title(self, generated_html):
         """Security headers should appear before <title> for early parsing."""
@@ -261,7 +261,7 @@ class TestCSPDirectiveValidation:
         ]
         out_path = tmp_path / "dashboard.html"
         write_html(findings, out_path)
-        html = out_path.read_text()
+        html = out_path.read_text(encoding="utf-8")
         csp_match = re.search(
             r'http-equiv="Content-Security-Policy"\s+content="([^"]+)"', html
         )
@@ -334,7 +334,7 @@ class TestSecurityIntegrationWithHTMLEscaping:
 
         out_path = tmp_path / "dashboard.html"
         write_html(findings, out_path)
-        html = out_path.read_text()
+        html = out_path.read_text(encoding="utf-8")
 
         # SECURITY: XSS payloads should be HTML-escaped or JSON-escaped
         # The html_reporter.py uses json.dumps() which escapes quotes as \" and special chars
@@ -384,7 +384,7 @@ class TestSecurityIntegrationWithHTMLEscaping:
 
         out_path = tmp_path / "dashboard.html"
         write_html(findings, out_path)
-        html = out_path.read_text()
+        html = out_path.read_text(encoding="utf-8")
 
         # SECURITY: Script tag should be escaped in JSON
         # Check for the escaping pattern used in html_reporter.py
@@ -413,7 +413,7 @@ class TestSecurityCommentsAndDocumentation:
         ]
         out_path = tmp_path / "dashboard.html"
         write_html(findings, out_path)
-        html = out_path.read_text()
+        html = out_path.read_text(encoding="utf-8")
 
         # React dashboard: Production build strips comments for size optimization
         # Security headers are still present (checked by other tests)
@@ -435,7 +435,7 @@ class TestSecurityCommentsAndDocumentation:
         ]
         out_path = tmp_path / "dashboard.html"
         write_html(findings, out_path)
-        html = out_path.read_text()
+        html = out_path.read_text(encoding="utf-8")
 
         # React dashboard: Production build strips all HTML comments
         # Security headers are still present and effective (verified by other tests)

@@ -212,7 +212,9 @@ class ScheduleManager:
                 },
                 "schedules": [],
             }
-            self.schedules_file.write_text(json.dumps(manifest, indent=2))
+            self.schedules_file.write_text(
+                json.dumps(manifest, indent=2), encoding="utf-8"
+            )
             # Set secure permissions (read/write for owner only)
             self.schedules_file.chmod(0o600)
 
@@ -241,7 +243,7 @@ class ScheduleManager:
         )
 
         # Load existing manifest
-        manifest = json.loads(self.schedules_file.read_text())
+        manifest = json.loads(self.schedules_file.read_text(encoding="utf-8"))
 
         # Check for duplicate name
         if any(
@@ -252,13 +254,13 @@ class ScheduleManager:
 
         # Append and save
         manifest["schedules"].append(self._to_dict(schedule))
-        self.schedules_file.write_text(json.dumps(manifest, indent=2))
+        self.schedules_file.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
         return schedule
 
     def list(self, labels: dict[str, str] | None = None) -> list[ScanSchedule]:
         """List schedules, optionally filtered by labels."""
-        manifest = json.loads(self.schedules_file.read_text())
+        manifest = json.loads(self.schedules_file.read_text(encoding="utf-8"))
         schedules = [self._from_dict(s) for s in manifest["schedules"]]
 
         if labels:
@@ -280,7 +282,7 @@ class ScheduleManager:
 
     def update(self, schedule: ScanSchedule) -> ScanSchedule:
         """Update existing schedule."""
-        manifest = json.loads(self.schedules_file.read_text())
+        manifest = json.loads(self.schedules_file.read_text(encoding="utf-8"))
 
         # Find and replace
         for i, s in enumerate(manifest["schedules"]):
@@ -291,12 +293,12 @@ class ScheduleManager:
         else:
             raise ValueError(f"Schedule '{schedule.metadata.name}' not found")
 
-        self.schedules_file.write_text(json.dumps(manifest, indent=2))
+        self.schedules_file.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
         return schedule
 
     def delete(self, name: str) -> bool:
         """Delete schedule by name."""
-        manifest = json.loads(self.schedules_file.read_text())
+        manifest = json.loads(self.schedules_file.read_text(encoding="utf-8"))
         original_count = len(manifest["schedules"])
 
         manifest["schedules"] = [
@@ -306,7 +308,7 @@ class ScheduleManager:
         if len(manifest["schedules"]) == original_count:
             return False  # Not found
 
-        self.schedules_file.write_text(json.dumps(manifest, indent=2))
+        self.schedules_file.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
         return True
 
     def _to_dict(self, schedule: ScanSchedule) -> dict:
