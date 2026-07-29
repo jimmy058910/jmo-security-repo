@@ -2,9 +2,18 @@
 
 ## Overview
 
-JMo Security uses a **Python version-locked dependency system** to ensure consistent builds across development, CI, and production environments.
+JMo Security declares its dependencies in **one place** and locks them in **one file**:
 
-**Critical Rule:** `requirements-dev.txt` MUST be compiled with **Python 3.12+** to match CI/CD environments.
+| What | Where |
+|------|-------|
+| Runtime dependencies | `pyproject.toml` → `[project] dependencies` |
+| Optional runtime extras | `pyproject.toml` → `[project.optional-dependencies]` (`reporting`, `email`, `mcp`, `attestation`, `visual`) |
+| Development dependencies | `pyproject.toml` → `[dependency-groups] dev` (PEP 735) |
+| The resolved lockfile | `uv.lock` — generated, tracked in git, **universal** |
+
+`uv.lock` is universal by construction: it records every platform's wheels and every platform-conditional dependency edge in a single file. That is what makes a Windows, macOS and Linux install resolve from the same source of truth.
+
+**Critical rule:** never hand-edit `uv.lock`, and never add a second dependency file. One declaration, one lock.
 
 ---
 
@@ -12,586 +21,217 @@ JMo Security uses a **Python version-locked dependency system** to ensure consis
 
 | Task | Command | When to Use |
 |------|---------|-------------|
-| **Validate** | `make deps-validate` | Before every release, in CI |
-| **Recompile** | `make deps-compile` | After updating `requirements-dev.in` |
-| **Upgrade All** | `make deps-upgrade` | Monthly dependency updates |
-| **Check Outdated** | `make deps-check-outdated` | Weekly audits |
-| **Sync Environment** | `make deps-sync` | After pulling new `requirements-dev.txt` |
+| **Install / refresh your environment** | `make deps-sync` | After pulling, after switching branches |
+| **Regenerate the lock** | `make deps-lock` | After editing dependencies in `pyproject.toml` |
+| **Upgrade everything** | `make deps-upgrade` | Deliberate refresh to latest compatible versions |
+| **Audit for CVEs** | `bash scripts/dev/audit_deps.sh` | Runs automatically in CI and pre-commit |
+
+`make deps-sync` installs the `dev` group **and** the project itself in editable mode, so `from scripts...` imports work with no `PYTHONPATH` fiddling. There is no separate `pip install -e .` step.
 
 ---
 
-## The Problem
+## Lock strictness is deliberately asymmetric
 
-### What Can Happen
+| Context | Command | Behavior on a stale lock |
+|---------|---------|--------------------------|
+| Local development | `uv sync` (via `make deps-sync`) | Refreshes the lock automatically; the change appears in `git diff` |
+| CI | `uv sync --locked` | **Hard fail** |
+| Pre-commit | `uv lock --check` (the `uv-lock` hook) | **Hard fail** |
 
-If `requirements-dev.txt` is compiled with an older Python while CI uses Python 3.12, this can cause:
+This is intentional, not an oversight. A stale lock cannot merge — CI and pre-commit both block it. Making the *local* command hard-fail as well would only add a manual `make deps-lock` step that protects nothing the CI gate does not already cover, while interrupting the edit-test loop.
 
-1. **4 Unintended Downgrades:**
-   - bandit: 1.8.6 → 1.7.10 ❌
-   - pytest-cov: 7.0.0 → 5.0.0 ❌
-   - mypy: 1.18.2 → 1.14.1 ❌
-   - coverage: 7.10.7 → 7.6.1 ❌
-
-2. **5 Dependency Conflicts:**
-   - `checkov` requires `packaging<24.0`, but got `packaging 25.0`
-   - `semgrep` requires `urllib3~=2.0`, but got `urllib3 1.26.20`
-   - `langchain` mismatches on `langsmith` versions
-
-3. **CI Incompatibility:**
-   - Tests on Python 3.12+ used different dependency versions
-   - Non-deterministic behavior across environments
-
-### Root Cause
-
-`uv pip compile --universal --python-version 3.12` targets a fixed Python version regardless of the active interpreter. Older Python versions have different available versions than Python 3.12+, leading to downgrades.
-
----
-
-## The Solution
-
-### Automated Validation (`update_dependencies.py`)
-
-We built [scripts/dev/update_dependencies.py](../scripts/dev/update_dependencies.py) to prevent this:
-
-**Features:**
-
-- ✅ Enforces Python 3.12+ for compilation
-- ✅ Detects dependency conflicts (`pip check`)
-- ✅ Prevents accidental downgrades
-- ✅ Provides upgrade preview before applying
-- ✅ CI-compatible (exit codes for automation)
-
-**Usage:**
-
-```bash
-
-# Validate current requirements-dev.txt
-
-python3 scripts/dev/update_dependencies.py --validate
-
-# Recompile (safe, preserves versions)
-
-python3 scripts/dev/update_dependencies.py --compile
-
-# Upgrade all dependencies (use with caution)
-
-python3 scripts/dev/update_dependencies.py --upgrade
-
-# Check for outdated packages
-
-python3 scripts/dev/update_dependencies.py --check-outdated
-```text
-
-### Makefile Integration
-
-```bash
-
-# Validate (pre-release requirement)
-
-make deps-validate
-
-# Recompile with current Python
-
-make deps-compile
-
-# Upgrade all dependencies (prompts for confirmation)
-
-make deps-upgrade
-
-# Check for outdated packages
-
-make deps-check-outdated
-```text
-
-### CI Automation
-
-Added to [.github/workflows/ci.yml](../.github/workflows/ci.yml):
-
-```yaml
-
-- name: Validate requirements-dev.txt Python version
-
-    pip install uv
-    python scripts/dev/update_dependencies.py --validate
-```text
-**This runs on every PR and push**, blocking merges if Python version is incorrect.
-
----
-
-## Dependency Update Workflows
-
-### Weekly Audit (Security Monitoring)
-
-**Every Monday morning:**
-
-```bash
-
-# Check for outdated packages
-
-make deps-check-outdated
-
-# Review output for security-critical packages:
-
-# - pytest, pytest-cov (test infrastructure)
-
-# - black, ruff, mypy (dev tools)
-
-# - uv (dependency management)
-
-```text
-**Action if vulnerabilities found:**
-
-1. Research CVE severity (use `pip-audit` if available)
-2. If HIGH/CRITICAL, upgrade immediately
-3. Otherwise, defer to monthly cycle
-
-### Monthly Upgrade Cycle (First Monday of Month)
-
-**Comprehensive dependency refresh:**
-
-```bash
-
-# Step 1: Check current state
-
-make deps-validate
-make deps-check-outdated
-
-# Step 2: Review outdated packages
-
-# Note packages with major version changes (may have breaking changes)
-
-# Step 3: Upgrade (prompts for confirmation)
-
-make deps-upgrade
-
-# Step 4: Review changes
-
-git diff requirements-dev.txt
-
-# Step 5: Validate no conflicts
-
-make deps-validate
-
-# Step 6: Run full test suite
-
-make test
-make lint
-
-# Step 7: Commit
-
-git add requirements-dev.txt
-git commit -m "deps: monthly dependency update (YYYY-MM)
-
-- Package upgrades: [list key upgrades]
-- All tests passing
-- No dependency conflicts
-
-Related: Monthly maintenance cycle"
-```text
-
-### Before Every Release
-
-**Pre-release checklist:**
-
-```bash
-
-# 1. Validate Python version
-
-make deps-validate
-
-# Expected output:
-
-# [ok] requirements-dev.txt compiled with Python 3.12 (or higher)
-
-# [ok] No dependency conflicts detected
-
-# 2. If validation fails:
-
-python3.12 scripts/dev/update_dependencies.py --compile
-
-# 3. Verify no downgrades
-
-git diff requirements-dev.txt
-
-# Look for lines like: -package==1.2.0 +package==1.1.0 (DOWNGRADE, BAD)
-
-# 4. Run tests
-
-make test
-
-# 5. Commit if changed
-
-git add requirements-dev.txt
-git commit -m "deps: recompile with Python 3.12+ for v0.X.Y release"
-```text
----
-
-## Troubleshooting
-
-### Error: "Python 3.12+ required"
-
-**Cause:** Using wrong Python version to compile dependencies.
-
-**Fix:**
-
-```bash
-
-# Use Python 3.12
-
-pip install uv
-python3.12 scripts/dev/update_dependencies.py --compile
-```text
-
-### Error: "X dependency conflict(s) detected"
-
-**Cause:** Conflicting version constraints in `requirements-dev.in` or transitive dependencies.
-
-**Example:**
-
-```text
-checkov 3.2.477 requires packaging<24.0, but have packaging 25.0
-```text
-**Fix:**
-
-```bash
-
-# Option 1: Pin conflicting package in requirements-dev.in
-
-echo "packaging<24.0  # Required by checkov" >> requirements-dev.in
-make deps-compile
-
-# Option 2: Wait for upstream fix (check checkov releases)
-
-# If checkov updates to support packaging>=24.0, update checkov version
-
-# Option 3: Downgrade offending package (last resort)
-
-echo "packaging==23.2" >> requirements-dev.in
-make deps-compile
-```text
-
-### Error: "Downgrades detected! This should not happen."
-
-**Cause:** Version constraints in `requirements-dev.in` forcing downgrades.
-
-**Example:**
-
-```text
-Downgrades (4):
-  ↓ bandit: 1.8.6 → 1.7.10
-  ↓ pytest-cov: 7.0.0 → 5.0.0
-```text
-**Fix:**
-
-```bash
-
-# Step 1: Check requirements-dev.in for version pins
-
-cat requirements-dev.in | grep -E "bandit|pytest-cov"
-
-# Step 2: Remove overly restrictive pins
-
-# BAD:  bandit<1.8  # Forces downgrade
-
-# GOOD: bandit>=1.7.10  # Allows upgrades
-
-# Step 3: Recompile
-
-make deps-compile
-
-# Step 4: Verify upgrades
-
-git diff requirements-dev.txt | grep -E "^\+bandit|^\+pytest-cov"
-```text
-
-### Error: "uv not installed"
-
-**Cause:** `uv` not available in active Python environment.
-
-**Fix:**
-
-```bash
-
-# Install uv
-
-pip install uv
-
-# Or specify Python version
-
-python3.12 -m pip install uv
-```text
 ---
 
 ## Development Workflow
 
-### Adding a New Dependency
+### Adding a dependency
 
 ```bash
+# 1. Add it to the right table in pyproject.toml:
+#      runtime      -> [project] dependencies
+#      dev-only     -> [dependency-groups] dev
+#      optional     -> [project.optional-dependencies] <extra>
+#    Use a floor (>=1.0.0), not an exact pin, unless you can say why in a comment.
 
-# Step 1: Add to requirements-dev.in
-
-echo "new-package>=1.0.0" >> requirements-dev.in
-
-# Step 2: Recompile
-
-make deps-compile
-
-# Step 3: Sync environment
-
+# 2. Regenerate the lock and install
+make deps-lock
 make deps-sync
 
-# Step 4: Verify no conflicts
-
-make deps-validate
-
-# Step 5: Test
-
+# 3. Test
 make test
 
-# Step 6: Commit both files
-
-git add requirements-dev.in requirements-dev.txt
+# 4. Commit BOTH files -- the declaration and the lock
+git add pyproject.toml uv.lock
 git commit -m "deps: add new-package for [purpose]"
-```text
+```
 
-### Removing a Dependency
+`uv add --group dev 'new-package>=1.0.0'` does steps 1 and 2 in one command if you prefer.
 
-```bash
+### Removing a dependency
 
-# Step 1: Remove from requirements-dev.in
+Delete the line from `pyproject.toml`, then `make deps-lock && make deps-sync`. Transitive dependencies that nothing else needs drop out of the lock automatically, and `uv sync` uninstalls them from your environment. Commit `pyproject.toml` and `uv.lock` together.
 
-# (edit file manually)
-
-# Step 2: Recompile (will remove transitive deps if unused)
-
-make deps-compile
-
-# Step 3: Sync environment (will uninstall)
-
-make deps-sync
-
-# Step 4: Verify no conflicts
-
-make deps-validate
-
-# Step 5: Commit
-
-git add requirements-dev.in requirements-dev.txt
-git commit -m "deps: remove old-package (no longer needed)"
-```text
-
-### Upgrading a Specific Package
+### Upgrading one package
 
 ```bash
+uv lock --upgrade-package pytest
+git diff uv.lock          # review what moved
+make deps-sync && make test
+git add pyproject.toml uv.lock
+```
 
-# Step 1: Update version in requirements-dev.in
+### Upgrading everything
 
-# Before: package>=1.0.0
+`make deps-upgrade` (prompts for confirmation) floats every dependency to the latest version compatible with the declared constraints. Review `git diff uv.lock`, run `make test` and `make lint`, then commit.
 
-# After:  package>=2.0.0
+### Upper bounds: only to hold back a known-breaking major
 
-# Step 2: Recompile
+Constraints are floors by default. The one deliberate cap today is `mcp[cli]>=1.0.0,<2`: mcp 2.0 replaces `httpx` with `httpx2` and drops `pydantic-settings` and `httpx-sse`, which changes what roughly a hundred tests collect and breaks `tests/integration/test_cli_scan_ci.py`. The cap holds the project on the 1.x line until that upgrade is done deliberately, with the test work attached. Dependabot will keep proposing it as an ungrouped major bump.
 
-make deps-compile
+This matters generally, because **an unbounded declaration means the next from-scratch `uv lock` is an upgrade, not a translation.** The migration's first resolve moved 30 of 94 packages this way. If you ever regenerate the lock from nothing, diff the resulting package set against the previous one before assuming they are equivalent:
 
-# Step 3: Review changes
+```bash
+uv export --frozen --quiet --format requirements.txt --no-emit-project --no-hashes -o new.txt
+# compare package names first, then versions for the shared names
+```
 
-git diff requirements-dev.txt
+---
 
-# Step 4: Test for breaking changes
+## Security Auditing
 
-make test
-make lint
+[scripts/dev/audit_deps.sh](../../scripts/dev/audit_deps.sh) is the single implementation of the CVE scan, called by both `.github/workflows/ci.yml` and the `pip-audit` pre-commit hook. It exports the lock to a temporary requirements file and runs `pip-audit` against it.
 
-# Step 5: Commit
+**The exported file is never committed.** Any tracked `requirements*.txt` is a file Dependabot would try to manage, which recreates the second-writer problem described under *History* below.
 
-git add requirements-dev.in requirements-dev.txt
-git commit -m "deps: upgrade package to v2.0.0
+The export is universal, so the audited set includes platform-conditional entries such as `pywin32==312 ; sys_platform == 'win32'` no matter which OS runs the audit. A Linux-only audit would silently skip Windows-only dependencies.
 
-- Breaking changes: [list if any]
-- Tested: [describe test coverage]"
-```text
+Two advisories are ignored, both documented with full reasoning in the script's header:
+
+| Advisory | Why it is ignored |
+|----------|-------------------|
+| `PYSEC-2025-183` | Disputed pyjwt "weak encryption" advisory. No fix version exists; the maintainer's position is that key length is the calling application's choice. Transitive dev-only via `mcp`. |
+| `GHSA-qp9x-wp8f-qgjj` | tuf delegation path matching, fixed in tuf 7.0.0. Adopted when every sigstore release capped `tuf<7`, making the fix unreachable. Tracking: [#539](https://github.com/jimmy058910/jmo-security-repo/issues/539). |
+
+Do not remove either ignore without first confirming the advisory is genuinely absent from the current lock. `tests/unit/test_dep_audit_drift.py` asserts both survive refactoring.
+
 ---
 
 ## CI Integration
 
-### Pre-Release Gate
-
-The CI workflow **blocks releases** if dependencies are invalid:
+### The freshness gate
 
 ```yaml
+- name: Verify uv.lock is up to date
+  run: uv lock --check
+```
 
-- name: Validate requirements-dev.txt Python version
+This runs in `quick-checks` on **every event and every author** — pushes, pull requests, manual dispatches, human and bot alike. If it fails:
 
-    pip install uv
-    python scripts/dev/update_dependencies.py --validate
-```text
-**Exit codes:**
+```bash
+make deps-lock
+git add uv.lock
+```
 
-- `0` - All checks passed
-- `1` - Python version mismatch OR dependency conflicts
+### The install pattern
 
-### Dependabot Integration
+Every CI job that needs the dev environment uses the same block:
 
-[.github/dependabot.yml](../.github/dependabot.yml) automatically creates PRs for:
+```yaml
+- name: Set up uv
+  uses: astral-sh/setup-uv@v9.0.0
+  with:
+    version: "0.11.15"
+    python-version: '3.12'
+    enable-cache: true
+    cache-dependency-glob: "uv.lock"
 
-- Python package updates (weekly)
-- GitHub Actions updates (weekly)
-- Docker base image updates (weekly)
+- name: Install dependencies
+  run: uv sync --locked --group dev
 
-**Workflow:**
+- name: Put the project venv on PATH
+  shell: bash
+  run: |
+    if [ -d .venv/Scripts ]; then
+      echo "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+    else
+      echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+    fi
+```
 
-1. Dependabot creates PR with version bump
-2. CI validates Python version and conflicts
-3. Tests run on Python 3.12
-4. If all pass, merge PR
+Two details that are easy to get wrong:
+
+- **`python-version` is required.** Without it uv selects the newest interpreter satisfying `requires-python = ">=3.12"`, which silently moves CI off 3.12.
+- **uv is pinned to a single version across every site** (the [PR #488](https://github.com/jimmy058910/jmo-security-repo/pull/488) convention). `tests/unit/test_dep_audit_drift.py` fails if any site disagrees. Bump every site in one commit.
+
+### Dependabot
+
+[.github/dependabot.yml](../../.github/dependabot.yml) runs the **`uv` ecosystem** weekly (Monday 09:00 UTC): it reads `[dependency-groups]` and regenerates `uv.lock` *with uv*. Minor and patch bumps are grouped into one `python-minor-patch` PR; majors arrive individually. Security updates are native.
+
+Because Dependabot and CI now use the same resolver, bot PRs face the identical `uv lock --check` gate humans do. Review and test them like any other PR.
+
+---
+
+## Troubleshooting
+
+### `The lockfile at uv.lock needs to be updated, but --check was provided`
+
+The declaration in `pyproject.toml` and the lock disagree. Run `make deps-lock` and commit `uv.lock`.
+
+### `uv sync --locked` fails in CI but works locally
+
+Local `make deps-sync` uses plain `uv sync`, which silently refreshes a stale lock. Run `uv lock --check` locally to see what CI sees, then `make deps-lock` and commit the result.
+
+### A dependency is missing on Windows or macOS
+
+Check that `uv.lock` still carries the relevant platform markers and wheels. `tests/unit/test_uv_lock_platform_coverage.py` guards this. The usual cause is a `[tool.uv] environments` key narrowing the resolve — remove it and run `make deps-lock`. Note that `uv lock` has no `--python-platform` flag, so the lock cannot be narrowed from the command line.
+
+### `uv: command not found`
+
+Every Make target installs the pinned version if it is missing. To do it by hand: `python -m pip install uv==0.11.15`.
 
 ---
 
 ## Best Practices
 
-### ✅ DO
+### DO
 
-- ✅ **Always use Python 3.12+ for `deps-compile`**
-- ✅ **Run `deps-validate` before every release**
-- ✅ **Commit both `requirements-dev.in` AND `requirements-dev.txt`**
-- ✅ **Review diff after `deps-compile` (check for downgrades)**
-- ✅ **Run full test suite after dependency changes**
-- ✅ **Use version ranges** (`>=1.0.0`) instead of exact pins (`==1.0.0`) in `.in` file
-- ✅ **Document why** when pinning to specific versions (add comment)
+- Declare dependencies in `pyproject.toml` and commit `uv.lock` alongside every change to them
+- Use floors (`>=1.0.0`) rather than exact pins, and add a comment whenever you pin
+- Review `git diff uv.lock` before committing an upgrade
+- Run `make test` after any dependency change
+- Bump the pinned uv version at every site in a single commit
 
-### ❌ DON'T
+### DON'T
 
-- ❌ **Never compile with Python < 3.12** (CI uses 3.12+)
-- ❌ **Never commit only `requirements-dev.txt` without `.in`** (loses dependency rationale)
-- ❌ **Never ignore `pip check` conflicts** (will break at runtime)
-- ❌ **Never blindly accept Dependabot PRs** (always review changes and test)
-- ❌ **Never pin exact versions in `.in` file without reason** (prevents security updates)
+- Don't hand-edit `uv.lock`
+- Don't add a second dependency file — no `requirements*.txt`, no re-added `dev` extra
+- Don't commit `pyproject.toml` dependency changes without the regenerated `uv.lock`
+- Don't add `[tool.uv] environments` — it narrows the resolve and breaks cross-platform installs
+- Don't blindly accept Dependabot PRs; review and test them
 
 ---
 
-## Migration Guide (For Contributors)
+## History: the `requirements-dev` era (retired 2026-07-29)
 
-If you previously compiled dependencies with an older Python version:
+Kept because `CHANGELOG.md` and older PRs still reference this workflow.
 
-### Step 1: Install Python 3.12+
+Until 2026-07-29 dev dependencies lived in `requirements-dev.in`, were compiled to `requirements-dev.txt` by `uv pip compile --universal`, and were installed with `pip install -r`. A `deps-compile` gate compared a fresh compile byte-for-byte against the committed file, and `scripts/dev/update_dependencies.py` wrapped the compile with Python-version and `pip check` validation.
 
-**Ubuntu/Debian:**
-```bash
-sudo apt update
-sudo apt install python3.12 python3.12-venv
-```text
-**macOS (Homebrew):**
-```bash
-brew install python@3.12
-```text
-**Windows (WSL):**
-```bash
-sudo apt install python3.12
-```text
+Two defects ended it, both rooted in the same cause — **the generated file had two writers with different serializers**:
 
-### Step 2: Update Your Workflow
+1. **Drift.** Dependabot ran on the `pip` ecosystem and edited `requirements-dev.txt` directly with its own Linux-only resolver. After every bot merge `main` held a non-canonical file, and the next human PR failed the byte-equality gate with an unrelated-looking red. This happened twice on 2026-07-28 alone (PRs #677 and #682, re-armed by #680). It was not cosmetic: the pip resolve dropped `pywin32==312 ; sys_platform == 'win32'` (transitive via `mcp`), so a fresh Windows install omitted `pywin32` and broke `mcp` — invisible on CI's Linux runners. Three attempts to scope the gate (#321, #323, and a later event-scoped predicate) all treated the symptom.
+2. **Divergence.** Dev dependencies were declared twice — a 19-package `[project.optional-dependencies] dev` extra and a 30-package `requirements-dev.in`. The extra was a strict subset, so the documented `pip install -e ".[dev]"` produced a smaller environment than CI used. That is how PR #361 shipped a scheduled job broken by a missing `pytest-benchmark`.
 
-**Old workflow (pre-uv):**
-```bash
-python3 -m pip install pip-tools
-python3 -m piptools compile -o requirements-dev.txt requirements-dev.in
-```text
-**New workflow (uv):**
-```bash
-pip install uv
-uv pip compile --universal --python-version 3.12 requirements-dev.in -o requirements-dev.txt
-
-# OR use the script/Makefile
-
-python3.12 scripts/dev/update_dependencies.py --compile
-
-# OR use Makefile
-
-make deps-compile  # Uses PY variable (defaults to python3)
-```text
-
-### Step 3: Validate
-
-```bash
-make deps-validate
-```text
-**Expected output:**
-```text
-[ok] Python 3.12 (meets requirement ≥3.12)
-[ok] requirements-dev.txt compiled with Python 3.12
-[ok] No dependency conflicts detected
-```text
----
-
-## Future Improvements
-
-### Planned Enhancements
-
-1. **Automatic Vulnerability Scanning:**
-
-   pip install pip-audit
-   make deps-audit  # Check for known CVEs
-   ```
-
-1. **Dependency Graph Visualization:**
-
-   ```bash
-   pip install pipdeptree
-   make deps-tree  # Show dependency tree
-   ```
-
-2. **Lockfile Comparison:**
-
-   ```bash
-   make deps-diff vX.Y.0 vX.Y.1  # Compare dependency changes between versions
-   ```
-
-3. **Automated PR Creation:**
-
-   ```bash
-   # After make deps-upgrade, auto-create PR with changelog
-   make deps-upgrade-pr
-   ```
+Removing the second writer removed both. `update_dependencies.py` went with the file: its Python-version check read a `uv pip compile` header that no longer exists, and its `pip check` conflict detection only ever fired because flattening every dev dependency into one requirements file puts tools together that never share a Python environment (checkov, prowler and semgrep all run in isolated venvs at runtime). `uv.lock` resolves a real dependency graph, so those conflicts cannot arise.
 
 ---
 
 ## References
 
-- **Update Script:** [scripts/dev/update_dependencies.py](../scripts/dev/update_dependencies.py)
-- **CI Workflow:** [.github/workflows/ci.yml](../.github/workflows/ci.yml)
-- **Dependabot Config:** [.github/dependabot.yml](../.github/dependabot.yml)
-- **Makefile Targets:** [Makefile](../Makefile) (lines 24-30, 115-136)
-- **uv Documentation:** <https://docs.astral.sh/uv/>
-
----
-
-## Lessons Learned
-
-### What We Fixed
-
-1. **Created `update_dependencies.py`** - Automated Python version validation
-2. **Added CI check** - Blocks PRs with incorrect Python version
-3. **Updated Makefile** - Easy-to-use targets (`deps-validate`, `deps-upgrade`)
-4. **Documented workflow** - This guide prevents future issues
-
-### Impact
-
-- **Time saved:** 2-3 hours per release (no more manual dependency debugging)
-- **Error reduction:** CI blocks invalid compilations (can't merge broken deps)
-- **Consistency:** All environments use same dependency versions
-- **Security:** Monthly audits catch vulnerabilities early
-
-### Prevention
-
-**Never again will we:**
-
-- ❌ Compile dependencies with wrong Python version
-- ❌ Miss dependency conflicts before release
-- ❌ Lose Dependabot upgrades due to downgrades
-- ❌ Have non-deterministic builds across environments
-
----
-
-**Last Updated:** February 2026
-**Maintainer:** JMo Security Team
+- **Audit script:** [scripts/dev/audit_deps.sh](../../scripts/dev/audit_deps.sh)
+- **CI workflow:** [.github/workflows/ci.yml](../../.github/workflows/ci.yml)
+- **Dependabot config:** [.github/dependabot.yml](../../.github/dependabot.yml)
+- **Pre-commit hooks:** [.pre-commit-config.yaml](../../.pre-commit-config.yaml), documented in [PRE_COMMIT_HOOKS.md](PRE_COMMIT_HOOKS.md)
+- **Drift guards:** `tests/unit/test_uv_lock_platform_coverage.py`, `tests/unit/test_dep_audit_drift.py`
+- **PEP 735 (dependency groups):** <https://peps.python.org/pep-0735/>
+- **uv documentation:** <https://docs.astral.sh/uv/>

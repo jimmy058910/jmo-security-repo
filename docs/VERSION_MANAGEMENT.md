@@ -509,7 +509,7 @@ This ensures scans use exactly the versions specified in `versions.yaml`.
       update-types: ["minor", "patch"]
 ```
 
-**Tracks:** requirements-dev.txt (pytest, coverage, black, etc.)
+**Tracks:** `pyproject.toml` + `uv.lock` (pytest, coverage, black, etc.)
 **Does NOT track:** Security tools in Dockerfiles (use update_versions.py)
 
 ### Docker Base Images

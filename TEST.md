@@ -253,7 +253,7 @@ This repo ships as a Python package (entry point `jmo = scripts.cli.jmo:main`).
 When running tests locally, install the package in editable mode so imports work:
 
 ```bash
-make dev-setup  # or: python -m pip install -r requirements-dev.txt && python -m pip install -e .
+make dev-setup  # or: uv sync --group dev  (installs dev deps + the project, editable)
 ```
 
 Alternatively, you can set `PYTHONPATH=.` for ad-hoc runs, but installing with `-e .` matches CI and is recommended.
