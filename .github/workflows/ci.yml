@@ -370,6 +370,118 @@ jobs:
           path: coverage-shard-${{ matrix.os }}-${{ matrix.shard }}.xml
           retention-days: 1
 
+  # The only job that runs as an ordinary Windows user does.
+  #
+  # Every other test step above sets PYTHONUTF8: "1", which enables Python UTF-8
+  # Mode and overrides the locale codec for open(), read_text() AND stdio. On
+  # Linux/macOS that changes nothing (already UTF-8); on Windows it substitutes
+  # an environment nobody actually has, so those shards structurally cannot
+  # observe this bug class. That is how 40 failures and 22 errors sat on main
+  # under a green tick while `jmo trends explain score` exited 1 for every
+  # Windows user.
+  #
+  # Everything except the console codec is identical to the windows-2022 shard,
+  # so a failure here is attributable to the codec and nothing else.
+  #
+  # DO NOT add PYTHONUTF8 here, and DO NOT add continue-on-error. Either one
+  # makes this job decorative. See
+  # .claude/rules/testing.cross-platform.rules.md "Console Encoding (Windows)".
+  windows-native-encoding:
+    name: Windows native console encoding
+    runs-on: windows-2022
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
+          python-version: '3.12'  # preserves the pin actions/setup-python held
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Install dependencies
+        run: uv sync --locked --group dev
+
+      - name: Put the project venv on PATH
+        # cygpath -w is mandatory: shutil.which() on Windows cannot read a POSIX
+        # PATH entry, so tool discovery silently returns None. See the same step
+        # in test-sharded for the full explanation.
+        run: |
+          cygpath -w "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+
+      - name: Configure Windows temp directory for faster I/O
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "D:\Temp" | Out-Null
+          "TEMP=D:\Temp" | Out-File -Append $env:GITHUB_ENV
+          "TMP=D:\Temp" | Out-File -Append $env:GITHUB_ENV
+
+      - name: Report the console codec this job actually got
+        # Proves the job is testing what it claims to. If this ever prints utf-8,
+        # something upstream (a runner image change, an inherited env var) has
+        # silently neutralised the job.
+        run: |
+          python -c "import sys, locale; print(
+            'stdout:', sys.stdout.encoding,
+            '| preferred:', locale.getpreferredencoding(False),
+            '| utf8_mode:', sys.flags.utf8_mode)"
+
+      - name: Assert the suite still collects
+        # `0 tests collected` exits 0, and a conftest that quietly stops
+        # collecting a package (mcp 2.0 hid 235 tests behind a green tick)
+        # exits 0 too. Only a count floor catches that. Measured 7935 with this
+        # filter; the floor is a deliberate tripwire -- if you legitimately
+        # remove tests, lower it in the same PR and say why.
+        env:
+          CI: "true"
+          SKIP_REACT_BUILD_CHECK: "true"
+        run: |
+          collected=$(python -m pytest --collect-only -q \
+            -m "not smoke and not requires_tools and not docker and not slow" \
+            | grep -oE "^[0-9]+/[0-9]+ tests collected" | cut -d/ -f1)
+          echo "collected: ${collected:-0} (floor: 7800)"
+          if [ -z "$collected" ] || [ "$collected" -lt 7800 ]; then
+            echo "::error::Collected ${collected:-0} tests, expected >=7800." \
+              "Collection broke, or tests were removed without lowering the floor."
+            exit 1
+          fi
+
+      - name: Run the full suite on a native (non-UTF-8) console
+        # PYTHONUTF8 is DELIBERATELY ABSENT -- that is the entire point.
+        # Flags match the windows-2022 shard exactly so the codec is the only
+        # variable. Not `-m native_encoding`: the read-side class lives in
+        # ordinary tests all over the suite and a marker cannot see it.
+        env:
+          CI: "true"
+          JMO_THREADS: "2"
+          SKIP_REACT_BUILD_CHECK: "true"
+        run: |
+          python -m pytest -q \
+            --disable-warnings \
+            --timeout=60 \
+            -p no:xdist \
+            -p no:rerunfailures \
+            -m "not smoke and not requires_tools and not docker and not slow"
+
+      - name: Windows post-test cleanup
+        if: always()
+        shell: pwsh
+        run: |
+          $procs = Get-Process -Name python,cmd,node,java -ErrorAction SilentlyContinue |
+            Where-Object { $_.Id -ne $PID }
+          if ($procs) {
+            Write-Host "Killing $($procs.Count) orphan processes"
+            $procs | Stop-Process -Force -ErrorAction SilentlyContinue
+          }
+
   # Aggregate coverage from all shards and upload to Codecov
   coverage-aggregate:
     name: Aggregate Coverage
