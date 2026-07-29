@@ -14,7 +14,7 @@ from scripts.core.reporters import (
     diff_md_reporter,
     diff_sarif_reporter,
 )
-from scripts.core.unicode_utils import UNICODE_FALLBACKS
+from scripts.core.unicode_utils import safe_print
 
 # Optional Rich library for enhanced terminal output
 try:
@@ -28,31 +28,6 @@ try:
 except ImportError:
     RICH_AVAILABLE = False
     console = None  # type: ignore[assignment]  # Graceful fallback when rich optional dep not installed
-
-
-def _can_encode_unicode() -> bool:
-    """Check if stdout can encode Unicode characters."""
-    try:
-        encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
-        if encoding.lower() in ("cp1252", "ascii", "latin-1", "iso-8859-1"):
-            return False
-        "─".encode(encoding)
-        return True
-    except (UnicodeEncodeError, LookupError):
-        return False
-
-
-def safe_print(text: str, file=None) -> None:
-    """Print text with Unicode fallback for Windows compatibility."""
-    if file is None:
-        file = sys.stdout
-    if _can_encode_unicode():
-        print(text, file=file)
-    else:
-        result = text
-        for unicode_char, ascii_fallback in UNICODE_FALLBACKS.items():
-            result = result.replace(unicode_char, ascii_fallback)
-        print(result, file=file)
 
 
 def detect_git_context() -> dict[str, Any] | None:
@@ -327,7 +302,7 @@ def cmd_diff(args) -> int:
         args.scan_ids = None
 
         # Display auto-detection results
-        safe_print("🔍 Auto-detected configuration:", file=sys.stderr)
+        safe_print("🔍 Auto-detected configuration:", stream=sys.stderr)
         print(f"   Baseline: {baseline}", file=sys.stderr)
         print(f"   Current:  {current}", file=sys.stderr)
         print(f"   Format:   {args.format}", file=sys.stderr)
@@ -477,7 +452,7 @@ def cmd_diff(args) -> int:
             safe_print(
                 f"\n📊 Summary: {stats['total_new']} new, {stats['total_resolved']} resolved, "
                 f"{stats['total_modified']} modified (trend: {stats['trend']})",
-                file=sys.stderr,
+                stream=sys.stderr,
             )
 
     return 0

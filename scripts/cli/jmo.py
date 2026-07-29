@@ -31,6 +31,9 @@ from scripts.core.unicode_utils import (
     UNICODE_FALLBACKS as _UNICODE_FALLBACKS,
 )
 from scripts.core.unicode_utils import (
+    harden_console_streams,
+)
+from scripts.core.unicode_utils import (
     safe_print as _safe_print,
 )
 
@@ -3671,6 +3674,10 @@ def cmd_verify(args) -> int:
 
 
 def main():
+    # Before parse_args(): argparse writes --help and usage errors straight to
+    # the console, and those paths must survive a non-UTF-8 codec too.
+    harden_console_streams()
+
     args = parse_args()
 
     # Handle empty namespace (--help called during pytest)

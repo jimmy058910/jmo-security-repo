@@ -51,33 +51,7 @@ from scripts.core.trend_exporters import (
     export_to_grafana,
     export_to_prometheus,
 )
-from scripts.core.unicode_utils import UNICODE_FALLBACKS
-
-
-def _can_encode_unicode() -> bool:
-    """Check if stdout can encode Unicode characters."""
-    try:
-        encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
-        if encoding.lower() in ("cp1252", "ascii", "latin-1", "iso-8859-1"):
-            return False
-        "─".encode(encoding)
-        return True
-    except (UnicodeEncodeError, LookupError):
-        return False
-
-
-def safe_write(text: str, stream=None) -> None:
-    """Write text with Unicode fallback for Windows compatibility."""
-    if stream is None:
-        stream = sys.stdout
-    if _can_encode_unicode():
-        stream.write(text)
-    else:
-        result = text
-        for unicode_char, ascii_fallback in UNICODE_FALLBACKS.items():
-            result = result.replace(unicode_char, ascii_fallback)
-        stream.write(result)
-
+from scripts.core.unicode_utils import safe_write
 
 # ============================================================================
 # Command 1: jmo trends analyze
