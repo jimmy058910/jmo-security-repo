@@ -50,7 +50,7 @@ class BaselineValidationResult:
 
 def load_baseline(baseline_file: Path) -> dict[str, Any]:
     """Load a baseline file."""
-    with open(baseline_file) as f:
+    with open(baseline_file, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -103,7 +103,7 @@ def load_findings(results_dir: Path) -> list[dict[str, Any]]:
     if not findings_file.exists():
         return []
 
-    with open(findings_file) as f:
+    with open(findings_file, encoding="utf-8") as f:
         data = json.load(f)
 
     if isinstance(data, list):
@@ -304,7 +304,7 @@ class TestBaselineSchemaValidation:
     def test_baseline_files_valid_json(self):
         """All baseline files should be valid JSON."""
         for baseline_file in BASELINES_DIR.glob("*.baseline.json"):
-            with open(baseline_file) as f:
+            with open(baseline_file, encoding="utf-8") as f:
                 data = json.load(f)
 
             # Check required top-level keys

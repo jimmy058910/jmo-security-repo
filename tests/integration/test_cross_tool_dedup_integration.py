@@ -20,7 +20,7 @@ def fixture_path() -> Path:
 @pytest.fixture
 def sql_injection_cluster(fixture_path):
     """Load SQL injection cluster from fixtures."""
-    with open(fixture_path) as f:
+    with open(fixture_path, encoding="utf-8") as f:
         data = json.load(f)
 
     # Get the SQL injection cluster (first in known_duplicates)

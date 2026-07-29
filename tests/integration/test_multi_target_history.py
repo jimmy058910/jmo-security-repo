@@ -209,7 +209,7 @@ class TestMultiTargetHistoryIntegration:
         assert output_path.exists(), "JSON output should exist"
 
         # Validate diff detected new IaC finding
-        with open(output_path) as f:
+        with open(output_path, encoding="utf-8") as f:
             diff = json.load(f)
 
         assert "statistics" in diff

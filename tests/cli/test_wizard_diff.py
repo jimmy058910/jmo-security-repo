@@ -675,7 +675,7 @@ class TestRunDiffWizardHTMLBrowserOpen:
 
         def mock_cmd_diff(args):
             # Simulate creating the output file
-            Path(args.output).write_text("<html>Report</html>")
+            Path(args.output).write_text("<html>Report</html>", encoding="utf-8")
             return 0
 
         with patch("builtins.input", side_effect=inputs):
@@ -712,7 +712,7 @@ class TestRunDiffWizardHTMLBrowserOpen:
         ]
 
         def mock_cmd_diff(args):
-            Path(args.output).write_text("<html>Report</html>")
+            Path(args.output).write_text("<html>Report</html>", encoding="utf-8")
             return 0
 
         with patch("builtins.input", side_effect=inputs):

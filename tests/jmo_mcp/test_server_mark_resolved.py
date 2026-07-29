@@ -32,11 +32,11 @@ def mock_findings_file(tmp_path):
     results_dir = tmp_path / "results" / "summaries"
     results_dir.mkdir(parents=True, exist_ok=True)
 
-    with open(findings_json) as f:
+    with open(findings_json, encoding="utf-8") as f:
         findings_data = json.load(f)
 
     output_path = results_dir / "findings.json"
-    with open(output_path, "w") as f:
+    with open(output_path, "w", encoding="utf-8") as f:
         json.dump(findings_data, f, indent=2)
 
     return tmp_path

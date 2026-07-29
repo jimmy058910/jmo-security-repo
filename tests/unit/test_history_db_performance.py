@@ -467,7 +467,7 @@ def test_export_pagination_for_large_datasets(perf_db, tmp_path):
         "total_count": len(scans),
     }
 
-    with open(output_file, "w") as f:
+    with open(output_file, "w", encoding="utf-8") as f:
         json.dump(export_data, f, indent=2)
 
     conn.close()
@@ -481,7 +481,7 @@ def test_export_pagination_for_large_datasets(perf_db, tmp_path):
     assert elapsed < 5.0  # <5s for 1000 scans
 
     # Verify exported data is valid JSON
-    with open(output_file) as f:
+    with open(output_file, encoding="utf-8") as f:
         data = json.load(f)
 
     assert len(data["scans"]) == 1000

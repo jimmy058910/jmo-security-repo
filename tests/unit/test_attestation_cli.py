@@ -270,7 +270,7 @@ class TestAttestCommandExecution:
         assert exit_code == 0
         # Verify attestation contains scan args
         attestation_path = Path(str(sample_findings) + ".att.json")
-        attestation = json.loads(attestation_path.read_text())
+        attestation = json.loads(attestation_path.read_text(encoding="utf-8"))
 
         assert (
             attestation["predicate"]["buildDefinition"]["externalParameters"]["profile"]
@@ -302,7 +302,7 @@ class TestAttestCommandExecution:
 
         assert exit_code == 0
         attestation_path = Path(str(sample_findings) + ".att.json")
-        attestation = json.loads(attestation_path.read_text())
+        attestation = json.loads(attestation_path.read_text(encoding="utf-8"))
 
         # Verify in-toto statement structure
         assert attestation["_type"] == "https://in-toto.io/Statement/v0.1"

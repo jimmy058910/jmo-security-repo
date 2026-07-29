@@ -29,11 +29,11 @@ def mock_findings_file(tmp_path):
     results_dir = tmp_path / "results" / "summaries"
     results_dir.mkdir(parents=True, exist_ok=True)
 
-    with open(findings_json) as f:
+    with open(findings_json, encoding="utf-8") as f:
         findings_data = json.load(f)
 
     output_path = results_dir / "findings.json"
-    with open(output_path, "w") as f:
+    with open(output_path, "w", encoding="utf-8") as f:
         json.dump(findings_data, f, indent=2)
 
     return tmp_path
@@ -266,7 +266,7 @@ def test_get_security_findings_empty_findings_file(tmp_path, monkeypatch):
     results_dir.mkdir(parents=True, exist_ok=True)
 
     findings_path = results_dir / "findings.json"
-    with open(findings_path, "w") as f:
+    with open(findings_path, "w", encoding="utf-8") as f:
         json.dump([], f)  # Empty list, not object
 
     monkeypatch.setenv("MCP_RESULTS_DIR", str(tmp_path / "results"))

@@ -124,7 +124,7 @@ def test_json_schema_structure(tmp_path, sample_diff_result):
 
     assert out_path.exists()
 
-    with open(out_path) as f:
+    with open(out_path, encoding="utf-8") as f:
         data = json.load(f)
 
     # Check top-level keys
@@ -140,7 +140,7 @@ def test_json_metadata_wrapper(tmp_path, sample_diff_result):
     out_path = tmp_path / "diff.json"
     write_json_diff(sample_diff_result, out_path)
 
-    with open(out_path) as f:
+    with open(out_path, encoding="utf-8") as f:
         data = json.load(f)
 
     meta = data["meta"]
@@ -178,7 +178,7 @@ def test_json_statistics_section(tmp_path, sample_diff_result):
     out_path = tmp_path / "diff.json"
     write_json_diff(sample_diff_result, out_path)
 
-    with open(out_path) as f:
+    with open(out_path, encoding="utf-8") as f:
         data = json.load(f)
 
     stats = data["statistics"]
@@ -200,7 +200,7 @@ def test_json_new_findings(tmp_path, sample_diff_result):
     out_path = tmp_path / "diff.json"
     write_json_diff(sample_diff_result, out_path)
 
-    with open(out_path) as f:
+    with open(out_path, encoding="utf-8") as f:
         data = json.load(f)
 
     new = data["new_findings"]
@@ -218,7 +218,7 @@ def test_json_resolved_findings(tmp_path, sample_diff_result):
     out_path = tmp_path / "diff.json"
     write_json_diff(sample_diff_result, out_path)
 
-    with open(out_path) as f:
+    with open(out_path, encoding="utf-8") as f:
         data = json.load(f)
 
     resolved = data["resolved_findings"]
@@ -233,7 +233,7 @@ def test_json_modified_findings(tmp_path, sample_diff_result):
     out_path = tmp_path / "diff.json"
     write_json_diff(sample_diff_result, out_path)
 
-    with open(out_path) as f:
+    with open(out_path, encoding="utf-8") as f:
         data = json.load(f)
 
     modified = data["modified_findings"]
@@ -256,7 +256,7 @@ def test_json_valid_format(tmp_path, sample_diff_result):
     write_json_diff(sample_diff_result, out_path)
 
     # Should parse without errors
-    with open(out_path) as f:
+    with open(out_path, encoding="utf-8") as f:
         data = json.load(f)
 
     assert isinstance(data, dict)
@@ -268,7 +268,7 @@ def test_json_round_trip(tmp_path, sample_diff_result):
     write_json_diff(sample_diff_result, out_path)
 
     # Read back
-    with open(out_path) as f:
+    with open(out_path, encoding="utf-8") as f:
         data = json.load(f)
 
     # Verify all data intact
@@ -320,7 +320,7 @@ def test_json_empty_diff(tmp_path):
     out_path = tmp_path / "empty-diff.json"
     write_json_diff(diff, out_path)
 
-    with open(out_path) as f:
+    with open(out_path, encoding="utf-8") as f:
         data = json.load(f)
 
     assert data["statistics"]["total_new"] == 0

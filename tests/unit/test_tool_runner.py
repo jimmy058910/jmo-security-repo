@@ -581,7 +581,9 @@ class TestErrorHandling:
         import stat
         import tempfile
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as f:
+        with tempfile.NamedTemporaryFile(
+            encoding="utf-8", mode="w", suffix=".sh", delete=False
+        ) as f:
             f.write("#!/bin/bash\necho test\n")
             script_path = f.name
 

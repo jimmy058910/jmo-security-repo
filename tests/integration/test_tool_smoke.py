@@ -479,7 +479,7 @@ def parse_with_adapter(tool_name: str, output_file: Path) -> list[dict[str, Any]
     if hasattr(adapter, "parse"):
         return adapter.parse(output_file)
     elif hasattr(adapter, "parse_output"):
-        with open(output_file) as f:
+        with open(output_file, encoding="utf-8") as f:
             content = f.read()
         return adapter.parse_output(content)
     else:

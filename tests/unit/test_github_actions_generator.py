@@ -307,7 +307,9 @@ def test_actionlint_validation(basic_schedule):
     workflow_yaml = generator.generate(basic_schedule)
 
     # Write to temporary file
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as f:
+    with tempfile.NamedTemporaryFile(
+        encoding="utf-8", mode="w", suffix=".yml", delete=False
+    ) as f:
         f.write(workflow_yaml)
         temp_file = Path(f.name)
 

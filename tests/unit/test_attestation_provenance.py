@@ -147,7 +147,7 @@ class TestHashGeneration:
         """Test generating all three hash algorithms."""
         from scripts.core.attestation.provenance import ProvenanceGenerator
 
-        with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
+        with tempfile.NamedTemporaryFile(encoding="utf-8", mode="w", delete=False) as f:
             f.write('{"findings": []}')
             findings_path = Path(f.name)
 

@@ -114,7 +114,7 @@ class TestSecretsManagement:
         gitignore_path = Path(".gitignore")
         assert gitignore_path.exists(), ".gitignore must exist"
 
-        gitignore_content = gitignore_path.read_text()
+        gitignore_content = gitignore_path.read_text(encoding="utf-8")
 
         # Critical patterns that MUST be gitignored
         required_patterns = [
@@ -139,7 +139,7 @@ class TestSecretsManagement:
         pre_commit_config = Path(".pre-commit-config.yaml")
         assert pre_commit_config.exists(), ".pre-commit-config.yaml must exist"
 
-        config_content = pre_commit_config.read_text()
+        config_content = pre_commit_config.read_text(encoding="utf-8")
 
         # Should include detect-private-key hook
         assert (

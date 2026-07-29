@@ -408,13 +408,15 @@ class TestCIModeIntegration:
         attestation_path_obj = Path(attestation_path_str)
 
         # Save attestation manually
-        attestation_path_obj.write_text(json.dumps(statement, indent=2))
+        attestation_path_obj.write_text(
+            json.dumps(statement, indent=2), encoding="utf-8"
+        )
 
         # Should exist at expected path
         assert attestation_path_obj.exists()
 
         # Should be valid JSON
-        with open(attestation_path_str) as f:
+        with open(attestation_path_str, encoding="utf-8") as f:
             data = json.load(f)
             assert data["_type"] == "https://in-toto.io/Statement/v0.1"
 

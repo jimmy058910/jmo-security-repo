@@ -53,7 +53,7 @@ def test_store_scan_1000_findings_fast(
     # Write findings to JSON (simulate scan output)
     # Format: {"findings": [...], "metadata": {...}}
     findings_file = summaries_dir / "findings.json"
-    with open(findings_file, "w") as f:
+    with open(findings_file, "w", encoding="utf-8") as f:
         json.dump(
             {
                 "findings": benchmark_findings,
@@ -353,7 +353,7 @@ def test_benchmark_suite(tmp_path: Path, benchmark_findings: list[dict[str, Any]
 
     # Write findings.json
     findings_file = summaries_dir / "findings.json"
-    with open(findings_file, "w") as f:
+    with open(findings_file, "w", encoding="utf-8") as f:
         json.dump(
             {
                 "findings": benchmark_findings,

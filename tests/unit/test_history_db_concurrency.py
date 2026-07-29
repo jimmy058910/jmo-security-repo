@@ -85,7 +85,7 @@ def test_concurrent_writes_thread_safety(concurrency_db, sample_findings, tmp_pa
     summaries_dir = results_dir / "summaries"
     summaries_dir.mkdir()
     findings_file = summaries_dir / "findings.json"
-    with open(findings_file, "w") as f:
+    with open(findings_file, "w", encoding="utf-8") as f:
         json.dump({"findings": sample_findings}, f)
 
     # Thread worker function
@@ -167,7 +167,7 @@ def test_concurrent_reads_during_writes(concurrency_db, sample_findings, tmp_pat
     summaries_dir = results_dir / "summaries"
     summaries_dir.mkdir()
     findings_file = summaries_dir / "findings.json"
-    with open(findings_file, "w") as f:
+    with open(findings_file, "w", encoding="utf-8") as f:
         json.dump({"findings": sample_findings}, f)
 
     # Insert initial scans
@@ -265,7 +265,7 @@ def test_sqlite_locking_under_contention(concurrency_db, sample_findings, tmp_pa
     summaries_dir = results_dir / "summaries"
     summaries_dir.mkdir()
     findings_file = summaries_dir / "findings.json"
-    with open(findings_file, "w") as f:
+    with open(findings_file, "w", encoding="utf-8") as f:
         json.dump({"findings": sample_findings}, f)
 
     # Thread worker function with artificial contention
@@ -342,7 +342,7 @@ def test_database_corruption_recovery(concurrency_db, sample_findings, tmp_path)
     summaries_dir = results_dir / "summaries"
     summaries_dir.mkdir()
     findings_file = summaries_dir / "findings.json"
-    with open(findings_file, "w") as f:
+    with open(findings_file, "w", encoding="utf-8") as f:
         json.dump({"findings": sample_findings}, f)
 
     # Store initial scan
@@ -434,7 +434,7 @@ def test_partial_write_recovery(concurrency_db, sample_findings, tmp_path):
     summaries_dir = results_dir / "summaries"
     summaries_dir.mkdir()
     findings_file = summaries_dir / "findings.json"
-    with open(findings_file, "w") as f:
+    with open(findings_file, "w", encoding="utf-8") as f:
         json.dump({"findings": sample_findings}, f)
 
     # Store initial scan
@@ -511,7 +511,7 @@ def test_connection_pool_thread_safety(concurrency_db, sample_findings, tmp_path
     summaries_dir = results_dir / "summaries"
     summaries_dir.mkdir()
     findings_file = summaries_dir / "findings.json"
-    with open(findings_file, "w") as f:
+    with open(findings_file, "w", encoding="utf-8") as f:
         json.dump({"findings": sample_findings}, f)
 
     connection_ids = []

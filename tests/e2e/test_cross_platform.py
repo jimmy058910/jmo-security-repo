@@ -383,7 +383,7 @@ class TestCrossPlatformCompatibility:
         # Check findings for path consistency
         findings_json = results_dir / "summaries" / "findings.json"
         if findings_json.exists():
-            with open(findings_json) as f:
+            with open(findings_json, encoding="utf-8") as f:
                 data = json.load(f)
 
             # v1.0.0 metadata wrapper

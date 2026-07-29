@@ -38,7 +38,7 @@ class TestFindingsFormatHandling:
             }
         ]
         findings_file = summaries / "findings.json"
-        with open(findings_file, "w") as f:
+        with open(findings_file, "w", encoding="utf-8") as f:
             json.dump(findings_list, f)
 
         # Store scan (should succeed with list format)
@@ -86,7 +86,7 @@ class TestFindingsFormatHandling:
             ]
         }
         findings_file = summaries / "findings.json"
-        with open(findings_file, "w") as f:
+        with open(findings_file, "w", encoding="utf-8") as f:
             json.dump(findings_dict, f)
 
         # Store scan (should succeed with dict format)
@@ -120,7 +120,7 @@ class TestFindingsFormatHandling:
 
         # Create findings.json with empty list
         findings_file = summaries / "findings.json"
-        with open(findings_file, "w") as f:
+        with open(findings_file, "w", encoding="utf-8") as f:
             json.dump([], f)
 
         # Store scan (should succeed with 0 findings)
@@ -159,7 +159,7 @@ class TestFindingsFormatHandling:
 
         # Create findings.json with malformed format (string, not list/dict)
         findings_file = summaries / "findings.json"
-        with open(findings_file, "w") as f:
+        with open(findings_file, "w", encoding="utf-8") as f:
             json.dump("malformed", f)
 
         # Store scan (should handle gracefully with 0 findings)
