@@ -114,6 +114,8 @@ make test-fast                         # Fast parallel tests (recommended for de
 | `jmo history list` | View scan history |
 | `jmo validate` | Pre-release validation scorecard (quick tier) |
 | `jmo validate --tier full` | Full validation with real tools |
+| `make deps-sync` | Install/refresh the dev env from `uv.lock` |
+| `make deps-lock` | Regenerate `uv.lock` after changing deps in `pyproject.toml` |
 | `make fmt` | Format code (Black + Ruff) |
 | `make lint` | Lint checks |
 | `make test-fast` | Parallel tests, no coverage (fastest dev loop) |
@@ -257,6 +259,8 @@ Detailed guidelines for specific parts of the codebase. These load automatically
 |------|---------|
 | `jmo.yml` | Main JMo config (referenced throughout codebase) |
 | `jmo.suppress.yml` | Suppression rules |
+| `pyproject.toml` | Single declaration of all deps — runtime, extras, and `[dependency-groups] dev` (PEP 735) |
+| `uv.lock` | The only lockfile. Universal, tracked, generated (NEVER hand-edit; use `make deps-lock`) |
 | `versions.yaml` | Tool versions (NEVER edit manually; use `update_versions.py`) |
 | `.pre-commit-config.yaml` | Pre-commit hooks (Black before Ruff) |
 
@@ -283,6 +287,7 @@ See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for complete configuration referenc
 | Tool not found | `jmo tools check`, then `jmo tools install` |
 | Tool startup crash | `jmo tools clean --force && jmo tools install <tool>` |
 | Pre-commit fails | `make fmt`, `make lint` |
+| `uv.lock needs to be updated, but --check was provided` | Deps changed in `pyproject.toml` without relocking. `make deps-lock && git add uv.lock`. Local `uv sync` refreshes a stale lock silently; CI and pre-commit hard-fail — that asymmetry is deliberate |
 | CI failures | Check matrix tests, coverage, pre-commit |
 | SQLite locked | `jmo history vacuum` |
 | Docker persistence | Mount `.jmo/` volume |
