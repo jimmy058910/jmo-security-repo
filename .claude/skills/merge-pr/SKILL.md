@@ -160,9 +160,10 @@ The `--delete-branch` flag handles remote cleanup atomically. After this:
 
 ### Step 7: Sync dev from main
 
+Sync `dev` **server-side, without switching any branch.** The primary checkout is shared with an always-on peer agent, so `git checkout` here would yank the branch out from under it — the same hazard Step 8 warns about.
+
 ```bash
-git checkout main
-git pull origin main
+git fetch origin
 
 # Sanity check: dev hasn't diverged during the wait
 DIVERGE=$(git rev-list --count origin/main..origin/dev)
@@ -173,12 +174,15 @@ if [ "$DIVERGE" != "0" ]; then
   exit 1
 fi
 
-git checkout dev
-git merge --ff-only main  # fast-forward only; refuses if non-FF
-git push origin dev
+# Fast-forward origin/dev to origin/main directly. Git refuses a non-fast-forward
+# push by default, so this carries the same guarantee as `git merge --ff-only`
+# without ever checking anything out.
+git push origin origin/main:dev
 ```
 
-The `--ff-only` is critical — it prevents accidental merge commits if dev silently diverged. If dev had any unique commits (e.g., long-running experimental work), this will refuse and ask the user to resolve manually.
+The non-fast-forward refusal is critical — it prevents accidental merge commits if dev silently diverged. If dev had unique commits (e.g. long-running experimental work), the push is rejected and the user resolves manually.
+
+If you happen to be on `dev` already in a checkout nobody else shares, `git merge --ff-only origin/main && git push origin dev` is equivalent. Prefer the server-side form when in doubt — it is correct in both cases.
 
 ### Step 8: Local branch cleanup
 
@@ -193,9 +197,12 @@ if [ -n "$WT" ]; then
   # NEVER remove a worktree blind. Confirm it holds nothing unpushed first.
   git -C "$WT" status --porcelain          # must be empty
   git -C "$WT" stash list                  # must be empty
-  git diff --quiet main "$BRANCH" \
+  # origin/main, NOT main -- a worktree-based checkout often has no local main ref,
+  # and `git diff main ...` then dies with "unknown revision", which reads as a
+  # failed safety check when it is actually a missing one.
+  git diff --quiet origin/main "$BRANCH" \
     && echo "safe: squash absorbed the tree" \
-    || echo "STOP: $BRANCH still differs from main"
+    || echo "STOP: $BRANCH still differs from origin/main"
 
   git worktree remove "$WT"   # add --force only after the checks above pass
 fi
@@ -234,7 +241,8 @@ echo "  - Otherwise, branch off main for the next change-set."
 | `no commits ahead of main` | Branch was already merged or never had commits | Nothing to do |
 | `gh pr create` fails with "no commits between..." | Branch already in PR, or already merged | `gh pr view` to inspect; the skill probably ran already |
 | CI `--watch` exits 1 with all checks shown as `pending` | Network/`gh` auth issue, not real CI failure | `gh auth status`, retry the watch |
-| `dev has N commits not on main` | Someone pushed to dev between steps 6 and 7 | Manual resolve (`git checkout dev && git merge main` or `git rebase main`) |
+| `dev has N commits not on main` | Someone pushed to dev between steps 6 and 7 | Manual resolve — but do it in a **worktree**, not by checking out `dev` in the shared primary tree: `git worktree add -d <tmp> origin/dev`, reconcile there, push, remove |
+| `git push origin origin/main:dev` rejected as non-fast-forward | Same cause as the row above — dev gained unique commits | Same fix. The rejection is the safety net working; never `--force` it |
 | `git branch -D` says "branch not found" | Already cleaned up | Idempotent; safe to ignore |
 | `gh pr merge --delete-branch` exits 1 with `cannot delete branch ... used by worktree` | **The merge already succeeded.** Only the local-branch delete failed, because a linked worktree holds the branch | Not an error to fix — finish Step 8's worktree removal, then `git branch -D`. Verify the merge landed (`gh pr view <N> --json state`) before assuming anything went wrong |
 | Local `make fmt && make lint` in Step 2 lints the wrong code | The working tree is on `dev`/`main`, not the feature branch (normal when the branch lives in a worktree) | Run them **in the worktree** (`cd "$WT" && make fmt lint`), or skip and rely on CI — which ran the full pre-commit suite against the actual PR head. State which you did |
