@@ -61,18 +61,25 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v7
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v9
         with:
-          python-version: '3.12'
-          cache: pip
-          cache-dependency-path: requirements-dev.txt
+          version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
+          python-version: '3.12'  # preserves the pin actions/setup-python held
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
       - name: Install dependencies
+        run: uv sync --locked --group dev
+
+      - name: Put the project venv on PATH
+        shell: bash
         run: |
-          python -m pip install --upgrade pip
-          pip install -e .
-          pip install -r requirements-dev.txt
+          if [ -d .venv/Scripts ]; then
+            echo "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+          else
+            echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          fi
 
       - name: Install security tools
         env:
@@ -242,18 +249,25 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v7
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v9
         with:
+          version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
           python-version: ${{ matrix.python-version }}
-          cache: pip
-          cache-dependency-path: requirements-dev.txt
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
       - name: Install dependencies
+        run: uv sync --locked --group dev
+
+      - name: Put the project venv on PATH
+        shell: bash
         run: |
-          python -m pip install --upgrade pip
-          pip install -e .
-          pip install -r requirements-dev.txt
+          if [ -d .venv/Scripts ]; then
+            echo "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+          else
+            echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          fi
 
       - name: Run unit tests
         shell: bash
@@ -287,18 +301,25 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v7
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v9
         with:
-          python-version: '3.12'
-          cache: pip
-          cache-dependency-path: requirements-dev.txt
+          version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
+          python-version: '3.12'  # preserves the pin actions/setup-python held
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
       - name: Install dependencies
+        run: uv sync --locked --group dev
+
+      - name: Put the project venv on PATH
+        shell: bash
         run: |
-          python -m pip install --upgrade pip
-          pip install -e .
-          pip install -r requirements-dev.txt
+          if [ -d .venv/Scripts ]; then
+            echo "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+          else
+            echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          fi
 
       - name: Run security regression test suite
         run: |
@@ -384,18 +405,25 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v7
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v9
         with:
-          python-version: '3.12'
-          cache: pip
-          cache-dependency-path: requirements-dev.txt
+          version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
+          python-version: '3.12'  # preserves the pin actions/setup-python held
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
       - name: Install JMo Security and test dependencies
+        run: uv sync --locked --group dev
+
+      - name: Put the project venv on PATH
+        shell: bash
         run: |
-          pip install --upgrade pip setuptools wheel
-          pip install -e .
-          pip install -r requirements-dev.txt
+          if [ -d .venv/Scripts ]; then
+            echo "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+          else
+            echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          fi
 
       - name: Install balanced profile tools
         env:
@@ -508,15 +536,25 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v7
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v9
         with:
-          python-version: '3.12'
+          version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
+          python-version: '3.12'  # preserves the pin actions/setup-python held
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
       - name: Install dev dependencies
+        run: uv sync --locked --group dev
+
+      - name: Put the project venv on PATH
+        shell: bash
         run: |
-          python -m pip install --upgrade 'pip<25.3'
-          pip install -r requirements-dev.txt
+          if [ -d .venv/Scripts ]; then
+            echo "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+          else
+            echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          fi
 
       - name: Cache pre-commit environments
         uses: actions/cache@v6
@@ -538,12 +576,13 @@ jobs:
           # pre-commit default to $HOME/.cache/pre-commit matches the cache step.
           # Skip bandit (already covered by make lint)
           # Skip yamllint to avoid validating external pre-commit cache files
-          # Skip deps-compile: PR-time validation only. On main (where scheduled.yml
-          # runs), the lockfile may be in Dependabot's pip-resolver format after
-          # Dependabot merges, which differs structurally from uv pip compile output.
-          # Enforcing canonical format on main was a category error (see PR #321 /
-          # #323 / the gate-simplification PR in release.rules.md).
-          SKIP: bandit,yamllint,deps-compile
+          # NOTE: uv-lock is deliberately NOT skipped. Its predecessor
+          # (deps-compile) had to be, because Dependabot's pip resolver left
+          # requirements-dev.txt in a non-canonical format after every bot merge,
+          # so main could not satisfy the check. Dependabot now regenerates
+          # uv.lock with uv, so the lock on main is canonical by construction and
+          # the check must run here.
+          SKIP: bandit,yamllint
         run: |
           pre-commit run --all-files --show-diff-on-failure
           # Run yamllint separately on our repo files only
@@ -565,18 +604,25 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v7
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v9
         with:
-          python-version: '3.12'
-          cache: pip
-          cache-dependency-path: requirements-dev.txt
+          version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
+          python-version: '3.12'  # preserves the pin actions/setup-python held
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
       - name: Install dependencies
+        run: uv sync --locked --group dev
+
+      - name: Put the project venv on PATH
+        shell: bash
         run: |
-          python -m pip install --upgrade pip
-          pip install -e .
-          pip install -r requirements-dev.txt
+          if [ -d .venv/Scripts ]; then
+            echo "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+          else
+            echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          fi
 
       - name: Install minimal security tools
         env:
@@ -683,19 +729,29 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v7
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v9
         with:
-          python-version: '3.12'
-          cache: 'pip'
-          cache-dependency-path: requirements-dev.txt
+          version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
+          python-version: '3.12'  # preserves the pin actions/setup-python held
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
       - name: Install JMo Security
+        run: uv sync --locked --group dev
+
+      - name: Put the project venv on PATH
+        shell: bash
         run: |
-          pip install --upgrade pip setuptools wheel
-          pip install -e .
-          pip install -r requirements-dev.txt
-          jmo --help || echo "jmo CLI not available"
+          if [ -d .venv/Scripts ]; then
+            echo "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+          else
+            echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          fi
+
+      - name: Probe the jmo CLI
+        # uv sync installs the project, so `jmo` resolves from the venv now.
+        run: jmo --help || echo "jmo CLI not available"
 
       - name: Install external security tools
         run: |
@@ -784,18 +840,25 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v7
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v9
         with:
-          python-version: '3.12'
-          cache: 'pip'
-          cache-dependency-path: requirements-dev.txt
+          version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
+          python-version: '3.12'  # preserves the pin actions/setup-python held
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
       - name: Install JMo Security
+        run: uv sync --locked --group dev
+
+      - name: Put the project venv on PATH
+        shell: bash
         run: |
-          pip install --upgrade pip setuptools wheel
-          pip install -e .
-          pip install -r requirements-dev.txt
+          if [ -d .venv/Scripts ]; then
+            echo "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+          else
+            echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          fi
 
       - name: Install external security tools via Homebrew
         run: |
@@ -840,18 +903,25 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v7
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v9
         with:
-          python-version: '3.12'
-          cache: 'pip'
-          cache-dependency-path: requirements-dev.txt
+          version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
+          python-version: '3.12'  # preserves the pin actions/setup-python held
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
       - name: Install JMo Security and test dependencies
+        run: uv sync --locked --group dev
+
+      - name: Put the project venv on PATH
+        shell: bash
         run: |
-          pip install --upgrade pip setuptools wheel
-          pip install -e .
-          pip install -r requirements-dev.txt
+          if [ -d .venv/Scripts ]; then
+            echo "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+          else
+            echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          fi
 
       - name: Install security tools for integration tests
         env:
@@ -924,18 +994,25 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v7
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v9
         with:
-          python-version: '3.12'
-          cache: pip
-          cache-dependency-path: requirements-dev.txt
+          version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
+          python-version: '3.12'  # preserves the pin actions/setup-python held
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
       - name: Install JMo Security and test dependencies
+        run: uv sync --locked --group dev
+
+      - name: Put the project venv on PATH
+        shell: bash
         run: |
-          pip install --upgrade pip setuptools wheel
-          pip install -e .
-          pip install -r requirements-dev.txt
+          if [ -d .venv/Scripts ]; then
+            echo "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+          else
+            echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          fi
 
       - name: Install security tools for contract tests
         env:
@@ -1117,17 +1194,29 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v7
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v9
         with:
-          python-version: '3.12'
-          cache: 'pip'
+          version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
+          python-version: '3.12'  # preserves the pin actions/setup-python held
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
       - name: Install dependencies
+        run: uv sync --locked --group dev
+
+      - name: Put the project venv on PATH
+        shell: bash
         run: |
-          pip install --upgrade pip setuptools wheel
-          pip install -r requirements-dev.txt
-          pip install psutil
+          if [ -d .venv/Scripts ]; then
+            echo "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+          else
+            echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          fi
+
+      - name: Install benchmark-only extras
+        # psutil is used solely by the benchmark harness, not by the project.
+        run: uv pip install psutil
 
       - name: Run baseline benchmarks (main branch)
         id: perf-tests
