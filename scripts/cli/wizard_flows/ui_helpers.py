@@ -2,8 +2,7 @@
 UI helper functions for the wizard.
 
 Contains:
-- UNICODE_FALLBACKS: Windows cp1252 compatibility mappings
-- safe_print(): Print with Unicode fallback
+- UNICODE_FALLBACKS, safe_print(): re-exported from scripts.core.unicode_utils
 - prompt_text(): Simple text input prompt
 - prompt_choice(): Numbered choice selection prompt
 - select_mode(): Helper for mode selection with consistent formatting
@@ -15,12 +14,12 @@ for colorization.
 
 from __future__ import annotations
 
-import sys
 from typing import TYPE_CHECKING
 
-from scripts.core.unicode_utils import (
-    UNICODE_FALLBACKS,
-)
+# Re-exported: callers (wizard_flows.tool_checker, tests) import these from here.
+# The redundant `as` alias marks them as intentional re-exports for the linter.
+from scripts.core.unicode_utils import UNICODE_FALLBACKS as UNICODE_FALLBACKS
+from scripts.core.unicode_utils import safe_print as safe_print
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -38,27 +37,6 @@ def _get_colorize() -> Callable[[str, str], str]:
         _colorize = PromptHelper().colorize
     assert _colorize is not None  # For type checker
     return _colorize
-
-
-def safe_print(text: str) -> None:
-    """Print with Unicode fallback for Windows cp1252 compatibility.
-
-    Automatically replaces Unicode characters with ASCII equivalents
-    when the terminal doesn't support them (e.g., Windows cmd.exe).
-
-    Args:
-        text: Text to print, may contain Unicode characters
-    """
-    try:
-        encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
-        if encoding.lower() in ("cp1252", "ascii", "latin-1", "iso-8859-1"):
-            for unicode_char, ascii_fallback in UNICODE_FALLBACKS.items():
-                text = text.replace(unicode_char, ascii_fallback)
-        print(text)
-    except UnicodeEncodeError:
-        for unicode_char, ascii_fallback in UNICODE_FALLBACKS.items():
-            text = text.replace(unicode_char, ascii_fallback)
-        print(text)
 
 
 def prompt_text(question: str, default: str = "") -> str:

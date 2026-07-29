@@ -111,7 +111,10 @@ class TestSafePrint:
         with patch("builtins.print") as mock_print:
             with patch("sys.stdout", mock_stdout):
                 safe_print("Hello")
-                mock_print.assert_called_once_with("Hello")
+                mock_print.assert_called_once()
+                # Assert the text, not the whole call: safe_print now passes an
+                # explicit file= so it can also write to stderr.
+                assert mock_print.call_args[0][0] == "Hello"
 
 
 # ========== Category 3: prompt_text() ==========

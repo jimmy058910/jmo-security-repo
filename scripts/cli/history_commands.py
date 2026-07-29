@@ -36,40 +36,7 @@ from scripts.core.history_db import (
 )
 from scripts.core.history_integrity import recover_database, verify_database_integrity
 from scripts.core.history_migrations import get_current_version, run_migrations
-from scripts.core.unicode_utils import UNICODE_FALLBACKS
-
-
-def _can_encode_unicode() -> bool:
-    """Check if stdout can encode Unicode characters."""
-    try:
-        encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
-        # cp1252 and similar Windows encodings can't handle many Unicode chars
-        if encoding.lower() in ("cp1252", "ascii", "latin-1", "iso-8859-1"):
-            return False
-        # Test by trying to encode a box drawing character
-        "─".encode(encoding)
-        return True
-    except (UnicodeEncodeError, LookupError):
-        return False
-
-
-def safe_write(text: str, stream=None) -> None:
-    """
-    Write text to stream with Unicode fallback for Windows compatibility.
-
-    On Windows with cp1252 encoding, replaces Unicode characters with ASCII alternatives.
-    """
-    if stream is None:
-        stream = sys.stdout
-
-    if _can_encode_unicode():
-        stream.write(text)
-    else:
-        # Replace Unicode characters with ASCII fallbacks
-        result = text
-        for unicode_char, ascii_fallback in UNICODE_FALLBACKS.items():
-            result = result.replace(unicode_char, ascii_fallback)
-        stream.write(result)
+from scripts.core.unicode_utils import safe_write
 
 
 def parse_time_delta(delta_str: str) -> int:

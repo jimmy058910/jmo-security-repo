@@ -157,7 +157,11 @@ class TestSafePrint:
         """Test that ASCII text prints normally."""
         with patch("builtins.print") as mock_print:
             _safe_print("Hello World")
-            mock_print.assert_called_once_with("Hello World")
+            mock_print.assert_called_once()
+            # Assert the text, not the whole call: safe_print now passes an
+            # explicit file= so it can also write to stderr. Matches how every
+            # other test in this class already reads the argument.
+            assert mock_print.call_args[0][0] == "Hello World"
 
     def test_unicode_on_utf8_terminal(self):
         """Test Unicode text on terminal that supports it."""
@@ -196,7 +200,8 @@ class TestSafePrint:
         # Create a mock that raises on first call, succeeds on second
         call_count = [0]
 
-        def mock_print_side_effect(text):
+        def mock_print_side_effect(text, **kwargs):
+            # **kwargs: safe_print passes file= so it can also target stderr.
             call_count[0] += 1
             if call_count[0] == 1:
                 raise UnicodeEncodeError("cp1252", "", 0, 1, "")

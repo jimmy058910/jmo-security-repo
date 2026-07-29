@@ -1773,31 +1773,39 @@ class TestRichOutput:
 class TestUnicodeFallback:
     """Tests for Unicode fallback handling."""
 
-    def test_can_encode_unicode_with_utf8(self, monkeypatch):
-        """Test Unicode detection with UTF-8 encoding."""
-        from unittest.mock import MagicMock
+    @pytest.mark.parametrize(
+        ("codec", "expected"),
+        [
+            ("utf-8", "Box ─ tick ✅"),
+            ("cp1252", "Box - tick [OK]"),
+            # cp437/cp850 are the OEM codepages of a real Windows console. They
+            # DO contain box drawing, so the old encoding-name check declared
+            # them safe and then crashed on the emoji.
+            ("cp437", "Box - tick [OK]"),
+            ("cp850", "Box - tick [OK]"),
+        ],
+    )
+    def test_safe_print_degrades_per_console_codec(self, monkeypatch, codec, expected):
+        """safe_print must decide from the actual codec, not the codec's name."""
+        from scripts.cli.diff_commands import safe_print
 
-        from scripts.cli.diff_commands import _can_encode_unicode
+        written = []
 
-        mock_stdout = MagicMock()
-        mock_stdout.encoding = "utf-8"
-        monkeypatch.setattr("sys.stdout", mock_stdout)
+        class MockStdout:
+            encoding = codec
 
-        result = _can_encode_unicode()
-        assert result is True
+            def write(self, text):
+                text.encode(codec)  # behaves like a real encoded stream
+                written.append(text)
 
-    def test_can_encode_unicode_with_cp1252(self, monkeypatch):
-        """Test Unicode detection with cp1252 encoding (Windows)."""
-        from unittest.mock import MagicMock
+            def flush(self):
+                pass
 
-        from scripts.cli.diff_commands import _can_encode_unicode
+        monkeypatch.setattr("sys.stdout", MockStdout())
 
-        mock_stdout = MagicMock()
-        mock_stdout.encoding = "cp1252"
-        monkeypatch.setattr("sys.stdout", mock_stdout)
+        safe_print("Box ─ tick ✅")
 
-        result = _can_encode_unicode()
-        assert result is False
+        assert "".join(written).rstrip("\n") == expected
 
     def test_safe_print_with_unicode(self, monkeypatch, capsys):
         """Test safe_print with Unicode characters."""

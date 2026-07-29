@@ -191,6 +191,7 @@ markers = [
     "baseline: marks tests that validate against vulnerability baselines",
     "e2e: marks end-to-end tests that validate complete workflows",
     "stress: marks tests as stress tests requiring significant resources",
+    "native_encoding: marks tests that run the CLI under a non-UTF-8 console codec (cp1252/cp437/cp850). Guards the Windows console-encoding class that PYTHONUTF8=1 hides.",
 ]
 # Exclude smoke tests by default (post-release only); run with: pytest -m smoke
 addopts = "-m 'not smoke'"

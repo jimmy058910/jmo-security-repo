@@ -167,6 +167,123 @@ def test_docker_thing(self, tmp_path: Path):
 
 **Variant: arbitrary UID (`--user $(id -u):$(id -g)`)** — semgrep, scancode, and other tools that write to `~/.cache` will fail because no `/etc/passwd` entry exists for that UID, so `HOME` resolves to `/`. Set `-e HOME=/tmp` explicitly so the container has a writable home.
 
+## Console Encoding (Windows) — the class that CI structurally cannot see
+
+`ci.yml` sets `PYTHONUTF8: "1"` on its test steps. That forces UTF-8 for `open()`,
+`read_text()` **and** stdio. On Linux/macOS it is a no-op (locale already UTF-8);
+on Windows it substitutes an environment **no real user has**. CI was green for
+releases while `jmo trends explain score` exited 1 for every Windows user.
+
+**Keep `PYTHONUTF8=1` on the existing shards** — removing it reddens all four.
+The guard is the additional `windows-native-encoding` job, which deliberately
+omits it.
+
+### What a Windows console codec actually is
+
+| stdout is… | codec | contains box drawing? | contains emoji? |
+|---|---|---|---|
+| piped / redirected | ANSI codepage — `cp1252` on a US box | no | no |
+| attached to a console | OEM codepage — `cp437` / `cp850` | **yes** | no |
+
+Test all three. cp437/cp850 are the trap: they *do* have `─`, so any check that
+probes with a box-drawing character declares them safe and then dies on an emoji.
+
+### Rules for writing console output
+
+1. **Never decide by encoding NAME.** `if encoding in ("cp1252", "ascii", ...)`
+   cannot enumerate what you did not think of. Probe the real payload against the
+   real codec: `text.encode(stream.encoding)`.
+2. **`UNICODE_FALLBACKS` is a quality layer, not a guarantee.** It renders `[OK]`
+   instead of `?`, and it will always be incomplete (`scripts/` emits ~74
+   characters it does not list). The guarantee is a final
+   `text.encode(enc, "replace")` — against the **stream's** codec, not `ascii`, so
+   a codec keeps what it can genuinely render.
+3. **Fix the stream, not the call sites.** `harden_console_streams()`
+   (`scripts/core/unicode_utils.py`), called first in `jmo.main()`, does
+   `reconfigure(errors="replace")` on stdout/stderr. That covers all 206 raw
+   `sys.stdout.write` calls **plus** rich, argparse and third-party output no
+   call-site audit reaches. It is a no-op on UTF-8. Never force
+   `encoding="utf-8"` — on a cp437 console that is mojibake, not a fix.
+4. **One implementation only.** Four modules had each grown a private copy of the
+   same broken helper. `tests/cross_platform/test_encoding_drift_guard.py` walks
+   `scripts/` with `ast` and fails if anything outside `unicode_utils.py`
+   **defines** `safe_print`/`safe_write`/`_can_encode_unicode`/
+   `harden_console_streams`. Importing and re-exporting stay legal.
+5. **Machine-read output stays raw.** `json.dumps` defaults to
+   `ensure_ascii=True`, so JSON is already pure ASCII; substituting into it would
+   corrupt it.
+
+### Subprocess tests: pin BOTH ends
+
+`PYTHONIOENCODING` **overrides** `PYTHONUTF8` (measured: `utf8_mode == 1` while
+`sys.stdout.encoding == 'cp1252'`). That is what lets an encoding guard bite on
+every platform and inside every existing shard. But if you pin the child, you must
+decode with the same codec:
+
+```python
+subprocess.run(cmd, capture_output=True, env=env,
+               encoding=codec, errors="replace")   # NOT text=True
+```
+
+Bare `text=True` decodes with the **parent's** locale codec. On Linux that is
+UTF-8, and cp850's `0x9E` (`×`) is not valid UTF-8 — the test dies in its own
+plumbing while the CLI under test exits 0. On Windows the same decode happens in a
+`subprocess` reader thread where the error is *swallowed* and captured output
+silently goes missing.
+
+### `ruff PLW1514` is a lower bound, not the scope
+
+`PLW1514` (unspecified-encoding, requires `preview = true`; select it
+**specifically**, never the `PLW` family — that re-creates the unpinned-ruleset
+ambush #678 fixed) flags `p.read_text()` only when it can prove the receiver is a
+`Path`. It does **not** flag `(tmp_path / "x.html").read_text()`, because it cannot
+type a `/` division result — and that is the dominant pytest idiom. It reported
+"All checks passed!" on `tests/reporters/test_html_security.py`, the source of all
+22 errors in this class. An AST scan needing no inference finds **1198** sites
+against ruff's **153**.
+
+**Consequence:** a lint rule cannot be the durable guard here. The
+`windows-native-encoding` job must run the **full suite**, not just
+`-m native_encoding`.
+
+### Verifying a change in this area
+
+- **Diff failing-test ID sets, never counts.** The full suite read
+  `43 failed / 22 errors` both before and after the write-side fix — it repaired
+  exactly 3 tests and broke exactly 3 others. Counts can match by coincidence.
+- **Prove the guard can fail**: remove the fix, watch it go red, restore. Do the
+  mutation with a **file backup** — `git checkout -- <file>` discards any
+  uncommitted work in that file, silently.
+- **Assert more than one condition per guard.** The subprocess guard survived a
+  broken capture only because it asserted `returncode == 0` as well as the absence
+  of a traceback; returncode is independent of stdout decoding.
+
+## Line Endings on Windows
+
+This repo has **no `.gitattributes`** and `core.autocrlf=false`, so line endings
+are stored byte-for-byte and are **mixed per file** (`scripts/cli/jmo.py` is LF;
+`scripts/core/unicode_utils.py` is CRLF).
+
+`pathlib.Path.write_text()` opens with `newline=None`, translating every `\n` to
+`os.linesep` — `\r\n` on Windows. Reading a LF file and writing it back **converts
+the whole file**, producing thousands of phantom line changes that bury the real
+edit (7545 lines for a 7-line change; same class as the `update_versions.py` bug
+fixed in #556). Use `write_bytes()`, or `open(..., newline="")`.
+
+Detect it before committing — raw and EOL-insensitive counts must match:
+
+```bash
+for f in $(git diff origin/main HEAD --name-only); do
+  a=$(git diff origin/main HEAD --numstat -- "$f" | cut -f1)
+  b=$(git diff origin/main HEAD --ignore-cr-at-eol --numstat -- "$f" | cut -f1)
+  [ "$a" != "$b" ] && echo "EOL FLIP $f: raw=+$a ignore-CR=+$b"
+done
+```
+
+Do **not** check line endings with `grep -c $'\r'` — MSYS grep normalizes CR, and
+the pattern also matches a literal `r`, so it reports CRLF for LF files. Use
+`od -c` on the blob, or count `b"\r\n"` in Python.
+
 ## Workflow Marker Filter Convention
 
 Pytest invocations in CI workflows use these filter sets. Each filter is tuned to match the runner environment's actual capabilities (which tools/packages are installed).
