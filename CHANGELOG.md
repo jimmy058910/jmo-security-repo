@@ -4,6 +4,35 @@ All notable changes to JMo Security will be documented in this file.
 
 ## [Unreleased]
 
+## [1.0.7] - 2026-07-30
+
+Two classes of silent failure are fixed in this release: a scan that could hang forever, and tools whose findings went missing while the scan reported success. Both affected the **default** (non-wizard) scan path, including CI and container runs. Windows users additionally get a `jmo` that no longer crashes on a console that isn't UTF-8.
+
+### Fixed
+
+- **Scans no longer hang when a tool retries or times out.** `ProgressTracker._lock` was a non-reentrant `threading.Lock`, but `update_tool()` held it and then called `log()` for the `retrying` and `timeout` statuses — and `log()` acquires the same lock. A single thread taking a non-reentrant lock twice blocks forever, so the worker's future never completed and the whole run stalled. Only the unhappy path reached it, which is why it survived several releases. Now a `threading.RLock`. The Rich progress display was unaffected, but it is only selected for wizard scans with human logs on a TTY — so plain `jmo scan`, CI, and container runs all took the affected path. ([#700](https://github.com/jimmy058910/jmo-security-repo/pull/700))
+- **A tool that exits cleanly but writes no output is no longer reported as success.** Previously such a tool rendered with a green checkmark while its findings were silently absent from the scan. A new `no_output` status renders as an error and counts as failed in the summary. The check is deliberately narrow: tools using `capture_stdout` are exempt (their file is written after the run returns), a tool declaring no `output_file` is exempt, and an unreadable path fails open, since Python 3.12 propagates `PermissionError` out of `Path.exists()` and an unstattable path is not evidence of absence. ([#700](https://github.com/jimmy058910/jmo-security-repo/pull/700))
+- **`jmo` no longer crashes with `UnicodeEncodeError` on a non-UTF-8 console.** Windows consoles defaulting to cp1252 (and cp437/cp850) could kill the CLI outright on emoji or box-drawing output. Console streams are now hardened at the stream level rather than at individual call sites, with a fallback table as a quality layer rather than the guarantee. File I/O now specifies an explicit encoding across the codebase. ([#695](https://github.com/jimmy058910/jmo-security-repo/pull/695), [#696](https://github.com/jimmy058910/jmo-security-repo/pull/696), [#698](https://github.com/jimmy058910/jmo-security-repo/pull/698))
+- **Tool durations no longer report as `0.0` on Windows.** Timing used `time.monotonic()`, which on Windows is backed by `GetTickCount64` at ~15 ms granularity — coarser than the operations being measured. Now `time.perf_counter()` (~100 ns). ([#692](https://github.com/jimmy058910/jmo-security-repo/pull/692))
+- **Dashboard transitive advisories** — `brace-expansion` and `js-yaml` pinned to patched versions via `overrides`. ([#676](https://github.com/jimmy058910/jmo-security-repo/pull/676))
+
+### Changed
+
+- **Dev dependencies migrated to PEP 735 `[dependency-groups]` with a tracked `uv.lock`.** **This changes contributor setup:** `pip install -e ".[dev]"` no longer works — use **`uv sync --group dev`**. `requirements-dev.in`, `requirements-dev.txt`, and `scripts/dev/update_dependencies.py` are removed; `uv.lock` is now the only lockfile and Dependabot runs on the `uv` ecosystem, so bot and human PRs resolve symmetrically. This structurally eliminates the lockfile-drift class where two different resolvers fought over one file — which had been silently dropping `pywin32` and breaking Windows dev installs. Relock with `make deps-lock`. ([#683](https://github.com/jimmy058910/jmo-security-repo/pull/683), [#687](https://github.com/jimmy058910/jmo-security-repo/pull/687), [#689](https://github.com/jimmy058910/jmo-security-repo/pull/689))
+- **Adopted `mcp` 2.0** — `FastMCP` is now `MCPServer`. ([#693](https://github.com/jimmy058910/jmo-security-repo/pull/693))
+- **Ruff's ruleset is now pinned explicitly** rather than inheriting the tool's expanding defaults, which had reddened CI on unchanged code across a version bump. ([#678](https://github.com/jimmy058910/jmo-security-repo/pull/678), [#681](https://github.com/jimmy058910/jmo-security-repo/pull/681))
+
+### Security
+
+- **Retired the `tuf` `--ignore-vuln` suppression** now that a fix is reachable (sigstore 4.5.0 lifted its `tuf<7` cap). Only the disputed, fix-less `PYSEC-2025-183` ignore remains, and `test_dep_audit_drift.py` now fails if a retired ignore returns. An ignore is justified only while nothing is adoptable. ([#688](https://github.com/jimmy058910/jmo-security-repo/pull/688), closes [#539](https://github.com/jimmy058910/jmo-security-repo/issues/539))
+
+### Internal
+
+- **Visual-regression CI restored** — the `e2e-visual` job installed `pytest-playwright` with bare `pip`, which after the uv migration resolved to the runner's system Python while the tests ran from `.venv`; the plugin was invisible and the job collected zero tests. Now installed through the lock. ([#699](https://github.com/jimmy058910/jmo-security-repo/pull/699))
+- **Release Playbook** with hard-won gotchas added to the release docs. ([#644](https://github.com/jimmy058910/jmo-security-repo/pull/644))
+- **Contributor guidance**: merges are gated on evidence a CI run cannot provide, and plans are treated as hypotheses until measured. ([#697](https://github.com/jimmy058910/jmo-security-repo/pull/697))
+- Dependency bumps across the python, github-actions, dashboard, and api groups, plus the weekly security-tool and pre-commit-hook auto-update.
+
 ## [1.0.6] - 2026-07-15
 
 ### Added
