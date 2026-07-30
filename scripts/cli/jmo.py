@@ -2504,7 +2504,13 @@ class ProgressTracker:
         self.total = total
         self.completed = 0
         self.args = args
-        self._lock = threading.Lock()
+        # RLock, not Lock: update_tool() holds this lock and then calls log()
+        # for the "retrying", "timeout" and "no_output" statuses, and log()
+        # acquires it too. With a plain Lock that is an unconditional deadlock
+        # -- the whole scan hangs forever on the first tool retry or timeout,
+        # because the stuck worker never completes its future. Measured: those
+        # three statuses never returned; "start"/"success"/"error" did.
+        self._lock = threading.RLock()
         self._start_time: float | None = None
         # Tool-level progress tracking
         self.total_tools = total_tools
@@ -2689,7 +2695,7 @@ class ProgressTracker:
 
         Args:
             tool_name: Name of the tool (may include phase suffix)
-            status: "start"/"success"/"error"/"retrying"/"timeout"
+            status: "start"/"success"/"no_output"/"error"/"retrying"/"timeout"
             findings_count: Number of findings (unused for now)
             message: Optional message (e.g., timeout reason)
             attempt: Current attempt number (for retries)
@@ -2712,6 +2718,14 @@ class ProgressTracker:
                 self.log(
                     "ERROR",
                     f"{base_tool_name}: Timed out after {max_attempts} attempts",
+                )
+                # Fall through to mark as failed
+
+            if status == "no_output":
+                self.log(
+                    "ERROR",
+                    f"{base_tool_name}: exited with an accepted code but wrote no "
+                    f"output file - its findings are MISSING from this scan",
                 )
                 # Fall through to mark as failed
 
