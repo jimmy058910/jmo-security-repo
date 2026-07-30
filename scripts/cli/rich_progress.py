@@ -329,6 +329,14 @@ class RichScanProgressTracker:
                 )
                 # Fall through to mark as failed
 
+            if status == "no_output":
+                self.console.print(
+                    f"[red]ERROR[/] {base_tool_name}: exited with an accepted code "
+                    f"but wrote no output file - its findings are MISSING "
+                    f"from this scan"
+                )
+                # Fall through to mark as failed
+
             if status == "start":
                 self.tools_in_progress.add(tool_name)
                 self._tool_start_times[tool_name] = time.time()
@@ -343,9 +351,12 @@ class RichScanProgressTracker:
                 if base_tool_name not in self._completed_base_tools:
                     self._completed_base_tools.add(base_tool_name)
                     self.tools_completed += 1
-                    # Map timeout to error for status tracking
+                    # Map timeout and no_output to error for status tracking.
+                    # The summary panel tallies "success" and "error" separately,
+                    # so any third status would land in neither and the counts
+                    # would silently stop adding up to the tool total.
                     self.tool_status[base_tool_name] = (
-                        "error" if status == "timeout" else status
+                        "error" if status in ("timeout", "no_output") else status
                     )
 
                     # Update tool progress bar

@@ -3,6 +3,7 @@
 
 # Import ProgressTracker from jmo.py
 import sys
+import threading
 from argparse import Namespace
 from pathlib import Path
 from unittest.mock import patch
@@ -228,6 +229,90 @@ class TestProgressTracker:
             tracker.update("repo", "repo1", 1.0)
             message = mock_log.call_args[0][2]
             assert "calculating..." in message
+
+
+class TestUpdateToolDoesNotDeadlock:
+    """`update_tool` must not deadlock on statuses that log from inside the lock.
+
+    `update_tool` takes `self._lock`, and three of its status branches --
+    "retrying", "timeout" and "no_output" -- then call `self.log()`, which
+    acquires the same lock. With a plain `threading.Lock` that is an
+    unconditional self-deadlock, and it is not a cosmetic one: the worker
+    thread never returns, so its future never completes, so `scan_all()` blocks
+    on `future.result()` and the entire scan hangs forever. Measured before the
+    fix (`threading.Lock` -> `threading.RLock`), with a 5s watchdog:
+
+        start      returned
+        success    returned
+        retrying   NO -- deadlock
+        timeout    NO -- deadlock
+        error      returned
+        no_output  NO -- deadlock
+
+    Every status is exercised here rather than only the three known-bad ones,
+    so a future branch that logs from inside the lock is caught by this test
+    instead of by a hung scan.
+    """
+
+    # Each status only formats and prints, so anything beyond a second is a
+    # deadlock rather than slowness. Generous for a loaded CI runner.
+    WATCHDOG_S = 20.0
+
+    @pytest.mark.parametrize(
+        "status",
+        ["start", "success", "retrying", "timeout", "error", "no_output"],
+    )
+    def test_update_tool_returns_for_status(self, status: str) -> None:
+        args = Namespace(human_logs=True, verbose=False, quiet=False)
+        tracker = ProgressTracker(total=1, args=args, total_tools=1)
+        returned = threading.Event()
+
+        def call_update_tool() -> None:
+            try:
+                tracker.update_tool(
+                    "semgrep",
+                    status,
+                    0,
+                    message="watchdog probe",
+                    attempt=1,
+                    max_attempts=1,
+                )
+            finally:
+                returned.set()
+
+        # Daemon thread + Event.wait, never a bare join(): a deadlocked thread
+        # must not be able to hang the suite (see
+        # .claude/rules/testing.cross-platform.rules.md).
+        worker = threading.Thread(target=call_update_tool, daemon=True)
+        worker.start()
+
+        assert returned.wait(self.WATCHDOG_S), (
+            f"ProgressTracker.update_tool() never returned for status={status!r} "
+            f"within {self.WATCHDOG_S}s. This is the self-deadlock described in "
+            "this class's docstring: a branch logging from inside self._lock "
+            "while _lock is a non-reentrant threading.Lock. In a real scan this "
+            "hangs the whole run, because the tool's future never completes."
+        )
+
+    def test_lock_is_reentrant(self) -> None:
+        """Guard the mechanism directly, not just the symptom.
+
+        The parametrized test above would also pass if someone "fixed" the hang
+        by deleting the log calls. This asserts the property that makes
+        logging-from-inside-the-lock safe in the first place.
+        """
+        args = Namespace(human_logs=True, verbose=False, quiet=False)
+        tracker = ProgressTracker(total=1, args=args, total_tools=1)
+
+        with tracker._lock:
+            acquired_again = tracker._lock.acquire(timeout=5)
+            if acquired_again:
+                tracker._lock.release()
+
+        assert acquired_again, (
+            "ProgressTracker._lock is not reentrant. update_tool() holds it and "
+            "calls log(), which acquires it again -- that requires RLock."
+        )
 
 
 if __name__ == "__main__":

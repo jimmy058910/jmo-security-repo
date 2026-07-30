@@ -45,7 +45,8 @@ class ProgressCallback(Protocol):
 
         Args:
             tool_name: Name of the tool
-            status: Status string ("start", "success", "error", "retrying", "timeout")
+            status: Status string ("start", "success", "no_output", "error",
+                "retrying", "timeout")
             findings_count: Number of findings (optional)
             message: Additional context (e.g., timeout reason)
             attempt: Current attempt number
@@ -104,7 +105,9 @@ class ToolResult:
 
     Attributes:
         tool: Tool name
-        status: Execution status ("success", "timeout", "error", "retry_exhausted")
+        status: Execution status ("success", "no_output", "timeout", "error",
+            "retry_exhausted"). "no_output" means the return code was acceptable
+            but the tool wrote nothing to its declared output_file.
         returncode: Process return code (or -1 if timeout/error)
         stdout: Standard output (empty if not captured)
         stderr: Standard error output
@@ -185,11 +188,35 @@ class ToolRunner:
             max_workers: Maximum number of parallel workers (default: 4)
             progress_callback: Optional callback for tool status updates.
                               Called with (tool_name, status, findings_count, **kwargs).
-                              Status values: "start", "success", "error", "retrying", "timeout"
+                              Status values: "start", "success", "no_output",
+                              "error", "retrying", "timeout"
         """
         self.tools = tools
         self.max_workers = max_workers
         self.progress_callback = progress_callback
+
+    @staticmethod
+    def _missing_declared_output(tool: ToolDefinition) -> bool:
+        """Whether a tool that had to write its own output file failed to.
+
+        Only meaningful when ``capture_stdout`` is False. When it is True the
+        caller writes the file from captured stdout *after* ``run_tool`` returns
+        (see ``scan_jobs/*_scanner.py``), so absence at this point proves
+        nothing. ``output_file=None`` declares that no file is expected at all
+        (noseyparker's init/scan phases).
+
+        Returns False when the path cannot be stat'd: on Python 3.12+
+        ``Path.exists()`` propagates ``PermissionError`` rather than returning
+        False (see ``.claude/rules/testing.cross-platform.rules.md``), and an
+        unreadable path is not evidence of absence -- failing open keeps a
+        permissions quirk from reddening an otherwise good scan.
+        """
+        if tool.output_file is None or tool.capture_stdout:
+            return False
+        try:
+            return not tool.output_file.exists()
+        except OSError:
+            return False
 
     @staticmethod
     def _classify_failure(exc: Exception | None, returncode: int | None) -> str:
@@ -248,6 +275,32 @@ class ToolRunner:
 
                 # Check if return code is acceptable
                 if result.returncode in tool.ok_return_codes:
+                    # An acceptable return code is necessary but NOT sufficient.
+                    # A tool told exactly where to write (every capture_stdout=False
+                    # site passes -o/--output/-out=) can exit acceptably and write
+                    # nothing: it may crash after startup, or the code may itself
+                    # mean "I did nothing" -- prowler's 3 is "no credentials", and
+                    # semgrep's 2 is "errors". Reporting that as success is not
+                    # recoverable downstream, because normalize_and_report globs
+                    # for files that exist and so cannot see one that is absent.
+                    # This is the only layer that knows what was expected.
+                    if self._missing_declared_output(tool):
+                        duration = time.perf_counter() - start_time
+                        return ToolResult(
+                            tool=tool.name,
+                            status="no_output",
+                            returncode=result.returncode,
+                            stderr=result.stderr,
+                            attempts=attempt,
+                            duration=duration,
+                            output_file=tool.output_file,
+                            capture_stdout=tool.capture_stdout,
+                            error_message=(
+                                f"Exited {result.returncode} (an accepted code) but "
+                                f"wrote no output to {tool.output_file}"
+                            ),
+                        )
+
                     duration = time.perf_counter() - start_time
                     return ToolResult(
                         tool=tool.name,

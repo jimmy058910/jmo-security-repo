@@ -61,8 +61,8 @@ def test_duration_is_measured_with_perf_counter() -> None:
             "Use time.perf_counter() -- see this test's docstring for measurements."
         )
 
-    assert text.count("time.perf_counter()") == 4, (
-        "Expected 4 perf_counter() calls (1 start_time + 3 duration subtractions). "
+    assert text.count("time.perf_counter()") == 5, (
+        "Expected 5 perf_counter() calls (1 start_time + 4 duration subtractions). "
         "If a return path was added or removed, update this count -- but every "
         "elapsed-time measurement in the file must use the same clock."
     )
@@ -218,7 +218,10 @@ class TestToolRunner:
         tool = ToolDefinition(
             name="echo",
             command=["echo", "hello"],
-            output_file=Path("/tmp/echo.json"),
+            # None, not a path: `echo` writes no file, and run_tool now treats a
+            # declared-but-unwritten output_file as "no_output" rather than
+            # success. See TestDeclaredOutputFile for that contract.
+            output_file=None,
             timeout=5,
         )
 
@@ -272,7 +275,7 @@ class TestToolRunner:
         tool = ToolDefinition(
             name="false",
             command=["false"],  # Always returns 1
-            output_file=Path("/tmp/false.json"),
+            output_file=None,  # `false` writes no file
             ok_return_codes=(0, 1),  # Accept both 0 and 1
             retries=2,
         )
@@ -308,17 +311,17 @@ class TestToolRunner:
             ToolDefinition(
                 name="echo1",
                 command=["echo", "test1"],
-                output_file=Path("/tmp/echo1.json"),
+                output_file=None,
             ),
             ToolDefinition(
                 name="echo2",
                 command=["echo", "test2"],
-                output_file=Path("/tmp/echo2.json"),
+                output_file=None,
             ),
             ToolDefinition(
                 name="echo3",
                 command=["echo", "test3"],
-                output_file=Path("/tmp/echo3.json"),
+                output_file=None,
             ),
         ]
 
@@ -340,12 +343,12 @@ class TestToolRunner:
             ToolDefinition(
                 name="echo1",
                 command=["echo", "test1"],
-                output_file=Path("/tmp/echo1.json"),
+                output_file=None,
             ),
             ToolDefinition(
                 name="echo2",
                 command=["echo", "test2"],
-                output_file=Path("/tmp/echo2.json"),
+                output_file=None,
             ),
         ]
 
@@ -411,7 +414,7 @@ class TestToolRunner:
         tool = ToolDefinition(
             name="echo",
             command=["echo", "not captured"],
-            output_file=Path("/tmp/echo.json"),
+            output_file=None,  # `echo` writes no file
             capture_stdout=False,
         )
 
@@ -431,12 +434,12 @@ class TestRunToolsConvenienceFunction:
             ToolDefinition(
                 name="test1",
                 command=["echo", "test1"],
-                output_file=Path("/tmp/test1.json"),
+                output_file=None,
             ),
             ToolDefinition(
                 name="test2",
                 command=["echo", "test2"],
-                output_file=Path("/tmp/test2.json"),
+                output_file=None,
             ),
         ]
 
@@ -451,12 +454,12 @@ class TestRunToolsConvenienceFunction:
             ToolDefinition(
                 name="test1",
                 command=["echo", "test1"],
-                output_file=Path("/tmp/test1.json"),
+                output_file=None,
             ),
             ToolDefinition(
                 name="test2",
                 command=["echo", "test2"],
-                output_file=Path("/tmp/test2.json"),
+                output_file=None,
             ),
         ]
 
@@ -482,7 +485,7 @@ class TestEdgeCases:
             ToolDefinition(
                 name="echo",
                 command=["echo", "test"],
-                output_file=Path("/tmp/echo.json"),
+                output_file=None,  # `echo` writes no file
             )
         ]
 
@@ -500,7 +503,7 @@ class TestEdgeCases:
             ToolDefinition(
                 name=f"echo{i}",
                 command=["echo", f"test{i}"],
-                output_file=Path(f"/tmp/echo{i}.json"),
+                output_file=None,
             )
             for i in range(num_tools)
         ]
@@ -648,7 +651,7 @@ class TestErrorHandling:
         tool = ToolDefinition(
             name="findings-ok",
             command=["sh", "-c", "exit 1"],  # Exit 1 (findings detected)
-            output_file=Path("/tmp/findings.json"),
+            output_file=None,  # `sh -c "exit 1"` writes no file
             ok_return_codes=(0, 1),  # Accept 0 and 1
             retries=0,
         )
@@ -668,7 +671,7 @@ class TestErrorHandling:
             ToolDefinition(
                 name="success",
                 command=["echo", "ok"],
-                output_file=Path("/tmp/success.json"),
+                output_file=None,
             ),
             ToolDefinition(
                 name="timeout",
@@ -706,7 +709,7 @@ class TestErrorHandling:
             ToolDefinition(
                 name="good1",
                 command=["echo", "test1"],
-                output_file=Path("/tmp/good1.json"),
+                output_file=None,
             ),
             ToolDefinition(
                 name="bad",
@@ -716,7 +719,7 @@ class TestErrorHandling:
             ToolDefinition(
                 name="good2",
                 command=["echo", "test2"],
-                output_file=Path("/tmp/good2.json"),
+                output_file=None,
             ),
         ]
 
@@ -892,7 +895,7 @@ class TestProgressCallback:
         tool = ToolDefinition(
             name="fast-tool",
             command=["echo", "done"],
-            output_file=Path("/tmp/fast.json"),
+            output_file=None,
             timeout=10,
         )
 
@@ -1070,6 +1073,182 @@ class TestRetryConfigIntegration:
             result = runner.run_tool(tool)
         assert result.status == "retry_exhausted"
         assert result.attempts == 2  # retries=1 -> max_attempts=2
+
+
+class TestDeclaredOutputFile:
+    """An acceptable return code alone must not be reported as success.
+
+    Every `capture_stdout=False` tool in `scan_jobs/` is told exactly where to
+    write (`-o` / `--output` / `-out=` / prowler's `--output-directory` +
+    `--output-filename`). A tool that exits acceptably and writes nothing there
+    has not done its job, and two of the accepted codes *mean* "I did nothing":
+    prowler's 3 is "no credentials", semgrep's 2 is "errors".
+
+    This is unrecoverable further down the pipeline. `normalize_and_report`
+    discovers outputs with `target.glob("*.json")`, so it only ever sees files
+    that exist -- it holds no manifest of what was expected and therefore cannot
+    notice an absence. `run_tool` is the only layer that knows.
+
+    The user-visible bug: `jmo` printed `[1/1] OK semgrep [100%]` for a semgrep
+    that crashed on a non-UTF-8 Windows console and wrote nothing, so the scan
+    looked clean while semgrep's findings were silently missing.
+    """
+
+    @staticmethod
+    def _ok_subprocess(returncode: int = 0):
+        mock_result = MagicMock()
+        mock_result.returncode = returncode
+        mock_result.stdout = "some stdout"
+        mock_result.stderr = ""
+        return mock_result
+
+    def test_missing_output_file_is_not_success(self, tmp_path: Path):
+        """rc=0 but no file written -> no_output, not success."""
+        tool = ToolDefinition(
+            name="crasher",
+            command=["crasher", "-o", str(tmp_path / "crasher.json")],
+            output_file=tmp_path / "crasher.json",  # never created
+            capture_stdout=False,
+        )
+
+        runner = ToolRunner([tool])
+        with patch("subprocess.run", return_value=self._ok_subprocess(0)):
+            result = runner.run_tool(tool)
+
+        assert result.status == "no_output"
+        assert result.is_success() is False
+        assert result.returncode == 0
+        # The message must name the path, or a user cannot tell which file is
+        # missing when several tools run in parallel.
+        assert str(tool.output_file) in result.error_message
+
+    def test_written_output_file_is_success(self, tmp_path: Path):
+        """The same tool succeeds once the file exists -- proves the guard
+        discriminates rather than failing everything."""
+        out = tmp_path / "good.json"
+        out.write_bytes(b'{"results": []}')
+        tool = ToolDefinition(
+            name="good",
+            command=["good", "-o", str(out)],
+            output_file=out,
+            capture_stdout=False,
+        )
+
+        runner = ToolRunner([tool])
+        with patch("subprocess.run", return_value=self._ok_subprocess(0)):
+            result = runner.run_tool(tool)
+
+        assert result.status == "success"
+        assert result.is_success() is True
+
+    def test_empty_output_file_is_still_success(self, tmp_path: Path):
+        """A zero-findings run is a real result. Only *absence* is the failure --
+        an empty or empty-JSON file means the tool ran and found nothing."""
+        out = tmp_path / "empty.json"
+        out.write_bytes(b"")
+        tool = ToolDefinition(
+            name="clean",
+            command=["clean", "-o", str(out)],
+            output_file=out,
+            capture_stdout=False,
+        )
+
+        runner = ToolRunner([tool])
+        with patch("subprocess.run", return_value=self._ok_subprocess(0)):
+            result = runner.run_tool(tool)
+
+        assert result.status == "success"
+
+    def test_capture_stdout_tools_are_exempt(self, tmp_path: Path):
+        """With capture_stdout=True the *caller* writes the file after run_tool
+        returns (scan_jobs/*_scanner.py), so absence here proves nothing."""
+        tool = ToolDefinition(
+            name="stdout-tool",
+            command=["stdout-tool"],
+            output_file=tmp_path / "not-yet-written.json",
+            capture_stdout=True,
+        )
+
+        runner = ToolRunner([tool])
+        with patch("subprocess.run", return_value=self._ok_subprocess(0)):
+            result = runner.run_tool(tool)
+
+        assert result.status == "success"
+        assert result.stdout == "some stdout"
+
+    def test_no_declared_output_file_is_exempt(self):
+        """output_file=None declares that no file is expected at all
+        (noseyparker's init and scan phases)."""
+        tool = ToolDefinition(
+            name="noseyparker-init",
+            command=["noseyparker", "datastore", "init"],
+            output_file=None,
+            capture_stdout=False,
+        )
+
+        runner = ToolRunner([tool])
+        with patch("subprocess.run", return_value=self._ok_subprocess(0)):
+            result = runner.run_tool(tool)
+
+        assert result.status == "success"
+
+    def test_accepted_but_did_nothing_code_is_caught(self, tmp_path: Path):
+        """prowler's ok_return_codes includes 3 == "no credentials". That is an
+        accepted code for a run that cannot have produced findings."""
+        tool = ToolDefinition(
+            name="prowler",
+            command=["prowler", "--output-directory", str(tmp_path)],
+            output_file=tmp_path / "prowler.json",  # never created
+            ok_return_codes=(0, 1, 3),
+            capture_stdout=False,
+        )
+
+        runner = ToolRunner([tool])
+        with patch("subprocess.run", return_value=self._ok_subprocess(3)):
+            result = runner.run_tool(tool)
+
+        assert result.status == "no_output"
+        assert result.returncode == 3
+
+    def test_unstattable_output_file_fails_open(self, tmp_path: Path):
+        """An unreadable path is not evidence of absence.
+
+        Python 3.12 made `Path.exists()` propagate `PermissionError` instead of
+        returning False (see .claude/rules/testing.cross-platform.rules.md).
+        A permissions quirk on a bind mount must not redden an otherwise good
+        scan, and must certainly not raise out of run_tool.
+        """
+        out = tmp_path / "unstattable.json"
+        tool = ToolDefinition(
+            name="mounted",
+            command=["mounted", "-o", str(out)],
+            output_file=out,
+            capture_stdout=False,
+        )
+
+        runner = ToolRunner([tool])
+        with (
+            patch("subprocess.run", return_value=self._ok_subprocess(0)),
+            patch.object(
+                Path, "exists", side_effect=PermissionError("EACCES on bind mount")
+            ),
+        ):
+            result = runner.run_tool(tool)
+
+        assert result.status == "success"
+
+    def test_no_output_counts_as_failed_in_summary(self):
+        """get_summary() must not count no_output as successful."""
+        results = [
+            ToolResult(tool="ok", status="success", returncode=0, duration=1.0),
+            ToolResult(tool="silent", status="no_output", returncode=0, duration=1.0),
+        ]
+
+        summary = ToolRunner([]).get_summary(results)
+
+        assert summary["successful"] == 1
+        assert summary["failed"] == 1
+        assert summary["results_by_status"]["no_output"] == 1
 
 
 if __name__ == "__main__":
