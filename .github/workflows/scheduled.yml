@@ -1163,9 +1163,14 @@ jobs:
       - uses: ./.github/actions/setup-python-jmo
 
       - name: Install Playwright
+        # pytest-playwright must land in .venv -- the interpreter that `make
+        # test-e2e-visual` runs (Makefile prefers .venv when present). uv-created
+        # venvs ship no pip, so a bare `pip install` here resolves to the runner's
+        # system Python and pytest exits 5 after importorskip("playwright") skips
+        # the only module in the invocation.
         run: |
-          pip install pytest-playwright
-          playwright install chromium --with-deps
+          uv sync --locked --group dev --extra visual
+          uv run --no-sync playwright install chromium --with-deps
 
       - name: Run visual tests
         run: make test-e2e-visual
