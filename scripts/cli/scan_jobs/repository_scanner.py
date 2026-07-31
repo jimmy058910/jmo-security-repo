@@ -52,6 +52,7 @@ Integrates with ToolRunner for parallel execution and resilient error handling.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from pathlib import Path
 
@@ -59,6 +60,8 @@ from ...core.config import RetryConfig
 from ...core.tool_runner import ToolDefinition, ToolRunner
 from ..path_sanitizers import _sanitize_path_component, _validate_output_path
 from ..scan_utils import find_tool, write_stub
+
+logger = logging.getLogger(__name__)
 
 # Per-tool timeout defaults (seconds) for tools that typically run longer
 # These serve as MINIMUM timeouts - user/profile configs can increase but not decrease
@@ -111,7 +114,22 @@ def scan_repository(
 
     # Use provided functions or defaults
     _write_stub = write_stub_func or write_stub
-    _find_tool = find_tool_func or find_tool
+    _resolve_tool = find_tool_func or find_tool
+
+    # Every tool block below is `if X in tools: path = _find_tool(X)` followed by
+    # `if path: ... elif allow_missing_tools: ...`. When neither holds the tool is
+    # dropped with no status, no warning and no error -- the scan simply runs
+    # without it and still exits 0. That is how checkov vanished from a repo with
+    # 47 Terraform files while `jmo tools check` reported it OK.
+    #
+    # Recording here rather than in all 26 blocks: they share this one alias.
+    unresolved: list[str] = []
+
+    def _find_tool(tool_name: str) -> str | None:
+        resolved = _resolve_tool(tool_name)
+        if resolved is None:
+            unresolved.append(tool_name)
+        return resolved
 
     name = _sanitize_path_component(repo.name)
     out_dir = results_dir / name
@@ -1145,6 +1163,35 @@ def scan_repository(
             statuses["dependency-check"] = True
 
     # ========== End of v1.0.0 New Tools ==========
+
+    # A requested tool that never ran must say so. Silence here is the same
+    # failure class as #700 (an accepted return code with no output written):
+    # the scan looks complete, exits 0, and the missing tool's findings are
+    # simply absent with nothing in the output to indicate it.
+    if unresolved:
+        for missing in sorted(set(unresolved)):
+            statuses[missing] = False
+            logger.error(
+                "%s: requested but its executable could not be found - it did "
+                "NOT run and its findings are MISSING from this scan. "
+                "Run `jmo tools check` to confirm installation, or pass "
+                "--allow-missing-tools to record an explicit empty result.",
+                missing,
+            )
+
+    # Tools asked for that this scanner has no implementation for at all. These
+    # are not installation problems: nuclei only scans URLs, opa is evaluated in
+    # the report phase, and shellcheck has no repository implementation. Kept
+    # distinct from `unresolved` so a real missing binary is not lost in noise.
+    not_applicable = (
+        set(tools) - {td.name for td in tool_defs} - set(unresolved) - set(statuses)
+    )
+    if not_applicable:
+        logger.warning(
+            "Requested but not applicable to repository targets (no repository "
+            "implementation): %s",
+            ", ".join(sorted(not_applicable)),
+        )
 
     # Execute all tools with ToolRunner
     # Note: Tool progress is reported via progress_callback, not direct stderr prints

@@ -1987,8 +1987,13 @@ class ToolInstaller:
                     )
 
                 # Move to install directory
-                # On Windows, ensure .exe extension for executable binaries
-                if self.platform == "windows" and url.endswith(".exe"):
+                # On Windows, ensure .exe extension for executable binaries.
+                # Keyed on the destination platform, NOT on how upstream
+                # packaged the download - see BinaryInstaller for the measured
+                # consequence (trufflehog silently never scanning).
+                if self.platform == "windows" and not tool_name.lower().endswith(
+                    ".exe"
+                ):
                     dest = self.install_dir / f"{tool_name}.exe"
                 else:
                     dest = self.install_dir / tool_name

@@ -447,7 +447,16 @@ class BinaryInstaller(BaseInstaller):
         Returns:
             Full path for installed binary
         """
-        if self._platform.platform_key == "windows" and url.endswith(".exe"):
+        # The extension depends on the *destination* platform, never on how
+        # upstream happened to package the download. Gating on
+        # `url.endswith(".exe")` gave .exe only to tools shipped as a bare
+        # executable (hadolint, opa) and left every archive-extracted binary
+        # without one. Windows cannot resolve an extension-less file through
+        # exec/PATH, so trufflehog -- which re-execs itself -- never scanned,
+        # wrote nothing, and exited 0.
+        if self._platform.platform_key == "windows":
+            if tool_name.lower().endswith(".exe"):
+                return self._install_dir / tool_name
             return self._install_dir / f"{tool_name}.exe"
         return self._install_dir / tool_name
 

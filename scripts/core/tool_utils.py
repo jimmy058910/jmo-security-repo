@@ -14,6 +14,8 @@ import os
 import shutil
 from pathlib import Path
 
+from scripts.core.paths import get_isolated_tool_path
+
 # Module-level warning tracker for deduplication (Fix 1.3 - Issue #3)
 _warned_tools: set[str] = set()
 
@@ -63,17 +65,22 @@ def find_tool(tool_name: str) -> str | None:
     jmo_bin = home / ".jmo" / "bin"
 
     # Check isolated venv paths first (prowler, checkov, semgrep, bandit, scancode, etc.)
-    # These are installed at ~/.jmo/tools/venvs/{tool}/bin/{tool}
-    venvs_dir = home / ".jmo" / "tools" / "venvs" / tool_name
-    if venvs_dir.exists():
-        # Linux/macOS: bin/{tool}
-        venv_bin = venvs_dir / "bin" / tool_name
-        if venv_bin.exists():
-            return str(venv_bin)
-        # Windows: Scripts/{tool}.exe
-        venv_scripts = venvs_dir / "Scripts" / f"{tool_name}.exe"
-        if venv_scripts.exists():
-            return str(venv_scripts)
+    #
+    # Delegate rather than reimplement. This function used to carry a narrower
+    # private copy that looked only for `bin/{tool}` and `Scripts/{tool}.exe`.
+    # checkov ships setuptools-style scripts, so its venv holds `checkov` and
+    # `checkov.cmd` but no `checkov.exe`: the copy returned None while
+    # `get_isolated_tool_path` -- which also tries `.cmd`, no-extension and
+    # alternate name forms -- found it. So `jmo tools check` printed
+    # "checkov OK 3.3.8" while the scanner resolved None and dropped checkov
+    # from every scan. Measured: 0 IaC findings on a repo with 47 .tf files.
+    #
+    # Two resolvers for one question is the same defect as the four private
+    # copies of `_can_encode_unicode` (see
+    # tests/cross_platform/test_encoding_drift_guard.py). One implementation.
+    isolated = get_isolated_tool_path(tool_name)
+    if isolated is not None:
+        return str(isolated)
 
     # ZAP baseline script is inside the extracted ZAP directory
     if tool_name == "zap-baseline.py":
