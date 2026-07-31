@@ -1168,16 +1168,23 @@ def scan_repository(
     # failure class as #700 (an accepted return code with no output written):
     # the scan looks complete, exits 0, and the missing tool's findings are
     # simply absent with nothing in the output to indicate it.
-    if unresolved:
-        for missing in sorted(set(unresolved)):
-            statuses[missing] = False
-            logger.error(
-                "%s: requested but its executable could not be found - it did "
-                "NOT run and its findings are MISSING from this scan. "
-                "Run `jmo tools check` to confirm installation, or pass "
-                "--allow-missing-tools to record an explicit empty result.",
-                missing,
-            )
+    #
+    # Only tools that were *dropped*. Under --allow-missing-tools the `elif`
+    # branch already wrote a stub and recorded the tool satisfied; that is a
+    # deliberate, user-requested empty result, not a silent omission, so it must
+    # not be overwritten here. Presence in `statuses` is what distinguishes the
+    # two - a dropped tool has no entry at all, which is the whole problem.
+    for missing in sorted(set(unresolved)):
+        if missing in statuses:
+            continue
+        statuses[missing] = False
+        logger.error(
+            "%s: requested but its executable could not be found - it did "
+            "NOT run and its findings are MISSING from this scan. "
+            "Run `jmo tools check` to confirm installation, or pass "
+            "--allow-missing-tools to record an explicit empty result.",
+            missing,
+        )
 
     # Tools asked for that this scanner has no implementation for at all. These
     # are not installation problems: nuclei only scans URLs, opa is evaluated in
