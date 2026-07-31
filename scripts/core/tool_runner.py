@@ -10,6 +10,7 @@ Created as part of PHASE 1 refactoring to extract tool execution logic from cmd_
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -291,12 +292,33 @@ class ToolRunner:
         # Track attempts per failure type
         attempts_by_type: dict[str, int] = {}
 
+        # Scanners read arbitrary repository content, so their own stdio must be
+        # UTF-8 or they crash on the first character their host codec cannot
+        # represent. This is the mirror of the decode problem handled below: we
+        # cannot patch a third-party tool, but we do choose the environment it
+        # runs in.
+        #
+        # Measured: semgrep 1.161.0 on OWASP/NodeGoat under a cp1252 host dies
+        # with "'charmap' codec can't encode character U+202A" (LEFT-TO-RIGHT
+        # EMBEDDING, present in the scanned source) and exits 2 - which semgrep
+        # declares as "errors" and JMo accepts - so it wrote nothing while
+        # looking fine. The codepoint is named rather than quoted here: bandit
+        # B613 flags literal bidirectional control characters in source, and it
+        # is right to (CVE-2021-42574, "Trojan Source").
+        # With PYTHONUTF8=1 the identical command returns 186 KB and 42 results.
+        #
+        # setdefault, not assignment: an operator who deliberately pinned
+        # PYTHONUTF8 keeps their value. Non-Python tools ignore the variable.
+        child_env = os.environ.copy()
+        child_env.setdefault("PYTHONUTF8", "1")
+
         while True:
             attempt += 1
 
             try:
                 result = subprocess.run(
                     tool.command,
+                    env=child_env,
                     stdout=(
                         subprocess.PIPE if tool.capture_stdout else subprocess.DEVNULL
                     ),
