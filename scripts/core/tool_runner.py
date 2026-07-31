@@ -219,6 +219,39 @@ class ToolRunner:
             return False
 
     @staticmethod
+    def _empty_capture_despite_findings(
+        tool: ToolDefinition, returncode: int, stdout: str | None
+    ) -> bool:
+        """Whether a capture_stdout tool claimed findings but emitted nothing.
+
+        The mirror of ``_missing_declared_output``. That covers tools told where
+        to write; this covers tools whose output the caller writes afterwards
+        from ``result.stdout``:
+
+            result.output_file.write_text(result.stdout or "", ...)
+
+        The ``or ""`` turns lost output into a 0-byte file that *exists*, so
+        every "was a file written?" check downstream answers yes.
+
+        Emptiness alone cannot be the signal -- trufflehog on a repo with no
+        secrets exits 0 and correctly emits nothing. The discriminator is the
+        return code. Scanners use a non-zero *accepted* code to mean "I found
+        something"; emitting nothing while saying so is self-contradictory, and
+        is what a crash inside an accepted code looks like.
+
+        Measured: checkov's broken Windows venv wrapper exits 1 with an empty
+        stdout and a traceback on stderr. Because checkov declares
+        ``ok_return_codes=(0, 1)`` -- 1 legitimately means "issues found" -- the
+        crash was graded a success and written out as a 0-byte checkov.json in
+        all 5 repos of a public-repo benchmark, while the scan exited 0.
+        """
+        if not tool.capture_stdout or tool.output_file is None:
+            return False
+        if returncode == 0:
+            return False
+        return not (stdout or "").strip()
+
+    @staticmethod
     def _classify_failure(exc: Exception | None, returncode: int | None) -> str:
         """Classify a failure into a type for retry budget lookup."""
         if isinstance(exc, subprocess.TimeoutExpired):
@@ -308,6 +341,26 @@ class ToolRunner:
                             error_message=(
                                 f"Exited {result.returncode} (an accepted code) but "
                                 f"wrote no output to {tool.output_file}"
+                            ),
+                        )
+
+                    if self._empty_capture_despite_findings(
+                        tool, result.returncode, result.stdout
+                    ):
+                        duration = time.perf_counter() - start_time
+                        return ToolResult(
+                            tool=tool.name,
+                            status="no_output",
+                            returncode=result.returncode,
+                            stderr=result.stderr,
+                            attempts=attempt,
+                            duration=duration,
+                            output_file=tool.output_file,
+                            capture_stdout=tool.capture_stdout,
+                            error_message=(
+                                f"{tool.name}: exited {result.returncode} (an accepted "
+                                f"code meaning findings were produced) but emitted no "
+                                f"output - its findings are MISSING from this scan"
                             ),
                         )
 

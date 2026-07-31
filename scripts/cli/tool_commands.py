@@ -484,8 +484,19 @@ def cmd_tools_install(args: argparse.Namespace) -> int:
         return 0
 
     # Interactive confirmation (only for actual install)
+    #
+    # `sys.stdin.isatty()` is not a reliable non-interactivity test: under Git
+    # Bash on Windows it returns True while stdin is already at EOF, so `input()`
+    # ran and raised an unhandled EOFError with a traceback - making `jmo tools
+    # install` unusable from CI, cron, Docker builds and any scan runner.
+    # EOF means nobody is there to answer, which is the same situation as a
+    # non-tty, so it takes the same branch: proceed. (The uninstall prompt below
+    # defaults the other way on purpose - it is destructive.)
     if not yes and sys.stdin.isatty():
-        response = input("Proceed with installation? [Y/n] ").strip().lower()
+        try:
+            response = input("Proceed with installation? [Y/n] ").strip().lower()
+        except EOFError:
+            response = ""
         if response and response != "y":
             print("Installation cancelled")
             return 0
@@ -585,8 +596,12 @@ def cmd_tools_update(args: argparse.Namespace) -> int:
     print()
 
     # Interactive confirmation
+    # See cmd_tools_install: isatty() can be True with stdin already at EOF.
     if not yes and sys.stdin.isatty():
-        response = input("Proceed with updates? [Y/n] ").strip().lower()
+        try:
+            response = input("Proceed with updates? [Y/n] ").strip().lower()
+        except EOFError:
+            response = ""
         if response and response != "y":
             print("Update cancelled")
             return 0

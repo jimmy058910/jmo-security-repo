@@ -61,8 +61,8 @@ def test_duration_is_measured_with_perf_counter() -> None:
             "Use time.perf_counter() -- see this test's docstring for measurements."
         )
 
-    assert text.count("time.perf_counter()") == 5, (
-        "Expected 5 perf_counter() calls (1 start_time + 4 duration subtractions). "
+    assert text.count("time.perf_counter()") == 6, (
+        "Expected 6 perf_counter() calls (1 start_time + 5 duration subtractions). "
         "If a return path was added or removed, update this count -- but every "
         "elapsed-time measurement in the file must use the same clock."
     )
@@ -1249,6 +1249,105 @@ class TestDeclaredOutputFile:
         assert summary["successful"] == 1
         assert summary["failed"] == 1
         assert summary["results_by_status"]["no_output"] == 1
+
+
+class TestEmptyCaptureWithNonZeroExit:
+    """A tool claiming findings while emitting nothing has not run.
+
+    #700 covers `capture_stdout=False` tools: told where to write, wrote
+    nothing. The mirror case was left open. For a `capture_stdout=True` tool the
+    caller writes the file from `result.stdout` *after* `run_tool` returns:
+
+        if result.output_file and result.capture_stdout:
+            result.output_file.write_text(result.stdout or "", ...)
+
+    `or ""` turns lost output into a 0-byte file that exists, so every
+    downstream check that asks "was a file written?" answers yes.
+
+    Measured. checkov's venv wrapper on Windows is broken (`File association not
+    found for extension .py`) and exits **1**. checkov declares
+    `ok_return_codes=(0, 1)` because 1 legitimately means "issues found", so the
+    crash was graded acceptable, empty stdout was written as `checkov.json` at
+    0 bytes in all 5 repos of a public-repo benchmark, and the scan exited 0.
+    The report phase logged "JSON file is empty" without escalating.
+
+    Emptiness alone cannot be the signal: trufflehog on a repo with no secrets
+    exits **0** and correctly emits nothing (measured on docker-library/postgres
+    in the same run). The discriminator is the return code. A non-zero
+    *accepted* code is the tool saying "I found something" -- emitting nothing
+    while saying so is self-contradictory, and is what a crash looks like.
+    """
+
+    @staticmethod
+    def _tool(tmp_path: Path, name: str = "quiet") -> ToolDefinition:
+        return ToolDefinition(
+            name=name,
+            command=[name],
+            output_file=tmp_path / f"{name}.json",
+            capture_stdout=True,
+            ok_return_codes=(0, 1),
+        )
+
+    @staticmethod
+    def _result(returncode: int, stdout: str, stderr: str = ""):
+        mock = MagicMock()
+        mock.returncode = returncode
+        mock.stdout = stdout
+        mock.stderr = stderr
+        return mock
+
+    def test_empty_capture_with_nonzero_accepted_code_is_not_success(
+        self, tmp_path: Path
+    ):
+        """rc=1 (accepted, means 'findings') plus no output -> no_output."""
+        tool = self._tool(tmp_path, "checkov")
+        runner = ToolRunner([tool])
+
+        with patch(
+            "subprocess.run",
+            return_value=self._result(
+                1, "", "File association not found for extension .py"
+            ),
+        ):
+            result = runner.run_tool(tool)
+
+        assert result.status == "no_output"
+        assert result.is_success() is False
+        # Name the tool and the consequence, or a parallel scan gives the user
+        # no way to tell which of nine tools produced nothing.
+        assert "checkov" in result.error_message or "checkov" in result.tool
+
+    def test_empty_capture_with_zero_exit_is_still_success(self, tmp_path: Path):
+        """rc=0 plus no output is a clean scan, not a failure.
+
+        Guards the fix against over-reach: trufflehog on a repo with no secrets
+        must not be reported as broken.
+        """
+        tool = self._tool(tmp_path, "trufflehog")
+        runner = ToolRunner([tool])
+
+        with patch(
+            "subprocess.run",
+            return_value=self._result(0, "", 'msg":"finished scanning"'),
+        ):
+            result = runner.run_tool(tool)
+
+        assert result.status == "success"
+        assert result.is_success() is True
+
+    def test_nonzero_code_with_output_is_still_success(self, tmp_path: Path):
+        """rc=1 with real findings is the normal 'issues found' path."""
+        tool = self._tool(tmp_path, "checkov")
+        runner = ToolRunner([tool])
+
+        with patch(
+            "subprocess.run",
+            return_value=self._result(1, '{"results": {"failed_checks": []}}'),
+        ):
+            result = runner.run_tool(tool)
+
+        assert result.status == "success"
+        assert result.stdout
 
 
 class TestSubprocessDecoding:
