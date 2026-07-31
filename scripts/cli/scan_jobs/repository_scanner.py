@@ -74,6 +74,50 @@ TOOL_TIMEOUT_DEFAULTS: dict[str, int] = {
     "prowler": 600,  # 10 min - cloud config scanning
 }
 
+# Upper bound on file arguments passed to a single per-file tool invocation.
+# Windows caps a command line at 32767 characters; a few hundred absolute paths
+# stays well inside that while covering every repository we have measured
+# (docker-library/postgres, the densest, has 55 shell scripts and 26
+# Dockerfiles). Exceeding it is reported, never silently truncated - a cap that
+# does not announce itself reads as "everything was scanned" when it was not.
+MAX_FILE_ARGS = 300
+
+
+def _collect_files(repo: Path, patterns: tuple[str, ...], tool_name: str) -> list[str]:
+    """Collect matching files for a tool that takes file arguments.
+
+    Both shellcheck and hadolint accept many paths per invocation; scanning one
+    file and calling it done under-reports without saying so. hadolint used to
+    take `dockerfiles[0]`, which on docker-library/postgres meant 1 of 26 files
+    (and 1 of 14 on kubernetes-goat) - about 90% of Dockerfiles unexamined,
+    with nothing in the output to indicate it.
+    """
+    seen: set[Path] = set()
+    for pattern in patterns:
+        for path in repo.glob(pattern):
+            # Repositories vendor dependencies; scanning node_modules or a
+            # bundled venv buries the repo's own findings in third-party noise.
+            parts = set(path.parts)
+            if parts & {".git", "node_modules", "vendor", ".venv", "venv"}:
+                continue
+            if path.is_file():
+                seen.add(path)
+
+    files = sorted(seen)
+    if len(files) > MAX_FILE_ARGS:
+        logger.warning(
+            "%s: %d matching files in %s, scanning the first %d "
+            "(command-line length limit) - %d file(s) NOT scanned",
+            tool_name,
+            len(files),
+            repo.name,
+            MAX_FILE_ARGS,
+            len(files) - MAX_FILE_ARGS,
+        )
+        files = files[:MAX_FILE_ARGS]
+
+    return [str(f) for f in files]
+
 
 def scan_repository(
     repo: Path,
@@ -343,17 +387,22 @@ def scan_repository(
         if hadolint_path:
             hadolint_flags = get_tool_flags("hadolint")
 
-            # Find Dockerfiles in repository
-            dockerfiles = list(repo.glob("**/Dockerfile*"))
+            # hadolint's usage is `[DOCKERFILE...]` - it takes as many paths as
+            # you give it. This previously passed `dockerfiles[0]` only, so
+            # docker-library/postgres had 1 of its 26 Dockerfiles scanned and
+            # kubernetes-goat 1 of 14 - ~90% unexamined, silently.
+            dockerfiles = _collect_files(
+                repo,
+                ("**/Dockerfile", "**/Dockerfile.*", "**/*.Dockerfile"),
+                "hadolint",
+            )
             if dockerfiles:
-                # Hadolint scans one file at a time; use first Dockerfile found
-                dockerfile = dockerfiles[0]
                 hadolint_cmd = [
                     hadolint_path,
                     "-f",
                     "json",
                     *hadolint_flags,
-                    str(dockerfile),
+                    *dockerfiles,
                 ]
                 tool_defs.append(
                     ToolDefinition(
@@ -369,6 +418,50 @@ def scan_repository(
         elif allow_missing_tools:
             _write_stub("hadolint", hadolint_out)
             statuses["hadolint"] = True
+
+    # ShellCheck: shell script static analysis
+    #
+    # shellcheck ships in PROFILE_TOOLS["fast"], installs cleanly and reports OK
+    # from `jmo tools check`, but had no repository implementation at all - so it
+    # could never run, and `shellcheck_adapter.py` sat waiting for input that was
+    # never produced. Measured: docker-library/postgres has 55 shell scripts and
+    # kubernetes-goat 7, none of them examined.
+    #
+    # Shell scripts are a genuine finding source in public repositories:
+    # unquoted expansions (SC2086), unquoted command substitution (SC2046) and
+    # `cd` without a failure guard (SC2164) are command-injection and
+    # data-destruction risks, not merely style.
+    if "shellcheck" in tools:
+        shellcheck_out = out_dir / "shellcheck.json"
+        shellcheck_path = _find_tool("shellcheck")
+        if shellcheck_path:
+            shellcheck_flags = get_tool_flags("shellcheck")
+            shell_scripts = _collect_files(
+                repo, ("**/*.sh", "**/*.bash", "**/*.ksh"), "shellcheck"
+            )
+            if shell_scripts:
+                shellcheck_cmd = [
+                    shellcheck_path,
+                    "--format=json",
+                    *shellcheck_flags,
+                    *shell_scripts,
+                ]
+                tool_defs.append(
+                    ToolDefinition(
+                        name="shellcheck",
+                        command=shellcheck_cmd,
+                        output_file=shellcheck_out,
+                        timeout=get_tool_timeout("shellcheck", timeout),
+                        retries=retries,
+                        # 0 = clean, 1 = findings. 2+ are fatal parse/usage
+                        # errors and must NOT be graded acceptable.
+                        ok_return_codes=(0, 1),
+                        capture_stdout=True,
+                    )
+                )
+        elif allow_missing_tools:
+            _write_stub("shellcheck", shellcheck_out)
+            statuses["shellcheck"] = True
 
     # Bandit: Python security analysis
     if "bandit" in tools:
