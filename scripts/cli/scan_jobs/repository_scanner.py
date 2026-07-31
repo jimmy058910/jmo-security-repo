@@ -169,7 +169,16 @@ def scan_repository(
     # Recording here rather than in all 26 blocks: they share this one alias.
     unresolved: list[str] = []
 
+    # Tools this scanner actually has a code path for. Only an implemented block
+    # reaches `_find_tool`, so membership is recorded rather than inferred.
+    # Inferring it from "produced no ToolDefinition" cannot distinguish "no
+    # implementation" from "implemented, but this repo has no matching files" -
+    # and reporting the wrong reason sends the reader hunting for code that
+    # already exists.
+    considered: set[str] = set()
+
     def _find_tool(tool_name: str) -> str | None:
+        considered.add(tool_name)
         resolved = _resolve_tool(tool_name)
         if resolved is None:
             unresolved.append(tool_name)
@@ -1279,18 +1288,31 @@ def scan_repository(
             missing,
         )
 
-    # Tools asked for that this scanner has no implementation for at all. These
-    # are not installation problems: nuclei only scans URLs, opa is evaluated in
-    # the report phase, and shellcheck has no repository implementation. Kept
-    # distinct from `unresolved` so a real missing binary is not lost in noise.
-    not_applicable = (
-        set(tools) - {td.name for td in tool_defs} - set(unresolved) - set(statuses)
-    )
-    if not_applicable:
+    # Requested but never even attempted: this scanner has no code path for
+    # them. nuclei scans URLs only and opa is evaluated in the report phase, so
+    # both are correct to skip on a repository - but the profile still counts
+    # them, which is why the progress bar reads [N/9] while fewer can run.
+    # Kept distinct from `unresolved` so a genuinely missing binary is not lost
+    # among tools that were never going to run.
+    not_implemented = set(tools) - considered
+    if not_implemented:
         logger.warning(
             "Requested but not applicable to repository targets (no repository "
             "implementation): %s",
-            ", ".join(sorted(not_applicable)),
+            ", ".join(sorted(not_implemented)),
+        )
+
+    # Implemented and installed, but this repository had nothing for them to
+    # look at - shellcheck on a repo with no shell scripts, hadolint with no
+    # Dockerfiles. Benign, and reported at debug so it is available when a user
+    # asks "why is there no shellcheck output?" without adding noise to a normal
+    # run. Distinct from the two cases above: nothing is wrong here.
+    idle = considered - set(unresolved) - {td.name for td in tool_defs} - set(statuses)
+    if idle:
+        logger.debug(
+            "No matching files in %s for: %s",
+            repo.name,
+            ", ".join(sorted(idle)),
         )
 
     # Execute all tools with ToolRunner
