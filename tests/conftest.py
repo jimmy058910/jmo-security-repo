@@ -178,3 +178,43 @@ def docker_available() -> bool:
         return result.returncode == 0
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return False
+
+
+# ---------------------------------------------------------------------------
+# Guard: the test suite must never destroy the developer's real installation.
+# ---------------------------------------------------------------------------
+#
+# `_uninstall_tools` ends with `shutil.rmtree(Path.home() / ".jmo" / "bin")`.
+# A test that exercises it without redirecting `Path.home()` deletes the real
+# tool directory and still passes - measured: a sentinel file placed in
+# `~/.jmo/bin` was gone after a single green test run, taking every installed
+# scanner with it. Recovering costs a full `jmo tools install`, and until the
+# developer notices, every scan silently under-reports because the tools that
+# vanished are the ones being tested.
+#
+# Detection rather than prevention: redirecting `Path.home()` for the whole
+# suite would break tests that legitimately read real user config. This notices
+# the damage and names it, which is enough to stop it reaching a second person.
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _guard_real_jmo_install():
+    """Fail the run if a test deleted the real ~/.jmo/bin."""
+    from pathlib import Path
+
+    jmo_bin = Path.home() / ".jmo" / "bin"
+    existed = jmo_bin.exists()
+
+    yield
+
+    if existed and not jmo_bin.exists():
+        pytest.fail(
+            f"A test deleted the real tool directory {jmo_bin}.\n"
+            "Something called an uninstall path without redirecting "
+            "Path.home(). Use:\n"
+            "    monkeypatch.setattr(Path, 'home', staticmethod(lambda: tmp_path))\n"
+            "and NOT monkeypatch.setenv('HOME', ...), which does not affect "
+            "Path.home() on Windows.\n"
+            "Recover with: jmo tools install --profile fast --yes",
+            pytrace=False,
+        )
