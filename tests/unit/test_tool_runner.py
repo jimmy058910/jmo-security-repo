@@ -1251,5 +1251,95 @@ class TestDeclaredOutputFile:
         assert summary["results_by_status"]["no_output"] == 1
 
 
+class TestSubprocessDecoding:
+    """Tool output must survive bytes the host locale cannot decode.
+
+    Scanners emit whatever bytes the scanned repository contains -- file names,
+    matched secrets, and code snippets from arbitrary public source. Bare
+    `text=True` decodes those with the *parent's* locale codec under `strict`
+    errors, which is the wrong codec and the wrong error policy:
+
+    - On Windows the decode runs inside `subprocess._readerthread`. The
+      exception cannot propagate to the caller, so it is printed and the
+      captured output is simply **lost**. `run_tool` then sees empty stdout,
+      reports `success`, and the caller writes a 0-byte output file.
+    - On Linux/macOS the same decode raises out of `subprocess.run` and the
+      whole tool is recorded as a failure.
+
+    Measured on a real 5-repo public scan (cp1252 host): five
+    `UnicodeDecodeError: 'charmap' codec can't decode byte 0x90` tracebacks in
+    `_readerthread`, `trufflehog.json` written as **0 bytes in all 5 repos**,
+    trufflehog reported successful, and the `zero-secrets` policy PASSED.
+
+    0x90 is deliberately chosen: it is undefined in cp1252 *and* an illegal
+    lead byte in UTF-8, so this test bites on every platform rather than only
+    on the one where the bug was found. `PYTHONUTF8=1` (set on the CI shards)
+    does not rescue it.
+    """
+
+    # Undefined in cp1252; illegal UTF-8 lead byte. Invalid under both.
+    UNDECODABLE = b"\x90"
+
+    def _emit_bytes_tool(self, payload: bytes, tmp_path: Path) -> ToolDefinition:
+        """A tool that writes raw, locale-hostile bytes to stdout."""
+        return ToolDefinition(
+            name="byte-emitter",
+            command=[
+                sys.executable,
+                "-c",
+                (
+                    "import sys;"
+                    f"sys.stdout.buffer.write({payload!r});"
+                    "sys.stdout.buffer.flush()"
+                ),
+            ],
+            output_file=tmp_path / "byte-emitter.json",
+            capture_stdout=True,
+            timeout=60,
+        )
+
+    def test_undecodable_bytes_do_not_destroy_captured_output(self, tmp_path: Path):
+        """The payload must arrive, not vanish into a swallowed decode error."""
+        payload = b'{"found": "' + self.UNDECODABLE + b'secret"}'
+        tool = self._emit_bytes_tool(payload, tmp_path)
+
+        result = ToolRunner([tool]).run_tool(tool)
+
+        assert (
+            result.status == "success"
+        ), f"decode failure surfaced as {result.status!r}: {result.error_message!r}"
+        # The bug's signature is empty stdout despite the tool having written
+        # ~25 bytes. Assert on content, not just truthiness -- an empty string
+        # is exactly what the broken path produced.
+        assert result.stdout, "captured stdout was lost to a decode error"
+        assert "found" in result.stdout
+        assert "secret" in result.stdout
+
+    def test_decoding_is_not_left_to_the_host_locale(self, tmp_path: Path):
+        """Guard the fix itself: `text=True` alone must not be reintroduced.
+
+        The behavioural test above passes on a UTF-8 host even with the bug, if
+        the payload happens to be valid UTF-8. This asserts the actual contract
+        -- an explicit codec and a non-strict error policy -- so the guard
+        cannot silently stop guarding on a maintainer's Linux box.
+        """
+        tool = self._emit_bytes_tool(b"{}", tmp_path)
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="{}", stderr="")
+            ToolRunner([tool]).run_tool(tool)
+
+        kwargs = mock_run.call_args.kwargs
+        assert (
+            kwargs.get("encoding") == "utf-8"
+        ), "tool output must be decoded as UTF-8, not the host locale codec"
+        assert (
+            kwargs.get("errors") == "replace"
+        ), "a single undecodable byte must not discard the whole capture"
+        assert not kwargs.get(
+            "text"
+        ), "text=True re-enables locale decoding and overrides the intent"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

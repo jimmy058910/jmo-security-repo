@@ -57,7 +57,10 @@ def run(
             cmd,
             cwd=str(cwd) if cwd else None,
             capture_output=True,
-            text=True,
+            # git clone/fetch of arbitrary public repos echoes remote ref names
+            # and commit subjects, which are UTF-8 and frequently non-ASCII.
+            encoding="utf-8",
+            errors="replace",
             check=False,
         )
         rc = cp.returncode

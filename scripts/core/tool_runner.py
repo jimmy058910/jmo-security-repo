@@ -268,7 +268,17 @@ class ToolRunner:
                         subprocess.PIPE if tool.capture_stdout else subprocess.DEVNULL
                     ),
                     stderr=subprocess.PIPE,
-                    text=True,
+                    # NOT text=True. That decodes with the *parent's* locale
+                    # codec under strict errors, and scanner output carries
+                    # whatever bytes the scanned repo contains. On Windows the
+                    # decode runs in subprocess._readerthread, where the
+                    # exception cannot reach us -- it is printed and the capture
+                    # is silently lost, so the tool looks successful and the
+                    # caller writes a 0-byte output file. Scanners emit UTF-8
+                    # regardless of host locale; "replace" keeps one bad byte
+                    # from discarding an entire scan's findings.
+                    encoding="utf-8",
+                    errors="replace",
                     timeout=tool.timeout,
                     check=False,  # Don't raise on non-zero exit
                 )
