@@ -437,3 +437,64 @@ class TestGetToolVersion:
         installer = IsolatedPipInstaller(subprocess_runner=runner)
         version = installer._get_tool_version(tmp_path / "tool", tmp_path / "bin")
         assert version is None
+
+
+class TestWindowsVenvLauncher:
+    """A venv tool must be launchable without a .py file association.
+
+    pip emits a real `{tool}.exe` shim only for packages declaring
+    `entry_points.console_scripts`. Packages using setuptools' legacy `scripts=`
+    get a bare script plus a `{tool}.cmd` polyglot wrapper that resolves the
+    interpreter through the Windows `.py` **file association**. Without one it
+    dies with `File association not found for extension .py` and exit 1.
+
+    checkov is such a package. Because it declares `ok_return_codes=(0, 1)` -
+    1 legitimately means "issues found" - that crash was graded a success and
+    written out as a 0-byte checkov.json. Measured on terragoat (47 .tf files):
+    **0** findings before, **477** failed checks after.
+    """
+
+    @staticmethod
+    def _installer():
+        from scripts.cli.installers.pip_installer import IsolatedPipInstaller
+
+        return IsolatedPipInstaller()
+
+    def test_writes_launcher_when_pip_made_no_exe(self, tmp_path: Path):
+        """Bare script, no .exe -> a working .cmd is written."""
+        bin_dir = tmp_path / "Scripts"
+        bin_dir.mkdir()
+        (bin_dir / "checkov").write_bytes(b"#!python\n")
+
+        self._installer()._ensure_windows_launcher("checkov", bin_dir)
+
+        launcher = bin_dir / "checkov.cmd"
+        assert launcher.exists()
+        content = launcher.read_bytes()
+        # Must invoke the venv's OWN interpreter, located relative to itself -
+        # not "python" from PATH, which would defeat the isolation.
+        assert b'"%~dp0python.exe"' in content
+        assert b'"%~dp0checkov"' in content
+        assert b"%*" in content, "arguments must be forwarded"
+        # Batch files require CRLF.
+        assert content.endswith(b"\r\n")
+
+    def test_does_not_clobber_a_real_exe_shim(self, tmp_path: Path):
+        """When pip produced a proper .exe, leave everything alone."""
+        bin_dir = tmp_path / "Scripts"
+        bin_dir.mkdir()
+        (bin_dir / "bandit.exe").write_bytes(b"MZ")
+        (bin_dir / "bandit").write_bytes(b"#!python\n")
+
+        self._installer()._ensure_windows_launcher("bandit", bin_dir)
+
+        assert not (bin_dir / "bandit.cmd").exists()
+
+    def test_no_script_to_wrap_is_a_noop(self, tmp_path: Path):
+        """Nothing to wrap -> write nothing, raise nothing."""
+        bin_dir = tmp_path / "Scripts"
+        bin_dir.mkdir()
+
+        self._installer()._ensure_windows_launcher("ghost", bin_dir)
+
+        assert not (bin_dir / "ghost.cmd").exists()

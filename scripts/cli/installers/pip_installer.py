@@ -487,7 +487,12 @@ class IsolatedPipInstaller(BaseInstaller):
                     duration_seconds=time.time() - start_time,
                 )
 
-            # Step 5: Verify installation by checking if executable exists
+            # Step 5: On Windows, make sure something in the venv is actually
+            # launchable before we go looking for it.
+            if sys.platform == "win32":
+                self._ensure_windows_launcher(tool_name, bin_dir)
+
+            # Step 6: Verify installation by checking if executable exists
             # get_isolated_tool_path already handles alternate names
             tool_path = get_isolated_tool_path(tool_name)
             if tool_path and tool_path.exists():
@@ -528,6 +533,53 @@ class IsolatedPipInstaller(BaseInstaller):
                 message=str(e),
                 duration_seconds=time.time() - start_time,
             )
+
+    @staticmethod
+    def _ensure_windows_launcher(tool_name: str, bin_dir: Path) -> None:
+        """Give a Windows venv tool a launcher that does not need a .py assoc.
+
+        pip emits a real ``{tool}.exe`` shim for packages declaring
+        ``entry_points.console_scripts``. Packages still using setuptools'
+        legacy ``scripts=`` get a bare script plus a ``{tool}.cmd`` polyglot
+        batch/Python wrapper instead, and that wrapper resolves the interpreter
+        through the ``.py`` **file association**. On a machine without one it
+        dies with ``File association not found for extension .py`` and exit 1.
+
+        checkov is such a package. Measured consequence before this fix: the
+        wrapper exited 1 with empty stdout; because checkov declares
+        ``ok_return_codes=(0, 1)`` (1 legitimately means "issues found") the
+        crash was graded a success and written out as a 0-byte checkov.json in
+        all 5 repos of a public-repo benchmark - so a repo with 47 Terraform
+        files produced **0** IaC findings. With a working launcher the same
+        repo yields 477 failed checks.
+
+        Writing a 2-line launcher that invokes the venv's own interpreter is
+        both simpler and more robust than the wrapper it replaces: ``%~dp0``
+        expands to this file's directory, so it survives the venv being moved
+        and needs no PATH, no association and no activation.
+
+        No-ops when pip produced a proper ``.exe``, and when there is no script
+        to wrap.
+        """
+        if (bin_dir / f"{tool_name}.exe").exists():
+            return
+
+        script = bin_dir / tool_name
+        if not script.exists():
+            return
+
+        # write_bytes, not write_text: batch files want CRLF, and write_text
+        # would additionally translate the \n we did write into os.linesep.
+        launcher = bin_dir / f"{tool_name}.cmd"
+        launcher.write_bytes(
+            b"@echo off\r\n"
+            b'"%~dp0python.exe" "%~dp0' + tool_name.encode() + b'" %*\r\n'
+        )
+        logger.info(
+            "Wrote venv launcher %s (pip produced no .exe shim for %s)",
+            launcher,
+            tool_name,
+        )
 
     def _get_tool_version(self, tool_path: Path, bin_dir: Path) -> str | None:
         """Try to get tool version from --version output.
