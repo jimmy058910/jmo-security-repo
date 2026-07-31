@@ -2627,7 +2627,9 @@ def print_install_progress(
             print(f"  {icon} {result.tool_name}{version} - {result.method}")
         else:
             icon = colorize("[FAIL]", "red")
-            print(f"  {icon} {result.tool_name} - {result.message[:50]}")
+            # Not truncated: failure messages carry the asset URL, which is the
+            # only way to tell a version mismatch from a bad platform template.
+            print(f"  {icon} {result.tool_name} - {result.message}")
 
     print("-" * 50)
     summary_parts = [f"Total: {progress.total}"]

@@ -135,11 +135,16 @@ BINARY_URLS: dict[str, str | dict[str, str]] = {
         "default": "https://github.com/hadolint/hadolint/releases/download/v{version}/hadolint-{os}-{arch}",
     },
     # shellcheck: lowercase "linux.x86_64" with dots
-    "shellcheck": "https://github.com/koalaman/shellcheck/releases/download/v{version}/shellcheck-v{version}.{os_lower}.{arch_aarch}.tar.xz",
+    # Windows is a single arch-less .zip - the {os_lower}.{arch_aarch} scheme
+    # has no Windows asset, so the generic template 404s (verified upstream).
+    "shellcheck": {
+        "windows": "https://github.com/koalaman/shellcheck/releases/download/v{version}/shellcheck-v{version}.zip",
+        "default": "https://github.com/koalaman/shellcheck/releases/download/v{version}/shellcheck-v{version}.{os_lower}.{arch_aarch}.tar.xz",
+    },
     # Go tools using lowercase "linux_amd64" format
-    # trufflehog: Windows uses .zip, Linux/macOS use .tar.gz
+    # trufflehog: ships .tar.gz on every platform including Windows
     "trufflehog": {
-        "windows": "https://github.com/trufflesecurity/trufflehog/releases/download/v{version}/trufflehog_{version}_windows_{arch_amd}.zip",
+        "windows": "https://github.com/trufflesecurity/trufflehog/releases/download/v{version}/trufflehog_{version}_windows_{arch_amd}.tar.gz",
         "default": "https://github.com/trufflesecurity/trufflehog/releases/download/v{version}/trufflehog_{version}_{os_lower}_{arch_amd}.tar.gz",
     },
     "nuclei": "https://github.com/projectdiscovery/nuclei/releases/download/v{version}/nuclei_{version}_{os_lower}_{arch_amd}.zip",

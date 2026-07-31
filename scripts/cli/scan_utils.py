@@ -52,7 +52,7 @@ def _run_inline_tool_update(drift_list: list[dict]) -> bool:
                 print(f"OK ({result.version_installed or 'installed'})")
                 success_count += 1
             else:
-                print(f"FAILED ({result.message[:50]})")
+                print(f"FAILED ({result.message})")
                 fail_count += 1
 
         print(f"\nUpdate complete: {success_count} succeeded, {fail_count} failed")
