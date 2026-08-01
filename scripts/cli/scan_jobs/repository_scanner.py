@@ -57,7 +57,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from ...core.config import RetryConfig
-from ...core.tool_runner import ToolDefinition, ToolRunner
+from ...core.tool_runner import ToolDefinition, ToolResult, ToolRunner
 from ..path_sanitizers import _sanitize_path_component, _validate_output_path
 from ..scan_utils import find_tool, write_stub
 
@@ -1324,6 +1324,28 @@ def scan_repository(
     )
     results = runner.run_all_parallel()
 
+    def _report_failure(result: ToolResult, reason: str) -> None:
+        """State, on a durable stream, that a tool delivered no findings.
+
+        Every non-success branch below used to set `statuses[tool] = False` and
+        discard `result.error_message`. The only remaining trace was a `✗` in
+        the Rich progress display, which a non-TTY run (CI, cron, a detached
+        scan) never renders at all - so on terragoat, prowler / yara /
+        dependency-check failed leaving no record on any stream, while the scan
+        exited 0 and the policy gate passed on the resulting empty finding set.
+
+        Which tools land here is platform-dependent (dependency-check is silent
+        on Windows and honest on Linux; noseyparker is the reverse), so this
+        cannot be left to per-tool handling.
+        """
+        detail = result.error_message or f"status={result.status}"
+        logger.error(
+            "%s: %s - it did NOT contribute findings to this scan (%s)",
+            result.tool,
+            reason,
+            detail,
+        )
+
     # Process results
     attempts_map: dict[str, int] = {}
     noseyparker_phases = {"init": False, "scan": False, "report": False}
@@ -1370,20 +1392,27 @@ def scan_repository(
                 statuses[result.tool] = True
             else:
                 statuses[result.tool] = False
+                _report_failure(result, "its executable was not found at run time")
         elif "Timeout" in result.error_message:
             # Tool timed out - write stub so report phase has consistent files
             # and mark as failed (timeout is a failure state)
+            #
+            # The stub must not be the only signal: once the report phase reads
+            # it, an empty stub is indistinguishable from a tool that genuinely
+            # found nothing. The timeout has to be stated here or it is lost.
             tool_out = out_dir / f"{result.tool}.json"
             if not tool_out.exists():
                 _write_stub(result.tool, tool_out)
             statuses[result.tool] = False
             if result.attempts > 0:
                 attempts_map[result.tool] = result.attempts
+            _report_failure(result, "it timed out")
         else:
             # Other errors (non-zero exit, etc.)
             statuses[result.tool] = False
             if result.attempts > 0:
                 attempts_map[result.tool] = result.attempts
+            _report_failure(result, "it failed")
 
     # Aggregate noseyparker multi-phase status
     if any(noseyparker_phases.values()):
