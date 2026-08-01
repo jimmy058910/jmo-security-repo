@@ -650,3 +650,144 @@ profiles:
 
     # Verify scan completed (thread count affects parallelism, not correctness)
     assert (tmp_path / "results" / "individual-repos").exists()
+
+
+def test_scan_startup_does_not_version_check_unrequested_tools(
+    tmp_path: Path, monkeypatch
+):
+    """Scan startup cost must scale with the tools asked for, not the profile.
+
+    Measured on this machine, `deep` profile, terragoat:
+        22-tool scan   Scan targets -> Starting scan = 23.3s
+         3-tool scan   Scan targets -> Starting scan = 20.8s
+
+    Nearly identical, because `cmd_scan` calls `ToolManager.get_tool_summary(
+    profile)` purely to render the `X/Y` number in one INFO line, and that
+    sweeps every platform-applicable tool in the profile, spawning a
+    `--version` subprocess for each.
+
+    That flat ~21s tax is what breaks
+    tests/security/test_input_validation.py's two 30-second subprocess caps on
+    a machine that actually has tools installed - they passed only because the
+    machine was tool-deprived, so this is also a green-in-CI / red-for-users
+    coverage illusion.
+    """
+    repos_dir = tmp_path / "repos"
+    (repos_dir / "proj").mkdir(parents=True)
+
+    cfg = {
+        "default_profile": "fast",
+        "profiles": {"fast": {"tools": ["trufflehog"], "timeout": 60, "threads": 1}},
+    }
+    cfg_path = tmp_path / "jmo.yml"
+    _write_yaml(cfg_path, cfg)
+
+    checked: list[str] = []
+
+    from scripts.cli import tool_manager as tm_module
+
+    real_check = tm_module.ToolManager.check_tool
+
+    def _counting_check(self, name, *a, **kw):
+        checked.append(name)
+        return real_check(self, name, *a, **kw)
+
+    monkeypatch.setattr(tm_module.ToolManager, "check_tool", _counting_check)
+    monkeypatch.setenv("CI", "true")
+
+    args = types.SimpleNamespace(
+        cmd="scan",
+        repo=None,
+        repos_dir=str(repos_dir),
+        targets=None,
+        results_dir=str(tmp_path / "results"),
+        config=str(cfg_path),
+        tools=["trufflehog"],
+        timeout=None,
+        threads=None,
+        allow_missing_tools=True,
+        profile_name="fast",
+        log_level="INFO",
+        human_logs=True,
+    )
+    rc = jmo.cmd_scan(args)
+    assert rc == 0
+
+    unrequested = sorted(set(checked) - {"trufflehog"})
+    assert not unrequested, (
+        f"scan startup version-checked {len(unrequested)} tool(s) nobody asked "
+        f"for: {unrequested}. Each is a subprocess spawn; on the deep profile "
+        f"this costs ~21s before any scanning begins."
+    )
+
+
+def test_scan_startup_probes_each_tool_at_most_once(tmp_path: Path, monkeypatch):
+    """Startup must not re-probe a tool it has already inspected.
+
+    Measured: `ToolManager.check_tool("checkov")` costs 4.23s on the first call
+    and 3.08s on the second - there is no caching, and a `--version` probe of a
+    Python-based tool is genuinely that slow on Windows. A full `balanced`
+    sweep is 16.4s.
+
+    Scan startup performs that sweep three times, against three separate
+    ToolManager instances: the critical-update warning, the missing-tool
+    pre-flight, and the summary used for one log line. Nothing can change on
+    disk between them, so two of the three are pure waste - and together they
+    are what pushes an empty-directory scan past the 30s subprocess cap in
+    tests/security/test_input_validation.py.
+    """
+    repos_dir = tmp_path / "repos"
+    (repos_dir / "proj").mkdir(parents=True)
+
+    cfg = {
+        "default_profile": "fast",
+        "profiles": {
+            "fast": {
+                "tools": ["trufflehog", "semgrep", "trivy"],
+                "timeout": 60,
+                "threads": 1,
+            }
+        },
+    }
+    cfg_path = tmp_path / "jmo.yml"
+    _write_yaml(cfg_path, cfg)
+
+    probed: list[str] = []
+
+    from scripts.cli import tool_manager as tm_module
+
+    # Count the `--version` subprocess, not calls to check_tool. The spawn is
+    # what costs seconds; a call that returns a memo costs nothing, so counting
+    # calls would measure a proxy rather than the thing being fixed.
+    real_version = tm_module.ToolManager._get_tool_version
+
+    def _counting_version(self, base_tool, binary_path, *a, **kw):
+        probed.append(base_tool)
+        return real_version(self, base_tool, binary_path, *a, **kw)
+
+    monkeypatch.setattr(tm_module.ToolManager, "_get_tool_version", _counting_version)
+    monkeypatch.setenv("CI", "true")
+
+    args = types.SimpleNamespace(
+        cmd="scan",
+        repo=None,
+        repos_dir=str(repos_dir),
+        targets=None,
+        results_dir=str(tmp_path / "results"),
+        config=str(cfg_path),
+        tools=["trufflehog", "semgrep", "trivy"],
+        timeout=None,
+        threads=None,
+        allow_missing_tools=True,
+        profile_name="fast",
+        log_level="INFO",
+        human_logs=True,
+    )
+    assert jmo.cmd_scan(args) == 0
+
+    repeated = {n: probed.count(n) for n in set(probed) if probed.count(n) > 1}
+    assert not repeated, (
+        f"startup spawned a repeat --version probe for: {repeated}. "
+        f"Each repeat costs seconds (checkov: 4.23s then 3.08s) and nothing on "
+        f"disk can change between the sweeps."
+    )

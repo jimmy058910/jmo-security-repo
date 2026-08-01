@@ -2051,7 +2051,9 @@ def _check_scan_tools(args, requested_tools: list[str]) -> tuple[list[str], list
     try:
         from scripts.cli.tool_manager import get_missing_tools_for_scan
 
-        available, missing_statuses = get_missing_tools_for_scan(requested_tools)
+        available, missing_statuses = get_missing_tools_for_scan(
+            requested_tools, manager=getattr(args, "_startup_tool_manager", None)
+        )
 
         if not missing_statuses:
             # All tools available
@@ -2096,12 +2098,34 @@ def _check_scan_tools(args, requested_tools: list[str]) -> tuple[list[str], list
         while True:
             try:
                 choice = input("\nChoice [2]: ").strip() or "2"
-            except (EOFError, KeyboardInterrupt):
+            except EOFError:
+                # Nobody is there to answer. That is the same situation as a
+                # non-tty, so it takes the same branch: proceed with what is
+                # available - which is also the default this prompt advertises.
+                #
+                # `sys.stdin.isatty()` above does not catch this: under Git Bash
+                # on Windows, and under any launcher that inherits a console but
+                # leaves stdin empty, it returns True while stdin is already at
+                # EOF. Returning `[]` here made a detached `jmo scan` cancel
+                # itself, writing no results directory and nothing to stderr.
+                # `tool_commands.py` reached the same conclusion for the install
+                # prompt; the two paths must not disagree about what EOF means.
+                print("\nNo input available - continuing with available tools.")
+                return available, missing_names
+            except KeyboardInterrupt:
+                # A person deciding to stop, unlike EOF which is the absence of
+                # a person. Cancelling is what they asked for.
                 return [], missing_names
 
             if choice == "1":
-                # Install missing tools
-                return _install_and_retry(missing_statuses, available)
+                # Install missing tools. Anything installed here invalidates the
+                # memoised status the shared ToolManager is holding - that is
+                # the one moment in a run when what is on disk actually changes.
+                result = _install_and_retry(missing_statuses, available)
+                startup_tm = getattr(args, "_startup_tool_manager", None)
+                if startup_tm is not None:
+                    startup_tm.invalidate_status_cache()
+                return result
             elif choice == "2":
                 return available, missing_names
             elif choice == "3":
@@ -2175,12 +2199,19 @@ def _install_and_retry(
         return available, [s.name for s in missing_statuses]
 
 
-def _warn_critical_updates() -> None:
+def _warn_critical_updates(tools: list[str] | None = None, manager=None) -> None:
     """
     Show non-blocking warning if critical tools have updates.
 
     This is called at the start of scans to remind users about important updates.
     It does not block execution, just prints a warning.
+
+    Args:
+        tools: Restrict the check to these tools. A scan can only be affected by
+            a tool it actually runs, and every tool inspected costs a
+            `--version` subprocess - unrestricted, this probes the whole
+            registry (32 tools measured, including `ruff` and `shfmt`, for a
+            one-tool scan).
     """
     # Skip in Docker (tools bundled in image)
     if os.environ.get("DOCKER_CONTAINER"):
@@ -2189,8 +2220,9 @@ def _warn_critical_updates() -> None:
     try:
         from scripts.cli.tool_manager import ToolManager
 
-        manager = ToolManager()
-        critical_outdated = manager.get_critical_outdated()
+        if manager is None:
+            manager = ToolManager()
+        critical_outdated = manager.get_critical_outdated(restrict_to=tools)
 
         if critical_outdated:
             _safe_print("\n" + "=" * 60)
@@ -2792,9 +2824,6 @@ def cmd_scan(args) -> int:
 
     clear_tool_warnings()
 
-    # Check for critical tool updates (non-blocking warning)
-    _warn_critical_updates()
-
     # Check for first-run email prompt (non-blocking)
     if _check_first_run():
         _collect_email_opt_in(args)
@@ -2804,6 +2833,28 @@ def cmd_scan(args) -> int:
     cfg = load_config(args.config)
     tools = eff["tools"]
     results_dir = Path(args.results_dir)
+
+    # One ToolManager for the whole startup path. It memoises check_tool, and
+    # startup asks the same questions three times (this warning, the
+    # missing-tool pre-flight in _check_scan_tools, and the summary behind the
+    # "Starting scan with X/Y" line). Sharing the instance is what turns that
+    # into one sweep; separate instances each pay the full cost.
+    _startup_tm = None
+    try:
+        from scripts.cli.tool_manager import ToolManager
+
+        _startup_tm = ToolManager()
+    except ImportError:
+        pass
+    args._startup_tool_manager = _startup_tm
+
+    # Check for critical tool updates (non-blocking warning).
+    #
+    # Deliberately after `tools` is resolved: this used to run first and, with
+    # nothing to scope it, probed every tool in the registry - 32 `--version`
+    # subprocesses for a scan that requested one. A scan can only be affected by
+    # a tool it actually runs.
+    _warn_critical_updates(tools, manager=_startup_tm)
 
     # Security: Validate tool names to prevent command injection
     import re
@@ -3003,32 +3054,32 @@ def cmd_scan(args) -> int:
         and sys.stderr.isatty()
     )
 
-    # Log scan start message with context about tools being used
-    # Use ToolStatusSummary for consistent counts with wizard display
-    profile_name = getattr(args, "profile_name", None) or cfg.default_profile
-    try:
-        from scripts.cli.tool_manager import ToolManager
-
-        tm = ToolManager()
-        tool_summary = tm.get_tool_summary(profile_name)  # type: ignore[arg-type]
-        platform_applicable = tool_summary.platform_applicable
-    except (ImportError, OSError, ValueError, KeyError, AttributeError):
-        platform_applicable = total_tools  # Fallback to actual tool count
-
+    # Log scan start message with context about tools being used.
+    #
+    # The denominator is what was asked for, so the arithmetic always closes:
+    # `will run` + `skipped` == `requested`. It previously reported
+    # `platform_applicable`, producing lines like "22/23 tools ... (6 skipped)"
+    # on deep - where 22 + 6 = 28, not 23 - which no reader could reconcile.
+    # Using the profile's declared count instead would be equally wrong whenever
+    # `--tools` narrows the run.
     skipped_count = len(missing_tools) if missing_tools else 0
+    requested_total = total_tools + skipped_count
     if skipped_count > 0:
-        # Provide context about skipped tools with consistent denominator
+        # Name every skipped tool. Truncating to three hides which findings are
+        # absent, and the reader has no other way to recover the list.
         _log(
             args,
             "INFO",
-            f"Starting scan with {total_tools}/{platform_applicable} tools for {total_targets} target(s) "
-            f"({skipped_count} skipped: {', '.join(missing_tools[:3])}{'...' if skipped_count > 3 else ''})",
+            f"Starting scan with {total_tools} of {requested_total} requested tools "
+            f"for {total_targets} target(s) "
+            f"({skipped_count} skipped: {', '.join(missing_tools)})",
         )
     else:
         _log(
             args,
             "INFO",
-            f"Starting scan with {total_tools}/{platform_applicable} tools for {total_targets} target(s)...",
+            f"Starting scan with {total_tools} of {requested_total} requested tools "
+            f"for {total_targets} target(s)...",
         )
 
     if use_rich_progress:

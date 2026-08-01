@@ -785,3 +785,86 @@ def test_parse_args_no_store_raw_findings():
         args = parse_args()
         assert args.cmd == "scan"
         assert args.no_store_raw_findings is True
+
+
+class TestScanPreflightAtEOF:
+    """A scan must not cancel itself because nobody was there to answer.
+
+    Measured: launching `jmo scan --profile-name deep` as a detached process
+    produced no results directory and zero bytes on stderr. Both pre-flight
+    prompts guard only on `sys.stdin.isatty()`, which returns True while stdin
+    is already at EOF (Git Bash on Windows, and any launcher that inherits a
+    console but redirects nothing). `input()` then raises EOFError, and the
+    handler returned `[], missing_names` - the *Cancel* branch - while the
+    prompt on screen advertises `[2] Continue with available tools` as the
+    default.
+
+    `tool_commands.py` already reached the opposite conclusion for the install
+    prompt and documents why: "EOF means nobody is there to answer, which is
+    the same situation as a non-tty, so it takes the same branch: proceed."
+    This pins the scan path to that same rule.
+    """
+
+    @staticmethod
+    def _missing(name: str):
+        status = MagicMock()
+        status.name = name
+        return status
+
+    def _call(self, monkeypatch, *, isatty: bool, on_input):
+        import scripts.cli.tool_manager as tool_manager
+        from scripts.cli.jmo import _check_scan_tools
+
+        monkeypatch.setattr(
+            tool_manager,
+            "get_missing_tools_for_scan",
+            lambda tools, manager=None: (["trivy"], [self._missing("noseyparker")]),
+        )
+        monkeypatch.setattr("sys.stdin.isatty", lambda: isatty)
+        monkeypatch.setattr("builtins.input", on_input)
+
+        args = argparse.Namespace(allow_missing_tools=False)
+        return _check_scan_tools(args, ["trivy", "noseyparker"])
+
+    def test_eof_at_prompt_proceeds_with_available_tools(self, monkeypatch):
+        """EOF must take the advertised default, not the Cancel branch."""
+
+        def _eof(_prompt=""):
+            raise EOFError
+
+        available, missing = self._call(monkeypatch, isatty=True, on_input=_eof)
+
+        assert available == ["trivy"], (
+            "EOF at the prompt dropped every tool, so the scan produced no "
+            "results directory and said nothing about why"
+        )
+        assert missing == ["noseyparker"]
+
+    def test_non_tty_proceeds_with_available_tools(self, monkeypatch):
+        """The established non-interactive path, unchanged."""
+
+        def _never(_prompt=""):
+            raise AssertionError("must not prompt when stdin is not a tty")
+
+        available, missing = self._call(monkeypatch, isatty=False, on_input=_never)
+
+        assert available == ["trivy"]
+        assert missing == ["noseyparker"]
+
+    def test_explicit_cancel_still_cancels(self, monkeypatch):
+        """A human typing 3 must still be able to abort - EOF is not consent."""
+        available, missing = self._call(
+            monkeypatch, isatty=True, on_input=lambda _p="": "3"
+        )
+
+        assert available == []
+
+    def test_keyboard_interrupt_still_cancels(self, monkeypatch):
+        """Ctrl-C is a person deciding to stop; EOF is the absence of a person."""
+
+        def _interrupt(_prompt=""):
+            raise KeyboardInterrupt
+
+        available, missing = self._call(monkeypatch, isatty=True, on_input=_interrupt)
+
+        assert available == []
