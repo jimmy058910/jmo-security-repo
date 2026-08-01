@@ -475,24 +475,22 @@ Metadata:
   - Duration:  245.2 seconds
 ```
 
-### `jmo history compare`
+### `jmo history diff`
 
 **Compare two historical scans from the SQLite database.**
 
 ```bash
-jmo history compare SCAN_ID_1 SCAN_ID_2 [OPTIONS]
+jmo history diff SCAN_ID_1 SCAN_ID_2 [OPTIONS]
 ```
 
 **Arguments:**
 
-- `SCAN_ID_1` - First scan ID (typically baseline or older scan)
-- `SCAN_ID_2` - Second scan ID (typically current or newer scan)
+- `SCAN_ID_1` - First scan ID (baseline, typically the older scan)
+- `SCAN_ID_2` - Second scan ID (comparison, typically the newer scan)
 
 **Options:**
 
-- `--severity LEVEL` - Filter by severity levels (CRITICAL, HIGH, MEDIUM, LOW, INFO)
-- `--only {new,fixed,modified}` - Show only specific change types
-- `--format {json,md,html}` - Output format (default: console)
+- `--json` - Output the full diff as JSON
 - `--db PATH` - Database path (default: `.jmo/history.db`)
 
 **Use Cases:**
@@ -508,14 +506,33 @@ jmo history compare SCAN_ID_1 SCAN_ID_2 [OPTIONS]
 jmo history list
 
 # Compare two scans
-jmo history compare abc123 def456
+jmo history diff abc123 def456
 
-# Show only new HIGH/CRITICAL findings
-jmo history compare abc123 def456 --severity HIGH CRITICAL --only new
-
-# Generate HTML report
-jmo history compare abc123 def456 --format html > comparison.html
+# Output:
+#  Diff: abc123... → def456...
+#
+#  New findings:       12
+#  Resolved findings:  5
+#  Unchanged findings: 210
+#
+#    New Findings (top 10):
+#   - HIGH     CKV_AWS_18                     terraform/aws/s3.tf
+#   ...
 ```
+
+The console view lists at most the first 10 new findings. For the complete set,
+or to filter by severity or change type, take the JSON and process it:
+
+```bash
+# Every new CRITICAL/HIGH finding
+jmo history diff abc123 def456 --json \
+  | python -c "import json,sys; d=json.load(sys.stdin); \
+      print('\n'.join(f\"{f['severity']:8} {f['rule_id']:30} {f['path']}\" \
+      for f in d['new'] if f['severity'] in ('CRITICAL','HIGH')))"
+```
+
+The JSON has three keys — `new`, `resolved`, `unchanged` — each a list of
+findings.
 
 **See Also:**
 
@@ -659,44 +676,55 @@ Top Tools:
   checkov                   412 findings
 ```
 
-### `jmo history vacuum`
+### `jmo history optimize`
 
 **Optimize the SQLite history database by reclaiming unused space and rebuilding indexes.**
 
 ```bash
-jmo history vacuum [OPTIONS]
+jmo history optimize [OPTIONS]
 ```
 
 **Options:**
 
 - `--db PATH` - Database path (default: `.jmo/history.db`)
+- `--json` - Output results as JSON
 
 **Description:**
 
-Optimize the SQLite history database by:
-
-- Reclaiming unused space
-- Rebuilding indexes
-- Improving query performance
+Runs `VACUUM`, then `ANALYZE`, then verifies that every expected index exists.
+It is **non-destructive** — it reclaims pages the database has already freed and
+refreshes the query planner's statistics. It deletes no scans and no findings.
+To remove data, use `jmo history prune --older-than`.
 
 **Use Cases:**
 
 - After pruning old scans (`jmo history prune`)
-- Database growing too large
 - Query performance degradation
 - Scheduled maintenance
+- Releasing a stale SQLite lock left by a crashed scan
 
 **Example:**
 
 ```bash
-# Vacuum database
-jmo history vacuum
+jmo history optimize
 
-# Typical output:
-# Database vacuumed successfully
-# Space reclaimed: 15.2 MB -> 8.4 MB (45% reduction)
-# Query performance improved
+# Output:
+# Optimizing database: .jmo/history.db
+#
+# [OK] Optimization complete
+#
+# Size before:       555.30 MB
+# Size after:        551.35 MB
+# Space reclaimed:   3.95 MB
+# Indices optimized: 19
 ```
+
+> **`VACUUM` only reclaims space the database has already freed.** If a scan
+> history is large because it genuinely holds many findings, optimize will
+> report a small reduction — in the run above, 3.95 MB of 555 MB. That is not a
+> failure; it means there was little free space to reclaim. Use
+> `jmo history stats` to see what is actually stored, and
+> `jmo history prune --older-than <N>d --dry-run` before deleting anything.
 
 **See Also:**
 
@@ -750,7 +778,7 @@ jmo history verify
 
 **See Also:**
 
-- `jmo history vacuum` - Optimize database
+- `jmo history optimize` - Optimize database
 - Troubleshooting - SQLite issues
 
 ---

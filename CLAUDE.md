@@ -335,7 +335,7 @@ See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for complete configuration referenc
 | Pre-commit fails | `make fmt`, `make lint` |
 | `uv.lock needs to be updated, but --check was provided` | Deps changed in `pyproject.toml` without relocking. `make deps-lock && git add uv.lock`. Local `uv sync` refreshes a stale lock silently; CI and pre-commit hard-fail — that asymmetry is deliberate |
 | CI failures | Check matrix tests, coverage, pre-commit |
-| SQLite locked | `jmo history vacuum` |
+| SQLite locked | `jmo history optimize` (runs VACUUM + ANALYZE; there is no `vacuum` subcommand) |
 | Docker persistence | Mount `.jmo/` volume |
 | Daily nightly fails — but visible failure count is exactly 5 | `--maxfail=5` truncation. Fix visible 5, dispatch nightly via `gh workflow run scheduled.yml --ref main -f task=nightly`, repeat. See `.claude/rules/testing.rules.md` "Bug Archeology" section. |
 | Code on main works but Docker images don't | Container code is whatever shipped in the last release tag. `scripts/cli/` and `scripts/core/` fixes don't propagate until next `v*` tag triggers `release.yml` and rebuilds GHCR images. Test-level fixes in `tests/` ARE effective immediately because pytest runs on the host. |
