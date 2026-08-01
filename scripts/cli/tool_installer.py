@@ -37,6 +37,7 @@ from rich.progress import (
 )
 
 from scripts.cli.installers.models import InstallProgress, InstallResult
+from scripts.cli.installers.pip_installer import pip_install_command
 from scripts.cli.tool_manager import ToolManager
 from scripts.cli.ui.progress import ParallelInstallProgress
 from scripts.core.archive_security import (
@@ -1203,7 +1204,7 @@ class ToolInstaller:
             progress.on_start(tool_name)
 
         # Try batch install
-        cmd = [sys.executable, "-m", "pip", "install", "--quiet"] + packages
+        cmd = pip_install_command(packages)
 
         try:
             result = subprocess.run(
@@ -1533,7 +1534,7 @@ class ToolInstaller:
         try:
             # Pin to specific version from versions.yaml for reproducibility
             pinned_package = f"{package}=={tool_info.version}"
-            cmd = [sys.executable, "-m", "pip", "install", "--quiet", pinned_package]
+            cmd = pip_install_command([pinned_package])
             result = subprocess.run(
                 cmd,
                 capture_output=True,

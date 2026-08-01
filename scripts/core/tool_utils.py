@@ -12,6 +12,7 @@ import importlib.util
 import logging
 import os
 import shutil
+import sys
 from pathlib import Path
 
 from scripts.core.paths import get_isolated_tool_path
@@ -59,6 +60,25 @@ def find_tool(tool_name: str) -> str | None:
     path = shutil.which(tool_name)
     if path:
         return path
+
+    # Then the interpreter's own script directory.
+    #
+    # `jmo tools install` runs pip against `sys.executable`, so a pip-backed tool
+    # lands next to the running interpreter -- `.venv/Scripts/bandit.exe` when
+    # invoked as `.venv/Scripts/python.exe -m scripts.cli.jmo`. That directory is
+    # only on PATH if the venv was *activated*, and `jmo` is routinely run by
+    # absolute path (make targets, CI, scheduled tasks) where it is not.
+    #
+    # Measured: `jmo tools install bandit prowler` reported [OK], the executables
+    # existed in `.venv/Scripts/`, and `jmo tools check` still said MISSING -- so
+    # a tool JMo had just installed itself was invisible to its own scanner.
+    scripts_dir = Path(sys.executable).parent
+    for candidate in (
+        scripts_dir / tool_name,
+        scripts_dir / f"{tool_name}.exe",
+    ):
+        if candidate.is_file():
+            return str(candidate)
 
     # Check JMo special installation paths
     home = Path.home()
