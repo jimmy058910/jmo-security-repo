@@ -705,6 +705,36 @@ class ScanOrchestrator:
         gitlab_tools = filter_tools_for_scan_type(self.config.tools, "gitlab")
         k8s_tools = filter_tools_for_scan_type(self.config.tools, "k8s")
 
+        # A requested tool that matches no target type present in this scan runs
+        # nowhere and contributes nothing, and until now said nothing either:
+        # `filter_tools_for_scan_type` drops silently, and the per-target
+        # scanners can only report on tools that were handed to them. On a deep
+        # scan of a repository that made `nuclei` (URL-only) and `lynis` vanish
+        # completely - absent from every stream, artifact and diagnostic.
+        #
+        # Computed against the target types actually being scanned, not each
+        # filter in isolation: nuclei is correctly skipped for a repository, but
+        # if the same run also has URLs then it does run and must not be named.
+        routed: set[str] = set()
+        for present, applicable in (
+            (targets.repos, repo_tools),
+            (targets.images, image_tools),
+            (targets.iac_files, iac_tools),
+            (targets.urls, url_tools),
+            (targets.gitlab_repos, gitlab_tools),
+            (targets.k8s_resources, k8s_tools),
+        ):
+            if present:
+                routed.update(applicable)
+
+        unrouted = [t for t in self.config.tools if t not in routed]
+        if unrouted:
+            logger.warning(
+                "Requested but applicable to no target type in this scan, so "
+                "not run and contributing no findings: %s",
+                ", ".join(sorted(unrouted)),
+            )
+
         skipped_count = 0
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:

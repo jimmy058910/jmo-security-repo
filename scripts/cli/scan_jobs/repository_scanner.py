@@ -177,11 +177,33 @@ def scan_repository(
     # already exists.
     considered: set[str] = set()
 
-    def _find_tool(tool_name: str) -> str | None:
-        considered.add(tool_name)
+    # For a lookup made on behalf of a profile tool, the binary that was
+    # actually missing - so the report can name both.
+    missing_dependency: dict[str, str] = {}
+
+    def _find_tool(tool_name: str, record_as: str | None = None) -> str | None:
+        """Resolve a binary, recorded against the profile tool that needs it.
+
+        `record_as` matters because several blocks resolve a binary that is not
+        the tool the user asked for: checkov-cicd runs `checkov`, trivy-rbac
+        runs `trivy`, semgrep-secrets runs `semgrep`, zap runs `zap-baseline.py`
+        plus `docker`, afl++ runs `afl-fuzz`.
+
+        Without it, `considered` only ever learned the binary names, so
+        `not_implemented` (`set(tools) - considered`) accused tools that had
+        demonstrably run - a deep scan of terragoat reported checkov-cicd,
+        semgrep-secrets and trivy-rbac as having "no repository implementation"
+        in the same run that wrote all three of their output files. In the other
+        direction, `unresolved` reported `docker` and `zap-baseline.py` as tools
+        whose findings were missing, and neither is a tool in any profile.
+        """
+        owner = record_as or tool_name
+        considered.add(owner)
         resolved = _resolve_tool(tool_name)
         if resolved is None:
-            unresolved.append(tool_name)
+            unresolved.append(owner)
+            if owner != tool_name:
+                missing_dependency[owner] = tool_name
         return resolved
 
     name = _sanitize_path_component(repo.name)
@@ -578,7 +600,7 @@ def scan_repository(
             )
         # Strategy 2: Fallback to Docker-based noseyparker
         else:
-            docker_np_path = _find_tool("docker")
+            docker_np_path = _find_tool("docker", record_as="noseyparker")
             noseyparker_docker_script = (
                 Path(__file__).parent.parent.parent / "core/run_noseyparker_docker.sh"
             )
@@ -613,8 +635,8 @@ def scan_repository(
         zap_out = out_dir / "zap.json"
         # ZAP baseline scan can analyze HTML/JS files in repository
         # This is a limited use case; full DAST requires --url target
-        zap_baseline_path = _find_tool("zap-baseline.py")
-        zap_docker_path = _find_tool("docker")
+        zap_baseline_path = _find_tool("zap-baseline.py", record_as="zap")
+        zap_docker_path = _find_tool("docker", record_as="zap")
         if zap_baseline_path or zap_docker_path:
             zap_flags = get_tool_flags("zap")
             # Check for web-related files (HTML, JS, PHP, etc.)
@@ -734,8 +756,8 @@ def scan_repository(
     # For repositories, we check for compiled binaries and run basic fuzz testing.
     if "afl++" in tools:
         afl_out = out_dir / "aflplusplus.json"
-        afl_fuzz_path = _find_tool("afl-fuzz")
-        afl_analyze_path = _find_tool("afl-analyze")
+        afl_fuzz_path = _find_tool("afl-fuzz", record_as="afl++")
+        afl_analyze_path = _find_tool("afl-analyze", record_as="afl++")
         if afl_fuzz_path or afl_analyze_path:
             afl_flags = get_tool_flags("afl++")
             # Look for compiled binaries or fuzzing harnesses
@@ -798,7 +820,7 @@ def scan_repository(
     if "checkov-cicd" in tools:
         checkov_cicd_out = out_dir / "checkov-cicd.json"
         checkov_cicd_temp_dir = out_dir / "checkov-cicd-temp"
-        checkov_cicd_path = _find_tool("checkov")
+        checkov_cicd_path = _find_tool("checkov", record_as="checkov-cicd")
         if checkov_cicd_path:
             checkov_cicd_flags = get_tool_flags("checkov-cicd")
             checkov_cicd_cmd = [
@@ -1134,7 +1156,7 @@ def scan_repository(
             + list(repo.glob("**/*service*.yaml"))
             + list(repo.glob("**/k8s/**/*.yaml"))
         )
-        trivy_rbac_path = _find_tool("trivy")
+        trivy_rbac_path = _find_tool("trivy", record_as="trivy-rbac")
         if k8s_manifests and trivy_rbac_path:
             trivy_rbac_flags = get_tool_flags("trivy-rbac")
             trivy_rbac_cmd = [
@@ -1167,7 +1189,7 @@ def scan_repository(
     # Semgrep Secrets: Hardcoded credentials detection
     if "semgrep-secrets" in tools:
         semgrep_secrets_out = out_dir / "semgrep-secrets.json"
-        semgrep_secrets_path = _find_tool("semgrep")
+        semgrep_secrets_path = _find_tool("semgrep", record_as="semgrep-secrets")
         if semgrep_secrets_path:
             semgrep_secrets_flags = get_tool_flags("semgrep-secrets")
             semgrep_secrets_cmd = [
@@ -1280,12 +1302,19 @@ def scan_repository(
         if missing in statuses:
             continue
         statuses[missing] = False
+        # Name the dependency when the tool itself is not what was missing.
+        # `zap` needs `zap-baseline.py` and `docker`; reporting the helper's
+        # name alone sent the reader looking for a tool that is in no profile,
+        # while the tool that actually lost its findings went unnamed.
+        dep = missing_dependency.get(missing)
+        what = f"its dependency `{dep}`" if dep else "its executable"
         logger.error(
-            "%s: requested but its executable could not be found - it did "
+            "%s: requested but %s could not be found - it did "
             "NOT run and its findings are MISSING from this scan. "
             "Run `jmo tools check` to confirm installation, or pass "
             "--allow-missing-tools to record an explicit empty result.",
             missing,
+            what,
         )
 
     # Requested but never even attempted: this scanner has no code path for
@@ -1412,7 +1441,20 @@ def scan_repository(
             statuses[result.tool] = False
             if result.attempts > 0:
                 attempts_map[result.tool] = result.attempts
-            _report_failure(result, "it failed")
+            # `no_output` - an accepted return code with nothing written - is
+            # also announced by the progress tracker, but that is a UI surface:
+            # bare text rather than the log stream, and overwritten in place on
+            # a TTY. It is not a durable record, so this must still log. The
+            # #700 class of bug is precisely a tool that returns 0 and produces
+            # nothing; that must survive into the log.
+            _report_failure(
+                result,
+                (
+                    "it exited with an accepted code but wrote no output"
+                    if result.status == "no_output"
+                    else "it failed"
+                ),
+            )
 
     # Aggregate noseyparker multi-phase status
     if any(noseyparker_phases.values()):

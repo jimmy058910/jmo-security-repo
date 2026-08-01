@@ -1122,6 +1122,87 @@ class TestRepositoryScanner:
             assert any("semgrep" in str(p) for _, p in stub_calls)
 
 
+class TestAccountingNamesProfileToolsOnly:
+    """The three accounting diagnostics must speak in profile-tool names.
+
+    `_find_tool` records whatever binary it was asked to resolve, but several
+    blocks resolve a binary that is not the tool the user asked for:
+    checkov-cicd runs `checkov`, trivy-rbac runs `trivy`, semgrep-secrets runs
+    `semgrep`, zap runs `zap-baseline.py` plus `docker`, afl++ runs `afl-fuzz`.
+
+    Two consequences, both measured on terragoat with `--profile-name deep`:
+
+      Requested but not applicable to repository targets (no repository
+      implementation): checkov-cicd, opa, semgrep-secrets, trivy-rbac, zap
+
+    three of those five wrote output files in the same run - because
+    `not_implemented` is `set(tools) - considered` and `considered` only ever
+    saw the binary names. And:
+
+      docker: requested but its executable could not be found - it did NOT run
+      and its findings are MISSING from this scan
+
+    `docker` is not a tool in any profile; it is a dependency of one.
+    """
+
+    def _scan(self, tmp_path, tools, resolvable, caplog):
+        import logging
+
+        repo = tmp_path / "test-repo"
+        repo.mkdir()
+        (repo / "main.tf").write_text('resource "aws_s3_bucket" "b" {}')
+        (repo / "index.html").write_text("<html></html>")
+
+        with (
+            patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner,
+            caplog.at_level(logging.DEBUG),
+        ):
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+            mock_runner.run_all_parallel.return_value = []
+            scan_repository(
+                repo=repo,
+                results_dir=tmp_path,
+                tools=tools,
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+                find_tool_func=lambda t: (f"/usr/bin/{t}" if t in resolvable else None),
+            )
+        return caplog.text
+
+    def test_variant_tool_is_not_called_unimplemented(self, tmp_path, caplog):
+        """checkov-cicd is implemented; it must not be reported otherwise."""
+        text = self._scan(
+            tmp_path,
+            tools=["checkov-cicd"],
+            resolvable={"checkov"},
+            caplog=caplog,
+        )
+        assert "no repository implementation" not in text or "checkov-cicd" not in (
+            text.split("no repository implementation")[1]
+            if "no repository implementation" in text
+            else ""
+        ), f"checkov-cicd was called unimplemented while its block ran:\n{text}"
+
+    def test_missing_dependency_is_reported_against_its_own_tool(
+        self, tmp_path, caplog
+    ):
+        """zap's missing helper must be reported as zap, not as `docker`."""
+        text = self._scan(
+            tmp_path,
+            tools=["zap"],
+            resolvable=set(),  # neither zap-baseline.py nor docker resolve
+            caplog=caplog,
+        )
+        assert "docker: requested but" not in text, (
+            f"`docker` is a dependency, not a profile tool, and was reported as "
+            f"a tool whose findings are missing:\n{text}"
+        )
+        assert "zap" in text, f"zap's own failure went unreported:\n{text}"
+
+
 class TestFailedToolsAreReported:
     """A tool that does not deliver findings must say so on a durable stream.
 
@@ -1241,6 +1322,42 @@ class TestFailedToolsAreReported:
 
         assert statuses["yara"] is False
         assert "yara" in caplog.text
+
+    def test_no_output_is_reported_durably(self, tmp_path, caplog):
+        """An accepted return code with nothing written must reach the log.
+
+        This status is also announced by the progress tracker in jmo.py, which
+        is easy to mistake for "already reported". It is not: that is a UI
+        surface - bare text rather than the log stream, and overwritten in
+        place on a TTY - so suppressing the log line here would leave the #700
+        failure class (tool returns 0, writes nothing) with no durable record
+        at all, which is the exact bug this whole area exists to prevent.
+        """
+        import logging
+
+        from scripts.core.tool_runner import ToolResult
+
+        with caplog.at_level(logging.ERROR):
+            _, statuses = self._run(
+                tmp_path,
+                [
+                    ToolResult(
+                        tool="gosec",
+                        status="no_output",
+                        returncode=1,
+                        error_message="Exited 1 (an accepted code) but wrote no output",
+                        attempts=1,
+                    )
+                ],
+                ["gosec"],
+            )
+
+        assert statuses["gosec"] is False
+        assert "gosec" in caplog.text, (
+            "a tool that exited 0 and wrote nothing left no durable record:\n"
+            f"{caplog.text}"
+        )
+        assert "wrote no output" in caplog.text
 
     def test_successful_tool_is_not_reported_as_failed(self, tmp_path, caplog):
         """The guard must stay silent on success, or it is just noise."""

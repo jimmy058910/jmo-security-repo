@@ -3749,6 +3749,12 @@ def main():
     if not hasattr(args, "cmd"):
         return 0
 
+    # Route the scan path's stdlib loggers through the same stream and format
+    # as _log(). Until this existed they fell to logging.lastResort, which is
+    # pinned at WARNING with no formatter - so `--log-level DEBUG` could not
+    # reach them and their output was bare among otherwise-JSON lines.
+    configure_scan_logging(args)
+
     # Route to appropriate command handler
     if args.cmd == "wizard":
         return cmd_wizard(args)
@@ -3835,6 +3841,90 @@ def _log(args, level: str, message: str) -> None:
         "msg": message,
     }
     sys.stderr.write(json.dumps(rec) + "\n")
+
+
+class _ScanLogFormatter(logging.Formatter):
+    """Render stdlib records the way `_log()` renders its own.
+
+    Two streams describing one scan must not look different: `_log()` emits
+    JSON, and without this the stdlib records went out through Python's
+    `lastResort` handler, which has no formatter at all - so "its findings are
+    MISSING from this scan" arrived as a bare line among JSON.
+    """
+
+    def __init__(self, human: bool) -> None:
+        super().__init__()
+        self.human = human
+
+    def format(self, record: logging.LogRecord) -> str:
+        level = "WARN" if record.levelname == "WARNING" else record.levelname
+        message = record.getMessage()
+        if self.human:
+            color = {
+                "DEBUG": "\x1b[36m",
+                "INFO": "\x1b[32m",
+                "WARN": "\x1b[33m",
+                "ERROR": "\x1b[31m",
+            }.get(level, "")
+            ts = datetime.now(UTC).strftime("%H:%M:%S")
+            return f"{color}{level:5}\x1b[0m {ts} {message}"
+        return json.dumps(
+            {
+                "ts": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+                "level": level,
+                "msg": message,
+            }
+        )
+
+
+_SCAN_LOG_HANDLER: logging.Handler | None = None
+
+
+def configure_scan_logging(args) -> None:
+    """Make `--log-level` reach the loggers the scan actually uses.
+
+    `_log()` is jmo.py's own JSON logger and honours `--log-level`. Everything
+    under `scripts/core` and `scripts/cli/scan_jobs` uses stdlib `logging`,
+    which nothing configured - measured, root level WARNING with no handlers,
+    so `logging.lastResort` was in play. That made the scanner's `idle`
+    diagnostic ("implemented and installed, but this repository had nothing for
+    it to look at"), logged at DEBUG, unreachable at every flag setting - one
+    third of the three-state tool accounting could never be seen.
+
+    Attached to the `scripts` logger rather than the root logger on purpose: at
+    DEBUG the root logger would also surface every third-party library's
+    internals, burying the diagnostics this exists to reveal.
+
+    The default stays WARNING, which is what `lastResort` already imposed, so
+    normal runs are unchanged in verbosity - only in format, and in the fact
+    that DEBUG is now reachable at all.
+    """
+    global _SCAN_LOG_HANDLER
+
+    scripts_logger = logging.getLogger("scripts")
+    if _SCAN_LOG_HANDLER is not None:
+        scripts_logger.removeHandler(_SCAN_LOG_HANDLER)
+        _SCAN_LOG_HANDLER = None
+
+    level_name = (getattr(args, "log_level", None) or "WARN").upper()
+    level = {
+        "DEBUG": logging.DEBUG,
+        "INFO": logging.INFO,
+        "WARN": logging.WARNING,
+        "WARNING": logging.WARNING,
+        "ERROR": logging.ERROR,
+    }.get(level_name, logging.WARNING)
+
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(_ScanLogFormatter(bool(getattr(args, "human_logs", False))))
+    handler.setLevel(level)
+
+    scripts_logger.setLevel(level)
+    scripts_logger.addHandler(handler)
+    # Without this the record also reaches the root logger, where lastResort
+    # prints it a second time in its bare format.
+    scripts_logger.propagate = False
+    _SCAN_LOG_HANDLER = handler
 
 
 if __name__ == "__main__":

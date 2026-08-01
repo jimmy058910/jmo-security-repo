@@ -868,3 +868,68 @@ class TestScanPreflightAtEOF:
         available, missing = self._call(monkeypatch, isatty=True, on_input=_interrupt)
 
         assert available == []
+
+
+class TestScanPathLoggingIsReachable:
+    """`--log-level` must reach the loggers the scan actually uses.
+
+    `jmo.py` has a hand-rolled `_log()` that emits JSON and honours
+    `--log-level`. Everything under `scripts/core` and `scripts/cli/scan_jobs`
+    uses stdlib `logging`, which nothing ever configured. Measured:
+
+        root level: WARNING   root handlers: []   isEnabledFor(DEBUG): False
+        lastResort: <_StderrHandler <stderr> (WARNING)>
+
+    Two consequences. The `idle` diagnostic added in d2c3641 - "implemented and
+    installed, but this repository had nothing for it to look at", the third
+    leg of the scanner's own three-state accounting - is logged at DEBUG and so
+    was unreachable at every CLI flag setting. And the diagnostics that did
+    appear went out through Python's `lastResort` handler, which has no
+    formatter, so lines like "its findings are MISSING from this scan" were
+    emitted bare while every other line was JSON - invisible to any consumer
+    parsing the log stream.
+    """
+
+    def test_debug_level_reaches_scan_path_loggers(self, capsys):
+        import logging
+
+        from scripts.cli.jmo import configure_scan_logging
+
+        configure_scan_logging(argparse.Namespace(log_level="DEBUG", human_logs=False))
+        try:
+            logging.getLogger("scripts.cli.scan_jobs.repository_scanner").debug(
+                "IDLE-MARKER"
+            )
+            assert "IDLE-MARKER" in capsys.readouterr().err
+        finally:
+            configure_scan_logging(argparse.Namespace(log_level=None, human_logs=False))
+
+    def test_default_level_suppresses_debug(self, capsys):
+        """Without --log-level DEBUG the debug diagnostics stay out of the way."""
+        import logging
+
+        from scripts.cli.jmo import configure_scan_logging
+
+        configure_scan_logging(argparse.Namespace(log_level=None, human_logs=False))
+        logging.getLogger("scripts.cli.scan_jobs.repository_scanner").debug(
+            "IDLE-MARKER"
+        )
+        assert "IDLE-MARKER" not in capsys.readouterr().err
+
+    def test_scan_diagnostics_are_json_like_the_rest_of_the_stream(self, capsys):
+        """An ERROR from the scan path must not arrive bare via lastResort."""
+        import logging
+
+        from scripts.cli.jmo import configure_scan_logging
+
+        configure_scan_logging(argparse.Namespace(log_level=None, human_logs=False))
+        try:
+            logging.getLogger("scripts.cli.scan_jobs.repository_scanner").error(
+                "findings are MISSING"
+            )
+            err = capsys.readouterr().err
+            assert (
+                '"level"' in err and '"msg"' in err
+            ), f"scan diagnostics are not machine-readable like _log()'s:\n{err}"
+        finally:
+            configure_scan_logging(argparse.Namespace(log_level=None, human_logs=False))
