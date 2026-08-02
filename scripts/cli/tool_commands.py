@@ -439,7 +439,12 @@ def cmd_tools_install(args: argparse.Namespace) -> int:
         jobs = 4
     max_workers = min(jobs, 8)  # Cap at 8
 
-    force = bool(getattr(args, "force", False))
+    force = getattr(args, "force", False)
+    # Ensure force is a real bool (handles MagicMock in tests), mirroring the
+    # `jobs` guard above. A MagicMock attribute is truthy, so `bool(getattr(...))`
+    # silently makes force=True and routes *every* tool into the install list.
+    if not isinstance(force, bool):
+        force = False
 
     # Determine which tools to install
     if tools_arg:
