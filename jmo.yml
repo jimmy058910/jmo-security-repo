@@ -184,8 +184,12 @@ profiles:
         timeout: 900
       yara:
         timeout: 900
-        flags:
-        - --max-rules-per-file=500
+        # No flags by default. This shipped `--max-rules-per-file=500`, which is
+        # not a yara option: v4.5.8 defines `max-rules` and
+        # `max-strings-per-rule`, and nothing of that name. The scanner would
+        # have been rejected on an unknown option had it ever got far enough to
+        # run. Set `rules_path` here to point at your own rule set; otherwise
+        # the bundle installed by `jmo tools install yara` is used.
       grype:
         timeout: 900
 profiling:

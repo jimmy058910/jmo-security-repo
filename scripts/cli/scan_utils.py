@@ -11,6 +11,7 @@ import logging
 import subprocess  # nosec B404: imported for controlled, vetted CLI invocations
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 # Re-export from core for backward compatibility.
 # find_tool/tool_exists live in scripts.core.tool_utils to maintain clean
@@ -21,6 +22,11 @@ from scripts.core.tool_utils import (  # noqa: F401
     find_tool,
     tool_exists,
 )
+
+if TYPE_CHECKING:  # pragma: no cover - annotation only
+    # Deferred: core must stay importable without cli, and this is the only
+    # reference to it here.
+    from scripts.core.tool_runner import ToolResult
 
 
 def _run_inline_tool_update(drift_list: list[dict]) -> bool:
@@ -202,6 +208,54 @@ def check_version_drift_before_scan(
         if behind:
             logger.warning("Run 'jmo tools update' to synchronize versions")
         return True
+
+
+# A tool's stderr is unbounded (semgrep and horusec are chatty). Keep the tail,
+# where the fatal message is, rather than the head, where the banner is.
+STDERR_TAIL_CHARS = 500
+
+
+def report_tool_failure(result: ToolResult, reason: str) -> None:
+    """State, on a durable stream, that a tool delivered no findings.
+
+    Every scan job's results loop used to set ``statuses[tool] = False`` and
+    discard ``result.error_message``. The only remaining trace was a ``x`` in
+    the Rich progress display, which a non-TTY run - CI, cron, a detached scan -
+    never renders at all. Measured on bridgecrewio/terragoat with the ``deep``
+    profile: prowler, yara and dependency-check each failed leaving no record on
+    any stream, while the scan exited 0 and the policy gate passed on the
+    resulting empty finding set.
+
+    Which tools land here is platform-dependent (dependency-check is silent on
+    Windows and honest on Linux; noseyparker is the reverse), so this cannot be
+    left to per-tool handling.
+
+    It lives here, beside ``write_stub``, rather than as a private copy in each
+    of the five scan jobs. Four modules each growing a private copy of one
+    helper is the defect ``tests/cross_platform/test_encoding_drift_guard.py``
+    exists to prevent; the reasoning is not specific to encoding.
+    """
+    logger = logging.getLogger(__name__)
+    detail = result.error_message or f"status={result.status}"
+
+    # error_message says what happened; stderr says why. For a non-zero exit it
+    # is only "exited with return code 2", and ToolRunner captures the tool's
+    # stderr into the result and nothing reads it - so the diagnosis is
+    # collected and then dropped one line short of the log. yara exiting 2
+    # writes "0 of 310 rule file(s) compiled - nothing was scanned" there;
+    # without this the operator sees the code and never the cause.
+    tail = (result.stderr or "").strip()
+    if tail:
+        if len(tail) > STDERR_TAIL_CHARS:
+            tail = "..." + tail[-STDERR_TAIL_CHARS:]
+        detail = f"{detail}; stderr: {tail}"
+
+    logger.error(
+        "%s: %s - it did NOT contribute findings to this scan (%s)",
+        result.tool,
+        reason,
+        detail,
+    )
 
 
 def write_stub(tool: str, out_path: Path) -> None:

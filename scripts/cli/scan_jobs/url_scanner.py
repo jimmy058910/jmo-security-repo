@@ -18,7 +18,7 @@ from urllib.parse import urlparse
 
 from ...core.config import RetryConfig
 from ...core.tool_runner import ToolDefinition, ToolRunner
-from ..scan_utils import find_tool, write_stub
+from ..scan_utils import find_tool, report_tool_failure, write_stub
 
 
 def scan_url(
@@ -212,13 +212,13 @@ def scan_url(
             if result.attempts > 1:
                 attempts_map[result.tool] = result.attempts
         elif result.status == "error" and "Tool not found" in result.error_message:
-            # Tool doesn't exist - write stub if allow_missing_tools
-            if allow_missing_tools:
-                tool_out = out_dir / f"{result.tool}.json"
-                _write_stub(result.tool, tool_out)
-                statuses[result.tool] = True
-            else:
-                statuses[result.tool] = False
+            # The tool resolved in pre-flight and then could not be executed -
+            # always a defect, never something --allow-missing-tools consents
+            # to. See repository_scanner for the measured case: find_tool's
+            # "python:yara" pseudo-path passed pre-flight, raised
+            # FileNotFoundError at exec, and was recorded as a clean scan.
+            statuses[result.tool] = False
+            report_tool_failure(result, "its executable was not found at run time")
         else:
             # Other errors (timeout, non-zero exit, etc.)
             statuses[result.tool] = False

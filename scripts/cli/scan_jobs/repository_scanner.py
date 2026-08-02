@@ -57,9 +57,10 @@ from collections.abc import Callable
 from pathlib import Path
 
 from ...core.config import RetryConfig
-from ...core.tool_runner import ToolDefinition, ToolResult, ToolRunner
+from ...core.paths import get_yara_rules_dir
+from ...core.tool_runner import ToolDefinition, ToolRunner
 from ..path_sanitizers import _sanitize_path_component, _validate_output_path
-from ..scan_utils import find_tool, write_stub
+from ..scan_utils import find_tool, report_tool_failure, write_stub
 
 logger = logging.getLogger(__name__)
 
@@ -1048,18 +1049,32 @@ def scan_repository(
         yara_path = _find_tool("yara")
         if yara_path:
             yara_flags = get_tool_flags("yara")
-            # Use built-in rules or user-provided rules
+            # yara is libyara bindings, not a CLI, so `yara_path` is this
+            # interpreter and scripts/core/yara_runner.py supplies the command
+            # line. See that module for why the native CLI is not an option:
+            # VirusTotal/yara publishes prebuilt binaries for Windows only, and
+            # stopped even those at v4.5.6.
+            #
+            # What was here before could never have run. It built the native C
+            # command line (`yara -r -w -s <rules> <repo>`) against a library
+            # that has no executable; it pointed at /usr/share/yara/rules, which
+            # is absent on Windows and on stock Ubuntu alike; and the adapter it
+            # fed parses JSON, which yara's CLI has never emitted - the string
+            # "json" does not appear anywhere in cli/yara.c.
             rules_path = per_tool_config.get("yara", {}).get(
-                "rules_path", "/usr/share/yara/rules"
+                "rules_path", str(get_yara_rules_dir())
             )
             yara_cmd = [
                 yara_path,
-                "-r",  # Recursive
-                "-w",  # Disable warnings
-                "-s",  # Print matched strings
-                *yara_flags,
+                "-m",
+                "scripts.core.yara_runner",
+                "--rules",
                 str(rules_path),
+                "--target",
                 str(repo),
+                "--output",
+                str(yara_out),
+                *yara_flags,
             ]
             tool_defs.append(
                 ToolDefinition(
@@ -1068,8 +1083,12 @@ def scan_repository(
                     output_file=yara_out,
                     timeout=get_tool_timeout("yara", timeout),
                     retries=retries,
+                    # 0 = clean, 1 = matches. The runner reserves 2 for "did NOT
+                    # scan", which must stay a failure rather than an empty result.
                     ok_return_codes=(0, 1),
-                    capture_stdout=True,
+                    # The runner writes --output itself. Capturing stdout would
+                    # overwrite that file with the runner's (empty) stdout.
+                    capture_stdout=False,
                 )
             )
         elif allow_missing_tools:
@@ -1353,28 +1372,6 @@ def scan_repository(
     )
     results = runner.run_all_parallel()
 
-    def _report_failure(result: ToolResult, reason: str) -> None:
-        """State, on a durable stream, that a tool delivered no findings.
-
-        Every non-success branch below used to set `statuses[tool] = False` and
-        discard `result.error_message`. The only remaining trace was a `✗` in
-        the Rich progress display, which a non-TTY run (CI, cron, a detached
-        scan) never renders at all - so on terragoat, prowler / yara /
-        dependency-check failed leaving no record on any stream, while the scan
-        exited 0 and the policy gate passed on the resulting empty finding set.
-
-        Which tools land here is platform-dependent (dependency-check is silent
-        on Windows and honest on Linux; noseyparker is the reverse), so this
-        cannot be left to per-tool handling.
-        """
-        detail = result.error_message or f"status={result.status}"
-        logger.error(
-            "%s: %s - it did NOT contribute findings to this scan (%s)",
-            result.tool,
-            reason,
-            detail,
-        )
-
     # Process results
     attempts_map: dict[str, int] = {}
     noseyparker_phases = {"init": False, "scan": False, "report": False}
@@ -1414,14 +1411,27 @@ def scan_repository(
             if result.attempts > 1:
                 attempts_map[result.tool] = result.attempts
         elif result.status == "error" and "Tool not found" in result.error_message:
-            # Tool doesn't exist - write stub if allow_missing_tools
-            if allow_missing_tools:
-                tool_out = out_dir / f"{result.tool}.json"
-                _write_stub(result.tool, tool_out)
-                statuses[result.tool] = True
-            else:
-                statuses[result.tool] = False
-                _report_failure(result, "its executable was not found at run time")
+            # Reaching here means the tool RESOLVED in pre-flight - it was given
+            # a ToolDefinition and handed to ToolRunner - and then could not be
+            # executed. That is always a defect: a resolver returning something
+            # that is not a path, or a binary that vanished mid-scan. A tool the
+            # user genuinely has not installed never gets this far; it is
+            # dropped or stubbed in pre-flight.
+            #
+            # So --allow-missing-tools must NOT absorb it. That flag means
+            # "record an explicit empty result for tools I know I lack", which
+            # is not consent to swallow a resolver bug. It used to write a stub
+            # and set True here: find_tool("yara") returned the pseudo-path
+            # "python:yara", which is truthy and so passed pre-flight, then
+            # raised FileNotFoundError at exec. Measured on a machine with HOME
+            # and PATH stripped - where yara could not possibly have run - the
+            # scan wrote yara.json and reported a clean malware scan.
+            #
+            # No stub, either: an empty stub is indistinguishable from a genuine
+            # empty result once the report phase reads it, which is the precise
+            # lie being removed.
+            statuses[result.tool] = False
+            report_tool_failure(result, "its executable was not found at run time")
         elif "Timeout" in result.error_message:
             # Tool timed out - write stub so report phase has consistent files
             # and mark as failed (timeout is a failure state)
@@ -1435,7 +1445,7 @@ def scan_repository(
             statuses[result.tool] = False
             if result.attempts > 0:
                 attempts_map[result.tool] = result.attempts
-            _report_failure(result, "it timed out")
+            report_tool_failure(result, "it timed out")
         else:
             # Other errors (non-zero exit, etc.)
             statuses[result.tool] = False
@@ -1447,7 +1457,7 @@ def scan_repository(
             # a TTY. It is not a durable record, so this must still log. The
             # #700 class of bug is precisely a tool that returns 0 and produces
             # nothing; that must survive into the log.
-            _report_failure(
+            report_tool_failure(
                 result,
                 (
                     "it exited with an accepted code but wrote no output"

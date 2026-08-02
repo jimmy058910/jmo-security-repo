@@ -126,12 +126,25 @@ def find_tool(tool_name: str) -> str | None:
         if lynis_path.exists():
             return str(lynis_path)
 
-    # Yara is a Python module, not a binary - check via importlib
-    if tool_name == "yara":
-        spec = importlib.util.find_spec("yara")
-        if spec is not None:
-            # Return a pseudo-path indicating the module is available
-            return "python:yara"
+    # yara ships as libyara bindings (the yara-python wheel), not as a CLI: the
+    # installed artifact is a compiled extension exposing compile()/match(),
+    # with no main() and no console script. JMo drives it through
+    # scripts/core/yara_runner.py, so the executable that runs yara *is* this
+    # interpreter - the same shape tool_manager's version probe already uses
+    # (`[sys.executable, "-c", "import yara; ..."]`).
+    #
+    # This used to return the pseudo-path "python:yara", which broke the
+    # contract three lines of docstring above ("Full path to the tool binary").
+    # Being truthy, it passed pre-flight; landing at command[0], it raised
+    # FileNotFoundError; and the scanner then matched the resulting "Tool not
+    # found" string and, under --allow-missing-tools, wrote a stub and recorded
+    # yara as having run clean. Measured: yara.json existed after a scan with
+    # HOME and PATH stripped, where yara could not possibly have run.
+    #
+    # Falls through rather than returning None, so a genuine native yara binary
+    # under ~/.jmo/bin is still found by the generic checks below.
+    if tool_name == "yara" and importlib.util.find_spec("yara") is not None:
+        return sys.executable
 
     # Generic check for tools in ~/.jmo/bin/{tool}/
     tool_in_subdir = jmo_bin / tool_name / tool_name
