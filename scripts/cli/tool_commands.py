@@ -439,14 +439,25 @@ def cmd_tools_install(args: argparse.Namespace) -> int:
         jobs = 4
     max_workers = min(jobs, 8)  # Cap at 8
 
+    force = bool(getattr(args, "force", False))
+
     # Determine which tools to install
     if tools_arg:
         # Specific tools requested
         missing = []
         for t in tools_arg:
             status = manager.check_tool(t)
-            if not status.installed:
+            if force or not status.installed:
                 missing.append(status)
+            elif not status.execution_ready:
+                # Present but unable to run - an incomplete install, not a
+                # finished one. yara reaches this state with its engine
+                # installed and no rules, where it would report every scan
+                # clean. Say so rather than printing a bare "already installed".
+                print(
+                    f"{t}: installed ({status.installed_version}) but not ready"
+                    f" - {status.execution_warning}"
+                )
             else:
                 print(f"{t}: already installed ({status.installed_version})")
     else:

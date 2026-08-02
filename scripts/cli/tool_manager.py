@@ -1722,6 +1722,32 @@ class ToolManager:
         if missing:
             return False, f"Missing: {', '.join(missing)}", missing
 
+        # yara ships an engine and no detection content. Without rules it
+        # examines every file, matches nothing, and returns a result that is
+        # byte-for-byte identical to a genuinely clean repository - so "the
+        # library imports" is not the same question as "yara can detect
+        # anything", and only the second one is worth reporting.
+        #
+        # Checked against the bundle directory `jmo tools install yara` fills.
+        # A user pointing per_tool.yara.rules_path at their own set is not
+        # visible here, which is why this downgrades execution readiness rather
+        # than claiming the tool is absent; the runner re-checks the configured
+        # path at scan time and fails loudly there if it is empty.
+        if tool_name == "yara":
+            from scripts.core.paths import get_yara_rules_dir
+
+            rules_dir = get_yara_rules_dir()
+            has_rules = rules_dir.is_dir() and any(
+                rules_dir.rglob(pattern) for pattern in ("*.yar", "*.yara")
+            )
+            if not has_rules:
+                return (
+                    False,
+                    "No YARA rules installed - yara would report every scan "
+                    "clean. Run: jmo tools install yara --force",
+                    ["yara-rules"],
+                )
+
         # Special version checks
         if tool_name == "cdxgen":
             node_version = self._get_node_version()

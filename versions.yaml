@@ -246,12 +246,17 @@ special_tools:
       '
     docker_ready: false
   yara:
-    version: 4.5.5
+    # Tracks the PyPI package, which is what JMo installs. It previously
+    # tracked github_repo VirusTotal/yara as well - a different project with
+    # its own numbering - and took `version` from there. That is how this came
+    # to pin 4.5.5, which has never existed on PyPI: `jmo tools install yara`
+    # failed with "no version of yara-python==4.5.5". The C project is at 4.5.8
+    # and publishes prebuilt binaries for Windows only (and stopped at v4.5.6),
+    # so it is not a source JMo can install from on any platform.
+    version: 4.5.4
     pypi_package: yara-python
-    github_repo: VirusTotal/yara
-    description: Malware pattern detection
-    release_pattern: v{version}.tar.gz
-    update_check: gh api repos/VirusTotal/yara/releases/latest
+    description: Malware pattern detection (libyara engine)
+    update_check: pip index versions yara-python
     critical: false
     installation: yara-python pip package (Python library, not CLI)
     notes: 'v1.0.0 - Web shells, backdoors, cryptominers (200-500 curated rules).

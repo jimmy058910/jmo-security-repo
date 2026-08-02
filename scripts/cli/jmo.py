@@ -738,6 +738,11 @@ Examples:
         metavar="N",
         help="Number of parallel installation jobs (default: 4, max: 8)",
     )
+    install_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Reinstall even if already present (repairs an incomplete install)",
+    )
 
     # UPDATE
     update_parser = tools_subparsers.add_parser("update", help="Update outdated tools")
