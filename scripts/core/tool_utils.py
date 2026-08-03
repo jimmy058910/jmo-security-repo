@@ -43,6 +43,46 @@ def clear_tool_warnings() -> None:
     _warned_tools = set()
 
 
+def _is_windows() -> bool:
+    """Whether to prefer Windows launcher extensions.
+
+    A function rather than `os.name == "nt"` inline so tests can exercise both
+    branches on one host. Monkeypatching `os.name` itself is not an option:
+    `pathlib` reads it to choose its flavour, so setting it to "posix" on
+    Windows makes `Path()` raise
+    `NotImplementedError: cannot instantiate 'PosixPath' on your system`.
+    """
+    return os.name == "nt"
+
+
+def _platform_launcher(directory: Path, stem: str) -> Path | None:
+    """Return the launcher for `stem` that this platform can actually execute.
+
+    The Java-based tools ship a POSIX `.sh` and a Windows `.bat` **side by side
+    in the same directory** (`zap.sh`/`zap.bat`,
+    `dependency-check.sh`/`dependency-check.bat`). Picking by name alone gets
+    the wrong one half the time.
+
+    Handing Windows the `.sh` does not fail as "not found". `subprocess` raises
+
+        [WinError 193] %1 is not a valid Win32 application
+
+    which reads like a corrupt download rather than the wrong file - which is
+    why dependency-check's failure was not obvious from its message.
+
+    On Windows a missing `.bat` returns None rather than falling back to the
+    `.sh`. `unresolved` is an accounted state the reconciler understands; a
+    launcher the platform cannot execute is a run-time failure that, before
+    this branch, `--allow-missing-tools` laundered into a recorded success.
+    """
+    suffixes = (".bat", ".cmd", ".exe") if _is_windows() else (".sh", "")
+    for suffix in suffixes:
+        candidate = directory / f"{stem}{suffix}"
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def find_tool(tool_name: str) -> str | None:
     """
     Find a security tool in PATH or JMo special installation paths.
@@ -108,17 +148,21 @@ def find_tool(tool_name: str) -> str | None:
         if zap_baseline.exists():
             return str(zap_baseline)
 
-    # ZAP main launcher
-    if tool_name == "zap.sh":
-        zap_sh = jmo_bin / "zap" / "zap.sh"
-        if zap_sh.exists():
-            return str(zap_sh)
+    # ZAP main launcher. The name is spelled "zap.sh" at every call site, but
+    # that is the POSIX launcher's filename, not the tool's identity - Windows
+    # needs zap.bat from the same directory.
+    if tool_name in ("zap.sh", "zap.bat"):
+        zap_launcher = _platform_launcher(jmo_bin / "zap", "zap")
+        if zap_launcher is not None:
+            return str(zap_launcher)
 
-    # dependency-check shell script
-    if tool_name in ("dependency-check", "dependency-check.sh"):
-        dc_path = jmo_bin / "dependency-check" / "bin" / "dependency-check.sh"
-        if dc_path.exists():
-            return str(dc_path)
+    # dependency-check launcher, same shape as zap.
+    if tool_name in ("dependency-check", "dependency-check.sh", "dependency-check.bat"):
+        dc_launcher = _platform_launcher(
+            jmo_bin / "dependency-check" / "bin", "dependency-check"
+        )
+        if dc_launcher is not None:
+            return str(dc_launcher)
 
     # Lynis is cloned to ~/.jmo/bin/lynis/
     if tool_name == "lynis":

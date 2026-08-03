@@ -1682,19 +1682,37 @@ class ToolManager:
         return result
 
     def _get_clean_env(self) -> dict:
-        """Get a clean environment for subprocess calls."""
+        """Get a clean environment for subprocess calls.
+
+        Joins with ``os.pathsep``, not a hardcoded ``":"``. On POSIX the two
+        coincide, so the bug this fixes was invisible there; on Windows the
+        separator is ``";"``, and joining with ``":"`` fused every prepended
+        directory *and the first genuine PATH entry* into one nonsensical
+        element::
+
+            'C:\\Users\\J/.jmo/bin:C:\\Users\\J/.local/bin:...:C:\\real\\first\\entry'
+
+        So ``~/.jmo/bin`` - the directory JMo installs every tool into - was not
+        on the probe's PATH at all, and whatever had been first was destroyed
+        with it. Measured: that is why dependency-check's version probe reported
+        ``'java' is not recognized`` on a machine where java was on PATH and
+        ``shutil.which("java")`` found it from the same process.
+
+        Paths are built with ``Path`` rather than f-string slashes for the same
+        reason - a mix of separators in one entry is not a valid path anywhere.
+        """
         import os
 
         env = os.environ.copy()
         # Add common tool paths
-        home = str(Path.home())
+        home = Path.home()
         extra_paths = [
-            f"{home}/.jmo/bin",
-            f"{home}/.local/bin",
-            f"{home}/.kubescape/bin",
+            str(home / ".jmo" / "bin"),
+            str(home / ".local" / "bin"),
+            str(home / ".kubescape" / "bin"),
         ]
         current_path = env.get("PATH", "")
-        env["PATH"] = ":".join(extra_paths) + ":" + current_path
+        env["PATH"] = os.pathsep.join([*extra_paths, current_path])
         return env
 
     def _verify_execution(self, tool_name: str) -> tuple[bool, str | None, list[str]]:
