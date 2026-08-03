@@ -312,6 +312,22 @@ class ToolRunner:
         child_env = os.environ.copy()
         child_env.setdefault("PYTHONUTF8", "1")
 
+        # Some scanners shell out to other scanners, and JMo installs those into
+        # ~/.jmo/bin - a directory nothing puts on PATH. `prowler iac` invokes
+        # `trivy`; with trivy installed by JMo but absent from the child's PATH
+        # it died with FileNotFoundError [WinError 2] from inside prowler and
+        # wrote nothing. Adding trivy's directory to PATH produced 88 records
+        # (13 FAIL) from the identical command.
+        #
+        # os.pathsep, not ":" - the hardcoded colon is what corrupted the
+        # version probe's PATH on Windows, fusing the prepended entries and the
+        # first real one into a single unusable element.
+        jmo_bin = Path.home() / ".jmo" / "bin"
+        if jmo_bin.is_dir():
+            child_env["PATH"] = os.pathsep.join(
+                [str(jmo_bin), child_env.get("PATH", "")]
+            )
+
         while True:
             attempt += 1
 

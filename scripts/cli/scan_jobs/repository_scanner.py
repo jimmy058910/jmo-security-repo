@@ -1017,25 +1017,54 @@ def scan_repository(
         prowler_path = _find_tool("prowler")
         if cloud_files and prowler_path:
             prowler_flags = get_tool_flags("prowler")
-            # Run Prowler in configuration scanning mode
+            # `prowler iac` scans Infrastructure-as-Code from a local path with
+            # no cloud credentials, which is what this branch wants - it is
+            # gated on .tf/cloudformation files being present.
+            #
+            # What was here before could not run at all. prowler's CLI requires
+            # a provider subcommand ({aws,azure,gcp,kubernetes,iac,...}); with
+            # none, argparse printed usage and exited **2**, which is where the
+            # reported "Return code 2 not in (0, 1, 3)" came from. Widening the
+            # accepted set to include 2 would have been the wrong fix: 2 is
+            # argparse's usage error, so accepting it means accepting "I passed
+            # nonsense arguments" as a successful scan.
+            #
+            # `--output-formats json` was also invalid - prowler 5.x offers
+            # {csv,json-asff,json-ocsf,html,sarif} and no plain `json`.
             prowler_cmd = [
                 prowler_path,
+                "iac",
+                "--scan-path",
+                str(repo),
                 "--output-formats",
-                "json",
+                "json-ocsf",
                 "--output-directory",
                 str(out_dir),
                 "--output-filename",
                 "prowler",
+                # prowler renders a summary table to stdout that can raise
+                # UnicodeEncodeError on a non-UTF-8 console. Nothing reads it.
+                "--no-banner",
                 *prowler_flags,
             ]
             tool_defs.append(
                 ToolDefinition(
                     name="prowler",
                     command=prowler_cmd,
-                    output_file=prowler_out,
+                    # The file prowler ACTUALLY writes, not the one the report
+                    # phase wants. `--output-filename prowler` plus
+                    # `--output-formats json-ocsf` yields `prowler.ocsf.json`,
+                    # and ToolRunner checks this path the instant the process
+                    # exits - before the rename below. Declaring `prowler.json`
+                    # made it report `no_output` for a scan that had just
+                    # written 372 KB, and the reconciler then saw the renamed
+                    # artifact too and called prowler CONTRADICTORY.
+                    output_file=out_dir / "prowler.ocsf.json",
                     timeout=get_tool_timeout("prowler", timeout),
                     retries=retries,
-                    ok_return_codes=(0, 1, 3),  # 0=clean, 1=findings, 3=no credentials
+                    # 0=clean, 1=findings, 3=no credentials. NOT 2: that is
+                    # argparse rejecting the command line.
+                    ok_return_codes=(0, 1, 3),
                     capture_stdout=False,
                 )
             )
@@ -1387,6 +1416,16 @@ def scan_repository(
             else:
                 noseyparker_phases[phase] = False
             continue  # Don't set individual phase status in statuses dict
+
+        # prowler names its own artifact. `--output-filename prowler` with
+        # `--output-formats json-ocsf` produces `prowler.ocsf.json`, so the
+        # declared output_file (`prowler.json`) would never appear and the tool
+        # would be recorded `no_output` after a scan that genuinely worked.
+        if result.tool == "prowler":
+            ocsf_out = out_dir / "prowler.ocsf.json"
+            prowler_json = out_dir / "prowler.json"
+            if ocsf_out.exists() and not prowler_json.exists():
+                ocsf_out.replace(prowler_json)
 
         # Handle checkov-cicd special case: move results from temp directory
         if result.tool == "checkov-cicd" and result.status == "success":

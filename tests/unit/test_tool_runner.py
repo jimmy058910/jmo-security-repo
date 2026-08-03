@@ -1442,3 +1442,70 @@ class TestSubprocessDecoding:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestChildEnvironment:
+    """A scanner that shells out to another scanner must be able to find it.
+
+    JMo installs tools into ``~/.jmo/bin``, a directory nothing puts on PATH.
+    `prowler iac` invokes `trivy`; with trivy installed by JMo but absent from
+    the child's PATH it died with ``FileNotFoundError [WinError 2]`` raised
+    inside prowler and wrote nothing. Measured: adding that one directory to
+    PATH made the identical command produce 88 records, 13 of them FAIL.
+
+    `tool_manager._get_clean_env` already prepends it for the *version probe*,
+    so the two execution paths disagreed - the same one-right-one-wrong split
+    that hid the checkov, yara and dependency-check resolver bugs.
+    """
+
+    def test_jmo_bin_is_on_the_child_path(self, tmp_path, monkeypatch):
+        import os as _os
+        from pathlib import Path as _Path
+
+        captured = {}
+
+        def fake_run(cmd, **kwargs):
+            captured["env"] = kwargs.get("env") or {}
+            raise FileNotFoundError("stop here - we only want the env")
+
+        jmo_bin = tmp_path / ".jmo" / "bin"
+        jmo_bin.mkdir(parents=True)
+        monkeypatch.setattr(_Path, "home", staticmethod(lambda: tmp_path))
+        monkeypatch.setattr("scripts.core.tool_runner.subprocess.run", fake_run)
+
+        from scripts.core.tool_runner import ToolDefinition, ToolRunner
+
+        ToolRunner(tools=[]).run_tool(
+            ToolDefinition(name="t", command=["nonexistent-binary"], output_file=None)
+        )
+
+        entries = captured["env"].get("PATH", "").split(_os.pathsep)
+        assert str(jmo_bin) in entries, (
+            "~/.jmo/bin is not on the child's PATH, so a scanner cannot find "
+            f"any other JMo-installed tool. entries[0]={entries[0]!r}"
+        )
+
+    def test_path_is_joined_with_os_pathsep(self, tmp_path, monkeypatch):
+        """A hardcoded ':' fuses entries into one unusable element on Windows."""
+        import os as _os
+        from pathlib import Path as _Path
+
+        captured = {}
+
+        def fake_run(cmd, **kwargs):
+            captured["env"] = kwargs.get("env") or {}
+            raise FileNotFoundError("stop here")
+
+        (tmp_path / ".jmo" / "bin").mkdir(parents=True)
+        sentinel = str(tmp_path / "sentinel")
+        monkeypatch.setattr(_Path, "home", staticmethod(lambda: tmp_path))
+        monkeypatch.setenv("PATH", sentinel)
+        monkeypatch.setattr("scripts.core.tool_runner.subprocess.run", fake_run)
+
+        from scripts.core.tool_runner import ToolDefinition, ToolRunner
+
+        ToolRunner(tools=[]).run_tool(
+            ToolDefinition(name="t", command=["nonexistent-binary"], output_file=None)
+        )
+
+        assert sentinel in captured["env"]["PATH"].split(_os.pathsep)

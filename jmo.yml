@@ -75,8 +75,9 @@ profiles:
         - critical,high,medium
       prowler:
         timeout: 600
-        flags:
-        - --quiet
+        # No --quiet: prowler 5.x does not have it, and an unknown option makes
+        # argparse exit 2 before the scan starts. The scanner passes
+        # --no-banner, which is the flag that actually suppresses the chatter.
       kubescape:
         timeout: 500
         flags:
@@ -113,8 +114,7 @@ profiles:
         - critical,high,medium
       prowler:
         timeout: 900
-        flags:
-        - --quiet
+        # See the `fast` profile: --quiet does not exist in prowler 5.x.
       kubescape:
         timeout: 600
         flags:
@@ -172,8 +172,7 @@ profiles:
         - none
       prowler:
         timeout: 1200
-        flags:
-        - --quiet
+        # See the `fast` profile: --quiet does not exist in prowler 5.x.
       kubescape:
         timeout: 900
         flags:
