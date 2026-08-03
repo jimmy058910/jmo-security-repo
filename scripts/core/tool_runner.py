@@ -128,6 +128,12 @@ def _terminate_tree(proc: subprocess.Popen) -> None:
             subprocess.run(
                 ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
                 capture_output=True,
+                # Explicit codec even though nothing reads this output: bare
+                # capture decodes with the host locale, which is the drift
+                # tests/cross_platform/test_encoding_drift_guard.py forbids on
+                # the scan data path. It caught this line.
+                encoding="utf-8",
+                errors="replace",
                 timeout=30,
                 check=False,
             )

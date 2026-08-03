@@ -120,6 +120,10 @@ def test_scan_per_tool_flags_injected(tmp_path: Path, monkeypatch):
     import subprocess
 
     monkeypatch.setattr(subprocess, "run", fake_run)
+    # The scan path runs tools through tool_runner._run_bounded (Popen plus a
+    # tree kill on timeout), not subprocess.run - patching only the latter
+    # records the version probes and none of the scan commands.
+    monkeypatch.setattr("scripts.core.tool_runner._run_bounded", fake_run)
 
     args = types.SimpleNamespace(
         cmd="scan",
@@ -196,6 +200,10 @@ def test_scan_retries_on_failure_then_success(tmp_path: Path, monkeypatch):
     import subprocess
 
     monkeypatch.setattr(subprocess, "run", fake_run)
+    # The scan path runs tools through tool_runner._run_bounded (Popen plus a
+    # tree kill on timeout), not subprocess.run - patching only the latter
+    # records the version probes and none of the scan commands.
+    monkeypatch.setattr("scripts.core.tool_runner._run_bounded", fake_run)
 
     args = types.SimpleNamespace(
         cmd="scan",
