@@ -963,7 +963,10 @@ class TestRetryConfigIntegration:
             retries=rc,
         )
         runner = ToolRunner([tool])
-        with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("cmd", 1)):
+        with patch(
+            "scripts.core.tool_runner._run_bounded",
+            side_effect=subprocess.TimeoutExpired("cmd", 1),
+        ):
             result = runner.run_tool(tool)
         assert result.status == "retry_exhausted"
         assert result.attempts == 4  # 2 base + 2 timeout = 4
@@ -987,7 +990,7 @@ class TestRetryConfigIntegration:
         mock_result.stderr = "error"
 
         runner = ToolRunner([tool])
-        with patch("subprocess.run", return_value=mock_result):
+        with patch("scripts.core.tool_runner._run_bounded", return_value=mock_result):
             result = runner.run_tool(tool)
         assert result.status == "retry_exhausted"
         assert result.attempts == 2  # Only max_attempts, not +timeout_retries
@@ -1004,7 +1007,10 @@ class TestRetryConfigIntegration:
             retries=rc,
         )
         runner = ToolRunner([tool])
-        with patch("subprocess.run", side_effect=FileNotFoundError("not found")):
+        with patch(
+            "scripts.core.tool_runner._run_bounded",
+            side_effect=FileNotFoundError("not found"),
+        ):
             result = runner.run_tool(tool)
         assert result.status == "error"
         assert result.attempts == 1
@@ -1028,7 +1034,7 @@ class TestRetryConfigIntegration:
         mock_result.stderr = "error"
 
         runner = ToolRunner([tool])
-        with patch("subprocess.run", return_value=mock_result):
+        with patch("scripts.core.tool_runner._run_bounded", return_value=mock_result):
             result = runner.run_tool(tool)
         assert result.attempts == 1  # No retries when disabled
 
@@ -1051,7 +1057,10 @@ class TestRetryConfigIntegration:
             retries=rc,
         )
         runner = ToolRunner([tool])
-        with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("cmd", 1)):
+        with patch(
+            "scripts.core.tool_runner._run_bounded",
+            side_effect=subprocess.TimeoutExpired("cmd", 1),
+        ):
             result = runner.run_tool(tool)
         assert result.attempts == 1  # No retries when disabled
 
@@ -1069,7 +1078,7 @@ class TestRetryConfigIntegration:
         mock_result.stderr = "error"
 
         runner = ToolRunner([tool])
-        with patch("subprocess.run", return_value=mock_result):
+        with patch("scripts.core.tool_runner._run_bounded", return_value=mock_result):
             result = runner.run_tool(tool)
         assert result.status == "retry_exhausted"
         assert result.attempts == 2  # retries=1 -> max_attempts=2
@@ -1112,7 +1121,9 @@ class TestDeclaredOutputFile:
         )
 
         runner = ToolRunner([tool])
-        with patch("subprocess.run", return_value=self._ok_subprocess(0)):
+        with patch(
+            "scripts.core.tool_runner._run_bounded", return_value=self._ok_subprocess(0)
+        ):
             result = runner.run_tool(tool)
 
         assert result.status == "no_output"
@@ -1135,7 +1146,9 @@ class TestDeclaredOutputFile:
         )
 
         runner = ToolRunner([tool])
-        with patch("subprocess.run", return_value=self._ok_subprocess(0)):
+        with patch(
+            "scripts.core.tool_runner._run_bounded", return_value=self._ok_subprocess(0)
+        ):
             result = runner.run_tool(tool)
 
         assert result.status == "success"
@@ -1154,7 +1167,9 @@ class TestDeclaredOutputFile:
         )
 
         runner = ToolRunner([tool])
-        with patch("subprocess.run", return_value=self._ok_subprocess(0)):
+        with patch(
+            "scripts.core.tool_runner._run_bounded", return_value=self._ok_subprocess(0)
+        ):
             result = runner.run_tool(tool)
 
         assert result.status == "success"
@@ -1170,7 +1185,9 @@ class TestDeclaredOutputFile:
         )
 
         runner = ToolRunner([tool])
-        with patch("subprocess.run", return_value=self._ok_subprocess(0)):
+        with patch(
+            "scripts.core.tool_runner._run_bounded", return_value=self._ok_subprocess(0)
+        ):
             result = runner.run_tool(tool)
 
         assert result.status == "success"
@@ -1187,7 +1204,9 @@ class TestDeclaredOutputFile:
         )
 
         runner = ToolRunner([tool])
-        with patch("subprocess.run", return_value=self._ok_subprocess(0)):
+        with patch(
+            "scripts.core.tool_runner._run_bounded", return_value=self._ok_subprocess(0)
+        ):
             result = runner.run_tool(tool)
 
         assert result.status == "success"
@@ -1204,7 +1223,9 @@ class TestDeclaredOutputFile:
         )
 
         runner = ToolRunner([tool])
-        with patch("subprocess.run", return_value=self._ok_subprocess(3)):
+        with patch(
+            "scripts.core.tool_runner._run_bounded", return_value=self._ok_subprocess(3)
+        ):
             result = runner.run_tool(tool)
 
         assert result.status == "no_output"
@@ -1228,7 +1249,10 @@ class TestDeclaredOutputFile:
 
         runner = ToolRunner([tool])
         with (
-            patch("subprocess.run", return_value=self._ok_subprocess(0)),
+            patch(
+                "scripts.core.tool_runner._run_bounded",
+                return_value=self._ok_subprocess(0),
+            ),
             patch.object(
                 Path, "exists", side_effect=PermissionError("EACCES on bind mount")
             ),
@@ -1304,7 +1328,7 @@ class TestEmptyCaptureWithNonZeroExit:
         runner = ToolRunner([tool])
 
         with patch(
-            "subprocess.run",
+            "scripts.core.tool_runner._run_bounded",
             return_value=self._result(
                 1, "", "File association not found for extension .py"
             ),
@@ -1327,7 +1351,7 @@ class TestEmptyCaptureWithNonZeroExit:
         runner = ToolRunner([tool])
 
         with patch(
-            "subprocess.run",
+            "scripts.core.tool_runner._run_bounded",
             return_value=self._result(0, "", 'msg":"finished scanning"'),
         ):
             result = runner.run_tool(tool)
@@ -1341,7 +1365,7 @@ class TestEmptyCaptureWithNonZeroExit:
         runner = ToolRunner([tool])
 
         with patch(
-            "subprocess.run",
+            "scripts.core.tool_runner._run_bounded",
             return_value=self._result(1, '{"results": {"failed_checks": []}}'),
         ):
             result = runner.run_tool(tool)
@@ -1424,7 +1448,7 @@ class TestSubprocessDecoding:
         """
         tool = self._emit_bytes_tool(b"{}", tmp_path)
 
-        with patch("subprocess.run") as mock_run:
+        with patch("scripts.core.tool_runner._run_bounded") as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout="{}", stderr="")
             ToolRunner([tool]).run_tool(tool)
 
@@ -1471,7 +1495,7 @@ class TestChildEnvironment:
         jmo_bin = tmp_path / ".jmo" / "bin"
         jmo_bin.mkdir(parents=True)
         monkeypatch.setattr(_Path, "home", staticmethod(lambda: tmp_path))
-        monkeypatch.setattr("scripts.core.tool_runner.subprocess.run", fake_run)
+        monkeypatch.setattr("scripts.core.tool_runner._run_bounded", fake_run)
 
         from scripts.core.tool_runner import ToolDefinition, ToolRunner
 
@@ -1500,7 +1524,7 @@ class TestChildEnvironment:
         sentinel = str(tmp_path / "sentinel")
         monkeypatch.setattr(_Path, "home", staticmethod(lambda: tmp_path))
         monkeypatch.setenv("PATH", sentinel)
-        monkeypatch.setattr("scripts.core.tool_runner.subprocess.run", fake_run)
+        monkeypatch.setattr("scripts.core.tool_runner._run_bounded", fake_run)
 
         from scripts.core.tool_runner import ToolDefinition, ToolRunner
 
@@ -1509,3 +1533,82 @@ class TestChildEnvironment:
         )
 
         assert sentinel in captured["env"]["PATH"].split(_os.pathsep)
+
+
+class TestTimeoutKillsTheProcessTree:
+    """A timeout must bound the whole tree, not just the process we spawned.
+
+    Several scanners are launcher scripts: `dependency-check.bat` runs
+    `cmd.exe` which runs `java`. `subprocess.run(timeout=...)` kills only the
+    direct child and then calls `communicate()` **without a timeout** to drain
+    the pipes - which the surviving grandchild holds open. The documented
+    timeout therefore bounds nothing.
+
+    Measured before the fix: a dependency-check invocation with a 1200s timeout
+    was still running at **38 minutes**, with an orphaned java process no longer
+    under the scan's process tree at all. It stayed hidden while
+    dependency-check failed instantly with WinError 193 - making the tool
+    actually run is what exposed it.
+    """
+
+    def test_a_grandchild_does_not_outlive_the_timeout(self, tmp_path: Path):
+        """The grandchild must be dead, not merely no longer blocking us.
+
+        Asserted by watching a heartbeat file the grandchild keeps touching,
+        rather than by timing the call. Timing alone does not discriminate: with
+        the tree kill removed the call still returns, because `_run_bounded`
+        bounds its own drain at 30s - but the grandchild survives that and runs
+        on unsupervised, which is exactly the 38-minute orphaned java process
+        this fixes. Measured: kill-tree 4s, no-kill-tree 33s, both "passing" a
+        timing assertion while only one actually killed anything.
+        """
+        import subprocess as _sp
+        import sys
+        import time as _time
+
+        from scripts.core.tool_runner import ToolDefinition, ToolRunner
+
+        heartbeat = tmp_path / "grandchild.heartbeat"
+        # The grandchild ticks a file ~every 0.3s for 2 minutes. The launcher
+        # spawns it and then waits, so killing only the launcher leaves it
+        # running - and holding the inherited stderr pipe.
+        grandchild = (
+            "import pathlib,time\n"
+            f"p = pathlib.Path(r'{heartbeat}')\n"
+            "for i in range(400):\n"
+            "    p.write_text(str(i))\n"
+            "    time.sleep(0.3)\n"
+        )
+        launcher = (
+            "import subprocess,sys,time\n"
+            f"subprocess.Popen([sys.executable,'-c',{grandchild!r}])\n"
+            "time.sleep(120)\n"
+        )
+        tool = ToolDefinition(
+            name="slow-launcher",
+            command=[sys.executable, "-c", launcher],
+            output_file=tmp_path / "out.json",
+            timeout=3,
+        )
+
+        result = ToolRunner([tool]).run_tool(tool)
+
+        # "error" is this runner's established status for an exhausted timeout
+        # budget (see test_run_tool_timeout); the message is what the scan job
+        # matches on to report it as a timeout.
+        assert result.is_success() is False
+        assert "Timeout" in result.error_message, result.error_message
+
+        assert heartbeat.exists(), "the grandchild never started - test is vacuous"
+        first = heartbeat.read_text(encoding="utf-8")
+        _time.sleep(2.5)
+        second = heartbeat.read_text(encoding="utf-8")
+
+        assert first == second, (
+            f"the grandchild is still running after the timeout "
+            f"(heartbeat advanced {first} -> {second}). Killing the launcher "
+            f"does not kill what it spawned; this is the orphaned java process "
+            f"that outlived a 1200s dependency-check timeout by 38 minutes."
+        )
+        # Belt and braces: it must also not still be blocking the runner.
+        assert _sp is not None

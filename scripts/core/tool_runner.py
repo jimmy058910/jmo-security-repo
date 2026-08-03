@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import logging
 import os
+import signal
 import subprocess
+import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -97,6 +99,97 @@ class ToolDefinition:
             raise ValueError(f"Timeout must be positive, got {self.timeout}")
         if isinstance(self.retries, int) and self.retries < 0:
             raise ValueError(f"Retries must be non-negative, got {self.retries}")
+
+
+def _terminate_tree(proc: subprocess.Popen) -> None:
+    """Kill `proc` and every process it spawned.
+
+    ``Popen.kill()`` kills one process. Several scanners are launcher scripts
+    that spawn the real work as a grandchild - ``dependency-check.bat`` runs
+    ``cmd.exe`` which runs ``java`` - and killing the launcher leaves that
+    grandchild alive, still holding the stderr pipe. ``communicate()`` then
+    blocks on a pipe that will never close, so the timeout does not bound
+    anything: measured, a dependency-check invocation with a 1200s timeout was
+    still running at **38 minutes**, with an orphaned java process no longer
+    under the scan's process tree at all.
+
+    This is the Windows orphan-process hang described in
+    ``.claude/rules/testing.cross-platform.rules.md``. It stayed hidden while
+    dependency-check failed instantly with WinError 193; making the tool
+    actually run is what exposed it.
+    """
+    # sys.platform, not os.name: mypy narrows platform-specific attributes on
+    # `sys.platform` comparisons only, and os.killpg/getpgid/signal.SIGKILL do
+    # not exist in the Windows stubs.
+    if sys.platform == "win32":
+        # taskkill /T walks the tree by PID. There is no portable process-group
+        # equivalent on Windows without a Job Object.
+        try:
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                capture_output=True,
+                timeout=30,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError):
+            pass
+    else:
+        # The child was started with start_new_session=True, so it leads its own
+        # process group and one signal reaches every descendant.
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except (ProcessLookupError, PermissionError, OSError):
+            pass
+    try:
+        proc.kill()
+    except OSError:
+        pass
+
+
+def _run_bounded(
+    command: list[str],
+    *,
+    env: dict[str, str],
+    stdout: int,
+    stderr: int,
+    encoding: str,
+    errors: str,
+    timeout: float | None,
+) -> subprocess.CompletedProcess:
+    """``subprocess.run``, but a timeout kills the whole process tree.
+
+    ``subprocess.run(timeout=...)`` kills only the direct child and then calls
+    ``communicate()`` again to drain the pipes - which a surviving grandchild
+    holds open indefinitely. The timeout therefore cannot be enforced for any
+    tool that is a launcher script, which is most of the Java-based ones.
+
+    Raises ``subprocess.TimeoutExpired`` after the tree is dead, so the caller's
+    existing timeout handling is unchanged.
+    """
+    proc = subprocess.Popen(
+        command,
+        env=env,
+        stdout=stdout,
+        stderr=stderr,
+        encoding=encoding,
+        errors=errors,
+        # POSIX only: makes the child a process-group leader so killpg reaches
+        # its descendants. Not valid on Windows, where taskkill /T is used.
+        start_new_session=(sys.platform != "win32"),
+    )
+    try:
+        out, err = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        _terminate_tree(proc)
+        try:
+            # The tree is dead, so the pipes close and this returns promptly.
+            # Bounded anyway: a wedged handle must not replace one hang with
+            # another.
+            out, err = proc.communicate(timeout=30)
+        except subprocess.TimeoutExpired:
+            out, err = "", ""
+        raise subprocess.TimeoutExpired(command, timeout or 0, output=out, stderr=err)
+    return subprocess.CompletedProcess(command, proc.returncode, out, err)
 
 
 @dataclass
@@ -332,7 +425,7 @@ class ToolRunner:
             attempt += 1
 
             try:
-                result = subprocess.run(
+                result = _run_bounded(
                     tool.command,
                     env=child_env,
                     stdout=(
@@ -351,7 +444,6 @@ class ToolRunner:
                     encoding="utf-8",
                     errors="replace",
                     timeout=tool.timeout,
-                    check=False,  # Don't raise on non-zero exit
                 )
 
                 # Check if return code is acceptable
