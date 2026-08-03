@@ -68,6 +68,7 @@ ACCOUNTED_STATES = (
     "no_output",
     "failed",
     "unrouted",
+    "skipped",
     "unresolved",
     "not_impl",
     "idle",
@@ -84,6 +85,12 @@ class Diagnostics:
     no_output: frozenset[str] = frozenset()
     failed: frozenset[str] = frozenset()
     unrouted: frozenset[str] = frozenset()
+
+    # Dropped by --skip-tools. Deliberately NOT folded into `unresolved`:
+    # "the operator asked me not to run this" and "I could not find it" are
+    # different facts, and reporting the first as the second is the kind of
+    # near-enough accounting this instrument exists to catch.
+    skipped: frozenset[str] = frozenset()
 
     # Transient progress glyphs. NOT a durable account - a non-TTY run may never
     # render these - but they distinguish "failed with no explanation" from
@@ -130,6 +137,7 @@ def _states_by_name(diags: Diagnostics) -> dict[str, frozenset[str]]:
         "no_output": diags.no_output,
         "failed": diags.failed,
         "unrouted": diags.unrouted,
+        "skipped": diags.skipped,
         "unresolved": diags.unresolved,
         "not_impl": diags.not_impl,
         "idle": diags.idle,
@@ -150,6 +158,7 @@ def parse_log(log_text: str) -> Diagnostics:
     no_output: set[str] = set()
     failed: set[str] = set()
     unrouted: set[str] = set()
+    skipped: set[str] = set()
     tick_ok: set[str] = set()
     tick_fail: set[str] = set()
 
@@ -187,6 +196,16 @@ def parse_log(log_text: str) -> Diagnostics:
     for m in re.finditer(r'"msg": "Skipping \d+ missing tool\(s\): ([^"]+)"', log_text):
         unresolved.update(t.strip() for t in m.group(1).split(","))
 
+    # Dropped by --skip-tools. Kept apart from the "missing" case above: this
+    # one is the operator's choice, not a resolution failure. Before jmo.py
+    # logged it at all, a skipped tool appeared in no stream and no artifact -
+    # NEVER MENTIONED, the same shape as the silently filtered nuclei/lynis.
+    for m in re.finditer(
+        r'"msg": "Skipping \d+ tool\(s\) at user request \(--skip-tools\): ([^"]+)"',
+        log_text,
+    ):
+        skipped.update(t.strip() for t in m.group(1).split(","))
+
     for m in re.finditer(
         r"no repository implementation\): (.+?)(?:\"|$)", log_text, re.MULTILINE
     ):
@@ -215,6 +234,7 @@ def parse_log(log_text: str) -> Diagnostics:
         no_output=frozenset(no_output),
         failed=frozenset(failed),
         unrouted=frozenset(unrouted),
+        skipped=frozenset(skipped),
         tick_ok=frozenset(tick_ok),
         tick_fail=frozenset(tick_fail),
     )
@@ -306,6 +326,7 @@ def reconcile(
         | diags.idle
         | diags.failed
         | diags.unrouted
+        | diags.skipped
         | diags.no_output
     )
     result.stray_reported = sorted(reported - set(declared))

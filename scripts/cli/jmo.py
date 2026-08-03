@@ -87,7 +87,27 @@ def _effective_scan_settings(args) -> dict[str, Any]:
     # Handle --skip-tools flag to exclude specific tools
     skip_tools = getattr(args, "skip_tools", None) or []
     if skip_tools and tools:
+        dropped = [t for t in tools if t in skip_tools]
         tools = [t for t in tools if t not in skip_tools]
+        if dropped:
+            # Say which tools were dropped. Filtering silently is how `nuclei`
+            # and `lynis` came to appear in no stream and no artifact at all -
+            # a tool declared by the profile and then absent everywhere reads
+            # as "it ran and found nothing" to anyone reading the results.
+            # Verified with the accounting reconciler: skipping a tool without
+            # this line produces `NEVER MENTIONED` and a FAIL verdict.
+            # "scripts.cli.jmo", not __name__: this module is normally entered
+            # as `python -m scripts.cli.jmo`, where __name__ is "__main__". A
+            # __main__ logger is not a child of "scripts", so it never receives
+            # the handler configure_scan_logging() installs and falls back to
+            # logging.lastResort - pinned at WARNING, which silently drops this
+            # INFO record. Measured: the line was absent from a real scan's
+            # stderr while firing correctly under a direct import.
+            logging.getLogger("scripts.cli.jmo").info(
+                "Skipping %d tool(s) at user request (--skip-tools): %s",
+                len(dropped),
+                ", ".join(sorted(dropped)),
+            )
 
     return {
         "tools": tools,
