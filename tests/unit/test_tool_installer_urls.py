@@ -182,8 +182,14 @@ class TestBinaryURLPatterns:
         )
 
     def test_shellcheck_url_x86_64(self):
-        """Test shellcheck URL for x86_64 Linux (lowercase, dots)."""
-        url = BINARY_URLS["shellcheck"].format(
+        """Test shellcheck URL for x86_64 Linux (lowercase, dots).
+
+        `shellcheck` became a per-platform dict: the `{os_lower}.{arch_aarch}`
+        scheme has no Windows asset (verified against the upstream release), so
+        the generic template 404'd there. Windows now has its own entry; this
+        exercises the `default` branch that all other platforms use.
+        """
+        url = BINARY_URLS["shellcheck"]["default"].format(
             version="0.10.0",
             os="Linux",
             os_lower="linux",
@@ -286,7 +292,18 @@ class TestBinaryURLPatterns:
         )
 
     def test_trufflehog_url_windows(self):
-        """Test trufflehog URL for Windows (.zip format)."""
+        """Test trufflehog URL for Windows (.tar.gz, same as every platform).
+
+        Previously asserted `.zip`, matching a stale "Windows uses .zip" comment
+        in install_config.py. Measured against upstream v3.95.9:
+
+            trufflehog_3.95.9_windows_amd64.zip     -> 404
+            trufflehog_3.95.9_windows_amd64.tar.gz  -> 200
+
+        So the installer requested an asset that does not exist and trufflehog
+        could not be installed on Windows at all. Extraction dispatches on file
+        extension (binary_installer.py), not platform, so .tar.gz is handled.
+        """
         url = BINARY_URLS["trufflehog"]["windows"].format(
             version="3.88.0",
             os="Windows",
@@ -299,7 +316,7 @@ class TestBinaryURLPatterns:
         )
         assert url == (
             "https://github.com/trufflesecurity/trufflehog/releases/download/v3.88.0/"
-            "trufflehog_3.88.0_windows_amd64.zip"
+            "trufflehog_3.88.0_windows_amd64.tar.gz"
         )
 
     def test_horusec_url_windows(self):

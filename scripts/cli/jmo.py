@@ -41,7 +41,7 @@ from scripts.core.unicode_utils import (
 logger = logging.getLogger(__name__)
 
 # Version (from pyproject.toml)
-__version__ = "1.0.7"
+__version__ = "1.0.8"
 
 
 def _merge_dict(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
@@ -87,7 +87,27 @@ def _effective_scan_settings(args) -> dict[str, Any]:
     # Handle --skip-tools flag to exclude specific tools
     skip_tools = getattr(args, "skip_tools", None) or []
     if skip_tools and tools:
+        dropped = [t for t in tools if t in skip_tools]
         tools = [t for t in tools if t not in skip_tools]
+        if dropped:
+            # Say which tools were dropped. Filtering silently is how `nuclei`
+            # and `lynis` came to appear in no stream and no artifact at all -
+            # a tool declared by the profile and then absent everywhere reads
+            # as "it ran and found nothing" to anyone reading the results.
+            # Verified with the accounting reconciler: skipping a tool without
+            # this line produces `NEVER MENTIONED` and a FAIL verdict.
+            # "scripts.cli.jmo", not __name__: this module is normally entered
+            # as `python -m scripts.cli.jmo`, where __name__ is "__main__". A
+            # __main__ logger is not a child of "scripts", so it never receives
+            # the handler configure_scan_logging() installs and falls back to
+            # logging.lastResort - pinned at WARNING, which silently drops this
+            # INFO record. Measured: the line was absent from a real scan's
+            # stderr while firing correctly under a direct import.
+            logging.getLogger("scripts.cli.jmo").info(
+                "Skipping %d tool(s) at user request (--skip-tools): %s",
+                len(dropped),
+                ", ".join(sorted(dropped)),
+            )
 
     return {
         "tools": tools,
@@ -737,6 +757,11 @@ Examples:
         default=4,
         metavar="N",
         help="Number of parallel installation jobs (default: 4, max: 8)",
+    )
+    install_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Reinstall even if already present (repairs an incomplete install)",
     )
 
     # UPDATE
@@ -2051,7 +2076,9 @@ def _check_scan_tools(args, requested_tools: list[str]) -> tuple[list[str], list
     try:
         from scripts.cli.tool_manager import get_missing_tools_for_scan
 
-        available, missing_statuses = get_missing_tools_for_scan(requested_tools)
+        available, missing_statuses = get_missing_tools_for_scan(
+            requested_tools, manager=getattr(args, "_startup_tool_manager", None)
+        )
 
         if not missing_statuses:
             # All tools available
@@ -2096,12 +2123,34 @@ def _check_scan_tools(args, requested_tools: list[str]) -> tuple[list[str], list
         while True:
             try:
                 choice = input("\nChoice [2]: ").strip() or "2"
-            except (EOFError, KeyboardInterrupt):
+            except EOFError:
+                # Nobody is there to answer. That is the same situation as a
+                # non-tty, so it takes the same branch: proceed with what is
+                # available - which is also the default this prompt advertises.
+                #
+                # `sys.stdin.isatty()` above does not catch this: under Git Bash
+                # on Windows, and under any launcher that inherits a console but
+                # leaves stdin empty, it returns True while stdin is already at
+                # EOF. Returning `[]` here made a detached `jmo scan` cancel
+                # itself, writing no results directory and nothing to stderr.
+                # `tool_commands.py` reached the same conclusion for the install
+                # prompt; the two paths must not disagree about what EOF means.
+                print("\nNo input available - continuing with available tools.")
+                return available, missing_names
+            except KeyboardInterrupt:
+                # A person deciding to stop, unlike EOF which is the absence of
+                # a person. Cancelling is what they asked for.
                 return [], missing_names
 
             if choice == "1":
-                # Install missing tools
-                return _install_and_retry(missing_statuses, available)
+                # Install missing tools. Anything installed here invalidates the
+                # memoised status the shared ToolManager is holding - that is
+                # the one moment in a run when what is on disk actually changes.
+                result = _install_and_retry(missing_statuses, available)
+                startup_tm = getattr(args, "_startup_tool_manager", None)
+                if startup_tm is not None:
+                    startup_tm.invalidate_status_cache()
+                return result
             elif choice == "2":
                 return available, missing_names
             elif choice == "3":
@@ -2175,12 +2224,19 @@ def _install_and_retry(
         return available, [s.name for s in missing_statuses]
 
 
-def _warn_critical_updates() -> None:
+def _warn_critical_updates(tools: list[str] | None = None, manager=None) -> None:
     """
     Show non-blocking warning if critical tools have updates.
 
     This is called at the start of scans to remind users about important updates.
     It does not block execution, just prints a warning.
+
+    Args:
+        tools: Restrict the check to these tools. A scan can only be affected by
+            a tool it actually runs, and every tool inspected costs a
+            `--version` subprocess - unrestricted, this probes the whole
+            registry (32 tools measured, including `ruff` and `shfmt`, for a
+            one-tool scan).
     """
     # Skip in Docker (tools bundled in image)
     if os.environ.get("DOCKER_CONTAINER"):
@@ -2189,8 +2245,9 @@ def _warn_critical_updates() -> None:
     try:
         from scripts.cli.tool_manager import ToolManager
 
-        manager = ToolManager()
-        critical_outdated = manager.get_critical_outdated()
+        if manager is None:
+            manager = ToolManager()
+        critical_outdated = manager.get_critical_outdated(restrict_to=tools)
 
         if critical_outdated:
             _safe_print("\n" + "=" * 60)
@@ -2792,9 +2849,6 @@ def cmd_scan(args) -> int:
 
     clear_tool_warnings()
 
-    # Check for critical tool updates (non-blocking warning)
-    _warn_critical_updates()
-
     # Check for first-run email prompt (non-blocking)
     if _check_first_run():
         _collect_email_opt_in(args)
@@ -2804,6 +2858,28 @@ def cmd_scan(args) -> int:
     cfg = load_config(args.config)
     tools = eff["tools"]
     results_dir = Path(args.results_dir)
+
+    # One ToolManager for the whole startup path. It memoises check_tool, and
+    # startup asks the same questions three times (this warning, the
+    # missing-tool pre-flight in _check_scan_tools, and the summary behind the
+    # "Starting scan with X/Y" line). Sharing the instance is what turns that
+    # into one sweep; separate instances each pay the full cost.
+    _startup_tm = None
+    try:
+        from scripts.cli.tool_manager import ToolManager
+
+        _startup_tm = ToolManager()
+    except ImportError:
+        pass
+    args._startup_tool_manager = _startup_tm
+
+    # Check for critical tool updates (non-blocking warning).
+    #
+    # Deliberately after `tools` is resolved: this used to run first and, with
+    # nothing to scope it, probed every tool in the registry - 32 `--version`
+    # subprocesses for a scan that requested one. A scan can only be affected by
+    # a tool it actually runs.
+    _warn_critical_updates(tools, manager=_startup_tm)
 
     # Security: Validate tool names to prevent command injection
     import re
@@ -3003,32 +3079,32 @@ def cmd_scan(args) -> int:
         and sys.stderr.isatty()
     )
 
-    # Log scan start message with context about tools being used
-    # Use ToolStatusSummary for consistent counts with wizard display
-    profile_name = getattr(args, "profile_name", None) or cfg.default_profile
-    try:
-        from scripts.cli.tool_manager import ToolManager
-
-        tm = ToolManager()
-        tool_summary = tm.get_tool_summary(profile_name)  # type: ignore[arg-type]
-        platform_applicable = tool_summary.platform_applicable
-    except (ImportError, OSError, ValueError, KeyError, AttributeError):
-        platform_applicable = total_tools  # Fallback to actual tool count
-
+    # Log scan start message with context about tools being used.
+    #
+    # The denominator is what was asked for, so the arithmetic always closes:
+    # `will run` + `skipped` == `requested`. It previously reported
+    # `platform_applicable`, producing lines like "22/23 tools ... (6 skipped)"
+    # on deep - where 22 + 6 = 28, not 23 - which no reader could reconcile.
+    # Using the profile's declared count instead would be equally wrong whenever
+    # `--tools` narrows the run.
     skipped_count = len(missing_tools) if missing_tools else 0
+    requested_total = total_tools + skipped_count
     if skipped_count > 0:
-        # Provide context about skipped tools with consistent denominator
+        # Name every skipped tool. Truncating to three hides which findings are
+        # absent, and the reader has no other way to recover the list.
         _log(
             args,
             "INFO",
-            f"Starting scan with {total_tools}/{platform_applicable} tools for {total_targets} target(s) "
-            f"({skipped_count} skipped: {', '.join(missing_tools[:3])}{'...' if skipped_count > 3 else ''})",
+            f"Starting scan with {total_tools} of {requested_total} requested tools "
+            f"for {total_targets} target(s) "
+            f"({skipped_count} skipped: {', '.join(missing_tools)})",
         )
     else:
         _log(
             args,
             "INFO",
-            f"Starting scan with {total_tools}/{platform_applicable} tools for {total_targets} target(s)...",
+            f"Starting scan with {total_tools} of {requested_total} requested tools "
+            f"for {total_targets} target(s)...",
         )
 
     if use_rich_progress:
@@ -3698,6 +3774,12 @@ def main():
     if not hasattr(args, "cmd"):
         return 0
 
+    # Route the scan path's stdlib loggers through the same stream and format
+    # as _log(). Until this existed they fell to logging.lastResort, which is
+    # pinned at WARNING with no formatter - so `--log-level DEBUG` could not
+    # reach them and their output was bare among otherwise-JSON lines.
+    configure_scan_logging(args)
+
     # Route to appropriate command handler
     if args.cmd == "wizard":
         return cmd_wizard(args)
@@ -3784,6 +3866,142 @@ def _log(args, level: str, message: str) -> None:
         "msg": message,
     }
     sys.stderr.write(json.dumps(rec) + "\n")
+
+
+class _ScanLogFormatter(logging.Formatter):
+    """Render stdlib records the way `_log()` renders its own.
+
+    Two streams describing one scan must not look different: `_log()` emits
+    JSON, and without this the stdlib records went out through Python's
+    `lastResort` handler, which has no formatter at all - so "its findings are
+    MISSING from this scan" arrived as a bare line among JSON.
+    """
+
+    def __init__(self, human: bool) -> None:
+        super().__init__()
+        self.human = human
+
+    def format(self, record: logging.LogRecord) -> str:
+        level = "WARN" if record.levelname == "WARNING" else record.levelname
+        message = record.getMessage()
+        if self.human:
+            color = {
+                "DEBUG": "\x1b[36m",
+                "INFO": "\x1b[32m",
+                "WARN": "\x1b[33m",
+                "ERROR": "\x1b[31m",
+            }.get(level, "")
+            ts = datetime.now(UTC).strftime("%H:%M:%S")
+            return f"{color}{level:5}\x1b[0m {ts} {message}"
+        return json.dumps(
+            {
+                "ts": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+                "level": level,
+                "msg": message,
+            }
+        )
+
+
+_SCAN_LOG_HANDLER: logging.Handler | None = None
+_SCAN_LOG_PRIOR_STATE: tuple[bool, int] | None = None
+
+
+def configure_scan_logging(args) -> None:
+    """Make `--log-level` reach the loggers the scan actually uses.
+
+    `_log()` is jmo.py's own JSON logger and honours `--log-level`. Everything
+    under `scripts/core` and `scripts/cli/scan_jobs` uses stdlib `logging`,
+    which nothing configured - measured, root level WARNING with no handlers,
+    so `logging.lastResort` was in play. That made the scanner's `idle`
+    diagnostic ("implemented and installed, but this repository had nothing for
+    it to look at"), logged at DEBUG, unreachable at every flag setting - one
+    third of the three-state tool accounting could never be seen.
+
+    Attached to the `scripts` logger rather than the root logger on purpose: at
+    DEBUG the root logger would also surface every third-party library's
+    internals, burying the diagnostics this exists to reveal.
+
+    The default stays WARNING, which is what `lastResort` already imposed, so
+    normal runs are unchanged in verbosity - only in format, and in the fact
+    that DEBUG is now reachable at all.
+    """
+    global _SCAN_LOG_HANDLER, _SCAN_LOG_PRIOR_STATE
+
+    scripts_logger = logging.getLogger("scripts")
+    # Snapshot once, on the first configure, so repeated calls stay idempotent
+    # and `reset_scan_logging()` restores the *original* state rather than
+    # whatever the previous configure left behind.
+    if _SCAN_LOG_PRIOR_STATE is None:
+        _SCAN_LOG_PRIOR_STATE = (scripts_logger.propagate, scripts_logger.level)
+    if _SCAN_LOG_HANDLER is not None:
+        scripts_logger.removeHandler(_SCAN_LOG_HANDLER)
+        _SCAN_LOG_HANDLER = None
+
+    level_name = (getattr(args, "log_level", None) or "WARN").upper()
+    level = {
+        "DEBUG": logging.DEBUG,
+        "INFO": logging.INFO,
+        "WARN": logging.WARNING,
+        "WARNING": logging.WARNING,
+        "ERROR": logging.ERROR,
+    }.get(level_name, logging.WARNING)
+
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(_ScanLogFormatter(bool(getattr(args, "human_logs", False))))
+    handler.setLevel(level)
+
+    scripts_logger.setLevel(level)
+    scripts_logger.addHandler(handler)
+    # Stops a *configured* root logger printing every scan record a second
+    # time in its own format - `scripts/jmo_mcp/jmo_server.py` calls
+    # `logging.basicConfig()` at import, so that root is real, not theoretical.
+    #
+    # It is NOT about `logging.lastResort`, which an earlier version of this
+    # comment claimed: `Logger.callHandlers` only falls back to lastResort when
+    # it finds *zero* handlers in the whole chain, and the handler just added
+    # above guarantees it finds one. Measured, root unconfigured: 1 line with
+    # propagate either way.
+    #
+    # Because this mutates a process-global tree, it must be undoable - see
+    # `reset_scan_logging()`.
+    scripts_logger.propagate = False
+    _SCAN_LOG_HANDLER = handler
+
+
+def reset_scan_logging() -> None:
+    """Undo `configure_scan_logging()`, restoring the `scripts` logger.
+
+    Both mutations above are process-global and neither is self-limiting, so
+    in a long-lived process - a pytest session, or the MCP server, which both
+    scans and logs - the last scan's settings apply to everything afterwards.
+
+    The level is the one that bites hardest, and it is worth naming precisely
+    because it is easy to misattribute to `propagate`. `logger.info()` first
+    asks `isEnabledFor(INFO)`, which resolves the *effective* level by walking
+    up to the nearest ancestor carrying an explicit one. Once `scripts` holds
+    an explicit WARNING, every `scripts.*` child discards INFO records **at
+    the source**, before any handler is consulted - and `caplog.at_level(INFO)`
+    cannot help, because it raises the level of the *root* logger, which the
+    walk stops short of.
+
+    Measured consequence: `caplog.text` is `''` for every later INFO assertion
+    against a `scripts.*` logger, while WARNING and ERROR assertions still
+    pass. That asymmetry is the signature - six INFO-asserting
+    `test_policy_reporter` tests failed in CI while the two WARNING/ERROR ones
+    beside them passed, and the whole set was written off as load flakes
+    because each passes in isolation.
+    """
+    global _SCAN_LOG_HANDLER, _SCAN_LOG_PRIOR_STATE
+
+    scripts_logger = logging.getLogger("scripts")
+    if _SCAN_LOG_HANDLER is not None:
+        scripts_logger.removeHandler(_SCAN_LOG_HANDLER)
+        _SCAN_LOG_HANDLER = None
+    if _SCAN_LOG_PRIOR_STATE is not None:
+        propagate, level = _SCAN_LOG_PRIOR_STATE
+        scripts_logger.propagate = propagate
+        scripts_logger.setLevel(level)
+        _SCAN_LOG_PRIOR_STATE = None
 
 
 if __name__ == "__main__":

@@ -532,8 +532,33 @@ class TestGetDestinationPath:
         dest = installer._get_destination_path("trivy", "http://example.com/trivy.exe")
         assert dest == tmp_path / "trivy.exe"
 
-    def test_windows_non_exe(self, tmp_path: Path):
-        """Test Windows destination without .exe when URL is not .exe."""
+    def test_windows_binary_from_archive_still_gets_exe(self, tmp_path: Path):
+        """A Windows executable needs .exe regardless of how it was packaged.
+
+        This previously asserted the opposite -- that a binary extracted from a
+        .tar.gz was installed *without* an extension, because that is what the
+        `url.endswith(".exe")` branch happened to do. That is a change-detector:
+        it restated the implementation's condition rather than any requirement,
+        and it defended a real defect.
+
+        Measured consequence. `~/.jmo/bin/` after `jmo tools install --profile
+        fast` on Windows:
+
+            hadolint.exe, opa.exe          <- URL ended in .exe
+            nuclei, shellcheck, syft,      <- extracted from an archive
+            trivy, trufflehog
+
+        An extension-less file is not resolvable through Windows' exec/PATH
+        lookup. trufflehog re-execs itself as a child process, so it fails that
+        lookup, **never scans**, writes nothing and exits 0. Same binary, same
+        input, only the filename differs:
+
+            trufflehog.exe  -> 2622 bytes of findings (private key detected)
+            trufflehog      ->    0 bytes, exit 0, no "finished scanning" line
+
+        The scan then reported trufflehog successful and the `zero-secrets`
+        policy PASSED. The secrets scanner was inert, not merely degraded.
+        """
         installer = make_installer(install_dir=tmp_path)
         installer._platform = PlatformInfo(
             os_name="Windows",
@@ -548,7 +573,25 @@ class TestGetDestinationPath:
         dest = installer._get_destination_path(
             "trivy", "http://example.com/trivy.tar.gz"
         )
-        assert dest == tmp_path / "trivy"
+        assert dest == tmp_path / "trivy.exe"
+
+    def test_windows_does_not_double_suffix(self, tmp_path: Path):
+        """A tool already named *.exe must not become *.exe.exe."""
+        installer = make_installer(install_dir=tmp_path)
+        installer._platform = PlatformInfo(
+            os_name="Windows",
+            os_lower="windows",
+            arch="x86_64",
+            arch_amd="amd64",
+            arch_aarch="x86_64",
+            trivy_arch="64bit",
+            rust_arch="x86_64-pc-windows-msvc",
+            platform_key="windows",
+        )
+        dest = installer._get_destination_path(
+            "hadolint.exe", "http://example.com/hadolint.exe"
+        )
+        assert dest == tmp_path / "hadolint.exe"
 
 
 # ========== Category 9: _extract_and_find_binary() ==========

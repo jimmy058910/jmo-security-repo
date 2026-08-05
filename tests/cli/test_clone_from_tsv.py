@@ -70,6 +70,54 @@ class TestParseTsv:
         assert len(urls) == 1
         assert urls[0] == "https://github.com/owner/repo1.git"
 
+    def test_parse_single_column_file(self, tmp_path: Path) -> None:
+        """A one-column file must parse -- it is the documented example.
+
+        `csv.Sniffer` raises `_csv.Error: Could not determine delimiter` when a
+        file contains no delimiter, which a single column necessarily does not.
+        Measured before the fix, with the exact file below: exit 1 and an
+        unhandled traceback out of `parse_tsv`. Two columns: exit 0.
+
+        Every other test in this class builds its fixture with `csv.writer` and
+        incidentally includes a second column ("stars", "description"), because
+        that is the shape of a real GitHub export. So `parse_tsv` had full line
+        coverage while the *documented* minimal input crashed:
+
+            docs/examples/scan_from_tsv.md
+                full_name
+                example/project-a
+                example/project-b
+
+        Written without csv.writer on purpose -- the point is the exact bytes a
+        user gets by copying the documentation, not a round-trip through the
+        same library that reads it back.
+        """
+        tsv = tmp_path / "repos.tsv"
+        tsv.write_bytes(b"full_name\nexample/project-a\nexample/project-b\n")
+
+        urls = parse_tsv(tsv, max_count=None)
+
+        assert urls == [
+            "https://github.com/example/project-a.git",
+            "https://github.com/example/project-b.git",
+        ]
+
+    def test_parse_single_column_url_file(self, tmp_path: Path) -> None:
+        """The other documented single-column form: a bare `url` column."""
+        tsv = tmp_path / "repos.tsv"
+        tsv.write_bytes(
+            b"url\n"
+            b"https://github.com/example/project-a.git\n"
+            b"https://github.com/example/project-b\n"
+        )
+
+        urls = parse_tsv(tsv, max_count=None)
+
+        assert urls == [
+            "https://github.com/example/project-a.git",
+            "https://github.com/example/project-b",
+        ]
+
     def test_parse_with_max_count(self, tmp_path: Path) -> None:
         """Test parsing TSV with max_count limit."""
         tsv = tmp_path / "repos.tsv"

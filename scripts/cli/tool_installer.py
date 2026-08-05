@@ -37,6 +37,7 @@ from rich.progress import (
 )
 
 from scripts.cli.installers.models import InstallProgress, InstallResult
+from scripts.cli.installers.pip_installer import pip_install_command
 from scripts.cli.tool_manager import ToolManager
 from scripts.cli.ui.progress import ParallelInstallProgress
 from scripts.core.archive_security import (
@@ -53,10 +54,12 @@ from scripts.core.install_config import (
     INSTALL_SCRIPTS,
     ISOLATED_TOOLS,
     SPECIAL_INSTALL,
+    YARA_RULES_BUNDLE,
 )
 from scripts.core.paths import (
     get_isolated_tool_path,
     get_isolated_venv_path,
+    get_yara_rules_dir,
 )
 from scripts.core.secure_temp import secure_temp_dir
 from scripts.core.tool_registry import (
@@ -460,7 +463,9 @@ class ToolInstaller:
         # Check for special installation requirements
         if tool_name in SPECIAL_INSTALL:
             result = self._install_special(tool_name, tool_info, start_time)
-            return self._validate_installed_version(result, tool_info.version)
+            return self._post_install(
+                tool_name, self._validate_installed_version(result, tool_info.version)
+            )
 
         # Try installation methods in priority order
         methods = [method] if method else INSTALL_PRIORITIES.get(self.platform, [])
@@ -474,7 +479,10 @@ class ToolInstaller:
             )
             if result.success:
                 # Validate version after successful install
-                return self._validate_installed_version(result, tool_info.version)
+                return self._post_install(
+                    tool_name,
+                    self._validate_installed_version(result, tool_info.version),
+                )
             elif result.message and "not available" not in result.message:
                 # Method was attempted but failed
                 attempted_methods.append(install_method)
@@ -1203,7 +1211,7 @@ class ToolInstaller:
             progress.on_start(tool_name)
 
         # Try batch install
-        cmd = [sys.executable, "-m", "pip", "install", "--quiet"] + packages
+        cmd = pip_install_command(packages)
 
         try:
             result = subprocess.run(
@@ -1533,7 +1541,7 @@ class ToolInstaller:
         try:
             # Pin to specific version from versions.yaml for reproducibility
             pinned_package = f"{package}=={tool_info.version}"
-            cmd = [sys.executable, "-m", "pip", "install", "--quiet", pinned_package]
+            cmd = pip_install_command([pinned_package])
             result = subprocess.run(
                 cmd,
                 capture_output=True,
@@ -1987,8 +1995,13 @@ class ToolInstaller:
                     )
 
                 # Move to install directory
-                # On Windows, ensure .exe extension for executable binaries
-                if self.platform == "windows" and url.endswith(".exe"):
+                # On Windows, ensure .exe extension for executable binaries.
+                # Keyed on the destination platform, NOT on how upstream
+                # packaged the download - see BinaryInstaller for the measured
+                # consequence (trufflehog silently never scanning).
+                if self.platform == "windows" and not tool_name.lower().endswith(
+                    ".exe"
+                ):
                     dest = self.install_dir / f"{tool_name}.exe"
                 else:
                     dest = self.install_dir / tool_name
@@ -2297,6 +2310,115 @@ class ToolInstaller:
                 message=str(e),
                 duration_seconds=time.time() - start_time,
             )
+
+    def _post_install(self, tool_name: str, result: InstallResult) -> InstallResult:
+        """Fetch companion data a tool needs but its package does not carry.
+
+        Only yara needs this today. Its wheel is the libyara engine and no
+        detection content whatsoever, so an engine-only install matches nothing
+        and produces exactly the output of a clean repository.
+        """
+        if tool_name == "yara" and result.success:
+            return self._install_yara_rules(result)
+        return result
+
+    def _install_yara_rules(self, result: InstallResult) -> InstallResult:
+        """Install the pinned rule bundle into ~/.jmo/yara-rules/.
+
+        Reports failure when the rules do not land, even though the engine
+        installed. "yara is installed" has to mean "yara can detect something";
+        an engine with no rules scans every file, matches nothing, and returns a
+        clean result indistinguishable from a genuinely clean tree. That is the
+        precise failure mode this whole change exists to remove, so it must not
+        be reintroduced at the install layer.
+        """
+        rules_dir = get_yara_rules_dir()
+        url = YARA_RULES_BUNDLE["url"]
+
+        def failed(message: str) -> InstallResult:
+            return InstallResult(
+                tool_name="yara",
+                success=False,
+                method=result.method,
+                message=(
+                    f"engine installed, but its rules did not: {message}. "
+                    f"yara cannot detect anything without them. Retry, or point "
+                    f"per_tool.yara.rules_path in jmo.yml at your own rule set."
+                ),
+                version_installed=result.version_installed,
+                duration_seconds=result.duration_seconds,
+            )
+
+        try:
+            with self._windows_safe_tempdir() as tmppath:
+                archive = tmppath / "yara-rules.tar.gz"
+                download_cmd = self._get_download_command(url, archive)
+                if not download_cmd:
+                    return failed("no download tool available (curl/wget)")
+
+                proc = subprocess.run(
+                    download_cmd, capture_output=True, text=True, timeout=300
+                )
+                if proc.returncode != 0:
+                    return failed(
+                        f"download failed: "
+                        f"{sanitize_subprocess_output(proc.stderr, max_length=200)}"
+                    )
+
+                extract_dir = tmppath / "extracted"
+                extract_dir.mkdir()
+                with tarfile.open(archive, "r:gz") as tar:
+                    safe_tar_extract(tar, extract_dir)
+
+                # GitHub archives nest everything under <repo>-<sha>/; the rules
+                # live in a known subdirectory of that. Promoting it keeps the
+                # namespace category-relative (`ransomware/Foo`) instead of
+                # carrying the SHA into every finding's tags.
+                roots = [p for p in extract_dir.iterdir() if p.is_dir()]
+                if len(roots) != 1:
+                    return failed(f"unexpected archive layout ({len(roots)} roots)")
+                src = roots[0] / YARA_RULES_BUNDLE["subdir"]
+                if not src.is_dir():
+                    return failed(
+                        f"'{YARA_RULES_BUNDLE['subdir']}' missing from archive"
+                    )
+
+                if rules_dir.exists():
+                    shutil.rmtree(rules_dir)
+                rules_dir.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(src), str(rules_dir))
+
+                # The licence has to travel with the rules. MIT requires the
+                # notice to accompany copies, and taking only the rules subtree
+                # leaves it behind - the installed content would carry no
+                # statement of what it is or who wrote it.
+                for name in ("LICENSE", "LICENSE.md", "LICENSE.txt"):
+                    licence = roots[0] / name
+                    if licence.is_file():
+                        shutil.copy2(str(licence), str(rules_dir / name))
+                        break
+        except (
+            OSError,
+            tarfile.TarError,
+            ValueError,
+            subprocess.SubprocessError,
+        ) as exc:
+            return failed(f"{type(exc).__name__}: {exc}")
+
+        count = sum(1 for _ in rules_dir.rglob("*.yar")) + sum(
+            1 for _ in rules_dir.rglob("*.yara")
+        )
+        if count == 0:
+            return failed("bundle contained no .yar/.yara files")
+
+        return InstallResult(
+            tool_name="yara",
+            success=True,
+            method=result.method,
+            message=f"{result.message} + {count} rules ({YARA_RULES_BUNDLE['license']})",
+            version_installed=result.version_installed,
+            duration_seconds=result.duration_seconds,
+        )
 
     def _install_extract_app(
         self, tool_name: str, tool_info: ToolInfo, start_time: float
@@ -2627,7 +2749,9 @@ def print_install_progress(
             print(f"  {icon} {result.tool_name}{version} - {result.method}")
         else:
             icon = colorize("[FAIL]", "red")
-            print(f"  {icon} {result.tool_name} - {result.message[:50]}")
+            # Not truncated: failure messages carry the asset URL, which is the
+            # only way to tell a version mismatch from a bad platform template.
+            print(f"  {icon} {result.tool_name} - {result.message}")
 
     print("-" * 50)
     summary_parts = [f"Total: {progress.total}"]

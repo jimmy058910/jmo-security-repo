@@ -130,10 +130,38 @@ def _load_checkov_internal(path: str | Path) -> list[dict[str, Any]]:
     Returns:
         List of dicts (converted to Finding objects by parse() method)
     """
-    data = safe_load_json_file(path, default=None)
-    if not isinstance(data, dict):
+    raw = safe_load_json_file(path, default=None)
+
+    # checkov emits a LIST of per-framework reports whenever it detects more
+    # than one framework, and a bare dict when it detects exactly one. The list
+    # form is the normal case for any real repository: terragoat produces
+    # `[terraform, dockerfile, secrets, github_actions]`.
+    #
+    # This used to be `if not isinstance(data, dict): return []`, so every
+    # multi-framework scan was discarded in silence. Measured on
+    # bridgecrewio/terragoat: 3.3 MB of checkov output holding 477 failed checks
+    # (terraform 467, dockerfile 2, secrets 5, github_actions 3) normalized to
+    # **0** findings. checkov ran, wrote its output, and reported success.
+    if isinstance(raw, dict):
+        reports = [raw]
+    elif isinstance(raw, list):
+        reports = [r for r in raw if isinstance(r, dict)]
+    else:
         return []
 
+    out: list[dict[str, Any]] = []
+    for report in reports:
+        out.extend(_parse_checkov_report(report))
+    return out
+
+
+def _parse_checkov_report(data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Parse one checkov framework report into finding dicts.
+
+    A report is one entry of checkov's output list, or the whole document when
+    checkov detected a single framework. Each carries its own ``check_type``,
+    which drives CI/CD tagging.
+    """
     out: list[dict[str, Any]] = []
 
     # Extract check_type for CI/CD detection (v2.0.0)

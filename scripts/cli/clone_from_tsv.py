@@ -57,7 +57,10 @@ def run(
             cmd,
             cwd=str(cwd) if cwd else None,
             capture_output=True,
-            text=True,
+            # git clone/fetch of arbitrary public repos echoes remote ref names
+            # and commit subjects, which are UTF-8 and frequently non-ASCII.
+            encoding="utf-8",
+            errors="replace",
             check=False,
         )
         rc = cp.returncode
@@ -208,12 +211,24 @@ def parse_tsv(tsv_path: Path, max_count: int | None) -> list[str]:
     """
     urls: list[str] = []
     with tsv_path.open("r", encoding="utf-8") as f:
-        # Sniff delimiter; default to tab
+        # Sniff delimiter; default to tab.
+        #
+        # Sniffer raises `_csv.Error: Could not determine delimiter` on a
+        # single-column file, because such a file contains no delimiter to find.
+        # That is the *documented* minimal example in
+        # docs/examples/scan_from_tsv.md -- a `full_name` header followed by one
+        # `owner/repo` per line -- so following the docs produced an unhandled
+        # traceback and exit 1. Tab is the intended default (this file is a TSV
+        # reader and the empty-sample branch below already says so); a failed
+        # sniff means "no delimiter present", which a single column satisfies.
         sample = f.read(4096)
         f.seek(0)
-        dialect = (
-            csv.Sniffer().sniff(sample, delimiters="\t,;") if sample else csv.excel_tab
-        )
+        dialect: type[csv.Dialect] | csv.Dialect = csv.excel_tab
+        if sample:
+            try:
+                dialect = csv.Sniffer().sniff(sample, delimiters="\t,;")
+            except csv.Error:
+                dialect = csv.excel_tab
         reader = csv.DictReader(f, dialect=dialect)
         cols = [c.strip().lower() for c in (reader.fieldnames or [])]
         if not cols:

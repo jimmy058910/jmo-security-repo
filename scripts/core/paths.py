@@ -18,6 +18,23 @@ from scripts.core.install_config import ISOLATED_TOOLS
 logger = logging.getLogger(__name__)
 
 
+def get_yara_rules_dir() -> Path:
+    """Get the directory holding the installed YARA rule set.
+
+    Defined once because the installer writes here and the scanner reads here;
+    two literals would drift, and a rules path that silently points at nothing
+    makes yara report a clean scan of an unexamined tree.
+
+    The previous default was the hardcoded `/usr/share/yara/rules`, which does
+    not exist on Windows *or* on stock Ubuntu - measured absent on both - so
+    yara could never have found rules on either platform.
+
+    Returns:
+        Path to the rules directory (~/.jmo/yara-rules/)
+    """
+    return Path.home() / ".jmo" / "yara-rules"
+
+
 def get_isolated_venv_path(tool_name: str) -> Path:
     """Get the path to an isolated venv for a tool.
 

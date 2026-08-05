@@ -4,6 +4,32 @@ All notable changes to JMo Security will be documented in this file.
 
 ## [Unreleased]
 
+## [1.0.8] - 2026-08-05
+
+Three tools that had never produced a finding in any release now work: **yara**, **prowler** and **dependency-check**. None was broken in one place — each was broken at roughly four independent layers simultaneously, which is why each had survived every release. The same investigation closed several ways a scan could report success while producing less than it found.
+
+The theme is unchanged from 1.0.7 and now has a guard: a scan must reconcile against its own artifacts, so a tool can no longer disappear between running and reporting.
+
+### Fixed
+
+- **`yara` now runs.** Four breakages were true at once. The installer fetched `yara-python` — a compiled extension with no console script — while the scanner built a command line for the native C CLI; no rules were shipped at all (the default `/usr/share/yara/rules` is absent on Windows and on stock Ubuntu); and the adapter parsed JSON from a CLI that has no JSON output. yara now runs through `scripts/core/yara_runner.py` against libyara, with a pinned MIT-licensed rules bundle (310 files) installed to `~/.jmo/yara-rules/`. `versions.yaml` also pinned `4.5.5`, which has never existed on PyPI, so `jmo tools install yara` had been failing outright.
+- **`prowler` now runs, and its output is read in the format it actually writes.** It was invoked with no provider subcommand, with an `--output-formats json` that is not one of the accepted values, and with a `--quiet` flag removed upstream (exit 2 — argparse's *usage error*, which is why widening the accepted return codes would have been the wrong fix). The adapter then parsed v3 NDJSON where 5.x writes an array of OCSF records: a measured 88 records containing 13 failures were read as **zero findings**.
+- **`dependency-check` now runs on Windows.** Tool resolution hardcoded the `.sh` launcher next to the `.bat` one, so Windows tried to execute a shell script and reported `[WinError 193]`, which reads like a corrupt download rather than the wrong file. `zap` had the identical bug and is fixed with it.
+- **`_get_clean_env` corrupted `PATH` on Windows**, joining entries with `:` instead of `;` and fusing the prepended directories into the first real entry — so `~/.jmo/bin` was not on the probe's `PATH` at all.
+- **`--allow-missing-tools` no longer reports a failed tool as a clean run.** A tool that resolved during pre-flight and then failed to execute was being stubbed and recorded as successful, in all five scan jobs. That path always indicates a defect, never a user choice, and is now a loud failure with the tool's stderr attached.
+- **A tool timeout now bounds something.** `subprocess.run(timeout=)` killed the direct child and then drained pipes unbounded, so a launcher that shells out (`dependency-check.bat` → `cmd.exe` → `java`) left the grandchild holding the pipe. Measured: a 1200s timeout still running at **38 minutes**, with orphaned processes outside the scan's tree. Timeouts now kill the process tree.
+- **`--skip-tools` no longer drops a tool without a trace.** Skipped tools are now reported in their own state, kept distinct from tools that failed to resolve — an operator's choice is not a resolution failure.
+- **`ToolRunner` now puts `~/.jmo/bin` on the child's `PATH`.** `prowler iac` shells out to `trivy`, which JMo installs there, so prowler failed *inside itself* and wrote nothing.
+- **`configure_scan_logging()` no longer changes the `scripts` logger permanently.** It set a level and disabled propagation process-globally and never restored either, so in any long-lived process the last scan's settings applied to everything afterwards.
+- **`cryptography` raised to `>=50.0.0`** for PYSEC-2026-3552.
+- **Documentation referenced two `jmo history` subcommands that do not exist** (`vacuum`, `compare`).
+
+### Added
+
+- **The scan now reconciles against its own artifacts, as a test.** Every tool a profile declares must land in exactly **one** accounted state — zero states is a silent omission, two is the scan's diagnostics disagreeing with themselves. The invariant is environment-independent (only the distribution moves with what is installed), so it runs in ordinary CI with no tools present. `scripts/dev/reconcile_scan_accounting.py` can be pointed at any results directory.
+- **A guard that the three hand-maintained version sites agree.** `pyproject.toml`, `scripts/cli/jmo.py` and `scripts/jmo_mcp/__init__.py` were bumped by hand with nothing checking they moved together.
+- **`jmo tools install --force`**, so a machine that already has a tool's engine can still acquire assets it is missing.
+
 ## [1.0.7] - 2026-07-30
 
 Two classes of silent failure are fixed in this release: a scan that could hang forever, and tools whose findings went missing while the scan reported success. Both affected the **default** (non-wizard) scan path, including CI and container runs. Windows users additionally get a `jmo` that no longer crashes on a console that isn't UTF-8.

@@ -103,7 +103,8 @@ class PolicyEngine:
             result = subprocess.run(
                 [self._opa_path, "version"],
                 capture_output=True,
-                text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=5,
             )
             if result.returncode != 0:
@@ -182,7 +183,12 @@ class PolicyEngine:
                     package_name,  # Use policy-specific package
                 ],
                 capture_output=True,
-                text=True,
+                # This is the evaluation that decides PASS/FAIL. Its input is
+                # the findings document, and OPA echoes matched values back as
+                # UTF-8 JSON -- i.e. scanned-repo bytes. A locale decode failure
+                # here silently corrupts a policy verdict.
+                encoding="utf-8",
+                errors="replace",
                 timeout=30,
             )
 
@@ -271,7 +277,10 @@ class PolicyEngine:
         result = subprocess.run(
             [self._opa_path, "check", str(policy_path)],  # type: ignore[list-item]
             capture_output=True,
-            text=True,
+            # OPA emits UTF-8 JSON (RFC 8259) and echoes matched finding values
+            # back, so its stdout carries scanned-repo bytes.
+            encoding="utf-8",
+            errors="replace",
             timeout=10,
         )
 
@@ -365,7 +374,8 @@ class PolicyEngine:
                     "data.jmo.policy.metadata",
                 ],
                 capture_output=True,
-                text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=10,
             )
 

@@ -16,7 +16,10 @@ Target Coverage: >= 85%
 import argparse
 import json
 import sys
+from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 # ========== Category 1: Colors Class ==========
 
@@ -1142,9 +1145,33 @@ class TestUninstallTools:
         assert len(errors) == 0
         mock_run.assert_called()
 
-    def test_uninstall_npm_tools(self):
-        """Test uninstalling npm tools."""
+    def test_uninstall_npm_tools(self, tmp_path, monkeypatch):
+        """Test uninstalling npm tools.
+
+        `Path.home()` is redirected. `_uninstall_tools` ends with
+
+            jmo_bin = Path.home() / ".jmo" / "bin"
+            shutil.rmtree(jmo_bin)
+
+        so without redirection this test **deleted the developer's real
+        installed security tools** and still passed. Verified by dropping a
+        sentinel file into `~/.jmo/bin` and running this test alone: it passed,
+        and the directory was gone.
+
+        Its sibling `test_uninstall_pip_tools` patches `shutil.rmtree` with the
+        comment "to avoid Windows file locking on ~/.jmo/bin/" - so the hazard
+        was known, fixed in one test, and missed in the adjacent one.
+
+        Redirecting home is preferred over patching `shutil.rmtree`: the real
+        deletion still runs and is asserted, just against a temporary tree, so
+        the test exercises the code path instead of stubbing it out.
+        """
         from scripts.cli.tool_commands import _uninstall_tools
+
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+        jmo_bin = tmp_path / ".jmo" / "bin"
+        jmo_bin.mkdir(parents=True)
+        (jmo_bin / "cdxgen").write_text("binary", encoding="utf-8")
 
         mock_tool = MagicMock()
         mock_tool.npm_package = "@cyclonedx/cdxgen"
@@ -1163,6 +1190,7 @@ class TestUninstallTools:
                 _uninstall_tools([("cdxgen", "npm")], errors)
 
         mock_run.assert_called()
+        assert not jmo_bin.exists(), "uninstall must remove the bin directory"
 
 
 class TestCmdToolsUninstall:
@@ -2914,6 +2942,26 @@ class TestGetInstalledToolsTypes:
 
 class TestUninstallToolsExecution:
     """Test _uninstall_tools execution paths."""
+
+    @pytest.fixture(autouse=True)
+    def _isolate_home(self, tmp_path, monkeypatch):
+        """Keep these tests away from the developer's real installation.
+
+        `_uninstall_tools` ends with
+        `shutil.rmtree(Path.home() / ".jmo" / "bin")`. Every test in this class
+        calls it, so without redirection the whole class deletes the real tool
+        directory - and passes while doing it. Verified by placing a sentinel in
+        `~/.jmo/bin` and running this class alone: green, and the directory gone.
+
+        Applied class-wide rather than per test so a test added later is covered
+        by construction.
+
+        `monkeypatch.setattr(Path, "home", ...)`, never
+        `monkeypatch.setenv("HOME", ...)` - the latter has no effect on
+        `Path.home()` on Windows (see
+        .claude/rules/testing.cross-platform.rules.md).
+        """
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
 
     def test_uninstall_tools_pip_partial_failure(self, capsys):
         """Test _uninstall_tools pip uninstall with partial failure."""

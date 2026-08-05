@@ -253,3 +253,110 @@ def test_checkov_metadata(tmp_path: Path):
     assert metadata.tool_name == "checkov"
     assert metadata.schema_version == "1.2.0"
     assert metadata.output_format == "json"
+
+
+def test_checkov_multi_framework_list_output(tmp_path: Path):
+    """checkov's LIST output form must be parsed, not silently dropped.
+
+    checkov emits a bare dict when it detects exactly one framework, and a
+    **list** of per-framework reports when it detects several. The list form is
+    the normal case for any real repository.
+
+    The adapter previously began `if not isinstance(data, dict): return []`, so
+    every multi-framework scan produced zero findings while checkov itself
+    reported success and wrote megabytes of output.
+
+    Measured on bridgecrewio/terragoat: 3.3 MB of checkov output holding 477
+    failed checks across `[terraform, dockerfile, secrets, github_actions]`
+    normalized to **0** findings. After the fix, 477.
+    """
+    adapter = CheckovAdapter()
+    payload = json.dumps(
+        [
+            {
+                "check_type": "terraform",
+                "checkov_version": "3.3.8",
+                "results": {
+                    "failed_checks": [
+                        {
+                            "check_id": "CKV_AWS_20",
+                            "check_name": "S3 Bucket has an ACL defined which allows public READ access.",
+                            "file_path": "/aws/s3.tf",
+                            "file_line_range": [1, 12],
+                            "severity": "HIGH",
+                        }
+                    ]
+                },
+            },
+            {
+                "check_type": "dockerfile",
+                "checkov_version": "3.3.8",
+                "results": {
+                    "failed_checks": [
+                        {
+                            "check_id": "CKV_DOCKER_2",
+                            "check_name": "Ensure that HEALTHCHECK instructions have been added",
+                            "file_path": "/Dockerfile",
+                            "file_line_range": [1, 5],
+                        }
+                    ]
+                },
+            },
+            {
+                "check_type": "github_actions",
+                "checkov_version": "3.3.8",
+                "results": {
+                    "failed_checks": [
+                        {
+                            "check_id": "CKV_GHA_1",
+                            "check_name": "Ensure ACTIONS_ALLOW_UNSECURE_COMMANDS is not set",
+                            "file_path": "/.github/workflows/ci.yml",
+                            "file_line_range": [3, 9],
+                        }
+                    ]
+                },
+            },
+        ]
+    )
+    p = write(tmp_path, "checkov.json", payload)
+
+    findings = adapter.parse(p)
+
+    assert len(findings) == 3, "every framework report must contribute findings"
+    rule_ids = {f.ruleId for f in findings}
+    assert rule_ids == {"CKV_AWS_20", "CKV_DOCKER_2", "CKV_GHA_1"}
+
+    # check_type drives CI/CD tagging, and it lives on each report rather than
+    # on the document - so tagging must be decided per report, not once.
+    by_rule = {f.ruleId: f for f in findings}
+    assert "cicd-security" in by_rule["CKV_GHA_1"].tags
+    assert "iac" in by_rule["CKV_AWS_20"].tags
+
+
+def test_checkov_list_with_non_dict_entries_is_tolerated(tmp_path: Path):
+    """A malformed entry must not discard the entries around it."""
+    adapter = CheckovAdapter()
+    payload = json.dumps(
+        [
+            "unexpected string",
+            {
+                "check_type": "terraform",
+                "results": {
+                    "failed_checks": [
+                        {
+                            "check_id": "CKV_AWS_1",
+                            "check_name": "Test check",
+                            "file_path": "/main.tf",
+                            "file_line_range": [1, 2],
+                        }
+                    ]
+                },
+            },
+        ]
+    )
+    p = write(tmp_path, "checkov.json", payload)
+
+    findings = adapter.parse(p)
+
+    assert len(findings) == 1
+    assert findings[0].ruleId == "CKV_AWS_1"

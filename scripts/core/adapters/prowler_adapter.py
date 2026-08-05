@@ -31,7 +31,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from scripts.core.adapters.common import safe_load_ndjson_file
+from scripts.core.adapters.common import safe_load_json_file, safe_load_ndjson_file
 from scripts.core.common_finding import fingerprint, normalize_severity
 from scripts.core.plugin_api import (
     AdapterPlugin,
@@ -112,6 +112,68 @@ class ProwlerAdapter(AdapterPlugin):
         return findings
 
 
+def _ocsf_to_native(record: dict[str, Any]) -> dict[str, Any]:
+    """Map one OCSF record onto the field names the parser below already reads.
+
+    Translating at the edge keeps the mapping in one place instead of threading
+    two shapes through every field extraction.
+    """
+    finding_info = record.get("finding_info") or {}
+    resources = record.get("resources") or []
+    resource = resources[0] if isinstance(resources, list) and resources else {}
+    group = resource.get("group") or {}
+    metadata = record.get("metadata") or {}
+
+    return {
+        "CheckID": str(metadata.get("event_code") or finding_info.get("uid") or ""),
+        "Status": str(record.get("status_code") or ""),
+        "Severity": str(record.get("severity") or "medium"),
+        "CheckTitle": str(finding_info.get("title") or ""),
+        "CheckType": ", ".join(str(t) for t in (finding_info.get("types") or [])),
+        "ServiceName": str(group.get("name") or ""),
+        "Description": str(finding_info.get("desc") or ""),
+        "Risk": str(record.get("risk_details") or ""),
+        "StatusExtended": str(record.get("message") or ""),
+        "ResourceId": str(resource.get("uid") or ""),
+        "ResourceType": str(resource.get("type") or ""),
+        "ResourceDetails": str((resource.get("data") or {}).get("details") or ""),
+        "Provider": "iac",
+        "Remediation": record.get("remediation") or {},
+    }
+
+
+def _iter_prowler_records(path: str | Path) -> list[dict[str, Any]]:
+    """Yield prowler findings from whichever format is on disk.
+
+    Prowler 5.x writes a **JSON array of OCSF records** for `json-ocsf`, whose
+    field names share nothing with the flat `CheckID`/`Status`/`Severity` shape
+    this adapter was written against - that was prowler v3's native JSON, which
+    5.x no longer emits. Measured on prowler 5.35.0: `prowler iac` produced 88
+    OCSF records (13 FAIL) that this adapter read as zero findings.
+
+    Both are accepted, because the file on disk may predate the change: NDJSON
+    is detected by the flat key, OCSF by `class_uid`/`finding_info`.
+    """
+    records = list(safe_load_ndjson_file(path))
+    if records and any("CheckID" in r for r in records if isinstance(r, dict)):
+        return [r for r in records if isinstance(r, dict)]
+
+    data = safe_load_json_file(path, default=None)
+    if isinstance(data, dict):
+        data = [data]
+    if not isinstance(data, list):
+        return [r for r in records if isinstance(r, dict)]
+
+    ocsf = [
+        r
+        for r in data
+        if isinstance(r, dict) and ("finding_info" in r or "class_uid" in r)
+    ]
+    if ocsf:
+        return [_ocsf_to_native(r) for r in ocsf]
+    return [r for r in records if isinstance(r, dict)]
+
+
 def _load_prowler_internal(path: str | Path) -> list[dict[str, Any]]:
     """Internal function to parse Prowler JSON output.
 
@@ -125,7 +187,7 @@ def _load_prowler_internal(path: str | Path) -> list[dict[str, Any]]:
     # Each line is a separate JSON finding object
     out: list[dict[str, Any]] = []
 
-    for finding_data in safe_load_ndjson_file(path):
+    for finding_data in _iter_prowler_records(path):
 
         # Extract core finding fields
         check_id = str(finding_data.get("CheckID", ""))

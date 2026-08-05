@@ -88,6 +88,42 @@ EXTRACT_APP_URLS: dict[str, str | dict[str, str]] = {
 
 
 # ============================================================================
+# YARA RULE BUNDLE
+# ============================================================================
+# yara is the one scanner whose package carries no detection content: the
+# yara-python wheel is the libyara engine and nothing else. Without rules it
+# examines every file and matches nothing, which is byte-for-byte the same
+# result as a clean repository - so the rules are part of the install, not an
+# optional extra.
+#
+# Why this bundle:
+#   - MIT (verified verbatim in its LICENSE), so it can be redistributed and
+#     used commercially. The set the yara adapter's docstring names,
+#     Neo23x0/signature-base, reports its licence as NOASSERTION and is 42 MB,
+#     which also exceeds the repo's 10 MB check-added-large-files hook.
+#   - 615 KB across 310 rule files, organised by category (backdoor,
+#     ransomware, trojan, exploit, ...). Those directory names become the
+#     namespace, and the adapter infers severity from exactly such tags.
+#   - Fetched at install time into ~/.jmo/yara-rules/, matching how lynis, zap
+#     and dependency-check already live under ~/.jmo/. Nothing is vendored.
+#
+# Pinned to a commit because the repository publishes no releases or tags. Bump
+# deliberately - a rule set that changes under you changes your findings.
+YARA_RULES_BUNDLE: dict[str, str] = {
+    "repo": "reversinglabs/reversinglabs-yara-rules",
+    "ref": "e0a0be54aa1e11ccfd6854e4f19e9476f328fd84",  # 2025-11-03
+    "url": (
+        "https://github.com/reversinglabs/reversinglabs-yara-rules/"
+        "archive/e0a0be54aa1e11ccfd6854e4f19e9476f328fd84.tar.gz"
+    ),
+    # Directory inside the archive holding the rules; everything else (README,
+    # LICENSE) is dropped so the namespace stays category-relative.
+    "subdir": "yara",
+    "license": "MIT",
+}
+
+
+# ============================================================================
 # BINARY DOWNLOAD URLS
 # ============================================================================
 # Binary download URLs (GitHub releases)
@@ -135,11 +171,16 @@ BINARY_URLS: dict[str, str | dict[str, str]] = {
         "default": "https://github.com/hadolint/hadolint/releases/download/v{version}/hadolint-{os}-{arch}",
     },
     # shellcheck: lowercase "linux.x86_64" with dots
-    "shellcheck": "https://github.com/koalaman/shellcheck/releases/download/v{version}/shellcheck-v{version}.{os_lower}.{arch_aarch}.tar.xz",
+    # Windows is a single arch-less .zip - the {os_lower}.{arch_aarch} scheme
+    # has no Windows asset, so the generic template 404s (verified upstream).
+    "shellcheck": {
+        "windows": "https://github.com/koalaman/shellcheck/releases/download/v{version}/shellcheck-v{version}.zip",
+        "default": "https://github.com/koalaman/shellcheck/releases/download/v{version}/shellcheck-v{version}.{os_lower}.{arch_aarch}.tar.xz",
+    },
     # Go tools using lowercase "linux_amd64" format
-    # trufflehog: Windows uses .zip, Linux/macOS use .tar.gz
+    # trufflehog: ships .tar.gz on every platform including Windows
     "trufflehog": {
-        "windows": "https://github.com/trufflesecurity/trufflehog/releases/download/v{version}/trufflehog_{version}_windows_{arch_amd}.zip",
+        "windows": "https://github.com/trufflesecurity/trufflehog/releases/download/v{version}/trufflehog_{version}_windows_{arch_amd}.tar.gz",
         "default": "https://github.com/trufflesecurity/trufflehog/releases/download/v{version}/trufflehog_{version}_{os_lower}_{arch_amd}.tar.gz",
     },
     "nuclei": "https://github.com/projectdiscovery/nuclei/releases/download/v{version}/nuclei_{version}_{os_lower}_{arch_amd}.zip",
