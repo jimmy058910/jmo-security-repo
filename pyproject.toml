@@ -116,7 +116,7 @@ dev = [
     "packaging",                    # Version comparison in OPA version checks
     # SLSA Attestation (Feature #6, v1.0.0)
     "sigstore>=2.0.0",              # Keyless signing (Fulcio + Rekor)
-    "cryptography>=48.0.1",         # >=48.0.1: GHSA-537c-gmf6-5ccf
+    "cryptography>=50.0.0",         # >=48.0.1: GHSA-537c-gmf6-5ccf; >=50.0.0: PYSEC-2026-3552
     # Platform-specific transitive deps kept top-level so they are guaranteed to
     # appear in the lock. uv.lock is universal, so pywin32's
     # sys_platform == "win32" marker (via mcp) is preserved natively --
