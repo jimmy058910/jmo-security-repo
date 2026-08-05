@@ -127,7 +127,7 @@ fix the plan rather than working around it.
    | Behaviour a *user* can hit and we intend to keep | [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) | Ships in the repo, so users find it without reading the tracker. |
    | A trap that only bites *developers* | the matching [`.claude/rules/*.md`](.claude/rules/) | Loads automatically when Claude touches those paths. |
 
-   > `.claude/known-issues.md` was the previous answer and is **gone**. It was gitignored — so this instruction pointed contributors at a file they could not see — and by the end it was 95 lines carrying a stale "Last Updated", a RESOLVED entry, and an obsolete one for a tool deleted six months earlier. A log with no close mechanism only accumulates.
+   > A private `known-issues` log under `.claude/` was the previous answer, and it is **gone**. It was gitignored — so this instruction pointed contributors at a file they could not see — and by the end it was 95 lines carrying a stale "Last Updated", a RESOLVED entry, and an obsolete one for a tool deleted six months earlier. A log with no close mechanism only accumulates.
 
 4. **Never Ignore:** Warnings, deprecations, and flaky tests become bugs over time
 5. **Rule of Three:** If the same approach fails 3 times, stop and change something fundamental — different angle, fresh start, or escalate to the user
