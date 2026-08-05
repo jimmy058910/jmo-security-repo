@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -39,6 +40,63 @@ if TYPE_CHECKING:
     from scripts.core.tool_registry import ToolInfo, ToolRegistry
 
 logger = logging.getLogger(__name__)
+
+
+def pip_install_command(packages: list[str]) -> list[str]:
+    """Build an install command that works in a uv-created virtualenv.
+
+    `uv venv` does **not** install pip, so `sys.executable -m pip install ...`
+    fails outright with
+
+        No module named pip
+
+    That has been the case for every pip-backed tool since the uv.lock migration
+    (#683/#687) made `.venv` the project's standard environment: measured,
+    `jmo tools install bandit yara prowler` failed with exactly that message
+    while the tools themselves were perfectly installable.
+
+    Prefer pip when it is genuinely present -- an isolated venv built by
+    `python -m venv` does ship it, and pip is the more widely understood path --
+    and fall back to `uv pip install --python <interpreter>`, which targets the
+    same interpreter without needing pip inside it.
+    """
+    if _interpreter_has_pip(sys.executable):
+        return [sys.executable, "-m", "pip", "install", "--quiet", *packages]
+
+    uv = shutil.which("uv")
+    if uv:
+        return [uv, "pip", "install", "--python", sys.executable, "--quiet", *packages]
+
+    # Neither available: return the pip form so the failure names the real
+    # problem rather than "uv not found", which would send the reader the
+    # wrong way.
+    return [sys.executable, "-m", "pip", "install", "--quiet", *packages]
+
+
+def _interpreter_has_pip(interpreter: str) -> bool:
+    """Whether `interpreter -m pip` is importable. Cached per interpreter."""
+    cached = _PIP_AVAILABLE.get(interpreter)
+    if cached is not None:
+        return cached
+
+    try:
+        probe = subprocess.run(
+            [interpreter, "-c", "import pip"],
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+            check=False,
+        )
+        available = probe.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        available = False
+
+    _PIP_AVAILABLE[interpreter] = available
+    return available
+
+
+_PIP_AVAILABLE: dict[str, bool] = {}
 
 
 class PipInstaller(BaseInstaller):
@@ -126,7 +184,7 @@ class PipInstaller(BaseInstaller):
         try:
             # Pin to specific version from versions.yaml for reproducibility
             pinned_package = f"{package}=={tool_info.version}"
-            cmd = [sys.executable, "-m", "pip", "install", "--quiet", pinned_package]
+            cmd = pip_install_command([pinned_package])
             result = self._runner.run(
                 cmd,
                 timeout=PIP_INSTALL_TIMEOUT_SECONDS,
@@ -223,7 +281,7 @@ class PipInstaller(BaseInstaller):
                 progress.on_start(tool_name)
 
         # Try batch install
-        cmd = [sys.executable, "-m", "pip", "install", "--quiet"] + packages
+        cmd = pip_install_command(packages)
 
         try:
             result = self._runner.run(
@@ -487,7 +545,12 @@ class IsolatedPipInstaller(BaseInstaller):
                     duration_seconds=time.time() - start_time,
                 )
 
-            # Step 5: Verify installation by checking if executable exists
+            # Step 5: On Windows, make sure something in the venv is actually
+            # launchable before we go looking for it.
+            if sys.platform == "win32":
+                self._ensure_windows_launcher(tool_name, bin_dir)
+
+            # Step 6: Verify installation by checking if executable exists
             # get_isolated_tool_path already handles alternate names
             tool_path = get_isolated_tool_path(tool_name)
             if tool_path and tool_path.exists():
@@ -528,6 +591,53 @@ class IsolatedPipInstaller(BaseInstaller):
                 message=str(e),
                 duration_seconds=time.time() - start_time,
             )
+
+    @staticmethod
+    def _ensure_windows_launcher(tool_name: str, bin_dir: Path) -> None:
+        """Give a Windows venv tool a launcher that does not need a .py assoc.
+
+        pip emits a real ``{tool}.exe`` shim for packages declaring
+        ``entry_points.console_scripts``. Packages still using setuptools'
+        legacy ``scripts=`` get a bare script plus a ``{tool}.cmd`` polyglot
+        batch/Python wrapper instead, and that wrapper resolves the interpreter
+        through the ``.py`` **file association**. On a machine without one it
+        dies with ``File association not found for extension .py`` and exit 1.
+
+        checkov is such a package. Measured consequence before this fix: the
+        wrapper exited 1 with empty stdout; because checkov declares
+        ``ok_return_codes=(0, 1)`` (1 legitimately means "issues found") the
+        crash was graded a success and written out as a 0-byte checkov.json in
+        all 5 repos of a public-repo benchmark - so a repo with 47 Terraform
+        files produced **0** IaC findings. With a working launcher the same
+        repo yields 477 failed checks.
+
+        Writing a 2-line launcher that invokes the venv's own interpreter is
+        both simpler and more robust than the wrapper it replaces: ``%~dp0``
+        expands to this file's directory, so it survives the venv being moved
+        and needs no PATH, no association and no activation.
+
+        No-ops when pip produced a proper ``.exe``, and when there is no script
+        to wrap.
+        """
+        if (bin_dir / f"{tool_name}.exe").exists():
+            return
+
+        script = bin_dir / tool_name
+        if not script.exists():
+            return
+
+        # write_bytes, not write_text: batch files want CRLF, and write_text
+        # would additionally translate the \n we did write into os.linesep.
+        launcher = bin_dir / f"{tool_name}.cmd"
+        launcher.write_bytes(
+            b"@echo off\r\n"
+            b'"%~dp0python.exe" "%~dp0' + tool_name.encode() + b'" %*\r\n'
+        )
+        logger.info(
+            "Wrote venv launcher %s (pip produced no .exe shim for %s)",
+            launcher,
+            tool_name,
+        )
 
     def _get_tool_version(self, tool_path: Path, bin_dir: Path) -> str | None:
         """Try to get tool version from --version output.

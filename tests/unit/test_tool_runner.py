@@ -61,8 +61,8 @@ def test_duration_is_measured_with_perf_counter() -> None:
             "Use time.perf_counter() -- see this test's docstring for measurements."
         )
 
-    assert text.count("time.perf_counter()") == 5, (
-        "Expected 5 perf_counter() calls (1 start_time + 4 duration subtractions). "
+    assert text.count("time.perf_counter()") == 6, (
+        "Expected 6 perf_counter() calls (1 start_time + 5 duration subtractions). "
         "If a return path was added or removed, update this count -- but every "
         "elapsed-time measurement in the file must use the same clock."
     )
@@ -963,7 +963,10 @@ class TestRetryConfigIntegration:
             retries=rc,
         )
         runner = ToolRunner([tool])
-        with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("cmd", 1)):
+        with patch(
+            "scripts.core.tool_runner._run_bounded",
+            side_effect=subprocess.TimeoutExpired("cmd", 1),
+        ):
             result = runner.run_tool(tool)
         assert result.status == "retry_exhausted"
         assert result.attempts == 4  # 2 base + 2 timeout = 4
@@ -987,7 +990,7 @@ class TestRetryConfigIntegration:
         mock_result.stderr = "error"
 
         runner = ToolRunner([tool])
-        with patch("subprocess.run", return_value=mock_result):
+        with patch("scripts.core.tool_runner._run_bounded", return_value=mock_result):
             result = runner.run_tool(tool)
         assert result.status == "retry_exhausted"
         assert result.attempts == 2  # Only max_attempts, not +timeout_retries
@@ -1004,7 +1007,10 @@ class TestRetryConfigIntegration:
             retries=rc,
         )
         runner = ToolRunner([tool])
-        with patch("subprocess.run", side_effect=FileNotFoundError("not found")):
+        with patch(
+            "scripts.core.tool_runner._run_bounded",
+            side_effect=FileNotFoundError("not found"),
+        ):
             result = runner.run_tool(tool)
         assert result.status == "error"
         assert result.attempts == 1
@@ -1028,7 +1034,7 @@ class TestRetryConfigIntegration:
         mock_result.stderr = "error"
 
         runner = ToolRunner([tool])
-        with patch("subprocess.run", return_value=mock_result):
+        with patch("scripts.core.tool_runner._run_bounded", return_value=mock_result):
             result = runner.run_tool(tool)
         assert result.attempts == 1  # No retries when disabled
 
@@ -1051,7 +1057,10 @@ class TestRetryConfigIntegration:
             retries=rc,
         )
         runner = ToolRunner([tool])
-        with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("cmd", 1)):
+        with patch(
+            "scripts.core.tool_runner._run_bounded",
+            side_effect=subprocess.TimeoutExpired("cmd", 1),
+        ):
             result = runner.run_tool(tool)
         assert result.attempts == 1  # No retries when disabled
 
@@ -1069,7 +1078,7 @@ class TestRetryConfigIntegration:
         mock_result.stderr = "error"
 
         runner = ToolRunner([tool])
-        with patch("subprocess.run", return_value=mock_result):
+        with patch("scripts.core.tool_runner._run_bounded", return_value=mock_result):
             result = runner.run_tool(tool)
         assert result.status == "retry_exhausted"
         assert result.attempts == 2  # retries=1 -> max_attempts=2
@@ -1112,7 +1121,9 @@ class TestDeclaredOutputFile:
         )
 
         runner = ToolRunner([tool])
-        with patch("subprocess.run", return_value=self._ok_subprocess(0)):
+        with patch(
+            "scripts.core.tool_runner._run_bounded", return_value=self._ok_subprocess(0)
+        ):
             result = runner.run_tool(tool)
 
         assert result.status == "no_output"
@@ -1135,7 +1146,9 @@ class TestDeclaredOutputFile:
         )
 
         runner = ToolRunner([tool])
-        with patch("subprocess.run", return_value=self._ok_subprocess(0)):
+        with patch(
+            "scripts.core.tool_runner._run_bounded", return_value=self._ok_subprocess(0)
+        ):
             result = runner.run_tool(tool)
 
         assert result.status == "success"
@@ -1154,7 +1167,9 @@ class TestDeclaredOutputFile:
         )
 
         runner = ToolRunner([tool])
-        with patch("subprocess.run", return_value=self._ok_subprocess(0)):
+        with patch(
+            "scripts.core.tool_runner._run_bounded", return_value=self._ok_subprocess(0)
+        ):
             result = runner.run_tool(tool)
 
         assert result.status == "success"
@@ -1170,7 +1185,9 @@ class TestDeclaredOutputFile:
         )
 
         runner = ToolRunner([tool])
-        with patch("subprocess.run", return_value=self._ok_subprocess(0)):
+        with patch(
+            "scripts.core.tool_runner._run_bounded", return_value=self._ok_subprocess(0)
+        ):
             result = runner.run_tool(tool)
 
         assert result.status == "success"
@@ -1187,7 +1204,9 @@ class TestDeclaredOutputFile:
         )
 
         runner = ToolRunner([tool])
-        with patch("subprocess.run", return_value=self._ok_subprocess(0)):
+        with patch(
+            "scripts.core.tool_runner._run_bounded", return_value=self._ok_subprocess(0)
+        ):
             result = runner.run_tool(tool)
 
         assert result.status == "success"
@@ -1204,7 +1223,9 @@ class TestDeclaredOutputFile:
         )
 
         runner = ToolRunner([tool])
-        with patch("subprocess.run", return_value=self._ok_subprocess(3)):
+        with patch(
+            "scripts.core.tool_runner._run_bounded", return_value=self._ok_subprocess(3)
+        ):
             result = runner.run_tool(tool)
 
         assert result.status == "no_output"
@@ -1228,7 +1249,10 @@ class TestDeclaredOutputFile:
 
         runner = ToolRunner([tool])
         with (
-            patch("subprocess.run", return_value=self._ok_subprocess(0)),
+            patch(
+                "scripts.core.tool_runner._run_bounded",
+                return_value=self._ok_subprocess(0),
+            ),
             patch.object(
                 Path, "exists", side_effect=PermissionError("EACCES on bind mount")
             ),
@@ -1251,5 +1275,340 @@ class TestDeclaredOutputFile:
         assert summary["results_by_status"]["no_output"] == 1
 
 
+class TestEmptyCaptureWithNonZeroExit:
+    """A tool claiming findings while emitting nothing has not run.
+
+    #700 covers `capture_stdout=False` tools: told where to write, wrote
+    nothing. The mirror case was left open. For a `capture_stdout=True` tool the
+    caller writes the file from `result.stdout` *after* `run_tool` returns:
+
+        if result.output_file and result.capture_stdout:
+            result.output_file.write_text(result.stdout or "", ...)
+
+    `or ""` turns lost output into a 0-byte file that exists, so every
+    downstream check that asks "was a file written?" answers yes.
+
+    Measured. checkov's venv wrapper on Windows is broken (`File association not
+    found for extension .py`) and exits **1**. checkov declares
+    `ok_return_codes=(0, 1)` because 1 legitimately means "issues found", so the
+    crash was graded acceptable, empty stdout was written as `checkov.json` at
+    0 bytes in all 5 repos of a public-repo benchmark, and the scan exited 0.
+    The report phase logged "JSON file is empty" without escalating.
+
+    Emptiness alone cannot be the signal: trufflehog on a repo with no secrets
+    exits **0** and correctly emits nothing (measured on docker-library/postgres
+    in the same run). The discriminator is the return code. A non-zero
+    *accepted* code is the tool saying "I found something" -- emitting nothing
+    while saying so is self-contradictory, and is what a crash looks like.
+    """
+
+    @staticmethod
+    def _tool(tmp_path: Path, name: str = "quiet") -> ToolDefinition:
+        return ToolDefinition(
+            name=name,
+            command=[name],
+            output_file=tmp_path / f"{name}.json",
+            capture_stdout=True,
+            ok_return_codes=(0, 1),
+        )
+
+    @staticmethod
+    def _result(returncode: int, stdout: str, stderr: str = ""):
+        mock = MagicMock()
+        mock.returncode = returncode
+        mock.stdout = stdout
+        mock.stderr = stderr
+        return mock
+
+    def test_empty_capture_with_nonzero_accepted_code_is_not_success(
+        self, tmp_path: Path
+    ):
+        """rc=1 (accepted, means 'findings') plus no output -> no_output."""
+        tool = self._tool(tmp_path, "checkov")
+        runner = ToolRunner([tool])
+
+        with patch(
+            "scripts.core.tool_runner._run_bounded",
+            return_value=self._result(
+                1, "", "File association not found for extension .py"
+            ),
+        ):
+            result = runner.run_tool(tool)
+
+        assert result.status == "no_output"
+        assert result.is_success() is False
+        # Name the tool and the consequence, or a parallel scan gives the user
+        # no way to tell which of nine tools produced nothing.
+        assert "checkov" in result.error_message or "checkov" in result.tool
+
+    def test_empty_capture_with_zero_exit_is_still_success(self, tmp_path: Path):
+        """rc=0 plus no output is a clean scan, not a failure.
+
+        Guards the fix against over-reach: trufflehog on a repo with no secrets
+        must not be reported as broken.
+        """
+        tool = self._tool(tmp_path, "trufflehog")
+        runner = ToolRunner([tool])
+
+        with patch(
+            "scripts.core.tool_runner._run_bounded",
+            return_value=self._result(0, "", 'msg":"finished scanning"'),
+        ):
+            result = runner.run_tool(tool)
+
+        assert result.status == "success"
+        assert result.is_success() is True
+
+    def test_nonzero_code_with_output_is_still_success(self, tmp_path: Path):
+        """rc=1 with real findings is the normal 'issues found' path."""
+        tool = self._tool(tmp_path, "checkov")
+        runner = ToolRunner([tool])
+
+        with patch(
+            "scripts.core.tool_runner._run_bounded",
+            return_value=self._result(1, '{"results": {"failed_checks": []}}'),
+        ):
+            result = runner.run_tool(tool)
+
+        assert result.status == "success"
+        assert result.stdout
+
+
+class TestSubprocessDecoding:
+    """Tool output must survive bytes the host locale cannot decode.
+
+    Scanners emit whatever bytes the scanned repository contains -- file names,
+    matched secrets, and code snippets from arbitrary public source. Bare
+    `text=True` decodes those with the *parent's* locale codec under `strict`
+    errors, which is the wrong codec and the wrong error policy:
+
+    - On Windows the decode runs inside `subprocess._readerthread`. The
+      exception cannot propagate to the caller, so it is printed and the
+      captured output is simply **lost**. `run_tool` then sees empty stdout,
+      reports `success`, and the caller writes a 0-byte output file.
+    - On Linux/macOS the same decode raises out of `subprocess.run` and the
+      whole tool is recorded as a failure.
+
+    Measured on a real 5-repo public scan (cp1252 host): five
+    `UnicodeDecodeError: 'charmap' codec can't decode byte 0x90` tracebacks in
+    `_readerthread`, `trufflehog.json` written as **0 bytes in all 5 repos**,
+    trufflehog reported successful, and the `zero-secrets` policy PASSED.
+
+    0x90 is deliberately chosen: it is undefined in cp1252 *and* an illegal
+    lead byte in UTF-8, so this test bites on every platform rather than only
+    on the one where the bug was found. `PYTHONUTF8=1` (set on the CI shards)
+    does not rescue it.
+    """
+
+    # Undefined in cp1252; illegal UTF-8 lead byte. Invalid under both.
+    UNDECODABLE = b"\x90"
+
+    def _emit_bytes_tool(self, payload: bytes, tmp_path: Path) -> ToolDefinition:
+        """A tool that writes raw, locale-hostile bytes to stdout."""
+        return ToolDefinition(
+            name="byte-emitter",
+            command=[
+                sys.executable,
+                "-c",
+                (
+                    "import sys;"
+                    f"sys.stdout.buffer.write({payload!r});"
+                    "sys.stdout.buffer.flush()"
+                ),
+            ],
+            output_file=tmp_path / "byte-emitter.json",
+            capture_stdout=True,
+            timeout=60,
+        )
+
+    def test_undecodable_bytes_do_not_destroy_captured_output(self, tmp_path: Path):
+        """The payload must arrive, not vanish into a swallowed decode error."""
+        payload = b'{"found": "' + self.UNDECODABLE + b'secret"}'
+        tool = self._emit_bytes_tool(payload, tmp_path)
+
+        result = ToolRunner([tool]).run_tool(tool)
+
+        assert (
+            result.status == "success"
+        ), f"decode failure surfaced as {result.status!r}: {result.error_message!r}"
+        # The bug's signature is empty stdout despite the tool having written
+        # ~25 bytes. Assert on content, not just truthiness -- an empty string
+        # is exactly what the broken path produced.
+        assert result.stdout, "captured stdout was lost to a decode error"
+        assert "found" in result.stdout
+        assert "secret" in result.stdout
+
+    def test_decoding_is_not_left_to_the_host_locale(self, tmp_path: Path):
+        """Guard the fix itself: `text=True` alone must not be reintroduced.
+
+        The behavioural test above passes on a UTF-8 host even with the bug, if
+        the payload happens to be valid UTF-8. This asserts the actual contract
+        -- an explicit codec and a non-strict error policy -- so the guard
+        cannot silently stop guarding on a maintainer's Linux box.
+        """
+        tool = self._emit_bytes_tool(b"{}", tmp_path)
+
+        with patch("scripts.core.tool_runner._run_bounded") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="{}", stderr="")
+            ToolRunner([tool]).run_tool(tool)
+
+        kwargs = mock_run.call_args.kwargs
+        assert (
+            kwargs.get("encoding") == "utf-8"
+        ), "tool output must be decoded as UTF-8, not the host locale codec"
+        assert (
+            kwargs.get("errors") == "replace"
+        ), "a single undecodable byte must not discard the whole capture"
+        assert not kwargs.get(
+            "text"
+        ), "text=True re-enables locale decoding and overrides the intent"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestChildEnvironment:
+    """A scanner that shells out to another scanner must be able to find it.
+
+    JMo installs tools into ``~/.jmo/bin``, a directory nothing puts on PATH.
+    `prowler iac` invokes `trivy`; with trivy installed by JMo but absent from
+    the child's PATH it died with ``FileNotFoundError [WinError 2]`` raised
+    inside prowler and wrote nothing. Measured: adding that one directory to
+    PATH made the identical command produce 88 records, 13 of them FAIL.
+
+    `tool_manager._get_clean_env` already prepends it for the *version probe*,
+    so the two execution paths disagreed - the same one-right-one-wrong split
+    that hid the checkov, yara and dependency-check resolver bugs.
+    """
+
+    def test_jmo_bin_is_on_the_child_path(self, tmp_path, monkeypatch):
+        import os as _os
+        from pathlib import Path as _Path
+
+        captured = {}
+
+        def fake_run(cmd, **kwargs):
+            captured["env"] = kwargs.get("env") or {}
+            raise FileNotFoundError("stop here - we only want the env")
+
+        jmo_bin = tmp_path / ".jmo" / "bin"
+        jmo_bin.mkdir(parents=True)
+        monkeypatch.setattr(_Path, "home", staticmethod(lambda: tmp_path))
+        monkeypatch.setattr("scripts.core.tool_runner._run_bounded", fake_run)
+
+        from scripts.core.tool_runner import ToolDefinition, ToolRunner
+
+        ToolRunner(tools=[]).run_tool(
+            ToolDefinition(name="t", command=["nonexistent-binary"], output_file=None)
+        )
+
+        entries = captured["env"].get("PATH", "").split(_os.pathsep)
+        assert str(jmo_bin) in entries, (
+            "~/.jmo/bin is not on the child's PATH, so a scanner cannot find "
+            f"any other JMo-installed tool. entries[0]={entries[0]!r}"
+        )
+
+    def test_path_is_joined_with_os_pathsep(self, tmp_path, monkeypatch):
+        """A hardcoded ':' fuses entries into one unusable element on Windows."""
+        import os as _os
+        from pathlib import Path as _Path
+
+        captured = {}
+
+        def fake_run(cmd, **kwargs):
+            captured["env"] = kwargs.get("env") or {}
+            raise FileNotFoundError("stop here")
+
+        (tmp_path / ".jmo" / "bin").mkdir(parents=True)
+        sentinel = str(tmp_path / "sentinel")
+        monkeypatch.setattr(_Path, "home", staticmethod(lambda: tmp_path))
+        monkeypatch.setenv("PATH", sentinel)
+        monkeypatch.setattr("scripts.core.tool_runner._run_bounded", fake_run)
+
+        from scripts.core.tool_runner import ToolDefinition, ToolRunner
+
+        ToolRunner(tools=[]).run_tool(
+            ToolDefinition(name="t", command=["nonexistent-binary"], output_file=None)
+        )
+
+        assert sentinel in captured["env"]["PATH"].split(_os.pathsep)
+
+
+class TestTimeoutKillsTheProcessTree:
+    """A timeout must bound the whole tree, not just the process we spawned.
+
+    Several scanners are launcher scripts: `dependency-check.bat` runs
+    `cmd.exe` which runs `java`. `subprocess.run(timeout=...)` kills only the
+    direct child and then calls `communicate()` **without a timeout** to drain
+    the pipes - which the surviving grandchild holds open. The documented
+    timeout therefore bounds nothing.
+
+    Measured before the fix: a dependency-check invocation with a 1200s timeout
+    was still running at **38 minutes**, with an orphaned java process no longer
+    under the scan's process tree at all. It stayed hidden while
+    dependency-check failed instantly with WinError 193 - making the tool
+    actually run is what exposed it.
+    """
+
+    def test_a_grandchild_does_not_outlive_the_timeout(self, tmp_path: Path):
+        """The grandchild must be dead, not merely no longer blocking us.
+
+        Asserted by watching a heartbeat file the grandchild keeps touching,
+        rather than by timing the call. Timing alone does not discriminate: with
+        the tree kill removed the call still returns, because `_run_bounded`
+        bounds its own drain at 30s - but the grandchild survives that and runs
+        on unsupervised, which is exactly the 38-minute orphaned java process
+        this fixes. Measured: kill-tree 4s, no-kill-tree 33s, both "passing" a
+        timing assertion while only one actually killed anything.
+        """
+        import subprocess as _sp
+        import sys
+        import time as _time
+
+        from scripts.core.tool_runner import ToolDefinition, ToolRunner
+
+        heartbeat = tmp_path / "grandchild.heartbeat"
+        # The grandchild ticks a file ~every 0.3s for 2 minutes. The launcher
+        # spawns it and then waits, so killing only the launcher leaves it
+        # running - and holding the inherited stderr pipe.
+        grandchild = (
+            "import pathlib,time\n"
+            f"p = pathlib.Path(r'{heartbeat}')\n"
+            "for i in range(400):\n"
+            "    p.write_text(str(i))\n"
+            "    time.sleep(0.3)\n"
+        )
+        launcher = (
+            "import subprocess,sys,time\n"
+            f"subprocess.Popen([sys.executable,'-c',{grandchild!r}])\n"
+            "time.sleep(120)\n"
+        )
+        tool = ToolDefinition(
+            name="slow-launcher",
+            command=[sys.executable, "-c", launcher],
+            output_file=tmp_path / "out.json",
+            timeout=3,
+        )
+
+        result = ToolRunner([tool]).run_tool(tool)
+
+        # "error" is this runner's established status for an exhausted timeout
+        # budget (see test_run_tool_timeout); the message is what the scan job
+        # matches on to report it as a timeout.
+        assert result.is_success() is False
+        assert "Timeout" in result.error_message, result.error_message
+
+        assert heartbeat.exists(), "the grandchild never started - test is vacuous"
+        first = heartbeat.read_text(encoding="utf-8")
+        _time.sleep(2.5)
+        second = heartbeat.read_text(encoding="utf-8")
+
+        assert first == second, (
+            f"the grandchild is still running after the timeout "
+            f"(heartbeat advanced {first} -> {second}). Killing the launcher "
+            f"does not kill what it spawned; this is the orphaned java process "
+            f"that outlived a 1200s dependency-check timeout by 38 minutes."
+        )
+        # Belt and braces: it must also not still be blocking the runner.
+        assert _sp is not None

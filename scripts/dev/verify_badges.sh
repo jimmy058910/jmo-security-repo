@@ -88,7 +88,29 @@ main() {
   current_branch="${GITHUB_HEAD_REF:-$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD)}"
   current_tag=$(git -C "$REPO_ROOT" describe --exact-match --tags 2>/dev/null || echo "")
 
-  if git -C "$REPO_ROOT" log -1 --format=%s | grep -q '^release: v'; then
+  # Every branch push produces TWO ci.yml runs, one per trigger, and they see
+  # different worlds. Both must be satisfied or quick-checks stays red:
+  #
+  #   pull_request: actions/checkout leaves a *shallow* checkout of the merge
+  #     commit, so `git log -1` yields "Merge <sha> into <sha>" and the parents
+  #     are not fetched (HEAD^2 is unavailable too). No commit-based test can
+  #     work here -- measured, this exemption printed nothing at all. Hence the
+  #     PR title, which is checkout-independent and is also the string the
+  #     squash-merge subject becomes on main.
+  #
+  #   push: no pull_request payload exists, so `pr_title` is empty and the
+  #     commit test below is the one that fires. It reads the real tip, so the
+  #     release commit has to *be* the tip -- a fixup committed on top of it
+  #     silently re-arms this check.
+  pr_title=""
+  if [[ -f "${GITHUB_EVENT_PATH:-}" ]]; then
+    pr_title=$(jq -r '.pull_request.title // ""' "$GITHUB_EVENT_PATH" 2>/dev/null || echo "")
+  fi
+
+  if [[ $pr_title == release:\ v* ]]; then
+    is_release_commit=true
+    echo -e "${YELLOW}ℹ️  Detected release PR: $pr_title${NC}"
+  elif git -C "$REPO_ROOT" log -1 --format=%s | grep -q '^release: v'; then
     is_release_commit=true
     echo -e "${YELLOW}ℹ️  Detected release commit${NC}"
   elif [[ $current_branch =~ ^release/v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then

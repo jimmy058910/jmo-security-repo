@@ -71,6 +71,12 @@ security-results-*/
 results/
 results-*/
 
+# Third-party repos cloned for scanning. `docs/examples/scan_from_tsv.md`
+# tells users to clone into ./repos-tsv, and this is a public repo - without
+# this, following the documented workflow leaves other people's source in an
+# untracked directory here.
+repos-tsv/
+
 # Sample fixture scan outputs (regenerated via `make regenerate-samples`)
 samples/fixtures/*/sample-results/
 

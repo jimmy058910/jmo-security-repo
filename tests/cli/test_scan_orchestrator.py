@@ -943,3 +943,73 @@ class TestInvalidUrlWarning:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestUnroutedToolsAreReported:
+    """A requested tool that matches no target type in this scan must say so.
+
+    `filter_tools_for_scan_type` is a bare list comprehension: it drops tools
+    and returns, telling nobody. On a `deep` scan of a repository that silently
+    removed `nuclei` (URL-only) and `lynis` (absent from TOOL_SCAN_TYPES["repo"]
+    despite having a repository implementation), and neither appeared in any
+    stream or artifact for the whole run - not in the scanner's `unresolved`,
+    `not_implemented` or `idle` diagnostics, not in the progress display, and
+    not in `.scan_metadata.json`.
+
+    Being filtered is usually correct - nuclei genuinely cannot scan a
+    repository - but "correctly skipped" and "silently vanished" have to look
+    different to whoever reads the output, or every skip reads as a scan.
+    """
+
+    def _orchestrator(self, tmp_path, tools):
+        cfg = ScanConfig(
+            tools=tools,
+            results_dir=tmp_path / "results",
+            timeout=60,
+            retries=0,
+        )
+        return ScanOrchestrator(cfg)
+
+    def test_url_only_tool_on_a_repo_scan_is_reported(self, tmp_path, caplog):
+        import logging
+
+        repo = tmp_path / "proj"
+        repo.mkdir()
+
+        targets = ScanTargets()
+        targets.repos = [repo]
+
+        orch = self._orchestrator(tmp_path, ["trufflehog", "nuclei", "lynis"])
+
+        with (
+            patch("scripts.cli.scan_jobs.scan_repository", return_value=("proj", {})),
+            caplog.at_level(logging.DEBUG),
+        ):
+            orch.scan_all(targets, per_tool_config={})
+
+        assert (
+            "nuclei" in caplog.text
+        ), f"nuclei was dropped from a repo scan without a word:\n{caplog.text}"
+        assert (
+            "lynis" in caplog.text
+        ), f"lynis was dropped from a repo scan without a word:\n{caplog.text}"
+
+    def test_routed_tool_is_not_reported_as_unrouted(self, tmp_path, caplog):
+        """trufflehog does apply to repositories; it must not be named."""
+        import logging
+
+        repo = tmp_path / "proj"
+        repo.mkdir()
+
+        targets = ScanTargets()
+        targets.repos = [repo]
+
+        orch = self._orchestrator(tmp_path, ["trufflehog"])
+
+        with (
+            patch("scripts.cli.scan_jobs.scan_repository", return_value=("proj", {})),
+            caplog.at_level(logging.DEBUG),
+        ):
+            orch.scan_all(targets, per_tool_config={})
+
+        assert "no target type in this scan" not in caplog.text

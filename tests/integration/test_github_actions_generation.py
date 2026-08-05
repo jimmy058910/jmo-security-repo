@@ -7,6 +7,7 @@ Tests validate generated workflows work end-to-end:
 - Schedule runs at correct time
 """
 
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -81,9 +82,15 @@ def test_workflow_file_validity():
     assert "workflow_dispatch" in workflow["on"]
 
 
+# shutil.which, not subprocess.run(["which", ...]): `which` is a Unix binary
+# with no Windows equivalent, so this raised FileNotFoundError [WinError 2] at
+# *module import* - and a skipif expression is evaluated during collection, so
+# the whole suite aborted with "Interrupted: 1 error during collection", not
+# just this file. It went unnoticed because it only fails where PATH lacks Git
+# Bash: running this file from a Git Bash shell inherits /usr/bin/which and
+# collects cleanly, while a plain Windows process does not.
 @pytest.mark.skipif(
-    subprocess.run(["which", "actionlint"], capture_output=True, timeout=60).returncode
-    != 0,
+    shutil.which("actionlint") is None,
     reason="actionlint not installed",
 )
 def test_actionlint_validation():

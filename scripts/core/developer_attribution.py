@@ -242,7 +242,11 @@ class DeveloperAttribution:
                 cmd,
                 cwd=self.repo_path,
                 capture_output=True,
-                text=True,
+                # Author names and commit subjects in third-party repos are
+                # routinely non-ASCII. Decoding blame output with the host
+                # locale drops the capture on Windows (see tool_runner.py).
+                encoding="utf-8",
+                errors="replace",
                 timeout=10,
                 check=False,
             )

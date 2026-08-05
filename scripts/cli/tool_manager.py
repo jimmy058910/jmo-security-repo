@@ -13,7 +13,7 @@ import os
 import re
 import subprocess
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -702,6 +702,19 @@ class ToolManager:
         """
         self._registry = registry
         self.platform = detect_platform()
+        # Memo for check_tool. A probe costs a `--version` subprocess - measured
+        # at 4.23s for checkov on the first call and 3.08s on the second, so the
+        # probe itself caches nothing. Scan startup asks the same questions
+        # three times (critical-update warning, missing-tool pre-flight, and the
+        # summary behind one log line), and nothing on disk can change between
+        # them.
+        #
+        # Per-instance rather than module-level on purpose: `registry` is
+        # injectable, so a process-wide cache would let one test's fake registry
+        # answer another test's question. Callers that want the saving share an
+        # instance; `invalidate_status_cache()` covers the one case where the
+        # answer legitimately changes mid-process (a tool was just installed).
+        self._status_cache: dict[str, ToolStatus] = {}
 
     @property
     def registry(self) -> ToolRegistry:
@@ -709,6 +722,17 @@ class ToolManager:
         if self._registry is None:
             self._registry = ToolRegistry()
         return self._registry
+
+    def invalidate_status_cache(self, tool_name: str | None = None) -> None:
+        """Drop memoised status, for after an install changes what is on disk.
+
+        Args:
+            tool_name: Drop just this tool, or everything when None.
+        """
+        if tool_name is None:
+            self._status_cache.clear()
+        else:
+            self._status_cache.pop(tool_name, None)
 
     def check_tool(self, tool_name: str) -> ToolStatus:
         """
@@ -720,6 +744,10 @@ class ToolManager:
         Returns:
             ToolStatus with installation and execution information
         """
+        cached = self._status_cache.get(tool_name)
+        if cached is not None:
+            return cached
+
         tool_info = self.registry.get_tool(tool_name)
 
         # Handle variants - they share a binary with base tool
@@ -775,7 +803,7 @@ class ToolManager:
             # This allows wizard to prompt for dependency installation first
             missing_deps = self._check_preinstall_deps(tool_name)
 
-        return ToolStatus(
+        status = ToolStatus(
             name=tool_name,
             installed=installed,
             installed_version=installed_version,
@@ -791,6 +819,8 @@ class ToolManager:
             version_error=version_error,  # Phase 4
             manual_install=tool_name in MANUAL_INSTALL_TOOLS,
         )
+        self._status_cache[tool_name] = status
+        return status
 
     def check_profile(self, profile: str) -> dict[str, ToolStatus]:
         """
@@ -852,25 +882,42 @@ class ToolManager:
         statuses = self.check_profile(profile)
         return [s for s in statuses.values() if not s.installed]
 
-    def get_outdated_tools(self, profile: str | None = None) -> list[ToolStatus]:
+    def get_outdated_tools(
+        self,
+        profile: str | None = None,
+        restrict_to: Collection[str] | None = None,
+    ) -> list[ToolStatus]:
         """
         Get list of outdated tools.
 
         Args:
             profile: Optional profile to filter by
+            restrict_to: Only inspect these tools. Every tool inspected costs a
+                `--version` subprocess, so this narrows the *work*, not just the
+                result - filtering afterwards would still pay for the spawns.
 
         Returns:
             List of ToolStatus for outdated tools
         """
-        if profile:
+        if restrict_to is not None:
+            statuses = {name: self.check_tool(name) for name in restrict_to}
+        elif profile:
             statuses = self.check_profile(profile)
         else:
             statuses = self.check_all_tools()
         return [s for s in statuses.values() if s.installed and s.is_outdated]
 
-    def get_critical_outdated(self) -> list[ToolStatus]:
-        """Get outdated tools marked as critical."""
-        outdated = self.get_outdated_tools()
+    def get_critical_outdated(
+        self, restrict_to: Collection[str] | None = None
+    ) -> list[ToolStatus]:
+        """Get outdated tools marked as critical.
+
+        `restrict_to` matters on the scan path: without it this reaches
+        `check_all_tools()` and version-probes the entire registry - measured at
+        32 tools, including `ruff`, `shfmt` and `falcoctl`, for a scan that
+        requested one.
+        """
+        outdated = self.get_outdated_tools(restrict_to=restrict_to)
         return [s for s in outdated if s.is_critical]
 
     def get_profile_summary(self, profile: str) -> dict:
@@ -954,7 +1001,9 @@ class ToolManager:
 
         return drift
 
-    def get_tool_summary(self, profile: str) -> ToolStatusSummary:
+    def get_tool_summary(
+        self, profile: str, restrict_to: Collection[str] | None = None
+    ) -> ToolStatusSummary:
         """
         Get unified tool status summary for a profile.
 
@@ -965,6 +1014,12 @@ class ToolManager:
 
         Args:
             profile: Profile name ('fast', 'slim', 'balanced', 'deep')
+            restrict_to: Only inspect these tools. The wizard wants the whole
+                profile; a scan only ever runs the tools it was asked for, and
+                inspecting the rest costs a `--version` subprocess each. On
+                `deep` that was a measured ~21s spent before any scanning began,
+                identical whether the scan requested 22 tools or 3, because the
+                sweep existed only to render one `X/Y` log line.
 
         Returns:
             ToolStatusSummary with all counts and categorized tool lists
@@ -977,6 +1032,11 @@ class ToolManager:
         platform_applicable_tools = get_tools_for_profile_filtered(
             profile, self.platform
         )
+        if restrict_to is not None:
+            wanted = set(restrict_to)
+            platform_applicable_tools = [
+                t for t in platform_applicable_tools if t in wanted
+            ]
         platform_applicable = len(platform_applicable_tools)
 
         # Get platform-skipped tools with reasons
@@ -1622,19 +1682,37 @@ class ToolManager:
         return result
 
     def _get_clean_env(self) -> dict:
-        """Get a clean environment for subprocess calls."""
+        """Get a clean environment for subprocess calls.
+
+        Joins with ``os.pathsep``, not a hardcoded ``":"``. On POSIX the two
+        coincide, so the bug this fixes was invisible there; on Windows the
+        separator is ``";"``, and joining with ``":"`` fused every prepended
+        directory *and the first genuine PATH entry* into one nonsensical
+        element::
+
+            'C:\\Users\\J/.jmo/bin:C:\\Users\\J/.local/bin:...:C:\\real\\first\\entry'
+
+        So ``~/.jmo/bin`` - the directory JMo installs every tool into - was not
+        on the probe's PATH at all, and whatever had been first was destroyed
+        with it. Measured: that is why dependency-check's version probe reported
+        ``'java' is not recognized`` on a machine where java was on PATH and
+        ``shutil.which("java")`` found it from the same process.
+
+        Paths are built with ``Path`` rather than f-string slashes for the same
+        reason - a mix of separators in one entry is not a valid path anywhere.
+        """
         import os
 
         env = os.environ.copy()
         # Add common tool paths
-        home = str(Path.home())
+        home = Path.home()
         extra_paths = [
-            f"{home}/.jmo/bin",
-            f"{home}/.local/bin",
-            f"{home}/.kubescape/bin",
+            str(home / ".jmo" / "bin"),
+            str(home / ".local" / "bin"),
+            str(home / ".kubescape" / "bin"),
         ]
         current_path = env.get("PATH", "")
-        env["PATH"] = ":".join(extra_paths) + ":" + current_path
+        env["PATH"] = os.pathsep.join([*extra_paths, current_path])
         return env
 
     def _verify_execution(self, tool_name: str) -> tuple[bool, str | None, list[str]]:
@@ -1661,6 +1739,32 @@ class ToolManager:
 
         if missing:
             return False, f"Missing: {', '.join(missing)}", missing
+
+        # yara ships an engine and no detection content. Without rules it
+        # examines every file, matches nothing, and returns a result that is
+        # byte-for-byte identical to a genuinely clean repository - so "the
+        # library imports" is not the same question as "yara can detect
+        # anything", and only the second one is worth reporting.
+        #
+        # Checked against the bundle directory `jmo tools install yara` fills.
+        # A user pointing per_tool.yara.rules_path at their own set is not
+        # visible here, which is why this downgrades execution readiness rather
+        # than claiming the tool is absent; the runner re-checks the configured
+        # path at scan time and fails loudly there if it is empty.
+        if tool_name == "yara":
+            from scripts.core.paths import get_yara_rules_dir
+
+            rules_dir = get_yara_rules_dir()
+            has_rules = rules_dir.is_dir() and any(
+                rules_dir.rglob(pattern) for pattern in ("*.yar", "*.yara")
+            )
+            if not has_rules:
+                return (
+                    False,
+                    "No YARA rules installed - yara would report every scan "
+                    "clean. Run: jmo tools install yara --force",
+                    ["yara-rules"],
+                )
 
         # Special version checks
         if tool_name == "cdxgen":

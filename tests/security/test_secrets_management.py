@@ -18,6 +18,35 @@ from pathlib import Path
 
 import pytest
 
+# Vendored trees are pruned during traversal, never filtered afterwards.
+# `rglob` descends into them regardless of any later check and stats every entry
+# it yields, which fails differently on each platform and so reads as a platform
+# quirk on both: `OSError [WinError 1920]` on Windows (the pnpm symlink farm
+# under scripts/dashboard/node_modules) and a plain pytest **timeout** under
+# WSL, where stat-ing tens of thousands of vendored files across /mnt/c is
+# glacial. One cause, two masks, neither pointing at the other.
+_SKIP_DIRS = {
+    ".git",
+    ".venv",
+    "venv",
+    "node_modules",
+    "build",
+    "dist",
+    "__pycache__",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".mypy_cache",
+    "htmlcov",
+    "worktrees",  # a nested worktree is a second checkout, not our content
+}
+
+
+def _walk(root: Path, suffixes: set[str] | None = None) -> list[Path]:
+    """Yield files under `root`, skipping vendored trees during descent."""
+    from tests.conftest import iter_repo_files
+
+    return iter_repo_files(root, _SKIP_DIRS, suffixes)
+
 
 @pytest.mark.timeout(300)  # These tests scan the codebase and can be slow
 class TestSecretsManagement:
@@ -51,7 +80,7 @@ class TestSecretsManagement:
             if not scan_dir.exists():
                 continue
 
-            for py_file in scan_dir.rglob("*.py"):
+            for py_file in _walk(scan_dir, {".py"}):
                 # Skip __pycache__ and test files
                 if "__pycache__" in str(py_file) or "test_" in py_file.name:
                     continue
@@ -234,7 +263,7 @@ class TestSecretsManagement:
             if not scan_dir.exists():
                 continue
 
-            for file in scan_dir.rglob("*"):
+            for file in _walk(scan_dir):
                 # Skip binary files, cache, dependencies, and test fixtures
                 if (
                     file.is_dir()
@@ -287,7 +316,7 @@ class TestSecretsManagement:
             if not scan_dir.exists():
                 continue
 
-            for file in scan_dir.rglob("*"):
+            for file in _walk(scan_dir):
                 if (
                     file.is_dir()
                     or "__pycache__" in str(file)
@@ -332,7 +361,7 @@ class TestSecretsManagement:
             if not scan_dir.exists():
                 continue
 
-            for py_file in scan_dir.rglob("*.py"):
+            for py_file in _walk(scan_dir, {".py"}):
                 if "__pycache__" in str(py_file) or "test_secrets_management.py" in str(
                     py_file
                 ):  # Skip self

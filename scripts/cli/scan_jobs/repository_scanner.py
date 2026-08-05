@@ -52,13 +52,17 @@ Integrates with ToolRunner for parallel execution and resilient error handling.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from pathlib import Path
 
 from ...core.config import RetryConfig
+from ...core.paths import get_yara_rules_dir
 from ...core.tool_runner import ToolDefinition, ToolRunner
 from ..path_sanitizers import _sanitize_path_component, _validate_output_path
-from ..scan_utils import find_tool, write_stub
+from ..scan_utils import find_tool, report_tool_failure, write_stub
+
+logger = logging.getLogger(__name__)
 
 # Per-tool timeout defaults (seconds) for tools that typically run longer
 # These serve as MINIMUM timeouts - user/profile configs can increase but not decrease
@@ -70,6 +74,50 @@ TOOL_TIMEOUT_DEFAULTS: dict[str, int] = {
     "zap": 900,  # 15 min - DAST scanning
     "prowler": 600,  # 10 min - cloud config scanning
 }
+
+# Upper bound on file arguments passed to a single per-file tool invocation.
+# Windows caps a command line at 32767 characters; a few hundred absolute paths
+# stays well inside that while covering every repository we have measured
+# (docker-library/postgres, the densest, has 55 shell scripts and 26
+# Dockerfiles). Exceeding it is reported, never silently truncated - a cap that
+# does not announce itself reads as "everything was scanned" when it was not.
+MAX_FILE_ARGS = 300
+
+
+def _collect_files(repo: Path, patterns: tuple[str, ...], tool_name: str) -> list[str]:
+    """Collect matching files for a tool that takes file arguments.
+
+    Both shellcheck and hadolint accept many paths per invocation; scanning one
+    file and calling it done under-reports without saying so. hadolint used to
+    take `dockerfiles[0]`, which on docker-library/postgres meant 1 of 26 files
+    (and 1 of 14 on kubernetes-goat) - about 90% of Dockerfiles unexamined,
+    with nothing in the output to indicate it.
+    """
+    seen: set[Path] = set()
+    for pattern in patterns:
+        for path in repo.glob(pattern):
+            # Repositories vendor dependencies; scanning node_modules or a
+            # bundled venv buries the repo's own findings in third-party noise.
+            parts = set(path.parts)
+            if parts & {".git", "node_modules", "vendor", ".venv", "venv"}:
+                continue
+            if path.is_file():
+                seen.add(path)
+
+    files = sorted(seen)
+    if len(files) > MAX_FILE_ARGS:
+        logger.warning(
+            "%s: %d matching files in %s, scanning the first %d "
+            "(command-line length limit) - %d file(s) NOT scanned",
+            tool_name,
+            len(files),
+            repo.name,
+            MAX_FILE_ARGS,
+            len(files) - MAX_FILE_ARGS,
+        )
+        files = files[:MAX_FILE_ARGS]
+
+    return [str(f) for f in files]
 
 
 def scan_repository(
@@ -111,7 +159,53 @@ def scan_repository(
 
     # Use provided functions or defaults
     _write_stub = write_stub_func or write_stub
-    _find_tool = find_tool_func or find_tool
+    _resolve_tool = find_tool_func or find_tool
+
+    # Every tool block below is `if X in tools: path = _find_tool(X)` followed by
+    # `if path: ... elif allow_missing_tools: ...`. When neither holds the tool is
+    # dropped with no status, no warning and no error -- the scan simply runs
+    # without it and still exits 0. That is how checkov vanished from a repo with
+    # 47 Terraform files while `jmo tools check` reported it OK.
+    #
+    # Recording here rather than in all 26 blocks: they share this one alias.
+    unresolved: list[str] = []
+
+    # Tools this scanner actually has a code path for. Only an implemented block
+    # reaches `_find_tool`, so membership is recorded rather than inferred.
+    # Inferring it from "produced no ToolDefinition" cannot distinguish "no
+    # implementation" from "implemented, but this repo has no matching files" -
+    # and reporting the wrong reason sends the reader hunting for code that
+    # already exists.
+    considered: set[str] = set()
+
+    # For a lookup made on behalf of a profile tool, the binary that was
+    # actually missing - so the report can name both.
+    missing_dependency: dict[str, str] = {}
+
+    def _find_tool(tool_name: str, record_as: str | None = None) -> str | None:
+        """Resolve a binary, recorded against the profile tool that needs it.
+
+        `record_as` matters because several blocks resolve a binary that is not
+        the tool the user asked for: checkov-cicd runs `checkov`, trivy-rbac
+        runs `trivy`, semgrep-secrets runs `semgrep`, zap runs `zap-baseline.py`
+        plus `docker`, afl++ runs `afl-fuzz`.
+
+        Without it, `considered` only ever learned the binary names, so
+        `not_implemented` (`set(tools) - considered`) accused tools that had
+        demonstrably run - a deep scan of terragoat reported checkov-cicd,
+        semgrep-secrets and trivy-rbac as having "no repository implementation"
+        in the same run that wrote all three of their output files. In the other
+        direction, `unresolved` reported `docker` and `zap-baseline.py` as tools
+        whose findings were missing, and neither is a tool in any profile.
+        """
+        owner = record_as or tool_name
+        considered.add(owner)
+        resolved = _resolve_tool(tool_name)
+        if resolved is None:
+            unresolved.append(owner)
+            if owner != tool_name:
+                missing_dependency[owner] = tool_name
+        return resolved
 
     name = _sanitize_path_component(repo.name)
     out_dir = results_dir / name
@@ -325,17 +419,22 @@ def scan_repository(
         if hadolint_path:
             hadolint_flags = get_tool_flags("hadolint")
 
-            # Find Dockerfiles in repository
-            dockerfiles = list(repo.glob("**/Dockerfile*"))
+            # hadolint's usage is `[DOCKERFILE...]` - it takes as many paths as
+            # you give it. This previously passed `dockerfiles[0]` only, so
+            # docker-library/postgres had 1 of its 26 Dockerfiles scanned and
+            # kubernetes-goat 1 of 14 - ~90% unexamined, silently.
+            dockerfiles = _collect_files(
+                repo,
+                ("**/Dockerfile", "**/Dockerfile.*", "**/*.Dockerfile"),
+                "hadolint",
+            )
             if dockerfiles:
-                # Hadolint scans one file at a time; use first Dockerfile found
-                dockerfile = dockerfiles[0]
                 hadolint_cmd = [
                     hadolint_path,
                     "-f",
                     "json",
                     *hadolint_flags,
-                    str(dockerfile),
+                    *dockerfiles,
                 ]
                 tool_defs.append(
                     ToolDefinition(
@@ -351,6 +450,50 @@ def scan_repository(
         elif allow_missing_tools:
             _write_stub("hadolint", hadolint_out)
             statuses["hadolint"] = True
+
+    # ShellCheck: shell script static analysis
+    #
+    # shellcheck ships in PROFILE_TOOLS["fast"], installs cleanly and reports OK
+    # from `jmo tools check`, but had no repository implementation at all - so it
+    # could never run, and `shellcheck_adapter.py` sat waiting for input that was
+    # never produced. Measured: docker-library/postgres has 55 shell scripts and
+    # kubernetes-goat 7, none of them examined.
+    #
+    # Shell scripts are a genuine finding source in public repositories:
+    # unquoted expansions (SC2086), unquoted command substitution (SC2046) and
+    # `cd` without a failure guard (SC2164) are command-injection and
+    # data-destruction risks, not merely style.
+    if "shellcheck" in tools:
+        shellcheck_out = out_dir / "shellcheck.json"
+        shellcheck_path = _find_tool("shellcheck")
+        if shellcheck_path:
+            shellcheck_flags = get_tool_flags("shellcheck")
+            shell_scripts = _collect_files(
+                repo, ("**/*.sh", "**/*.bash", "**/*.ksh"), "shellcheck"
+            )
+            if shell_scripts:
+                shellcheck_cmd = [
+                    shellcheck_path,
+                    "--format=json",
+                    *shellcheck_flags,
+                    *shell_scripts,
+                ]
+                tool_defs.append(
+                    ToolDefinition(
+                        name="shellcheck",
+                        command=shellcheck_cmd,
+                        output_file=shellcheck_out,
+                        timeout=get_tool_timeout("shellcheck", timeout),
+                        retries=retries,
+                        # 0 = clean, 1 = findings. 2+ are fatal parse/usage
+                        # errors and must NOT be graded acceptable.
+                        ok_return_codes=(0, 1),
+                        capture_stdout=True,
+                    )
+                )
+        elif allow_missing_tools:
+            _write_stub("shellcheck", shellcheck_out)
+            statuses["shellcheck"] = True
 
     # Bandit: Python security analysis
     if "bandit" in tools:
@@ -458,7 +601,7 @@ def scan_repository(
             )
         # Strategy 2: Fallback to Docker-based noseyparker
         else:
-            docker_np_path = _find_tool("docker")
+            docker_np_path = _find_tool("docker", record_as="noseyparker")
             noseyparker_docker_script = (
                 Path(__file__).parent.parent.parent / "core/run_noseyparker_docker.sh"
             )
@@ -493,8 +636,8 @@ def scan_repository(
         zap_out = out_dir / "zap.json"
         # ZAP baseline scan can analyze HTML/JS files in repository
         # This is a limited use case; full DAST requires --url target
-        zap_baseline_path = _find_tool("zap-baseline.py")
-        zap_docker_path = _find_tool("docker")
+        zap_baseline_path = _find_tool("zap-baseline.py", record_as="zap")
+        zap_docker_path = _find_tool("docker", record_as="zap")
         if zap_baseline_path or zap_docker_path:
             zap_flags = get_tool_flags("zap")
             # Check for web-related files (HTML, JS, PHP, etc.)
@@ -614,8 +757,8 @@ def scan_repository(
     # For repositories, we check for compiled binaries and run basic fuzz testing.
     if "afl++" in tools:
         afl_out = out_dir / "aflplusplus.json"
-        afl_fuzz_path = _find_tool("afl-fuzz")
-        afl_analyze_path = _find_tool("afl-analyze")
+        afl_fuzz_path = _find_tool("afl-fuzz", record_as="afl++")
+        afl_analyze_path = _find_tool("afl-analyze", record_as="afl++")
         if afl_fuzz_path or afl_analyze_path:
             afl_flags = get_tool_flags("afl++")
             # Look for compiled binaries or fuzzing harnesses
@@ -678,7 +821,7 @@ def scan_repository(
     if "checkov-cicd" in tools:
         checkov_cicd_out = out_dir / "checkov-cicd.json"
         checkov_cicd_temp_dir = out_dir / "checkov-cicd-temp"
-        checkov_cicd_path = _find_tool("checkov")
+        checkov_cicd_path = _find_tool("checkov", record_as="checkov-cicd")
         if checkov_cicd_path:
             checkov_cicd_flags = get_tool_flags("checkov-cicd")
             checkov_cicd_cmd = [
@@ -874,25 +1017,54 @@ def scan_repository(
         prowler_path = _find_tool("prowler")
         if cloud_files and prowler_path:
             prowler_flags = get_tool_flags("prowler")
-            # Run Prowler in configuration scanning mode
+            # `prowler iac` scans Infrastructure-as-Code from a local path with
+            # no cloud credentials, which is what this branch wants - it is
+            # gated on .tf/cloudformation files being present.
+            #
+            # What was here before could not run at all. prowler's CLI requires
+            # a provider subcommand ({aws,azure,gcp,kubernetes,iac,...}); with
+            # none, argparse printed usage and exited **2**, which is where the
+            # reported "Return code 2 not in (0, 1, 3)" came from. Widening the
+            # accepted set to include 2 would have been the wrong fix: 2 is
+            # argparse's usage error, so accepting it means accepting "I passed
+            # nonsense arguments" as a successful scan.
+            #
+            # `--output-formats json` was also invalid - prowler 5.x offers
+            # {csv,json-asff,json-ocsf,html,sarif} and no plain `json`.
             prowler_cmd = [
                 prowler_path,
+                "iac",
+                "--scan-path",
+                str(repo),
                 "--output-formats",
-                "json",
+                "json-ocsf",
                 "--output-directory",
                 str(out_dir),
                 "--output-filename",
                 "prowler",
+                # prowler renders a summary table to stdout that can raise
+                # UnicodeEncodeError on a non-UTF-8 console. Nothing reads it.
+                "--no-banner",
                 *prowler_flags,
             ]
             tool_defs.append(
                 ToolDefinition(
                     name="prowler",
                     command=prowler_cmd,
-                    output_file=prowler_out,
+                    # The file prowler ACTUALLY writes, not the one the report
+                    # phase wants. `--output-filename prowler` plus
+                    # `--output-formats json-ocsf` yields `prowler.ocsf.json`,
+                    # and ToolRunner checks this path the instant the process
+                    # exits - before the rename below. Declaring `prowler.json`
+                    # made it report `no_output` for a scan that had just
+                    # written 372 KB, and the reconciler then saw the renamed
+                    # artifact too and called prowler CONTRADICTORY.
+                    output_file=out_dir / "prowler.ocsf.json",
                     timeout=get_tool_timeout("prowler", timeout),
                     retries=retries,
-                    ok_return_codes=(0, 1, 3),  # 0=clean, 1=findings, 3=no credentials
+                    # 0=clean, 1=findings, 3=no credentials. NOT 2: that is
+                    # argparse rejecting the command line.
+                    ok_return_codes=(0, 1, 3),
                     capture_stdout=False,
                 )
             )
@@ -906,18 +1078,32 @@ def scan_repository(
         yara_path = _find_tool("yara")
         if yara_path:
             yara_flags = get_tool_flags("yara")
-            # Use built-in rules or user-provided rules
+            # yara is libyara bindings, not a CLI, so `yara_path` is this
+            # interpreter and scripts/core/yara_runner.py supplies the command
+            # line. See that module for why the native CLI is not an option:
+            # VirusTotal/yara publishes prebuilt binaries for Windows only, and
+            # stopped even those at v4.5.6.
+            #
+            # What was here before could never have run. It built the native C
+            # command line (`yara -r -w -s <rules> <repo>`) against a library
+            # that has no executable; it pointed at /usr/share/yara/rules, which
+            # is absent on Windows and on stock Ubuntu alike; and the adapter it
+            # fed parses JSON, which yara's CLI has never emitted - the string
+            # "json" does not appear anywhere in cli/yara.c.
             rules_path = per_tool_config.get("yara", {}).get(
-                "rules_path", "/usr/share/yara/rules"
+                "rules_path", str(get_yara_rules_dir())
             )
             yara_cmd = [
                 yara_path,
-                "-r",  # Recursive
-                "-w",  # Disable warnings
-                "-s",  # Print matched strings
-                *yara_flags,
+                "-m",
+                "scripts.core.yara_runner",
+                "--rules",
                 str(rules_path),
+                "--target",
                 str(repo),
+                "--output",
+                str(yara_out),
+                *yara_flags,
             ]
             tool_defs.append(
                 ToolDefinition(
@@ -926,8 +1112,12 @@ def scan_repository(
                     output_file=yara_out,
                     timeout=get_tool_timeout("yara", timeout),
                     retries=retries,
+                    # 0 = clean, 1 = matches. The runner reserves 2 for "did NOT
+                    # scan", which must stay a failure rather than an empty result.
                     ok_return_codes=(0, 1),
-                    capture_stdout=True,
+                    # The runner writes --output itself. Capturing stdout would
+                    # overwrite that file with the runner's (empty) stdout.
+                    capture_stdout=False,
                 )
             )
         elif allow_missing_tools:
@@ -1014,7 +1204,7 @@ def scan_repository(
             + list(repo.glob("**/*service*.yaml"))
             + list(repo.glob("**/k8s/**/*.yaml"))
         )
-        trivy_rbac_path = _find_tool("trivy")
+        trivy_rbac_path = _find_tool("trivy", record_as="trivy-rbac")
         if k8s_manifests and trivy_rbac_path:
             trivy_rbac_flags = get_tool_flags("trivy-rbac")
             trivy_rbac_cmd = [
@@ -1047,7 +1237,7 @@ def scan_repository(
     # Semgrep Secrets: Hardcoded credentials detection
     if "semgrep-secrets" in tools:
         semgrep_secrets_out = out_dir / "semgrep-secrets.json"
-        semgrep_secrets_path = _find_tool("semgrep")
+        semgrep_secrets_path = _find_tool("semgrep", record_as="semgrep-secrets")
         if semgrep_secrets_path:
             semgrep_secrets_flags = get_tool_flags("semgrep-secrets")
             semgrep_secrets_cmd = [
@@ -1146,6 +1336,62 @@ def scan_repository(
 
     # ========== End of v1.0.0 New Tools ==========
 
+    # A requested tool that never ran must say so. Silence here is the same
+    # failure class as #700 (an accepted return code with no output written):
+    # the scan looks complete, exits 0, and the missing tool's findings are
+    # simply absent with nothing in the output to indicate it.
+    #
+    # Only tools that were *dropped*. Under --allow-missing-tools the `elif`
+    # branch already wrote a stub and recorded the tool satisfied; that is a
+    # deliberate, user-requested empty result, not a silent omission, so it must
+    # not be overwritten here. Presence in `statuses` is what distinguishes the
+    # two - a dropped tool has no entry at all, which is the whole problem.
+    for missing in sorted(set(unresolved)):
+        if missing in statuses:
+            continue
+        statuses[missing] = False
+        # Name the dependency when the tool itself is not what was missing.
+        # `zap` needs `zap-baseline.py` and `docker`; reporting the helper's
+        # name alone sent the reader looking for a tool that is in no profile,
+        # while the tool that actually lost its findings went unnamed.
+        dep = missing_dependency.get(missing)
+        what = f"its dependency `{dep}`" if dep else "its executable"
+        logger.error(
+            "%s: requested but %s could not be found - it did "
+            "NOT run and its findings are MISSING from this scan. "
+            "Run `jmo tools check` to confirm installation, or pass "
+            "--allow-missing-tools to record an explicit empty result.",
+            missing,
+            what,
+        )
+
+    # Requested but never even attempted: this scanner has no code path for
+    # them. nuclei scans URLs only and opa is evaluated in the report phase, so
+    # both are correct to skip on a repository - but the profile still counts
+    # them, which is why the progress bar reads [N/9] while fewer can run.
+    # Kept distinct from `unresolved` so a genuinely missing binary is not lost
+    # among tools that were never going to run.
+    not_implemented = set(tools) - considered
+    if not_implemented:
+        logger.warning(
+            "Requested but not applicable to repository targets (no repository "
+            "implementation): %s",
+            ", ".join(sorted(not_implemented)),
+        )
+
+    # Implemented and installed, but this repository had nothing for them to
+    # look at - shellcheck on a repo with no shell scripts, hadolint with no
+    # Dockerfiles. Benign, and reported at debug so it is available when a user
+    # asks "why is there no shellcheck output?" without adding noise to a normal
+    # run. Distinct from the two cases above: nothing is wrong here.
+    idle = considered - set(unresolved) - {td.name for td in tool_defs} - set(statuses)
+    if idle:
+        logger.debug(
+            "No matching files in %s for: %s",
+            repo.name,
+            ", ".join(sorted(idle)),
+        )
+
     # Execute all tools with ToolRunner
     # Note: Tool progress is reported via progress_callback, not direct stderr prints
     # This prevents overlapping output when Rich progress display is active
@@ -1171,6 +1417,16 @@ def scan_repository(
                 noseyparker_phases[phase] = False
             continue  # Don't set individual phase status in statuses dict
 
+        # prowler names its own artifact. `--output-filename prowler` with
+        # `--output-formats json-ocsf` produces `prowler.ocsf.json`, so the
+        # declared output_file (`prowler.json`) would never appear and the tool
+        # would be recorded `no_output` after a scan that genuinely worked.
+        if result.tool == "prowler":
+            ocsf_out = out_dir / "prowler.ocsf.json"
+            prowler_json = out_dir / "prowler.json"
+            if ocsf_out.exists() and not prowler_json.exists():
+                ocsf_out.replace(prowler_json)
+
         # Handle checkov-cicd special case: move results from temp directory
         if result.tool == "checkov-cicd" and result.status == "success":
             # checkov creates: checkov-cicd-temp/results_json.json
@@ -1194,27 +1450,60 @@ def scan_repository(
             if result.attempts > 1:
                 attempts_map[result.tool] = result.attempts
         elif result.status == "error" and "Tool not found" in result.error_message:
-            # Tool doesn't exist - write stub if allow_missing_tools
-            if allow_missing_tools:
-                tool_out = out_dir / f"{result.tool}.json"
-                _write_stub(result.tool, tool_out)
-                statuses[result.tool] = True
-            else:
-                statuses[result.tool] = False
+            # Reaching here means the tool RESOLVED in pre-flight - it was given
+            # a ToolDefinition and handed to ToolRunner - and then could not be
+            # executed. That is always a defect: a resolver returning something
+            # that is not a path, or a binary that vanished mid-scan. A tool the
+            # user genuinely has not installed never gets this far; it is
+            # dropped or stubbed in pre-flight.
+            #
+            # So --allow-missing-tools must NOT absorb it. That flag means
+            # "record an explicit empty result for tools I know I lack", which
+            # is not consent to swallow a resolver bug. It used to write a stub
+            # and set True here: find_tool("yara") returned the pseudo-path
+            # "python:yara", which is truthy and so passed pre-flight, then
+            # raised FileNotFoundError at exec. Measured on a machine with HOME
+            # and PATH stripped - where yara could not possibly have run - the
+            # scan wrote yara.json and reported a clean malware scan.
+            #
+            # No stub, either: an empty stub is indistinguishable from a genuine
+            # empty result once the report phase reads it, which is the precise
+            # lie being removed.
+            statuses[result.tool] = False
+            report_tool_failure(result, "its executable was not found at run time")
         elif "Timeout" in result.error_message:
             # Tool timed out - write stub so report phase has consistent files
             # and mark as failed (timeout is a failure state)
+            #
+            # The stub must not be the only signal: once the report phase reads
+            # it, an empty stub is indistinguishable from a tool that genuinely
+            # found nothing. The timeout has to be stated here or it is lost.
             tool_out = out_dir / f"{result.tool}.json"
             if not tool_out.exists():
                 _write_stub(result.tool, tool_out)
             statuses[result.tool] = False
             if result.attempts > 0:
                 attempts_map[result.tool] = result.attempts
+            report_tool_failure(result, "it timed out")
         else:
             # Other errors (non-zero exit, etc.)
             statuses[result.tool] = False
             if result.attempts > 0:
                 attempts_map[result.tool] = result.attempts
+            # `no_output` - an accepted return code with nothing written - is
+            # also announced by the progress tracker, but that is a UI surface:
+            # bare text rather than the log stream, and overwritten in place on
+            # a TTY. It is not a durable record, so this must still log. The
+            # #700 class of bug is precisely a tool that returns 0 and produces
+            # nothing; that must survive into the log.
+            report_tool_failure(
+                result,
+                (
+                    "it exited with an accepted code but wrote no output"
+                    if result.status == "no_output"
+                    else "it failed"
+                ),
+            )
 
     # Aggregate noseyparker multi-phase status
     if any(noseyparker_phases.values()):

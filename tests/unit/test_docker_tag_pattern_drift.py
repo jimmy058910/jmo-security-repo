@@ -65,6 +65,12 @@ SKIP_DIR_NAMES: set[str] = {
     ".mypy_cache",
     "htmlcov",
     "dev-only",  # Internal archive, explicitly not published per CLAUDE.md
+    # A nested git worktree is a *second checkout*, not repository content.
+    # `.claude/worktrees/release-v107` held a pre-squash copy of CHANGELOG.md
+    # whose historical `:latest-full` / `:latest-slim` references tripped this
+    # test against a file that is not part of the tree under review. Previously
+    # invisible: the walk died in node_modules before ever reaching it.
+    "worktrees",
 }
 
 # The forbidden pattern: any GHCR jmo-security image with a `:latest-<suffix>` tag.
@@ -76,17 +82,18 @@ FORBIDDEN_TAG_PATTERN = re.compile(
 
 
 def _iter_scannable_files() -> list[Path]:
-    """Walk REPO_ROOT and yield files we should scan."""
-    out: list[Path] = []
-    for path in REPO_ROOT.rglob("*"):
-        if not path.is_file():
-            continue
-        if path.suffix not in SCAN_EXTENSIONS:
-            continue
-        if any(part in SKIP_DIR_NAMES for part in path.parts):
-            continue
-        out.append(path)
-    return out
+    """Walk REPO_ROOT and yield files we should scan.
+
+    Pruning happens *during* traversal. The previous `rglob("*")` form descended
+    into `node_modules` regardless of `SKIP_DIR_NAMES` and stat-ed every file it
+    yielded, which failed differently on each platform and so read as a platform
+    quirk on both: `OSError [WinError 1920]` on the pnpm symlink farm under
+    Windows, and a plain pytest **timeout** under WSL, where stat-ing tens of
+    thousands of vendored files across `/mnt/c` is glacial.
+    """
+    from tests.conftest import iter_repo_files
+
+    return iter_repo_files(REPO_ROOT, SKIP_DIR_NAMES, SCAN_EXTENSIONS)
 
 
 def _relative_posix(path: Path) -> str:

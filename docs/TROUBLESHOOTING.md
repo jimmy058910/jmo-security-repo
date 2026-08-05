@@ -76,7 +76,7 @@ jmo scan --repo . --timeout 1800    # 30-minute hard limit
 **Fix:**
 
 ```bash
-jmo history vacuum    # rebuilds the DB, releases stale locks
+jmo history optimize    # VACUUM + ANALYZE; rebuilds the DB, releases stale locks
 ```
 
 If the problem persists, rename `.jmo/history.db` to `.jmo/history.db.old` and re-run — a fresh DB will initialize.

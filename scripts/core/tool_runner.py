@@ -10,7 +10,10 @@ Created as part of PHASE 1 refactoring to extract tool execution logic from cmd_
 from __future__ import annotations
 
 import logging
+import os
+import signal
 import subprocess
+import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -96,6 +99,103 @@ class ToolDefinition:
             raise ValueError(f"Timeout must be positive, got {self.timeout}")
         if isinstance(self.retries, int) and self.retries < 0:
             raise ValueError(f"Retries must be non-negative, got {self.retries}")
+
+
+def _terminate_tree(proc: subprocess.Popen) -> None:
+    """Kill `proc` and every process it spawned.
+
+    ``Popen.kill()`` kills one process. Several scanners are launcher scripts
+    that spawn the real work as a grandchild - ``dependency-check.bat`` runs
+    ``cmd.exe`` which runs ``java`` - and killing the launcher leaves that
+    grandchild alive, still holding the stderr pipe. ``communicate()`` then
+    blocks on a pipe that will never close, so the timeout does not bound
+    anything: measured, a dependency-check invocation with a 1200s timeout was
+    still running at **38 minutes**, with an orphaned java process no longer
+    under the scan's process tree at all.
+
+    This is the Windows orphan-process hang described in
+    ``.claude/rules/testing.cross-platform.rules.md``. It stayed hidden while
+    dependency-check failed instantly with WinError 193; making the tool
+    actually run is what exposed it.
+    """
+    # sys.platform, not os.name: mypy narrows platform-specific attributes on
+    # `sys.platform` comparisons only, and os.killpg/getpgid/signal.SIGKILL do
+    # not exist in the Windows stubs.
+    if sys.platform == "win32":
+        # taskkill /T walks the tree by PID. There is no portable process-group
+        # equivalent on Windows without a Job Object.
+        try:
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                capture_output=True,
+                # Explicit codec even though nothing reads this output: bare
+                # capture decodes with the host locale, which is the drift
+                # tests/cross_platform/test_encoding_drift_guard.py forbids on
+                # the scan data path. It caught this line.
+                encoding="utf-8",
+                errors="replace",
+                timeout=30,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError):
+            pass
+    else:
+        # The child was started with start_new_session=True, so it leads its own
+        # process group and one signal reaches every descendant.
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except (ProcessLookupError, PermissionError, OSError):
+            pass
+    try:
+        proc.kill()
+    except OSError:
+        pass
+
+
+def _run_bounded(
+    command: list[str],
+    *,
+    env: dict[str, str],
+    stdout: int,
+    stderr: int,
+    encoding: str,
+    errors: str,
+    timeout: float | None,
+) -> subprocess.CompletedProcess:
+    """``subprocess.run``, but a timeout kills the whole process tree.
+
+    ``subprocess.run(timeout=...)`` kills only the direct child and then calls
+    ``communicate()`` again to drain the pipes - which a surviving grandchild
+    holds open indefinitely. The timeout therefore cannot be enforced for any
+    tool that is a launcher script, which is most of the Java-based ones.
+
+    Raises ``subprocess.TimeoutExpired`` after the tree is dead, so the caller's
+    existing timeout handling is unchanged.
+    """
+    proc = subprocess.Popen(
+        command,
+        env=env,
+        stdout=stdout,
+        stderr=stderr,
+        encoding=encoding,
+        errors=errors,
+        # POSIX only: makes the child a process-group leader so killpg reaches
+        # its descendants. Not valid on Windows, where taskkill /T is used.
+        start_new_session=(sys.platform != "win32"),
+    )
+    try:
+        out, err = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        _terminate_tree(proc)
+        try:
+            # The tree is dead, so the pipes close and this returns promptly.
+            # Bounded anyway: a wedged handle must not replace one hang with
+            # another.
+            out, err = proc.communicate(timeout=30)
+        except subprocess.TimeoutExpired:
+            out, err = "", ""
+        raise subprocess.TimeoutExpired(command, timeout or 0, output=out, stderr=err)
+    return subprocess.CompletedProcess(command, proc.returncode, out, err)
 
 
 @dataclass
@@ -219,6 +319,39 @@ class ToolRunner:
             return False
 
     @staticmethod
+    def _empty_capture_despite_findings(
+        tool: ToolDefinition, returncode: int, stdout: str | None
+    ) -> bool:
+        """Whether a capture_stdout tool claimed findings but emitted nothing.
+
+        The mirror of ``_missing_declared_output``. That covers tools told where
+        to write; this covers tools whose output the caller writes afterwards
+        from ``result.stdout``:
+
+            result.output_file.write_text(result.stdout or "", ...)
+
+        The ``or ""`` turns lost output into a 0-byte file that *exists*, so
+        every "was a file written?" check downstream answers yes.
+
+        Emptiness alone cannot be the signal -- trufflehog on a repo with no
+        secrets exits 0 and correctly emits nothing. The discriminator is the
+        return code. Scanners use a non-zero *accepted* code to mean "I found
+        something"; emitting nothing while saying so is self-contradictory, and
+        is what a crash inside an accepted code looks like.
+
+        Measured: checkov's broken Windows venv wrapper exits 1 with an empty
+        stdout and a traceback on stderr. Because checkov declares
+        ``ok_return_codes=(0, 1)`` -- 1 legitimately means "issues found" -- the
+        crash was graded a success and written out as a 0-byte checkov.json in
+        all 5 repos of a public-repo benchmark, while the scan exited 0.
+        """
+        if not tool.capture_stdout or tool.output_file is None:
+            return False
+        if returncode == 0:
+            return False
+        return not (stdout or "").strip()
+
+    @staticmethod
     def _classify_failure(exc: Exception | None, returncode: int | None) -> str:
         """Classify a failure into a type for retry budget lookup."""
         if isinstance(exc, subprocess.TimeoutExpired):
@@ -258,19 +391,65 @@ class ToolRunner:
         # Track attempts per failure type
         attempts_by_type: dict[str, int] = {}
 
+        # Scanners read arbitrary repository content, so their own stdio must be
+        # UTF-8 or they crash on the first character their host codec cannot
+        # represent. This is the mirror of the decode problem handled below: we
+        # cannot patch a third-party tool, but we do choose the environment it
+        # runs in.
+        #
+        # Measured: semgrep 1.161.0 on OWASP/NodeGoat under a cp1252 host dies
+        # with "'charmap' codec can't encode character U+202A" (LEFT-TO-RIGHT
+        # EMBEDDING, present in the scanned source) and exits 2 - which semgrep
+        # declares as "errors" and JMo accepts - so it wrote nothing while
+        # looking fine. The codepoint is named rather than quoted here: bandit
+        # B613 flags literal bidirectional control characters in source, and it
+        # is right to (CVE-2021-42574, "Trojan Source").
+        # With PYTHONUTF8=1 the identical command returns 186 KB and 42 results.
+        #
+        # setdefault, not assignment: an operator who deliberately pinned
+        # PYTHONUTF8 keeps their value. Non-Python tools ignore the variable.
+        child_env = os.environ.copy()
+        child_env.setdefault("PYTHONUTF8", "1")
+
+        # Some scanners shell out to other scanners, and JMo installs those into
+        # ~/.jmo/bin - a directory nothing puts on PATH. `prowler iac` invokes
+        # `trivy`; with trivy installed by JMo but absent from the child's PATH
+        # it died with FileNotFoundError [WinError 2] from inside prowler and
+        # wrote nothing. Adding trivy's directory to PATH produced 88 records
+        # (13 FAIL) from the identical command.
+        #
+        # os.pathsep, not ":" - the hardcoded colon is what corrupted the
+        # version probe's PATH on Windows, fusing the prepended entries and the
+        # first real one into a single unusable element.
+        jmo_bin = Path.home() / ".jmo" / "bin"
+        if jmo_bin.is_dir():
+            child_env["PATH"] = os.pathsep.join(
+                [str(jmo_bin), child_env.get("PATH", "")]
+            )
+
         while True:
             attempt += 1
 
             try:
-                result = subprocess.run(
+                result = _run_bounded(
                     tool.command,
+                    env=child_env,
                     stdout=(
                         subprocess.PIPE if tool.capture_stdout else subprocess.DEVNULL
                     ),
                     stderr=subprocess.PIPE,
-                    text=True,
+                    # NOT text=True. That decodes with the *parent's* locale
+                    # codec under strict errors, and scanner output carries
+                    # whatever bytes the scanned repo contains. On Windows the
+                    # decode runs in subprocess._readerthread, where the
+                    # exception cannot reach us -- it is printed and the capture
+                    # is silently lost, so the tool looks successful and the
+                    # caller writes a 0-byte output file. Scanners emit UTF-8
+                    # regardless of host locale; "replace" keeps one bad byte
+                    # from discarding an entire scan's findings.
+                    encoding="utf-8",
+                    errors="replace",
                     timeout=tool.timeout,
-                    check=False,  # Don't raise on non-zero exit
                 )
 
                 # Check if return code is acceptable
@@ -298,6 +477,26 @@ class ToolRunner:
                             error_message=(
                                 f"Exited {result.returncode} (an accepted code) but "
                                 f"wrote no output to {tool.output_file}"
+                            ),
+                        )
+
+                    if self._empty_capture_despite_findings(
+                        tool, result.returncode, result.stdout
+                    ):
+                        duration = time.perf_counter() - start_time
+                        return ToolResult(
+                            tool=tool.name,
+                            status="no_output",
+                            returncode=result.returncode,
+                            stderr=result.stderr,
+                            attempts=attempt,
+                            duration=duration,
+                            output_file=tool.output_file,
+                            capture_stdout=tool.capture_stdout,
+                            error_message=(
+                                f"{tool.name}: exited {result.returncode} (an accepted "
+                                f"code meaning findings were produced) but emitted no "
+                                f"output - its findings are MISSING from this scan"
                             ),
                         )
 
