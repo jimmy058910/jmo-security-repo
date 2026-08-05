@@ -99,16 +99,56 @@ docs/COMPLETENESS_ANALYZER.md
 # MCP configuration with sensitive tokens (keep .mcp.json.example in repo)
 .mcp.json
 
-# Claude Code user-specific configuration (open-source project)
-# Use .claude/* (not .claude/) so specific subpaths can be re-included below.
-# Git cannot re-include files under a directory excluded with a trailing slash.
+# ---------------------------------------------------------------------------
+# Claude Code configuration: the public/private boundary
+# ---------------------------------------------------------------------------
+# What ships to a public clone is decided by AUDIENCE, deliberately:
+#   public  - what a CONTRIBUTOR uses: shared rules, contributor skills, and
+#             the read-only analysis agents.
+#   private - maintainer workflows (issue/PR triage, merging, releases) and
+#             marketing. These stay on the maintainer's disk, in place under
+#             .claude/skills/ so Claude Code still discovers them as slash
+#             commands; they are simply never committed.
+#
+# Two mechanics govern this list:
+#   1. `.claude/*` (not `.claude/`) excludes every direct child while still
+#      allowing specific subpaths to be re-included. Git cannot re-include
+#      anything under a directory excluded with a trailing slash.
+#   2. Adding a line here does NOT untrack an already-tracked path. Git never
+#      re-ignores what is already in the index; that needs `git rm --cached`.
+#      Forgetting this is exactly how the boundary drifted before.
+#
+# Guard: `scripts/dev/check_doc_links.py` fails CI and pre-commit when a
+# tracked file links to a path this list leaves untracked, so the allowlist
+# and the documentation cannot silently disagree again.
 .claude/*
-# Exception: path-scoped AI rules are shared conventions (subprocess security,
+
+# Public: path-scoped AI rules are shared conventions (subprocess security,
 # cross-platform testing, adapter patterns) that apply to all contributors.
 !.claude/rules/
-# Note: files already tracked under .claude/ (e.g. skills/INDEX.md,
-# skills/jmo-e2e-verify/SKILL.md) stay tracked because git does not
-# re-ignore paths that are already in the index.
+
+# Public: read-only analysis agents, plus the guide describing their format.
+!.claude/agents/
+!.claude/PERSONA_GUIDELINES.md
+
+# Public: contributor skills. Re-include the directory, re-exclude its
+# contents, then allowlist per skill - anything absent here stays private.
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/INDEX.md
+!.claude/skills/references/
+!.claude/skills/jmo-adapter-generator/
+!.claude/skills/jmo-ci-debugger/
+!.claude/skills/jmo-compliance-mapper/
+!.claude/skills/jmo-dashboard-builder/
+!.claude/skills/jmo-documentation-updater/
+!.claude/skills/jmo-e2e-verify/
+!.claude/skills/jmo-profile-optimizer/
+!.claude/skills/jmo-refactoring-assistant/
+!.claude/skills/jmo-security-hardening/
+!.claude/skills/jmo-systematic-debugging/
+!.claude/skills/jmo-target-type-expander/
+!.claude/skills/jmo-test-fabricator/
 
 # Test scan result directories (local testing artifacts)
 test-juice-results/

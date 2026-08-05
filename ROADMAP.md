@@ -6,9 +6,14 @@
 
 ## Current Status
 
-**Latest Stable Release:** v1.0.0 (November 2025) — Production-Ready Platform
+**Latest Stable Release:** v1.0.8 (August 2026)
 
-v1.0.0 delivered all core features for production security scanning:
+The project ships on a **patch cadence** — each release hardens what is already
+there rather than accumulating toward a version milestone. The next release is
+v1.0.9. There is no v1.1.0 in flight; features that would once have been held
+for one now ship in the next patch.
+
+v1.0 delivers the full production scanning platform:
 
 - 28 security scanners with unified CLI
 - SQLite historical storage with trend analysis
@@ -19,33 +24,12 @@ v1.0.0 delivered all core features for production security scanning:
 - React dashboard with interactive filtering
 - Cross-tool deduplication (30-40% noise reduction)
 
-**Documentation:** [CHANGELOG.md](CHANGELOG.md) for complete version history
+**Documentation:** [CHANGELOG.md](CHANGELOG.md) is the authoritative record of
+what shipped in which release. This file covers only what has *not* shipped yet.
 
 ---
 
-## Completed (v1.1.0) — Pending Release
-
-**Theme:** Dashboard polish, accessibility, and wizard hardening
-
-All v1.1.0 features are implemented on the `dev` branch and pending release.
-
-| Feature | Description |
-|---------|-------------|
-| KEV-first sorting | Critical vulnerabilities (CISA KEV) always sorted first |
-| Dual pagination | Top and bottom pagination controls |
-| Radix UI tooltips | Accessible hover tooltips for truncated content |
-| Simple HTML reporter | Email-compatible static HTML (Gmail, Outlook, etc.) |
-| Wizard dependency auto-install | Detects and installs Java/Node.js/bash runtime deps |
-| Wizard `--db` flag | Custom history database path for wizard |
-| Wizard refactoring (Phase 3) | Trend flow extracted to dedicated module |
-| Windows terminal compatibility | ANSI detection, `NO_COLOR` support, dynamic width |
-| Archive extraction hardening | CWE-22 path traversal defense (Zip Slip protection) |
-| Python 3.12 minimum | Stdlib `tomllib`, `tar filter="data"` |
-| Docker Ubuntu 24.04 | PEP 668, UID 1000 fix, shellcheck binary install |
-
----
-
-## Planned (v1.2.0+)
+## Planned
 
 **Theme:** Developer experience and extensibility
 
@@ -61,9 +45,10 @@ All v1.1.0 features are implemented on the `dev` branch and pending release.
 
 ---
 
-## Future (v2.0+)
+## Future
 
-**Theme:** Enterprise and advanced features
+**Theme:** Enterprise and advanced features. Larger than a patch — these need a
+design pass before they are schedulable.
 
 | Feature | GitHub Issue |
 |---------|--------------|
@@ -78,11 +63,10 @@ All v1.1.0 features are implemented on the `dev` branch and pending release.
 
 ## Completed Features
 
-### v1.0.0 (November 2025)
+Every shipped feature lives in [CHANGELOG.md](CHANGELOG.md), release by release —
+it is not duplicated here, so there is nothing to keep in sync.
 
-All v1.0.0 features are documented in [CHANGELOG.md](CHANGELOG.md#100---2025-11-10).
-
-Key highlights:
+Highlights of the v1.0 line:
 
 - **28 security scanners** — Unified CLI orchestrating tools across 6 scan types
 - **Metadata wrapper** — Standardized `{"meta": {...}, "findings": [...]}` output
@@ -94,6 +78,8 @@ Key highlights:
 - **Policy-as-Code** — OPA 1.0+ with Rego v1 syntax
 - **AI remediation** — MCP server for Copilot/Claude integration
 - **Cross-tool deduplication** — Similarity clustering, 30-40% noise reduction
+- **Scan accounting** — every declared tool lands in exactly one accounted state,
+  so a tool can no longer vanish between running and reporting (v1.0.8)
 
 ---
 
@@ -114,5 +100,5 @@ Want to help? Check out:
 
 ---
 
-**Last Updated:** February 2026
+**Last Updated:** August 2026 (v1.0.8)
 **Maintained By:** Jimmy ([@jimmy058910](https://github.com/jimmy058910))

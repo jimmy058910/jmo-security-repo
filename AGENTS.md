@@ -29,11 +29,14 @@ Agents run autonomously when invoked in conversation.
 | `doc-sync-checker` | Documentation-code sync verification |
 | `codebase-explorer` | Architecture and pattern understanding |
 
-Agent definitions: [.claude/agents/](.claude/agents/)
+Agent definitions: [.claude/agents/](.claude/agents/) — persona conventions in [.claude/PERSONA_GUIDELINES.md](.claude/PERSONA_GUIDELINES.md)
 
 ## Skills
 
-Skills are invoked with `/skill-name` in Claude Code.
+Skills are invoked with `/skill-name` in Claude Code. These twelve ship with the
+repository; maintainer-only workflows (triage, merges, releases, marketing) are
+deliberately not published — see [.claude/skills/INDEX.md](.claude/skills/INDEX.md)
+for the boundary and how it is enforced.
 
 | Skill | Slash Command | Purpose |
 |-------|--------------|---------|
@@ -48,9 +51,6 @@ Skills are invoked with `/skill-name` in Claude Code.
 | Refactoring Assistant | `/jmo-refactoring-assistant` | Complex refactoring with test preservation |
 | Documentation Updater | `/jmo-documentation-updater` | Keep docs synchronized with code |
 | Dashboard Builder | `/jmo-dashboard-builder` | Build React security dashboard |
-| Content Generator | `/content-generator` | Generate marketing content |
-| Community Manager | `/community-manager` | Track community engagement |
-| Skill Optimizer | `/jmo-skill-optimizer` | Review and upgrade skills |
 | E2E Verifier | `/jmo-e2e-verify` | AI-orchestrated e2e verification with failure categorization and visual dashboard inspection |
 
 The `/jmo-e2e-verify` skill uses **3 parallel research sub-agents** in Phase 2:
@@ -90,3 +90,4 @@ Setup: [docs/MCP_SETUP.md](docs/MCP_SETUP.md)
 - [CONTRIBUTING.md](CONTRIBUTING.md) — Contribution workflow
 - [TEST.md](TEST.md) — Testing guide
 - [docs/USER_GUIDE.md](docs/USER_GUIDE.md) — User documentation
+- [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) — Deliberate and environment-bound behaviour

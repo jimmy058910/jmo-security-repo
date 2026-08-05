@@ -842,7 +842,7 @@ The MCP server provides a standardized interface for AI tools to query security 
 |------|-------------|
 | `--results-dir DIR` | Path to results directory (default: `./results`) |
 | `--repo-root PATH` | Path to repository root (default: current directory) |
-| `--api-key KEY` | API key for authentication (enables production mode) |
+| `--api-key KEY` | Intended to enable authentication. **Currently inert** — see [#716](https://github.com/jimmy058910/jmo-security-repo/issues/716). Set `JMO_MCP_API_KEYS` instead |
 | `--log-level LEVEL` | Log level: `DEBUG`, `INFO`, `WARN`, `ERROR` |
 | `--human-logs` | Human-friendly colored logs instead of JSON |
 
@@ -852,7 +852,7 @@ The MCP server provides a standardized interface for AI tools to query security 
 |----------|-------------|
 | `MCP_RESULTS_DIR` | Path to results directory (overrides `--results-dir`) |
 | `MCP_REPO_ROOT` | Path to repository root (overrides `--repo-root`) |
-| `MCP_API_KEY` | API key for authentication (overrides `--api-key`) |
+| `JMO_MCP_API_KEYS` | Comma-separated API keys. Authentication is **disabled** while unset — the server logs which state it is in at startup |
 
 ---
 

@@ -119,10 +119,15 @@ fix the plan rather than working around it.
    - Change scope is larger than expected
    - **Action:** Present the issue, options, and recommendation before proceeding
 
-3. **Document If Deferring:** If fix requires significant research/refactoring but isn't blocking:
-   - Create GitHub issue with `technical-debt` or `enhancement` label
-   - Add `# TODO(issue-#):` comment in code at the relevant location
-   - Document in `.claude/known-issues.md` with description, root cause, proposed fix, priority (P0-P3)
+3. **Document If Deferring:** If a fix needs significant research or refactoring but isn't blocking, route it by *who needs to know*. There is no fourth option — a private notes file was tried and removed, because nothing ever closed it:
+
+   | Kind of thing | Goes to | Why there |
+   |---|---|---|
+   | Anything with a plausible fix | **GitHub issue** (`technical-debt` / `enhancement`) + `# TODO(issue-#):` at the site | It can be closed, assigned, and searched. A file can only be edited. |
+   | Behaviour a *user* can hit and we intend to keep | [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) | Ships in the repo, so users find it without reading the tracker. |
+   | A trap that only bites *developers* | the matching [`.claude/rules/*.md`](.claude/rules/) | Loads automatically when Claude touches those paths. |
+
+   > A private `known-issues` log under `.claude/` was the previous answer, and it is **gone**. It was gitignored — so this instruction pointed contributors at a file they could not see — and by the end it was 95 lines carrying a stale "Last Updated", a RESOLVED entry, and an obsolete one for a tool deleted six months earlier. A log with no close mechanism only accumulates.
 
 4. **Never Ignore:** Warnings, deprecations, and flaky tests become bugs over time
 5. **Rule of Three:** If the same approach fails 3 times, stop and change something fundamental — different angle, fresh start, or escalate to the user
@@ -187,7 +192,13 @@ python3 scripts/dev/update_versions.py --sync          # Sync Dockerfiles
 
 ## AI Tooling Ecosystem
 
-JMo Security includes agents, skills, and an MCP server for AI-assisted development.
+JMo Security ships 12 skills, 7 agents, and an MCP server for AI-assisted development. Everything named here is in the repository, so a fresh clone gets working tooling.
+
+### What ships, and what does not
+
+`.claude/` is scoped to **contributors**. Skills that generate an adapter, fabricate tests, debug CI, or map compliance frameworks are tracked. Maintainer workflows — issue and PR triage, dependency sweeps, merges, releases, marketing — are deliberately not published: they need `gh` write access or push rights to `main`, so they would be unusable to a contributor anyway. They stay on the maintainer's machine, in place under `.claude/skills/` and untracked.
+
+The split is mechanical rather than remembered. `.gitignore` carries an explicit per-skill allowlist under `.claude/`, and `scripts/dev/check_doc_links.py` fails CI and pre-commit if any tracked file links to a path a clone does not receive. **Anything this file names must be tracked** — an instruction pointing at an untracked path is a dead end for every contributor who follows it.
 
 ### MCP Server (Security Findings API)
 
@@ -204,6 +215,8 @@ JMo Security includes agents, skills, and an MCP server for AI-assisted developm
 | `code-quality-auditor` | Technical debt, refactoring opportunities |
 | `security-auditor` | Security vulnerability analysis |
 | `dependency-analyzer` | Impact analysis for changes |
+| `doc-sync-checker` | Documentation-code sync verification |
+| `codebase-explorer` | Architecture and pattern understanding |
 
 ### Key Skills (invoke with /skill-name)
 
@@ -212,7 +225,7 @@ JMo Security includes agents, skills, and an MCP server for AI-assisted developm
 - `/jmo-ci-debugger` - Debug CI/CD pipeline failures
 - `/jmo-e2e-verify` - AI-driven e2e verification with parallel sub-agents
 
-**Full documentation:** [.claude/skills/INDEX.md](.claude/skills/INDEX.md) (16 skills, 7 agents) | **Personas:** [.claude/PERSONA_GUIDELINES.md](.claude/PERSONA_GUIDELINES.md)
+**Full documentation:** [.claude/skills/INDEX.md](.claude/skills/INDEX.md) (12 skills, 7 agents) | **Personas:** [.claude/PERSONA_GUIDELINES.md](.claude/PERSONA_GUIDELINES.md)
 
 ### Parallel Work: Agent Teams vs Subagents
 
@@ -381,7 +394,7 @@ Key takeaways now embedded in path-scoped rules:
 
 **Features:** [docs/PROFILES_AND_TOOLS.md](docs/PROFILES_AND_TOOLS.md) | [docs/VERSION_MANAGEMENT.md](docs/VERSION_MANAGEMENT.md) | [docs/DOCKER_README.md](docs/DOCKER_README.md) | [docs/RESULTS_GUIDE.md](docs/RESULTS_GUIDE.md)
 
-**Operations:** [docs/RELEASE.md](docs/RELEASE.md) | [docs/SCHEDULE_GUIDE.md](docs/SCHEDULE_GUIDE.md) | [docs/POLICY_AS_CODE.md](docs/POLICY_AS_CODE.md)
+**Operations:** [docs/RELEASE.md](docs/RELEASE.md) | [docs/SCHEDULE_GUIDE.md](docs/SCHEDULE_GUIDE.md) | [docs/POLICY_AS_CODE.md](docs/POLICY_AS_CODE.md) | [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md)
 
 **Internal (Dev-Only):** `dev-only/` - Plans, archive, and internal documentation (not published)
 

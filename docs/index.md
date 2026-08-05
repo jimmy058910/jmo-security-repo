@@ -59,6 +59,7 @@
 | [Installation Guide](MANUAL_INSTALLATION.md) | Platform-specific installation (macOS, Windows, WSL, Linux) |
 | [FAQ](FAQ.md) | Common questions about installation, scanning, Docker, CI/CD |
 | [Troubleshooting](TROUBLESHOOTING.md) | Symptom-cause-fix guide for common problems |
+| [Known Limitations](KNOWN_LIMITATIONS.md) | Behaviour that is deliberate, unfinished, or environment-bound |
 | [Upgrade Guide](../UPGRADE.md) | Migration from earlier releases to v1.0.x |
 
 ### Reference

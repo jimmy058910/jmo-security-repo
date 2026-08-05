@@ -1,10 +1,10 @@
 # Telemetry
 
-**Status: Removed (v1.1.0).**
+**Status: Removed (v1.0.6).**
 
 JMo Security no longer collects any usage telemetry. Earlier releases shipped an
 opt-out telemetry module that reported anonymous, bucketed usage events, but it
-was retired in v1.1.0: the tool now phones home to nothing, and no usage data
+was retired in v1.0.6: the tool now phones home to nothing, and no usage data
 of any kind leaves your machine.
 
 There is nothing to enable, disable, or opt out of. The former
