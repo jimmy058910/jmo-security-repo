@@ -1,6 +1,23 @@
 # JMo Security - AI Tooling Ecosystem
 
-JMo Security includes a comprehensive AI tooling ecosystem: **21 skills**, **7 agents**, and an **MCP server** for AI-assisted security development.
+JMo Security ships **12 skills**, **7 agents**, and an **MCP server** for AI-assisted
+security development. Everything listed here is in the repository, so a fresh clone
+gets working tooling.
+
+## What is here, and what is not
+
+This directory is scoped to **contributors**. Skills that generate a new adapter,
+fabricate tests, debug a CI failure, or map compliance frameworks ship with the
+repo, because those are the paths a contributor actually walks.
+
+Maintainer workflows -- issue and PR triage, dependency sweeps, merges, releases,
+marketing -- are deliberately **not** published. They need `gh` write access or
+push rights to `main`, so they would be unusable to a contributor even if present.
+They live on the maintainer's machine under this same directory, untracked.
+
+The split is mechanical, not a matter of memory: `.gitignore` carries an explicit
+per-skill allowlist under `.claude/`, and `scripts/dev/check_doc_links.py` fails CI
+and pre-commit if any tracked file links to a path a clone does not receive.
 
 ## MCP Server (Security Findings API)
 
@@ -49,9 +66,9 @@ For MCP setup, see [docs/MCP_SETUP.md](../../docs/MCP_SETUP.md).
 
 ---
 
-## Key Agents
+## Agents
 
-Agents are invoked naturally in conversation. Each one completes a specialized task end-to-end in a single invocation, then reports back; they do not pause mid-task for confirmation.
+Agents are invoked naturally in conversation. Each one completes a specialized task end-to-end in a single invocation, then reports back; they do not pause mid-task for confirmation. All seven are read-only analysis over this codebase.
 
 | Agent | Purpose | When to Use |
 |-------|---------|-------------|
@@ -63,7 +80,8 @@ Agents are invoked naturally in conversation. Each one completes a specialized t
 | `doc-sync-checker` | Documentation-code sync verification | After feature implementations |
 | `codebase-explorer` | Architecture and pattern understanding | When onboarding or exploring |
 
-Agent definitions are in [.claude/agents/](../agents/).
+Agent definitions are in [.claude/agents/](../agents/); the persona conventions they
+follow are in [.claude/PERSONA_GUIDELINES.md](../PERSONA_GUIDELINES.md).
 
 ---
 
@@ -82,16 +100,7 @@ Agent definitions are in [.claude/agents/](../agents/).
 | [Dashboard Builder](jmo-dashboard-builder/SKILL.md) | `/jmo-dashboard-builder` | Build React security dashboard |
 | [Refactoring Assistant](jmo-refactoring-assistant/SKILL.md) | `/jmo-refactoring-assistant` | Complex refactoring with test preservation |
 | [Security Hardening](jmo-security-hardening/SKILL.md) | `/jmo-security-hardening` | Implement OWASP/CWE security fixes |
-| [Content Generator](content-generator/SKILL.md) | `/content-generator` | Generate marketing content |
-| [Community Manager](community-manager/SKILL.md) | `/community-manager` | Track community engagement |
-| [Skill Optimizer](jmo-skill-optimizer/SKILL.md) | `/jmo-skill-optimizer` | Review and upgrade skills |
 | [E2E Verify](jmo-e2e-verify/SKILL.md) | `/jmo-e2e-verify [quick\|full\|visual\|scan-only]` | AI-orchestrated e2e verification with parallel sub-agents, failure analysis, and visual dashboard inspection |
-| [Merge PR](merge-pr/SKILL.md) | `/merge-pr [PR-title-override]` | Push branch, open PR to main, watch CI, squash-merge, sync dev, cleanup local + remote |
-| [Dependabot Triage](jmo-dependabot-triage/SKILL.md) | `/jmo-dependabot-triage [--dry-run\|--execute]` | Sweep open Dependabot PRs + security alerts; classify merge/close/dismiss/defer; project-policy-aware (no auto-merge, conservative bumps) |
-| [Issue Triage](jmo-issue-triage/SKILL.md) | `/jmo-issue-triage [--dry-run\|--execute]` | Sweep manual bug/enhancement/tech-debt/docs issues; classify READY-TO-WORK / NEEDS-INFO / ROADMAP-TRACKING / STALE-NEGLECTED / DUPLICATE |
-| [Tool Update Triage](jmo-tool-update-triage/SKILL.md) | `/jmo-tool-update-triage [--dry-run\|--execute]` | Sweep `app/github-actions` tool-version update issues; classify BATCH-MINOR / MAJOR-BUMP-READABLE / MAJOR-BUMP-MIGRATION / MANUAL-TOOL / PLACEHOLDER-CURRENT |
-| [Roadmap Sync](jmo-roadmap-sync/SKILL.md) | `/jmo-roadmap-sync [--dry-run\|--execute]` | Align ROADMAP.md, `phase-*` labels, and the GitHub Project board after releases or quarterly reviews |
-| [Maintenance Monday](maintenance-monday/SKILL.md) | `/maintenance-monday [--dry-run\|--execute]` | Orchestrate all three triage skills (issue + Dependabot + tool-update) in one consolidated plan with per-section approval. Weekly cadence. |
 
 ---
 
@@ -132,12 +141,6 @@ These workflows describe how skills compose together for end-to-end features.
 3. `/jmo-test-fabricator` — Update tests, maintain 85%+ coverage
 4. `/jmo-documentation-updater` — Update architecture docs
 
-### Weekly Maintenance (Consolidated Triage)
-
-1. `/maintenance-monday` — Discover backlog across all three triage scopes (manual issues, Dependabot PRs, tool-version issues), present one consolidated plan with per-section approval, execute approved sections
-
-The super-skill is preferred over invoking the three child skills sequentially when the whole backlog is being reviewed. To pick at a single scope, invoke the child skill (`/jmo-issue-triage`, `/jmo-dependabot-triage`, or `/jmo-tool-update-triage`) directly.
-
 ---
 
 ## Shared References
@@ -148,4 +151,4 @@ The super-skill is preferred over invoking the three child skills sequentially w
 
 ---
 
-**Skills Count:** 20 | **Agents:** 7 | **MCP Tools:** 4
+**Skills:** 12 | **Agents:** 7 | **MCP Tools:** 4

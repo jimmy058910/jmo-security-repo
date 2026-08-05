@@ -119,9 +119,11 @@ repos:
         entry: python3 scripts/dev/check_import_direction.py
         pass_filenames: false
       - id: doc-links
-        name: doc-links (validate documentation links)
+        name: doc-links (links resolve to tracked files)
         language: system
-        files: ^(CLAUDE\.md|docs/)
+        # .gitignore is in scope on purpose: changing the .claude/ allowlist can
+        # orphan a link without touching a single markdown file.
+        files: ^(CLAUDE\.md|AGENTS\.md|README\.md|CONTRIBUTING\.md|QUICKSTART\.md|ROADMAP\.md|TEST\.md|\.gitignore|docs/|\.claude/)
         entry: python3 scripts/dev/check_doc_links.py
         pass_filenames: false
       - id: yaml-env-tilde

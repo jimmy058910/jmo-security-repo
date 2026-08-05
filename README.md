@@ -253,6 +253,7 @@ security_scan:
 |----------|---------|
 | [docs/RESULTS_GUIDE.md](docs/RESULTS_GUIDE.md) | Results and output formats |
 | [docs/API_REFERENCE.md](docs/API_REFERENCE.md) | Python API docs |
+| [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) | Deliberate and environment-bound behaviour |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |
 | [ROADMAP.md](ROADMAP.md) | Future plans |
 

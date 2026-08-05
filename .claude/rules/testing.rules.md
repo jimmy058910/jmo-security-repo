@@ -141,3 +141,16 @@ When changing `PROFILE_TOOLS` (or `MANUAL_INSTALL_TOOLS`) in `scripts/core/tool_
 - `.github/workflows/scheduled.yml`'s `validate-variants` matrix (`expected_tools: <N>`)
 
 Bearer's removal in PR #262 (April 2026) needed cascading updates that took multiple follow-up PRs to fully sync. **When changing `PROFILE_TOOLS`, grep for variant counts (`14`, `18`, `25`) and `expected_tools` simultaneously across `tests/` and `.github/workflows/`.**
+
+## Deliberate Verification Gaps
+
+Areas the suite does not cover, recorded so nobody mistakes silence for a pass.
+Coverage percentage says nothing about these — there is no line to miss.
+
+| Gap | Why it is untested | If you touch this area |
+|---|---|---|
+| **Cron persistence across reboot** | Install/uninstall is verified under WSL; a reboot test is too disruptive to automate on the dev box. Standard crontab behaviour, so risk is low. | Verify by hand on a real reboot before changing `cron_installer.py`. |
+| **MCP server memory over long sessions** | The server starts, serves, and shuts down cleanly, but no extended profiling has been run. stdio is single-client and sessions are short, so growth would need a long-lived client to matter. | Profile if you add caching or any per-request accumulation. |
+| **Concurrent scans on Windows** | Requires two real scans racing on one results directory. SQLite has its own locking and scan outputs are write-once, so the risk is low — but it is untested, not proven. | Exercise it manually with separate `--results-dir` values, then with shared ones. |
+
+The user-facing half of these is in [docs/KNOWN_LIMITATIONS.md](../../docs/KNOWN_LIMITATIONS.md). Keep the two in step: if a gap here becomes something a user can hit, it belongs there too.
