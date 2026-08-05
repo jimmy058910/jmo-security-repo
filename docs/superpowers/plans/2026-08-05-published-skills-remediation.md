@@ -1,0 +1,149 @@
+# Remediating the newly-published `.claude/` skills and agents
+
+**Status:** discovery complete, execution not started
+**Branch:** `fix/coderabbit-findings-717` off `dev`
+**Tracking issue:** [#718](https://github.com/jimmy058910/jmo-security-repo/issues/718)
+**Endgame:** land on `dev`, then `dev -> main` as **v1.0.9**
+
+## What happened
+
+PR #717 split `.claude/` by audience and published 12 contributor skills plus 7
+agents. That put ~16,400 lines of instructional content under review for the
+first time in the project's history. The review returned **103 findings**:
+2 Critical, 61 Major, 38 Minor, 2 Trivial, across 53 files.
+
+None of this is a regression from #717. It is pre-existing drift that
+publication exposed — the content had never been linted, link-checked, or
+reviewed because it had never been tracked.
+
+## Discovery: the findings are not 103 independent problems
+
+Three things came out of reading them that change how the work should be run.
+
+### 1. Clusters collapse to single root causes
+
+The 13 `jmo-profile-optimizer` findings all reduce to one fact: **the skill
+documents a `timings.json` schema that has never existed.**
+
+| | Real (`scripts/cli/report_orchestrator.py:344-348`) | What the skill reads |
+|---|---|---|
+| total | `aggregate_seconds` | `total_duration_seconds` |
+| per-tool | `jobs: [{tool, path, seconds, count}]` — a flat list | `tools: {name: {...}}` — a dict |
+| profile | *absent* | `profile` |
+| timeouts / failures | **not recorded at all** | per-tool `timeouts`, `failures` |
+
+Its documented Phase 1 raises `KeyError` on the first line against real CLI
+output, and its timeout-rate analysis has no data source in the first place.
+Fixing the schema resolves most of the 13 as a side effect.
+
+Expect other clusters to behave the same way. **Read a cluster whole before
+fixing any member of it.**
+
+### 2. Finding density varies by more than 20x
+
+Density is the best available proxy for "is this content maintained."
+
+| Skill | Findings | Lines | Per 100 lines |
+|---|---:|---:|---:|
+| `jmo-dashboard-builder` | 7 | 379 | **1.85** |
+| `jmo-profile-optimizer` | 13 | 1033 | **1.26** |
+| `jmo-documentation-updater` | 6 | 755 | 0.79 |
+| `jmo-target-type-expander` | 11 | 1484 | 0.74 |
+| `jmo-refactoring-assistant` | 6 | 964 | 0.62 |
+| `jmo-security-hardening` | 8 | 1340 | 0.60 |
+| `jmo-compliance-mapper` | 3 | 575 | 0.52 |
+| `jmo-ci-debugger` | 13 | 3008 | 0.43 |
+| `jmo-adapter-generator` | 4 | 1343 | 0.30 |
+| `jmo-test-fabricator` | 11 | 3752 | 0.29 |
+| `jmo-systematic-debugging` | 1 | 1219 | 0.08 |
+| `jmo-e2e-verify` | **0** | 411 | **0.00** |
+
+`jmo-e2e-verify` is the control: it is the one skill that was already tracked
+before #717, and it came back clean. That is the standard the rest should meet.
+
+### 3. Verification cuts both ways — never batch-apply
+
+Measured on the findings worked so far:
+
+- **3/3** claims against `check_doc_links.py` were real, including one the
+  author (me) had introduced that same day.
+- The `exit_codes` batch was right about 5 sites where a naive grep found 2 —
+  **but** it also implied changing two `memory-integration.md` blocks where
+  string keys are *correct*, because those blocks are JSON documents.
+
+So: **verify every claim against the code, then fix or dismiss with a stated
+reason.** A finding dismissed with a reason is a completed finding.
+
+## The policy decision to make first
+
+Several skills document APIs and schemas that do not exist. For those, there are
+two honest responses, and the choice should be made **once, up front**, not
+per-file:
+
+- **Repair** — rewrite the example against the real code. Costly, and it only
+  holds until the next drift, because nothing tests instructional prose.
+- **Delete the fiction** — remove the invented example and point at the real
+  module. Cheaper, shorter, and cannot drift, because there is nothing left to
+  disagree with reality.
+
+**Recommendation: delete by default, repair only where the example teaches
+something the source does not.** A skill that says "read
+`scripts/cli/report_orchestrator.py:344` for the timings schema" is correct
+forever. A skill that reproduces that schema is wrong the moment it changes,
+and has been wrong for months already without anyone noticing.
+
+The instruction covering this work is explicit that deleting content that is no
+longer active or needed is in scope.
+
+## Segmentation
+
+Ordered by value: skills that **cannot work as documented** first, then density,
+then breadth. Each chunk is one session, one commit series, one push.
+
+| # | Chunk | Findings | Why this grouping |
+|---|---|---:|---|
+| **A** | `jmo-profile-optimizer` | 13 | Both Criticals live here, and the whole cluster is one fictional schema. Decide repair-vs-delete here and set the precedent. |
+| **B** | `jmo-dashboard-builder` + `jmo-documentation-updater` | 13 | Highest density, smallest files — fastest ratio of findings closed to lines read. |
+| **C** | `jmo-adapter-generator` + `jmo-test-fabricator` | 15 | The scaffold a contributor copies. Highest external blast radius; the `exit_codes` class already found here. |
+| **D** | `jmo-ci-debugger` | 13 | 3008 lines, the largest single reference corpus. Needs a whole session. |
+| **E** | `jmo-target-type-expander` + `jmo-security-hardening` | 19 | Both mid-density, both heavy on example code. |
+| **F** | 7 agents | 13 | Different shape: report templates, not procedures. Several are stale counts and commands. |
+| **G** | `jmo-refactoring-assistant`, `jmo-compliance-mapper`, `jmo-systematic-debugging`, `references/` | 11 | The tail. Low density; likely mostly dismissals. |
+
+Chunk A also carries one setup task: 4–5 findings have their claim nested such
+that only HTML comments trail the analysis block. Read those individually from
+the PR conversation.
+
+### Per-chunk protocol
+
+1. Pull that chunk's findings from the PR review.
+2. Read the whole cluster before editing — look for the single root cause.
+3. Verify each claim against real code. Record the verdict.
+4. Fix, or delete the fiction, or dismiss with a reason. All three are done.
+5. Run `python scripts/dev/check_doc_links.py` and the unit tests.
+6. Check line endings: `git diff --numstat` must equal
+   `git diff --ignore-cr-at-eol --numstat` on every changed file.
+7. Commit with the verdicts in the message; push; comment the tally on #718.
+
+### Acceptance
+
+- Every one of the 103 findings is fixed, deleted, or dismissed-with-reason.
+- `check_doc_links.py` passes over all 162 tracked Markdown files.
+- No published skill documents a schema, flag, or API that does not exist —
+  spot-check by grepping each documented symbol against `scripts/`.
+- Then `dev -> main` as **v1.0.9**.
+
+## Standing traps for every session
+
+- **`main` is never touched by this work.** Branch off `dev`; PR into `dev`.
+- **Line endings**: this repo is mixed CRLF/LF with no `.gitattributes`.
+  `Path.write_text()` and `sed -i` under MSYS both rewrite whole files. Use
+  `write_bytes()`. `cat -A` through an MSYS pipe misreports; the numstat
+  comparison is the only reliable check.
+- **Formatters are repo-wide.** `make fmt` runs `black .`; `.claude/` is
+  excluded via `pyproject.toml`, so leave that exclusion in place — the
+  adapter templates contain `{Tool}` placeholders and are not parseable Python.
+- **Console output**: anything printing repository content must go through
+  `harden_console_streams()` + `safe_print()` from `scripts/core/unicode_utils`.
+- **Read the `windows-2022` job log, not its check tick** — it is
+  `continue-on-error: true` and reports success over failures.
