@@ -718,8 +718,20 @@ def test_scan_startup_does_not_version_check_unrequested_tools(
         log_level="INFO",
         human_logs=True,
     )
+    # Not `== 0`. Whether the scan succeeds depends on which tools happen to be
+    # installed on the box, and this test is about startup's probing behaviour,
+    # not about the outcome of the scan. Asserting 0 made it pass here (22
+    # tools installed) and fail on every CI runner (none) - the distribution,
+    # not the invariant.
     rc = jmo.cmd_scan(args)
-    assert rc == 0
+    assert rc in (0, 1), f"cmd_scan returned {rc}, which is neither outcome"
+
+    # Liveness: `checked` being empty would satisfy the assertion below without
+    # proving anything, so pin that startup really did probe.
+    assert "trufflehog" in checked, (
+        "startup never probed the one tool that was requested, so the "
+        "assertion below would pass vacuously"
+    )
 
     unrequested = sorted(set(checked) - {"trufflehog"})
     assert not unrequested, (
@@ -764,16 +776,25 @@ def test_scan_startup_probes_each_tool_at_most_once(tmp_path: Path, monkeypatch)
 
     from scripts.cli import tool_manager as tm_module
 
-    # Count the `--version` subprocess, not calls to check_tool. The spawn is
-    # what costs seconds; a call that returns a memo costs nothing, so counting
-    # calls would measure a proxy rather than the thing being fixed.
-    real_version = tm_module.ToolManager._get_tool_version
+    # Count binary *resolutions*, not calls to check_tool. `check_tool` is
+    # memoised per ToolManager (`_status_cache`), so a repeat call on one
+    # instance costs nothing and counting calls would measure a proxy. A
+    # resolution happens exactly once per (tool, ToolManager instance), which
+    # is precisely the defect: three instances sweeping the same tools.
+    #
+    # The earlier version of this test counted `_get_tool_version` instead.
+    # That reads better - the `--version` spawn is the thing that costs
+    # seconds - but `check_tool` only reaches it `if binary_path`, so on a
+    # runner with no tools installed nothing was ever counted and the
+    # assertion below passed vacuously. `_find_binary` is called
+    # unconditionally, so this measures the same sweeps on any machine.
+    real_find = tm_module.ToolManager._find_binary
 
-    def _counting_version(self, base_tool, binary_path, *a, **kw):
-        probed.append(base_tool)
-        return real_version(self, base_tool, binary_path, *a, **kw)
+    def _counting_find(self, binary_name, *a, **kw):
+        probed.append(binary_name)
+        return real_find(self, binary_name, *a, **kw)
 
-    monkeypatch.setattr(tm_module.ToolManager, "_get_tool_version", _counting_version)
+    monkeypatch.setattr(tm_module.ToolManager, "_find_binary", _counting_find)
     monkeypatch.setenv("CI", "true")
 
     args = types.SimpleNamespace(
@@ -791,11 +812,19 @@ def test_scan_startup_probes_each_tool_at_most_once(tmp_path: Path, monkeypatch)
         log_level="INFO",
         human_logs=True,
     )
-    assert jmo.cmd_scan(args) == 0
+    # Not `== 0` - see the sibling test above. The scan's outcome depends on
+    # which tools the machine happens to have; the probing behaviour does not.
+    rc = jmo.cmd_scan(args)
+    assert rc in (0, 1), f"cmd_scan returned {rc}, which is neither outcome"
+
+    # Liveness: an empty `probed` satisfies the assertion below while proving
+    # nothing, which is exactly how the previous instrument failed.
+    assert probed, "startup resolved no binaries at all - nothing was measured"
 
     repeated = {n: probed.count(n) for n in set(probed) if probed.count(n) > 1}
     assert not repeated, (
-        f"startup spawned a repeat --version probe for: {repeated}. "
-        f"Each repeat costs seconds (checkov: 4.23s then 3.08s) and nothing on "
-        f"disk can change between the sweeps."
+        f"startup re-resolved these tools once per extra sweep: {repeated}. "
+        f"Each sweep re-probes the filesystem and then spawns `--version` for "
+        f"whatever it finds (checkov: 4.23s then 3.08s), and nothing on disk "
+        f"can change between them."
     )
