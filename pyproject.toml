@@ -261,9 +261,18 @@ omit = [
     "scripts/dev/*",
 ]
 
+[tool.black]
+# Skill templates under .claude/ are scaffolding with {Tool} placeholders, not
+# valid Python — black cannot parse them. pre-commit already carries
+# `exclude: ^\.claude/` on black and ruff; this keeps the repo-wide paths
+# (`make fmt`, `black .`) behaving the same way, since CLAUDE.md tells every
+# contributor to run `make fmt` before every commit.
+extend-exclude = '^/\.claude/'
+
 [tool.ruff]
-# Exclude test fixtures that are intentionally vulnerable
-extend-exclude = ["tests/e2e/fixtures/python/vulnerable_app.py"]
+# Exclude test fixtures that are intentionally vulnerable, and the .claude/
+# skill templates (see [tool.black] above — same reason).
+extend-exclude = ["tests/e2e/fixtures/python/vulnerable_app.py", ".claude"]
 
 [tool.ruff.lint]
 # Rule set is pinned EXPLICITLY. Without this, ruff runs its *default* rules,
