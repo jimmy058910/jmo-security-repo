@@ -933,3 +933,48 @@ class TestScanPathLoggingIsReachable:
             ), f"scan diagnostics are not machine-readable like _log()'s:\n{err}"
         finally:
             configure_scan_logging(argparse.Namespace(log_level=None, human_logs=False))
+
+    def test_reset_lets_caplog_see_info_from_scripts_loggers_again(self, caplog):
+        """`configure_scan_logging` must not permanently break `caplog`.
+
+        It puts an explicit level on the shared `scripts` logger. That makes
+        every `scripts.*` child drop INFO records **at the source** -
+        `logger.info()` checks `isEnabledFor`, which resolves the effective
+        level by walking up to the nearest ancestor with an explicit one, and
+        stops at `scripts`. `caplog.at_level(INFO)` raises the level of the
+        *root* logger, which the walk never reaches, so it cannot compensate.
+
+        Without a restore, one call anywhere in a pytest session empties
+        `caplog.text` for every later INFO assertion against a `scripts.*`
+        logger, in ordering-dependent ways that read exactly like flakes.
+
+        Not hypothetical: six INFO-asserting tests in
+        `tests/reporters/test_policy_reporter.py` failed this way across every
+        CI platform while the two WARNING/ERROR-asserting tests beside them
+        passed - the asymmetry that identifies the level as the cause. All six
+        pass in isolation, and the set was written off as load flakes on that
+        evidence before this was found.
+        """
+        import logging
+
+        from scripts.cli.jmo import configure_scan_logging, reset_scan_logging
+
+        scripts_logger = logging.getLogger("scripts")
+        child = logging.getLogger("scripts.core.reporters.policy_reporter")
+
+        # WARN is configure_scan_logging's default, i.e. the ordinary case -
+        # every `jmo` subcommand configures logging, not just `scan`.
+        configure_scan_logging(argparse.Namespace(log_level=None, human_logs=False))
+        assert not child.isEnabledFor(
+            logging.INFO
+        ), "precondition: the scan's level does suppress INFO on scripts.* children"
+
+        reset_scan_logging()
+
+        assert scripts_logger.propagate is True
+        with caplog.at_level(logging.INFO):
+            child.info("CAPLOG-MARKER")
+        assert "CAPLOG-MARKER" in caplog.text, (
+            "caplog cannot see an INFO record from a scripts.* logger after a "
+            "jmo command configured logging - the scan's level leaked past it"
+        )

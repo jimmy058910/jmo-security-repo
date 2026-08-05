@@ -3903,6 +3903,7 @@ class _ScanLogFormatter(logging.Formatter):
 
 
 _SCAN_LOG_HANDLER: logging.Handler | None = None
+_SCAN_LOG_PRIOR_STATE: tuple[bool, int] | None = None
 
 
 def configure_scan_logging(args) -> None:
@@ -3924,9 +3925,14 @@ def configure_scan_logging(args) -> None:
     normal runs are unchanged in verbosity - only in format, and in the fact
     that DEBUG is now reachable at all.
     """
-    global _SCAN_LOG_HANDLER
+    global _SCAN_LOG_HANDLER, _SCAN_LOG_PRIOR_STATE
 
     scripts_logger = logging.getLogger("scripts")
+    # Snapshot once, on the first configure, so repeated calls stay idempotent
+    # and `reset_scan_logging()` restores the *original* state rather than
+    # whatever the previous configure left behind.
+    if _SCAN_LOG_PRIOR_STATE is None:
+        _SCAN_LOG_PRIOR_STATE = (scripts_logger.propagate, scripts_logger.level)
     if _SCAN_LOG_HANDLER is not None:
         scripts_logger.removeHandler(_SCAN_LOG_HANDLER)
         _SCAN_LOG_HANDLER = None
@@ -3946,10 +3952,56 @@ def configure_scan_logging(args) -> None:
 
     scripts_logger.setLevel(level)
     scripts_logger.addHandler(handler)
-    # Without this the record also reaches the root logger, where lastResort
-    # prints it a second time in its bare format.
+    # Stops a *configured* root logger printing every scan record a second
+    # time in its own format - `scripts/jmo_mcp/jmo_server.py` calls
+    # `logging.basicConfig()` at import, so that root is real, not theoretical.
+    #
+    # It is NOT about `logging.lastResort`, which an earlier version of this
+    # comment claimed: `Logger.callHandlers` only falls back to lastResort when
+    # it finds *zero* handlers in the whole chain, and the handler just added
+    # above guarantees it finds one. Measured, root unconfigured: 1 line with
+    # propagate either way.
+    #
+    # Because this mutates a process-global tree, it must be undoable - see
+    # `reset_scan_logging()`.
     scripts_logger.propagate = False
     _SCAN_LOG_HANDLER = handler
+
+
+def reset_scan_logging() -> None:
+    """Undo `configure_scan_logging()`, restoring the `scripts` logger.
+
+    Both mutations above are process-global and neither is self-limiting, so
+    in a long-lived process - a pytest session, or the MCP server, which both
+    scans and logs - the last scan's settings apply to everything afterwards.
+
+    The level is the one that bites hardest, and it is worth naming precisely
+    because it is easy to misattribute to `propagate`. `logger.info()` first
+    asks `isEnabledFor(INFO)`, which resolves the *effective* level by walking
+    up to the nearest ancestor carrying an explicit one. Once `scripts` holds
+    an explicit WARNING, every `scripts.*` child discards INFO records **at
+    the source**, before any handler is consulted - and `caplog.at_level(INFO)`
+    cannot help, because it raises the level of the *root* logger, which the
+    walk stops short of.
+
+    Measured consequence: `caplog.text` is `''` for every later INFO assertion
+    against a `scripts.*` logger, while WARNING and ERROR assertions still
+    pass. That asymmetry is the signature - six INFO-asserting
+    `test_policy_reporter` tests failed in CI while the two WARNING/ERROR ones
+    beside them passed, and the whole set was written off as load flakes
+    because each passes in isolation.
+    """
+    global _SCAN_LOG_HANDLER, _SCAN_LOG_PRIOR_STATE
+
+    scripts_logger = logging.getLogger("scripts")
+    if _SCAN_LOG_HANDLER is not None:
+        scripts_logger.removeHandler(_SCAN_LOG_HANDLER)
+        _SCAN_LOG_HANDLER = None
+    if _SCAN_LOG_PRIOR_STATE is not None:
+        propagate, level = _SCAN_LOG_PRIOR_STATE
+        scripts_logger.propagate = propagate
+        scripts_logger.setLevel(level)
+        _SCAN_LOG_PRIOR_STATE = None
 
 
 if __name__ == "__main__":

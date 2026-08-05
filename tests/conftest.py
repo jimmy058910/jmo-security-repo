@@ -222,6 +222,37 @@ def _guard_real_jmo_install():
 
 
 # ---------------------------------------------------------------------------
+# Scan logging leaks out of the test that configured it.
+# ---------------------------------------------------------------------------
+# `configure_scan_logging()` sets a level and turns off propagation on the
+# shared `logging.getLogger("scripts")`, process-globally. Any test that runs
+# a scan - or calls `jmo.main()` with any subcommand, which configures it too
+# - leaves those settings in place for the rest of the session.
+#
+# The level is what breaks `caplog`: an explicit WARNING on `scripts` makes
+# every `scripts.*` child drop INFO records at the source, and
+# `caplog.at_level(INFO)` cannot undo it because it raises the level of the
+# *root* logger, which effective-level resolution never reaches.
+#
+# That is order-dependent pollution, and it is indistinguishable from a flake
+# at the symptom level: the affected tests pass in isolation and fail in a
+# full run or a shard. Six `test_policy_reporter` tests were dismissed as
+# "load flakes" on exactly that evidence before the cause was found.
+#
+# Restore after every test rather than asking each scan test to remember.
+
+
+@pytest.fixture(autouse=True)
+def _restore_scan_logging():
+    """Undo any `configure_scan_logging()` a test left behind."""
+    yield
+
+    from scripts.cli.jmo import reset_scan_logging
+
+    reset_scan_logging()
+
+
+# ---------------------------------------------------------------------------
 # Repo walking that prunes during traversal, not after.
 # ---------------------------------------------------------------------------
 
