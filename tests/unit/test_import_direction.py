@@ -163,3 +163,59 @@ class TestDocLinks:
 
         assert mod.LINE_ANCHOR_PATTERN.search("scripts/cli/jmo.py#L245")
         assert not mod.LINE_ANCHOR_PATTERN.search("docs/USER_GUIDE.md#configuration")
+
+    def test_code_spans_of_any_backtick_width_are_suppressed(self) -> None:
+        """A code span is delimited by backtick runs of equal length.
+
+        Matching only single backticks left the contents of a ``double`` span
+        visible, so a quoted sample link was reported as a real BROKEN
+        reference. Doubles exist precisely to quote text containing backticks,
+        which is exactly how documentation shows a link.
+        """
+        mod = _load_check_doc_links()
+
+        for ticks in ("`", "``", "```"):
+            line = f"see {ticks}[sample](does/not/exist.md){ticks} above"
+            kept = "\n".join(mod.navigable_lines(line))
+            assert (
+                "does/not/exist.md" not in kept
+            ), f"leaked from a {len(ticks)}-backtick span"
+
+        # A genuine link on an ordinary line must still be seen.
+        kept = "\n".join(mod.navigable_lines("see [real](docs/index.md)"))
+        assert "docs/index.md" in kept
+
+    def test_every_tracked_markdown_file_is_checked(self) -> None:
+        """Coverage comes from `git ls-files`, not a hand-maintained list.
+
+        An allowlist stops covering whatever nobody remembered to add to it:
+        the previous one named nine files and left 75 tracked Markdown files
+        unchecked, which between them held 17 dead references CI called green.
+        """
+        mod = _load_check_doc_links()
+        tracked = mod.tracked_paths()
+        checked = set(mod.collect_files(tracked))
+
+        expected = {
+            p
+            for p in tracked
+            if p.endswith(".md") and not p.startswith(mod.ARCHIVAL_PREFIXES)
+        }
+        assert checked == expected
+        assert len(checked) > 100, "coverage collapsed to a small subset"
+
+        # Archival records are exempt by design; they name deleted paths on purpose.
+        assert not any(p.startswith(mod.ARCHIVAL_PREFIXES) for p in checked)
+
+    def test_console_output_is_hardened(self) -> None:
+        """The checker prints repository content, so its stream must be hardened.
+
+        Paths and link text are arbitrary; one character a cp1252 console cannot
+        encode would otherwise crash the guard itself. Per unicode_utils, fix the
+        stream once rather than guarding each call site.
+        """
+        source = DOC_CHECKER.read_text(encoding="utf-8")
+        assert "harden_console_streams()" in source
+        assert "safe_print(" in source
+        # No bare print() left behind at statement indentation.
+        assert not re.search(r"^\s+print\(", source, re.MULTILINE)

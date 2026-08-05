@@ -7,8 +7,8 @@
 **Related Documentation:**
 
 - [TESTING_MATRIX.md](TESTING_MATRIX.md) - Automated test coverage analysis
-- [PLATFORM_NOTES.md](PLATFORM_NOTES.md) - Cross-platform development guide
-- [TEST.md](../TEST.md) - Running the automated test suite
+- [PLATFORM_NOTES.md](../PLATFORM_NOTES.md) - Cross-platform development guide
+- [TEST.md](../../TEST.md) - Running the automated test suite
 
 ---
 
@@ -522,6 +522,6 @@ jmo scan --image node:14      # EOL, has CVEs
 **Last Updated:** 2026-02-15
 **Test Platform:** Windows 11, Python 3.12.11, Docker 29.1.5; WSL Ubuntu 24.04, Python 3.12.3, Docker 28.2.2
 **Tester:** Claude Code (automated + manual + pexpect interactive + Docker scan + WSL cross-platform verification)
-**Maintainer:** See [CONTRIBUTING.md](../CONTRIBUTING.md)
+**Maintainer:** See [CONTRIBUTING.md](../../CONTRIBUTING.md)
 **Docker Images Tested:** local-fast (9 tools), local-balanced (18 tools), local-deep (27 tools)
 **WSL Testing:** Ubuntu 24.04, /mnt/c scans, cron integration, line ending validation, cross-FS results access
