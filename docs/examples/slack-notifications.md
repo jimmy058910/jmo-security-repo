@@ -682,4 +682,4 @@ script:
 - [SCHEDULE_GUIDE.md](../SCHEDULE_GUIDE.md) — Complete schedule management guide
 - [Slack Block Kit Builder](https://app.slack.com/block-kit-builder) — Visual message builder
 - [Slack API: Incoming Webhooks](https://api.slack.com/messaging/webhooks) — Official documentation
-- [GitLab CI Examples](../.gitlab-ci.yml) — Complete GitLab CI configurations
+- [GitLab CI Examples](.gitlab-ci.yml) — Complete GitLab CI configurations

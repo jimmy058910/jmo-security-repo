@@ -231,7 +231,7 @@ This matrix shows which tools are tested on which platforms and execution modes.
 
 ## Matrix 4: Compliance Frameworks x Tools
 
-All 28 tools benefit from universal compliance enrichment via [scripts/core/compliance_mapper.py](../scripts/core/compliance_mapper.py).
+All 28 tools benefit from universal compliance enrichment via [scripts/core/compliance_mapper.py](../../scripts/core/compliance_mapper.py).
 
 **Supported Frameworks:**
 
@@ -244,8 +244,8 @@ All 28 tools benefit from universal compliance enrichment via [scripts/core/comp
 
 **Test Coverage:**
 
-- [tests/unit/test_compliance_mapper_direct.py](../tests/unit/test_compliance_mapper_direct.py) - Direct mapper tests
-- [tests/reporters/test_compliance_reporter.py](../tests/reporters/test_compliance_reporter.py) - Compliance report generation
+- [tests/unit/test_compliance_mapper_direct.py](../../tests/unit/test_compliance_mapper_direct.py) - Direct mapper tests
+- [tests/reporters/test_compliance_reporter.py](../../tests/reporters/test_compliance_reporter.py) - Compliance report generation
 
 **Compliance Coverage:** 100% (all tools x all frameworks)
 
@@ -311,8 +311,8 @@ All 28 tools benefit from universal compliance enrichment via [scripts/core/comp
 
 **Test Files:**
 
-- [.github/workflows/ci.yml](../.github/workflows/ci.yml) - GitHub Actions primary CI
-- [.github/workflows/release.yml](../.github/workflows/release.yml) - GitHub Actions release automation
+- [.github/workflows/ci.yml](../../.github/workflows/ci.yml) - GitHub Actions primary CI
+- [.github/workflows/release.yml](../../.github/workflows/release.yml) - GitHub Actions release automation
 
 ---
 

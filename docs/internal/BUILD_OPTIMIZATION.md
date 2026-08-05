@@ -1218,4 +1218,4 @@ GPU acceleration is **not applicable** to build optimization:
 - [Docker BuildKit Documentation](https://docs.docker.com/build/buildkit/)
 - [BuildKit Heredocs](https://www.docker.com/blog/introduction-to-heredocs-in-dockerfiles/)
 - [Python ThreadPoolExecutor](https://docs.python.org/3/library/concurrent.futures.html)
-- [JMo Security Tool Registry](../scripts/core/tool_registry.py)
+- [JMo Security Tool Registry](../../scripts/core/tool_registry.py)

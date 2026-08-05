@@ -31,22 +31,18 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-# Documentation surfaces whose links must resolve in a fresh clone. Anything
-# tracked under .claude/ is included automatically (see collect_files) since
-# that directory is the public/private boundary this guard exists to hold.
-EXPLICIT_FILES = (
-    "CLAUDE.md",
-    "AGENTS.md",
-    "README.md",
-    "CONTRIBUTING.md",
-    "QUICKSTART.md",
-    "ROADMAP.md",
-    "TEST.md",
-    "docs/index.md",
-    "docs/KNOWN_LIMITATIONS.md",
+# Run directly (`python scripts/dev/check_doc_links.py`) and sys.path[0] is
+# scripts/dev, not the repo root - so scripts.core is not importable without
+# this. Same bootstrap as scripts/dev/reconcile_scan_accounting.py.
+if __package__ in (None, ""):  # pragma: no cover - only on direct execution
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts.core.unicode_utils import (  # noqa: E402
+    harden_console_streams,
+    safe_print,
 )
 
-# Historical records. Exempt by design - see the module docstring.
+# Historical records, exempt by design - see the module docstring.
 ARCHIVAL_PREFIXES = (
     "docs/superpowers/",
     "CHANGELOG.md",
@@ -59,7 +55,11 @@ LINK_PATTERN = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 # navigation - the agent and skill files quote broken links on purpose, to
 # teach what a broken link looks like.
 FENCE_PATTERN = re.compile(r"^\s{0,3}(?P<marker>`{3,}|~{3,})\s*(?P<info>\S.*)?$")
-INLINE_CODE_PATTERN = re.compile(r"`[^`]*`")
+# A code span is delimited by backtick strings of EQUAL length, so ``x`` is one
+# span and not two empty ones. Matching only single backticks left the contents
+# of a double-backtick span visible to LINK_PATTERN, which reported a quoted
+# sample as a real BROKEN reference.
+INLINE_CODE_PATTERN = re.compile(r"(?P<ticks>`+)(?:(?!(?P=ticks)).)*(?P=ticks)")
 
 # A GitHub line anchor (`file.py#L42`, `file.py#L42-L51`). These are citations
 # pointing at a line of source on the web, not links into the repo tree.
@@ -106,12 +106,16 @@ def tracked_paths() -> set[str]:
 
 
 def collect_files(tracked: set[str]) -> list[str]:
-    """Documentation surfaces to check: the explicit list plus all of .claude/."""
-    files = [f for f in EXPLICIT_FILES if f in tracked]
-    files.extend(
-        sorted(p for p in tracked if p.startswith(".claude/") and p.endswith(".md"))
+    """Every tracked Markdown file except the archival ones.
+
+    Derived from `git ls-files` rather than an allowlist. An allowlist silently
+    stops covering whatever it was not updated for: the previous one named nine
+    files and left 75 tracked Markdown files unchecked, which between them held
+    17 dead references that CI reported as green.
+    """
+    return sorted(
+        p for p in tracked if p.endswith(".md") and not p.startswith(ARCHIVAL_PREFIXES)
     )
-    return files
 
 
 def is_tracked(target: str, tracked: set[str]) -> bool:
@@ -161,25 +165,31 @@ def check_file(rel_path: str, tracked: set[str]) -> list[str]:
 
 
 def main() -> int:
-    print("Checking documentation links resolve to tracked files...")
+    # This tool prints file paths and link text - arbitrary repository content -
+    # so a single character the console cannot encode would otherwise crash the
+    # guard itself on a non-UTF-8 Windows console. Harden the stream once rather
+    # than guarding each call site.
+    harden_console_streams()
+
+    safe_print("Checking documentation links resolve to tracked files...")
     tracked = tracked_paths()
 
-    files = [f for f in collect_files(tracked) if not f.startswith(ARCHIVAL_PREFIXES)]
+    files = collect_files(tracked)
     problems: list[str] = []
     for rel_path in files:
         problems.extend(check_file(rel_path, tracked))
 
     if problems:
         for line in sorted(problems):
-            print(line)
-        print(f"\n{len(problems)} dead reference(s) across {len(files)} file(s).")
-        print("BROKEN    -> fix the path, or remove the link.")
-        print("UNTRACKED -> the file exists locally but ships to nobody. Either")
-        print("             track it (see the .claude/ allowlist in .gitignore)")
-        print("             or stop referencing it from a tracked file.")
+            safe_print(line)
+        safe_print(f"\n{len(problems)} dead reference(s) across {len(files)} file(s).")
+        safe_print("BROKEN    -> fix the path, or remove the link.")
+        safe_print("UNTRACKED -> the file exists locally but ships to nobody. Either")
+        safe_print("             track it (see the .claude/ allowlist in .gitignore)")
+        safe_print("             or stop referencing it from a tracked file.")
         return 1
 
-    print(f"All links in {len(files)} tracked file(s) resolve to tracked paths.")
+    safe_print(f"All links in {len(files)} tracked file(s) resolve to tracked paths.")
     return 0
 
 
