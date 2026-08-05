@@ -22,7 +22,7 @@ Real-world examples of adding new security tool adapters using the v3.0.0 plugin
     tool_name="prowler",
     schema_version="1.2.0",
     output_format="json",
-    exit_codes={"0": "pass", "1": "findings", "3": "error"}
+    exit_codes={0: "pass", 1: "findings", 3: "error"}
 ))
 class ProwlerAdapter(AdapterPlugin):
     """Prowler cloud security auditing adapter."""
@@ -114,7 +114,7 @@ if "prowler" in tools:
     tool_name="mobsf",
     schema_version="1.2.0",
     output_format="json",
-    exit_codes={"0": "complete"}
+    exit_codes={0: "complete"}
 ))
 class MobSFAdapter(AdapterPlugin):
     """MobSF mobile security framework adapter."""
@@ -188,7 +188,7 @@ class MobSFAdapter(AdapterPlugin):
     tool_name="checkov",
     schema_version="1.2.0",
     output_format="json",
-    exit_codes={"0": "pass", "1": "findings"}
+    exit_codes={0: "pass", 1: "findings"}
 ))
 class CheckovAdapter(AdapterPlugin):
     """Checkov IaC and CI/CD security scanner adapter."""
@@ -272,7 +272,7 @@ class CheckovAdapter(AdapterPlugin):
     tool_name="scancode",
     schema_version="1.2.0",
     output_format="json",
-    exit_codes={"0": "complete"}
+    exit_codes={0: "complete"}
 ))
 class ScanCodeAdapter(AdapterPlugin):
     """ScanCode license compliance scanner adapter."""
@@ -341,7 +341,7 @@ class ScanCodeAdapter(AdapterPlugin):
     tool_name="lynis",
     schema_version="1.2.0",
     output_format="text",  # Lynis outputs text log, parse to JSON
-    exit_codes={"0": "complete"}
+    exit_codes={0: "complete"}
 ))
 class LynisAdapter(AdapterPlugin):
     """Lynis system hardening audit adapter."""

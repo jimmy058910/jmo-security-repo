@@ -144,8 +144,8 @@ def test_{tool}_plugin_metadata():
     assert metadata.name == "{tool}"
     assert metadata.tool_name == "{tool}"
     assert metadata.schema_version == "1.2.0"
-    assert "0" in metadata.exit_codes
-    assert "1" in metadata.exit_codes
+    assert 0 in metadata.exit_codes
+    assert 1 in metadata.exit_codes
 
 
 def test_{tool}_finding_objects_not_dicts({tool}_output_high_severity):

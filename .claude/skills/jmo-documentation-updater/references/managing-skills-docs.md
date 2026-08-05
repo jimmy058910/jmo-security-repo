@@ -4,13 +4,20 @@ Referenced from the main [SKILL.md](../SKILL.md).
 
 ## Documentation Standards for Skills
 
-Even though `.claude/skills/` is gitignored, skill documentation files (SKILL.md, README.md) should:
+`.claude/*` is ignored by default, but `.gitignore` re-includes an explicit
+allowlist: contributor skills, the agents, and `rules/` are **tracked and ship
+to every clone**. Maintainer-only skills stay ignored. Check which side a file
+is on before assuming it is local — `git ls-files .claude/` is the answer, and
+`scripts/dev/check_doc_links.py` fails CI if tracked documentation links to
+anything the allowlist leaves out.
 
-1. **Pass markdownlint checks** -- Skills teach documentation best practices; they must be exemplary
+Skill documentation files (SKILL.md, README.md) should:
+
+1. **Pass markdownlint checks** -- Skills teach documentation best practices; they must be exemplary. This applies to tracked skills whether or not you remember they are tracked: markdownlint runs over `.claude/` in CI and pre-commit
 2. **Follow Perfect Documentation Structure** -- Same principles as main repo docs
 3. **Include working examples** -- Test all commands before committing
-4. **Use relative links** -- Enable offline/fork compatibility
-5. **Document their own changes** -- Maintain changelog section for transparency
+4. **Use relative links** -- Enable offline/fork compatibility. Count the depth from the file itself: a `SKILL.md` reaches the repo root with `../../../`, and a file under `references/` needs `../../../../`
+5. **Link only to tracked paths** -- A link to `dev-only/` or to an unpublished skill resolves on a maintainer's disk and nowhere else, which is worse than no link at all
 
 ## When to Update Skill Documentation
 

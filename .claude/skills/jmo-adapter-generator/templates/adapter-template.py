@@ -40,9 +40,9 @@ logger = logging.getLogger(__name__)
     schema_version="1.2.0",
     output_format="json",
     exit_codes={
-        "0": "clean",
-        "1": "findings",
-        "2": "error"
+        0: "clean",
+        1: "findings",
+        2: "error"
     }
 ))
 class {Tool}Adapter(AdapterPlugin):
