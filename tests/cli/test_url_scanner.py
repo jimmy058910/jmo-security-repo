@@ -392,7 +392,18 @@ class TestUrlScanner:
                 mock_stub.assert_called()
 
     def test_scan_url_tool_not_found_error(self, tmp_path):
-        """Test handling of 'Tool not found' error from ToolRunner"""
+        """A tool that resolved and then failed to exec is NOT a success.
+
+        This used to assert ``statuses["zap"] is True`` - it encoded the defect
+        as the contract. Reaching this branch means zap resolved in pre-flight
+        and then could not be executed, which is a bug (a resolver returning a
+        non-path, or a binary vanishing mid-scan), not something
+        ``--allow-missing-tools`` consents to. Recording it clean is what let a
+        machine with no yara at all report a successful malware scan.
+
+        See tests/cli/test_scanner_failure_accounting.py for the same contract
+        pinned across all five scan jobs.
+        """
 
         def mock_find_tool(tool: str):
             return "/usr/bin/zap.sh" if tool in ("zap.sh", "zap") else None
@@ -429,8 +440,7 @@ class TestUrlScanner:
                 find_tool_func=mock_find_tool,
             )
 
-            # Should write stub for tool not found error
-            assert statuses["zap"] is True
+            assert statuses["zap"] is False
 
 
 if __name__ == "__main__":

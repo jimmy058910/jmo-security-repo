@@ -376,7 +376,9 @@ def get_git_context(repo_path: Path) -> dict[str, Any]:
             ["git", "rev-parse", "HEAD", "--abbrev-ref", "HEAD"],
             cwd=repo_path,
             capture_output=True,
-            text=True,
+            # Ref names may be UTF-8; git is not restricted to ASCII here.
+            encoding="utf-8",
+            errors="replace",
             check=True,
             timeout=5,
         )
@@ -392,7 +394,8 @@ def get_git_context(repo_path: Path) -> dict[str, Any]:
             ["git", "describe", "--tags", "--exact-match"],
             cwd=repo_path,
             capture_output=True,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=5,
         )
         tag = result.stdout.strip() if result.returncode == 0 else None
@@ -402,7 +405,11 @@ def get_git_context(repo_path: Path) -> dict[str, Any]:
             ["git", "status", "--porcelain"],
             cwd=repo_path,
             capture_output=True,
-            text=True,
+            # Porcelain output is file paths, which are UTF-8 and often
+            # non-ASCII in third-party repos. With check=True a locale decode
+            # failure would raise rather than merely lose the capture.
+            encoding="utf-8",
+            errors="replace",
             check=True,
             timeout=5,
         )

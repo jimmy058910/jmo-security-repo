@@ -94,3 +94,78 @@ def test_main_hardens_streams_before_parsing_args() -> None:
         "harden",
         "parse_args",
     ], f"Expected harden_console_streams() before parse_args(), got: {called}"
+
+
+# Modules whose subprocess output carries bytes we do not control: scanner
+# output over arbitrary repositories, git metadata from third-party clones, and
+# OPA's UTF-8 JSON. Decoding these with the host locale under strict errors
+# loses the capture entirely on Windows -- the exception is raised inside
+# `subprocess._readerthread`, where it cannot reach the caller.
+#
+# Measured on a 5-repo public scan (cp1252 host): five UnicodeDecodeErrors,
+# `trufflehog.json` written as 0 bytes in all 5 repos, trufflehog reported
+# successful, and the `zero-secrets` policy PASSED. A missed finding is a gap;
+# a policy that certifies "no secrets" because the scanner's output was
+# destroyed is a false assurance.
+#
+# This guard is deliberately scoped to the data path rather than all ~73
+# `text=True` sites in `scripts/`. PR #696 fixed all 153 lint-visible encoding
+# sites and repaired zero actual failures; scope comes from failures, not from
+# an enumerable pattern. Add a module here when it starts handling foreign bytes.
+DATA_PATH_MODULES = (
+    "core/tool_runner.py",  # scanner stdout over arbitrary repo content
+    "core/policy_engine.py",  # OPA JSON; decides PASS/FAIL
+    "core/developer_attribution.py",  # git blame: author names
+    "core/history_db.py",  # git refs, tags, porcelain paths
+    "cli/clone_from_tsv.py",  # git clone of arbitrary public repos
+)
+
+
+def _capturing_subprocess_calls(tree: ast.AST):
+    """Yield (lineno, kwargs) for subprocess calls that capture output."""
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = ast.unparse(node.func)
+        if func not in {
+            "subprocess.run",
+            "subprocess.Popen",
+            "subprocess.check_output",
+        }:
+            continue
+        kwargs = {kw.arg for kw in node.keywords if kw.arg}
+        if kwargs & {"capture_output", "stdout", "stderr"}:
+            yield node.lineno, kwargs
+
+
+def test_data_path_subprocesses_decode_explicitly() -> None:
+    """Scan-path subprocess output must not be decoded with the host locale.
+
+    `text=True` / `universal_newlines=True` select
+    `locale.getpreferredencoding()` under `errors="strict"`. Both halves are
+    wrong for foreign bytes: the codec is the host's rather than the tool's, and
+    strict turns one unmappable byte into total data loss.
+    """
+    offenders: list[str] = []
+
+    for rel in DATA_PATH_MODULES:
+        path = SCRIPTS / rel
+        assert path.exists(), f"guard references a module that moved: {rel}"
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+
+        for lineno, kwargs in _capturing_subprocess_calls(tree):
+            if kwargs & {"text", "universal_newlines"}:
+                offenders.append(f"{rel}:{lineno} uses text=True (locale decoding)")
+            elif "encoding" not in kwargs:
+                offenders.append(f"{rel}:{lineno} has no explicit encoding=")
+            elif "errors" not in kwargs:
+                offenders.append(
+                    f"{rel}:{lineno} has encoding= but no errors= "
+                    "(strict discards the whole capture on one bad byte)"
+                )
+
+    assert (
+        not offenders
+    ), "Locale-decoded subprocess output on the scan data path:\n" + "\n".join(
+        f"  {o}" for o in offenders
+    )

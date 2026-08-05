@@ -2107,10 +2107,10 @@ jmo history query --severity CRITICAL
 | `jmo history list` | List all stored scans |
 | `jmo history show` | Show details for a specific scan |
 | `jmo history query` | Query findings from history |
-| `jmo history compare` | Compare two scans side-by-side |
+| `jmo history diff` | Compare two scans side-by-side |
 | `jmo history export` | Export to JSON/CSV |
 | `jmo history verify` | Verify database integrity |
-| `jmo history vacuum` | Optimize database |
+| `jmo history optimize` | Optimize database (VACUUM + ANALYZE) |
 | `jmo history prune` | Delete old scans |
 
 **Complete Guide:** [HISTORY_GUIDE.md](HISTORY_GUIDE.md)

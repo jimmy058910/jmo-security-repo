@@ -10,6 +10,7 @@ This module provides:
 
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -178,3 +179,122 @@ def docker_available() -> bool:
         return result.returncode == 0
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return False
+
+
+# ---------------------------------------------------------------------------
+# Guard: the test suite must never destroy the developer's real installation.
+# ---------------------------------------------------------------------------
+#
+# `_uninstall_tools` ends with `shutil.rmtree(Path.home() / ".jmo" / "bin")`.
+# A test that exercises it without redirecting `Path.home()` deletes the real
+# tool directory and still passes - measured: a sentinel file placed in
+# `~/.jmo/bin` was gone after a single green test run, taking every installed
+# scanner with it. Recovering costs a full `jmo tools install`, and until the
+# developer notices, every scan silently under-reports because the tools that
+# vanished are the ones being tested.
+#
+# Detection rather than prevention: redirecting `Path.home()` for the whole
+# suite would break tests that legitimately read real user config. This notices
+# the damage and names it, which is enough to stop it reaching a second person.
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _guard_real_jmo_install():
+    """Fail the run if a test deleted the real ~/.jmo/bin."""
+    from pathlib import Path
+
+    jmo_bin = Path.home() / ".jmo" / "bin"
+    existed = jmo_bin.exists()
+
+    yield
+
+    if existed and not jmo_bin.exists():
+        pytest.fail(
+            f"A test deleted the real tool directory {jmo_bin}.\n"
+            "Something called an uninstall path without redirecting "
+            "Path.home(). Use:\n"
+            "    monkeypatch.setattr(Path, 'home', staticmethod(lambda: tmp_path))\n"
+            "and NOT monkeypatch.setenv('HOME', ...), which does not affect "
+            "Path.home() on Windows.\n"
+            "Recover with: jmo tools install --profile fast --yes",
+            pytrace=False,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Scan logging leaks out of the test that configured it.
+# ---------------------------------------------------------------------------
+# `configure_scan_logging()` sets a level and turns off propagation on the
+# shared `logging.getLogger("scripts")`, process-globally. Any test that runs
+# a scan - or calls `jmo.main()` with any subcommand, which configures it too
+# - leaves those settings in place for the rest of the session.
+#
+# The level is what breaks `caplog`: an explicit WARNING on `scripts` makes
+# every `scripts.*` child drop INFO records at the source, and
+# `caplog.at_level(INFO)` cannot undo it because it raises the level of the
+# *root* logger, which effective-level resolution never reaches.
+#
+# That is order-dependent pollution, and it is indistinguishable from a flake
+# at the symptom level: the affected tests pass in isolation and fail in a
+# full run or a shard. Six `test_policy_reporter` tests were dismissed as
+# "load flakes" on exactly that evidence before the cause was found.
+#
+# Restore after every test rather than asking each scan test to remember.
+
+
+@pytest.fixture(autouse=True)
+def _restore_scan_logging():
+    """Undo any `configure_scan_logging()` a test left behind."""
+    yield
+
+    from scripts.cli.jmo import reset_scan_logging
+
+    reset_scan_logging()
+
+
+# ---------------------------------------------------------------------------
+# Repo walking that prunes during traversal, not after.
+# ---------------------------------------------------------------------------
+
+
+def iter_repo_files(
+    root: Path,
+    skip_dir_names: set[str],
+    suffixes: set[str] | None = None,
+) -> list[Path]:
+    """Walk `root`, skipping `skip_dir_names` **during** descent.
+
+    The obvious formulation is wrong in a way that hides behind a platform:
+
+        for path in root.rglob("*"):
+            if not path.is_file():          # <- stats every vendored file
+                continue
+            if any(p in SKIP for p in path.parts):   # <- far too late
+
+    `rglob` descends into `node_modules` regardless of any later filter, and
+    `is_file()` stats each entry it yields. Measured symptoms of that single
+    bug, one per platform:
+
+    - **Windows**: `OSError: [WinError 1920]` on the pnpm symlink farm under
+      `scripts/dashboard/node_modules/.pnpm/`.
+    - **Linux over /mnt/c (WSL)**: no error at all - the suite simply **times
+      out** in `os.stat`, because stat-ing tens of thousands of vendored files
+      across the 9p mount is glacial.
+
+    Neither symptom points at the cause on its own, which is how it survived:
+    each platform reads as its own quirk. `os.walk` with in-place `dirs`
+    pruning never enters those trees.
+    """
+    import os
+
+    found: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        # In-place mutation is what prunes the walk; rebinding does nothing.
+        dirnames[:] = [d for d in dirnames if d not in skip_dir_names]
+        base = Path(dirpath)
+        for name in filenames:
+            path = base / name
+            if suffixes is not None and path.suffix not in suffixes:
+                continue
+            found.append(path)
+    return found

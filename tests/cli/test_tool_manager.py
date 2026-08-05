@@ -13,6 +13,7 @@ This test suite validates the ToolManager class:
 Target Coverage: >= 85%
 """
 
+import os
 import re
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -833,14 +834,23 @@ def test_get_node_version_not_installed():
 
 
 def test_get_clean_env():
-    """Test _get_clean_env adds custom paths."""
+    """Test _get_clean_env adds custom paths.
+
+    Asserted as a real PATH *entry*, not as the substring ".jmo/bin". That
+    substring hardcodes the POSIX separator, so it only ever passed on Windows
+    because the code built its paths with f-string forward slashes - producing
+    mixed-separator entries, which was part of the defect. A substring check
+    also cannot tell "is a PATH entry" from "is buried inside a corrupted one",
+    which is exactly what was happening. See TestCleanEnvPathSeparator.
+    """
     from scripts.cli.tool_manager import ToolManager
 
     manager = ToolManager()
     env = manager._get_clean_env()
 
     assert "PATH" in env
-    assert ".jmo/bin" in env["PATH"]
+    entries = env["PATH"].split(os.pathsep)
+    assert str(Path.home() / ".jmo" / "bin") in entries
 
 
 # ========== Category 13: Print Functions ==========
@@ -1751,3 +1761,59 @@ class TestGetToolSummary:
 
         assert summary.profile_total == 0
         assert summary.platform_applicable == 0
+
+
+class TestCleanEnvPathSeparator:
+    r"""`_get_clean_env` must join PATH with the platform's separator.
+
+    It prepended its extra directories with a hardcoded ``":"``::
+
+        env["PATH"] = ":".join(extra_paths) + ":" + current_path
+
+    On POSIX that is correct and the bug is invisible. On Windows the separator
+    is ``";"``, so every prepended directory **and the first genuine PATH entry**
+    fuse into one nonsensical element:
+
+        'C:\Users\J/.jmo/bin:C:\Users\J/.local/bin:C:\Users\J/.kubescape/bin:C:\real\first\entry'
+
+    Two things are lost. ``~/.jmo/bin`` - the directory JMo installs every tool
+    into - is not on the probe's PATH at all, and whatever was first on the real
+    PATH is destroyed with it.
+
+    Measured: this is why `dependency-check`'s version probe reported
+    ``'java' is not recognized`` on a machine where java was on PATH and
+    `shutil.which("java")` found it from the same process. The probe was
+    searching a corrupted PATH.
+
+    `tool_manager.py`'s isolated-venv branch already uses ``os.pathsep``
+    correctly, so one call site was right and the other was not.
+    """
+
+    def test_extra_paths_are_joined_with_os_pathsep(self):
+        from scripts.cli.tool_manager import ToolManager
+
+        env = ToolManager()._get_clean_env()
+        entries = env["PATH"].split(os.pathsep)
+
+        jmo_bin = str(Path.home() / ".jmo" / "bin")
+        normalised = {e.replace("/", os.sep).rstrip(os.sep) for e in entries}
+
+        assert jmo_bin.replace("/", os.sep).rstrip(os.sep) in normalised, (
+            "~/.jmo/bin is not a PATH entry - JMo installs its tools there, so "
+            f"the probe cannot find any of them. PATH[0] was: {entries[0]!r}"
+        )
+
+    def test_the_first_real_path_entry_survives(self, monkeypatch):
+        """Prepending must not consume the entry that was already first."""
+        from scripts.cli.tool_manager import ToolManager
+
+        sentinel = str(
+            Path("C:/sentinel-dir") if os.name == "nt" else Path("/sentinel-dir")
+        )
+        monkeypatch.setenv("PATH", sentinel + os.pathsep + "other")
+
+        entries = ToolManager()._get_clean_env()["PATH"].split(os.pathsep)
+
+        assert (
+            sentinel in entries
+        ), f"the pre-existing first PATH entry was swallowed. entries[0]={entries[0]!r}"

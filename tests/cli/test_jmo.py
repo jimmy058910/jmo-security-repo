@@ -785,3 +785,196 @@ def test_parse_args_no_store_raw_findings():
         args = parse_args()
         assert args.cmd == "scan"
         assert args.no_store_raw_findings is True
+
+
+class TestScanPreflightAtEOF:
+    """A scan must not cancel itself because nobody was there to answer.
+
+    Measured: launching `jmo scan --profile-name deep` as a detached process
+    produced no results directory and zero bytes on stderr. Both pre-flight
+    prompts guard only on `sys.stdin.isatty()`, which returns True while stdin
+    is already at EOF (Git Bash on Windows, and any launcher that inherits a
+    console but redirects nothing). `input()` then raises EOFError, and the
+    handler returned `[], missing_names` - the *Cancel* branch - while the
+    prompt on screen advertises `[2] Continue with available tools` as the
+    default.
+
+    `tool_commands.py` already reached the opposite conclusion for the install
+    prompt and documents why: "EOF means nobody is there to answer, which is
+    the same situation as a non-tty, so it takes the same branch: proceed."
+    This pins the scan path to that same rule.
+    """
+
+    @staticmethod
+    def _missing(name: str):
+        status = MagicMock()
+        status.name = name
+        return status
+
+    def _call(self, monkeypatch, *, isatty: bool, on_input):
+        import scripts.cli.tool_manager as tool_manager
+        from scripts.cli.jmo import _check_scan_tools
+
+        monkeypatch.setattr(
+            tool_manager,
+            "get_missing_tools_for_scan",
+            lambda tools, manager=None: (["trivy"], [self._missing("noseyparker")]),
+        )
+        monkeypatch.setattr("sys.stdin.isatty", lambda: isatty)
+        monkeypatch.setattr("builtins.input", on_input)
+
+        args = argparse.Namespace(allow_missing_tools=False)
+        return _check_scan_tools(args, ["trivy", "noseyparker"])
+
+    def test_eof_at_prompt_proceeds_with_available_tools(self, monkeypatch):
+        """EOF must take the advertised default, not the Cancel branch."""
+
+        def _eof(_prompt=""):
+            raise EOFError
+
+        available, missing = self._call(monkeypatch, isatty=True, on_input=_eof)
+
+        assert available == ["trivy"], (
+            "EOF at the prompt dropped every tool, so the scan produced no "
+            "results directory and said nothing about why"
+        )
+        assert missing == ["noseyparker"]
+
+    def test_non_tty_proceeds_with_available_tools(self, monkeypatch):
+        """The established non-interactive path, unchanged."""
+
+        def _never(_prompt=""):
+            raise AssertionError("must not prompt when stdin is not a tty")
+
+        available, missing = self._call(monkeypatch, isatty=False, on_input=_never)
+
+        assert available == ["trivy"]
+        assert missing == ["noseyparker"]
+
+    def test_explicit_cancel_still_cancels(self, monkeypatch):
+        """A human typing 3 must still be able to abort - EOF is not consent."""
+        available, missing = self._call(
+            monkeypatch, isatty=True, on_input=lambda _p="": "3"
+        )
+
+        assert available == []
+
+    def test_keyboard_interrupt_still_cancels(self, monkeypatch):
+        """Ctrl-C is a person deciding to stop; EOF is the absence of a person."""
+
+        def _interrupt(_prompt=""):
+            raise KeyboardInterrupt
+
+        available, missing = self._call(monkeypatch, isatty=True, on_input=_interrupt)
+
+        assert available == []
+
+
+class TestScanPathLoggingIsReachable:
+    """`--log-level` must reach the loggers the scan actually uses.
+
+    `jmo.py` has a hand-rolled `_log()` that emits JSON and honours
+    `--log-level`. Everything under `scripts/core` and `scripts/cli/scan_jobs`
+    uses stdlib `logging`, which nothing ever configured. Measured:
+
+        root level: WARNING   root handlers: []   isEnabledFor(DEBUG): False
+        lastResort: <_StderrHandler <stderr> (WARNING)>
+
+    Two consequences. The `idle` diagnostic added in d2c3641 - "implemented and
+    installed, but this repository had nothing for it to look at", the third
+    leg of the scanner's own three-state accounting - is logged at DEBUG and so
+    was unreachable at every CLI flag setting. And the diagnostics that did
+    appear went out through Python's `lastResort` handler, which has no
+    formatter, so lines like "its findings are MISSING from this scan" were
+    emitted bare while every other line was JSON - invisible to any consumer
+    parsing the log stream.
+    """
+
+    def test_debug_level_reaches_scan_path_loggers(self, capsys):
+        import logging
+
+        from scripts.cli.jmo import configure_scan_logging
+
+        configure_scan_logging(argparse.Namespace(log_level="DEBUG", human_logs=False))
+        try:
+            logging.getLogger("scripts.cli.scan_jobs.repository_scanner").debug(
+                "IDLE-MARKER"
+            )
+            assert "IDLE-MARKER" in capsys.readouterr().err
+        finally:
+            configure_scan_logging(argparse.Namespace(log_level=None, human_logs=False))
+
+    def test_default_level_suppresses_debug(self, capsys):
+        """Without --log-level DEBUG the debug diagnostics stay out of the way."""
+        import logging
+
+        from scripts.cli.jmo import configure_scan_logging
+
+        configure_scan_logging(argparse.Namespace(log_level=None, human_logs=False))
+        logging.getLogger("scripts.cli.scan_jobs.repository_scanner").debug(
+            "IDLE-MARKER"
+        )
+        assert "IDLE-MARKER" not in capsys.readouterr().err
+
+    def test_scan_diagnostics_are_json_like_the_rest_of_the_stream(self, capsys):
+        """An ERROR from the scan path must not arrive bare via lastResort."""
+        import logging
+
+        from scripts.cli.jmo import configure_scan_logging
+
+        configure_scan_logging(argparse.Namespace(log_level=None, human_logs=False))
+        try:
+            logging.getLogger("scripts.cli.scan_jobs.repository_scanner").error(
+                "findings are MISSING"
+            )
+            err = capsys.readouterr().err
+            assert (
+                '"level"' in err and '"msg"' in err
+            ), f"scan diagnostics are not machine-readable like _log()'s:\n{err}"
+        finally:
+            configure_scan_logging(argparse.Namespace(log_level=None, human_logs=False))
+
+    def test_reset_lets_caplog_see_info_from_scripts_loggers_again(self, caplog):
+        """`configure_scan_logging` must not permanently break `caplog`.
+
+        It puts an explicit level on the shared `scripts` logger. That makes
+        every `scripts.*` child drop INFO records **at the source** -
+        `logger.info()` checks `isEnabledFor`, which resolves the effective
+        level by walking up to the nearest ancestor with an explicit one, and
+        stops at `scripts`. `caplog.at_level(INFO)` raises the level of the
+        *root* logger, which the walk never reaches, so it cannot compensate.
+
+        Without a restore, one call anywhere in a pytest session empties
+        `caplog.text` for every later INFO assertion against a `scripts.*`
+        logger, in ordering-dependent ways that read exactly like flakes.
+
+        Not hypothetical: six INFO-asserting tests in
+        `tests/reporters/test_policy_reporter.py` failed this way across every
+        CI platform while the two WARNING/ERROR-asserting tests beside them
+        passed - the asymmetry that identifies the level as the cause. All six
+        pass in isolation, and the set was written off as load flakes on that
+        evidence before this was found.
+        """
+        import logging
+
+        from scripts.cli.jmo import configure_scan_logging, reset_scan_logging
+
+        scripts_logger = logging.getLogger("scripts")
+        child = logging.getLogger("scripts.core.reporters.policy_reporter")
+
+        # WARN is configure_scan_logging's default, i.e. the ordinary case -
+        # every `jmo` subcommand configures logging, not just `scan`.
+        configure_scan_logging(argparse.Namespace(log_level=None, human_logs=False))
+        assert not child.isEnabledFor(
+            logging.INFO
+        ), "precondition: the scan's level does suppress INFO on scripts.* children"
+
+        reset_scan_logging()
+
+        assert scripts_logger.propagate is True
+        with caplog.at_level(logging.INFO):
+            child.info("CAPLOG-MARKER")
+        assert "CAPLOG-MARKER" in caplog.text, (
+            "caplog cannot see an INFO record from a scripts.* logger after a "
+            "jmo command configured logging - the scan's level leaked past it"
+        )

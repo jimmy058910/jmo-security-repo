@@ -306,3 +306,62 @@ def test_prowler_adapter_compliance_enrichment(tmp_path: Path):
     assert len(items) == 1
     # Compliance field should exist (enriched by compliance_mapper)
     assert hasattr(items[0], "compliance")
+
+
+class TestOcsfFormat:
+    """prowler 5.x writes OCSF, whose field names share nothing with v3's.
+
+    The adapter was written against prowler v3's flat native JSON
+    (`CheckID`/`Status`/`Severity`). prowler 5.x emits `json-ocsf`: a JSON
+    **array** of records keyed `status_code`/`severity`/`finding_info`/
+    `resources`. Measured on prowler 5.35.0 against a Terraform+Dockerfile
+    fixture: 88 records, 13 of them FAIL, which this adapter read as **zero
+    findings** - a scanner that ran correctly and reported nothing.
+    """
+
+    def _ocsf_record(self, tmp_path, status="FAIL"):
+        import json
+
+        record = {
+            "class_uid": 2001,
+            "status_code": status,
+            "severity": "High",
+            "message": "Last USER command in Dockerfile should not be 'root'",
+            "risk_details": "Running as root is dangerous.",
+            "finding_info": {
+                "uid": "prowler-iac-DS-0002-Dockerfile-1:1",
+                "title": "Last USER command should not be root",
+                "desc": "Ensure the last USER is not root.",
+                "types": ["Infrastructure as Code"],
+            },
+            "resources": [
+                {
+                    "uid": "Dockerfile",
+                    "name": "Dockerfile",
+                    "type": "iac",
+                    "group": {"name": "dockerfile"},
+                    "data": {"details": ""},
+                }
+            ],
+            "metadata": {"event_code": "DS-0002"},
+        }
+        p = tmp_path / "prowler.json"
+        # write_bytes: write_text translates LF to CRLF on Windows.
+        p.write_bytes(json.dumps([record]).encode("utf-8"))
+        return p
+
+    def test_ocsf_fail_record_becomes_a_finding(self, tmp_path):
+        from scripts.core.adapters.prowler_adapter import ProwlerAdapter
+
+        findings = ProwlerAdapter().parse(self._ocsf_record(tmp_path))
+
+        assert len(findings) == 1, "OCSF records read as zero findings"
+        assert findings[0].ruleId == "DS-0002"
+        assert findings[0].severity == "HIGH"
+        assert "Dockerfile" in str(findings[0].location.get("path", ""))
+
+    def test_ocsf_pass_records_are_skipped(self, tmp_path):
+        """PASS is the majority of prowler's output and is not a finding."""
+        from scripts.core.adapters.prowler_adapter import ProwlerAdapter
+
+        assert ProwlerAdapter().parse(self._ocsf_record(tmp_path, status="PASS")) == []

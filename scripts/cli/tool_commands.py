@@ -439,14 +439,30 @@ def cmd_tools_install(args: argparse.Namespace) -> int:
         jobs = 4
     max_workers = min(jobs, 8)  # Cap at 8
 
+    force = getattr(args, "force", False)
+    # Ensure force is a real bool (handles MagicMock in tests), mirroring the
+    # `jobs` guard above. A MagicMock attribute is truthy, so `bool(getattr(...))`
+    # silently makes force=True and routes *every* tool into the install list.
+    if not isinstance(force, bool):
+        force = False
+
     # Determine which tools to install
     if tools_arg:
         # Specific tools requested
         missing = []
         for t in tools_arg:
             status = manager.check_tool(t)
-            if not status.installed:
+            if force or not status.installed:
                 missing.append(status)
+            elif not status.execution_ready:
+                # Present but unable to run - an incomplete install, not a
+                # finished one. yara reaches this state with its engine
+                # installed and no rules, where it would report every scan
+                # clean. Say so rather than printing a bare "already installed".
+                print(
+                    f"{t}: installed ({status.installed_version}) but not ready"
+                    f" - {status.execution_warning}"
+                )
             else:
                 print(f"{t}: already installed ({status.installed_version})")
     else:
@@ -484,8 +500,19 @@ def cmd_tools_install(args: argparse.Namespace) -> int:
         return 0
 
     # Interactive confirmation (only for actual install)
+    #
+    # `sys.stdin.isatty()` is not a reliable non-interactivity test: under Git
+    # Bash on Windows it returns True while stdin is already at EOF, so `input()`
+    # ran and raised an unhandled EOFError with a traceback - making `jmo tools
+    # install` unusable from CI, cron, Docker builds and any scan runner.
+    # EOF means nobody is there to answer, which is the same situation as a
+    # non-tty, so it takes the same branch: proceed. (The uninstall prompt below
+    # defaults the other way on purpose - it is destructive.)
     if not yes and sys.stdin.isatty():
-        response = input("Proceed with installation? [Y/n] ").strip().lower()
+        try:
+            response = input("Proceed with installation? [Y/n] ").strip().lower()
+        except EOFError:
+            response = ""
         if response and response != "y":
             print("Installation cancelled")
             return 0
@@ -585,8 +612,12 @@ def cmd_tools_update(args: argparse.Namespace) -> int:
     print()
 
     # Interactive confirmation
+    # See cmd_tools_install: isatty() can be True with stdin already at EOF.
     if not yes and sys.stdin.isatty():
-        response = input("Proceed with updates? [Y/n] ").strip().lower()
+        try:
+            response = input("Proceed with updates? [Y/n] ").strip().lower()
+        except EOFError:
+            response = ""
         if response and response != "y":
             print("Update cancelled")
             return 0
