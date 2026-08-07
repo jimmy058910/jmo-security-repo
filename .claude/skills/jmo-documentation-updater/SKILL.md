@@ -40,7 +40,7 @@ Documentation is organized by **user persona and journey**, not by technical cat
 
 | Persona | Entry Point | Update Trigger |
 |---------|-------------|----------------|
-| Complete Beginner | [DOCKER_README.md#quick-start](../../../docs/DOCKER_README.md) or `jmo wizard` | Wizard, Docker, beginner workflows |
+| Complete Beginner | [DOCKER_README.md — Quick Start](../../../docs/DOCKER_README.md#quick-start-absolute-beginners) or `jmo wizard` | Wizard, Docker, beginner workflows |
 | Developer | [QUICKSTART.md](../../../QUICKSTART.md) | Installation, basic commands, defaults |
 | DevOps/SRE | [DOCKER_README.md](../../../docs/DOCKER_README.md) | Docker variants, CI examples, env vars |
 | Advanced User | [USER_GUIDE.md](../../../docs/USER_GUIDE.md) | Config options, advanced features |
@@ -98,25 +98,46 @@ Key rule: Run `pre-commit run markdownlint --files <changed_files>` after every 
 
 ### Relative Link Best Practices
 
-Always use relative links from repository root:
+Use relative links — but **relative to the file holding them, not to the
+repository root.** Markdown resolves a link against its own file's directory,
+so `[QUICKSTART.md](QUICKSTART.md)` written *here* points at
+`.claude/skills/jmo-documentation-updater/QUICKSTART.md`, which does not exist.
+`scripts/dev/check_doc_links.py` fails CI and pre-commit on exactly that.
+
+Count the depth from the file itself. From a skill's `SKILL.md` the repo root
+is three levels up; from a file under that skill's `references/` it is four:
 
 ```markdown
-# Correct (relative links)
+# Correct - from THIS file (.claude/skills/<skill>/SKILL.md)
+[QUICKSTART.md](../../../QUICKSTART.md)
+[docs/USER_GUIDE.md](../../../docs/USER_GUIDE.md)
+
+# Correct - from a doc at the repository root
 [QUICKSTART.md](QUICKSTART.md)
-[docs/USER_GUIDE.md](docs/USER_GUIDE.md)
-[USER_GUIDE - Configuration](docs/USER_GUIDE.md#configuration-jmoyml)
 
 # Wrong (absolute GitHub URLs - breaks in forks/offline)
 [QUICKSTART.md](https://github.com/jimmy058910/jmo-security-repo/blob/main/QUICKSTART.md)
 ```
 
+The "Where to Start" table above is the worked example: every entry there
+carries `../../../` for this reason.
+
 ### Anchor Links
 
+Anchors are derived from the heading text: lowercased, spaces to hyphens,
+punctuation dropped. Derive them from the **actual** heading — a plausible
+guess is how you get a link that resolves to the top of the page instead:
+
 ```markdown
-# Header anchors: lowercase, hyphens, no special chars
+# docs/DOCKER_README.md's heading is "## Quick Start (Absolute Beginners)"
+[Docker quick start](../../../docs/DOCKER_README.md#quick-start-absolute-beginners)
+
 # "AWS Account Scanning (v0.7.0)" -> #aws-account-scanning-v070
-[AWS Scanning](docs/USER_GUIDE.md#aws-account-scanning-v070)
+[AWS Scanning](../../../docs/USER_GUIDE.md#aws-account-scanning-v070)
 ```
+
+> `check_doc_links.py` validates that the **file** exists; it does not verify
+> the fragment. A wrong anchor is silent, so check the heading yourself.
 
 ### Bi-Directional Links
 

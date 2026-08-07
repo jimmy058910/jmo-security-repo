@@ -6,19 +6,19 @@
 
 ## Progress
 
-**18 / 103 resolved.**
+**30 / 103 resolved.**
 
 | Chunk | Scope | Findings | Done | Status |
 |---|---|---:|---:|---|
 | **A** | jmo-profile-optimizer | 13 | 13 | **complete** |
-| **B** | dashboard-builder + documentation-updater | 13 | 1 | in progress |
+| **B** | dashboard-builder + documentation-updater | 13 | 13 | **complete** |
 | **C** | adapter-generator + test-fabricator | 15 | 1 | in progress |
 | **D** | jmo-ci-debugger | 13 | 0 | not started |
 | **E** | target-type-expander + security-hardening | 19 | 0 | not started |
 | **F** | the 7 agents | 13 | 0 | not started |
 | **G** | tail: refactoring, compliance, systematic-debugging, references | 11 | 0 | not started |
 | **H** | repo config authored by PR #717 | 6 | 3 | in progress |
-| | **total** | **103** | **18** | |
+| | **total** | **103** | **30** | |
 
 ## How to mark a finding off
 
@@ -158,43 +158,90 @@ audit caught (the flag is `--results-dir`). Two one-line summaries in
 `AGENTS.md` and `.claude/skills/INDEX.md` were synced to the new description so
 the change does not create fresh drift.
 
-## Chunk B - dashboard-builder + documentation-updater  (1/13)
+## Chunk B - dashboard-builder + documentation-updater  (13/13)
 
+Root cause for the dashboard half: **the skill reproduced an early prototype of
+`scripts/core/reporters/html_reporter.py`.** The real module has since grown
+placeholder validation and `<script>`-context escaping the copy never had, so
+three findings were one stale snippet. Deleted and replaced with a citation.
 
 **`.claude/skills/jmo-dashboard-builder/SKILL.md`**
 
-- [ ] **Major** L15: (claim nested; read from the PR conversation)
-- [ ] **Major** L33: Use one bundle-size policy across the dashboard documentation
-- [ ] **Major** L145: (claim nested; read from the PR conversation)
-- [ ] **Major** L219: Fail when the findings placeholder is missing
-- [ ] **Major** L219: (claim nested; read from the PR conversation)
-- [ ] **Major** L230: Call the React reporter from the CLI
+- [x] **Major** L15: Make local data loading deterministic
+      -> FIXED: it never loaded `findings.json`. `html_reporter.py` picks inline
+      vs external on `INLINE_THRESHOLD`; external writes `dashboard-data.json`
+      (not `findings.json` - that name is `basic_reporter.write_json()`'s
+      metadata-wrapped output). Documented both modes. The review's remedy
+      ("remove fetch") was **not** applied: it would reintroduce 50-100 MB HTML
+      files, which is what the threshold exists to prevent. The `file://`
+      opaque-origin caveat is recorded instead.
+- [x] **Major** L33: Use one bundle-size policy across the dashboard documentation
+      -> FIXED: no authoritative threshold existed in tests or CI, so there was
+      nothing to align to. Made SKILL.md's <2 MB target authoritative and had
+      troubleshooting.md defer to it. Measured the real artifact: 0.93 MB.
+- [x] **Major** L145: Do not enable `inlineDynamicImports` while requiring code splitting
+      -> FIXED: the skill demanded "code split by route" while its own config set
+      `inlineDynamicImports: true`. Real `vite.config.ts` also sets
+      `manualChunks: undefined`. Dropped the code-splitting requirement and
+      replaced the reproduced config with a citation.
+- [x] **Major** L219: Fail when the findings placeholder is missing
+      -> DELETED: the real `html_reporter.py:64-75` already verifies the
+      placeholder and falls back with a logged warning. Only the reproduced
+      prototype lacked it.
+- [x] **Major** L219: Escape findings before inserting them into the inline script (CWE-79)
+      -> DELETED: `html_reporter.py:88-94` already escapes `</script>`,
+      `<script`, `<!--` and backticks after `json.dumps`. Same stale snippet.
+- [x] **Major** L230: Call the React reporter from the CLI
+      -> DELETED: `write_html_react` does not exist. The CLI already calls
+      `html_reporter.write_html`; the snippet's own fallback imported `write_html`
+      from its own module, a circular import that could never have run.
 
 **`.claude/skills/jmo-dashboard-builder/references/troubleshooting.md`**
 
-- [ ] **Major** L11: (claim nested; read from the PR conversation)
+- [x] **Major** L11: Do not lazy-load the Recharts namespace directly
+      -> FIXED: `React.lazy` needs a default export; Recharts has published only
+      named exports since v2.0. Real `src/App.tsx` lazy-loads local
+      default-exporting wrappers. Also noted it buys zero bytes in a
+      single-file build, since every dynamic import is inlined.
 
 **`.claude/skills/jmo-documentation-updater/SKILL.md`**
 
-- [ ] **Major** L111: Use paths relative to the Markdown file
+- [x] **Major** L111: Use paths relative to the Markdown file
+      -> FIXED: the file contradicted itself - its "Where to Start" table already
+      used `../../../` while the guidance section taught root-relative paths that
+      `check_doc_links.py` rejects. Also recorded that the checker validates the
+      file but not the `#fragment`.
+- [x] **Minor** L47: Fix the `DOCKER_README.md` quick-start link
+      -> FIXED: the real heading is `## Quick Start (Absolute Beginners)`, so the
+      anchor is `#quick-start-absolute-beginners`, not `#quick-start`.
 
 **`.claude/skills/jmo-documentation-updater/templates/doc-update-templates.md`**
 
-- [ ] **Major** L364: Make the verification checklist fail when required updates are missing
-
-**`.claude/skills/jmo-documentation-updater/SKILL.md`**
-
-- [ ] **Minor** L47: Fix the `DOCKER_README.md` quick-start link
+- [x] **Major** L364: Make the verification checklist fail when required updates are missing
+      -> FIXED, and the defect was worse than claimed: step 1 grepped `jmo.yml`
+      for a `tools:` key under `deep:` that **does not exist**, so it returned 0
+      on every run. Rewritten against `tool_registry.py:PROFILE_TOOLS` with a
+      real non-zero exit. Two of my own remedies were measured wrong first: a
+      deep-only assertion produced **16 false positives** because 9/13/17 are
+      fast/slim/balanced. Final form asserts membership in the live count set
+      {9,13,17,28,29} - 5 hits, no false positives.
+- [x] **Minor** L209: Limit the batch migration to reviewed files
+      -> FIXED: replaced `find . -exec sed -i` with list-review-then-edit, and
+      recorded two traps it hid (BSD `sed -i` eats the next filename without an
+      explicit suffix; `sed -i` on Windows rewrites whole-file line endings).
+      Marked the `--results` rename as illustrative: it is not a live
+      deprecation - measured, `--results` still resolves today purely because
+      argparse accepts unambiguous prefixes.
 
 **`.claude/skills/jmo-documentation-updater/references/managing-skills-docs.md`**
 
 - [x] **Minor** L8: Describe the public/private allowlist accurately
       -> RESOLVED: PR #717 - allowlist described accurately
-- [ ] **Minor** L14: Apply the changelog rule or narrow it
-
-**`.claude/skills/jmo-documentation-updater/templates/doc-update-templates.md`**
-
-- [ ] **Minor** L209: Limit the batch migration to reviewed files
+- [x] **Minor** L14: Apply the changelog rule or narrow it
+      -> FIXED (narrowed): measured, **zero** tracked skills or agents have a
+      changelog section, so the rule was universally unmet. A per-skill changelog
+      duplicates git history with nothing to keep it honest. Points at
+      `git log -- .claude/skills/<skill>/` and the repository `CHANGELOG.md`.
 
 ## Chunk C - adapter-generator + test-fabricator  (1/15)
 

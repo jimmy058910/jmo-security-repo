@@ -43,8 +43,17 @@ pre-commit run markdownlint --files .claude/skills/jmo-documentation-updater/SKI
 # Step 3: Verify fixes
 pre-commit run markdownlint --files .claude/skills/jmo-documentation-updater/SKILL.md
 
-# Step 4: Document self-improvement in Changelog
+# Step 4: record the change in the repository CHANGELOG.md, if it is
+#         user-visible. Skills do not keep their own changelogs.
 ```
+
+> **Skill files carry no changelog section, by decision.** Measured: none of the
+> tracked skills or agents has one. A per-skill changelog would duplicate git
+> history with no mechanism to keep it honest, and the earlier wording here
+> stated a requirement that every file in the repository violated — which
+> teaches contributors to ignore the rule rather than follow it. Skill history
+> is `git log -- .claude/skills/<skill>/`; the repository `CHANGELOG.md` covers
+> anything a *user* would notice.
 
 ## Files to Maintain in .claude/skills/
 
@@ -61,5 +70,5 @@ pre-commit run markdownlint --files .claude/skills/jmo-documentation-updater/SKI
 **Do NOT create:**
 
 - Session summaries
-- Execution logs (document in Changelog instead)
+- Execution logs (put anything durable in the repository `CHANGELOG.md`)
 - Duplicate documentation (consolidate into SKILL.md)
