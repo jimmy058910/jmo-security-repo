@@ -98,7 +98,7 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
 | **Policy** | OPA |
 | **Runtime** | Trivy-RBAC, Falco, AFL++ |
 
-**Tool details:** [docs/USER_GUIDE.md#tool-overview](docs/USER_GUIDE.md#tool-overview)
+**Tool details:** [docs/PROFILES_AND_TOOLS.md](docs/PROFILES_AND_TOOLS.md)
 
 ---
 

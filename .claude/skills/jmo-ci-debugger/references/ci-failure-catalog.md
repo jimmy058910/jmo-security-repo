@@ -894,7 +894,7 @@ MD031: true   # Blank lines around code fences
 
 **Fix ALL violations found, not just new ones.**
 
-If markdownlint shows 10 violations (3 new + 7 old), fix all 10. See [jmo-documentation-updater skill](../../jmo-documentation-updater/SKILL.md#technical-debt-principle) for rationale.
+If markdownlint shows 10 violations (3 new + 7 old), fix all 10. See [jmo-documentation-updater skill](../../jmo-documentation-updater/SKILL.md#technical-debt-and-linting) for rationale.
 
 ---
 

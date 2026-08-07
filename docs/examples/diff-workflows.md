@@ -44,7 +44,7 @@ graph LR
 
 ### Example Output
 
-```markdown
+````markdown
 # 🔍 Security Diff Report
 
 **Baseline:** `main` (2025-11-05, balanced profile)
@@ -93,7 +93,7 @@ cursor.execute(query, (user_id,))
 
 </details>
 
-```text
+````
 
 ---
 
@@ -499,7 +499,7 @@ jmo diff --scan abc123 --scan def456 --format json
 
 - [GitHub Actions Example](github-actions-diff.yml)
 - [GitLab CI Example](gitlab-ci-diff.yml)
-- [USER_GUIDE.md - Diff Command Reference](../USER_GUIDE.md#jmo-diff)
+- [USER_GUIDE.md - Diff Command Reference](../USER_GUIDE.md#machine-readable-diffs)
 
 ---
 

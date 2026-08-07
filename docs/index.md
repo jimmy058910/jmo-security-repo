@@ -31,7 +31,7 @@
 | Configure scanning | [User Guide: Configuration](USER_GUIDE.md#configuration-jmoyml) |
 | Speed up scans | [Scan Optimization](SCAN_OPTIMIZATION.md) |
 | Set up CI/CD | [Docker Guide: CI/CD](DOCKER_README.md#cicd-integration) |
-| Suppress false positives | [User Guide: Suppressions](USER_GUIDE.md#suppressions) |
+| Suppress false positives | [User Guide: Suppressions](USER_GUIDE.md#handling-false-positives) |
 | Compare scans (diff) | [Diff Guide](DIFF_GUIDE.md) |
 | Track trends over time | [Trends Guide](TRENDS_GUIDE.md) |
 | View scan history | [History Guide](HISTORY_GUIDE.md) |
@@ -162,7 +162,7 @@ JMo Security orchestrates 28 security scanners across 11 categories:
 | System | Lynis |
 | Runtime | Trivy-RBAC, Falco, AFL++ |
 
-**Tool details:** [Profiles and Tools Reference](PROFILES_AND_TOOLS.md) | [User Guide: Tool Overview](USER_GUIDE.md#tool-overview)
+**Tool details:** [Profiles and Tools Reference](PROFILES_AND_TOOLS.md) | [User Guide: Tool Overview](USER_GUIDE.md#tool-management)
 
 ---
 

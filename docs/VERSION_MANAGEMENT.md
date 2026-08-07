@@ -1,7 +1,7 @@
 # Version Management Guide
 
 **Status:** ✅ Implemented
-**Related:** [ROADMAP.md #14](../ROADMAP.md#1-tool-version-consistency--automated-dependency-management), [Issue #46](https://github.com/jimmy058910/jmo-security-repo/issues/46), [Issue #12](https://github.com/jimmy058910/jmo-security-repo/issues/12)
+**Related:** [ROADMAP.md](../ROADMAP.md), [Issue #46](https://github.com/jimmy058910/jmo-security-repo/issues/46), [Issue #12](https://github.com/jimmy058910/jmo-security-repo/issues/12)
 
 ## Table of Contents
 
@@ -20,7 +20,7 @@
 
 ## Overview
 
-JMo Security Suite uses a **5-layer version management system** to ensure Docker images and native installations always use the same tool versions. This prevents critical issues like the Trivy v0.58.1 → v0.67.2 discrepancy that caused 16 CVEs to be missed (see [ROADMAP.md #14](../ROADMAP.md#1-tool-version-consistency--automated-dependency-management)).
+JMo Security Suite uses a **5-layer version management system** to ensure Docker images and native installations always use the same tool versions. This prevents critical issues like the Trivy v0.58.1 → v0.67.2 discrepancy that caused 16 CVEs to be missed (see [ROADMAP.md](../ROADMAP.md)).
 
 ### Why This Matters
 
@@ -712,7 +712,7 @@ python3 scripts/dev/update_versions.py --sync
 
 ## Related Documentation
 
-- [ROADMAP.md #14](../ROADMAP.md#1-tool-version-consistency--automated-dependency-management) — Full 5-layer system design
+- [ROADMAP.md](../ROADMAP.md) — Project roadmap and shipped features
 - [Issue #46](https://github.com/jimmy058910/jmo-security-repo/issues/46) — Tool version consistency tracking
 - [Issue #12](https://github.com/jimmy058910/jmo-security-repo/issues/12) — Dependency locking & updates
 - [CLAUDE.md](../CLAUDE.md) — AI assistant development guidance

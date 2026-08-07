@@ -27,6 +27,8 @@ from __future__ import annotations
 import re
 import subprocess
 import sys
+import unicodedata
+from collections.abc import Iterator
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -66,16 +68,65 @@ INLINE_CODE_PATTERN = re.compile(r"(?P<ticks>`+)(?:(?!(?P=ticks)).)*(?P=ticks)")
 LINE_ANCHOR_PATTERN = re.compile(r"#L\d")
 
 
-def navigable_lines(text: str) -> list[str]:
-    """Lines with code fences dropped and inline code spans blanked out.
+# A link inside a heading renders as its text alone, so the URL must come off
+# before the filter runs - stripping punctuation from it would otherwise glue
+# the URL to the text (`the-guidedocsuser_guidemd`).
+HEADING_LINK_PATTERN = re.compile(r"\[([^\]]*)\]\([^)]*\)")
+
+# Join controls (U+200C/U+200D) glue emoji sequences together. GitHub keeps
+# them; they are `\p{Join_Control}`, which Python exposes nowhere.
+JOIN_CONTROLS = frozenset("‌‍")
+
+
+def _is_slug_char(char: str) -> bool:
+    """True for the characters GitHub's slug filter keeps.
+
+    GitHub drops everything outside `[\\p{Word}\\- ]`, and Ruby's `\\p{Word}` is
+    `Alnum + Mark + Connector_Punctuation + Join_Control`. Python's `\\w` covers
+    the first and third but **not** marks - so a `[^\\w\\- ]` port silently
+    disagrees on `⚠️`, dropping the U+FE0F variation selector GitHub retains.
+    Measured against `gh api markdown` across all 177 tracked files: this
+    predicate agrees on 3873/3873 anchors, the regex on 3868.
+    """
+    if char in "- _":
+        return True
+    if char.isalnum():
+        return True
+    return unicodedata.category(char).startswith("M") or char in JOIN_CONTROLS
+
+
+# An ATX heading. The space after the hashes is required, which is what keeps
+# `#!/usr/bin/env python` and a `#719` issue reference from becoming anchors.
+# The corpus has no setext (`Title\n=====`) headings; every `---` under a line
+# of prose is a YAML frontmatter terminator.
+HEADING_PATTERN = re.compile(r"^\s{0,3}#{1,6}\s+(?P<title>.*?)\s*#*\s*$")
+
+
+def heading_anchor(text: str) -> str:
+    """The `#fragment` GitHub generates for a heading with this text.
+
+    Backticks and `**` need no special case: they are punctuation, and the
+    filter drops them like any other. Note that a dropped character leaves its
+    surrounding spaces behind, so an emoji between two words produces a double
+    hyphen - that is GitHub's behaviour, not an artefact.
+    """
+    rendered = HEADING_LINK_PATTERN.sub(r"\1", text).lower()
+    kept = "".join(char for char in rendered if _is_slug_char(char))
+    return kept.replace(" ", "-")
+
+
+def unfenced_lines(text: str) -> Iterator[str]:
+    """Yield the lines that are not inside a fenced code block.
 
     Follows the CommonMark closing rule rather than toggling on every fence:
     a closer repeats the opener's character, is at least as long, and carries
     no info string. Toggling desynchronises on same-length nested fences - a
     ```markdown block quoting a ```bash block - which is exactly the shape
     these agent files use to show example output.
+
+    Both callers need this and neither needs the other's transformation, so it
+    lives here once. Duplicating the closing rule is how the two would drift.
     """
-    lines: list[str] = []
     opener: str | None = None
     for raw in text.splitlines():
         fence = FENCE_PATTERN.match(raw)
@@ -88,8 +139,34 @@ def navigable_lines(text: str) -> list[str]:
             if closes:
                 opener = None
                 continue
-        lines.append("" if opener else INLINE_CODE_PATTERN.sub("``", raw))
-    return lines
+        if opener is None:
+            yield raw
+
+
+def navigable_lines(text: str) -> list[str]:
+    """Lines with code fences dropped and inline code spans blanked out."""
+    return [INLINE_CODE_PATTERN.sub("``", raw) for raw in unfenced_lines(text)]
+
+
+def collect_anchors(text: str) -> set[str]:
+    """Every `#fragment` a reader can actually link to in this document.
+
+    Headings are the only source: the corpus carries no `<a id=>` and no inline
+    HTML in any heading. Code spans are deliberately *not* blanked first - the
+    anchor derives from the heading's rendered text, and blanking
+    ``## `jmo tools check` MANUAL`` would drop three of its four words.
+    """
+    anchors: set[str] = set()
+    seen: dict[str, int] = {}
+    for raw in unfenced_lines(text):
+        heading = HEADING_PATTERN.match(raw)
+        if not heading:
+            continue
+        base = heading_anchor(heading.group("title").strip())
+        count = seen.get(base, 0)
+        seen[base] = count + 1
+        anchors.add(base if count == 0 else f"{base}-{count}")
+    return anchors
 
 
 def tracked_paths() -> set[str]:
@@ -126,25 +203,34 @@ def is_tracked(target: str, tracked: set[str]) -> bool:
     return any(p.startswith(prefix) for p in tracked)
 
 
-def check_file(rel_path: str, tracked: set[str]) -> list[str]:
-    """Return dead-reference messages for one documentation file."""
+def check_text(
+    rel_path: str,
+    text: str,
+    tracked: set[str],
+    anchors: dict[str, set[str]],
+) -> list[str]:
+    """Return dead-reference messages for one document's Markdown source."""
     source = REPO_ROOT / rel_path
     problems: list[str] = []
-    text = "\n".join(navigable_lines(source.read_text(encoding="utf-8")))
+    navigable = "\n".join(navigable_lines(text))
 
-    for match in LINK_PATTERN.finditer(text):
+    for match in LINK_PATTERN.finditer(navigable):
         link = match.group(1).strip()
 
-        if link.startswith(("http://", "https://", "mailto:", "#")):
+        if link.startswith(("http://", "https://", "mailto:")):
             continue
 
-        # A line citation points at source on the web, not into the tree.
+        # A line citation points at source on the web, not at a heading.
         if LINE_ANCHOR_PATTERN.search(link):
             continue
 
-        # Strip any anchor; a bare anchor was handled above.
-        path_part = link.split("#", 1)[0]
+        path_part, _, fragment = link.partition("#")
+
+        # A bare `#anchor` - the shape every table of contents uses - names a
+        # heading in the file it is written in.
         if not path_part:
+            if fragment and fragment not in anchors.get(rel_path, set()):
+                problems.append(f"  NO ANCHOR {rel_path} -> {link}")
             continue
 
         # Repo-relative form of a link written relative to its own file.
@@ -155,13 +241,25 @@ def check_file(rel_path: str, tracked: set[str]) -> list[str]:
             # Escapes the repo entirely - not ours to validate.
             continue
 
-        if is_tracked(target, tracked):
+        if not is_tracked(target, tracked):
+            kind = "UNTRACKED" if resolved.exists() else "BROKEN   "
+            problems.append(f"  {kind} {rel_path} -> {link}")
+            # The path is the fix; its anchor is downstream noise.
             continue
 
-        kind = "UNTRACKED" if resolved.exists() else "BROKEN   "
-        problems.append(f"  {kind} {rel_path} -> {link}")
+        # Only Markdown grows headings, so only Markdown has anchors to verify.
+        if fragment and target in anchors and fragment not in anchors[target]:
+            problems.append(f"  NO ANCHOR {rel_path} -> {link}")
 
     return problems
+
+
+def check_file(
+    rel_path: str, tracked: set[str], anchors: dict[str, set[str]]
+) -> list[str]:
+    """Return dead-reference messages for one documentation file."""
+    text = (REPO_ROOT / rel_path).read_text(encoding="utf-8")
+    return check_text(rel_path, text, tracked, anchors)
 
 
 def main() -> int:
@@ -174,10 +272,19 @@ def main() -> int:
     safe_print("Checking documentation links resolve to tracked files...")
     tracked = tracked_paths()
 
+    # Anchors come from every tracked Markdown file, archival included: those
+    # are exempt as link *sources*, not as link *targets*. A link into a plan's
+    # heading is as checkable as any other.
+    anchors = {
+        path: collect_anchors((REPO_ROOT / path).read_text(encoding="utf-8"))
+        for path in tracked
+        if path.endswith(".md")
+    }
+
     files = collect_files(tracked)
     problems: list[str] = []
     for rel_path in files:
-        problems.extend(check_file(rel_path, tracked))
+        problems.extend(check_file(rel_path, tracked, anchors))
 
     if problems:
         for line in sorted(problems):
@@ -187,6 +294,13 @@ def main() -> int:
         safe_print("UNTRACKED -> the file exists locally but ships to nobody. Either")
         safe_print("             track it (see the .claude/ allowlist in .gitignore)")
         safe_print("             or stop referencing it from a tracked file.")
+        safe_print("NO ANCHOR -> the file resolves but names no such heading. This one")
+        safe_print(
+            "             fails silently in a browser - it scrolls to the top of"
+        )
+        safe_print(
+            "             the page, which looks exactly like a link that worked."
+        )
         return 1
 
     safe_print(f"All links in {len(files)} tracked file(s) resolve to tracked paths.")

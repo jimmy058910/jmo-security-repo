@@ -500,7 +500,7 @@ jobs:
               --check-rekor
             ```
 
-```text
+```
 
 ## Compliance Scenarios
 
@@ -717,4 +717,4 @@ jobs:
 - **Sigstore Documentation:** <https://docs.sigstore.dev>
 - **Rekor Transparency Log:** <https://rekor.sigstore.dev>
 - **in-toto Attestation Framework:** <https://in-toto.io>
-- **JMo Security USER_GUIDE.md:** [SLSA Attestation Section](../USER_GUIDE.md#slsa-attestation-v100)
+- **JMo Security USER_GUIDE.md:** [SLSA Attestation Section](../USER_GUIDE.md#slsa-attestation)

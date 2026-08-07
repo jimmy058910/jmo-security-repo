@@ -1305,7 +1305,7 @@ jmo adapters validate ~/.jmo/adapters/custom_tool_adapter.py
 1. `~/.jmo/adapters/` - User plugins (highest priority)
 2. `scripts/core/adapters/` - Built-in plugins
 
-**Complete Guide:** [CONTRIBUTING.md — Adding Tool Adapters](../CONTRIBUTING.md#adding-tool-adapters)
+**Complete Guide:** [CONTRIBUTING.md — Adding Tool Adapters](../CONTRIBUTING.md#adding-tool-adapters-plugin-system)
 
 ## Schedule Management
 
