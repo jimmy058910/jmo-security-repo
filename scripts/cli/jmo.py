@@ -936,7 +936,7 @@ def _add_schedule_args(
     create_parser.add_argument(
         "--profile",
         required=True,
-        choices=["fast", "balanced", "deep"],
+        choices=list(PROFILE_TOOLS),
         help="Scan profile",
     )
     create_parser.add_argument("--repos-dir", help="Repository directory to scan")
@@ -989,7 +989,7 @@ def _add_schedule_args(
     update_parser.add_argument("name", help="Schedule name")
     update_parser.add_argument("--cron", help="New cron expression")
     update_parser.add_argument(
-        "--profile", choices=["fast", "balanced", "deep"], help="New scan profile"
+        "--profile", choices=list(PROFILE_TOOLS), help="New scan profile"
     )
     update_parser.add_argument(
         "--suspend", action="store_true", help="Suspend schedule"
@@ -1169,7 +1169,7 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     store_parser.add_argument(
         "--profile",
         default="balanced",
-        choices=["fast", "balanced", "deep"],
+        choices=list(PROFILE_TOOLS),
         help="Scan profile that was used (default: balanced)",
     )
     store_parser.add_argument(
@@ -1188,7 +1188,7 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     list_parser.add_argument("--branch", help="Filter by branch name")
     list_parser.add_argument(
         "--profile",
-        choices=["fast", "balanced", "deep"],
+        choices=list(PROFILE_TOOLS),
         help="Filter by profile",
     )
     list_parser.add_argument(

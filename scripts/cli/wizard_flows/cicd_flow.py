@@ -62,6 +62,8 @@ class CICDFlow(BaseWizardFlow):
         )
         profile = self.prompter.prompt_choice(
             "Select scan profile:",
+            # curated-profile-subset: CI/CD needs a short feedback loop, so
+            # `deep` (40-70 min) is deliberately not offered here.
             choices=["fast", "balanced"],
             default="fast",
         )

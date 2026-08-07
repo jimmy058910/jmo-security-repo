@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .base_flow import BaseWizardFlow
-from .profile_config import get_profile_warning
+from .profile_config import PROFILES, get_profile_warning
 
 
 class EntireStackFlow(BaseWizardFlow):
@@ -39,7 +39,7 @@ class EntireStackFlow(BaseWizardFlow):
         # Profile selection
         profile = self.prompter.prompt_choice(
             "Select scan profile:",
-            choices=["fast", "balanced", "deep"],
+            choices=list(PROFILES),
             default="balanced",
         )
 
