@@ -253,6 +253,50 @@ def _restore_scan_logging():
 
 
 # ---------------------------------------------------------------------------
+# Timing a wall-clock budget without measuring the runner's mood.
+# ---------------------------------------------------------------------------
+
+# Windows clock granularity, measured on a dev box:
+#
+#     time.monotonic()       15.0000 ms
+#     time.time()             0.5021 ms
+#     time.perf_counter()     0.0001 ms
+#
+# `perf_counter` is the clock this repository standardised on after a "just use
+# monotonic" change made a different flake 26.7% worse (see
+# tests/unit/test_tool_runner.py).
+#
+# Granularity is necessary but not sufficient. One sample on a shared CI runner
+# measures the runner as much as the code: #733 flaked at 15.62ms against a
+# 10ms budget on a PR that touched only the Makefile - 1.6x over, which is well
+# inside normal scheduling noise. Taking the median of several runs fixed it,
+# measured spread 15x -> 1.08x (#736).
+LATENCY_SAMPLES = 21
+
+
+def median_seconds(operation, samples: int = LATENCY_SAMPLES) -> float:
+    """Median wall time of `operation` in seconds, over `samples` runs.
+
+    Median rather than mean: one descheduled run should not move the result,
+    and that is exactly the failure being defended against.
+
+    **Only for operations that can honestly be repeated.** Re-running something
+    that mutates a database, or that populates a cache the next run then hits,
+    measures a different code path after the first sample. Give those a fresh
+    fixture per sample or leave them on a single measurement.
+    """
+    import statistics
+    import time
+
+    timings = []
+    for _ in range(samples):
+        start = time.perf_counter()
+        operation()
+        timings.append(time.perf_counter() - start)
+    return statistics.median(timings)
+
+
+# ---------------------------------------------------------------------------
 # Repo walking that prunes during traversal, not after.
 # ---------------------------------------------------------------------------
 

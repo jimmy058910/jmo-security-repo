@@ -6,6 +6,7 @@ Tests API latency, cache performance, and bulk operations.
 
 import statistics
 import time
+from itertools import count
 from unittest.mock import Mock, patch
 
 import pytest
@@ -126,19 +127,29 @@ class TestEPSSPerformance:
         mock_response.raise_for_status = Mock()
         mock_get.return_value = mock_response
 
-        client = EPSSClient(cache_dir=temp_cache_dir)
-
         cves = [f"CVE-2024-{i:04d}" for i in range(100)]
 
-        # Measure bulk API call time
-        start = time.perf_counter()
-        scores = client.get_scores_bulk(cves)
-        elapsed_ms = (time.perf_counter() - start) * 1000
+        # Each sample needs its own cache directory. `get_scores_bulk` consults
+        # the cache before calling `_fetch_bulk_from_api`
+        # (scripts/core/epss_integration.py:128-135), so reusing one directory
+        # would leave every sample after the first measuring a cache read - a
+        # different, far cheaper code path than the one under test.
+        scores = {}
+        run = count()
+
+        def fetch_bulk():
+            nonlocal scores
+            cache = temp_cache_dir / f"run-{next(run)}"
+            cache.mkdir()
+            scores = EPSSClient(cache_dir=cache).get_scores_bulk(cves)
+
+        elapsed_ms = median_ms(fetch_bulk)
 
         assert len(scores) == 100
-        assert (
-            elapsed_ms < 2000
-        ), f"Bulk API call took {elapsed_ms:.2f}ms (expected <2000ms)"
+        assert elapsed_ms < 2000, (
+            f"Bulk API call median took {elapsed_ms:.2f}ms over "
+            f"{LATENCY_SAMPLES} runs (expected <2000ms)"
+        )
 
     def test_cache_hit_ratio(self, temp_cache_dir):
         """Test cache effectiveness with mixed cached/uncached requests."""
