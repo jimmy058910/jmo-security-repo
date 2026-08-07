@@ -16,7 +16,7 @@ Answer these three questions:
 
 - **How do you install?** If Docker, see [Docker users](#docker-users). If pip, see [pip users](#pip-users).
 - **Do you have a `.jmo/history.db` from v0.8.0?** No — history storage is new in v1.0.0. See [New features worth adopting](#new-features-worth-adopting).
-- **Do you have CI pipelines calling `jmo scan` or `jmo ci`?** Re-read [CLI flag changes](#cli-flag-changes) before bumping your image or package version.
+- **Do you have CI pipelines calling `jmo scan` or `jmo ci`?** Re-read [CLI flag changes](#cli-flag---profile-renamed-to---profile-name-on-scan-and-ci) before bumping your image or package version.
 
 ---
 

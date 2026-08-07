@@ -1830,7 +1830,7 @@ docker run --rm \
 For complete documentation, see:
 
 - [docs/USER_GUIDE.md — Trend Analysis](../USER_GUIDE.md#trend-analysis)
-- [docs/API_REFERENCE.md — TrendAnalyzer API](../API_REFERENCE.md#trendanalyzer)
+- [docs/API_REFERENCE.md — TrendAnalyzer API](../API_REFERENCE.md#trendanalyzer-api)
 - [docs/examples/ci-cd-trends.md](./ci-cd-trends.md) - Complete CI/CD patterns
 
 ---

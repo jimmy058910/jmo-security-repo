@@ -999,7 +999,7 @@ if __name__ == "__main__":
 
 ## Further Reading
 
-- [User Guide - Trend Analysis](USER_GUIDE.md#trend-analysis-v100): CLI usage and examples
-- [User Guide - Historical Storage](USER_GUIDE.md#historical-storage-v100): Database schema and query API
+- [User Guide - Trend Analysis](USER_GUIDE.md#trend-analysis): CLI usage and examples
+- [User Guide - Historical Storage](USER_GUIDE.md#historical-storage): Database schema and query API
 - [CHANGELOG.md](../CHANGELOG.md): Feature #5 implementation details
 - [Source Code](../scripts/core/): Complete implementation with docstrings
