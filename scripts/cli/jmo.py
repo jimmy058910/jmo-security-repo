@@ -312,7 +312,7 @@ def _add_report_args(subparsers: argparse._SubParsersAction) -> Any:
     rp.add_argument(
         "--profile",
         action="store_true",
-        help="Collect per-tool timing and write timings.json (for profile SELECTION use --profile-name on scan/ci)",
+        help="Write timings.json: per-adapter PARSE timing for the report phase (tool run times live in scan-timings.json, written by scan). For profile SELECTION use --profile-name on scan/ci",
     )
     rp.add_argument(
         "--threads",
@@ -352,7 +352,7 @@ def _add_ci_args(subparsers: argparse._SubParsersAction) -> Any:
     cp.add_argument(
         "--profile",
         action="store_true",
-        help="Collect timings.json during report (for profile SELECTION use --profile-name)",
+        help="Write timings.json: per-adapter PARSE timing for the report phase (tool run times live in scan-timings.json, written by scan). For profile SELECTION use --profile-name",
     )
     cp.add_argument(
         "--policy",

@@ -109,8 +109,10 @@ optimizing the adapter.
 4. Store the updated baseline (automatic, final phase)
 
 **Verifying a timeout change:** `timings.json` cannot confirm it — it records
-report-phase parsing only. Compare whole-scan durations with
-`jmo history list` before and after.
+report-phase parsing only. Read that tool's `duration` and `status` in
+`scan-timings.json` before and after. Do not judge it by whole-scan duration
+alone: a cap tight enough to kill a healthy tool makes the scan *faster* while
+producing `status: "timeout"` and no findings.
 
 ---
 
@@ -132,5 +134,7 @@ report-phase parsing only. Compare whole-scan durations with
 | Updated Configuration | Ready-to-paste `jmo.yml` per-tool overrides |
 | Next Steps | Applying and verifying the changes |
 
-**Not included:** per-tool timeout and failure rates. JMo does not record them —
-see [optimization-patterns.md Phase 4](optimization-patterns.md#phase-4-timeout-and-failure-analysis--no-data-source).
+**Not included:** per-tool timeout and failure *rates*. A rate needs many scans,
+and nothing aggregates `scan-timings.json` across runs yet. Per-tool outcomes
+**for a single scan** are available — see
+[optimization-patterns.md Phase 4](optimization-patterns.md#phase-4-timeout-and-failure-analysis).
