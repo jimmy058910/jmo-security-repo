@@ -62,6 +62,7 @@ cat .jmo/memory/test-patterns/trufflehog.json | jq '.exit_codes'
     "Severity normalization: HIGH/CRITICAL/MEDIUM/LOW/UNKNOWN"
   ],
   "metadata": {
+    "tool_version": "0.70.0",
     "last_updated": "2025-10-24",
     "usage_count": 15,
     "success_rate": 0.92,
@@ -77,11 +78,22 @@ cat .jmo/memory/test-patterns/trufflehog.json | jq '.exit_codes'
 ## Example Workflow
 
 1. **Query Memory:** Claude checks `.jmo/memory/test-patterns/trivy.json` before writing tests
-2. **Cache Hit:** If cached, retrieve trivy test pattern instantly
-   - Skip schema analysis (saves 15 min)
-   - Skip coverage strategy design (saves 15 min)
-   - Use proven fabricated fixtures (saves 15 min)
-   - **Total Savings:** 45 min
+2. **Cache Hit:** If cached, **validate before trusting it**
+   - A hit proves only that *somebody stored a pattern once*. It does not
+     prove the tool still emits that schema. Security tools change output
+     between releases, which is why this repository pins them in
+     `versions.yaml` at all.
+   - So: compare `tool_version` in the cached entry against the version now
+     pinned in `versions.yaml`. **If they differ, treat it as a cache miss**
+     and re-analyse. If they match, spot-check the cached `json_schema` keys
+     against one real sample before reusing the fixtures.
+   - Only then: skip schema analysis, reuse the coverage strategy and the
+     fabricated fixtures (saves ~45 min)
+
+   > The storage format below records `metadata.last_updated` but **no tool
+   > version**, so today a hit cannot be validated at all. Add `tool_version`
+   > when you next write an entry; a date tells you when someone looked, not
+   > what they were looking at.
 3. **Cache Miss:** If not cached, analyze tool output and design tests (1-2 hours)
    - Analyze trivy JSON schema
    - Design coverage strategy (equivalence partitioning)

@@ -6,19 +6,19 @@
 
 ## Progress
 
-**30 / 103 resolved.**
+**44 / 103 resolved.**
 
 | Chunk | Scope | Findings | Done | Status |
 |---|---|---:|---:|---|
 | **A** | jmo-profile-optimizer | 13 | 13 | **complete** |
 | **B** | dashboard-builder + documentation-updater | 13 | 13 | **complete** |
-| **C** | adapter-generator + test-fabricator | 15 | 1 | in progress |
+| **C** | adapter-generator + test-fabricator | 15 | 15 | **complete** |
 | **D** | jmo-ci-debugger | 13 | 0 | not started |
 | **E** | target-type-expander + security-hardening | 19 | 0 | not started |
 | **F** | the 7 agents | 13 | 0 | not started |
 | **G** | tail: refactoring, compliance, systematic-debugging, references | 11 | 0 | not started |
 | **H** | repo config authored by PR #717 | 6 | 3 | in progress |
-| | **total** | **103** | **30** | |
+| | **total** | **103** | **44** | |
 
 ## How to mark a finding off
 
@@ -243,60 +243,110 @@ three findings were one stale snippet. Deleted and replaced with a citation.
       duplicates git history with nothing to keep it honest. Points at
       `git log -- .claude/skills/<skill>/` and the repository `CHANGELOG.md`.
 
-## Chunk C - adapter-generator + test-fabricator  (1/15)
+## Chunk C - adapter-generator + test-fabricator  (15/15)
 
 
 **`.claude/skills/jmo-adapter-generator/templates/adapter-template.py`**
 
-- [ ] **Major** L130: Use the `AdapterPlugin.get_fingerprint()` contract
+- [x] **Major** L130: Use the `AdapterPlugin.get_fingerprint()` contract
+      -> FIXED: template called it with 5 kwargs; real signature is
+      `get_fingerprint(finding)` (plugin_api.py:144), so it raised TypeError.
+      Adapters do not fingerprint at all - `BaseAdapter.load()` calls
+      `_generate_fingerprint()` (base_adapter.py:181) and injects the digest.
+      Template now leaves `id=""`, as bandit_adapter.py:105 does.
 
 **`.claude/skills/jmo-test-fabricator/SKILL.md`**
 
-- [ ] **Major** L203: Keep compliance enrichment in `normalize_and_report.py`
+- [x] **Major** L203: Keep compliance enrichment in `normalize_and_report.py`
+      -> FIXED: Category 4 renamed to "v1.2.0 metadata" at all 4 sites
+      (L101 outline, L133 header convention, L175 template, L339 checklist)
+      plus the summary table, with a note routing framework mappings to the
+      reporting boundary. Verified: `TestBanditCompliance`
+      (test_bandit_adapter.py:365) is named for compliance and asserts
+      schemaVersion/tool name/remediation - because that is what the adapter
+      boundary guarantees.
 
 **`.claude/skills/jmo-test-fabricator/references/ci-platform-validation.md`**
 
-- [ ] **Major** L35: (claim nested; read from the PR conversation)
+- [x] **Major** L35: Use the supported GitLab report format for the SAST artifact
+      -> FIXED: `reports.sast` expects GitLab's SAST schema, not SARIF. GitLab
+      does not error - it renders an empty Security tab, so the pipeline is
+      green and reports nothing. SARIF is now a plain artifact.
 
 **`.claude/skills/jmo-test-fabricator/references/integration-patterns.md`**
 
-- [ ] **Major** L155: Fail when the expected report is missing
+- [x] **Major** L155: Fail when the expected report is missing
+      -> FIXED at 3 sites, not the 1 reported. `if findings_json.exists():`
+      makes a scan that wrote nothing pass having asserted nothing; at the
+      multi-tool pattern the ENTIRE assertion sat inside the guard.
 
 **`.claude/skills/jmo-test-fabricator/references/memory-integration.md`**
 
-- [ ] **Major** L91: Validate cached patterns before skipping schema analysis
+- [x] **Major** L91: Validate cached patterns before skipping schema analysis
+      -> FIXED: a hit proves a pattern was stored once, not that the schema is
+      current. The format recorded no tool version, so a hit could not be
+      validated at all; added `tool_version` + compare against versions.yaml.
 
 **`.claude/skills/jmo-test-fabricator/references/required-test-functions.md`**
 
-- [ ] **Major** L52: Assert the actual schema and fingerprint contract
-- [ ] **Major** L504: Test compliance enrichment at the reporting boundary
-- [ ] **Major** L783: Do not require non-empty tags from every adapter
+- [x] **Major** L52: Assert the actual schema and fingerprint contract
+      -> FIXED: 3 defects. `len(id) > 20` is wrong in the FAILING direction -
+      the digest is 16 chars (FINGERPRINT_LENGTH), measured b52adc71af4ac748.
+      `startswith(("<tool>", ""))` is a tautology. schemaVersion is an
+      equality, not a membership test over stale versions.
+- [x] **Major** L504: Test compliance enrichment at the reporting boundary
+      -> FIXED: there is no `enrich_finding_with_compliance` on the adapter
+      path; normalize_and_report.py:234 does it in the report phase. The block
+      was also guarded by `if "compliance" in item:` - a no-op reporting green.
+- [x] **Major** L783: Do not require non-empty tags from every adapter
+      -> FIXED: `tags` is absent from the schema's `required` list
+      (docs/schemas/common_finding.v1.json). Checked only when present.
 
 **`.claude/skills/jmo-adapter-generator/references/memory-integration.md`**
 
-- [ ] **Minor** L83: Keep compliance enrichment centralized
+- [x] **Minor** L83: Keep compliance enrichment centralized
+      -> FIXED: "Pre-populate compliance fields" -> cache mapping *inputs*;
+      enrichment is `normalize_and_report.py:234`.
 
 **`.claude/skills/jmo-adapter-generator/templates/adapter-template.py`**
 
-- [ ] **Minor** L46: Normalize `PluginMetadata.name` from the adapter filename
+- [x] **Minor** L46: Normalize `PluginMetadata.name` from the adapter filename
+      -> FIXED: it matches the ADAPTER filename identifier, not the output
+      filename. dependency_check_adapter.py:50 uses `name="dependency_check"`.
+      plugin_loader.py:235 has to try both variants because this drifts.
+      Sibling bullet in SKILL.md L61-67 corrected too.
 - [x] **Minor** L46: Use integer exit-code keys in `PluginMetadata`
       -> RESOLVED: PR #717 - exit_codes int keys (10 sites); TWO other claims on this line still open
 
 **`.claude/skills/jmo-test-fabricator/SKILL.md`**
 
-- [ ] **Minor** L75: Limit the five-second requirement to fast tests
+- [x] **Minor** L75: Limit the five-second requirement to fast tests
+      -> FIXED: contradicted by this skill's own integration-patterns.md
+      (timeout=120..240). Measured: tests/adapters/ is 1819 tests in ~18s,
+      slowest 0.43s. Rule is now per-test and per-layer.
 
 **`.claude/skills/jmo-test-fabricator/references/ci-platform-validation.md`**
 
-- [ ] **Minor** L249: (claim nested; read from the PR conversation)
+- [x] **Minor** L249: Test Python 3.8 in the CI example
+      -> DISMISSED as stated; the surrounding CLAIM was the defect. pyproject
+      sets requires-python ">=3.12", CI pins 3.12, and scripts/core/ uses
+      `str | None` which 3.8 cannot parse. The example was right. The "3.8
+      compatibility" rule was actively harmful - it told contributors to write
+      Optional[str] in a codebase written the other way. Fixed at 3 sites.
 
 **`.claude/skills/jmo-test-fabricator/references/common-mistakes.md`**
 
-- [ ] **Minor** L80: (claim nested; read from the PR conversation)
+- [x] **Minor** L80: Do not describe `pytest.mark.slow` as timeout protection
+      -> FIXED: `slow` is a selection marker. In THIS repo it means "runs in
+      the PR shards but not the quick coverage gate" - see #742. Example now
+      shows subprocess timeout= and @pytest.mark.timeout().
 
 **`.claude/skills/jmo-test-fabricator/references/coverage-strategies.md`**
 
-- [ ] **Minor** L26: Correct the uncovered-line count
+- [x] **Minor** L26: Correct the uncovered-line count
+      -> FIXED: and a second inconsistency the finding missed - the Miss
+      column said 15 while the ranges summed to 10. Ranges are now
+      18-22, 35-39, 45-49 = 15, with 27/42 giving the stated 64%.
 
 ## Chunk D - jmo-ci-debugger  (0/13)
 

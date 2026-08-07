@@ -66,19 +66,35 @@ def test_scan(tmp_path):
     assert result.returncode == 0
 ```
 
-**Solution**: Always set timeout in subprocess.run() and pytest.mark.
+**Solution**: Set `timeout=` on `subprocess.run()`. If the test legitimately
+needs longer than the suite's 120s default, raise it with
+`@pytest.mark.timeout()`.
 
 ```python
 # SAFE: Timeout protection
-@pytest.mark.slow
+@pytest.mark.timeout(300)  # raises pytest's 120s default; THIS is the timeout
+@pytest.mark.slow          # SELECTION only - see below
 def test_scan(tmp_path):
     result = subprocess.run(
         ["jmo", "scan", "--repo", str(repo)],
         capture_output=True,
-        timeout=120  # 2-minute safety timeout
+        timeout=120  # kills the child process; pytest cannot do this for you
     )
     assert result.returncode in [0, 1]
 ```
+
+> **`@pytest.mark.slow` is not timeout protection.** It selects tests, nothing
+> more, and in this repository it does not even mean "slow" — it means **"runs
+> in the PR shards but not the quick coverage gate"**, which is the only job
+> that adds `not slow`. `tests/integration/test_scan_accounting.py` picked it
+> over `requires_tools` for exactly that reason, and says so in its module
+> docstring. Marking a test `slow` changes *where it runs*; it never bounds how
+> long it runs.
+>
+> Order the two protections by what they can kill: `subprocess.run(timeout=)`
+> is the only one that stops the child process. pytest-timeout uses the thread
+> method on Windows, which can kill the test thread and leave the subprocess
+> orphaned — see `.claude/rules/testing.cross-platform.rules.md`.
 
 ## Mistake 4: Platform-Specific Assertions
 
@@ -179,32 +195,37 @@ def test_finding(tmp_path):
 
 ---
 
-## Python 3.8 Compatibility Requirements
+## Python Version and Type Hints
 
-**CRITICAL: JMo Security supports Python 3.8-3.12. Python 3.8 does NOT support `|` union syntax (added in Python 3.10).**
+**JMo Security requires Python 3.12+.** `pyproject.toml` declares
+`requires-python = ">=3.12"`, and every CI job pins `python-version: '3.12'`.
 
-### Required Imports
-
-```python
-from typing import Any, Dict, List, Optional, Union
-```
+This section used to say "supports Python 3.8-3.12" and forbade `|` union
+syntax. That was wrong in the harmful direction: `scripts/core/` already uses
+`str | None` and `list[str]` throughout, so following the old rule produced test
+files written in a style the codebase does not use, and did so in the name of a
+version that cannot even parse the modules under test.
 
 ### Type Hint Patterns
 
-| Python 3.10+ (avoid) | Python 3.8+ (use) |
-|-----------------------|--------------------|
+Use the modern built-in generics. `typing.Optional`, `Union`, `Dict` and `List`
+are not errors, but they are not the house style.
+
+| Use | Not |
+|---|---|
 | `def func(x: str \| None)` | `def func(x: Optional[str])` |
 | `def func(x: int \| str)` | `def func(x: Union[int, str])` |
 | `items: list[str]` | `items: List[str]` |
 | `data: dict[str, Any]` | `data: Dict[str, Any]` |
 | `tuple[int, str]` | `Tuple[int, str]` |
 
-### Compatibility Checklist
+### Checklist
 
 Before creating any test file:
 
-- [ ] Import `Optional` from `typing` if using optional parameters
-- [ ] Never use `Type1 | Type2` syntax (use `Union[Type1, Type2]` or `Optional[Type]`)
-- [ ] Never use `dict[str, Any]` (use `Dict[str, Any]` with capital D)
-- [ ] Never use `list[str]` (use `List[str]` with capital L)
-- [ ] Use `from __future__ import annotations` if needed for forward references
+- [ ] Match the surrounding module's style; `scripts/core/` is `X | None` and
+      lowercase generics
+- [ ] `from __future__ import annotations` at the top, as the rest of the
+      codebase does - it keeps annotations lazy and is required by some of the
+      older call sites
+- [ ] Do not add `typing` imports you do not need

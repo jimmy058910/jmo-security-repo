@@ -67,9 +67,18 @@ Generate comprehensive pytest test suites for JMo Security with fabricated fixtu
 2. **Test edge cases comprehensively** -- Empty inputs, malformed data, missing fields, alternative structures
 3. **Cover all schema versions** -- v1.0.0 basic, v1.1.0 risk/context, v1.2.0 compliance
 4. **Preserve raw tool output** -- Always verify `raw` field contains original payload (adapters only)
-5. **Fast test execution** -- All tests should complete in <5 seconds total
+5. **Fast test execution, per test and per layer** -- An adapter or unit test
+   parses a fixture in memory and should stay well under a second: measured,
+   the slowest of the 1819 tests in `tests/adapters/` is 0.43s and the whole
+   directory runs in ~18s. Integration tests are a different layer and are not
+   held to that -- this skill's own `references/integration-patterns.md` uses
+   `timeout=120` through `timeout=240`, because they shell out to real scans.
+   If an adapter test needs a timeout at all, it is doing something an adapter
+   test should not
 6. **Test actual behavior, not ideal behavior** -- Test what the code does now, not what it should do
-7. **Python 3.8 compatibility required** -- No `|` union syntax, use `Optional[T]` and `Union[T1, T2]`
+7. **Python 3.12+** -- `pyproject.toml` sets `requires-python = ">=3.12"` and
+   every CI job pins 3.12. Use `X | None` and lowercase generics, matching
+   `scripts/core/`; there is no 3.8 to be compatible with
 8. **Unicode handling is mandatory** -- All text-processing modules must handle emoji, CJK, Cyrillic
 9. **Read the module first** -- Always read the actual module code before writing tests
 10. **Fix all technical debt immediately** -- When you find linting issues or failing tests, fix ALL of them
@@ -98,7 +107,7 @@ Reuse patterns for similar tool types. Copy-paste helper functions if applicable
 # Category 1: Basic Valid Input (TODO)
 # Category 2: Error Handling (TODO)
 # Category 3: v1.1.0 Features (TODO)
-# Category 4: v1.2.0 Compliance (TODO)
+# Category 4: v1.2.0 metadata (TODO)
 # Category 5: Tool-Specific Edge Cases (TODO)
 ```
 
@@ -130,8 +139,8 @@ def test_tool_malformed_json(tmp_path: Path): ...
 # ========== Category 3: Schema v1.1.0 Features (Risk, Context, Autofix) ==========
 def test_tool_v110_risk_fields(tmp_path: Path): ...
 
-# ========== Category 4: Schema v1.2.0 Compliance ==========
-def test_tool_compliance_enrichment(tmp_path: Path): ...
+# ========== Category 4: Schema v1.2.0 metadata ==========
+def test_tool_schema_and_tool_metadata(tmp_path: Path): ...
 
 # ========== Category 5: Tool-Specific Edge Cases ==========
 def test_tool_nested_paths(tmp_path: Path): ...
@@ -172,9 +181,10 @@ def test_<tool>_empty_and_malformed(tmp_path: Path):
 def test_<tool>_v110_autofix_remediation(tmp_path: Path):
     """Test v1.1.0 autofix remediation structure."""
 
-# Test Category 4: Schema v1.2.0 Compliance
-def test_<tool>_compliance_enrichment(tmp_path: Path):
-    """Test that findings are enriched with compliance mappings."""
+# Test Category 4: Schema v1.2.0 metadata
+def test_<tool>_schema_and_tool_metadata(tmp_path: Path):
+    """Assert schemaVersion and tool metadata. NOT framework mappings -
+    an adapter does not produce those; see the note under the summary."""
 
 # Test Category 5: Tool-Specific Edge Cases
 def test_<tool>_alternative_severity_field(tmp_path: Path):
@@ -199,8 +209,18 @@ See [detailed required test functions](references/required-test-functions.md) fo
 | 1: Basic Valid Input | Happy path parsing | Field mapping, schema version, fingerprint, raw preservation |
 | 2: Error Handling | Resilience to bad input | Empty file, malformed JSON, missing file, non-dict items, Unicode |
 | 3: v1.1.0 Features | Risk/remediation/context | Autofix dict, string remediation, CWE metadata, likelihood/impact, code context |
-| 4: v1.2.0 Compliance | Compliance enrichment | 6 framework mappings, multiple CWEs, no-CWE graceful handling |
+| 4: v1.2.0 metadata | What `load()` injects | `schemaVersion == "1.2.0"`, tool name/version, remediation text, any CWE the tool itself emits |
 | 5: Tool-Specific | Output format variations | Alt field names, missing optional fields, tags, NDJSON, nested arrays |
+
+> **Do not assert framework mappings in an adapter test.** OWASP/CIS/NIST/PCI
+> mappings are not produced by adapters. `normalize_and_report.py` calls
+> `enrich_findings_with_compliance()` once over the deduplicated set
+> (`scripts/core/normalize_and_report.py:234`), so a `parse()` result never
+> carries them and an adapter-level assertion would either fail or assert
+> nothing. Test the mapping itself at the reporting boundary. The repository's
+> own `TestBanditCompliance`
+> (`tests/adapters/test_bandit_adapter.py:365`) shows the real shape: despite
+> the name it asserts `schemaVersion`, tool name and remediation text.
 
 ---
 
@@ -325,7 +345,7 @@ Real test files from this project to use as examples:
 - [ ] **Category 1:** Basic valid input test (`test_<tool>_basic`)
 - [ ] **Category 2:** Error handling tests (empty, malformed, missing file, non-dict items)
 - [ ] **Category 3:** v1.1.0 feature tests (autofix, CWE, likelihood/impact, code context)
-- [ ] **Category 4:** v1.2.0 compliance enrichment test
+- [ ] **Category 4:** v1.2.0 metadata test (`schemaVersion`, tool name/version) - **not** framework mappings
 - [ ] **Category 5:** Tool-specific edge case tests (alternative fields, NDJSON, nested arrays, etc.)
 
 ### Coverage

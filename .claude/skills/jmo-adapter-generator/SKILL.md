@@ -62,8 +62,16 @@ Use the full template at [templates/adapter-template.py](templates/adapter-templ
 
 - `@adapter_plugin` decorator with `PluginMetadata` (auto-registers)
 - Inherits `AdapterPlugin`, implements `parse()` returning `List[Finding]`
-- Uses `self.get_fingerprint()` for deterministic IDs
-- `name` in metadata must match `{tool}.json` filename
+- Sets `Finding.id` with the module-level `fingerprint()` from
+  `scripts.core.common_finding` - **not** `self.get_fingerprint()`. The method on
+  `AdapterPlugin` takes one already-built `Finding` (`plugin_api.py:144`) and so
+  cannot be called from inside the constructor of the `Finding` that needs the
+  id. `fingerprint(tool, rule_id, path, start_line, message)` returns 16
+  lowercase hex chars; every shipped adapter uses it
+  (`bandit_adapter.py:164`)
+- `name` in metadata matches the **adapter filename** identifier - underscored,
+  normalized once: `dependency-check` -> `dependency_check_adapter.py` and
+  `name="dependency_check"`. It is not the tool's output filename
 - Adapters do NOT handle compliance enrichment (centralized in normalize_and_report.py)
 
 ### Phase 3: Write Tests

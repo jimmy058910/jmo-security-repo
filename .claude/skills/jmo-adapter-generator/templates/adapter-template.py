@@ -28,11 +28,25 @@ from scripts.core.plugin_api import (
     adapter_plugin
 )
 
+# The fingerprint helper is a module-level function, not a method. Every
+# shipped adapter imports it from here - see
+# scripts/core/adapters/bandit_adapter.py:59.
+from scripts.core.common_finding import fingerprint
+
 logger = logging.getLogger(__name__)
 
 
+# `{tool}` is the normalized, underscore-based identifier - the same token that
+# names the adapter file. A tool spelled with a hyphen normalizes once, here:
+# `dependency-check` -> `dependency_check`, giving
+# `dependency_check_adapter.py` and `name="dependency_check"`
+# (scripts/core/adapters/dependency_check_adapter.py:50).
 @adapter_plugin(PluginMetadata(
-    name="{tool}",  # CRITICAL: Must match {tool}.json filename
+    # Matches the ADAPTER FILENAME identifier, not the tool's output filename.
+    # plugin_loader has to "try both underscore and hyphenated variants since
+    # metadata.name may differ" (scripts/core/plugin_loader.py:235) precisely
+    # because this drifts; normalizing once is what keeps it from drifting.
+    name="{tool}",
     version="1.0.0",
     author="JMo Security Contributors",
     description="{tool} adapter for JMo Security",
@@ -97,12 +111,22 @@ class {Tool}Adapter(AdapterPlugin):
                 # Use Finding dataclass (NOT dict!)
                 finding = Finding(
                     schemaVersion="1.2.0",
-                    id=self.get_fingerprint(
-                        tool=self.metadata.tool_name,
-                        ruleId=vuln.get("id", "UNKNOWN"),
-                        path=vuln.get("file", ""),
-                        startLine=vuln.get("line", 0),
-                        message=vuln.get("title", "")[:120]
+                    # Use the module-level `fingerprint()`, NOT
+                    # `self.get_fingerprint()`. The method on AdapterPlugin
+                    # takes one already-built `Finding`
+                    # (scripts/core/plugin_api.py:144), so it cannot be called
+                    # from inside the constructor of the Finding that needs the
+                    # id. `fingerprint()` takes the five components positionally
+                    # and returns 16 lowercase hex characters
+                    # (common_finding.py:193, FINGERPRINT_LENGTH = 16).
+                    # This is what every shipped adapter does - see
+                    # scripts/core/adapters/bandit_adapter.py:164.
+                    id=fingerprint(
+                        self.metadata.tool_name,
+                        vuln.get("id", "UNKNOWN"),
+                        vuln.get("file", ""),
+                        vuln.get("line", 0),
+                        vuln.get("title", ""),  # truncated internally
                     ),
                     ruleId=vuln.get("id", "UNKNOWN"),
                     severity=self._map_severity(vuln.get("severity", "info")),

@@ -15,15 +15,18 @@ pytest tests/adapters/test_tool_adapter.py \
 # Example output:
 # Name                                    Stmts   Miss  Cover   Missing
 # ---------------------------------------------------------------------
-# scripts/core/adapters/tool_adapter.py      42     15    64%   18-22, 35-38, 45
+# scripts/core/adapters/tool_adapter.py      42     15    64%   18-22, 35-39, 45-49
 ```
 
 **Interpretation:**
 
-- **64% coverage** -- Need 21% more to reach 85%
+- **64% coverage** -- 27 of 42 statements covered; need 21 points more to reach 85%
 - **Lines 18-22** -- First uncovered block (5 lines)
-- **Lines 35-38** -- Second uncovered block (4 lines)
-- **Line 45** -- Single uncovered line (6 lines total)
+- **Lines 35-39** -- Second uncovered block (5 lines)
+- **Lines 45-49** -- Third uncovered block (5 lines)
+
+The ranges must account for every missing statement: 5 + 5 + 5 = 15, which is
+the Miss column. If they do not add up, you are reading a stale report.
 
 ### Step 2: Identify Uncovered Branches
 
@@ -271,7 +274,8 @@ pytest tests/adapters/test_<tool>_adapter.py \
 - **Error message formatting** -- Specific wording of exceptions
 - **Unreachable defensive code** -- `if x is None` when x is always set
 - **OS-specific branches** -- Windows vs Linux paths (test on Linux)
-- **Version compatibility shims** -- Python 3.8 vs 3.12 differences
+- **Version compatibility shims** -- for a dependency that changed API, not
+  for Python itself: this project requires 3.12+
 
 ### Unacceptable Missing Coverage
 

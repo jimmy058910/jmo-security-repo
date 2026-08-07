@@ -146,13 +146,24 @@ def test_cross_target_deduplication(tmp_path: Path):
     cmd_report = ["python3", "scripts/cli/jmo.py", "report", str(tmp_path / "results")]
     subprocess.run(cmd_report, check=True, timeout=60)
 
-    # Verify deduplication
+    # Verify deduplication.
+    #
+    # Assert the report EXISTS before reading it. Guarding this block with
+    # `if findings_json.exists():` means a scan or report that wrote nothing
+    # produces a green test that checked no deduplication at all - the failure
+    # mode is indistinguishable from success, which is the specific thing this
+    # repository keeps getting caught by.
     findings_json = tmp_path / "results" / "summaries" / "findings.json"
-    if findings_json.exists():
-        findings = json.loads(findings_json.read_text())
-        fingerprints = [f["id"] for f in findings["findings"]]
-        # All fingerprints should be unique (no duplicates)
-        assert len(fingerprints) == len(set(fingerprints)), "Duplicate fingerprints found"
+    assert findings_json.exists(), (
+        f"report wrote no findings.json to {findings_json.parent}; "
+        f"nothing was deduplicated because nothing was produced"
+    )
+
+    findings = json.loads(findings_json.read_text(encoding="utf-8"))
+    fingerprints = [f["id"] for f in findings["findings"]]
+    assert fingerprints, "findings.json is empty - deduplication was never exercised"
+    # All fingerprints should be unique (no duplicates)
+    assert len(fingerprints) == len(set(fingerprints)), "Duplicate fingerprints found"
 ```
 
 ### Pattern 3: Graceful Degradation
@@ -353,16 +364,20 @@ def test_profile_tool_selection_balanced(tmp_path: Path):
     ]
     subprocess.run(cmd, capture_output=True, text=True, timeout=240)
 
-    # Count tool JSON files in results directory
+    # Count tool JSON files in results directory. Assert the directory exists
+    # rather than guarding on it: under `if repo_dir.exists():` a scan that
+    # wrote nothing skips the profile check entirely and still reports green.
     repo_dir = tmp_path / "results" / "individual-repos" / "test-repo"
-    if repo_dir.exists():
-        tool_outputs = list(repo_dir.glob("*.json"))
-        found_tools = [f.stem for f in tool_outputs]
+    assert repo_dir.exists(), f"scan produced no output directory at {repo_dir}"
 
-        # Balanced profile: trufflehog, semgrep, syft, trivy, checkov, hadolint, zap, nuclei
-        # Verify at least some balanced tools present
-        balanced_tools = ["trufflehog", "semgrep", "trivy", "syft"]
-        assert any(tool in found_tools for tool in balanced_tools)
+    found_tools = [f.stem for f in repo_dir.glob("*.json")]
+
+    # Balanced profile: trufflehog, semgrep, syft, trivy, checkov, hadolint, zap, nuclei
+    # Verify at least some balanced tools present
+    balanced_tools = ["trufflehog", "semgrep", "trivy", "syft"]
+    assert any(tool in found_tools for tool in balanced_tools), (
+        f"none of {balanced_tools} ran; got {found_tools}"
+    )
 ```
 
 ### Config Inheritance Tests
@@ -412,11 +427,13 @@ profiles:
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
     assert result.returncode in [0, 1]
 
-    # Verify both tools ran
+    # Verify both tools ran. Note the assertion is NOT inside an
+    # `if repo_dir.exists():` guard - a scan that produced no directory at all
+    # would then pass this test having checked nothing.
     repo_dir = tmp_path / "results" / "individual-repos" / "test-repo"
-    if repo_dir.exists():
-        tool_outputs = list(repo_dir.glob("*.json"))
-        found_tools = [f.stem for f in tool_outputs]
-        # At least one tool should have run
-        assert len(found_tools) > 0
+    assert repo_dir.exists(), f"scan produced no output directory at {repo_dir}"
+
+    found_tools = [f.stem for f in repo_dir.glob("*.json")]
+    # At least one tool should have run
+    assert found_tools, f"no tool wrote output to {repo_dir}"
 ```
