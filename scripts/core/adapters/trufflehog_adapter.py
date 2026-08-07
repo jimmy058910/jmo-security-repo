@@ -68,6 +68,37 @@ from scripts.core.plugin_api import (
     adapter_plugin,
 )
 
+# Lob test-mode API keys are `test_` followed by 35 hex-ish characters.
+# TruffleHog's detector for them accepts underscores in that run, and pytest
+# names every test function `test_<words_with_underscores>` - so the two
+# collide by construction, and any Python project whose test names happen to be
+# 35 characters long produces Lob "secrets".
+#
+# They come back **Verified: true**, because Lob's API accepts test-mode keys,
+# so nothing downstream can tell them apart: the adapter graded them HIGH and
+# `zero-secrets.rego` ("blocks all verified secrets") failed the build. That was
+# #724, and it reached users as well as CI - `jmo scan` runs the same detector.
+#
+# The separator is the underscore. A real key has none; a Python identifier
+# always does. Measured over this repository's `tests/` tree: 2318 Lob findings,
+# 412 distinct, **412/412 containing an underscore and 0/412 matching
+# `[0-9a-f]{35}`**. Filtering on it costs no real detection.
+LOB_KEY_PREFIX = "test_"
+
+
+def _is_pytest_name_matched_as_lob_key(detector: str, secret: object) -> bool:
+    """True when a Lob "secret" is really a pytest function name.
+
+    Deliberately narrow: only the Lob detector, only a `test_` prefix, and only
+    when the remainder contains an underscore. Anything else - including a
+    genuine Lob key, and every other detector - is left alone.
+    """
+    if detector != "Lob" or not isinstance(secret, str):
+        return False
+    if not secret.startswith(LOB_KEY_PREFIX):
+        return False
+    return "_" in secret[len(LOB_KEY_PREFIX) :]
+
 
 @adapter_plugin(
     PluginMetadata(
@@ -103,6 +134,10 @@ class TruffleHogAdapter(AdapterPlugin):
         for f in safe_load_ndjson_file(output_path):
             detector = str(f.get("DetectorName") or f.get("Detector") or "Unknown")
             verified = bool(f.get("Verified") or f.get("verified") or False)
+
+            secret = f.get("Raw")
+            if _is_pytest_name_matched_as_lob_key(detector, secret):
+                continue
 
             # Try to extract file path from SourceMetadata.Data.Filesystem.file or similar
             file_path = ""
