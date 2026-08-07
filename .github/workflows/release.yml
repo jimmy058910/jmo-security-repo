@@ -784,11 +784,11 @@ jobs:
 
           {
             echo ""
-            echo "**v1.0.0 Target Sizes (Phase 1 Optimizations):**"
-            echo "- Deep: ~1.97 GB (26 Docker-ready tools, 155 MB savings)"
-            echo "- Balanced: ~1.41 GB (21 tools, production CI/CD)"
-            echo "- Slim: ~557 MB (15 tools, cloud-focused)"
-            echo "- Fast: ~502 MB (8 tools, CI/CD gate)"
+            echo "**Target Sizes:**"
+            echo "- Deep: ~1.97 GB (28 tools, 4 of them manual-install)"
+            echo "- Balanced: ~1.41 GB (17 tools, production CI/CD)"
+            echo "- Slim: ~557 MB (13 tools, cloud-focused)"
+            echo "- Fast: ~502 MB (9 tools, CI/CD gate)"
             echo ""
             echo "**Phase 1 Optimizations Applied (155 MB savings):**"
             echo "- Nuclei template filtering (65 MB)"
@@ -876,7 +876,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           repository: ${{ env.IMAGE_NAME_DOCKERHUB }}
-          short-description: "Security audit toolkit with 12 tools - scan repos, images, IaC, URLs, K8s in one unified CLI"
+          short-description: "Security audit toolkit with 29 tools - scan repos, images, IaC, URLs, K8s in one unified CLI"
           readme-filepath: ./DOCKER_HUB_README.md
 
       - name: Docker Hub update skipped
