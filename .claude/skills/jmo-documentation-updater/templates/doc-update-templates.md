@@ -205,9 +205,26 @@ jmo scan --repo ./myapp --results ./scan-results
 # After (current)
 jmo scan --repo ./myapp --results-dir ./scan-results
 
-# Batch migration for scripts
-find . -name "*.sh" -exec sed -i 's/--results /--results-dir /g' {} +
+# Batch migration for scripts: list first, review, then edit only that list.
+# Never `find ... -exec sed -i` across a tree -- it rewrites every match in
+# every file it reaches, including unrelated prose and vendored code, with no
+# preview and no undo.
+grep -rl -- '--results ' --include='*.sh' . > /tmp/to-migrate.txt
+$EDITOR /tmp/to-migrate.txt            # drop anything that should not change
+xargs -a /tmp/to-migrate.txt sed -i.bak -- 's/--results /--results-dir /g'
 ```
+
+> Two traps in that `sed`. `-i` alone is GNU-only — BSD/macOS `sed` reads the
+> next argument as the suffix and silently eats your next filename, so pass an
+> explicit suffix (`-i.bak`). And on Windows checkouts `sed -i` rewrites the
+> whole file's line endings, turning a one-line change into a whole-file diff;
+> prefer a scripted edit that writes bytes, and verify with
+> `git diff --numstat` against `git diff --ignore-cr-at-eol --numstat`.
+>
+> The `--results` → `--results-dir` rename above is an **illustrative example**
+> of how to document a breaking change, not a live deprecation. JMo's real flag
+> is `--results-dir`; `--results` still resolves to it today only because
+> argparse accepts unambiguous prefixes.
 
 **Deprecation Timeline:**
 
@@ -350,16 +367,56 @@ jmo report ./results --outputs csv
 
 **Verification Checklist:**
 
+A checklist you have to eyeball is not a check. Each step below **exits
+non-zero** when it fails, so the block can be pasted whole and trusted.
+
 ```bash
-# 1. Count tools in jmo.yml deep profile
-grep -A 1 "deep:" jmo.yml | grep "tools:" | tr ',' '\n' | wc -l
+#!/usr/bin/env bash
+set -euo pipefail
 
-# 2. Verify DOCKER_HUB_README.md (2 locations)
-grep -n "tools\|Tools" DOCKER_HUB_README.md | grep -E "[0-9]+ tools"
+# 1. Both counts come from the single source of truth -- NOT from jmo.yml.
+#    jmo.yml's `deep:` profile carries no `tools:` key at all (it says so in a
+#    comment); a grep for one there silently returns 0 and every later
+#    comparison then "passes" against nothing.
+#
+#    There are SEVERAL legitimate numbers -- one per profile, plus the unique
+#    catalogue total. Asserting against only one of them flags correct files:
+#    measured, a deep-only check reported 16 false positives, because 9 / 13 /
+#    17 are simply fast / slim / balanced.
+VALID=$(python - <<'PY'
+from scripts.core.tool_registry import PROFILE_TOOLS
+counts = {len(v) for v in PROFILE_TOOLS.values()}
+counts.add(len({t for v in PROFILE_TOOLS.values() for t in v}))
+print(" ".join(str(c) for c in sorted(counts)))
+PY
+)
+echo "legitimate tool counts: $VALID"
 
-# 3. Verify release.yml short-description
-grep "short-description:" .github/workflows/release.yml
+# 2. Every stated count must be one of them. A number that is no longer any
+#    profile's size is stale by construction -- no judgement needed.
+fail=0
+for f in DOCKER_HUB_README.md README.md docs/PROFILES_AND_TOOLS.md \
+         .github/workflows/release.yml; do
+  [ -f "$f" ] || { echo "MISSING: $f"; fail=1; continue; }
+  while IFS= read -r hit; do
+    n=$(printf '%s' "${hit#*:}" | grep -oE '^[0-9]+')
+    case " $VALID " in
+      *" $n "*) ;;
+      *) echo "STALE in $f:$hit"; fail=1 ;;
+    esac
+  done < <(grep -noE "[0-9]+ tools" "$f" || true)
+done
 
-# 4. Verify all files updated
-git diff --name-only | grep -E "(DOCKER_HUB_README|release\.yml|README|CLAUDE)"
+exit "$fail"
 ```
+
+> **Which of the live numbers a file should use is a judgement the script cannot
+> make** — it only proves the number is still one of them. Confirm the *sense*
+> yourself: `README.md`'s "29 tools across 12 categories" is the catalogue and
+> is correct; a profile comparison table saying 29 would be wrong.
+>
+> Do not add `jmo.yml` expecting a tool list. Profile membership lives in
+> `scripts/core/tool_registry.py:PROFILE_TOOLS`; `jmo.yml` sets only per-profile
+> `threads`/`timeout`/`retries`/`policy`. Its inline comment naming a count is
+> prose, and prose drifts — at the time of writing it says 29 for `deep`, which
+> is the catalogue number, while `PROFILE_TOOLS["deep"]` holds 28.
