@@ -2,8 +2,16 @@
 
 .PHONY: help fmt lint typecheck test test-fast test-parallel test-profile test-e2e test-e2e-visual test-e2e-report verify clean tools verify-env analyze-completeness verify-completeness dev-deps dev-setup pre-commit-install pre-commit-run install-git-hooks upgrade-pip deps-sync deps-lock deps-upgrade docker-build docker-build-all docker-build-local docker-push docker-test validate-readme check-pypi-readme collect-metrics metrics verify-badges samples-clean samples-scan samples-report samples-verify regenerate-samples dist dist-clean dist-verify clean-build clean-test clean-caches clean-all
 
-# Prefer workspace venv if available
-PY := $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
+# Prefer workspace venv if available.
+#
+# Both layouts must be probed: a venv puts its interpreter in `bin/` on POSIX
+# and in `Scripts/` on Windows. Probing only `bin/` meant every Windows checkout
+# silently fell through to PATH `python3` -- a different interpreter with none
+# of this project's dependencies, and on a machine with other tooling installed
+# (an agent runtime, another project's venv) not even a system Python. The
+# failure is a bare `No module named pytest`, which reads like a broken install
+# rather than the wrong interpreter.
+PY := $(shell for p in .venv/bin/python .venv/Scripts/python.exe; do [ -x "$$p" ] && echo "$$p" && break; done || echo python3)
 
 help:
 	@echo "Targets:"
