@@ -1,9 +1,24 @@
 # Remediating the newly-published `.claude/` skills and agents
 
-**Status:** discovery complete, execution not started
-**Branch:** `fix/coderabbit-findings-717` off `dev`
+**Status:** chunks A, B, C, D and H complete (60/103); E, F, G remain
+**Branch:** one branch per chunk off `dev`; PR into `dev`. Never `main`.
 **Tracking issue:** [#718](https://github.com/jimmy058910/jmo-security-repo/issues/718)
-**Endgame:** land on `dev`, then `dev -> main` as **v1.0.9**
+**Endgame:** land all 103 on `dev`, then `dev -> main` as **v1.0.9**
+
+### Decided 2026-08-08: all 103 land before v1.0.9
+
+The alternative was cutting v1.0.9 early, at 60/103, and shipping E/F/G in
+v1.0.10. The case for it: every one of the 43 remaining findings is inside
+`.claude/`, which is contributor tooling with no runtime effect on the released
+package, while `dev` is holding user-facing fixes — #725 (`slim` scans silently
+discarded), #746 (trufflehog reporting pytest function names as verified
+secrets), #734, #729.
+
+**Rejected in favour of one clean release.** v1.0.9 ships the full remediation
+and closes #718 with the tag, rather than splitting it across two releases.
+E (19) → F (13) → G (11) first; expect roughly one chunk per session.
+
+Do not re-open this at the start of the next session.
 
 ## What happened
 
