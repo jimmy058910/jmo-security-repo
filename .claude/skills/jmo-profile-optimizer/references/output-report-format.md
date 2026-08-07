@@ -109,10 +109,10 @@ optimizing the adapter.
 4. Store the updated baseline (automatic, final phase)
 
 **Verifying a timeout change:** `timings.json` cannot confirm it — it records
-report-phase parsing only. Read that tool's `duration` and `status` in
+report-phase parsing only. Read that tool's `duration` and `timed_out` in
 `scan-timings.json` before and after. Do not judge it by whole-scan duration
 alone: a cap tight enough to kill a healthy tool makes the scan *faster* while
-producing `status: "timeout"` and no findings.
+producing `timed_out: true` and no findings.
 
 ---
 

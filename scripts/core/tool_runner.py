@@ -205,9 +205,22 @@ class ToolResult:
 
     Attributes:
         tool: Tool name
-        status: Execution status ("success", "no_output", "timeout", "error",
-            "retry_exhausted"). "no_output" means the return code was acceptable
-            but the tool wrote nothing to its declared output_file.
+        status: Execution status. Exactly four values are ever assigned:
+            "success", "no_output", "error", "retry_exhausted". "no_output"
+            means the return code was acceptable but the tool wrote nothing to
+            its declared output_file.
+
+            There is deliberately no "timeout" status -- see ``timed_out``.
+            This docstring claimed one until #727, while ``run_tool`` never
+            assigned it; the only "timeout" literal in this module is a
+            progress-callback UI signal. Reading the docstring instead of the
+            code is how #722 came to be filed on a false premise.
+        timed_out: Whether the terminal failure was a timeout. Separate from
+            ``status`` on purpose: "retry_exhausted" carries its own signal --
+            *this failure burned the whole retry budget* -- and folding a
+            timeout into ``status`` would discard it. A timed-out tool
+            therefore reports ``status="error"`` or ``"retry_exhausted"`` **and**
+            ``timed_out=True``.
         returncode: Process return code (or -1 if timeout/error)
         stdout: Standard output (empty if not captured)
         stderr: Standard error output
@@ -228,6 +241,7 @@ class ToolResult:
     output_file: Path | None = None
     capture_stdout: bool = False
     error_message: str = ""
+    timed_out: bool = False
 
     def is_success(self) -> bool:
         """Check if tool execution was successful."""
@@ -243,6 +257,7 @@ class ToolResult:
             "duration": self.duration,
             "output_file": str(self.output_file) if self.output_file else None,
             "error_message": self.error_message,
+            "timed_out": self.timed_out,
         }
 
 
@@ -387,6 +402,10 @@ class ToolRunner:
         rc = tool.retry_config
         attempt = 0
         last_error = ""
+        # Paired with last_error: whichever failure ends the loop is the one
+        # the returned ToolResult describes, so this must be reassigned at
+        # every site that sets last_error -- not only at the timeout one.
+        last_failure_was_timeout = False
 
         # Track attempts per failure type
         attempts_by_type: dict[str, int] = {}
@@ -517,6 +536,7 @@ class ToolRunner:
                 last_error = (
                     f"Return code {result.returncode} not in {tool.ok_return_codes}"
                 )
+                last_failure_was_timeout = False
                 attempts_by_type["crash"] = attempts_by_type.get("crash", 0) + 1
                 budget = rc.attempts_for_failure("crash")
                 if attempts_by_type["crash"] < budget:
@@ -528,6 +548,7 @@ class ToolRunner:
 
             except subprocess.TimeoutExpired:
                 last_error = f"Timeout after {tool.timeout}s"
+                last_failure_was_timeout = True
                 attempts_by_type["timeout"] = attempts_by_type.get("timeout", 0) + 1
                 budget = rc.attempts_for_failure("timeout")
 
@@ -571,6 +592,7 @@ class ToolRunner:
 
             except (OSError, PermissionError) as e:
                 last_error = str(e)
+                last_failure_was_timeout = False
                 attempts_by_type["system_error"] = (
                     attempts_by_type.get("system_error", 0) + 1
                 )
@@ -587,6 +609,7 @@ class ToolRunner:
                 Exception
             ) as e:  # Acceptable: tool invocation may fail unexpectedly — retry with budget
                 last_error = str(e)
+                last_failure_was_timeout = False
                 attempts_by_type["unknown"] = attempts_by_type.get("unknown", 0) + 1
                 budget = rc.attempts_for_failure("unknown")
                 logger.error(
@@ -608,6 +631,7 @@ class ToolRunner:
             attempts=attempt,
             duration=duration,
             error_message=last_error,
+            timed_out=last_failure_was_timeout,
         )
 
     def run_all_parallel(self) -> list[ToolResult]:

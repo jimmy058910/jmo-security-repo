@@ -1485,9 +1485,15 @@ def scan_repository(
             # lie being removed.
             statuses[result.tool] = False
             report_tool_failure(result, "its executable was not found at run time")
-        elif "Timeout" in result.error_message:
+        elif result.timed_out:
             # Tool timed out - write stub so report phase has consistent files
             # and mark as failed (timeout is a failure state)
+            #
+            # `result.timed_out`, not `"Timeout" in result.error_message` (#727).
+            # That match made a human-readable message load-bearing: rewording
+            # "Timeout after 600s" would have silently routed every timeout to
+            # the generic branch below, dropping the stub and the "it timed out"
+            # log line, with nothing going red.
             #
             # The stub must not be the only signal: once the report phase reads
             # it, an empty stub is indistinguishable from a tool that genuinely
