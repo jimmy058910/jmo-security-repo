@@ -377,6 +377,7 @@ See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for complete configuration referenc
 | Tool not found | `jmo tools check`, then `jmo tools install` |
 | Tool startup crash | `jmo tools clean --force && jmo tools install <tool>` |
 | Pre-commit fails | `make fmt`, `make lint` |
+| `No module named pytest` (or any dep) when the venv demonstrably has it | You are on a different interpreter. On Windows the venv is `.venv/Scripts/python.exe`, never `.venv/bin/python`, and `chmod +x` is a no-op there — so `[ -x .venv/bin/python ]` is false *whatever* exists, and PATH `python3` wins. On a box with other tooling installed that is somebody else's venv. Invoke `.venv/Scripts/python.exe -m pytest` (or `uv run pytest`, which resolves the project venv on every platform — note it syncs against `uv.lock` first, so it may change your env). `Makefile:6` probes both layouts as of #722. |
 | `uv.lock needs to be updated, but --check was provided` | Deps changed in `pyproject.toml` without relocking. `make deps-lock && git add uv.lock`. Local `uv sync` refreshes a stale lock silently; CI and pre-commit hard-fail — that asymmetry is deliberate |
 | CI failures | Check matrix tests, coverage, pre-commit |
 | SQLite locked | `jmo history optimize` (runs VACUUM + ANALYZE; there is no `vacuum` subcommand) |
