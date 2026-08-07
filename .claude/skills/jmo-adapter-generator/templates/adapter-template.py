@@ -28,6 +28,11 @@ from scripts.core.plugin_api import (
     adapter_plugin
 )
 
+# The fingerprint helper is a module-level function, not a method. Every
+# shipped adapter imports it from here - see
+# scripts/core/adapters/bandit_adapter.py:59.
+from scripts.core.common_finding import fingerprint
+
 logger = logging.getLogger(__name__)
 
 
@@ -106,19 +111,23 @@ class {Tool}Adapter(AdapterPlugin):
                 # Use Finding dataclass (NOT dict!)
                 finding = Finding(
                     schemaVersion="1.2.0",
-                    # Leave `id` empty. Do NOT call get_fingerprint() here:
-                    #   - its signature is get_fingerprint(finding) - one
-                    #     Finding, not the five keyword arguments this template
-                    #     used to pass, so the call raised TypeError;
-                    #   - it needs the Finding that is still being built, so
-                    #     there is nothing to hand it at this point;
-                    #   - adapters do not fingerprint at all. BaseAdapter.load()
-                    #     calls _generate_fingerprint() over the parsed dicts
-                    #     (scripts/core/adapters/base_adapter.py:181) and
-                    #     injects the 16-char digest.
-                    # The real adapters do exactly this - see
-                    # scripts/core/adapters/bandit_adapter.py:105.
-                    id="",
+                    # Use the module-level `fingerprint()`, NOT
+                    # `self.get_fingerprint()`. The method on AdapterPlugin
+                    # takes one already-built `Finding`
+                    # (scripts/core/plugin_api.py:144), so it cannot be called
+                    # from inside the constructor of the Finding that needs the
+                    # id. `fingerprint()` takes the five components positionally
+                    # and returns 16 lowercase hex characters
+                    # (common_finding.py:193, FINGERPRINT_LENGTH = 16).
+                    # This is what every shipped adapter does - see
+                    # scripts/core/adapters/bandit_adapter.py:164.
+                    id=fingerprint(
+                        self.metadata.tool_name,
+                        vuln.get("id", "UNKNOWN"),
+                        vuln.get("file", ""),
+                        vuln.get("line", 0),
+                        vuln.get("title", ""),  # truncated internally
+                    ),
                     ruleId=vuln.get("id", "UNKNOWN"),
                     severity=self._map_severity(vuln.get("severity", "info")),
                     tool={

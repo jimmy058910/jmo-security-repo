@@ -43,13 +43,24 @@ def test_<tool>_basic(tmp_path: Path):
     assert item["location"]["path"] == "src/app.py"
     assert item["location"]["startLine"] == 42
 
-    # Verify schema version (may be 1.1.0 or 1.2.0 after enrichment)
-    assert item["schemaVersion"] in ["1.0.0", "1.1.0", "1.2.0"]
+    # Verify schema version. `BaseAdapter.load()` injects
+    # SCHEMA_VERSION_CURRENT unconditionally
+    # (scripts/core/adapters/base_adapter.py:33), so this is an equality, not a
+    # membership test - accepting "1.0.0" or "1.1.0" would pass a finding that
+    # never went through load() at all.
+    assert item["schemaVersion"] == "1.2.0"
 
-    # Verify fingerprint ID is present and stable
+    # Verify fingerprint ID. It is a SHA256 truncated to
+    # FINGERPRINT_HASH_LENGTH = 16 hex characters (base_adapter.py:35).
+    # `len(...) > 20` was wrong in the failing direction: a real 16-character
+    # fingerprint fails it, so the generated test could never pass.
     assert "id" in item
-    assert len(item["id"]) > 20  # SHA256 hash
-    assert item["id"].startswith(("<tool>", ""))  # Some use tool prefix
+    assert len(item["id"]) == 16, f"expected a 16-char fingerprint, got {item['id']!r}"
+    assert all(c in "0123456789abcdef" for c in item["id"]), (
+        f"fingerprint must be lowercase hex, got {item['id']!r}"
+    )
+    # NB: there is no tool prefix. `startswith(("<tool>", ""))` asserted
+    # nothing whatsoever - every string starts with the empty string.
 
     # Verify tool metadata
     assert "tool" in item
@@ -497,11 +508,27 @@ def test_<tool>_v110_no_context_if_file_missing(tmp_path: Path):
 
 ---
 
-## Category 4: Compliance Enrichment Tests (v1.2.0)
+## Category 4: Schema v1.2.0 metadata tests
 
-Tests that compliance enrichment is applied during adapter processing (via `enrich_finding_with_compliance` utility).
+Tests what `parse()` actually guarantees: the schema version, the tool metadata,
+and any CWE the tool itself reported.
 
-**Purpose:** Verify findings with CWE mappings are automatically enriched with 6 compliance frameworks.
+> **Compliance enrichment does not happen "during adapter processing".** There
+> is no `enrich_finding_with_compliance` utility on the adapter path.
+> `normalize_and_report.py` calls `enrich_findings_with_compliance()` once over
+> the deduplicated set (`scripts/core/normalize_and_report.py:234`), which is
+> the **report** phase — so a `parse()` result never carries framework
+> mappings, and an adapter-level assertion about them either fails or, guarded
+> by `if "compliance" in item:`, asserts nothing at all. Test the mapping
+> itself at the reporting boundary.
+>
+> The repository's own `TestBanditCompliance`
+> (`tests/adapters/test_bandit_adapter.py:365`) is named for compliance and
+> asserts `schemaVersion`, tool name and remediation. That is the shape to
+> copy.
+
+**Purpose:** Verify `load()`/`parse()` set `schemaVersion` and tool metadata,
+and that a CWE the tool emitted survives into the finding.
 
 ```python
 def test_<tool>_compliance_enrichment(tmp_path: Path):
@@ -524,29 +551,19 @@ def test_<tool>_compliance_enrichment(tmp_path: Path):
 
     item = out[0]
 
-    # Schema version should be 1.2.0 after enrichment (or 1.1.0 if enrichment not called)
-    assert item["schemaVersion"] in ["1.1.0", "1.2.0"]
+    # Adapters set the current schema version unconditionally.
+    assert item["schemaVersion"] == "1.2.0"
 
-    # Compliance field may be added by enrichment
-    # (Not all findings have CWE mappings, so compliance field is optional)
-    if "compliance" in item:
-        # If present, verify structure
-        compliance = item["compliance"]
+    # The CWE the TOOL reported must survive parsing. This is the real
+    # adapter-level obligation, and it is what makes enrichment possible later:
+    # enrich_findings_with_compliance() maps from the CWE, so an adapter that
+    # drops it silently costs every framework mapping downstream.
+    assert item["ruleId"] == "CWE-79"
 
-        # Should have at least one framework mapping
-        possible_frameworks = [
-            "owaspTop10_2021",
-            "cweTop25_2024",
-            "cisControlsV8_1",
-            "nistCsf2_0",
-            "pciDss4_0",
-            "mitreAttack",
-        ]
-        assert any(fw in compliance for fw in possible_frameworks), "Should have at least one framework"
-
-        # If OWASP present, verify structure
-        if "owaspTop10_2021" in compliance:
-            assert isinstance(compliance["owaspTop10_2021"], list)
+    # Do NOT assert framework mappings here. `parse()` never produces them, so
+    # the only two options are a failing assertion or - as this template used
+    # to have - an `if "compliance" in item:` guard that turns the whole block
+    # into a no-op and reports green having checked nothing.
             # CWE-79 maps to OWASP A03:2021 (Injection)
             assert any("A03" in cat for cat in compliance["owaspTop10_2021"])
 
@@ -773,14 +790,20 @@ def test_<tool>_tags_present(tmp_path: Path):
     out = load_<tool>(path)
     assert len(out) == 1
 
-    assert "tags" in out[0]
-    tags = out[0]["tags"]
-    assert isinstance(tags, list)
-    assert len(tags) > 0
+    # `tags` is OPTIONAL. The CommonFinding schema requires only
+    # schemaVersion, id, ruleId, severity, tool, location and message
+    # (docs/schemas/common_finding.v1.json), so an adapter that emits no tags
+    # is still valid and this test must not fail it.
+    tags = out[0].get("tags", [])
+    assert isinstance(tags, list), f"tags must be a list when present, got {type(tags)}"
 
-    # Verify tool category tag present
-    expected_categories = ["sast", "secrets", "iac", "vuln", "container", "dast"]
-    assert any(cat in tags for cat in expected_categories)
+    # Only assert the category tag if this adapter emits tags at all. Every
+    # adapter shipped today does; the contract does not oblige the next one to.
+    if tags:
+        expected_categories = ["sast", "secrets", "iac", "vuln", "container", "dast"]
+        assert any(cat in tags for cat in expected_categories), (
+            f"adapter emits tags but none is a category tag: {tags}"
+        )
 
 
 def test_<tool>_tags_from_tool_metadata(tmp_path: Path):
