@@ -48,3 +48,50 @@ def test_cmd_report_missing_results_dir_returns_error(tmp_path: Path):
     )
     rc = cmd_report(args)
     assert rc == 2
+
+
+def _profile_flag_help(monkeypatch, subcommand: str) -> str:
+    """The `--profile` help string as argparse would print it for a subcommand."""
+    monkeypatch.setattr(sys, "argv", ["jmo", subcommand, "--help"])
+    import argparse
+
+    captured = {}
+
+    def record(self, *a, **k):
+        for action in self._actions:
+            if "--profile" in action.option_strings:
+                captured["help"] = action.help
+        raise SystemExit(0)
+
+    monkeypatch.setattr(argparse.ArgumentParser, "print_help", record)
+    try:
+        parse_args()
+    except SystemExit:
+        pass
+    return captured.get("help", "")
+
+
+def test_profile_flag_help_names_the_phase_it_times(monkeypatch):
+    """`--profile` must not read as if it timed the tools.
+
+    It writes `timings.json`, which measures how long *adapters took to parse*
+    tool output -- the report phase. The old wording, "Collect per-tool timing
+    and write timings.json", reads as per-tool *scan* timing, and that is
+    exactly how it was read: issue #722 was filed asking for instrumentation
+    that this flag was believed to provide and never did.
+
+    Scan-phase tool durations live in `scan-timings.json`, written by the scan
+    jobs. Both files exist now, so the flag has to say which one it is.
+    """
+    for subcommand in ("report", "ci"):
+        help_text = _profile_flag_help(monkeypatch, subcommand).lower()
+
+        assert "parse" in help_text, (
+            f"`jmo {subcommand} --profile` does not say it times parsing. "
+            f"Got: {help_text!r}"
+        )
+        assert "scan-timings.json" in help_text, (
+            f"`jmo {subcommand} --profile` does not point at the scan-phase "
+            f"file, so a user looking for tool run times has no signpost. "
+            f"Got: {help_text!r}"
+        )

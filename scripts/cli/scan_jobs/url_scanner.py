@@ -12,11 +12,13 @@ Integrates with ToolRunner for execution management.
 from __future__ import annotations
 
 import re
+import time
 from collections.abc import Callable
 from pathlib import Path
 from urllib.parse import urlparse
 
 from ...core.config import RetryConfig
+from ...core.scan_timings import write_scan_timings
 from ...core.tool_runner import ToolDefinition, ToolRunner
 from ..scan_utils import find_tool, report_tool_failure, write_stub
 
@@ -199,7 +201,18 @@ def scan_url(
     runner = ToolRunner(
         tools=tool_defs,
     )
+    tools_started = time.perf_counter()
     results = runner.run_all_parallel()
+
+    # ToolRunner already timed and classified every invocation. Record that
+    # before the loop below reduces the results to booleans (#722).
+    write_scan_timings(
+        out_dir,
+        results,
+        target=safe_name,
+        target_type="url",
+        wall_seconds=time.perf_counter() - tools_started,
+    )
 
     # Process results
     attempts_map: dict[str, int] = {}

@@ -214,8 +214,10 @@ Every ratio goes through `pct_change`, so a zero or absent baseline produces a
 `no_sample` entry instead of `ZeroDivisionError`. Newly introduced tools are
 skipped explicitly rather than compared against nothing.
 
-> **Timeout and failure rates are not compared, because JMo does not record
-> them.** See [optimization-patterns.md Phase 4](optimization-patterns.md#phase-4-timeout-and-failure-analysis--no-data-source).
+> **Timeout and failure rates are not compared.** Per-tool outcomes exist for a
+> single scan (`scan-timings.json`), but nothing aggregates them across runs, so
+> there is no rate to compare a baseline against. See
+> [optimization-patterns.md Phase 4](optimization-patterns.md#phase-4-timeout-and-failure-analysis).
 
 ### Example comparison output
 

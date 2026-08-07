@@ -240,6 +240,17 @@ def parse_log(log_text: str) -> Diagnostics:
     )
 
 
+# Filenames under `individual-*/<target>/` that are scan metadata rather than a
+# tool's findings. Every other `*.json` there is mapped to a tool by its stem, so
+# an unlisted artifact is reported as `stray_output` -- correctly, since that is
+# the check that catches a tool nobody declared having written a file.
+#
+# Keep this an explicit allowlist, never a pattern. The invariant is worth more
+# than the convenience: a new artifact should have to be named here on purpose,
+# because the alternative is a rule loose enough to also swallow a real tool.
+NON_TOOL_ARTIFACTS = frozenset({"scan-timings"})
+
+
 def parse_outputs(results_dir: Path) -> tuple[dict[str, int], frozenset[str]]:
     """Map tool -> record count for every output file that actually parses."""
     counts: dict[str, int] = {}
@@ -249,6 +260,8 @@ def parse_outputs(results_dir: Path) -> tuple[dict[str, int], frozenset[str]]:
             continue
         for f in sorted(target.glob("*.json")):
             tool = f.stem
+            if tool in NON_TOOL_ARTIFACTS:
+                continue
             raw = f.read_text(encoding="utf-8", errors="replace")
             n: int | None = None
             try:

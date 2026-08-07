@@ -26,6 +26,7 @@ from scripts.dev.reconcile_scan_accounting import (
     ACCOUNTED_STATES,
     Diagnostics,
     parse_log,
+    parse_outputs,
     reconcile,
 )
 
@@ -331,3 +332,31 @@ def test_progress_glyphs_are_not_mistaken_for_durable_accounts() -> None:
     result = reconcile(declared=["trivy"], diags=diags, output_counts={})
     assert result.unaccounted == ["trivy"]
     assert not result.ok
+
+
+def test_scan_timings_is_not_counted_as_a_tool_output(tmp_path) -> None:
+    """`scan-timings.json` is metadata about the scan, not a tool's output.
+
+    `parse_outputs` maps every `*.json` under `individual-*/<target>/` to a tool
+    by filename stem, so a non-tool artifact dropped in that directory is
+    reported as `stray_output` -- an output file nothing declared. That is the
+    reconciler working correctly; the fix is to tell it which filenames are
+    scan metadata rather than to loosen the invariant, which is the only thing
+    standing between a silently-unaccounted tool and a green scan (#722).
+    """
+    target = tmp_path / "individual-repos" / "demo"
+    target.mkdir(parents=True)
+    (target / "trivy.json").write_bytes(b'{"Results": []}')
+    (target / "scan-timings.json").write_bytes(
+        b'{"schema_version": 1, "target": "demo", "target_type": "repo", '
+        b'"wall_seconds": 1.0, "tools": []}'
+    )
+
+    counts, unparseable = parse_outputs(tmp_path)
+
+    assert "scan-timings" not in counts, (
+        "scan-timings.json was counted as a tool output, so the reconciler "
+        "will report it as an artifact nothing declared"
+    )
+    assert "trivy" in counts, "a real tool output must still be counted"
+    assert unparseable == frozenset()

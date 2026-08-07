@@ -1,6 +1,6 @@
 ---
 name: jmo-profile-optimizer
-description: Analyze report-phase timing data from `jmo report --profile` and tune profile configuration (threads, timeouts, per-tool flags) against measured evidence. Use when report aggregation is slow or a profile needs rebalancing.
+description: Analyze scan-phase tool timings (`scan-timings.json`) and report-phase parse timings (`jmo report --profile`), then tune profile configuration (threads, timeouts, per-tool flags) against measured evidence. Use when a scan or its report is slow, or a profile needs rebalancing.
 argument-hint: <profile-name>
 user-invocable: true
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash
@@ -21,9 +21,13 @@ Measure before optimizing. Every recommendation must cite actual timing data.
 
 ### What this skill can and cannot measure
 
-`jmo report --profile` writes `<results-dir>/summaries/timings.json`, which
-records the **report phase**: how long JMo took to read and normalize each tool's
-output. It does **not** record how long the tools took to run.
+There are **two** timing files, and they measure different phases. Confusing
+them is how this skill drifted in the first place.
+
+| File | Written by | Measures |
+|---|---|---|
+| `<results-dir>/summaries/timings.json` | `jmo report --profile` | **report** phase — how long adapters took to *parse* tool output |
+| `<results-dir>/individual-*/<target>/scan-timings.json` | `jmo scan` (always) | **scan** phase — how long each tool took to *run* |
 
 | Question | Answerable | Source |
 |---|---|---|
@@ -31,12 +35,13 @@ output. It does **not** record how long the tools took to run.
 | How many findings does each tool produce? | yes | `timings.json` `jobs[].count` |
 | Is the report worker count right? | yes | `recommended_threads` vs `meta.max_workers` |
 | How long did the whole scan take? | yes | `jmo history list` / `jmo history show` |
-| How long did **one tool** take to run? | **no** | not recorded anywhere |
-| What is a tool's timeout or failure rate? | **no** | not recorded anywhere |
+| How long did **one tool** take to run? | yes | `scan-timings.json` `tools[].duration` |
+| Did a tool time out **on this scan**? | yes | `scan-timings.json` `tools[].error_message` starts `"Timeout after "` — **not** `status`, which never takes the `"timeout"` value its docstring claims |
+| What is a tool's timeout **rate across scans**? | **no** | `scan-timings.json` is per-scan; nothing aggregates it yet (#722) |
 
-If the question is "why is the scan slow", this skill can only narrow it to
-whole-scan durations from history plus configured timeouts. Per-tool scan
-timing needs instrumentation that does not exist yet.
+So "why is the scan slow" is now answerable per tool, from the scan's own
+output. "Is tool X *usually* slow, or was that one run" is not — that needs the
+per-scan files collected over time, which nothing does yet.
 
 ---
 

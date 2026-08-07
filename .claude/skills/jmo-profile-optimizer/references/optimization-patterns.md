@@ -14,11 +14,11 @@ tuning.
 > JMo took to **read and normalize tool output** — not how long the tools took to
 > **run**.
 >
-> **JMo records no per-tool scan duration, timeout count, or failure count
-> anywhere.** `history_db` stores a single `duration_seconds` per *scan*
-> (`scripts/core/history_db.py:103`) with no tool breakdown. Do not infer tool
-> runtime, timeout rate, or failure rate from this file — see
-> [Phase 4](#phase-4-timeout-and-failure-analysis--no-data-source).
+> **Do not infer tool runtime, timeouts, or failures from this file.** Those
+> live in `scan-timings.json`, written by the scan phase — see
+> [Phase 4](#phase-4-timeout-and-failure-analysis). `history_db` still stores a
+> single `duration_seconds` per *scan* (`scripts/core/history_db.py:103`) with
+> no tool breakdown, so cross-scan *rates* remain unavailable.
 
 ---
 
@@ -200,27 +200,58 @@ against wall clock would let them exceed it.
 
 ---
 
-## Phase 4: Timeout and Failure Analysis — no data source
+## Phase 4: Timeout and Failure Analysis
 
 Earlier revisions of this skill documented an `analyze_timeouts()` function
 computing per-tool timeout and failure rates from
-`metrics["timeouts"] / metrics["executions"]`.
+`metrics["timeouts"] / metrics["executions"]`. Those keys never existed, and
+when this skill was rewritten there was no per-tool scan data at all, so the
+analysis was deleted rather than repaired.
 
-**JMo records none of those values.** `timings.json` carries parse timings only;
-`history_db` stores one `duration_seconds` per *scan*
-(`scripts/core/history_db.py:103`) with no per-tool breakdown; and the scan
-orchestrator reads `config.timeout` to pass to each tool but never records
-whether a tool hit it. The analysis was removed rather than repaired, because
-there is nothing in the codebase to repair it against.
+**#722 added the data source.** Every scan now writes
+`<results-dir>/individual-*/<target>/scan-timings.json`, built from the
+`ToolResult` objects `ToolRunner` had always produced and the scan jobs had
+always discarded.
 
-Restoring it needs per-tool scan instrumentation, which is a code change, not a
-documentation change.
+Schema — the authority is `scripts/core/scan_timings.py`, and `schema_version`
+guards it:
 
-What can be stated about timeouts today:
+| Key | Meaning |
+|---|---|
+| `schema_version` | `1`. Refuse a shape you do not recognise rather than misreading it. |
+| `target` / `target_type` | Which target, and one of `repo` / `image` / `iac` / `url` / `k8s`. |
+| `wall_seconds` | Elapsed time of the whole parallel tool batch. |
+| `tools[]` | One entry per invocation: `tool`, `status`, `returncode`, `attempts`, `duration`, `output_file`, `error_message`. |
 
-- The **configured** value, read from `jmo.yml` (`timeout`, and
-  `per_tool.<tool>.timeout`).
-- Whether a tool produced **no output at all**, from the scan's own accounting.
+`tools[].status` carries **four** values, not a coarse pass/fail:
+`success`, `no_output`, `error`, `retry_exhausted`. Read `no_output`
+carefully — it means an *accepted* return code with an empty artifact, which
+is a tool that appeared to work and did not.
+
+> **Do not test `status == "timeout"`.** `ToolResult`'s docstring claims that
+> value but `scripts/core/tool_runner.py` never assigns it (measured: the only
+> `"timeout"` literal is a progress-callback UI signal). A timed-out tool
+> reports `error` or `retry_exhausted` with
+> `error_message` beginning `"Timeout after "` — which is how all five scan
+> jobs detect it. Match on `error_message` until #727 resolves the producer.
+
+### The denominator trap
+
+Tools run concurrently, so `sum(tools[].duration)` **exceeds** `wall_seconds`.
+Use `wall_seconds` as the denominator for "what share of the scan was tool X".
+Using the sum understates every tool by the parallelism factor — the same
+invalid-denominator defect this skill was reviewed for.
+
+### What is still not answerable
+
+A **rate** needs more than one scan. `scan-timings.json` is per-scan and per-
+target, and nothing collects it across runs — `history_db` still stores only
+one `duration_seconds` per scan (`scripts/core/history_db.py:103`) with no
+per-tool breakdown. So:
+
+- "did `dependency-check` time out on this scan" — yes, read `status`.
+- "does `dependency-check` time out 30% of the time" — no. That needs the
+  history persistence deferred out of #722.
 
 ---
 
@@ -382,4 +413,7 @@ budget scan time by image count rather than by repository count.
 
 > Whether any of these settings actually helps is not measurable from
 > `timings.json` — it records report-phase parsing only. Verify a timeout change
-> by re-running the scan and comparing `jmo history list` durations.
+> against `scan-timings.json`: re-run the scan and compare that tool's
+> `duration` and `status`. A cap that "fixed" a slow tool by killing it shows up
+> as `status: "timeout"`, which a whole-scan duration from `jmo history list`
+> would have reported as an improvement.

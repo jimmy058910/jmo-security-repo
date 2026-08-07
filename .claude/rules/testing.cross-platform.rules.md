@@ -306,5 +306,26 @@ Pytest invocations in CI workflows use these filter sets. Each filter is tuned t
 
 - **Always exclude `requires_tools` and `smoke`** unless the runner explicitly installs the prerequisite (real tool binaries or the released PyPI wheel).
 - **Always exclude `docker`** unless the runner has a Docker daemon (Linux runners do; macOS/Windows runners require setup).
-- **Include `slow`** only when the job has a generous timeout budget (nightly, full e2e). Exclude in PR-time CI (`ci.yml`).
+- **`slow` is NOT excluded from PR-time CI.** `ci.yml`'s **sharded** jobs (`:312`, `:327`) run `-m "not smoke and not requires_tools and not docker"` — slow tests included. Only the **Quick coverage check** (`:352`) and `nightly-cross-platform` (`:448`) add `and not slow`. Exclude it when the job's budget is tight, not because it is PR-time.
 - **Use `-m "<marker>"` to RUN only that marker**'s tests after installing prerequisites; use `-m "not <marker>"` to EXCLUDE.
+
+### Reproducing a shard locally
+
+**Use the sharded filter, not the coverage filter.** They are not the same suite,
+and the coverage one is strictly smaller:
+
+```bash
+# What the shards actually run -- this is the one to reproduce
+pytest tests/ -p no:xdist -m "not smoke and not requires_tools and not docker"
+```
+
+Verifying with `and not slow` appended is verifying against fewer tests than gate
+the PR. Measured on #722: a full local `tests/unit tests/cli` sweep came back
+**4552 passed, 0 failed** with the coverage filter, while shard 3 failed on
+`tests/integration/test_scan_accounting.py` — a `@pytest.mark.slow` test the
+local filter had deselected. Two independent gaps compounded: the wrong marker
+filter *and* omitting `tests/integration/` from the path list.
+
+The bullet above this one used to say slow was excluded in PR-time CI, which is
+what produced that run. It contradicted the table in this same section — when
+they disagree, the table is generated from the workflows and wins.
