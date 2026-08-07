@@ -803,6 +803,10 @@ jobs:
           pre-commit run --all-files mixed-line-ending
           pre-commit run --all-files detect-private-key
           pre-commit run --all-files check-added-large-files
+          # CLAUDE.md and .gitignore both promise this "fails CI and pre-commit".
+          # Until it ran here, only the nightly all-hooks job enforced it, so a
+          # broken documentation link could merge and sit until the next night.
+          pre-commit run --all-files doc-links
 
       - name: Check Python formatting (black --check)
         run: |

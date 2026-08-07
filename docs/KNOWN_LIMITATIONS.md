@@ -52,6 +52,18 @@ exactly one client. This is the transport's design, not a JMo restriction.
 
 **What to do:** run one server instance per client.
 
+### Memory use over long sessions is unmeasured
+
+The server starts, serves and shuts down cleanly, and that path is tested — but
+no extended profiling has been run, so there is no measured figure for growth
+over a session lasting hours. Because stdio is single-client and sessions are
+normally short, this has not mattered in practice; it is untested rather than
+known-good.
+
+**What to do:** if you keep a server alive for a long-running client, watch its
+RSS and restart it between large batches. Report anything that grows without
+bound — that would be a defect, not this limitation.
+
 ---
 
 ## Scanning
@@ -104,6 +116,21 @@ nothing on a Linux runner.
 
 **What to do:** edit the exported workflow's paths for the CI environment before
 committing it, or create the schedule with the paths the runner will see.
+
+### Survival across a reboot is not verified automatically
+
+`jmo schedule install` writes a normal crontab entry — Linux and macOS only;
+there is no Windows Scheduled Task backend, so on Windows use
+`jmo schedule export` and run the schedule from CI instead. Install/uninstall is
+tested under WSL, but no automated test reboots a machine, because that is too
+disruptive to run on a dev box or a CI runner. Standard crontab entries do
+persist across reboots, so the expected behaviour is that your schedule simply
+resumes; it is unproven here rather than doubtful.
+
+**What to do:** after your first install, confirm it by hand once —
+`jmo schedule list` (or `crontab -l`) following a reboot. Worth re-checking on a
+machine where something else manages cron, such as a container or a hardened
+image that resets `/var/spool/cron`.
 
 ---
 
