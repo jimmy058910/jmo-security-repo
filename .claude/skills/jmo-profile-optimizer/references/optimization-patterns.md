@@ -221,19 +221,24 @@ guards it:
 | `schema_version` | `1`. Refuse a shape you do not recognise rather than misreading it. |
 | `target` / `target_type` | Which target, and one of `repo` / `image` / `iac` / `url` / `k8s`. |
 | `wall_seconds` | Elapsed time of the whole parallel tool batch. |
-| `tools[]` | One entry per invocation: `tool`, `status`, `returncode`, `attempts`, `duration`, `output_file`, `error_message`. |
+| `tools[]` | One entry per invocation: `tool`, `status`, `timed_out`, `returncode`, `attempts`, `duration`, `output_file`, `error_message`. |
 
 `tools[].status` carries **four** values, not a coarse pass/fail:
 `success`, `no_output`, `error`, `retry_exhausted`. Read `no_output`
 carefully — it means an *accepted* return code with an empty artifact, which
 is a tool that appeared to work and did not.
 
-> **Do not test `status == "timeout"`.** `ToolResult`'s docstring claims that
-> value but `scripts/core/tool_runner.py` never assigns it (measured: the only
-> `"timeout"` literal is a progress-callback UI signal). A timed-out tool
-> reports `error` or `retry_exhausted` with
-> `error_message` beginning `"Timeout after "` — which is how all five scan
-> jobs detect it. Match on `error_message` until #727 resolves the producer.
+> **A timeout is `tools[].timed_out`, not a `status` value.** `status` has no
+> `"timeout"` member — its docstring claimed one for months while `run_tool`
+> never assigned it, which is how #722 came to be filed on a false premise.
+> #727 added a separate boolean instead of a fifth status, so that
+> `retry_exhausted` keeps its own meaning: *this failure burned the whole retry
+> budget*. A timed-out tool therefore reports **both**
+> `status: "error" | "retry_exhausted"` **and** `timed_out: true`.
+>
+> Read them together. `timed_out` with `retry_exhausted` and `attempts: 4` is a
+> tool that is reliably too slow for its budget; `timed_out` with `error` and
+> `attempts: 1` timed out once and was not retried.
 
 ### The denominator trap
 
@@ -414,6 +419,6 @@ budget scan time by image count rather than by repository count.
 > Whether any of these settings actually helps is not measurable from
 > `timings.json` — it records report-phase parsing only. Verify a timeout change
 > against `scan-timings.json`: re-run the scan and compare that tool's
-> `duration` and `status`. A cap that "fixed" a slow tool by killing it shows up
-> as `status: "timeout"`, which a whole-scan duration from `jmo history list`
+> `duration` and `timed_out`. A cap that "fixed" a slow tool by killing it shows
+> up as `timed_out: true`, which a whole-scan duration from `jmo history list`
 > would have reported as an improvement.

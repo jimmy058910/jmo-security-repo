@@ -36,7 +36,7 @@ them is how this skill drifted in the first place.
 | Is the report worker count right? | yes | `recommended_threads` vs `meta.max_workers` |
 | How long did the whole scan take? | yes | `jmo history list` / `jmo history show` |
 | How long did **one tool** take to run? | yes | `scan-timings.json` `tools[].duration` |
-| Did a tool time out **on this scan**? | yes | `scan-timings.json` `tools[].error_message` starts `"Timeout after "` — **not** `status`, which never takes the `"timeout"` value its docstring claims |
+| Did a tool time out **on this scan**? | yes | `scan-timings.json` `tools[].timed_out` — a boolean, **not** a `status` value |
 | What is a tool's timeout **rate across scans**? | **no** | `scan-timings.json` is per-scan; nothing aggregates it yet (#722) |
 
 So "why is the scan slow" is now answerable per tool, from the scan's own

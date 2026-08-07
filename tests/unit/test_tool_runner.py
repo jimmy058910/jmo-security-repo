@@ -161,16 +161,25 @@ class TestToolResult:
         assert result.duration == 5.2
 
     def test_failed_result(self):
-        """Test creating a failed result"""
+        """Test creating a failed result.
+
+        Uses the shape `run_tool` actually produces for a timeout:
+        `status="retry_exhausted"` plus `timed_out=True`. This test previously
+        constructed `status="timeout"` — a value nothing assigns — which made
+        the docstring's false claim look validated by a passing test, and is
+        part of how #722 came to be filed on a false premise (#727).
+        """
         result = ToolResult(
             tool="semgrep",
-            status="timeout",
+            status="retry_exhausted",
             returncode=-1,
+            timed_out=True,
             error_message="Timeout after 600s",
         )
 
         assert result.is_success() is False
-        assert result.status == "timeout"
+        assert result.status == "retry_exhausted"
+        assert result.timed_out is True
         assert result.error_message == "Timeout after 600s"
 
     def test_to_dict_conversion(self):
@@ -1612,3 +1621,159 @@ class TestTimeoutKillsTheProcessTree:
         )
         # Belt and braces: it must also not still be blocking the runner.
         assert _sp is not None
+
+
+class TestTimedOutFlag:
+    """A timeout must be structurally detectable, not inferred from prose.
+
+    `ToolResult.status` does not distinguish a timeout: `run_tool` assigns only
+    `success`, `no_output`, `error` and `retry_exhausted`, so a timed-out tool
+    is indistinguishable from a crash except by the wording of
+    `error_message` ("Timeout after Ns"). `repository_scanner` branches on that
+    string to decide whether to write a stub and what to log — so rewording a
+    human-readable message silently reclassifies every timeout (#727).
+
+    `timed_out` is a separate field rather than a fifth `status` value on
+    purpose: `retry_exhausted` carries its own signal (this failure burned the
+    whole retry budget), and folding it into `timeout` would lose it.
+    """
+
+    @staticmethod
+    def _timing_out_tool(**kwargs):
+        from scripts.core.config import RetryConfig
+
+        return ToolDefinition(
+            name="slowpoke",
+            command=["sleep", "999"],
+            output_file=None,
+            timeout=1,
+            retries=RetryConfig(
+                max_attempts=1, timeout_retries=0, backoff_base=0, backoff_max=0
+            ),
+            **kwargs,
+        )
+
+    def test_timeout_sets_the_flag(self):
+        """The terminal failure was a timeout, so say so in a field."""
+        tool = self._timing_out_tool()
+        runner = ToolRunner([tool])
+
+        with patch(
+            "scripts.core.tool_runner._run_bounded",
+            side_effect=subprocess.TimeoutExpired("cmd", 1),
+        ):
+            result = runner.run_tool(tool)
+
+        assert result.timed_out is True, (
+            "a timed-out tool must be identifiable without parsing "
+            "error_message, which is human-readable prose"
+        )
+
+    def test_timeout_still_reports_its_retry_status(self):
+        """`timed_out` supplements `status`; it does not replace it.
+
+        Collapsing a timeout into a `status` value would discard whether it
+        exhausted its retry budget, which is what distinguishes a flaky tool
+        from a hopelessly slow one.
+        """
+        from scripts.core.config import RetryConfig
+
+        tool = ToolDefinition(
+            name="slowpoke",
+            command=["sleep", "999"],
+            output_file=None,
+            timeout=1,
+            retries=RetryConfig(
+                max_attempts=2, timeout_retries=2, backoff_base=0, backoff_max=0
+            ),
+        )
+        runner = ToolRunner([tool])
+
+        with patch(
+            "scripts.core.tool_runner._run_bounded",
+            side_effect=subprocess.TimeoutExpired("cmd", 1),
+        ):
+            result = runner.run_tool(tool)
+
+        assert result.timed_out is True
+        assert result.status == "retry_exhausted"
+        assert result.attempts == 4  # 2 base + 2 timeout
+
+    def test_a_crash_does_not_set_the_flag(self):
+        """A non-zero exit is not a timeout. The flag must discriminate."""
+        tool = ToolDefinition(
+            name="crashy", command=["false"], output_file=None, retries=0
+        )
+        runner = ToolRunner([tool])
+
+        with patch(
+            "scripts.core.tool_runner._run_bounded",
+            return_value=subprocess.CompletedProcess(["false"], 3, "", "boom"),
+        ):
+            result = runner.run_tool(tool)
+
+        assert result.timed_out is False
+        assert result.status in ("error", "retry_exhausted")
+
+    def test_missing_tool_does_not_set_the_flag(self):
+        """A tool that never launched cannot have timed out."""
+        tool = ToolDefinition(
+            name="ghost", command=["no-such-binary-12345"], output_file=None, retries=0
+        )
+        runner = ToolRunner([tool])
+
+        with patch(
+            "scripts.core.tool_runner._run_bounded", side_effect=FileNotFoundError()
+        ):
+            result = runner.run_tool(tool)
+
+        assert result.timed_out is False
+
+    def test_flag_survives_serialization(self):
+        """`scan-timings.json` is where this becomes user-visible (#722)."""
+        assert (
+            ToolResult(tool="t", status="error", timed_out=True).to_dict()["timed_out"]
+            is True
+        )
+        assert ToolResult(tool="t", status="success").to_dict()["timed_out"] is False
+
+    def test_a_crash_after_a_timeout_is_not_reported_as_a_timeout(self):
+        """The flag describes the *terminal* failure, not any failure seen.
+
+        `last_error` and `timed_out` are a pair: whichever failure ends the
+        retry loop is the one the returned ToolResult describes. If only the
+        timeout branch assigns the flag, a tool that times out once and then
+        crashes reports `timed_out=True` alongside a crash's `error_message` --
+        so the scan writes a timeout stub and logs "it timed out" for a tool
+        that actually exited non-zero.
+
+        Every other test in this class exercises a single failure kind, and so
+        cannot see the missing reset. Found by mutation: deleting the crash
+        path's reset left all five of them green.
+        """
+        from scripts.core.config import RetryConfig
+
+        tool = ToolDefinition(
+            name="flaky",
+            command=["flaky"],
+            output_file=None,
+            timeout=1,
+            ok_return_codes=(0,),
+            retries=RetryConfig(
+                max_attempts=2, timeout_retries=1, backoff_base=0, backoff_max=0
+            ),
+        )
+        runner = ToolRunner([tool])
+
+        crash = subprocess.CompletedProcess(["flaky"], 3, "", "boom")
+        with patch(
+            "scripts.core.tool_runner._run_bounded",
+            side_effect=[subprocess.TimeoutExpired("cmd", 1), crash, crash],
+        ):
+            result = runner.run_tool(tool)
+
+        assert result.timed_out is False, (
+            "the run ended on a crash, but it was reported as a timeout -- the "
+            "crash path is not resetting the flag a previous timeout set"
+        )
+        assert "Return code 3" in result.error_message

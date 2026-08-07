@@ -236,3 +236,50 @@ def test_resolve_then_vanish_writes_no_stub(tmp_path, caplog):
         f"the report phase reads it."
     )
     assert statuses["yara"] is False
+
+
+def test_timeout_handling_does_not_depend_on_the_message_wording(tmp_path, caplog):
+    """A timeout is routed by `result.timed_out`, not by prose (#727).
+
+    This branch writes a stub and logs "it timed out". It used to be selected by
+    `"Timeout" in result.error_message`, which made a human-readable string
+    load-bearing: rewording it would silently route every timeout to the generic
+    failure branch, dropping both signals, with no test going red.
+
+    So this passes a deliberately reworded message. The branch must still fire.
+    """
+    stubbed: list[str] = []
+    with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+        mock_runner = MagicMock()
+        MockRunner.return_value = mock_runner
+        mock_runner.run_all_parallel.return_value = [
+            ToolResult(
+                tool="semgrep",
+                status="retry_exhausted",
+                returncode=-1,
+                attempts=3,
+                timed_out=True,
+                error_message="exceeded its 600s budget",  # deliberately NOT "Timeout"
+            )
+        ]
+        with caplog.at_level(logging.ERROR):
+            _, statuses = scan_repository(
+                repo=_repo_target(tmp_path)["repo"],
+                results_dir=tmp_path,
+                tools=["semgrep"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=True,
+                find_tool_func=lambda t: f"/usr/bin/{t}",
+                write_stub_func=lambda name, path: stubbed.append(name),
+            )
+
+    assert statuses["semgrep"] is False
+    assert stubbed == ["semgrep"], (
+        "no stub was written for a timed-out tool, so the report phase will "
+        f"have no file for it at all. stubbed={stubbed}"
+    )
+    assert (
+        "timed out" in caplog.text
+    ), f"the timeout was not announced as a timeout. caplog was: {caplog.text!r}"
