@@ -155,13 +155,15 @@ def test_never_serializes_tool_stdout_or_stderr(tmp_path: Path) -> None:
 
 # The four values `tool_runner.py` actually assigns to `ToolResult.status`.
 #
-# Deliberately NOT five. `ToolResult`'s own docstring claims a `"timeout"`
-# status, and #722's rescoping read that claim off the docstring rather than the
-# code -- but `run_tool` never assigns it. A timed-out tool gets `error` or
-# `retry_exhausted` with `error_message="Timeout after Ns"`, which is why all
-# five scan jobs detect timeouts by string-matching that message. Listing
-# `"timeout"` here would make this file assert against fiction, which is the
-# exact defect class the #718 remediation exists to remove.
+# Deliberately NOT five. `ToolResult`'s docstring claimed a `"timeout"` status
+# that `run_tool` never assigned, and #722's rescoping read that claim off the
+# docstring rather than the code. Listing it here would make this file assert
+# against fiction -- the exact defect class the #718 remediation exists to
+# remove.
+#
+# A timed-out tool reports `error` or `retry_exhausted` **and** `timed_out=True`
+# (#727). The flag is what carries the timeout; `status` carries whether the
+# retry budget was exhausted. Both are in `to_dict()`, so both reach this file.
 TOOL_RUNNER_STATUSES = ["success", "no_output", "error", "retry_exhausted"]
 
 

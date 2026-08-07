@@ -926,6 +926,7 @@ class TestRepositoryScanner:
                     tool="semgrep-secrets",
                     status="error",
                     attempts=2,
+                    timed_out=True,
                     error_message="Timeout after 900s",
                 ),
             ]
@@ -976,6 +977,7 @@ class TestRepositoryScanner:
                     tool="semgrep-secrets",
                     status="retry_exhausted",
                     attempts=3,
+                    timed_out=True,
                     error_message="Timeout after 900s",
                 ),
             ]
@@ -1288,7 +1290,8 @@ class TestFailedToolsAreReported:
                 [
                     ToolResult(
                         tool="dependency-check",
-                        status="timeout",
+                        status="error",
+                        timed_out=True,
                         error_message="Timeout after 1200s",
                         attempts=1,
                     )
