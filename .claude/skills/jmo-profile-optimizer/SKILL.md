@@ -135,9 +135,10 @@ that produced it:
 
 > Recommendation engine: [references/optimization-patterns.md](references/optimization-patterns.md#phase-5-generate-optimization-recommendations)
 
-**Timeout and failure-rate analysis is not part of this skill** — JMo records
-neither. See [the Phase 4 note](references/optimization-patterns.md#phase-4-timeout-and-failure-analysis--no-data-source)
-before adding recommendations about timeouts.
+**Per-tool timeout and failure analysis is available for a single scan, but
+*rates* are not** — nothing aggregates `scan-timings.json` across runs. See
+[Phase 4](references/optimization-patterns.md#phase-4-timeout-and-failure-analysis)
+before making any recommendation about timeouts.
 
 ---
 
