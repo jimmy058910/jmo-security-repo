@@ -191,12 +191,12 @@ deep:
   - yara            # Malware pattern detection
   - noseyparker     # Deep secrets scanning
   - bandit          # Python security linter
-  # Tool variants (4)
+  # Tool variants (4) - 1 requires manual installation
   - semgrep-secrets # Semgrep with secrets rules
   - trivy-rbac      # Trivy RBAC scanning
   - checkov-cicd    # Checkov CI/CD config scanning
-  - falco           # Runtime security
-  # Specialized (4) - 3 require manual installation
+  - falco           # Runtime security [MANUAL]
+  # Specialized (5) - 3 require manual installation
   - akto            # API security (OWASP API Top 10) [MANUAL]
   - afl++           # Coverage-guided fuzzing [MANUAL]
   - mobsf           # Mobile security (Android/iOS) [MANUAL]
@@ -684,7 +684,7 @@ apt-get install -y git curl jq shellcheck ca-certificates
 docker run -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:fast scan
 docker run -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:slim scan
 docker run -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:balanced scan
-docker run -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:deep scan  # 25 tools, 3 manual
+docker run -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:deep scan  # 28 tools, 4 need manual install
 ```
 
 **Registries:**
