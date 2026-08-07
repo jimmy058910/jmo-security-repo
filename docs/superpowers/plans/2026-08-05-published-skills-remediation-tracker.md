@@ -6,19 +6,19 @@
 
 ## Progress
 
-**30 / 103 resolved.**
+**35 / 103 resolved.**
 
 | Chunk | Scope | Findings | Done | Status |
 |---|---|---:|---:|---|
 | **A** | jmo-profile-optimizer | 13 | 13 | **complete** |
 | **B** | dashboard-builder + documentation-updater | 13 | 13 | **complete** |
-| **C** | adapter-generator + test-fabricator | 15 | 1 | in progress |
+| **C** | adapter-generator + test-fabricator | 15 | 6 | in progress |
 | **D** | jmo-ci-debugger | 13 | 0 | not started |
 | **E** | target-type-expander + security-hardening | 19 | 0 | not started |
 | **F** | the 7 agents | 13 | 0 | not started |
 | **G** | tail: refactoring, compliance, systematic-debugging, references | 11 | 0 | not started |
 | **H** | repo config authored by PR #717 | 6 | 3 | in progress |
-| | **total** | **103** | **30** | |
+| | **total** | **103** | **35** | |
 
 ## How to mark a finding off
 
@@ -243,16 +243,28 @@ three findings were one stale snippet. Deleted and replaced with a citation.
       duplicates git history with nothing to keep it honest. Points at
       `git log -- .claude/skills/<skill>/` and the repository `CHANGELOG.md`.
 
-## Chunk C - adapter-generator + test-fabricator  (1/15)
+## Chunk C - adapter-generator + test-fabricator  (6/15)
 
 
 **`.claude/skills/jmo-adapter-generator/templates/adapter-template.py`**
 
-- [ ] **Major** L130: Use the `AdapterPlugin.get_fingerprint()` contract
+- [x] **Major** L130: Use the `AdapterPlugin.get_fingerprint()` contract
+      -> FIXED: template called it with 5 kwargs; real signature is
+      `get_fingerprint(finding)` (plugin_api.py:144), so it raised TypeError.
+      Adapters do not fingerprint at all - `BaseAdapter.load()` calls
+      `_generate_fingerprint()` (base_adapter.py:181) and injects the digest.
+      Template now leaves `id=""`, as bandit_adapter.py:105 does.
 
 **`.claude/skills/jmo-test-fabricator/SKILL.md`**
 
-- [ ] **Major** L203: Keep compliance enrichment in `normalize_and_report.py`
+- [x] **Major** L203: Keep compliance enrichment in `normalize_and_report.py`
+      -> FIXED: Category 4 renamed to "v1.2.0 metadata" at all 4 sites
+      (L101 outline, L133 header convention, L175 template, L339 checklist)
+      plus the summary table, with a note routing framework mappings to the
+      reporting boundary. Verified: `TestBanditCompliance`
+      (test_bandit_adapter.py:365) is named for compliance and asserts
+      schemaVersion/tool name/remediation - because that is what the adapter
+      boundary guarantees.
 
 **`.claude/skills/jmo-test-fabricator/references/ci-platform-validation.md`**
 
@@ -274,11 +286,17 @@ three findings were one stale snippet. Deleted and replaced with a citation.
 
 **`.claude/skills/jmo-adapter-generator/references/memory-integration.md`**
 
-- [ ] **Minor** L83: Keep compliance enrichment centralized
+- [x] **Minor** L83: Keep compliance enrichment centralized
+      -> FIXED: "Pre-populate compliance fields" -> cache mapping *inputs*;
+      enrichment is `normalize_and_report.py:234`.
 
 **`.claude/skills/jmo-adapter-generator/templates/adapter-template.py`**
 
-- [ ] **Minor** L46: Normalize `PluginMetadata.name` from the adapter filename
+- [x] **Minor** L46: Normalize `PluginMetadata.name` from the adapter filename
+      -> FIXED: it matches the ADAPTER filename identifier, not the output
+      filename. dependency_check_adapter.py:50 uses `name="dependency_check"`.
+      plugin_loader.py:235 has to try both variants because this drifts.
+      Sibling bullet in SKILL.md L61-67 corrected too.
 - [x] **Minor** L46: Use integer exit-code keys in `PluginMetadata`
       -> RESOLVED: PR #717 - exit_codes int keys (10 sites); TWO other claims on this line still open
 
@@ -296,7 +314,10 @@ three findings were one stale snippet. Deleted and replaced with a citation.
 
 **`.claude/skills/jmo-test-fabricator/references/coverage-strategies.md`**
 
-- [ ] **Minor** L26: Correct the uncovered-line count
+- [x] **Minor** L26: Correct the uncovered-line count
+      -> FIXED: and a second inconsistency the finding missed - the Miss
+      column said 15 while the ranges summed to 10. Ranges are now
+      18-22, 35-39, 45-49 = 15, with 27/42 giving the stated 64%.
 
 ## Chunk D - jmo-ci-debugger  (0/13)
 
