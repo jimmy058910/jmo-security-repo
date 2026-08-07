@@ -66,19 +66,35 @@ def test_scan(tmp_path):
     assert result.returncode == 0
 ```
 
-**Solution**: Always set timeout in subprocess.run() and pytest.mark.
+**Solution**: Set `timeout=` on `subprocess.run()`. If the test legitimately
+needs longer than the suite's 120s default, raise it with
+`@pytest.mark.timeout()`.
 
 ```python
 # SAFE: Timeout protection
-@pytest.mark.slow
+@pytest.mark.timeout(300)  # raises pytest's 120s default; THIS is the timeout
+@pytest.mark.slow          # SELECTION only - see below
 def test_scan(tmp_path):
     result = subprocess.run(
         ["jmo", "scan", "--repo", str(repo)],
         capture_output=True,
-        timeout=120  # 2-minute safety timeout
+        timeout=120  # kills the child process; pytest cannot do this for you
     )
     assert result.returncode in [0, 1]
 ```
+
+> **`@pytest.mark.slow` is not timeout protection.** It selects tests, nothing
+> more, and in this repository it does not even mean "slow" — it means **"runs
+> in the PR shards but not the quick coverage gate"**, which is the only job
+> that adds `not slow`. `tests/integration/test_scan_accounting.py` picked it
+> over `requires_tools` for exactly that reason, and says so in its module
+> docstring. Marking a test `slow` changes *where it runs*; it never bounds how
+> long it runs.
+>
+> Order the two protections by what they can kill: `subprocess.run(timeout=)`
+> is the only one that stops the child process. pytest-timeout uses the thread
+> method on Windows, which can kill the test thread and leave the subprocess
+> orphaned — see `.claude/rules/testing.cross-platform.rules.md`.
 
 ## Mistake 4: Platform-Specific Assertions
 
