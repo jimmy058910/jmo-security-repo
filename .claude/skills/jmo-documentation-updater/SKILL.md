@@ -128,16 +128,34 @@ Anchors are derived from the heading text: lowercased, spaces to hyphens,
 punctuation dropped. Derive them from the **actual** heading — a plausible
 guess is how you get a link that resolves to the top of the page instead:
 
+Both examples below were checked against the real headings before being written
+here, which is the whole point:
+
 ```markdown
-# docs/DOCKER_README.md's heading is "## Quick Start (Absolute Beginners)"
+# docs/DOCKER_README.md heading: "## Quick Start (Absolute Beginners)"
+# -> parentheses dropped, spaces become hyphens
 [Docker quick start](../../../docs/DOCKER_README.md#quick-start-absolute-beginners)
 
-# "AWS Account Scanning (v0.7.0)" -> #aws-account-scanning-v070
-[AWS Scanning](../../../docs/USER_GUIDE.md#aws-account-scanning-v070)
+# docs/USER_GUIDE.md heading: "## Tool Management"
+[Tool management](../../../docs/USER_GUIDE.md#tool-management)
 ```
 
-> `check_doc_links.py` validates that the **file** exists; it does not verify
-> the fragment. A wrong anchor is silent, so check the heading yourself.
+Confirm the heading exists before writing the link:
+
+```bash
+grep -nE '^#{1,6} ' docs/USER_GUIDE.md | grep -i 'tool management'
+```
+
+> **`check_doc_links.py` validates the file, not the `#fragment`.** A wrong
+> anchor is silent — it degrades to "jump to the top of the page", which looks
+> like a working link.
+>
+> This is not hypothetical. The previous version of this very section cited
+> `docs/USER_GUIDE.md#aws-account-scanning-v070`; that file has **no AWS heading
+> at all**. A fabricated anchor sat inside the passage warning against
+> fabricated anchors, and CI was green. Repo-wide there are **28** such links
+> across 328 fragment links — so treat a `#fragment` as unverified until you
+> have grepped for its heading.
 
 ### Bi-Directional Links
 
