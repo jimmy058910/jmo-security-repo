@@ -240,6 +240,37 @@ The split is mechanical rather than remembered. `.gitignore` carries an explicit
 
 > Agent teams require `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in settings.json (experimental).
 
+### Optional: local knowledge graph (not shipped)
+
+Unlike everything else in this section, this is **maintainer-local and absent
+from a clone**. It is recorded here because a session that has it should use it,
+and because the Windows setup has a trap worth writing down once.
+
+[Graphify](https://github.com/Graphify-Labs/graphify) (`pip`/`uv` package
+`graphifyy`) indexes the repo into a queryable graph under `graphify-out/`,
+which is gitignored. Deterministic AST parsing — no LLM, no API cost. A git
+`post-commit` hook rebuilds it incrementally.
+
+| Task | Command |
+|---|---|
+| Refresh after many commits | `graphify update .` |
+| Ask a structural question | `graphify query "what connects X to Y?"` |
+| Explain one symbol | `graphify explain "store_scan"` |
+| Path between two symbols | `graphify path "A" "B"` |
+
+Check freshness with the graph's own `built_at_commit` key, **not** the file
+mtime — clustering rewrites `graph.json` without re-extracting, so mtime reads
+fresher than the content is.
+
+**Windows trap.** The hook probes for an interpreter and gives up silently
+(`could not locate a Python with graphify installed`) when every probe fails.
+Under Git Bash all four can fail at once: a hook installed from WSL pins a
+`/home/...` path; MSYS strips `.exe` from `command -v graphify`, so the launcher
+is read as a shebang and rejected; and `graphify` lives in a uv-tool venv the
+default `python` cannot import. The fix is one gitignored file —
+`graphify-out/.graphify_python` containing the absolute interpreter path. The
+MCP server needs the extra: `uv tool install "graphifyy[mcp]"`.
+
 ## Architecture Overview
 
 ### Two-Phase Workflow

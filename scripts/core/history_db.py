@@ -103,7 +103,12 @@ CREATE TABLE IF NOT EXISTS scans (
     duration_seconds REAL,
 
     -- Constraints
-    CHECK (profile IN ('fast', 'balanced', 'deep')),
+    -- NOTE: `profile` is deliberately unconstrained here. A SQL CHECK can only
+    -- enumerate a fixed list, and the real rule is "a profile that exists in
+    -- tool_registry.PROFILE_TOOLS or in the user's jmo.yml `profiles:` dict" --
+    -- neither of which SQL can see. The previous enumeration predated the
+    -- `slim` profile and silently rejected every slim scan (#721). Validation
+    -- lives in store_scan(), against the registry, so it cannot drift again.
     CHECK (target_type IN ('repo', 'image', 'iac', 'url', 'gitlab', 'k8s', 'unknown'))
 );
 """
@@ -784,6 +789,30 @@ def _enforce_database_permissions(db_path: Path) -> None:
         logger.warning(f"Failed to set database permissions: {e}")
 
 
+def get_known_profiles() -> set[str]:
+    """Profile names that may legitimately appear in history.
+
+    Derived at call time from the tool registry plus any profile the user
+    defined under ``profiles:`` in ``jmo.yml`` (a free-form dict). Never
+    hardcode the list: the previous enumeration of fast/balanced/deep predated
+    the ``slim`` profile and silently discarded every slim scan (#721).
+    """
+    from scripts.core.tool_registry import PROFILE_TOOLS
+
+    known = set(PROFILE_TOOLS)
+
+    try:
+        from scripts.core.config import load_config
+
+        known |= set(load_config("jmo.yml").profiles)
+    except (OSError, ValueError, TypeError, KeyError) as e:
+        # No readable jmo.yml on this path (common in tests and library use).
+        # The registry alone is a correct, if narrower, answer.
+        logger.debug(f"Could not read profiles from jmo.yml: {e}")
+
+    return known
+
+
 def store_scan(
     results_dir: Path,
     profile: str,
@@ -803,7 +832,7 @@ def store_scan(
 
     Args:
         results_dir: Path to scan results directory (contains findings.json)
-        profile: Profile name ("fast" | "balanced" | "deep")
+        profile: Profile name; any key of PROFILE_TOOLS or a jmo.yml profile
         tools: List of tool names that were run
         db_path: Path to SQLite database file
         commit_hash: Git commit hash (optional, auto-detected if None)
@@ -838,8 +867,12 @@ def store_scan(
     if not findings_json.exists():
         raise FileNotFoundError(f"findings.json not found: {findings_json}")
 
-    if profile not in ("fast", "balanced", "deep"):
-        raise ValueError(f"Invalid profile: {profile}")
+    known_profiles = get_known_profiles()
+    if profile not in known_profiles:
+        raise ValueError(
+            f"Unknown profile: {profile!r}. "
+            f"Known profiles: {', '.join(sorted(known_profiles))}"
+        )
 
     # Validate encryption prerequisites (Phase 6 Step 6.2)
     if encrypt_findings:

@@ -72,6 +72,8 @@ class DeploymentFlow(BaseWizardFlow):
 
         profile = self.prompter.prompt_choice(
             "Select scan profile:",
+            # curated-profile-subset: a deployment gate needs real coverage, so
+            # `fast` is deliberately not offered here.
             choices=["balanced", "deep"],
             default=profile_default,
         )
