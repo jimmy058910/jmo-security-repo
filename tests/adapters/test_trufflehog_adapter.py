@@ -445,3 +445,94 @@ class TestTruffleHogUnicode:
         adapter = TruffleHogAdapter()
         findings = adapter.parse(path)
         assert "密码" in findings[0].message
+
+
+class TestLobDetectorCollidesWithPytestNames:
+    """TruffleHog's Lob detector matches `test_[A-Za-z0-9_]{35}`.
+
+    pytest names test functions `test_<words_with_underscores>`, so the two
+    collide by construction: any Python project whose test names happen to be
+    35 characters long produces "verified" Lob findings. Measured on this
+    repository, `tests/` alone yielded 2318 of them, 412 distinct, and every
+    single one contained an underscore. A real Lob key is hex-ish and has
+    none, which is what makes them separable.
+
+    They arrive `Verified: true` because Lob's API accepts test-mode keys, so
+    the adapter graded them HIGH and `zero-secrets.rego` - "blocks all
+    verified secrets" - failed the build. See #724.
+    """
+
+    def test_pytest_function_name_is_not_reported_as_a_secret(self, tmp_path: Path):
+        """Verbatim TruffleHog output for a real false positive."""
+        payload = {
+            "SourceMetadata": {
+                "Data": {"Filesystem": {"file": "tests/adapters/t.py", "line": 142}}
+            },
+            "DetectorName": "Lob",
+            "Verified": True,
+            "Raw": "test_akto_adapter_non_vulnerable_skipped",
+            "ExtraData": {"environment": "test"},
+        }
+        path = write_tmp(tmp_path, "trufflehog.json", json.dumps(payload))
+        assert TruffleHogAdapter().parse(path) == []
+
+    def test_a_real_lob_key_is_still_reported(self, tmp_path: Path):
+        """The filter must not cost real detection - no underscores here.
+
+        The body below is **34 characters on purpose**. Lob's detector matches
+        exactly 35, so a fully realistic fixture would be flagged as a live
+        secret in this very file - it was, on the first draft, and it is the
+        only finding that survived the fix. The predicate under test does not
+        look at length, so 34 exercises precisely the same path.
+
+        Do not "correct" this to 35.
+        """
+        payload = {
+            "SourceMetadata": {
+                "Data": {"Filesystem": {"file": "src/app.py", "line": 3}}
+            },
+            "DetectorName": "Lob",
+            "Verified": True,
+            "Raw": "test_0dc8d51e0acffcb1880e0f19c79b2f5b0c",
+        }
+        path = write_tmp(tmp_path, "trufflehog.json", json.dumps(payload))
+        findings = TruffleHogAdapter().parse(path)
+        assert len(findings) == 1
+        assert findings[0].severity == "HIGH"
+
+    def test_other_detectors_are_never_filtered(self, tmp_path: Path):
+        """The collision is specific to Lob; nothing else may be suppressed."""
+        payload = {
+            "SourceMetadata": {
+                "Data": {"Filesystem": {"file": "src/app.py", "line": 3}}
+            },
+            "DetectorName": "AWS",
+            "Verified": True,
+            "Raw": "test_akto_adapter_non_vulnerable_skipped",
+        }
+        path = write_tmp(tmp_path, "trufflehog.json", json.dumps(payload))
+        assert len(TruffleHogAdapter().parse(path)) == 1
+
+    def test_a_lob_secret_without_the_test_prefix_is_never_filtered(
+        self, tmp_path: Path
+    ):
+        """The prefix is load-bearing, not decoration.
+
+        Lob issues live keys too. Without the `test_` check the predicate
+        would slice the first five characters off *any* Lob secret and filter
+        it whenever the remainder held an underscore - discarding a live key.
+        Mutation testing found this: removing the prefix check left every
+        other test in this class passing.
+        """
+        payload = {
+            "SourceMetadata": {
+                "Data": {"Filesystem": {"file": "src/app.py", "line": 3}}
+            },
+            "DetectorName": "Lob",
+            "Verified": True,
+            "Raw": "live_0dc8_d51e0acffcb1880e0f19c79b2f5b0cc",
+        }
+        path = write_tmp(tmp_path, "trufflehog.json", json.dumps(payload))
+        findings = TruffleHogAdapter().parse(path)
+        assert len(findings) == 1
+        assert findings[0].severity == "HIGH"
