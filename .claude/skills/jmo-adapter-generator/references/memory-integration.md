@@ -79,7 +79,11 @@ print(f"[memory] Stored {tool} patterns in .jmo/memory/adapters/{tool}.json")
 
 - **Plugin Metadata Caching:** Store exit codes, output formats in memory
 - **Test Fixture Library:** Reuse fixtures across similar tools
-- **Compliance Auto-Enrichment:** Pre-populate compliance fields
+- **Compliance Mapping Inputs:** Cache the `ruleId` -> CWE correspondences a
+  tool emits. Adapters do not populate `compliance`; `normalize_and_report.py`
+  calls `enrich_findings_with_compliance()` once over the deduplicated set
+  (`scripts/core/normalize_and_report.py:234`), so what memory saves here is
+  the research, not the enrichment.
 - **Time Savings:** 42% faster than v2.1.0 (4.3h to 2.5h)
 
 ---

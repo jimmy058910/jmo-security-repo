@@ -172,9 +172,10 @@ def test_<tool>_empty_and_malformed(tmp_path: Path):
 def test_<tool>_v110_autofix_remediation(tmp_path: Path):
     """Test v1.1.0 autofix remediation structure."""
 
-# Test Category 4: Schema v1.2.0 Compliance
-def test_<tool>_compliance_enrichment(tmp_path: Path):
-    """Test that findings are enriched with compliance mappings."""
+# Test Category 4: Schema v1.2.0 metadata
+def test_<tool>_schema_and_tool_metadata(tmp_path: Path):
+    """Assert schemaVersion and tool metadata. NOT framework mappings -
+    an adapter does not produce those; see the note under the summary."""
 
 # Test Category 5: Tool-Specific Edge Cases
 def test_<tool>_alternative_severity_field(tmp_path: Path):
@@ -199,8 +200,18 @@ See [detailed required test functions](references/required-test-functions.md) fo
 | 1: Basic Valid Input | Happy path parsing | Field mapping, schema version, fingerprint, raw preservation |
 | 2: Error Handling | Resilience to bad input | Empty file, malformed JSON, missing file, non-dict items, Unicode |
 | 3: v1.1.0 Features | Risk/remediation/context | Autofix dict, string remediation, CWE metadata, likelihood/impact, code context |
-| 4: v1.2.0 Compliance | Compliance enrichment | 6 framework mappings, multiple CWEs, no-CWE graceful handling |
+| 4: v1.2.0 metadata | What `load()` injects | `schemaVersion == "1.2.0"`, tool name/version, remediation text, any CWE the tool itself emits |
 | 5: Tool-Specific | Output format variations | Alt field names, missing optional fields, tags, NDJSON, nested arrays |
+
+> **Do not assert framework mappings in an adapter test.** OWASP/CIS/NIST/PCI
+> mappings are not produced by adapters. `normalize_and_report.py` calls
+> `enrich_findings_with_compliance()` once over the deduplicated set
+> (`scripts/core/normalize_and_report.py:234`), so a `parse()` result never
+> carries them and an adapter-level assertion would either fail or assert
+> nothing. Test the mapping itself at the reporting boundary. The repository's
+> own `TestBanditCompliance`
+> (`tests/adapters/test_bandit_adapter.py:365`) shows the real shape: despite
+> the name it asserts `schemaVersion`, tool name and remediation text.
 
 ---
 
