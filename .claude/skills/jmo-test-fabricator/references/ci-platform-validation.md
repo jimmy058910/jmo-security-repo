@@ -30,10 +30,17 @@ stages:
   artifacts:
     when: always
     paths:
+      # SARIF is published as a plain artifact, downloadable from the job.
+      # It is deliberately NOT under `reports:` - see below.
       - results/
-    reports:
-      sast: results/summaries/findings.sarif
     expire_in: 30 days
+
+  # NOTE: do not write `reports: sast: results/summaries/findings.sarif`.
+  # GitLab's `reports.sast` expects GitLab's own SAST report schema, not SARIF,
+  # and silently produces an empty Security tab when handed the wrong format -
+  # the pipeline stays green while reporting nothing. Either convert to the
+  # GitLab SAST schema first, or publish SARIF as an ordinary artifact as
+  # above and gate the build on `jmo report --fail-on` instead.
 
 security:scan:
   extends: .jmo_scan_template

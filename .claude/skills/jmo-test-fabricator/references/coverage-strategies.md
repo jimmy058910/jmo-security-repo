@@ -274,7 +274,8 @@ pytest tests/adapters/test_<tool>_adapter.py \
 - **Error message formatting** -- Specific wording of exceptions
 - **Unreachable defensive code** -- `if x is None` when x is always set
 - **OS-specific branches** -- Windows vs Linux paths (test on Linux)
-- **Version compatibility shims** -- Python 3.8 vs 3.12 differences
+- **Version compatibility shims** -- for a dependency that changed API, not
+  for Python itself: this project requires 3.12+
 
 ### Unacceptable Missing Coverage
 

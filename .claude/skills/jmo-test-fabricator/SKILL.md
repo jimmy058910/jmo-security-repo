@@ -76,7 +76,9 @@ Generate comprehensive pytest test suites for JMo Security with fabricated fixtu
    If an adapter test needs a timeout at all, it is doing something an adapter
    test should not
 6. **Test actual behavior, not ideal behavior** -- Test what the code does now, not what it should do
-7. **Python 3.8 compatibility required** -- No `|` union syntax, use `Optional[T]` and `Union[T1, T2]`
+7. **Python 3.12+** -- `pyproject.toml` sets `requires-python = ">=3.12"` and
+   every CI job pins 3.12. Use `X | None` and lowercase generics, matching
+   `scripts/core/`; there is no 3.8 to be compatible with
 8. **Unicode handling is mandatory** -- All text-processing modules must handle emoji, CJK, Cyrillic
 9. **Read the module first** -- Always read the actual module code before writing tests
 10. **Fix all technical debt immediately** -- When you find linting issues or failing tests, fix ALL of them
