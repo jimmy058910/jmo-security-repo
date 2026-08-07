@@ -93,7 +93,7 @@ follow are in [.claude/PERSONA_GUIDELINES.md](../PERSONA_GUIDELINES.md).
 | [Target Type Expander](jmo-target-type-expander/SKILL.md) | `/jmo-target-type-expander` | Add new scan target types |
 | [Test Fabricator](jmo-test-fabricator/SKILL.md) | `/jmo-test-fabricator` | Generate pytest test suites (85%+ coverage) |
 | [Compliance Mapper](jmo-compliance-mapper/SKILL.md) | `/jmo-compliance-mapper` | Map findings to 6 compliance frameworks |
-| [Profile Optimizer](jmo-profile-optimizer/SKILL.md) | `/jmo-profile-optimizer` | Optimize scan profile performance |
+| [Profile Optimizer](jmo-profile-optimizer/SKILL.md) | `/jmo-profile-optimizer` | Tune profile config from report-phase timings |
 | [CI Debugger](jmo-ci-debugger/SKILL.md) | `/jmo-ci-debugger` | Diagnose GitHub Actions CI failures |
 | [Documentation Updater](jmo-documentation-updater/SKILL.md) | `/jmo-documentation-updater` | Keep docs synchronized with code |
 | [Systematic Debugging](jmo-systematic-debugging/SKILL.md) | `/jmo-systematic-debugging` | Four-phase debugging framework |
@@ -123,7 +123,7 @@ These workflows describe how skills compose together for end-to-end features.
 
 ### Performance Investigation
 
-1. `/jmo-profile-optimizer` — Analyze timings, identify bottlenecks
+1. `/jmo-profile-optimizer` — Analyze report-phase timings, identify parse bottlenecks
 2. `/jmo-ci-debugger` — Fix CI timeout configuration
 3. `/jmo-documentation-updater` — Document tuning in USER_GUIDE.md
 

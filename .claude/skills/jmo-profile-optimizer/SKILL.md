@@ -1,6 +1,6 @@
 ---
 name: jmo-profile-optimizer
-description: Optimize scan profile performance through timing analysis, tool configuration tuning, and memory-integrated baselines. Use when scans are slow or profiles need rebalancing.
+description: Analyze report-phase timing data from `jmo report --profile` and tune profile configuration (threads, timeouts, per-tool flags) against measured evidence. Use when report aggregation is slow or a profile needs rebalancing.
 argument-hint: <profile-name>
 user-invocable: true
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash
@@ -17,18 +17,26 @@ Optimize profile: **$ARGUMENTS**
 
 ## Purpose
 
-**Approach:** Measure before optimizing. Every recommendation must cite actual timing data.
+Measure before optimizing. Every recommendation must cite actual timing data.
 
----
+### What this skill can and cannot measure
 
-## What's New in v2.1.0
+`jmo report --profile` writes `<results-dir>/summaries/timings.json`, which
+records the **report phase**: how long JMo took to read and normalize each tool's
+output. It does **not** record how long the tools took to run.
 
-### Memory Integration Features
+| Question | Answerable | Source |
+|---|---|---|
+| Which adapter costs the most parse time? | yes | `timings.json` `jobs[]` |
+| How many findings does each tool produce? | yes | `timings.json` `jobs[].count` |
+| Is the report worker count right? | yes | `recommended_threads` vs `meta.max_workers` |
+| How long did the whole scan take? | yes | `jmo history list` / `jmo history show` |
+| How long did **one tool** take to run? | **no** | not recorded anywhere |
+| What is a tool's timeout or failure rate? | **no** | not recorded anywhere |
 
-1. **Query-Before-Analyze Pattern** -- Check `.jmo/memory/profiles/{profile}.json` for historical baselines; saves 15-25 min if baseline exists.
-2. **Store-After-Optimization Pattern** -- Store optimization results and tool performance metrics; detect regressions across versions.
-3. **Tool Performance History** -- Track avg duration, timeout rate, failure rate per tool; identify trending issues.
-4. **Profile Tuning Recommendations** -- Auto-suggest thread count and timeout adjustments based on P95 durations.
+If the question is "why is the scan slow", this skill can only narrow it to
+whole-scan durations from history plus configured timeouts. Per-tool scan
+timing needs instrumentation that does not exist yet.
 
 ---
 
@@ -36,136 +44,144 @@ Optimize profile: **$ARGUMENTS**
 
 ### Natural Language Triggers
 
-**Direct Actions:**
+**Direct actions:**
 
-- "Optimize {profile} profile performance"
+- "Optimize the {profile} profile configuration"
 - "Analyze timings.json and recommend improvements"
-- "Why are scans so slow?"
+- "Which adapter is slowest to parse?"
 
-**Problem Statements:**
+**Problem statements:**
 
-- "Scans are taking too long"
-- "Too many timeouts in {profile} profile"
-- "{tool} keeps timing out"
+- "Report generation is taking too long"
+- "Aggregation is slow on large result sets"
+- "{tool} produces too many findings"
 
-**Context Clues:**
+**Context clues:**
 
-- Mentions of slow scans, timeouts, performance issues
-- References to timings.json or profiling data
-- Questions about thread counts or timeout configuration
-
----
-
-## Skill Workflow (7 Phases)
-
-### Phase 0: Memory Query
-
-Load historical performance baselines from `.jmo/memory/profiles/{profile}.json`. If a baseline exists, display stored metrics (avg durations, timeout rates) for comparison. If no baseline exists, establish a new one.
-
-> Full implementation: [references/memory-integration.md](references/memory-integration.md#phase-0-memory-query---loading-historical-baselines)
+- References to `timings.json`, aggregation time, or worker/thread counts
+- Questions about `per_tool` timeout or flag configuration in `jmo.yml`
 
 ---
 
-### Phase 1: Load and Analyze timings.json
+## Skill Workflow (6 Phases)
 
-Parse `results/summaries/timings.json` from the most recent scan. Extract total duration, per-tool metrics, and identify bottlenecks (>50% of total time), timeout issues (>10% rate), and failure issues (>5% rate).
+### Phase 0: Validate the profile name, then query memory
 
-> Full schema and analysis code: [references/optimization-patterns.md](references/optimization-patterns.md#phase-1-load-and-analyze-timingsjson)
+`$ARGUMENTS` is untrusted input that becomes part of a file path. **Validate it
+before any file tool call.** Reject anything containing path separators or `..`,
+then confirm it names a profile that actually exists — built-in profiles come
+from `scripts/core/tool_registry.py:PROFILE_TOOLS`, and users may define more
+under `profiles:` in `jmo.yml`.
 
----
+Only after validation, load `.jmo/memory/profiles/{profile}.json`. A missing file
+is a cache miss, not an error — `.jmo/` is gitignored and absent from a fresh
+clone.
 
-### Phase 2: Compare with Memory Baseline
-
-Detect performance regressions by comparing current metrics against stored baselines. Flags regressions when total duration increases >10% or per-tool timeout rates increase >5%. Also identifies improvements.
-
-> Full comparison logic and example output: [references/memory-integration.md](references/memory-integration.md#phase-2-compare-with-memory-baseline)
-
----
-
-### Phase 3: Identify Bottlenecks
-
-Find tools consuming >30% of total scan time. Sort by percentage descending. For each bottleneck, report total duration, execution count, avg duration, and timeout rate.
-
-> Full implementation: [references/optimization-patterns.md](references/optimization-patterns.md#phase-3-identify-bottlenecks)
+> Validation helper and query implementation: [references/memory-integration.md](references/memory-integration.md#profile-name-validation-required-before-any-memory-path)
 
 ---
 
-### Phase 4: Analyze Timeout Patterns
+### Phase 1: Load and analyze timings.json
 
-For each tool with timeouts, calculate timeout rate and generate severity-rated recommendations. High severity (>20% rate): recommend 1.5x max observed duration as new timeout. Medium severity (5-20%): recommend monitoring and retries.
+Parse `<results-dir>/summaries/timings.json`. Group the flat `jobs` list by tool
+and compute, per tool: total parse seconds, parse count, findings produced, mean,
+max, and real percentiles from the observed samples.
 
-> Full implementation and examples: [references/optimization-patterns.md](references/optimization-patterns.md#phase-4-analyze-timeout-patterns)
-
----
-
-### Phase 5: Generate Optimization Recommendations
-
-Produce prioritized recommendations in three tiers:
-
-- **P1 Immediate:** Fix high timeout rates, reduce thread contention
-- **P2 Short-Term:** Optimize tool configurations (exclude patterns, caching)
-- **P3 Long-Term:** Profile restructuring for scans exceeding 30 minutes
-
-Each recommendation includes config changes (ready-to-paste YAML) and expected impact estimates.
-
-> Full recommendation engine: [references/optimization-patterns.md](references/optimization-patterns.md#phase-5-generate-optimization-recommendations)
+> Schema and analysis code: [references/optimization-patterns.md](references/optimization-patterns.md#phase-1-load-and-analyze-timingsjson)
 
 ---
 
-### Phase 6: Store Memory
+### Phase 2: Compare with the memory baseline
 
-Persist optimization results as updated baseline in `.jmo/memory/profiles/{profile}.json`. Stores per-tool percentiles (p50/p95/p99), timeout/failure/success rates, recommended config, and optimization count.
+Compare the analyzed timings against the stored baseline. Flags a regression when
+cumulative parse time rises more than 10%, or a tool's mean parse duration rises
+more than 15%. Zero or missing baselines are reported as `no_sample` rather than
+divided by.
 
-> Full storage implementation: [references/memory-integration.md](references/memory-integration.md#phase-6-store-optimization-memory)
-
----
-
-### Phase 7: Generate Optimization Report
-
-Output a comprehensive `OPTIMIZATION_REPORT.md` with sections: baseline comparison table, bottleneck analysis, prioritized recommendations with YAML config snippets, and a next-steps checklist.
-
-> Full report template and example: [references/output-report-format.md](references/output-report-format.md)
+> Comparison logic and example output: [references/memory-integration.md](references/memory-integration.md#phase-2-compare-with-the-memory-baseline)
 
 ---
 
-## Time Savings Comparison
+### Phase 3: Identify bottlenecks
 
-### v2.0.0 (Non-Memory)
+Find tools above `BOTTLENECK_THRESHOLD_PCT` (**30%**) of cumulative parse time,
+sorted descending. The threshold is defined once, in
+`references/optimization-patterns.md`, and every phase uses that single value.
 
-| Phase | Duration |
-|-------|----------|
-| Load timings (Phase 1) | 5 min |
-| Analyze performance (Phase 2-4) | 30 min |
-| Generate recommendations (Phase 5) | 20 min |
-| Write report (Phase 7) | 10 min |
-| **Total** | **65 min** |
+Percentages are shares of **cumulative parse time**, not of wall clock — jobs run
+in parallel across `meta.max_workers`, so shares of wall clock would not sum to
+100%.
 
-### v2.1.0 (Memory-Integrated)
-
-| Phase | Duration | Savings |
-|-------|----------|---------|
-| Memory query (Phase 0) | 2 min | - |
-| Load timings (Phase 1) | 5 min | - |
-| Compare baseline (Phase 2) | **5 min** (automated) | **-25 min** |
-| Analyze bottlenecks (Phase 3) | 5 min | - |
-| Analyze timeouts (Phase 4) | 5 min | - |
-| Generate recommendations (Phase 5) | 10 min (data-driven) | -10 min |
-| Store memory (Phase 6) | 2 min | - |
-| Write report (Phase 7) | 5 min (template) | -5 min |
-| **Total** | **39 min** | **-40 min (40%)** |
-
-**Second Optimization (Memory Hit):**
-- Baseline comparison: Instant (memory lookup)
-- Regression detection: Automated
-- **Total: 25 min (62% savings)**
+> Implementation: [references/optimization-patterns.md](references/optimization-patterns.md#phase-3-identify-bottlenecks)
 
 ---
 
-## Tool-Specific Optimization Patterns (v0.6.2)
+### Phase 4: Generate optimization recommendations
 
-Nuclei and GitLab scanner optimization strategies including timeout sweet spots, rate limiting, container discovery impact, and recommended per-profile settings.
+Produce prioritized recommendations in three tiers, each citing the measurement
+that produced it:
 
-> Full tool-specific patterns: [references/optimization-patterns.md](references/optimization-patterns.md#v062-tool-specific-optimization-patterns)
+- **P1 Immediate:** correct the report worker count when it disagrees with
+  `recommended_threads`
+- **P2 Short-term:** profile the parse path of any adapter over the bottleneck
+  threshold
+- **P3 Long-term:** reduce finding volume at source for tools whose output
+  dominates parse and deduplication cost
+
+> Recommendation engine: [references/optimization-patterns.md](references/optimization-patterns.md#phase-5-generate-optimization-recommendations)
+
+**Timeout and failure-rate analysis is not part of this skill** — JMo records
+neither. See [the Phase 4 note](references/optimization-patterns.md#phase-4-timeout-and-failure-analysis--no-data-source)
+before adding recommendations about timeouts.
+
+---
+
+### Phase 5: Store memory
+
+Persist the analyzed timings as the profile's updated baseline in
+`.jmo/memory/profiles/{profile}.json`, incrementing `optimization_count` from the
+previously stored record.
+
+> Storage implementation: [references/memory-integration.md](references/memory-integration.md#phase-6-store-the-updated-baseline)
+
+---
+
+### Phase 6: Generate the optimization report
+
+Write `OPTIMIZATION_REPORT.md`: baseline comparison table, bottleneck analysis,
+prioritized recommendations with ready-to-paste `jmo.yml` snippets, and a
+next-steps checklist.
+
+> Report template: [references/output-report-format.md](references/output-report-format.md)
+
+---
+
+## Producing the input
+
+```bash
+# Profile selection is --profile-name; --profile is the report timing flag.
+jmo scan --repos-dir ~/repos --profile-name balanced --results-dir ./results
+jmo report ./results --profile
+
+cat results/summaries/timings.json
+```
+
+Whole-scan wall-clock durations come from the history database, not from
+`timings.json`:
+
+```bash
+jmo history list --limit 10
+jmo history show <scan-id>
+```
+
+---
+
+## Tool-Specific Optimization Patterns
+
+Per-tool `jmo.yml` overrides for Nuclei and GitLab targets, including timeout
+guidance and the container-discovery cost of GitLab scanning.
+
+> Full patterns: [references/optimization-patterns.md](references/optimization-patterns.md#tool-specific-optimization-patterns)
 
 ---
 
@@ -173,6 +189,6 @@ Nuclei and GitLab scanner optimization strategies including timeout sweet spots,
 
 | File | Contents |
 |------|----------|
-| [references/memory-integration.md](references/memory-integration.md) | Memory query/store code, baseline comparison logic, upgrade path |
-| [references/optimization-patterns.md](references/optimization-patterns.md) | timings.json schema, bottleneck/timeout analysis, recommendation engine, tool-specific tuning |
+| [references/memory-integration.md](references/memory-integration.md) | Profile-name validation, memory query/store, baseline comparison |
+| [references/optimization-patterns.md](references/optimization-patterns.md) | timings.json schema, bottleneck analysis, recommendation engine, per-tool tuning |
 | [references/output-report-format.md](references/output-report-format.md) | OPTIMIZATION_REPORT.md template and section explanations |

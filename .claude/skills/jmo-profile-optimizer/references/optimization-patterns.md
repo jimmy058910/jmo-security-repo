@@ -1,460 +1,385 @@
 # Optimization Patterns Reference
 
-Detailed code implementations for bottleneck identification, timeout analysis, recommendation generation, and tool-specific tuning strategies.
+Code implementations for the report-phase profiling that `jmo report --profile`
+makes available: per-adapter parse cost, findings volume, and worker-count
+tuning.
+
+> **Read this before using any code below.**
+>
+> `timings.json` is written by the **report** phase, not the scan phase.
+> `aggregate_seconds` wraps `gather_results()`
+> (`scripts/cli/report_orchestrator.py:106-108`), and each `jobs[]` entry times a
+> single `adapter.parse(path)` call
+> (`scripts/core/normalize_and_report.py:305-318`). The file measures how long
+> JMo took to **read and normalize tool output** — not how long the tools took to
+> **run**.
+>
+> **JMo records no per-tool scan duration, timeout count, or failure count
+> anywhere.** `history_db` stores a single `duration_seconds` per *scan*
+> (`scripts/core/history_db.py:103`) with no tool breakdown. Do not infer tool
+> runtime, timeout rate, or failure rate from this file — see
+> [Phase 4](#phase-4-timeout-and-failure-analysis--no-data-source).
 
 ---
 
 ## Phase 1: Load and Analyze timings.json
 
-### timings.json Schema
+### timings.json schema
+
+Written to `<results-dir>/summaries/timings.json` by
+`scripts/cli/report_orchestrator.py:344-352` when `jmo report --profile` is used.
+**Treat that function as the source of truth**; the sample below is illustrative.
 
 ```json
 {
-  "scan_start": "2025-10-21T14:30:00",
-  "scan_end": "2025-10-21T14:50:15",
-  "total_duration_seconds": 1215.3,
-  "profile": "balanced",
-  "threads": 4,
-  "timeout": 600,
-  "targets": {
-    "repositories": 12,
-    "images": 3,
-    "iac_files": 8,
-    "urls": 2
-  },
-  "tools": {
-    "trufflehog": {
-      "executions": 12,
-      "successes": 12,
-      "failures": 0,
-      "timeouts": 0,
-      "total_duration_seconds": 542.4,
-      "avg_duration_seconds": 45.2,
-      "min_duration_seconds": 12.3,
-      "max_duration_seconds": 120.5
-    },
-    "trivy": {
-      "executions": 23,
-      "successes": 19,
-      "failures": 1,
-      "timeouts": 3,
-      "total_duration_seconds": 4151.5,
-      "avg_duration_seconds": 180.5,
-      "min_duration_seconds": 45.2,
-      "max_duration_seconds": 600.0
-    }
-  }
+  "aggregate_seconds": 3.402,
+  "recommended_threads": 8,
+  "jobs": [
+    {"tool": "trivy", "path": "results/individual-repos/acme/trivy.json", "seconds": 0.314772, "count": 412},
+    {"tool": "trivy", "path": "results/individual-repos/beta/trivy.json", "seconds": 0.288104, "count": 377},
+    {"tool": "semgrep", "path": "results/individual-repos/acme/semgrep.json", "seconds": 0.301988, "count": 96}
+  ],
+  "meta": {"max_workers": 8}
 }
 ```
 
-### Analysis Implementation
+| Key | Type | Meaning |
+|---|---|---|
+| `aggregate_seconds` | float | Wall-clock duration of the whole aggregation pass |
+| `recommended_threads` | int | CPU-derived suggestion, clamped to `profiling_min_threads`..`profiling_max_threads` (`scripts/core/config.py:168-170`) |
+| `jobs` | list | One entry per *(tool, result file)* parsed |
+| `jobs[].tool` | str | Adapter name |
+| `jobs[].path` | str | Result file that was parsed |
+| `jobs[].seconds` | float | Parse duration for that one file |
+| `jobs[].count` | int | Findings produced by that parse |
+| `meta.max_workers` | int | Worker count actually used (`scripts/core/normalize_and_report.py:155`) |
+
+There is **no** `profile`, `total_duration_seconds`, `tools`, `threads`,
+`timeout`, `timeouts`, or `failures` key. `jobs` is a flat list, not a per-tool
+dict — a tool appears once per result file, so a tool with 23 result files
+contributes 23 duration samples. That is what makes real percentiles possible.
+
+### Analysis implementation
 
 ```python
 import json
+import math
+import statistics
+from collections import defaultdict
 from pathlib import Path
 
-def analyze_timings(timings_file: Path) -> dict:
-    """Analyze timings.json and extract performance metrics."""
-    data = json.loads(timings_file.read_text())
+# One threshold for every phase, and for SKILL.md Phase 3. Changing it here
+# changes it everywhere; do not introduce a second value.
+BOTTLENECK_THRESHOLD_PCT = 30.0
 
-    analysis = {
-        "total_duration": data["total_duration_seconds"],
-        "profile": data["profile"],
-        "bottlenecks": [],
-        "timeout_issues": [],
-        "failure_issues": [],
-        "recommendations": []
+
+def load_timings(timings_file: Path) -> dict:
+    """Load timings.json, rejecting shapes this skill cannot analyse."""
+    data = json.loads(timings_file.read_text(encoding="utf-8"))
+    if "jobs" not in data:
+        raise ValueError(
+            f"{timings_file} has no 'jobs' key, so it was not produced by "
+            "'jmo report --profile'. See scripts/cli/report_orchestrator.py:344."
+        )
+    return data
+
+
+def percentiles(samples: list[float]) -> dict:
+    """Real percentiles from observed samples, or None when unsupported.
+
+    A percentile is only reported once the sample is large enough to express it.
+    Deriving p95 from the maximum is not a percentile and produces false latency
+    trends, so this returns None instead of approximating.
+    """
+    n = len(samples)
+    if n == 0:
+        return {"p50_seconds": None, "p95_seconds": None, "p99_seconds": None}
+
+    ordered = sorted(samples)
+
+    def nearest_rank(q: float) -> float:
+        idx = min(n - 1, max(0, math.ceil(q * n) - 1))
+        return round(ordered[idx], 6)
+
+    return {
+        "p50_seconds": nearest_rank(0.50),
+        "p95_seconds": nearest_rank(0.95) if n >= 20 else None,
+        "p99_seconds": nearest_rank(0.99) if n >= 100 else None,
     }
 
-    # Identify bottlenecks (tools taking >50% of total time)
-    total_time = data["total_duration_seconds"]
-    for tool, metrics in data["tools"].items():
-        tool_pct = (metrics["total_duration_seconds"] / total_time) * 100
-        if tool_pct > 50:
-            analysis["bottlenecks"].append({
-                "tool": tool,
-                "duration": metrics["total_duration_seconds"],
-                "percentage": tool_pct
-            })
 
-    # Identify timeout issues
-    for tool, metrics in data["tools"].items():
-        timeout_rate = metrics["timeouts"] / metrics["executions"]
-        if timeout_rate > 0.1:  # >10% timeout rate
-            analysis["timeout_issues"].append({
-                "tool": tool,
-                "timeout_rate": timeout_rate,
-                "timeouts": metrics["timeouts"],
-                "executions": metrics["executions"]
-            })
+def analyze_timings(data: dict) -> dict:
+    """Group jobs by tool and compute per-tool parse cost.
 
-    # Identify failure issues
-    for tool, metrics in data["tools"].items():
-        failure_rate = metrics["failures"] / metrics["executions"]
-        if failure_rate > 0.05:  # >5% failure rate
-            analysis["failure_issues"].append({
-                "tool": tool,
-                "failure_rate": failure_rate,
-                "failures": metrics["failures"],
-                "executions": metrics["executions"]
-            })
+    Returns the *analysed* schema consumed by every later phase and by
+    references/memory-integration.md. It is deliberately distinct from the raw
+    timings.json schema above: raw goes in, analysed comes out, and no phase
+    mixes the two.
+    """
+    samples: dict[str, list[float]] = defaultdict(list)
+    findings: dict[str, int] = defaultdict(int)
 
-    return analysis
+    for job in data.get("jobs", []):
+        samples[job["tool"]].append(job["seconds"])
+        findings[job["tool"]] += job.get("count", 0)
+
+    cumulative = sum(sum(v) for v in samples.values())
+
+    tools = {}
+    for tool, secs in samples.items():
+        total = sum(secs)
+        tools[tool] = {
+            "parse_seconds_total": round(total, 6),
+            "parse_count": len(secs),
+            "findings": findings[tool],
+            "mean_seconds": round(statistics.fmean(secs), 6),
+            "max_seconds": round(max(secs), 6),
+            # Share of CUMULATIVE parse work, not of wall clock. Jobs run in
+            # parallel across meta.max_workers, so per-tool shares of wall clock
+            # are not well defined and would not sum to 100.
+            "share_pct": (total / cumulative * 100) if cumulative else None,
+            **percentiles(secs),
+        }
+
+    return {
+        "aggregate_seconds": data.get("aggregate_seconds"),
+        "cumulative_parse_seconds": round(cumulative, 6),
+        "max_workers": data.get("meta", {}).get("max_workers"),
+        "recommended_threads": data.get("recommended_threads"),
+        "tools": tools,
+    }
 ```
+
+Every division above is guarded: `share_pct` is `None` when nothing was parsed,
+`percentiles` returns `None` entries for an empty sample, and `statistics.fmean`
+and `max` are only reached for a tool that has at least one job. An empty scan
+yields an analysis with `tools == {}` rather than a `ZeroDivisionError`.
 
 ---
 
 ## Phase 3: Identify Bottlenecks
 
 ```python
-def identify_bottlenecks(timings: dict, threshold_pct: float = 30.0) -> list:
-    """
-    Identify tools consuming >threshold% of total scan time.
+def identify_bottlenecks(
+    analysis: dict,
+    threshold_pct: float = BOTTLENECK_THRESHOLD_PCT,
+) -> list:
+    """Tools above `threshold_pct` of cumulative parse time, slowest first."""
+    if not analysis["cumulative_parse_seconds"]:
+        return []  # nothing was parsed; there is nothing to rank
 
-    Args:
-        timings: Parsed timings.json
-        threshold_pct: Percentage threshold (default 30%)
-
-    Returns:
-        List of bottleneck tools with metrics
-    """
-    bottlenecks = []
-    total_duration = timings["total_duration_seconds"]
-
-    for tool, metrics in timings["tools"].items():
-        tool_duration = metrics["total_duration_seconds"]
-        tool_pct = (tool_duration / total_duration) * 100
-
-        if tool_pct > threshold_pct:
-            bottlenecks.append({
-                "tool": tool,
-                "total_duration": tool_duration,
-                "percentage": tool_pct,
-                "executions": metrics["executions"],
-                "avg_duration": metrics["avg_duration_seconds"],
-                "timeouts": metrics["timeouts"],
-                "timeout_rate": metrics["timeouts"] / metrics["executions"]
-            })
-
-    # Sort by percentage (descending)
-    bottlenecks.sort(key=lambda x: x["percentage"], reverse=True)
+    bottlenecks = [
+        {"tool": tool, **metrics}
+        for tool, metrics in analysis["tools"].items()
+        if metrics["share_pct"] is not None
+        and metrics["share_pct"] > threshold_pct
+    ]
+    bottlenecks.sort(key=lambda x: x["share_pct"], reverse=True)
     return bottlenecks
 ```
 
-### Example Output
+### Example output
 
 ```text
-Bottlenecks Detected (>30% of total time):
+Aggregation wall clock: 3.402s   Cumulative parse time: 12.100s   max_workers: 8
 
-1. trivy: 4151.5s (68% of total)
-   - Executions: 23
-   - Avg duration: 180.5s
-   - Timeout rate: 13% (3/23 timeouts)
-   - Recommendation: Reduce timeout from 600s to 300s, or exclude slow scans
+Bottlenecks (>30% of cumulative parse time):
 
-2. semgrep: 450.2s (37% of total)
-   - Executions: 12
-   - Avg duration: 37.5s
-   - Timeout rate: 0%
-   - Recommendation: Consider adding --exclude patterns for vendor code
+1. trivy: 7.240s (59.8% of cumulative parse time)
+   - Parses: 23 result files, 4310 findings
+   - Mean: 0.315s   p50: 0.288s   p95: 0.981s
+
+2. semgrep: 3.890s (32.1% of cumulative parse time)
+   - Parses: 12 result files, 1204 findings
+   - Mean: 0.324s   p50: 0.301s   p95: n/a (12 samples, needs 20)
 ```
+
+Cumulative parse time exceeds wall clock because jobs run in parallel. Shares are
+taken against cumulative parse time, so they sum to at most 100% — reporting them
+against wall clock would let them exceed it.
 
 ---
 
-## Phase 4: Analyze Timeout Patterns
+## Phase 4: Timeout and Failure Analysis — no data source
 
-```python
-def analyze_timeouts(timings: dict) -> dict:
-    """Analyze timeout patterns and recommend fixes."""
-    timeout_analysis = {
-        "tools_with_timeouts": [],
-        "recommendations": []
-    }
+Earlier revisions of this skill documented an `analyze_timeouts()` function
+computing per-tool timeout and failure rates from
+`metrics["timeouts"] / metrics["executions"]`.
 
-    for tool, metrics in timings["tools"].items():
-        timeout_rate = metrics["timeouts"] / metrics["executions"]
+**JMo records none of those values.** `timings.json` carries parse timings only;
+`history_db` stores one `duration_seconds` per *scan*
+(`scripts/core/history_db.py:103`) with no per-tool breakdown; and the scan
+orchestrator reads `config.timeout` to pass to each tool but never records
+whether a tool hit it. The analysis was removed rather than repaired, because
+there is nothing in the codebase to repair it against.
 
-        if timeout_rate > 0:
-            timeout_analysis["tools_with_timeouts"].append({
-                "tool": tool,
-                "timeout_count": metrics["timeouts"],
-                "execution_count": metrics["executions"],
-                "timeout_rate": timeout_rate,
-                "current_timeout": timings["timeout"],
-                "max_duration": metrics["max_duration_seconds"],
-                "avg_duration": metrics["avg_duration_seconds"]
-            })
+Restoring it needs per-tool scan instrumentation, which is a code change, not a
+documentation change.
 
-            # Generate recommendation
-            if timeout_rate > 0.2:  # >20% timeout rate
-                recommended_timeout = int(metrics["max_duration_seconds"] * 1.5)
-                timeout_analysis["recommendations"].append({
-                    "tool": tool,
-                    "severity": "high",
-                    "issue": f"High timeout rate ({timeout_rate*100:.0f}%)",
-                    "current_timeout": timings["timeout"],
-                    "recommended_timeout": recommended_timeout,
-                    "rationale": f"Max duration was {metrics['max_duration_seconds']}s, "
-                                f"recommend {recommended_timeout}s (1.5x max)"
-                })
-            elif timeout_rate > 0.05:  # 5-20% timeout rate
-                timeout_analysis["recommendations"].append({
-                    "tool": tool,
-                    "severity": "medium",
-                    "issue": f"Moderate timeout rate ({timeout_rate*100:.0f}%)",
-                    "recommendation": "Monitor performance, consider increasing timeout or adding retries"
-                })
+What can be stated about timeouts today:
 
-    return timeout_analysis
-```
-
-### Example Output
-
-```text
-Timeout Analysis:
-
-Tools with Timeouts:
-1. trivy: 3/23 timeouts (13%)
-   - Current timeout: 600s
-   - Max duration: 600.0s (hit timeout)
-   - Avg duration: 180.5s
-
-Recommendations:
-  HIGH: trivy - High timeout rate (13%)
-    - Current timeout: 600s
-    - Recommended timeout: 900s (1.5x max observed duration)
-    - Rationale: Max duration was 600s, recommend 900s buffer
-
-  MEDIUM: nuclei - Moderate timeout rate (8%)
-    - Recommendation: Monitor performance, consider adding retries
-```
+- The **configured** value, read from `jmo.yml` (`timeout`, and
+  `per_tool.<tool>.timeout`).
+- Whether a tool produced **no output at all**, from the scan's own accounting.
 
 ---
 
 ## Phase 5: Generate Optimization Recommendations
 
 ```python
-def generate_recommendations(
-    bottlenecks: list,
-    timeout_analysis: dict,
-    baseline_comparison: dict
-) -> dict:
-    """Generate comprehensive optimization recommendations."""
+def generate_recommendations(analysis: dict, bottlenecks: list) -> dict:
+    """Build recommendations from measured report-phase data.
+
+    Every value read here comes from `analysis` (the object returned by
+    analyze_timings) or from `bottlenecks`, so the function has no free
+    variables and no caller has to supply anything it did not compute.
+    """
     recommendations = {
-        "immediate": [],  # P1: High impact, low effort
-        "short_term": [],  # P2: Medium impact, medium effort
-        "long_term": []  # P3: High effort, strategic improvements
+        "immediate": [],  # P1: high impact, low effort
+        "short_term": [],  # P2: medium impact, medium effort
+        "long_term": [],  # P3: strategic
     }
 
-    # Immediate: Fix high timeout rates
-    for rec in timeout_analysis.get("recommendations", []):
-        if rec.get("severity") == "high":
-            recommendations["immediate"].append({
-                "priority": "P1",
-                "category": "timeout",
-                "tool": rec["tool"],
-                "action": f"Increase timeout from {rec['current_timeout']}s to {rec['recommended_timeout']}s",
-                "config_change": f"""
-per_tool:
-  {rec['tool']}:
-    timeout: {rec['recommended_timeout']}
-""",
-                "expected_impact": f"Reduce timeout rate from {rec.get('timeout_rate', 0)*100:.0f}% to <5%"
-            })
-
-    # Immediate: Reduce threads if thread contention detected
-    current_threads = timings.get("threads", 4)
-    if len(bottlenecks) > 0 and current_threads > 2:
+    # P1: worker count. report_orchestrator already derives a recommendation
+    # from CPU count; surface it only when it disagrees with what actually ran.
+    used = analysis.get("max_workers")
+    recommended = analysis.get("recommended_threads")
+    if used and recommended and used != recommended:
         recommendations["immediate"].append({
             "priority": "P1",
             "category": "parallelism",
-            "action": f"Reduce threads from {current_threads} to {current_threads // 2}",
-            "rationale": "High thread count may cause contention for slow tools like Trivy",
-            "config_change": f"""
-profiles:
-  balanced:
-    threads: {current_threads // 2}
-""",
-            "expected_impact": f"Reduce overall scan time by 10-15% (less context switching)"
+            "action": f"Set report threads to {recommended} (this run used {used})",
+            "rationale": (
+                "recommended_threads is derived from os.cpu_count() and clamped to "
+                "profiling_min_threads..profiling_max_threads "
+                "(scripts/core/config.py:168-170)."
+            ),
+            "config_change": f"jmo report <results-dir> --threads {recommended}",
         })
 
-    # Short-term: Optimize tool configurations
+    # P2: a dominant adapter is worth profiling directly.
     for bottleneck in bottlenecks:
-        if bottleneck["percentage"] > 40:
-            recommendations["short_term"].append({
-                "priority": "P2",
-                "category": "optimization",
-                "tool": bottleneck["tool"],
-                "action": f"Optimize {bottleneck['tool']} configuration",
-                "suggestions": [
-                    f"Add --exclude patterns to skip vendor code",
-                    f"Use tool-specific caching",
-                    f"Consider moving to 'deep' profile only (not balanced)"
-                ],
-                "expected_impact": f"Reduce {bottleneck['tool']} time by 20-30%"
-            })
-
-    # Long-term: Profile restructuring
-    if timings.get("total_duration_seconds", 0) > 1800:  # >30 min
-        recommendations["long_term"].append({
-            "priority": "P3",
-            "category": "architecture",
-            "action": "Consider profile restructuring",
-            "rationale": "Scan duration exceeds 30 minutes, impacting developer experience",
-            "suggestions": [
-                "Move slow tools (trivy, nuclei) to 'deep' profile only",
-                "Create 'quick' profile with fast tools (trufflehog, semgrep only)",
-                "Implement differential scanning (scan only changed files)"
-            ],
-            "expected_impact": "Reduce CI pipeline time from 30min to <10min"
+        recommendations["short_term"].append({
+            "priority": "P2",
+            "category": "adapter-performance",
+            "tool": bottleneck["tool"],
+            "action": f"Profile the {bottleneck['tool']} adapter's parse path",
+            "evidence": (
+                f"{bottleneck['parse_seconds_total']:.2f}s over "
+                f"{bottleneck['parse_count']} files "
+                f"({bottleneck['share_pct']:.1f}% of cumulative parse time), "
+                f"{bottleneck['findings']} findings"
+            ),
         })
+
+    # P3: findings volume drives parse and dedup cost more than adapter code does.
+    if analysis["tools"]:
+        noisiest, metrics = max(
+            analysis["tools"].items(), key=lambda kv: kv[1]["findings"]
+        )
+        if metrics["findings"] > 5000:
+            recommendations["long_term"].append({
+                "priority": "P3",
+                "category": "noise",
+                "tool": noisiest,
+                "action": f"Reduce {noisiest} finding volume at the source",
+                "rationale": (
+                    f"{metrics['findings']} findings dominate both parse time and "
+                    "downstream deduplication cost. Tune the tool's own severity "
+                    "and exclude flags under per_tool in jmo.yml before optimising "
+                    "the adapter."
+                ),
+            })
 
     return recommendations
 ```
 
+Call it with the objects the earlier phases produced:
+
+```python
+data = load_timings(Path("results/summaries/timings.json"))
+analysis = analyze_timings(data)
+bottlenecks = identify_bottlenecks(analysis)
+recommendations = generate_recommendations(analysis, bottlenecks)
+```
+
 ---
 
-## v0.6.2 Tool-Specific Optimization Patterns
+## Tool-Specific Optimization Patterns
 
-### Nuclei Optimization
+**Profile tool lists are not reproduced here.** They live in
+`scripts/core/tool_registry.py:PROFILE_TOOLS`, which `jmo.yml` names as the
+single source of truth. Read them with:
 
-**Tool Profile:**
-- **Purpose:** Fast API/web vulnerability scanning with 4000+ templates
-- **Target Type:** Web URLs (`--url`, `--urls-file`)
-- **Output:** JSON-lines format (streaming)
-- **Typical Runtime:** 60-180 seconds per URL
+```bash
+python -c "from scripts.core.tool_registry import PROFILE_TOOLS; print(sorted(PROFILE_TOOLS['balanced']))"
+```
 
-**Recommended Settings:**
+The snippets below show **per-tool overrides only** — the part a profile actually
+configures in `jmo.yml`.
+
+### Nuclei
+
+- **Purpose:** web/API vulnerability scanning across a large template set
+- **Target flags:** `--url`, `--urls-file`
+- **Output:** JSON-lines (streaming)
+- **Present in:** `fast`, `slim`, `balanced`, `deep`
 
 ```yaml
 # jmo.yml
 profiles:
-  fast:
-    tools: [trufflehog, semgrep, trivy]  # Nuclei not in fast (web-only)
-
   balanced:
-    tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, zap, nuclei]
     per_tool:
       nuclei:
-        timeout: 300  # 5 min sufficient for most URLs
+        timeout: 300
         flags: ["-severity", "critical,high", "-rate-limit", "150"]
 
   deep:
-    tools: [trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, nuclei, falco, afl++]
     per_tool:
       nuclei:
-        timeout: 600  # 10 min for comprehensive scanning
+        timeout: 600
         flags: ["-severity", "critical,high,medium", "-rate-limit", "100", "-bulk-size", "25"]
 ```
 
-**Performance Characteristics:**
+Timeout guidance, from configured values rather than measured runtime:
 
-| Scenario | Timeout | Rate Limit | Templates | Duration |
-|----------|---------|------------|-----------|----------|
-| Single URL (fast) | 300s | 150 req/s | Critical/High | 60-120s |
-| Single URL (deep) | 600s | 100 req/s | Crit/High/Med | 120-300s |
-| Multiple URLs (5) | 300s each | 150 req/s | Critical/High | 5-10 min |
+| Configured timeout | Effect |
+|---|---|
+| unset | May run until the scan-level timeout on large sites |
+| 60s | Frequently too short for a full template pass |
+| 300s | Common choice for `balanced` |
+| 600s | Common choice for `deep` |
 
-**Common Timeouts:**
-- Default (unlimited): May run indefinitely on large sites
-- 60s: Too short, misses critical findings
-- 300s: Sweet spot for balanced profile
-- 600s: Comprehensive scanning for deep profile
+### GitLab targets
 
-**Memory Optimization:**
+- **Target flags:** `--gitlab-repo`, `--gitlab-group`
+- **Runs:** the same profile tool list as any other repository target, minus
+  tools that need a live URL
 
-Store nuclei performance data:
-
-```json
-{
-  "tool": "nuclei",
-  "version": "3.1.0",
-  "avg_runtime_sec": 95,
-  "timeout_sweet_spot": 300,
-  "rate_limit_optimal": 150,
-  "findings_per_url_avg": 8,
-  "template_count": 4200,
-  "last_profiled": "2025-10-24"
-}
-```
-
-### GitLab Scanner Optimization
-
-**Tool Profile:**
-- **Purpose:** Full repository scanning for GitLab-hosted repos
-- **Target Type:** GitLab repos (`--gitlab-repo`, `--gitlab-group`)
-- **Tools:** 10/12 tools (all except ZAP, Nuclei which are web-only)
-- **Typical Runtime:** 10-30 minutes per repo (depends on size)
-
-**Key Change from v0.6.1:**
-
-```diff
-# v0.6.1: GitLab scanner ran trufflehog only (1 tool)
-- Runtime: 2-5 minutes per repo
-- Coverage: Secrets only
-
-# v0.6.2: GitLab scanner runs full suite (10 tools)
-+ Runtime: 10-30 minutes per repo
-+ Coverage: Secrets, SAST, SCA, IaC, Dockerfiles, runtime, fuzzing
-```
-
-**Recommended Profile Adjustments:**
+Remote repositories are usually larger than local checkouts, and cloning is
+included in the scan window, so per-tool timeouts tuned for local repos are
+often too tight:
 
 ```yaml
 # jmo.yml
 profiles:
   balanced:
-    threads: 4  # Reduce from 8 if GitLab scanning enabled
-    timeout: 900  # Increase from 600s (GitLab repos may be large)
+    threads: 4
+    timeout: 900
     per_tool:
       semgrep:
-        timeout: 1200  # GitLab repos often larger than local
+        timeout: 1200
       trivy:
         timeout: 900
       noseyparker:
-        timeout: 1800  # Deep scanning on GitLab Enterprise repos
-
-  deep:
-    threads: 2  # Conservative for GitLab + local repos
-    timeout: 1800  # 30 min per tool for large GitLab repos
+        timeout: 1800
 ```
 
-**Container Discovery Impact (v0.6.2):**
+**Container discovery.** The GitLab path also discovers container images
+referenced by Dockerfiles, `docker-compose.yml`, and Kubernetes manifests, then
+scans each with Trivy. Every discovered image is an additional scan target, so
+budget scan time by image count rather than by repository count.
 
-GitLab scanner now auto-discovers container images from:
-- Dockerfiles (`FROM nginx:latest`)
-- docker-compose.yml (`image: postgres:14`)
-- K8s manifests (`image: myapp:v1.2.3`)
-
-**Estimated Additional Time:**
-- Small repo (no containers): +0 minutes
-- Medium repo (2-3 images): +5-10 minutes (trivy image scans)
-- Large repo (10+ images): +20-40 minutes (multiple trivy scans)
-
-**Optimization Strategy:**
-
-```yaml
-# Option 1: Skip container discovery (faster)
-# (Feature flag not yet implemented, future v0.7.0)
-
-# Option 2: Limit threads to avoid timeout cascade
-profiles:
-  balanced:
-    threads: 2  # When scanning GitLab with container discovery
-    timeout: 1200  # Allow time for discovered images
-```
-
-**Memory Storage:**
-
-```json
-{
-  "tool": "gitlab-scanner",
-  "version": "0.6.2",
-  "avg_runtime_sec": 1200,
-  "container_discovery_overhead_sec": 300,
-  "tools_run": 10,
-  "typical_containers_discovered": 3,
-  "timeout_recommendation": 1800,
-  "thread_recommendation": 2
-}
-```
+> Whether any of these settings actually helps is not measurable from
+> `timings.json` — it records report-phase parsing only. Verify a timeout change
+> by re-running the scan and comparing `jmo history list` durations.

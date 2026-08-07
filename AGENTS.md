@@ -45,7 +45,7 @@ for the boundary and how it is enforced.
 | CI Debugger | `/jmo-ci-debugger` | Diagnose GitHub Actions CI failures |
 | Target Type Expander | `/jmo-target-type-expander` | Add new scan target types |
 | Compliance Mapper | `/jmo-compliance-mapper` | Map findings to 6 compliance frameworks |
-| Profile Optimizer | `/jmo-profile-optimizer` | Optimize scan profile performance |
+| Profile Optimizer | `/jmo-profile-optimizer` | Tune profile config from report-phase timings |
 | Security Hardening | `/jmo-security-hardening` | Implement OWASP/CWE security fixes |
 | Systematic Debugging | `/jmo-systematic-debugging` | Four-phase debugging framework |
 | Refactoring Assistant | `/jmo-refactoring-assistant` | Complex refactoring with test preservation |

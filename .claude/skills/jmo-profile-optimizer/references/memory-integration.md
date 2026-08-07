@@ -1,257 +1,302 @@
 # Memory Integration Reference
 
-Detailed code and schemas for the memory-integrated performance baseline system introduced in v2.1.0.
+How this skill persists performance baselines between sessions, using the
+`.jmo/memory/` file convention shared by all JMo skills.
+
+> **There is no memory module to import.** `.jmo/memory/` is a plain-file
+> convention that each skill implements itself with Read and Write — see
+> [`../../references/memory-integration-pattern.md`](../../references/memory-integration-pattern.md).
+> This skill owns the `profiles/` namespace. `.jmo/` is gitignored
+> (`.gitignore:179`), so the directory is absent from a fresh clone and is
+> created on first store. A cache miss is normal operation, not an error.
 
 ---
 
-## Phase 0: Memory Query - Loading Historical Baselines
+## Profile name validation (required before any memory path)
 
-**Purpose:** Load historical performance baselines before analysis begins.
+The profile name reaches this skill as `$ARGUMENTS` — untrusted input that is
+interpolated into a file path. Validate it **before** constructing any path, or
+a value like `../../outside` redirects reads and writes outside the namespace.
 
 ```python
-from scripts.core.memory import query_memory
-from datetime import datetime, timedelta
+import re
+from pathlib import Path
 
-def load_performance_baseline(profile_name: str) -> dict | None:
+from scripts.core.config import load_config
+from scripts.core.tool_registry import PROFILE_TOOLS
+
+MEMORY_ROOT = Path(".jmo/memory/profiles")
+
+# Deliberately no separators, no dots, no leading dash.
+_SAFE_PROFILE = re.compile(r"[a-z][a-z0-9_-]*")
+
+
+def memory_path(profile: str) -> Path:
+    """Resolve a profile's memory file, rejecting anything unsafe or unknown.
+
+    Two checks, because either alone is insufficient: the pattern rejects
+    traversal and separators, and the membership check rejects well-formed names
+    that are not real profiles.
     """
-    Load historical performance baseline for profile.
+    if not _SAFE_PROFILE.fullmatch(profile):
+        raise ValueError(
+            f"Invalid profile name {profile!r}: expected lowercase alphanumerics, "
+            "'-' or '_' only."
+        )
 
-    Args:
-        profile_name: Profile name (fast/balanced/deep)
+    # Built-in profiles plus any the user defined under `profiles:` in jmo.yml,
+    # which is a free-form dict -- do not hardcode the built-in list.
+    known = set(PROFILE_TOOLS) | set(load_config("jmo.yml").profiles)
+    if profile not in known:
+        raise ValueError(
+            f"Unknown profile {profile!r}. Known profiles: {', '.join(sorted(known))}"
+        )
 
-    Returns:
-        Baseline data if found, None otherwise
-    """
-    memory_data = query_memory("profiles", profile_name)
-
-    if memory_data:
-        print(f"[memory] Found baseline for {profile_name} profile")
-        print(f"[memory] Last optimized: {memory_data.get('last_optimized')}")
-        print(f"[memory] Baseline duration: {memory_data.get('baseline_duration_seconds')}s")
-
-        # Display historical metrics
-        for tool, metrics in memory_data.get("tool_performance", {}).items():
-            print(f"  {tool}: avg={metrics['avg_duration_seconds']}s, "
-                  f"timeout_rate={metrics['timeout_rate']*100:.1f}%")
-
-        return memory_data
-
-    print(f"[memory] No baseline for {profile_name}, establishing new baseline")
-    return None
+    return MEMORY_ROOT / f"{profile}.json"
 ```
 
-### Memory Schema
+At the time of writing, `PROFILE_TOOLS` defines `fast`, `slim`, `balanced`, and
+`deep`. The list is read at runtime rather than reproduced, so a new profile
+needs no change here.
+
+---
+
+## The two timing schemas
+
+Two distinct objects flow through this skill. Mixing them is what previously
+caused per-tool comparisons to be silently skipped, so they are named apart:
+
+| Object | Produced by | Shape |
+|---|---|---|
+| **raw** | `jmo report --profile` | `aggregate_seconds`, `recommended_threads`, `jobs[]`, `meta` — see [optimization-patterns.md](optimization-patterns.md#timingsjson-schema) |
+| **analysed** | `analyze_timings(raw)` | `aggregate_seconds`, `cumulative_parse_seconds`, `max_workers`, `recommended_threads`, `tools{}` |
+
+**Every function on this page takes the analysed object.** Nothing here reads
+raw `timings.json` keys.
+
+---
+
+## Phase 0: Memory Query — loading a historical baseline
+
+```python
+import json
+
+
+def load_performance_baseline(profile: str) -> dict | None:
+    """Load the stored baseline for a profile, or None on a cache miss."""
+    path = memory_path(profile)
+    if not path.exists():
+        print(f"[memory] No baseline for {profile}, establishing a new one")
+        return None
+
+    baseline = json.loads(path.read_text(encoding="utf-8"))
+    meta = baseline.get("metadata", {})
+    print(f"[memory] Found baseline for {profile}")
+    print(f"[memory] Last updated: {meta.get('last_updated')}")
+    print(f"[memory] Cumulative parse time: {baseline.get('cumulative_parse_seconds')}s")
+
+    for tool, metrics in baseline.get("tool_performance", {}).items():
+        print(f"  {tool}: mean={metrics['mean_seconds']}s over {metrics['parse_count']} parses")
+
+    return baseline
+```
+
+### Memory schema
 
 ```json
 {
   "profile": "balanced",
-  "baseline_duration_seconds": 1200,
-  "target_duration_seconds": 900,
+  "aggregate_seconds": 3.402,
+  "cumulative_parse_seconds": 12.1,
+  "max_workers": 8,
+  "recommended_threads": 8,
   "tool_performance": {
-    "trufflehog": {
-      "avg_duration_seconds": 45.2,
-      "p50_duration_seconds": 42.0,
-      "p95_duration_seconds": 78.0,
-      "p99_duration_seconds": 120.0,
-      "timeout_rate": 0.02,
-      "failure_rate": 0.01,
-      "success_rate": 0.97,
-      "sample_size": 150
-    },
     "trivy": {
-      "avg_duration_seconds": 180.5,
-      "p50_duration_seconds": 165.0,
-      "p95_duration_seconds": 285.0,
-      "p99_duration_seconds": 420.0,
-      "timeout_rate": 0.15,
-      "failure_rate": 0.03,
-      "success_rate": 0.82,
-      "sample_size": 150,
-      "notes": "High timeout rate, recommend increasing timeout to 900s"
+      "parse_seconds_total": 7.24,
+      "parse_count": 23,
+      "findings": 4310,
+      "mean_seconds": 0.314783,
+      "max_seconds": 0.981204,
+      "p50_seconds": 0.288104,
+      "p95_seconds": 0.981204,
+      "p99_seconds": null,
+      "share_pct": 59.8
     }
   },
-  "recommended_config": {
-    "threads": 4,
-    "timeout": 600,
-    "per_tool": {
-      "trivy": {
-        "timeout": 900
-      }
-    }
-  },
-  "last_optimized": "2025-09-15",
-  "optimization_count": 3,
-  "created_by": "jmo-profile-optimizer v2.1.0"
+  "metadata": {
+    "last_updated": "2026-08-05T09:14:22",
+    "optimization_count": 3,
+    "created_by": "jmo-profile-optimizer"
+  }
 }
 ```
 
+`p95_seconds` and `p99_seconds` are `null` when the sample was too small to
+support them (20 and 100 parses respectively). `null` means "not enough data",
+never "zero" — do not substitute a value derived from `max_seconds`.
+
 ---
 
-## Phase 2: Compare with Memory Baseline
-
-**Purpose:** Detect performance regressions by comparing current metrics against stored baselines.
+## Phase 2: Compare with the memory baseline
 
 ```python
-def compare_with_baseline(current: dict, baseline: dict | None) -> dict:
-    """
-    Compare current performance with historical baseline.
+def pct_change(current: float, baseline: float) -> float | None:
+    """Percentage change, or None when the baseline offers no denominator."""
+    if not baseline:  # zero or missing -- no meaningful ratio exists
+        return None
+    return (current - baseline) / baseline * 100
+
+
+def compare_with_baseline(analysis: dict, baseline: dict | None) -> dict:
+    """Compare an analysed timing object with a stored baseline.
 
     Args:
-        current: Current timings analysis
-        baseline: Historical baseline from memory (or None)
-
-    Returns:
-        Comparison report with regressions and improvements
+        analysis: the object returned by analyze_timings()
+        baseline: the object returned by load_performance_baseline(), or None
     """
     if not baseline:
-        return {
-            "status": "no_baseline",
-            "message": "Establishing new baseline"
-        }
+        return {"status": "no_baseline", "message": "Establishing a new baseline"}
 
     comparison = {
         "status": "compared",
         "regressions": [],
         "improvements": [],
-        "stable": []
+        "no_sample": [],
     }
 
-    # Compare total duration
-    current_duration = current["total_duration"]
-    baseline_duration = baseline["baseline_duration_seconds"]
-    duration_change_pct = ((current_duration - baseline_duration) / baseline_duration) * 100
-
-    if duration_change_pct > 10:  # >10% slower
+    # Total parse cost.
+    change = pct_change(
+        analysis["cumulative_parse_seconds"],
+        baseline.get("cumulative_parse_seconds", 0),
+    )
+    if change is None:
+        comparison["no_sample"].append("cumulative_parse_seconds")
+    elif change > 10:
         comparison["regressions"].append({
-            "metric": "total_duration",
-            "current": current_duration,
-            "baseline": baseline_duration,
-            "change_pct": duration_change_pct,
-            "severity": "high" if duration_change_pct > 25 else "medium"
+            "metric": "cumulative_parse_seconds",
+            "current": analysis["cumulative_parse_seconds"],
+            "baseline": baseline["cumulative_parse_seconds"],
+            "change_pct": change,
+            "severity": "high" if change > 25 else "medium",
         })
-    elif duration_change_pct < -10:  # >10% faster
+    elif change < -10:
         comparison["improvements"].append({
-            "metric": "total_duration",
-            "current": current_duration,
-            "baseline": baseline_duration,
-            "change_pct": duration_change_pct
+            "metric": "cumulative_parse_seconds",
+            "current": analysis["cumulative_parse_seconds"],
+            "baseline": baseline["cumulative_parse_seconds"],
+            "change_pct": change,
         })
 
-    # Compare per-tool performance
-    for tool, current_metrics in current.get("tools", {}).items():
+    # Per-tool mean parse duration.
+    for tool, current_metrics in analysis["tools"].items():
         baseline_metrics = baseline.get("tool_performance", {}).get(tool)
         if not baseline_metrics:
-            continue
+            continue  # new tool -- nothing to compare against
 
-        # Compare average duration
-        current_avg = current_metrics["avg_duration_seconds"]
-        baseline_avg = baseline_metrics["avg_duration_seconds"]
-        avg_change_pct = ((current_avg - baseline_avg) / baseline_avg) * 100
-
-        if avg_change_pct > 15:  # >15% slower
+        change = pct_change(
+            current_metrics["mean_seconds"], baseline_metrics.get("mean_seconds", 0)
+        )
+        if change is None:
+            comparison["no_sample"].append(f"{tool}_mean_seconds")
+        elif change > 15:
             comparison["regressions"].append({
-                "metric": f"{tool}_avg_duration",
-                "current": current_avg,
-                "baseline": baseline_avg,
-                "change_pct": avg_change_pct,
-                "severity": "medium"
-            })
-
-        # Compare timeout rate
-        current_timeout_rate = current_metrics["timeouts"] / current_metrics["executions"]
-        baseline_timeout_rate = baseline_metrics["timeout_rate"]
-        timeout_change = current_timeout_rate - baseline_timeout_rate
-
-        if timeout_change > 0.05:  # >5% increase in timeout rate
-            comparison["regressions"].append({
-                "metric": f"{tool}_timeout_rate",
-                "current": current_timeout_rate,
-                "baseline": baseline_timeout_rate,
-                "change": timeout_change,
-                "severity": "high"
+                "metric": f"{tool}_mean_seconds",
+                "current": current_metrics["mean_seconds"],
+                "baseline": baseline_metrics["mean_seconds"],
+                "change_pct": change,
+                "severity": "medium",
             })
 
     return comparison
 ```
 
-### Example Comparison Output
+Every ratio goes through `pct_change`, so a zero or absent baseline produces a
+`no_sample` entry instead of `ZeroDivisionError`. Newly introduced tools are
+skipped explicitly rather than compared against nothing.
+
+> **Timeout and failure rates are not compared, because JMo does not record
+> them.** See [optimization-patterns.md Phase 4](optimization-patterns.md#phase-4-timeout-and-failure-analysis--no-data-source).
+
+### Example comparison output
 
 ```text
-[baseline] Comparing with baseline from 2025-09-15
+[baseline] Comparing with baseline from 2026-07-02
 
-Regressions Detected:
-  total_duration: 1215s (current) vs 900s (baseline) = +35% slower [HIGH]
-  trivy_timeout_rate: 0.13 (current) vs 0.02 (baseline) = +11% increase [HIGH]
-  trivy_avg_duration: 180s (current) vs 145s (baseline) = +24% slower [MEDIUM]
+Regressions:
+  cumulative_parse_seconds: 12.10s vs 8.90s = +36.0% [HIGH]
+  trivy_mean_seconds: 0.315s vs 0.244s = +29.1% [MEDIUM]
 
-Improvements Detected:
-  trufflehog_avg_duration: 45s (current) vs 52s (baseline) = -13% faster
+Improvements:
+  semgrep_mean_seconds: 0.324s vs 0.401s = -19.2%
 
-Recommendation: Investigate Trivy performance regression (timeout rate increased 11%)
+No sample:
+  grype_mean_seconds (no baseline value)
+
+Note: this measures report-phase parsing. A parse-time regression usually means
+more findings, not a slower scan -- check the findings counts first.
 ```
 
 ---
 
-## Phase 6: Store Optimization Memory
-
-**Purpose:** Persist optimization results and updated baseline after analysis.
+## Phase 6: Store the updated baseline
 
 ```python
-from scripts.core.memory import store_memory
 from datetime import datetime
 
-def store_optimization_memory(profile: str, timings: dict, recommendations: dict):
-    """Store optimization results in memory."""
-    # Calculate percentiles from individual execution durations
-    tool_performance = {}
-    for tool, metrics in timings["tools"].items():
-        tool_performance[tool] = {
-            "avg_duration_seconds": metrics["avg_duration_seconds"],
-            "p50_duration_seconds": metrics.get("p50", metrics["avg_duration_seconds"]),
-            "p95_duration_seconds": metrics.get("p95", metrics["max_duration_seconds"] * 0.95),
-            "p99_duration_seconds": metrics.get("p99", metrics["max_duration_seconds"]),
-            "timeout_rate": metrics["timeouts"] / metrics["executions"],
-            "failure_rate": metrics["failures"] / metrics["executions"],
-            "success_rate": metrics["successes"] / metrics["executions"],
-            "sample_size": metrics["executions"]
-        }
+
+def store_optimization_memory(profile: str, analysis: dict) -> None:
+    """Persist the analysed timings as the profile's new baseline."""
+    path = memory_path(profile)
+
+    # Load the existing record FIRST, into its own variable. Reading the record
+    # being built is an UnboundLocalError on every call.
+    previous = load_performance_baseline(profile)
+    previous_count = (previous or {}).get("metadata", {}).get("optimization_count", 0)
 
     memory_data = {
         "profile": profile,
-        "baseline_duration_seconds": timings["total_duration_seconds"],
-        "target_duration_seconds": timings["total_duration_seconds"] * 0.75,  # 25% improvement goal
-        "tool_performance": tool_performance,
-        "recommended_config": {
-            "threads": recommendations.get("threads", timings["threads"]),
-            "timeout": recommendations.get("timeout", timings["timeout"]),
-            "per_tool": recommendations.get("per_tool", {})
+        "aggregate_seconds": analysis["aggregate_seconds"],
+        "cumulative_parse_seconds": analysis["cumulative_parse_seconds"],
+        "max_workers": analysis["max_workers"],
+        "recommended_threads": analysis["recommended_threads"],
+        "tool_performance": analysis["tools"],
+        "metadata": {
+            "last_updated": datetime.now().isoformat(timespec="seconds"),
+            "optimization_count": previous_count + 1,
+            "created_by": "jmo-profile-optimizer",
         },
-        "last_optimized": datetime.now().isoformat(),
-        "optimization_count": memory_data.get("optimization_count", 0) + 1 if memory_data else 1,
-        "created_by": "jmo-profile-optimizer v2.1.0"
     }
 
-    store_memory("profiles", profile, memory_data)
-    print(f"[memory] Stored optimization results for {profile} profile")
-    print(f"[memory] Location: .jmo/memory/profiles/{profile}.json")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(memory_data, indent=2), encoding="utf-8")
+    print(f"[memory] Stored baseline for {profile} at {path}")
 ```
+
+`analysis["tools"]` is stored as-is, so the memory schema and the analysed schema
+never drift apart — there is one shape, written once and read back unchanged.
 
 ---
 
-## Upgrade Path from v2.0.0
-
-### For Existing Profiles
-
-1. **Establish Baseline:**
+## Establishing a first baseline
 
 ```bash
-# Run scan with profiling
-jmotools balanced --repos-dir ~/repos --profile
+# 1. Run a scan, then a report with profiling enabled.
+jmo scan --repos-dir ~/repos --profile-name balanced --results-dir ./results
+jmo report ./results --profile
 
-# Store baseline
-python3 scripts/dev/store_profile_baseline.py results/summaries/timings.json
+# 2. Confirm the timings file exists.
+cat results/summaries/timings.json
+
+# 3. Run this skill against it -- Phase 6 writes the baseline automatically.
 ```
 
-2. **Future Scans:**
-   - Baselines automatically loaded from memory
-   - Regressions detected and reported
+`jmo scan --profile-name` selects the profile; `jmo report --profile` is the
+timing flag. They are different options with similar names.
+
+Whole-scan wall-clock durations, which `timings.json` does not contain, come
+from the history database instead:
+
+```bash
+jmo history list --limit 10     # includes a Duration column
+jmo history show <scan-id>      # includes "Duration: N seconds"
+```
