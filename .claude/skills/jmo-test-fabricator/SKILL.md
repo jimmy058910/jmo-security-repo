@@ -67,7 +67,14 @@ Generate comprehensive pytest test suites for JMo Security with fabricated fixtu
 2. **Test edge cases comprehensively** -- Empty inputs, malformed data, missing fields, alternative structures
 3. **Cover all schema versions** -- v1.0.0 basic, v1.1.0 risk/context, v1.2.0 compliance
 4. **Preserve raw tool output** -- Always verify `raw` field contains original payload (adapters only)
-5. **Fast test execution** -- All tests should complete in <5 seconds total
+5. **Fast test execution, per test and per layer** -- An adapter or unit test
+   parses a fixture in memory and should stay well under a second: measured,
+   the slowest of the 1819 tests in `tests/adapters/` is 0.43s and the whole
+   directory runs in ~18s. Integration tests are a different layer and are not
+   held to that -- this skill's own `references/integration-patterns.md` uses
+   `timeout=120` through `timeout=240`, because they shell out to real scans.
+   If an adapter test needs a timeout at all, it is doing something an adapter
+   test should not
 6. **Test actual behavior, not ideal behavior** -- Test what the code does now, not what it should do
 7. **Python 3.8 compatibility required** -- No `|` union syntax, use `Optional[T]` and `Union[T1, T2]`
 8. **Unicode handling is mandatory** -- All text-processing modules must handle emoji, CJK, Cyrillic
