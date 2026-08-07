@@ -31,6 +31,7 @@ from scripts.core.history_db import (
 from scripts.core.normalize_and_report import _cluster_cross_tool_duplicates
 from scripts.core.reporters.html_reporter import write_html
 from scripts.core.trend_analyzer import TrendAnalyzer
+from tests.conftest import LATENCY_SAMPLES, median_seconds
 
 # ============================================================================
 # Test Fixtures and Helper Functions
@@ -381,17 +382,23 @@ class TestPerformanceBenchmarks:
             )
             conn.commit()
 
-        # Benchmark trend analysis
-        start = time.time()
-        with TrendAnalyzer(db_path) as analyzer:
-            trends = analyzer.analyze_trends(days=30)
-        duration_ms = (time.time() - start) * 1000
+        # Benchmark trend analysis. Read-only over a database that is fully
+        # populated by this point, so repeating it measures the same work every
+        # time - which is what makes the median honest here.
+        trends = None
+
+        def analyze():
+            nonlocal trends
+            with TrendAnalyzer(db_path) as analyzer:
+                trends = analyzer.analyze_trends(days=30)
+
+        duration_ms = median_seconds(analyze) * 1000
 
         # Verify
         assert trends is not None
         assert duration_ms < 100, (
-            f"Trend analysis took {duration_ms:.2f}ms (expected <100ms). "
-            f"Target from CLAUDE.md: Trend analysis (30 days) <200ms"
+            f"Trend analysis median took {duration_ms:.2f}ms over "
+            f"{LATENCY_SAMPLES} runs (expected <100ms)."
         )
 
         # Verify trend data structure
