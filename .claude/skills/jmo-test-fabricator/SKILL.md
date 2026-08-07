@@ -98,7 +98,7 @@ Reuse patterns for similar tool types. Copy-paste helper functions if applicable
 # Category 1: Basic Valid Input (TODO)
 # Category 2: Error Handling (TODO)
 # Category 3: v1.1.0 Features (TODO)
-# Category 4: v1.2.0 Compliance (TODO)
+# Category 4: v1.2.0 metadata (TODO)
 # Category 5: Tool-Specific Edge Cases (TODO)
 ```
 
@@ -130,8 +130,8 @@ def test_tool_malformed_json(tmp_path: Path): ...
 # ========== Category 3: Schema v1.1.0 Features (Risk, Context, Autofix) ==========
 def test_tool_v110_risk_fields(tmp_path: Path): ...
 
-# ========== Category 4: Schema v1.2.0 Compliance ==========
-def test_tool_compliance_enrichment(tmp_path: Path): ...
+# ========== Category 4: Schema v1.2.0 metadata ==========
+def test_tool_schema_and_tool_metadata(tmp_path: Path): ...
 
 # ========== Category 5: Tool-Specific Edge Cases ==========
 def test_tool_nested_paths(tmp_path: Path): ...
@@ -336,7 +336,7 @@ Real test files from this project to use as examples:
 - [ ] **Category 1:** Basic valid input test (`test_<tool>_basic`)
 - [ ] **Category 2:** Error handling tests (empty, malformed, missing file, non-dict items)
 - [ ] **Category 3:** v1.1.0 feature tests (autofix, CWE, likelihood/impact, code context)
-- [ ] **Category 4:** v1.2.0 compliance enrichment test
+- [ ] **Category 4:** v1.2.0 metadata test (`schemaVersion`, tool name/version) - **not** framework mappings
 - [ ] **Category 5:** Tool-specific edge case tests (alternative fields, NDJSON, nested arrays, etc.)
 
 ### Coverage
