@@ -44,7 +44,7 @@ graph LR
 
 ### Example Output
 
-```markdown
+````markdown
 # 🔍 Security Diff Report
 
 **Baseline:** `main` (2025-11-05, balanced profile)
@@ -93,7 +93,7 @@ cursor.execute(query, (user_id,))
 
 </details>
 
-```text
+````
 
 ---
 

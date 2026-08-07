@@ -500,7 +500,7 @@ jobs:
               --check-rekor
             ```
 
-```text
+```
 
 ## Compliance Scenarios
 
