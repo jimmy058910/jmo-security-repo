@@ -84,17 +84,44 @@ RUN userdel -r ubuntu && useradd -u 1000 jmo
 
 ### Tool Installation in Docker
 
-```dockerfile
-# Shellcheck: Use GitHub releases binary (not apt)
-RUN set -eux && \
-    SHELLCHECK_VERSION="v0.10.0" && \
-    curl -fsSL "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.xz" \
-    | tar -xJf - --strip-components=1 -C /usr/local/bin shellcheck-${SHELLCHECK_VERSION}/shellcheck
+Two rules, both learned the hard way (see `.claude/rules/docker.rules.md`,
+"Download Hardening Convention"):
 
-# Note: fast/slim/balanced Dockerfiles need xz-utils for .tar.xz extraction
-# deep variant has it via build-essential transitive dependency
-RUN apt-get install -y --no-install-recommends xz-utils
+1. **Install the extractor before the extraction.** `tar -xJf` shells out to
+   `xz`; on a slim base that package is absent, so an extraction step placed
+   above the `apt-get install` fails every build.
+2. **Never pipe a download straight into `tar`.** `curl` without `-f` exits 0 on
+   an HTTP error page, and the pipe hands that HTML to `tar` — the
+   "not in gzip format" cycle that broke v1.0.3 nightly smoke tests repeatedly.
+   Download to a file, verify, then extract.
+
+```dockerfile
+# xz-utils goes in the base package layer, well before any .tar.xz download.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    xz-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+# Shellcheck: GitHub releases binary (not apt).
+# The version literal is owned by versions.yaml -- never hand-edit it here or in
+# a Dockerfile; run `python scripts/dev/update_versions.py --sync`.
+RUN SHELLCHECK_VERSION="<from versions.yaml>" && \
+    SHELLCHECK_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "aarch64" || echo "x86_64") && \
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors \
+      --connect-timeout 30 --max-time 600 \
+      "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.${SHELLCHECK_ARCH}.tar.xz" \
+      -o /tmp/shellcheck.tar.xz && \
+    xz -t /tmp/shellcheck.tar.xz && \
+    tar -xJf /tmp/shellcheck.tar.xz -C /tmp && \
+    mv /tmp/shellcheck-v${SHELLCHECK_VERSION}/shellcheck /usr/local/bin/shellcheck && \
+    chmod +x /usr/local/bin/shellcheck
 ```
+
+**All four** `Dockerfile.*` variants install `xz-utils` explicitly in that base
+layer (`Dockerfile.fast:18`, `.slim:18`, `.balanced:18`, `.deep:19`) — including
+`deep`, which does **not** get it transitively from `build-essential`. Read the
+real files rather than copying this snippet; they are the source of truth for
+the pinned versions and the arch handling.
 
 ---
 
@@ -136,6 +163,12 @@ jobs:
 
 ### Permissions Block
 
+**Declaring any `permissions` block sets every scope you do not list to `none`.**
+It is not additive on top of the defaults, so an omission silently removes access
+rather than inheriting it — the usual symptom is a 403 from one API call in an
+otherwise green job. Grant per job, not workflow-wide, and list only what that
+job calls:
+
 ```yaml
 permissions:
   contents: read          # Checkout code
@@ -143,6 +176,7 @@ permissions:
   security-events: write  # Upload SARIF to Security tab
   id-token: write         # OIDC token for Trusted Publishers
   pull-requests: write    # Comment on PRs with results
+  statuses: write         # ONLY if the job calls createCommitStatus (see catalog #13)
 ```
 
 ---

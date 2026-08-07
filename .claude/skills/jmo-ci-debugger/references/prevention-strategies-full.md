@@ -136,26 +136,35 @@ if [ -n "$untracked" ]; then
   exit 1
 fi
 
-# Validate critical module imports
-for module in compliance_frameworks exceptions tool_runner constants; do
-  if ! python3 -c "import scripts.core.$module" 2>/dev/null; then
+# Validate critical module imports.
+# Name only modules that exist -- one bad entry makes the hook exit 1 forever,
+# and a hook that always fails gets bypassed with --no-verify, which is worse
+# than no hook. Check with: ls scripts/core/<name>.py
+for module in compliance_frameworks exceptions tool_runner; do
+  if ! python -c "import scripts.core.$module" 2>/dev/null; then
     echo "ERROR: Cannot import scripts.core.$module"
     exit 1
   fi
 done
 
-# Run mypy on staged Python files
+# Run mypy on staged Python files.
+# -z gives NUL-delimited names, so paths containing spaces or glob characters
+# survive; xargs -0 passes them as discrete arguments and -- stops a leading
+# dash being read as an option. An unquoted $STAGED_PY would split on whitespace,
+# glob-expand, and hand "-foo.py" to the tool as a flag.
+# --diff-filter=ACMR drops deletions: linting a removed file always errors.
+# The guard is required -- with empty input, GNU xargs still runs the command once.
 echo "Running mypy on staged Python files..."
-STAGED_PY=$(git diff --cached --name-only | grep '\.py$' || true)
-if [ -n "$STAGED_PY" ]; then
-  mypy $STAGED_PY || exit 1
+if [ -n "$(git diff --cached --name-only --diff-filter=ACMR -- '*.py')" ]; then
+  git diff --cached --name-only -z --diff-filter=ACMR -- '*.py' \
+    | xargs -0 mypy -- || exit 1
 fi
 
 # Run markdownlint on staged Markdown files
 echo "Running markdownlint on staged Markdown files..."
-STAGED_MD=$(git diff --cached --name-only | grep '\.md$' || true)
-if [ -n "$STAGED_MD" ]; then
-  npx markdownlint $STAGED_MD || exit 1
+if [ -n "$(git diff --cached --name-only --diff-filter=ACMR -- '*.md')" ]; then
+  git diff --cached --name-only -z --diff-filter=ACMR -- '*.md' \
+    | xargs -0 npx markdownlint -- || exit 1
 fi
 
 echo "Pre-push checks passed!"
