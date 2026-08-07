@@ -31,8 +31,17 @@ from scripts.core.plugin_api import (
 logger = logging.getLogger(__name__)
 
 
+# `{tool}` is the normalized, underscore-based identifier - the same token that
+# names the adapter file. A tool spelled with a hyphen normalizes once, here:
+# `dependency-check` -> `dependency_check`, giving
+# `dependency_check_adapter.py` and `name="dependency_check"`
+# (scripts/core/adapters/dependency_check_adapter.py:50).
 @adapter_plugin(PluginMetadata(
-    name="{tool}",  # CRITICAL: Must match {tool}.json filename
+    # Matches the ADAPTER FILENAME identifier, not the tool's output filename.
+    # plugin_loader has to "try both underscore and hyphenated variants since
+    # metadata.name may differ" (scripts/core/plugin_loader.py:235) precisely
+    # because this drifts; normalizing once is what keeps it from drifting.
+    name="{tool}",
     version="1.0.0",
     author="JMo Security Contributors",
     description="{tool} adapter for JMo Security",
@@ -97,13 +106,19 @@ class {Tool}Adapter(AdapterPlugin):
                 # Use Finding dataclass (NOT dict!)
                 finding = Finding(
                     schemaVersion="1.2.0",
-                    id=self.get_fingerprint(
-                        tool=self.metadata.tool_name,
-                        ruleId=vuln.get("id", "UNKNOWN"),
-                        path=vuln.get("file", ""),
-                        startLine=vuln.get("line", 0),
-                        message=vuln.get("title", "")[:120]
-                    ),
+                    # Leave `id` empty. Do NOT call get_fingerprint() here:
+                    #   - its signature is get_fingerprint(finding) - one
+                    #     Finding, not the five keyword arguments this template
+                    #     used to pass, so the call raised TypeError;
+                    #   - it needs the Finding that is still being built, so
+                    #     there is nothing to hand it at this point;
+                    #   - adapters do not fingerprint at all. BaseAdapter.load()
+                    #     calls _generate_fingerprint() over the parsed dicts
+                    #     (scripts/core/adapters/base_adapter.py:181) and
+                    #     injects the 16-char digest.
+                    # The real adapters do exactly this - see
+                    # scripts/core/adapters/bandit_adapter.py:105.
+                    id="",
                     ruleId=vuln.get("id", "UNKNOWN"),
                     severity=self._map_severity(vuln.get("severity", "info")),
                     tool={

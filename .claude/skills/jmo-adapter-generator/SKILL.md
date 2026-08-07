@@ -62,8 +62,14 @@ Use the full template at [templates/adapter-template.py](templates/adapter-templ
 
 - `@adapter_plugin` decorator with `PluginMetadata` (auto-registers)
 - Inherits `AdapterPlugin`, implements `parse()` returning `List[Finding]`
-- Uses `self.get_fingerprint()` for deterministic IDs
-- `name` in metadata must match `{tool}.json` filename
+- Leaves `Finding.id` empty. Adapters do **not** fingerprint: `BaseAdapter.load()`
+  calls `_generate_fingerprint()` over the parsed dicts and injects the 16-char
+  digest (`scripts/core/adapters/base_adapter.py:181`). `get_fingerprint()` on
+  the plugin ABC takes **one `Finding`**, so it cannot be called while building
+  the very `Finding` that needs the id
+- `name` in metadata matches the **adapter filename** identifier - underscored,
+  normalized once: `dependency-check` -> `dependency_check_adapter.py` and
+  `name="dependency_check"`. It is not the tool's output filename
 - Adapters do NOT handle compliance enrichment (centralized in normalize_and_report.py)
 
 ### Phase 3: Write Tests
