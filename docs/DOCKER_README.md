@@ -301,12 +301,12 @@ START: What is your primary use case?
 
 ├─ Production CI/CD (daily/weekly scans)
 │  → Use BALANCED variant (:balanced)
-│     - 18 tools, 18-25 min scans
+│     - 17 tools, 18-25 min scans
 │     - Best for: DevOps, regular audits, balanced coverage
 
 ├─ Cloud/K8s/IaC focused (containers, infrastructure)
 │  → Use SLIM variant (:slim)
-│     - 14 tools, 12-18 min scans
+│     - 13 tools, 12-18 min scans
 │     - Best for: Cloud-native, IaC, container security
 
 └─ Fast feedback (pre-commit, PR checks)

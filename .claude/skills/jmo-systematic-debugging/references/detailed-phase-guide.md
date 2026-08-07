@@ -248,7 +248,7 @@ grep -A 10 "individual-images" scripts/core/normalize_and_report.py
 
 - **Adapter pattern:** `scripts/core/adapters/trivy_adapter.py` (most comprehensive)
 - **Test pattern:** `tests/adapters/test_trivy_adapter.py` (5 categories)
-- **Scan job pattern:** `scripts/cli/scan_jobs/repository_scanner.py` (12 tools)
+- **Scan job pattern:** `scripts/cli/scan_jobs/repository_scanner.py` (28 tools)
 - **Exit code handling:** Check CLAUDE.md "Tool Invocation" section
 - **CommonFinding schema:** `docs/schemas/common_finding.v1.json`
 

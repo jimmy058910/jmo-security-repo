@@ -120,9 +120,9 @@ No. JMo Security collects no telemetry and phones home to nothing — all scanni
 Pick the smallest variant that covers your needs:
 
 ```bash
-docker pull ghcr.io/jimmy058910/jmo-security:fast        # ~800 MB, 8 scanners
-docker pull ghcr.io/jimmy058910/jmo-security:slim        # ~1.4 GB, 14 scanners
-docker pull ghcr.io/jimmy058910/jmo-security:balanced    # ~1.6 GB, 18 scanners
+docker pull ghcr.io/jimmy058910/jmo-security:fast        # ~800 MB, 9 scanners
+docker pull ghcr.io/jimmy058910/jmo-security:slim        # ~1.4 GB, 13 scanners
+docker pull ghcr.io/jimmy058910/jmo-security:balanced    # ~1.6 GB, 17 scanners
 docker pull ghcr.io/jimmy058910/jmo-security:latest      # ~2.0 GB, 28 scanners (default)
 ```
 

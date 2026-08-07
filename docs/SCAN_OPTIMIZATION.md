@@ -4,7 +4,7 @@ Comprehensive guide for optimizing JMo Security scan performance without sacrifi
 
 ## Overview
 
-A typical balanced profile scan (18 tools) takes 18-25 minutes. This guide covers strategies to reduce scan times by 30-60% while maintaining thorough security coverage.
+A typical balanced profile scan (17 tools) takes 18-25 minutes. This guide covers strategies to reduce scan times by 30-60% while maintaining thorough security coverage.
 
 **Key Metrics:**
 
