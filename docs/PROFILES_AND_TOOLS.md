@@ -535,7 +535,7 @@ Different target types invoke different subsets of tools. This matrix shows the 
 
 ## Complete Tool Reference
 
-### All 27 Tools (Alphabetical)
+### All 29 Tools (Alphabetical)
 
 | # | Tool | Version | Profiles | Installation | Critical |
 |---|------|---------|----------|--------------|----------|

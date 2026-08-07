@@ -129,13 +129,13 @@ You have access to all documentation analysis tools:
 
 #### 1. README.md
 
-**Current:** "Orchestrates 27+ security scanners"
+**Current:** "Orchestrates 29 security scanners"
 **Update to:** "Orchestrates 28+ security scanners"
 
 **Location:** Line 15
 **Change:**
 ```diff
-- Orchestrates 27+ security scanners (Trivy, Semgrep, TruffleHog, etc.)
+- Orchestrates 29 security scanners (Trivy, Semgrep, TruffleHog, etc.)
 + Orchestrates 28+ security scanners (Trivy, Semgrep, TruffleHog, Snyk, etc.)
 ```
 

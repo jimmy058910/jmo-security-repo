@@ -20,7 +20,7 @@ Systematically decompose monolithic functions, migrate to design patterns (BaseA
 This skill helps you refactor the JMo Security codebase by:
 
 1. **Decomposing monolithic functions** (e.g., cmd_scan: 1,553 lines, CC 252)
-2. **Migrating to design patterns** (e.g., BaseAdapter for 14 tool adapters)
+2. **Migrating to design patterns** (e.g., BaseAdapter for 29 tool adapters)
 3. **Splitting oversized files** (e.g., jmo.py: 2,456 lines -> 600 lines)
 4. **Preserving test coverage** and preventing regressions
 5. **Avoiding circular dependencies** with proven patterns

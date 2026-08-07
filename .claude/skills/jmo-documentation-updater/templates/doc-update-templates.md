@@ -339,9 +339,10 @@ jmo report ./results --outputs csv
 
 | Variant | Size | Tools Included | Use Case |
 |---------|------|----------------|----------|
-| `full` | ~2.5 GB | All 14 tools | Complete scanning |
-| `slim` | ~800 MB | 8 core tools | CI/CD |
-| `alpine` | ~400 MB | 6 essential tools | Minimal footprint |
+| `deep` | ~1.97 GB | 28 tools (4 manual-install) | Compliance audits, pentests |
+| `balanced` | ~1.41 GB | 17 tools | Production scans, CI/CD |
+| `slim` | ~557 MB | 13 tools | Cloud/IaC |
+| `fast` | ~502 MB | 9 tools | Pre-commit, PR validation |
 ```
 
 ## 9. Tool Count Changes (Critical for Docker Hub)
