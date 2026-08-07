@@ -160,11 +160,35 @@ def scan_k8s_resource(
             # FileNotFoundError at exec, and was recorded as a clean scan.
             statuses[result.tool] = False
             report_tool_failure(result, "its executable was not found at run time")
-        else:
-            # Other errors (timeout, non-zero exit, etc.)
+        elif result.timed_out:
+            # A timeout gets a stub so the report phase sees a consistent file
+            # tree -- but the stub must never be the only signal. Once read, an
+            # empty stub is indistinguishable from a tool that ran and found
+            # nothing, so the timeout has to be stated on the log or it is lost.
+            tool_out = out_dir / f"{result.tool}.json"
+            if not tool_out.exists():
+                _write_stub(result.tool, tool_out)
             statuses[result.tool] = False
             if result.attempts > 0:
                 attempts_map[result.tool] = result.attempts
+            report_tool_failure(result, "it timed out")
+        else:
+            # Other errors (non-zero exit, no output, etc.). This used to record
+            # False and return without logging anything at all, so a tool that
+            # failed contributed nothing to the scan and said so on no stream
+            # (#727). A non-TTY run renders no progress display, which makes the
+            # log the only durable record.
+            statuses[result.tool] = False
+            if result.attempts > 0:
+                attempts_map[result.tool] = result.attempts
+            report_tool_failure(
+                result,
+                (
+                    "it exited with an accepted code but wrote no output"
+                    if result.status == "no_output"
+                    else "it failed"
+                ),
+            )
 
     # Include attempts metadata if any retries occurred
     if attempts_map:
