@@ -117,15 +117,31 @@ def job_<type>(target):
 **Solution:**
 
 ```python
-# Use environment variables
+# Use environment variables -- and let the tool READ them itself
 def job_<type>(target):
-    token = os.environ.get("<TYPE>_TOKEN")
-    if not token:
+    if not os.environ.get("<TYPE>_TOKEN"):
         _log(args, "WARN", "Token not set, skipping")
         return target, {}
 
-    cmd = ["tool", "--token", token, target]  # Good!
+    # Best: the tool picks the credential up from the environment, so it
+    # never appears in argv at all.
+    cmd = ["tool", "scan", target]
+    rc, *_ = _run_cmd(cmd, timeout, env={**os.environ})
 ```
+
+**Reading from the environment is only half the fix.** Sourcing the token from
+`os.environ` instead of a literal keeps it out of *git*, but
+
+```python
+cmd = ["tool", "--token", token, target]   # still exposed
+```
+
+puts it straight back into the **process list** (CWE-214), where any local user
+can read it with `ps -ef`, `/proc/<pid>/cmdline`, or
+`Get-CimInstance Win32_Process` for as long as the scan runs. Hand the tool the
+environment and let it read the variable; pass the secret on the command line
+only if the tool supports nothing else. See
+[authentication-patterns.md](authentication-patterns.md) Pattern 1 vs Pattern 2.
 
 ## Pitfall 6: Not Sanitizing Batch File Input
 

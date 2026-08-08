@@ -72,12 +72,9 @@ def job_aws_account(account_id: str) -> tuple[str, dict[str, bool]]:
                 ok_rcs=(0, 1),  # 0 = pass, 1 = findings
             )
 
-            if rc in (0, 1):
-                statuses["prowler"] = True
-                attempts_map["prowler"] = used
-            elif args.allow_missing_tools:
-                _write_stub("prowler", out)
-                statuses["prowler"] = True
+            # prowler ran -- record its real result, never a stub.
+            statuses["prowler"] = rc in (0, 1)
+            attempts_map["prowler"] = used
         elif args.allow_missing_tools:
             _write_stub("prowler", out)
             statuses["prowler"] = True
@@ -181,12 +178,22 @@ jmo ci --aws-account 123456789012 --fail-on HIGH --profile-name balanced
 
 ```text
 # Production accounts
-123456789012  # Main prod
-234567890123  # Backup
+# (main prod, then backup)
+123456789012
+234567890123
 
 # Staging (commented out)
 # 345678901234
 ```
+
+`_iter_aws_accounts` skips **whole-line** comments only — it tests
+`line.startswith("#")` after stripping, and does nothing else to the line. An
+entry written as `123456789012  # Main prod` is therefore collected verbatim,
+comment and all, and no account parses. Put the annotation on its own line.
+
+The parser is right not to strip trailing `#`: `#` is legal inside other target
+identifiers — a URL fragment being the obvious one — so a blanket strip would
+silently truncate them.
 
 ---
 
@@ -246,13 +253,13 @@ def job_npm_package(package: str) -> tuple[str, dict[str, bool]]:
                 capture_stdout=True,  # npm audit writes to stdout
             )
 
-            if rc in (0, 1) and stdout:
+            # npm ran -- record its real result, never a stub. Empty stdout on
+            # an otherwise-OK exit is still a failure: nothing to normalize.
+            ok = rc in (0, 1) and bool(stdout)
+            if ok:
                 out.write_text(stdout, encoding="utf-8")
-                statuses["npm-audit"] = True
-                attempts_map["npm-audit"] = used
-            elif args.allow_missing_tools:
-                _write_stub("npm-audit", out)
-                statuses["npm-audit"] = True
+            statuses["npm-audit"] = ok
+            attempts_map["npm-audit"] = used
         elif args.allow_missing_tools:
             _write_stub("npm-audit", out)
             statuses["npm-audit"] = True
@@ -268,19 +275,23 @@ def job_npm_package(package: str) -> tuple[str, dict[str, bool]]:
                 "--json",
             ]
 
-            rc, _, _, used = _run_cmd(
+            # `snyk test --json` writes to stdout. Capture it and persist it to
+            # `out` -- exactly as npm audit does above. Without this, snyk.json
+            # is never created and the report phase finds nothing, while the
+            # scan still reports the tool as successful.
+            rc, stdout, _, used = _run_cmd(
                 cmd,
                 t_override("snyk", to),
                 retries=retries,
                 ok_rcs=(0, 1),
+                capture_stdout=True,
             )
 
-            if rc in (0, 1):
-                statuses["snyk"] = True
-                attempts_map["snyk"] = used
-            elif args.allow_missing_tools:
-                _write_stub("snyk", out)
-                statuses["snyk"] = True
+            ok = rc in (0, 1) and bool(stdout)
+            if ok:
+                out.write_text(stdout, encoding="utf-8")
+            statuses["snyk"] = ok
+            attempts_map["snyk"] = used
         elif args.allow_missing_tools:
             _write_stub("snyk", out)
             statuses["snyk"] = True
@@ -400,6 +411,18 @@ def job_graphql_api(api_url: str) -> tuple[str, dict[str, bool]]:
                 "--output", str(out),
             ]
 
+            # WARNING (CWE-214): this puts the bearer token in argv, where
+            # every local user can read it for the lifetime of the process
+            # (`ps -ef`, /proc/<pid>/cmdline, Get-CimInstance Win32_Process).
+            #
+            # Before copying this shape, check whether your tool can take the
+            # credential from the environment or a credentials file instead --
+            # that is Pattern 1 in references/authentication-patterns.md, and
+            # it is the one to prefer. Pass it via the subprocess `env=`
+            # argument rather than exporting it process-wide.
+            #
+            # Only fall back to a header on argv when the tool genuinely
+            # offers no other route, and never log the resulting command.
             if auth_token:
                 cmd.extend(["--header", f"Authorization: Bearer {auth_token}"])
 
@@ -412,12 +435,9 @@ def job_graphql_api(api_url: str) -> tuple[str, dict[str, bool]]:
                 ok_rcs=(0, 1),
             )
 
-            if rc in (0, 1):
-                statuses["graphql-cop"] = True
-                attempts_map["graphql-cop"] = used
-            elif args.allow_missing_tools:
-                _write_stub("graphql-cop", out)
-                statuses["graphql-cop"] = True
+            # graphql-cop ran -- record its real result, never a stub.
+            statuses["graphql-cop"] = rc in (0, 1)
+            attempts_map["graphql-cop"] = used
         elif args.allow_missing_tools:
             _write_stub("graphql-cop", out)
             statuses["graphql-cop"] = True
@@ -513,12 +533,9 @@ def job_mobile_app(app_path: Path) -> tuple[str, dict[str, bool]]:
                 ok_rcs=(0,)
             )
 
-            if rc == 0:
-                statuses["mobsf"] = True
-                attempts_map["mobsf"] = used
-            elif args.allow_missing_tools:
-                _write_stub("mobsf", out)
-                statuses["mobsf"] = True
+            # mobsf ran -- record its real result, never a stub.
+            statuses["mobsf"] = rc == 0
+            attempts_map["mobsf"] = used
         elif args.allow_missing_tools:
             _write_stub("mobsf", out)
             statuses["mobsf"] = True
@@ -530,6 +547,13 @@ scan_parser.add_argument("--mobile-src", help="Mobile app source directory")
 scan_parser.add_argument("--apk", help="Android APK file")
 scan_parser.add_argument("--ipa", help="iOS IPA file")
 scan_parser.add_argument("--mobile-apps-file", help="File with mobile app paths")
+
+# CI subcommand (MUST mirror scan args -- see Step 4). Without these,
+# `jmo ci --apk app.apk` exits 2 with "unrecognized arguments".
+ci_parser.add_argument("--mobile-src", help="Mobile app source directory")
+ci_parser.add_argument("--apk", help="Android APK file")
+ci_parser.add_argument("--ipa", help="iOS IPA file")
+ci_parser.add_argument("--mobile-apps-file", help="File with mobile app paths")
 ```
 
 ### Usage
@@ -590,12 +614,9 @@ def job_host_audit() -> tuple[str, dict[str, bool]]:
                 ok_rcs=(0,)
             )
 
-            if rc == 0:
-                statuses["lynis"] = True
-                attempts_map["lynis"] = used
-            elif args.allow_missing_tools:
-                _write_stub("lynis", out)
-                statuses["lynis"] = True
+            # lynis ran -- record its real result, never a stub.
+            statuses["lynis"] = rc == 0
+            attempts_map["lynis"] = used
         elif args.allow_missing_tools:
             _write_stub("lynis", out)
             statuses["lynis"] = True
@@ -611,6 +632,11 @@ if _should_run_host_audit(args):
 # Step 4: CLI Arguments
 scan_parser.add_argument("--host-audit", action="store_true",
                         help="Run system hardening audit on localhost")
+
+# CI subcommand (MUST mirror scan args -- see Step 4). Without this,
+# `jmo ci --host-audit` exits 2 with "unrecognized arguments".
+ci_parser.add_argument("--host-audit", action="store_true",
+                       help="Run system hardening audit on localhost")
 ```
 
 ### Usage

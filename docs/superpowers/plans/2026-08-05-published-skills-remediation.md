@@ -1,6 +1,6 @@
 # Remediating the newly-published `.claude/` skills and agents
 
-**Status:** chunks A, B, C, D and H complete (60/103); E, F, G remain
+**Status:** chunks A, B, C, D, E and H complete (79/103); F, G remain
 **Branch:** one branch per chunk off `dev`; PR into `dev`. Never `main`.
 **Tracking issue:** [#718](https://github.com/jimmy058910/jmo-security-repo/issues/718)
 **Endgame:** land all 103 on `dev`, then `dev -> main` as **v1.0.9**
@@ -174,6 +174,34 @@ the PR conversation.
 - **Read the `windows-2022` job log, not its check tick** — it is
   `continue-on-error: true` and reports success over failures. Same applies to
   the two Juice Shop E2E steps (`scheduled.yml:841`, `:927`).
+
+### Learned in chunk E — apply to F and G
+
+- **Precision is not evidence — it is camouflage.** Chunk E's three worst
+  findings were all *specific*: `require('@cloudflare/turnstile')` (npm 404),
+  `X-Frame-Options` in a `<meta>` tag (inert), `--cov-fail-under=85` (set
+  nowhere; CI's real floor is 70%). Each read as authoritative precisely
+  because it named a thing. A vague claim invites checking; a precise one
+  deflects it. Check the named thing.
+- **Verify the fix's own mechanism, not just the finding's.** Executing my
+  replacement for the cache-miss finding proved *it* was broken: `jq -e ...
+  2>/dev/null || echo "cache miss"` reports a miss for every lookup on a box
+  without `jq`. Second time this session a self-authored recipe failed on
+  first execution (chunk D's `sha256sum -c` was the first). Run what you write.
+- **Don't invent a flag to make a fix land.** A first draft here added
+  `--header-from-env` to graphql-cop — a tool not in `versions.yaml`, so the
+  flag could not be verified and was almost certainly imaginary. Removing
+  fiction by adding fiction is not progress. If the safe API cannot be named,
+  document the exposure instead.
+- **Prefer package metadata to web research.** ScoutSuite's entry point was
+  settled by downloading the 5.14.0 wheel and reading `entry_points.txt`
+  (`scout = ScoutSuite.__main__:run_from_cli`, no `scoutsuite`), not by
+  trusting the search result that said the same thing.
+- **The Grep tool and `grep` disagreed once.** A Grep-tool search for
+  `os.environ` in `.claude/skills` returned no matches while plain `grep -rn`
+  found two. Cross-check a *negative* result before concluding a pattern is
+  absent. (Recursive `grep -r` from Bash still times out at 120s — it bit twice
+  this session; scope it to one directory.)
 
 ### Learned in chunks C and D — apply to E, F, G
 

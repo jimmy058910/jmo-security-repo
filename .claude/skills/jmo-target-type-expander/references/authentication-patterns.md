@@ -8,8 +8,11 @@ This reference covers the three standard patterns used in JMo Security.
 ```python
 # In job_<type>() function
 
-# Check for required credentials in environment
-if "<TYPE>_TOKEN" not in os.environ:
+# Check for required credentials in environment.
+# `not os.environ.get(...)` -- NOT `not in os.environ`. A CI secret that
+# failed to resolve is exported as an EMPTY STRING, which `in` accepts; the
+# scan then runs unauthenticated and reports success over partial results.
+if not os.environ.get("<TYPE>_TOKEN"):
     _log(args, "WARN", f"<TYPE>_TOKEN not set, skipping <type> {target}")
     return target, {}
 
@@ -76,8 +79,16 @@ cmd = [
 
 **Cons:**
 
-- Token in process list (security risk)
+- **Token in process list (CWE-214).** `argv` is world-readable on a shared
+  host — `ps -ef`, `/proc/<pid>/cmdline`, and `Get-CimInstance Win32_Process`
+  all expose it, to any local user, for as long as the scan runs. It also
+  reaches shell history and any log that echoes the command.
 - Harder to manage in CI/CD
+
+**Prefer Pattern 1 whenever the tool supports it.** Use this pattern only for a
+tool that offers no environment or credential-file route, and say so in the
+adapter's docstring. If you must pass a secret through `argv`, do not also log
+the command.
 
 **Example: GitLab Repos**
 

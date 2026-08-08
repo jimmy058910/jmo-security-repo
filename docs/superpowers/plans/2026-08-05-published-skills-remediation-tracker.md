@@ -6,7 +6,7 @@
 
 ## Progress
 
-**60 / 103 resolved.**
+**79 / 103 resolved.**
 
 | Chunk | Scope | Findings | Done | Status |
 |---|---|---:|---:|---|
@@ -14,11 +14,11 @@
 | **B** | dashboard-builder + documentation-updater | 13 | 13 | **complete** |
 | **C** | adapter-generator + test-fabricator | 15 | 15 | **complete** |
 | **D** | jmo-ci-debugger | 13 | 13 | **complete** |
-| **E** | target-type-expander + security-hardening | 19 | 0 | not started |
+| **E** | target-type-expander + security-hardening | 19 | 19 | **complete** |
 | **F** | the 7 agents | 13 | 0 | not started |
 | **G** | tail: refactoring, compliance, systematic-debugging, references | 11 | 0 | not started |
 | **H** | repo config authored by PR #717 | 6 | 6 | **complete** |
-| | **total** | **103** | **60** | |
+| | **total** | **103** | **79** | |
 
 ## How to mark a finding off
 
@@ -489,72 +489,175 @@ downloaded, checksummed and extracted for real.
       `scripts.core.constants`, which does not exist - so it hit `exit 1` on
       every run, and a hook that always fails gets bypassed with `--no-verify`.
 
-## Chunk E - target-type-expander + security-hardening  (0/19)
+## Chunk E - target-type-expander + security-hardening  (19/19)
 
+Root-cause shape: **SPECIFICITY**. Three findings turned out to be claims
+*about* claims — a package that does not exist, a protection that cannot work
+as delivered, and a gate that fires nowhere. Each had survived because it was
+precise: a vague claim invites checking, a specific one does not.
 
 **`.claude/skills/jmo-security-hardening/examples/vulnerability-fix-examples.md`**
 
-- [ ] **Major** L159: (claim nested; read from the PR conversation)
-- [ ] **Major** L331: (claim nested; read from the PR conversation)
+- [x] **Major** L159 **FIXED, and the finding understated it.** It said
+  `--profile` is "a timing/reporting flag" on scan. Measured: `jmo scan` has
+  **no `--profile` at all** — `--help` lists only `--profile-name`, and
+  `--profile balanced` is silently accepted only because argparse abbreviates
+  unambiguous prefixes. Reproduced in isolation: with just `--profile-name`
+  defined, `parse_known_args(["--profile","fast"])` → `profile_name='fast'`;
+  with both defined (which is `jmo ci`) it binds the boolean and leaves
+  `'fast'` stray. Switched to `--profile-name` and recorded why.
+- [x] **Major** L331 **FIXED at both sites, scope wider than reported.** The
+  finding named 2 inert mechanisms; there are **3**. `X-Frame-Options` **and**
+  `X-Content-Type-Options` are header-only in a `<meta>`, plus CSP's
+  `frame-ancestors`. `<meta name="referrer">` and `<meta name="robots">` are
+  correct meta forms. Production emits all of them
+  (`scripts/dashboard/index.html:8-12`), so the docs now say these are
+  documentation of intent, not enforcement — and note that
+  `tests/reporters/test_html_security.py` asserts *presence*, not enforcement.
+- [x] **Minor** L76 **FIXED by rewriting against real code.** The finding asked
+  for `hostname`/`action` validation after `verify()`. But `verify()` came from
+  `require('@cloudflare/turnstile')`, and **`npm view @cloudflare/turnstile`
+  returns 404** — the package does not exist. Polishing that call would have
+  refined fiction. Rewrote the example as the siteverify POST the shipped
+  endpoint actually performs (`scripts/api/subscribe_endpoint.js:104-126`),
+  then added the context checks, keeping its fail-closed 503 behaviour.
 
 **`.claude/skills/jmo-security-hardening/references/rollback-performance.md`**
 
-- [ ] **Major** L55: Remove force-push from the standard rollback procedure
+- [x] **Major** L55 **FIXED, scope wider than reported.** The finding flagged
+  the force-push in Option 3; Option 1 also pushed straight to `main`. Both are
+  blocked, and this was checked against the live API rather than assumed:
+  ruleset `9147592` is `active` on `refs/heads/main` with `pull_request` and
+  `non_fast_forward`; only `actor_id: 5` (Repository Admin) has
+  `bypass_mode: always`. Rewrote all three options to go through a PR and
+  documented the `gh api` command that re-verifies the rules.
 
 **`.claude/skills/jmo-target-type-expander/SKILL.md`**
 
-- [ ] **Major** L169: Do not convert scanner failures into missing-tool stubs
-- [ ] **Major** L174: Make sanitized output names collision-resistant
-- [ ] **Major** L244: Use one result-directory contract across producers and reporting
+- [x] **Major** L169 **FIXED — highest-value item in the chunk.** The `elif
+  args.allow_missing_tools` sat inside the `_tool_exists` branch, so a tool
+  that ran and *failed* got a stub and reported success. This is the exact bug
+  the scan core carried in five jobs, which hid three scanners (yara,
+  dependency-check, prowler) that had never once worked. Rewrote to record the
+  real exit code, and pointed at the production shape in
+  `scripts/cli/scan_jobs/image_scanner.py:88-116`. **Six copied instances** in
+  `examples/real-world-examples.md` fixed too — the finding said "branches"
+  without a count.
+- [x] **Major** L174 **FIXED.** Replaced the skill's private
+  `re.sub(r"[^a-zA-Z0-9._-]", "_", ...)` with the shared
+  `_sanitize_path_component` (`scripts/cli/path_sanitizers.py:16`) — the skill
+  had been documenting a *second*, different sanitizer. Executed it: `a/b`,
+  `a?b`, `a:b`, `a|b`, `a<b` → **5 distinct inputs, 1 output** (`a_b`).
+  Documented a sha256-suffix disambiguation and ran that too.
+- [x] **Major** L244 **FIXED, and the real defect was bigger.** Not a naming
+  mismatch: the table claimed "currently supports 9 target types" while
+  **6** exist. All seven CLI flags for Cloud/Mobile/Host are absent from
+  `jmo scan --help`, nothing in `scripts/` references
+  `individual-cloud|mobile|hosts`, and `normalize_and_report.py:162-167` lists
+  six. Marked those three rows *(not implemented)*, made the `target_dirs`
+  example match reality verbatim, and added a `jq` check that proves the wiring
+  end-to-end — because omitting this step fails **silently**.
+- [x] **Minor** L49 **FIXED.** Three counts disagreed: "4-function pattern"
+  (L45), "4-Step Implementation Pattern" (L97), and a 6-item checklist against
+  5 defined sections. Settled on **5**, folding the checklist's "results
+  directory created" into Step 2, which is where `job_<type>` does the `mkdir`.
 
 **`.claude/skills/jmo-target-type-expander/examples/real-world-examples.md`**
 
-- [ ] **Major** L286: (claim nested; read from the PR conversation)
-- [ ] **Major** L533: Mirror target flags in `ci_parser`
+- [x] **Major** L286 **FIXED.** The Snyk branch declared `out = out_dir /
+  "snyk.json"` and never wrote it — `rc, _, _, used` discarded stdout with no
+  `capture_stdout=True`, so the file never existed and the report phase found
+  nothing while the tool reported success. Mirrored the npm-audit handling
+  directly above it.
+- [x] **Major** L533 **FIXED at both sites.** Examples 1-3 register `scan_parser`
+  *and* `ci_parser`; mobile (L524-527) and host (L604) registered only
+  `scan_parser`, contradicting the skill's own Step 4 rule. Added the `ci_parser`
+  mirrors. Confirmed the failure is real, not theoretical: `jmo ci --repo .
+  --fail-on HIGH --profile balanced` exits **2**, `unrecognized arguments`.
+- [x] **Minor** L188 **FIXED.** Executed the documented parser against the
+  documented sample: both entries came back as
+  `'123456789012  # Main prod'`, and **0 of 2** parsed as valid account IDs.
+  Moved the annotations onto their own lines, and recorded why the parser is
+  right *not* to strip trailing `#` — it is legal in other target identifiers,
+  URL fragments especially.
 
 **`.claude/skills/jmo-target-type-expander/references/authentication-patterns.md`**
 
-- [ ] **Major** L68: (claim nested; read from the PR conversation)
-
-**`.claude/skills/jmo-security-hardening/SKILL.md`**
-
-- [ ] **Minor** L245: Correct the contradictory MEDIUM finding counts
-
-**`.claude/skills/jmo-security-hardening/examples/vulnerability-fix-examples.md`**
-
-- [ ] **Minor** L76: (claim nested; read from the PR conversation)
-
-**`.claude/skills/jmo-security-hardening/references/python-compat.md`**
-
-- [ ] **Minor** L23: (claim nested; read from the PR conversation)
-
-**`.claude/skills/jmo-security-hardening/templates/security-commit-template.md`**
-
-- [ ] **Minor** L84: Do not hard-code a co-author in the example
-
-**`.claude/skills/jmo-target-type-expander/SKILL.md`**
-
-- [ ] **Minor** L49: Make the implementation-step count consistent
-
-**`.claude/skills/jmo-target-type-expander/examples/real-world-examples.md`**
-
-- [ ] **Minor** L188: Make the batch-file syntax match the parser
-
-**`.claude/skills/jmo-target-type-expander/references/authentication-patterns.md`**
-
-- [ ] **Minor** L17: Reject empty environment credentials
+- [x] **Major** L68 **FIXED at all 3 sites**, and the anchors were correct this
+  time (chunk D's wrong-file trap did not recur — verified by grepping the
+  cited symbols first). Pattern 2's cons now name CWE-214 and the three ways
+  `argv` leaks (`ps -ef`, `/proc/<pid>/cmdline`, `Get-CimInstance
+  Win32_Process`). `real-world-examples.md` GraphQL header carries the warning
+  and points at Pattern 1. `common-pitfalls.md` "Good!" example now shows the
+  tool reading the variable itself — sourcing from `os.environ` keeps a secret
+  out of *git* but puts it straight back in the *process list*.
+  **Self-correction:** the first draft invented a `--header-from-env` flag for
+  graphql-cop. That tool is not in `versions.yaml`, so the flag was
+  unverifiable — exactly the fiction this chunk exists to remove. Reverted to
+  the flag that exists, with the exposure stated plainly.
+- [x] **Minor** L17 **FIXED.** `"<TYPE>_TOKEN" not in os.environ` accepts an
+  empty value; an unresolved CI secret is exported as `""`, so the scan runs
+  unauthenticated and reports success. Now `not os.environ.get(...)`. One site
+  — grepped for siblings; `common-pitfalls.md:122` already used `.get`.
 
 **`.claude/skills/jmo-target-type-expander/references/memory-integration.md`**
 
-- [ ] **Minor** L29: Handle cache misses explicitly
+- [x] **Minor** L29 **FIXED, and executing it caught a bug in my own fix.**
+  `cat <missing> | jq` errors on a miss, which is the normal case. First
+  replacement used `jq -e ... 2>/dev/null || echo "cache miss"` — and on this
+  box, where `jq` is **not installed**, that reports "cache miss" for *every*
+  lookup including present-and-correct entries. A cache that can only miss is
+  indistinguishable from no cache. Final version guards with `command -v jq`
+  and separates rc 2 (no jq) from rc 1 (no entry); all four paths executed
+  against a stub `jq`. Also recorded that **nothing creates `.jmo/memory/`** —
+  no `scripts/` file references it and it is absent from a checkout.
 
 **`.claude/skills/jmo-target-type-expander/references/tool-selection.md`**
 
-- [ ] **Minor** L64: (claim nested; read from the PR conversation)
+- [x] **Minor** L64 **FIXED, verified from the package rather than the web.**
+  Downloaded the ScoutSuite 5.14.0 wheel from PyPI and read
+  `entry_points.txt`: `[console_scripts]` declares exactly `scout =
+  ScoutSuite.__main__:run_from_cli` and no `scoutsuite`. Corrected the command
+  and annotated the tool table.
+
+**`.claude/skills/jmo-security-hardening/SKILL.md`**
+
+- [x] **Minor** L245 **FIXED.** "0 MEDIUM (from 6)" vs an enumerated list of 3
+  IDs. Took the enumerated list as authoritative → "from 3". Checked first that
+  the four cited target files all exist; they do, so this skill is grounded in
+  real code and only the count was wrong.
+
+**`.claude/skills/jmo-security-hardening/references/python-compat.md`**
+
+- [x] **Minor** L23 **DELETED (whole file).** The finding asked to change one
+  row from 3.9+ to 3.10+. That row is wrong, but the file's *premise* is the
+  defect: it teaches Python 3.8 workarounds for a repo pinned to
+  `requires-python = ">=3.12"`, which its own line 24 admitted. Measured: 151
+  of 183 `scripts/*.py` (83%) carry `from __future__ import annotations`;
+  `is_relative_to`/`removeprefix`/`removesuffix` are used freely; and its
+  "3.8-compatible" example **is** the production `_validate_output_path`
+  (`scripts/cli/path_sanitizers.py:62-99`), so it taught strictly less than the
+  source. Both `SKILL.md` references replaced with a pointer to that module.
+  > Also corrected the handoff's framing: `str | None` **parses** fine under
+  > `ast.parse(..., feature_version=(3,8))`. It fails at *evaluation* on <3.10,
+  > and not at all under `from __future__ import annotations`.
 
 **`.claude/skills/jmo-security-hardening/templates/security-commit-template.md`**
 
-- [ ] **Trivial** L30: Record the repository-required verification
+- [x] **Minor** L84 **FIXED, and it broke a standing convention.** Not merely a
+  hardcoded co-author: `Co-Authored-By: Claude <noreply@anthropic.com>` is an
+  AI-attribution marker, which this project forbids in commits and PRs. Removed
+  from the example; the template slot is documented as being for a human
+  reviewer who has agreed.
+- [x] **Trivial** L30 **FIXED, with the 85% claim corrected rather than
+  copied.** Added `make fmt && make lint && make test` (real). Did **not** add
+  a ">=85% coverage" gate, because it does not exist: `--cov-fail-under=85`
+  appears only in `.claude/` prose, `make test` runs `pytest ... --cov
+  --cov-report=term-missing` with no threshold, `[tool.coverage.report]` sets
+  no `fail_under`, and CI's only enforced floor is **70%**
+  (`.github/workflows/ci.yml:734`) — whose own comment claims `make test`
+  enforces 85%. Filed separately; template now says "Coverage: [NN]% (CI floor:
+  70%)". Same correction applied to the target-type-expander checklist.
 
 ## Chunk F - the 7 agents  (0/13)
 

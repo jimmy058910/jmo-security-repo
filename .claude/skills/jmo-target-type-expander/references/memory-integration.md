@@ -17,16 +17,46 @@ for caching learned patterns, tool compatibility, and API structures.
 
 ## Query Before Analysis
 
+A cache **miss is the normal case**, not an error — so check that the file
+exists before reading it. `cat <missing> | jq ...` prints a shell error, feeds
+`jq` an empty stream, and looks like a failure rather than "nothing cached
+yet":
+
 ```bash
-# Check if AWS S3 pattern already learned
-cat .jmo/memory/target-types/aws-s3.json | jq '.api_pattern'
+# Usage: mem_get <target-type> <jq-filter>
+#   rc 0 = hit (value printed)   rc 1 = miss   rc 2 = jq unavailable
+mem_get() {
+  command -v jq >/dev/null 2>&1 || { echo "ERROR: jq not installed"; return 2; }
+  f=".jmo/memory/target-types/$1.json"
+  [ -f "$f" ] || { echo "cache miss: no entry for $1"; return 1; }
+  jq -e "$2" "$f" || { echo "cache miss: $1 has no $2"; return 1; }
+}
 
-# Check if npm registry structure cached
-cat .jmo/memory/target-types/npm-registry.json | jq '.schema'
-
-# Check if GraphQL introspection pattern cached
-cat .jmo/memory/target-types/graphql.json | jq '.introspection_query'
+mem_get aws-s3       .api_pattern
+mem_get npm-registry .schema
+mem_get graphql      .introspection_query
 ```
+
+`jq -e` exits non-zero when the filter yields `null` or `false`, so a file that
+exists but lacks the key is reported as a miss too, rather than printing a bare
+`null`.
+
+> **The `command -v jq` guard is load-bearing.** The first version of this
+> helper wrote `jq -e ... 2>/dev/null || echo "cache miss"`. On a box without
+> `jq` — this one — the `jq` call fails every time, `2>/dev/null` hides the
+> reason, and the `||` branch reports **"cache miss" for every lookup,
+> including entries that are present and correct**. A cache that can only ever
+> miss is indistinguishable from no cache at all, and nothing about the output
+> says so. Separate "no jq" (rc 2) from "no entry" (rc 1) so the failure is
+> visible.
+>
+> **Nothing creates `.jmo/memory/`.** No file under `scripts/` references the
+> path (`grep -rn "jmo/memory" scripts/` → no matches), and it does not exist
+> in a fresh checkout. This namespace is a convention *this skill* maintains,
+> so on a first run **every** lookup above is a miss and the full-analysis
+> branch is the one that runs. Treat a hit as the exception. `jq` is also not
+> guaranteed to be installed — check with `command -v jq` before relying on
+> these snippets.
 
 ## Storage Format (JSON)
 

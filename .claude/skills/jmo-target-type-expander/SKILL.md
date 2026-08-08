@@ -22,9 +22,18 @@ the multi-target scanning pattern.
 
 **Approach:** Follow the existing pattern precisely. Study how the most recent target type was added, replicate exactly.
 
-## Current Target Types (v1.0.0)
+## Current Target Types
 
-JMo Security currently supports 9 target types:
+JMo Security **implements 6** target types. The last three rows below are
+**not implemented** — they are the worked examples this skill uses to show what
+adding a target type involves, and none of their CLI flags exists yet
+(`jmo scan --help` lists no `--aws-account`, `--apk`, `--ipa`, `--mobile-src`
+or `--host-audit`).
+
+The authoritative list is `target_dirs` in
+[scripts/core/normalize_and_report.py](../../../scripts/core/normalize_and_report.py)
+(lines 162-167) — a directory absent from it is never read, so anything written
+there is silently discarded at report time.
 
 | Target Type | CLI Flags | Directory | Tools | Example |
 |-------------|-----------|-----------|-------|---------|
@@ -34,19 +43,20 @@ JMo Security currently supports 9 target types:
 | **Web URLs** | `--url`, `--urls-file`, `--api-spec` | `individual-web/` | zap, nuclei | `--url https://example.com` |
 | **GitLab Repos** | `--gitlab-repo`, `--gitlab-group`, `--gitlab-token` | `individual-gitlab/` | trufflehog | `--gitlab-repo mygroup/repo` |
 | **Kubernetes Clusters** | `--k8s-context`, `--k8s-namespace`, `--k8s-all-namespaces` | `individual-k8s/` | trivy | `--k8s-context prod` |
-| **Cloud Accounts** | `--aws-account`, `--azure-subscription`, `--gcp-project` | `individual-cloud/` | prowler, kubescape, scoutsuite | `--aws-account 123456789012` |
-| **Mobile Apps** | `--mobile-src`, `--apk`, `--ipa` | `individual-mobile/` | mobsf | `--apk app-release.apk` |
-| **Host Audits** | `--host-audit` | `individual-hosts/` | lynis | `--host-audit` |
+| *(not implemented)* **Cloud Accounts** | `--aws-account`, `--azure-subscription`, `--gcp-project` | `individual-cloud/` | prowler, kubescape, scoutsuite | `--aws-account 123456789012` |
+| *(not implemented)* **Mobile Apps** | `--mobile-src`, `--apk`, `--ipa` | `individual-mobile/` | mobsf | `--apk app-release.apk` |
+| *(not implemented)* **Host Audits** | `--host-audit` | `individual-hosts/` | lynis | `--host-audit` |
 
 ## Architecture Overview
 
 ### Key Principles
 
-1. **Consistent Pattern:** All target types follow the same 4-function pattern
+1. **Consistent Pattern:** All target types follow the same 5-step pattern
 2. **Parallel Execution:** ThreadPoolExecutor scans targets concurrently
 3. **Directory Isolation:** Each target instance gets its own directory
 4. **Unified Reporting:** All findings deduplicated across target types
-5. **Error Resilience:** `--allow-missing-tools` writes stubs for missing tools
+5. **Error Resilience:** `--allow-missing-tools` writes stubs for tools that are
+   **absent** — never for tools that ran and failed (see Step 2)
 
 ### Scan Flow
 
@@ -84,9 +94,6 @@ results/
 ├── individual-web/            # Web/API scanning
 ├── individual-gitlab/         # GitLab-specific scanning
 ├── individual-k8s/            # Kubernetes cluster scanning
-├── individual-cloud/          # Cloud account scanning
-├── individual-mobile/         # Mobile app scanning
-├── individual-hosts/          # Host audit scanning
 ├── individual-<type>s/        # YOUR NEW TARGET TYPE
 │   └── <sanitized-name>/
 │       ├── tool1.json
@@ -94,7 +101,7 @@ results/
 └── summaries/                 # Aggregated reports (all targets)
 ```
 
-## 4-Step Implementation Pattern
+## 5-Step Implementation Pattern
 
 Every target type follows this exact pattern in [scripts/cli/jmo.py](../../../scripts/cli/jmo.py):
 
@@ -130,7 +137,9 @@ handles tool existence checks, supports `--allow-missing-tools`.
 ```python
 def job_<type>(target: str) -> tuple[str, dict[str, bool]]:
     """Scan a single <type> target."""
-    safe_name = re.sub(r"[^a-zA-Z0-9._-]", "_", str(target))
+    # Use the shared sanitizer -- do not write a second one.
+    from scripts.cli.path_sanitizers import _sanitize_path_component
+    safe_name = _sanitize_path_component(str(target))
     out_dir = results_dir / "individual-<type>s" / safe_name
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -155,23 +164,39 @@ def job_<type>(target: str) -> tuple[str, dict[str, bool]]:
                 cmd, t_override("tool1", to),
                 retries=retries, ok_rcs=(0, 1),
             )
-            ok = rc in (0, 1)
-            if ok:
-                statuses["tool1"] = True
-                attempts_map["tool1"] = used
-            elif args.allow_missing_tools:
-                _write_stub("tool1", out)
-                statuses["tool1"] = True
-            else:
-                statuses["tool1"] = False
+            # The tool EXISTS, so its exit code is the real result. Record it
+            # as-is -- do NOT fall back to a stub here.
+            statuses["tool1"] = rc in (0, 1)
+            attempts_map["tool1"] = used
         elif args.allow_missing_tools:
+            # Reached only when the executable is ABSENT.
             _write_stub("tool1", out)
             statuses["tool1"] = True
 
     return str(target), statuses
 ```
 
-**Directory Naming:** Always sanitize with `re.sub(r"[^a-zA-Z0-9._-]", "_", target)`.
+**`--allow-missing-tools` means missing, not failing.** Note where the
+`elif` attaches: to `_tool_exists`, not to the return code. If a stub is
+written when an installed tool crashes, times out, or is misconfigured, the
+scan reports success over an empty file and the failure never surfaces —
+`jmo` shipped exactly that bug, in five scan jobs, and it hid three scanners
+(yara, dependency-check, prowler) that had **never once worked**. The
+production shape to copy is in
+[scripts/cli/scan_jobs/](../../../scripts/cli/scan_jobs/) — e.g.
+`image_scanner.py:88-116`, where the `elif allow_missing_tools:` sits on the
+tool-path check and the run result is recorded by the runner.
+
+**Directory Naming:** use `_sanitize_path_component()` from
+[scripts/cli/path_sanitizers.py](../../../scripts/cli/path_sanitizers.py).
+
+It is deliberately **not injective** — `a/b`, `a?b` and `a:b` all collapse to
+`a_b` — so two distinct targets in one scan can land in the same directory and
+overwrite each other's output. If a target type admits names that differ only
+in separator or Windows-reserved characters (URLs and registry references do),
+disambiguate the directory, e.g.
+`f"{safe_name}-{hashlib.sha256(target.encode()).hexdigest()[:8]}"`, or detect
+the collision and fail rather than silently merging two targets' findings.
 
 ### Step 3: Parallel Execution with ThreadPoolExecutor
 
@@ -230,6 +255,7 @@ Add the new target directory to `target_dirs` in `scripts/core/normalize_and_rep
 Existing tool loaders and deduplication work automatically across all target types.
 
 ```python
+# scripts/core/normalize_and_report.py:162-167 -- the real list, verbatim
 target_dirs = [
     results_dir / "individual-repos",
     results_dir / "individual-images",
@@ -237,11 +263,20 @@ target_dirs = [
     results_dir / "individual-web",
     results_dir / "individual-gitlab",
     results_dir / "individual-k8s",
-    results_dir / "individual-cloud",
-    results_dir / "individual-mobile",
-    results_dir / "individual-hosts",
     results_dir / "individual-<type>s",  # ADD NEW TARGET TYPE HERE
 ]
+```
+
+**This step is not optional, and skipping it fails silently.** The scan writes
+its JSON, every tool reports success, and the report phase simply never looks
+in the directory — no error, no warning, zero findings. Verify with an actual
+scan, not by reading the diff:
+
+```bash
+jmo scan --<type> <target> --results-dir /tmp/tt && \
+  jmo report /tmp/tt && \
+  jq '[.findings[] | select(.target_type=="<type>")] | length' \
+     /tmp/tt/summaries/findings.json     # must be > 0
 ```
 
 ## Reference Documentation
@@ -280,8 +315,8 @@ When adding a new target type, verify all items:
 - [ ] **Step 2:** `job_<type>(target)` scan function created
 - [ ] **Step 3:** ThreadPoolExecutor parallel execution added
 - [ ] **Step 4:** CLI arguments added to `scan` AND `ci` subcommands
-- [ ] **Step 5:** Results directory structure created (`individual-<type>s/`)
-- [ ] **Step 6:** Target directory added to `normalize_and_report.py`
+- [ ] **Step 5:** Target directory added to `normalize_and_report.py`
+      (`job_<type>` already creates `individual-<type>s/` via `mkdir`)
 
 ### Tool Integration
 
@@ -314,5 +349,6 @@ When adding a new target type, verify all items:
 ### Quality Assurance
 
 - [ ] Pre-commit hooks pass (`make fmt && make lint`)
-- [ ] Full test suite passes (`make test` with >=85% coverage)
+- [ ] Full test suite passes (`make test`; CI's enforced coverage floor is 70%,
+      in `.github/workflows/ci.yml:734` -- nothing sets `--cov-fail-under=85`)
 - [ ] CI pipeline passes
