@@ -1015,11 +1015,15 @@ git commit --no-verify -m "emergency hotfix"
 **Symptoms:**
 
 ```text
-FAILED tests/adapters/test_snyk_adapter.py::test_snyk_basic
-=============================== Coverage =============================
-TOTAL                        1234    245     82%
-FAILED: Coverage of 82% is below threshold of 85%
+📊 Combined coverage: 68.7%
+❌ Coverage 68.7% is below 70% CI threshold
 ```
+
+Those two lines are the **real** symptom, printed by the `Verify coverage
+threshold` step of the `coverage-aggregate` job. pytest itself emits nothing
+here — `--cov-fail-under` is set nowhere (#756), so there is no
+`Coverage of N% is below threshold` line to search for. Grep the run log for
+`is below 70% CI threshold`.
 
 **Root Cause:**
 
@@ -1078,7 +1082,9 @@ def test_snyk_nested_arrays(tmp_path: Path):
 
 **Coverage Best Practices:**
 
-- **Aim for >90%:** Gives buffer below 85% threshold
+- **Aim for >90%:** CI fails only below 70% (`ci.yml:734`), so the buffer you are
+  keeping is against review and against the next regression, not against a build
+  failure
 - **Test all error paths:** Not just happy path
 - **Use coverage report:** `--cov-report=html` for visual coverage map
 - **Don't skip tests:** Avoid `@pytest.mark.skip` without good reason
@@ -1394,7 +1400,7 @@ gh pr merge --squash
 ```bash
 # Pre-flight checklist (prevents PR failures)
 make pre-commit-run  # All pre-commit hooks
-make test           # Tests with coverage >=85%
+make test           # Tests with a coverage report -- no threshold (#756)
 make lint           # Additional linting
 
 # Check for common issues

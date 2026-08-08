@@ -41,7 +41,9 @@ You have access to all code analysis tools:
 
 **Target Thresholds:**
 
-- **Test Coverage:** ≥85% (enforced by CI)
+- **Test Coverage:** ≥85% as a review target — **not a CI gate**. CI's only
+  enforced floor is 70% (`.github/workflows/ci.yml:734`); `--cov-fail-under` is
+  set nowhere in this repository (#756)
 - **Cyclomatic Complexity:** ≤10 per function
 - **File Length:** ≤500 lines (exceptions: adapters ≤300 lines)
 - **Function Length:** ≤50 lines
@@ -708,7 +710,7 @@ RETRIES_DEEP = 1
 RETRIES_MAX = 3
 
 # Coverage constants
-COVERAGE_THRESHOLD = 85  # CI enforces 85%+
+COVERAGE_THRESHOLD = 85  # review target; CI's enforced floor is 70% (#756)
 
 # Schema versions
 SCHEMA_VERSION_CURRENT = "1.2.0"

@@ -34,7 +34,7 @@ Generate comprehensive pytest test suites for JMo Security with fabricated fixtu
 
 **Config/CLI Testing:** Config loaders, YAML parsing, field validation, multi-target helpers, argument parsing.
 
-**General:** CI coverage below 85%, new CommonFinding schema features, improving coverage for any module.
+**General:** coverage below the project's 85% target (CI itself fails only below 70%, `ci.yml:734`), new CommonFinding schema features, improving coverage for any module.
 
 ---
 

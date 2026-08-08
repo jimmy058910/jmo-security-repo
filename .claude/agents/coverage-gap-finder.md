@@ -739,7 +739,8 @@ def test_specific_edge_case(tmp_path: Path):
 
 5. **"Will this code pass CI?"**
    - Run coverage check
-   - Compare to 85% threshold
+   - Compare to CI's **70%** floor (`ci.yml:734`) — that is the only number that
+     can fail the build. Report 85% separately, as a target rather than a gate
    - Report pass/fail
    - List gaps if failing
 

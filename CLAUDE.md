@@ -10,7 +10,7 @@ JMo Security is a terminal-first security audit toolkit orchestrating 29 scanner
 
 **Version:** v1.0.8 (latest released — see CHANGELOG.md for full history)
 **Philosophy:** Two-phase architecture: scan (invoke tools) → report (normalize, dedupe, output)
-**Test Coverage:** 8,000+ tests, 87% coverage, CI requires ≥85% (sharded across 4 parallel jobs); CI quick threshold 70% (excludes slow/docker/requires_tools/smoke)
+**Test Coverage:** 8,000+ tests, sharded across 4 parallel jobs. The **only enforced floor is 70%** (`.github/workflows/ci.yml:734`, on the marker-filtered suite — excludes slow/docker/requires_tools/smoke). Nothing sets `--cov-fail-under` (#756); measure current coverage rather than quoting a figure from this file
 
 **Key v1.0 Features:**
 
@@ -373,7 +373,7 @@ See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for complete configuration referenc
 
 | Issue | Solution |
 |-------|----------|
-| Tests failing | `make test --maxfail=1`, check coverage ≥85% |
+| Tests failing | `make test` (already carries `--maxfail=1` via `TEST_FLAGS`). No local coverage gate exists — CI's floor is 70%, `ci.yml:734` (#756) |
 | Tool not found | `jmo tools check`, then `jmo tools install` |
 | Tool startup crash | `jmo tools clean --force && jmo tools install <tool>` |
 | Pre-commit fails | `make fmt`, `make lint` |
