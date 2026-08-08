@@ -140,6 +140,7 @@ def _render_terminal(results: list[CategoryResult], verbose: bool) -> int:
     total_warn = sum(r.warned for r in results)
     total = sum(r.total for r in results)
     total_error = sum(r.errored for r in results)
+    total_skip = sum(r.skipped for r in results)
 
     has_failures = total_fail > 0 or total_error > 0
 
@@ -178,6 +179,12 @@ def _render_terminal(results: list[CategoryResult], verbose: bool) -> int:
         parts.append(f"{total_fail} FAIL")
     if total_error > 0:
         parts.append(f"{total_error} ERROR")
+    # SKIP was absent from this line until #773, so the checks between
+    # total_pass and total were simply unaccounted for -- `270/283 PASS |
+    # 5 WARN` with no hint where the other 8 went. The JSON renderer has always
+    # reported `skipped`; only the terminal scorecard dropped it.
+    if total_skip > 0:
+        parts.append(f"{total_skip} SKIP")
 
     _print_line(f"Result: {' | '.join(parts)}")
 
@@ -187,6 +194,14 @@ def _render_terminal(results: list[CategoryResult], verbose: bool) -> int:
         verdict_display = _colorize("GO", "green", use_color)
 
     _print_line(f"Verdict: {verdict_display}")
+
+    # A GO says nothing about checks that never ran, and `--tier full` degrades
+    # quietly when a prerequisite is missing: with no Docker daemon all four
+    # docker-build-* checks SKIP, so a green verdict can coexist with zero
+    # images built. Say that where the verdict is read rather than leaving it
+    # to be inferred from the rows above.
+    if not has_failures and total_skip > 0:
+        _print_line(f"  ({total_skip} check(s) skipped - GO covers only what ran)")
 
     return 1 if has_failures else 0
 
