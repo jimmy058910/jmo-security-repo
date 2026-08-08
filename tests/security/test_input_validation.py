@@ -139,7 +139,21 @@ args: ['echo pwned > /tmp/yaml-pwned.txt']
         test_env = os.environ.copy()
         test_env["CI"] = "true"
 
-        # Test with absurdly large timeout value
+        # Test with absurdly large timeout value.
+        #
+        # `--tools`/`--allow-missing-tools` bound the work to one scanner. This
+        # test asserts the CLI does not crash on a huge integer; it does not
+        # need a full profile to prove that, and running one made its runtime a
+        # function of how many scanners the developer happens to have installed
+        # (#748). CI installs none, so the scan found nothing to run and
+        # returned in seconds -- it passed there for releases while failing on
+        # any machine with real tools.
+        #
+        # Measured on a box with 8 scanners in ~/.jmo/bin: the unbounded form
+        # exceeded 45s (the 30s cap below could never be met), redirecting HOME
+        # so no tools resolve still took 26s against that 30s cap, and this
+        # bounded form takes 12s. Only the last one is independent of the
+        # machine it runs on.
         result = subprocess.run(
             [
                 sys.executable,
@@ -147,12 +161,15 @@ args: ['echo pwned > /tmp/yaml-pwned.txt']
                 "scan",
                 "--repo",
                 str(tmp_path),
+                "--tools",
+                "trufflehog",
+                "--allow-missing-tools",
                 "--timeout",
                 "999999999999999",  # Absurdly large
             ],
             capture_output=True,
             text=True,
-            timeout=30,  # Increased from 5s for slower systems
+            timeout=60,
             env=test_env,
         )
 

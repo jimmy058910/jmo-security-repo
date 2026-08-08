@@ -143,6 +143,64 @@ def test_shellcheck_level_mapping_function():
     assert map_tool_severity("shellcheck", "unknown") == "INFO"
 
 
+def test_sc1017_is_downgraded_to_info_but_still_reported(tmp_path: Path):
+    """SC1017 is a CRLF encoding lint, not a HIGH security finding (#768).
+
+    shellcheck emits it at `level: "error"`, once per line, so a single
+    CRLF-saved file can dominate a scan: measured 83 HIGH findings from 2 files
+    on Juice Shop, 35% of the whole `fast` profile.
+
+    It is downgraded, not dropped -- the finding still exists, at INFO.
+    """
+    sample = [
+        {
+            "file": "bootstrap.sh",
+            "line": n,
+            "endLine": n,
+            "column": 1,
+            "endColumn": 1,
+            "level": "error",
+            "code": 1017,
+            "message": "Literal carriage return. Run script through tr -d '\\r' .",
+        }
+        for n in (1, 2, 3)
+    ]
+    p = write(tmp_path, "shellcheck.json", json.dumps(sample))
+
+    findings = ShellCheckAdapter().parse(p)
+
+    assert len(findings) == 3, "downgraded, not suppressed - all 3 still reported"
+    assert {f.severity for f in findings} == {"INFO"}
+    assert {f.ruleId for f in findings} == {"SC1017"}
+
+
+def test_other_error_level_rules_stay_high(tmp_path: Path):
+    """The override is scoped to SC1017; `error -> HIGH` is otherwise intact.
+
+    Guards the obvious wrong fix for #768 -- demoting every shellcheck `error`,
+    which would hide real defects along with the CRLF noise.
+    """
+    sample = [
+        {
+            "file": "script.sh",
+            "line": 1,
+            "endLine": 1,
+            "column": 1,
+            "endColumn": 1,
+            "level": "error",
+            "code": 1073,
+            "message": "Couldn't parse this if expression.",
+        }
+    ]
+    p = write(tmp_path, "shellcheck.json", json.dumps(sample))
+
+    findings = ShellCheckAdapter().parse(p)
+
+    assert len(findings) == 1
+    assert findings[0].ruleId == "SC1073"
+    assert findings[0].severity == "HIGH"
+
+
 def test_shellcheck_empty_results(tmp_path: Path):
     """Test ShellCheck adapter handles empty array."""
     sample = []

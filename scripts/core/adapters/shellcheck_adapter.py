@@ -65,6 +65,25 @@ from scripts.core.plugin_api import (
     adapter_plugin,
 )
 
+# Per-rule severity overrides, applied after the normal level -> severity map.
+#
+# The level mapping itself is correct: shellcheck really does report these at
+# `level: "error"`, and error -> HIGH is right for the rules that describe what
+# a script *does*. These describe how the file is *encoded*, and they fire once
+# per line, so a single mis-saved file can outweigh every real finding in a
+# scan.
+#
+# Measured on Juice Shop, `fast` profile, Windows checkout (#768): SC1017 alone
+# produced 83 findings from 2 files -- 35% of the whole scan -- and every one
+# was HIGH. Excluding them took the scan from 234 findings to 151, and HIGH
+# from 99 to 16.
+#
+# Downgraded rather than suppressed: "this file has CRLF line endings" is worth
+# reporting, it is just not a HIGH security finding.
+RULE_SEVERITY_OVERRIDES: dict[str, str] = {
+    "SC1017": "INFO",  # Literal carriage return; fires per line on CRLF files.
+}
+
 
 @adapter_plugin(
     PluginMetadata(
@@ -181,8 +200,11 @@ def _load_shellcheck_internal(path: str | Path) -> list[dict[str, Any]]:
         code_str = f"SC{code}" if isinstance(code, int) else str(code or "SC0000")
         message = str(item.get("message") or code_str)
 
-        # Map level to severity using centralized mapping
-        severity = map_tool_severity("shellcheck", level)
+        # Map level to severity using centralized mapping, then apply any
+        # per-rule override (see RULE_SEVERITY_OVERRIDES for why).
+        severity = RULE_SEVERITY_OVERRIDES.get(
+            code_str, map_tool_severity("shellcheck", level)
+        )
 
         # Create fingerprint
         fid = fingerprint("shellcheck", code_str, file_path, start_line, message)

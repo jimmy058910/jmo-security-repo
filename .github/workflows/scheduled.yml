@@ -908,9 +908,44 @@ jobs:
             echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           fi
 
-      - name: Install external security tools via Homebrew
+      - name: Install external security tools
         run: |
-          brew install semgrep trivy syft checkov hadolint || echo "Some tools failed"
+          set -euo pipefail
+
+          # checkov is pinned from versions.yaml AT RUNTIME, not copied into
+          # this file. Two separate defects made run 31241312938 report a
+          # green tick over a scanner that found nothing (#769):
+          #
+          #   1. Homebrew installs whatever bottle is current. It gave this job
+          #      checkov 3.3.0 against a versions.yaml pin of 3.3.8, and 3.3.0
+          #      returned zero findings on a deliberately vulnerable fixture.
+          #      A hardcoded pin here would only move the drift -- that is #747
+          #      (ci.yml said trufflehog 3.94.3, versions.yaml said 3.95.9).
+          #      Reading the source of truth leaves nowhere to forget.
+          #   2. `|| echo "Some tools failed"` made a scanner that never
+          #      installed indistinguishable from one that found nothing.
+          CHECKOV_VERSION="$(python3 -c \
+            "import yaml; print(yaml.safe_load(open('versions.yaml'))['python_tools']['checkov']['version'])")"
+          echo "checkov pin from versions.yaml: ${CHECKOV_VERSION}"
+          uv pip install "checkov==${CHECKOV_VERSION}"
+
+          # Binary tools have no per-version Homebrew formulae, so they stay
+          # unpinned -- but the install may no longer fail quietly. Pinning
+          # these too is a real remaining gap, tracked separately.
+          brew install semgrep trivy syft hadolint
+
+          missing=0
+          for t in checkov semgrep trivy syft hadolint; do
+            if command -v "$t" >/dev/null 2>&1; then
+              echo "  $t -> $(command -v "$t")"
+            else
+              echo "::error::$t did not install"
+              missing=1
+            fi
+          done
+          [[ "${missing}" -eq 0 ]] || exit 1
+
+          checkov --version
 
       - name: Run macOS test suite
         run: |
@@ -1213,8 +1248,12 @@ jobs:
               "$1" "$2" 2>/dev/null || echo 0
           }
 
+          reports=0
+          total_failed=0
+
           for report_file in test-results/*/pytest-report.json; do
             if [[ -f "$report_file" ]]; then
+              reports=$((reports + 1))
               job=$(dirname "$report_file" | xargs basename \
                 | sed 's/-results-.*//' | sed 's/e2e-//')
 
@@ -1222,6 +1261,7 @@ jobs:
               passed=$(get_field "$report_file" passed)
               failed=$(get_field "$report_file" failed)
               skipped=$(get_field "$report_file" skipped)
+              total_failed=$((total_failed + failed))
 
               {
                 echo "### $job Results"
@@ -1235,6 +1275,10 @@ jobs:
           done
 
           cat summary.md
+          cat summary.md >> "$GITHUB_STEP_SUMMARY"
+
+          echo "E2E_REPORTS=$reports" >> "$GITHUB_ENV"
+          echo "E2E_TOTAL_FAILED=$total_failed" >> "$GITHUB_ENV"
 
       - name: Upload summary
         uses: actions/upload-artifact@v7
@@ -1242,6 +1286,37 @@ jobs:
           name: e2e-test-summary-${{ github.run_id }}
           path: summary.md
           retention-days: 90
+
+      # The five e2e jobs run their pytest step under `continue-on-error: true`
+      # so that results and logs still upload when tests fail. The side effect
+      # was that a failing suite rendered as a green check: run 31241312938 had
+      # `2 failed` and an explicit "E2E Release Readiness: FAIL (89.5%)" in the
+      # macOS log while every job, and the run, reported success.
+      #
+      # This step is the gate. It runs after the artifacts are safely uploaded,
+      # reads the same pytest-report.json files the summary above already
+      # parses, and is the only thing here allowed to fail the run.
+      #
+      # Absent evidence fails too: zero reports means the suites did not run,
+      # which must not be indistinguishable from a clean pass. That is the same
+      # mistake in a different costume.
+      - name: Fail the run if any e2e test failed
+        run: |
+          echo "reports found: ${E2E_REPORTS} | tests failed: ${E2E_TOTAL_FAILED}"
+
+          if [[ "${E2E_REPORTS}" -eq 0 ]]; then
+            echo "::error::No pytest-report.json was produced by any e2e job." \
+              "The suites did not run, so this is a failure, not a pass."
+            exit 1
+          fi
+
+          if [[ "${E2E_TOTAL_FAILED}" -gt 0 ]]; then
+            echo "::error::${E2E_TOTAL_FAILED} e2e test(s) failed." \
+              "See the job summary above for the per-suite breakdown."
+            exit 1
+          fi
+
+          echo "All ${E2E_REPORTS} e2e suite(s) reported zero failures."
 
 # ==============================================================================
 # PERFORMANCE TESTS - Benchmark comparison
