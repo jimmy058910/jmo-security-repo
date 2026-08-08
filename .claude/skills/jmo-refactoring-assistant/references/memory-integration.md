@@ -70,15 +70,21 @@ cat .jmo/memory/refactoring/circular-imports.json | jq '.solutions'
   "safety_checks": {
     "pre_refactor": [
       "git status (ensure clean working tree)",
-      "pytest --cov=scripts (baseline coverage)",
-      "git checkout -b refactor/extract-method"
+      "git rev-parse --abbrev-ref HEAD (record the base branch; do not assume main)",
+      "pytest --cov=scripts (record the baseline percentage)",
+      "git switch -c refactor/extract-method"
     ],
     "post_refactor": [
-      "pytest --cov=scripts --cov-fail-under=85",
+      "pytest --cov=scripts (compare against the recorded baseline)",
       "make lint (ensure no new violations)",
       "git diff (review all changes)"
     ],
-    "rollback": "git checkout main && git branch -D refactor/extract-method"
+    "rollback": [
+      "git stash -u (preserve uncommitted work; never discard it to switch away)",
+      "git switch - (return to the recorded base branch)",
+      "KEEP refactor/extract-method until its commits are confirmed reachable elsewhere",
+      "git branch -d refactor/extract-method (only after that; -d refuses unmerged work, which is the point)"
+    ]
   },
   "metadata": {
     "last_updated": "2025-10-24",
@@ -216,19 +222,30 @@ Memory stores proven coverage preservation techniques:
 
 ```json
 {
-  "strategy": "maintain-85-percent-coverage",
+  "strategy": "hold-coverage-at-the-recorded-baseline",
   "techniques": [
     {"name": "Baseline First", "command": "pytest --cov=scripts --cov-report=term-missing > baseline.txt"},
-    {"name": "Incremental Testing", "command": "pytest --cov=scripts.cli.jmo --cov-fail-under=85"},
-    {"name": "New Function Coverage", "command": "pytest --cov=scripts.cli.jmo::cmd_scan --cov-fail-under=90"}
+    {"name": "Incremental Testing", "command": "pytest --cov=scripts --cov-report=term-missing tests/cli/"},
+    {"name": "New Function Coverage", "command": "pytest --cov=scripts.cli.wizard_generators --cov-report=term-missing tests/unit/test_wizard_generators.py"}
   ],
   "rollback_if": [
-    "Coverage drops below 85%",
-    "New functions have <80% coverage",
+    "Total coverage is below the baseline recorded in baseline.txt",
+    "A file touched by the refactor lost coverage even though total held",
     "Integration tests fail"
   ]
 }
 ```
+
+**Compare against the baseline, not against a fixed percentage.** Earlier
+revisions of this file passed `--cov-fail-under=85` and `--cov-fail-under=90` and
+named the strategy `maintain-85-percent-coverage`. **No such floor exists in this
+repository**: `Makefile:132` runs `pytest --cov --cov-report=term-missing` with
+no threshold, `[tool.coverage.report]` in `pyproject.toml` sets no `fail_under`,
+and CI's only enforced gate is `coverage_pct < 70` at
+[`.github/workflows/ci.yml:734`](../../../../.github/workflows/ci.yml). A refactor
+that quietly drops coverage from 87% to 86% passes every one of those, which is
+exactly why the recorded baseline — not a constant — is the thing to diff against.
+Tracked as issue #756.
 
 ---
 

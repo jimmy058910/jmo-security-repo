@@ -65,7 +65,7 @@ Reference examples for compliance report generation and output samples.
 |--------|-----------|-------|-------------|
 | Initial Access | T1190 (Exploit Public-Facing App) | 55 | M1048, M1050 |
 | Credential Access | T1552.001 (Credentials in Files) | 12 | M1047, M1027 |
-| Execution | T1059 (Command Injection) | 20 | M1038, M1042 |
+| Execution | T1059 (Command and Scripting Interpreter) | 20 | M1038, M1042 |
 
 **Attack Surface:** 3 tactics, 8 techniques
 
@@ -104,7 +104,7 @@ Generate JSON for MITRE ATT&CK Navigator visualization:
 {
   "name": "CWE-79 XSS Attack Techniques",
   "versions": {
-    "attack": "15.1",
+    "attack": "16.1",
     "navigator": "4.9.5",
     "layer": "4.5"
   },

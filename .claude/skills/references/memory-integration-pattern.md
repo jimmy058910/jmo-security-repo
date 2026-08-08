@@ -46,7 +46,9 @@ mkdir -p .jmo/memory/{namespace}
 cat > .jmo/memory/{namespace}/{key}.json << 'EOF'
 {
   "tool": "tool-name",
-  "patterns": { ... },
+  "patterns": {
+    "example_pattern": "example value"
+  },
   "metadata": {
     "last_updated": "2026-02-15",
     "usage_count": 1,
@@ -55,6 +57,13 @@ cat > .jmo/memory/{namespace}/{key}.json << 'EOF'
 }
 EOF
 ```
+
+The `patterns` object must contain real key/value pairs. A bare `...` placeholder
+is not valid JSON, so a file written from this heredoc cannot be read back by the
+`jq` call in step 2 — measured with a strict parser, the old form fails with
+`Expecting property name enclosed in double quotes: line 3 column 17` while the
+form above parses. `{namespace}` and `{key}` are path placeholders you
+substitute; the JSON body is written literally, so it has to be valid on its own.
 
 ## Storage Format (JSON)
 

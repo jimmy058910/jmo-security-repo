@@ -206,7 +206,15 @@ makefile = generate_makefile_target(config, command)
 
 ### 3. Update Test Files
 
-Split imports between modules, update function calls with new parameters, update mock paths (`@patch("wizard.X")` -> `@patch("wizard_generators.X")`).
+Split imports between modules and update function calls with new parameters.
+
+**Mock targets usually do not move.** Step 1 leaves `wizard.py` importing the
+function back (`from ... import generate_makefile_target`), so a test that mocks
+a call made *inside* `run_wizard` keeps `@patch("wizard.X")` — patching
+`wizard_generators.X` replaces the definition, not the name the caller resolves,
+and the mock silently never fires. See
+[references/test-migration-patterns.md](references/test-migration-patterns.md)
+Pattern 2 for the measured comparison.
 
 ### 4. Common Import Errors
 
@@ -219,12 +227,26 @@ Split imports between modules, update function calls with new parameters, update
 
 ---
 
-## Parameters
+## Invocation
 
-### Required
+This is a Claude Code skill, not a command-line program. There is no argument
+parser: the frontmatter declares `argument-hint: <refactoring-type>`, and
+`$ARGUMENTS` (line 12) receives everything after the skill name as one string.
 
-- `--target PATH`: File or directory to refactor
-- `--refactor-type TYPE`: One of the types below
+```text
+/jmo-refactoring-assistant split_file scripts/cli/jmo.py
+```
+
+Name the target and the refactoring type in plain language. The vocabulary below
+belongs in that sentence; it is not a flag set.
+
+> **Removed, not reworded.** Earlier revisions documented `--target`,
+> `--refactor-type`, `--function`, `--base-class-name`, `--max-lines`,
+> `--output-dir`, `--dry-run`, `--skip-tests`, `--preserve-coverage` and
+> `--avoid-circular-imports` as options. **None was ever implemented** — nothing
+> in this repository parses any of them. They are deleted rather than corrected
+> because a documented `--dry-run` reads as a guarantee that nothing is written,
+> and a documented `--skip-tests` reads as permission to skip Phase 4.
 
 ### Refactoring Types
 
@@ -238,16 +260,20 @@ Split imports between modules, update function calls with new parameters, update
 
 **`consolidate_duplicates`** - Merge duplicate code blocks. Detects similar patterns, creates shared utility functions.
 
-### Optional
+### Scope and Safety
 
-- `--function NAME`: Specific function to refactor (for extract_monolith)
-- `--base-class-name NAME`: Name for generated base class (for migrate_to_base_pattern)
-- `--max-lines N`: Maximum lines per file (for split_file, default: 500)
-- `--output-dir PATH`: Where to create new files (default: same directory)
-- `--dry-run`: Preview changes without applying
-- `--skip-tests`: Skip test migration (not recommended)
-- `--preserve-coverage`: Fail if coverage decreases (default: true)
-- `--avoid-circular-imports`: Use TYPE_CHECKING pattern (default: true)
+File access is whatever `allowed-tools` grants (`Read, Write, Edit, Glob, Grep,
+Bash`), mediated by Claude Code's permission prompts. **Nothing canonicalizes a
+path you name or rejects a `../` in it**, so the following are working rules for
+whoever runs the skill, not settings that enforce themselves:
+
+| Rule | Why it is not automatic |
+|------|-------------------------|
+| Refactor only inside this repository's working tree | A target resolving outside the tree is edited like any other; there is no containment check to fail |
+| New files land beside their source unless you say otherwise | There is no output directory to configure — say where you want them |
+| Always run Phase 4 (Test Migration) | It is the only regression guard this skill has; nothing detects that it was skipped |
+| Commit or stash before starting | Edits apply directly. There is no preview mode, so `git diff` is the review step |
+| Keep coverage at or above the pre-refactor number | Behaviour-preserving refactoring should not move it at all — a drop means tests were lost, not that a threshold was missed |
 
 ---
 

@@ -98,7 +98,8 @@ after the framework moves. Returning `None` makes the refresh happen.
   "confidence": "high",
   "last_updated": "2025-09-15",
   "framework_versions": {
-    "owasp": "2021", "cwe_top_25": "2024", "cis": "8.1", "nist_csf": "2.0", "pci_dss": "4.0"
+    "owasp": "2021", "cwe_top_25": "2024", "cis": "8.1",
+    "nist_csf": "2.0", "pci_dss": "4.0", "mitre_attack": "16.1"
   },
   "created_by": "jmo-compliance-mapper v2.1.0"
 }
@@ -168,7 +169,7 @@ def store_compliance_mapping(
         "last_updated": datetime.now().isoformat(),
         "framework_versions": {
             "owasp": "2021", "cwe_top_25": "2024", "cis": "8.1",
-            "nist_csf": "2.0", "pci_dss": "4.0", "mitre_attack": "15.1"
+            "nist_csf": "2.0", "pci_dss": "4.0", "mitre_attack": "16.1"
         },
         "created_by": "jmo-compliance-mapper",
     }

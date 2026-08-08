@@ -151,7 +151,9 @@ Output includes rank, category, score, previous rank, and trend.
 
 ### Phase 5: MITRE ATT&CK Mapping
 
-**Purpose:** Map to adversary tactics and techniques (ATT&CK for Enterprise v15.1)
+**Purpose:** Map to adversary tactics and techniques (ATT&CK for Enterprise v16.1
+— the version `scripts/core/compliance_frameworks.py` maps against; see
+[references/framework-version-updates.md](references/framework-version-updates.md))
 
 Map each CWE to tactics (e.g., TA0001 Initial Access), techniques (e.g., T1190), subtechniques, data sources, and mitigations. Example: CWE-79 maps to T1190 (Exploit Public-Facing Application) and T1552.001 (Credentials In Files).
 
