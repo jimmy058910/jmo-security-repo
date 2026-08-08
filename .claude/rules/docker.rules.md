@@ -99,6 +99,23 @@ unzip -t /tmp/foo.zip > /dev/null  # before unzip
 
 Binary-only downloads (no extraction step) don't need an integrity check — `--fail` plus the runtime version-check (`<tool> --version` in the verify stage) catches HTTP errors and serving-the-wrong-file mistakes.
 
+**Checksum verification: keep the canonical asset filename.** When a project publishes a `*_checksums.txt`, `sha256sum -c` resolves the path written *inside* that line and opens it from the working directory — it does not check whatever you piped in. So renaming the download breaks verification permanently, and the failure is easy to misread as a corrupt file:
+
+```dockerfile
+# WRONG - can never verify: the checksums line names the original asset
+curl -fsSL "$URL/actionlint_1.7.12_linux_amd64.tar.gz" -o actionlint.tar.gz
+grep " actionlint_1.7.12_linux_amd64.tar.gz$" checksums.txt | sha256sum -c -
+#   -> sha256sum: actionlint_1.7.12_linux_amd64.tar.gz: No such file or directory
+#      FAILED open or read
+
+# RIGHT - save under the name the checksums file uses
+archive="actionlint_1.7.12_linux_amd64.tar.gz"
+curl -fsSL "$URL/$archive" -o "$archive"
+grep " ${archive}$" checksums.txt | sha256sum -c -
+```
+
+Found in a documented recipe that had never been run (#749). It fails loudly rather than silently, but it fails on *every* invocation, so a recipe carrying it has provably never been executed. Run any download recipe you write.
+
 **Why this matters**: With ~50 binaries downloaded per release across 4 Dockerfile variants × 2 architectures, single-attempt downloads at even 0.5% CDN flake rate cause one transient failure most release cycles. The v1.0.3 cycle saw multiple Docker Smoke Test failures from this exact pattern (trufflehog, trivy, others — each different binary on different runs). Hardening landed in PR #349.
 
 ## Image Size Measurement Dimension
