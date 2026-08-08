@@ -377,7 +377,15 @@ class TestAdapterOutputCompliance:
             "message": "Complete finding with all fields",
             "description": "Detailed description of the finding",
             "severity": "HIGH",
-            "cvss": 7.5,
+            # Matches what adapters actually emit -- grype_adapter.py:63-67 and
+            # dependency_check_adapter.py:178-190 both build this shape, and
+            # history_db.py:1088 reads `.get("score")` off it. This fixture
+            # previously said `7.5`, which no adapter has ever produced (#757).
+            "cvss": {
+                "version": "3.x",
+                "score": 7.5,
+                "vector": "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+            },
             "tool": {"name": "full-adapter", "version": "2.0.0"},
             "location": {
                 "path": "src/vulnerable.py",
