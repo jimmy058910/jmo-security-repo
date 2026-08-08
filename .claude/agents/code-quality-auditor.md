@@ -263,7 +263,7 @@ class BaseAdapter:
         **kwargs
     ) -> Dict[str, Any]:
         """Create a CommonFinding with standard fields."""
-        from scripts.core.common_finding import compute_finding_id
+        from scripts.core.common_finding import fingerprint
 
         finding = {
             "schemaVersion": "1.2.0",
@@ -282,8 +282,8 @@ class BaseAdapter:
             **kwargs  # Additional fields (title, description, etc.)
         }
 
-        # Compute stable fingerprint
-        finding["id"] = compute_finding_id(
+        # Compute stable fingerprint (16 hex chars)
+        finding["id"] = fingerprint(
             self.tool_name, rule_id, path, start_line, message
         )
 
@@ -315,7 +315,7 @@ class TrivyAdapter(BaseAdapter):
                     title=vuln.get("Title"),
                     description=vuln.get("Description"),
                     remediation=vuln.get("FixedVersion"),
-                    cvss=self._extract_cvss(vuln),
+                    cvss=self._extract_cvss_score(vuln),
                     raw=vuln
                 )
                 findings.append(finding)
@@ -333,16 +333,21 @@ class TrivyAdapter(BaseAdapter):
         }
         return mapping.get(trivy_severity, "INFO")
 
-    def _extract_cvss(self, vuln: dict) -> dict:
-        """Extract CVSS data from vulnerability."""
+    def _extract_cvss_score(self, vuln: dict) -> float | None:
+        """Extract the CVSS base score from a vulnerability.
+
+        `cvss` is declared `{"type": "number"}` in
+        docs/schemas/common_finding.v1.json, so this must return a scalar.
+        Returning the {"score": ..., "vector": ...} dict fails validation:
+        `cvss: {...} is not of type 'number'`. The schema defines no vector
+        field, so the vector stays reachable through `raw`.
+        """
         cvss_data = vuln.get("CVSS", {})
         if not cvss_data:
-            return {}
+            return None
 
-        return {
-            "score": max([v.get("V3Score", 0) for v in cvss_data.values()] or [0]),
-            "vector": next((v.get("V3Vector") for v in cvss_data.values()), "")
-        }
+        scores = [v.get("V3Score") for v in cvss_data.values() if v.get("V3Score")]
+        return max(scores) if scores else None
 
 # Public API (backward compatibility)
 def load_trivy(path: str | Path) -> List[Dict[str, Any]]:

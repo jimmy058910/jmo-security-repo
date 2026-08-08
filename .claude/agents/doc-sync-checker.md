@@ -568,14 +568,24 @@ After making updates:
    **Issue:** File `docs/INSTALLATION.md` does not exist
    **Fix:** Should link to `QUICKSTART.md` instead
 
-1. **docs/USER_GUIDE.md:120** - Broken link
+1. **README.md:120** - Broken link
 
    ```markdown
-   [Release Process](RELEASE.md)
+   [User Guide](USER_GUIDE.md)
    ```
 
-   **Issue:** File is in `docs/` subdirectory
-   **Fix:** Change to `[Release Process](docs/RELEASE.md)`
+   **Issue:** Links resolve against the **source document's own directory**, so
+   from `README.md` this means `./USER_GUIDE.md`, which does not exist — the
+   file is `docs/USER_GUIDE.md`
+   **Fix:** Change to `[User Guide](docs/USER_GUIDE.md)`
+
+   > Resolve the link from the linking file's directory before calling it
+   > broken. The same target needs a different prefix depending on where the
+   > link lives: from `README.md` it is `docs/RELEASE.md`, but from
+   > `docs/USER_GUIDE.md` it is already just `RELEASE.md` — "fixing" that one to
+   > `docs/RELEASE.md` would point at `docs/docs/RELEASE.md`.
+   > `python scripts/dev/check_doc_links.py` does this resolution for you
+   > (`source.parent / path_part`) across every tracked file.
 
 ### Internal Anchor Links (2 broken)
 

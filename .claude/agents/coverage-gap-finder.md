@@ -106,54 +106,74 @@ Every adapter test must have 5 categories:
 ## Adapter Coverage Analysis
 
 ### Summary
-- ✅ **22/27 adapters** meet 85% coverage requirement
-- ⚠️ **5/27 adapters** below threshold
+- ✅ **24/27 adapters** meet the coverage target
+- ⚠️ **3/27 adapters** below it
+
+> Numbers here illustrate the report **format**. Re-measure them; and keep the
+> summary consistent with the detail list below it.
 
 ### Below Threshold (3 adapters)
 
 #### 1. noseyparker_adapter.py - 76% coverage ❌
 
-**Uncovered Lines:**
-- Lines 45-52: Docker fallback logic
-- Lines 68-71: Error handling for missing binary
-- Line 89: Empty results edge case
+**Uncovered Lines:** (read them from the coverage report, then open the file and
+cite what those lines actually contain — not what you expect an adapter to contain)
+
+- Lines 125-127: `matches` key absent or not a list
+- Lines 131-132: non-dict entry inside `matches`
+- Lines 138-141: `location.startLine` fallback when `line_number` is absent
 
 **Missing Tests:**
 ```python
 # tests/adapters/test_noseyparker_adapter.py
 # ADD THESE TESTS:
-
-def test_noseyparker_docker_fallback(tmp_path, monkeypatch):
-    """Test Docker fallback when binary missing."""
-    # Mock binary check to fail
-    monkeypatch.setattr("shutil.which", lambda x: None)
-
-    sample = {...}  # Noseyparker output
-    path = write_tmp(tmp_path, "noseyparker.json", json.dumps(sample))
-
-    # Should fall back to Docker runner
-    out = load_noseyparker(path)
-    assert len(out) > 0
+# (write_tmp is defined at the top of each adapter test file; json and
+#  NoseyParkerAdapter are already imported there)
 
 def test_noseyparker_empty_results(tmp_path):
-    """Test handling of scan with no findings."""
-    sample = {"matches": []}  # No findings
-    path = write_tmp(tmp_path, "noseyparker.json", json.dumps(sample))
-    out = load_noseyparker(path)
-    assert out == []
+    """No matches -> no findings."""
+    sample = {"version": "0.16.0", "matches": []}
+    path = write_tmp(tmp_path, "np.json", json.dumps(sample))
+    assert NoseyParkerAdapter().parse(path) == []
 
-def test_noseyparker_missing_binary_error(tmp_path, monkeypatch):
-    """Test error when binary missing and Docker unavailable."""
-    monkeypatch.setattr("shutil.which", lambda x: None)
-    monkeypatch.setattr("subprocess.run", lambda *args, **kwargs: raise_exception())
+def test_noseyparker_matches_not_a_list(tmp_path):
+    """A non-list 'matches' is rejected, not iterated."""
+    sample = {"version": "0.16.0", "matches": {"signature": "AWS"}}
+    path = write_tmp(tmp_path, "np.json", json.dumps(sample))
+    assert NoseyParkerAdapter().parse(path) == []
 
-    sample = {...}
-    path = write_tmp(tmp_path, "noseyparker.json", json.dumps(sample))
-    out = load_noseyparker(path)
-    assert out == []  # Should return empty on error
+def test_noseyparker_skips_non_dict_match(tmp_path):
+    """Junk entries are skipped; valid siblings still parse."""
+    sample = {
+        "version": "0.16.0",
+        "matches": ["not-a-dict", {"signature": "AWS", "path": "a.txt", "line_number": 5}],
+    }
+    path = write_tmp(tmp_path, "np.json", json.dumps(sample))
+    findings = NoseyParkerAdapter().parse(path)
+    assert len(findings) == 1
+    assert findings[0].ruleId == "AWS"
+
+def test_noseyparker_location_startline_fallback(tmp_path):
+    """startLine comes from location when line_number is absent."""
+    sample = {
+        "version": "0.16.0",
+        "matches": [{"signature": "AWS", "location": {"path": "a.txt", "startLine": 42}}],
+    }
+    path = write_tmp(tmp_path, "np.json", json.dumps(sample))
+    findings = NoseyParkerAdapter().parse(path)
+    assert findings[0].location["startLine"] == 42
+    assert findings[0].location["path"] == "a.txt"
 ```
 
-**Estimated Coverage After:** 88% (+12%)
+**Estimated Coverage After:** re-run `pytest --cov` and quote the measured
+number; do not predict it.
+
+> **Test what the file does.** The adapter is a pure JSON parser — no
+> `subprocess`, no `shutil.which`, no Docker fallback lives in it (the container
+> runner is `scripts/core/run_noseyparker_docker.sh`). Monkeypatching
+> `shutil.which` or `subprocess.run` here patches nothing the code under test
+> calls, so such a test passes without exercising anything. Read the module
+> before proposing mocks for it.
 
 ---
 

@@ -34,7 +34,11 @@ You have access to all release verification tools:
 1. **Bump version** in `pyproject.toml`
 2. **Update `CHANGELOG.md`** with changes
 3. **Commit** with message: `release: vX.Y.Z`
-4. **Create and push tag:** `git tag vX.Y.Z && git push --tags`
+4. **Create and push tag** (canonical form, `docs/RELEASE.md:24`):
+   `git fetch origin && git tag -a vX.Y.Z origin/main -m "vX.Y.Z" && git push origin vX.Y.Z`
+   — annotated, cut from `origin/main` rather than local HEAD, and pushing the
+   **one** tag. `git push --tags` publishes every local tag you happen to have,
+   and each `v*` tag fires `release.yml`
 5. **CI auto-publishes** to PyPI using Trusted Publishers (OIDC)
 6. **CI auto-builds** Docker images (fast/slim/balanced/deep)
 
@@ -303,11 +307,17 @@ M docs/USER_GUIDE.md
 ### Branch Status
 
 ```bash
-git log origin/main..HEAD
+git fetch origin main
+git rev-list --left-right --count origin/main...HEAD
 ```
 
-**Output:** 0 commits ahead
+**Output:** `0	0` (left = commits only on `origin/main`, right = only on HEAD)
 **Status:** ✅ Local main matches remote
+
+> Use the symmetric three-dot form. `git log origin/main..HEAD` is one-sided: it
+> lists what HEAD has that `origin/main` lacks, and reports nothing when the
+> remote is *ahead*. Treat either count being non-zero as divergence, and fetch
+> first or you are comparing against a stale ref.
 
 ---
 
@@ -316,7 +326,7 @@ git log origin/main..HEAD
 ### Build Status
 
 ```bash
-docker build -t jmo-security:test-0.7.0 -f Dockerfile .
+docker build -t jmo-security:test-0.7.0 -f Dockerfile.deep .
 ```
 
 **Status:** Not tested
@@ -325,15 +335,16 @@ docker build -t jmo-security:test-0.7.0 -f Dockerfile .
 **Recommended:**
 
 ```bash
-# Build all variants
-docker build -t jmo-security:0.7.0-deep -f Dockerfile .
+# Build all variants (there is no bare `Dockerfile` in this repo)
+docker build -t jmo-security:0.7.0-deep -f Dockerfile.deep .
 docker build -t jmo-security:0.7.0-fast -f Dockerfile.fast .
 docker build -t jmo-security:0.7.0-slim -f Dockerfile.slim .
 docker build -t jmo-security:0.7.0-balanced -f Dockerfile.balanced .
 
-# Test full variant
-docker run --rm jmo-security:0.7.0-full --help
-docker run --rm jmo-security:0.7.0-full scan --help
+# Test the deep variant — run the tag you just built.
+# There is no `full` variant; `deep` is the heavyweight image (also :latest).
+docker run --rm jmo-security:0.7.0-deep --help
+docker run --rm jmo-security:0.7.0-deep scan --help
 ```
 
 ---
@@ -453,10 +464,10 @@ pre-commit run --all-files
 git add pyproject.toml CHANGELOG.md README.md QUICKSTART.md docs/USER_GUIDE.md
 git commit -m "release: v0.7.0"
 
-# 3. Create and push tag
-git tag v0.7.0
-git push origin main
-git push --tags
+# 3. Create and push tag (annotated, from origin/main, one tag only)
+git fetch origin
+git tag -a v0.7.0 origin/main -m "v0.7.0"
+git push origin v0.7.0
 
 # 4. Monitor CI
 gh run watch
@@ -477,7 +488,8 @@ open https://github.com/jimmy058910/jmo-security/pkgs/container/jmo-security
 After successful release:
 
 - [ ] Verify PyPI package published: `pip install jmo-security==0.7.0`
-- [ ] Verify Docker images built: `docker pull ghcr.io/jimmy058910/jmo-security:0.7.0-full`
+- [ ] Verify Docker images built: `docker pull ghcr.io/jimmy058910/jmo-security:0.7.0-deep`
+      (there is no `-full` tag — it was removed in v1.0.5; `:latest` is the deep variant)
 - [ ] Create GitHub Release with notes from CHANGELOG
 - [ ] Announce the release (maintainers use their own drafting workflow)
 - [ ] Update project website (if applicable)
@@ -593,19 +605,24 @@ After successful release:
 1. **Build each variant:**
 
    ```bash
-   docker build -t jmo-security:test-deep -f Dockerfile .
+   docker build -t jmo-security:test-deep -f Dockerfile.deep .
    docker build -t jmo-security:test-fast -f Dockerfile.fast .
    docker build -t jmo-security:test-slim -f Dockerfile.slim .
    docker build -t jmo-security:test-balanced -f Dockerfile.balanced .
    ```
 
-2. **Test each image:**
+2. **Test each image** — run the tags you just built, once per variant:
 
    ```bash
-   docker run --rm jmo-security:test-full --help
-   docker run --rm jmo-security:test-full scan --help
-   docker run --rm jmo-security:test-full --version  # If supported
+   for v in deep fast slim balanced; do
+     docker run --rm "jmo-security:test-$v" --help
+     docker run --rm "jmo-security:test-$v" scan --help
+   done
    ```
+
+   > Build and run must name the same tag. A `-full` tag is never created by
+   > these builds, so running it either fails or silently tests a stale image
+   > left over from an earlier release.
 
 3. **Check image sizes:**
 
