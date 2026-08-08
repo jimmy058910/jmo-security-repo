@@ -6,7 +6,7 @@
 
 ## Progress
 
-**57 / 103 resolved.**
+**60 / 103 resolved.**
 
 | Chunk | Scope | Findings | Done | Status |
 |---|---|---:|---:|---|
@@ -17,8 +17,8 @@
 | **E** | target-type-expander + security-hardening | 19 | 0 | not started |
 | **F** | the 7 agents | 13 | 0 | not started |
 | **G** | tail: refactoring, compliance, systematic-debugging, references | 11 | 0 | not started |
-| **H** | repo config authored by PR #717 | 6 | 3 | in progress |
-| | **total** | **103** | **57** | |
+| **H** | repo config authored by PR #717 | 6 | 6 | **complete** |
+| | **total** | **103** | **60** | |
 
 ## How to mark a finding off
 
@@ -641,8 +641,11 @@ downloaded, checksummed and extracted for real.
 
 - [ ] **Trivial** L81: Make rollback non-destructive
 
-## Chunk H - repo config authored by PR #717  (3/6)
+## Chunk H - repo config authored by PR #717  (6/6)
 
+Unlike A-G this chunk is repo *behaviour*, not skill prose, so CI alone is not
+sufficient evidence — the hook-scope change was verified by running the hook
+before and after.
 
 **`scripts/dev/check_doc_links.py`**
 
@@ -653,15 +656,41 @@ downloaded, checksummed and extracted for real.
 
 **`.claude/rules/testing.rules.md`**
 
-- [ ] **Minor** L156: (claim nested; read from the PR conversation)
+- [x] **Minor** L156: Synchronize the missing deliberate verification gaps
+      -> FIXED: the rules file lists three Deliberate Verification Gaps and says
+      a gap a user can hit belongs in `KNOWN_LIMITATIONS.md` too; only
+      *Concurrent scans on Windows* had made it across. Added the user-facing
+      halves of the other two. The reboot entry was **corrected mid-draft by
+      checking the code**: `jmo schedule install` is cron-only, Linux/macOS,
+      with no Windows Scheduled Task backend (`--help` says so;
+      `tests/unit/test_cron_installer.py:20` skips on win32), so it now points
+      Windows users at `schedule export`.
 
 **`.pre-commit-config.yaml`**
 
-- [ ] **Minor** L126: (claim nested; read from the PR conversation)
+- [x] **Minor** L126: Make the `doc-links` scope match the documented guarantee
+      -> FIXED on both halves. `files:` named 7 root files plus `docs/` and
+      `.claude/`, leaving **28** tracked Markdown files outside it. Because
+      `pass_filenames: false` the checker already scans every tracked file when
+      it runs, so `files:` only decides *when* — widening it to all Markdown
+      costs nothing per run and takes uncovered from 28/177 to **0/177**.
+      **The CI half was false too:** `CLAUDE.md:201` and `.gitignore:121` both
+      claim the checker "fails CI and pre-commit", but `lint-quick` ran 8 named
+      hooks and `doc-links` was not among them — only the nightly all-hooks job
+      enforced it. Added to that step. Verified by running the hook: old config
+      **Skipped** `CHANGELOG.md`, new config runs it, and a non-Markdown path
+      stays correctly inert.
 
 **`ROADMAP.md`**
 
-- [ ] **Minor** L9: (claim nested; read from the PR conversation)
+- [x] **Minor** L9: Update stale v1.0.5 release references
+      -> FIXED: `pyproject.toml:7` and `ROADMAP.md` say v1.0.8 while
+      `CLAUDE.md:11` and `docs/index.md:192` still said v1.0.5.
+      `docs/CLI_REFERENCE.md:5` says `1.0.0` and was **deliberately left** ->
+      #750: bumping that header asserts the document's *contents* describe
+      v1.0.8's CLI, which is unaudited. #750 also covers the missing guard —
+      `test_version_consistency.py` checks only the three code sites, never the
+      prose headers, which is why these drifted across three releases.
 
 **`scripts/dev/check_doc_links.py`**
 

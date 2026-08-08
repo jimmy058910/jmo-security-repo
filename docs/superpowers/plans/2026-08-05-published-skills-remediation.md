@@ -1,9 +1,35 @@
 # Remediating the newly-published `.claude/` skills and agents
 
-**Status:** discovery complete, execution not started
-**Branch:** `fix/coderabbit-findings-717` off `dev`
+**Status:** chunks A, B, C, D and H complete (60/103); E, F, G remain
+**Branch:** one branch per chunk off `dev`; PR into `dev`. Never `main`.
 **Tracking issue:** [#718](https://github.com/jimmy058910/jmo-security-repo/issues/718)
-**Endgame:** land on `dev`, then `dev -> main` as **v1.0.9**
+**Endgame:** land all 103 on `dev`, then `dev -> main` as **v1.0.9**
+
+### Decided 2026-08-08: all 103 land before v1.0.9
+
+The alternative was cutting v1.0.9 early, at 60/103, and shipping E/F/G in
+v1.0.10. The case for it: every one of the 43 remaining findings is inside
+`.claude/`, which is contributor tooling with no runtime effect on the released
+package, while `dev` is holding user-facing fixes — #725 (`slim` scans silently
+discarded), #746 (trufflehog reporting pytest function names as verified
+secrets), #734, #729.
+
+**Rejected in favour of one clean release.** v1.0.9 ships the full remediation
+and closes #718 with the tag, rather than splitting it across two releases.
+E (19) → F (13) → G (11) first; expect roughly one chunk per session.
+
+Do not re-open this at the start of the next session.
+
+### Release gate at 103/103, before tagging: [#752](https://github.com/jimmy058910/jmo-security-repo/issues/752)
+
+None of these 103 findings is executed by a test, so green CI proves only that
+nothing *else* broke. Before `dev -> main`, run the full Juice Shop pass plus
+`jmo validate --tier full` and `reconcile_scan_accounting.py`, and compare
+finding counts to the baselines in `docs/internal/MANUAL_TESTING_CHECKLIST.md`.
+
+**Read the job logs, not the check ticks.** Both Juice Shop E2E steps
+(`scheduled.yml:841`, `:927`) are `continue-on-error: true`, so they report
+green over real failures — the same trap as the `windows-2022` shard.
 
 ## What happened
 
@@ -146,4 +172,30 @@ the PR conversation.
 - **Console output**: anything printing repository content must go through
   `harden_console_streams()` + `safe_print()` from `scripts/core/unicode_utils`.
 - **Read the `windows-2022` job log, not its check tick** — it is
-  `continue-on-error: true` and reports success over failures.
+  `continue-on-error: true` and reports success over failures. Same applies to
+  the two Juice Shop E2E steps (`scheduled.yml:841`, `:927`).
+
+### Learned in chunks C and D — apply to E, F, G
+
+- **Verify the anchored file actually contains the cited symbol.** Chunk D had
+  4 findings whose API `path` *and* `diff_hunk` said `jmo-ci-debugger/references/
+  memory-integration.md`, while the bodies analysed Python that exists only in
+  `jmo-compliance-mapper/references/memory-integration.md` — at identical line
+  numbers, because the two files share a basename and a similar length. Grep the
+  cited symbol before editing.
+- **Findings understate their own scope; grep for siblings.** Every multi-site
+  finding in C and D named fewer sites than existed (1 reported vs 4 real, twice).
+  Read the whole construct, not the cited line.
+- **"Battle-tested" is a claim to check, not a reason to trust.** The ci-debugger
+  skill asserted every fix had been proven in production; its pattern #13 remedy
+  appears in no commit (`git log -S`) and its premise was measurably false against
+  this repo's own ruleset. Test the claim against `git log` and the live API.
+- **A doc that cannot fail is a doc that never ran.** Recurring shape: a `grep`
+  that returns 0 every time (chunk B), an assertion that could never pass (C), an
+  import of a module that does not exist (A, D), a `sha256sum -c` that can never
+  resolve its file (D). If an example has a pass/fail step, **execute it** — that
+  is what caught three of these, including one of my own.
+- **`\|` inside a Markdown table is the GFM escape, not a regex escape.** It
+  renders as a bare `|`. Removing it splits the cell and drops a column. Check
+  rendering with `gh api markdown` (no leading slash — MSYS mangles `/markdown`
+  into a path).

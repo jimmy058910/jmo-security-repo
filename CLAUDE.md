@@ -8,7 +8,7 @@ Guidance for Claude Code when working with the JMo Security Audit Tool Suite rep
 
 JMo Security is a terminal-first security audit toolkit orchestrating 29 scanners with unified CLI, normalized outputs, and HTML dashboard.
 
-**Version:** v1.0.5 (latest released — see CHANGELOG.md for full history)
+**Version:** v1.0.8 (latest released — see CHANGELOG.md for full history)
 **Philosophy:** Two-phase architecture: scan (invoke tools) → report (normalize, dedupe, output)
 **Test Coverage:** 8,000+ tests, 87% coverage, CI requires ≥85% (sharded across 4 parallel jobs); CI quick threshold 70% (excludes slow/docker/requires_tools/smoke)
 
