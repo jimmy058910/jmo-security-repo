@@ -209,7 +209,7 @@ Remember to update CHANGELOG.md with user-facing changes.
 
 - **No PyPI API token required!** This repo uses Trusted Publishers (OIDC) for tokenless publishing.
 - Ensure the repository is configured as a Trusted Publisher in PyPI settings (one-time setup).
-- Ensure tests are green locally. There is no local coverage gate to pass — `make test` prints a report and sets no threshold (#756); CI's only floor is 70% (`.github/workflows/ci.yml:734`).
+- Ensure tests are green locally. There is no local coverage gate to pass — `make test` prints a report and sets no threshold (#756); CI's only floor is 80% (`.github/workflows/ci.yml:734`).
 - Update `CHANGELOG.md` with all user-facing changes from the "Unreleased" section.
 
 ## Pre-Release Checklist
@@ -840,7 +840,7 @@ docker run --rm --platform linux/amd64 jmogaming/jmo-security:latest --help
 - The package exposes the `jmo` console script.
 - Coverage reports are uploaded to Codecov as part of the tests workflow (tokenless OIDC).
 - License is defined via SPDX string in `pyproject.toml` and the `LICENSE` file is included in the distribution.
-- CI enforces: tests passing, coverage ≥70% (`.github/workflows/ci.yml:734` — the only coverage gate that exists, see #756), pre-commit checks, reproducible dev deps.
+- CI enforces: tests passing, coverage ≥80% (`.github/workflows/ci.yml:734` — the only coverage gate that exists, see #756), pre-commit checks, reproducible dev deps.
 
 ## Post-Release
 

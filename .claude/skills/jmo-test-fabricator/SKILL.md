@@ -34,7 +34,7 @@ Generate comprehensive pytest test suites for JMo Security with fabricated fixtu
 
 **Config/CLI Testing:** Config loaders, YAML parsing, field validation, multi-target helpers, argument parsing.
 
-**General:** coverage below the project's 85% target (CI itself fails only below 70%, `ci.yml:734`), new CommonFinding schema features, improving coverage for any module.
+**General:** coverage below the project's 85% target (CI itself fails only below 80%, `ci.yml:734`), new CommonFinding schema features, improving coverage for any module.
 
 ---
 
@@ -352,7 +352,7 @@ Real test files from this project to use as examples:
 
 - [ ] All tests pass: `pytest tests/adapters/test_<tool>_adapter.py -v`
 - [ ] Coverage >=85% **for the new adapter module** (a local bar for new code, not
-      a CI gate — CI's only floor is 70% repo-wide, `ci.yml:734`, see #756):
+      a CI gate — CI's only floor is 80% repo-wide, `ci.yml:734`, see #756):
       `pytest ... --cov=scripts/core/adapters/<tool>_adapter --cov-fail-under=85`
 - [ ] Coverage report reviewed: `--cov-report=term-missing` shows no critical gaps
 

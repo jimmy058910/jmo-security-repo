@@ -10,7 +10,7 @@ JMo Security is a terminal-first security audit toolkit orchestrating 29 scanner
 
 **Version:** v1.0.8 (latest released — see CHANGELOG.md for full history)
 **Philosophy:** Two-phase architecture: scan (invoke tools) → report (normalize, dedupe, output)
-**Test Coverage:** 8,000+ tests, sharded across 4 parallel jobs. The **only enforced floor is 70%** (`.github/workflows/ci.yml:734`, on the marker-filtered suite — excludes slow/docker/requires_tools/smoke). Nothing sets `--cov-fail-under` (#756); measure current coverage rather than quoting a figure from this file
+**Test Coverage:** 8,000+ tests, sharded across 4 parallel jobs. The **only enforced floor is 80%** (`.github/workflows/ci.yml:734`, on the marker-filtered suite — excludes slow/docker/requires_tools/smoke). Nothing sets `--cov-fail-under` (#756); measure current coverage rather than quoting a figure from this file
 
 **Key v1.0 Features:**
 
@@ -27,7 +27,7 @@ JMo Security is a terminal-first security audit toolkit orchestrating 29 scanner
 ### Mandatory Guardrails
 
 1. **Pre-commit Order:** Black MUST run before Ruff (see `.pre-commit-config.yaml`)
-2. **Test Coverage:** CI's only enforced floor is **70%** (`.github/workflows/ci.yml:734`, on the marker-filtered suite). Nothing sets `--cov-fail-under` — not `make test`, not `pyproject.toml`. Write tests to the standard the codebase holds itself to, but do not cite 85% as a gate (#756)
+2. **Test Coverage:** CI's only enforced floor is **80%** (`.github/workflows/ci.yml:734`, on the marker-filtered suite). Nothing sets `--cov-fail-under` — not `make test`, not `pyproject.toml`. Write tests to the standard the codebase holds itself to, but do not cite 85% as a gate (#756)
 3. **Subprocess Security:** NEVER use `shell=True` in subprocess calls. See [.claude/rules/python-safety.rules.md](.claude/rules/python-safety.rules.md)
 4. **Conventional Commits:** `feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`, `perf:`, `ci:`
 5. **Path Security:** Validate all user paths against directory traversal
@@ -373,7 +373,7 @@ See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for complete configuration referenc
 
 | Issue | Solution |
 |-------|----------|
-| Tests failing | `make test` (already carries `--maxfail=1` via `TEST_FLAGS`). No local coverage gate exists — CI's floor is 70%, `ci.yml:734` (#756) |
+| Tests failing | `make test` (already carries `--maxfail=1` via `TEST_FLAGS`). No local coverage gate exists — CI's floor is 80%, `ci.yml:734` (#756) |
 | Tool not found | `jmo tools check`, then `jmo tools install` |
 | Tool startup crash | `jmo tools clean --force && jmo tools install <tool>` |
 | Pre-commit fails | `make fmt`, `make lint` |

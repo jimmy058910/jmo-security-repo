@@ -190,7 +190,7 @@ pytest tests/integration/ -v
 pytest tests/ --cov=scripts --cov-report=term-missing
 ```
 
-**Status:** report the measured number against CI's actual floor — **70%**
+**Status:** report the measured number against CI's actual floor — **80%**
 (`.github/workflows/ci.yml:734`). Nothing sets `--cov-fail-under` (#756), so a
 figure like 84% is **passing**, not "below threshold". Flag a *drop from the
 previous release* rather than a miss against a constant that isn't enforced.

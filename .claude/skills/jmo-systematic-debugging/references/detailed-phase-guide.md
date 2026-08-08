@@ -643,7 +643,7 @@ pytest tests/integration/ -v
 # 4. Check coverage of the module you changed
 pytest --cov=scripts/core/adapters/tool_adapter --cov-fail-under=85
 # A local bar for the module under repair -- NOT a CI gate. CI's only enforced
-# floor is 70% repo-wide (ci.yml:734); --cov-fail-under is set nowhere. See #756.
+# floor is 80% repo-wide (ci.yml:734); --cov-fail-under is set nowhere. See #756.
 
 # 5. Run pre-commit hooks
 pre-commit run --all-files
