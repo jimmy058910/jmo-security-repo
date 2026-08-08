@@ -420,12 +420,34 @@ jmo scan --image node:14      # EOL, has CVEs
 
 ### Expected Finding Counts (Approximate)
 
-| Target | Profile | Expected Findings |
-|--------|---------|-------------------|
-| Juice Shop | fast | 50-100 (native: ~100, Docker: 66) |
-| Juice Shop | balanced | 600-800 (Docker: 691 incl. 602 horusec SAST) |
+**Count non-INFO findings.** The raw total is not comparable across releases:
+`syft` and `cdxgen` emit one INFO row per SBOM package — inventory, not
+vulnerabilities — and since #771 every `shellcheck` SC1017 lands in INFO too.
+Those three account for the entire INFO bucket in both profiles below, so a
+raw total silently tracks how many dependencies the target has.
+
+| Target | Profile | Expected Findings (non-INFO) |
+|--------|---------|------------------------------|
+| Juice Shop | fast | 100-130 (measured 115; raw 239 incl. 124 INFO) |
+| Juice Shop | balanced | 600-800 (measured 698, incl. 583 horusec; raw 845 incl. 147 INFO) |
 | juice-shop:latest (image) | balanced | 150-300 |
 | TerraGoat | slim | 80-150 |
+
+Measured 2026-08-08, native on Windows, `--allow-missing-tools`, against
+`C:/Projects/juice-shop`:
+
+| Profile | non-INFO by tool | INFO by tool |
+|---|---|---|
+| fast | semgrep 71, checkov 26, trivy 9, trufflehog 5, hadolint 4 = **115** | shellcheck 83, syft 41 = **124** |
+| balanced | the same 115, plus horusec 583 = **698** | the above, plus cdxgen 23 = **147** |
+
+The two runs agree tool-for-tool — `balanced` is `fast` plus horusec and
+cdxgen — which is the cheapest way to tell a real change from scan noise.
+
+The previous entries here read `50-100` and `600-800` against *raw* totals and
+so looked badly stale (239 and 845). They were not: both bands still hold on
+the basis they were measured on. Re-deriving them from the raw totals would
+have folded 64 SBOM inventory rows into a vulnerability expectation.
 
 ---
 
