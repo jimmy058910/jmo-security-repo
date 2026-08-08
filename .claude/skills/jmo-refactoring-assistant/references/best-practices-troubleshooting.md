@@ -10,11 +10,24 @@
 2. **Run tests:** `make test` (ensure baseline is green)
 3. **Check coverage:** `pytest --cov` (note current %)
 4. **Review agent findings:** Know what you're fixing
-5. **Check for circular import risks:** `grep -r "from.*import" | grep target_file`
+5. **Check for circular import risks:** find who imports the module you are about
+   to split. Substitute its bare module name — `target_file` below is a shell
+   variable, not a literal to search for:
+
+   ```bash
+   MODULE=wizard_generators   # bare module name of the file under refactor
+   git grep -n -E "^(from|import).*\b${MODULE}\b" -- 'scripts/**/*.py' 'tests/**/*.py'
+   ```
+
+   Scope it to paths and let git walk the index. A bare `grep -r "from.*import"`
+   over this repository descends into `.venv/`, `results/` and `graphify-out/`
+   and exceeds the agent Bash tool's 120-second timeout; the scoped form above
+   returns in **0.06s**.
 
 ### During Refactoring
 
-1. **Start with --dry-run:** Preview changes before applying
+1. **Review before applying:** there is no preview mode — edits land directly, so
+   the pre-refactor commit plus `git diff` is your dry run
 2. **One refactor at a time:** Don't combine multiple refactor types
 3. **Use TYPE_CHECKING for type hints:** Avoids circular imports
 4. **Apply parameter injection:** Pass dependencies explicitly
@@ -25,7 +38,12 @@
 ### After Refactoring
 
 1. **Run full test suite:** `make test`
-2. **Check coverage:** Should be >= before
+2. **Check coverage:** compare against the percentage you noted in step 3 above —
+   it should be **unchanged**. Behaviour-preserving refactoring does not move
+   coverage; a drop means tests stopped exercising the moved code, most often a
+   mock aimed at the wrong namespace (see test-migration-patterns.md Pattern 2).
+   Diff the number yourself: neither `make test` nor CI applies a
+   `--cov-fail-under` floor that would catch this for you
 3. **Run linters:** `make lint` or `ruff check && black --check`
 4. **Manual smoke test:** Verify key workflows still work
 5. **Update docstrings:** Note refactoring and cross-references
@@ -89,19 +107,25 @@
 
 **Cause:** Circular dependencies
 
-**Fix:** Use `--dry-run` to preview, manually resolve circular imports before applying. Use TYPE_CHECKING + parameter injection patterns.
+**Fix:** Ask for the proposed module split *before* any file is written, resolve
+the cycles on paper, then apply. Use TYPE_CHECKING + parameter injection patterns.
 
 ### "Coverage decreased"
 
-**Cause:** New code paths not tested
+**Cause:** New code paths not tested — or an existing test stopped reaching the
+moved code because its `@patch` target no longer resolves in the caller's
+namespace (test-migration-patterns.md Pattern 2). Rule out the second before
+writing new tests for the first; a silently-inert mock looks identical to an
+untested path in the coverage report.
 
-**Fix:** Use jmo-test-fabricator to generate tests for new modules
+**Fix:** Use jmo-test-fabricator to generate tests for genuinely new modules
 
 ### "Skill suggesting wrong split points"
 
 **Cause:** Complex function boundaries
 
-**Fix:** Use `--dry-run`, review proposed split, provide feedback for manual refinement
+**Fix:** Ask for the proposed split as a plan, review it, and give feedback before
+applying — then `git diff` against the pre-refactor commit to confirm what landed
 
 ### Common Import Errors Reference
 

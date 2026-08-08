@@ -96,24 +96,41 @@ THEN investigate that specific component
 **Example (multi-layer system):**
 
 ```bash
-# Layer 1: Workflow
-echo "=== Secrets available in workflow: ==="
+# Layer 1: Workflow -- did the secret arrive at all?
+echo "=== Secret reaches the workflow: ==="
 echo "IDENTITY: ${IDENTITY:+SET}${IDENTITY:-UNSET}"
 
-# Layer 2: Build script
-echo "=== Env vars in build script: ==="
-env | grep IDENTITY || echo "IDENTITY not in environment"
+# Layer 2: Build script -- did it survive the process boundary?
+echo "=== Secret reaches the build script: ==="
+env | cut -d= -f1 | grep -qx IDENTITY \
+  && echo "IDENTITY: present in environment" \
+  || echo "IDENTITY: absent from environment"
 
-# Layer 3: Signing script
+# Layer 3: Signing script -- is a usable identity on the search list?
 echo "=== Keychain state: ==="
-security list-keychains
-security find-identity -v
+security list-keychains                                    # paths only
+security find-identity -v -p codesigning | tail -1         # count line, not the list
 
-# Layer 4: Actual signing
-codesign --sign "$IDENTITY" --verbose=4 "$APP"
+# Layer 4: Actual signing -- succeed/fail, without dumping internals
+codesign --sign "$IDENTITY" "$APP" && codesign --verify "$APP"
 ```
 
 **This reveals:** Which layer fails (secrets -> workflow OK, workflow -> build FAIL)
+
+**Every probe answers set-or-unset, never what the value is.** A bisection log is
+read by whoever can see the CI run, and CI logs are retained and widely readable
+— printing a credential into one is CWE-532, not a debugging convenience. The
+concrete traps this example used to contain:
+
+| Instead of | Use | Why |
+|------------|-----|-----|
+| `env \| grep IDENTITY` | the `cut -d= -f1` form above | `grep` on `env` prints `IDENTITY=<the actual value>`. Verified: with `IDENTITY` set, it echoed the credential verbatim; the replacement prints only `present`/`absent` |
+| `security find-identity -v` | `... -p codesigning \| tail -1` | The unfiltered form lists certificate hashes and common names for every identity |
+| `codesign --verbose=4` | plain sign, then `codesign --verify` | Verbosity 4 dumps signing internals; you only need the exit status to locate the failing layer |
+
+GitHub Actions masks values registered with `add-mask`, but that covers only what
+it knows about — a value derived, decoded, or re-exported inside the job is not
+masked. Do not rely on it as the redaction layer.
 
 **JMo-specific component boundaries:**
 

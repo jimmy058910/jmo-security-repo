@@ -6,7 +6,7 @@
 
 ## Progress
 
-**92 / 103 resolved.**
+**103 / 103 resolved.**
 
 | Chunk | Scope | Findings | Done | Status |
 |---|---|---:|---:|---|
@@ -16,9 +16,9 @@
 | **D** | jmo-ci-debugger | 13 | 13 | **complete** |
 | **E** | target-type-expander + security-hardening | 19 | 19 | **complete** |
 | **F** | the 7 agents | 13 | 13 | **complete** |
-| **G** | tail: refactoring, compliance, systematic-debugging, references | 11 | 0 | not started |
+| **G** | tail: refactoring, compliance, systematic-debugging, references | 11 | 11 | **complete** |
 | **H** | repo config authored by PR #717 | 6 | 6 | **complete** |
-| | **total** | **103** | **92** | |
+| | **total** | **103** | **103** | **complete** |
 
 ## How to mark a finding off
 
@@ -816,30 +816,121 @@ findings understated their scope.
   back `'[REDACTED]'`. Switched to `copy.deepcopy` and recorded why `del
   safe["raw"]` is unaffected (top-level deletion touches only the copy).
 
-## Chunk G - tail: refactoring, compliance, systematic-debugging, references  (0/11)
+## Chunk G - tail: refactoring, compliance, systematic-debugging, references  (11/11)
 
+Root-cause shape: **UNBUILT SURFACE.** Three findings ask for controls on a CLI
+that was never written; two more chase upstream releases for a table whose real
+authority is a module in this repo. The reviewer treated documentation as a
+description of software that exists. Where it wasn't, the fix is to delete the
+surface, not to harden it.
 
 **`.claude/skills/jmo-compliance-mapper/references/framework-version-updates.md`**
 
-- [ ] **Major** L14: (claim nested; read from the PR conversation)
+- [x] **Major** L14 **FIXED, but not in the direction asked.** The finding says
+  refresh OWASP/CWE/ATT&CK to current public releases (2025 / 2025 / v19.1).
+  **That would have been wrong.** This table documents what the mapper *emits*,
+  and `scripts/core/compliance_frameworks.py:6-11` is the authority: OWASP 2021,
+  CWE Top 25 2024, CIS v8.1, NIST CSF 2.0, PCI DSS 4.0 are all **correct** — the
+  code literally emits `A01:2021`..`A10:2021` and names its constants
+  `CWE_TO_OWASP_TOP10_2021` / `CWE_TOP_25_2024`. Writing 2025 here would have
+  made the doc lie about the code. **One version genuinely was wrong**, and the
+  finding half-saw it: ATT&CK. Doc said `v15`; code says **v16.1** at
+  `compliance_frameworks.py:11,783`, `compliance_mapper.py:11,790`,
+  `TESTING_MATRIX.md:14,243`. Corrected across **5 sites** (finding named 3):
+  `framework-version-updates.md:14,32`, `SKILL.md:154` (`v15.1`),
+  `compliance-report-examples.md:107` (`"attack": "15.1"`),
+  `references/memory-integration.md:171` (`"mitre_attack": "15.1"`). Reframed the
+  section so the code is the stated oracle and upstream releases are a trigger to
+  change code, not this file. Dropped `next_check` — it sat 6 months expired
+  because nothing reads it; a diff against the module cannot silently lapse.
+  **Unmentioned by the finding, in the same file:** L57 told the reader to run
+  `python3 scripts/dev/bulk_compliance_map.py`, which **has never existed**
+  (`git ls-files` matches nothing). Replaced with the real path — enrichment is
+  automatic and central at `normalize_and_report.py:234`.
 
 **`.claude/skills/jmo-refactoring-assistant/SKILL.md`**
 
-- [ ] **Major** L86: Enforce the 85% coverage floor in every refactoring checklist
-- [ ] **Major** L250: (claim nested; read from the PR conversation)
-- [ ] **Major** L250: Do not expose an unrestricted `--skip-tests` path
+- [x] **Major** L86 **DISMISSED as written; the real defect was elsewhere in the
+  skill.** The finding asks to require `pytest --cov-fail-under=85` in three
+  checklists "because CI enforces 85%". **Nothing enforces 85%** — measured:
+  `Makefile:132` is `pytest --cov --cov-report=term-missing` with no threshold,
+  `[tool.coverage.report]` in `pyproject.toml` sets no `fail_under`, and a repo
+  scan finds `--cov-fail-under` **only** in `.claude/` prose and docs. CI's one
+  gate is `coverage_pct < 70` (`ci.yml:734`); the comment above it claiming
+  "Full 85% coverage is still enforced via `make test`" is itself false. Adding
+  the flag would have propagated an unenforceable gate — that is **#756**. The
+  three cited sites say "coverage must be >= before", which is *correct* advice
+  for behaviour-preserving refactoring, so they were kept and sharpened
+  (compare against a recorded baseline; a drop means tests were lost).
+  **The finding pointed at three sites that were fine and missed two that were
+  not:** `references/memory-integration.md:77,222-223` asserted
+  `--cov-fail-under=85` and `=90` and named the strategy
+  `maintain-85-percent-coverage`. Those are fixed.
+- [x] **Major** L250 (path traversal on `--target` / `--output-dir`)
+  **FIXED by deleting the fiction.** The finding says to canonicalize both paths
+  and reject traversal "before any read, edit, or write operation". There is
+  **no program to put that in.** `--target`, `--refactor-type`, `--function`,
+  `--base-class-name`, `--max-lines`, `--output-dir`, `--dry-run`,
+  `--skip-tests`, `--preserve-coverage`, `--avoid-circular-imports` appear
+  **nowhere in this repository** outside two skill docs — no argparse, no entry
+  point. The frontmatter says `argument-hint: <refactoring-type>` and `$ARGUMENTS`
+  takes one free-text string. Replaced `## Parameters` with `## Invocation`
+  (how the skill is really called) plus a `### Scope and Safety` table that
+  states containment as a working rule **and says plainly that nothing enforces
+  it** — which is the actionable form of the finding for a prompt document.
+- [x] **Major** L250 (`--skip-tests`) **FIXED — same root cause, same edit.**
+  Removed rather than reworded: a documented `--skip-tests` reads as permission
+  to skip Phase 4, and a documented `--dry-run` reads as a guarantee that nothing
+  is written. Both are false. Swept the rest of the skill for the same fiction
+  and found two more live references telling readers to "Use `--dry-run`"
+  (`best-practices-troubleshooting.md:110,122`) — both rewritten.
+  **Sibling not touched, deliberately:** `jmo-security-hardening/SKILL.md:139`
+  has an identical fictional `## Parameters` block with its own `--skip-tests`.
+  That file is chunk E's and E is closed; filed separately rather than reopening
+  a completed tally. Grep confirms the class is exactly these two skills.
 
 **`.claude/skills/jmo-refactoring-assistant/references/test-migration-patterns.md`**
 
-- [ ] **Major** L47: (claim nested; read from the PR conversation)
+- [x] **Major** L47 **FIXED, and confirmed by execution.** Pattern 2 told readers
+  to rewrite `@patch("wizard.X")` as `@patch("wizard_generators.X")` after
+  extraction. That is backwards. The skill's own step 1 leaves the caller doing
+  `from ... import X` — the real shape at `scripts/cli/wizard.py:119` — so
+  `run_wizard` resolves through `wizard.X`, and patching the definition in
+  `wizard_generators` never fires. Reproduced the two-module shape and ran it:
+  patching `wizard_generators.…` returned **`REAL`** (no-op), patching
+  `wizard.…` returned **`MOCKED`**. Rewrote Pattern 2 with that table, added the
+  rule (the patch target follows the *caller's* import style, not the function's
+  new home), and fixed the **third** site the finding did not list — the
+  migration checklist at L74 repeated the same bad rewrite. Added a
+  `mock.called` assertion to the checklist because a mis-aimed patch fails
+  **silently**: the real function just runs.
 
 **`.claude/skills/jmo-systematic-debugging/references/detailed-phase-guide.md`**
 
-- [ ] **Major** L110: (claim nested; read from the PR conversation)
+- [x] **Major** L110 **FIXED; one of its two anchors was wrong.** The finding
+  claims the leaky block also lives at `jmo-systematic-debugging/SKILL.md#L99-L110`.
+  It does not — `IDENTITY`, `codesign` and `security` appear in **zero** lines of
+  that file (L99-110 there is a list of red-flag phrases). Only
+  `detailed-phase-guide.md` has it. It also mis-quotes the command as
+  `codesign --verbose=4 "$IDENTITY"`; the file says
+  `codesign --sign "$IDENTITY" --verbose=4 "$APP"`. The substance holds: L105's
+  `env | grep IDENTITY` prints the credential. **Demonstrated** — with `IDENTITY`
+  set to a sentinel it echoed `IDENTITY=Developer ID Application: SECRET-VALUE-12345`
+  verbatim; the replacement (`env | cut -d= -f1 | grep -qx IDENTITY`) prints only
+  `present`/`absent`, verified in both branches. Layer 1 already used the safe
+  set/unset idiom, so the file was inconsistent with itself. Also narrowed
+  `security find-identity -v` to its count line and dropped `--verbose=4`.
+  **Not executed:** the `security`/`codesign` lines are macOS-only and this is a
+  Windows box — those two changes are verbosity reductions reasoned from their
+  documented behaviour, not measured, and the tracker should say so.
 
 **`.claude/skills/jmo-compliance-mapper/examples/compliance-report-examples.md`**
 
-- [ ] **Minor** L69: (claim nested; read from the PR conversation)
+- [x] **Minor** L69 **FIXED, on in-repo evidence rather than the web.** The
+  finding cites attack.mitre.org for the technique name. The repo answers it
+  directly: `compliance_frameworks.py:808` and `:897` both set
+  `"techniqueName": "Command and Scripting Interpreter"` for T1059. The example
+  said `T1059 (Command Injection)` — a name the mapper never emits. Corrected.
 
 **`.claude/skills/jmo-compliance-mapper/references/memory-integration.md`**
 
@@ -847,19 +938,43 @@ findings understated their scope.
 > findings). The JSON example below was **deliberately left alone** so the chunk
 > tallies stay honest - it belongs to G, not D.
 
-- [ ] **Minor** L67: Keep the framework-version schema complete
+- [x] **Minor** L67 **FIXED.** The Example Memory Hit's `framework_versions`
+  carried five keys while `frameworks` right above it carried six, and
+  `store_compliance_mapping` in the same file writes all six. Added
+  `mitre_attack`, matching the writer's key set and value exactly (`"16.1"`,
+  per the version correction above). The finding's line reference (94-98) points
+  at the `mitre_attack` block inside `frameworks`, not at `framework_versions`;
+  the defect it describes is real regardless.
 
 **`.claude/skills/jmo-refactoring-assistant/references/best-practices-troubleshooting.md`**
 
-- [ ] **Minor** L13: Use the selected target in the import search
+- [x] **Minor** L13 **FIXED, and the command was worse than the finding said.**
+  `grep -r "from.*import" | grep target_file` does search for the literal
+  `target_file` — but the recursive half is also a documented failure in this
+  repo: unscoped `grep -r` descends into `.venv/`, `results/` and `graphify-out/`
+  and **exceeds the Bash tool's 120s timeout** (it did so twice while working
+  this chunk). Replaced with a `MODULE=` variable and
+  `git grep -n -E "^(from|import).*\b${MODULE}\b" -- 'scripts/**/*.py' 'tests/**/*.py'`,
+  executed: **6 real callers in 0.056s**.
 
 **`.claude/skills/references/memory-integration-pattern.md`**
 
-- [ ] **Minor** L56: Write valid JSON in the storage example
+- [x] **Minor** L56 **FIXED, verified by parsing both forms.** `"patterns": { ... }`
+  is not valid JSON, so step 2's `jq '.patterns'` cannot read a file step 3
+  wrote. Ran both through a strict parser: the old form fails with
+  `Expecting property name enclosed in double quotes: line 3 column 17`, the new
+  form parses. (`jq` is not installed on this box, so the claim is stated against
+  the parser actually used — not asserted about jq's exit code.)
 
 **`.claude/skills/jmo-refactoring-assistant/references/memory-integration.md`**
 
-- [ ] **Trivial** L81: Make rollback non-destructive
+- [x] **Trivial** L81 **FIXED.** `git checkout main && git branch -D refactor/…`
+  had three problems, not one: it hardcodes `main` (this repo branches off and
+  merges into `dev`), `-D` force-deletes commits that may be reachable nowhere
+  else, and it discards uncommitted work to switch away. Replaced with a
+  sequence that records the base branch instead of assuming it, stashes with
+  `-u`, keeps the branch until its commits are confirmed reachable, and uses
+  `git branch -d` — whose refusal on unmerged work *is* the safety property.
 
 ## Chunk H - repo config authored by PR #717  (6/6)
 
