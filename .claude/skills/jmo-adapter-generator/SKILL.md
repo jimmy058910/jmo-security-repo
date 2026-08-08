@@ -112,7 +112,7 @@ Persist tool patterns, exit codes, pitfalls, and test fixtures to `.jmo/memory/a
 
 ### Phase 9: Run Validation Suite
 
-Run `make test && make lint && make pre-commit-run`. Verify plugin discovery, coverage >=85%, memory file exists. Full checklist in [references/detailed-phase-guide.md](references/detailed-phase-guide.md#phase-9-run-validation-suite).
+Run `make test && make lint && make pre-commit-run`. Verify plugin discovery, memory file exists, and >=85% coverage **of the new adapter module** — a bar for new code, not a gate `make test` applies (it sets no threshold; CI's only floor is 70% repo-wide, `ci.yml:734`, see #756). Full checklist in [references/detailed-phase-guide.md](references/detailed-phase-guide.md#phase-9-run-validation-suite).
 
 ### Phase 10: Create Pull Request
 

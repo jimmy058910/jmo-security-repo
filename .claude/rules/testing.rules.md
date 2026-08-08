@@ -16,11 +16,27 @@ references:
 
 ## Test Coverage & CI Requirements
 
-**Mandatory:** `pytest --cov-fail-under=85` in CI.
+**The only enforced coverage floor is 70%**, in `.github/workflows/ci.yml:734`:
+
+```python
+if coverage_pct < 70:
+    sys.exit(1)
+```
+
+`--cov-fail-under` is set **nowhere** — not in `make test` (`Makefile:132` runs
+`pytest --cov --cov-report=term-missing`, no threshold), not in
+`[tool.coverage.report]`, not in any workflow. Tracked as **#756**.
 
 - All new code must include tests.
-- Aim for >87% coverage (current baseline).
 - Use `--cov=scripts --cov-report=term-missing` to identify gaps.
+- **Compare against the previous run, not against a constant.** Because nothing
+  fails between 70% and the current level, a regression in that band is invisible
+  to CI — diffing the number yourself is the only thing that catches it.
+
+> This section previously read "**Mandatory:** `pytest --cov-fail-under=85` in
+> CI" and "Aim for >87% (current baseline)". Both were unenforced, and the 87%
+> was never measured in-repo. A stated guarantee is a claim to verify — the same
+> failure class as #747 (pinned version drift) and #750 (prose version headers).
 
 ## Running Tests Locally
 

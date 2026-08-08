@@ -183,10 +183,14 @@ CI Failure
     |   |-- ModuleNotFoundError (multiple PRs) -> #6 Dependabot
     |   |-- ModuleNotFoundError (one job, after a pip install) -> #18 Bare pip install
     |   |-- collected 0 items, then Error 5 -> #18 Bare pip install
-    |   |-- Coverage below 85% -> #9 Test Coverage
     |   |-- Float assertion failures -> #16 Platform Precision
     |   |-- FileNotFoundError: React -> #17 React Build Check
     |   +-- Other test failures -> Check test code
+    |
+    +-- coverage-aggregate (after the shards)
+    |   +-- "is below 70% CI threshold" -> #9 Test Coverage
+    |       (the gate lives here, NOT in test-matrix -- the shards carry no
+    |        coverage threshold of their own)
     |
     +-- lint-full (nightly)
     |   |-- 4+ tool failures -> #14 Nightly Cascading

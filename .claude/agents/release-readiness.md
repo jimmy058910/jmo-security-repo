@@ -187,10 +187,13 @@ pytest tests/integration/ -v
 ### Coverage
 
 ```bash
-pytest tests/ --cov=scripts --cov-fail-under=85
+pytest tests/ --cov=scripts --cov-report=term-missing
 ```
 
-**Status:** ⚠️ 84% (below threshold)
+**Status:** report the measured number against CI's actual floor — **70%**
+(`.github/workflows/ci.yml:734`). Nothing sets `--cov-fail-under` (#756), so a
+figure like 84% is **passing**, not "below threshold". Flag a *drop from the
+previous release* rather than a miss against a constant that isn't enforced.
 **Action:** Add tests to reach 85%+
 
 ---
