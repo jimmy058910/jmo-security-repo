@@ -42,17 +42,34 @@ Before deploying security fixes to production:
 If security fix causes production issues:
 
 ```bash
-# Option 1: Git revert (recommended for clean rollback)
-git revert <commit-sha-of-security-fix>
-git push origin main
-
-# Option 2: Feature flag disable (fastest, no deployment)
+# Option 1: Feature flag disable (fastest, no deployment at all)
 # Set environment variable: SECURITY_FIX_MEDIUM_001=false
 # Restart application
 
-# Option 3: Deploy rollback branch (for complex fixes)
-git checkout rollback/pre-security-fix-MEDIUM-001
-git push origin main --force  # Use with extreme caution
+# Option 2: Git revert (the standard code rollback)
+git checkout -b revert/security-fix-MEDIUM-001 dev
+git revert <commit-sha-of-security-fix>
+git push -u origin revert/security-fix-MEDIUM-001
+gh pr create --base dev    # then dev -> main as usual
+
+# Option 3: Complex fixes -- revert the whole range, still via a PR
+git revert --no-commit <first-sha>..<last-sha> && git commit
+```
+
+**Neither a direct push nor a force-push to `main` is available here**, and
+that is enforced, not advisory. Ruleset `9147592` ("Protect main branch
+(minimal)") is `active` on `refs/heads/main` with `pull_request` (blocks direct
+push) and `non_fast_forward` (blocks force-push). Only `actor_id: 5`
+(Repository Admin) has `bypass_mode: always`.
+
+So a rollback that force-pushes `main` fails for every contributor, and for an
+admin it silently succeeds while discarding any commit landed since the fix —
+which is why it is not listed above. Verify the live rules before relying on
+this text:
+
+```bash
+gh api repos/jimmy058910/jmo-security-repo/rulesets/9147592 \
+  --jq '{rules: [.rules[].type], bypass: .bypass_actors}'
 ```
 
 ### Gradual Rollout Strategy

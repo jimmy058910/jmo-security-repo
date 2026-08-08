@@ -12,7 +12,7 @@ Guidelines for choosing security tools when adding new target types to JMo Secur
 | Web URLs | DAST | zap | burp, nikto |
 | GitLab Repos | Secrets | trufflehog | gitleaks |
 | Kubernetes | K8s Security | trivy | kubesec, kube-bench |
-| **AWS Accounts** | Cloud Security | prowler, scoutsuite | cloudmapper |
+| **AWS Accounts** | Cloud Security | prowler, scoutsuite (cmd: `scout`) | cloudmapper |
 | **npm Packages** | SCA | npm audit, snyk | retire.js |
 | **GraphQL APIs** | API Security | graphql-cop, inql | graphw00f |
 
@@ -60,7 +60,7 @@ Slow (>20 min):
 ```bash
 # Required: JSON output for adapter integration
 prowler aws --output-formats json  # Yes
-scoutsuite aws --report-dir .      # Yes (generates JSON)
+scout aws --report-dir .           # Yes (generates JSON)
 nmap -oX output.xml                # No (XML only, needs conversion)
 ```
 

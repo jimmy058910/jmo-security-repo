@@ -25,7 +25,9 @@ Defense Layers:
 - Layer 2: [Defense-in-depth mechanism]
 
 Testing:
+- make fmt && make lint && make test: clean
 - [X]/[X] tests passing
+- Coverage: [NN]% (CI floor: 70%)
 - Bandit: 0 findings (was [N])
 - Fuzzing: [Y]/[Y] malicious inputs blocked
 
@@ -67,7 +69,9 @@ Defense Layers:
 - Layer 2: Path validation (ensures output stays within results directory)
 
 Testing:
+- make fmt && make lint && make test: clean
 - 123/123 tests passing
+- Coverage: 87% (CI floor: 70%)
 - Bandit: 0 findings (was 6 vulnerable code patterns)
 - Fuzzing: 106/106 malicious inputs blocked
 
@@ -80,8 +84,26 @@ References:
 - Finding: dev-only/security-fix-MEDIUM-001.md
 - CWE-22: https://cwe.mitre.org/data/definitions/22.html
 - OWASP A01: https://owasp.org/Top10/A01_2021-Broken_Access_Control/
-
-Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
 )"
 ```
+
+---
+
+## Two rules this template must not break
+
+**No AI-attribution trailers.** The example above deliberately ends at the
+references block. This repo's commit convention is conventional-commit subject
+lines with **no AI-attribution markers** in commits or PRs, so a
+`Co-Authored-By: Claude ...` line does not belong in a JMo commit. The
+`Co-Authored-By` slot in the template is for a **human** security reviewer, and
+only after that person has agreed — a copied trailer otherwise attributes
+authorship to someone who never saw the change.
+
+**The coverage numbers above are reported, not gated.** Grepping for the
+threshold is misleading here: `--cov-fail-under=85` appears in `.claude/` prose
+but in no executable path. `make test` runs `pytest ... --cov
+--cov-report=term-missing` with no `--cov-fail-under`, and
+`[tool.coverage.report]` in `pyproject.toml` sets no `fail_under`. The only
+enforced floor is **70%**, in `.github/workflows/ci.yml:734`. Put the real
+measured percentage in the commit; do not claim a gate that will not fire.

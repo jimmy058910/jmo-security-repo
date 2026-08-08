@@ -206,7 +206,9 @@ fix details, validation results, and deployment checklist.
 2. **Review attack scenarios:** Know how exploit works
 3. **Check existing mitigations:** Don't duplicate defenses
 4. **Commit current work:** `git commit` before security changes
-5. **Check Python compatibility:** See [references/python-compat.md](references/python-compat.md)
+5. **Reuse the existing helpers:** path validation already lives in
+   `scripts/cli/path_sanitizers.py` (`_sanitize_path_component`,
+   `_validate_output_path`) -- don't write a second one
 
 ### During Fix Application
 
@@ -239,7 +241,7 @@ fix details, validation results, and deployment checklist.
 After using this skill, you should see:
 
 - **0 HIGH security findings** (from 2)
-- **0 MEDIUM security findings** (from 6)
+- **0 MEDIUM security findings** (from 3)
 - **Security test coverage:** 100% for patched code
 - **Scanners clean:** Bandit, Semgrep, Trufflehog green
 - **Fuzzing resistant:** 100+ malicious inputs blocked
@@ -271,7 +273,6 @@ make test
 |----------|----------|
 | [examples/vulnerability-fix-examples.md](examples/vulnerability-fix-examples.md) | Full fix examples with generated code for all 4 vulnerability types |
 | [references/browser-compat.md](references/browser-compat.md) | Browser support matrix, fallback strategies for web security fixes |
-| [references/python-compat.md](references/python-compat.md) | Python version compatibility patterns (Path.is_relative_to, etc.) |
 | [references/rollback-performance.md](references/rollback-performance.md) | Rollback procedures, gradual rollout, performance overhead, optimization |
 | [references/limitations.md](references/limitations.md) | Known limitations, edge cases, troubleshooting |
 | [references/memory-integration.md](references/memory-integration.md) | Memory caching for OWASP fixes, CWE patterns, test templates |
