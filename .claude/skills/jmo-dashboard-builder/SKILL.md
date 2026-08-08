@@ -181,7 +181,7 @@ export interface CommonFinding {
   remediation?: string
   references?: string[]
   tags?: string[]
-  cvss?: number
+  cvss?: { version?: string; score: number; vector?: string }
   context?: { snippet?: string; lines?: string[] }
   compliance?: {
     owaspTop10_2021?: string[]

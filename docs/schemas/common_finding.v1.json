@@ -20,7 +20,16 @@
     "message": { "type": "string" },
     "description": { "type": "string" },
     "severity": { "type": "string", "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"] },
-    "cvss": { "type": "number" },
+    "cvss": {
+      "type": "object",
+      "description": "Best available CVSS score. Adapters select v3 over v2 and keep the vector, so the score stays auditable. Omitted entirely when the tool reports no score -- Finding.to_dict() drops None, so this is never null.",
+      "required": ["score"],
+      "properties": {
+        "version": { "type": "string", "description": "CVSS revision, e.g. \"3.x\" or \"2.0\"" },
+        "score": { "type": "number", "minimum": 0, "maximum": 10, "description": "Base score" },
+        "vector": { "type": "string", "description": "Base vector string, e.g. \"AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H\"" }
+      }
+    },
     "tool": {
       "type": "object",
       "required": ["name", "version"],
