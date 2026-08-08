@@ -1064,6 +1064,31 @@ class TestFullTierEdgeCases:
             result = _full_tools_check()
             assert result.status == CheckStatus.FAIL
 
+    def test_full_tools_check_bound_clears_the_measured_runtime(self):
+        """The bound must survive the validator's own load (#773).
+
+        `jmo tools check` probes all 29 registry entries -- measured 49s cold
+        and 33s warm, standalone, on a box with the tools installed. The old
+        60s literal was 1.22x the cold run while this validator spawns
+        subprocess checks alongside it, so the check ERRORed and `--tier full`
+        reported NO-GO. Same shape as #748, where a bound sized against an
+        unloaded machine failed on one that had the tools.
+
+        The other two cases here mock `_run_jmo` wholesale, so nothing else in
+        this file would notice the bound being tightened again.
+        """
+        from scripts.core.validators.cli_validator import (
+            _TOOLS_CHECK_TIMEOUT,
+            _full_tools_check,
+        )
+
+        assert _TOOLS_CHECK_TIMEOUT >= 150, "must clear the 49s cold measurement"
+
+        with patch("scripts.core.validators.cli_validator._run_jmo") as mock_run:
+            mock_run.return_value = _mock_completed(returncode=0, stdout="ok")
+            _full_tools_check()
+            assert mock_run.call_args.kwargs["timeout"] == _TOOLS_CHECK_TIMEOUT
+
     def test_full_diff_auto_accepts_rc_two(self):
         """diff --auto with rc=2 (no git context) is acceptable."""
         from scripts.core.validators.cli_validator import _full_diff_auto

@@ -525,15 +525,25 @@ def _check_scan_help_mentions_repo() -> CheckResult | None:
 # ---------------------------------------------------------------------------
 
 
+# `jmo tools check` probes all 29 registry entries. Measured standalone on a
+# Windows box with the tools actually installed: 49s cold, 33s warm. The bound
+# here was 60s -- 1.22x the cold run -- and this validator is itself the load,
+# spawning subprocess checks throughout, so the check ERRORed and `--tier full`
+# reported NO-GO (#773). Same shape as #748, where a bound with 1.03-1.36x
+# headroom passed on a machine with no tools installed and failed on one that
+# had them. Sized at ~3.7x the cold measurement instead.
+_TOOLS_CHECK_TIMEOUT = 180
+
+
 def _full_tools_check() -> CheckResult | None:
     """Run 'jmo tools check' and verify it completes."""
     try:
-        result = _run_jmo("tools", "check", timeout=60)
+        result = _run_jmo("tools", "check", timeout=_TOOLS_CHECK_TIMEOUT)
     except subprocess.TimeoutExpired:
         return CheckResult(
             name="full: tools check",
             status=CheckStatus.ERROR,
-            message="Timed out (60s)",
+            message=f"Timed out ({_TOOLS_CHECK_TIMEOUT}s)",
         )
     # tools check may return non-zero if tools are missing, but
     # it should at least produce output and not crash
