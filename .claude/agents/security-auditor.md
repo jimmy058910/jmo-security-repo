@@ -159,94 +159,89 @@ None found. ✅
 
 ## High Severity Findings (2)
 
-### HIGH-001: Command Injection Risk in Docker Tool Execution
+### HIGH-001: Container image pulled from a floating `:latest` tag
 
-**Location:** [scripts/core/run_noseyparker_docker.sh:25](scripts/core/run_noseyparker_docker.sh#L25)
+**Location:** [scripts/core/run_noseyparker_docker.sh:27](scripts/core/run_noseyparker_docker.sh#L27)
 
 **Description:**
-The `run_noseyparker_docker.sh` script constructs Docker commands using string concatenation with user-controlled input (`$1` repo path). While currently safe due to path validation in Python caller, future modifications could introduce command injection.
+The script hardcodes an unpinned image tag, bypassing the repo's version
+registry. `versions.yaml:80` pins noseyparker to `0.24.0`, so what actually runs
+is whatever upstream last pushed to `:latest` — and it drifts without any commit
+to this repo.
 
 **Vulnerable Code:**
+
 ```bash
-REPO_PATH="$1"
-docker run --rm -v "$REPO_PATH:/scan" ghcr.io/praetorian-inc/noseyparker:latest \
-    scan /scan --datastore /tmp/np.db
+IMAGE="ghcr.io/praetorian-inc/noseyparker:latest"
+...
+docker pull "$IMAGE" >/dev/null 2>&1 || warn "Unable to pull; using local image if present"
 ```
 
 **Attack Scenario:**
-If path validation is removed/bypassed, attacker could inject commands:
-
-```bash
-./run_noseyparker_docker.sh "/tmp/repo; rm -rf /"
-# Executes: docker run ... -v "/tmp/repo; rm -rf /:/scan" ...
-```
+A compromised or simply changed upstream tag executes with the repo mounted. The
+`|| warn` fallback also means a failed pull silently proceeds with whatever stale
+local image exists, so the version that ran is not recoverable from the logs.
 
 **Risk:**
 
-- **Likelihood:** Low (requires bypassing Python path validation)
-- **Impact:** High (arbitrary command execution on host)
-- **CWE:** CWE-78 (OS Command Injection)
+- **Likelihood:** Low (requires upstream compromise or an unnoticed breaking release)
+- **Impact:** High (arbitrary code execution against the scanned tree)
+- **CWE:** CWE-1357 (Reliance on Insufficiently Trustworthy Component)
 
 **Remediation:**
 
-1. Use array-based Docker arguments instead of string concatenation
-2. Add explicit path validation in shell script
-3. Use `--` to terminate option parsing
-
-**Fixed Code:**
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-
-REPO_PATH="${1:?Missing repo path}"
-
-# Validate path exists and is absolute
-if [[ ! -d "$REPO_PATH" ]]; then
-    echo "Error: Path does not exist: $REPO_PATH" >&2
-    exit 1
-fi
-
-if [[ ! "$REPO_PATH" = /* ]]; then
-    echo "Error: Path must be absolute: $REPO_PATH" >&2
-    exit 1
-fi
-
-# Use array for safe argument passing
-docker_args=(
-    "run" "--rm"
-    "-v" "${REPO_PATH}:/scan"
-    "ghcr.io/praetorian-inc/noseyparker:latest"
-    "scan" "/scan"
-    "--datastore" "/tmp/np.db"
-)
-
-docker "${docker_args[@]}"
-```
+1. Read the pinned version from `versions.yaml` instead of hardcoding a tag
+2. Prefer a digest (`@sha256:...`) so the pull is reproducible
+3. Fail closed when the pull fails, rather than falling back to a local image
 
 **Verification:**
 
 ```bash
-# Test with malicious input
-./run_noseyparker_docker.sh "/tmp/repo; echo INJECTED"
-# Should fail with validation error, not execute injection
+grep -n 'IMAGE=' scripts/core/run_noseyparker_docker.sh
+# -> 27:IMAGE="ghcr.io/praetorian-inc/noseyparker:latest"
+
+python -c "import yaml;print(yaml.safe_load(open('versions.yaml'))['binary_tools']['noseyparker']['version'])"
+# -> 0.24.0
+# The tag the script runs must equal the version the registry pins.
+# Note the section: versions.yaml has no top-level `tools` key — entries live
+# under python_tools / binary_tools / special_tools / docker_images.
 ```
 
 **References:**
 
-- OWASP: Command Injection
-- CWE-78: Improper Neutralization of Special Elements used in OS Command
+- CWE-1357: Reliance on Insufficiently Trustworthy Component
+- `docs/VERSION_MANAGEMENT.md` — why tool versions live in `versions.yaml`
+
+> **Claim rejected during this audit — command injection via the repo path.**
+> An earlier draft of this report flagged `-v "$REPO_PATH:/scan"` as CWE-78 with
+> a `"/tmp/repo; rm -rf /"` payload. That is wrong, and the reasoning is worth
+> keeping: `docker` is executed directly, not through a shell, and the argument
+> is quoted, so the whole string arrives as **one** argv element. Verified by
+> substituting a stand-in for `docker` and printing argv:
+>
+> ```text
+> argv[4]=-v
+> argv[5]=/tmp/repo; rm -rf /:/repo:ro
+> ```
+>
+> `$(id)` likewise arrives literal — there is no second expansion pass. The
+> script additionally canonicalizes with `readlink -f` (:73), rejects a
+> non-directory (:78), and mounts read-only (:106). Before reporting injection,
+> identify the sink and confirm a shell actually parses the string there.
 
 ---
 
-### HIGH-002: Path Traversal in Results Directory Creation
+### HIGH-002: Path Traversal in Results Directory Creation — **NOT REPRODUCIBLE**
 
-**Location:** [scripts/cli/jmo.py:245](scripts/cli/jmo.py#L245)
+**Location:** [scripts/cli/scan_jobs/repository_scanner.py:212](scripts/cli/scan_jobs/repository_scanner.py#L212)
 
-**Description:**
-The `cmd_scan()` function creates result directories using user-controlled `--results-dir` without validating against path traversal attacks.
+**Description (as originally drafted):**
+The scan path was reported to create result directories from a user-controlled
+repo name without validating against path traversal.
 
-**Vulnerable Code:**
+**Reported code — note this is a *sketch*, not the code in the repo.**
+The real entry point is `cmd_scan()` at `scripts/cli/jmo.py:2839`, and there is
+no `iter_repos()` function anywhere in `scripts/`:
 
 ```python
 def cmd_scan(args):
@@ -259,74 +254,76 @@ def cmd_scan(args):
         out_dir.mkdir(parents=True, exist_ok=True)
 ```
 
-**Attack Scenario:**
+**Attack Scenario — tested, and it does not reproduce:**
 
 ```bash
-# Attacker creates malicious repo directory
 mkdir -p "/tmp/repos/../../../etc/malicious"
-
-# Run scan
 jmo scan --repos-dir /tmp/repos --results-dir /tmp/results
-
-# Creates: /tmp/results/individual-repos/../../../etc/malicious
-# Resolves to: /etc/malicious (writes outside intended directory)
 ```
-
-**Risk:**
-
-- **Likelihood:** Medium (requires attacker-controlled repo directory names)
-- **Impact:** High (arbitrary file write, potential privilege escalation)
-- **CWE:** CWE-22 (Path Traversal)
-
-**Remediation:**
-
-1. Sanitize all path components from user input
-2. Resolve paths and verify they're within expected parent
-3. Use `os.path.commonpath()` to validate containment
-
-**Fixed Code:**
 
 ```python
-def _safe_path_component(name: str) -> str:
-    """Sanitize a path component to prevent traversal."""
-    # Remove path separators and traversal sequences
-    safe = name.replace("/", "_").replace("\\", "_")
-    safe = safe.replace("..", "_")
-    # Remove leading dots (hidden files)
-    safe = safe.lstrip(".")
-    # Ensure non-empty
-    if not safe:
-        safe = "unknown"
-    return safe
-
-def cmd_scan(args):
-    results_dir = Path(args.results_dir).resolve()
-    results_dir.mkdir(parents=True, exist_ok=True)
-
-    for repo in iter_repos(args):
-        # Sanitize repo name to prevent traversal
-        safe_name = _safe_path_component(repo.name)
-        out_dir = results_dir / "individual-repos" / safe_name
-
-        # Verify output directory is within results_dir
-        try:
-            out_dir.resolve().relative_to(results_dir)
-        except ValueError:
-            _log(args, "ERROR", f"Path traversal detected: {repo.name}")
-            continue
-
-        out_dir.mkdir(parents=True, exist_ok=True)
+>>> Path('/tmp/repos/../../../etc/malicious').name
+'malicious'
+>>> _sanitize_path_component('malicious')
+'malicious'
+# out_dir -> /tmp/results/individual-repos/malicious   (inside results_dir)
 ```
+
+Two independent reasons it fails. `Path.name` is only the final component, so
+the traversal segments never reach the join; and `repository_scanner.py:212`
+puts that name through `_sanitize_path_component()` regardless. Feeding the
+sanitizer a raw traversal string directly still yields nothing escaping:
+
+```python
+>>> _sanitize_path_component('../../../etc/malicious')
+'______etc_malicious'
+>>> _sanitize_path_component('..')
+'_'
+```
+
+**Risk:** none as written — **this entry is retained as an example of a claim
+that must be dropped**, not as a finding. Do not report a traversal without
+running the join and showing the resulting path lands outside the parent.
+
+**Remediation: none required — the control already exists.**
+
+Do not propose writing a `_safe_path_component()` helper here.
+`scripts/cli/path_sanitizers.py` already provides `_sanitize_path_component()`,
+and all three scan job types route user-controlled names through it:
+
+```python
+# scripts/cli/scan_jobs/repository_scanner.py:212
+name = _sanitize_path_component(repo.name)
+# scripts/cli/scan_jobs/image_scanner.py:61
+safe_name = _sanitize_path_component(image)
+# scripts/cli/scan_jobs/iac_scanner.py:63
+safe_name = _sanitize_path_component(iac_path.stem)
+```
+
+Proposing a duplicate of an existing control is worse than reporting nothing: it
+implies the control is absent, and a second sanitizer with slightly different
+rules is a real future divergence. Grep for the defense before writing one.
 
 **Verification:**
 
 ```python
-# Unit test
+# Measured against scripts/cli/path_sanitizers.py, not assumed:
+from scripts.cli.path_sanitizers import _sanitize_path_component
+
 def test_path_traversal_prevention():
-    assert _safe_path_component("../../../etc/passwd") == "___etc_passwd"
-    assert _safe_path_component("normal-repo") == "normal-repo"
-    assert _safe_path_component("..hidden") == "hidden"
+    assert _sanitize_path_component("../../../etc/passwd") == "______etc_passwd"
+    assert _sanitize_path_component("normal-repo") == "normal-repo"
+    assert _sanitize_path_component("..hidden") == "_hidden"
+    assert _sanitize_path_component("nginx:latest") == "nginx_latest"
+    assert _sanitize_path_component("..") == "_"
 ```
+
+> The docstring examples in `path_sanitizers.py` disagree with these values —
+> they predict `'___etc_passwd'` and `'hidden'`. The docstring is wrong, not the
+> code: `/` → `_` runs *before* `..` → `_`, so separators count too, and the
+> `..` → `_` substitution happens before `lstrip(".")`, leaving nothing to
+> strip. Nothing executes those doctests (no `--doctest-modules` anywhere), so
+> the drift was never caught. **Run the function; do not copy its docstring.**
 
 **References:**
 
@@ -353,11 +350,13 @@ The HTML dashboard includes the full `raw` field from findings, which may contai
 **Remediation:**
 
 ```python
+import copy
+
 def write_html(findings: List[Dict], output_path: Path) -> None:
     # Sanitize sensitive fields before rendering
     sanitized = []
     for f in findings:
-        safe = f.copy()
+        safe = copy.deepcopy(f)
         # Remove potentially sensitive raw data
         if "raw" in safe:
             del safe["raw"]
@@ -370,6 +369,14 @@ def write_html(findings: List[Dict], output_path: Path) -> None:
     html = render_template(sanitized)
     output_path.write_text(html)
 ```
+
+> `f.copy()` is **shallow**: `safe["context"]` is the *same dict object* as
+> `f["context"]`, so assigning `"[REDACTED]"` overwrites the caller's finding.
+> Confirmed by running the shallow version — the input's
+> `context["fileContents"]` came back `'[REDACTED]'`. Every reporter that runs
+> after this one would then render redacted placeholders instead of real data.
+> `del safe["raw"]` is safe only because deletion touches the copy's own top
+> level; the nested mutation is what leaks. Use `copy.deepcopy`.
 
 ---
 
@@ -542,13 +549,36 @@ def _log_error(args, message: str, exc: Exception = None):
 
 **Location:** [scripts/core/reporters/html_reporter.py:50](scripts/core/reporters/html_reporter.py#L50)
 
-**Remediation:**
+**Remediation:** already present in the shipped template
+(`scripts/dashboard/index.html:8-12`) — but read the next paragraph before
+reporting it either way.
 
 ```html
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline' 'self'; style-src 'unsafe-inline' 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none';">
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
 <meta http-equiv="X-Frame-Options" content="DENY">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
 ```
+
+> **What these actually do here — document intent, not enforcement.**
+> Three of the mechanisms above are inert in a `<meta>` tag: browsers ignore
+> `X-Frame-Options` and `X-Content-Type-Options` outside an HTTP response
+> header, and CSP's `frame-ancestors` is one of the directives (with `sandbox`
+> and `report-uri`) that a `<meta>` policy may not set. `referrer` and `robots`
+> are correct in meta form; the rest of the CSP applies.
+>
+> **Do not "fix" this by moving them to HTTP response headers.** JMo has no HTTP
+> server — `write_html()` writes `dashboard.html` to disk and the user opens it
+> from the filesystem, so there is no response for a header to ride on. There is
+> no Flask/FastAPI/`http.server` anywhere in the codebase. A recommendation to
+> set response headers is unactionable for this product.
+>
+> Note also that `tests/reporters/test_html_security.py` asserts these strings
+> are **present**, not that any browser enforces them — a green suite here is
+> not evidence of protection. If you want a real improvement, the honest one is
+> replacing `'unsafe-inline'` with per-build nonces or hashes on the generated
+> inline `<script>`/`<style>` blocks, which does work from a meta policy.
 
 ---
 

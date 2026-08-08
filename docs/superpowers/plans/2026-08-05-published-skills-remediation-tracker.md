@@ -6,7 +6,7 @@
 
 ## Progress
 
-**79 / 103 resolved.**
+**92 / 103 resolved.**
 
 | Chunk | Scope | Findings | Done | Status |
 |---|---|---:|---:|---|
@@ -15,10 +15,10 @@
 | **C** | adapter-generator + test-fabricator | 15 | 15 | **complete** |
 | **D** | jmo-ci-debugger | 13 | 13 | **complete** |
 | **E** | target-type-expander + security-hardening | 19 | 19 | **complete** |
-| **F** | the 7 agents | 13 | 0 | not started |
+| **F** | the 7 agents | 13 | 13 | **complete** |
 | **G** | tail: refactoring, compliance, systematic-debugging, references | 11 | 0 | not started |
 | **H** | repo config authored by PR #717 | 6 | 6 | **complete** |
-| | **total** | **103** | **79** | |
+| | **total** | **103** | **92** | |
 
 ## How to mark a finding off
 
@@ -659,45 +659,162 @@ precise: a vague claim invites checking, a specific one does not.
   enforces 85%. Filed separately; template now says "Coverage: [NN]% (CI floor:
   70%)". Same correction applied to the target-type-expander checklist.
 
-## Chunk F - the 7 agents  (0/13)
+## Chunk F - the 7 agents  (13/13)
 
+Root-cause shape: **PHANTOM SYMBOLS**. Chunk F's example code names functions
+that do not exist (`compute_finding_id` x6, `load_noseyparker`, `iter_repos`,
+`_safe_path_component`, `CURRENT_SCHEMA_VERSION` in the wrong module) and mocks
+call sites the code under test never reaches. The reviewer saw the *consequences*
+(a count is wrong, a test won't run) without naming the cause, so 8 of 13
+findings understated their scope.
 
 **`.claude/agents/code-quality-auditor.md`**
 
-- [ ] **Major** L319: (claim nested; read from the PR conversation)
+- [x] **Major** L319 **FIXED, and the finding's remedy was not available.** The
+  claim checks out: `cvss` is `{"type": "number"}` in
+  `docs/schemas/common_finding.v1.json:23`, and the validator rejects the dict —
+  measured: `cvss: {'version': '3.x', 'score': 9.8, ...} is not of type
+  'number'`. But the suggested destination, "a separate schema-defined field"
+  for the vector, **does not exist** — the schema defines no vector property
+  (`additionalProperties: true` would permit inventing one, which is not the
+  same thing). Renamed to `_extract_cvss_score()` returning `float | None` and
+  documented that the vector stays reachable via `raw`. Ran the rewritten
+  example end-to-end against the real validator: **no schema errors**.
+  Same block: `compute_finding_id` does not exist anywhere in `scripts/`; the
+  function is `common_finding.fingerprint()` (16 hex chars). Fixed both sites.
+  *Two live defects surfaced, filed as **#757**, not fixed here:*
+  `grype_adapter.py:63` and `dependency_check_adapter.py:178` emit `cvss` as a
+  dict in production, so their findings fail schema validation; and nothing in
+  the normal pipeline validates real scan output (`schema_validator` is reached
+  only from `scan_validator.py`'s self-test).
 
 **`.claude/agents/coverage-gap-finder.md`**
 
-- [ ] **Major** L153: Make the proposed tests executable
+- [x] **Major** L153 **FIXED by rewriting against the real adapter.** Wider than
+  reported: it is not only that `sample = {...}` is a placeholder and
+  `raise_exception()` is undefined — `load_noseyparker` **does not exist** (the
+  API is `NoseyParkerAdapter().parse()`), and **2 of the 3 proposed tests assert
+  behaviour the adapter does not contain**. `noseyparker_adapter.py` has zero
+  `subprocess` / `shutil.which` / Docker references, so patching them exercises
+  nothing; the container runner is a separate shell script. The cited uncovered
+  lines were fiction too — "L68-71: error handling for missing binary" is
+  `PluginMetadata` fields, and "L89: empty results" is a docstring quote.
+  Replaced with 4 tests against real branches, and **executed them: 4 passed**.
+  Also fixed the summary that said "5/27 below threshold" over a list of 3.
 
 **`.claude/agents/dependency-analyzer.md`**
 
-- [ ] **Major** L50: Keep compliance enrichment in the report phase
-- [ ] **Major** L124: (claim nested; read from the PR conversation)
+- [x] **Major** L50 **FIXED, and the imports were worse than the phase error.**
+  Enrichment is now shown where it happens — `normalize_and_report.py:234`, once
+  over the deduped set — and removed from the adapter pattern. The two import
+  lines also contradicted each other, and the first named **two symbols that do
+  not exist** in `common_finding.py` (`compute_finding_id`,
+  `enrich_finding_with_compliance`; the latter is in `compliance_mapper.py`).
+  Measured: **1 of 27** adapters calls enrichment directly
+  (`semgrep_secrets_adapter.py:289`) — recorded as the outlier to remove, not a
+  pattern. Also replaced the stale `def load_<tool>(path)` contract with the
+  real `AdapterPlugin.parse()` shape.
+- [x] **Major** L124 **FIXED; every count in the section was wrong.** Adapters
+  11 -> 27 (28 `*_adapter.py` files, minus `base_adapter.py`, which has no
+  subclasses - #745). Reporters 5 -> **13**. And the migration scope missed its
+  biggest item: `CURRENT_SCHEMA_VERSION` exists **only** in the unused
+  `base_adapter.py:38`, while each of the 27 adapters hardcodes
+  `schema_version="1.2.0"` in its `PluginMetadata` — so a schema bump is 27
+  edits, not the 1 the checklist implied.
 
 **`.claude/agents/doc-sync-checker.md`**
 
-- [ ] **Major** L579: Fix the relative-link example
+- [x] **Major** L579 **FIXED — the example was inverted.** From
+  `docs/USER_GUIDE.md`, `[Release Process](RELEASE.md)` already resolves to
+  `docs/RELEASE.md`, which exists; the documented "fix" would have produced
+  `docs/docs/RELEASE.md`. The example presented a working link as broken. (The
+  cited line is fabricated regardless: `docs/USER_GUIDE.md` contains no
+  `RELEASE.md` link.) Replaced with a genuinely broken case — `README.md`
+  linking `USER_GUIDE.md` — and pointed at the repo's own resolver,
+  `check_doc_links.py:238` (`source.parent / path_part`).
 
 **`.claude/agents/release-readiness.md`**
 
-- [ ] **Major** L38: Push only the release tag
-- [ ] **Major** L310: Do not infer branch parity from a one-sided log range
-- [ ] **Major** L336: Run the image tag that the checklist builds
+- [x] **Major** L38 **FIXED at both sites, against the canonical procedure.**
+  `docs/RELEASE.md:24` is
+  `git fetch origin && git tag -a vX.Y.Z origin/main -m "vX.Y.Z" && git push
+  origin vX.Y.Z`. The agent diverged in **three** ways, not the one reported:
+  `--tags` publishes every local tag *and* every `v*` fires `release.yml`; the
+  tag was lightweight rather than annotated; and it was cut from local HEAD
+  rather than `origin/main`.
+- [x] **Major** L310 **FIXED.** `git log origin/main..HEAD` is one-sided and
+  silent when the remote is ahead. Now `git fetch origin main` +
+  `git rev-list --left-right --count origin/main...HEAD`, with either count
+  non-zero read as divergence.
+- [x] **Major** L336 **FIXED at both sites, plus two the finding missed.** The
+  build/run tag mismatch is real (builds `-deep`, runs `-full`). Two more in the
+  same blocks: **there is no bare `Dockerfile`** in this repo — only
+  `Dockerfile.{deep,fast,slim,balanced}` — so `docker build -f Dockerfile .`
+  fails outright at 3 sites; and the post-release checklist pulls
+  `:0.7.0-full`, a tag **removed in v1.0.5**.
 
 **`.claude/agents/security-auditor.md`**
 
-- [ ] **Major** L182: Correct the command-injection analysis
-- [ ] **Major** L273: Correct the path-traversal analysis
-- [ ] **Major** L551: (claim nested; read from the PR conversation)
+- [x] **Major** L182 **FIXED — HIGH-001 replaced, claim disproved by execution.**
+  Confirmed false: `docker` is invoked directly, not via a shell, and the
+  argument is quoted. Substituted a stand-in for `docker` and printed argv —
+  `/tmp/repo; rm -rf /:/repo:ro` arrives as a **single** `argv[5]`, and `$(id)`
+  arrives literal. Wider than reported: the quoted "vulnerable code" **is not in
+  the file** (no `REPO_PATH`; the real mount is `-v "$REPO_DIR:/repo:ro"`), the
+  anchor `:25` points at a color-logging helper, and the "fixed code" was
+  security theatre — identical safety, since the original was never unsafe.
+  Replaced with a real, verifiable finding at the same file: the image is pinned
+  to a floating `:latest` (`:27`) while `versions.yaml:80` pins `0.24.0`, and a
+  failed pull silently falls back to a stale local image. Kept the disproof as a
+  worked "claim rejected" example. **My own verification recipe failed on first
+  run** (`KeyError: 'tools'` — entries live under `binary_tools`); corrected and
+  re-run.
+- [x] **Major** L273 **FIXED — HIGH-002 marked NOT REPRODUCIBLE, with measured
+  output.** `Path('/tmp/repos/../../../etc/malicious').name` is `'malicious'`,
+  so the join lands *inside* `results_dir`. The finding named one defence; there
+  are **two** — `repository_scanner.py:212` also routes the name through
+  `_sanitize_path_component()`, which turns a raw `'../../../etc/malicious'`
+  into `'______etc_malicious'`. Deleted the "fixed code" that proposed writing
+  `_safe_path_component()`: that control **already exists** in
+  `scripts/cli/path_sanitizers.py` and is applied by all three scan job types.
+  Anchor was wrong too (`jmo.py:245`; `cmd_scan` is at `jmo.py:2839`) and
+  `iter_repos()` does not exist.
+  *Live defect surfaced, filed as **#758**:* the sanitizer's **own doctests are
+  wrong** — they predict `'___etc_passwd'` and `'hidden'` where the code returns
+  `'______etc_passwd'` and `'_hidden'`. **4 of 7 doctests in that module fail**,
+  and nothing runs them (no `--doctest-modules` anywhere).
+- [x] **Major** L551 **FIXED, consistent with chunk E's L331 verdict.** Same
+  inert-`<meta>` class: `X-Frame-Options` and `X-Content-Type-Options` are
+  header-only, and CSP's `frame-ancestors` is not settable from a meta policy.
+  The decisive fact the finding missed: **JMo has no HTTP server**, so "deliver
+  them as HTTP response headers" is unactionable — `write_html()` writes
+  `dashboard.html` to disk and the user opens it from the filesystem (no Flask /
+  FastAPI / `http.server` anywhere). Aligned the example CSP with what
+  production actually emits (`scripts/dashboard/index.html:8-12`, which was
+  strictly stronger than the doc's), documented these as intent rather than
+  enforcement, noted that `test_html_security.py` asserts *presence* only, and
+  kept nonce/hash as the one honest improvement.
 
 **`.claude/agents/codebase-explorer.md`**
 
-- [ ] **Minor** L18: (claim nested; read from the PR conversation)
+- [x] **Minor** L18 **FIXED, and the count was the least of it.** 28 vs 27 is
+  right — 28 `*_adapter.py` files, 27 tool adapters, `base_adapter.py` subclassed
+  by nothing (#745). Standardised on 27 with the discrepancy explained. The
+  larger defect, unmentioned: the pattern-summary template claimed "22/27
+  adapters call `enrich_finding_with_compliance()`" and **recommended adding it
+  to more** — i.e. recommended spreading an architecture violation. Real count:
+  **1 of 27**. Also fixed `Grep: compute_finding_id` (phantom symbol -> a dead-end
+  search) and the "read 3-4 adapters, then summarise about all" instruction that
+  produced these numbers. My first replacement asserted "all use
+  `safe_load_json_file()`" — **measured 24/27**, corrected before commit.
 
 **`.claude/agents/security-auditor.md`**
 
-- [ ] **Minor** L367: Avoid mutating input findings during redaction
+- [x] **Minor** L367 **FIXED.** `f.copy()` is shallow, so redacting
+  `safe["context"]["fileContents"]` overwrites the caller's finding. Executed
+  the doc's own snippet to confirm: the input's `context["fileContents"]` came
+  back `'[REDACTED]'`. Switched to `copy.deepcopy` and recorded why `del
+  safe["raw"]` is unaffected (top-level deletion touches only the copy).
 
 ## Chunk G - tail: refactoring, compliance, systematic-debugging, references  (0/11)
 

@@ -35,8 +35,8 @@ You have access to all analysis tools:
 
 ```python
 # Common patterns across codebase
-from scripts.core.common_finding import compute_finding_id, enrich_finding_with_compliance
-from scripts.core.compliance_mapper import enrich_finding_with_compliance
+from scripts.core.common_finding import fingerprint, normalize_severity
+from scripts.core.compliance_mapper import enrich_findings_with_compliance
 from scripts.core.normalize_and_report import gather_results
 from scripts.core.config import load_config
 from scripts.core.suppress import apply_suppressions
@@ -45,10 +45,17 @@ from scripts.core.suppress import apply_suppressions
 **Adapter pattern:**
 
 ```python
-# All adapters follow this pattern
-from scripts.core.common_finding import compute_finding_id, enrich_finding_with_compliance
-def load_<tool>(path: str | Path) -> List[Dict[str, Any]]
+# All 27 adapters follow this pattern
+from scripts.core.common_finding import fingerprint, normalize_severity
+from scripts.core.plugin_api import AdapterPlugin, Finding
+
+class <Tool>Adapter(AdapterPlugin):
+    def parse(self, output_path: Path) -> list[Finding]: ...
 ```
+
+Adapters normalize only. Compliance enrichment is **not** an adapter concern —
+`normalize_and_report.py` applies it once to the deduplicated set. See
+"Chain 2" below.
 
 **Reporter pattern:**
 
@@ -76,14 +83,18 @@ tests/adapters/*.py (validate schema)
 **Chain 2: Compliance Enrichment**
 
 ```text
-compliance_mapper.py (framework mappings)
+compliance_mapper.py (framework mappings + enrich_findings_with_compliance)
   ↓
-common_finding.py (enrich_finding_with_compliance function)
-  ↓
-adapters/*.py (call enrichment)
+normalize_and_report.py:234 (single enrichment pass over deduped findings)
   ↓
 reporters/compliance_reporter.py (generate reports)
 ```
+
+Adapters are **not** in this chain: they emit unenriched findings, and
+`normalize_and_report.py` enriches once after dedup. A change to the framework
+mappings therefore has one call site, not 27. (One adapter,
+`semgrep_secrets_adapter.py:289`, still calls `enrich_finding_with_compliance`
+itself and is an outlier to fix, not a pattern to copy.)
 
 **Chain 3: CLI Configuration**
 
@@ -115,12 +126,12 @@ profiles (fast/balanced/deep)
 
    ```bash
    # Search for CommonFinding usage
-   Grep: "schemaVersion"|compute_finding_id|enrich_finding_with_compliance
+   Grep: "schemaVersion"|fingerprint\(|enrich_findings_with_compliance
    ```
 
-3. **Categorize affected files:**
-   - **Adapters** (11 files) - Create findings with schema
-   - **Reporters** (5 files) - Read findings, expect schema fields
+3. **Categorize affected files** (re-count these; they drift):
+   - **Adapters** (27 files, plus unused `base_adapter.py`) - Create findings with schema
+   - **Reporters** (13 files) - Read findings, expect schema fields
    - **Tests** (20+ files) - Validate schema structure
    - **Docs** (5 files) - Document schema
 
@@ -175,9 +186,12 @@ finding = {
 #### 1. Core Schema (2 files) - MUST UPDATE
 
 - ✅ `scripts/core/common_finding.py` - Add priority field logic
-  - Update CURRENT_SCHEMA_VERSION to "1.3.0"
   - Add priority calculation function
-  - Update compute_finding_id signature (if priority affects fingerprint)
+  - Update `fingerprint()` signature (if priority affects the fingerprint)
+  - Note: there is **no** shared schema-version constant to bump.
+    `CURRENT_SCHEMA_VERSION` exists only in the unused `base_adapter.py`; each
+    of the 27 adapters hardcodes `schema_version="1.2.0"` in its
+    `PluginMetadata`, so a version bump is 27 edits, not one
 
 - ✅ `docs/schemas/common_finding.v1.json` - Update JSON schema
   - Add "priority" to properties
@@ -217,7 +231,7 @@ def _calculate_priority(severity: str, context: dict) -> str:
 finding["priority"] = _calculate_priority(severity, context)
 ```
 
-#### 3. Reporters (5 files) - SHOULD UPDATE
+#### 3. Reporters (13 files) - SHOULD UPDATE
 
 Reporters may want to use priority field for sorting/filtering:
 
@@ -580,9 +594,9 @@ common_finding.py
 
 - "I want to add a 'priority' field to CommonFinding. What will this affect?"
 - "Which files depend on compliance_mapper.py?"
-- "What happens if I change the signature of compute_finding_id()?"
+- "What happens if I change the signature of common_finding.fingerprint()?"
 - "Are there any circular dependencies in scripts/core/?"
-- "Which adapters don't call enrich_finding_with_compliance()?"
+- "Which adapters call enrich_finding_with_compliance() directly instead of leaving it to the report phase?"
 - "What third-party packages are actually used vs. just declared?"
 - "If I remove PyYAML, what breaks?"
 - "Show me the dependency chain for HTML reporter"

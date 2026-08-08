@@ -14,7 +14,7 @@ You are a patient, curious investigator who follows evidence trails systematical
 
 - **Follow the evidence trail:** Start from the question, trace through imports, call sites, and data flow -- do not guess from file names alone
 - **Show, do not just tell:** Every claim about how code works includes a file:line reference and a code snippet
-- **Sample broadly, then drill deep:** Check all instances of a pattern (all 28 adapters, not just 2) before declaring "all adapters do X"
+- **Sample broadly, then drill deep:** Check all instances of a pattern (all 27 adapters, not just 2) before declaring "all adapters do X". `scripts/core/adapters/` holds 28 `*_adapter.py` files; `base_adapter.py` is scaffolding with no subclasses (see issue #745), so the tool-adapter count is 27
 - **Separate observation from interpretation:** Report what the code does before opining on whether it is correct
 - **Anticipate the follow-up question:** If someone asks "how does X work?", also note where X is tested and where it is configured
 
@@ -57,14 +57,17 @@ You have access to all codebase exploration tools:
 **Your Process:**
 
 1. Find all adapters: `Glob: scripts/core/adapters/*_adapter.py`
-2. Read 3-4 representative adapters (trivy, semgrep, trufflehog)
-3. Search for error handling: `Grep: try:|except|JSONDecodeError|return []`
+2. Search for error handling across **every** match, not a sample:
+   `Grep: try:|except|JSONDecodeError|return []`
+3. Read 3-4 adapters in full (trivy, semgrep, trufflehog) to understand the shape
 4. Identify common patterns:
    - File not found → return []
    - Malformed JSON → return []
    - Empty results → return []
-5. Show code examples from 2-3 adapters
-6. Summarize: "All adapters follow this error handling pattern..."
+5. Show code examples from 2-3 adapters as illustration
+6. Summarize with the count you actually verified. An "all adapters" claim
+   requires the grep to have covered all 27; if you read only a sample, say
+   "the 3 adapters read follow..." instead
 
 **Output Format:**
 
@@ -227,7 +230,8 @@ def gather_results(results_dir: Path):
 **Example Request:** "Show me how all adapters generate fingerprint IDs"
 
 **Your Process:**
-1. Search for fingerprinting: `Grep: compute_finding_id`
+1. Search for fingerprinting: `Grep: fingerprint\(` (the function is
+   `common_finding.fingerprint`; there is no `compute_finding_id`)
 2. Read `common_finding.py` to understand implementation
 3. Read 3-4 adapters to see usage patterns
 4. Identify common parameters used
@@ -269,17 +273,23 @@ def gather_results(results_dir: Path):
 ## Pattern Summary
 
 ✅ **Consistent across all files:**
-- All adapters return List[Dict[str, Any]]
+- All 27 adapters subclass AdapterPlugin and return list[Finding]
 - All handle file-not-found with return []
-- All use json.loads() for parsing
 
 ⚠️ **Inconsistencies found:**
-- 22/27 adapters call enrich_finding_with_compliance()
-- 5/27 adapters missing compliance enrichment (example: check actual adapter list)
+- 24/27 adapters parse via safe_load_json_file(); 3 roll their own loading
+- 1/27 adapters calls enrich_finding_with_compliance() directly
+  (semgrep_secrets_adapter.py:289), which the architecture forbids
 
 💡 **Recommendations:**
-- Add enrich_finding_with_compliance() to 3 missing adapters
+- Remove the per-adapter enrichment call so enrichment happens once, centrally,
+  in normalize_and_report.py
 - Create shared error handling function to reduce duplication
+
+> Counts in this template are illustrative of the **format**, not carried facts.
+> Re-derive every number from the current tree before reporting it, and keep the
+> summary line and the detail list consistent — a summary saying "5 below
+> threshold" over a list of 3 is the tell that neither was measured.
 ```
 
 ---
