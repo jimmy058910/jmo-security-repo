@@ -1117,23 +1117,34 @@ def _check_test_count() -> CheckResult:
         )
 
 
+# The floor CI actually enforces, at .github/workflows/ci.yml:734
+# (`if coverage_pct < 80: sys.exit(1)`). This check demanded 85 until #773 -- a
+# number nothing in the repo has ever enforced (#756), so it could only ever
+# WARN, no matter how healthy coverage was. #766 raised the real floor from 70
+# to 80 and updated its citations; this site was missed because only
+# `--tier full` reaches it and that tier had never been run.
+_ENFORCED_COVERAGE_FLOOR = 80
+
+
 def _check_coverage_threshold() -> CheckResult:
-    """Coverage configuration requires >=85%."""
+    """Coverage configuration meets the floor CI enforces."""
     # Check pyproject.toml or .coveragerc for threshold
     try:
         _get_pyproject_data()  # validate pyproject.toml is loadable
-        # Check if CI config implies 85%
         # Also check Makefile for --cov-fail-under
         if _path_exists("Makefile"):
             makefile = _read_text("Makefile")
             m = re.search(r"--cov-fail-under[=\s]+(\d+)", makefile)
             if m:
                 threshold = int(m.group(1))
-                if threshold < 85:
+                if threshold < _ENFORCED_COVERAGE_FLOOR:
                     return CheckResult(
                         name="coverage-threshold",
                         status=CheckStatus.FAIL,
-                        message=f"Coverage threshold is {threshold}% (need >=85%)",
+                        message=(
+                            f"Coverage threshold is {threshold}% "
+                            f"(need >={_ENFORCED_COVERAGE_FLOOR}%)"
+                        ),
                     )
                 return CheckResult(
                     name="coverage-threshold",
@@ -1149,17 +1160,19 @@ def _check_coverage_threshold() -> CheckResult:
         m = re.search(r"--cov-fail-under[=\s]+(\d+)", ci)
         if m:
             threshold = int(m.group(1))
-            if threshold >= 85:
+            if threshold >= _ENFORCED_COVERAGE_FLOOR:
                 return CheckResult(
                     name="coverage-threshold",
                     status=CheckStatus.PASS,
                     message=f"CI enforces {threshold}% coverage",
                 )
-        # Also check inline Python threshold (e.g. "if coverage_pct < 85:")
+        # Also check inline Python threshold (e.g. "if coverage_pct < 80:").
+        # This is the branch that actually fires: nothing in this repo sets
+        # --cov-fail-under (#756), so ci.yml's inline check is the only gate.
         m = re.search(r"coverage_pct\s*<\s*(\d+)", ci)
         if m:
             threshold = int(m.group(1))
-            if threshold >= 85:
+            if threshold >= _ENFORCED_COVERAGE_FLOOR:
                 return CheckResult(
                     name="coverage-threshold",
                     status=CheckStatus.PASS,
@@ -1168,7 +1181,7 @@ def _check_coverage_threshold() -> CheckResult:
     return CheckResult(
         name="coverage-threshold",
         status=CheckStatus.WARN,
-        message="Cannot verify coverage threshold >=85%",
+        message=f"Cannot verify coverage threshold >={_ENFORCED_COVERAGE_FLOOR}%",
     )
 
 
@@ -1500,31 +1513,47 @@ def _check_dockerfile_build(dockerfile: str) -> CheckResult:
     return None  # type: ignore[return-value]
 
 
-def _check_pip_install() -> CheckResult:
-    """pip install -e '.[dev]' succeeds."""
+def _check_dev_install() -> CheckResult:
+    """The documented dev install resolves against the lockfile.
+
+    This probed `pip install -e '.[dev]' --dry-run` until #773, which was wrong
+    twice over. The `[project.optional-dependencies] dev` extra was removed by
+    the uv migration (#683) in favour of a PEP 735 `[dependency-groups]` group
+    -- pyproject.toml records why -- so that extra failing is the intended
+    state, not a defect. And uv-created venvs ship no pip, so `python -m pip`
+    exits 1 with "No module named pip" rather than raising FileNotFoundError:
+    the SKIP guard below could never fire on the project's own primary dev
+    path, and the check reported FAIL on a correctly configured machine.
+
+    The guard was right in shape and attached to the wrong probe. A missing
+    `uv` executable does raise FileNotFoundError, so it now means what it says.
+
+    Only `--tier full` reaches this check, which is why it went unnoticed until
+    that tier was run for the first time.
+    """
     try:
         result = _run_cmd(
-            [sys.executable, "-m", "pip", "install", "-e", ".[dev]", "--dry-run"],
+            ["uv", "sync", "--locked", "--group", "dev", "--dry-run"],
             timeout=120,
         )
         if result.returncode != 0:
             return CheckResult(
-                name="pip-install-dev",
+                name="dev-install",
                 status=CheckStatus.FAIL,
-                message="pip install -e '.[dev]' would fail",
+                message="uv sync --locked --group dev would fail",
                 details=(result.stderr or "")[:500],
             )
     except FileNotFoundError:
         return CheckResult(
-            name="pip-install-dev",
+            name="dev-install",
             status=CheckStatus.SKIP,
-            message="pip not available",
+            message="uv not available",
         )
     except subprocess.TimeoutExpired:
         return CheckResult(
-            name="pip-install-dev",
+            name="dev-install",
             status=CheckStatus.SKIP,
-            message="pip install timed out",
+            message="uv sync timed out",
         )
     return None  # type: ignore[return-value]
 
@@ -1646,7 +1675,7 @@ def validate_release(tier: str) -> CategoryResult:
                     _make_docker_check(dockerfile),
                 )
             )
-        checks.append(timed_check("pip-install-dev", _check_pip_install))
+        checks.append(timed_check("dev-install", _check_dev_install))
         checks.append(timed_check("jmo-entry-point", _check_jmo_version_entry_point))
 
     return CategoryResult(name="Release Artifacts", checks=checks)
