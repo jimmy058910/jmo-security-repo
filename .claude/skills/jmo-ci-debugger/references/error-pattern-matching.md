@@ -6,7 +6,17 @@ Error pattern matching regex and log analysis patterns for diagnosing CI failure
 
 ## Quick Pattern Matching Table
 
-When diagnosing CI failures, match error messages to these patterns:
+When diagnosing CI failures, match error messages to these patterns.
+
+**Dialect: POSIX ERE**, as used by the `grep -E` commands below. Write digits as
+`[0-9]`: `\d` is a PCRE construct GNU grep does not implement, so `\d` matches a
+literal `d` and the pattern silently matches nothing.
+
+**The `\|` in this table is Markdown, not regex.** A bare `|` inside a table cell
+is a column separator, so GFM requires it escaped even inside a code span. It
+renders as a plain `|`, which is the ERE alternation you want — copy the
+*rendered* cell, not the raw source. Removing the backslash does not fix a regex;
+it splits the cell in half and drops the last column off the row.
 
 | Error Pattern (regex) | Failure | Section |
 |----------------------|---------|---------|
@@ -18,15 +28,16 @@ When diagnosing CI failures, match error messages to these patterns:
 | `ModuleNotFoundError` (multiple PRs) | Dependabot Cascading Failures | #6 |
 | `MD036/no-emphasis-as-heading` | Markdownlint | #7 |
 | `ruff\.+Failed` | Pre-commit Hooks | #8 |
-| `Coverage of \d+% is below` | Test Coverage | #9 |
+| `Coverage of [0-9]+% is below` | Test Coverage | #9 |
 | `uv\.lock needs to be updated` | Lockfile Drift | #10 |
 | `syntax error: expected <block` | YAML Syntax | #11 |
 | `GH013: Repository rule violations` | Branch Protection | #12 |
-| `waiting for status to be reported` | Rulesets/Commit Status | #13 |
+| `waiting for status to be reported` | Ruleset check never reported | #13 |
 | `lint-full.*Failed` (4+ tools) | Nightly Cascading Failures | #14 |
 | `F401 imported but unused\|F541 f-string` | Ruff After Black | #15 |
-| `assert 0\.\d+ [<>=]+ 0\.\d+` (across platforms) | Platform Float Precision | #16 |
+| `assert 0\.[0-9]+ [<>=]+ 0\.[0-9]+` (across platforms) | Platform Float Precision | #16 |
 | `FileNotFoundError.*React dashboard` | React Build Check | #17 |
+| `collected 0 items` (then `Error 5`) | Bare `pip install` outside the uv venv | #18 |
 
 ---
 
@@ -92,17 +103,22 @@ gh run view <run-id> --log-failed | grep -E "assert|FAILED" | grep -E "test_name
 
 ## Regex Patterns for Common Errors
 
+Same ERE dialect as the table above, so these paste straight into `grep -E`.
+`\s`, `\w` and `\S` are GNU extensions and do work bare, but **not inside a
+bracket expression** — GNU grep reads `[\w.]` as "backslash, w, or dot", so
+write the class out.
+
 ### Python Test Failures
 
 ```regex
 # Float comparison failures
-assert\s+\d+\.\d+\s*[<>=!]+\s*\d+\.\d+
+assert\s+[0-9]+\.[0-9]+\s*[<>=!]+\s*[0-9]+\.[0-9]+
 
 # Module import errors
-ModuleNotFoundError:\s+No module named\s+'[\w.]+'
+ModuleNotFoundError:\s+No module named\s+'[A-Za-z0-9_.]+'
 
 # Coverage threshold
-Coverage of \d+% is below threshold of \d+%
+Coverage of [0-9]+% is below threshold of [0-9]+%
 
 # Test collection errors
 ImportError while importing test module
@@ -115,7 +131,7 @@ ImportError while importing test module
 syntax error: expected <block\s+\w+>.*found.*<block\s+\w+>
 
 # Actionlint
-Unexpected input\(s\) '[\w_]+',\s*valid inputs are
+Unexpected input\(s\) '[A-Za-z0-9_]+',\s*valid inputs are
 
 # Workflow permissions
 Resource not accessible by integration
@@ -126,10 +142,10 @@ refusing to allow.*without.*write permission
 
 ```regex
 # Tag format
-invalid reference format:?\s*v?\d+
+invalid reference format:?\s*v?[0-9]+
 
 # Manifest not found
-manifest.*not found.*for\s+v?\d+
+manifest.*not found.*for\s+v?[0-9]+
 
 # Build failures
 Error:.*docker\s+(build|push|pull)\s+failed
@@ -142,7 +158,7 @@ Error:.*docker\s+(build|push|pull)\s+failed
 \w+\.+Failed
 
 # Ruff violations
-F\d{3}\s+\[\*\]\s+.+
+F[0-9]{3}\s+\[\*\]\s+.+
 
 # Black formatting
 would reformat\s+\S+\.py
@@ -165,6 +181,8 @@ CI Failure
     |
     +-- test-matrix (10-15 min)
     |   |-- ModuleNotFoundError (multiple PRs) -> #6 Dependabot
+    |   |-- ModuleNotFoundError (one job, after a pip install) -> #18 Bare pip install
+    |   |-- collected 0 items, then Error 5 -> #18 Bare pip install
     |   |-- Coverage below 85% -> #9 Test Coverage
     |   |-- Float assertion failures -> #16 Platform Precision
     |   |-- FileNotFoundError: React -> #17 React Build Check
@@ -191,7 +209,7 @@ CI Failure
     |
     +-- Push rejected
         |-- GH013 rule violations -> #12 Branch Protection
-        +-- Waiting for status -> #13 Rulesets/Commit Status
+        +-- Waiting for status -> #13 Ruleset check never reported
 ```
 
 ---

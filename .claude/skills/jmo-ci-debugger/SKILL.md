@@ -82,7 +82,7 @@ jobs:
 | 10 | Lockfile Drift | `uv.lock needs to be updated` | Run `make deps-lock`, commit uv.lock | Easy |
 | 11 | YAML Syntax | `syntax error: expected <block` | Fix indentation, quote special chars, use 2-space indent | Easy-Med |
 | 12 | Branch Protection | `GH013: Repository rule violations` | Use feature branches + PRs (never push directly to main) | Easy |
-| 13 | Rulesets/Commit Status | `waiting for status to be reported` | Add `createCommitStatus` step with `actions/github-script` | Medium |
+| 13 | Ruleset check never reported | `waiting for status to be reported` | Match the ruleset context to a job name; only add `createCommitStatus` if the ruleset really wants a commit status | Medium |
 | 14 | Nightly Cascading | `lint-full: 4+ tool failures` | Fix in order: uv-lock, actionlint, mypy, markdownlint | Medium |
 | 15 | Ruff After Black | `F401`/`F541` after formatting | Run `ruff check --fix` after Black, review auto-fixes | Easy |
 | 16 | Platform Float Precision | `assert 0.X <= Y.YYY` across platforms | Find min/max across ALL platforms, add 5-20% buffer | Medium |
@@ -113,11 +113,12 @@ Use the [error pattern matching reference](references/error-pattern-matching.md)
 - `uv.lock needs to be updated` -> #10 Lockfile Drift
 - `syntax error: expected <block` -> #11 YAML Syntax
 - `GH013: Repository rule violations` -> #12 Branch Protection
-- `waiting for status to be reported` -> #13 Rulesets/Commit Status
+- `waiting for status to be reported` -> #13 Ruleset check never reported
 - `lint-full: 4+ tool failures` -> #14 Nightly Cascading
 - `F401 imported but unused` / `F541 f-string` -> #15 Ruff After Black
 - `assert 0.X <= Y.YYY` (cross-platform) -> #16 Platform Float Precision
 - `FileNotFoundError: React dashboard` -> #17 React Build Check
+- `collected 0 items / 1 skipped` then `make: *** Error 5` -> #18 Bare `pip install` outside the uv venv
 
 ### 3. Apply Proven Fix
 
@@ -189,7 +190,7 @@ gh run rerun <run-id> --failed             # Re-run failed jobs
 
 ## Additional References
 
-- [Complete failure catalog](references/ci-failure-catalog.md) - All 17 failures with full detail
+- [Complete failure catalog](references/ci-failure-catalog.md) - All 18 failures with full detail
 - [Error pattern matching](references/error-pattern-matching.md) - Regex patterns, diagnostic decision tree
 - [Installation and configuration](references/installation-config.md) - Version pinning, Dockerfile patterns
 - [Prevention strategies](references/prevention-strategies-full.md) - Pre-push hooks, local CI simulation

@@ -1,6 +1,6 @@
 # CI Failure Catalog
 
-Complete reference of all 17 documented CI failure patterns with detailed symptoms, root causes, and proven fixes.
+Complete reference of all 18 documented CI failure patterns with detailed symptoms, root causes, and proven fixes.
 
 ---
 
@@ -148,15 +148,40 @@ Using deprecated or incorrect parameter names from outdated action documentation
 
 ### Alternative: Run actionlint directly
 
+Only when the reviewdog action cannot be used. **Do not pipe an unpinned remote
+script into a shell** — the upstream `scripts/download-actionlint.bash` lives on
+`main`, so `bash <(curl ...)` executes whatever that branch holds at the moment
+the job runs, with no integrity check. Pin a release and verify the checksum,
+the same convention the Dockerfiles use (`.claude/rules/docker.rules.md`,
+"Download Hardening Convention"):
+
 ```yaml
 - name: Run actionlint (Direct)
+  env:
+    ACTIONLINT_VERSION: 1.7.12  # release assets omit the leading 'v'
   run: |
-    # Install actionlint
-    bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+    set -euo pipefail
+    base="https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}"
+    archive="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
 
-    # Run with custom flags
+    # Keep the canonical asset name: sha256sum -c resolves the path written in
+    # the checksums line, so renaming the download makes verification impossible.
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors \
+      --connect-timeout 30 --max-time 600 -o "$archive" "${base}/${archive}"
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors \
+      --connect-timeout 30 --max-time 600 \
+      -o checksums.txt "${base}/actionlint_${ACTIONLINT_VERSION}_checksums.txt"
+
+    # Verify before extracting -- curl without -f exits 0 on an HTML error page.
+    grep " ${archive}\$" checksums.txt | sha256sum -c -
+    gzip -t "$archive"
+    tar -xzf "$archive" actionlint
+
     ./actionlint -color -verbose
 ```
+
+Bump `ACTIONLINT_VERSION` deliberately; `ci.yml` pins the action side the same
+way (`reviewdog/action-actionlint@v1.73.0`).
 
 **Testing Locally:**
 
@@ -456,10 +481,12 @@ jobs:
 
 ```bash
 # Go to Docker Hub -> Account Settings -> Security -> Access Tokens
-# Create new token with scopes:
-- Read
-- Write
-- Delete (required for README updates)
+# Create new token with the LEAST privilege that works:
+- Read & Write   # sufficient: the sync PATCHes the repository description
+
+# Do NOT grant Delete. Read/Write/Delete are distinct Docker Hub permissions;
+# README sync never removes a repository or an image, so Delete only widens the
+# blast radius of a leaked token.
 
 # Name: github-actions-readme-sync
 # Copy token (shown once)
@@ -482,13 +509,23 @@ DOCKERHUB_ENABLED=true  # Repository variable
 **3. Verify Token Permissions:**
 
 ```bash
-# Test token locally
+# Test token locally. Docker Hub's token endpoint is a POST with a JSON body --
+# it does not accept Basic auth, and it is not the legacy /v2/users/login/ path.
 TOKEN="dckr_pat_xxxxxxxxxxxxxxxxxxxxx"
-curl -u "username:$TOKEN" https://hub.docker.com/v2/users/login/
+curl -sS -X POST https://hub.docker.com/v2/auth/token \
+  -H "Content-Type: application/json" \
+  -d "{\"identifier\": \"username\", \"secret\": \"$TOKEN\"}"
 
-# Should return: {"token": "..."}
-# If error 401: Token expired or wrong permissions
+# Should return: {"access_token": "...", ...}
+# 401 -> token revoked, expired, or the identifier is wrong
+# 400 -> malformed body (the response names the offending field)
+# 415 -> you sent a GET, or omitted the JSON Content-Type
 ```
+
+> `curl -u "username:$TOKEN" https://hub.docker.com/v2/users/login/` cannot work:
+> measured, it returns **415 Unsupported Media Type**, so it fails on the method
+> before the token is ever evaluated. A 401 from it would not mean what the
+> old text claimed.
 
 **Why Use Variable Gate?**
 
@@ -1377,7 +1414,7 @@ actionlint .github/workflows/*.yml
 
 ---
 
-## 13. GitHub Rulesets Requiring Commit Statuses (Not Check Runs)
+## 13. Ruleset Check Never Reported (Required Context Matches No Job)
 
 **Symptoms:**
 
@@ -1390,18 +1427,39 @@ Manual merge attempt: "Required status check was not set by the expected GitHub 
 
 **Root Cause:**
 
-GitHub has **two separate status systems**:
+GitHub has two status systems, and a ruleset's `required_status_checks`
+accepts **either**:
 
-1. **Check Runs API** (modern) - Used by GitHub Actions workflows
-2. **Commit Status API** (legacy) - Required by some GitHub Rulesets
+1. **Check Runs API** (modern) - what GitHub Actions creates automatically
+2. **Commit Status API** (legacy) - what external CI systems typically post
 
-When a **GitHub Ruleset** is configured to require a specific status check by context name, it expects a **commit status** (legacy API), not a **check run**. GitHub Actions creates check runs by default, not commit statuses.
+A required check is satisfied when *either* a check run **or** a commit status
+reports success under the required context name. So the usual cause of this
+symptom is not the API family — it is that **the required context matches
+nothing that ran**:
+
+- The context is spelled differently from the job (`Quick checks` vs `quick-checks`).
+  Rulesets match a check run by its **name**, which is `jobs.<id>.name` when set
+  and the job id otherwise.
+- The job was filtered out by `paths:`/`branches:` and never ran at all. A
+  required check that never starts leaves the PR pending forever.
+- The context is genuinely a commit status posted by an external service that
+  is no longer running.
+
+> **Measured in this repository.** Ruleset `9147592` requires
+> `{"context": "quick-checks", "integration_id": 15368}` (15368 is the GitHub
+> Actions app). `gh api .../commits/<sha>/status` returns
+> `{"state": "pending", "statuses": []}` — **zero commit statuses ever** — while
+> `check-runs` shows `quick-checks` succeeding from app 15368, and PRs merge
+> normally. `createCommitStatus` appears nowhere in `.github/workflows/`. A
+> check run alone satisfies the rule; the older claim that rulesets demand a
+> commit status is false here.
 
 **Where This Occurs:**
 
-- Repositories using GitHub Rulesets instead of branch protection rules
 - Rulesets configured with `required_status_checks` by context name
-- Any workflow where ruleset expects commit status but CI creates check run
+- A required context that no job name produces (renamed job, typo, case drift)
+- A required job gated behind `paths:` or `if:` so it never reports on some PRs
 
 **Diagnosis Commands:**
 
@@ -1412,66 +1470,83 @@ gh api repos/OWNER/REPO/rulesets --jq '.[] | {id, name, enforcement}'
 # 2. Get required status checks from ruleset
 gh api repos/OWNER/REPO/rulesets/RULESET_ID --jq '.rules[] | select(.type == "required_status_checks") | .parameters.required_status_checks[]'
 
-# 3. Check commit status API (different from check runs)
+# 3. Check the commit status API
 gh api repos/OWNER/REPO/commits/COMMIT_SHA/status --jq '{state, statuses: [.statuses[] | {context, state}]}'
-# Returns: {"state":"pending","statuses":[]}  <- No commit statuses!
+# {"state":"pending","statuses":[]} is NORMAL for an Actions-only repo -- it
+# means no commit statuses exist, not that anything is broken.
 
-# 4. Check check runs API (GitHub Actions)
+# 4. Check the check runs API (GitHub Actions)
 gh api repos/OWNER/REPO/commits/COMMIT_SHA/check-runs --jq '.check_runs[] | {name, status, conclusion}'
-# Returns: All checks show "completed" and "success"
 
-# 5. Compare: Ruleset expects commit status, but only check runs exist
+# 5. The real comparison: does the required context from step 2 appear as a
+#    check-run NAME in step 4, or as a status CONTEXT in step 3? If it appears
+#    in neither, nothing is producing it -- that is the bug.
+gh api repos/OWNER/REPO/commits/COMMIT_SHA/check-runs --jq '[.check_runs[].name]'
 ```
 
-**Wrong Approach (Manual Fix):**
+**Fix 1 (usual case): make a job actually produce the required context.**
 
-```bash
-# Manually creating commit status works but isn't sustainable
-gh api repos/OWNER/REPO/statuses/COMMIT_SHA \
-  -X POST \
-  -f state=success \
-  -f context="quick-checks" \
-  -f description="All CI checks passed"
+Rename the job -- or the ruleset entry -- so they agree exactly. Rulesets match a
+check run by `jobs.<id>.name`, falling back to the job id when `name:` is absent:
 
-# This works ONCE but doesn't fix future PRs
+```yaml
+jobs:
+  quick-checks:
+    name: quick-checks   # must equal the ruleset's required context, character for character
 ```
 
-**Correct Approach (Permanent Fix):**
+If instead the job is skipped by `paths:`/`if:` on some PRs, either drop it from
+the required list or give it a always-reporting companion job, because a
+required check that never starts blocks the PR indefinitely.
 
-Add commit status creation to your workflow:
+**Fix 2 (only when a commit status is genuinely required):**
+
+Reach for this **only** when step 5 shows the required context is a commit
+status posted by something outside Actions and you must emulate it. Adding it
+"just in case" creates a second status surface to keep green for no benefit.
 
 ```yaml
 # .github/workflows/ci.yml
 jobs:
   quick-checks:
-    name: Quick checks
+    name: quick-checks
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      statuses: write        # REQUIRED: createCommitStatus 403s without it
     steps:
       # ... existing validation steps ...
 
-      # Create commit status for ruleset compatibility
-      # GitHub Rulesets may require commit statuses (legacy API) instead of check runs
       - name: Create commit status
         if: always()
         uses: actions/github-script@v7
+        env:
+          JOB_STATUS: ${{ job.status }}
         with:
           script: |
-            github.rest.repos.createCommitStatus({
+            const ok = process.env.JOB_STATUS === 'success';
+            await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              sha: context.sha,
-              state: '${{ job.status }}' === 'success' ? 'success' : 'failure',
+              sha: context.payload.pull_request?.head.sha ?? context.sha,
+              state: ok ? 'success' : 'failure',
               context: 'quick-checks',
-              description: 'CI checks ' + ('${{ job.status }}' === 'success' ? 'passed' : 'failed')
+              description: 'CI checks ' + (ok ? 'passed' : 'failed')
             });
 ```
 
 **Why This Works:**
 
-- `if: always()` ensures status is created even if job fails
-- `${{ job.status }}` evaluates to 'success', 'failure', 'cancelled', or 'skipped'
-- `context: 'quick-checks'` matches the ruleset requirement exactly
-- Creates **both** check run (automatic) and commit status (explicit)
+- `statuses: write` is mandatory. Declaring **any** `permissions` block sets
+  every unlisted scope to `none`, so a block without it makes the call 403 —
+  and on repos whose default token is read-only it 403s even with no block.
+- `await` matters: without it the step can finish before the request settles,
+  which reports green while posting nothing.
+- `job.status` is read via `env:` rather than interpolated into the script body,
+  so the value is never spliced into JavaScript source.
+- On `pull_request`, `context.sha` is the **merge** commit; the ruleset checks
+  the PR head, so prefer `pull_request.head.sha` when present.
+- `if: always()` still reports when the job fails.
 
 **Key Differences: Check Runs vs. Commit Statuses:**
 
@@ -1479,62 +1554,56 @@ jobs:
 |--------|-------------------|------------------------|
 | **API Endpoint** | `/repos/{owner}/{repo}/check-runs` | `/repos/{owner}/{repo}/statuses/{sha}` |
 | **Created By** | GitHub Actions (automatic) | Manual API call or external CI |
-| **Identifier** | Name (e.g., "Quick checks") | Context (e.g., "quick-checks") |
-| **Ruleset Support** | Not directly supported | Required by rulesets |
+| **Identifier** | Name (e.g., "quick-checks") | Context (e.g., "quick-checks") |
+| **Ruleset Support** | Supported — matched by check-run name | Supported — matched by context |
 | **UI Display** | Shows in "Checks" tab | Shows as status badge |
 | **Conclusion** | SUCCESS, FAILURE, SKIPPED, etc. | success, failure, error, pending |
 
-**Alternative Solution: Update Ruleset to Use Check Runs:**
+**Alternative: point the ruleset at the context that already reports.**
 
-If you have repository admin access, update the ruleset:
+With repository admin access, edit the required context instead of adding a
+producer for it. `integration_id` pins which app may satisfy the rule — 15368 is
+GitHub Actions; `null` accepts any source:
 
 ```bash
 # Get current ruleset configuration
 gh api repos/OWNER/REPO/rulesets/RULESET_ID > ruleset.json
 
-# Edit ruleset.json to change from commit status to check run
-# Change:
-#   "required_status_checks": [{"context": "quick-checks", "integration_id": 15368}]
-# To:
-#   "required_status_checks": [{"context": "Quick checks", "integration_id": null}]
-# Note: Check runs use the job NAME, not context
+# Edit required_status_checks[].context to match a real check-run name,
+# e.g. "Quick checks" -> "quick-checks" if that is what the job is called.
+# Keep integration_id: 15368 to require that GitHub Actions be the reporter.
 
 # Update ruleset
 gh api repos/OWNER/REPO/rulesets/RULESET_ID -X PUT --input ruleset.json
 ```
 
-**However, updating workflows is preferred** because:
-
-- Works with any ruleset configuration
-- Backwards compatible with branch protection rules
-- Doesn't require admin access
-- Creates both check runs and commit statuses (best of both worlds)
+Prefer whichever side is wrong. If the job name drifted, rename the job; if the
+ruleset was written against a name that never existed, fix the ruleset.
 
 **Verification:**
 
 ```bash
-# After adding commit status step to workflow:
-# 1. Push commit
-git commit -m "test"
-git push
+# 1. Push to a branch and open/refresh a PR, then wait for CI (2-3 min)
 
-# 2. Wait for CI to complete (2-3 min)
+# 2. The required context must appear in ONE of these two lists
+gh api repos/OWNER/REPO/commits/$(git rev-parse HEAD)/check-runs --jq '[.check_runs[].name]'
+gh api repos/OWNER/REPO/commits/$(git rev-parse HEAD)/status --jq '[.statuses[].context]'
 
-# 3. Verify commit status was created
-gh api repos/OWNER/REPO/commits/$(git rev-parse HEAD)/status --jq '.statuses[] | {context, state}'
-# Should show: {"context":"quick-checks","state":"success"}
-
-# 4. Verify PR is mergeable
+# 3. Verify PR is mergeable
 gh pr view PR_NUMBER --json mergeable,mergeStateStatus
 # Should show: {"mergeable":true,"mergeStateStatus":"CLEAN"}
+# UNSTABLE means a non-required check is failing -- that is a different problem.
 ```
 
 **Prevention:**
 
-1. **Always create commit statuses** in GitHub Actions workflows for critical jobs
-2. **Test merge button** in PRs during workflow development
-3. **Document ruleset requirements** in repository documentation
-4. **Use consistent context names** between workflow job names and status contexts
+1. **Keep job names and required contexts identical** — this is the whole failure
+   mode. Renaming a job silently un-satisfies every ruleset naming the old name.
+2. **Do not add commit statuses "just in case."** A check run already satisfies a
+   ruleset; a second surface is one more thing that can go stale or 403.
+3. **Test the merge button** in a real PR when changing job names or rulesets.
+4. **Re-check after adding `paths:`/`if:` filters** — a required job that stops
+   running blocks merges rather than passing them.
 
 ---
 

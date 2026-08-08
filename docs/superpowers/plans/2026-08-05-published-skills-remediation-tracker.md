@@ -6,19 +6,19 @@
 
 ## Progress
 
-**44 / 103 resolved.**
+**57 / 103 resolved.**
 
 | Chunk | Scope | Findings | Done | Status |
 |---|---|---:|---:|---|
 | **A** | jmo-profile-optimizer | 13 | 13 | **complete** |
 | **B** | dashboard-builder + documentation-updater | 13 | 13 | **complete** |
 | **C** | adapter-generator + test-fabricator | 15 | 15 | **complete** |
-| **D** | jmo-ci-debugger | 13 | 0 | not started |
+| **D** | jmo-ci-debugger | 13 | 13 | **complete** |
 | **E** | target-type-expander + security-hardening | 19 | 0 | not started |
 | **F** | the 7 agents | 13 | 0 | not started |
 | **G** | tail: refactoring, compliance, systematic-debugging, references | 11 | 0 | not started |
 | **H** | repo config authored by PR #717 | 6 | 3 | in progress |
-| | **total** | **103** | **44** | |
+| | **total** | **103** | **57** | |
 
 ## How to mark a finding off
 
@@ -348,39 +348,146 @@ three findings were one stale snippet. Deleted and replaced with a citation.
       column said 15 while the ranges summed to 10. Ranges are now
       18-22, 35-39, 45-49 = 15, with 27/42 giving the stated 64%.
 
-## Chunk D - jmo-ci-debugger  (0/13)
+## Chunk D - jmo-ci-debugger  (13/13)
 
+**Two root causes, plus a review-tool defect worth knowing about.**
+
+1. **Speculative content presented as battle-tested.** The skill opens "Every fix
+   has been battle-tested in production CI/CD workflows." Pattern #13 was not:
+   `createCommitStatus` appears **nowhere** in `.github/workflows/`, in any
+   commit (`git log -S`), and its central claim is measurably false against this
+   repo's own ruleset.
+2. **Staleness against hardened originals** - chunk B's shape. The Dockerfile
+   snippet reproduces a prototype from before the v1.0.3 download hardening, so
+   it carries the exact `curl | tar` pipe that `.claude/rules/docker.rules.md`
+   now forbids.
+
+**Review-tool defect: 4 of the 13 were anchored to the wrong file.** The API
+`path` for the four `memory-integration.md` findings is *jmo-ci-debugger*, and
+the `diff_hunk` confirms the anchor really sits in that file - but the finding
+bodies analyse Python (`datetime.fromisoformat`, `store_compliance_mapping`,
+`unique_cwes`) that exists only in **`jmo-compliance-mapper/references/memory-integration.md`**,
+at those exact line numbers. Two files, same basename, similar length. The
+claims are all real *there*, so they were fixed there and are counted here.
+Grep the cited symbol before trusting a path.
+
+**Verification.** Markdown is not executed by any test, so the examples were
+extracted and run. Pre-fix code reproduced every claimed failure
+(`TypeError: fromisoformat: argument must be str`, `ValueError: Invalid
+isoformat string`, a 200-day-old record returned as fresh, `confidence='high'`
+on an empty mapping, `ZeroDivisionError`); rewritten code passes 17 checks
+including traversal payloads and a store/reload cycle. The regex table was run
+through `grep -E` against sample log lines, and the actionlint recipe was
+downloaded, checksummed and extracted for real.
 
 **`.claude/skills/jmo-ci-debugger/references/ci-failure-catalog.md`**
 
-- [ ] **Major** L158: (claim nested; read from the PR conversation)
-- [ ] **Major** L463: (claim nested; read from the PR conversation)
-- [ ] **Major** L1405: (claim nested; read from the PR conversation)
-- [ ] **Major** L1466: (claim nested; read from the PR conversation)
+- [x] **Major** L158: Do not execute an unpinned remote script (CWE-494)
+      -> FIXED: `bash <(curl .../actionlint/main/scripts/download-actionlint.bash)`
+      runs whatever `main` holds at job time. Replaced with a pinned release,
+      `sha256sum -c`, and `gzip -t`, per the repo's own Download Hardening
+      Convention - which the old line also violated (no `-f`, no `--retry`).
+      **Executed end-to-end**; the first draft was wrong and the run caught it:
+      `sha256sum -c` resolves the filename *inside* the checksums line, so
+      saving as `actionlint.tar.gz` could never verify. Keeps the canonical
+      asset name now. Verified 2353908 bytes, checksum OK, valid x86-64 ELF.
+- [x] **Major** L463: Use the least-privileged Docker Hub token
+      -> FIXED: README sync PATCHes the repository description, which needs
+      Read & Write. `Delete (required for README updates)` was false and only
+      widened a leaked token's blast radius.
+- [x] **Major** L1405: Do not assume rulesets require commit statuses
+      -> FIXED, and the claim was wrong in four places, not one (heading,
+      root-cause paragraph, comparison-table row, prevention list).
+      **Measured against this repo:** ruleset `9147592` requires
+      `{"context":"quick-checks","integration_id":15368}`;
+      `commits/<sha>/status` returns `{"state":"pending","statuses":[]}` -
+      zero commit statuses have ever existed - while `check-runs` shows
+      `quick-checks` succeeding from app 15368, and PRs merge normally. A check
+      run alone satisfies the rule. Section re-rooted on the real cause: a
+      required context that matches no job name, or a job filtered out by
+      `paths:`/`if:` so it never reports.
+- [x] **Major** L1466: Grant `statuses: write` for the commit-status step
+      -> FIXED at both sites, plus two defects the finding missed. The call was
+      **not awaited**, so the step could finish green having posted nothing; and
+      it used `context.sha`, which on `pull_request` is the merge commit rather
+      than the head the ruleset checks. `job.status` now arrives via `env:`
+      instead of being interpolated into JavaScript source.
+- [x] **Minor** L3: Index failure pattern 18 everywhere
+      -> FIXED: pattern 18 exists at L1921 while the header said "all 17".
+      Corrected at 4 real sites - catalog L3, `SKILL.md` "All 17 failures",
+      the SKILL.md quick-lookup list, and the error-pattern table - plus the
+      decision tree, which the finding did not mention. The cited `SKILL.md:92`
+      needed **no** change: it carries no count.
+- [x] **Minor** L490: Update the Docker Hub authentication example
+      -> FIXED, and understated: `curl -u ... GET /v2/users/login/` returns
+      **HTTP 415** (measured, no credentials needed), so it fails on method
+      before the token is evaluated - meaning the old "If error 401: token
+      expired" guidance was also unreachable. Now `POST /v2/auth/token` with a
+      JSON body, whose 400 response names `identifier`/`secret`.
 
 **`.claude/skills/jmo-ci-debugger/references/installation-config.md`**
 
-- [ ] **Major** L96: (claim nested; read from the PR conversation)
+- [x] **Major** L96: Install `xz-utils` before extracting the archive
+      -> FIXED, and the surrounding snippet was stale in three further ways.
+      All four real Dockerfiles already install `xz-utils` in the base layer
+      (`fast:18`, `slim:18`, `balanced:18`, `deep:19`), so the trailing comment
+      "deep variant has it via build-essential transitive dependency" is false.
+      The real files download to a file and run `xz -t` before `tar`; the
+      snippet piped `curl` straight into `tar`, the exact "not in gzip format"
+      failure the hardening convention exists to prevent. Version literal now
+      defers to `versions.yaml` rather than pinning a stale `0.10.0` (real:
+      `0.11.0`).
 
-**`.claude/skills/jmo-ci-debugger/references/memory-integration.md`**
+**`.claude/skills/jmo-compliance-mapper/references/memory-integration.md`** *(the four mis-anchored findings)*
 
-- [ ] **Major** L30: Handle invalid memory timestamps as cache misses
-- [ ] **Major** L34: Do not return stale mappings as fresh results
-- [ ] **Major** L99: Do not assign `high` confidence unconditionally
-- [ ] **Major** L153: Handle reports with no CWE identifiers
-
-**`.claude/skills/jmo-ci-debugger/references/ci-failure-catalog.md`**
-
-- [ ] **Minor** L3: Index failure pattern 18 everywhere
-- [ ] **Minor** L490: (claim nested; read from the PR conversation)
+- [x] **Major** L30: Handle invalid memory timestamps as cache misses
+      -> FIXED: reproduced both `TypeError` (key absent -> `.get()` returns
+      `None`) and `ValueError` (hand-edited value). Both, plus `KeyError`, now
+      resolve to a miss. Corrupt JSON and unreadable files too.
+- [x] **Major** L34: Do not return stale mappings as fresh results
+      -> FIXED: reproduced - a 200-day-old record printed "recommend refresh"
+      and then returned itself, so nothing ever refreshed. Stale now returns
+      `None`. Verified at 200d (miss), 5d (hit) and 179d23h (hit).
+- [x] **Major** L99: Do not assign `high` confidence unconditionally
+      -> FIXED: reproduced `confidence='high'` on a mapping with **zero**
+      frameworks and no evidence, which made the field meaningless. Now derived
+      - `high` only when all six frameworks resolve *and* evidence is cited,
+      else `partial`/`unverified` - with an `unresolved` list naming the gaps.
+- [x] **Major** L153: Handle reports with no CWE identifiers
+      -> FIXED: reproduced `ZeroDivisionError` on an empty finding list, which
+      is a normal input (a clean scan, or tools emitting only rule ids).
+      **Root cause behind all four:** the enclosing examples begin
+      `from scripts.core.memory import query_memory` - no such module, so every
+      one was dead on line 1 and fixing the four bugs alone would have repaired
+      fiction. Rewritten against the real file convention per chunk A's policy.
+      Also renamed the helper: it was called `enrich_findings_with_compliance`,
+      colliding with **production code** at `compliance_mapper.py:1278` that
+      does something entirely different.
 
 **`.claude/skills/jmo-ci-debugger/references/error-pattern-matching.md`**
 
-- [ ] **Minor** L29: Use one regex dialect consistently
+- [x] **Minor** L29: Use one regex dialect consistently
+      -> **FIXED in part, DISMISSED in part - the review's remedy corrupts the
+      file.** Measured: rows 21 and 28 (`\d`) match **nothing** under `grep -E`,
+      because GNU grep reads `\d` as a literal `d`; fixed to `[0-9]`, and the
+      standalone regex blocks fixed likewise (`[\w.]` also fails - GNU
+      extensions do not work inside a bracket expression). But rows 17 and 27
+      are **correct as written**: `\|` there is the mandatory *GFM table* escape,
+      not regex. Verified via `gh api markdown` that it renders as a bare `|`;
+      verified that applying the remedy splits the code span across two cells
+      and pushes the `#5` column out of the row. All 18 table patterns now
+      re-verified as valid ERE matching a real log line.
 
 **`.claude/skills/jmo-ci-debugger/references/prevention-strategies-full.md`**
 
-- [ ] **Minor** L158: Pass staged paths as discrete arguments
+- [x] **Minor** L158: Pass staged paths as discrete arguments
+      -> FIXED: measured, `mypy $STAGED_PY` turned 4 staged files into 5 wrong
+      arguments (`has space.py` -> `has` + `space.py`). Now `-z` +
+      `xargs -0` + `--`, with `--diff-filter=ACMR` so deleted files are not
+      linted, and a guard because GNU `xargs` still runs once on empty input.
+      **Sibling the review missed:** the same hook loops over
+      `scripts.core.constants`, which does not exist - so it hit `exit 1` on
+      every run, and a hook that always fails gets bypassed with `--no-verify`.
 
 ## Chunk E - target-type-expander + security-hardening  (0/19)
 
@@ -515,6 +622,10 @@ three findings were one stale snippet. Deleted and replaced with a citation.
 - [ ] **Minor** L69: (claim nested; read from the PR conversation)
 
 **`.claude/skills/jmo-compliance-mapper/references/memory-integration.md`**
+
+> Chunk D already rewrote the Python in this file (the four mis-anchored
+> findings). The JSON example below was **deliberately left alone** so the chunk
+> tallies stay honest - it belongs to G, not D.
 
 - [ ] **Minor** L67: Keep the framework-version schema complete
 
