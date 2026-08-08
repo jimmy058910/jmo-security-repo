@@ -41,7 +41,7 @@ Test CI conditions locally:
 # Simulate test matrix (Python 3.10, 3.11, 3.12)
 for py in 3.10 3.11 3.12; do
   docker run --rm -v $(pwd):/workspace -w /workspace python:$py-slim \
-    bash -c "pip install -e .[dev] && pytest --cov --cov-fail-under=85"
+    bash -c "pip install -e .[dev] && pytest --cov --cov-report=term-missing"
 done
 
 # Simulate quick-checks

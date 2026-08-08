@@ -1027,8 +1027,10 @@ New code not sufficiently tested, or tests don't cover all branches.
 
 **Where This Occurs:**
 
-- ci.yml, test-matrix job
-- pytest with `--cov-fail-under=85`
+- `ci.yml`, the `Verify coverage threshold` step of the `coverage-aggregate` job
+- An inline Python check, **not** a pytest flag: `if coverage_pct < 70: sys.exit(1)`
+  (`ci.yml:734`). `--cov-fail-under` is set nowhere in this repository (#756), so
+  grepping for it to find the gate returns nothing and misleads.
 
 **Quick Diagnosis:**
 

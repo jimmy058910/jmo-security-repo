@@ -909,8 +909,8 @@ pyright scripts/
 # 5. Run tests
 make test
 
-# 6. Check coverage
-pytest --cov=scripts --cov-fail-under=85
+# 6. Check coverage (CI's only floor is 70%, at ci.yml:734 -- see #756)
+pytest --cov=scripts --cov-report=term-missing
 ```
 
 ---

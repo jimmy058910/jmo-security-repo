@@ -351,7 +351,9 @@ Real test files from this project to use as examples:
 ### Coverage
 
 - [ ] All tests pass: `pytest tests/adapters/test_<tool>_adapter.py -v`
-- [ ] Coverage >=85%: `pytest ... --cov=scripts/core/adapters/<tool>_adapter --cov-fail-under=85`
+- [ ] Coverage >=85% **for the new adapter module** (a local bar for new code, not
+      a CI gate — CI's only floor is 70% repo-wide, `ci.yml:734`, see #756):
+      `pytest ... --cov=scripts/core/adapters/<tool>_adapter --cov-fail-under=85`
 - [ ] Coverage report reviewed: `--cov-report=term-missing` shows no critical gaps
 
 ### Code Quality

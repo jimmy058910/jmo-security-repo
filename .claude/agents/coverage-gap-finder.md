@@ -31,9 +31,12 @@ You have access to all testing analysis tools:
 
 ### Coverage Requirements
 
-- **CI Enforcement:** ≥85% coverage required (see `.github/workflows/ci.yml`)
-- **Command:** `pytest tests/ --cov=scripts --cov-fail-under=85`
-- **Current Status:** 8,000+ tests, 87% coverage
+- **CI Enforcement:** **70%**, and only there — `.github/workflows/ci.yml:734`
+  (`if coverage_pct < 70: sys.exit(1)`). `--cov-fail-under` is set nowhere in
+  this repository (#756), so treat any higher figure as an aspiration, not a gate
+- **Command:** `pytest tests/ --cov=scripts --cov-report=term-missing`
+- **Current Status:** 8,000+ tests. **Measure current coverage before quoting
+  it** — a percentage copied from a doc is how the 85% claim survived unchecked
 
 ### Test File Structure
 
@@ -638,8 +641,7 @@ pytest tests/ --cov=scripts --cov-report=html --cov-report=term-missing
 ```bash
 pytest tests/adapters/test_trivy_adapter.py \
   --cov=scripts/core/adapters/trivy_adapter.py \
-  --cov-report=term-missing \
-  --cov-fail-under=85
+  --cov-report=term-missing
 ```
 
 **Coverage by category:**

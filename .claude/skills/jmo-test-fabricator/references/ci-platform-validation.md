@@ -240,8 +240,16 @@ jmo --help
 
 ### GitHub Actions Workflow
 
+> **These two blocks are templates to adopt, not descriptions of this repo.**
+> JMo's real `ci.yml` shards tests with `pytest-split` and enforces coverage
+> through an inline `if coverage_pct < 70` check in the `coverage-aggregate`
+> job (`ci.yml:734`) — not via `--cov-fail-under`, which is set nowhere here
+> (#756). The real `.pre-commit-config.yaml` has **no** `pytest-adapter-coverage`
+> hook. Copying either block verbatim into this repository would add a gate that
+> does not currently exist, which is a decision, not a fix.
+
 ```yaml
-# .github/workflows/ci.yml
+# Template: .github/workflows/ci.yml
 name: CI
 
 on: [push, pull_request]
@@ -268,7 +276,7 @@ jobs:
 ### Pre-commit Hook
 
 ```yaml
-# .pre-commit-config.yaml
+# Template: .pre-commit-config.yaml
 repos:
   - repo: local
     hooks:

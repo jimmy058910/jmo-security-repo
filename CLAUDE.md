@@ -27,7 +27,7 @@ JMo Security is a terminal-first security audit toolkit orchestrating 29 scanner
 ### Mandatory Guardrails
 
 1. **Pre-commit Order:** Black MUST run before Ruff (see `.pre-commit-config.yaml`)
-2. **Test Coverage:** CI requires ≥85% (`pytest --cov-fail-under=85`)
+2. **Test Coverage:** CI's only enforced floor is **70%** (`.github/workflows/ci.yml:734`, on the marker-filtered suite). Nothing sets `--cov-fail-under` — not `make test`, not `pyproject.toml`. Write tests to the standard the codebase holds itself to, but do not cite 85% as a gate (#756)
 3. **Subprocess Security:** NEVER use `shell=True` in subprocess calls. See [.claude/rules/python-safety.rules.md](.claude/rules/python-safety.rules.md)
 4. **Conventional Commits:** `feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`, `perf:`, `ci:`
 5. **Path Security:** Validate all user paths against directory traversal

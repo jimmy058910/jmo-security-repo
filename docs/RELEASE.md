@@ -253,7 +253,7 @@ Remember to update CHANGELOG.md with user-facing changes.
    ```bash
    make test
    # or
-   pytest -q --maxfail=1 --disable-warnings --cov=. --cov-report=term-missing --cov-fail-under=85
+   pytest -q --maxfail=1 --disable-warnings --cov=. --cov-report=term-missing
    ```
 
 3. **Verify linting and formatting:**
