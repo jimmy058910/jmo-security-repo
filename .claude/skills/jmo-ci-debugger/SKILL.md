@@ -40,7 +40,7 @@ jobs:
 
   test-matrix:       # 10-15 min (parallel)
     - Ubuntu/macOS x Python 3.10/3.11/3.12
-    - pytest, sharded x4; coverage gate is 70% (ci.yml:734), not 85%
+    - pytest, sharded x4; coverage gate is 80% (ci.yml:734), not 85%
 
   lint-full:         # 5-10 min (nightly only)
     - Complete pre-commit suite (all markdown, Python, shell, YAML)
@@ -78,7 +78,7 @@ jobs:
 | 6 | Dependabot Cascading | `ModuleNotFoundError` (13+ PRs) | `@dependabot rebase` via `gh pr comment` | Easy |
 | 7 | Markdownlint | `MD036/no-emphasis-as-heading` | Fix ALL violations: headings, blank lines, code fence langs | Easy |
 | 8 | Pre-commit Hooks | `ruff...Failed` / `black...Failed` | Run `make fmt` then `pre-commit run --all-files` | Easy-Med |
-| 9 | Test Coverage | `is below 70% CI threshold` (coverage-aggregate job, not pytest) | Add missing tests for uncovered lines | Medium |
+| 9 | Test Coverage | `is below 80% CI threshold` (coverage-aggregate job, not pytest) | Add missing tests for uncovered lines | Medium |
 | 10 | Lockfile Drift | `uv.lock needs to be updated` | Run `make deps-lock`, commit uv.lock | Easy |
 | 11 | YAML Syntax | `syntax error: expected <block` | Fix indentation, quote special chars, use 2-space indent | Easy-Med |
 | 12 | Branch Protection | `GH013: Repository rule violations` | Use feature branches + PRs (never push directly to main) | Easy |
@@ -157,7 +157,7 @@ make fmt && make lint && make test   # Pre-push checks
 Key prevention rules:
 
 1. **Black before Ruff** - enforced in `.pre-commit-config.yaml` hook order
-2. **Coverage** - CI fails below **70%** (ci.yml:734); 85%+ is the project's own
+2. **Coverage** - CI fails below **80%** (ci.yml:734); 85%+ is the project's own
    target, enforced by review rather than by the build
 3. **Fix ALL violations** - not just new ones (Technical Debt Principle)
 4. **Feature branches** - never push directly to main

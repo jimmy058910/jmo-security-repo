@@ -16,10 +16,10 @@ references:
 
 ## Test Coverage & CI Requirements
 
-**The only enforced coverage floor is 70%**, in `.github/workflows/ci.yml:734`:
+**The only enforced coverage floor is 80%**, in `.github/workflows/ci.yml:734`:
 
 ```python
-if coverage_pct < 70:
+if coverage_pct < 80:
     sys.exit(1)
 ```
 
@@ -30,7 +30,7 @@ if coverage_pct < 70:
 - All new code must include tests.
 - Use `--cov=scripts --cov-report=term-missing` to identify gaps.
 - **Compare against the previous run, not against a constant.** Because nothing
-  fails between 70% and the current level, a regression in that band is invisible
+  fails between 80% and the current level, a regression in that band is invisible
   to CI — diffing the number yourself is the only thing that catches it.
 
 > This section previously read "**Mandatory:** `pytest --cov-fail-under=85` in

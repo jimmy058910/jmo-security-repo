@@ -15,7 +15,7 @@
 
 **Total Possible Combinations:** 6 x 28 x 3 x 5 x 6 = **15,120 test scenarios**
 **Current Test Suite:** 8,000+ tests across unit/adapters/reporters/integration
-**Coverage:** measure it before quoting it — CI's only enforced minimum is **70%** (`.github/workflows/ci.yml:734`), and nothing sets `--cov-fail-under` (#756)
+**Coverage:** measure it before quoting it — CI's only enforced minimum is **80%** (`.github/workflows/ci.yml:734`), and nothing sets `--cov-fail-under` (#756)
 
 ---
 
@@ -349,7 +349,7 @@ All 28 tools benefit from universal compliance enrichment via [scripts/core/comp
 **Current State:**
 
 - **Total Tests:** 8,000+
-- **Coverage:** measure it before quoting it — CI's only enforced minimum is **70%** (`.github/workflows/ci.yml:734`); `--cov-fail-under` is set nowhere (#756)
+- **Coverage:** measure it before quoting it — CI's only enforced minimum is **80%** (`.github/workflows/ci.yml:734`); `--cov-fail-under` is set nowhere (#756)
 - **CI Platforms:** 2 OS (Linux, macOS) x 3 Python versions (3.10, 3.11, 3.12) = 6 matrix jobs
 - **Test Categories:**
   - Unit tests

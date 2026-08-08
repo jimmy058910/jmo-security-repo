@@ -27,7 +27,7 @@ Defense Layers:
 Testing:
 - make fmt && make lint && make test: clean
 - [X]/[X] tests passing
-- Coverage: [NN]% (CI floor: 70%)
+- Coverage: [NN]% (CI floor: 80%)
 - Bandit: 0 findings (was [N])
 - Fuzzing: [Y]/[Y] malicious inputs blocked
 
@@ -71,7 +71,7 @@ Defense Layers:
 Testing:
 - make fmt && make lint && make test: clean
 - 123/123 tests passing
-- Coverage: 87% (CI floor: 70%)
+- Coverage: 87% (CI floor: 80%)
 - Bandit: 0 findings (was 6 vulnerable code patterns)
 - Fuzzing: 106/106 malicious inputs blocked
 
@@ -105,5 +105,5 @@ threshold is misleading here: `--cov-fail-under=85` appears in `.claude/` prose
 but in no executable path. `make test` runs `pytest ... --cov
 --cov-report=term-missing` with no `--cov-fail-under`, and
 `[tool.coverage.report]` in `pyproject.toml` sets no `fail_under`. The only
-enforced floor is **70%**, in `.github/workflows/ci.yml:734`. Put the real
+enforced floor is **80%**, in `.github/workflows/ci.yml:734`. Put the real
 measured percentage in the commit; do not claim a gate that will not fire.
