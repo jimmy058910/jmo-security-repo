@@ -1287,11 +1287,18 @@ jobs:
           path: summary.md
           retention-days: 90
 
-      # The five e2e jobs run their pytest step under `continue-on-error: true`
-      # so that results and logs still upload when tests fail. The side effect
-      # was that a failing suite rendered as a green check: run 31241312938 had
-      # `2 failed` and an explicit "E2E Release Readiness: FAIL (89.5%)" in the
-      # macOS log while every job, and the run, reported success.
+      # e2e-ubuntu and e2e-macos run their pytest step under
+      # `continue-on-error: true` so that results and logs still upload when
+      # tests fail. The side effect was that a failing suite rendered as a
+      # green check: run 31241312938 had `2 failed` and an explicit
+      # "E2E Release Readiness: FAIL (89.5%)" in the macOS log while every job,
+      # and the run, reported success.
+      #
+      # Those two are also the only jobs that upload a pytest-report.json, so
+      # two reports -- not five -- is the expected count here. The other three
+      # e2e jobs (tool-integration, contract, visual) have no
+      # continue-on-error, so a failure in one of them already fails the run on
+      # its own and needs no gate.
       #
       # This step is the gate. It runs after the artifacts are safely uploaded,
       # reads the same pytest-report.json files the summary above already
@@ -1300,6 +1307,10 @@ jobs:
       # Absent evidence fails too: zero reports means the suites did not run,
       # which must not be indistinguishable from a clean pass. That is the same
       # mistake in a different costume.
+      #
+      # TODO(issue-772): partial absence is not caught yet -- one report when
+      # two are expected still passes. Tightening that needs a count that
+      # survives adding a sixth e2e job; see the issue for the options.
       - name: Fail the run if any e2e test failed
         run: |
           echo "reports found: ${E2E_REPORTS} | tests failed: ${E2E_TOTAL_FAILED}"
