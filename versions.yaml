@@ -185,17 +185,6 @@ binary_tools:
     update_check: gh api repos/anchore/grype/releases/latest
     critical: false
     notes: v1.0.0 - Dual scanning with Trivy (Anchore DB)
-  osv-scanner:
-    version: 2.4.0
-    github_repo: google/osv-scanner
-    description: Google OSV vulnerability scanner
-    release_pattern: osv-scanner_linux_{arch}
-    architectures:
-      amd64: amd64
-      arm64: arm64
-    update_check: gh api repos/google/osv-scanner/releases/latest
-    critical: false
-    notes: v1.0.0 - Uses Google OSV database for comprehensive vulnerability data
 special_tools:
   zap:
     version: 2.17.0
@@ -332,15 +321,9 @@ docker_images:
     version: '24.04'
     registry: docker.io
     image: ubuntu
-    description: Base image for Dockerfile and Dockerfile.slim
+    description: Base image for all four Dockerfiles (deep, balanced, slim, fast)
     update_check: docker pull ubuntu:24.04 && docker inspect ubuntu:24.04 | jq -r
       '.[0].Created'
-  alpine:
-    version: '3.18'
-    registry: docker.io
-    image: alpine
-    description: Base image for Dockerfile.alpine
-    update_check: docker pull alpine:3.18 && docker inspect alpine:3.18 | jq -r '.[0].Created'
 update_policies:
   critical_tools:
     tools:

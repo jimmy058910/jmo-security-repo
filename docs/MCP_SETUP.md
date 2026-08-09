@@ -919,7 +919,7 @@ To add Serena to your MCP configuration, edit `.claude/mcp.json`:
 | Semantic refactoring | Serena | "Rename all occurrences of `load_gitleaks` to `parse_gitleaks`" |
 | Symbol navigation | Serena | "Find all functions that construct CommonFinding objects" |
 | Project documentation | Read tool | "Read CLAUDE.md to understand architecture" |
-| GitHub operations | GitHub MCP | "Create an issue for adding osv-scanner adapter" |
+| GitHub operations | GitHub MCP | "Create an issue for adding a new tool adapter" |
 | Dashboard testing | Chrome DevTools | "Screenshot dashboard with mobile viewport" |
 
 ## Additional Resources
@@ -986,7 +986,7 @@ To add Serena to your MCP configuration, edit `.claude/mcp.json`:
    - **Context7** → "How does pytest parametrize work? use context7"
    - **Serena** → "Rename all `load_*` functions to `parse_*` across adapters"
    - **Read tool** → "Show me the CommonFinding schema" (project docs)
-   - **GitHub MCP** → "Create an issue for adding osv-scanner support"
+   - **GitHub MCP** → "Create an issue for adding support for a new scanner"
 
 ### Performance Tips
 

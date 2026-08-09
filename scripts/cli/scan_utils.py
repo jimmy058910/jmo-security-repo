@@ -271,7 +271,6 @@ def write_stub(tool: str, out_path: Path) -> None:
         "checkov": {"results": {"failed_checks": []}},
         "tfsec": {"results": []},
         "bandit": {"results": []},
-        "osv-scanner": {"results": []},
         "zap": {"site": []},
         "nuclei": "",  # NDJSON format - empty string for empty file
         "falco": [],

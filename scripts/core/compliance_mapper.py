@@ -944,7 +944,7 @@ def get_tool_category(tool_name: str, tags: list[str]) -> str | None:
         return "sast"
 
     # SCA/vulnerability tools
-    if tool in ["trivy", "syft", "osv-scanner"] or "sca" in tags or "vuln" in tags:
+    if tool in ["trivy", "syft"] or "sca" in tags or "vuln" in tags:
         return "sca"
 
     # IaC scanners

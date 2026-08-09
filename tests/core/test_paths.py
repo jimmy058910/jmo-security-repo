@@ -62,19 +62,23 @@ class TestGetIsolatedToolPath:
 
     def test_tries_alternate_names(self, monkeypatch, tmp_path):
         monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
-        venv = tmp_path / ".jmo" / "tools" / "venvs" / "osv-scanner"
+        # An arbitrary name: get_isolated_tool_path takes any string and does not
+        # validate against the registry, so this exercises the `-cli` fallback
+        # without naming a real tool (it used to say "osv-scanner", which was
+        # removed in #782 and made this read like leftover residue).
+        venv = tmp_path / ".jmo" / "tools" / "venvs" / "example-tool"
         if sys.platform == "win32":
             bin_dir = venv / "Scripts"
-            exe_name = "osv-scanner-cli.exe"
+            exe_name = "example-tool-cli.exe"
         else:
             bin_dir = venv / "bin"
-            exe_name = "osv-scanner-cli"
+            exe_name = "example-tool-cli"
         bin_dir.mkdir(parents=True)
         exe = bin_dir / exe_name
         exe.touch()
 
-        # Primary name doesn't exist, but osv-scanner-cli does
-        result = get_isolated_tool_path("osv-scanner")
+        # Primary name doesn't exist, but example-tool-cli does
+        result = get_isolated_tool_path("example-tool")
         assert result == exe
 
     def test_returns_none_when_no_matching_exe(self, monkeypatch, tmp_path):

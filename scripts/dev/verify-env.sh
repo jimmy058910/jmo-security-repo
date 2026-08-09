@@ -26,7 +26,7 @@ log "OS: $OS | WSL: $WSL"
 
 REQ_TOOLS=(python3 pip3 jq curl git)
 # Curated tools by category
-OPT_TOOLS=(gitleaks noseyparker semgrep syft trivy checkov hadolint tfsec trufflehog osv-scanner shellcheck shfmt docker)
+OPT_TOOLS=(gitleaks noseyparker semgrep syft trivy checkov hadolint tfsec trufflehog shellcheck shfmt docker)
 
 missing=()
 for t in "${REQ_TOOLS[@]}"; do
@@ -61,7 +61,6 @@ hint_install() {
     gitleaks | semgrep | hadolint | checkov | trivy | syft | tfsec) echo "brew install $tool" ;;
     trufflehog) echo "brew install trufflesecurity/trufflehog/trufflehog" ;;
     noseyparker) echo "brew install noseyparker (or see upstream)" ;;
-    osv-scanner) echo "brew install osv-scanner" ;;
     *) echo "brew install $tool" ;;
     esac
     ;;
@@ -76,7 +75,6 @@ hint_install() {
     checkov) echo "pipx install checkov || pip3 install --user checkov" ;;
     hadolint) echo "curl -sSL https://github.com/hadolint/hadolint/releases/latest/download/hadolint-$(uname -s)-$(uname -m) -o /usr/local/bin/hadolint && chmod +x /usr/local/bin/hadolint" ;;
     tfsec) echo "curl -sSL https://github.com/aquasecurity/tfsec/releases/latest/download/tfsec-linux-amd64 -o /usr/local/bin/tfsec && chmod +x /usr/local/bin/tfsec" ;;
-    osv-scanner) echo "curl -sSL https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_linux_amd64 -o /usr/local/bin/osv-scanner && chmod +x /usr/local/bin/osv-scanner" ;;
     *) echo "sudo apt-get install -y $tool" ;;
     esac
     ;;

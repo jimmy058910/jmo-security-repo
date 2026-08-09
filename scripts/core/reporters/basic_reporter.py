@@ -261,7 +261,7 @@ def _get_category_summary(findings: list[dict[str, Any]]) -> dict[str, int]:
                 or "key" in rule
             ):
                 categories["🔑 Secrets"] += 1
-            elif tool in ["trivy", "osv-scanner", "grype"] or "cve" in rule:
+            elif tool in ["trivy", "grype"] or "cve" in rule:
                 categories["🛡️ Vulnerabilities"] += 1
             elif (
                 tool in ["hadolint", "checkov", "tfsec"]
