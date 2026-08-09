@@ -28,6 +28,56 @@ class TestRenderScorecard:
         assert "GO" in captured.out
         assert exit_code == 0
 
+    def test_skips_are_counted_and_qualify_the_go(self, capsys):
+        """A GO must disclose what never ran (#773).
+
+        `--tier full` degrades quietly: with no Docker daemon all four
+        docker-build-* checks SKIP, so a green verdict can coexist with zero
+        images built. Worse, SKIP was missing from the Result line entirely,
+        so `270/283 PASS | 5 WARN` left 8 checks unaccounted for -- the reader
+        had to subtract to notice they existed at all.
+        """
+        results = [
+            CategoryResult(
+                name="Release Artifacts",
+                checks=[
+                    CheckResult(name="version", status=CheckStatus.PASS),
+                    CheckResult(
+                        name="docker-build-dockerfile.deep",
+                        status=CheckStatus.SKIP,
+                        message="Docker not available",
+                    ),
+                    CheckResult(
+                        name="docker-build-dockerfile.fast",
+                        status=CheckStatus.SKIP,
+                        message="Docker not available",
+                    ),
+                ],
+            ),
+        ]
+        exit_code = render_scorecard(results, verbose=False)
+        captured = capsys.readouterr()
+
+        assert "2 SKIP" in captured.out
+        assert "GO" in captured.out
+        assert "covers only what ran" in captured.out
+        # Skips are not failures: the verdict and exit code stay green.
+        assert "NO-GO" not in captured.out
+        assert exit_code == 0
+
+    def test_no_skip_note_when_nothing_was_skipped(self, capsys):
+        """The qualifier must not appear on a fully-executed run."""
+        results = [
+            CategoryResult(
+                name="CLI Completeness",
+                checks=[CheckResult(name="help works", status=CheckStatus.PASS)],
+            ),
+        ]
+        render_scorecard(results, verbose=False)
+        captured = capsys.readouterr()
+        assert "SKIP" not in captured.out
+        assert "covers only what ran" not in captured.out
+
     def test_with_failures(self, capsys):
         results = [
             CategoryResult(
