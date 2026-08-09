@@ -456,9 +456,21 @@ have folded 64 SBOM inventory rows into a vulnerability expectation.
 | Profile | Tool Count | Notes |
 |---------|-----------|-------|
 | fast | 9 | Includes OPA for policy checks |
-| slim | 14 | fast + cloud/IaC tools |
-| balanced | 18 | slim + DAST/SCA tools |
-| deep | 29 | All tools including fuzzing, mobile, host security |
+| slim | 13 | fast + cloud/IaC tools |
+| balanced | 17 | slim + DAST/SCA tools |
+| deep | 28 | All tools including fuzzing, mobile, host security. 4 of these are `MANUAL_INSTALL_TOOLS` (`afl++`, `akto`, `falco`, `mobsf`) and are deliberately absent from every Docker image |
+
+> **29 is the catalogue total, not a profile count.** The unique tool catalogue
+> has 29 entries; no profile has 29. `README.md`'s "29 tools across 12
+> categories" is correct because it says catalogue — see #731, which flags that
+> exact number as one not to "fix". `deep` is 28.
+>
+> Derive these rather than trusting the table:
+>
+> ```bash
+> python -c "from scripts.core.tool_registry import PROFILE_TOOLS; \
+>   print({p: len(t) for p, t in PROFILE_TOOLS.items()})"
+> ```
 
 ---
 
