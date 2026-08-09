@@ -54,9 +54,10 @@ RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 FROM_EMAIL = os.getenv("JMO_FROM_EMAIL", "marketing@jmotools.com")
 
 # Canonical audience for the "JMo Updates" newsletter. CLI signup touchpoints
-# (first-run prompt, `jmo wizard` end-of-flow, `jmo subscribe`) push contacts
-# here so they land in the same audience that scripts/core/newsletter_broadcast.py
-# targets when sending release digests.
+# (first-run prompt, `jmo wizard` end-of-flow) push contacts here so they land
+# in the same audience that scripts/core/newsletter_broadcast.py targets when
+# sending release digests. This list used to name a third touchpoint,
+# `jmo subscribe`, which is not a subcommand and never was (#790).
 JMO_UPDATES_AUDIENCE_ID = "fb900b6d-10de-4171-97df-e4e5eebf20fd"
 RESEND_AUDIENCE_ID = os.getenv("RESEND_AUDIENCE_ID", JMO_UPDATES_AUDIENCE_ID)
 

@@ -374,7 +374,15 @@ def _cmd_schedule_delete(args, manager: ScheduleManager) -> int:
     # Confirmation prompt (unless --force)
     if not args.force:
         _warn(f"Delete schedule '{args.name}'? This cannot be undone.")
-        response = input("Type 'yes' to confirm: ")
+        try:
+            response = input("Type 'yes' to confirm: ")
+        except (EOFError, KeyboardInterrupt):
+            # Nobody is there to confirm a destructive action, so decline it.
+            # Every peer prompt already does this -- `history prune`,
+            # `tools uninstall`, the first-run and resume prompts -- and this
+            # was the one that raised instead (#789).
+            _info("Cancelled")
+            return 0
         if response.lower() != "yes":
             _info("Cancelled")
             return 0
