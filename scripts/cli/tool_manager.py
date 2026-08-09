@@ -127,7 +127,6 @@ VERSION_PATTERNS: dict[str, re.Pattern] = {
     "yara": re.compile(r"v?(\d+\.\d+\.\d+)"),
     "opa": re.compile(r"Version:\s*v?(\d+\.\d+\.\d+)"),
     "falcoctl": re.compile(r"(\d+\.\d+\.\d+)"),
-    "osv-scanner": re.compile(r"osv-scanner version:\s*v?(\d+\.\d+\.\d+)"),
 }
 
 # Version commands for tools that don't use --version
@@ -166,7 +165,6 @@ VERSION_COMMANDS: dict[str, list[str] | dict[str, list[str]]] = {
     # The native 'yara' CLI is a separate package from yara-python
     "yara": [sys.executable, "-c", "import yara; print(yara.YARA_VERSION)"],
     "cdxgen": ["cdxgen", "--version"],
-    "osv-scanner": ["osv-scanner", "--version"],
 }
 
 # Tools that need longer timeout for version check (e.g., Java-based tools)
@@ -1725,7 +1723,19 @@ class ToolManager:
         Returns:
             Tuple of (is_ready, warning_message, missing_deps)
         """
-        required = TOOL_EXECUTION_COMMANDS.get(tool_name, [tool_name])
+        # Variants share their parent's binary -- `semgrep-secrets` runs the
+        # `semgrep` executable -- and both TOOL_VARIANTS and TOOL_BINARY_NAMES
+        # say so. `check_tool`'s installed check and version lookup already
+        # resolve that; this one did not, so it looked for a binary literally
+        # named `semgrep-secrets`, never found one, and reported
+        # "Missing: semgrep-secrets" for a tool the very same run listed as
+        # installed and OK. Resolve to the parent before probing.
+        base_tool = TOOL_VARIANTS.get(tool_name, tool_name)
+        required = (
+            TOOL_EXECUTION_COMMANDS.get(tool_name)
+            or TOOL_EXECUTION_COMMANDS.get(base_tool)
+            or [base_tool]
+        )
 
         missing = []
         for cmd in required:

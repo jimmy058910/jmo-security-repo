@@ -232,7 +232,6 @@ deep:
 | Trivy | fast+ | CVE/NVD database |
 | Grype | slim+ | Anchore vulnerability DB |
 | Dependency-Check | slim+ | OWASP NVD integration |
-| OSV-Scanner | - | Google OSV database (not in profiles) |
 
 ### SBOM Generation
 

@@ -3,7 +3,7 @@ Repository Scanner
 
 Scans local Git repositories using multiple security tools.
 
-Fully Implemented Tools (28 total for v1.0.0):
+Fully Implemented Tools (26 total):
 
 Core Tools (11):
 1. TruffleHog: Verified secrets scanning
@@ -18,23 +18,22 @@ Core Tools (11):
 10. Falco: Runtime security monitoring (validates Falco rule files)
 11. AFL++: Coverage-guided fuzzing (analyzes compiled binaries)
 
-v1.0.0 New Tools (17):
+v1.0.0 New Tools (15):
 12. Checkov CI/CD: GitHub Actions workflow security
 13. Gosec: Go security analyzer
-14. OSV-Scanner: Open source vulnerability detection
-15. cdxgen: SBOM and dependency analysis
-16. ScanCode: License and copyright scanner
-17. Kubescape: Kubernetes security scanner
-18. Prowler: Multi-cloud CSPM (AWS/Azure/GCP/K8s)
-19. YARA: Malware detection
-20. Grype: Vulnerability scanner for containers/filesystems
-21. MobSF: Mobile Security Framework (Android/iOS)
-22. Lynis: System hardening and security auditing
-23. Trivy RBAC: Kubernetes RBAC security assessment
-24. Semgrep Secrets: Hardcoded credentials detection
-25. Horusec: Multi-language SAST (18+ languages)
-26. Dependency-Check: OWASP SCA for known vulnerabilities
-27. Akto: API Security testing (URL scanner only)
+14. cdxgen: SBOM and dependency analysis
+15. ScanCode: License and copyright scanner
+16. Kubescape: Kubernetes security scanner
+17. Prowler: Multi-cloud CSPM (AWS/Azure/GCP/K8s)
+18. YARA: Malware detection
+19. Grype: Vulnerability scanner for containers/filesystems
+20. MobSF: Mobile Security Framework (Android/iOS)
+21. Lynis: System hardening and security auditing
+22. Trivy RBAC: Kubernetes RBAC security assessment
+23. Semgrep Secrets: Hardcoded credentials detection
+24. Horusec: Multi-language SAST (18+ languages)
+25. Dependency-Check: OWASP SCA for known vulnerabilities
+26. Akto: API Security testing (URL scanner only)
 
 Special Tool Behaviors:
 - Nosey Parker: Multi-phase execution (init → scan → report) with automatic Docker fallback
@@ -880,36 +879,6 @@ def scan_repository(
         elif allow_missing_tools:
             _write_stub("gosec", gosec_out)
             statuses["gosec"] = True
-
-    # OSV-Scanner: Vulnerability scanner for open source
-    if "osv-scanner" in tools:
-        osv_out = out_dir / "osv.json"
-        osv_path = _find_tool("osv-scanner")
-        if osv_path:
-            osv_flags = get_tool_flags("osv-scanner")
-            osv_cmd = [
-                osv_path,
-                "--format",
-                "json",
-                "--output",
-                str(osv_out),
-                *osv_flags,
-                str(repo),
-            ]
-            tool_defs.append(
-                ToolDefinition(
-                    name="osv-scanner",
-                    command=osv_cmd,
-                    output_file=osv_out,
-                    timeout=get_tool_timeout("osv-scanner", timeout),
-                    retries=retries,
-                    ok_return_codes=(0, 1),
-                    capture_stdout=False,
-                )
-            )
-        elif allow_missing_tools:
-            _write_stub("osv-scanner", osv_out)
-            statuses["osv-scanner"] = True
 
     # cdxgen: SBOM and dependency analysis
     # Performance optimizations (v1.0.1):
