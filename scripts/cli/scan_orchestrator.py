@@ -116,6 +116,10 @@ class ScanTargets:
     urls: list[str] = field(default_factory=list)
     gitlab_repos: list[dict[str, str]] = field(default_factory=list)
     k8s_resources: list[dict[str, str]] = field(default_factory=list)
+    # Targets the caller asked for that discovery refused, with the reason.
+    # Without this, a mistyped path was indistinguishable from asking for
+    # nothing: both produced an empty ScanTargets and the same message.
+    rejected: list[str] = field(default_factory=list)
 
     def total_count(self) -> int:
         """Return total number of scan targets across all types."""
@@ -219,6 +223,10 @@ class ScanOrchestrator:
             config: Scan configuration
         """
         self.config = config
+        # Initialized here, not in discover_targets, because the _discover_*
+        # methods are also called directly (7 tests do exactly that) and must
+        # not depend on state their usual caller happens to set first.
+        self._rejected: list[str] = []
 
     def discover_targets(self, args) -> ScanTargets:
         """
@@ -231,6 +239,9 @@ class ScanOrchestrator:
             ScanTargets with all discovered targets
         """
         targets = ScanTargets()
+        # Reset per call - discover_targets may run more than once per process
+        # (the wizard and `jmo ci` both build orchestrators).
+        self._rejected = []
 
         # Discover repositories
         targets.repos = self._discover_repos(args)
@@ -253,7 +264,19 @@ class ScanOrchestrator:
         # Apply repository filters (include/exclude patterns)
         targets.repos = self._filter_repos(targets.repos)
 
+        targets.rejected = list(self._rejected)
         return targets
+
+    def _reject(self, flag: str, value: object, reason: str) -> None:
+        """Record and log a target that was asked for but will not be scanned.
+
+        `--image` and `--url` already warned on bad input; the six path-based
+        flags dropped silently, so a typo read exactly like passing no target
+        at all. Everything that refuses a target now goes through here.
+        """
+        message = f"{flag} {value!s}: {reason}"
+        self._rejected.append(message)
+        logger.warning("Not scanning %s", message)
 
     def _discover_repos(self, args) -> list[Path]:
         """
@@ -276,11 +299,14 @@ class ScanOrchestrator:
             # Check for MSYS path mangling (Git Bash on Windows + Docker)
             if _detect_msys_path_mangling(repo_path):
                 _warn_msys_path_mangling(repo_path)
+                self._reject("--repo", repo_path, "path looks MSYS-mangled")
                 return repos  # Return empty - path is invalid
 
             p = Path(repo_path)
             if p.exists():
                 repos.append(p)
+            else:
+                self._reject("--repo", repo_path, "path does not exist")
 
         # Directory of repositories
         elif getattr(args, "repos_dir", None):
@@ -289,24 +315,41 @@ class ScanOrchestrator:
             # Check for MSYS path mangling
             if _detect_msys_path_mangling(repos_dir_path):
                 _warn_msys_path_mangling(repos_dir_path)
+                self._reject("--repos-dir", repos_dir_path, "path looks MSYS-mangled")
                 return repos
 
             base = Path(repos_dir_path)
-            if base.exists() and base.is_dir():
+            if not base.exists():
+                self._reject("--repos-dir", repos_dir_path, "directory does not exist")
+            elif not base.is_dir():
+                self._reject("--repos-dir", repos_dir_path, "is not a directory")
+            else:
                 # Find all subdirectories (assumed to be repos)
                 repos.extend([p for p in base.iterdir() if p.is_dir()])
+                if not repos:
+                    self._reject(
+                        "--repos-dir", repos_dir_path, "contains no subdirectories"
+                    )
 
         # Targets file (list of repository paths)
         elif getattr(args, "targets", None):
             targets_file = Path(args.targets)
-            if targets_file.exists():
+            if not targets_file.exists():
+                self._reject("--targets", args.targets, "file does not exist")
+            else:
+                listed = 0
                 for line in targets_file.read_text(encoding="utf-8").splitlines():
                     line = line.strip()
                     if not line or line.startswith("#"):
                         continue
+                    listed += 1
                     p = Path(line)
                     if p.exists():
                         repos.append(p)
+                    else:
+                        self._reject("--targets", line, "listed path does not exist")
+                if listed == 0:
+                    self._reject("--targets", args.targets, "file lists no paths")
 
         return repos
 
@@ -328,12 +371,14 @@ class ScanOrchestrator:
             if validate_container_image(image):
                 images.append(image)
             else:
-                logger.warning(f"Skipping invalid container image: '{image}'")
+                self._reject("--image", image, "not a valid container image reference")
 
         # Images file
         if getattr(args, "images_file", None):
             images_file = Path(args.images_file)
-            if images_file.exists():
+            if not images_file.exists():
+                self._reject("--images-file", args.images_file, "file does not exist")
+            else:
                 for line in images_file.read_text(encoding="utf-8").splitlines():
                     line = line.strip()
                     if not line or line.startswith("#"):
@@ -341,7 +386,11 @@ class ScanOrchestrator:
                     if validate_container_image(line):
                         images.append(line)
                     else:
-                        logger.warning(f"Skipping invalid container image: '{line}'")
+                        self._reject(
+                            "--images-file",
+                            line,
+                            "not a valid container image reference",
+                        )
 
         return images
 
@@ -356,23 +405,19 @@ class ScanOrchestrator:
         """
         iac_files: list[tuple[str, Path]] = []
 
-        # Terraform state files
-        if getattr(args, "terraform_state", None):
-            p = Path(args.terraform_state)
+        for flag, attr, iac_type in (
+            ("--terraform-state", "terraform_state", "terraform"),
+            ("--cloudformation", "cloudformation", "cloudformation"),
+            ("--k8s-manifest", "k8s_manifest", "k8s"),
+        ):
+            value = getattr(args, attr, None)
+            if not value:
+                continue
+            p = Path(value)
             if p.exists():
-                iac_files.append(("terraform", p))
-
-        # CloudFormation templates
-        if getattr(args, "cloudformation", None):
-            p = Path(args.cloudformation)
-            if p.exists():
-                iac_files.append(("cloudformation", p))
-
-        # Kubernetes manifests
-        if getattr(args, "k8s_manifest", None):
-            p = Path(args.k8s_manifest)
-            if p.exists():
-                iac_files.append(("k8s", p))
+                iac_files.append((iac_type, p))
+            else:
+                self._reject(flag, value, "file does not exist")
 
         return iac_files
 
@@ -395,12 +440,14 @@ class ScanOrchestrator:
             if validate_url(url):
                 urls.append(url)
             else:
-                logger.warning(f"Skipping invalid URL: '{url}'")
+                self._reject("--url", url, "only http/https URLs are scanned")
 
         # URLs file
         if getattr(args, "urls_file", None):
             urls_file = Path(args.urls_file)
-            if urls_file.exists():
+            if not urls_file.exists():
+                self._reject("--urls-file", args.urls_file, "file does not exist")
+            else:
                 for line in urls_file.read_text(encoding="utf-8").splitlines():
                     line = line.strip()
                     if not line or line.startswith("#"):
@@ -408,7 +455,23 @@ class ScanOrchestrator:
                     if validate_url(line):
                         urls.append(line)
                     else:
-                        logger.warning(f"Skipping invalid URL: '{line}'")
+                        self._reject(
+                            "--urls-file", line, "only http/https URLs are scanned"
+                        )
+
+        # OpenAPI/Swagger spec. This is advertised in `jmo scan --help` but was
+        # handled only by jmo.py's _iter_urls, which nothing has called since
+        # discovery moved here - so the flag was silently accepted and dropped.
+        if getattr(args, "api_spec", None):
+            spec = args.api_spec
+            if spec.startswith(("http://", "https://")):
+                urls.append(spec)
+            else:
+                p = Path(spec)
+                if p.exists():
+                    urls.append(f"file://{p.absolute()}")
+                else:
+                    self._reject("--api-spec", spec, "spec file does not exist")
 
         return urls
 

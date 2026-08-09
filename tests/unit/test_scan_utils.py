@@ -241,3 +241,52 @@ def test_tool_install_hints_complete():
         assert tool in TOOL_INSTALL_HINTS
         hint = TOOL_INSTALL_HINTS[tool]
         assert "Install" in hint or "see" in hint
+
+
+class TestFilterTrivyFlags:
+    """jmo.yml configures flags per tool; trivy's flag surface is per subcommand.
+
+    All four shipped profiles set --no-progress, which `trivy config` rejects
+    fatally at argument parsing - so every IaC scan produced 0 findings where
+    the same file and tool yield 12 (#804).
+    """
+
+    def test_no_progress_is_dropped_for_trivy_config(self):
+        from scripts.cli.scan_utils import filter_trivy_flags
+
+        assert filter_trivy_flags("config", ["--no-progress"]) == []
+
+    def test_other_subcommands_keep_it(self):
+        from scripts.cli.scan_utils import filter_trivy_flags
+
+        for subcommand in ("fs", "image", "k8s"):
+            assert filter_trivy_flags(subcommand, ["--no-progress"]) == [
+                "--no-progress"
+            ]
+
+    def test_supported_flags_survive_and_keep_their_values(self):
+        """--scanners is accepted by every subcommand, including config, and
+        takes a value - dropping a flag must never orphan its argument."""
+        from scripts.cli.scan_utils import filter_trivy_flags
+
+        flags = ["--no-progress", "--scanners", "vuln,secret,misconfig"]
+
+        assert filter_trivy_flags("config", flags) == [
+            "--scanners",
+            "vuln,secret,misconfig",
+        ]
+
+    def test_the_drop_is_announced(self, caplog):
+        import logging
+
+        from scripts.cli.scan_utils import filter_trivy_flags
+
+        with caplog.at_level(logging.WARNING):
+            filter_trivy_flags("config", ["--no-progress"])
+
+        assert "--no-progress" in caplog.text
+
+    def test_unknown_subcommand_is_left_alone(self):
+        from scripts.cli.scan_utils import filter_trivy_flags
+
+        assert filter_trivy_flags("rootfs", ["--no-progress"]) == ["--no-progress"]

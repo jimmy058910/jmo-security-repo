@@ -57,7 +57,13 @@ def scan_k8s_resource(
 
     context = k8s_info["context"]
     namespace = k8s_info["namespace"]
-    all_namespaces = k8s_info.get("all_namespaces", "False") == "True"
+    # Two producers build this dict and they disagree: the live discovery path
+    # (scan_orchestrator._discover_k8s_resources) signals "every namespace" by
+    # writing namespace="*" and sets no all_namespaces key at all, so reading
+    # only the key made --k8s-all-namespaces unreachable. Accept both shapes.
+    all_namespaces = (
+        str(k8s_info.get("all_namespaces", "False")) == "True" or namespace == "*"
+    )
 
     safe_name = f"{context}_{namespace}".replace("/", "_").replace("*", "all")
     out_dir = results_dir / safe_name
@@ -97,18 +103,24 @@ def scan_k8s_resource(
                 *trivy_flags,
             ]
 
-            # Add context if not current
-            if context != "current":
-                trivy_cmd.extend(["--context", context])
+            # Namespace selection. trivy scans every namespace unless told
+            # otherwise, so "all namespaces" is the absence of a filter rather
+            # than a flag - there is no --all-namespaces. "default" is the
+            # sentinel _discover_k8s_resources writes when the user named no
+            # namespace, so it means "unspecified" here, not the namespace
+            # literally called default.
+            if not all_namespaces and namespace not in ("", "*", "default"):
+                trivy_cmd.extend(["--include-namespaces", namespace])
 
-            # Add namespace selection
-            if all_namespaces:
-                trivy_cmd.append("--all-namespaces")
-            elif namespace != "default":
-                trivy_cmd.extend(["-n", namespace])
+            trivy_cmd.extend(["-o", str(trivy_out)])
 
-            # Output file and target (scan all K8s resources)
-            trivy_cmd.extend(["-o", str(trivy_out), "all"])
+            # Context is a POSITIONAL argument - `trivy kubernetes [flags]
+            # [CONTEXT]` - so it goes last and takes no flag. This previously
+            # passed --context, which trivy rejects outright, and then appended
+            # a literal "all" that trivy read as the context name. Both killed
+            # the run at argument parsing, before any cluster contact.
+            if context and context != "current":
+                trivy_cmd.append(context)
 
             tool_defs.append(
                 ToolDefinition(

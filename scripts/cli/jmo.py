@@ -2956,14 +2956,27 @@ def cmd_scan(args) -> int:
     orchestrator = ScanOrchestrator(scan_config)
     targets = orchestrator.discover_targets(args)
 
-    # Validate at least one target
+    # Validate at least one target. A scan that scanned nothing is not a
+    # success: `jmo scan --repo "$REPO" || exit 1` used to pass when $REPO was
+    # a typo, because this returned 0. Same call as #788 made for
+    # `jmo tools check`. The two cases are reported differently because they
+    # are different mistakes.
     if targets.is_empty():
-        _log(
-            args,
-            "WARN",
-            "No scan targets provided (repos, images, IaC files, URLs, GitLab, or K8s resources).",
-        )
-        return 0
+        if targets.rejected:
+            _log(
+                args,
+                "ERROR",
+                "Every target was rejected, so nothing was scanned: "
+                + "; ".join(targets.rejected),
+            )
+        else:
+            _log(
+                args,
+                "ERROR",
+                "No scan targets provided (repos, images, IaC files, URLs, "
+                "GitLab, or K8s resources).",
+            )
+        return 1
 
     # Log scan targets summary
     _log(args, "INFO", f"Scan targets: {targets.summary()}")

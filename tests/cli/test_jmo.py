@@ -978,3 +978,76 @@ class TestScanPathLoggingIsReachable:
             "caplog cannot see an INFO record from a scripts.* logger after a "
             "jmo command configured logging - the scan's level leaked past it"
         )
+
+
+# ========== Scan: nothing scanned is not a success (#806) ==========
+
+
+class TestScanExitsNonZeroWhenNothingWasScanned:
+    """`jmo scan --repo "$REPO" || exit 1` used to pass when $REPO was a typo.
+
+    cmd_scan returned 0 whenever discovery came up empty, so a CI gate reported
+    success for a scan that never ran. Same call as #788 made for
+    `jmo tools check`.
+    """
+
+    @staticmethod
+    def _run(argv):
+        from scripts.cli.jmo import cmd_scan, parse_args
+
+        with patch("sys.argv", argv):
+            return cmd_scan(parse_args())
+
+    def test_missing_repo_path_fails(self, tmp_path):
+        rc = self._run(
+            [
+                "jmo",
+                "scan",
+                "--repo",
+                str(tmp_path / "definitely-not-here"),
+                "--results-dir",
+                str(tmp_path / "out"),
+                "--tools",
+                "trufflehog",
+                "--no-store-history",
+            ]
+        )
+        assert rc != 0, "a scan that scanned nothing reported success"
+
+    def test_no_target_flag_at_all_fails(self, tmp_path):
+        rc = self._run(
+            [
+                "jmo",
+                "scan",
+                "--results-dir",
+                str(tmp_path / "out"),
+                "--tools",
+                "trufflehog",
+                "--no-store-history",
+            ]
+        )
+        assert rc != 0
+
+    def test_the_rejected_target_is_named_in_the_log(self, tmp_path, caplog):
+        import logging
+
+        missing = tmp_path / "typo-here"
+        with caplog.at_level(logging.WARNING):
+            self._run(
+                [
+                    "jmo",
+                    "scan",
+                    "--repo",
+                    str(missing),
+                    "--results-dir",
+                    str(tmp_path / "out"),
+                    "--tools",
+                    "trufflehog",
+                    "--no-store-history",
+                ]
+            )
+
+        assert "typo-here" in caplog.text, (
+            "the rejected path must appear on some stream; the old message named "
+            f"no target at all:\n{caplog.text}"
+        )

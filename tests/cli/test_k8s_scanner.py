@@ -82,13 +82,19 @@ class TestK8sScanner:
                 find_tool_func=mock_find_tool,
             )
 
-            # Verify --all-namespaces flag is used
+            # trivy has no --all-namespaces flag; it scans every namespace
+            # unless --include-namespaces narrows it. This asserted
+            # "--all-namespaces" in the command until #803 - which trivy 0.70.0
+            # answers with `FATAL unknown flag: --all-namespaces`, killing the
+            # run at argument parsing. The test passed because it only ever
+            # inspected the command JMo built, never what trivy accepts.
             MockRunner.assert_called_once()
             args, kwargs = MockRunner.call_args
             tool_defs = kwargs.get("tools") or (args[0] if args else [])
             trivy_def = next((t for t in tool_defs if t.name == "trivy"), None)
             assert trivy_def is not None, "trivy tool definition not found"
-            assert "--all-namespaces" in trivy_def.command
+            assert "--all-namespaces" not in trivy_def.command
+            assert "--include-namespaces" not in trivy_def.command
 
     def test_scan_k8s_custom_context(self, tmp_path):
         """Test K8s scanning with custom context"""
@@ -123,14 +129,22 @@ class TestK8sScanner:
                 find_tool_func=mock_find_tool,
             )
 
-            # Verify --context flag is used
+            # trivy's usage is `trivy kubernetes [flags] [CONTEXT]` - context is
+            # POSITIONAL and must be last. There is no --context flag; passing
+            # one is `FATAL unknown flag: --context` (#803).
             MockRunner.assert_called_once()
             args, kwargs = MockRunner.call_args
             tool_defs = kwargs.get("tools") or (args[0] if args else [])
             trivy_def = next((t for t in tool_defs if t.name == "trivy"), None)
             assert trivy_def is not None, "trivy tool definition not found"
-            assert "--context" in trivy_def.command
-            assert "production" in trivy_def.command
+            assert "--context" not in trivy_def.command
+            assert trivy_def.command[-1] == "production", (
+                "context must be the trailing positional argument, got: "
+                f"{trivy_def.command}"
+            )
+            # The old command also appended a literal "all" after -o, which
+            # trivy read as the context name.
+            assert "all" not in trivy_def.command
 
     def test_scan_k8s_sanitizes_name(self, tmp_path):
         """Test that context/namespace are sanitized for directory names"""
@@ -401,7 +415,11 @@ class TestK8sScanner:
             assert "--context" not in trivy_def.command
 
     def test_scan_k8s_specific_namespace(self, tmp_path):
-        """Test K8s scanning with specific (non-default) namespace includes -n flag"""
+        """A named namespace narrows the scan with --include-namespaces.
+
+        Not -n: trivy answers that with `FATAL unknown shorthand flag: 'n'`
+        (#803).
+        """
 
         def mock_find_tool(tool_name):
             return f"/usr/bin/{tool_name}" if tool_name == "trivy" else None
@@ -438,8 +456,10 @@ class TestK8sScanner:
             tool_defs = kwargs.get("tools") or (args[0] if args else [])
             trivy_def = next((t for t in tool_defs if t.name == "trivy"), None)
             assert trivy_def is not None
-            assert "-n" in trivy_def.command
-            assert "monitoring" in trivy_def.command
+            assert "-n" not in trivy_def.command
+            assert "--include-namespaces" in trivy_def.command
+            ns_index = trivy_def.command.index("--include-namespaces")
+            assert trivy_def.command[ns_index + 1] == "monitoring"
 
     def test_scan_k8s_default_namespace_no_n_flag(self, tmp_path):
         """Test K8s scanning with default namespace does NOT add -n flag"""
@@ -480,6 +500,94 @@ class TestK8sScanner:
             trivy_def = next((t for t in tool_defs if t.name == "trivy"), None)
             assert trivy_def is not None
             assert "-n" not in trivy_def.command
+            assert "--include-namespaces" not in trivy_def.command
+
+    def test_trivy_k8s_command_is_accepted_by_trivys_own_grammar(self, tmp_path):
+        """Pin the whole command shape, not one flag at a time.
+
+        Every flag in the pre-#803 command was rejected by trivy, and four
+        separate tests passed anyway because each asserted only on the argv JMo
+        built. This asserts the grammar trivy documents -
+        `trivy kubernetes [flags] [CONTEXT]` - so a regression in any single
+        position fails here.
+        """
+
+        def mock_find_tool(tool_name):
+            return f"/usr/bin/{tool_name}" if tool_name == "trivy" else None
+
+        with patch("scripts.cli.scan_jobs.k8s_scanner.ToolRunner") as MockRunner:
+            MockRunner.return_value = MagicMock()
+
+            from scripts.core.tool_runner import ToolResult
+
+            MockRunner.return_value.run_all_parallel.return_value = [
+                ToolResult(tool="trivy", status="success", attempts=1),
+            ]
+
+            scan_k8s_resource(
+                k8s_info={"context": "prod", "namespace": "monitoring"},
+                results_dir=tmp_path,
+                tools=["trivy"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+                find_tool_func=mock_find_tool,
+            )
+
+            args, kwargs = MockRunner.call_args
+            tool_defs = kwargs.get("tools") or (args[0] if args else [])
+            cmd = next(t for t in tool_defs if t.name == "trivy").command
+
+            assert cmd[1] == "k8s"
+            # Flags trivy 0.70.0 does not have on `k8s`, each measured as a
+            # FATAL parse error before any cluster contact.
+            for rejected in ("--context", "-n", "--all-namespaces"):
+                assert rejected not in cmd, f"trivy k8s rejects {rejected}"
+            # Context is the trailing positional, and nothing follows it.
+            assert cmd[-1] == "prod"
+            # -o must still carry the output path.
+            assert cmd[cmd.index("-o") + 1].endswith("trivy.json")
+
+    def test_all_namespaces_is_reachable_via_the_star_namespace(self, tmp_path):
+        """The live discovery path signals all-namespaces with namespace="*".
+
+        scan_orchestrator._discover_k8s_resources writes namespace="*" and no
+        all_namespaces key at all, so reading only the key made
+        --k8s-all-namespaces unreachable in production (#803).
+        """
+
+        def mock_find_tool(tool_name):
+            return f"/usr/bin/{tool_name}" if tool_name == "trivy" else None
+
+        with patch("scripts.cli.scan_jobs.k8s_scanner.ToolRunner") as MockRunner:
+            MockRunner.return_value = MagicMock()
+
+            from scripts.core.tool_runner import ToolResult
+
+            MockRunner.return_value.run_all_parallel.return_value = [
+                ToolResult(tool="trivy", status="success", attempts=1),
+            ]
+
+            scan_k8s_resource(
+                k8s_info={"context": "prod", "namespace": "*"},
+                results_dir=tmp_path,
+                tools=["trivy"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+                find_tool_func=mock_find_tool,
+            )
+
+            args, kwargs = MockRunner.call_args
+            tool_defs = kwargs.get("tools") or (args[0] if args else [])
+            cmd = next(t for t in tool_defs if t.name == "trivy").command
+
+            # No namespace filter at all == every namespace, which is trivy's
+            # default. A literal "*" must never be passed through.
+            assert "--include-namespaces" not in cmd
+            assert "*" not in cmd
 
     def test_scan_k8s_sanitized_directory_special_chars(self, tmp_path):
         """Test directory name sanitization for context/namespace with special chars"""

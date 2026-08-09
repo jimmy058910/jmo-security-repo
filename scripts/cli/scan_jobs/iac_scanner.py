@@ -18,7 +18,12 @@ from ...core.config import RetryConfig
 from ...core.scan_timings import write_scan_timings
 from ...core.tool_runner import ToolDefinition, ToolRunner
 from ..path_sanitizers import _sanitize_path_component, _validate_output_path
-from ..scan_utils import find_tool, report_tool_failure, write_stub
+from ..scan_utils import (
+    filter_trivy_flags,
+    find_tool,
+    report_tool_failure,
+    write_stub,
+)
 
 
 def scan_iac_file(
@@ -117,7 +122,7 @@ def scan_iac_file(
         trivy_out = out_dir / "trivy.json"
         trivy_path = _find_tool("trivy")
         if trivy_path:
-            trivy_flags = get_tool_flags("trivy")
+            trivy_flags = filter_trivy_flags("config", get_tool_flags("trivy"))
             trivy_cmd = [
                 trivy_path,
                 "config",

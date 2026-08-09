@@ -256,6 +256,47 @@ def report_tool_failure(result: ToolResult, reason: str) -> None:
     )
 
 
+# jmo.yml configures flags per *tool*, but trivy's flag surface is per
+# *subcommand*, and JMo drives trivy with four of them (fs, image, config, k8s).
+# Measured against trivy 0.70.0: `trivy config` is the only one that rejects
+# --no-progress, and it rejects it fatally at argument parsing - so every IaC
+# scan died before it started and contributed nothing. All four shipped profiles
+# set that flag, so no profile escaped it.
+#
+# Only value-less flags belong here: dropping one must never orphan a value
+# argument. --scanners is accepted by all four subcommands and is not listed.
+TRIVY_UNSUPPORTED_FLAGS: dict[str, frozenset[str]] = {
+    "config": frozenset({"--no-progress"}),
+}
+
+
+def filter_trivy_flags(subcommand: str, flags: list[str]) -> list[str]:
+    """Drop configured trivy flags that ``subcommand`` does not accept.
+
+    Args:
+        subcommand: The trivy subcommand being invoked ("config", "fs", ...).
+        flags: Flags from per-tool configuration.
+
+    Returns:
+        The flags the subcommand actually accepts.
+    """
+    unsupported = TRIVY_UNSUPPORTED_FLAGS.get(subcommand)
+    if not unsupported:
+        return list(flags)
+
+    kept = [f for f in flags if f not in unsupported]
+    dropped = [f for f in flags if f in unsupported]
+    if dropped:
+        logging.getLogger(__name__).warning(
+            "trivy %s does not accept %s; dropping so the scan can run. "
+            "Configure it under a profile that does not reach this subcommand "
+            "if you need it.",
+            subcommand,
+            ", ".join(dropped),
+        )
+    return kept
+
+
 def write_stub(tool: str, out_path: Path) -> None:
     """Write empty JSON stub for missing tool."""
     out_path.parent.mkdir(parents=True, exist_ok=True)

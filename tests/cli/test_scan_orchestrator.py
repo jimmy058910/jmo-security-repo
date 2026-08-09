@@ -335,6 +335,7 @@ class TestScanOrchestrator:
         args = MagicMock()
         args.url = "https://example.com"
         args.urls_file = None
+        args.api_spec = None
 
         urls = orchestrator._discover_urls(args)
 
@@ -549,6 +550,7 @@ class TestScanOrchestrator:
         args.k8s_manifest = None
         args.url = "https://example.com"
         args.urls_file = None
+        args.api_spec = None
         args.gitlab_repo = None
         args.gitlab_group = None
         args.k8s_context = None
@@ -646,6 +648,7 @@ class TestDiscoverUrlsFromFile:
         args = MagicMock()
         args.url = None
         args.urls_file = str(urls_file_path)
+        args.api_spec = None
 
         urls = orchestrator._discover_urls(args)
         assert len(urls) == 2
@@ -665,6 +668,7 @@ class TestDiscoverUrlsFromFile:
         args = MagicMock()
         args.url = None
         args.urls_file = str(urls_file_path)
+        args.api_spec = None
 
         urls = orchestrator._discover_urls(args)
         assert len(urls) == 1
@@ -681,6 +685,7 @@ class TestDiscoverUrlsFromFile:
         args = MagicMock()
         args.url = None
         args.urls_file = str(urls_file_path)
+        args.api_spec = None
 
         urls = orchestrator._discover_urls(args)
         assert len(urls) == 1
@@ -698,6 +703,7 @@ class TestDiscoverUrlsFromFile:
         args = MagicMock()
         args.url = None
         args.urls_file = str(urls_file_path)
+        args.api_spec = None
 
         with caplog.at_level(logging.WARNING):
             urls = orchestrator._discover_urls(args)
@@ -913,6 +919,7 @@ class TestInvalidUrlWarning:
         class Args:
             url = "not-a-valid-url"  # Single invalid URL
             urls_file = None
+            api_spec = None
 
         with caplog.at_level(logging.WARNING):
             urls = orchestrator._discover_urls(Args())
@@ -932,6 +939,7 @@ class TestInvalidUrlWarning:
         class Args:
             url = "https://example.com"  # Valid URL
             urls_file = None
+            api_spec = None
 
         with caplog.at_level(logging.WARNING):
             urls = orchestrator._discover_urls(Args())
@@ -1013,3 +1021,159 @@ class TestUnroutedToolsAreReported:
             orch.scan_all(targets, per_tool_config={})
 
         assert "no target type in this scan" not in caplog.text
+
+
+class TestRejectedTargetsAreNamed:
+    """Discovery must say which target it refused, and why.
+
+    Eight degenerate inputs used to produce one identical message - "No scan
+    targets provided" - at exit code 0, so a typo'd path, a missing targets
+    file and an empty directory were indistinguishable from asking for nothing
+    (#805, #806). `--image` and `--url` already warned; the six path-based
+    flags dropped silently.
+    """
+
+    @staticmethod
+    def _args(**kw):
+        from types import SimpleNamespace
+
+        base = {
+            "repo": None,
+            "repos_dir": None,
+            "targets": None,
+            "image": None,
+            "images_file": None,
+            "terraform_state": None,
+            "cloudformation": None,
+            "k8s_manifest": None,
+            "url": None,
+            "urls_file": None,
+            "api_spec": None,
+            "gitlab_url": None,
+            "gitlab_repo": None,
+            "gitlab_group": None,
+            "k8s_context": None,
+            "k8s_namespace": None,
+            "k8s_all_namespaces": False,
+        }
+        base.update(kw)
+        return SimpleNamespace(**base)
+
+    @staticmethod
+    def _orchestrator(tmp_path):
+        return ScanOrchestrator(
+            ScanConfig(tools=["trufflehog"], results_dir=tmp_path / "results")
+        )
+
+    @pytest.mark.parametrize(
+        "flag,value_factory,fragment",
+        [
+            ("repo", lambda t: str(t / "nope"), "--repo"),
+            ("repos_dir", lambda t: str(t / "nope_dir"), "--repos-dir"),
+            ("targets", lambda t: str(t / "nope.txt"), "--targets"),
+            ("terraform_state", lambda t: str(t / "nope.tfstate"), "--terraform-state"),
+            ("cloudformation", lambda t: str(t / "nope.yaml"), "--cloudformation"),
+            ("k8s_manifest", lambda t: str(t / "nope.yaml"), "--k8s-manifest"),
+        ],
+    )
+    def test_missing_path_is_named_not_dropped(
+        self, tmp_path, flag, value_factory, fragment
+    ):
+        orch = self._orchestrator(tmp_path)
+        targets = orch.discover_targets(self._args(**{flag: value_factory(tmp_path)}))
+
+        assert targets.is_empty()
+        assert targets.rejected, f"{fragment} was dropped without a reason"
+        assert any(fragment in r for r in targets.rejected)
+
+    def test_empty_repos_dir_is_distinguished_from_a_missing_one(self, tmp_path):
+        empty = tmp_path / "empty"
+        empty.mkdir()
+
+        orch = self._orchestrator(tmp_path)
+        targets = orch.discover_targets(self._args(repos_dir=str(empty)))
+
+        assert targets.is_empty()
+        assert any("no subdirectories" in r for r in targets.rejected)
+
+    def test_targets_file_names_each_missing_line(self, tmp_path):
+        listing = tmp_path / "targets.txt"
+        listing.write_text("# a comment\n/definitely/not/here\n\n", encoding="utf-8")
+
+        orch = self._orchestrator(tmp_path)
+        targets = orch.discover_targets(self._args(targets=str(listing)))
+
+        assert targets.is_empty()
+        assert any("/definitely/not/here" in r for r in targets.rejected)
+
+    def test_invalid_image_and_url_also_count_as_rejections(self, tmp_path):
+        """These already logged a warning but nothing acted on it."""
+        orch = self._orchestrator(tmp_path)
+
+        image_targets = orch.discover_targets(self._args(image="not a valid image!!"))
+        assert image_targets.rejected
+
+        url_targets = orch.discover_targets(self._args(url="ftp://evil.example"))
+        assert url_targets.rejected
+
+    def test_no_target_flag_at_all_records_no_rejection(self, tmp_path):
+        """Asking for nothing is a different mistake from asking for something
+        that does not exist, and must stay distinguishable."""
+        orch = self._orchestrator(tmp_path)
+        targets = orch.discover_targets(self._args())
+
+        assert targets.is_empty()
+        assert targets.rejected == []
+
+    def test_rejections_do_not_leak_between_calls(self, tmp_path):
+        orch = self._orchestrator(tmp_path)
+        orch.discover_targets(self._args(repo=str(tmp_path / "nope")))
+        second = orch.discover_targets(self._args())
+
+        assert second.rejected == []
+
+
+class TestApiSpecIsDiscovered:
+    """`--api-spec` is advertised in `jmo scan --help` and was a no-op (#807).
+
+    The only code that handled it was jmo.py's _iter_urls, which nothing has
+    called since discovery moved to ScanOrchestrator.
+    """
+
+    @staticmethod
+    def _args(**kw):
+        return TestRejectedTargetsAreNamed._args(**kw)
+
+    @staticmethod
+    def _orchestrator(tmp_path):
+        return ScanOrchestrator(
+            ScanConfig(tools=["zap"], results_dir=tmp_path / "results")
+        )
+
+    def test_remote_spec_becomes_a_url_target(self, tmp_path):
+        orch = self._orchestrator(tmp_path)
+        targets = orch.discover_targets(
+            self._args(api_spec="https://example.com/openapi.json")
+        )
+
+        assert targets.urls == ["https://example.com/openapi.json"]
+        assert not targets.is_empty()
+
+    def test_local_spec_becomes_a_file_url(self, tmp_path):
+        spec = tmp_path / "openapi.json"
+        spec.write_text('{"openapi": "3.0.0"}', encoding="utf-8")
+
+        orch = self._orchestrator(tmp_path)
+        targets = orch.discover_targets(self._args(api_spec=str(spec)))
+
+        assert len(targets.urls) == 1
+        assert targets.urls[0].startswith("file://")
+
+    def test_missing_local_spec_is_rejected_rather_than_ignored(self, tmp_path):
+        orch = self._orchestrator(tmp_path)
+        targets = orch.discover_targets(
+            self._args(api_spec=str(tmp_path / "gone.json"))
+        )
+
+        assert targets.is_empty()
+        assert any("--api-spec" in r for r in targets.rejected)
