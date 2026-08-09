@@ -51,6 +51,27 @@ def _merge_dict(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _merge_per_tool(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
+    """Merge per-tool overrides one level deeper than ``dict.update()``.
+
+    USER_GUIDE.md:1652 promises root and per-profile ``per_tool`` blocks are
+    "merged", with profile values winning. A flat update replaces a tool's whole
+    entry, so a profile that set only ``semgrep.timeout`` silently discarded a
+    root-level ``semgrep.flags`` (#791). Merge per tool, then per key.
+    """
+    out: dict[str, Any] = {
+        tool: dict(opts) if isinstance(opts, dict) else opts
+        for tool, opts in (a or {}).items()
+    }
+    for tool, opts in (b or {}).items():
+        existing = out.get(tool)
+        if isinstance(existing, dict) and isinstance(opts, dict):
+            existing.update(opts)
+        else:
+            out[tool] = dict(opts) if isinstance(opts, dict) else opts
+    return out
+
+
 def _effective_scan_settings(args) -> dict[str, Any]:
     """Compute effective scan settings from CLI, config, and optional profile.
 
@@ -82,7 +103,7 @@ def _effective_scan_settings(args) -> dict[str, Any]:
     retries = cfg.retries  # May be int or RetryConfig
     if isinstance(profile.get("retries"), (int, dict)):
         retries = profile["retries"]
-    per_tool = _merge_dict(cfg.per_tool, profile.get("per_tool", {}))
+    per_tool = _merge_per_tool(cfg.per_tool, profile.get("per_tool", {}))
 
     # Handle --skip-tools flag to exclude specific tools
     skip_tools = getattr(args, "skip_tools", None) or []
@@ -2355,9 +2376,14 @@ def _collect_email_opt_in(args) -> None:
                     )
                 else:
                     # Audience add failed — saved locally, retry path available.
+                    # No `jmo subscribe` command exists, and the
+                    # `pending_subscription` flag written below is never read
+                    # back, so there is no CLI retry path to advertise (#790).
+                    # Point at the page that does exist.
                     _safe_print(
-                        "\n✅ Thanks! Saved your address. Run "
-                        "`jmo subscribe` later to finish signup.\n"
+                        "\n✅ Thanks! Saved your address locally, but signup"
+                        " did not complete.\n   Finish it at"
+                        " https://jmotools.com/subscribe.html\n"
                     )
                     _log(
                         args,
@@ -2404,8 +2430,10 @@ def _collect_email_opt_in(args) -> None:
                 yaml.dump(config, f)
             _log(args, "DEBUG", f"Email collection error (non-blocking): {e}")
     else:
-        _safe_print("\n👍 No problem! You can always add your email later with:")
-        print("   jmo config --email your@email.com\n")
+        # `jmo config` is not a subcommand -- the parser has 20 and that is not
+        # one of them (#790). Name the page that actually works.
+        _safe_print("\n👍 No problem! You can always subscribe later at:")
+        print("   https://jmotools.com/subscribe.html\n")
 
         # Mark onboarding complete even if skipped
         import yaml

@@ -390,13 +390,16 @@ def cmd_report(args, _log_fn) -> int:
             else:
                 history_db_path = Path(".jmo/history.db")
 
-            # Get profile name from config
-            profile_name = (
-                getattr(args, "profile_name", None) or cfg.default_profile or "balanced"
-            )
-
-            # Get tools from config
-            tools = getattr(cfg, "tools", [])
+            # Record what the scan actually did, not what the config asks for.
+            # `profile` and `tools_used` were resolved above from
+            # .scan_metadata.json (written by the scan) with a findings-derived
+            # fallback, and `tools_used` is what findings.json's metadata
+            # already reports. Reading cfg.tools here instead made every stored
+            # row claim jmo.yml's top-level `tools:` list regardless of profile
+            # -- 1790 of 1833 rows named the same 8 tools, including one that
+            # was not installed and so cannot have run (#787).
+            profile_name = getattr(args, "profile_name", None) or profile or "balanced"
+            tools = sorted(tools_used)
 
             # Get security flags (Phase 6 Step 6.1, 6.2, 6.3)
             no_store_raw = getattr(args, "no_store_raw_findings", False)
