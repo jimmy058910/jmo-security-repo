@@ -1250,12 +1250,14 @@ jobs:
 
           reports=0
           total_failed=0
+          seen=""
 
           for report_file in test-results/*/pytest-report.json; do
             if [[ -f "$report_file" ]]; then
               reports=$((reports + 1))
               job=$(dirname "$report_file" | xargs basename \
                 | sed 's/-results-.*//' | sed 's/e2e-//')
+              seen="${seen} ${job}"
 
               total=$(get_field "$report_file" total)
               passed=$(get_field "$report_file" passed)
@@ -1279,6 +1281,7 @@ jobs:
 
           echo "E2E_REPORTS=$reports" >> "$GITHUB_ENV"
           echo "E2E_TOTAL_FAILED=$total_failed" >> "$GITHUB_ENV"
+          echo "E2E_SEEN_SUITES=${seen}" >> "$GITHUB_ENV"
 
       - name: Upload summary
         uses: actions/upload-artifact@v7
@@ -1312,12 +1315,42 @@ jobs:
       # two are expected still passes. Tightening that needs a count that
       # survives adding a sixth e2e job; see the issue for the options.
       - name: Fail the run if any e2e test failed
+        env:
+          # The suites that upload a pytest-report.json -- which is exactly the
+          # set whose pytest step runs under `continue-on-error: true`, so
+          # their failures cannot fail their own job and need this gate. The
+          # other three e2e jobs (tool-integration, contract, visual) have no
+          # continue-on-error and fail the run natively.
+          #
+          # Add a job to that set and you must add it here, or its failures go
+          # unwatched exactly as #769's did.
+          EXPECTED_E2E_SUITES: "ubuntu macos"
         run: |
           echo "reports found: ${E2E_REPORTS} | tests failed: ${E2E_TOTAL_FAILED}"
+          echo "suites reporting:${E2E_SEEN_SUITES:- <none>}"
 
           if [[ "${E2E_REPORTS}" -eq 0 ]]; then
             echo "::error::No pytest-report.json was produced by any e2e job." \
               "The suites did not run, so this is a failure, not a pass."
+            exit 1
+          fi
+
+          # Partial absence is absent evidence too (#772). Until this check,
+          # one report where two were expected printed "All 1 e2e suite(s)
+          # reported zero failures" and exited 0 -- #769's mistake in a smaller
+          # costume, inferring health from the absence of bad news. The guard
+          # above only caught the all-or-nothing case.
+          read -ra expected_suites <<< "${EXPECTED_E2E_SUITES}"
+          missing=""
+          for suite in "${expected_suites[@]}"; do
+            case " ${E2E_SEEN_SUITES} " in
+              *" ${suite} "*) ;;
+              *) missing="${missing} ${suite}" ;;
+            esac
+          done
+          if [[ -n "${missing// /}" ]]; then
+            echo "::error::No pytest-report.json from:${missing}." \
+              "Those suites produced no evidence, which is a failure, not a pass."
             exit 1
           fi
 
@@ -1327,7 +1360,8 @@ jobs:
             exit 1
           fi
 
-          echo "All ${E2E_REPORTS} e2e suite(s) reported zero failures."
+          echo "All ${E2E_REPORTS} e2e suite(s) reported zero failures:" \
+            "${E2E_SEEN_SUITES# }."
 
 # ==============================================================================
 # PERFORMANCE TESTS - Benchmark comparison
