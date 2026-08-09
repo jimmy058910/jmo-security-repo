@@ -993,12 +993,27 @@ class TestScanExitsNonZeroWhenNothingWasScanned:
 
     @staticmethod
     def _run(argv):
+        """Run cmd_scan with tool pre-flight neutralised.
+
+        cmd_scan bails at `jmo.py:2929` when no requested tool is installed,
+        before discovery ever runs, and returns 1 (silently - #811). On a
+        runner without trufflehog that made the two exit-code tests below pass
+        for entirely the wrong reason: the missing-tool bail also returns
+        non-zero, so they were green while never reaching the code under test.
+        Pinning the pre-flight keeps these tests about target discovery.
+        """
         from scripts.cli.jmo import cmd_scan, parse_args
 
         with patch("sys.argv", argv):
-            return cmd_scan(parse_args())
+            args = parse_args()
 
-    def test_missing_repo_path_fails(self, tmp_path):
+        with patch(
+            "scripts.cli.jmo._check_scan_tools",
+            side_effect=lambda _a, requested: (list(requested), []),
+        ):
+            return cmd_scan(args)
+
+    def test_missing_repo_path_fails(self, tmp_path, capsys):
         rc = self._run(
             [
                 "jmo",
@@ -1013,8 +1028,11 @@ class TestScanExitsNonZeroWhenNothingWasScanned:
             ]
         )
         assert rc != 0, "a scan that scanned nothing reported success"
+        # Asserting the exit code alone is not enough: several earlier bail-outs
+        # also return non-zero, so this must confirm it failed *here* (#811).
+        assert "Every target was rejected" in capsys.readouterr().err
 
-    def test_no_target_flag_at_all_fails(self, tmp_path):
+    def test_no_target_flag_at_all_fails(self, tmp_path, capsys):
         rc = self._run(
             [
                 "jmo",
@@ -1027,6 +1045,9 @@ class TestScanExitsNonZeroWhenNothingWasScanned:
             ]
         )
         assert rc != 0
+        # Asking for nothing stays a distinct message from asking for something
+        # that does not exist.
+        assert "No scan targets provided" in capsys.readouterr().err
 
     def test_the_rejected_target_is_named_in_the_log(self, tmp_path, caplog):
         import logging
