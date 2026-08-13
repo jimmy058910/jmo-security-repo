@@ -127,7 +127,12 @@ jobs:
           tar -xzf /tmp/trufflehog.tar.gz -C /usr/local/bin trufflehog
           chmod +x /usr/local/bin/trufflehog
           trufflehog filesystem . --json --exclude-paths .trufflehog-exclude.txt --only-verified > trufflehog-results.json || true
-          VERIFIED=$(jq -r 'select(.Verified == true)' trufflehog-results.json 2>/dev/null | wc -l || echo "0")
+          # -c, not -r: trufflehog emits NDJSON, and `jq -r` pretty-prints each
+          # matching object across ~40 lines, so `wc -l` counted *lines* rather
+          # than secrets. Measured: 147 findings reported as "6090 verified
+          # secrets". The pass/fail logic was right; only the number was, and a
+          # 40x-inflated count reads like a breach during triage.
+          VERIFIED=$(jq -c 'select(.Verified == true)' trufflehog-results.json 2>/dev/null | wc -l || echo "0")
           if [ "$VERIFIED" -gt 0 ]; then
             echo "::error::Found $VERIFIED verified secrets! Review trufflehog-results.json"
             exit 1
