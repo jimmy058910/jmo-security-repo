@@ -61,20 +61,25 @@ from ...core.paths import get_yara_rules_dir
 from ...core.scan_timings import write_scan_timings
 from ...core.tool_runner import ToolDefinition, ToolRunner
 from ..path_sanitizers import _sanitize_path_component, _validate_output_path
-from ..scan_utils import find_tool, report_tool_failure, write_stub
+from ..scan_utils import (
+    TOOL_TIMEOUT_DEFAULTS,
+    find_tool,
+    report_tool_failure,
+    tool_flags,
+    tool_timeout,
+    write_stub,
+)
 
 logger = logging.getLogger(__name__)
 
-# Per-tool timeout defaults (seconds) for tools that typically run longer
-# These serve as MINIMUM timeouts - user/profile configs can increase but not decrease
-TOOL_TIMEOUT_DEFAULTS: dict[str, int] = {
-    "cdxgen": 600,  # 10 min - with --no-install-deps optimization (was 30 min)
-    "dependency-check": 1200,  # 20 min - NVD database sync can take a while
-    "scancode": 1200,  # 20 min - license scanning large codebases
-    "horusec": 900,  # 15 min - multi-language SAST
-    "zap": 900,  # 15 min - DAST scanning
-    "prowler": 600,  # 10 min - cloud config scanning
-}
+# TOOL_TIMEOUT_DEFAULTS now lives in scan_utils and is re-exported here for the
+# handful of readers that reach for it by this name. It was defined in this
+# module, which is exactly why only *repository* scans honoured the floor: the
+# other four scanners could not see it and their `get_tool_timeout` copies had
+# none. `zap` carries a 900 s floor and also runs on `url` targets, so a
+# `balanced` URL scan gave it 600 s -- a third short -- while the same tool on a
+# repository target got 900 s.
+__all__ = ["TOOL_TIMEOUT_DEFAULTS", "scan_repository"]
 
 # Upper bound on file arguments passed to a single per-file tool invocation.
 # Windows caps a command line at 32767 characters; a few hundred absolute paths
@@ -214,36 +219,27 @@ def scan_repository(
     out_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
 
     def get_tool_timeout(tool: str, default: int) -> int:
-        """Get timeout for tool, respecting per-tool defaults for slow tools.
+        """Timeout for this tool, honouring the slow-tool floor.
 
-        Priority order:
-        1. User's per_tool_config timeout (if specified)
-        2. TOOL_TIMEOUT_DEFAULTS (minimum for known slow tools)
-        3. Profile default timeout
+        Priority: an explicit `per_tool.<tool>.timeout` wins outright, else the
+        profile default raised to `TOOL_TIMEOUT_DEFAULTS` if the tool has a
+        floor. Slow tools (cdxgen, dependency-check, scancode) have minimums so
+        a low profile default cannot kill them early.
 
-        Slow tools (cdxgen, dependency-check, scancode) have minimum timeouts
-        to prevent premature termination. User config can increase but profile
-        defaults can't decrease below the minimum.
+        Delegates to the shared implementation. This body was the only one of
+        five that applied the floor at all.
         """
-        # Check user's per_tool_config first
-        tool_cfg = per_tool_config.get(tool, {})
-        if isinstance(tool_cfg, dict):
-            override = tool_cfg.get("timeout")
-            if isinstance(override, int) and override > 0:
-                return override
-
-        # Use per-tool default as minimum (user didn't specify override)
-        tool_minimum = TOOL_TIMEOUT_DEFAULTS.get(tool, 0)
-        return max(default, tool_minimum)
+        return tool_timeout(per_tool_config, tool, default)
 
     def get_tool_flags(tool: str) -> list[str]:
-        """Get additional flags for specific tool."""
-        tool_cfg = per_tool_config.get(tool, {})
-        if isinstance(tool_cfg, dict):
-            flags = tool_cfg.get("flags", [])
-            if isinstance(flags, list):
-                return [str(f) for f in flags]
-        return []
+        """Extra flags for this tool, minus any JMo must own.
+
+        Delegates to the shared implementation: this was one of five identical
+        copies, none of which filtered anything, so a `per_tool` flag could
+        override JMo's own `-f`/`-o` and silently destroy the tool's findings
+        (#822).
+        """
+        return tool_flags(per_tool_config, tool)
 
     # TruffleHog: Verified secrets scanning
     # Uses filesystem mode to scan working directory (not just git history)
