@@ -304,8 +304,12 @@ USER jmo
 ENTRYPOINT ["jmo"]
 CMD ["--help"]
 
+# Exec form with an explicit shell. hadolint 2.15.0 extended DL3025 to cover
+# HEALTHCHECK, and this probe genuinely needs a shell for the redirect and the
+# `||`. Naming /bin/sh keeps the behaviour identical to the shell form Docker
+# would otherwise have wrapped it in.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD jmo --help > /dev/null || exit 1
+    CMD ["/bin/sh", "-c", "jmo --help > /dev/null || exit 1"]
 
 # Usage: docker run --rm -v "$(pwd)/.jmo:/scan/.jmo" -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:balanced scan --repo /scan --profile balanced
 # The .jmo mount persists the SQLite history DB between runs so `jmo history`, `jmo diff`, and `jmo trend` work.
