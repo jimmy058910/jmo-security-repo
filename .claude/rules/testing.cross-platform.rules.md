@@ -209,6 +209,35 @@ probes with a box-drawing character declares them safe and then dies on an emoji
    `scripts/` with `ast` and fails if anything outside `unicode_utils.py`
    **defines** `safe_print`/`safe_write`/`_can_encode_unicode`/
    `harden_console_streams`. Importing and re-exporting stay legal.
+
+   **That guard had two blind spots, and two copies survived it for months.**
+   It scans for `def <guarded name>` — the *shape the bug had last time* — while
+   what is actually forbidden is *deciding encodability from a codec's name*,
+   which can appear anywhere under any name:
+
+   | Survivor | How it slipped through |
+   |---|---|
+   | `policy_commands.py` defined `_safe_print` | **underscored** — `GUARDED_NAMES` lists `safe_print` |
+   | `jmo.py` inlined the branch inside `_log()` | defined **no** guarded helper at all |
+
+   Measured impact before the fix, on `--human-logs`:
+
+   | console codec | what it is | denylist fires? | rendered |
+   |---|---|---|---|
+   | `cp1252` | piped / redirected | yes | `[v]` `[x]` |
+   | **`cp437` / `cp850`** | **a real console** | **no** | **`?` `?`** |
+
+   Not a crash — `harden_console_streams` guarantees that — but the fallback
+   table silently skipped **in the exact environment it was written for**. The
+   name list can never be right: it must enumerate codecs nobody thought of.
+
+   So there is now a second, **behavioural** guard,
+   `test_no_module_branches_on_the_encodings_name`, which fails on any
+   comparison against a codec-name literal anywhere in `scripts/`, regardless of
+   the enclosing function's name. Both holes are mutation-tested.
+
+   **The transferable lesson: a guard that scans for last time's syntax will be
+   walked around. Assert the property, not the pattern.**
 5. **Machine-read output stays raw.** `json.dumps` defaults to
    `ensure_ascii=True`, so JSON is already pure ASCII; substituting into it would
    corrupt it.

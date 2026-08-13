@@ -28,10 +28,8 @@ from scripts.core.exceptions import (
 )
 from scripts.core.tool_registry import PROFILE_TOOLS
 from scripts.core.unicode_utils import (
-    UNICODE_FALLBACKS as _UNICODE_FALLBACKS,
-)
-from scripts.core.unicode_utils import (
     harden_console_streams,
+    safe_write,
 )
 from scripts.core.unicode_utils import (
     safe_print as _safe_print,
@@ -3890,16 +3888,13 @@ def _log(args, level: str, message: str) -> None:
         }.get(level, "")
         reset = "\x1b[0m"
         ts = datetime.now(UTC).strftime("%H:%M:%S")
-        # Windows-safe Unicode handling for stderr
-        safe_message = message
-        try:
-            encoding = getattr(sys.stderr, "encoding", None) or "utf-8"
-            if encoding.lower() in ("cp1252", "ascii", "latin-1", "iso-8859-1"):
-                for unicode_char, ascii_fallback in _UNICODE_FALLBACKS.items():
-                    safe_message = safe_message.replace(unicode_char, ascii_fallback)
-        except (AttributeError, LookupError):
-            pass
-        sys.stderr.write(f"{color}{level:5}{reset} {ts} {safe_message}\n")
+        # safe_write probes the payload against the stream's real codec, applies
+        # the fallback table, then replaces only what the table missed. The
+        # hand-rolled version this replaces decided from the encoding's NAME and
+        # listed cp1252/ascii/latin-1 - so on cp437 and cp850, the codecs a real
+        # Windows console actually uses, it did nothing and the table was lost.
+        # Measured: "Scan complete OK" rendered "?" there instead of "[v]".
+        safe_write(f"{color}{level:5}{reset} {ts} {message}\n", stream=sys.stderr)
         return
     rec = {
         "ts": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
