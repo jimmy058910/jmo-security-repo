@@ -894,16 +894,24 @@ class TestScanAll:
 
         progress_calls = []
 
-        def progress_callback(target_type, target_id, statuses):
-            progress_calls.append((target_type, target_id))
+        def progress_callback(target_type, target_id, statuses, elapsed=0.0):
+            progress_calls.append((target_type, target_id, statuses, elapsed))
 
         with patch("scripts.cli.scan_jobs.scan_repository") as mock_scan:
-            mock_scan.return_value = ("repo", {"trivy": {"status": "success"}})
+            mock_scan.return_value = ("repo", {"trivy": True})
 
             orchestrator.scan_all(targets, {}, progress_callback=progress_callback)
 
         assert len(progress_calls) == 1
         assert progress_calls[0][0] == "repo"
+        # The status map has to arrive, because it is the only thing that can
+        # distinguish a target that produced findings from one that produced
+        # nothing. The callback was already being handed it and the two
+        # implementations both declared the parameter `elapsed: float` (#809).
+        assert progress_calls[0][2] == {"trivy": True}
+        # And the duration has to be measured, not invented.
+        assert isinstance(progress_calls[0][3], float)
+        assert progress_calls[0][3] >= 0.0
 
 
 class TestInvalidUrlWarning:
