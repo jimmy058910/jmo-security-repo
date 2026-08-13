@@ -363,3 +363,48 @@ class TestCrashedTargetIsStillAccounted:
             )
 
         assert results == [("proj", {})]
+
+
+class TestToolApplicableToNoTargetType:
+    """A requested tool that applies nowhere leaves the target with no tools."""
+
+    def test_target_with_no_applicable_tool_produced_nothing(self, tmp_path, caplog):
+        """`nuclei` is URL-only, so a repo target is handed an empty tool list.
+
+        `filter_tools_for_scan_type(["nuclei"], "repo")` is `[]`, so the repo
+        scanner builds no ToolDefinitions and returns an empty status map --
+        which `classify_target_outcome` reads as TARGET_FAILED, because the
+        target genuinely contributed nothing. `scan_all` was already warning
+        about exactly this ("Requested but applicable to no target type in this
+        scan"); the outcome now agrees with the warning.
+
+        This is what `tests/unit/test_signal_handling.py` had been doing by
+        accident for years with `gitleaks` -- removed in v0.5.0 and implemented
+        nowhere -- while asserting the run exited 0. Measured across all four
+        profiles, **every** profile/target-type pair has at least one applicable
+        tool, so no profile-driven scan reaches this state; it takes an explicit
+        `--tools` naming something inapplicable.
+        """
+        from scripts.cli.scan_orchestrator import ScanOrchestrator, ScanTargets
+
+        config = jmo.ScanConfig(results_dir=tmp_path, tools=["nuclei"])
+        orchestrator = ScanOrchestrator(config)
+        (tmp_path / "proj").mkdir()
+        targets = ScanTargets(repos=[tmp_path / "proj"])
+
+        with caplog.at_level(logging.WARNING, logger="scripts.cli.scan_orchestrator"):
+            results = orchestrator.scan_all(targets, {})
+
+        assert len(results) == 1
+        name, statuses = results[0]
+        assert {k: v for k, v in statuses.items() if not k.startswith("__")} == {}
+        assert classify_target_outcome(statuses) == TARGET_FAILED
+
+        # The warning and the verdict must agree -- one without the other is how
+        # this went unnoticed.
+        visible = [
+            r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING
+        ]
+        assert any(
+            "applicable to no target type" in m for m in visible
+        ), f"expected the unrouted-tool warning; got {visible}"
