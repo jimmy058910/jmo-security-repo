@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from unittest.mock import patch
 
@@ -227,3 +228,92 @@ class TestFlattenToDicts:
         result = list(_flatten_to_dicts(data))
         assert len(result) == 4
         assert all(isinstance(r, dict) for r in result)
+
+
+class TestUnparseableOutputIsAnnounced:
+    """#823/#822: a tool output that cannot be parsed must not vanish quietly."""
+
+    def test_malformed_json_warns_and_names_the_file(
+        self, tmp_path: Path, caplog
+    ) -> None:
+        """This branch used to be DEBUG while its two siblings warned.
+
+        `safe_load_json_file` was inconsistent with itself: a file that is
+        *absent* or *empty* logged at WARNING, while a file that is present and
+        unreadable logged at DEBUG -- and `configure_scan_logging` sets the
+        `scripts` logger to WARNING, so that branch was invisible in every
+        normal run.
+
+        Malformed is the most alarming of the three: the tool ran, exited
+        acceptably and wrote something JMo cannot read, so its findings are
+        absent while the scan reports success. Measured on #822 -- a `per_tool`
+        flag making trivy emit a table instead of JSON took a target from 2
+        findings to 0, rc=0, nothing on any stream.
+
+        This is the layer that matters because **no adapter raises
+        AdapterParseException** (0 of 27); they all route through here.
+        """
+        bad = tmp_path / "trivy.json"
+        bad.write_text("\nReport Summary\n+----+\n", encoding="utf-8")
+
+        with caplog.at_level(logging.WARNING, logger="scripts.core.adapters.common"):
+            result = safe_load_json_file(bad, default=None)
+
+        assert result is None
+        visible = [
+            r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING
+        ]
+        assert visible, "an unreadable tool output was not reported at all"
+        assert any("trivy.json" in m for m in visible), visible
+        assert any("MISSING" in m for m in visible), visible
+
+    def test_valid_json_stays_quiet(self, tmp_path: Path, caplog) -> None:
+        """The control. Without it an always-warn bug would pass the test above."""
+        good = tmp_path / "trivy.json"
+        good.write_text('{"Results": []}', encoding="utf-8")
+
+        with caplog.at_level(logging.WARNING, logger="scripts.core.adapters.common"):
+            result = safe_load_json_file(good, default=None)
+
+        assert result == {"Results": []}
+        assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
+
+    def test_speculative_callers_can_opt_out(self, tmp_path: Path, caplog) -> None:
+        """`log_errors=False` is how a format-probing caller stays quiet.
+
+        `prowler_adapter._load` tries NDJSON and then JSON. A genuine multi-line
+        NDJSON file is not valid JSON, so without this escape hatch the warning
+        above would fire on every prowler scan of that shape -- which is exactly
+        the always-fires warning #784 was about.
+        """
+        ndjson = tmp_path / "prowler.json"
+        ndjson.write_text('{"a": 1}\n{"a": 2}\n', encoding="utf-8")
+
+        with caplog.at_level(logging.WARNING, logger="scripts.core.adapters.common"):
+            result = safe_load_json_file(ndjson, default=None, log_errors=False)
+
+        assert result is None
+        assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
+
+    def test_prowler_ndjson_does_not_warn_through_the_real_adapter(
+        self, tmp_path: Path, caplog
+    ) -> None:
+        """The end-to-end version: the real probe must not warn on valid NDJSON."""
+        from scripts.core.adapters.prowler_adapter import _iter_prowler_records
+
+        ndjson = tmp_path / "prowler.json"
+        ndjson.write_text(
+            '{"class_uid": 2001, "finding_info": {"uid": "a"}}\n'
+            '{"class_uid": 2001, "finding_info": {"uid": "b"}}\n',
+            encoding="utf-8",
+        )
+
+        with caplog.at_level(logging.WARNING, logger="scripts.core.adapters.common"):
+            _iter_prowler_records(ndjson)
+
+        noisy = [
+            r.getMessage()
+            for r in caplog.records
+            if r.levelno >= logging.WARNING and "Could not parse" in r.getMessage()
+        ]
+        assert not noisy, f"prowler's speculative JSON probe warned: {noisy}"

@@ -77,8 +77,32 @@ def safe_load_json_file(
         return cast(result_type, json.loads(raw))
     except json.JSONDecodeError as e:
         if log_errors:
-            logger.debug(
-                "Failed to parse JSON file %s: %s at position %d", p, e.msg, e.pos
+            # WARNING, matching the "missing" and "empty" branches above. This
+            # function was inconsistent with itself: a file that is absent or
+            # empty warned, while a file that is *present and unreadable*
+            # whispered at DEBUG -- and `configure_scan_logging` sets the
+            # `scripts` logger to WARNING, so that branch was invisible in every
+            # normal run.
+            #
+            # Malformed is the most alarming of the three: the tool ran, exited
+            # acceptably and wrote something JMo cannot read, so its findings are
+            # absent from the report while the scan reports success. Measured on
+            # #822: a `per_tool` flag making trivy emit a table instead of JSON
+            # took a target from 2 findings to 0, rc=0, nothing on any stream.
+            #
+            # This is the layer that matters, because **no adapter raises
+            # `AdapterParseException`** (0 of 27) -- they all route through here
+            # and turn "unparseable" into "empty". One shared helper, so one fix
+            # covers all 25 adapters that use it.
+            #
+            # Speculative callers -- ones that probe a format and expect to fail
+            # -- must pass `log_errors=False`; see `prowler_adapter._load`.
+            logger.warning(
+                "Could not parse %s as JSON (%s at position %d) - any findings "
+                "it contained are MISSING from this report",
+                p,
+                e.msg,
+                e.pos,
             )
         return cast(result_type, default)
 

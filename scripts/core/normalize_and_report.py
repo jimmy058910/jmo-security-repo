@@ -218,16 +218,23 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
         for fut in as_completed(jobs):
             try:
                 findings.extend(fut.result())
-            except AdapterParseException as e:
-                # Adapter parsing failed - log but continue with other tools
-                logger.debug(f"Adapter parse failed: {e.tool} on {e.path}: {e.reason}")
-            except FileNotFoundError as e:
-                # Tool output missing (expected when using --allow-missing-tools)
-                logger.debug(f"Tool output file not found: {e.filename}")
             except (
                 Exception
-            ) as e:  # Acceptable: adapter parse error — skip tool, continue aggregation
-                # Unexpected error - log with traceback for debugging
+            ) as e:  # Acceptable: a broken future must not abort aggregation
+                # `_safe_load_plugin` already catches AdapterParseException,
+                # FileNotFoundError, OSError and bare Exception, returning `[]`
+                # for each -- so this loop used to carry per-type handlers that
+                # could never run. Worse, the dead `AdapterParseException` one
+                # held the *better* message (it unpacked `.tool`/`.path`/
+                # `.reason` where the live one printed only `e`), so the good
+                # diagnostic was the unreachable one. Same shape as #808 and the
+                # dead `_iter_*` helpers: two copies, and the fix lived in the
+                # one nothing calls.
+                #
+                # They are removed rather than kept "just in case": an except
+                # clause that cannot fire is a claim about behaviour that is not
+                # true. This generic one stays as a genuine backstop, because a
+                # future can fail for reasons unrelated to its callable.
                 logger.error(f"Unexpected error loading findings: {e}", exc_info=True)
     # Dedupe by id (fingerprint) - memory-efficient approach
     # Uses set for fingerprints (tiny strings) instead of dict storing full findings
@@ -345,7 +352,29 @@ def _safe_load_plugin(
         logger.debug(f"Tool output not found: {path}")
         return []
     except AdapterParseException as e:
-        logger.debug(f"Adapter parse failed: {e}")
+        # WARNING, not DEBUG. `configure_scan_logging` sets the `scripts` logger
+        # to WARNING by default, so at DEBUG this was invisible in every normal
+        # run -- and what it hides is a tool that ran, exited acceptably and
+        # wrote a file JMo cannot read. Its findings are absent from the report
+        # while the scan reports success, which is the #769 / `zero-secrets`
+        # class all over again.
+        #
+        # Measured on #822: a `per_tool` flag making trivy emit a table instead
+        # of JSON took a target from 2 findings to 0, with rc=0 and not one line
+        # on any stream. Flag collision is only one cause -- a tool changing its
+        # output schema between versions does the same thing -- so this is the
+        # guard for the whole class rather than for that one bug.
+        #
+        # Message carries tool, path and reason: `AdapterParseException` already
+        # separates them, and "which tool lost its findings" is the first thing
+        # a reader needs.
+        logger.warning(
+            "%s produced output that could not be parsed, so its findings are "
+            "MISSING from this report: %s (%s)",
+            e.tool,
+            e.path,
+            e.reason,
+        )
         return []
     except (OSError, PermissionError) as e:
         logger.debug(f"Failed to read tool output {path}: {e}")
