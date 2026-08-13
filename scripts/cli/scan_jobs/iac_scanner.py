@@ -22,6 +22,8 @@ from ..scan_utils import (
     filter_trivy_flags,
     find_tool,
     report_tool_failure,
+    tool_flags,
+    tool_timeout,
     write_stub,
 )
 
@@ -71,22 +73,24 @@ def scan_iac_file(
     out_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
 
     def get_tool_timeout(tool: str, default: int) -> int:
-        """Get timeout override for specific tool."""
-        tool_cfg = per_tool_config.get(tool, {})
-        if isinstance(tool_cfg, dict):
-            override = tool_cfg.get("timeout")
-            if isinstance(override, int) and override > 0:
-                return override
-        return default
+        """Timeout for this tool, honouring the slow-tool floor.
+
+        Delegates to the shared implementation. This copy had no floor, so a
+        tool with a `TOOL_TIMEOUT_DEFAULTS` minimum got only the profile default
+        here while the same tool got its floor on a repository target -- `zap`
+        runs on both and is 300 s short on a `balanced` URL scan.
+        """
+        return tool_timeout(per_tool_config, tool, default)
 
     def get_tool_flags(tool: str) -> list[str]:
-        """Get additional flags for specific tool."""
-        tool_cfg = per_tool_config.get(tool, {})
-        if isinstance(tool_cfg, dict):
-            flags = tool_cfg.get("flags", [])
-            if isinstance(flags, list):
-                return [str(f) for f in flags]
-        return []
+        """Extra flags for this tool, minus any JMo must own.
+
+        Delegates to the shared implementation: this was one of five identical
+        copies, none of which filtered anything, so a `per_tool` flag could
+        override JMo's own `-f`/`-o` and silently destroy the tool's findings
+        (#822).
+        """
+        return tool_flags(per_tool_config, tool)
 
     # Checkov IaC scan
     if "checkov" in tools:
