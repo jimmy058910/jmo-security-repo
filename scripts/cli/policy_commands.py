@@ -19,28 +19,21 @@ import argparse
 import json
 import logging
 import shutil
-import sys
 from pathlib import Path
 from typing import Any, cast
 
 from scripts.core.policy_engine import PolicyEngine
-from scripts.core.unicode_utils import UNICODE_FALLBACKS as _UNICODE_FALLBACKS
+
+# This module used to define its own _safe_print, deciding from the encoding's
+# NAME whether output was safe. cp437 and cp850 - the OEM codepages a real
+# Windows console uses - are not on any such list, so the substitution never ran
+# there and the fallback table was lost exactly where it was meant to help.
+# The canonical helper probes the payload against the stream's real codec
+# instead. Importing under the old private name keeps the five call sites below
+# unchanged.
+from scripts.core.unicode_utils import safe_print as _safe_print
 
 logger = logging.getLogger(__name__)
-
-
-def _safe_print(text: str) -> None:
-    """Print with Unicode fallback for Windows cp1252 compatibility."""
-    try:
-        encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
-        if encoding.lower() in ("cp1252", "ascii", "latin-1", "iso-8859-1"):
-            for unicode_char, ascii_fallback in _UNICODE_FALLBACKS.items():
-                text = text.replace(unicode_char, ascii_fallback)
-        print(text)
-    except UnicodeEncodeError:
-        for unicode_char, ascii_fallback in _UNICODE_FALLBACKS.items():
-            text = text.replace(unicode_char, ascii_fallback)
-        print(text)
 
 
 def get_builtin_policies_dir() -> Path:

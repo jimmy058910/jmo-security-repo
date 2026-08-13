@@ -169,3 +169,83 @@ def test_data_path_subprocesses_decode_explicitly() -> None:
     ), "Locale-decoded subprocess output on the scan data path:\n" + "\n".join(
         f"  {o}" for o in offenders
     )
+
+
+# Codec names that appear in the "is this stream safe?" denylists this guard
+# exists to eliminate. Deliberately not exhaustive -- it does not need to be,
+# because the point is that NO such list can be.
+_CODEC_NAME_LITERALS = frozenset(
+    {
+        "cp1252",
+        "cp437",
+        "cp850",
+        "ascii",
+        "latin-1",
+        "latin1",
+        "iso-8859-1",
+    }
+)
+
+
+def test_no_module_branches_on_the_encodings_name() -> None:
+    """Nothing may decide encodability by comparing a codec's NAME.
+
+    The definition guard above only sees `def safe_print(...)`. Two copies of
+    the broken logic survived it anyway, each through a different hole:
+
+        scripts/cli/policy_commands.py  defined `_safe_print` -- underscored,
+                                        so not in GUARDED_NAMES
+        scripts/cli/jmo.py             inlined the branch inside `_log`, so it
+                                        defined no guarded helper at all
+
+    A definition-scanner tests for the shape the bug had last time. This tests
+    for the behaviour it is actually forbidden to have, wherever it appears and
+    whatever the enclosing function is called.
+
+    Measured on cp437, the codec a real Windows console uses: the name-based
+    branch never fired, so 'Scan complete <check>' rendered '?' where the
+    canonical helper renders '[v]'. It is not a crash -- harden_console_streams
+    guarantees that -- it is the fallback table being silently skipped in
+    exactly the environment it was written for.
+
+    The fix is always the same: call safe_print/safe_write, which probe the real
+    payload against the stream's real codec.
+    """
+    offenders: list[str] = []
+
+    for path in sorted(SCRIPTS.rglob("*.py")):
+        if path == CANONICAL:
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Compare):
+                continue
+            # `enc == "cp1252"` / `enc != "ascii"` / `enc in (...)`
+            operands = list(node.comparators)
+            literals: set[str] = set()
+            for operand in operands:
+                if isinstance(operand, ast.Constant) and isinstance(operand.value, str):
+                    literals.add(operand.value.lower())
+                elif isinstance(operand, ast.Tuple | ast.List | ast.Set):
+                    for element in operand.elts:
+                        if isinstance(element, ast.Constant) and isinstance(
+                            element.value, str
+                        ):
+                            literals.add(element.value.lower())
+
+            if literals & _CODEC_NAME_LITERALS:
+                rel = path.relative_to(REPO_ROOT).as_posix()
+                offenders.append(
+                    f"{rel}:{node.lineno} branches on codec name(s) "
+                    f"{sorted(literals & _CODEC_NAME_LITERALS)}"
+                )
+
+    assert not offenders, (
+        "Encodability must be probed, never inferred from the codec's name -- "
+        "no list can enumerate the codecs you did not think of, and cp437/cp850 "
+        "are the ones a real Windows console uses. Found:\n  "
+        + "\n  ".join(offenders)
+        + "\n\nCall safe_print()/safe_write() from scripts/core/unicode_utils.py "
+        "instead; they encode the actual payload against the stream's actual "
+        "codec."
+    )
