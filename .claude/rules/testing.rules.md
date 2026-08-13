@@ -38,6 +38,42 @@ if coverage_pct < 80:
 > was never measured in-repo. A stated guarantee is a claim to verify — the same
 > failure class as #747 (pinned version drift) and #750 (prose version headers).
 
+## `.test_durations` — why it is committed, and how to regenerate it
+
+The Ubuntu shards split with `--splits 4 --group N --splitting-algorithm
+least_duration`. **Without a durations file that algorithm has nothing to
+balance against and silently falls back to splitting evenly by count**, which
+clusters the slow tests. Measured before this file existed:
+
+| | shard 1 | shard 2 | shard 3 | shard 4 |
+|---|---|---|---|---|
+| even by count | 6.7 min | 6.8 min | **17.9 min** | **16.5 min** |
+| with durations | 12.0 min | 12.0 min | 12.0 min | 12.0 min |
+
+A 2.7x spread, and it is why `ubuntu-latest Shard 4/4` timed out intermittently
+on unrelated PRs for weeks (#828). pytest-split announces the fallback in its
+own output — `[pytest-split] No test durations found` — which is worth grepping
+for if the shards look lopsided again.
+
+Regenerate after adding or removing a lot of tests:
+
+```bash
+# Merges into the existing file; run in chunks so no single run is killed.
+pytest tests/adapters -n 8 -q --store-durations -m "not smoke and not requires_tools and not docker"
+pytest tests/unit tests/core -n 8 -q --store-durations -m "not smoke and not requires_tools and not docker"
+# ...and so on for the remaining directories, then:
+pytest tests/performance -q -p no:randomly --store-durations   # serially: contention distorts perf timings
+```
+
+**The trap: a durations file generated on Windows records every
+Windows-skipped test at ~0.0005 s**, so pytest-split treats them as free. That
+is *worse than no entry*, and it hits exactly the tests that matter —
+`test_history_list_performance_10k_scans` is skipped on Windows and takes
+**305 s** (measured with the `skipif` bypassed). Its entry is hand-corrected to
+that value. The three `tests/e2e/test_cross_platform.py` entries are
+Linux/macOS-only and still carry placeholder durations; regenerating on Linux
+is the durable fix if the shards drift again.
+
 ## Running Tests Locally
 
 ```bash

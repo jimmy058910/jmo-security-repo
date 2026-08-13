@@ -223,11 +223,27 @@ def test_single_scan_insert_performance(perf_db, tmp_path):
 
 
 @pytest.mark.slow
-@pytest.mark.timeout(600)  # 10 minutes - creates 10k dirs, slow on Windows
+# 20 minutes. Was 600 s, which this test outgrew on Linux CI as well: it is the
+# cause of the intermittent `ubuntu-latest Shard 4/4` failure seen on #799, #826,
+# #827 and #830 (issue #828), where a pytest-timeout dump replaces the summary
+# line so the log appears to contain no pytest output at all.
+#
+# Measured on an idle dev machine (fast NVMe, no coverage instrumentation):
+# 300 scans in 5.7 s, i.e. **~3.2 minutes** for 10 000. CI adds coverage tracing
+# and shared-runner contention on top of that, which puts the real cost within a
+# small factor of the old 10-minute cap -- hence "intermittent" rather than
+# "always". 20 minutes restores headroom while the job's own `timeout-minutes:
+# 30` stays the backstop for a genuinely hung test.
+#
+# The cost is intrinsic, not incidental: it is 10 000 separate `store_scan`
+# transactions. Measured alternatives that do **not** work -- reusing one results
+# directory instead of 10 000 saves only **7%**, and WAL is already the default
+# that `init_database` sets, so neither is the lever it looks like.
+@pytest.mark.timeout(1200)
 @pytest.mark.skipif(
     sys.platform == "win32",
-    reason="10k mkdir+write+SQLite-insert on Windows NTFS exceeds 600s timeout; "
-    "test validates SQLite query perf and runs on Linux/macOS CI where I/O is predictable",
+    reason="10k mkdir+write+SQLite-insert on Windows NTFS exceeds the timeout; "
+    "test validates SQLite query perf and runs on Linux/macOS CI",
 )
 def test_history_list_performance_10k_scans(perf_db, tmp_path):
     """
