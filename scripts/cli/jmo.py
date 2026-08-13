@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import sys
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -19,7 +20,14 @@ from scripts.cli.policy_commands import cmd_policy
 from scripts.cli.report_orchestrator import cmd_report as _cmd_report_impl
 
 # PHASE 1 REFACTORING: Import refactored modules
-from scripts.cli.scan_orchestrator import ScanConfig, ScanOrchestrator
+from scripts.cli.scan_orchestrator import (
+    TARGET_FAILED,
+    TARGET_OK,
+    TARGET_PARTIAL,
+    ScanConfig,
+    ScanOrchestrator,
+    classify_target_outcome,
+)
 from scripts.cli.schedule_commands import cmd_schedule
 from scripts.cli.trend_commands import cmd_trends
 from scripts.core.config import load_config
@@ -2089,8 +2097,15 @@ def _check_scan_tools(args, requested_tools: list[str]) -> tuple[list[str], list
         requested_tools: List of tool names requested for the scan
 
     Returns:
-        Tuple of (available_tools, missing_tool_names)
-        If user cancels, returns ([], []) to signal abort
+        Tuple of (available_tools, missing_tool_names). An empty first element
+        means there is nothing to scan with, for any of three reasons: every
+        tool is missing (logged here), ``--allow-missing-tools`` left nothing
+        installed (logged by the caller, which is the only place that knows the
+        flag was the reason), or the user cancelled (logged here).
+
+        This used to say it returned ``([], [])`` on cancel. No path returns
+        that -- every one carries ``missing_names`` -- so a caller written to
+        that docstring's discriminator would never have matched.
     """
     try:
         from scripts.cli.tool_manager import get_missing_tools_for_scan
@@ -2159,6 +2174,7 @@ def _check_scan_tools(args, requested_tools: list[str]) -> tuple[list[str], list
             except KeyboardInterrupt:
                 # A person deciding to stop, unlike EOF which is the absence of
                 # a person. Cancelling is what they asked for.
+                _log(args, "ERROR", "Scan cancelled at the missing-tool prompt.")
                 return [], missing_names
 
             if choice == "1":
@@ -2173,6 +2189,7 @@ def _check_scan_tools(args, requested_tools: list[str]) -> tuple[list[str], list
             elif choice == "2":
                 return available, missing_names
             elif choice == "3":
+                _log(args, "ERROR", "Scan cancelled: you chose [3] Cancel scan.")
                 return [], missing_names
             else:
                 print("Please enter 1, 2, or 3")
@@ -2669,6 +2686,24 @@ class ProgressTracker:
             secs = int(elapsed % 60)
             return f"{mins}m{secs}s"
 
+    @staticmethod
+    def _write_progress_line(progress_line: str) -> None:
+        """Write a carriage-return progress line through the fallback table.
+
+        These three call sites used `print(..., file=sys.stderr)`, which reaches
+        only `harden_console_streams`' `errors="replace"` -- the guarantee that
+        nothing crashes, not the layer that renders something readable. The
+        spinner frames are Braille (U+280B..U+280F) and **all ten are
+        unrenderable in cp1252, cp437 and cp850**, i.e. in every codec a real
+        Windows console uses, so the animation was a motionless `?` for the
+        length of the scan. `safe_write` applies `UNICODE_FALLBACKS` first,
+        which now maps the ten frames onto a rotating ASCII cycle that still
+        animates. The substitutes are one character wide, so the `:<70`
+        padding still clears the previous line exactly.
+        """
+        safe_write(f"{progress_line:<70}", sys.stderr)
+        sys.stderr.flush()
+
     def _refresh_display(self):
         """Refresh progress line with current elapsed time and spinner.
 
@@ -2697,23 +2732,47 @@ class ProgressTracker:
             f"\r[{self.tools_completed}/{self.total_tools}] "
             f"{spinner} {base_name} ({elapsed_str}) [{percentage}%]"
         )
-        print(f"{progress_line:<70}", end="", file=sys.stderr, flush=True)
+        self._write_progress_line(progress_line)
 
-    def update(self, target_type: str, target_name: str, elapsed: float):
+    def update(
+        self,
+        target_type: str,
+        target_name: str,
+        statuses: Mapping[str, Any],
+        elapsed: float = 0.0,
+    ):
         """Update progress after completing a target scan.
 
         Args:
             target_type: Type of target (repo, image, url, etc.)
             target_name: Name/identifier of target
-            elapsed: Elapsed time in seconds for this target
+            statuses: The scanner's per-tool boolean map for this target. The
+                success symbol is derived from this and nothing else.
+            elapsed: Seconds this target took, measured in the worker.
 
+        The symbol used to be ``"✓" if elapsed >= 0 else "✗"`` -- a duration
+        deciding a success question -- while the only caller passed a hardcoded
+        ``elapsed=1.0``. Both halves of the ternary were therefore constant, and
+        a target whose every tool failed printed the same ``✓`` as a clean one
+        (#809). ``(1s)`` was the same fiction; the duration is now real.
         """
         import time
+
+        outcome = classify_target_outcome(statuses)
+        failed_tools = sorted(
+            name
+            for name, ok in (statuses or {}).items()
+            if not name.startswith("__") and not ok
+        )
 
         with self._lock:
             self.completed += 1
             percentage = int((self.completed / self.total) * 100)
-            status_symbol = "✓" if elapsed >= 0 else "✗"
+            status_symbol = {
+                TARGET_OK: "✓",
+                TARGET_PARTIAL: "⚠",
+                TARGET_FAILED: "✗",
+            }[outcome]
 
             # Calculate ETA
             if self._start_time and self.completed > 0:
@@ -2732,7 +2791,31 @@ class ProgressTracker:
                 f"Progress: {percentage}% | ETA: {eta_str}"
             )
 
-            _log(self.args, "INFO", message)
+            # The level carries the outcome too, for anyone reading the JSON
+            # log stream rather than the glyph. A symbol alone is not enough:
+            # `--json-logs` consumers filter on `level`, and at INFO a total
+            # failure was indistinguishable from a clean scan there as well.
+            if outcome == TARGET_FAILED:
+                _log(
+                    self.args,
+                    "ERROR",
+                    f"{message} - contributed NO findings: "
+                    + (
+                        f"every tool failed ({', '.join(failed_tools)})"
+                        if failed_tools
+                        else "no tool ran against this target"
+                    ),
+                )
+            elif outcome == TARGET_PARTIAL:
+                _log(
+                    self.args,
+                    "WARN",
+                    f"{message} - findings MISSING from "
+                    f"{len(failed_tools)} failed tool(s): "
+                    f"{', '.join(failed_tools)}",
+                )
+            else:
+                _log(self.args, "INFO", message)
 
     def _format_duration(self, seconds: int) -> str:
         """Format duration in human-readable format."""
@@ -2829,7 +2912,7 @@ class ProgressTracker:
                         f"\r[{self.tools_completed}/{self.total_tools}] "
                         f"{spinner} {base_tool_name} (0s) [{percentage}%]"
                     )
-                    print(f"{progress_line:<70}", end="", file=sys.stderr, flush=True)
+                    self._write_progress_line(progress_line)
             else:
                 # Tool/phase completed (success, error, or timeout)
                 self.tools_in_progress.discard(tool_name)
@@ -2854,7 +2937,7 @@ class ProgressTracker:
                         f"{status_icon} {base_tool_name} [{percentage}%]"
                     )
                     # Pad to clear leftover characters
-                    print(f"{progress_line:<70}", end="", file=sys.stderr, flush=True)
+                    self._write_progress_line(progress_line)
 
                     # Print newline and stop refresh when all tools complete
                     if self.tools_completed >= self.total_tools:
@@ -2925,7 +3008,28 @@ def cmd_scan(args) -> int:
     if not os.environ.get("DOCKER_CONTAINER"):
         tools, missing_tools = _check_scan_tools(args, tools)
         if not tools:
-            # All tools missing and user cancelled
+            # Nothing left to run. Three different situations reach here and
+            # this branch used to return 1 saying nothing on any stream (#811):
+            #
+            #   * --allow-missing-tools with every tool absent. _check_scan_tools
+            #     returns ([], missing) without logging, because the flag is
+            #     checked before the "none installed" error. Silent.
+            #   * no flag, every tool absent. Already logged "None of the
+            #     requested tools are installed" -- do not repeat it.
+            #   * the user chose Cancel at the prompt. Now logged there.
+            #
+            # The comment this replaces said "user cancelled", which is the one
+            # case that cannot happen non-interactively -- and non-interactive
+            # is where the silence did the damage: a CI job asserting only
+            # `rc != 0` cannot tell this bail from the failure it meant to test.
+            if getattr(args, "allow_missing_tools", False):
+                _log(
+                    args,
+                    "ERROR",
+                    "--allow-missing-tools was given, but none of the requested "
+                    "tool(s) are installed, so there is nothing to scan with: "
+                    f"{', '.join(missing_tools)}",
+                )
             return 1
         if missing_tools:
             _log(
@@ -3146,6 +3250,12 @@ def cmd_scan(args) -> int:
             f"for {total_targets} target(s)...",
         )
 
+    # Per-target outcomes, so the exit code can reflect them. `scan_all`'s
+    # return value was discarded at both call sites below, which is why a target
+    # that produced nothing could not affect the exit code however loudly the
+    # scanner reported it (#809).
+    scan_results: list[tuple[str, dict]] = []
+
     if use_rich_progress:
         # Use Rich-based progress tracker for clean, thread-safe display
         from scripts.cli.rich_progress import RichScanProgressTracker
@@ -3159,7 +3269,7 @@ def cmd_scan(args) -> int:
         # Execute scans with Rich progress context
         try:
             with rich_progress:
-                orchestrator.scan_all(
+                scan_results = orchestrator.scan_all(
                     targets,
                     per_tool_config,
                     progress_callback=rich_progress.update,
@@ -3183,9 +3293,13 @@ def cmd_scan(args) -> int:
         progress.start()
 
         # Create progress callback for orchestrator (target-level)
-        def progress_callback(target_type, target_id, statuses):
-            """Update progress tracker when scan completes."""
-            progress.update(target_type, target_id, elapsed=1.0)
+        def progress_callback(target_type, target_id, statuses, elapsed=0.0):
+            """Update progress tracker when scan completes.
+
+            This closure used to drop `statuses` and pass `elapsed=1.0`, which
+            is how a target whose every tool failed rendered `✓ ... (1s)`.
+            """
+            progress.update(target_type, target_id, statuses, elapsed=elapsed)
 
         # Create tool-level progress callback
         def tool_progress_callback(
@@ -3196,7 +3310,7 @@ def cmd_scan(args) -> int:
 
         # Execute scans via orchestrator (replaces 158 lines of inline logic)
         try:
-            orchestrator.scan_all(
+            scan_results = orchestrator.scan_all(
                 targets,
                 per_tool_config,
                 progress_callback,
@@ -3214,6 +3328,30 @@ def cmd_scan(args) -> int:
             if not scan_config.allow_missing_tools:
                 raise
             return 1
+
+    # A target whose every tool failed contributed nothing to this scan. That
+    # was reported correctly by each scanner, recorded correctly in
+    # scan-timings.json, and then reached neither the progress line nor the exit
+    # code -- so `jmo scan` exited 0 over a GitLab target it could not
+    # authenticate to and a k8s target that died in argument parsing (#809).
+    #
+    # Deliberately scoped to targets where *nothing* ran, not to any tool
+    # failure: individual tool failures are already reported per tool, and a
+    # deep profile legitimately has tools that do not apply everywhere. The line
+    # this draws is "did this target produce anything at all".
+    failed_targets = [
+        str(name)
+        for name, statuses in scan_results
+        if classify_target_outcome(statuses) == TARGET_FAILED
+    ]
+    if failed_targets:
+        _log(
+            args,
+            "ERROR",
+            f"{len(failed_targets)} of {len(scan_results)} target(s) produced no "
+            f"findings because no tool ran successfully against them: "
+            f"{', '.join(failed_targets)}",
+        )
 
     # Show Ko-Fi support reminder
     _show_kofi_reminder(args)
@@ -3257,8 +3395,13 @@ def cmd_scan(args) -> int:
 
     report_code = _cmd_report_impl(args, _log)
 
-    # Return report exit code if it failed, otherwise 0 (scan succeeded)
-    return report_code if report_code != 0 else 0
+    # Report's threshold verdict wins when it fails -- it is the more specific
+    # answer. Otherwise a target that produced nothing is itself a failure: the
+    # run cannot honestly claim success for a target it never scanned. Same call
+    # as #788 and #806, and a user-visible behaviour change for the CHANGELOG.
+    if report_code != 0:
+        return report_code
+    return 1 if failed_targets else 0
 
 
 def cmd_report(args) -> int:

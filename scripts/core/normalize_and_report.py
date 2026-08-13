@@ -34,6 +34,7 @@ from scripts.core.plugin_loader import get_plugin_loader, get_plugin_registry
 # Priority calculation (v0.9.0 Feature #5: EPSS/KEV)
 from scripts.core.priority_calculator import PriorityCalculator
 from scripts.core.reporters.basic_reporter import write_json, write_markdown
+from scripts.core.scan_timings import SCAN_TIMINGS_FILENAME
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -175,6 +176,21 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
             for target in sorted(p for p in target_dir.iterdir() if p.is_dir()):
                 # Discover all tool outputs using plugin registry
                 for tool_output in target.glob("*.json"):
+                    # JMo's own scan-phase instrumentation, written by
+                    # write_scan_timings into the same directory as the tool
+                    # outputs. It is not a tool result, so no adapter exists for
+                    # it and the registry lookup below warned about it on
+                    # *every* report run (#784). A warning that always fires
+                    # teaches the reader to skip the whole class -- and "no
+                    # adapter plugin found" is precisely the message that
+                    # matters when a real adapter goes missing.
+                    #
+                    # Compared against the constant rather than the literal
+                    # string so renaming the artifact cannot quietly resurrect
+                    # the warning.
+                    if tool_output.name == SCAN_TIMINGS_FILENAME:
+                        continue
+
                     tool_name = tool_output.stem  # e.g., "trivy", "semgrep", "afl++"
 
                     # Handle special case: afl++.json → tool name is "aflplusplus"

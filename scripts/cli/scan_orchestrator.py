@@ -17,6 +17,8 @@ import logging
 import os
 import re
 import sys
+import time
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -195,6 +197,62 @@ class ScanConfig:
             raise ValueError(f"Retries must be non-negative, got {self.retries}")
         if self.max_workers is not None and self.max_workers < 1:
             raise ValueError(f"max_workers must be >= 1, got {self.max_workers}")
+
+
+# How one target's scan ended, derived from the per-tool status map every
+# scanner in scan_jobs/ returns. Named constants rather than bare strings so a
+# typo at a comparison site is a NameError instead of a silently false branch.
+TARGET_OK = "ok"
+TARGET_PARTIAL = "partial"
+TARGET_FAILED = "failed"
+
+
+def classify_target_outcome(statuses: Mapping[str, Any] | None) -> str:
+    """Classify one target's scan from the booleans its scanner returned.
+
+    Args:
+        statuses: The per-tool status map from a ``scan_jobs`` scanner. Keys
+            beginning ``__`` are metadata (``__attempts__``), not tools.
+
+    Returns:
+        ``TARGET_OK`` if every tool succeeded, ``TARGET_PARTIAL`` if some did,
+        ``TARGET_FAILED`` if none did.
+
+    **An empty map is ``TARGET_FAILED``, not vacuous success.** It is what
+    ``scan_all`` appends when a scanner raised, and what a scanner returns when
+    no requested tool applied to this target type -- both cases where the target
+    contributed nothing. ``all([])`` being True is exactly the reading that
+    would let those render as a clean scan.
+
+    This exists because the information was already correct everywhere and
+    consulted nowhere: every scanner reports ``dict.fromkeys(tools, False)`` on
+    its failure paths, and the progress display decided the success symbol from
+    an elapsed time the caller hardcoded to ``1.0`` (#809).
+    """
+    if not statuses:
+        return TARGET_FAILED
+    outcomes = [bool(ok) for name, ok in statuses.items() if not name.startswith("__")]
+    if not outcomes:
+        return TARGET_FAILED
+    if all(outcomes):
+        return TARGET_OK
+    if any(outcomes):
+        return TARGET_PARTIAL
+    return TARGET_FAILED
+
+
+def _run_timed(scan_job, *args: Any, **kwargs: Any) -> tuple[str, dict, float]:
+    """Run one scan job and return its result plus the seconds it took.
+
+    Timed **inside the worker**, not around ``future.result()``: with more
+    targets than workers a future sits queued, and charging that wait to the
+    target would report a scheduling backlog as a slow scan. ``perf_counter``
+    rather than ``time.time`` because the latter is coarser than the former on
+    Windows (~15 ms vs ~1 ms) and a fast target would round to zero.
+    """
+    started = time.perf_counter()
+    name, statuses = scan_job(*args, **kwargs)
+    return name, statuses, time.perf_counter() - started
 
 
 class ScanOrchestrator:
@@ -721,7 +779,11 @@ class ScanOrchestrator:
         Args:
             targets: Discovered scan targets
             per_tool_config: Per-tool configuration overrides
-            progress_callback: Optional callback for target-level progress updates (callable)
+            progress_callback: Optional target-level progress callback, invoked
+                as ``(target_type, target_id, statuses, elapsed=<seconds>)``.
+                ``statuses`` is the scanner's per-tool boolean map -- pass it to
+                ``classify_target_outcome``; do not infer success from
+                ``elapsed``, which is a duration and says nothing about outcome.
             tool_progress_callback: Optional callback for tool-level progress (tool_name, status, count)
                                    Called when each tool starts and completes
             session: Optional ScanSession for checkpointing (skip completed targets)
@@ -807,6 +869,7 @@ class ScanOrchestrator:
                     skipped_count += 1
                     continue
                 future = executor.submit(
+                    _run_timed,
                     scan_repository,
                     repo,
                     self.config.results_dir / "individual-repos",
@@ -825,6 +888,7 @@ class ScanOrchestrator:
                     skipped_count += 1
                     continue
                 future = executor.submit(
+                    _run_timed,
                     scan_image,
                     image,
                     self.config.results_dir / "individual-images",
@@ -843,6 +907,7 @@ class ScanOrchestrator:
                     skipped_count += 1
                     continue
                 future = executor.submit(
+                    _run_timed,
                     scan_iac_file,
                     iac_type,
                     iac_path,
@@ -861,6 +926,7 @@ class ScanOrchestrator:
                     skipped_count += 1
                     continue
                 future = executor.submit(
+                    _run_timed,
                     scan_url,
                     url,
                     self.config.results_dir / "individual-web",
@@ -879,6 +945,7 @@ class ScanOrchestrator:
                     skipped_count += 1
                     continue
                 future = executor.submit(
+                    _run_timed,
                     scan_gitlab_repo,
                     gitlab_repo_info,
                     self.config.results_dir / "individual-gitlab",
@@ -899,6 +966,7 @@ class ScanOrchestrator:
                     skipped_count += 1
                     continue
                 future = executor.submit(
+                    _run_timed,
                     scan_k8s_resource,
                     k8s_resource_info,
                     self.config.results_dir / "individual-k8s",
@@ -911,14 +979,27 @@ class ScanOrchestrator:
                 futures.append(("k8s", k8s_id, future))
 
             if skipped_count > 0:
-                logger.info(
-                    f"Resuming scan: skipped {skipped_count} previously completed target(s)"
+                # WARNING, not INFO. `configure_scan_logging` sets the `scripts`
+                # logger to WARNING by default, so this was invisible at the
+                # default verbosity -- measured: present with `--log-level INFO`,
+                # absent with `--log-level WARN`. Meanwhile jmo.py's own `_log`
+                # prints INFO, so the two logging systems have different
+                # effective floors and this line was on the quiet one.
+                #
+                # It is the only thing that tells a reader their results cover
+                # fewer targets than they asked for, and the progress display
+                # ends part-way (`[1/2] ... Progress: 50%`) with no other
+                # explanation. That is not routine chatter.
+                logger.warning(
+                    "Resuming scan: skipped %d previously completed target(s); "
+                    "this run's results cover only the remaining ones",
+                    skipped_count,
                 )
 
             # Collect results as they complete
             for target_type, target_id, future in futures:
                 try:
-                    name, statuses = future.result()
+                    name, statuses, elapsed = future.result()
                     all_results.append((name, statuses))
 
                     # Checkpoint after each completed target
@@ -926,14 +1007,39 @@ class ScanOrchestrator:
 
                     # Call progress callback if provided
                     if progress_callback:
-                        progress_callback(target_type, target_id, statuses)
+                        progress_callback(
+                            target_type, target_id, statuses, elapsed=elapsed
+                        )
 
                 except Exception as e:
                     # Log error but continue with other targets
                     logger.error(
                         f"Scan failed for {target_type} {target_id}: {e}", exc_info=True
                     )
-                    # Still append partial result
+                    # Still append partial result. An empty status map is
+                    # classify_target_outcome's TARGET_FAILED, so this target is
+                    # counted as having produced nothing rather than vanishing.
                     all_results.append((target_id, {}))
+
+                    # The callback used to be skipped on this path, so a target
+                    # whose scanner *raised* never reached the progress display
+                    # at all: the run ended showing fewer completed targets than
+                    # it had, with no line saying which one was missing. A crash
+                    # is the loudest outcome there is and it was the quietest.
+                    #
+                    # Guarded, matching ToolRunner's callback handling: this call
+                    # sits *inside* an except block, so anything it raises would
+                    # replace a single target's failure with the death of the
+                    # whole scan. A progress display must not be able to do that.
+                    if progress_callback:
+                        try:
+                            progress_callback(target_type, target_id, {}, elapsed=0.0)
+                        except Exception:
+                            logger.debug(
+                                "Progress callback failed for %s %s",
+                                target_type,
+                                target_id,
+                                exc_info=True,
+                            )
 
         return all_results

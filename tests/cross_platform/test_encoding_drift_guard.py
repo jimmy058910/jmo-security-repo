@@ -249,3 +249,109 @@ def test_no_module_branches_on_the_encodings_name() -> None:
         "instead; they encode the actual payload against the stream's actual "
         "codec."
     )
+
+
+class _LegacyConsole:
+    """A write target that reports a legacy Windows console codec.
+
+    Not `io.StringIO`: `safe_write` reads `stream.encoding` to decide what the
+    payload has to survive, and StringIO advertises none.
+    """
+
+    def __init__(self, encoding: str) -> None:
+        self.encoding = encoding
+        self._chunks: list[str] = []
+
+    def write(self, text: str) -> int:
+        """Encode on write, the way a real console does.
+
+        Storing `text` verbatim would make this fake useless: `print()` and
+        `safe_write()` would produce identical output and a caller that
+        bypassed the fallback table would look correct. Mutation-tested --
+        without this encode step, replacing `safe_write` with `print` in
+        `_write_progress_line` left the guard below green.
+        """
+        rendered = text.encode(self.encoding, "replace").decode(
+            self.encoding, "replace"
+        )
+        self._chunks.append(rendered)
+        return len(text)
+
+    def flush(self) -> None:
+        """A real stderr has one; the progress writer flushes after every line."""
+
+    def getvalue(self) -> str:
+        return "".join(self._chunks)
+
+
+def _render(text: str, codec: str) -> str:
+    """What a legacy console would actually show for `text`."""
+    from scripts.core.unicode_utils import safe_write
+
+    stream = _LegacyConsole(codec)
+    safe_write(text, stream)
+    return stream.getvalue()
+
+
+def test_scan_progress_spinner_survives_a_legacy_console() -> None:
+    """The scan spinner must remain readable AND animated on a real console.
+
+    `ProgressTracker._SPINNER_FRAMES` is Braille (U+280B..U+280F). Measured
+    before this guard existed: **all ten frames are unrenderable in cp1252,
+    cp437 and cp850** -- every codec a real Windows console uses -- and none had
+    a `UNICODE_FALLBACKS` entry. The three call sites wrote them with
+    `print(..., file=sys.stderr)`, which reaches only the stream hardening's
+    `errors="replace"`, so the spinner was a motionless `?` for the length of
+    every scan on Windows.
+
+    Two properties, not one. Checking only "is it renderable" would pass if all
+    ten frames collapsed to the same character -- readable, but no longer an
+    animation, which is the entire purpose of a spinner. Asserted as properties
+    of whatever frames the tracker declares, so changing the frame set cannot
+    walk around this the way a hardcoded list would.
+    """
+    from scripts.cli.jmo import ProgressTracker
+
+    frames = list(ProgressTracker._SPINNER_FRAMES)
+    assert frames, "the tracker must declare spinner frames for this to mean anything"
+
+    for codec in ("cp1252", "cp437", "cp850"):
+        rendered = [_render(f, codec) for f in frames]
+
+        unreadable = [f for f, r in zip(frames, rendered) if not r or "?" in r]
+        assert not unreadable, (
+            f"{len(unreadable)} of {len(frames)} spinner frames render as '?' on "
+            f"{codec}. Add a UNICODE_FALLBACKS entry for each, and make sure the "
+            f"call site uses safe_write() rather than print(file=sys.stderr) -- "
+            f"stream hardening alone only guarantees no crash, not legibility."
+        )
+
+        assert len(set(rendered)) > 1, (
+            f"every spinner frame renders identically on {codec}, so the spinner "
+            f"no longer animates. Map the frames onto a rotating substitute."
+        )
+
+
+def test_progress_line_writer_goes_through_the_fallback_table() -> None:
+    """`ProgressTracker` must write progress lines with safe_write, not print.
+
+    This is the behavioural half of the test above: the fallback table can be
+    complete and still never consulted, because `print(..., file=sys.stderr)`
+    bypasses it entirely. Asserting the rendered output rather than the source
+    keeps this true however the writer is spelled.
+    """
+    from scripts.cli.jmo import ProgressTracker
+
+    spinner = ProgressTracker._SPINNER_FRAMES[0]
+    line = f"\r[0/1] {spinner} trufflehog (0s) [0%]"
+
+    console = _LegacyConsole("cp437")
+    with patch("scripts.cli.jmo.sys.stderr", console):
+        ProgressTracker._write_progress_line(line)
+
+    written = console.getvalue()
+    assert "trufflehog" in written, "the progress line never reached the stream"
+    assert "?" not in written, (
+        "the progress line was written without the fallback table -- the spinner "
+        "degraded to '?'. Use safe_write() from scripts/core/unicode_utils.py."
+    )

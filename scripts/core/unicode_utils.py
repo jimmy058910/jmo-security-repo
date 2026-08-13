@@ -76,6 +76,26 @@ UNICODE_FALLBACKS: dict[str, str] = {
     "\U0001f4a1": "[i]",  # 💡 Light bulb
     "\U0001f4d6": "[?]",  # 📖 Book
     "\U0001f50d": "[?]",  # 🔍 Magnifying glass
+    # Braille spinner frames — ProgressTracker._SPINNER_FRAMES (scan progress).
+    # Measured: all ten are unrenderable in cp1252 AND cp437 AND cp850, i.e. in
+    # every codec a real Windows console uses, and none was in this table. The
+    # stream hardening turned each into "?", so the scan spinner was a motionless
+    # "?" for the whole run -- an animation conveying nothing, and one that reads
+    # as an error rather than as progress.
+    #
+    # Mapped onto a 4-phase ASCII cycle *in frame order* rather than all to one
+    # character, so the substitute still animates. A static replacement would
+    # have removed the only thing a spinner is for.
+    "⠋": "|",  # ⠋ frame 1
+    "⠙": "/",  # ⠙ frame 2
+    "⠹": "-",  # ⠹ frame 3
+    "⠸": "\\",  # ⠸ frame 4
+    "⠼": "|",  # ⠼ frame 5
+    "⠴": "/",  # ⠴ frame 6
+    "⠦": "-",  # ⠦ frame 7
+    "⠧": "\\",  # ⠧ frame 8
+    "⠇": "|",  # ⠇ frame 9
+    "⠏": "/",  # ⠏ frame 10
 }
 
 
