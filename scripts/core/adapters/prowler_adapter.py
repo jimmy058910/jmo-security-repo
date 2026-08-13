@@ -158,7 +158,13 @@ def _iter_prowler_records(path: str | Path) -> list[dict[str, Any]]:
     if records and any("CheckID" in r for r in records if isinstance(r, dict)):
         return [r for r in records if isinstance(r, dict)]
 
-    data = safe_load_json_file(path, default=None)
+    # `log_errors=False` because this call is **speculative**: NDJSON has already
+    # been tried above, and this is the second of two formats being probed. A
+    # genuine multi-line NDJSON file is not valid JSON, so letting this warn
+    # would fire on every prowler scan of that shape -- the always-fires warning
+    # that #784 was about. The caller decides whether a parse failure is news;
+    # that is what `log_errors` is for, and this is its first real use.
+    data = safe_load_json_file(path, default=None, log_errors=False)
     if isinstance(data, dict):
         data = [data]
     if not isinstance(data, list):

@@ -1,4 +1,5 @@
 import json
+import logging
 from pathlib import Path
 
 from scripts.core import normalize_and_report as nr
@@ -56,7 +57,19 @@ def test_invalid_jmo_threads_env(tmp_path: Path, monkeypatch):
 
 
 def test_adapter_parse_exception_in_gather(tmp_path: Path, monkeypatch):
-    """Test AdapterParseException handler in gather_results (line 134)."""
+    """Aggregation survives a `_safe_load_plugin` that raises.
+
+    Note what this does and does not prove. It patches `_safe_load_plugin`
+    itself to raise, which the real one never does -- it catches
+    AdapterParseException, FileNotFoundError, OSError and bare Exception and
+    returns `[]` for each. So this exercises `gather_results`' generic backstop,
+    not any per-exception handler, and it cannot see the WARNING that the real
+    `_safe_load_plugin` now emits (that is covered below).
+
+    The docstring used to claim it tested "the AdapterParseException handler in
+    gather_results (line 134)". That handler was unreachable in production and
+    has been removed; only this monkeypatch made it look live.
+    """
     root = tmp_path / "results"
     repo = root / "individual-repos" / "r1"
     _write(repo / "semgrep.json", [])
@@ -76,7 +89,11 @@ def test_adapter_parse_exception_in_gather(tmp_path: Path, monkeypatch):
 
 
 def test_file_not_found_in_gather(tmp_path: Path, monkeypatch):
-    """Test FileNotFoundError handler in gather_results (line 137)."""
+    """Aggregation survives a `_safe_load_plugin` that raises FileNotFoundError.
+
+    Same caveat as the test above: the real `_safe_load_plugin` swallows this
+    and returns `[]`, so what runs here is `gather_results`' generic backstop.
+    """
     root = tmp_path / "results"
     repo = root / "individual-repos" / "r1"
     _write(repo / "trivy.json", [])
@@ -192,3 +209,70 @@ def test_compliance_enrichment_error(tmp_path: Path, monkeypatch):
     )
     out = nr.gather_results(root)
     assert isinstance(out, list)
+
+
+class _Meta:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+
+class _ExplodingAdapter:
+    """An adapter whose parse() fails the way a real one does on bad output."""
+
+    metadata = _Meta("semgrep")
+
+    def parse(self, path):
+        raise AdapterParseException(
+            tool="semgrep", path=Path(path), reason="Invalid JSON: line 1 column 2"
+        )
+
+
+class _WorkingAdapter:
+    metadata = _Meta("semgrep")
+
+    def parse(self, path):
+        return []
+
+
+def test_unparseable_tool_output_is_reported_at_default_verbosity(tmp_path, caplog):
+    """#823: a tool whose output cannot be parsed must not fail silently.
+
+    This was `logger.debug`, and `configure_scan_logging` sets the `scripts`
+    logger to WARNING by default -- so a tool that ran, exited acceptably and
+    wrote a file JMo could not read contributed nothing to the report, and said
+    so on no stream. Measured on #822: a `per_tool` flag making trivy emit a
+    table instead of JSON took a target from 2 findings to 0, with rc=0 and not
+    one line logged.
+
+    Asserted as "at least WARNING" rather than "exactly WARNING", because the
+    property that matters is *visible at the default level*, not the specific
+    level chosen.
+    """
+    out_path = tmp_path / "semgrep.json"
+    out_path.write_text("{ not json", encoding="utf-8")
+
+    with caplog.at_level(logging.WARNING, logger="scripts.core.normalize_and_report"):
+        result = nr._safe_load_plugin(_ExplodingAdapter, out_path)
+
+    # The findings are still dropped rather than crashing the report...
+    assert result == []
+
+    # ...but the reader is told which tool lost them, and why.
+    visible = [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
+    assert visible, "the parse failure was invisible at the default log level"
+    assert any("semgrep" in m for m in visible), visible
+    assert any("MISSING" in m for m in visible), visible
+    assert any("Invalid JSON" in m for m in visible), visible
+
+
+def test_successful_parse_stays_quiet(tmp_path, caplog):
+    """The control. Without it, any always-warn bug would pass the test above."""
+    out_path = tmp_path / "semgrep.json"
+    out_path.write_text("[]", encoding="utf-8")
+
+    with caplog.at_level(logging.WARNING, logger="scripts.core.normalize_and_report"):
+        result = nr._safe_load_plugin(_WorkingAdapter, out_path)
+
+    assert result == []
+    visible = [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
+    assert not visible, f"a clean parse should log nothing at WARNING: {visible}"
