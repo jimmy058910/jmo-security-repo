@@ -18,6 +18,10 @@ updates:
   # freshness gate. See PRs #677, #682.
   - package-ecosystem: "uv"
     directory: "/"
+    # Retargeted from the default branch (main) to dev for the v1.1.0
+    # audit campaign: every bot PR against main widens a divergence the
+    # release has to fast-forward across. Revert once v1.1.0 ships.
+    target-branch: "dev"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -45,6 +49,10 @@ updates:
   # Docker base images (Ubuntu, Alpine)
   - package-ecosystem: "docker"
     directory: "/"
+    # Retargeted from the default branch (main) to dev for the v1.1.0
+    # audit campaign: every bot PR against main widens a divergence the
+    # release has to fast-forward across. Revert once v1.1.0 ships.
+    target-branch: "dev"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -62,6 +70,10 @@ updates:
   # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
+    # Retargeted from the default branch (main) to dev for the v1.1.0
+    # audit campaign: every bot PR against main widens a divergence the
+    # release has to fast-forward across. Revert once v1.1.0 ships.
+    target-branch: "dev"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -90,6 +102,10 @@ updates:
   # npm dependencies - scripts/dashboard
   - package-ecosystem: "npm"
     directory: "/scripts/dashboard"
+    # Retargeted from the default branch (main) to dev for the v1.1.0
+    # audit campaign: every bot PR against main widens a divergence the
+    # release has to fast-forward across. Revert once v1.1.0 ships.
+    target-branch: "dev"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -107,6 +123,10 @@ updates:
   # npm dependencies - scripts/api
   - package-ecosystem: "npm"
     directory: "/scripts/api"
+    # Retargeted from the default branch (main) to dev for the v1.1.0
+    # audit campaign: every bot PR against main widens a divergence the
+    # release has to fast-forward across. Revert once v1.1.0 ships.
+    target-branch: "dev"
     schedule:
       interval: "weekly"
       day: "monday"
