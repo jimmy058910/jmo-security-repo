@@ -40,6 +40,7 @@ from scripts.core.plugin_loader import (
     PluginLoader,
     PluginRegistry,
     get_available_adapters,
+    get_plugin_loader,
     get_plugin_registry,
 )
 
@@ -96,16 +97,28 @@ class TestBuiltinAdapterModuleNames:
         )
 
     def test_no_adapter_module_lands_at_the_top_level_of_sys_modules(self):
+        """Match the loader's own file stems, never a name shape.
+
+        The first version of this test scanned `sys.modules` for anything
+        ending in `_adapter` with no dot. That is a *pattern*, not the
+        property, and pytest imports `tests/adapters/test_<tool>_adapter.py`
+        under bare top-level names of its own — so it flagged all 27 of those
+        instead. It passed locally only because the local suite is split into
+        halves and `tests/adapters/` is in the other one from `tests/unit/`;
+        CI's shards mix them, and it failed on every platform.
+        """
+        loader = get_plugin_loader()
         registry = get_plugin_registry()
         for name in get_available_adapters():
             registry.get(name)
 
-        top_level = sorted(
-            m for m in sys.modules if m.endswith("_adapter") and "." not in m
-        )
-        assert not top_level, (
+        stems = {path.stem for path in loader._adapter_paths.values()}
+        assert stems, "no adapter paths discovered - the assertion is vacuous"
+
+        leaked = sorted(stems & set(sys.modules))
+        assert not leaked, (
             "adapters occupying bare top-level sys.modules keys; each is a "
-            f"second copy of an importable module: {top_level}"
+            f"second copy of an importable module: {leaked}"
         )
 
     def test_loader_returns_the_same_class_object_a_normal_import_yields(self):
