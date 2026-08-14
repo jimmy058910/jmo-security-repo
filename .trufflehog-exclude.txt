@@ -58,6 +58,13 @@ docker-compose.*\.yml$
 \.github/
 \.gitlab-ci\.yml$
 
+# pytest-split's duration cache: 8276 test IDs, and trufflehog's Lob detector
+# reads a leading "test_" as a Lob *test-environment* API key -- which verifies
+# trivially, so every one comes back Verified:true. Same root cause as #746,
+# which fixed it for a test rather than for this scan step; the tests/ rule near
+# the top is why it never bit before, and this file sits at the repo root.
+\.test_durations$
+
 # Coverage and test reports
 htmlcov/
 \.coverage$
