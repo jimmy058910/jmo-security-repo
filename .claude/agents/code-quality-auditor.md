@@ -150,6 +150,16 @@ You have access to all code analysis tools:
 
 ### CRITICAL-001: Severe Code Duplication in Adapters
 
+> **Illustrative only — this exact proposal was tried and rejected (#745).** A
+> `BaseAdapter` was in fact written, and **nothing ever subclassed it**: the
+> live contract is `@adapter_plugin` + `AdapterPlugin.parse()`, and the plugin
+> loader registers `AdapterPlugin` subclasses *only*, so an adapter built on the
+> class below could never be registered. It was deleted, along with the 30 tests
+> that made it look maintained. The duplication is real and is addressed by
+> shared helpers in `adapters/common.py` (`safe_load_json_file`,
+> `safe_load_ndjson_file`) — composition, not inheritance. Keep this section as
+> a sample of *report shape*; do not re-propose the remedy.
+
 **Locations:**
 - [scripts/core/adapters/*.py](scripts/core/adapters/) (27 files)
 

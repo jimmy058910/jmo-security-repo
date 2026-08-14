@@ -46,6 +46,32 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Adapters are loaded under a module name inside the `scripts` package rather
+# than the bare stem (`prowler_adapter`). Two separate things depend on it:
+#
+# 1. `logging.getLogger(__name__)` in an adapter names its logger after its
+#    module. Under a bare stem that logger is a *sibling* of `scripts`, so
+#    `configure_scan_logging` -- which attaches its handler to the `scripts`
+#    logger precisely so `--log-level` reaches the scan -- never sees it, and
+#    the record falls through to `logging.lastResort` as bare text. Measured
+#    before this change: 17 of 27 adapter loggers sat outside `scripts` and 0
+#    inside, and prowler's "matched neither format" warning reached the user
+#    unformatted by `--json-logs` and unsuppressable by `--log-level ERROR`
+#    (#838).
+# 2. A bare stem is a different `sys.modules` key from the dotted path the rest
+#    of the codebase imports, so the plugin-loaded adapter and the imported one
+#    were two distinct module objects -- `isinstance(loaded(), Imported)` was
+#    False. The test suite imports normally, so it exercised a different object
+#    than production ran, which is why (1) survived 27 adapters and 8,000 tests.
+_ADAPTER_PKG = "scripts.core.adapters"
+
+# User adapters from ~/.jmo/adapters/ deliberately do NOT get the real dotted
+# path: they override built-ins by stem, so reusing it would shadow the
+# built-in for every other importer in the process. This prefix is still a
+# child of `scripts` (so point 1 above holds) but is never imported, so it
+# cannot collide.
+_EXTERNAL_PKG = f"{_ADAPTER_PKG}._external"
+
 
 class PluginRegistry:
     """Registry of loaded adapter plugins.
@@ -177,14 +203,14 @@ class PluginLoader:
                 logger.debug(f"Search path does not exist: {search_path}")
                 continue
 
+            # Two `continue` guards used to sit here, for `base_adapter.py` and
+            # `common.py`. Neither survives measurement: `common.py` does not
+            # end in `_adapter.py`, so this glob never yields it and that guard
+            # could not fire under any input; and `base_adapter.py` is gone,
+            # having been an abstract base subclassed by nothing (the live
+            # contract is `@adapter_plugin` + `AdapterPlugin.parse()`). A guard
+            # that cannot fire is a claim about behaviour that is not true.
             for plugin_file in search_path.glob("*_adapter.py"):
-                # Skip base_adapter.py (abstract base class, not a plugin)
-                if plugin_file.name == "base_adapter.py":
-                    continue
-                # Skip common.py (utility module, not a plugin)
-                if plugin_file.name == "common.py":
-                    continue
-
                 # Extract adapter name from filename
                 # e.g., "trivy_adapter.py" -> "trivy"
                 # e.g., "semgrep_secrets_adapter.py" -> "semgrep_secrets"
@@ -318,25 +344,67 @@ class PluginLoader:
         }
         return mappings.get(tool_name, tool_name.replace("-", "_"))
 
-    def _load_plugin(self, plugin_path: Path):
-        """Load a single plugin file.
+    def _is_builtin(self, plugin_path: Path) -> bool:
+        """True if `plugin_path` is one of the adapters shipped with JMo."""
+        try:
+            builtin_dir = (Path(__file__).parent / "adapters").resolve()
+            return plugin_path.resolve().parent == builtin_dir
+        except OSError:  # Acceptable: unresolvable path is not a built-in
+            return False
 
-        Args:
-            plugin_path: Path to plugin file
+    def _module_name_for(self, plugin_path: Path) -> str:
+        """Dotted module name to load `plugin_path` under.
 
-        Raises:
-            ImportError: If plugin cannot be loaded
+        See `_ADAPTER_PKG` / `_EXTERNAL_PKG` for why this is never the bare
+        stem.
         """
-        module_name = plugin_path.stem
+        pkg = _ADAPTER_PKG if self._is_builtin(plugin_path) else _EXTERNAL_PKG
+        return f"{pkg}.{plugin_path.stem}"
 
-        # Load module
+    def _import_plugin_module(self, plugin_path: Path):
+        """Import a plugin file as a module under a `scripts`-namespaced name."""
+        module_name = self._module_name_for(plugin_path)
+
+        if self._is_builtin(plugin_path):
+            # The dotted name IS this file's real import path, so going through
+            # the normal machinery yields the *same* module object as
+            # `import scripts.core.adapters.x` -- rather than a second copy
+            # with its own logger and its own class objects.
+            return importlib.import_module(module_name)
+
         spec = importlib.util.spec_from_file_location(module_name, plugin_path)
         if spec is None or spec.loader is None:
             raise ImportError(f"Cannot load plugin: {plugin_path}")
 
         module = importlib.util.module_from_spec(spec)
         sys.modules[module_name] = module
-        spec.loader.exec_module(module)
+        try:
+            spec.loader.exec_module(module)
+        except BaseException:
+            # A module that failed to execute must not be left behind: the next
+            # load would find the half-initialised object in sys.modules and
+            # return it as if it had worked, instead of re-running and
+            # re-raising.
+            sys.modules.pop(module_name, None)
+            raise
+        return module
+
+    def _load_plugin(self, plugin_path: Path) -> str | None:
+        """Load a single plugin file and register the adapter it defines.
+
+        Args:
+            plugin_path: Path to plugin file
+
+        Returns:
+            The registered plugin name, or None if the file loaded but defines
+            no usable `AdapterPlugin` subclass. Callers that need to know
+            whether the file is actually an adapter must check this: loading
+            without finding one is not an error, it just registers nothing.
+
+        Raises:
+            ImportError: If plugin cannot be loaded
+        """
+        module = self._import_plugin_module(plugin_path)
 
         # Find AdapterPlugin subclasses
         for attr_name in dir(module):
@@ -368,9 +436,10 @@ class PluginLoader:
                 # Register
                 self.registry.register(metadata.name, attr, metadata)
                 logger.debug(f"Loaded plugin: {metadata.name} from {plugin_path}")
-                return
+                return str(metadata.name)
 
         logger.warning(f"No AdapterPlugin subclass found in {plugin_path}")
+        return None
 
     def reload_plugin(self, name: str) -> bool:
         """Reload a specific plugin (hot-reload for development).
@@ -389,8 +458,10 @@ class PluginLoader:
                     # Unregister old plugin
                     self.registry.unregister(name)
 
-                    # Remove from sys.modules to force reload
-                    module_name = f"{name}_adapter"
+                    # Remove from sys.modules to force reload. Must use the
+                    # same name `_import_plugin_module` loads under, or the
+                    # stale module survives and the "reload" is a no-op.
+                    module_name = self._module_name_for(plugin_file)
                     if module_name in sys.modules:
                         del sys.modules[module_name]
 
