@@ -6,7 +6,7 @@
 
 ## What's Stored
 
-- **Refactoring Patterns:** Extract Method, Introduce Parameter Object, Replace Conditional with Polymorphism, BaseAdapter migration
+- **Refactoring Patterns:** Extract Method, Introduce Parameter Object, Replace Conditional with Polymorphism, extract-to-shared-helper
 - **Architectural Decisions:** When to use dependency injection, factory patterns, circular dependency resolution strategies
 - **Safety Checks:** Test coverage thresholds (85%), rollback procedures, pre/post-refactor validations
 - **Code Smell Signatures:** Cyclomatic complexity scores, function length thresholds, coupling metrics
@@ -21,9 +21,9 @@
 cat .jmo/memory/refactoring/extract-method.json | jq '.steps'
 # Returns: ["Identify code smell", "Create new method", "Move code", "Update tests", "Verify coverage maintained"]
 
-# Check if BaseAdapter migration pattern cached
-cat .jmo/memory/refactoring/base-adapter-migration.json | jq '.checklist'
-# Returns: ["Inherit BaseAdapter", "Remove duplicate code", "Update tests", "Verify all adapters work"]
+# Check if the shared-helper extraction pattern is cached
+cat .jmo/memory/refactoring/extract-shared-helper.json | jq '.checklist'
+# Returns: ["Add helper to adapters/common.py", "Route adapters through it", "Update tests", "Verify all adapters work"]
 
 # Check if circular dependency fix pattern cached
 cat .jmo/memory/refactoring/circular-imports.json | jq '.solutions'
@@ -122,7 +122,7 @@ cat .jmo/memory/refactoring/circular-imports.json | jq '.solutions'
 
 - **Manual:** Delete `.jmo/memory/refactoring/extract-method.json` to force fresh analysis
 - **Automatic:** Cache valid indefinitely (refactoring patterns rarely change)
-- **Architecture Change:** Invalidate when core architecture changes (e.g., BaseAdapter pattern introduced)
+- **Architecture Change:** Invalidate when core architecture changes (e.g., a new adapter contract replacing `@adapter_plugin`)
 
 ---
 
@@ -205,12 +205,13 @@ Cache architectural decisions to ensure consistency:
 
 ```json
 {
-  "decision": "when-to-use-base-adapter",
+  "decision": "how-tool-adapters-share-code",
   "context": "All tool adapters have common patterns (load JSON, normalize, fingerprint)",
-  "chosen": "BaseAdapter with inheritance",
-  "rationale": "Reduces duplication, enforces consistency, easier to add compliance enrichment",
-  "when_to_apply": "When adding new tool adapter OR 3+ adapters share >50% code",
-  "when_NOT_to_apply": "Tool has unique output format incompatible with base pattern"
+  "chosen": "Composition: @adapter_plugin + AdapterPlugin.parse(), with shared helpers in adapters/common.py",
+  "rationale": "The plugin loader registers AdapterPlugin subclasses only; shared behaviour lives in common.py (safe_load_json_file / safe_load_ndjson_file) and common_finding.fingerprint",
+  "when_to_apply": "Every new tool adapter -- see .claude/rules/adapters.rules.md",
+  "when_NOT_to_apply": "n/a; there is no second adapter contract",
+  "superseded": "An earlier record here chose 'BaseAdapter with inheritance'. That class was subclassed by nothing, implemented a different contract (dicts, its own fingerprinting), and has been deleted."
 }
 ```
 

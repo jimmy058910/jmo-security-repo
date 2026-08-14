@@ -130,7 +130,7 @@ profiles (fast/balanced/deep)
    ```
 
 3. **Categorize affected files** (re-count these; they drift):
-   - **Adapters** (27 files, plus unused `base_adapter.py`) - Create findings with schema
+   - **Adapters** (27 files) - Create findings with schema
    - **Reporters** (13 files) - Read findings, expect schema fields
    - **Tests** (20+ files) - Validate schema structure
    - **Docs** (5 files) - Document schema
@@ -188,10 +188,12 @@ finding = {
 - ✅ `scripts/core/common_finding.py` - Add priority field logic
   - Add priority calculation function
   - Update `fingerprint()` signature (if priority affects the fingerprint)
-  - Note: there is **no** shared schema-version constant to bump.
-    `CURRENT_SCHEMA_VERSION` exists only in the unused `base_adapter.py`; each
-    of the 27 adapters hardcodes `schema_version="1.2.0"` in its
-    `PluginMetadata`, so a version bump is 27 edits, not one
+  - Note: there is **no** shared schema-version constant to bump. `plugin_api.py`
+    carries `"1.2.0"` as a *default* twice (`Finding.schemaVersion:34`,
+    `PluginMetadata.schema_version:79`), but **all 27 adapters override both
+    explicitly** — so changing the defaults alone changes nothing, and a version
+    bump is **54 edits across 27 files**, not one. (`CURRENT_SCHEMA_VERSION` in
+    `base_adapter.py` used to be cited here; that module was deleted, #745.)
 
 - ✅ `docs/schemas/common_finding.v1.json` - Update JSON schema
   - Add "priority" to properties

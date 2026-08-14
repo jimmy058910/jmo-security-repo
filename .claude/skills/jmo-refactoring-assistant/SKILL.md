@@ -15,12 +15,12 @@ Refactoring target: **$ARGUMENTS**
 
 ## Purpose
 
-Systematically decompose monolithic functions, migrate to design patterns (BaseAdapter), and split oversized files while preserving test coverage and preventing regressions.
+Systematically decompose monolithic functions, migrate to design patterns, and split oversized files while preserving test coverage and preventing regressions.
 
 This skill helps you refactor the JMo Security codebase by:
 
 1. **Decomposing monolithic functions** (e.g., cmd_scan: 1,553 lines, CC 252)
-2. **Migrating to design patterns** (e.g., BaseAdapter for 29 tool adapters)
+2. **Migrating to design patterns** (e.g., the Strategy-pattern installers in `scripts/cli/installers/`)
 3. **Splitting oversized files** (e.g., jmo.py: 2,456 lines -> 600 lines)
 4. **Preserving test coverage** and preventing regressions
 5. **Avoiding circular dependencies** with proven patterns
@@ -38,7 +38,7 @@ Use when code exhibits high cyclomatic complexity (CC >10), excessive line count
 | ID | Target | Status |
 |----|--------|--------|
 | CRITICAL-001 | cmd_scan() decomposition (ToolRunner, ScanOrchestrator) | Remaining |
-| CRITICAL-002 | BaseAdapter pattern migration (14 adapters) | Remaining |
+| CRITICAL-002 | ~~BaseAdapter pattern migration (14 adapters)~~ | **Withdrawn** — `BaseAdapter` was subclassed by nothing and implemented a *different* contract (dicts, its own fingerprinting) from the live `@adapter_plugin` + `AdapterPlugin.parse()` one. Deleted; migrating onto it would have produced adapters the plugin loader cannot register |
 | HIGH-002a | compliance_mapper.py (1,278 -> 399 lines) | COMPLETED |
 | HIGH-002b | wizard.py (959 -> 825 lines) | COMPLETED |
 | HIGH-001 | Embedded 777-line job() function extraction | Remaining |
@@ -123,7 +123,7 @@ The skill performs refactoring in 6 phases:
 | 890+ lines of constants/data | `split_file` | compliance_frameworks.py |
 | 3-5 small related functions | `extract_function` | wizard_generators.py |
 | 1,500+ line monolithic function | `extract_monolith` | cmd_scan() (future) |
-| 14 adapters with duplicate code | `migrate_to_base_pattern` | BaseAdapter (future) |
+| 14 adapters with duplicate code | shared helpers in `adapters/common.py` | `safe_load_json_file` / `safe_load_ndjson_file` |
 | 2,400+ line file | `split_file` (multi-module) | jmo.py (future) |
 
 ---

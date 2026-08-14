@@ -927,14 +927,23 @@ def _add_adapters_args(
 ) -> Any:
     """Add 'adapters' subcommand arguments for plugin management."""
     adapters_parser = subparsers.add_parser("adapters", help="Manage adapter plugins")
-    adapters_subparsers = adapters_parser.add_subparsers(dest="adapters_command")
+    # `required=True` matches `policy`/`schedule`: bare `jmo adapters` prints
+    # usage and exits 2. Without it argparse left `adapters_command` as None,
+    # `cmd_adapters` fell through its if/elif to `return 0`, and the command
+    # reported success while doing nothing -- the only subcommand in the CLI
+    # that did (measured: history 1, tools 1, policy 2, schedule 2).
+    adapters_subparsers = adapters_parser.add_subparsers(
+        dest="adapters_command", required=True
+    )
 
     # List command
     adapters_subparsers.add_parser("list", help="List all loaded adapter plugins")
 
     # Validate command
     validate_parser = adapters_subparsers.add_parser(
-        "validate", help="Validate an adapter plugin file"
+        "validate",
+        help="Validate an adapter plugin file (imports it, so module-level "
+        "code runs)",
     )
     validate_parser.add_argument("file", help="Path to adapter plugin file")
 
@@ -3452,15 +3461,26 @@ def cmd_adapters(args) -> int:
 
             plugin_registry = PluginRegistry()
             loader = PluginLoader(plugin_registry)
-            loader._load_plugin(plugin_file)
-
-            _safe_print(f"✅ Valid plugin: {plugin_file}")
-            return 0
+            registered = loader._load_plugin(plugin_file)
         except (
             Exception
         ) as e:  # Acceptable: plugin validation — report error without crashing CLI
             _safe_print(f"❌ Invalid plugin: {e}")
             return 1
+
+        # The one condition this command exists to check. `_load_plugin` treats
+        # "imported fine but defines no AdapterPlugin" as a warning, not an
+        # error, so keying success off "no exception raised" passed any
+        # importable Python file: `x = 1` reported "✅ Valid plugin" and exit 0.
+        if registered is None:
+            _safe_print(
+                f"❌ Invalid plugin: {plugin_file} defines no AdapterPlugin "
+                "subclass with usable metadata"
+            )
+            return 1
+
+        _safe_print(f"✅ Valid plugin: {plugin_file} (registers '{registered}')")
+        return 0
 
     return 0
 

@@ -43,17 +43,18 @@ def test_<tool>_basic(tmp_path: Path):
     assert item["location"]["path"] == "src/app.py"
     assert item["location"]["startLine"] == 42
 
-    # Verify schema version. `BaseAdapter.load()` injects
-    # SCHEMA_VERSION_CURRENT unconditionally
-    # (scripts/core/adapters/base_adapter.py:33), so this is an equality, not a
-    # membership test - accepting "1.0.0" or "1.1.0" would pass a finding that
-    # never went through load() at all.
+    # Verify schema version. `Finding.schemaVersion` defaults to "1.2.0"
+    # (scripts/core/plugin_api.py:34) and no adapter overrides it, so this is
+    # an equality, not a membership test - accepting "1.0.0" or "1.1.0" would
+    # pass a finding that was never built as a `Finding` at all.
     assert item["schemaVersion"] == "1.2.0"
 
-    # Verify fingerprint ID. It is a SHA256 truncated to
-    # FINGERPRINT_HASH_LENGTH = 16 hex characters (base_adapter.py:35).
-    # `len(...) > 20` was wrong in the failing direction: a real 16-character
-    # fingerprint fails it, so the generated test could never pass.
+    # Verify fingerprint ID. It is a SHA256 truncated to 16 hex characters by
+    # both live paths: `common_finding.fingerprint()` via FINGERPRINT_LENGTH
+    # (common_finding.py:17), used by 24 adapters, and
+    # `AdapterPlugin.get_fingerprint()` (plugin_api.py:164), used by the other
+    # three. `len(...) > 20` was wrong in the failing direction: a real
+    # 16-character fingerprint fails it, so the generated test could never pass.
     assert "id" in item
     assert len(item["id"]) == 16, f"expected a 16-char fingerprint, got {item['id']!r}"
     assert all(c in "0123456789abcdef" for c in item["id"]), (
