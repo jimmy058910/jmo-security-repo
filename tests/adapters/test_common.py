@@ -317,3 +317,192 @@ class TestUnparseableOutputIsAnnounced:
             if r.levelno >= logging.WARNING and "Could not parse" in r.getMessage()
         ]
         assert not noisy, f"prowler's speculative JSON probe warned: {noisy}"
+
+
+class TestNdjsonFailuresAreAnnounced:
+    """Chunk 5: `safe_load_ndjson_file` reported every failure at DEBUG.
+
+    #830 made `safe_load_json_file` warn on unreadable output, which covered
+    the 23 adapters that use it. Its NDJSON sibling -- used by `falco`,
+    `nuclei`, `prowler` and `trufflehog` -- kept logging *every* failure mode
+    at DEBUG, and `configure_scan_logging` sets the `scripts` logger to
+    WARNING, so all four were blind to a missing, empty or corrupt file.
+
+    Measured before the fix, across the whole degenerate matrix: those four
+    adapters were the only ones invisible on all six file-level failure modes
+    (23 warned, 4 did not).
+    """
+
+    def _warnings(self, caplog) -> list[str]:
+        return [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
+
+    def test_missing_file_warns(self, tmp_path: Path, caplog) -> None:
+        missing = tmp_path / "absent.ndjson"
+
+        with caplog.at_level(logging.WARNING, logger="scripts.core.adapters.common"):
+            assert list(safe_load_ndjson_file(missing)) == []
+
+        assert any("does not exist" in m for m in self._warnings(caplog))
+
+    def test_empty_file_warns(self, tmp_path: Path, caplog) -> None:
+        """trufflehog writes a genuinely 0-byte file when it finds nothing.
+
+        Measured on a real scan: `trufflehog.json` was 0 bytes and the adapter
+        reported it at DEBUG, so an empty result and a failed run looked
+        identical at default verbosity.
+        """
+        empty = tmp_path / "empty.ndjson"
+        empty.write_bytes(b"")
+
+        with caplog.at_level(logging.WARNING, logger="scripts.core.adapters.common"):
+            assert list(safe_load_ndjson_file(empty)) == []
+
+        assert any("is empty" in m for m in self._warnings(caplog))
+
+    def test_partial_line_loss_is_reported_with_both_counts(
+        self, tmp_path: Path, caplog
+    ) -> None:
+        """The worst case, because the loss is PARTIAL.
+
+        A total failure yields an empty report, which is at least suspicious.
+        This yields a *populated* report that is quietly short. Measured on a
+        10-line trufflehog stream with 4 truncated lines: 6 verified-secret
+        findings returned, 4 dropped, nothing at WARNING or above.
+        """
+        lines = [json.dumps({"DetectorName": "AWS", "Raw": f"K{i}"}) for i in range(10)]
+        for i in (2, 4, 6, 8):
+            lines[i] = lines[i][: len(lines[i]) // 2]
+        ndjson = tmp_path / "trufflehog.json"
+        ndjson.write_bytes(("\n".join(lines) + "\n").encode())
+
+        with caplog.at_level(logging.WARNING, logger="scripts.core.adapters.common"):
+            got = list(safe_load_ndjson_file(ndjson))
+
+        assert len(got) == 6
+        warnings = self._warnings(caplog)
+        # Assert the positive shape -- the counts -- not merely that something
+        # was logged. A guard that only checks "a warning happened" cannot tell
+        # a useful message from an empty one.
+        assert any(
+            "4 line(s)" in m and "6 parsed successfully" in m for m in warnings
+        ), f"expected a summary naming both counts, got: {warnings}"
+
+    def test_one_summary_not_one_warning_per_bad_line(
+        self, tmp_path: Path, caplog
+    ) -> None:
+        """Flooding hides a signal as thoroughly as silence does."""
+        ndjson = tmp_path / "many_bad.ndjson"
+        ndjson.write_bytes(b"\n".join([b'{"bad"'] * 50) + b"\n")
+
+        with caplog.at_level(logging.WARNING, logger="scripts.core.adapters.common"):
+            list(safe_load_ndjson_file(ndjson))
+
+        assert len(self._warnings(caplog)) == 1
+
+    def test_clean_ndjson_stays_quiet(self, tmp_path: Path, caplog) -> None:
+        """A healthy NDJSON stream must not warn -- it fails the whole-file
+        JSON parse by definition, and promoting that would fire every run."""
+        ndjson = tmp_path / "clean.ndjson"
+        ndjson.write_bytes(
+            b'{"DetectorName": "AWS", "Raw": "a"}\n{"DetectorName": "GH", "Raw": "b"}\n'
+        )
+
+        with caplog.at_level(logging.WARNING, logger="scripts.core.adapters.common"):
+            assert len(list(safe_load_ndjson_file(ndjson))) == 2
+
+        assert not self._warnings(caplog)
+
+    def test_valid_json_array_stays_quiet(self, tmp_path: Path, caplog) -> None:
+        arr = tmp_path / "array.json"
+        arr.write_bytes(b'[{"id": 1}, {"id": 2}]')
+
+        with caplog.at_level(logging.WARNING, logger="scripts.core.adapters.common"):
+            assert len(list(safe_load_ndjson_file(arr))) == 2
+
+        assert not self._warnings(caplog)
+
+    def test_line_loss_reports_even_for_speculative_callers(
+        self, tmp_path: Path, caplog
+    ) -> None:
+        """`log_errors=False` must not re-hide destroyed data.
+
+        prowler passes it to probe whether a file is NDJSON at all. That is
+        legitimate for "this isn't NDJSON", but line loss cannot happen on a
+        healthy file of *either* accepted format -- a valid JSON array returns
+        from the whole-file parse without entering the loop, and valid NDJSON
+        loses no lines. So losing lines is always real, and always reported.
+        """
+        ndjson = tmp_path / "partial.ndjson"
+        ndjson.write_bytes(b'{"CheckID": "a"}\n{"CheckI\n')
+
+        with caplog.at_level(logging.WARNING, logger="scripts.core.adapters.common"):
+            list(safe_load_ndjson_file(ndjson, log_errors=False))
+
+        assert any("1 line(s)" in m for m in self._warnings(caplog))
+
+
+class TestStructurallyValidButImpossibleJson:
+    """Chunk 5: JSON that parses but is not a shape any tool emits.
+
+    `null`, a bare string and a bare number all decode cleanly, so the
+    malformed branch cannot see them -- and every adapter then fails its
+    `isinstance(data, dict)` guard and returns `[]`, which is
+    indistinguishable from "the tool found nothing". Measured across all 27
+    adapters before the fix: 0 findings and **0 log records at any level**.
+    """
+
+    def _warnings(self, caplog) -> list[str]:
+        return [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
+
+    def test_literal_null_warns(self, tmp_path: Path, caplog) -> None:
+        f = tmp_path / "null.json"
+        f.write_bytes(b"null")
+
+        with caplog.at_level(logging.WARNING, logger="scripts.core.adapters.common"):
+            safe_load_json_file(f)
+
+        assert any("not an object or array" in m for m in self._warnings(caplog))
+
+    def test_bare_scalar_warns_and_names_the_type(self, tmp_path: Path, caplog) -> None:
+        f = tmp_path / "scalar.json"
+        f.write_bytes(b'"a string"')
+
+        with caplog.at_level(logging.WARNING, logger="scripts.core.adapters.common"):
+            safe_load_json_file(f)
+
+        assert any("contained str" in m for m in self._warnings(caplog))
+
+    def test_empty_object_and_array_stay_quiet(self, tmp_path: Path, caplog) -> None:
+        """`{}` and `[]` are how a tool says "no findings" -- the single most
+        common healthy outcome. Warning on them would fire on most scans."""
+        for name, payload in (("obj.json", b"{}"), ("arr.json", b"[]")):
+            caplog.clear()
+            f = tmp_path / name
+            f.write_bytes(payload)
+
+            with caplog.at_level(
+                logging.WARNING, logger="scripts.core.adapters.common"
+            ):
+                safe_load_json_file(f)
+
+            assert not self._warnings(caplog), f"{name} warned"
+
+    def test_speculative_callers_can_still_opt_out(
+        self, tmp_path: Path, caplog
+    ) -> None:
+        f = tmp_path / "null.json"
+        f.write_bytes(b"null")
+
+        with caplog.at_level(logging.WARNING, logger="scripts.core.adapters.common"):
+            safe_load_json_file(f, log_errors=False)
+
+        assert not self._warnings(caplog)
+
+    def test_value_is_still_returned_unchanged(self, tmp_path: Path) -> None:
+        """Pure diagnostic: every adapter already rejects a non-dict/list, so
+        replacing the return value would be a behaviour change this does not
+        need to make."""
+        f = tmp_path / "scalar.json"
+        f.write_bytes(b"123")
+
+        assert safe_load_json_file(f) == 123
