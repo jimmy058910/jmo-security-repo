@@ -1,4 +1,5 @@
 import json
+import logging
 from pathlib import Path
 
 from scripts.core.adapters.prowler_adapter import ProwlerAdapter
@@ -365,3 +366,139 @@ class TestOcsfFormat:
         from scripts.core.adapters.prowler_adapter import ProwlerAdapter
 
         assert ProwlerAdapter().parse(self._ocsf_record(tmp_path, status="PASS")) == []
+
+
+class TestProwlerDistinguishesEmptyFromUnreadable:
+    """Chunk 5: prowler probes two formats, so BOTH probes must stay quiet.
+
+    `_iter_prowler_records` tries NDJSON first and a JSON/OCSF array second.
+    Each fails routinely when the *other* format is the one on disk, so both
+    run with `log_errors=False` -- which left the case where **both** fail
+    completely silent. A prowler output that is a proxy error page, a
+    truncated write or an unrecognised shape produced 0 findings, rc=0 and
+    nothing on any stream.
+
+    The hard part is not reporting it; it is reporting it *without* firing on
+    an empty result, which is prowler's most common healthy outcome.
+    """
+
+    def _warnings(self, caplog) -> list[str]:
+        return [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
+
+    def _parse(self, tmp_path: Path, payload: bytes, caplog):
+        p = tmp_path / "prowler.json"
+        p.write_bytes(payload)
+        with caplog.at_level(logging.WARNING):
+            findings = ProwlerAdapter().parse(p)
+        return findings, self._warnings(caplog)
+
+    def test_empty_array_stays_quiet(self, tmp_path: Path, caplog) -> None:
+        findings, warnings = self._parse(tmp_path, b"[]", caplog)
+        assert findings == []
+        assert not warnings
+
+    def test_empty_object_stays_quiet(self, tmp_path: Path, caplog) -> None:
+        findings, warnings = self._parse(tmp_path, b"{}", caplog)
+        assert findings == []
+        assert not warnings
+
+    def test_array_of_empty_objects_stays_quiet(self, tmp_path: Path, caplog) -> None:
+        findings, warnings = self._parse(tmp_path, b"[{},{}]", caplog)
+        assert findings == []
+        assert not warnings
+
+    def test_html_error_page_is_reported(self, tmp_path: Path, caplog) -> None:
+        """`curl` exits 0 on an HTTP error, so a proxy page reaching disk is a
+        real failure mode -- it is why every Dockerfile download uses `-f`."""
+        findings, warnings = self._parse(
+            tmp_path, b"<html><body>502 Bad Gateway</body></html>", caplog
+        )
+        assert findings == []
+        assert any("matched neither prowler format" in m for m in warnings)
+
+    def test_literal_null_is_reported_with_the_accurate_reason(
+        self, tmp_path: Path, caplog
+    ) -> None:
+        """A file containing `null` parsed fine -- it just holds nothing.
+
+        `safe_load_json_file` returns its `default` on failure, so with
+        `default=None` this case and a genuinely unparseable file collapse to
+        the same value and get the same message. That message would then be
+        false for one of them. The sentinel keeps them apart, so assert the
+        *reason*, not merely that a warning happened -- asserting the generic
+        half let a mutation reverting the sentinel survive.
+        """
+        findings, warnings = self._parse(tmp_path, b"null", caplog)
+        assert findings == []
+        assert any("parsed as NoneType" in m for m in warnings), warnings
+
+    def test_unparseable_file_says_it_could_not_be_parsed(
+        self, tmp_path: Path, caplog
+    ) -> None:
+        """The other side of the sentinel: this one genuinely did not parse."""
+        findings, warnings = self._parse(tmp_path, b"{not json at all", caplog)
+        assert findings == []
+        assert any("could not be parsed as JSON" in m for m in warnings), warnings
+
+    def test_non_empty_unknown_shape_is_reported(self, tmp_path: Path, caplog) -> None:
+        """The case that survived the first version of this guard.
+
+        Suppressing the warning whenever the NDJSON probe salvaged *something*
+        looked reasonable and was wrong: this path is only reached once those
+        records are known to carry no `CheckID`, so they are junk that gets
+        discarded downstream. Measured with the suppression in place:
+        `[{"totally": "unexpected"}]` gave 0 findings and 0 warnings.
+        """
+        findings, warnings = self._parse(
+            tmp_path, b'[{"totally": "unexpected"}]', caplog
+        )
+        assert findings == []
+        assert any("matched neither prowler format" in m for m in warnings)
+
+    def test_truncated_ndjson_reports_the_lost_lines(
+        self, tmp_path: Path, caplog
+    ) -> None:
+        """prowler's `log_errors=False` must not re-hide destroyed data."""
+        findings, warnings = self._parse(
+            tmp_path, b'{"CheckID": "a", "Status": "FAIL"}\n{"CheckI\n', caplog
+        )
+        assert len(findings) == 1
+        assert any("1 line(s)" in m for m in warnings)
+
+
+class TestProwlerReadsOcsfDeliveredAsNdjson:
+    """Chunk 5: OCSF records one-per-line matched neither branch.
+
+    The `CheckID` test does not match an OCSF record, and the JSON-array probe
+    cannot parse a multi-line file at all -- so these fell through and were
+    returned unconverted, then dropped downstream for having no `CheckID`.
+
+    Measured against `origin/dev`: **0 findings**. After: 2.
+    """
+
+    PAYLOAD = (
+        b'{"class_uid": 2001, "status_code": "FAIL", "severity": "High", '
+        b'"finding_info": {"uid": "a", "title": "T1"}}\n'
+        b'{"class_uid": 2001, "status_code": "FAIL", "severity": "High", '
+        b'"finding_info": {"uid": "b", "title": "T2"}}\n'
+    )
+
+    def test_ndjson_ocsf_records_become_findings(self, tmp_path: Path) -> None:
+        p = tmp_path / "prowler.json"
+        p.write_bytes(self.PAYLOAD)
+
+        findings = ProwlerAdapter().parse(p)
+
+        assert len(findings) == 2
+        # Assert they were genuinely CONVERTED, not passed through: a raw OCSF
+        # record has no ruleId, so a pass-through would leave it empty.
+        assert sorted(f.ruleId for f in findings) == ["a", "b"]
+
+    def test_ndjson_ocsf_does_not_warn(self, tmp_path: Path, caplog) -> None:
+        p = tmp_path / "prowler.json"
+        p.write_bytes(self.PAYLOAD)
+
+        with caplog.at_level(logging.WARNING):
+            ProwlerAdapter().parse(p)
+
+        assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
