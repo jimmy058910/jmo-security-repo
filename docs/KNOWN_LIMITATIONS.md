@@ -89,19 +89,39 @@ are write-once, so the risk is low — but it is untested, not proven.
 
 ## Deduplication
 
-### Cross-tool clustering is conservative by default
+### Cross-tool clustering only ever merges findings from *different* tools
 
-The default `deduplication.similarity_threshold` of `0.65` (in `jmo.yml`) produces
-limited clustering *across* tools on real scans. Composite similarity is weighted
-toward message text, so two tools reporting the same problem in different words
-score low even when they agree on the location. Trivy's `:latest tag used` and
-Hadolint's `DL3006` on the same Dockerfile line score about `0.39`.
+Clustering runs in two phases. Phase 1 deduplicates by exact content
+fingerprint. Phase 2 clusters findings that different tools reported for the
+same underlying issue, and **a cluster holds at most one finding per tool** — so
+if one tool reports several distinct rules against the same line, they stay
+several findings. That is deliberate: within a single tool, "same location" is
+the normal case rather than evidence, and Phase 1 has already made the exact
+judgment about that tool's own output.
 
-No findings are lost — they are reported separately rather than clustered.
+Composite similarity is weighted **toward location** — `0.50` location, `0.25`
+message, `0.25` metadata — so two tools agreeing on a `path:line` are most of
+the way to the `0.65` default threshold before their wording is considered.
+Trivy's `:latest tag used` and Hadolint's `DL3006` on the same Dockerfile line
+score `0.82` and do cluster, via the rule-equivalence table in
+`scripts/core/rule_equivalence.py`.
+
+No findings are lost — anything not clustered is reported separately.
 
 **What to do:** lower `deduplication.similarity_threshold` toward `0.5` if you
-would rather over-cluster than under-cluster. Values outside `0.5`–`1.0` are
-rejected at config load.
+would rather over-cluster than under-cluster, or raise it toward `1.0` for the
+opposite. Values outside `0.5`–`1.0` are rejected at config load. How much
+clustering you see depends heavily on how much your profile's tools overlap: a
+scan whose tools examine different things (SBOM, secrets, SAST) will cluster
+very little, because there is nothing for them to agree on.
+
+> This section previously said clustering was "conservative", that similarity
+> was "weighted toward message text", and that the Trivy/Hadolint pair scored
+> "about `0.39`". All three were measured false — the weights favour location,
+> and that exact pair scores `0.82`. The sentence "no findings are lost" was
+> also untrue until the one-finding-per-tool rule landed: clustering was
+> merging distinct findings from a single tool and dropping them from the
+> report.
 
 ---
 

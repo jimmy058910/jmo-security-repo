@@ -239,8 +239,9 @@ def get_canonical_rule_id(tool: str, rule_id: str) -> str | None:
     if key_lower in _REVERSE_MAP:
         return _REVERSE_MAP[key_lower]
 
-    # Try substring matching for messages that may vary
-    # (e.g., ":latest tag used" might appear as "Using :latest tag is not recommended")
+    # Try substring matching for rule IDs that carry a suffix or vary in wording
+    # (e.g. semgrep reports `...subprocess-shell-true.subprocess-shell-true` for
+    # the rule mapped here as `...subprocess-shell-true`).
     # Require minimum length to avoid matching everything
     tool_lower = tool.lower()
     rule_id_lower = rule_id.lower()
@@ -248,10 +249,46 @@ def get_canonical_rule_id(tool: str, rule_id: str) -> str | None:
         for (mapped_tool, mapped_rule), canonical in _REVERSE_MAP.items():
             if mapped_tool == tool_lower:
                 # Check if rule_id contains mapped_rule or vice versa
-                if mapped_rule in rule_id_lower or rule_id_lower in mapped_rule:
+                if _contains_on_boundary(rule_id_lower, mapped_rule) or (
+                    _contains_on_boundary(mapped_rule, rule_id_lower)
+                ):
                     return canonical
 
     return None
+
+
+def _contains_on_boundary(haystack: str, needle: str) -> bool:
+    """True if `needle` occurs in `haystack` delimited by non-alphanumerics.
+
+    Plain containment is wrong for structured rule IDs, because their trailing
+    number makes every short ID a prefix of longer ones. Measured against the
+    real table: ``ckv_k8s_1`` ("privileged container") matched ``CKV_K8S_10``
+    and ``CKV_K8S_14`` through ``CKV_K8S_18``, and ``ckv_aws_3`` ("EBS
+    encryption") matched every ``CKV_AWS_3xx`` -- so unrelated checkov rules
+    resolved to one canonical ID and scored a perfect metadata match against
+    each other.
+
+    Requiring the match to start and end on a boundary keeps the case the
+    fallback exists for, where the separator is a real delimiter:
+
+        >>> _contains_on_boundary("a.b.rule-x.rule-x", "a.b.rule-x")   # '.' follows
+        True
+        >>> _contains_on_boundary("ckv_k8s_14", "ckv_k8s_1")           # '4' follows
+        False
+    """
+    if not needle or not haystack:
+        return False
+
+    start = haystack.find(needle)
+    while start != -1:
+        before_ok = start == 0 or not haystack[start - 1].isalnum()
+        end = start + len(needle)
+        after_ok = end == len(haystack) or not haystack[end].isalnum()
+        if before_ok and after_ok:
+            return True
+        start = haystack.find(needle, start + 1)
+
+    return False
 
 
 def are_rules_equivalent(

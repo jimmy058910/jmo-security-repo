@@ -616,13 +616,28 @@ def test_consensus_severity_elevation():
 
 
 def test_consensus_confidence():
-    """Confidence scoring based on tool count."""
+    """Confidence scoring based on tool count.
+
+    Every finding here carries a DISTINCT tool name. The fixture used to pass
+    `tool: {}` for all of them and still assert `tool_count == 4` at level
+    HIGH -- i.e. it asserted that four findings carrying no tool information
+    whatsoever amounted to "four tools agree". `_calculate_confidence` now
+    counts distinct tools, which is what the field is named and rendered as.
+    """
     # High confidence: 4+ tools agree
     cluster1 = FindingCluster(
-        representative={"id": "f1", "message": "Issue", "tool": {}, "raw": {}}
+        representative={
+            "id": "f1",
+            "message": "Issue",
+            "tool": {"name": "t1"},
+            "raw": {},
+        }
     )
     for i in range(2, 5):
-        cluster1.add({"id": f"f{i}", "message": "Issue", "tool": {}, "raw": {}}, 0.90)
+        cluster1.add(
+            {"id": f"f{i}", "message": "Issue", "tool": {"name": f"t{i}"}, "raw": {}},
+            0.90,
+        )
 
     consensus1 = cluster1.to_consensus_finding()
     assert consensus1["confidence"]["level"] == "HIGH"
@@ -630,16 +645,28 @@ def test_consensus_confidence():
 
     # Medium confidence: 2-3 tools
     cluster2 = FindingCluster(
-        representative={"id": "f1", "message": "Issue", "tool": {}, "raw": {}}
+        representative={
+            "id": "f1",
+            "message": "Issue",
+            "tool": {"name": "t1"},
+            "raw": {},
+        }
     )
-    cluster2.add({"id": "f2", "message": "Issue", "tool": {}, "raw": {}}, 0.85)
+    cluster2.add(
+        {"id": "f2", "message": "Issue", "tool": {"name": "t2"}, "raw": {}}, 0.85
+    )
 
     consensus2 = cluster2.to_consensus_finding()
     assert consensus2["confidence"]["level"] == "MEDIUM"
 
     # Low confidence: single tool
     cluster3 = FindingCluster(
-        representative={"id": "f1", "message": "Issue", "tool": {}, "raw": {}}
+        representative={
+            "id": "f1",
+            "message": "Issue",
+            "tool": {"name": "t1"},
+            "raw": {},
+        }
     )
 
     consensus3 = cluster3.to_consensus_finding()
@@ -699,6 +726,14 @@ def test_cluster_performance_100_findings():
     clusterer = FindingClusterer()
 
     # Generate 100 findings with TRUE duplicates (same location + similar messages)
+    #
+    # Each of the 5 groups is reported by 20 DIFFERENT tools. It used to name
+    # `trivy` for all 100, which made the fixture unreachable in production and
+    # the assertion meaningless: 20 byte-identical trivy findings share a
+    # content fingerprint, so Phase 1 collapses them before Phase 2 runs, and
+    # the only thing separating them here was a synthetic `id`. Phase 2 clusters
+    # *across* tools -- see FindingCluster's one-finding-per-tool invariant --
+    # so cross-tool duplicates are what this benchmark has to feed it.
     findings = []
     for i in range(100):
         # Create 5 groups of 20 duplicates each (same file, same line, same base message)
@@ -713,7 +748,7 @@ def test_cluster_performance_100_findings():
                     "startLine": 10 + group,
                 },  # Same line per group
                 "raw": {"CWE": "CWE-89"},  # Same CWE
-                "tool": {"name": "trivy"},
+                "tool": {"name": f"tool{i % 20}"},
             }
         )
 
@@ -1578,3 +1613,271 @@ def test_consensus_detected_by_mixed_same_and_different():
     assert len(consensus["detected_by"]) == 2
     tool_names = {t["name"] for t in consensus["detected_by"]}
     assert tool_names == {"bandit", "semgrep"}
+
+
+# ===== Chunk 7: a cluster holds at most one finding per tool =====
+#
+# Phase 1 (fingerprint) is exact and authoritative within a single tool. If it
+# kept two of that tool's findings apart they differ in rule, line or message,
+# and a fuzzy Phase-2 re-merge of one tool's own output is strictly less
+# trustworthy than the tool's own distinction.
+#
+# These assert the PROPERTY over clustering output rather than probing
+# `can_accept` directly, so an algorithm that reaches the same state by another
+# route still fails them.
+
+
+def _checkov_findings_on_one_line():
+    """Four DISTINCT checkov rules on one k8s resource -- a real, measured case.
+
+    Taken from a `deep` scan of tests/e2e/fixtures: all four are reported at
+    k8s-privileged-pod.yaml:4. Before the one-per-tool invariant they collapsed
+    into a single finding whose ruleId was CKV_K8S_14, silently removing
+    CKV_K8S_16 ("Container should not be privileged") from the report.
+    """
+    rules = [
+        ("CKV_K8S_14", "Image Tag should be fixed - not latest or blank"),
+        ("CKV_K8S_16", "Container should not be privileged"),
+        ("CKV_K8S_17", "Containers should not share the host process ID namespace"),
+        ("CKV_K8S_18", "Containers should not share the host IPC namespace"),
+    ]
+    return [
+        {
+            "id": f"ckv{i}",
+            "ruleId": rule,
+            "severity": "MEDIUM",
+            "message": msg,
+            "tool": {"name": "checkov", "version": "3.2.0"},
+            "location": {"path": "iac/k8s-privileged-pod.yaml", "startLine": 4},
+            "raw": {},
+            "tags": ["iac", "policy"],
+        }
+        for i, (rule, msg) in enumerate(rules)
+    ]
+
+
+def _assert_one_finding_per_tool(clusters):
+    for cluster in clusters:
+        names = [
+            (f.get("tool") or {}).get("name")
+            for f in cluster.findings
+            if isinstance(f.get("tool"), dict)
+        ]
+        assert len(names) == len(set(names)), (
+            f"cluster holds {len(names)} findings from "
+            f"{len(set(names))} tool(s): {names}"
+        )
+
+
+def test_distinct_rules_from_one_tool_are_never_clustered():
+    """Four different checkov rules at one location stay four findings."""
+    findings = _checkov_findings_on_one_line()
+    clusters = FindingClusterer(similarity_threshold=0.65).cluster(findings)
+
+    _assert_one_finding_per_tool(clusters)
+    assert len(clusters) == 4, (
+        "four distinct checkov rules on one line must remain four findings, "
+        f"got {len(clusters)}"
+    )
+    surviving_rules = {c.representative["ruleId"] for c in clusters}
+    assert (
+        "CKV_K8S_16" in surviving_rules
+    ), "the privileged-container finding must not be absorbed into another rule"
+
+
+def test_cross_tool_duplicates_still_cluster():
+    """The invariant must not disable the feature it constrains."""
+    findings = [
+        {
+            "id": "bandit-1",
+            "ruleId": "B602",
+            "severity": "HIGH",
+            "message": "subprocess call with shell=True identified, security issue.",
+            "tool": {"name": "bandit", "version": "1.9.2"},
+            "location": {"path": "app.py", "startLine": 40},
+            "raw": {"issue_cwe": {"id": 78}},
+        },
+        {
+            "id": "semgrep-1",
+            "ruleId": "python.lang.security.audit.subprocess-shell-true.subprocess-shell-true",
+            "severity": "HIGH",
+            "message": "Found 'subprocess' function 'call' with 'shell=True'.",
+            "tool": {"name": "semgrep", "version": "1.146.0"},
+            "location": {"path": "app.py", "startLine": 40},
+            "raw": {"cwe": ["CWE-78"]},
+        },
+    ]
+    clusters = FindingClusterer(similarity_threshold=0.65).cluster(findings)
+
+    _assert_one_finding_per_tool(clusters)
+    assert len(clusters) == 1, "bandit and semgrep on one line must still cluster"
+    assert len(clusters[0].findings) == 2
+
+
+def test_one_finding_per_tool_holds_under_the_lsh_algorithm():
+    """LSH unions pairs transitively, so it needs its own check.
+
+    Refusing same-tool unions alone is insufficient: checkov~trivy plus
+    trivy~checkov still lands two checkov findings in one Union-Find group.
+    """
+    findings = []
+    # Must exceed FindingClusterer.LSH_THRESHOLD (500) so the LSH path is the
+    # one under test -- the assertion below fails loudly if that stops holding.
+    for group in range(60):
+        for tool in ("checkov", "trivy", "kubescape"):
+            for variant in range(3):
+                findings.append(
+                    {
+                        "id": f"{tool}-{group}-{variant}",
+                        "ruleId": f"RULE_{tool}_{variant}",
+                        "severity": "HIGH",
+                        "message": f"Privileged container detected in workload {group}",
+                        "tool": {"name": tool, "version": "1"},
+                        "location": {
+                            "path": f"manifests/app{group}.yaml",
+                            "startLine": 10,
+                        },
+                        "raw": {"CWE": "CWE-250"},
+                    }
+                )
+
+    clusterer = FindingClusterer(similarity_threshold=0.65)
+    assert clusterer._should_use_lsh(
+        len(findings)
+    ), "fixture must exercise the LSH path"
+
+    clusters = clusterer.cluster(findings)
+    _assert_one_finding_per_tool(clusters)
+    assert sum(len(c.findings) for c in clusters) == len(
+        findings
+    ), "clustering must not lose or duplicate findings"
+
+
+def test_same_tool_findings_survive_into_the_consensus_output():
+    """End to end through _cluster_cross_tool_duplicates, not just the clusterer."""
+    from scripts.core.normalize_and_report import _cluster_cross_tool_duplicates
+
+    out = _cluster_cross_tool_duplicates(
+        _checkov_findings_on_one_line(), similarity_threshold=0.65
+    )
+
+    assert len(out) == 4
+    assert {f["ruleId"] for f in out} == {
+        "CKV_K8S_14",
+        "CKV_K8S_16",
+        "CKV_K8S_17",
+        "CKV_K8S_18",
+    }
+
+
+def test_confidence_tool_count_counts_tools_not_findings():
+    """`tool_count` is rendered as a number of tools, so it must be one."""
+    cluster = FindingCluster(
+        representative={
+            "id": "a",
+            "message": "Issue",
+            "tool": {"name": "checkov"},
+            "raw": {},
+        }
+    )
+    for i in range(3):
+        cluster.add(
+            {
+                "id": f"dup{i}",
+                "message": "Issue",
+                "tool": {"name": "checkov"},
+                "raw": {},
+            },
+            0.9,
+        )
+
+    consensus = cluster.to_consensus_finding()
+    assert consensus["confidence"]["tool_count"] == 1
+    assert len(consensus["detected_by"]) == 1
+    assert consensus["confidence"]["tool_count"] == len(
+        consensus["detected_by"]
+    ), "tool_count must agree with the detected_by array it is rendered beside"
+
+
+def test_clustered_members_are_actually_similar_to_their_representative():
+    """Union-Find is transitive; measured similarity is not.
+
+    A(checkov, lines 1-10) ~ B(checkov, 5-16) ~ Z(grype, 12-20), where A and Z
+    have disjoint line ranges and score 0.50 -- below the 0.65 threshold. The
+    only link between A and Z is a SAME-TOOL pair, so allowing same-tool unions
+    collapses all three into one component and build-time redistribution then
+    puts Z in A's cluster, a pairing nothing ever measured as similar.
+
+    Measured on this fixture: with the same-tool union refused, 0 members sit
+    below threshold; with it allowed, 200 do -- while BOTH produce 400 clusters
+    with an identical size distribution and 0 one-per-tool violations. A test
+    asserting only cluster counts or the tool invariant cannot tell them apart,
+    which is why this one asserts the similarity property directly.
+    """
+    threshold = 0.65
+    calc = SimilarityCalculator()
+
+    def triple(group):
+        path = f"svc{group}/main.tf"
+        common = {
+            "severity": "HIGH",
+            "message": "Hardcoded password detected in resource definition",
+            "raw": {"CWE": "CWE-798"},
+        }
+        return [
+            {
+                "id": f"A-{group}",
+                "ruleId": "CKV_P_1",
+                "tool": {"name": "checkov"},
+                "location": {"path": path, "startLine": 1, "endLine": 10},
+                **common,
+            },
+            {
+                "id": f"B-{group}",
+                "ruleId": "CKV_P_2",
+                "tool": {"name": "checkov"},
+                "location": {"path": path, "startLine": 5, "endLine": 16},
+                **common,
+            },
+            {
+                "id": f"Z-{group}",
+                "ruleId": "G-1",
+                "tool": {"name": "grype"},
+                "location": {"path": path, "startLine": 12, "endLine": 20},
+                **common,
+            },
+        ]
+
+    # Pin the fixture's own premise: if these stop holding, the test is no
+    # longer exercising the chain it describes.
+    a, b, z = triple(0)
+    assert calc.calculate_similarity(a, b) >= threshold, "A~B must link (same tool)"
+    assert calc.calculate_similarity(b, z) >= threshold, "B~Z must link (cross tool)"
+    assert calc.calculate_similarity(a, z) < threshold, "A~Z must NOT be similar"
+
+    findings = []
+    for group in range(170):  # >500 findings so the LSH path is the one under test
+        findings.extend(triple(group))
+
+    clusterer = FindingClusterer(similarity_threshold=threshold)
+    assert clusterer._should_use_lsh(
+        len(findings)
+    ), "fixture must exercise the LSH path"
+
+    clusters = clusterer.cluster(findings)
+
+    strays = [
+        (
+            cluster.representative["id"],
+            f["id"],
+            calc.calculate_similarity(cluster.representative, f),
+        )
+        for cluster in clusters
+        for f in cluster.findings
+        if f["id"] != cluster.representative["id"]
+        and calc.calculate_similarity(cluster.representative, f) < threshold
+    ]
+    assert not strays, (
+        f"{len(strays)} finding(s) clustered with a representative they are not "
+        f"similar to, e.g. {strays[:3]}"
+    )

@@ -20,6 +20,7 @@ Usage:
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 # =============================================================================
@@ -966,19 +967,64 @@ def get_tool_category(tool_name: str, tags: list[str]) -> str | None:
     return None
 
 
+def normalise_cwe_ids(cwes: Any) -> list[str]:
+    """Reduce whatever an adapter put in `risk.cwe` to canonical `CWE-<n>` ids.
+
+    Every table in this module keys on the bare id (`CWE-79`), and the five
+    lookups below used to compare against `cwe.upper().strip()` -- which only
+    matches if the adapter happened to store exactly that. It does not.
+    Measured on a real scan, the adapters that populate `risk.cwe` at all store
+    the id **with its description appended**::
+
+        "CWE-522: Insufficiently Protected Credentials"
+        ["CWE-798: Use of Hard-coded Credentials"]
+
+    so every lookup missed and all five CWE-keyed tables mapped **0 of 244
+    findings** -- including `CWE_TO_OWASP_TOP10_2021`, the largest table here at
+    104 entries. Normalising takes them to 30 / 22 / 9 / 10 / 11.
+
+    Accepts a bare string as well as a list, and ints (`issue_cwe.id` is an int
+    in bandit's output). The int case additionally used to raise
+    `AttributeError: 'int' object has no attribute 'upper'`, which
+    `gather_results` would have swallowed into a total loss of compliance data
+    for every finding in the report.
+
+    Unrecognisable entries are dropped rather than guessed at.
+
+        >>> normalise_cwe_ids("CWE-522: Insufficiently Protected Credentials")
+        ['CWE-522']
+        >>> normalise_cwe_ids([89, "cwe_79", "not a cwe"])
+        ['CWE-89', 'CWE-79']
+    """
+    if cwes is None:
+        return []
+    if isinstance(cwes, (str, int)):
+        cwes = [cwes]
+
+    normalised: list[str] = []
+    for raw in cwes:
+        if isinstance(raw, int) and not isinstance(raw, bool):
+            normalised.append(f"CWE-{raw}")
+            continue
+        match = re.search(r"CWE[-_\s]?(\d+)", str(raw), re.IGNORECASE)
+        if match:
+            normalised.append(f"CWE-{match.group(1)}")
+
+    return normalised
+
+
 def map_cwe_to_owasp_top10_2021(cwes: list[str]) -> list[str]:
     """Map CWE IDs to OWASP Top 10 2021 categories.
 
     Args:
-        cwes: List of CWE IDs (e.g., ["CWE-79", "CWE-89"])
+        cwes: CWE IDs in any form `normalise_cwe_ids` accepts
 
     Returns:
         List of OWASP Top 10 2021 categories (e.g., ["A03:2021"])
     """
     owasp_categories = set()
 
-    for cwe in cwes:
-        cwe_clean = cwe.upper().strip()
+    for cwe_clean in normalise_cwe_ids(cwes):
         if cwe_clean in CWE_TO_OWASP_TOP10_2021:
             owasp_categories.update(CWE_TO_OWASP_TOP10_2021[cwe_clean])
 
@@ -989,15 +1035,14 @@ def map_cwe_to_top25_2024(cwes: list[str]) -> list[dict[str, Any]]:
     """Map CWE IDs to CWE Top 25 2024 with rank and category.
 
     Args:
-        cwes: List of CWE IDs (e.g., ["CWE-79", "CWE-89"])
+        cwes: CWE IDs in any form `normalise_cwe_ids` accepts
 
     Returns:
         List of CWE Top 25 entries with id, rank, category
     """
     top25_entries = []
 
-    for cwe in cwes:
-        cwe_clean = cwe.upper().strip()
+    for cwe_clean in normalise_cwe_ids(cwes):
         if cwe_clean in CWE_TOP_25_2024:
             top25_entries.append(
                 {
@@ -1046,8 +1091,7 @@ def map_to_nist_csf_2_0(
     mappings = []
 
     # First try CWE-specific mappings
-    for cwe in cwes:
-        cwe_clean = cwe.upper().strip()
+    for cwe_clean in normalise_cwe_ids(cwes):
         if cwe_clean in CWE_TO_NIST_CSF_2_0:
             mappings.extend(CWE_TO_NIST_CSF_2_0[cwe_clean])
 
@@ -1084,8 +1128,7 @@ def map_to_pci_dss_4_0(
     mappings = []
 
     # First try CWE-specific mappings
-    for cwe in cwes:
-        cwe_clean = cwe.upper().strip()
+    for cwe_clean in normalise_cwe_ids(cwes):
         if cwe_clean in CWE_TO_PCI_DSS_4_0:
             mappings.extend(CWE_TO_PCI_DSS_4_0[cwe_clean])
 
@@ -1123,8 +1166,7 @@ def map_to_mitre_attack(
     mappings = []
 
     # First try CWE-specific mappings
-    for cwe in cwes:
-        cwe_clean = cwe.upper().strip()
+    for cwe_clean in normalise_cwe_ids(cwes):
         if cwe_clean in CWE_TO_MITRE_ATTACK:
             mappings.extend(CWE_TO_MITRE_ATTACK[cwe_clean])
 

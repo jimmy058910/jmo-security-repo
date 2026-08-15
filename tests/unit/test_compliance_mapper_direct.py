@@ -744,3 +744,121 @@ def test_enrich_container_vulnerability():
     assert "compliance" in result
     # Should have vulnerability-specific mappings
     assert "cisControlsV8_1" in result["compliance"]
+
+
+class TestCweIdNormalisation:
+    """CWE ids reach the tables in whatever shape an adapter stored them.
+
+    Every table in compliance_mapper keys on the bare id (`CWE-79`), and the
+    five CWE lookups used to compare against `cwe.upper().strip()`. Measured on
+    a real 244-finding scan, the adapters that populate `risk.cwe` at all store
+    the id with its description appended -- so every lookup missed and all five
+    CWE-keyed tables mapped **0 findings**, including CWE_TO_OWASP_TOP10_2021,
+    the largest table in the module at 104 entries.
+    """
+
+    def test_id_with_description_appended_still_maps(self):
+        """The shape real adapters actually emit."""
+        from scripts.core.compliance_mapper import map_cwe_to_owasp_top10_2021
+
+        assert map_cwe_to_owasp_top10_2021(
+            ["CWE-798: Use of Hard-coded Credentials"]
+        ) == map_cwe_to_owasp_top10_2021(["CWE-798"])
+        assert map_cwe_to_owasp_top10_2021(["CWE-798: Use of Hard-coded Credentials"])
+
+    def test_bare_string_is_accepted_as_well_as_a_list(self):
+        """One adapter stores risk.cwe as a string rather than a list."""
+        from scripts.core.compliance_mapper import map_cwe_to_owasp_top10_2021
+
+        assert map_cwe_to_owasp_top10_2021(
+            "CWE-522: Insufficiently Protected Credentials"
+        ) == map_cwe_to_owasp_top10_2021(["CWE-522"])
+
+    def test_integer_cwe_does_not_raise(self):
+        """bandit stores issue_cwe.id as an int.
+
+        `cwe.upper()` raised AttributeError on it, which gather_results would
+        have swallowed into a total loss of compliance data for every finding
+        in the report.
+        """
+        from scripts.core.compliance_mapper import map_cwe_to_owasp_top10_2021
+
+        assert map_cwe_to_owasp_top10_2021([89]) == map_cwe_to_owasp_top10_2021(
+            ["CWE-89"]
+        )
+
+    def test_degenerate_inputs_return_empty_rather_than_raising(self):
+        from scripts.core.compliance_mapper import (
+            map_cwe_to_owasp_top10_2021,
+            map_cwe_to_top25_2024,
+            map_to_mitre_attack,
+            map_to_nist_csf_2_0,
+            map_to_pci_dss_4_0,
+        )
+
+        for bad in (None, [], "", ["not a cwe"], [None], [{"a": 1}], [True]):
+            assert map_cwe_to_owasp_top10_2021(bad) == []
+            assert map_cwe_to_top25_2024(bad) == []
+            assert map_to_nist_csf_2_0("__no_such_tool__", [], bad) == []
+            assert map_to_pci_dss_4_0("__no_such_tool__", [], bad) == []
+            assert map_to_mitre_attack("__no_such_tool__", [], bad, "") == []
+
+    def test_all_five_cwe_keyed_tables_are_reachable(self):
+        """Assert the property -- every CWE table maps something -- not a shape.
+
+        Five of the ten tables in this module are CWE-keyed. Before the
+        normalisation they collectively mapped nothing on real data, and no
+        test noticed, because each was exercised only with hand-written ids in
+        the tables' own format.
+        """
+        from scripts.core.compliance_mapper import (
+            map_cwe_to_owasp_top10_2021,
+            map_cwe_to_top25_2024,
+            map_to_mitre_attack,
+            map_to_nist_csf_2_0,
+            map_to_pci_dss_4_0,
+        )
+
+        # Exactly as semgrep stores them, description and all.
+        realistic = [
+            "CWE-89: Improper Neutralization of Special Elements used in an SQL Command",
+            "CWE-79: Improper Neutralization of Input During Web Page Generation",
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory",
+        ]
+
+        assert map_cwe_to_owasp_top10_2021(realistic), "OWASP Top 10 table unreachable"
+        assert map_cwe_to_top25_2024(realistic), "CWE Top 25 table unreachable"
+        assert map_to_nist_csf_2_0(
+            "__no_such_tool__", [], realistic
+        ), "NIST CSF CWE table unreachable"
+        assert map_to_pci_dss_4_0(
+            "__no_such_tool__", [], realistic
+        ), "PCI DSS CWE table unreachable"
+        assert map_to_mitre_attack(
+            "__no_such_tool__", [], realistic, ""
+        ), "MITRE ATT&CK CWE table unreachable"
+
+    def test_enrichment_end_to_end_on_a_realistic_finding(self):
+        from scripts.core.compliance_mapper import enrich_finding_with_compliance
+
+        finding = {
+            "id": "f1",
+            "ruleId": "python.lang.security.audit.sqli",
+            "severity": "HIGH",
+            "message": "SQL injection",
+            "tool": {"name": "semgrep", "version": "1"},
+            "location": {"path": "a.py", "startLine": 1},
+            "tags": ["sast"],
+            "risk": {
+                "cwe": [
+                    "CWE-89: Improper Neutralization of Special Elements used in "
+                    "an SQL Command"
+                ]
+            },
+        }
+        compliance = enrich_finding_with_compliance(finding)["compliance"]
+
+        assert compliance.get("cweTop25_2024"), "CWE Top 25 must populate"
+        assert compliance["cweTop25_2024"][0]["id"] == "CWE-89"
+        assert compliance.get("owaspTop10_2021"), "OWASP must populate"
