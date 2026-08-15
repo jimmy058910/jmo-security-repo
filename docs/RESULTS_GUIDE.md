@@ -650,9 +650,11 @@ Edit `jmo.yml`:
 
 ```yaml
 
-# Exclude entire directories from scanning
+# Exclude entire directories from scanning.
+# The key is `exclude` -- `exclude_paths` is not a JMo config key, and
+# unrecognised keys in jmo.yml are ignored without warning.
 
-exclude_paths:
+exclude:
 
   - ".venv/"
   - ".venv-*/"

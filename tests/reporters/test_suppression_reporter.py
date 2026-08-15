@@ -402,3 +402,69 @@ def test_report_with_summary_zero_suppressed(tmp_path):
     # Debt section should NOT appear when total_suppressed == 0
     assert "Suppression debt:" not in content
     assert "No suppressions matched any findings." in content
+
+
+# ============================================================================
+# Selector rules (#538): rows must not vanish when the rule is not id-keyed
+# ============================================================================
+
+
+def test_selector_suppressed_findings_appear_in_the_table(tmp_path):
+    """A path/ruleId/severity rule is not keyed by any finding id.
+
+    Measured on a real deep scan before this was handled: a single
+    `path: "iac/*"` rule suppressed 187 of 242 findings, the debt summary
+    reported all 187 -- and the table below it rendered a header with zero
+    rows, because every lookup was suppressions.get(finding_id).
+    """
+    output_path = tmp_path / "SUPPRESSIONS.md"
+    rule = Suppression(path="iac/*", reason="IaC fixtures are intentional")
+    suppressions = {rule.key: rule}
+    suppressed_ids = ["aaaabbbbccccdddd", "1111222233334444"]
+    summary = SuppressionSummary(
+        total_suppressed=2,
+        total_before_suppression=10,
+        by_rule={rule.key: 2},
+        suppressed_ids=list(suppressed_ids),
+        suppressed_by=dict.fromkeys(suppressed_ids, rule.key),
+    )
+
+    write_suppression_report(suppressed_ids, suppressions, output_path, summary=summary)
+
+    content = output_path.read_text(encoding="utf-8")
+
+    assert "aaaabbbbccccdddd" in content
+    assert "1111222233334444" in content
+    assert "IaC fixtures are intentional" in content
+
+
+def test_selector_rule_is_named_in_the_table(tmp_path):
+    """The reader needs to know which rule caught each finding."""
+    output_path = tmp_path / "SUPPRESSIONS.md"
+    rule = Suppression(path="iac/*", reason="r")
+    suppressions = {rule.key: rule}
+    summary = SuppressionSummary(
+        total_suppressed=1,
+        total_before_suppression=10,
+        by_rule={rule.key: 1},
+        suppressed_ids=["aaaabbbbccccdddd"],
+        suppressed_by={"aaaabbbbccccdddd": rule.key},
+    )
+
+    write_suppression_report(
+        ["aaaabbbbccccdddd"], suppressions, output_path, summary=summary
+    )
+
+    assert "path=iac/*" in output_path.read_text(encoding="utf-8")
+
+
+def test_id_rows_still_render_without_a_summary(tmp_path):
+    """Backward compatibility: the id-keyed lookup path still works alone."""
+    output_path = tmp_path / "SUPPRESSIONS.md"
+    suppressions = {"fp-123": Suppression(id="fp-123", reason="False positive")}
+
+    write_suppression_report(["fp-123"], suppressions, output_path)
+
+    content = output_path.read_text(encoding="utf-8")
+    assert "fp-123" in content
+    assert "False positive" in content
