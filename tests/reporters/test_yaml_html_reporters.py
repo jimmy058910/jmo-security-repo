@@ -1,19 +1,10 @@
-import os
+import json
 from pathlib import Path
 
 import pytest
 
 from scripts.core.reporters.html_reporter import write_html
 from scripts.core.reporters.yaml_reporter import write_yaml
-
-
-@pytest.fixture(autouse=True)
-def skip_react_build_check():
-    """Skip React build check for all tests in this file (CI compatibility)."""
-    os.environ["SKIP_REACT_BUILD_CHECK"] = "true"
-    yield
-    os.environ.pop("SKIP_REACT_BUILD_CHECK", None)
-
 
 SAMPLE = [
     {
@@ -140,30 +131,32 @@ def test_html_script_tag_escaping(tmp_path: Path):
 
     script_content = html_content[script_start:script_end]
 
-    # 4. Verify that dangerous strings were escaped (should contain escaped versions)
-    # </script> should be escaped as <\/script>
-    assert r"<\/script>" in script_content or r"<\\\/script>" in script_content, (
-        "Danger! Found </script> in script content without proper escaping. "
-        "This will break out of the <script> tag!"
-    )
+    # 4. Verify that dangerous strings were escaped.
+    # This checked for the literal string `<\/script>` -- the spelling the
+    # escaper happened to use -- and so reported "found </script> unescaped"
+    # whenever the escaping *strategy* changed, while passing for the casings
+    # (</SCRIPT>, </ScRiPt>) that string never covered. Assert the property:
+    # no `<` at all reaches the embedded data.
+    assert "\\u003c" in script_content, "escaped form not found in script content"
 
     # 5. Verify that unescaped dangerous strings DON'T appear in data JSON
     # (They might appear in HTML elsewhere, but not in the JSON data)
     # Find the data array declaration (v1.0.0 dual-mode uses inline initialization)
     # Pattern: data = [...]  (inline mode assigns in the else branch)
     # React implementation: uses window.__FINDINGS__ = []
-    data_start = script_content.find("window.__FINDINGS__ = [")
-    data_end = script_content.find("]", data_start) if data_start != -1 else -1
-    if data_start != -1 and data_end != -1:
-        data_json = script_content[data_start : data_end + 1]
+    prefix = "window.__FINDINGS__ = "
+    data_start = script_content.find(prefix)
+    assert data_start != -1, "inline findings payload not found"
+    data_json = script_content[data_start + len(prefix) :].strip()
 
-        # Count unescaped </script> (should be 0, all should be escaped to <\/script>)
-        unescaped_count = data_json.count("</script>")
-        # With proper escaping, we should have 0 unescaped </script> in the data
-        assert unescaped_count == 0, (
-            f"Found {unescaped_count} unescaped </script> in data JSON! "
-            f"These will break the script tag. Expected 0."
-        )
+    # No `<` in any form can reach the payload, so no end tag can be spelled
+    # there in any case or with any terminator.
+    assert "<" not in data_json, f"raw '<' reached the payload: {data_json[:200]}"
+
+    # And the escaping must leave the payload valid JSON -- `<\script` was not.
+    assert json.loads(data_json)[1]["message"] == (
+        "Found <script>alert(1)</script> injection"
+    )
 
     # 6. Verify the dashboard data is loadable by checking structure
     # React implementation: uses window.__FINDINGS__ = []

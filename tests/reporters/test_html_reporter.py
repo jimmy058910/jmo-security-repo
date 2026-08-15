@@ -10,7 +10,6 @@ Coverage targets:
 """
 
 import json
-import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -18,9 +17,46 @@ import pytest
 
 from scripts.core.reporters.html_reporter import (
     INLINE_THRESHOLD,
+    PROVENANCE_META_NAME,
     _write_fallback_html,
     write_html,
 )
+
+#: A minimal stand-in for a `npm run build` artifact: everything write_html
+#: needs from a React build, and nothing else.
+MINIMAL_REACT_BUILD = (
+    "<!DOCTYPE html><html><head><title>JMo Security Dashboard</title>"
+    "<script>window.__FINDINGS__ = []</script></head>"
+    '<body><div id="root"></div></body></html>'
+)
+
+
+@pytest.fixture(autouse=True)
+def pinned_react_build(tmp_path_factory, monkeypatch):
+    """Render every test in this file from a known React build.
+
+    These tests used to wrap ``write_html`` in ``SKIP_REACT_BUILD_CHECK``
+    try/finally blocks, which nothing had read since ``df55c8f`` removed the
+    ``FileNotFoundError`` that variable gated. They therefore exercised
+    whichever template the machine happened to have -- a real ``dist/`` build
+    locally, the vendored ``tests/fixtures/dashboard`` build in CI -- so the
+    same test covered different code on different machines.
+
+    Tests that need a *different* template still patch ``__file__`` themselves;
+    that takes effect inside this one and is restored after.
+    """
+    root = tmp_path_factory.mktemp("pinned-build")
+    reporters = root / "scripts" / "core" / "reporters"
+    reporters.mkdir(parents=True)
+    module = reporters / "html_reporter.py"
+    module.touch()
+    dist = root / "scripts" / "dashboard" / "dist"
+    dist.mkdir(parents=True)
+    (dist / "index.html").write_text(MINIMAL_REACT_BUILD, encoding="utf-8")
+    monkeypatch.setattr(
+        "scripts.core.reporters.html_reporter.__file__", str(module), raising=False
+    )
+    return dist / "index.html"
 
 
 @pytest.fixture
@@ -52,24 +88,19 @@ def test_write_html_inline_mode_react_build(tmp_path, sample_findings):
     """Test inline mode (<1000 findings) with React build available."""
     output_path = tmp_path / "dashboard.html"
 
-    # Set environment to skip React build check and use test fixture
-    os.environ["SKIP_REACT_BUILD_CHECK"] = "true"
-    try:
-        write_html(sample_findings, output_path)
+    write_html(sample_findings, output_path)
 
-        assert output_path.exists()
-        html = output_path.read_text(encoding="utf-8")
+    assert output_path.exists()
+    html = output_path.read_text(encoding="utf-8")
 
-        # Verify inline mode (data embedded in HTML)
-        assert "window.__FINDINGS__ = [" in html
-        assert "finding-1" in html
-        assert "finding-2" in html
+    # Verify inline mode (data embedded in HTML)
+    assert "window.__FINDINGS__ = [" in html
+    assert "finding-1" in html
+    assert "finding-2" in html
 
-        # Verify no external JSON file created
-        json_path = tmp_path / "dashboard-data.json"
-        assert not json_path.exists()
-    finally:
-        os.environ.pop("SKIP_REACT_BUILD_CHECK", None)
+    # Verify no external JSON file created
+    json_path = tmp_path / "dashboard-data.json"
+    assert not json_path.exists()
 
 
 def test_write_html_inline_mode_threshold(tmp_path):
@@ -81,19 +112,15 @@ def test_write_html_inline_mode_threshold(tmp_path):
     ]
     output_path = tmp_path / "dashboard.html"
 
-    os.environ["SKIP_REACT_BUILD_CHECK"] = "true"
-    try:
-        write_html(findings, output_path)
+    write_html(findings, output_path)
 
-        html = output_path.read_text(encoding="utf-8")
-        # Should use inline mode (≤ threshold)
-        assert "window.__FINDINGS__ = [" in html
+    html = output_path.read_text(encoding="utf-8")
+    # Should use inline mode (≤ threshold)
+    assert "window.__FINDINGS__ = [" in html
 
-        # Verify no external JSON file
-        json_path = tmp_path / "dashboard-data.json"
-        assert not json_path.exists()
-    finally:
-        os.environ.pop("SKIP_REACT_BUILD_CHECK", None)
+    # Verify no external JSON file
+    json_path = tmp_path / "dashboard-data.json"
+    assert not json_path.exists()
 
 
 def test_write_html_external_mode(tmp_path):
@@ -105,24 +132,20 @@ def test_write_html_external_mode(tmp_path):
     ]
     output_path = tmp_path / "dashboard.html"
 
-    os.environ["SKIP_REACT_BUILD_CHECK"] = "true"
-    try:
-        write_html(findings, output_path)
+    write_html(findings, output_path)
 
-        html = output_path.read_text(encoding="utf-8")
-        # Should use external mode (> threshold)
-        assert "window.__FINDINGS__ = []  // Loaded via fetch()" in html
+    html = output_path.read_text(encoding="utf-8")
+    # Should use external mode (> threshold)
+    assert "window.__FINDINGS__ = []  // Loaded via fetch()" in html
 
-        # Verify external JSON file created
-        json_path = tmp_path / "dashboard-data.json"
-        assert json_path.exists()
+    # Verify external JSON file created
+    json_path = tmp_path / "dashboard-data.json"
+    assert json_path.exists()
 
-        # Verify JSON content
-        json_data = json.loads(json_path.read_text(encoding="utf-8"))
-        assert len(json_data) == INLINE_THRESHOLD + 1
-        assert json_data[0]["id"] == "f0"
-    finally:
-        os.environ.pop("SKIP_REACT_BUILD_CHECK", None)
+    # Verify JSON content
+    json_data = json.loads(json_path.read_text(encoding="utf-8"))
+    assert len(json_data) == INLINE_THRESHOLD + 1
+    assert json_data[0]["id"] == "f0"
 
 
 def test_write_html_script_injection_prevention(tmp_path):
@@ -146,32 +169,38 @@ def test_write_html_script_injection_prevention(tmp_path):
     ]
     output_path = tmp_path / "dashboard.html"
 
-    os.environ["SKIP_REACT_BUILD_CHECK"] = "true"
-    try:
-        write_html(findings, output_path)
+    write_html(findings, output_path)
 
-        html = output_path.read_text(encoding="utf-8")
+    html = output_path.read_text(encoding="utf-8")
 
-        # Verify dangerous characters are escaped in the JSON data
-        # Note: escaping only happens in inline mode when data embedded in <script> tag
-        if "window.__FINDINGS__ = [{" in html:  # Inline mode detected
-            assert "<\\/script>" in html  # Should escape </script>
-            assert "<\\script" in html  # Should escape <script
-            assert "<\\!--" in html  # Should escape <!--
-            assert "\\`" in html  # Should escape backticks
-        else:
-            # Fallback or external mode - no escaping needed (data in separate file)
-            pass
-    finally:
-        os.environ.pop("SKIP_REACT_BUILD_CHECK", None)
+    # The template is pinned to a React build, so inline mode is guaranteed --
+    # this assertion used to sit behind `if inline mode:` with a bare `pass`
+    # else-branch, so on a machine that took a different branch the whole
+    # injection check silently asserted nothing.
+    assert "window.__FINDINGS__ = [{" in html
+
+    # `<` cannot survive into the script block in any form, so no end tag,
+    # comment open or entity can be spelled there regardless of case.
+    prefix = "window.__FINDINGS__ = "
+    payload_start = html.index(prefix) + len(prefix)
+    payload = html[payload_start : html.index("</script>", payload_start)]
+    assert "<" not in payload, f"raw '<' reached the embedded payload: {payload[:200]}"
+    assert "\\u003c" in payload  # the escaped form is what is there instead
+
+    # Escaping must not corrupt the data: \uXXXX is valid JSON, `<\script` was not.
+    decoded = json.loads(payload)
+    assert decoded[0]["message"] == "</script><script>alert('XSS')</script>"
+    assert decoded[1]["message"] == "<!-- comment injection -->"
+    assert decoded[2]["message"] == "Template `literal` injection"
 
 
 def test_write_html_fallback_mode(tmp_path, sample_findings):
     """Test fallback HTML mode works when React build and fixture unavailable.
 
-    Note: This test calls _write_fallback_html directly since mocking Path
-    construction is complex. The integration test via write_html() is covered
-    by other tests when SKIP_REACT_BUILD_CHECK=true.
+    Note: This test calls _write_fallback_html directly. The integration path
+    through write_html() is covered by
+    tests/reporters/test_html_template_provenance.py, which pins each template
+    by patching html_reporter.__file__.
     """
     output_path = tmp_path / "dashboard.html"
 
@@ -211,14 +240,10 @@ def test_write_html_creates_parent_directory(tmp_path):
     output_path = tmp_path / "nested" / "dir" / "dashboard.html"
     findings = [{"id": "f1", "severity": "HIGH"}]
 
-    os.environ["SKIP_REACT_BUILD_CHECK"] = "true"
-    try:
-        write_html(findings, output_path)
+    write_html(findings, output_path)
 
-        assert output_path.exists()
-        assert output_path.parent.exists()
-    finally:
-        os.environ.pop("SKIP_REACT_BUILD_CHECK", None)
+    assert output_path.exists()
+    assert output_path.parent.exists()
 
 
 def test_write_html_with_test_fixture(tmp_path, sample_findings):
@@ -246,39 +271,29 @@ def test_write_html_with_test_fixture(tmp_path, sample_findings):
     )
 
     # Set environment to skip React build check (allows fallback to fixture)
-    os.environ["SKIP_REACT_BUILD_CHECK"] = "true"
-    try:
-        # Mock __file__ to use our tmp_path structure
-        with patch(
-            "scripts.core.reporters.html_reporter.__file__", str(fake_module_file)
-        ):
-            write_html(sample_findings, output_path)
+    # Mock __file__ to use our tmp_path structure
+    with patch("scripts.core.reporters.html_reporter.__file__", str(fake_module_file)):
+        write_html(sample_findings, output_path)
 
-            assert output_path.exists()
-            html = output_path.read_text(encoding="utf-8")
+        assert output_path.exists()
+        html = output_path.read_text(encoding="utf-8")
 
-            # Verify fixture template was used (not React build, not fallback)
-            assert "fixture-test" in html
-            assert "window.__FINDINGS__ = [{" in html
-    finally:
-        os.environ.pop("SKIP_REACT_BUILD_CHECK", None)
+        # Verify fixture template was used (not React build, not fallback)
+        assert "fixture-test" in html
+        assert "window.__FINDINGS__ = [{" in html
 
 
 def test_write_html_empty_findings(tmp_path):
     """Test writing HTML with empty findings list."""
     output_path = tmp_path / "dashboard.html"
 
-    os.environ["SKIP_REACT_BUILD_CHECK"] = "true"
-    try:
-        write_html([], output_path)
+    write_html([], output_path)
 
-        assert output_path.exists()
-        html = output_path.read_text(encoding="utf-8")
+    assert output_path.exists()
+    html = output_path.read_text(encoding="utf-8")
 
-        # Should use inline mode (0 < threshold)
-        assert "window.__FINDINGS__ = []" in html
-    finally:
-        os.environ.pop("SKIP_REACT_BUILD_CHECK", None)
+    # Should use inline mode (0 < threshold)
+    assert "window.__FINDINGS__ = []" in html
 
 
 def test_write_html_unicode_handling(tmp_path):
@@ -297,35 +312,27 @@ def test_write_html_unicode_handling(tmp_path):
     ]
     output_path = tmp_path / "dashboard.html"
 
-    os.environ["SKIP_REACT_BUILD_CHECK"] = "true"
-    try:
-        write_html(findings, output_path)
+    write_html(findings, output_path)
 
-        assert output_path.exists()
-        html = output_path.read_text(encoding="utf-8")
+    assert output_path.exists()
+    html = output_path.read_text(encoding="utf-8")
 
-        # Verify Unicode characters are preserved
-        assert "🔒" in html or "\\u" in html  # Either literal or JSON-escaped
-        assert "测试" in html or "\\u" in html
-    finally:
-        os.environ.pop("SKIP_REACT_BUILD_CHECK", None)
+    # Verify Unicode characters are preserved
+    assert "🔒" in html or "\\u" in html  # Either literal or JSON-escaped
+    assert "测试" in html or "\\u" in html
 
 
 def test_write_html_pathlib_and_str_paths(tmp_path, sample_findings):
     """Test that both pathlib.Path and str paths work."""
-    os.environ["SKIP_REACT_BUILD_CHECK"] = "true"
-    try:
-        # Test with Path object
-        path1 = tmp_path / "dashboard1.html"
-        write_html(sample_findings, path1)
-        assert path1.exists()
+    # Test with Path object
+    path1 = tmp_path / "dashboard1.html"
+    write_html(sample_findings, path1)
+    assert path1.exists()
 
-        # Test with string path
-        path2 = str(tmp_path / "dashboard2.html")
-        write_html(sample_findings, path2)
-        assert Path(path2).exists()
-    finally:
-        os.environ.pop("SKIP_REACT_BUILD_CHECK", None)
+    # Test with string path
+    path2 = str(tmp_path / "dashboard2.html")
+    write_html(sample_findings, path2)
+    assert Path(path2).exists()
 
 
 def test_write_html_large_findings_performance(tmp_path):
@@ -337,22 +344,18 @@ def test_write_html_large_findings_performance(tmp_path):
     ]
     output_path = tmp_path / "dashboard.html"
 
-    os.environ["SKIP_REACT_BUILD_CHECK"] = "true"
-    try:
-        write_html(findings, output_path)
+    write_html(findings, output_path)
 
-        # Verify HTML is small (external mode)
-        html = output_path.read_text(encoding="utf-8")
-        html_size = len(html)
-        assert html_size < 1_000_000  # Should be < 1MB (no embedded data)
+    # Verify HTML is small (external mode)
+    html = output_path.read_text(encoding="utf-8")
+    html_size = len(html)
+    assert html_size < 1_000_000  # Should be < 1MB (no embedded data)
 
-        # Verify external JSON file is created and large
-        json_path = tmp_path / "dashboard-data.json"
-        assert json_path.exists()
-        json_size = json_path.stat().st_size
-        assert json_size > 100_000  # Should be > 100KB (5000 findings)
-    finally:
-        os.environ.pop("SKIP_REACT_BUILD_CHECK", None)
+    # Verify external JSON file is created and large
+    json_path = tmp_path / "dashboard-data.json"
+    assert json_path.exists()
+    json_size = json_path.stat().st_size
+    assert json_size > 100_000  # Should be > 100KB (5000 findings)
 
 
 def test_write_html_with_react_build(tmp_path, sample_findings):
@@ -411,4 +414,9 @@ def test_write_html_fallback_when_react_build_missing(tmp_path, sample_findings)
 
     assert output_path.exists(), "Fallback dashboard.html should be created"
     html = output_path.read_text(encoding="utf-8")
-    assert "Fallback HTML Mode" in html or "JMo Security" in html
+    # This used to read `"Fallback HTML Mode" in html or "JMo Security" in html`,
+    # which no template in the chain can fail: all three carry "JMo Security" in
+    # their <title>. Assert the thing that actually distinguishes them.
+    assert "Fallback HTML Mode" in html
+    assert f'<meta name="{PROVENANCE_META_NAME}" content="fallback"' in html
+    assert "JMo Security Dashboard" not in html, "React template was used, not fallback"

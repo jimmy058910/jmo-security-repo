@@ -1916,80 +1916,84 @@ gh run view <run-id> --log-failed | grep -E "assert|FAILED" | grep -E "test_name
 
 ---
 
-## 17. React Dashboard Build FileNotFoundError (Test Environment)
+## 17. A Dashboard Test Passes Locally and Covers Something Else in CI
 
 **Symptoms:**
 
-1. Tests calling `write_html()` fail with `FileNotFoundError`
-2. Error mentions "React dashboard build not found"
-3. Tests pass locally but fail in CI (or vice versa)
-4. Multiple test files fail with same error
-
-**Error Pattern:**
-
-```text
-FAILED tests/reporters/test_html_security.py::test_xss_prevention - FileNotFoundError: React dashboard build not found at /path/to/scripts/dashboard/dist/index.html
-FAILED tests/reporters/test_yaml_html_reporters.py::test_write_html - FileNotFoundError: React dashboard build not found
-FAILED tests/unit/test_signal_handling.py::test_cmd_scan_signal_stop - FileNotFoundError: React dashboard build not found
-```
+1. A test calling `write_html()` asserts something about `dashboard.html` and
+   passes everywhere, but the two runs rendered *different documents*
+2. A change to the dashboard escaping or template breaks CI and not your box,
+   or the reverse
+3. A test sets `SKIP_REACT_BUILD_CHECK` and appears to control which template
+   is used
 
 **Root Cause:**
 
-The `html_reporter.py` has a dual check for skipping React build validation:
+`write_html()` picks a template in the order **React build -> vendored test
+fixture -> static fallback**, and `scripts/dashboard/dist/` is **gitignored**.
+So a developer who has run `npm run build` renders from the real build, while
+CI and every fresh clone render from
+`tests/fixtures/dashboard/test-inline-dashboard.html` -- a build vendored in
+November 2025 that is behind `scripts/dashboard/src/` and, in external mode,
+fetches a different data file. The same test covers different code depending on
+the machine.
 
-```python
-skip_react_check = (
-    os.getenv("SKIP_REACT_BUILD_CHECK", "false").lower() == "true"
-    or os.getenv("CI", "false").lower() == "true"
-)
-```
-
-- **GitHub Actions sets `CI=true` automatically** - tests pass
-- **Local development has no `CI` variable** - tests fail unless explicitly set
-- **Test files missing the `SKIP_REACT_BUILD_CHECK` fixture** - inconsistent behavior
+> **`SKIP_REACT_BUILD_CHECK` does not do this, and never did after 2026-03-22.**
+> It was added in `72e7da2` to gate a `raise FileNotFoundError`, and `df55c8f`
+> deleted that raise -- along with the only reader. This entry told you to add
+> an autouse fixture setting it; that fixture was a no-op, and the variable is
+> removed as of v1.1.0. If you find it anywhere, delete it.
 
 **Correct Approach:**
 
-Add a module-level autouse fixture to ensure consistent behavior across all environments:
+Pin the template explicitly. `write_html()` resolves both the build and the
+fixture relative to its own `__file__`, so point that at a tree you control:
 
 ```python
-import os
-import pytest
-
 @pytest.fixture(autouse=True)
-def skip_react_build_check():
-    """Skip React build check for all tests in this file (CI compatibility)."""
-    os.environ["SKIP_REACT_BUILD_CHECK"] = "true"
-    yield
-    os.environ.pop("SKIP_REACT_BUILD_CHECK", None)
-
-
-def test_write_html(tmp_path):
-    # Now works in both CI and local development
-    write_html(findings, tmp_path / "dashboard.html")
+def pinned_react_build(tmp_path_factory, monkeypatch):
+    root = tmp_path_factory.mktemp("pinned-build")
+    reporters = root / "scripts" / "core" / "reporters"
+    reporters.mkdir(parents=True)
+    module = reporters / "html_reporter.py"
+    module.touch()
+    dist = root / "scripts" / "dashboard" / "dist"
+    dist.mkdir(parents=True)
+    (dist / "index.html").write_text(
+        "<!DOCTYPE html><html><head><title>JMo Security Dashboard</title>"
+        "<script>window.__FINDINGS__ = []</script></head>"
+        '<body><div id="root"></div></body></html>',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "scripts.core.reporters.html_reporter.__file__", str(module), raising=False
+    )
 ```
 
-**Why This Works:**
+Reference implementations: `tests/reporters/test_html_reporter.py` and
+`tests/reporters/test_html_security.py`.
 
-1. **`autouse=True`** - Automatically applies to ALL tests in the file
-2. **`yield` pattern** - Proper setup/teardown, cleans up after each test
-3. **Module-level scope** - Only defined once, applies to entire file
-4. **Environment isolation** - No leakage between test files
+**Reading an artifact you did not produce:**
 
-**Files That Need This Fixture:**
+Every `dashboard.html` now declares its own origin. Check it before asserting
+anything about the content:
 
-Any test file that calls `write_html()` directly or indirectly:
+```bash
+grep -o 'jmo-dashboard-template" content="[^"]*"' dashboard.html
+# react-build | react-build-stale | test-fixture | fallback
+```
 
-- `tests/reporters/test_html_reporter.py` - Has fixture + explicit test for enforcement
-- `tests/reporters/test_yaml_html_reporters.py` - Needs fixture
-- `tests/reporters/test_html_security.py` - Needs fixture
-- `tests/unit/test_signal_handling.py` - Needs fixture (calls `cmd_scan` which may trigger reporting)
+`test-fixture` and `fallback` also carry a visible in-page banner, and both --
+plus `react-build-stale` -- are logged at WARNING by `jmo report`.
 
 **Prevention Strategies:**
 
-1. **Always add fixture to new test files calling `write_html()`**
-2. **Check for fixture when copying test patterns from other files**
-3. **Run tests locally with `unset CI` to catch missing fixtures**
+1. **Never assert against the ambient template.** Pin it, or assert the
+   provenance value you expect
+2. **`react-build-stale` means the bundle predates `src/` or the lockfile** --
+   run `npm run build` before drawing conclusions from a local dashboard
+3. `tests/reporters/test_html_template_provenance.py` is the guard that keeps
+   the four states distinguishable
 
 **Time Investment:** 5-10 minutes per occurrence
 

@@ -303,7 +303,6 @@ jobs:
           CI: "true"
           PYTHONUTF8: "1"
           JMO_THREADS: "2"
-          SKIP_REACT_BUILD_CHECK: "true"
         run: |
           python -m pytest -q \
             --disable-warnings \
@@ -322,7 +321,6 @@ jobs:
           CI: "true"
           PYTHONUTF8: "1"
           JMO_THREADS: "2"
-          SKIP_REACT_BUILD_CHECK: "true"
         run: |
           python -m pytest -q \
             --disable-warnings \
@@ -347,7 +345,6 @@ jobs:
           CI: "true"
           PYTHONUTF8: "1"
           JMO_THREADS: "2"
-          SKIP_REACT_BUILD_CHECK: "true"
         run: |
           python -m pytest -q \
             --disable-warnings \
@@ -447,7 +444,6 @@ jobs:
         # remove tests, lower it in the same PR and say why.
         env:
           CI: "true"
-          SKIP_REACT_BUILD_CHECK: "true"
         run: |
           collected=$(python -m pytest --collect-only -q \
             -m "not smoke and not requires_tools and not docker and not slow" \
@@ -467,7 +463,6 @@ jobs:
         env:
           CI: "true"
           JMO_THREADS: "2"
-          SKIP_REACT_BUILD_CHECK: "true"
         run: |
           python -m pytest -q \
             --disable-warnings \
