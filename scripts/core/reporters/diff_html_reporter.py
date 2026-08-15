@@ -62,6 +62,7 @@ import logging
 from pathlib import Path
 
 from scripts.core.diff_engine import DiffResult
+from scripts.core.reporters.html_reporter import escape_json_for_script
 
 # Threshold for inline vs external JSON mode
 INLINE_THRESHOLD = 1000
@@ -92,7 +93,11 @@ def write_html_diff(diff: DiffResult, out_path: Path) -> None:
     else:
         # Fallback path: Vanilla JS diff dashboard
         logger.warning("React dashboard not built. Using vanilla JS fallback.")
-        logger.warning("Run 'make dashboard-build' for full React features.")
+        # There is no `make dashboard-build` target and never has been; the
+        # build is an npm script in scripts/dashboard/.
+        logger.warning(
+            "Run 'npm run build' in scripts/dashboard/ for full React features."
+        )
         return _write_html_diff_vanilla(diff, out_path)
 
 
@@ -143,14 +148,8 @@ def _write_html_diff_react(diff: DiffResult, out_path: Path) -> None:
         ],
     }
 
-    # Escape dangerous characters that could break the <script> tag (XSS prevention)
-    diff_json = (
-        json.dumps(diff_data)
-        .replace("</script>", "<\\/script>")
-        .replace("<script", "<\\script")
-        .replace("<!--", "<\\!--")
-        .replace("`", "\\`")
-    )
+    # Escape characters that could break out of the <script> tag (XSS prevention)
+    diff_json = escape_json_for_script(json.dumps(diff_data))
 
     # Replace placeholder (React dashboard expects window.__DIFF_DATA__)
     injected_html = template_html.replace(
@@ -214,14 +213,8 @@ def _write_html_diff_vanilla(diff: DiffResult, out_path: Path) -> None:
 
     if use_inline:
         # Inline mode: Embed JSON directly
-        # Escape dangerous characters that could break the <script> tag
-        diff_json = (
-            json.dumps(diff_data)
-            .replace("</script>", "<\\/script>")
-            .replace("<script", "<\\script")
-            .replace("<!--", "<\\!--")
-            .replace("`", "\\`")
-        )
+        # Escape characters that could break out of the <script> tag
+        diff_json = escape_json_for_script(json.dumps(diff_data))
         data_injection = f"window.DIFF_DATA = {diff_json};"
     else:
         # External mode: Load JSON via fetch()

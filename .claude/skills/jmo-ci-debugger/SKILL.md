@@ -86,7 +86,7 @@ jobs:
 | 14 | Nightly Cascading | `lint-full: 4+ tool failures` | Fix in order: uv-lock, actionlint, mypy, markdownlint | Medium |
 | 15 | Ruff After Black | `F401`/`F541` after formatting | Run `ruff check --fix` after Black, review auto-fixes | Easy |
 | 16 | Platform Float Precision | `assert 0.X <= Y.YYY` across platforms | Find min/max across ALL platforms, add 5-20% buffer | Medium |
-| 17 | React Build Check | `FileNotFoundError: React dashboard` | Add `SKIP_REACT_BUILD_CHECK` autouse fixture to test file | Easy |
+| 17 | Dashboard test covers a different template in CI | Passes both places but rendered different documents; `dist/` is gitignored so CI gets the vendored fixture | Pin the template by patching `html_reporter.__file__`; check the `jmo-dashboard-template` meta tag before asserting | Easy |
 | 18 | Bare `pip install` outside the uv venv | `collected 0 items / 1 skipped` then `make: *** Error 5` (pytest exit 5) | Install importable packages through the lock: `uv sync --locked --group dev --extra <name>`, then `uv run --no-sync <cli>` | Medium |
 
 See [complete failure catalog](references/ci-failure-catalog.md) for detailed symptoms, root causes, and proven fixes for each failure.

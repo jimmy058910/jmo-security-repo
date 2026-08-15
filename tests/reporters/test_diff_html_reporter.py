@@ -146,6 +146,80 @@ def test_html_react_path(tmp_path, sample_diff_result):
     assert "window.__DIFF_DATA__ = null" not in content  # Should be replaced
 
 
+def test_html_react_path_escapes_script_breakouts(tmp_path):
+    """The React diff path must escape its payload like every other path.
+
+    This branch cannot run against a real template: no template JMo ships --
+    the built dist/index.html, the vendored test fixture, or
+    scripts/dashboard/index.html -- contains `window.__DIFF_DATA__`, so
+    `_write_html_diff_react` always falls through to the vanilla renderer.
+    A mutation that reverted this path's escaper to the old lowercase-only
+    replacement therefore survived the whole suite. Covering it with the same
+    mock the branch is otherwise tested with keeps the escaping guarded until
+    the dead branch is resolved.
+    """
+    out_path = tmp_path / "diff.html"
+    mock_template = (
+        "<!DOCTYPE html><html><head><title>React Dashboard</title></head>"
+        '<body><div id="root"></div>'
+        "<script>window.__DIFF_DATA__ = null</script></body></html>"
+    )
+    diff = DiffResult(
+        new=[
+            {
+                "id": "xss",
+                "severity": "HIGH",
+                "ruleId": "XSS",
+                "message": "</SCRIPT><img src=x onerror=alert(1)>",
+                "location": {"path": "test.js", "startLine": 1},
+            }
+        ],
+        resolved=[],
+        unchanged=[],
+        modified=[],
+        baseline_source=DiffSource(
+            source_type="directory",
+            path="baseline/",
+            timestamp="2025-11-04T10:00:00Z",
+            profile="fast",
+            total_findings=0,
+        ),
+        current_source=DiffSource(
+            source_type="directory",
+            path="current/",
+            timestamp="2025-11-05T10:00:00Z",
+            profile="fast",
+            total_findings=1,
+        ),
+        statistics={
+            "total_new": 1,
+            "total_resolved": 0,
+            "total_unchanged": 0,
+            "total_modified": 0,
+            "net_change": 1,
+            "trend": "worsening",
+            "new_by_severity": {"HIGH": 1},
+            "resolved_by_severity": {},
+            "modifications_by_type": {},
+        },
+    )
+
+    with (
+        patch.object(Path, "exists", return_value=True),
+        patch.object(Path, "read_text", return_value=mock_template),
+    ):
+        write_html_diff(diff, out_path)
+
+    content = out_path.read_text(encoding="utf-8")
+    prefix = "window.__DIFF_DATA__ = "
+    start = content.index(prefix) + len(prefix)
+    payload = content[start : content.index("</script>", start)]
+    assert "<" not in payload, f"raw '<' reached the payload: {payload[:200]}"
+    assert json.loads(payload)["new_findings"][0]["message"] == (
+        "</SCRIPT><img src=x onerror=alert(1)>"
+    )
+
+
 def test_html_vanilla_fallback(tmp_path, sample_diff_result, caplog):
     """Test vanilla fallback (React not built)."""
     out_path = tmp_path / "diff.html"
@@ -474,19 +548,26 @@ def test_html_json_escaping(tmp_path):
 
     content = out_path.read_text(encoding="utf-8")
 
-    # Verify dangerous characters escaped in JSON data
-    assert "<\\/script>" in content  # Escaped in JSON data
-    assert (
-        "alert('XSS')" in content or "alert(\\'XSS\\')" in content
-    )  # Payload preserved
+    # Verify dangerous characters escaped in JSON data.
+    # These assertions used to pin the escaper's *spelling* (`<\/script>`,
+    # `<\/script><\script`), which meant they passed while `</SCRIPT>`,
+    # `</ScRiPt>` and `</script >` all still broke out -- the HTML tokenizer
+    # matches an end tag case-insensitively. Assert the property instead.
+    assert "\\u003c" in content  # escaped form present
 
     # Verify HTML is well-formed (only one script tag at the end)
     assert content.count("</script>") == 1  # Only template's closing tag
-
-    # Most importantly: XSS payload should be safely embedded in JSON
-    # and NOT break out of the script context
     assert content.count("<script>") == 1  # Only one script tag
-    assert "<\\/script><\\script" in content  # Dangerous sequences escaped
+
+    # The payload text survives intact -- only the characters that can *start*
+    # markup are neutered -- and the result is still valid JSON.
+    prefix = "window.DIFF_DATA = "
+    start = content.index(prefix) + len(prefix)
+    payload = content[start : content.index(";", start)]
+    assert "<" not in payload, f"raw '<' reached the payload: {payload[:200]}"
+    assert json.loads(payload)["new"][0]["message"] == (
+        "XSS: </script><script>alert('XSS')</script>"
+    )
 
 
 def test_html_creates_parent_directory(tmp_path, sample_diff_result):

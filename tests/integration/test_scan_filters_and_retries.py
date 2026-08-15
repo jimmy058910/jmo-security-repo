@@ -64,7 +64,6 @@ exclude: ["test-*"]
 
     test_env = os.environ.copy()
     test_env["PYTHONPATH"] = "."
-    test_env["SKIP_REACT_BUILD_CHECK"] = "true"
 
     result = subprocess.run(
         cmd,
@@ -121,7 +120,6 @@ retries: 2
 
     test_env = os.environ.copy()
     test_env["PYTHONPATH"] = "."
-    test_env["SKIP_REACT_BUILD_CHECK"] = "true"
 
     result = subprocess.run(
         cmd,
@@ -176,7 +174,6 @@ tools: [semgrep, trivy]
 
     test_env = os.environ.copy()
     test_env["PYTHONPATH"] = "."
-    test_env["SKIP_REACT_BUILD_CHECK"] = "true"
 
     result = subprocess.run(
         cmd,
@@ -238,7 +235,6 @@ tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, bandit]
     test_env = {
         "PATH": python_dir,
         "PYTHONPATH": ".",
-        "SKIP_REACT_BUILD_CHECK": "true",  # Skip React build in tests
     }
     # Preserve HOME/USERPROFILE so Path.home() works on all platforms.
     # Preserve SYSTEMROOT/SYSTEMDRIVE/TEMP for Windows DLL loading.
@@ -326,7 +322,6 @@ tools: [trufflehog]
     test_env = os.environ.copy()
     test_env["JMO_THREADS"] = "not-an-int"
     test_env["PYTHONPATH"] = "."
-    test_env["SKIP_REACT_BUILD_CHECK"] = "true"  # Skip React build in tests
 
     result = subprocess.run(
         cmd,
