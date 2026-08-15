@@ -111,6 +111,28 @@ pytest-timeout uses `timeout_method = "thread"` on Windows (signal-based doesn't
 2. But NOT the child process (which becomes an orphan).
 3. `--reruns` then retries the test, multiplying hang time.
 
+### Symptom: a local suite half suddenly takes much longer than its recorded time
+
+The same orphan mechanism bites **locally**, and it looks like a performance
+regression in whatever you just changed. Measured 2026-08-15: a suite half that
+had just run in **391 s** blew past a 600 s cap on the next run, and the cause
+was orphaned workers from *earlier* runs — several still accumulating CPU at
+**850-1020 CPU-seconds**. Killing a foreground run (timeout, Ctrl-C, tool cap)
+reliably leaves its `-n 8` workers behind.
+
+**Check before concluding your change is slow:**
+
+```powershell
+Get-Process python* | Select-Object Id, CPU, StartTime | Sort-Object StartTime
+```
+
+Old `StartTime` values with large `CPU` are orphans. Do **not** blanket-kill
+while a run is in flight — you cannot tell its workers from the strays by name,
+and you will sabotage the run you are trying to measure. Either wait for the
+current run to finish and then clear them, or start the run in the background and
+accept the slower wall clock. This is why CI has a post-test `Stop-Process`
+cleanup step.
+
 **If Windows CI hangs:**
 
 1. Check for missing `timeout=` in subprocess calls.
