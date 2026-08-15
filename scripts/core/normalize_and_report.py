@@ -241,43 +241,72 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
     # This avoids double memory storage (dict + list copy)
     deduped = deduplicate_findings_memory_efficient(findings)
 
+    # The three enrichment stages below are best-effort by design: a failure must
+    # not block the report. But each catches every exception around a call that
+    # enriches the WHOLE list, so a single failure costs every finding its
+    # enrichment -- and at DEBUG that is invisible, because `configure_scan_logging`
+    # sets the `scripts` logger to WARNING for a normal run.
+    #
+    # Measured on a real 244-finding scan: a corrupt `~/.jmo/cache/epss_scores.db`
+    # -- an ordinary on-disk file, not a network outage -- took priority
+    # enrichment from 244/244 to 0/244 while emitting one DEBUG record and
+    # nothing at WARNING or above. The report is written, is the expected length,
+    # and silently has no EPSS/KEV data at all. Same shape as #823/#836: the
+    # failure is not the problem, the silence is.
+    #
+    # These report at WARNING and name what was lost. They cannot become the
+    # always-fires warning #784 was about, because they fire only on an actual
+    # exception -- a healthy run raises none.
+
     # Enrich Trivy findings with Syft SBOM context when available
     try:
         _enrich_trivy_with_syft(deduped)
-    except (KeyError, ValueError, TypeError) as e:
-        # Best-effort enrichment - missing SBOM data or malformed findings
-        logger.debug(f"Trivy-Syft enrichment skipped: {e}")
     except (
         Exception
     ) as e:  # Acceptable: enrichment is best-effort — must not block report generation
-        logger.debug(f"Unexpected error during Trivy-Syft enrichment: {e}")
+        logger.warning(
+            "Trivy/Syft SBOM enrichment failed, so no finding in this report "
+            "carries SBOM package context (%d findings affected): %s: %s",
+            len(deduped),
+            type(e).__name__,
+            e,
+        )
 
     # Enrich all findings with compliance framework mappings (v1.2.0)
     try:
         deduped = enrich_findings_with_compliance(deduped)
-    except FileNotFoundError as e:
-        # Compliance mapping data files missing
-        logger.debug(
-            f"Compliance enrichment skipped: mapping data not found: {e.filename}"
-        )
-    except (KeyError, ValueError, TypeError) as e:
-        # Malformed compliance data or findings
-        logger.debug(f"Compliance enrichment skipped: {e}")
     except (
         Exception
     ) as e:  # Acceptable: enrichment is best-effort — must not block report generation
-        logger.debug(f"Unexpected error during compliance enrichment: {e}")
+        # `deduped` is deliberately left bound to the un-enriched list: the
+        # assignment never happens, so the findings themselves survive intact.
+        detail = (
+            f"mapping data not found: {e.filename}"
+            if isinstance(e, FileNotFoundError)
+            else f"{type(e).__name__}: {e}"
+        )
+        logger.warning(
+            "Compliance enrichment failed, so no finding in this report carries "
+            "OWASP/CWE/CIS/NIST/PCI/MITRE mappings and the compliance reports "
+            "will be empty (%d findings affected): %s",
+            len(deduped),
+            detail,
+        )
 
     # Enrich findings with priority scores (v0.9.0 Feature #5: EPSS/KEV)
     try:
         _enrich_with_priority(deduped)
-    except (KeyError, ValueError, TypeError) as e:
-        # Missing priority data or malformed findings
-        logger.debug(f"Priority enrichment skipped: {e}")
     except (
         Exception
     ) as e:  # Acceptable: enrichment is best-effort — EPSS/KEV API failures non-fatal
-        logger.debug(f"Unexpected error during priority enrichment: {e}")
+        logger.warning(
+            "Priority enrichment failed, so no finding in this report carries an "
+            "EPSS score, KEV status or priority ranking (%d findings affected). "
+            "Check ~/.jmo/cache for an unreadable epss_scores.db or kev_catalog.json: %s: %s",
+            len(deduped),
+            type(e).__name__,
+            e,
+        )
 
     # Cross-tool deduplication clustering (v1.0.0 Feature #4 - Phase 2)
     # Threshold configurable via JMO_DEDUP_THRESHOLD env var or jmo.yml deduplication section

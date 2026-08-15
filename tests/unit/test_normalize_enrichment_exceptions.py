@@ -13,6 +13,7 @@ These tests cover:
 """
 
 import json
+import logging
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -776,3 +777,150 @@ class TestProgressCallbackExit:
 
         # Verify progress callback was invoked
         assert len(progress_calls) > 0
+
+
+class TestEnrichmentFailuresAreReported:
+    """A total enrichment failure must not be silent.
+
+    Each of the three enrichment stages wraps a call that enriches the WHOLE
+    finding list, so one exception costs every finding its enrichment. At DEBUG
+    that is invisible: `configure_scan_logging` sets the `scripts` logger to
+    WARNING for a normal run, so the record is dropped at source and the report
+    is written at full length with the data quietly missing.
+
+    Measured before the fix, on a real 244-finding scan: a corrupt
+    `~/.jmo/cache/epss_scores.db` took priority enrichment from 244/244 to
+    0/244 while emitting one DEBUG record and nothing at WARNING or above.
+    """
+
+    @staticmethod
+    def _one_repo(tmp_path):
+        root = tmp_path / "results"
+        repo = root / "individual-repos" / "r1"
+        finding = {
+            "schemaVersion": "1.2.0",
+            "id": "f1",
+            "ruleId": "R1",
+            "message": "m",
+            "severity": "LOW",
+            "tool": {"name": "semgrep", "version": "1"},
+            "location": {"path": "a.py", "startLine": 1},
+        }
+        _write(repo / "semgrep.json", [finding])
+        return root, finding
+
+    @staticmethod
+    def _warnings(caplog):
+        return [
+            r
+            for r in caplog.records
+            if r.levelno >= logging.WARNING
+            and r.name == "scripts.core.normalize_and_report"
+        ]
+
+    def test_priority_failure_is_reported_at_warning(
+        self, tmp_path, monkeypatch, caplog
+    ):
+        root, finding = self._one_repo(tmp_path)
+        monkeypatch.setattr(nr, "_safe_load_plugin", lambda *_a, **_k: [dict(finding)])
+
+        def boom(_findings):
+            raise RuntimeError("database disk image is malformed")
+
+        monkeypatch.setattr(nr, "_enrich_with_priority", boom)
+
+        with caplog.at_level(logging.DEBUG):
+            out = nr.gather_results(root)
+
+        assert isinstance(out, list) and out, "the report must still be produced"
+        warnings = self._warnings(caplog)
+        assert len(warnings) == 1, f"expected one WARNING, got {warnings}"
+        text = warnings[0].getMessage()
+        assert "riorit" in text, "the warning must name the enrichment that failed"
+        assert (
+            "database disk image is malformed" in text
+        ), "the warning must carry the underlying cause"
+
+    def test_compliance_failure_is_reported_at_warning(
+        self, tmp_path, monkeypatch, caplog
+    ):
+        root, finding = self._one_repo(tmp_path)
+        monkeypatch.setattr(nr, "_safe_load_plugin", lambda *_a, **_k: [dict(finding)])
+
+        def boom(_findings):
+            raise ValueError("mapping table unavailable")
+
+        monkeypatch.setattr(nr, "enrich_findings_with_compliance", boom)
+
+        with caplog.at_level(logging.DEBUG):
+            out = nr.gather_results(root)
+
+        assert out, "findings must survive a failed compliance pass"
+        assert not any(f.get("compliance") for f in out)
+        warnings = self._warnings(caplog)
+        assert len(warnings) == 1, f"expected one WARNING, got {warnings}"
+        assert "ompliance" in warnings[0].getMessage()
+
+    def test_compliance_filenotfound_still_names_the_missing_file(
+        self, tmp_path, monkeypatch, caplog
+    ):
+        root, finding = self._one_repo(tmp_path)
+        monkeypatch.setattr(nr, "_safe_load_plugin", lambda *_a, **_k: [dict(finding)])
+
+        def boom(_findings):
+            raise FileNotFoundError(2, "No such file", "owasp_top10.json")
+
+        monkeypatch.setattr(nr, "enrich_findings_with_compliance", boom)
+
+        with caplog.at_level(logging.DEBUG):
+            nr.gather_results(root)
+
+        warnings = self._warnings(caplog)
+        assert len(warnings) == 1
+        assert (
+            "owasp_top10.json" in warnings[0].getMessage()
+        ), "FileNotFoundError.filename must survive into the warning"
+
+    def test_syft_failure_is_reported_at_warning(self, tmp_path, monkeypatch, caplog):
+        root, finding = self._one_repo(tmp_path)
+        monkeypatch.setattr(nr, "_safe_load_plugin", lambda *_a, **_k: [dict(finding)])
+
+        def boom(_findings):
+            raise TypeError("malformed SBOM entry")
+
+        monkeypatch.setattr(nr, "_enrich_trivy_with_syft", boom)
+
+        with caplog.at_level(logging.DEBUG):
+            nr.gather_results(root)
+
+        warnings = self._warnings(caplog)
+        assert len(warnings) == 1, f"expected one WARNING, got {warnings}"
+        assert "SBOM" in warnings[0].getMessage()
+
+    def test_a_healthy_run_emits_no_enrichment_warning(
+        self, tmp_path, monkeypatch, caplog
+    ):
+        """The control. A warning that always fires teaches readers to skip it.
+
+        This is the failure mode chunk 5 hit twice: a guard that fired on the
+        absence of a marker warned on every clean scan.
+        """
+        root, finding = self._one_repo(tmp_path)
+        monkeypatch.setattr(nr, "_safe_load_plugin", lambda *_a, **_k: [dict(finding)])
+
+        class _OfflineCalculator:
+            def __init__(self, *a, **k):
+                pass
+
+            def calculate_priorities_bulk(self, findings):
+                return {}
+
+        monkeypatch.setattr(nr, "PriorityCalculator", _OfflineCalculator)
+
+        with caplog.at_level(logging.DEBUG):
+            out = nr.gather_results(root)
+
+        assert out
+        assert (
+            self._warnings(caplog) == []
+        ), "a healthy run must not emit an enrichment warning"

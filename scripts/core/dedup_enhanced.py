@@ -62,9 +62,28 @@ except ImportError:
 from scripts.core.common_finding import Severity
 
 
+def tool_name_of(finding: dict[str, Any]) -> str:
+    """Return a finding's tool name, or "" when it has none.
+
+    Tolerates the `tool` field being absent or not a dict, which is how
+    hand-built findings and degenerate adapter output reach this module.
+    """
+    tool = finding.get("tool")
+    if not isinstance(tool, dict):
+        return ""
+    return str(tool.get("name") or "")
+
+
 @dataclass
 class FindingCluster:
     """Cluster of similar findings from different tools.
+
+    **Invariant: a cluster holds at most one finding per tool.** Phase 1
+    (fingerprint) is exact and authoritative for a single tool -- if it kept two
+    of that tool's findings apart, they differ in rule, line or message, and a
+    *fuzzy* re-merge of one tool's own output is strictly less trustworthy than
+    the tool's own distinction. Phase 2 exists to reconcile *different* tools
+    reporting one issue, which is what `detected_by` and `confidence` describe.
 
     Attributes:
         representative: Primary finding (highest severity in cluster)
@@ -82,6 +101,22 @@ class FindingCluster:
         if not self.findings:
             self.findings = [self.representative]
             self.similarity_scores[self.representative["id"]] = 1.0
+
+    def tool_names(self) -> set[str]:
+        """Names of the tools already represented in this cluster."""
+        return {tool_name_of(f) for f in self.findings}
+
+    def can_accept(self, finding: dict[str, Any]) -> bool:
+        """Whether `finding` may join without breaking the one-per-tool invariant.
+
+        A finding whose tool is already in the cluster is refused however similar
+        it looks. Measured on a real `deep` scan of the e2e fixtures: without this
+        check, 11 of 13 clusters were same-tool and 14 of the 16 findings removed
+        by clustering were distinct issues -- among them checkov `CKV_K8S_16`
+        ("Container should not be privileged"), which was absorbed into
+        `CKV_K8S_14` ("Image Tag should be fixed") and left the report entirely.
+        """
+        return tool_name_of(finding) not in self.tool_names()
 
     def add(self, finding: dict[str, Any], similarity: float) -> None:
         """Add finding to cluster and update representative if needed.
@@ -194,7 +229,14 @@ class FindingCluster:
                 - avg_similarity: Average similarity score
 
         """
-        tool_count = len(self.findings)
+        # Distinct tools, not member count. These are not the same number
+        # whenever a cluster holds more than one finding from one tool, and the
+        # field is named -- and rendered -- as a count of tools: a 4-member
+        # all-checkov cluster reported `tool_count: 4, level: HIGH` while its own
+        # `detected_by` array listed exactly one tool. `can_accept` now makes the
+        # two agree by construction; counting tools keeps the field honest
+        # regardless of how the cluster was assembled.
+        tool_count = len({tool_name_of(f) for f in self.findings})
 
         # Confidence levels
         if tool_count >= 4:
@@ -219,10 +261,16 @@ class FindingCluster:
 class SimilarityCalculator:
     """Calculate multi-dimensional similarity between findings.
 
-    Components:
-        - Location similarity (35%): Path + line range overlap
-        - Message similarity (40%): Fuzzy + token matching
+    Components (the defaults on ``__init__``, which are what callers get):
+        - Location similarity (50%): Path + line range overlap
+        - Message similarity (25%): Fuzzy + token matching
         - Metadata similarity (25%): CWE/CVE/Rule ID matching
+
+    Note that location alone supplies 0.50 of the 0.65 default threshold, so two
+    findings at the same ``path:line`` need only 30% of the remaining signal to
+    score as similar. That is intentional for cross-tool matching -- and it is
+    why the one-finding-per-tool invariant in FindingCluster matters, since
+    within a single tool "same line" is the norm rather than evidence.
 
     Algorithm ensures incompatible vulnerability types never cluster.
     """
@@ -784,11 +832,14 @@ class FindingClusterer:
             if progress_callback and idx % 10 == 0:
                 progress_callback(idx, total, f"Clustering finding {idx+1}/{total}")
 
-            # Find best matching cluster
+            # Find best matching cluster, considering only clusters that do not
+            # already contain this finding's tool (see FindingCluster.can_accept).
             best_cluster = None
             best_score = 0.0
 
             for cluster in clusters:
+                if not cluster.can_accept(finding):
+                    continue
                 score = self.calculator.calculate_similarity(
                     finding, cluster.representative
                 )
@@ -1299,6 +1350,11 @@ class LSHClusterer:
                     progress, n, f"Comparing pair {idx+1}/{len(candidates)}"
                 )
 
+            # Never union two findings from the same tool -- Phase 1 already
+            # ruled on those, exactly (see FindingCluster.can_accept).
+            if tool_name_of(findings[i]) == tool_name_of(findings[j]):
+                continue
+
             similarity = self.calculator.calculate_similarity(findings[i], findings[j])
             if similarity >= self.threshold:
                 uf.union(i, j)
@@ -1321,26 +1377,40 @@ class LSHClusterer:
             group_findings = [findings[idx] for idx in group_indices]
             sorted_group = self._sort_by_severity(group_findings)
 
-            # Create cluster with highest severity as representative
-            cluster = FindingCluster(representative=sorted_group[0])
-
-            # Add remaining findings with their similarity scores
-            rep_idx = group_indices[
-                sorted_group.index(sorted_group[0]) if len(sorted_group) > 0 else 0
+            # Refusing same-tool *unions* above is not sufficient: Union-Find is
+            # transitive, so checkov~trivy plus trivy~checkov still lands two
+            # checkov findings in one group. Split each group into as many
+            # clusters as its most-repeated tool requires, so a refused finding
+            # joins a sibling cluster rather than being stranded alone: a group
+            # of 20 holding 4 findings from each of 5 tools becomes 4 clusters of
+            # 5, not 1 cluster of 5 plus 15 singletons.
+            group_clusters: list[FindingCluster] = [
+                FindingCluster(representative=sorted_group[0])
             ]
+            rep_idx = group_indices[group_findings.index(sorted_group[0])]
+
             for finding in sorted_group[1:]:
-                orig_idx = group_indices[group_findings.index(finding)]
-                # Look up cached similarity
-                pair = (min(rep_idx, orig_idx), max(rep_idx, orig_idx))
-                similarity = similarity_cache.get(pair, 0.0)
+                target = next(
+                    (c for c in group_clusters if c.can_accept(finding)), None
+                )
+                if target is None:
+                    group_clusters.append(FindingCluster(representative=finding))
+                    continue
+
+                if target.representative is sorted_group[0]:
+                    orig_idx = group_indices[group_findings.index(finding)]
+                    pair = (min(rep_idx, orig_idx), max(rep_idx, orig_idx))
+                    similarity = similarity_cache.get(pair, 0.0)
+                else:
+                    similarity = 0.0
                 if similarity == 0.0:
                     # Calculate if not in cache (transitive closure case)
                     similarity = self.calculator.calculate_similarity(
-                        cluster.representative, finding
+                        target.representative, finding
                     )
-                cluster.add(finding, similarity)
+                target.add(finding, similarity)
 
-            clusters.append(cluster)
+            clusters.extend(group_clusters)
 
         if progress_callback:
             progress_callback(n, n, f"Clustered into {len(clusters)} groups")
