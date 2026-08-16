@@ -311,9 +311,11 @@ def test_remediation_as_string():
     sarif = to_sarif(findings)
     result = sarif["runs"][0]["results"][0]
 
-    assert "fixes" in result
-    assert len(result["fixes"]) == 1
-    assert "cursor.execute" in result["fixes"][0]["description"]["text"]
+    # A SARIF `fix` REQUIRES artifactChanges (concrete text replacements);
+    # prose remediation is carried in properties instead. See
+    # tests/reporters/test_sarif_conformance.py.
+    assert "fixes" not in result
+    assert "cursor.execute" in result["properties"]["remediation"]
 
 
 def test_remediation_as_empty_string():
@@ -612,9 +614,13 @@ def test_finding_with_zero_line_number():
 
     sarif = to_sarif(findings)
     result = sarif["runs"][0]["results"][0]
-    region = result["locations"][0]["physicalLocation"]["region"]
+    physical = result["locations"][0]["physicalLocation"]
 
-    assert region["startLine"] == 0
+    # SARIF constrains region.startLine to `minimum: 1`, so a missing line must
+    # be OMITTED, not emitted as 0 -- that was 93 schema errors on a real scan.
+    assert "startLine" not in physical.get("region", {})
+    # the finding itself is still reported, with its artifact location
+    assert physical["artifactLocation"]["uri"]
 
 
 # ========== Category 8: File Writing Functionality ==========
@@ -744,15 +750,15 @@ def test_version_fallback():
 
 def test_sarif_schema_url():
     """Test SARIF schema URL is correct."""
-    from scripts.core.reporters.sarif_reporter import to_sarif
+    from scripts.core.reporters.sarif_reporter import SARIF_SCHEMA_URI, to_sarif
 
     sarif = to_sarif([])
 
     assert "$schema" in sarif
-    assert (
-        sarif["$schema"]
-        == "https://schemastore.azurewebsites.net/schemas/json/sarif-2.1.0.json"
-    )
+    # The old schemastore.azurewebsites.net host answers HTTP 403 (measured
+    # 2026-08-15), so `$schema` resolved to an error page.
+    assert sarif["$schema"] == SARIF_SCHEMA_URI
+    assert "azurewebsites.net" not in sarif["$schema"]
 
 
 def test_sarif_version_constant():
@@ -861,7 +867,7 @@ def test_realistic_finding_complete():
 
     # Verify all enrichments applied
     assert result["level"] == "error"  # CRITICAL -> error
-    assert "fixes" in result
+    assert result["properties"]["remediation"]
     assert "taxa" in result
     assert len(result["taxa"]) == 2  # CWE and OWASP
     assert "snippet" in result["locations"][0]["physicalLocation"]["region"]
@@ -904,7 +910,7 @@ def test_multiple_findings_different_rules():
 
     # All should have appropriate enrichments
     for result in results:
-        assert "fixes" in result  # All have remediation
+        assert result["properties"]["remediation"]  # All have remediation
         assert "taxa" in result  # All have CWE tags
 
 

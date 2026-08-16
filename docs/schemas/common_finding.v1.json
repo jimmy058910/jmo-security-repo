@@ -14,10 +14,10 @@
   ],
   "properties": {
     "schemaVersion": { "type": "string", "enum": ["1.0.0", "1.1.0", "1.2.0"] },
-    "id": { "type": "string", "description": "Deterministic fingerprint" },
-    "ruleId": { "type": "string" },
+    "id": { "type": "string", "minLength": 1, "description": "Deterministic fingerprint. Must be non-empty: phase-1 deduplication silently DROPS any finding with a falsy id (#848)" },
+    "ruleId": { "type": "string", "minLength": 1 },
     "title": { "type": "string" },
-    "message": { "type": "string" },
+    "message": { "type": "string", "minLength": 1 },
     "description": { "type": "string" },
     "severity": { "type": "string", "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"] },
     "cvss": {

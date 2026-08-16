@@ -1998,7 +1998,7 @@ Export findings to spreadsheet-friendly CSV format for Excel, Google Sheets, or 
 | `message` | Finding description |
 | `tool` | Primary detecting tool |
 | `detected_by` | All tools that detected this finding (for consensus findings) |
-| `triaged` | YES/NO - Has an active suppression rule in `jmo.suppress.yml` |
+| `triaged` | YES/NO - A suppression rule matches this finding but has EXPIRED |
 
 **Example Output:**
 
@@ -2011,7 +2011,14 @@ priority,kev,epss,severity,ruleId,path,line,message,tool,detected_by,triaged
 
 **Triage Status Integration:**
 
-The `triaged` column shows "YES" when a finding has an active suppression rule in `jmo.suppress.yml`:
+The `triaged` column shows "YES" when a suppression rule in `jmo.suppress.yml`
+matches the finding but has **expired** -- it was triaged, and that decision has
+lapsed, so the finding is back in the report.
+
+> It cannot mean "has an *active* rule", which is what this section used to say.
+> An active rule removes the finding from the report entirely, so such a row can
+> never appear in the CSV -- measured on a real scan, every one of 242 rows read
+> `NO` (#857).
 
 ```yaml
 # jmo.suppress.yml

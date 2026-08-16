@@ -93,3 +93,9 @@ def test_yaml_import_error_handling():
         builtins.__import__ = original_import
         if original_yaml is not None:
             sys.modules["yaml"] = original_yaml
+        # ...and reload the reporter itself. Restoring sys.modules is not
+        # enough: `yaml_reporter.yaml` is bound at import time, so without
+        # this it stays None for the REST OF THE SESSION and every later test
+        # runs against a write_yaml that raises "PyYAML not installed".
+        importlib.reload(ymod)
+        assert ymod.yaml is not None, "yaml_reporter left broken for later tests"
