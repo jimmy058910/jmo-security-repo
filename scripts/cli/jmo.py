@@ -3382,6 +3382,16 @@ def cmd_scan(args) -> int:
 
     # BUG #2 FIX: Automatically run report phase to aggregate findings and store history
     # This ensures --no-store-history flag (default: enabled) actually works
+    #
+    # `jmo ci` sets skip_auto_report: it runs its own report immediately after
+    # this call, with the --fail-on/--policy flags a scan namespace does not
+    # carry. Running both wrote every artifact twice and stored two history rows
+    # for one scan. Nothing on any parser sets this attribute -- it is the
+    # internal handshake between cmd_ci and cmd_scan, and absence means "report
+    # normally", so a bare `jmo scan` is unaffected.
+    if getattr(args, "skip_auto_report", False):
+        return 1 if failed_targets else 0
+
     _log(args, "INFO", "Running report phase to aggregate findings...")
 
     # Add missing report-specific arguments to namespace

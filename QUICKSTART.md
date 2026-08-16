@@ -128,7 +128,7 @@ jmo scan --image nginx:latest --results-dir ./image-scan
 **CI mode (scan + gate on severity):**
 
 ```bash
-jmo ci --repo . --fail-on HIGH --profile balanced
+jmo ci --repo . --fail-on HIGH --profile-name balanced
 ```
 
 ---

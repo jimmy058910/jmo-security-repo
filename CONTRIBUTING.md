@@ -252,7 +252,7 @@ jmo scan --repo . --profile balanced --human-logs
 jmo report ./results --profile --human-logs
 
 # CI mode with severity threshold
-jmo ci --fail-on HIGH --profile balanced
+jmo ci --fail-on HIGH --profile-name balanced
 
 # Compare scans (diff feature)
 jmo diff results-baseline/ results-current/ --format md

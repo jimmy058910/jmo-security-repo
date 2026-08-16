@@ -93,6 +93,36 @@ def _warn_unknown_outputs(cfg, args, _log_fn) -> list[str]:
     return unknown
 
 
+def _warn_unknown_threshold(threshold, args, _log_fn) -> str | None:
+    """Report a `--fail-on` / `fail_on:` value that gates nothing.
+
+    Returns the unrecognised value, so callers can assert on it.
+
+    `fail_code` returns 0 for any threshold outside SEV_ORDER, which is the
+    same exit code as "nothing at or above the threshold". A typo therefore
+    turns the CI gate off and looks exactly like a clean run: `--fail-on HIGHH`
+    exited 0 on a scan holding HIGH findings, and the only record at any level
+    was the summary line reporting `threshold=HIGHH` as though it had applied.
+    """
+    if not threshold:
+        return None
+    if str(threshold).upper() in SEV_ORDER:
+        return None
+    bad = str(threshold)
+    _log_fn(
+        args,
+        "WARN",
+        f"Unrecognized severity threshold {bad!r}; no threshold applied and "
+        f"the run cannot fail on findings. Valid values: "
+        f"{', '.join(SEV_ORDER)}",
+    )
+    # Same two-systems rule as `_warn_unknown_outputs` above: `_log_fn` carries
+    # the user-facing record, the module logger stays at DEBUG so the line is
+    # not printed twice.
+    logger.debug("Unrecognized severity threshold %r", bad)
+    return bad
+
+
 def cmd_report(args, _log_fn) -> int:
     """Run report command: aggregate findings and generate outputs.
 
@@ -418,6 +448,7 @@ def cmd_report(args, _log_fn) -> int:
 
     # Determine exit code
     threshold = args.fail_on if args.fail_on is not None else cfg.fail_on
+    _warn_unknown_threshold(threshold, args, _log_fn)
     code = fail_code(threshold, counts)
 
     _log_fn(

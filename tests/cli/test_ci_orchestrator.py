@@ -202,7 +202,20 @@ def test_cmd_ci_return_codes():
 
 
 def test_cmd_ci_scan_args_defaults():
-    """Test ScanArgs uses correct defaults when attributes missing."""
+    """A sparse caller still gets the attributes the scan phase cannot do without.
+
+    This used to enumerate the 26 fields `ScanArgs` manufactured, and that is
+    precisely why the drift it should have caught was invisible: a test that
+    lists what the mirror *set* has no way to notice what it did not.
+    `--skip-tools`, `--resume`, `--no-resume`, `--no-store-raw-findings`,
+    `--encrypt-findings` and `--collect-metadata` were all absent from both the
+    mirror and this list, and both were green.
+
+    The forwarder now copies the caller's namespace, so absent stays absent and
+    the consumers' own `getattr` defaults apply. Only the attributes read as a
+    bare `args.X` must be filled in -- see `test_ci_arg_forwarding.py`, which
+    derives that set from the consumers rather than restating it.
+    """
 
     class Args:
         repo = "/repo"
@@ -214,39 +227,21 @@ def test_cmd_ci_scan_args_defaults():
         cmd_ci(Args(), mock_scan, mock_report)
 
     scan_args = mock_scan.call_args[0][0]
-    # Verify defaults
-    assert scan_args.repos_dir is None
-    assert scan_args.targets is None
-    assert scan_args.image is None
-    assert scan_args.images_file is None
-    assert scan_args.terraform_state is None
-    assert scan_args.cloudformation is None
-    assert scan_args.k8s_manifest is None
-    assert scan_args.url is None
-    assert scan_args.urls_file is None
-    assert scan_args.api_spec is None
-    assert scan_args.gitlab_url is None
-    assert scan_args.gitlab_token is None
-    assert scan_args.gitlab_group is None
-    assert scan_args.gitlab_repo is None
-    assert scan_args.k8s_context is None
-    assert scan_args.k8s_namespace is None
-    assert scan_args.k8s_all_namespaces is False
+    assert scan_args.repo == "/repo"
     assert scan_args.results_dir == "results"
     assert scan_args.config == "jmo.yml"
-    assert scan_args.tools is None
-    assert scan_args.timeout == 600
-    assert scan_args.threads is None
-    assert scan_args.allow_missing_tools is False
-    assert scan_args.profile_name is None
-    assert scan_args.log_level is None
-    assert scan_args.human_logs is False
-    assert scan_args.store_history is False
-    assert scan_args.history_db is None
+    # Not supplied by the caller and not read without a default: left absent
+    # rather than invented, so nothing masks a flag that failed to arrive.
+    assert not hasattr(scan_args, "gitlab_token")
 
 
 def test_cmd_ci_report_args_defaults():
-    """Test ReportArgs uses correct defaults when attributes missing."""
+    """As above, for the report phase.
+
+    `results_dir` is normalized through `Path` and mirrored onto the positional
+    and optional dests `jmo report` reads; `out` is forced to None so reports
+    land in `<results>/summaries`.
+    """
 
     class Args:
         results_dir = "results"
@@ -258,7 +253,6 @@ def test_cmd_ci_report_args_defaults():
         cmd_ci(Args(), mock_scan, mock_report)
 
     report_args = mock_report.call_args[0][0]
-    # Verify defaults
     assert report_args.results_dir == "results"
     assert report_args.results_dir_pos == "results"
     assert report_args.results_dir_opt == "results"
@@ -267,18 +261,7 @@ def test_cmd_ci_report_args_defaults():
     assert report_args.fail_on is None
     assert report_args.profile is False
     assert report_args.threads is None
-    assert report_args.log_level is None
-    assert report_args.human_logs is False
-    assert report_args.json is False
-    assert report_args.md is False
-    assert report_args.html is False
-    assert report_args.sarif is False
-    assert report_args.yaml is False
-    assert report_args.store_history is False
-    assert report_args.history_db is None
-    assert report_args.profile_name is None
     assert report_args.policies is None
-    assert report_args.fail_on_policy_violation is False
 
 
 def test_cmd_ci_results_dir_path_conversion():
@@ -490,30 +473,17 @@ def test_cmd_ci_policy_args():
     assert report_args.fail_on_policy_violation is True
 
 
-def test_cmd_ci_output_format_args():
-    """Test cmd_ci with output format arguments."""
-
-    class Args:
-        json = True
-        md = True
-        html = True
-        sarif = True
-        yaml = True
-        results_dir = "results"
-        repo = "/repo"
-
-    mock_scan = MagicMock(return_value=0)
-    mock_report = MagicMock(return_value=0)
-
-    with patch("scripts.cli.jmo._log"):
-        cmd_ci(Args(), mock_scan, mock_report)
-
-    report_args = mock_report.call_args[0][0]
-    assert report_args.json is True
-    assert report_args.md is True
-    assert report_args.html is True
-    assert report_args.sarif is True
-    assert report_args.yaml is True
+# `test_cmd_ci_output_format_args` was deleted here. `ReportArgs` set five
+# fields -- `json`, `md`, `html`, `sarif`, `yaml` -- under a comment reading
+# "Output format flags (used by report_orchestrator)". Measured: no parser
+# defines any of them (`jmo report` has 11 dests, `jmo ci` 40, none of these),
+# and `report_orchestrator` reads none of them; the only `getattr(args, "json")`
+# calls in `scripts/cli/` are in `history_commands`, `tool_commands` and
+# `validate_commands`. Which report formats are written is decided by
+# `cfg.outputs`, guarded since chunk 10 by `KNOWN_OUTPUTS`.
+#
+# The test asserted the mirror had copied the five fields, which it always had,
+# so it was green for a contract that did not exist on either side of the copy.
 
 
 class TestStrictVersions:
