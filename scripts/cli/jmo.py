@@ -123,18 +123,33 @@ def _effective_scan_settings(args) -> dict[str, Any]:
             # as "it ran and found nothing" to anyone reading the results.
             # Verified with the accounting reconciler: skipping a tool without
             # this line produces `NEVER MENTIONED` and a FAIL verdict.
-            # "scripts.cli.jmo", not __name__: this module is normally entered
-            # as `python -m scripts.cli.jmo`, where __name__ is "__main__". A
-            # __main__ logger is not a child of "scripts", so it never receives
-            # the handler configure_scan_logging() installs and falls back to
-            # logging.lastResort - pinned at WARNING, which silently drops this
-            # INFO record. Measured: the line was absent from a real scan's
-            # stderr while firing correctly under a direct import.
-            logging.getLogger("scripts.cli.jmo").info(
-                "Skipping %d tool(s) at user request (--skip-tools): %s",
-                len(dropped),
-                ", ".join(sorted(dropped)),
+            #
+            # It goes through `_log`, not the stdlib logger, because the two
+            # have different default floors: `_log` defaults to INFO while
+            # `configure_scan_logging()` defaults the `scripts` logger to WARN -
+            # deliberately, since that is the right default for library
+            # diagnostics. An `.info()` here was therefore invisible in a normal
+            # run and appeared only under `--log-level INFO|DEBUG`, which is the
+            # exact silence this line exists to prevent (#871). Measured:
+            # default 0 records, INFO 1, WARN 0, DEBUG 1.
+            #
+            # An earlier fix here corrected the logger's *parentage* - under
+            # `python -m scripts.cli.jmo` this module's __name__ is "__main__",
+            # so the module logger at the top of the file is not a child of
+            # `scripts` and never receives the handler. That was real, and the
+            # level floor was left untouched, so the record still did not reach
+            # a normal run.
+            #
+            # The stdlib record stays as a DEBUG breadcrumb under the corrected
+            # name. `_log` writes JSON to stderr directly and never touches
+            # `logging`, so emitting at the user-facing level on both prints
+            # every line twice - the trap chunk 10 measured.
+            message = (
+                f"Skipping {len(dropped)} tool(s) at user request "
+                f"(--skip-tools): {', '.join(sorted(dropped))}"
             )
+            _log(args, "INFO", message)
+            logging.getLogger("scripts.cli.jmo").debug(message)
 
     return {
         "tools": tools,
