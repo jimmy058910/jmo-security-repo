@@ -206,3 +206,50 @@ Coverage percentage says nothing about these — there is no line to miss.
 | **Concurrent scans on Windows** | Requires two real scans racing on one results directory. SQLite has its own locking and scan outputs are write-once, so the risk is low — but it is untested, not proven. | Exercise it manually with separate `--results-dir` values, then with shared ones. |
 
 The user-facing half of these is in [docs/KNOWN_LIMITATIONS.md](../../docs/KNOWN_LIMITATIONS.md). Keep the two in step: if a gap here becomes something a user can hit, it belongs there too.
+
+## A mirror of a mirror: why enumerating tests miss a whole class
+
+**Symptom:** a hand-written list restates something the code already defines —
+an argparse parser, a set of writers, a config schema — and a full test file
+covers it, green, while the two have silently drifted apart.
+
+Found three times in the v1.1.0 campaign. The worst was `cmd_ci`, which
+re-marshalled its arguments through two hand-written classes built entirely
+from `getattr(a, "<literal>", <default>)`. `jmo ci` **parsed** nine flags and
+advertised them in `--help`, and the mirrors had never listed them, so
+`--skip-tools` ran the tool anyway and `--no-store-raw-findings` wrote secrets
+to the history database. A string literal is invisible to mypy, so there was no
+type error. `test_ci_orchestrator.py` had **24 tests over `cmd_ci` and not one
+used the real parser** — two of them enumerated the 26 and 20 fields the mirrors
+manufactured, one assertion each.
+
+> **A test that lists what the mirror *set* has no way to notice what it did
+> not.** The test is a mirror of the mirror; both were written from the same
+> wrong assumption, on the same day, by the same person.
+
+The same shape, elsewhere: `test_wizard_generators.py` asserted the strings
+`wizard_generators.py` emits, *verbatim* — comparing the template to itself. It
+was green for **13** generated `jmo ci`/`jmo report` commands that exit 2.
+
+### What to do instead
+
+1. **Derive from the authority, do not restate it.** Read the parser's dests,
+   AST-scan the consumer, ask the real parser whether a generated command
+   parses. `KNOWN_OUTPUTS` (chunk 10), `test_ci_arg_forwarding.py` and
+   `test_wizard_generated_commands_parse.py` are the worked examples.
+2. **Give every derivation a meta-guard.** An extractor that silently finds
+   nothing passes every assertion built on it. Assert a floor on what it found
+   *and* name a few items it must contain.
+3. **Add a negative control.** Prove the oracle still rejects the pre-fix input,
+   or "the parser accepts everything" reads as "everything is fine".
+4. **Keep any list that survives minimal and justified.** `_SCAN_REQUIRED` /
+   `_REPORT_REQUIRED` in `ci_orchestrator.py` are 7 entries, each because its
+   consumer reads it as a bare `args.X` with no default — and a test derives
+   that set by AST and fails if the lists drift in **either** direction. 49
+   hand-written fields became 7 measured ones.
+
+**And an oracle earns its keep immediately.** The first version of the wizard
+fix rewrote six `report --profile <value>` sites to `--profile-name` — a flag
+`jmo report` does not define either. The new parser-oracle guard failed 11 cases
+on its first run. Same lesson as chunk 8's mutation testing: *a fix can carry
+its own live bug, and only an independent oracle finds it.*

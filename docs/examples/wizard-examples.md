@@ -59,7 +59,7 @@ The wizard now displays a 6-step progress bar during execution:
 
 ┌─ 🚀 Preflight Check ───────────────────────────────────────────────
 │ • Profile: balanced
-│ • Command: jmo ci --profile balanced --fail-on HIGH --image nginx:latest
+│ • Command: jmo ci --profile-name balanced --fail-on HIGH --image nginx:latest
 │ • Estimated time: 18-25 minutes
 └────────────────────────────────────────────────────────────────────
 

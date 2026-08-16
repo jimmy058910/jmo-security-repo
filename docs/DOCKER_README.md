@@ -549,7 +549,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Deep Scan
-        run: jmo ci --repo . --profile deep
+        run: jmo ci --repo . --profile-name deep
 
       - name: Upload Results
         uses: actions/upload-artifact@v4

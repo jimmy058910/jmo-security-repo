@@ -30,7 +30,7 @@ Affected subcommands: `jmo scan`, `jmo ci`.
 
 ```bash
 jmo scan --repo . --profile balanced
-jmo ci --repo . --profile balanced --fail-on HIGH
+jmo ci --repo . --profile-name balanced --fail-on HIGH
 ```
 
 **After (v1.0.x):**

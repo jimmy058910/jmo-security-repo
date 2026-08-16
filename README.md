@@ -204,7 +204,7 @@ jmo report ./results
   run: |
     docker run --rm -v ${{ github.workspace }}:/scan \
       ghcr.io/jimmy058910/jmo-security:latest \
-      ci --repo /scan --fail-on HIGH --profile balanced
+      ci --repo /scan --fail-on HIGH --profile-name balanced
 
 - name: Upload SARIF
   uses: github/codeql-action/upload-sarif@v2
@@ -218,7 +218,7 @@ jmo report ./results
 security_scan:
   image: ghcr.io/jimmy058910/jmo-security:latest
   script:
-    - jmo ci --repo . --fail-on HIGH --profile balanced
+    - jmo ci --repo . --fail-on HIGH --profile-name balanced
   artifacts:
     reports:
       sast: results/summaries/findings.sarif

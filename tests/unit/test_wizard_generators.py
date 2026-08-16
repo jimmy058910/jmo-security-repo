@@ -87,7 +87,7 @@ def test_generate_makefile_target_repo_workflow(mock_config):
     assert ".PHONY: security-report" in result
     assert ".PHONY: security-clean" in result
     assert "jmo scan --repo ." in result
-    assert "jmo report ./results --profile" in result
+    assert "jmo report ./results" in result
     assert "rm -rf results/" in result
 
 
@@ -419,7 +419,7 @@ def test_generate_gitlab_ci_stack_workflow():
     assert "security-scan-all:" in result
     assert "security-report:" in result
     assert "jmo scan --repos-dir . --profile deep" in result
-    assert "jmo report ./results --profile" in result
+    assert "jmo report ./results" in result
     assert "dependencies:" in result
 
 
@@ -429,7 +429,7 @@ def test_generate_gitlab_ci_cicd_workflow():
 
     assert "- security-audit" in result
     assert "ci-security-audit:" in result
-    assert "jmo ci --repos-dir . --profile fast --fail-on HIGH" in result
+    assert "jmo ci --repos-dir . --profile-name fast --fail-on HIGH" in result
 
 
 def test_generate_gitlab_ci_deployment_workflow():
@@ -438,7 +438,7 @@ def test_generate_gitlab_ci_deployment_workflow():
 
     assert "- pre-deployment" in result
     assert "deployment-security-check:" in result
-    assert "jmo ci --profile balanced --fail-on CRITICAL" in result
+    assert "jmo ci --profile-name balanced --fail-on CRITICAL" in result
     assert "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA" in result
     assert "when: manual" in result
 
@@ -481,7 +481,10 @@ def test_generate_docker_compose_stack_workflow():
     assert "scan" in result
     assert "--repos-dir /scan" in result
     assert "--profile deep" in result
-    assert "report /scan/results --profile" in result
+    # `jmo report` has no profile-selection flag at all -- it reads the profile
+    # from .scan_metadata.json. This used to assert `--profile {profile}`, which
+    # made the generated command exit 2.
+    assert "report /scan/results" in result
 
 
 def test_generate_docker_compose_cicd_workflow():
@@ -491,7 +494,7 @@ def test_generate_docker_compose_cicd_workflow():
     assert "jmo-security:" in result
     assert "ci" in result
     assert "--repos-dir /scan" in result
-    assert "--profile fast" in result
+    assert "--profile-name fast" in result
     assert "--fail-on HIGH" in result
 
 

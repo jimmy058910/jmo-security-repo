@@ -112,3 +112,54 @@ def test_ci_composes_scan_and_report(tmp_path: Path, monkeypatch):
     assert (outdir / "dashboard.html").exists() or (outdir / "SUMMARY.md").exists()
     # timings.json should be present due to profile=True
     assert (outdir / "timings.json").exists()
+
+
+def test_ci_runs_the_report_phase_exactly_once(tmp_path: Path, monkeypatch):
+    """`cmd_scan` runs the report itself, and `cmd_ci` then ran it again.
+
+    `cmd_scan` grew its own report call so that `--no-store-history` works for a
+    bare `jmo scan`; `cmd_ci` already had one. Both fired, so a single `jmo ci`
+    parsed, enriched and wrote all 14 artifacts twice -- and stored two history
+    rows plus a doubled findings table for one scan. Measured on a real scan of
+    the e2e fixture tree: `jmo ci` produced 2 scan rows / 34 finding rows where
+    `jmo scan` produced 1 / 17.
+
+    Spying on `jmo._cmd_report_impl` catches both call sites: `cmd_scan` looks
+    it up as a module global, and the `cmd_ci` wrapper passes the same global
+    in as `cmd_report_fn`.
+    """
+    import scripts.cli.jmo as jmo_mod
+
+    monkeypatch.setenv("CI", "true")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    calls: list[object] = []
+    original = jmo_mod._cmd_report_impl
+
+    def spy(args, log_fn):
+        calls.append(args)
+        return original(args, log_fn)
+
+    monkeypatch.setattr(jmo_mod, "_cmd_report_impl", spy)
+
+    class Args:
+        def __init__(self):
+            self.repo = str(repo)
+            self.repos_dir = None
+            self.targets = None
+            self.results_dir = str(tmp_path / "results")
+            self.config = str(tmp_path / "no.yml")
+            self.tools = ["trufflehog"]
+            self.timeout = 5
+            self.threads = 1
+            self.allow_missing_tools = True
+            self.fail_on = None
+            self.profile = False
+
+    cmd_ci(Args())
+
+    assert len(calls) == 1, (
+        f"report phase ran {len(calls)} times for one `jmo ci`; "
+        "cmd_scan's auto-report and cmd_ci's own report both fired"
+    )

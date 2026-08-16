@@ -172,3 +172,72 @@ class TestRequestedArtifactFailsLoudly:
             if "yaml" in m.lower() or "compliance" in m.lower() or "output" in m.lower()
         ]
         assert noisy == [], noisy
+
+
+class TestUnknownFailOnThreshold:
+    """A `--fail-on` value JMo does not recognise turns the CI gate off.
+
+    `fail_code` returns 0 for any threshold outside `SEV_ORDER`, which is the
+    same exit code as "nothing at or above the threshold". Measured on a real
+    242-finding scan holding HIGH findings: `--fail-on HIGHH` exited **0**, and
+    the only record at any level -- DEBUG included -- was the summary line
+    reporting `threshold=HIGHH` as though it had been applied.
+    """
+
+    def test_unknown_threshold_is_reported_at_warn(self):
+        log = _Recorder()
+        assert (
+            report_orchestrator._warn_unknown_threshold("HIGHH", SimpleNamespace(), log)
+            == "HIGHH"
+        )
+        warned = log.at("WARN", "ERROR")
+        assert len(warned) == 1, log.records
+        assert "HIGHH" in warned[0]
+
+    def test_the_warning_names_the_values_that_would_work(self):
+        """A gate that silently does nothing is worth more than a bare 'invalid'."""
+        log = _Recorder()
+        report_orchestrator._warn_unknown_threshold("bogus", SimpleNamespace(), log)
+        message = log.at("WARN")[0]
+        for severity in report_orchestrator.SEV_ORDER:
+            assert severity in message, message
+
+    @pytest.mark.parametrize("threshold", ["CRITICAL", "HIGH", "medium", "Low", "INFO"])
+    def test_every_valid_threshold_is_silent(self, threshold):
+        """Negative control, including the case-insensitivity `fail_code` allows."""
+        log = _Recorder()
+        assert (
+            report_orchestrator._warn_unknown_threshold(
+                threshold, SimpleNamespace(), log
+            )
+            is None
+        )
+        assert log.records == []
+
+    @pytest.mark.parametrize("threshold", [None, ""])
+    def test_no_threshold_is_silent(self, threshold):
+        """Not asking for a gate is not a broken gate."""
+        log = _Recorder()
+        assert (
+            report_orchestrator._warn_unknown_threshold(
+                threshold, SimpleNamespace(), log
+            )
+            is None
+        )
+        assert log.records == []
+
+    def test_cmd_report_warns_and_still_exits_zero(self, tmp_path):
+        """Through the real command: the exit code is unchanged, the silence is not.
+
+        Changing the exit code would break every pipeline carrying a typo at
+        upgrade time, which is the same population that needs to be told.
+        """
+        out = tmp_path / "summaries"
+        args = _args(tmp_path, out)
+        args.fail_on = "HIGHH"
+        log = _Recorder()
+        with patch.object(report_orchestrator, "gather_results", return_value=[]):
+            rc = report_orchestrator.cmd_report(args, log)
+
+        assert rc == 0
+        assert any("HIGHH" in m for m in log.at("WARN", "ERROR")), log.records

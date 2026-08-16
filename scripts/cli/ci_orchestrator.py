@@ -3,8 +3,60 @@
 
 from __future__ import annotations
 
+import copy
 import sys
 from pathlib import Path
+
+# Attributes the downstream phases read as a bare ``args.X`` -- no ``getattr``
+# default -- so their absence is an AttributeError rather than a fallback.
+# `jmo ci`'s own parser supplies all of them except ``out``, which only
+# `jmo report` defines. The list exists for callers that build a namespace by
+# hand: `cmd_profile` routes `jmo fast|balanced|full` through here with 11
+# dests against `jmo ci`'s 40.
+#
+# This is deliberately NOT a mirror of the parser, and the distinction is the
+# whole point of the rewrite below. Two hand-written mirror classes used to live
+# here, listing 29 and 20 fields by name, and they had drifted from
+# `_add_ci_args` by nine: `--skip-tools`, `--resume`, `--no-resume`,
+# `--no-store-raw-findings`, `--encrypt-findings` and `--collect-metadata` were
+# parsed, advertised in `--help`, and then silently discarded. Because every
+# read was ``getattr(a, "<literal>", <default>)``, a renamed or added flag
+# produced no type error -- the same getattr-masks-mypy class as the
+# `threads: auto` crash. Anything reached through ``getattr`` with a default is
+# forwarded automatically by copying the namespace, so it must not be listed.
+_SCAN_REQUIRED: dict[str, object] = {
+    "config": "jmo.yml",
+    "results_dir": "results",
+}
+_REPORT_REQUIRED: dict[str, object] = {
+    "config": "jmo.yml",
+    "fail_on": None,
+    "out": None,
+    "policies": None,
+    "profile": False,
+    "threads": None,
+}
+
+
+def _phase_args(a, required: dict[str, object], **overrides):
+    """Return the caller's namespace, adapted for one phase.
+
+    ``copy.copy`` rather than ``argparse.Namespace(**vars(a))``: the test suite
+    and `cmd_profile` both pass objects whose attributes live on the *class*,
+    where ``vars(instance)`` is ``{}`` and every field would be dropped.
+
+    The copy also means the phase cannot mutate the caller's namespace --
+    `cmd_scan` adds ``results_dir_pos``/``out``/``fail_on`` to whatever it is
+    given, which used to land on a throwaway object and now would otherwise
+    land on `jmo ci`'s own arguments.
+    """
+    ns = copy.copy(a)
+    for key, value in required.items():
+        if not hasattr(ns, key):
+            setattr(ns, key, value)
+    for key, value in overrides.items():
+        setattr(ns, key, value)
+    return ns
 
 
 def cmd_ci(args, cmd_scan_fn, cmd_report_fn) -> int:
@@ -16,7 +68,8 @@ def cmd_ci(args, cmd_scan_fn, cmd_report_fn) -> int:
         cmd_report_fn: Function to run report command (args, _log_fn) -> int
 
     Returns:
-        Exit code from report command (respects --fail-on threshold)
+        Exit code: the report's threshold verdict when it fails, otherwise the
+        scan's own code.
     """
     # v1.0.0: Strict version check for reproducible CI builds
     if getattr(args, "strict_versions", False):
@@ -63,85 +116,37 @@ def cmd_ci(args, cmd_scan_fn, cmd_report_fn) -> int:
                     f"INFO: {len(ahead)} tool(s) ahead of versions.yaml (OK)\n"
                 )
 
-    class ScanArgs:
-        """Arguments adapter for scan command."""
-
-        def __init__(self, a):
-            self.repo = getattr(a, "repo", None)
-            self.repos_dir = getattr(a, "repos_dir", None)
-            self.targets = getattr(a, "targets", None)
-            # Container image scanning
-            self.image = getattr(a, "image", None)
-            self.images_file = getattr(a, "images_file", None)
-            # IaC scanning
-            self.terraform_state = getattr(a, "terraform_state", None)
-            self.cloudformation = getattr(a, "cloudformation", None)
-            self.k8s_manifest = getattr(a, "k8s_manifest", None)
-            # Web app/API scanning
-            self.url = getattr(a, "url", None)
-            self.urls_file = getattr(a, "urls_file", None)
-            self.api_spec = getattr(a, "api_spec", None)
-            # GitLab integration
-            self.gitlab_url = getattr(a, "gitlab_url", None)
-            self.gitlab_token = getattr(a, "gitlab_token", None)
-            self.gitlab_group = getattr(a, "gitlab_group", None)
-            self.gitlab_repo = getattr(a, "gitlab_repo", None)
-            # Kubernetes cluster scanning
-            self.k8s_context = getattr(a, "k8s_context", None)
-            self.k8s_namespace = getattr(a, "k8s_namespace", None)
-            self.k8s_all_namespaces = getattr(a, "k8s_all_namespaces", False)
-            # Other options
-            self.results_dir = getattr(a, "results_dir", "results")
-            self.config = getattr(a, "config", "jmo.yml")
-            self.tools = getattr(a, "tools", None)
-            self.timeout = getattr(a, "timeout", 600)
-            self.threads = getattr(a, "threads", None)
-            self.allow_missing_tools = getattr(a, "allow_missing_tools", False)
-            self.profile_name = getattr(a, "profile_name", None)
-            self.log_level = getattr(a, "log_level", None)
-            self.human_logs = getattr(a, "human_logs", False)
-            # History database flags
-            self.store_history = getattr(a, "store_history", False)
-            self.history_db = getattr(a, "history_db", None)
-
-    # Run scan phase
-    cmd_scan_fn(ScanArgs(args))
-
-    class ReportArgs:
-        """Arguments adapter for report command."""
-
-        def __init__(self, a):
-            rd = str(Path(getattr(a, "results_dir", "results")))
-            # Set all possible fields that cmd_report normalizes
-            self.results_dir = rd
-            self.results_dir_pos = rd
-            self.results_dir_opt = rd
-            self.out = None
-            self.config = getattr(a, "config", "jmo.yml")
-            self.fail_on = getattr(a, "fail_on", None)
-            self.profile = getattr(a, "profile", False)
-            self.threads = getattr(a, "threads", None)
-            self.log_level = getattr(a, "log_level", None)
-            self.human_logs = getattr(a, "human_logs", False)
-            # Output format flags (used by report_orchestrator)
-            self.json = getattr(a, "json", False)
-            self.md = getattr(a, "md", False)
-            self.html = getattr(a, "html", False)
-            self.sarif = getattr(a, "sarif", False)
-            self.yaml = getattr(a, "yaml", False)
-            # History database flags
-            self.store_history = getattr(a, "store_history", False)
-            self.history_db = getattr(a, "history_db", None)
-            self.profile_name = getattr(a, "profile_name", None)
-            # Policy flags (Phase 5.1)
-            self.policies = getattr(a, "policies", None)
-            self.fail_on_policy_violation = getattr(
-                a, "fail_on_policy_violation", False
-            )
+    # Run scan phase.
+    #
+    # `cmd_scan` runs the report phase itself, so that `--no-store-history`
+    # works for a bare `jmo scan`. Suppress that here: `jmo ci` runs its own
+    # report below with the threshold and policy flags the scan namespace does
+    # not carry, and without this a single `jmo ci` parsed, enriched and wrote
+    # all 14 artifacts twice -- and stored *two* history rows plus a doubled
+    # findings table for one scan (measured: 2 rows / 34 findings where
+    # `jmo scan` produced 1 / 17).
+    scan_rc = int(cmd_scan_fn(_phase_args(args, _SCAN_REQUIRED, skip_auto_report=True)))
 
     # Import _log here to avoid circular dependency
     from scripts.cli.jmo import _log
 
-    # Run report phase and return its exit code
-    rc_report: int = int(cmd_report_fn(ReportArgs(args), _log))
-    return rc_report
+    rd = str(Path(getattr(args, "results_dir", "results")))
+    report_args = _phase_args(
+        args,
+        _REPORT_REQUIRED,
+        results_dir=rd,
+        results_dir_pos=rd,
+        results_dir_opt=rd,
+        out=None,
+    )
+    rc_report: int = int(cmd_report_fn(report_args, _log))
+
+    # Same precedence `cmd_scan` applies to its own two codes: the threshold
+    # verdict wins when it fails, because it is the more specific answer.
+    # Otherwise a scan that could not complete is itself a failure. `jmo ci`
+    # previously discarded `cmd_scan`'s return value outright, so a target that
+    # never scanned exited 0 whenever the findings that *were* collected sat
+    # under the threshold.
+    if rc_report != 0:
+        return rc_report
+    return scan_rc
