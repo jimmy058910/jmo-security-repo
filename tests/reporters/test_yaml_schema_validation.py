@@ -85,11 +85,29 @@ def _invalid(**overrides):
 
 
 class TestValidationActuallyRuns:
-    def test_the_schema_is_reachable_from_this_module(self):
-        """The off-by-one that made every other test in this file vacuous."""
+    def test_the_schema_is_the_repository_one(self):
+        """Two ways this file could go vacuous, both measured.
+
+        1. The original defect: the schema path was wrong, so nothing was ever
+           validated.
+        2. `SCHEMA_PATH` is a module constant built with `/`, and a test
+           patching `Path.__truediv__` froze it to a **pytest tmpdir stub**
+           containing `{"type": "object"}` -- which every finding satisfies.
+           It still `exists()`, so an existence check alone passes.
+
+        Assert identity, not existence.
+        """
         from scripts.core.schema_validator import SCHEMA_PATH
 
         assert SCHEMA_PATH.exists(), SCHEMA_PATH
+        assert SCHEMA_PATH.name == "common_finding.v1.json", SCHEMA_PATH
+        assert SCHEMA_PATH.parent.name == "schemas", SCHEMA_PATH
+        assert "Temp" not in str(SCHEMA_PATH), f"schema repointed at {SCHEMA_PATH}"
+        # and it is the real schema, not a permissive stub
+        from scripts.core.schema_validator import load_schema
+
+        schema = load_schema()
+        assert schema["properties"]["risk"]["properties"]["cwe"]["type"] == "array"
 
     def test_wrong_typed_field_is_reported_at_warning(self, tmp_path):
         """risk.cwe as a string is the violation a real scan shipped."""

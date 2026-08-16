@@ -5,6 +5,19 @@ import logging
 from pathlib import Path
 from typing import Any
 
+# Imported at module scope on purpose. `schema_validator.SCHEMA_PATH` is a
+# module-level constant built with `Path(...) / ... / ...`, so it is frozen
+# at first import. A lazy import inside `write_yaml` put that first import
+# inside whatever a caller had patched -- and one test patches
+# `Path.__truediv__` itself, which is global to the class. `SCHEMA_PATH`
+# then pointed at a pytest tmpdir stub schema for the REST OF THE SESSION,
+# and every later validation passed against `{"type": "object"}`.
+from scripts.core.schema_validator import (
+    JSONSCHEMA_AVAILABLE,
+    load_schema,
+    validate_finding,
+)
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
@@ -13,11 +26,6 @@ try:
 except ImportError as e:  # optional dependency
     logger.debug(f"YAML reporter unavailable: {e}")
     yaml = None  # type: ignore[assignment]  # Fallback when yaml not installed
-
-try:
-    import jsonschema
-except ImportError:
-    jsonschema = None
 
 
 def _validate_against_schema(findings: list[dict[str, Any]]) -> int:
@@ -40,17 +48,11 @@ def _validate_against_schema(findings: list[dict[str, Any]]) -> int:
     The path is now `schema_validator`'s, which lives one directory shallower
     and had the arithmetic right -- so there is one definition rather than two.
     """
+    if not JSONSCHEMA_AVAILABLE:
+        return 0
     try:
-        from scripts.core.schema_validator import (
-            JSONSCHEMA_AVAILABLE,
-            load_schema,
-            validate_finding,
-        )
-
-        if not JSONSCHEMA_AVAILABLE:
-            return 0
         schema = load_schema()
-    except (FileNotFoundError, OSError, ValueError, ImportError) as e:
+    except (FileNotFoundError, OSError, ValueError) as e:
         # Loudly, because being unable to validate is exactly the state that
         # went unnoticed before.
         logger.warning("Schema validation skipped -- schema unavailable: %s", e)
@@ -96,8 +98,13 @@ def write_yaml(
     if yaml is None:
         raise RuntimeError("PyYAML not installed. Install with: pip install pyyaml")
 
-    # Optional schema validation
-    if validate and jsonschema:
+    # Optional schema validation. Whether jsonschema is importable is
+    # decided inside `_validate_against_schema`, by `schema_validator`'s
+    # own flag. This module used to keep a SECOND `jsonschema` global and
+    # gate on that -- so a test nulling it disabled validation through a
+    # flag the validator never consults, and the guards below went quietly
+    # vacuous on whichever xdist worker had run that test.
+    if validate:
         _validate_against_schema(findings)
 
     p = Path(out_path)
