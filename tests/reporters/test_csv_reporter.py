@@ -619,8 +619,39 @@ def test_write_csv_triaged_default():
     assert row == ["NO"]
 
 
-def test_write_csv_triaged_with_suppression():
-    """Test that triaged column shows YES when finding is suppressed."""
+def test_write_csv_triaged_with_expired_suppression():
+    """triaged is YES when a matching suppression has EXPIRED (#857).
+
+    This test previously asserted YES for an **active** suppression, and
+    passed -- while production could never produce that row, because
+    `cmd_report` filters actively-suppressed findings out before `write_csv`
+    sees them. It described a state the pipeline cannot reach.
+    """
+    from scripts.core.suppress import Suppression
+
+    finding = {
+        "id": "suppressed-finding-123",
+        "severity": "LOW",
+        "ruleId": "test",
+        "tool": {"name": "test"},
+        "location": {"path": "test.txt"},
+    }
+
+    suppressions = {
+        "suppressed-finding-123": Suppression(
+            id="suppressed-finding-123",
+            reason="False positive",
+            expires="2020-01-01",
+        )
+    }
+
+    row = _extract_row(finding, ["triaged"], suppressions=suppressions)
+
+    assert row == ["YES"]
+
+
+def test_write_csv_triaged_no_for_active_suppression():
+    """An active rule means the finding was filtered out upstream, not triaged."""
     from scripts.core.suppress import Suppression
 
     finding = {
@@ -637,6 +668,4 @@ def test_write_csv_triaged_with_suppression():
         )
     }
 
-    row = _extract_row(finding, ["triaged"], suppressions=suppressions)
-
-    assert row == ["YES"]
+    assert _extract_row(finding, ["triaged"], suppressions=suppressions) == ["NO"]

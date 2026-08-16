@@ -48,7 +48,7 @@ def test_semgrep_secrets_adapter_api_key(tmp_path: Path):
     assert items[0].location["startLine"] == 42
     assert "https://cwe.mitre.org/data/definitions/798.html" in items[0].references
     assert "https://semgrep.dev/r/generic-api-key" in items[0].references
-    assert items[0].risk["cwe"] == "CWE-798"
+    assert items[0].risk["cwe"] == ["CWE-798"]
     assert items[0].risk["confidence"] == "HIGH"
 
 
@@ -75,7 +75,7 @@ def test_semgrep_secrets_adapter_password(tmp_path: Path):
     assert items[0].ruleId == "hardcoded-password"
     assert items[0].severity == "CRITICAL"
     assert "password" in items[0].tags
-    assert items[0].risk["cwe"] == "CWE-259"
+    assert items[0].risk["cwe"] == ["CWE-259"]
 
 
 def test_semgrep_secrets_adapter_jwt_token(tmp_path: Path):
@@ -281,3 +281,71 @@ def test_semgrep_secrets_adapter_compliance_enrichment(tmp_path: Path):
     assert len(items) == 1
     # Compliance field should exist (enriched by compliance_mapper)
     assert hasattr(items[0], "compliance")
+
+
+def test_cwe_with_description_yields_the_bare_id(tmp_path: Path):
+    """semgrep writes "CWE-522: <description>", not "CWE-522".
+
+    Stripping only the "CWE-" prefix left the description attached to the id,
+    which then reached four places at once: a reference URL
+    (.../definitions/522: Insufficiently Protected Credentials.html), a tag,
+    `risk.cwe` and `context.cwe`. Every fixture in this file used the bare
+    form, so nothing exercised the shape the tool actually emits -- the same
+    blind spot chunk 7 found in the compliance tables.
+    """
+    data = {
+        "version": "1.90.0",
+        "results": [
+            {
+                "check_id": "rds-insecure-password-storage-in-source-code",
+                "path": "iac/rds.tf",
+                "start": {"line": 8},
+                "message": "RDS password stored in source",
+                "extra": {
+                    "severity": "ERROR",
+                    "metadata": {
+                        "cwe": ["CWE-522: Insufficiently Protected Credentials"]
+                    },
+                },
+            }
+        ],
+    }
+    f = tmp_path / "semgrep-secrets.json"
+    write(f, data)
+
+    items = SemgrepSecretsAdapter().parse(f)
+
+    assert len(items) == 1
+    item = items[0]
+    assert item.risk["cwe"] == ["CWE-522"]
+    assert item.context["cwe"] == "CWE-522"
+    assert "cwe-522" in item.tags
+    assert "https://cwe.mitre.org/data/definitions/522.html" in item.references
+    # nothing carries the description as part of an identifier
+    assert not any("Insufficiently" in str(t) for t in item.tags)
+    assert not any("Insufficiently" in r for r in item.references)
+
+
+def test_unrecognisable_cwe_is_dropped_not_guessed(tmp_path: Path):
+    """A value with no CWE number must not produce a broken URL or tag."""
+    data = {
+        "version": "1.90.0",
+        "results": [
+            {
+                "check_id": "weird-rule",
+                "path": "a.py",
+                "start": {"line": 1},
+                "message": "x",
+                "extra": {"severity": "ERROR", "metadata": {"cwe": ["not a cwe"]}},
+            }
+        ],
+    }
+    f = tmp_path / "semgrep-secrets.json"
+    write(f, data)
+
+    item = SemgrepSecretsAdapter().parse(f)[0]
+
+    assert "cwe" not in (item.risk or {})
+    assert item.context["cwe"] is None
+    assert not any("cwe" in str(t).lower() for t in item.tags)
+    assert not any("cwe.mitre.org" in r for r in item.references)

@@ -32,10 +32,23 @@ from scripts.core.suppress import (
 
 logger = logging.getLogger(__name__)
 
-# Version (from pyproject.toml)
-__version__ = "1.0.5"
-
 SEV_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
+
+# Every value `outputs:` accepts. Each one gates exactly one writer below.
+#
+# A name outside this set used to be discarded in silence: `outputs: [sarrif]`
+# or `outputs: [SARIF]` produced no SARIF file and no log record at any level,
+# so a typo in jmo.yml looked identical to a working config that happened to
+# emit fewer artifacts.
+KNOWN_OUTPUTS = (
+    "json",
+    "md",
+    "yaml",
+    "html",
+    "simple-html",
+    "sarif",
+    "csv",
+)
 
 
 def fail_code(threshold: str | None, counts: dict) -> int:
@@ -56,6 +69,28 @@ def fail_code(threshold: str | None, counts: dict) -> int:
     idx = SEV_ORDER.index(thr)
     severities = SEV_ORDER[: idx + 1]
     return 1 if any(counts.get(s, 0) > 0 for s in severities) else 0
+
+
+def _warn_unknown_outputs(cfg, args, _log_fn) -> list[str]:
+    """Report any `outputs:` value that gates no writer.
+
+    Returns the unknown names, in config order, so callers can assert on them.
+    """
+    outputs = getattr(cfg, "outputs", None) or []
+    unknown = [str(o) for o in outputs if str(o) not in KNOWN_OUTPUTS]
+    for name in unknown:
+        _log_fn(
+            args,
+            "WARN",
+            f"Unknown output format {name!r} in config 'outputs'; "
+            f"no such report will be written. Valid formats: "
+            f"{', '.join(KNOWN_OUTPUTS)}",
+        )
+        # `_log_fn` writes straight to stderr and `logger` is separately wired
+        # to it, so a WARNING on both paths prints the same line twice. The
+        # user-facing record is `_log_fn`; keep the module logger at DEBUG.
+        logger.debug("Unknown output format %r in config 'outputs'", name)
+    return unknown
 
 
 def cmd_report(args, _log_fn) -> int:
@@ -87,6 +122,8 @@ def cmd_report(args, _log_fn) -> int:
     results_dir = Path(rd)
     out_dir = Path(args.out) if args.out else results_dir / "summaries"
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    _warn_unknown_outputs(cfg, args, _log_fn)
 
     # Set profiling environment
     prev_profile = os.getenv("JMO_PROFILE")
@@ -186,7 +223,15 @@ def cmd_report(args, _log_fn) -> int:
         try:
             write_yaml(findings, out_dir / "findings.yaml", metadata=metadata)
         except RuntimeError as e:
-            _log_fn(args, "DEBUG", f"YAML reporter unavailable: {e}")
+            # The config asked for this artifact and it will not exist. At
+            # DEBUG that was invisible in a normal run, so findings.yaml simply
+            # went missing from a report the user had configured.
+            _log_fn(
+                args,
+                "WARN",
+                f"findings.yaml was requested in 'outputs' but was not written: {e}",
+            )
+            logger.debug("YAML reporter unavailable: %s", e)
     if "html" in cfg.outputs:
         write_html(findings, out_dir / "dashboard.html")
     if "simple-html" in cfg.outputs:
@@ -220,11 +265,13 @@ def cmd_report(args, _log_fn) -> int:
         write_pci_dss_report(findings, out_dir / "PCI_DSS_COMPLIANCE.md")
         write_attack_navigator_json(findings, out_dir / "attack-navigator.json")
     except (OSError, PermissionError) as e:
-        _log_fn(args, "DEBUG", f"Failed to write compliance reports: {e}")
-        logger.debug(f"Compliance report write failed: {e}")
+        # DEBUG hid this entirely: all three compliance artifacts could vanish
+        # from a report with no record at any level a normal run displays.
+        _log_fn(args, "WARN", f"Failed to write compliance reports: {e}")
+        logger.debug("Compliance report write failed: %s", e)
     except (KeyError, ValueError, TypeError) as e:
-        _log_fn(args, "DEBUG", f"Failed to write compliance reports: {e}")
-        logger.debug(f"Compliance data formatting error: {e}")
+        _log_fn(args, "WARN", f"Failed to write compliance reports: {e}")
+        logger.debug("Compliance data formatting error: %s", e)
 
     # Evaluate and write policy reports (v1.0.0 Feature #5: Policy-as-Code)
     # Determine policies to evaluate using configuration precedence:

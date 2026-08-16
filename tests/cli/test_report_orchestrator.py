@@ -419,8 +419,15 @@ def test_cmd_report_yaml_runtime_error_handling(tmp_path, mock_config, minimal_a
     ):
         cmd_report(minimal_args, mock_log)
 
-    # Verify DEBUG log for YAML unavailable
-    assert any("YAML reporter unavailable" in str(c) for c in mock_log.call_args_list)
+    # The config asked for findings.yaml and it will not exist, so this must be
+    # visible in a normal run -- it was DEBUG, i.e. invisible. Assert the level
+    # rather than the wording.
+    warned = [
+        c.args[2]
+        for c in mock_log.call_args_list
+        if len(c.args) >= 3 and str(c.args[1]).upper() in ("WARN", "ERROR")
+    ]
+    assert any("yaml" in str(m).lower() for m in warned), mock_log.call_args_list
 
 
 def test_cmd_report_writes_compliance_reports(tmp_path, mock_config, minimal_args):

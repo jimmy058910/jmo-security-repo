@@ -29,6 +29,7 @@ Supported Detection Types:
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 from typing import Any
 
@@ -188,12 +189,22 @@ def _load_semgrep_secrets_internal(path: str | Path) -> list[dict[str, Any]]:
         # Extract metadata
         metadata = extra.get("metadata", {})
 
-        # Extract CWE
+        # Extract CWE.
+        #
+        # semgrep writes the id WITH its description --
+        # "CWE-522: Insufficiently Protected Credentials" -- so stripping the
+        # "CWE-" prefix left `cwe` as "522: Insufficiently Protected
+        # Credentials". That fed a reference URL
+        # (.../definitions/522: Insufficiently Protected Credentials.html), a
+        # tag, `risk.cwe` and `context.cwe`, breaking all four. Take the
+        # numeric id only.
         cwe = None
         if isinstance(metadata.get("cwe"), list) and metadata["cwe"]:
             cwe_item = metadata["cwe"][0]
-            if isinstance(cwe_item, str) and cwe_item.startswith("CWE-"):
-                cwe = cwe_item.replace("CWE-", "")
+            if isinstance(cwe_item, str):
+                m = re.match(r"\s*CWE-(\d+)", cwe_item)
+                if m:
+                    cwe = m.group(1)
 
         # Extract OWASP
         owasp = None
@@ -250,7 +261,10 @@ def _load_semgrep_secrets_internal(path: str | Path) -> list[dict[str, Any]]:
         # Build risk field
         risk = {}
         if cwe:
-            risk["cwe"] = f"CWE-{cwe}"
+            # `risk.cwe` is an ARRAY of strings in CommonFinding v1.2.0
+            # (docs/schemas/common_finding.v1.json). A bare string here was the
+            # only schema violation in a 242-finding scan.
+            risk["cwe"] = [f"CWE-{cwe}"]
         risk["confidence"] = metadata.get("confidence", "HIGH")
         risk["likelihood"] = metadata.get("likelihood", "HIGH")
         risk["impact"] = metadata.get("impact", "CRITICAL")

@@ -193,8 +193,15 @@ class TestCSVTriageColumn:
 
         assert row == ["NO"]
 
-    def test_triaged_yes_with_matching_suppression(self, sample_finding):
-        """Test triaged column shows YES when finding is suppressed."""
+    def test_triaged_no_with_matching_active_suppression(self, sample_finding):
+        """An ACTIVE rule means the finding was filtered out upstream (#857).
+
+        This deliberately INVERTS the previous expectation. The column was
+        specified as "has an active suppression rule" and tested across all
+        four quadrants -- but `cmd_report` removes actively-suppressed findings
+        before `write_csv` runs, so that row cannot exist in a real report.
+        Measured on a real scan: 242 rows, NO for all 242.
+        """
         from scripts.core.reporters.csv_reporter import _extract_row
         from scripts.core.suppress import Suppression
 
@@ -206,7 +213,7 @@ class TestCSVTriageColumn:
 
         row = _extract_row(sample_finding, ["triaged"], suppressions=suppressions)
 
-        assert row == ["YES"]
+        assert row == ["NO"]
 
     def test_triaged_no_with_non_matching_suppression(self, sample_finding):
         """Test triaged column shows NO when suppression doesn't match."""
@@ -221,8 +228,13 @@ class TestCSVTriageColumn:
 
         assert row == ["NO"]
 
-    def test_triaged_no_with_expired_suppression(self, sample_finding):
-        """Test triaged column shows NO when suppression is expired."""
+    def test_triaged_yes_with_expired_suppression(self, sample_finding):
+        """An EXPIRED rule is the one reachable meaning of "triaged" (#857).
+
+        The finding was accepted, the acceptance lapsed, and it is back in the
+        report -- which is exactly what a reader wants this column to surface.
+        Also inverted deliberately; see the test above.
+        """
         from scripts.core.reporters.csv_reporter import _extract_row
         from scripts.core.suppress import Suppression
 
@@ -234,7 +246,7 @@ class TestCSVTriageColumn:
 
         row = _extract_row(sample_finding, ["triaged"], suppressions=suppressions)
 
-        assert row == ["NO"]
+        assert row == ["YES"]
 
     def test_triaged_no_for_finding_without_id(self):
         """Test triaged column shows NO for finding without id."""
@@ -257,7 +269,7 @@ class TestCSVTriageColumn:
 
         suppressions = {
             "test-fingerprint-123": Suppression(
-                id="test-fingerprint-123", reason="Accepted risk"
+                id="test-fingerprint-123", reason="Accepted risk", expires="2020-01-01"
             )
         }
 

@@ -162,17 +162,22 @@ def _extract_row(
                 else:
                     row.append("")
         elif col == "triaged":
-            # Check triage status via suppression rules (Feature #3)
-            # A finding is considered "triaged" if it has an active suppression rule
-            # This indicates the finding was reviewed and marked as false positive,
-            # accepted risk, or otherwise triaged by the security team
+            # YES means: a suppression rule matches this finding but is no
+            # longer active -- it was triaged, and that decision has EXPIRED.
+            #
+            # The column previously asked whether an *active* rule matched,
+            # which can never be true here (#857). Two independent reasons:
+            # `cmd_report` filters actively-suppressed findings out before
+            # `write_csv` is called, and the lookup was `suppressions.get(id)`,
+            # so the path/ruleId/severity/line selectors could not be found
+            # either. Measured on a real scan: 242 rows, NO for all 242.
+            # "Expired" is the one meaning that is both reachable and useful --
+            # it surfaces accepted risk whose acceptance has lapsed.
             triaged = "NO"
-            if suppressions:
-                finding_id = finding.get("id")
-                if finding_id and isinstance(finding_id, str):
-                    suppression = suppressions.get(finding_id)
-                    if suppression and suppression.is_active():
-                        triaged = "YES"
+            for suppression in (suppressions or {}).values():
+                if suppression.matches(finding) and not suppression.is_active():
+                    triaged = "YES"
+                    break
             row.append(triaged)
         elif col == "compliance_owasp":
             compliance = finding.get("compliance", {})

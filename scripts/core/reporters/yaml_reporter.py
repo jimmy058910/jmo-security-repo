@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 from typing import Any
@@ -19,6 +18,62 @@ try:
     import jsonschema
 except ImportError:
     jsonschema = None
+
+
+def _validate_against_schema(findings: list[dict[str, Any]]) -> int:
+    """Validate findings against CommonFinding, reporting failures at WARNING.
+
+    Returns the number of findings that failed, so callers and tests can assert
+    on it.
+
+    This used to build its own schema path::
+
+        Path(__file__).parent.parent.parent / "docs/schemas/common_finding.v1.json"
+
+    which resolves to ``scripts/docs/schemas/...`` -- three parents from
+    ``scripts/core/reporters/`` is ``scripts/``, not the repo root. The file
+    never existed, the guarding ``if schema_path.exists()`` had no ``else``,
+    and so **the report phase's only schema validation silently never ran**.
+    A real scan wrote a finding with ``risk.cwe`` as a string where the schema
+    requires an array, and logged nothing at any level.
+
+    The path is now `schema_validator`'s, which lives one directory shallower
+    and had the arithmetic right -- so there is one definition rather than two.
+    """
+    try:
+        from scripts.core.schema_validator import (
+            JSONSCHEMA_AVAILABLE,
+            load_schema,
+            validate_finding,
+        )
+
+        if not JSONSCHEMA_AVAILABLE:
+            return 0
+        schema = load_schema()
+    except (FileNotFoundError, OSError, ValueError, ImportError) as e:
+        # Loudly, because being unable to validate is exactly the state that
+        # went unnoticed before.
+        logger.warning("Schema validation skipped -- schema unavailable: %s", e)
+        return 0
+
+    failures: list[str] = []
+    for idx, finding in enumerate(findings):
+        for message in validate_finding(finding, schema):
+            failures.append(f"finding {idx}: {message}")
+
+    if failures:
+        # One aggregated record, not one per finding: a wholly invalid report
+        # would otherwise emit thousands, and flooding hides a signal as
+        # thoroughly as silence (the lesson from the NDJSON line-loss summary).
+        preview = "; ".join(failures[:3])
+        logger.warning(
+            "%d of %d findings failed CommonFinding schema validation: %s%s",
+            len({f.split(":")[0] for f in failures}),
+            len(findings),
+            preview,
+            " ..." if len(failures) > 3 else "",
+        )
+    return len({f.split(":")[0] for f in failures})
 
 
 def write_yaml(
@@ -43,24 +98,7 @@ def write_yaml(
 
     # Optional schema validation
     if validate and jsonschema:
-        schema_path = (
-            Path(__file__).parent.parent.parent / "docs/schemas/common_finding.v1.json"
-        )
-        if schema_path.exists():
-            try:
-                with open(schema_path, encoding="utf-8") as f:
-                    schema = json.load(f)
-                for idx, finding in enumerate(findings):
-                    try:
-                        jsonschema.validate(instance=finding, schema=schema)
-                    except jsonschema.ValidationError as e:
-                        logger.warning(
-                            f"Finding {idx} failed schema validation: {e.message}"
-                        )
-            except (
-                Exception
-            ) as e:  # Acceptable: schema validation is optional — report without validation
-                logger.debug(f"Schema validation skipped: {e}")
+        _validate_against_schema(findings)
 
     p = Path(out_path)
     p.parent.mkdir(parents=True, exist_ok=True)
