@@ -127,9 +127,19 @@ def harden_console_streams() -> None:
 
 
 def _substitute(text: str, fallbacks: dict[str, str]) -> str:
-    """Apply the fallback table. Cosmetic only -- makes no encodability promise."""
-    for unicode_char, ascii_fallback in fallbacks.items():
-        text = text.replace(unicode_char, ascii_fallback)
+    """Apply the fallback table. Cosmetic only -- makes no encodability promise.
+
+    Longest key first. Some entries are multi-codepoint sequences whose first
+    codepoint is itself an entry -- "⚠️" (warning sign plus VS-16)
+    and "⚠". In insertion order the bare sign matched first, substituted
+    "[!]", and left the orphaned variation selector behind to be replaced with
+    "?" by the final encode. Every "⚠️" in the product rendered as
+    "[!]?" on a non-UTF-8 console, including in the generated Markdown diff
+    report. Sorting by length makes the table order-independent, so a future
+    sequence entry cannot be shadowed by its own prefix.
+    """
+    for unicode_char in sorted(fallbacks, key=len, reverse=True):
+        text = text.replace(unicode_char, fallbacks[unicode_char])
     return text
 
 

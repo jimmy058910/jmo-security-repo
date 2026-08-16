@@ -1038,6 +1038,56 @@ class TestCmdHistoryDiff:
         captured = capsys.readouterr()
         assert "History database not found" in captured.err
 
+    def test_new_findings_are_not_marked_with_a_success_icon(
+        self, sample_database, capsys
+    ):
+        """New findings are the bad direction and must not read as a win.
+
+        Both counts carried the same green check, so a run that introduced
+        vulnerabilities printed "New findings: N" beside a tick.
+        """
+
+        class Args:
+            db = str(sample_database)
+            scan_id_1 = "scan1"
+            scan_id_2 = "scan2"
+            json = False
+
+        assert cmd_history_diff(Args()) == 0
+        out = capsys.readouterr().out
+        new_line = next(line for line in out.splitlines() if "New findings" in line)
+        resolved_line = next(
+            line for line in out.splitlines() if "Resolved findings" in line
+        )
+        assert "[OK]" not in new_line and "✅" not in new_line, new_line
+        # Resolved keeps its tick -- the two must be distinguishable.
+        assert "[OK]" in resolved_line or "✅" in resolved_line
+
+    def test_unexpected_failure_reports_without_a_traceback(
+        self, sample_database, monkeypatch, capsys
+    ):
+        """A raw Python traceback is not an error message.
+
+        The generic handler printed one straight to stderr, burying the actual
+        problem under a stack.
+        """
+        monkeypatch.setattr(
+            "scripts.cli.history_commands.compute_diff",
+            lambda *a, **k: (_ for _ in ()).throw(RuntimeError("db exploded")),
+        )
+
+        class Args:
+            db = str(sample_database)
+            scan_id_1 = "scan1"
+            scan_id_2 = "scan2"
+            json = False
+
+        assert cmd_history_diff(Args()) == 1
+        captured = capsys.readouterr()
+        assert "RuntimeError: db exploded" in captured.err
+        assert "Traceback (most recent call last)" not in captured.err
+        assert "Traceback (most recent call last)" not in captured.out
+
 
 # ===========================
 # Tests for cmd_history_trends

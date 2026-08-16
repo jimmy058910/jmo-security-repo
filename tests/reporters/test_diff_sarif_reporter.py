@@ -5,6 +5,7 @@ import json
 import pytest
 
 from scripts.core.diff_engine import DiffResult, DiffSource, ModifiedFinding
+from scripts.core.jmo_version import get_jmo_version
 from scripts.core.reporters.diff_sarif_reporter import (
     _convert_location_to_sarif,
     _map_severity_to_sarif,
@@ -123,7 +124,10 @@ def test_sarif_tool_metadata(tmp_path, sample_diff_result):
 
     tool = sarif["runs"][0]["tool"]["driver"]
     assert tool["name"] == "JMo Security Diff"
-    assert tool["version"] == "1.0.0"
+    # A GitHub Security upload records driver.version as the producing tool.
+    # It was hardcoded to 1.0.0, misattributing every diff since v1.0.1.
+    assert tool["version"] == get_jmo_version()
+    assert tool["semanticVersion"] == get_jmo_version()
     assert tool["informationUri"] == "https://jmotools.com"
 
 

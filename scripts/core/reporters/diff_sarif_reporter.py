@@ -87,6 +87,7 @@ from pathlib import Path
 from typing import Any
 
 from scripts.core.diff_engine import DiffResult
+from scripts.core.jmo_version import get_jmo_version
 
 logger = logging.getLogger(__name__)
 
@@ -115,9 +116,12 @@ def write_sarif_diff(diff: DiffResult, out_path: Path) -> None:
                 "tool": {
                     "driver": {
                         "name": "JMo Security Diff",
-                        "version": "1.0.0",
+                        # A GitHub Security upload records driver.version as
+                        # the tool that produced the results; hardcoding it
+                        # attributed every diff to 1.0.0.
+                        "version": get_jmo_version(),
                         "informationUri": "https://jmotools.com",
-                        "semanticVersion": "1.0.0",
+                        "semanticVersion": get_jmo_version(),
                     }
                 },
                 "properties": {
