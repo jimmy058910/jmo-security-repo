@@ -72,93 +72,29 @@ logger = logging.getLogger(__name__)
 
 def write_html_diff(diff: DiffResult, out_path: Path) -> None:
     """
-    Generate HTML diff dashboard with React (or fallback to vanilla).
+    Generate the self-contained HTML diff dashboard.
 
-    Approved hybrid approach:
-    1. Check for React dashboard build (scripts/dashboard/dist/index.html)
-    2. If exists: Use React dashboard with diff visualization
-    3. If not: Fall back to vanilla JS diff dashboard
+    There is one renderer. A second path used to try the built React dashboard
+    first, injecting the diff into a `window.__DIFF_DATA__` placeholder -- but
+    that placeholder exists in no template and no dashboard source, so the
+    branch could not complete. Measured against a real 757,857-byte build:
+    `__DIFF_DATA__` occurred 0 times, the reporter logged
+    "Using React dashboard for diff visualization" at INFO, then
+    "React template missing placeholder" at WARNING, and produced this page
+    anyway. The warning fired on every HTML diff for anyone who had built the
+    dashboard, and no build could ever satisfy it.
+
+    Nor was it a wiring gap a placeholder would close: the dashboard's own diff
+    view (`useDiffMode`/`DiffView`) computes its diff in the browser from two
+    findings lists fetched by scan id, and has no consumer for a precomputed
+    DiffResult. Supplying one is a dashboard feature, not a repair, so the dead
+    branch is removed rather than fed (#863).
 
     Args:
         diff: DiffResult object from DiffEngine
         out_path: Output file path for HTML
     """
-    # Check for React dashboard
-    react_template = Path(__file__).parent / "../../dashboard/dist/index.html"
-
-    if react_template.exists():
-        # Primary path: React dashboard with diff visualization
-        logger.info("Using React dashboard for diff visualization")
-        return _write_html_diff_react(diff, out_path)
-    else:
-        # Fallback path: Vanilla JS diff dashboard
-        logger.warning("React dashboard not built. Using vanilla JS fallback.")
-        # There is no `make dashboard-build` target and never has been; the
-        # build is an npm script in scripts/dashboard/.
-        logger.warning(
-            "Run 'npm run build' in scripts/dashboard/ for full React features."
-        )
-        return _write_html_diff_vanilla(diff, out_path)
-
-
-def _write_html_diff_react(diff: DiffResult, out_path: Path) -> None:
-    """Use React dashboard with diff-specific data injection."""
-    # Read React dashboard template
-    template_path = Path(__file__).parent / "../../dashboard/dist/index.html"
-    template_html = template_path.read_text(encoding="utf-8")
-
-    # Check if template has the required placeholder
-    if "window.__DIFF_DATA__ = null" not in template_html:
-        logger.warning(
-            "React template missing placeholder. Falling back to vanilla JS."
-        )
-        return _write_html_diff_vanilla(diff, out_path)
-
-    # Prepare diff data
-    diff_data = {
-        "meta": {
-            "diff_version": "1.0.0",
-            "baseline": {
-                "source_type": diff.baseline_source.source_type,
-                "path": diff.baseline_source.path,
-                "timestamp": diff.baseline_source.timestamp,
-                "profile": diff.baseline_source.profile,
-                "total_findings": diff.baseline_source.total_findings,
-            },
-            "current": {
-                "source_type": diff.current_source.source_type,
-                "path": diff.current_source.path,
-                "timestamp": diff.current_source.timestamp,
-                "profile": diff.current_source.profile,
-                "total_findings": diff.current_source.total_findings,
-            },
-        },
-        "statistics": diff.statistics,
-        "new_findings": diff.new,
-        "resolved_findings": diff.resolved,
-        "modified_findings": [
-            {
-                "fingerprint": m.fingerprint,
-                "changes": m.changes,
-                "baseline": m.baseline,
-                "current": m.current,
-                "risk_delta": m.risk_delta,
-            }
-            for m in diff.modified
-        ],
-    }
-
-    # Escape characters that could break out of the <script> tag (XSS prevention)
-    diff_json = escape_json_for_script(json.dumps(diff_data))
-
-    # Replace placeholder (React dashboard expects window.__DIFF_DATA__)
-    injected_html = template_html.replace(
-        "window.__DIFF_DATA__ = null", f"window.__DIFF_DATA__ = {diff_json}"
-    )
-
-    # Write to output
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(injected_html, encoding="utf-8")
+    return _write_html_diff_vanilla(diff, out_path)
 
 
 def _write_html_diff_vanilla(diff: DiffResult, out_path: Path) -> None:

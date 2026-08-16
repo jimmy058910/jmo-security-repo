@@ -1850,11 +1850,16 @@ Supports three modes:
     )
 
     # Output options
+    # No argparse default. `cmd_diff` resolves an unset value to "md", which
+    # leaves `--auto` able to tell "the user did not choose" from "the user
+    # chose md" -- the distinction its advertised format suggestion needs. A
+    # default of "md" here made `args.format` permanently truthy, so
+    # `suggest_output_format()` was unreachable.
     diff_parser.add_argument(
         "--format",
         choices=["json", "md", "html", "sarif"],
-        default="md",
-        help="Output format (default: md)",
+        default=None,
+        help="Output format (default: md, or suggested by --auto)",
     )
     diff_parser.add_argument(
         "--output", type=Path, help="Output file path (default: stdout for md/json)"
@@ -1886,7 +1891,7 @@ Supports three modes:
     diff_parser.add_argument(
         "--db",
         type=Path,
-        help="Path to SQLite database (default: ~/.jmo/scans.db)",
+        help="Path to the history database (default: .jmo/history.db)",
     )
 
     return diff_parser

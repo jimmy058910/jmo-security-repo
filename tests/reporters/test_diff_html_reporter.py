@@ -1,6 +1,7 @@
 """Tests for HTML diff reporter."""
 
 import json
+import logging
 from pathlib import Path
 from unittest.mock import patch
 
@@ -113,84 +114,74 @@ def sample_diff_result():
     )
 
 
-def test_html_react_path(tmp_path, sample_diff_result):
-    """Test React dashboard path (if built)."""
+def test_html_diff_has_one_renderer(tmp_path, sample_diff_result, caplog):
+    """There is one HTML diff renderer, and it never mentions React.
+
+    `write_html_diff` used to choose between a React path and this one. The
+    React branch could not complete -- no template JMo ships contains
+    `window.__DIFF_DATA__` -- so it logged "Using React dashboard for diff
+    visualization" at INFO and then "React template missing placeholder" at
+    WARNING on every run where a build existed, and produced this page anyway.
+    Both the branch and its log records are gone (#863). The presence of a
+    built dashboard must make no difference to the output.
+    """
+    caplog.set_level(logging.DEBUG)
     out_path = tmp_path / "diff.html"
 
-    # Mock React dashboard exists (path defined but not used in current implementation)
-    # Future enhancement: use this path for React integration
-    # react_template_path = (
-    #     Path(__file__).parent / "../../scripts/dashboard/dist/index.html"
-    # )
-    mock_template = """<!DOCTYPE html>
-<html>
-<head><title>React Dashboard</title></head>
-<body>
-<div id="root"></div>
-<script>window.__DIFF_DATA__ = null</script>
-</body>
-</html>"""
-
-    with (
-        patch.object(Path, "exists", return_value=True),
-        patch.object(Path, "read_text", return_value=mock_template),
-    ):
-        write_html_diff(sample_diff_result, out_path)
+    write_html_diff(sample_diff_result, out_path)
 
     assert out_path.exists()
     content = out_path.read_text(encoding="utf-8")
 
-    # Verify React template used
-    assert "React Dashboard" in content
-    assert "window.__DIFF_DATA__" in content
-    assert "window.__DIFF_DATA__ = null" not in content  # Should be replaced
+    assert "Security Diff Report" in content
+    assert "window.DIFF_DATA" in content
+    assert "renderDiff()" in content
+
+    # No React record at any level, and nothing telling the user to run a
+    # build that would change nothing.
+    assert "React" not in caplog.text
+    assert "npm run build" not in caplog.text
 
 
-def test_html_react_path_escapes_script_breakouts(tmp_path):
-    """The React diff path must escape its payload like every other path.
+@pytest.mark.parametrize("dashboard_built", [True, False])
+def test_html_diff_output_ignores_dashboard_build(
+    tmp_path, sample_diff_result, dashboard_built
+):
+    """The rendered page is identical whether or not dist/index.html exists."""
+    out_path = tmp_path / f"diff-{dashboard_built}.html"
+    with patch.object(Path, "exists", return_value=dashboard_built):
+        write_html_diff(sample_diff_result, out_path)
+    content = out_path.read_text(encoding="utf-8")
+    assert "renderDiff()" in content
+    assert "__DIFF_DATA__" not in content
 
-    This branch cannot run against a real template: no template JMo ships --
-    the built dist/index.html, the vendored test fixture, or
-    scripts/dashboard/index.html -- contains `window.__DIFF_DATA__`, so
-    `_write_html_diff_react` always falls through to the vanilla renderer.
-    A mutation that reverted this path's escaper to the old lowercase-only
-    replacement therefore survived the whole suite. Covering it with the same
-    mock the branch is otherwise tested with keeps the escaping guarded until
-    the dead branch is resolved.
+
+def test_html_diff_escapes_uppercase_script_breakout(tmp_path):
+    """Finding text cannot break out of the embedded-data <script> block.
+
+    HTML end tags match case-insensitively, so `</SCRIPT>` closes a script
+    element exactly as `</script>` does -- the stored XSS chunk 9 fixed. That
+    uppercase case was only ever asserted against the React branch, which
+    could not run; the reachable renderer was covered for the lowercase form
+    alone. Asserting it here keeps the guard on the path that executes.
     """
     out_path = tmp_path / "diff.html"
-    mock_template = (
-        "<!DOCTYPE html><html><head><title>React Dashboard</title></head>"
-        '<body><div id="root"></div>'
-        "<script>window.__DIFF_DATA__ = null</script></body></html>"
-    )
+    payload = "</SCRIPT><img src=x onerror=alert(document.domain)>"
     diff = DiffResult(
         new=[
             {
                 "id": "xss",
                 "severity": "HIGH",
                 "ruleId": "XSS",
-                "message": "</SCRIPT><img src=x onerror=alert(1)>",
+                "message": payload,
                 "location": {"path": "test.js", "startLine": 1},
             }
         ],
         resolved=[],
         unchanged=[],
         modified=[],
-        baseline_source=DiffSource(
-            source_type="directory",
-            path="baseline/",
-            timestamp="2025-11-04T10:00:00Z",
-            profile="fast",
-            total_findings=0,
-        ),
-        current_source=DiffSource(
-            source_type="directory",
-            path="current/",
-            timestamp="2025-11-05T10:00:00Z",
-            profile="fast",
-            total_findings=1,
-        ),
+        baseline_source=DiffSource("directory", "baseline/", "", "fast", 0),
+        current_source=DiffSource("directory", "current/", "", "fast", 1),
         statistics={
             "total_new": 1,
             "total_resolved": 0,
@@ -204,41 +195,27 @@ def test_html_react_path_escapes_script_breakouts(tmp_path):
         },
     )
 
-    with (
-        patch.object(Path, "exists", return_value=True),
-        patch.object(Path, "read_text", return_value=mock_template),
-    ):
-        write_html_diff(diff, out_path)
-
+    write_html_diff(diff, out_path)
     content = out_path.read_text(encoding="utf-8")
-    prefix = "window.__DIFF_DATA__ = "
+
+    # Meta-guard: the payload must actually be in the document, escaped. A
+    # renderer that silently dropped the message would satisfy every negative
+    # assertion below without escaping anything.
+    assert "\\u003c/SCRIPT" in content, "payload never reached the document"
+
+    # Nothing broke out: no live element anywhere in the page. The handler
+    # text itself survives inside the JSON string literal and is inert there --
+    # what matters is that no `<` did, so it can never start an element.
+    assert "<img" not in content.lower(), "payload broke out as a live element"
+
+    # And no raw `<` inside the embedded data itself. The assignment is a
+    # single line; the rest of the <script> block is the page's own JS, which
+    # legitimately contains `<` in its template literals.
+    prefix = "window.DIFF_DATA = "
     start = content.index(prefix) + len(prefix)
-    payload = content[start : content.index("</script>", start)]
-    assert "<" not in payload, f"raw '<' reached the payload: {payload[:200]}"
-    assert json.loads(payload)["new_findings"][0]["message"] == (
-        "</SCRIPT><img src=x onerror=alert(1)>"
-    )
-
-
-def test_html_vanilla_fallback(tmp_path, sample_diff_result, caplog):
-    """Test vanilla fallback (React not built)."""
-    out_path = tmp_path / "diff.html"
-
-    # Mock React dashboard missing
-    with patch.object(Path, "exists", return_value=False):
-        write_html_diff(sample_diff_result, out_path)
-
-    assert out_path.exists()
-    content = out_path.read_text(encoding="utf-8")
-
-    # Verify vanilla template used
-    assert "Security Diff Report" in content
-    assert "window.DIFF_DATA" in content
-    assert "renderDiff()" in content
-
-    # Verify warning logged
-    assert "React dashboard not built" in caplog.text
-    assert "vanilla JS fallback" in caplog.text
+    embedded = content[start : content.index("\n", start)]
+    assert json.loads(embedded.rstrip(";"))["new"][0]["message"] == payload
+    assert "<" not in embedded, f"raw '<' reached the payload: {embedded[:200]}"
 
 
 def test_html_inline_mode(tmp_path, sample_diff_result):

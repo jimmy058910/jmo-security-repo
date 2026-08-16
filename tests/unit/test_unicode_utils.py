@@ -13,6 +13,7 @@ import pytest
 
 from scripts.core.unicode_utils import (
     UNICODE_FALLBACKS,
+    _substitute,
     harden_console_streams,
     safe_print,
     safe_write,
@@ -321,3 +322,32 @@ class TestHardenConsoleStreams:
             patch("scripts.core.unicode_utils.sys.stderr", _Detached()),
         ):
             harden_console_streams()  # must not raise
+
+
+class TestMultiCodepointFallbacks:
+    """A sequence entry must not be shadowed by its own first codepoint.
+
+    UNICODE_FALLBACKS holds both "⚠" and "⚠️" (the same warning
+    sign with VS-16). Applied in insertion order the bare sign matched first,
+    substituted "[!]", and left the orphaned variation selector to become "?"
+    at the final encode -- so every "⚠️" in the product rendered as
+    "[!]?" on a non-UTF-8 console, the generated Markdown diff report included.
+    """
+
+    def test_variation_selector_does_not_survive_as_a_stray(self) -> None:
+        assert _substitute("⚠️ warning", UNICODE_FALLBACKS) == "[!] warning"
+
+    def test_bare_sign_still_substitutes(self) -> None:
+        assert _substitute("⚠ warning", UNICODE_FALLBACKS) == "[!] warning"
+
+    def test_no_table_entry_is_shadowed_by_a_prefix_entry(self) -> None:
+        """The property, not the one instance of it.
+
+        Any future multi-codepoint entry whose prefix is also an entry would
+        re-create the bug; this fails when one is added without the
+        longest-first ordering holding.
+        """
+        for key, expected in UNICODE_FALLBACKS.items():
+            assert (
+                _substitute(key, UNICODE_FALLBACKS) == expected
+            ), f"{[hex(ord(c)) for c in key]} did not substitute cleanly"

@@ -74,21 +74,18 @@ from pathlib import Path
 from typing import Any
 
 from scripts.core.diff_engine import DiffResult
+from scripts.core.jmo_version import get_jmo_version
 
 
 def _get_jmo_version() -> str:
-    """Get JMo Security version from pyproject.toml."""
-    import tomllib
+    """Get the JMo Security version.
 
-    project_root = Path(__file__).parent.parent.parent.parent
-    pyproject_path = project_root / "pyproject.toml"
-
-    if pyproject_path.exists():
-        with open(pyproject_path, "rb") as f:
-            pyproject = tomllib.load(f)
-            return pyproject.get("project", {}).get("version", "1.0.0")  # type: ignore[no-any-return]  # TOML parse returns nested Any dicts
-
-    return "1.0.0"
+    Delegates to the shared resolver so all four diff artifacts report the same
+    string. Reading `pyproject.toml` alone was correct only in a source
+    checkout: a wheel does not ship it, so every installed user got the
+    hardcoded fallback.
+    """
+    return get_jmo_version()
 
 
 def write_json_diff(diff: DiffResult, out_path: Path) -> None:

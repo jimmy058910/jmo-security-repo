@@ -15,6 +15,7 @@ Commands:
 from __future__ import annotations
 
 import json
+import logging
 import sys
 import time
 from pathlib import Path
@@ -37,6 +38,8 @@ from scripts.core.history_db import (
 from scripts.core.history_integrity import recover_database, verify_database_integrity
 from scripts.core.history_migrations import get_current_version, run_migrations
 from scripts.core.unicode_utils import safe_write
+
+logger = logging.getLogger(__name__)
 
 
 def parse_time_delta(delta_str: str) -> int:
@@ -630,12 +633,15 @@ def cmd_history_diff(args) -> int:
         else:
             # Human-readable summary
             safe_write(f"\n🔍 Diff: {scan_id_1[:8]}... → {scan_id_2[:8]}...\n\n")
-            safe_write(f"✅ New findings:       {len(diff['new'])}\n")
+            # New findings are the bad direction; both counts used to carry the
+            # same green check, so a run that introduced 17 vulnerabilities
+            # read as "✅ New findings: 17".
+            safe_write(f"⚠️ New findings:       {len(diff['new'])}\n")
             safe_write(f"✅ Resolved findings:  {len(diff['resolved'])}\n")
             sys.stdout.write(f"   Unchanged findings: {len(diff['unchanged'])}\n")
 
             if diff["new"]:
-                sys.stdout.write("\n   New Findings (top 10):\n")
+                safe_write("\n⚠️ New Findings (top 10):\n")
                 for f in diff["new"][:10]:
                     severity = f["severity"]
                     rule_id = f["rule_id"]
@@ -662,10 +668,10 @@ def cmd_history_diff(args) -> int:
         sys.stderr.write(f"Error: {e}\n")
         return 1
     except Exception as e:
-        sys.stderr.write(f"Error computing diff: {e}\n")
-        import traceback
-
-        traceback.print_exc()
+        # No raw traceback: it is not actionable for a user and it buries the
+        # message. The detail stays available at DEBUG.
+        sys.stderr.write(f"Error computing diff: {type(e).__name__}: {e}\n")
+        logger.debug("history diff failed", exc_info=True)
         return 1
 
 

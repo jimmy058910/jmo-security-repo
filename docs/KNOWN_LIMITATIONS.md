@@ -125,6 +125,47 @@ very little, because there is nothing for them to agree on.
 
 ---
 
+## Comparing scans
+
+### A finding whose message text changes is reported as resolved plus new
+
+`jmo diff` matches findings by their id, and that id is a hash of
+`tool | ruleId | path | line | message`, with the message truncated at 120
+characters. So if a tool changes the wording of a finding — commonly after
+upgrading the tool — the finding's identity changes with it, and the diff
+reports one **resolved** and one **new** rather than one **modified**.
+
+The engine does track a `message` change type, but it can only fire when the
+message is longer than 120 characters *and* the edit falls entirely beyond that
+point, leaving the hashed prefix intact. Measured on two real corpora: 6 of 34
+findings from a `bandit` scan and 106 of 263 from a mixed one have messages long
+enough to qualify at all.
+
+**What to do about it.** When a diff shows a suspiciously symmetric jump — N
+resolved and about N new, with the same rules and files on both sides — check
+whether a scanner was upgraded between the two scans before treating any of it
+as real movement.
+
+This is not fixed because `path` and `message` are inputs to the fingerprint by
+design: changing what goes into it invalidates every baseline and every row
+already in the history database. See [#861](https://github.com/jimmy058910/jmo-security-repo/issues/861),
+which has to solve the same migration for path normalization.
+
+### Clustering keeps a finding's diff identity, but only through its members
+
+Cross-tool clustering rewrites a consensus finding's id to
+`cluster-<fingerprint>`. `jmo diff` accounts for that: it matches on the
+representative's fingerprint recovered from the prefix, and on every id listed
+in `context.duplicates`. A finding that gains or loses a corroborating tool
+between two scans is therefore reported as unchanged, not as fixed-and-reopened.
+
+The limit is that this depends on the cluster recording its members. A finding
+that both joins a cluster **and** changes its own fingerprint in the same
+interval — a tool upgrade that reworded it, say — is still reported as resolved
+plus new, for the reason in the section above.
+
+---
+
 ## Scheduling
 
 ### Exported workflows carry the paths you created the schedule with
