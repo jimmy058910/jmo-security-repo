@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import os
 from pathlib import Path
 
 import pytest
@@ -102,7 +103,29 @@ class TestValidationActuallyRuns:
         assert SCHEMA_PATH.exists(), SCHEMA_PATH
         assert SCHEMA_PATH.name == "common_finding.v1.json", SCHEMA_PATH
         assert SCHEMA_PATH.parent.name == "schemas", SCHEMA_PATH
-        assert "Temp" not in str(SCHEMA_PATH), f"schema repointed at {SCHEMA_PATH}"
+
+        # Identity, not a spelling.
+        #
+        # This asserted `"Temp" not in str(SCHEMA_PATH)` as a proxy for "not a
+        # pytest tmpdir". That fails for any checkout that merely lives under a
+        # path containing "Temp": measured on a worktree under
+        # %LOCALAPPDATA%\Temp, where the same commit passes from C:\Projects
+        # (#877). A red test on an unmodified tree reads exactly like a
+        # regression, and costs a real diagnosis every time.
+        #
+        # `os.path.join` rather than `/`, so this cannot be redirected by the
+        # very `Path.__truediv__` patch it exists to catch. `parents[2]` walks
+        # tests/reporters/ -> tests/ -> repo root, which is arithmetic
+        # independent of schema_validator.py's own.
+        expected = Path(
+            os.path.join(
+                str(Path(__file__).resolve().parents[2]),
+                "docs",
+                "schemas",
+                "common_finding.v1.json",
+            )
+        )
+        assert SCHEMA_PATH.resolve() == expected, f"schema repointed at {SCHEMA_PATH}"
         # and it is the real schema, not a permissive stub
         from scripts.core.schema_validator import load_schema
 
