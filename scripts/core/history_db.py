@@ -275,8 +275,24 @@ def get_connection(db_path: Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
     conn = sqlite3.connect(str(db_path), timeout=30.0)
     conn.row_factory = sqlite3.Row
 
-    # Performance optimizations
-    conn.execute("PRAGMA journal_mode=WAL;")
+    # Performance optimizations.
+    #
+    # journal_mode is the odd one out: it is a PERSISTENT, on-disk property, so
+    # setting it rewrites the database header. Two consequences that cost a
+    # chunk-13 sweep to find:
+    #   * it is a write, so it raises "attempt to write a readonly database" on
+    #     a read-only file -- taking down every read-only `jmo history` command
+    #     (a `.jmo/` volume mounted ro, an archived DB, a snapshot kept as a
+    #     fixture) with a traceback rather than a message;
+    #   * on a writable file it means merely *reading* the database mutates it
+    #     (header bytes 18/19 go 1 -> 2), so a snapshot is not byte-stable
+    #     across inspection.
+    # WAL is an optimisation, not a requirement. Best-effort it, and let a
+    # database we cannot write stay readable.
+    try:
+        conn.execute("PRAGMA journal_mode=WAL;")
+    except sqlite3.OperationalError:
+        pass
     conn.execute("PRAGMA synchronous=NORMAL;")
     conn.execute("PRAGMA cache_size=10000;")
     conn.execute("PRAGMA temp_store=MEMORY;")
@@ -1516,7 +1532,24 @@ def get_database_stats(conn: sqlite3.Connection) -> dict[str, Any]:
     min_date = date_range[0]
     max_date = date_range[1]
 
-    # Scans by branch
+    # Scans by branch.
+    #
+    # Two numbers have to come back with the rows, because the rows alone are
+    # not a breakdown of `total_scans` and used to look like one:
+    #   * NULL branch is not "nothing to show" -- #780 leaves it unset for most
+    #     rows, so on a real database it is the single largest bucket. Excluded
+    #     silently, it made the rendered rows sum to a small fraction of
+    #     total_scans with nothing saying why.
+    #   * the LIMIT drops every branch past the tenth, also silently.
+    # Measured on the 2170-scan database this was found in: the table showed 10
+    # rows summing to 279 against `total_scans: 2170`, in the JSON as well as
+    # the terminal.
+    cursor.execute("SELECT COUNT(*) FROM scans WHERE branch IS NULL")
+    scans_without_branch = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(DISTINCT branch) FROM scans WHERE branch IS NOT NULL")
+    distinct_branches = cursor.fetchone()[0]
+
     cursor.execute("""
         SELECT branch, COUNT(*) as count
         FROM scans
@@ -1556,7 +1589,10 @@ def get_database_stats(conn: sqlite3.Connection) -> dict[str, Any]:
         {"severity": row[0], "count": row[1]} for row in cursor.fetchall()
     ]
 
-    # Top tools
+    # Top tools -- same LIMIT, same need to say what it dropped.
+    cursor.execute("SELECT COUNT(DISTINCT tool) FROM findings")
+    distinct_tools = cursor.fetchone()[0]
+
     cursor.execute("""
         SELECT tool, COUNT(*) as count
         FROM findings
@@ -1576,9 +1612,12 @@ def get_database_stats(conn: sqlite3.Connection) -> dict[str, Any]:
         "min_date": min_date,
         "max_date": max_date,
         "scans_by_branch": scans_by_branch,
+        "scans_without_branch": scans_without_branch,
+        "distinct_branches": distinct_branches,
         "scans_by_profile": scans_by_profile,
         "findings_by_severity": findings_by_severity,
         "top_tools": top_tools,
+        "distinct_tools": distinct_tools,
         "db_size_bytes": db_size,
         "db_size_mb": round(db_size / (1024 * 1024), 2),
     }

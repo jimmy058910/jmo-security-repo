@@ -1,7 +1,9 @@
 """Tests for history CLI commands."""
 
 import json
+import os
 import sqlite3
+import stat
 import time
 
 import pytest
@@ -1893,3 +1895,375 @@ class TestVerifyAndMigrate:
         assert result == 0
         captured = capsys.readouterr()
         assert "Applied 2 migration(s)" in captured.out
+
+
+# ---------------------------------------------------------------------------
+# Chunk 13 -- history read-path.
+#
+# Each class below covers a defect the read-path sweep found by running the
+# commands against the real 2170-scan history database. The reproductions are
+# preserved in the docstrings because the numbers are what make them findings
+# rather than opinions.
+# ---------------------------------------------------------------------------
+
+
+class TestListJsonOnEmptyResult:
+    """`jmo history list --json` must emit JSON even when nothing matches.
+
+    The empty check returned before the format branch, so `--json` printed the
+    prose "No scans found." with rc=0. Every consumer doing json.loads() got
+    `Expecting value: line 1 column 1 (char 0)`. Reproduced against the real
+    database on three independent filters -- `--profile slim`, `--since 1d`
+    and `--branch <nonexistent>`. `history export` already returned [] here,
+    so the two halves of the same command group disagreed.
+    """
+
+    @staticmethod
+    def _args(db, **over):
+        class Args:
+            pass
+
+        a = Args()
+        a.db = str(db)
+        a.branch = None
+        a.profile = None
+        a.since = None
+        a.limit = 50
+        a.json = True
+        for k, v in over.items():
+            setattr(a, k, v)
+        return a
+
+    def test_empty_result_with_json_is_parseable_json(self, sample_database, capsys):
+        # A branch that cannot match anything in the fixture.
+        args = self._args(sample_database, branch="no-such-branch-zzz")
+
+        result = cmd_history_list(args)
+
+        assert result == 0
+        captured = capsys.readouterr()
+        # The contract is that the output PARSES, not that it contains some
+        # substring -- a prose message can contain "[]" and still be unusable.
+        parsed = json.loads(captured.out)
+        assert parsed == []
+
+    def test_empty_result_without_json_keeps_the_human_message(
+        self, sample_database, capsys
+    ):
+        args = self._args(sample_database, branch="no-such-branch-zzz", json=False)
+
+        result = cmd_history_list(args)
+
+        assert result == 0
+        assert "No scans found" in capsys.readouterr().out
+
+    def test_non_empty_json_still_lists_scans(self, sample_database, capsys):
+        args = self._args(sample_database)
+
+        result = cmd_history_list(args)
+
+        assert result == 0
+        parsed = json.loads(capsys.readouterr().out)
+        assert isinstance(parsed, list)
+        assert len(parsed) == 2
+
+
+class TestQueryCannotWriteToTheDatabase:
+    """`jmo history query` is read-only, and destructive SQL must not persist.
+
+    Before the fix `cursor.execute()` ran whatever was typed against a
+    read-write connection. DDL executed in autocommit and PERSISTED --
+    `jmo history query "DROP TABLE findings"` really dropped the table -- while
+    DML opened an implicit transaction that `conn.close()` discarded. Both
+    reported the identical `SQL Error: 'NoneType' object is not iterable`
+    (a TypeError from `cursor.description` being None, not a database error),
+    so one message meant "destroyed your data" and "silently did nothing"
+    depending on the statement. The default database is ~1 GB and is the only
+    copy.
+
+    These assert on the DATA, not on the return code: a command that returns 1
+    and drops the table anyway is exactly the bug.
+    """
+
+    @staticmethod
+    def _args(db, query, fmt="table"):
+        class Args:
+            pass
+
+        a = Args()
+        a.db = str(db)
+        a.query = query
+        a.format = fmt
+        return a
+
+    @staticmethod
+    def _tables(db):
+        conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+        try:
+            return {
+                r[0]
+                for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                )
+            }
+        finally:
+            conn.close()
+
+    @staticmethod
+    def _scan_count(db):
+        conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+        try:
+            return conn.execute("SELECT COUNT(*) FROM scans").fetchone()[0]
+        finally:
+            conn.close()
+
+    def test_drop_table_does_not_drop_the_table(self, sample_database, capsys):
+        before = self._tables(sample_database)
+        assert "findings" in before
+
+        result = cmd_history_query(self._args(sample_database, "DROP TABLE findings"))
+
+        capsys.readouterr()
+        assert result == 1
+        assert self._tables(sample_database) == before
+
+    def test_delete_does_not_delete_rows(self, sample_database, capsys):
+        before = self._scan_count(sample_database)
+        assert before == 2
+
+        result = cmd_history_query(self._args(sample_database, "DELETE FROM scans"))
+
+        capsys.readouterr()
+        assert result == 1
+        assert self._scan_count(sample_database) == before
+
+    def test_create_table_does_not_add_a_table(self, sample_database, capsys):
+        before = self._tables(sample_database)
+
+        result = cmd_history_query(
+            self._args(sample_database, "CREATE TABLE evil (x TEXT)")
+        )
+
+        capsys.readouterr()
+        assert result == 1
+        assert self._tables(sample_database) == before
+
+    def test_write_attempt_reports_a_database_error_not_a_typeerror(
+        self, sample_database, capsys
+    ):
+        result = cmd_history_query(self._args(sample_database, "DROP TABLE findings"))
+
+        assert result == 1
+        err = capsys.readouterr().err
+        # The old message misattributed a Python TypeError as a SQL error.
+        assert "NoneType" not in err
+        assert "readonly" in err.lower()
+
+    def test_select_still_works(self, sample_database, capsys):
+        result = cmd_history_query(
+            self._args(sample_database, "SELECT id FROM scans", fmt="json")
+        )
+
+        assert result == 0
+        assert len(json.loads(capsys.readouterr().out)) == 2
+
+    def test_statement_with_no_result_set_is_reported_not_crashed(
+        self, sample_database, capsys
+    ):
+        """A read-only-permitted statement that returns no rows must not crash.
+
+        The write statements above all raise before `cursor.description` is
+        touched, so they do not reach the None guard -- mutation testing caught
+        that they left it uncovered. `PRAGMA foreign_keys=ON` is permitted on a
+        read-only connection and sets `description` to None, which is the path
+        that used to surface as `'NoneType' object is not iterable`.
+        """
+        result = cmd_history_query(
+            self._args(sample_database, "PRAGMA foreign_keys=ON")
+        )
+
+        assert result == 1
+        err = capsys.readouterr().err
+        assert "NoneType" not in err
+        assert "no result set" in err
+
+
+class TestReadPathDoesNotWriteToTheDatabase:
+    """Reading history must not modify the database file.
+
+    `get_connection` issued `PRAGMA journal_mode=WAL` unconditionally. That is
+    a PERSISTENT on-disk property, so setting it is a write, and any read-only
+    database -- `.jmo/` mounted ro into a container, an archived DB, a snapshot
+    kept as a fixture -- failed outright with `attempt to write a readonly
+    database`, surfaced as a traceback rather than a message.
+
+    Scope note: on a WRITABLE database the pragma still succeeds and still
+    converts the file to WAL, so merely reading is still not byte-neutral
+    there. That is deliberate (WAL is wanted for the real database, and the
+    write path shares this connection helper) and is tracked separately. The
+    guarantee asserted here is narrower and is the one that matters: a database
+    we cannot write is left unwritten, and stays readable.
+    """
+
+    @staticmethod
+    def _stats_args(db):
+        class Args:
+            pass
+
+        a = Args()
+        a.db = str(db)
+        a.json = True
+        return a
+
+    @pytest.mark.skipif(
+        hasattr(os, "geteuid") and os.geteuid() == 0,
+        reason="root bypasses the read-only file permission",
+    )
+    def test_stats_succeeds_on_a_read_only_database(self, sample_database, capsys):
+        # The fixture is built with the default rollback journal, so the WAL
+        # pragma has real work to do here -- pre-fix this raised.
+        before = sample_database.read_bytes()
+        assert before[18] == 1
+
+        os.chmod(sample_database, stat.S_IREAD)
+        try:
+            result = cmd_history_stats(self._stats_args(sample_database))
+            captured = capsys.readouterr()
+        finally:
+            os.chmod(sample_database, stat.S_IREAD | stat.S_IWRITE)
+
+        assert result == 0, f"stats failed on a read-only database: {captured.err}"
+        assert json.loads(captured.out)["total_scans"] == 2
+        # Two conditions, not one: it has to work AND it has to have left the
+        # unwritable file alone. Asserting only the return code would pass on a
+        # build that swallowed the error after a partial write.
+        assert sample_database.read_bytes() == before
+
+    @pytest.mark.skipif(
+        hasattr(os, "geteuid") and os.geteuid() == 0,
+        reason="root bypasses the read-only file permission",
+    )
+    def test_list_succeeds_on_a_read_only_database(self, sample_database, capsys):
+        class Args:
+            pass
+
+        args = Args()
+        args.db = str(sample_database)
+        args.branch = None
+        args.profile = None
+        args.since = None
+        args.limit = 50
+        args.json = True
+
+        os.chmod(sample_database, stat.S_IREAD)
+        try:
+            result = cmd_history_list(args)
+            captured = capsys.readouterr()
+        finally:
+            os.chmod(sample_database, stat.S_IREAD | stat.S_IWRITE)
+
+        assert result == 0, f"list failed on a read-only database: {captured.err}"
+        assert len(json.loads(captured.out)) == 2
+
+
+class TestStatsDisclosesWhatItLeftOut:
+    """`jmo history stats` must not present a partial breakdown as a whole one.
+
+    `Scans by Branch` excluded NULL-branch rows with `WHERE branch IS NOT NULL`
+    and capped the rest at 10, with nothing saying either had happened. On the
+    real database that produced 10 rows summing to **279** printed directly
+    under `Scans: 2170` -- and the same truncation reached `--json`, where a
+    consumer is more likely to compute percentages from it.
+    """
+
+    @pytest.fixture
+    def wide_database(self, tmp_path):
+        """A database with more branches than the cap, plus NULL-branch rows."""
+        db_path = tmp_path / "wide.db"
+        conn = sqlite3.connect(db_path)
+        conn.execute("""
+            CREATE TABLE scans (
+                id TEXT PRIMARY KEY, timestamp INTEGER NOT NULL,
+                timestamp_iso TEXT NOT NULL, branch TEXT, profile TEXT NOT NULL,
+                tools TEXT NOT NULL, total_findings INTEGER DEFAULT 0
+            )
+            """)
+        conn.execute("""
+            CREATE TABLE findings (
+                scan_id TEXT NOT NULL, fingerprint TEXT NOT NULL,
+                severity TEXT NOT NULL, tool TEXT NOT NULL, rule_id TEXT NOT NULL,
+                path TEXT NOT NULL, PRIMARY KEY (scan_id, fingerprint)
+            )
+            """)
+        now = int(time.time())
+        # 14 distinct branches -- more than the LIMIT 10.
+        for i in range(14):
+            conn.execute(
+                "INSERT INTO scans (id, timestamp, timestamp_iso, branch, profile, tools)"
+                " VALUES (?, ?, ?, ?, 'fast', 'bandit')",
+                (f"b{i}", now, "2026-01-01T00:00:00+00:00", f"branch-{i:02d}"),
+            )
+        # 7 scans with no branch recorded -- the #780 shape.
+        for i in range(7):
+            conn.execute(
+                "INSERT INTO scans (id, timestamp, timestamp_iso, branch, profile, tools)"
+                " VALUES (?, ?, ?, NULL, 'fast', 'bandit')",
+                (f"n{i}", now, "2026-01-01T00:00:00+00:00"),
+            )
+        # 12 distinct tools -- more than the LIMIT 10.
+        for i in range(12):
+            conn.execute(
+                "INSERT INTO findings (scan_id, fingerprint, severity, tool, rule_id, path)"
+                " VALUES ('b0', ?, 'LOW', ?, 'R1', 'a.py')",
+                (f"fp{i}", f"tool-{i:02d}"),
+            )
+        conn.commit()
+        conn.close()
+        return db_path
+
+    @staticmethod
+    def _args(db, as_json):
+        class Args:
+            pass
+
+        a = Args()
+        a.db = str(db)
+        a.json = as_json
+        return a
+
+    def test_json_reports_the_totals_the_rows_do_not_cover(self, wide_database, capsys):
+        result = cmd_history_stats(self._args(wide_database, True))
+
+        assert result == 0
+        stats = json.loads(capsys.readouterr().out)
+
+        assert stats["total_scans"] == 21
+        # The rows themselves are still capped...
+        assert len(stats["scans_by_branch"]) == 10
+        assert sum(i["count"] for i in stats["scans_by_branch"]) == 10
+        # ...but the object now says so, which is what makes the cap auditable.
+        assert stats["distinct_branches"] == 14
+        assert stats["scans_without_branch"] == 7
+        assert stats["distinct_tools"] == 12
+        # And the disclosed numbers reconcile with the total.
+        assert stats["scans_without_branch"] + stats["distinct_branches"] == 21
+
+    def test_table_header_names_the_cap_and_the_missing_scans(
+        self, wide_database, capsys
+    ):
+        result = cmd_history_stats(self._args(wide_database, False))
+
+        assert result == 0
+        out = capsys.readouterr().out
+        assert "Scans by Branch (top 10 of 14)" in out
+        assert "(no branch recorded)" in out
+        assert "Top Tools (10 of 12)" in out
+
+    def test_no_cap_no_disclosure(self, sample_database, capsys):
+        """A database inside the caps must not claim a truncation happened."""
+        result = cmd_history_stats(self._args(sample_database, False))
+
+        assert result == 0
+        out = capsys.readouterr().out
+        assert "top 10 of" not in out
+        assert "Top Tools:" in out
