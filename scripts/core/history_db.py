@@ -30,6 +30,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from scripts.core.jmo_version import get_jmo_version
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
@@ -829,6 +831,28 @@ def get_known_profiles() -> set[str]:
     return known
 
 
+def _scanned_repo_paths(results_dir: Path) -> list[Path]:
+    """Return the repository paths this scan actually visited.
+
+    Read from `repo_paths` in `.scan_metadata.json`, which the scan phase
+    writes (`jmo.py`, end of `cmd_scan`). Returns an empty list for a results
+    directory produced before that key existed, or written by something other
+    than `jmo scan` -- in which case the caller leaves git context NULL rather
+    than inferring it from the results directory's own location (#780).
+    """
+    meta_path = results_dir / ".scan_metadata.json"
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    if not isinstance(meta, dict):
+        return []
+    raw = meta.get("repo_paths")
+    if not isinstance(raw, list):
+        return []
+    return [Path(entry) for entry in raw if isinstance(entry, str) and entry]
+
+
 def store_scan(
     results_dir: Path,
     profile: str,
@@ -837,7 +861,7 @@ def store_scan(
     commit_hash: str | None = None,
     branch: str | None = None,
     tag: str | None = None,
-    jmo_version: str = "1.0.0",
+    jmo_version: str | None = None,
     duration_seconds: float | None = None,
     no_store_raw: bool = False,
     encrypt_findings: bool = False,
@@ -854,7 +878,8 @@ def store_scan(
         commit_hash: Git commit hash (optional, auto-detected if None)
         branch: Git branch name (optional, auto-detected if None)
         tag: Git tag (optional, auto-detected if None)
-        jmo_version: JMo Security version
+        jmo_version: JMo Security version (default: resolved via
+            get_jmo_version(), which reads installed distribution metadata)
         duration_seconds: Total scan duration in seconds
         no_store_raw: If True, don't store raw finding data (--no-store-raw-findings)
         encrypt_findings: If True, encrypt raw finding data (--encrypt-findings)
@@ -902,7 +927,11 @@ def store_scan(
     with open(findings_json, encoding="utf-8") as f:
         findings_data = json.load(f)
 
-    # Handle both list format (current) and dict format (legacy)
+    # Handle both artifact shapes. The labels here used to be reversed:
+    # `summaries/findings.json` as written by the report phase is the
+    # DICT form, {"meta": ..., "findings": [...]}; the bare list is the
+    # older one. Nothing depended on the comment, but it sent readers to
+    # the wrong branch when `jmo history store` crashed on a real file.
     if isinstance(findings_data, list):
         findings = findings_data
     elif isinstance(findings_data, dict):
@@ -921,21 +950,29 @@ def store_scan(
     target_type = detect_target_type(results_dir)
     targets = collect_targets(results_dir)
 
-    # Get Git context (if repo target and not provided)
+    # Get Git context (if repo target and not provided).
+    #
+    # This reads the paths the scan actually visited, recorded as `repo_paths`
+    # in `.scan_metadata.json`. It used to walk up from
+    # `results_dir/individual-repos/<name>` looking for a `.git` -- but that is
+    # an OUTPUT directory, so the walk found whatever repository happened to
+    # contain the results folder and recorded ITS branch and commit (#780).
+    #
+    # Measured: the same findings.json stored from two locations produced
+    # `chunk-14-history-write`/`90254a92` and `totally-unrelated-branch`/
+    # `55e25ac5` -- the second a repo holding one empty commit and no code.
+    # 1633 of 1833 rows in the reference database are NULL for the same reason
+    # (results written outside any repository), and none says `main`.
+    #
+    # When the scanned path is unknown, the fields stay NULL. NULL means "not
+    # recorded", which is true; a branch copied from an unrelated repository is
+    # not, and is worse than missing because it looks like data.
     git_ctx = {}
     if target_type == "repo" and not all([commit_hash, branch]):
-        # Try to detect Git context from first repo
-        if targets:
-            first_repo = results_dir / "individual-repos" / targets[0]
-            # Try parent directories to find .git
-            candidate = first_repo
-            for _ in range(5):  # Max 5 levels up
-                if (candidate / ".git").exists():
-                    git_ctx = get_git_context(candidate)
-                    break
-                candidate = candidate.parent
-                if candidate == candidate.parent:  # Reached filesystem root
-                    break
+        for scanned in _scanned_repo_paths(results_dir):
+            if (scanned / ".git").exists():
+                git_ctx = get_git_context(scanned)
+                break
 
     # Use provided values or detected values
     commit_hash = commit_hash or git_ctx.get("commit_hash")
@@ -946,6 +983,15 @@ def store_scan(
     )
     branch = branch or git_ctx.get("branch")
     tag = tag or git_ctx.get("tag")
+
+    # Resolve the version that is actually running. This used to be a literal
+    # default of "1.0.0" in the signature, and neither production caller
+    # overrode it -- so every scan in the reference database claimed 1.0.0
+    # across 2025-11-13 to 2026-08-17 and every release through v1.0.8 (#895).
+    # get_jmo_version() is the same resolver the `jmo diff` artifacts use, and
+    # returns "unknown" rather than a wrong number when it cannot tell.
+    if jmo_version is None:
+        jmo_version = get_jmo_version()
     is_dirty = git_ctx.get("is_dirty", 0) if git_ctx else 0
 
     # Note: Severity counts are automatically calculated by database triggers

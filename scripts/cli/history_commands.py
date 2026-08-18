@@ -97,7 +97,20 @@ def cmd_history_store(args) -> int:
                     data = json.load(f)
                     # Extract unique tools from findings
                     tool_set = set()
-                    for finding in data.get("findings", []):
+                    # Accept both artifact shapes, as store_scan() does.
+                    # `summaries/findings.json` is a dict of
+                    # {"meta": ..., "findings": [...]}, but the bare-list
+                    # form is also supported downstream -- and this line
+                    # used to be an unguarded `data.get(...)`, so a list
+                    # crashed the command with an AttributeError and a
+                    # traceback instead of storing the scan.
+                    if isinstance(data, list):
+                        entries = data
+                    elif isinstance(data, dict):
+                        entries = data.get("findings", [])
+                    else:
+                        entries = []
+                    for finding in entries:
                         tool_info = finding.get("tool", {})
                         if isinstance(tool_info, dict):
                             tool_set.add(tool_info.get("name", "unknown"))
@@ -126,6 +139,13 @@ def cmd_history_store(args) -> int:
         return 0
 
     except FileNotFoundError as e:
+        sys.stderr.write(f"Error: {e}\n")
+        return 1
+    except ValueError as e:
+        # A rejected profile name is a user mistake, not a crash.
+        # store_scan() validates against get_known_profiles() -- the tool
+        # registry PLUS jmo.yml `profiles:` -- and its message names every
+        # known profile, so a traceback adds noise and no information.
         sys.stderr.write(f"Error: {e}\n")
         return 1
     except Exception as e:
@@ -882,9 +902,12 @@ def cmd_history_migrate(args) -> int:
                 safe_write("\n❌ Errors during migration:\n", sys.stderr)
                 for err in result["errors"]:
                     sys.stderr.write(f"  - {err['version']}: {err['error']}\n")
-                return 1
 
-        return 0
+        # Outside the format branch on purpose. This `return 1` used to sit
+        # inside the `else`, so `--json` -- the mode automation uses --
+        # reported a FAILED migration as success. `cmd_history_verify` had
+        # this right; migrate and repair did not.
+        return 1 if result["errors"] else 0
 
     except Exception as e:
         sys.stderr.write(f"Error running migrations: {e}\n")
@@ -991,9 +1014,11 @@ def cmd_history_repair(args) -> int:
                 sys.stdout.write(
                     f"\nBackup preserved at: {result.get('backup_path', 'N/A')}\n"
                 )
-                return 1
 
-        return 0
+        # Outside the format branch on purpose -- see cmd_history_migrate.
+        # `--json` reported a FAILED repair as success, on the most
+        # destructive command in this module.
+        return 1 if not result["success"] else 0
 
     except Exception as e:
         sys.stderr.write(f"Error repairing database: {e}\n")
