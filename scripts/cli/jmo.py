@@ -1220,7 +1220,15 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     store_parser.add_argument(
         "--profile",
         default="balanced",
-        choices=list(PROFILE_TOOLS),
+        # Deliberately no `choices=`. It was `list(PROFILE_TOOLS)`, which is the
+        # registry only -- but `store_scan()` validates against
+        # `get_known_profiles()`, the registry PLUS any profile defined under
+        # `profiles:` in jmo.yml. argparse was therefore the narrower gate, and
+        # a user-defined profile could never reach the validator that accepts
+        # it. That is the #721 enumeration class one layer above the SQL CHECK
+        # #725 removed; `get_known_profiles()`'s own docstring says not to
+        # hardcode the list. Invalid names are rejected by store_scan() with a
+        # message naming every known profile.
         help="Scan profile that was used (default: balanced)",
     )
     store_parser.add_argument(
@@ -3397,6 +3405,12 @@ def cmd_scan(args) -> int:
         "tools": tools,
         "timestamp": datetime.now(UTC).isoformat(),
         "target_count": total_targets,
+        # The paths actually scanned. store_scan() needs these to record git
+        # context for the right repository: `results_dir/individual-repos/<name>`
+        # is an OUTPUT directory, so walking up from it finds whatever repo
+        # happens to contain the results folder, not the repo that was scanned
+        # (#780). Absolute, because the report phase may run from elsewhere.
+        "repo_paths": [str(Path(r).resolve()) for r in targets.repos],
     }
     scan_metadata_path.write_text(json.dumps(scan_metadata), encoding="utf-8")
 
