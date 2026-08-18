@@ -207,6 +207,39 @@ Coverage percentage says nothing about these — there is no line to miss.
 
 The user-facing half of these is in [docs/KNOWN_LIMITATIONS.md](../../docs/KNOWN_LIMITATIONS.md). Keep the two in step: if a gap here becomes something a user can hit, it belongs there too.
 
+## Counting tests: compare like with like
+
+A terminal summary's `skipped` count includes **collection-level** skips, which
+are not test nodes. So `passed + skipped` from the summary can legitimately
+exceed the number of tests collected, and the two numbers are not comparable.
+
+Measured on the half-B directories (`tests/` minus
+`unit`/`cli`/`core`/`adapters`):
+
+| source | number |
+|---|---:|
+| terminal summary | `1128 passed, 40 skipped` = **1168** |
+| `--collect-only -q` | **1167** selected (210 deselected) |
+| `--json-report` `summary` | `{"passed": 1128, "skipped": 39, "total": 1167, "collected": 1167}` |
+
+The odd one out is a module-level `pytest.importorskip`:
+
+```text
+SKIPPED [1] tests\e2e	est_dashboard_visual.py:29:
+  could not import 'playwright': No module named 'playwright'
+```
+
+Diffing the run's node ids against the collected ids is **empty in both
+directions** — there is no extra test, only an extra line in the tally.
+
+**What to do:** compare a collection count against a collection count, or take
+`summary.total` from `--json-report`. Do not reconcile a recorded
+`--collect-only` baseline against a fresh terminal summary.
+
+This was filed as a bug (#878) and closed after measuring. The campaign already
+applies like-with-like discipline to run-vs-run comparisons across trees; this
+is the same rule one level down, and it cost an issue to re-learn.
+
 ## A mirror of a mirror: why enumerating tests miss a whole class
 
 **Symptom:** a hand-written list restates something the code already defines —
