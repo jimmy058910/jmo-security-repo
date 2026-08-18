@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import time
+import traceback
 from pathlib import Path
 
 from scripts.core.config import load_config_with_env_overrides
@@ -457,16 +458,20 @@ def cmd_report(args, _log_fn) -> int:
         f"Wrote reports to {out_dir} (threshold={threshold or 'none'}, exit={code})",
     )
 
-    # Auto-storage hook: Store scan in history database if requested
+    # Auto-storage hook: Store scan in history database if requested.
+    #
+    # `history_db_path` and `store_error` are bound OUTSIDE the try so the
+    # handler can name the database even when the failure happened before the
+    # assignment, and so the exit-code check below is reachable on the path
+    # where no store was attempted at all.
+    store_error: Exception | None = None
+    _configured_db = getattr(args, "history_db", None)
+    history_db_path = (
+        Path(_configured_db) if _configured_db else Path(".jmo/history.db")
+    )
     if getattr(args, "store_history", False):
         try:
             from scripts.core.history_db import store_scan as db_store_scan
-
-            history_db_path = getattr(args, "history_db", None)
-            if history_db_path:
-                history_db_path = Path(history_db_path)
-            else:
-                history_db_path = Path(".jmo/history.db")
 
             # Record what the scan actually did, not what the config asks for.
             # `profile` and `tools_used` were resolved above from
@@ -498,13 +503,35 @@ def cmd_report(args, _log_fn) -> int:
             _log_fn(args, "INFO", f"Stored scan in history: {scan_id}")
             _log_fn(args, "INFO", f"Database: {history_db_path}")
 
-        except FileNotFoundError as e:
-            _log_fn(args, "WARN", f"Failed to store scan history: {e}")
         except Exception as e:
-            _log_fn(args, "WARN", f"Failed to store scan history: {e}")
-            import traceback
+            # Reported at ERROR, naming the consequence rather than the call
+            # that failed. History storage is on unless `--no-store-history`,
+            # so this used to be a WARN that scrolled past mid-run followed by
+            # a raw traceback -- and the exit code never saw it, so a scan
+            # could report success having stored nothing (#903).
+            store_error = e
+            _log_fn(
+                args,
+                "ERROR",
+                f"Scan results were NOT recorded in the history database "
+                f"({history_db_path}): {e}. The scan completed and its reports "
+                f"are valid, but `jmo history` will not show this run. "
+                f"Re-record it with `jmo history store --results-dir "
+                f"{results_dir}`, or pass --fail-on-store-error to make a "
+                f"failed history write exit non-zero.",
+            )
+            # The traceback is a debugging detail, not a user-facing one: this
+            # is a recoverable condition, and printing a stack trace into
+            # normal scan output makes it read as a crash.
+            _log_fn(args, "DEBUG", f"store_scan traceback: {traceback.format_exc()}")
 
-            traceback.print_exc()
-
-    # Return non-zero if either severity threshold or policy violations occurred
-    return max(code, policy_exit_code)
+    # Return non-zero if the severity threshold, a policy violation, or -- only
+    # when explicitly asked -- a failed history write says so. Storage is on by
+    # default, so failing without the flag would redden scans for users who
+    # never asked for history and ran the scan for its findings (#903).
+    store_exit_code = (
+        1
+        if store_error is not None and getattr(args, "fail_on_store_error", False)
+        else 0
+    )
+    return max(code, policy_exit_code, store_exit_code)
