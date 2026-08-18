@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@radix-ui/react-tooltip": "^1.2.16",
-    "lucide-react": "^1.29.0",
+    "lucide-react": "^1.31.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "recharts": "^3.8.1"
@@ -25,12 +25,12 @@
     "@babel/core": ">=7.29.6",
     "brace-expansion@1": "1.1.16",
     "brace-expansion@2": "2.1.2",
-    "js-yaml@3": "3.15.0"
+    "js-yaml@3": "^3.15.1"
   },
   "devDependencies": {
-    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.0",
-    "@testing-library/user-event": "^14.6.3",
+    "@testing-library/user-event": "^14.6.4",
     "@types/jest": "^30.0.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
@@ -39,7 +39,7 @@
     "jest": "^30.4.2",
     "jest-environment-jsdom": "^30.4.1",
     "postcss": "^8.5.26",
-    "rollup-plugin-visualizer": "^6.0.5",
+    "rollup-plugin-visualizer": "^7.1.1",
     "tailwindcss": "^3.4.1",
     "ts-jest": "^29.4.12",
     "typescript": "^6.0.3",
