@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+import sqlite3
 import sys
 import time
 from pathlib import Path
@@ -169,7 +170,15 @@ def cmd_history_list(args) -> int:
         conn.close()
 
         if not scans:
-            sys.stdout.write("No scans found.\n")
+            # --json has to hold on the empty path too. This used to return
+            # before the format branch below, so `--json` emitted the prose
+            # "No scans found." and every consumer doing json.loads() got
+            # "Expecting value: line 1 column 1". `history export` already
+            # returns [] here; this makes `list` agree with it.
+            if getattr(args, "json", False):
+                sys.stdout.write("[]\n")
+            else:
+                sys.stdout.write("No scans found.\n")
             return 0
 
         # Format output
@@ -329,11 +338,36 @@ def cmd_history_query(args) -> int:
         return 1
 
     try:
-        conn = get_connection(db_path)
+        # `query` executes whatever the user typed, so open the database
+        # READ-ONLY and let SQLite be the guard. A statement-type allowlist
+        # would have to parse SQL correctly to be safe, and a
+        # startswith("SELECT") test is not that.
+        #
+        # What this closes: previously DDL ran in autocommit and PERSISTED --
+        # `jmo history query "DROP TABLE findings"` really dropped the table --
+        # while DML opened an implicit transaction that conn.close() discarded.
+        # Both reported the identical "SQL Error: 'NoneType' object is not
+        # iterable", so the same message meant "destroyed your data" and
+        # "silently did nothing" depending on the statement. On the default
+        # 1 GB history database that is unrecoverable.
+        conn = sqlite3.connect(f"{db_path.resolve().as_uri()}?mode=ro", uri=True)
+        conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
         query = args.query
         cursor.execute(query)
+
+        # Non-SELECT statements leave cursor.description as None. Rendering it
+        # raised "'NoneType' object is not iterable", which read as a SQL
+        # error from the database rather than a TypeError from this function.
+        if cursor.description is None:
+            conn.close()
+            sys.stderr.write(
+                "Error: query returned no result set. "
+                "'jmo history query' is read-only -- use a SELECT.\n"
+            )
+            return 1
+
         rows = cursor.fetchall()
 
         # Format output
@@ -557,10 +591,25 @@ def cmd_history_stats(args) -> int:
                 )
             sys.stdout.write("\n")
 
-            if stats["scans_by_branch"]:
-                sys.stdout.write("Scans by Branch:\n")
-                for item in stats["scans_by_branch"][:10]:
+            # Say what these rows do NOT cover. They are capped at 10 and carry
+            # only scans with a branch recorded, so on a real database they can
+            # sum to a small fraction of `total_scans` -- 279 of 2170 on the
+            # one this was found on -- and printing them bare invited reading
+            # the column as a full breakdown.
+            shown_branches = len(stats["scans_by_branch"])
+            distinct_branches = stats["distinct_branches"]
+            scans_without_branch = stats["scans_without_branch"]
+            if stats["scans_by_branch"] or scans_without_branch:
+                header = "Scans by Branch"
+                if distinct_branches > shown_branches:
+                    header += f" (top {shown_branches} of {distinct_branches})"
+                sys.stdout.write(header + ":\n")
+                for item in stats["scans_by_branch"]:
                     sys.stdout.write(f"  {item['branch']:20} {item['count']:4} scans\n")
+                if scans_without_branch:
+                    sys.stdout.write(
+                        f"  {'(no branch recorded)':20} {scans_without_branch:4} scans\n"
+                    )
                 sys.stdout.write("\n")
 
             if stats["scans_by_profile"]:
@@ -582,8 +631,15 @@ def cmd_history_stats(args) -> int:
                 sys.stdout.write("\n")
 
             if stats["top_tools"]:
-                sys.stdout.write("Top Tools:\n")
-                for item in stats["top_tools"][:10]:
+                # Same cap, same duty to name it. The [:10] slice that used to
+                # sit on the loop below duplicated the SQL LIMIT, so raising
+                # one would have been silently undone by the other.
+                shown_tools = len(stats["top_tools"])
+                tools_header = "Top Tools"
+                if stats["distinct_tools"] > shown_tools:
+                    tools_header += f" ({shown_tools} of {stats['distinct_tools']})"
+                sys.stdout.write(tools_header + ":\n")
+                for item in stats["top_tools"]:
                     sys.stdout.write(
                         f"  {item['tool']:20} {item['count']:6,} findings\n"
                     )
