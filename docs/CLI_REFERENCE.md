@@ -115,6 +115,7 @@ Run security scans against repositories, images, URLs, and infrastructure.
 | Flag | Description |
 |------|-------------|
 | `--no-store-history` | Disable automatic history storage (enabled by default) |
+| `--fail-on-store-error` | Exit non-zero if the scan could not be recorded in history. Off by default: storage is enabled unless `--no-store-history`, so a failed write would otherwise redden scans run purely for their findings. The failure is always reported at `ERROR` regardless of this flag |
 | `--history-db PATH` | Path to history database (default: `.jmo/history.db`) |
 | `--no-store-raw-findings` | Don't store raw findings (security: prevents secret persistence) |
 | `--encrypt-findings` | Encrypt findings in database (requires `JMO_ENCRYPTION_KEY` env var) |

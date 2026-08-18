@@ -263,6 +263,16 @@ def _add_scan_config_args(parser: argparse.ArgumentParser) -> None:
         help="Disable automatic history storage (default: enabled)",
     )
     parser.add_argument(
+        "--fail-on-store-error",
+        action="store_true",
+        default=False,
+        help=(
+            "Exit non-zero if the scan could not be recorded in the history "
+            "database (default: report the failure but still exit on findings "
+            "alone)"
+        ),
+    )
+    parser.add_argument(
         "--history-db",
         default=None,
         help="Path to history database (default: .jmo/history.db)",
