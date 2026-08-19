@@ -207,6 +207,38 @@ Coverage percentage says nothing about these — there is no line to miss.
 
 The user-facing half of these is in [docs/KNOWN_LIMITATIONS.md](../../docs/KNOWN_LIMITATIONS.md). Keep the two in step: if a gap here becomes something a user can hit, it belongs there too.
 
+## `uv sync` disarms tests by uninstalling what is not in the lock
+
+`uv sync --group dev` prunes every package absent from `uv.lock`. Some of those
+are packages tests depend on, and the tests then **skip green** rather than
+fail — so a baseline taken after a sync is not comparable to one taken before.
+
+Measured 2026-08-18, immediately after a routine `uv sync --group dev`:
+
+| package | why it was there | tests | shows up as |
+|---|---|---:|---|
+| `yara-python` | installed by `jmo tools install`, never in `uv.lock` | **7** | `could not import 'yara'` in `tests/unit/test_yara_runner.py` |
+| `psutil` | **not in `uv.lock` at all** — `scheduled.yml:1410` runs `uv pip install psutil` for the benchmark job only | **2** | `psutil not installed` in `tests/performance/test_benchmarks.py` and `test_stress.py` |
+
+Half A went `7434 passed / 65 skipped` to `7427 / 72`; half B went `1128 / 40`
+to `1126 / 42`. **Collected counts were identical in both halves** — nothing was
+lost, 9 tests moved from passed to skipped. A comparison that looks only at
+`passed` reads this as a regression; one that looks only at `collected` reads it
+as no change. Both are wrong, which is why the section below insists on
+comparing like with like.
+
+Two consequences worth carrying:
+
+- **`psutil` is deliberate; `yara-python` is collateral.** The benchmark job
+  installs psutil itself and says so in a comment, so those 2 skips are correct
+  behaviour and must not be "fixed". The 7 yara skips are the real cost: a
+  security tool's Python module gets removed from the venv by a dependency sync.
+  Reinstall with `jmo tools install yara` when those tests matter.
+- **#792 does not "fail to reproduce" in a synced environment — it *skips*.**
+  `test_100k_findings_memory_usage` lives in `test_stress.py` behind the psutil
+  guard. "Did not reproduce" and "did not run" are different claims and only the
+  second is true. Say which mode produced the result.
+
 ## Counting tests: compare like with like
 
 A terminal summary's `skipped` count includes **collection-level** skips, which
