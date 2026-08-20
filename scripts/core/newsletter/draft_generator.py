@@ -64,6 +64,8 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
+from scripts.core.unicode_utils import harden_console_streams
+
 logger = logging.getLogger(__name__)
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -616,6 +618,12 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Own entry point, so it never receives the hardening `jmo.py:main()`
+    # applies. `--print` writes the assembled plain text, which comes from
+    # CHANGELOG.md and contains "→"; on a cp1252 console that raised
+    # UnicodeEncodeError *after* the HTML and .txt files had been written, so
+    # the run looked like a failure while its artifacts were fine.
+    harden_console_streams()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     args = _build_parser().parse_args(argv)
 

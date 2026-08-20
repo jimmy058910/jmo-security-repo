@@ -358,14 +358,25 @@ Detailed guidelines for specific parts of the codebase. These load automatically
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `default_profile` | string | Default scan profile (fast/balanced/deep) |
+| `default_profile` | string | Default scan profile (fast/slim/balanced/deep) |
 | `fail_on` | string | Severity threshold for CI failures |
 | `retries` | int | Retries for failed tool invocations |
 | `per_tool` | object | Per-tool configuration overrides |
 | `profiles` | object | Custom profile definitions with tool lists |
-| `email` | object | Email notification settings (SMTP, recipients) |
-| `schedule` | object | Scheduled scan configuration (cron expressions) |
+| `outputs` | object | Output/reporting settings |
+| `profiling` | object | Scan/report timing instrumentation |
+| `policy` | object | Policy-as-code settings |
 | `deduplication.similarity_threshold` | float | Cross-tool clustering threshold (0.5-1.0, default: 0.65) |
+
+> This table listed `email` ("Email notification settings (SMTP, recipients)")
+> and `schedule` ("Scheduled scan configuration (cron expressions)"). **Neither
+> key exists in `jmo.yml`, nothing under `scripts/` reads either, and there is
+> no SMTP anywhere in the product** — email goes through the Resend HTTP API
+> (`scripts/core/email_service.py`), and schedules live in
+> `~/.jmo/schedules.json`, managed by `jmo schedule`. Measured in chunk 17;
+> the "SMTP" wording had already propagated into a session handoff as a real
+> hazard to plan around. The keys above are the ones the shipped `jmo.yml`
+> actually has.
 
 See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for complete configuration reference.
 

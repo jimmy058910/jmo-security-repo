@@ -1,6 +1,6 @@
 """Command handlers for 'jmo schedule' subcommands.
 
-This module implements all 8 schedule subcommands:
+This module implements all 9 schedule subcommands:
 - create: Create new schedule
 - list: List all schedules
 - get: Get schedule details
@@ -15,6 +15,7 @@ This module implements all 8 schedule subcommands:
 from __future__ import annotations
 
 import json
+import os
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -37,6 +38,8 @@ from scripts.core.schedule_manager import (
     ScheduleSpec,
     ScheduleStatus,
 )
+from scripts.core.unicode_utils import safe_print
+from scripts.core.validation import SCHEDULE_NAME_PATTERN
 from scripts.core.workflow_generators import (
     GitHubActionsGenerator,
     GitLabCIGenerator,
@@ -87,6 +90,29 @@ def _cmd_schedule_create(args, manager: ScheduleManager) -> int:
     Returns:
         int: 0 on success, 1 on failure
     """
+    # Validate the name here, at creation, rather than only at `install`.
+    #
+    # `CronInstaller.install` has always called validate_schedule_name -- but
+    # `create` called nothing, so every name the installer rejects was accepted
+    # and persisted: "evil; rm -rf /", "../../etc/passwd", "has space",
+    # "9starts-with-digit" and names over 64 characters all stored at rc 0.
+    # The failure only appeared later, on Linux, at install time; on Windows it
+    # could not appear at all. Rejecting at the point of entry is where the
+    # user can still fix it.
+    # Matched against SCHEDULE_NAME_PATTERN rather than by calling
+    # validate_schedule_name(): that predicate also logs at ERROR, which would
+    # print the same rejection twice -- once as a JSON log line, once as the
+    # message below. The rule itself still lives in exactly one place, and
+    # test_schedule_name_gate_matches_installer pins this gate to the
+    # installer's so the two cannot drift apart.
+    if not SCHEDULE_NAME_PATTERN.match(args.name or ""):
+        _error(
+            f"Invalid schedule name '{args.name}'. Names must start with a "
+            f"letter, be 1-64 characters, and contain only letters, digits, "
+            f"hyphens or underscores."
+        )
+        return 1
+
     # Validate cron expression
     try:
         croniter(args.cron)
@@ -177,6 +203,9 @@ def _cmd_schedule_create(args, manager: ScheduleManager) -> int:
     _info(f"Cron: {args.cron}")
     _info(f"Profile: {args.profile}")
 
+    _warn_nonstandard_cron(args.cron)
+    _warn_timezone_ignored(args.backend, args.timezone)
+
     # Show next steps
     if args.backend == "github-actions":
         _info("")
@@ -263,6 +292,18 @@ def _cmd_schedule_update(args, manager: ScheduleManager) -> int:
         _error(f"Schedule '{args.name}' not found")
         return 1
 
+    # An update with no field to update is a mistake, not a no-op. It used to
+    # bump `metadata.generation`, rewrite schedules.json and report "Updated
+    # schedule 'x'" having changed nothing a user could name -- a success
+    # message for work that did not happen, which is the one thing this
+    # command must never produce.
+    if not (args.cron or args.profile or args.suspend or args.resume):
+        _error(
+            f"Nothing to update for '{args.name}'. Pass at least one of "
+            f"--cron, --profile, --suspend or --resume."
+        )
+        return 1
+
     # Update fields
     if args.cron:
         # Validate new cron expression
@@ -271,6 +312,7 @@ def _cmd_schedule_update(args, manager: ScheduleManager) -> int:
         except Exception as e:
             _error(f"Invalid cron expression '{args.cron}': {e}")
             return 1
+        _warn_nonstandard_cron(args.cron)
         schedule.spec.schedule = args.cron
 
     if args.profile:
@@ -281,9 +323,14 @@ def _cmd_schedule_update(args, manager: ScheduleManager) -> int:
     elif args.resume:
         schedule.spec.suspend = False
 
-    # Save updated schedule
+    # Save updated schedule. `manager.update` recomputes nextScheduleTime from
+    # the stored cron, so echoing it here shows the user the change landed --
+    # and would have made the stale-next-run bug visible the first time anyone
+    # ran `update --cron`.
     manager.update(schedule)
     _success(f"Updated schedule '{args.name}'")
+    _info(f"Cron: {schedule.spec.schedule}")
+    _info(f"Next run: {schedule.status.nextScheduleTime}")
 
     return 0
 
@@ -297,6 +344,8 @@ def _cmd_schedule_export(args, manager: ScheduleManager) -> int:
 
     # Determine backend
     backend = args.backend or schedule.spec.backend.type
+
+    _warn_timezone_ignored(backend, schedule.spec.timezone)
 
     # Generate workflow
     generator: GitHubActionsGenerator | GitLabCIGenerator
@@ -408,6 +457,13 @@ def _cmd_schedule_validate(args, manager: ScheduleManager) -> int:
         _error(f"Invalid cron expression: {e}")
         return 1
 
+    # "Valid" above means "croniter parses it", which is a broader set than
+    # either backend accepts. Saying so here is the point of a `validate`
+    # subcommand -- it reported "Cron expression valid" then
+    # "Schedule configuration valid" for `@daily`, which GitHub Actions cannot
+    # run and `jmo schedule install` refuses.
+    _warn_nonstandard_cron(schedule.spec.schedule)
+
     # Validate targets
     if not schedule.spec.jobTemplate.targets:
         _error("No targets configured")
@@ -422,6 +478,56 @@ def _cmd_schedule_validate(args, manager: ScheduleManager) -> int:
 
     _success("Schedule configuration valid")
     return 0
+
+
+def _warn_nonstandard_cron(cron_expr: str) -> None:
+    """Say so when a cron expression croniter accepts but the backends do not.
+
+    Three parsers see this string and they do not agree:
+
+    | expression      | croniter (create/validate) | validate_cron_expression (install) |
+    |-----------------|----------------------------|------------------------------------|
+    | `0 2 * * *`     | accepts                    | accepts                            |
+    | `0 0 2 * * *`   | accepts (6-field, seconds) | rejects                            |
+    | `@daily`        | accepts                    | rejects                            |
+    | `0 2 * * MON`   | accepts                    | rejects                            |
+
+    All three of the bottom rows were accepted at rc 0, persisted, reported
+    valid by `jmo schedule validate`, and written into the exported workflow --
+    where GitHub Actions requires five POSIX fields and does not support the
+    `@` shorthand at all, so the workflow it produced could not run.
+    """
+    fields = cron_expr.split()
+    if cron_expr.startswith("@"):
+        _warn(
+            f"'{cron_expr}' is a croniter shorthand. GitHub Actions and "
+            f"`jmo schedule install` both require a 5-field cron expression "
+            f"and will reject it -- use e.g. '0 0 * * *'."
+        )
+    elif len(fields) != 5:
+        _warn(
+            f"'{cron_expr}' has {len(fields)} fields. GitHub Actions and "
+            f"`jmo schedule install` both require exactly 5."
+        )
+
+
+def _warn_timezone_ignored(backend: str, timezone: str) -> None:
+    """Say so when the chosen backend cannot honour `--timezone`.
+
+    GitHub Actions has no timezone field: `schedule.cron` is always evaluated
+    in UTC. The generator therefore never emitted the timezone, and nothing
+    said so -- `--timezone America/New_York` was accepted, persisted, shown by
+    `jmo schedule get`, and then silently dropped, so the workflow ran at a
+    different wall-clock hour than the one the user asked for. The GitLab
+    generator does surface it, in the instructions for the GitLab UI, which is
+    where a GitLab schedule's timezone is actually configured.
+    """
+    if backend == "github-actions" and timezone and timezone.upper() != "UTC":
+        _warn(
+            f"GitHub Actions runs cron in UTC and has no timezone setting, so "
+            f"'{timezone}' will be ignored. Convert the cron expression to UTC, "
+            f"or use --backend local-cron / gitlab-ci."
+        )
 
 
 # Utility functions for colored output
@@ -448,21 +554,55 @@ def _print_schedules_table(schedules: list[ScanSchedule]) -> None:
         print(f"{name:<20} {backend:<15} {profile:<10} {cron:<20} {status:<10}")
 
 
+def _use_color() -> bool:
+    """Whether stderr can render ANSI colour.
+
+    These helpers all write to stderr, so the check is on stderr -- not the
+    `sys.stdout.isatty()` that `tool_commands.Colors.supports_color()` uses for
+    its own stdout writers. The Windows arm matches that helper: a bare
+    conhost may not process escape sequences, and TERM/WT_SESSION are what
+    distinguish the consoles that do.
+
+    Without this the escapes were unconditional, so `jmo schedule create 2>log`
+    wrote literal `\x1b[32m` into the log file.
+    """
+    if not getattr(sys.stderr, "isatty", lambda: False)():
+        return False
+    if sys.platform == "win32":
+        return bool(os.environ.get("TERM") or os.environ.get("WT_SESSION"))
+    return True
+
+
+def _mark(glyph: str, color: str, msg: str) -> None:
+    """Write one status line to stderr, colour- and encoding-safe.
+
+    `safe_print` applies UNICODE_FALLBACKS, which already carries the three
+    glyphs used here (U+2713 -> "[v]", U+2717 -> "[x]", U+26A0 -> "[!]").
+    Bypassing it with a bare `print()` is what made every schedule status line
+    render as a bare "?" on a cp1252 console: `harden_console_streams` stops
+    the UnicodeEncodeError, so nothing crashed and nothing was flagged --
+    "? Created schedule 'x'" and "? Schedule 'y' not found" read identically.
+    Measured across create/validate/update/get/install/delete: 9 bare "?".
+    """
+    prefix = f"\x1b[{color}m{glyph}\x1b[0m" if _use_color() else glyph
+    safe_print(f"{prefix} {msg}", stream=sys.stderr)
+
+
 def _success(msg: str) -> None:
     """Print success message in green."""
-    print(f"\x1b[32m✓\x1b[0m {msg}", file=sys.stderr)
+    _mark("✓", "32", msg)
 
 
 def _info(msg: str) -> None:
     """Print info message."""
-    print(f"  {msg}", file=sys.stderr)
+    safe_print(f"  {msg}", stream=sys.stderr)
 
 
 def _warn(msg: str) -> None:
     """Print warning message in yellow."""
-    print(f"\x1b[33m⚠\x1b[0m {msg}", file=sys.stderr)
+    _mark("⚠", "33", msg)
 
 
 def _error(msg: str) -> None:
     """Print error message in red."""
-    print(f"\x1b[31m✗\x1b[0m {msg}", file=sys.stderr)
+    _mark("✗", "31", msg)
