@@ -349,6 +349,14 @@ class PolicyEngine:
 
         Reads the policy file and parses the metadata object using OPA eval.
 
+        The query is built from the policy's OWN package declaration. It used to
+        be the literal `data.jmo.policy.metadata`, and no shipped policy lives in
+        that package -- the five builtins declare `jmo.policy.hipaa`,
+        `.owasp`, `.pci`, `.production` and `.secrets`. So OPA returned `{}`
+        every time and this method has ALWAYS fallen through to the textual
+        parser below. Measured 2026-08-20: 5 of 5 builtin policies returned
+        metadata that disagreed with OPA's own reading of the same file.
+
         Args:
             policy_path: Path to .rego policy file
 
@@ -362,6 +370,9 @@ class PolicyEngine:
             raise FileNotFoundError(f"Policy file not found: {policy_path}")
 
         try:
+            package_name = self._extract_package_name(policy_path)
+            if not package_name:
+                package_name = "data.jmo.policy"
             # Use OPA to evaluate just the metadata
             result = subprocess.run(
                 [
@@ -371,7 +382,7 @@ class PolicyEngine:
                     str(policy_path),
                     "--format",
                     "json",
-                    "data.jmo.policy.metadata",
+                    f"{package_name}.metadata",
                 ],
                 capture_output=True,
                 encoding="utf-8",
@@ -398,23 +409,29 @@ class PolicyEngine:
                 r"metadata\s*:=\s*\{([^}]+)\}", content, re.DOTALL | re.MULTILINE
             )
             if match:
-                # Basic parsing - extract key-value pairs
-                metadata = {}
-                pairs = match.group(1).split(",")
-                for pair in pairs:
-                    if ":" in pair:
-                        key, value = pair.split(":", 1)
-                        key = key.strip().strip('"')
-                        value = value.strip().strip('",')
-                        # Try to parse as JSON array
-                        if value.startswith("["):
-                            try:
-                                metadata[key] = json.loads(value)
-                            except json.JSONDecodeError:
-                                metadata[key] = value
-                        else:
-                            metadata[key] = value
-                return cast(dict[str, Any], metadata)
+                # A Rego object literal is JSON once its trailing commas are
+                # gone, so parse it as JSON rather than splitting on ",".
+                #
+                # The previous version did `match.group(1).split(",")`, which
+                # cuts through the *inside* of every list value: `"tags":
+                # ["hipaa", "healthcare", "compliance", "phi"]` became the
+                # string `["hipaa` and the remaining elements were discarded as
+                # having no ":". `jmo policy show hipaa-compliance` printed
+                # `tags: ["hipaa`, and 5 of 5 builtins were affected.
+                block = "{" + match.group(1) + "}"
+                # Rego permits a trailing comma before a closing brace
+                # or bracket; JSON does not.
+                block = re.sub(r",(\s*[}\]])", r"\1", block)
+                try:
+                    parsed = json.loads(block)
+                except json.JSONDecodeError as exc:
+                    logger.warning(
+                        f"Could not parse metadata block in {policy_path.name}: {exc}"
+                    )
+                    return {}
+                if isinstance(parsed, dict):
+                    return cast(dict[str, Any], parsed)
+                return {}
 
             return {}
 

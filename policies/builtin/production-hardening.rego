@@ -5,7 +5,7 @@ import future.keywords.in
 
 metadata := {
 	"name": "Production Hardening Policy",
-	"version": "1.0.0",
+	"version": "1.1.0",
 	"description": "Stricter rules for production deployments",
 	"author": "JMo Security",
 	"tags": ["production", "hardening", "zero-tolerance"],
@@ -45,8 +45,18 @@ secret_findings contains finding if {
 	finding.severity in ["CRITICAL", "HIGH"]
 }
 
+# The three populations below overlap -- a verified TruffleHog secret is a
+# `secret_findings` member AND a `blocking_findings` member (HIGH). Rego keeps
+# set members that differ in any field, so before these `not` guards one finding
+# produced two violations under two categories with the same fingerprint, and
+# the gate reported "Production gate FAILED: 2 blocking issues" for a single
+# finding. Measured 2026-08-20 end to end through `jmo report --policy`.
+#
+# Ordered most-specific first: secrets, then dockerfile, then plain severity.
 violations contains violation if {
 	finding := blocking_findings[_]
+	not finding in secret_findings
+	not finding in dockerfile_issues
 	violation := {
 		"fingerprint": finding.id,
 		"severity": finding.severity,
@@ -58,6 +68,7 @@ violations contains violation if {
 
 violations contains violation if {
 	finding := dockerfile_issues[_]
+	not finding in secret_findings
 	violation := {
 		"fingerprint": finding.id,
 		"severity": "CRITICAL",

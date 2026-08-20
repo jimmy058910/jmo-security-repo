@@ -6,7 +6,7 @@ import future.keywords.in
 # Metadata
 metadata := {
 	"name": "OWASP Top 10 2021 Enforcer",
-	"version": "1.0.0",
+	"version": "1.1.0",
 	"description": "Blocks findings mapped to OWASP Top 10 categories",
 	"author": "JMo Security",
 	"tags": ["owasp", "compliance", "web-security"],
@@ -39,7 +39,13 @@ violations contains violation if {
 		"rule": finding.ruleId,
 		"path": finding.location.path,
 		"message": sprintf("OWASP violation (%s): %s", [categories[0], finding.message]),
-		"remediation": finding.remediation,
+		# `remediation` is optional in common_finding.v1.json and
+		# Finding.to_dict() drops None fields, so a bare `finding.remediation`
+		# makes this whole object undefined -- which drops the violation while
+		# `allow` (keyed on owasp_findings) still reports false. Measured: two
+		# findings, one without the key, produced `violations = 1` and the
+		# message "Found 1 OWASP Top 10 violations".
+		"remediation": object.get(finding, "remediation", ""),
 	}
 }
 

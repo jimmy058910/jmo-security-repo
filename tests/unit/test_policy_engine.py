@@ -320,3 +320,79 @@ class TestPolicyEngine:
 
         with pytest.raises(FileNotFoundError, match="Policy file not found"):
             engine.get_metadata(tmp_path / "nonexistent.rego")
+
+
+class TestGetMetadataQueriesTheRightPackage:
+    """get_metadata read a package no shipped policy declares (chunk 16).
+
+    The query was the literal ``data.jmo.policy.metadata``. The five builtins
+    declare ``jmo.policy.hipaa``, ``.owasp``, ``.pci``, ``.production`` and
+    ``.secrets``, so OPA returned ``{}`` every time and the method has ALWAYS
+    fallen through to its textual parser -- which then split the object on ","
+    and cut through the inside of every list value.
+    """
+
+    @pytest.fixture
+    def mock_opa_available(self) -> MagicMock:
+        """Resolve OPA and satisfy the constructor's version probe."""
+        with (
+            patch("scripts.core.policy_engine.find_tool", return_value="/usr/bin/opa"),
+            patch("subprocess.run") as mock_run,
+        ):
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout="Version: 1.18.2", stderr=""
+            )
+            yield mock_run
+
+    POLICY = chr(10).join(
+        [
+            "package jmo.policy.example",
+            "",
+            "metadata := {",
+            '    "name": "Example",',
+            '    "version": "3.1.4",',
+            '    "tags": ["alpha", "beta", "gamma"],',
+            '    "frameworks": ["NIST CSF", "CIS Controls"],',
+            "}",
+            "",
+        ]
+    )
+
+    def test_query_is_built_from_the_policys_own_package(
+        self, mock_opa_available: MagicMock, tmp_path: Path
+    ) -> None:
+        policy = tmp_path / "example.rego"
+        policy.write_text(self.POLICY, encoding="utf-8")
+        engine = PolicyEngine()
+
+        with patch("subprocess.run") as run:
+            run.return_value = MagicMock(returncode=0, stdout="{}", stderr="")
+            engine.get_metadata(policy)
+
+        argv = run.call_args[0][0]
+        assert argv[-1] == "data.jmo.policy.example.metadata", argv
+
+    def test_textual_fallback_keeps_whole_lists(
+        self, mock_opa_available: MagicMock, tmp_path: Path
+    ) -> None:
+        """The fallback runs whenever OPA cannot evaluate the file at all.
+
+        It used to yield the string '["alpha' for a three-element tag list,
+        because it split the object body on "," and discarded every fragment
+        without a ":". `jmo policy show hipaa-compliance` printed
+        `tags: ["hipaa`, and all 5 builtins were affected.
+        """
+        policy = tmp_path / "example.rego"
+        policy.write_text(self.POLICY, encoding="utf-8")
+        engine = PolicyEngine()
+
+        with patch("subprocess.run") as run:
+            run.return_value = MagicMock(returncode=1, stdout="", stderr="parse error")
+            metadata = engine.get_metadata(policy)
+
+        assert metadata == {
+            "name": "Example",
+            "version": "3.1.4",
+            "tags": ["alpha", "beta", "gamma"],
+            "frameworks": ["NIST CSF", "CIS Controls"],
+        }, metadata
