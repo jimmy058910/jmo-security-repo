@@ -151,8 +151,10 @@ def _format_security_score(security_score: dict[str, Any]) -> str:
     lines.append(f"  Trend: {trend_icon}")
     lines.append(f"  [{bar}]")
 
-    # Score history if available
-    history = security_score.get("history", [])
+    # Score history if available. `_calculate_security_score` emits
+    # "historical_scores"; this read "history", so the Change line below
+    # could never render.
+    history = security_score.get("historical_scores", [])
     if len(history) >= 2:
         oldest = history[0]
         newest = history[-1]
@@ -273,7 +275,9 @@ def _format_improvement_metrics(improvement: dict[str, Any]) -> str:
     net_change = improvement.get("net_change", 0)
     resolved = improvement.get("resolved", 0)
     introduced = improvement.get("introduced", 0)
-    percent_change = improvement.get("percent_change", 0.0)
+    # `_compute_improvement_metrics` emits "percentage_change"; this read
+    # "percent_change", so the headline showed (+0.0%) on a 90% reduction.
+    percent_change = improvement.get("percentage_change", 0.0)
 
     # Net change indicator
     if net_change < 0:
@@ -292,8 +296,13 @@ def _format_improvement_metrics(improvement: dict[str, Any]) -> str:
     lines.append(f"  🔧 Resolved: {resolved}")
     lines.append(f"  ➕ Introduced: {introduced}")
 
-    # Per-severity breakdown
-    by_severity = improvement.get("by_severity", {})
+    # Per-severity breakdown. The producer emits these flat as
+    # "critical_change", "high_change", ... and never as a "by_severity"
+    # sub-dict, so this whole block was unreachable.
+    by_severity = {
+        severity: improvement.get(f"{severity.lower()}_change", 0)
+        for severity in ("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO")
+    }
     if by_severity:
         lines.append("")
         lines.append("  By Severity:")

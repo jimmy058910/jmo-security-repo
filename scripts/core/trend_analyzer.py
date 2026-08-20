@@ -24,6 +24,7 @@ from typing import Any
 from scripts.core.history_db import (
     DEFAULT_DB_PATH,
     get_connection,
+    get_findings_for_scan,
     get_scan_by_id,
     list_scans,
 )
@@ -350,6 +351,9 @@ class TrendAnalyzer:
             return {
                 "trend": "insufficient_data",
                 "total_change": 0,
+                "net_change": 0,
+                "resolved": 0,
+                "introduced": 0,
                 "critical_change": 0,
                 "high_change": 0,
                 "medium_change": 0,
@@ -394,9 +398,19 @@ class TrendAnalyzer:
         else:
             confidence = "low"
 
+        # `net_change` is an alias for `total_change`, and `resolved` /
+        # `introduced` are counted from the findings themselves. All three
+        # were read by the terminal report, the CSV export and three
+        # Prometheus metrics, and produced by nothing -- so the headline read
+        # "+0 findings ... STABLE" on a window where findings fell 90%.
+        resolved, introduced = self._count_resolved_and_introduced(scans)
+
         return {
             "trend": trend,
             "total_change": total_change,
+            "net_change": total_change,
+            "resolved": resolved,
+            "introduced": introduced,
             "critical_change": critical_change,
             "high_change": high_change,
             "medium_change": medium_change,
@@ -406,6 +420,33 @@ class TrendAnalyzer:
             "confidence": confidence,
             "scan_count": len(scans),
         }
+
+    def _count_resolved_and_introduced(
+        self, scans: list[dict[str, Any]]
+    ) -> tuple[int, int]:
+        """Count findings present in the first scan but not the last, and vice versa.
+
+        Fingerprint-level, because a net count cannot distinguish 'nothing
+        changed' from 'ten fixed and ten introduced'. The same derivation
+        `cmd_trends_developers` already performs to attribute remediation.
+
+        Returns (0, 0) rather than raising when the window holds fewer than
+        two scans, or when the findings cannot be read -- these are display
+        metrics and must not take down an analysis.
+        """
+        if len(scans) < 2 or not self.conn:
+            return 0, 0
+        try:
+            first = get_findings_for_scan(self.conn, scans[0]["id"])
+            last = get_findings_for_scan(self.conn, scans[-1]["id"])
+        except sqlite3.Error:
+            logger.debug(
+                "Could not read findings for remediation counts", exc_info=True
+            )
+            return 0, 0
+        first_fps = {f["fingerprint"] for f in first}
+        last_fps = {f["fingerprint"] for f in last}
+        return len(first_fps - last_fps), len(last_fps - first_fps)
 
     def _get_top_rules(
         self, scans: list[dict[str, Any]], limit: int = 10

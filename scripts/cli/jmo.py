@@ -1571,7 +1571,27 @@ Usage Examples:
     )
     analyze_parser.add_argument(
         "--export-html",
-        help="Export analysis to HTML file (Phase 4)",
+        help="Export analysis to HTML file",
+    )
+    # These four were read by cmd_trends_analyze from the day trend analysis
+    # landed and declared by nobody, so every getattr() found None and
+    # scripts/core/trend_exporters.py was unreachable from the CLI. The
+    # exporters themselves are a documented, semver-stable public API.
+    analyze_parser.add_argument(
+        "--export-csv",
+        help="Export analysis to CSV file (Excel, Google Sheets)",
+    )
+    analyze_parser.add_argument(
+        "--export-prometheus",
+        help="Export analysis as Prometheus metrics (.prom)",
+    )
+    analyze_parser.add_argument(
+        "--export-grafana",
+        help="Export a Grafana dashboard definition (JSON)",
+    )
+    analyze_parser.add_argument(
+        "--export-dashboard",
+        help="Export trend data for the JMo dashboard (JSON)",
     )
     add_common_trend_args(analyze_parser)
 

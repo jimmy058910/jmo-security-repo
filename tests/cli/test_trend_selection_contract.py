@@ -38,6 +38,7 @@ structural reasons, both avoided here (#916):
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import sqlite3
 import time
@@ -617,6 +618,138 @@ def test_history_trends_backend_also_defaults_to_every_branch(
         assert get_trend_summary(conn, "main", days=30) is None
     finally:
         conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Naming scans vs selecting scans -- the unified rule
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        ["--branch", "dev"],
+        ["--days", "365"],
+        ["--last", "10"],
+        ["--branch", "dev", "--last", "10"],
+    ],
+)
+def test_scan_ids_cannot_be_combined_with_a_selector(
+    extra: list[str], mixed_db: Path, capsys
+) -> None:
+    """Naming scans and selecting scans are mutually exclusive.
+
+    `_get_scans` gives --scan-ids priority over everything else, so
+    `--scan-ids A B --last 10 --branch dev` returned the two named scans
+    with all three selectors silently discarded -- the same
+    accepted-and-ignored defect as --branch on `show` and `compare`, which
+    this file already covers. Removing those two flags while leaving this
+    combination was the incomplete half of the fix.
+    """
+    args = _parse(
+        "analyze",
+        "--scan-ids",
+        "scan-0001",
+        "scan-0002",
+        *extra,
+        "--db",
+        str(mixed_db),
+    )
+
+    rc = cmd_trends_analyze(args)
+
+    err = capsys.readouterr().err
+    assert rc == 2
+    assert "--scan-ids cannot be combined with" in err
+    # the message names the flags actually passed, not a fixed list
+    for flag in extra[::2]:
+        assert flag in err
+
+
+def test_scan_ids_alone_is_still_accepted(mixed_db: Path) -> None:
+    """The rule must not break the legitimate invocation."""
+    args = _parse(
+        "analyze",
+        "--scan-ids",
+        "scan-0001",
+        "scan-0002",
+        "--format",
+        "json",
+        "--db",
+        str(mixed_db),
+    )
+    assert cmd_trends_analyze(args) == 0
+
+
+# ---------------------------------------------------------------------------
+# Export flags -- #915
+# ---------------------------------------------------------------------------
+
+
+EXPORT_FLAGS = {
+    "--export-json": "export_json",
+    "--export-html": "export_html",
+    "--export-csv": "export_csv",
+    "--export-prometheus": "export_prometheus",
+    "--export-grafana": "export_grafana",
+    "--export-dashboard": "export_dashboard",
+}
+
+
+def test_every_export_dest_the_command_reads_is_declared() -> None:
+    """The command read six export dests; the parser declared two.
+
+    So four `getattr(args, "export_csv", None)` calls returned None for
+    every possible invocation and `scripts/core/trend_exporters.py` -- 466
+    lines, four exporters, a documented semver-stable API -- was
+    unreachable from the CLI. Its own tests call the exporters directly,
+    which is why they passed throughout. Derived from the source rather
+    than restated, so a seventh exporter cannot be added and forgotten.
+    """
+    source = Path("scripts/cli/trend_commands.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    read_dests = {
+        node.args[1].value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "getattr"
+        and len(node.args) >= 2
+        and isinstance(node.args[1], ast.Constant)
+        and isinstance(node.args[1].value, str)
+        and node.args[1].value.startswith("export_")
+    }
+    assert read_dests, "extractor found no export_* reads -- it is broken"
+
+    declared = {a.dest for a in _parser()._actions}
+    parsed = _parse("analyze")
+    declared |= set(vars(parsed))
+
+    missing = sorted(read_dests - declared)
+    assert not missing, (
+        f"cmd_trends_analyze reads {missing} but no parser declares them; "
+        "every getattr() returns None for every invocation"
+    )
+
+
+@pytest.mark.parametrize("flag", sorted(EXPORT_FLAGS))
+def test_each_export_flag_writes_a_non_empty_file(
+    flag: str, mixed_db: Path, tmp_path: Path
+) -> None:
+    """Declared, reachable, and it produces something.
+
+    `--export-html` was declared and crashed on every invocation that
+    reached it, leaving a 0-byte file (#910), so existence of the flag is
+    not evidence that it works.
+    """
+    out = tmp_path / f"out{flag}"
+    args = _parse("analyze", flag, str(out), "--db", str(mixed_db))
+
+    rc = cmd_trends_analyze(args)
+
+    assert rc == 0
+    assert out.exists(), f"{flag} produced no file"
+    assert out.stat().st_size > 0, f"{flag} produced an empty file"
 
 
 # ---------------------------------------------------------------------------

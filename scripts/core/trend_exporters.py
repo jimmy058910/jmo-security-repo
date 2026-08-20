@@ -55,8 +55,10 @@ def export_to_csv(analysis: dict[str, Any], output_path: Path) -> None:
         severity_trends = analysis.get("severity_trends", {})
         by_severity = severity_trends.get("by_severity", {})
         timestamps = severity_trends.get("timestamps", [])
-        metadata = analysis.get("metadata", {})
-        scan_ids = metadata.get("scan_ids", [])
+        # The scan IDs live in analysis["scans"], not in metadata. Reading
+        # metadata["scan_ids"] -- a key nothing emits -- left the "Scan ID"
+        # column blank in every CSV this has ever produced.
+        scan_ids = [s.get("id", "") for s in analysis.get("scans", [])]
 
         security_score = analysis.get("security_score", {})
         score_trend = security_score.get("trend", "")
