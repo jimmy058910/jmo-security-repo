@@ -193,6 +193,70 @@ allow if {
 finding.severity in ["CRITICAL", "HIGH"]
 ```
 
+### Fields Available to a Policy
+
+`input.findings[_]` is a CommonFinding v1.2.0 object
+(`docs/schemas/common_finding.v1.json`). **Reading a field that is not there
+is not an error in Rego -- the expression becomes undefined, the rule
+silently does not match, and the policy answers PASS.** Two shipped policies
+were inert for exactly this reason before v1.1.0, so the three traps below
+are worth reading before writing a rule.
+
+**Always present** (schema `required`):
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | string | the dedup fingerprint; policies use it as `fingerprint` |
+| `ruleId` | string | the tool's own rule identifier |
+| `severity` | string | `CRITICAL` / `HIGH` / `MEDIUM` / `LOW` / `INFO`, upper-case |
+| `tool.name`, `tool.version` | string | |
+| `location.path` | string | |
+| `message` | string | |
+| `schemaVersion` | string | |
+
+**Optional -- may be absent entirely.** `Finding.to_dict()` drops `None`
+values, so an unset optional field has no key at all. Read these with
+`object.get`, or a violation object that mentions one will be undefined and
+the finding will vanish from `violations` while `allow` still fails:
+
+```rego
+# WRONG -- drops the whole violation when the finding has no remediation
+violation := {"rule": finding.ruleId, "remediation": finding.remediation}
+
+# RIGHT
+violation := {"rule": finding.ruleId,
+             "remediation": object.get(finding, "remediation", "")}
+```
+
+`remediation`, `title`, `description`, `references`, `tags`, `cvss`, `risk`,
+`compliance`, `context`, `raw`, and `location.startLine` / `location.endLine`
+are all optional.
+
+**Three traps:**
+
+1. **`risk.cwe` is an array of strings, in two spellings.** Adapters store
+   either the bare id (`["CWE-798"]`) or the id with its description
+   appended (`["CWE-79: Improper Neutralization ..."]`). Match on the
+   prefix, never with `sprintf("CWE-%d", ...)` -- Go's `%d` on a non-integer
+   produces `CWE-%!d(string=...)`, which matches nothing and turns the rule
+   into a permanent PASS.
+
+2. **`raw` is the tool's own record, unnormalised.** Field names there are
+   the tool's, not JMo's: TruffleHog writes `Verified` with a capital V.
+   Prefer the normalised field where one exists -- the same signal is on
+   `tags` as `"verified"` / `"unverified"`.
+
+3. **`compliance.*` is added by the report phase, not by adapters.** Its
+   sub-objects are `owaspTop10_2021` (array of strings such as `A03:2021`),
+   `pciDss4_0` (array of objects with `requirement`, `priority`,
+   `description`), `cisControlsV8_1`, `nistCsf2_0`, `mitreAttack` and
+   `cweTop25_2024`. A findings file assembled by hand rather than by
+   `jmo report` will not have them.
+
+> **Check a new rule against a findings file you know contains a violation
+> and one you know does not.** A PASS over an input the rule cannot match is
+> byte-identical to a PASS over a clean repository.
+
 ### Policy Template
 
 ```rego
@@ -539,10 +603,21 @@ opa check policies/builtin/my-policy.rego
    # Policy may only check HIGH/CRITICAL findings
    finding.severity in ["CRITICAL", "HIGH"]
    ```
+4. **Check every field the rule dereferences actually exists.** This is the
+   most common cause and it is silent: an undefined dereference makes the
+   rule not match, so the policy reports PASS with no error and no warning.
+
+   ```bash
+   # Ask OPA what the rule body binds, one expression at a time
+   opa eval -d policies/builtin/zero-secrets.rego -i results/summaries/findings.json --format pretty 'input.findings[0].raw'
+   ```
+
+   See [Fields Available to a Policy](#fields-available-to-a-policy) for the
+   optional fields and the `risk.cwe` / `raw` traps.
 
 ### Performance Issues
 
-**Issue:** Policy evaluation takes >100ms
+**Issue:** Policy evaluation is slower than the <300 ms budget
 
 **Solutions:**
 
@@ -572,13 +647,31 @@ opa check policies/builtin/my-policy.rego
 
 ## Performance Characteristics
 
-Based on benchmarks with 5 built-in policies:
+**Most of the cost is process creation, not policy evaluation.** Each call
+to `evaluate_policies` spawns two OPA processes -- a version probe when the
+engine is constructed, and the `opa eval` itself -- so the floor is whatever
+your platform charges for starting a process twice, and it dominates.
 
-- **Small finding sets** (<100 findings): 20-25ms per policy
-- **Large finding sets** (1000 findings): <500ms per policy
-- **Average evaluation time:** 21.81ms (target: <100ms) ✅
-- **Slowest policy:** 23.33ms (production-hardening)
-- **Fastest policy:** 20.77ms (owasp-top-10)
+Measured on Windows 11, opa 1.18.2, 15 runs per case, machine otherwise idle:
+
+| Case | min | median | p90 | max |
+|---|---:|---:|---:|---:|
+| Small (2 findings, one policy) | 77 ms | 79 ms | 103 ms | 105 ms |
+| Large (1000 findings, one policy) | 98 ms | 115 ms | 131 ms | 136 ms |
+| One bare `opa version` spawn | - | 35 ms | - | - |
+
+So ~70 ms of that 79 ms median is two process spawns, and going from 2
+findings to 1000 costs only ~36 ms. **Scaling with finding count is cheap;
+the per-invocation floor is not.** If you evaluate several policies, expect
+roughly that floor once per policy.
+
+Process creation is markedly cheaper on Linux and macOS, so these figures
+are an upper bound rather than a universal characteristic. This section
+previously reported 20-25 ms per policy and an average of 21.81 ms against a
+`<100 ms` target -- numbers that cannot have come from Windows, and that the
+benchmark suite could not have contradicted, because it was silently
+skipping (it looked for `opa` on `PATH` only, and `jmo tools install opa`
+writes to `~/.jmo/bin/`).
 
 Run your own benchmarks:
 

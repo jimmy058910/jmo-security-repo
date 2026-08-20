@@ -112,6 +112,15 @@ UNICODE_FALLBACKS: dict[str, str] = {
     "\U0001f527": "[T]",  # 🔧 wrench
     "\U0001f525": "[!]",  # 🔥 fire
     "\U0001f504": "[~]",  # 🔄 cycle arrows
+    # Emoji -- Rego policy messages. The five builtin policies author their
+    # own `message`, `warnings` and violation strings, and these two were the
+    # only glyphs among them absent from this table (chunk 16 measured 7
+    # distinct codepoints across policies/builtin/*.rego). Deliberately not
+    # mapped to "[?]": that token already serves two other emoji and is
+    # indistinguishable from the bare '?' an errors="replace" pass emits,
+    # which is the failure this table exists to make visible (#921).
+    "\U0001f6ab": "[BLOCKED]",  # 🚫 No entry (production gate failed)
+    "\U0001f6a8": "[ALERT]",  # 🚨 Siren (verified secrets found)
     # Mathematical symbols. Neither is safe everywhere and they fail in
     # opposite directions: U+00D7 encodes in cp1252 but not cp437, U+2265 in
     # cp437 but not cp1252 -- which is why encodability cannot be decided
