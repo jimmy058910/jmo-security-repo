@@ -16,6 +16,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from scripts.core.trend_analyzer import normalize_insight
+
 
 def export_to_csv(analysis: dict[str, Any], output_path: Path) -> None:
     """
@@ -439,7 +441,7 @@ def export_for_dashboard(analysis: dict[str, Any], output_path: Path) -> None:
                 "details": i.get("details", ""),
                 "recommended_action": i.get("recommended_action", ""),
             }
-            for i in insights
+            for i in map(normalize_insight, insights)
         ],
         "regressions": [
             {

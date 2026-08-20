@@ -756,8 +756,8 @@ def cmd_history_trends(args) -> int:
     Show security trends over time for a branch.
 
     Usage:
-        jmo history trends --branch main --days 30
-        jmo history trends --branch dev --days 90 --output json
+        jmo history trends
+        jmo history trends --branch dev --days 90 --json
     """
     db_path = Path(args.db or DEFAULT_DB_PATH)
 
@@ -765,19 +765,38 @@ def cmd_history_trends(args) -> int:
         sys.stderr.write(f"Error: History database not found: {db_path}\n")
         return 1
 
-    branch = getattr(args, "branch", "main")
-    days = getattr(args, "days", 30)
+    branch = getattr(args, "branch", None)
+    days = getattr(args, "days", None) or 30
+    branch_label = f"branch {branch!r}" if branch else "all branches"
 
     try:
         conn = get_connection(db_path)
         trend = get_trend_summary(conn, branch, days)
         conn.close()
 
+        # An empty result is not an error, and a caller that asked for JSON
+        # still gets JSON -- `jmo history list` exits 0 for the same empty
+        # query on the same database.
         if not trend:
-            sys.stdout.write(
-                f"No scans found for branch '{branch}' in last {days} days\n"
-            )
-            return 1
+            if getattr(args, "json", False):
+                sys.stdout.write(
+                    json.dumps(
+                        {
+                            "scan_count": 0,
+                            "branch": branch,
+                            "days": days,
+                            "message": (
+                                f"No scans found for {branch_label} "
+                                f"in last {days} days"
+                            ),
+                        },
+                        indent=2,
+                    )
+                    + "\n"
+                )
+            else:
+                safe_write(f"No scans found for {branch_label} in last {days} days\n")
+            return 0
 
         # Output formatting
         if getattr(args, "json", False):
@@ -785,7 +804,7 @@ def cmd_history_trends(args) -> int:
             sys.stdout.write(json.dumps(trend, indent=2) + "\n")
         else:
             # Human-readable summary
-            safe_write(f"\n📊 Security Trends: {branch} (last {days} days)\n")
+            safe_write(f"\n📊 Security Trends: {branch_label} (last {days} days)\n")
             sys.stdout.write("=" * 70 + "\n\n")
 
             # Scan count and date range

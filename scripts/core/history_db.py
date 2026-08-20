@@ -1268,25 +1268,36 @@ def list_scans(
     branch: str | None = None,
     profile: str | None = None,
     since: int | None = None,
-    limit: int = 50,
+    limit: int | None = 50,
 ) -> list[dict[str, Any]]:
     """
     List scans with optional filters.
 
     Args:
         conn: Database connection
-        branch: Filter by branch name
+        branch: Filter by branch name. None or "" means every branch,
+            including the scans whose branch could not be determined and is
+            stored NULL.
         profile: Filter by profile name
         since: Filter by timestamp (Unix epoch seconds)
-        limit: Maximum number of results
+        limit: Maximum number of results, or None for no limit.
 
     Returns:
         List of scan metadata dicts
+
+    Raises:
+        ValueError: If limit is not None and not >= 1. A negative limit is
+            rejected rather than passed to SQL, where SQLite defines any
+            negative LIMIT as *no* limit -- so `limit=-5` would silently
+            return the entire table.
     """
+    if limit is not None and limit < 1:
+        raise ValueError(f"limit must be >= 1 or None, got {limit}")
     cursor = conn.cursor()
 
     where_clauses = []
-    params = []
+    # Mixed types: the filter values bind as TEXT, the limit as an integer.
+    params: list[Any] = []
 
     if branch:
         where_clauses.append("branch = ?")
@@ -1302,16 +1313,23 @@ def list_scans(
 
     where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
 
-    # Security: where_sql is built from internal string literals only (e.g., "profile = ?"),
-    # NOT from user input. All values use parameterized queries via params list.
+    if limit is None:
+        limit_sql = ""
+    else:
+        limit_sql = "LIMIT ?"
+        params.append(limit)
+
+    # Security: where_sql and limit_sql are built from internal string literals only
+    # (e.g., "profile = ?", "LIMIT ?"), NOT from user input. All values use
+    # parameterized queries via params list.
     cursor.execute(
         f"""
         SELECT * FROM scans
         WHERE {where_sql}
         ORDER BY timestamp DESC
-        LIMIT ?
-        """,  # nosec B608 - where_sql contains only internal literals, values are parameterized
-        params + [limit],
+        {limit_sql}
+        """,  # nosec B608 - clauses contain only internal literals, values are parameterized
+        params,
     )
 
     return [dict(row) for row in cursor.fetchall()]
@@ -1425,7 +1443,7 @@ def compute_diff(
 
 def get_trend_summary(
     conn: sqlite3.Connection,
-    branch: str,
+    branch: str | None = None,
     days: int = 30,
 ) -> dict[str, Any] | None:
     """
@@ -1435,7 +1453,9 @@ def get_trend_summary(
 
     Args:
         conn: Database connection
-        branch: Git branch name (e.g., "main", "dev")
+        branch: Git branch name (e.g., "main", "dev"). None or "" analyses
+            every branch, including scans stored with a NULL branch -- which a
+            `branch = ?` comparison can never match.
         days: Number of days to analyze (default: 30)
 
     Returns:
@@ -1471,17 +1491,25 @@ def get_trend_summary(
     end_time = int(time.time())
     start_time = end_time - (days * 86400)
 
-    # 2. Query scans in time window for branch
+    # 2. Query scans in time window, optionally narrowed to one branch
+    if branch:
+        branch_sql = "branch = ?"
+        params: tuple[Any, ...] = (branch, start_time, end_time)
+    else:
+        branch_sql = "1=1"
+        params = (start_time, end_time)
+
+    # Security: branch_sql is one of two internal literals, never user input.
     cursor = conn.execute(
-        """
+        f"""
         SELECT id, timestamp, timestamp_iso,
                total_findings, critical_count, high_count,
                medium_count, low_count, info_count
         FROM scans
-        WHERE branch = ? AND timestamp >= ? AND timestamp <= ?
+        WHERE {branch_sql} AND timestamp >= ? AND timestamp <= ?
         ORDER BY timestamp ASC
-        """,
-        (branch, start_time, end_time),
+        """,  # nosec B608 - branch_sql is an internal literal, values are parameterized
+        params,
     )
     scans = [dict(row) for row in cursor.fetchall()]
 

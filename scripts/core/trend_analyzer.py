@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -28,6 +29,51 @@ from scripts.core.history_db import (
 )
 
 logger = logging.getLogger(__name__)
+
+#: Window used when neither --days nor --last is given.
+DEFAULT_WINDOW_DAYS = 30
+
+#: Above this many scans in one window, warn rather than silently truncate.
+LARGE_RESULT_WARN_THRESHOLD = 1000
+
+
+def normalize_insight(insight: Any) -> dict[str, Any]:
+    """Render one insight as a mapping, whatever shape it arrived in.
+
+    ``TrendAnalyzer._generate_insights`` returns ``list[str]`` and always
+    has. Two consumers -- the HTML report and the dashboard export --
+    read ``insight.get(...)`` and so raised ``AttributeError`` on every
+    real payload. Both are routed through here rather than each growing
+    its own isinstance check.
+
+    A mapping is passed through untouched, so a caller that does supply
+    structured insights keeps its fields.
+    """
+    if isinstance(insight, dict):
+        return insight
+    return {"message": str(insight)}
+
+
+def _describe_filters(
+    branch: str | None,
+    days: int | None,
+    scan_ids: list[str] | None,
+    last_n: int | None,
+) -> str:
+    """Render the filters that were actually applied, for an empty result.
+
+    "No scans found" is unactionable when the user set none of the filters
+    that excluded everything -- which is the case for the default invocation,
+    where an implicit branch and an implicit window do all the work.
+    """
+    if scan_ids:
+        return f"{len(scan_ids)} explicit scan id(s)"
+    parts = [f"branch={branch!r}" if branch else "all branches"]
+    if last_n is not None:
+        parts.append(f"last {last_n} scans")
+    else:
+        parts.append(f"last {days if days is not None else DEFAULT_WINDOW_DAYS} days")
+    return ", ".join(parts)
 
 
 # ============================================================================
@@ -69,7 +115,7 @@ class TrendAnalyzer:
 
     def analyze_trends(
         self,
-        branch: str = "main",
+        branch: str | None = None,
         days: int | None = None,
         scan_ids: list[str] | None = None,
         last_n: int | None = None,
@@ -78,7 +124,10 @@ class TrendAnalyzer:
         Analyze security trends over time.
 
         Args:
-            branch: Git branch to analyze
+            branch: Git branch to analyze. None (the default) analyses every
+                branch. A branch filter cannot match a scan whose branch is
+                stored NULL, so defaulting to a branch name hides every scan
+                whose target repository could not be determined.
             days: Number of days to analyze
             scan_ids: Specific scan IDs to analyze
             last_n: Last N scans to analyze
@@ -105,8 +154,18 @@ class TrendAnalyzer:
             return {
                 "metadata": {
                     "branch": branch,
+                    "scan_count": 0,
                     "status": "no_data",
-                    "message": "No scans found for the specified criteria",
+                    "message": (
+                        f"No scans found for the specified criteria "
+                        f"({_describe_filters(branch, days, scan_ids, last_n)})"
+                    ),
+                    "filters": {
+                        "branch": branch,
+                        "days": days,
+                        "last_n": last_n,
+                        "scan_ids": scan_ids,
+                    },
                 },
                 "scans": [],
             }
@@ -131,9 +190,20 @@ class TrendAnalyzer:
         # 7. Calculate security posture score
         security_score = self._calculate_security_score(scans)
 
+        # With explicit scan IDs the branch filter is not applied, so echoing
+        # the requested branch back would describe data that was never filtered
+        # by it. Report the branches the selected scans actually carry.
+        if scan_ids:
+            observed = sorted(
+                {s.get("branch") for s in scans}, key=lambda b: (b is None, b)
+            )
+            reported_branch = observed[0] if len(observed) == 1 else observed
+        else:
+            reported_branch = branch
+
         return {
             "metadata": {
-                "branch": branch,
+                "branch": reported_branch,
                 "scan_count": len(scans),
                 "date_range": {
                     "start": scans[0]["timestamp_iso"],
@@ -164,7 +234,7 @@ class TrendAnalyzer:
 
     def _get_scans(
         self,
-        branch: str,
+        branch: str | None,
         days: int | None,
         scan_ids: list[str] | None,
         last_n: int | None,
@@ -177,7 +247,19 @@ class TrendAnalyzer:
         2. last_n (last N scans)
         3. days (last N days)
         4. Default to last 30 days
+
+        `last_n` and `days` are tested against None rather than truthiness, so
+        an explicit 0 is rejected as invalid instead of being indistinguishable
+        from an omitted flag.
+
+        Raises:
+            ValueError: If last_n or days is not >= 1.
         """
+        if last_n is not None and last_n < 1:
+            raise ValueError(f"--last must be >= 1, got {last_n}")
+        if days is not None and days < 1:
+            raise ValueError(f"--days must be >= 1, got {days}")
+
         if scan_ids:
             # Get specific scans by ID
             scans = []
@@ -190,7 +272,7 @@ class TrendAnalyzer:
             return scans
 
         # Use list_scans with appropriate filters
-        if last_n:
+        if last_n is not None:
             scans = list(
                 map(dict, list_scans(self.conn, branch=branch, limit=last_n))  # type: ignore[arg-type]  # Connection validated in __enter__
             )
@@ -198,24 +280,22 @@ class TrendAnalyzer:
             scans.sort(key=lambda s: s["timestamp"])
             return scans
 
-        if days:
-            import time
-
-            since = int(time.time()) - (days * 86400)
-            scans = list(
-                map(dict, list_scans(self.conn, branch=branch, since=since, limit=1000))  # type: ignore[arg-type]  # Connection validated in __enter__
-            )
-            # Sort by timestamp (oldest first) for regression detection
-            scans.sort(key=lambda s: s["timestamp"])
-            return scans
-
-        # Default: last 30 days
-        import time
-
-        since = int(time.time()) - (30 * 86400)
+        # A time window returns every scan inside it. It previously carried a
+        # hardcoded limit of 1000, which made --days 365 and --days 3650 return
+        # byte-identical results on a 2214-scan database and reported the
+        # truncation point as the window's start date.
+        window_days = days if days is not None else DEFAULT_WINDOW_DAYS
+        since = int(time.time()) - (window_days * 86400)
         scans = list(
-            map(dict, list_scans(self.conn, branch=branch, since=since, limit=1000))  # type: ignore[arg-type]  # Connection validated in __enter__
+            map(dict, list_scans(self.conn, branch=branch, since=since, limit=None))  # type: ignore[arg-type]  # Connection validated in __enter__
         )
+        if len(scans) > LARGE_RESULT_WARN_THRESHOLD:
+            logger.warning(
+                "Analysing %d scans over %d days; this may be slow. "
+                "Narrow the window with --days or --last, or filter with --branch.",
+                len(scans),
+                window_days,
+            )
         # Sort by timestamp (oldest first) for regression detection
         scans.sort(key=lambda s: s["timestamp"])
         return scans

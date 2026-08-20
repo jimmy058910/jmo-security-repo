@@ -557,7 +557,7 @@ Show security trends over time for a branch.
 
 | Flag | Description |
 |------|-------------|
-| `--branch NAME` | Branch name (default: `main`) |
+| `--branch NAME` | Branch name (default: every branch) |
 | `--days N` | Number of days to analyze (default: 30) |
 | `--json` | Output as JSON |
 | `--db PATH` | Path to SQLite database |
@@ -606,6 +606,8 @@ Repair corrupted database (dump/reimport).
 
 Statistical trend analysis using historical scan data.
 
+**Scan selection.** With no filters, a subcommand analyses every scan from the last 30 days, on every branch. `--branch` narrows to one branch and `--days` / `--last` change the window; `--days N` returns every scan in that window, with no hidden cap. A scan whose branch could not be determined is stored with no branch at all, and **no value of `--branch` can match it** — so a branch filter always narrows to less than the whole database. A query that legitimately matches nothing exits **0**, like `jmo history list`; a missing database or an unknown scan ID exits 1.
+
 **jmo trends analyze**
 
 Analyze security trends with flexible filters.
@@ -615,7 +617,7 @@ Analyze security trends with flexible filters.
 | `--days N` | Number of days to analyze |
 | `--last N` | Last N scans to analyze |
 | `--scan-ids ID [ID ...]` | Specific scan IDs to analyze |
-| `--branch NAME` | Git branch to analyze (default: `main`) |
+| `--branch NAME` | Git branch to analyze (default: every branch) |
 | `--validate-statistics` | Run Mann-Kendall statistical validation |
 | `--format FORMAT` | Output format: `terminal`, `json` (default: `terminal`) |
 | `--verbose` | Show detailed output (top rules, etc.) |
@@ -631,7 +633,6 @@ Show trend context for a specific scan.
 |------|-------------|
 | `SCAN_ID` | Scan ID to show context for (positional, required) |
 | `--context N` | Number of scans before/after to show (default: 5) |
-| `--branch NAME` | Git branch to analyze (default: `main`) |
 | `--db PATH` | Path to SQLite database |
 
 **jmo trends regressions**
@@ -643,7 +644,7 @@ List all detected regressions.
 | `--last N` | Last N scans to analyze |
 | `--severity SEV` | Filter by severity: `CRITICAL`, `HIGH` |
 | `--fail-on-any` | Exit with error code 1 if any regressions found (for CI) |
-| `--branch NAME` | Git branch to analyze (default: `main`) |
+| `--branch NAME` | Git branch to analyze (default: every branch) |
 | `--db PATH` | Path to SQLite database |
 
 **jmo trends score**
@@ -654,7 +655,7 @@ Show security posture score history.
 |------|-------------|
 | `--last N` | Last N scans to analyze |
 | `--days N` | Number of days to analyze |
-| `--branch NAME` | Git branch to analyze (default: `main`) |
+| `--branch NAME` | Git branch to analyze (default: every branch) |
 | `--db PATH` | Path to SQLite database |
 
 **jmo trends compare**
@@ -666,7 +667,6 @@ Compare two specific scans side-by-side.
 | `SCAN_ID_1` | First scan ID (positional, required) |
 | `SCAN_ID_2` | Second scan ID (positional, required) |
 | `--verbose` | Show sample findings from diff |
-| `--branch NAME` | Git branch to analyze (default: `main`) |
 | `--db PATH` | Path to SQLite database |
 
 **jmo trends insights**
@@ -676,7 +676,7 @@ List all automated insights.
 | Flag | Description |
 |------|-------------|
 | `--last N` | Last N scans to analyze |
-| `--branch NAME` | Git branch to analyze (default: `main`) |
+| `--branch NAME` | Git branch to analyze (default: every branch) |
 | `--db PATH` | Path to SQLite database |
 
 **jmo trends explain**
@@ -695,7 +695,7 @@ Show developer remediation rankings.
 |------|-------------|
 | `--last N` | Last N scans to analyze |
 | `--top N` | Show top N developers (default: 10) |
-| `--branch NAME` | Git branch to analyze (default: `main`) |
+| `--branch NAME` | Git branch to analyze (default: every branch) |
 | `--db PATH` | Path to SQLite database |
 
 ---
