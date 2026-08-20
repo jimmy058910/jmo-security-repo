@@ -45,8 +45,12 @@ class TestGitLabCIGeneratorBranchCoverage:
 
         # Should not have repos-dir since no repositories target
         assert "--repos-dir" not in script
-        # Should have image target
-        assert "--image 'nginx:latest'" in script
+        # Should have image target. Bare, not quoted: the generator now uses
+        # shlex.quote, which leaves a value needing no quoting alone. The
+        # hand-rolled f"--image '{image}'" this replaced could not survive a
+        # value containing a single quote. The needs-quoting arm is pinned by
+        # test_gitlab_ci_quotes_values_that_need_it.
+        assert "--image nginx:latest" in script
 
     def test_generate_script_repositories_without_repos_dir(self):
         """Test _generate_script when repos dict has no repos_dir (line 132->134)."""
@@ -125,6 +129,11 @@ class TestGitLabCIGeneratorBranchCoverage:
             jobTemplate=JobTemplateSpec(
                 profile="fast",
                 targets={
+                    # The flat `urls` key, kept here deliberately as the
+                    # back-compat arm: it is the shape this generator used to
+                    # be the only reader of, and schedules written before the
+                    # fix still carry it. The shape the CLI actually writes
+                    # (`web.urls`) is covered in test_gitlab_ci_generation.py.
                     "urls": ["https://api.example.com"],
                 },
                 results={},
@@ -142,8 +151,8 @@ class TestGitLabCIGeneratorBranchCoverage:
         # No repos-dir or image
         assert "--repos-dir" not in script
         assert "--image" not in script
-        # Only URL
-        assert "--url 'https://api.example.com'" in script
+        # Only URL (bare -- shlex.quote leaves it alone; see above)
+        assert "--url https://api.example.com" in script
 
     def test_format_timeout_unknown_profile_uses_default(self):
         """Test _format_timeout with unknown profile falls back to 30 minutes."""

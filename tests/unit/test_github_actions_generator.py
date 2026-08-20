@@ -114,8 +114,15 @@ def test_multi_target_support():
     scan_step = [s for s in job["steps"] if "Run JMo Security Scan" in s["name"]][0]
     scan_cmd = scan_step["run"]
 
-    # Verify all target types present
-    assert "--repos-dir ~/repos" in scan_cmd
+    # Verify all target types present.
+    #
+    # Only this one is quoted: every argument now goes through shlex.quote, and
+    # `~` is the sole value here that shlex considers unsafe -- the eight
+    # assertions below are unchanged, which is the evidence the quoting is
+    # minimal rather than blanket. Quoting does suppress shell tilde expansion;
+    # that trade-off, and why `~` was not usable in this position anyway, is
+    # explained at tests/integration/test_schedule_cli.py and tracked in #926.
+    assert "--repos-dir '~/repos'" in scan_cmd
     assert "--image nginx:latest" in scan_cmd
     assert "--image postgres:15" in scan_cmd
     assert "--terraform-state terraform.tfstate" in scan_cmd

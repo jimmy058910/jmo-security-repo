@@ -505,6 +505,10 @@ def test_schedule_label_filtering(tmp_path):
         env=env,
         cwd=str(REPO_ROOT),
     )
+    # Explicit, rather than relying on this test happening to notice extra
+    # schedules leaking in from the developer's real file. See
+    # test_schedule_export_github_actions.
+    _assert_isolated(tmp_path)
 
     # List all schedules
     result = subprocess.run(
