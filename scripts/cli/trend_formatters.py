@@ -22,6 +22,8 @@ from typing import Any
 
 from rich.console import Console
 
+from scripts.core.trend_analyzer import normalize_insight as _ins
+
 console = Console()
 
 
@@ -699,7 +701,7 @@ def format_html_report(analysis: dict[str, Any]) -> str:
 
             <div class="card">
                 <h2>💡 Insights ({len(insights)})</h2>
-                {"".join(f'<div class="insight {insight.get("priority", "medium").lower()}">{insight.get("icon", "•")} {insight.get("message", "")}</div>' for insight in insights[:10])}
+                {"".join(f'<div class="insight {_ins(insight).get("priority", "medium").lower()}">{_ins(insight).get("icon", "•")} {_ins(insight).get("message", "")}</div>' for insight in insights[:10])}
                 {f'<p style="margin-top: 10px; color: #6b7280; font-size: 14px;">... and {len(insights) - 10} more</p>' if len(insights) > 10 else ''}
             </div>
         </div>

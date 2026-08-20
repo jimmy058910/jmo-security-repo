@@ -77,7 +77,7 @@ def cmd_trends_analyze(args) -> int:
 
     try:
         # Parse filters
-        branch = getattr(args, "branch", "main")
+        branch = getattr(args, "branch", None)
         days = getattr(args, "days", None)
         last_n = getattr(args, "last", None)
         scan_ids = getattr(args, "scan_ids", None)
@@ -90,9 +90,7 @@ def cmd_trends_analyze(args) -> int:
                 branch=branch, days=days, scan_ids=scan_ids, last_n=last_n
             )
 
-        if analysis["metadata"].get("status") == "no_data":
-            sys.stdout.write(f"{analysis['metadata']['message']}\n")
-            return 1
+        is_empty = analysis["metadata"].get("status") == "no_data"
 
         # Statistical validation (if requested)
         if validate_stats and "severity_trends" in analysis:
@@ -106,12 +104,20 @@ def cmd_trends_analyze(args) -> int:
         # Output formatting (Phase 4: Enhanced with rich visualizations)
         output_format = getattr(args, "format", "terminal")
 
+        # An empty result is still a result. A caller that asked for JSON gets
+        # JSON describing the emptiness, not an English sentence it cannot
+        # parse -- and the empty path is the default invocation whenever the
+        # database holds no scan on the requested branch.
         if output_format == "json":
             sys.stdout.write(format_json_report(analysis) + "\n")
+        elif is_empty:
+            safe_write(f"{analysis['metadata']['message']}\n")
         elif output_format == "terminal":
-            # Use rich-based terminal formatter with sparklines and charts
+            # The rich-rendered report is full of box drawing and arrows.
+            # safe_write substitutes the ASCII fallbacks; a raw write
+            # degrades the whole table to '?' on a cp1252 console.
             formatted_output = format_terminal_report(analysis, verbose=verbose)
-            sys.stdout.write(formatted_output)
+            safe_write(formatted_output)
 
             # Show statistical validation if present
             if "statistical_validation" in analysis:
@@ -130,13 +136,14 @@ def cmd_trends_analyze(args) -> int:
                             f"{severity:10s}: {trend:15s} (p={p_value:.4f}) {significant}\n"
                         )
                 sys.stdout.write("\n")
-        elif output_format == "html":
-            # Use interactive HTML formatter with Chart.js
-            sys.stdout.write(format_html_report(analysis) + "\n")
         else:
             sys.stderr.write(f"Error: Unknown format: {output_format}\n")
-            sys.stderr.write("Supported formats: terminal, json, html\n")
+            sys.stderr.write("Supported formats: terminal, json\n")
             return 1
+
+        # Nothing below this point can act on an empty analysis.
+        if is_empty:
+            return 0
 
         # Export to file (if requested)
         if getattr(args, "export_json", None):
@@ -151,7 +158,15 @@ def cmd_trends_analyze(args) -> int:
                 f.write(format_html_report(analysis))
             safe_write(f"\n✅ Exported HTML to: {export_path}\n")
 
-        # Phase 5: Additional export formats
+        # Phase 5: Additional export formats.
+        #
+        # TODO(issue-915): none of the four flags below is declared by the
+        # parser, so every getattr() here is None for every possible
+        # invocation and scripts/core/trend_exporters.py is unreachable from
+        # the CLI. Its tests call the exporters directly, which is why they
+        # pass. Declaring four new user-facing flags is a feature decision,
+        # so chunk 15 measured the gap and left it: three of the four work,
+        # export_for_dashboard shared the crash fixed here as #910.
         if getattr(args, "export_csv", None):
             export_path = Path(args.export_csv)
             export_to_csv(analysis, export_path)
@@ -187,6 +202,49 @@ def cmd_trends_analyze(args) -> int:
 # ============================================================================
 
 
+def _context_window(
+    conn, scan: dict, branch: str | None, context_size: int
+) -> list[dict]:
+    """Return up to `context_size` scans either side of `scan`, oldest first.
+
+    Args:
+        conn: Open database connection.
+        scan: The target scan row, already loaded.
+        branch: Restrict the window to this branch, or None for every branch.
+        context_size: How many scans to include before and after the target.
+
+    Returns:
+        The window including the target, ordered oldest first. Fewer than
+        ``2 * context_size + 1`` entries near either end of the timeline.
+    """
+    where = "branch = ?" if branch else "1=1"
+    prefix: tuple = (branch,) if branch else ()
+
+    # Security: `where` is one of two internal literals, never user input.
+    before = conn.execute(
+        f"""
+        SELECT * FROM scans
+        WHERE {where} AND timestamp <= ? AND id != ?
+        ORDER BY timestamp DESC
+        LIMIT ?
+        """,  # nosec B608 - internal literal, values parameterized
+        prefix + (scan["timestamp"], scan["id"], context_size),
+    ).fetchall()
+    after = conn.execute(
+        f"""
+        SELECT * FROM scans
+        WHERE {where} AND timestamp > ? AND id != ?
+        ORDER BY timestamp ASC
+        LIMIT ?
+        """,  # nosec B608 - internal literal, values parameterized
+        prefix + (scan["timestamp"], scan["id"], context_size),
+    ).fetchall()
+
+    window = [dict(r) for r in before] + [dict(scan)] + [dict(r) for r in after]
+    window.sort(key=lambda s: s["timestamp"])
+    return window
+
+
 def cmd_trends_show(args) -> int:
     """
     Show trend context for a specific scan.
@@ -203,7 +261,7 @@ def cmd_trends_show(args) -> int:
 
     scan_id = getattr(args, "scan_id", None)
     if not scan_id:
-        sys.stderr.write("Error: Provide --scan-id\n")
+        sys.stderr.write("Error: Provide a scan ID\n")
         sys.stderr.write("Usage: jmo trends show <scan-id>\n")
         return 1
 
@@ -220,29 +278,25 @@ def cmd_trends_show(args) -> int:
         scan = dict(scan)
 
         # Get context scans (N before, N after)
-        context_size = getattr(args, "context", 5)
-        branch = scan.get("branch", "main")
-
-        from scripts.core.history_db import list_scans
-
-        all_scans = list(map(dict, list_scans(conn, branch=branch, limit=1000)))
-
-        # Find index of target scan
-        scan_index = None
-        for i, s in enumerate(all_scans):
-            if s["id"] == scan_id:
-                scan_index = i
-                break
-
-        if scan_index is None:
-            sys.stderr.write("Error: Could not locate scan in timeline\n")
+        context_size = getattr(args, "context", None)
+        context_size = 5 if context_size is None else context_size
+        if context_size < 0:
+            sys.stderr.write(f"Error: --context must be >= 0, got {context_size}\n")
             conn.close()
             return 1
 
-        # Get context window
-        start_idx = max(0, scan_index - context_size)
-        end_idx = min(len(all_scans), scan_index + context_size + 1)
-        context_scans = all_scans[start_idx:end_idx]
+        # The context window is drawn from the target scan's own branch.
+        # A scan whose branch could not be determined is stored NULL, and a
+        # NULL branch cannot be compared for equality, so its context is
+        # every scan. Note scan['branch'] may be None even though the key
+        # exists, which is why this is not `scan.get('branch', 'main')`.
+        branch = scan["branch"]
+
+        # Query the window either side of the target rather than materialising
+        # a fixed-size prefix and searching it: a hardcoded LIMIT 1000 made
+        # every scan older than the newest 1000 report
+        # "Could not locate scan in timeline" -- about a row already loaded.
+        context_scans = _context_window(conn, scan, branch, context_size)
 
         conn.close()
 
@@ -310,7 +364,8 @@ def cmd_trends_regressions(args) -> int:
 
     try:
         # Parse filters
-        branch = getattr(args, "branch", "main")
+        branch = getattr(args, "branch", None)
+        branch_label = branch or "all branches"
         last_n = getattr(args, "last", None)
         severity_filter = getattr(args, "severity", None)
         fail_on_any = getattr(args, "fail_on_any", False)
@@ -320,8 +375,10 @@ def cmd_trends_regressions(args) -> int:
             analysis = analyzer.analyze_trends(branch=branch, last_n=last_n)
 
         if analysis["metadata"].get("status") == "no_data":
-            sys.stdout.write(f"{analysis['metadata']['message']}\n")
-            return 1
+            safe_write(f"{analysis['metadata']['message']}\n")
+            # An empty result is not an error: `jmo history list` exits 0
+            # for the same empty query on the same database.
+            return 0
 
         regressions = analysis.get("regressions", [])
 
@@ -332,7 +389,7 @@ def cmd_trends_regressions(args) -> int:
             ]
 
         # Output
-        safe_write(f"\n⚠️  Regression Analysis: {branch}\n")
+        safe_write(f"\n⚠️  Regression Analysis: {branch_label}\n")
         sys.stdout.write("=" * 70 + "\n\n")
 
         if not regressions:
@@ -388,7 +445,8 @@ def cmd_trends_score(args) -> int:
 
     try:
         # Parse filters
-        branch = getattr(args, "branch", "main")
+        branch = getattr(args, "branch", None)
+        branch_label = branch or "all branches"
         last_n = getattr(args, "last", None)
         days = getattr(args, "days", None)
 
@@ -397,14 +455,16 @@ def cmd_trends_score(args) -> int:
             analysis = analyzer.analyze_trends(branch=branch, last_n=last_n, days=days)
 
         if analysis["metadata"].get("status") == "no_data":
-            sys.stdout.write(f"{analysis['metadata']['message']}\n")
-            return 1
+            safe_write(f"{analysis['metadata']['message']}\n")
+            # An empty result is not an error: `jmo history list` exits 0
+            # for the same empty query on the same database.
+            return 0
 
         score_data = analysis.get("security_score", {})
         scans = analysis.get("scans", [])
 
         # Output
-        sys.stdout.write(f"\n🏆 Security Posture Score: {branch}\n")
+        safe_write(f"\n🏆 Security Posture Score: {branch_label}\n")
         sys.stdout.write("=" * 70 + "\n\n")
 
         sys.stdout.write(f"Current Score:    {score_data['current_score']}/100\n")
@@ -527,7 +587,7 @@ def cmd_trends_compare(args) -> int:
         # Verbose: Show sample findings
         if verbose:
             if diff["new"]:
-                sys.stdout.write("\n📋 New Findings (top 10):\n")
+                safe_write("\n📋 New Findings (top 10):\n")
                 sys.stdout.write("-" * 80 + "\n")
                 for f in diff["new"][:10]:
                     sys.stdout.write(
@@ -536,7 +596,7 @@ def cmd_trends_compare(args) -> int:
                 sys.stdout.write("\n")
 
             if diff["resolved"]:
-                sys.stdout.write("📋 Resolved Findings (top 10):\n")
+                safe_write("📋 Resolved Findings (top 10):\n")
                 sys.stdout.write("-" * 80 + "\n")
                 for f in diff["resolved"][:10]:
                     sys.stdout.write(
@@ -575,7 +635,8 @@ def cmd_trends_insights(args) -> int:
 
     try:
         # Parse filters
-        branch = getattr(args, "branch", "main")
+        branch = getattr(args, "branch", None)
+        branch_label = branch or "all branches"
         last_n = getattr(args, "last", None)
 
         # Run analysis
@@ -583,13 +644,15 @@ def cmd_trends_insights(args) -> int:
             analysis = analyzer.analyze_trends(branch=branch, last_n=last_n)
 
         if analysis["metadata"].get("status") == "no_data":
-            sys.stdout.write(f"{analysis['metadata']['message']}\n")
-            return 1
+            safe_write(f"{analysis['metadata']['message']}\n")
+            # An empty result is not an error: `jmo history list` exits 0
+            # for the same empty query on the same database.
+            return 0
 
         insights = analysis.get("insights", [])
 
         # Output
-        sys.stdout.write(f"\n💡 Automated Insights: {branch}\n")
+        safe_write(f"\n💡 Automated Insights: {branch_label}\n")
         sys.stdout.write("=" * 70 + "\n\n")
 
         if not insights:
@@ -771,18 +834,21 @@ def cmd_trends_developers(args) -> int:
     - Team performance aggregation
 
     Usage:
+        jmo trends developers
         jmo trends developers --last 30
         jmo trends developers --last 30 --top 10
-        jmo trends developers --last 30 --team-file teams.json
-        jmo trends developers --days 90 --repo /path/to/repo
+        jmo trends developers --branch dev --last 30
 
     Note: Requires git repository access for attribution.
     """
     try:
-        # Get parameters
-        last_n = getattr(args, "last", 30)
-        top = getattr(args, "top", 10)
-        repo_path = Path(getattr(args, "repo", Path.cwd()))
+        # Get parameters. argparse creates these attributes and sets them to
+        # None when the flag is omitted, so a getattr() default never fires --
+        # which is how `--last` unset used to reach the user as 'last None'.
+        last_n = getattr(args, "last", None)
+        top = getattr(args, "top", None) or 10
+        branch = getattr(args, "branch", None)
+        repo_path = Path(getattr(args, "repo", None) or Path.cwd())
         team_file = getattr(args, "team_file", None)
         db_path = getattr(args, "db", None)
         if db_path:
@@ -797,22 +863,27 @@ def cmd_trends_developers(args) -> int:
             )
             return 1
 
-        sys.stdout.write("\n👥 Developer Attribution Analysis\n")
+        safe_write("\n👥 Developer Attribution Analysis\n")
         sys.stdout.write("=" * 70 + "\n\n")
 
         # Analyze trends to get resolved findings
-        sys.stdout.write(f"Analyzing last {last_n} scans for resolved findings...\n")
+        window = f"last {last_n} scans" if last_n is not None else "the default window"
+        sys.stdout.write(f"Analyzing {window} for resolved findings...\n")
 
         # Use default db_path if not specified
         analyzer_kwargs = {"db_path": db_path} if db_path else {}
         with TrendAnalyzer(**analyzer_kwargs) as analyzer:
-            report = analyzer.analyze_trends(last_n=last_n)
+            report = analyzer.analyze_trends(branch=branch, last_n=last_n)
             # Get connection while we have the db_path from analyzer
             effective_db_path = analyzer.db_path
 
+        if report["metadata"].get("status") == "no_data":
+            safe_write(f"{report['metadata']['message']}\n")
+            return 0
+
         scan_count = report["metadata"]["scan_count"]
         if scan_count < 2:
-            sys.stdout.write("⚠️  Need at least 2 scans to detect resolved findings.\n")
+            safe_write("⚠️  Need at least 2 scans to detect resolved findings.\n")
             sys.stdout.write(f"   Found {scan_count} scan(s) in history.\n")
             sys.stdout.write("   Run more scans to enable developer attribution.\n")
             return 0
@@ -831,9 +902,12 @@ def cmd_trends_developers(args) -> int:
         first_findings = get_findings_for_scan(conn, scan_ids[0])
         last_findings = get_findings_for_scan(conn, scan_ids[-1])
 
-        # Type ignore: findings is list of tuples, not dict
-        first_fps = {f[1] for f in first_findings}  # type: ignore[index]  # (scan_id, fingerprint, ...)
-        last_fps = {f[1] for f in last_findings}  # type: ignore[index]  # Tuple index access for (scan_id, fingerprint, ...)
+        # get_findings_for_scan returns list[dict], not list[tuple]. Indexing
+        # by position raised KeyError: 1 on every real database -- masked
+        # until now by the KeyError: 'scan_count' three lines above it, so
+        # this command had never run to completion.
+        first_fps = {f["fingerprint"] for f in first_findings}
+        last_fps = {f["fingerprint"] for f in last_findings}
 
         resolved_fps = first_fps - last_fps
 

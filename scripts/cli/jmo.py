@@ -1351,10 +1351,15 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
         "trends", help="Show security trends over time for a branch"
     )
     trends_parser.add_argument(
-        "--branch", default="main", help="Branch name (default: main)"
+        "--branch",
+        default=None,
+        help="Branch name (default: every branch)",
     )
     trends_parser.add_argument(
-        "--days", type=int, default=30, help="Number of days to analyze (default: 30)"
+        "--days",
+        type=_positive_int,
+        default=30,
+        help="Number of days to analyze (default: 30)",
     )
     trends_parser.add_argument("--json", action="store_true", help="Output as JSON")
     add_db_arg(trends_parser)
@@ -1408,6 +1413,40 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     return history_parser
 
 
+def _positive_int(value: str) -> int:
+    """argparse type for a count that must be at least 1.
+
+    Raises:
+        argparse.ArgumentTypeError: If the value is not an integer >= 1.
+    """
+    try:
+        parsed = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"expected an integer >= 1, got {value!r}"
+        ) from None
+    if parsed < 1:
+        raise argparse.ArgumentTypeError(f"expected an integer >= 1, got {parsed}")
+    return parsed
+
+
+def _non_negative_int(value: str) -> int:
+    """argparse type for a count that may be 0 but not negative.
+
+    Raises:
+        argparse.ArgumentTypeError: If the value is not an integer >= 0.
+    """
+    try:
+        parsed = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"expected an integer >= 0, got {value!r}"
+        ) from None
+    if parsed < 0:
+        raise argparse.ArgumentTypeError(f"expected an integer >= 0, got {parsed}")
+    return parsed
+
+
 def _add_trends_args(subparsers: argparse._SubParsersAction) -> Any:
     """Add 'trends' subcommand arguments for security trend analysis."""
     trends_parser = subparsers.add_parser(
@@ -1446,7 +1485,7 @@ Usage Examples:
     trends_subparsers = trends_parser.add_subparsers(dest="trends_command")
 
     # Common arguments
-    def add_common_trend_args(parser):
+    def add_common_trend_args(parser, *, branch: bool = True):
         """Add common trend analysis arguments to argparse parser.
 
         Adds arguments shared by multiple trend subcommands (analyze, show, insights)
@@ -1454,6 +1493,10 @@ Usage Examples:
 
         Args:
             parser (argparse.ArgumentParser): Parser to modify in-place
+            branch (bool): Whether this subcommand can act on a branch filter.
+                False for `show` and `compare`, which are addressed by scan
+                ID -- they accepted --branch and discarded it, so a user who
+                passed one believed a filter was in effect that never was.
 
         Returns:
             None (modifies parser in-place by adding arguments)
@@ -1466,8 +1509,9 @@ Usage Examples:
             custom.db dev
 
         Note:
-            These arguments are automatically added to all trend analysis subcommands
-            (analyze, show, regressions, score, compare, insights, explain, developers).
+            --db goes on every trend subcommand that reads the database.
+            --branch goes on the five that filter by it (analyze, regressions,
+            score, insights, developers); show and compare take scan IDs.
 
         """
         parser.add_argument(
@@ -1475,11 +1519,16 @@ Usage Examples:
             default=None,
             help="Path to SQLite database (default: .jmo/history.db)",
         )
-        parser.add_argument(
-            "--branch",
-            default="main",
-            help="Git branch to analyze (default: main)",
-        )
+        if branch:
+            parser.add_argument(
+                "--branch",
+                default=None,
+                help=(
+                    "Git branch to analyze (default: every branch). A branch "
+                    "filter cannot match a scan whose branch is unknown, and "
+                    "those are stored NULL."
+                ),
+            )
 
     # ANALYZE
     analyze_parser = trends_subparsers.add_parser(
@@ -1487,12 +1536,12 @@ Usage Examples:
     )
     analyze_parser.add_argument(
         "--days",
-        type=int,
+        type=_positive_int,
         help="Number of days to analyze (e.g., 30)",
     )
     analyze_parser.add_argument(
         "--last",
-        type=int,
+        type=_positive_int,
         help="Last N scans to analyze (e.g., 10)",
     )
     analyze_parser.add_argument(
@@ -1536,11 +1585,11 @@ Usage Examples:
     )
     show_parser.add_argument(
         "--context",
-        type=int,
+        type=_non_negative_int,
         default=5,
         help="Number of scans before/after to show (default: 5)",
     )
-    add_common_trend_args(show_parser)
+    add_common_trend_args(show_parser, branch=False)
 
     # REGRESSIONS
     regressions_parser = trends_subparsers.add_parser(
@@ -1548,7 +1597,7 @@ Usage Examples:
     )
     regressions_parser.add_argument(
         "--last",
-        type=int,
+        type=_positive_int,
         help="Last N scans to analyze",
     )
     regressions_parser.add_argument(
@@ -1569,12 +1618,12 @@ Usage Examples:
     )
     score_parser.add_argument(
         "--last",
-        type=int,
+        type=_positive_int,
         help="Last N scans to analyze",
     )
     score_parser.add_argument(
         "--days",
-        type=int,
+        type=_positive_int,
         help="Number of days to analyze",
     )
     add_common_trend_args(score_parser)
@@ -1596,7 +1645,7 @@ Usage Examples:
         action="store_true",
         help="Show sample findings from diff",
     )
-    add_common_trend_args(compare_parser)
+    add_common_trend_args(compare_parser, branch=False)
 
     # INSIGHTS
     insights_parser = trends_subparsers.add_parser(
@@ -1604,7 +1653,7 @@ Usage Examples:
     )
     insights_parser.add_argument(
         "--last",
-        type=int,
+        type=_positive_int,
         help="Last N scans to analyze",
     )
     add_common_trend_args(insights_parser)
@@ -1627,12 +1676,12 @@ Usage Examples:
     )
     developers_parser.add_argument(
         "--last",
-        type=int,
+        type=_positive_int,
         help="Last N scans to analyze",
     )
     developers_parser.add_argument(
         "--top",
-        type=int,
+        type=_positive_int,
         default=10,
         help="Show top N developers (default: 10)",
     )

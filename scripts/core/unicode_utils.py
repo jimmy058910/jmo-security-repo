@@ -76,6 +76,54 @@ UNICODE_FALLBACKS: dict[str, str] = {
     "\U0001f4a1": "[i]",  # 💡 Light bulb
     "\U0001f4d6": "[?]",  # 📖 Book
     "\U0001f50d": "[?]",  # 🔍 Magnifying glass
+    # Emoji — trends headers. Absent from this table until chunk 15, so
+    # `jmo trends score` and `developers` printed a bare '?' as their title
+    # even though every other glyph on the line fell back cleanly.
+    "\U0001f3c6": "[*]",  # 🏆 Trophy (posture score)
+    "\U0001f465": "[@]",  # 👥 Busts (developer attribution)
+    "\U0001f4cb": "[=]",  # 📋 Clipboard (finding lists)
+    "\u27a1\ufe0f": "->",  # ➡️ Right arrow (stable trend)
+    "\u2139\ufe0f": "[i]",  # ℹ️ Information (insufficient data)
+    # Sparkline / bar ramp — trend_formatters renders severity charts and the
+    # posture-score bar out of these. Mapped to an ordered ASCII ramp rather
+    # than one shared character: a bar chart whose every cell is the same
+    # glyph renders, but stops being a chart. Same reasoning as the spinner
+    # frames below. U+2588 is in cp437 but not cp1252, and the sparkline was
+    # a row of '?' on any redirected Windows stream.
+    "\u2581": "_",  # ▁ lower one eighth block
+    "\u2582": ".",  # ▂ lower one quarter
+    "\u2583": ".",  # ▃ lower three eighths
+    "\u2584": "-",  # ▄ lower half
+    "\u2585": "-",  # ▅ lower five eighths
+    "\u2586": "=",  # ▆ lower three quarters
+    "\u2587": "=",  # ▇ lower seven eighths
+    "\u2588": "#",  # █ full block
+    "\u2591": ".",  # ░ light shade (bar remainder)
+    # Severity dots — trend_formatters' insight and regression markers.
+    "\U0001f534": "(!)",  # 🔴 red
+    "\U0001f7e0": "(*)",  # 🟠 orange
+    "\U0001f7e1": "(o)",  # 🟡 yellow
+    "\U0001f535": "(-)",  # 🔵 blue
+    "\U0001f7e2": "(+)",  # 🟢 green
+    # Remaining trends glyphs.
+    "\u27a1": "->",  # ➡ right arrow, bare (no VS-16)
+    "\u2139": "[i]",  # ℹ information, bare
+    "\u2795": "+",  # ➕ heavy plus
+    "\U0001f527": "[T]",  # 🔧 wrench
+    "\U0001f525": "[!]",  # 🔥 fire
+    "\U0001f504": "[~]",  # 🔄 cycle arrows
+    # Mathematical symbols. Neither is safe everywhere and they fail in
+    # opposite directions: U+00D7 encodes in cp1252 but not cp437, U+2265 in
+    # cp437 but not cp1252 -- which is why encodability cannot be decided
+    # from a codec's name.
+    "\u00d7": "x",  # × multiplication sign
+    "\u2265": ">=",  # ≥ greater than or equal
+    "\u2264": "<=",  # ≤ less than or equal
+    # An orphaned VARIATION SELECTOR-16 is handled per-emoji, by giving the
+    # sequence its own two-character key (see "⚠️" above) rather than by
+    # mapping U+FE0F to the empty string globally. Both work, but only the
+    # per-emoji form keeps every value in this table a non-empty ASCII token,
+    # which `test_values_are_ascii_strings` relies on.
     # Braille spinner frames — ProgressTracker._SPINNER_FRAMES (scan progress).
     # Measured: all ten are unrenderable in cp1252 AND cp437 AND cp850, i.e. in
     # every codec a real Windows console uses, and none was in this table. The
