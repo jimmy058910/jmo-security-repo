@@ -712,12 +712,12 @@ Create a new schedule.
 |------|-------------|
 | `--name NAME` | Schedule name (required) |
 | `--cron EXPR` | Cron expression, e.g., `0 2 * * *` (required) |
-| `--profile PROFILE` | Scan profile: `fast`, `balanced`, `deep` (required) |
+| `--profile PROFILE` | Scan profile: `fast`, `slim`, `balanced`, `deep` (required) |
 | `--repos-dir DIR` | Repository directory to scan |
 | `--image IMAGE` | Container image to scan (repeatable) |
 | `--url URL` | Web URL to scan (repeatable) |
 | `--backend BACKEND` | Backend: `github-actions`, `gitlab-ci`, `local-cron` |
-| `--timezone TZ` | Timezone for schedule (default: UTC) |
+| `--timezone TZ` | Timezone for schedule (default: UTC). **GitHub Actions has no timezone setting** — its cron is always UTC, so a non-UTC value is recorded but cannot be honoured on that backend, and `create`/`export` warn when you set one. GitLab CI surfaces it in the generated setup instructions. |
 | `--description TEXT` | Human-readable description |
 | `--label KEY=VALUE` | Label in KEY=VALUE format (repeatable) |
 | `--slack-webhook URL` | Slack webhook URL for notifications |
@@ -742,9 +742,17 @@ Create a new schedule.
 |------|-------------|
 | `NAME` | Schedule name (positional, required) |
 | `--cron EXPR` | New cron expression |
-| `--profile PROFILE` | New scan profile: `fast`, `balanced`, `deep` |
-| `--suspend` | Suspend schedule |
-| `--resume` | Resume schedule |
+| `--profile PROFILE` | New scan profile: `fast`, `slim`, `balanced`, `deep` |
+| `--suspend` | Suspend schedule (mutually exclusive with `--resume`) |
+| `--resume` | Resume schedule (mutually exclusive with `--suspend`) |
+
+At least one of these four flags is required; `jmo schedule update NAME` with
+none of them exits 1 rather than reporting a successful no-op.
+
+`--cron` is validated with `croniter`, which accepts more than either backend
+does. A 6-field expression or an `@daily`-style shorthand is accepted and
+stored, but GitHub Actions requires five POSIX fields and `jmo schedule install`
+rejects both — so `create`, `update` and `validate` all warn when they see one.
 
 **jmo schedule export**
 

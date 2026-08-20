@@ -28,7 +28,59 @@ JMo Security's schedule management system enables automated, recurring security 
 
 ## Quick Start
 
-### Basic Weekly Scan
+### Basic Weekly Scan (CLI)
+
+This is the supported way to create a schedule. The Python examples throughout
+the rest of this guide are the internal API the CLI is built on; reach for them
+only if you are embedding JMo, and read the target-shape note below first.
+
+```bash
+# Create -- --name, --cron and --profile are all required
+jmo schedule create \
+  --name weekly-scan \
+  --cron "0 2 * * 1" \
+  --profile balanced \
+  --repos-dir /repos \
+  --backend gitlab-ci \
+  --label team=security --label environment=production
+
+# Inspect
+jmo schedule list
+jmo schedule get weekly-scan
+jmo schedule validate weekly-scan
+
+# Export a workflow file
+jmo schedule export weekly-scan -o .gitlab-ci.yml
+
+# Change it, then remove it
+jmo schedule update weekly-scan --cron "0 4 * * 1"
+jmo schedule delete weekly-scan --force
+```
+
+Names must start with a letter and contain only letters, digits, hyphens or
+underscores (1-64 characters) — `jmo schedule create` rejects anything else,
+because `jmo schedule install` would.
+
+### Target shapes
+
+`targets` is a nested mapping, and every consumer — both workflow generators
+and the cron installer — keys off these top-level names. A target under any
+other key is **silently ignored**: the export succeeds, the YAML is valid, and
+the scan runs with no target.
+
+| Target | Shape | CLI flag |
+|---|---|---|
+| Repositories | `{"repositories": {"repos_dir": "/repos"}}` (or `"repo"`) | `--repos-dir` |
+| Container images | `{"images": ["nginx:latest", ...]}` | `--image` (repeatable) |
+| Web URLs | `{"web": {"urls": ["https://...", ...]}}` | `--url` (repeatable) |
+| IaC files | `{"iac": {"terraform_state": ..., "cloudformation": ..., "k8s_manifest": ...}}` | — |
+| GitLab | `{"gitlab": {"repo": ..., "group": ...}}` | — |
+| Kubernetes | `{"kubernetes": {"context": ..., "namespace": ...}}` | — |
+
+The GitLab CI generator currently emits only the first three; IaC, GitLab and
+Kubernetes targets reach the GitHub Actions and local-cron backends.
+
+### Basic Weekly Scan (Python API)
 
 ```python
 from scripts.core.schedule_manager import (
@@ -51,7 +103,7 @@ schedule = ScanSchedule(
         backend=BackendConfig(type="gitlab-ci"),
         jobTemplate=JobTemplateSpec(
             profile="balanced",
-            targets={"repos_dir": "/repos"},
+            targets={"repositories": {"repos_dir": "/repos"}},
             results={"dir": "/results"},
             options={"fail_on": "HIGH"},
             notifications={
@@ -121,7 +173,8 @@ spec:
   jobTemplate:
     profile: "balanced"
     targets:
-      repos_dir: "/repos"
+      repositories:
+        repos_dir: "/repos"
     results:
       dir: "/results"
     options:
@@ -234,10 +287,10 @@ schedule = ScanSchedule(
         jobTemplate=JobTemplateSpec(
             profile="balanced",
             targets={
-                "repos_dir": "/repos",
+                "repositories": {"repos_dir": "/repos"},
                 "images": ["nginx:latest", "postgres:15"],
-                "urls": ["https://api.example.com"],
-                "k8s_context": "prod"
+                "web": {"urls": ["https://api.example.com"]},
+                "kubernetes": {"context": "prod"}
             },
             results={"dir": "/results/weekly"},
             options={"fail_on": "HIGH", "threads": 8}
@@ -466,7 +519,7 @@ schedule = ScanSchedule(
         schedule="0 2 * * *",
         jobTemplate=JobTemplateSpec(
             profile="balanced",
-            targets={"repos_dir": "/repos"},
+            targets={"repositories": {"repos_dir": "/repos"}},
             results={"dir": "/results"},
             options={},
             notifications={
@@ -757,7 +810,7 @@ spec=ScheduleSpec(
 ```python
 jobTemplate=JobTemplateSpec(
     profile="deep",
-    targets={"repos_dir": "/repos"},
+    targets={"repositories": {"repos_dir": "/repos"}},
     results={"dir": "/results"},
     options={
         "fail_on": "MEDIUM",

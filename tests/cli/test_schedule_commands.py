@@ -1106,15 +1106,29 @@ def test_print_schedules_table_suspended(sample_schedule, capsys):
     assert "SUSPENDED" in captured.out
 
 
-def test_success_message(capsys):
-    """Test success message formatting."""
-    from scripts.cli.schedule_commands import _success
+def test_success_message(capsys, monkeypatch):
+    """Colour is emitted only when the destination can render it.
 
-    _success("Test message")
+    This asserted `"\\x1b[32m" in captured.err` unconditionally -- under
+    capsys stderr is a pipe, so the assertion was only satisfiable by the
+    unguarded escape it was meant to document. `jmo schedule create 2>log`
+    therefore wrote literal escape bytes into the log. Both arms are pinned
+    here: a colour-capable stream gets the escape, a pipe does not, and the
+    message survives either way.
+    """
+    from scripts.cli import schedule_commands
 
-    captured = capsys.readouterr()
-    assert "Test message" in captured.err
-    assert "\x1b[32m" in captured.err  # Green color code
+    monkeypatch.setattr(schedule_commands, "_use_color", lambda: True)
+    schedule_commands._success("Test message")
+    colored = capsys.readouterr().err
+    assert "Test message" in colored
+    assert "\x1b[32m" in colored  # Green color code
+
+    monkeypatch.setattr(schedule_commands, "_use_color", lambda: False)
+    schedule_commands._success("Test message")
+    plain = capsys.readouterr().err
+    assert "Test message" in plain
+    assert "\x1b[" not in plain
 
 
 def test_info_message(capsys):
@@ -1127,23 +1141,31 @@ def test_info_message(capsys):
     assert "Test message" in captured.err
 
 
-def test_warn_message(capsys):
-    """Test warning message formatting."""
-    from scripts.cli.schedule_commands import _warn
+def test_warn_message(capsys, monkeypatch):
+    """Warning colour is guarded the same way as success. See test_success_message."""
+    from scripts.cli import schedule_commands
 
-    _warn("Test message")
+    monkeypatch.setattr(schedule_commands, "_use_color", lambda: True)
+    schedule_commands._warn("Test message")
+    colored = capsys.readouterr().err
+    assert "Test message" in colored
+    assert "\x1b[33m" in colored  # Yellow color code
 
-    captured = capsys.readouterr()
-    assert "Test message" in captured.err
-    assert "\x1b[33m" in captured.err  # Yellow color code
+    monkeypatch.setattr(schedule_commands, "_use_color", lambda: False)
+    schedule_commands._warn("Test message")
+    assert "\x1b[" not in capsys.readouterr().err
 
 
-def test_error_message(capsys):
-    """Test error message formatting."""
-    from scripts.cli.schedule_commands import _error
+def test_error_message(capsys, monkeypatch):
+    """Error colour is guarded the same way as success. See test_success_message."""
+    from scripts.cli import schedule_commands
 
-    _error("Test message")
+    monkeypatch.setattr(schedule_commands, "_use_color", lambda: True)
+    schedule_commands._error("Test message")
+    colored = capsys.readouterr().err
+    assert "Test message" in colored
+    assert "\x1b[31m" in colored  # Red color code
 
-    captured = capsys.readouterr()
-    assert "Test message" in captured.err
-    assert "\x1b[31m" in captured.err  # Red color code
+    monkeypatch.setattr(schedule_commands, "_use_color", lambda: False)
+    schedule_commands._error("Test message")
+    assert "\x1b[" not in capsys.readouterr().err

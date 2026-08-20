@@ -1052,10 +1052,14 @@ def _add_schedule_args(
     update_parser.add_argument(
         "--profile", choices=list(PROFILE_TOOLS), help="New scan profile"
     )
-    update_parser.add_argument(
+    # Mutually exclusive: the handler resolved `--suspend --resume` with an
+    # if/elif, so suspend won and resume was discarded without a word. argparse
+    # can say so properly, and does it before anything is written.
+    suspend_group = update_parser.add_mutually_exclusive_group()
+    suspend_group.add_argument(
         "--suspend", action="store_true", help="Suspend schedule"
     )
-    update_parser.add_argument("--resume", action="store_true", help="Resume schedule")
+    suspend_group.add_argument("--resume", action="store_true", help="Resume schedule")
 
     # EXPORT
     export_parser = schedule_subparsers.add_parser(

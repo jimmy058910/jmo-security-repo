@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shlex
 from datetime import UTC
 from typing import Any
 
@@ -125,28 +126,37 @@ class GitLabCIGenerator:
 
         # Build jmo scan command
         cmd_parts = ["jmo scan"]
-        cmd_parts.append(f"--profile {spec.profile}")
+        cmd_parts.append(f"--profile {shlex.quote(spec.profile)}")
 
         # Targets
         targets = spec.targets
         if "repositories" in targets:
             repos = targets["repositories"]
+            if "repo" in repos:
+                cmd_parts.append(f"--repo {shlex.quote(repos['repo'])}")
             if "repos_dir" in repos:
-                cmd_parts.append(f"--repos-dir {repos['repos_dir']}")
+                cmd_parts.append(f"--repos-dir {shlex.quote(repos['repos_dir'])}")
             if "include" in repos:
                 for pattern in repos["include"]:
-                    cmd_parts.append(f"--include-pattern '{pattern}'")
+                    cmd_parts.append(f"--include-pattern {shlex.quote(pattern)}")
             if "exclude" in repos:
                 for pattern in repos["exclude"]:
-                    cmd_parts.append(f"--exclude-pattern '{pattern}'")
+                    cmd_parts.append(f"--exclude-pattern {shlex.quote(pattern)}")
 
         if "images" in targets:
             for image in targets["images"]:
-                cmd_parts.append(f"--image '{image}'")
+                cmd_parts.append(f"--image {shlex.quote(image)}")
 
-        if "urls" in targets:
-            for url in targets["urls"]:
-                cmd_parts.append(f"--url '{url}'")
+        # Web URLs live under targets["web"]["urls"] -- that is what the CLI
+        # writes and what the GitHub Actions generator and the cron installer
+        # both read. This generator read a flat targets["urls"] that nothing
+        # produces, so `jmo schedule create --url ...` exported correctly to
+        # GitHub Actions and dropped the URL entirely on GitLab, silently and
+        # at rc 0. The flat form is still accepted for any schedule written
+        # before this fix.
+        urls = targets.get("web", {}).get("urls", []) or targets.get("urls", [])
+        for url in urls:
+            cmd_parts.append(f"--url {shlex.quote(url)}")
 
         # Results directory
         cmd_parts.append("--results-dir ${RESULTS_DIR}")

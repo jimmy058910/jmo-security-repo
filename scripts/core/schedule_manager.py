@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -138,15 +137,67 @@ class ScanSchedule:
             )
         )
         """
-        # Build targets from simplified args
-        targets = {}
-        if repos_dir:
-            targets["repos_dir"] = repos_dir
+        # Build targets in the nested shape the consumers actually read.
+        #
+        # This used to write flat keys -- targets["repos_dir"], targets["image"],
+        # targets["url"] and so on. Every consumer (both workflow generators and
+        # the cron installer) reads the nested shape the CLI writes:
+        # targets["repositories"]["repos_dir"], targets["images"], and
+        # targets["web"]["urls"]. The two sets were entirely disjoint -- six keys
+        # written, seven read, zero in common -- so a schedule built through this
+        # factory exported a workflow that ran `jmo scan` with **no target at
+        # all**, and did it at rc 0 with valid YAML and no warning. That is also
+        # the shape docs/SCHEDULE_GUIDE.md's Quick Start taught.
+        targets: dict[str, Any] = {}
 
-        # Extract other target types from kwargs
-        for key in ["image", "terraform_state", "url", "gitlab_repo", "k8s_context"]:
-            if key in kwargs:
-                targets[key] = kwargs.pop(key)
+        repo = kwargs.pop("repo", None)
+        if repos_dir or repo:
+            repositories: dict[str, Any] = {}
+            if repo:
+                repositories["repo"] = repo
+            if repos_dir:
+                repositories["repos_dir"] = repos_dir
+            targets["repositories"] = repositories
+
+        # `--image` and `--url` are repeatable on the CLI and the consumers
+        # iterate them, so a bare scalar is normalised to a one-element list
+        # rather than silently iterating its characters.
+        if "image" in kwargs:
+            image = kwargs.pop("image")
+            targets["images"] = [image] if isinstance(image, str) else list(image)
+
+        web: dict[str, Any] = {}
+        if "url" in kwargs:
+            url = kwargs.pop("url")
+            web["urls"] = [url] if isinstance(url, str) else list(url)
+        if "api_spec" in kwargs:
+            web["api_spec"] = kwargs.pop("api_spec")
+        if web:
+            targets["web"] = web
+
+        iac = {
+            key: kwargs.pop(key)
+            for key in ("terraform_state", "cloudformation", "k8s_manifest")
+            if key in kwargs
+        }
+        if iac:
+            targets["iac"] = iac
+
+        gitlab: dict[str, Any] = {}
+        if "gitlab_repo" in kwargs:
+            gitlab["repo"] = kwargs.pop("gitlab_repo")
+        if "gitlab_group" in kwargs:
+            gitlab["group"] = kwargs.pop("gitlab_group")
+        if gitlab:
+            targets["gitlab"] = gitlab
+
+        kubernetes: dict[str, Any] = {}
+        if "k8s_context" in kwargs:
+            kubernetes["context"] = kwargs.pop("k8s_context")
+        if "k8s_namespace" in kwargs:
+            kubernetes["namespace"] = kwargs.pop("k8s_namespace")
+        if kubernetes:
+            targets["kubernetes"] = kubernetes
 
         # Build results config
         results = kwargs.pop("results", {"dir": "./results"})
@@ -187,15 +238,19 @@ class ScheduleManager:
     """Manage scan schedules with Kubernetes-inspired API."""
 
     def __init__(self, config_dir: Path | None = None):
-        if config_dir is None:
-            # Respect HOME environment variable for testing
-            home = os.environ.get("HOME")
-            if home:
-                self.config_dir = Path(home) / ".jmo"
-            else:
-                self.config_dir = Path.home() / ".jmo"
-        else:
-            self.config_dir = config_dir
+        # `Path.home()`, not `os.environ["HOME"]`. Every other consumer of
+        # ~/.jmo resolves it with Path.home() -- 24 sites, covering history,
+        # policies, tool installs, the EPSS/KEV caches and config.yml. This was
+        # the only one that read HOME, and on Windows the two disagree:
+        # Path.home() reads USERPROFILE and never consults HOME, so a user who
+        # sets HOME (routine for git and ssh) got their schedules in one
+        # directory and everything else in another, silently.
+        #
+        # The old branch's comment said "for testing", and Path.home() still
+        # honours HOME on POSIX -- so that affordance survives exactly where it
+        # ever worked. `config_dir` is the injection point that works on every
+        # platform, and it is what the tests already pass.
+        self.config_dir = config_dir if config_dir is not None else Path.home() / ".jmo"
         self.config_dir.mkdir(parents=True, exist_ok=True)
         self.schedules_file = self.config_dir / "schedules.json"
         self._ensure_file_exists()
@@ -228,8 +283,7 @@ class ScheduleManager:
 
         # Compute next run time
         now = datetime.now(UTC)
-        cron = croniter(schedule.spec.schedule, now)
-        schedule.status.nextScheduleTime = cron.get_next(datetime).isoformat()
+        schedule.status.nextScheduleTime = self._next_run(schedule.spec.schedule, now)
 
         # Add condition
         schedule.status.conditions.append(
@@ -281,13 +335,24 @@ class ScheduleManager:
         return None
 
     def update(self, schedule: ScanSchedule) -> ScanSchedule:
-        """Update existing schedule."""
+        """Update existing schedule, recomputing the next run time.
+
+        The recompute is the point. `update` used to persist the new cron and
+        leave `status.nextScheduleTime` at the value derived from the *old*
+        one, so `jmo schedule get` reported a next run the schedule could never
+        produce: after changing `0 2 * * *` to `30 5 * * 1`, it still read
+        Friday 02:00 for a Monday-05:30 schedule -- three days and three and a
+        half hours out, on the wrong weekday, at rc 0 with a success message.
+        """
         manifest = json.loads(self.schedules_file.read_text(encoding="utf-8"))
 
         # Find and replace
         for i, s in enumerate(manifest["schedules"]):
             if s["metadata"]["name"] == schedule.metadata.name:
                 schedule.metadata.generation += 1
+                schedule.status.nextScheduleTime = self._next_run(
+                    schedule.spec.schedule
+                )
                 manifest["schedules"][i] = self._to_dict(schedule)
                 break
         else:
@@ -310,6 +375,12 @@ class ScheduleManager:
 
         self.schedules_file.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
         return True
+
+    @staticmethod
+    def _next_run(cron_expr: str, now: datetime | None = None) -> str:
+        """Next fire time for `cron_expr`, as an ISO-8601 string."""
+        base = now or datetime.now(UTC)
+        return croniter(cron_expr, base).get_next(datetime).isoformat()
 
     def _to_dict(self, schedule: ScanSchedule) -> dict:
         """Convert dataclass to dict."""
