@@ -168,13 +168,20 @@ def test_csv_excel_compatible(sample_analysis, tmp_path):
 
 
 def test_csv_unicode_handling(tmp_path):
-    """Test CSV handles unicode characters in data."""
+    """Test CSV handles unicode characters in data.
+
+    The scan ID comes from analysis["scans"], not metadata["scan_ids"].
+    This fixture used to supply the latter -- a key TrendAnalyzer has never
+    emitted -- so it asserted that a value reached the CSV by a route no
+    real payload can take, while every real export left the column blank
+    (#918).
+    """
     analysis = {
         "metadata": {
             "branch": "main",
-            "scan_ids": ["scan-émoji-🔥"],
             "analysis_timestamp": "2025-01-01T00:00:00Z",
         },
+        "scans": [{"id": "scan-émoji-🔥"}],
         "severity_trends": {
             "by_severity": {
                 "CRITICAL": [1],

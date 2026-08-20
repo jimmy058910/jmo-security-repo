@@ -72,42 +72,52 @@ Perform comprehensive trend analysis across stored scans.
 ```python
 def analyze_trends(
     self,
-    branch: Optional[str] = None,
-    since: Optional[float] = None,
-    scans: Optional[int] = None,
-    min_scans: int = 2
-) -> Dict[str, Any]
+    branch: str | None = None,
+    days: int | None = None,
+    scan_ids: list[str] | None = None,
+    last_n: int | None = None,
+) -> dict[str, Any]
 ```
 
 **Parameters:**
 
-- `branch` (str, optional): Filter scans by Git branch (e.g., "main", "staging")
-- `since` (float, optional): Analyze scans since Unix timestamp
-- `scans` (int, optional): Analyze only the last N scans
-- `min_scans` (int): Minimum number of scans required for analysis (default: 2)
+- `branch` (str, optional): Restrict to one Git branch. `None` (the default)
+  analyses every branch. A branch filter cannot match a scan whose branch could
+  not be determined and is stored NULL, so passing one always narrows to less
+  than the whole database.
+- `days` (int, optional): Analyse the last N days. Must be >= 1. Defaults to 30
+  when neither `days` nor `last_n` is given. Returns every scan in the window --
+  there is no hidden result cap.
+- `scan_ids` (list[str], optional): Analyse exactly these scans. Mutually
+  exclusive with `branch`, `days` and `last_n`, which select scans rather than
+  name them.
+- `last_n` (int, optional): Analyse the last N scans. Must be >= 1.
+
+**Raises:** `ValueError` if `days` or `last_n` is less than 1.
 
 **Returns:** Dictionary containing:
 
 ```python
 {
-    "summary": {
+    "metadata": {
         "scan_count": 12,
-        "date_range": ["2025-10-01", "2025-11-05"],
-        "branch": "main",
-        "profile": "balanced"
+        "date_range": {                       # a mapping, not a pair
+            "start": "2025-10-01T09:12:44+00:00",
+            "end": "2025-11-05T14:30:15+00:00"
+        },
+        "branch": None,                       # None when no branch filter applied
+        "analysis_timestamp": "2025-11-05T14:31:02+00:00"
     },
     "severity_trends": {
-        "critical": {
-            "trend": "improving",  # "improving" | "stable" | "degrading"
-            "tau": -0.682,          # Kendall's Tau (-1 to +1)
-            "p_value": 0.001,       # Statistical significance
-            "significant": True,    # p < 0.05
-            "data": [6, 5, 4, 3, 2] # Historical counts
+        "by_severity": {                      # UPPERCASE keys, each a list of
+            "CRITICAL": [6, 5, 4, 3, 2],      # per-scan counts oldest-first
+            "HIGH": [...],
+            "MEDIUM": [...],
+            "LOW": [...],
+            "INFO": [...]
         },
-        "high": {...},
-        "medium": {...},
-        "low": {...},
-        "info": {...}
+        "total": [...],                       # per-scan totals
+        "timestamps": [...]                   # ISO timestamps, same order
     },
     "top_rules": [
         {
@@ -229,19 +239,31 @@ Validate whether a trend is statistically significant and classify it.
 
 ```python
 def validate_trend_significance(
-    tau: float,
-    p_value: float,
-    alpha: float = 0.05,
-    tau_threshold: float = 0.3
-) -> Dict[str, Any]
+    severity_trends: dict[str, list[int]],
+) -> dict[str, dict[str, Any]]
 ```
 
 **Parameters:**
 
-- `tau` (float): Kendall's Tau coefficient from Mann-Kendall test
-- `p_value` (float): p-value from Mann-Kendall test
-- `alpha` (float): Significance threshold (default: 0.05 = 95% confidence)
-- `tau_threshold` (float): Minimum |τ| for "improving"/"degrading" (default: 0.3)
+- `severity_trends` (dict): The `by_severity` mapping from
+  `analyze_trends()["severity_trends"]` -- severity name to a list of per-scan
+  counts. It runs the Mann-Kendall test itself rather than taking a
+  pre-computed tau and p-value.
+
+**Returns:** one entry per severity, e.g.
+
+```python
+{
+    "CRITICAL": {
+        "trend": "no_trend",   # "increasing" | "decreasing" | "no_trend"
+        "tau": -0.03,          # Kendall's Tau (-1 to +1)
+        "p_value": 0.2843,
+        "significant": False,  # p < 0.05
+        "confidence": "low"
+    },
+    "HIGH": {...}
+}
+```
 
 **Returns:**
 
@@ -505,10 +527,14 @@ def export_to_csv(analysis: Dict[str, Any], output_path: Path) -> None
 **CSV Format:**
 
 ```csv
-scan_id,timestamp,branch,profile,critical,high,medium,low,info,total,score,grade
-abc123,2025-11-05T14:30:15,main,balanced,2,10,20,30,5,67,78,C
-def456,2025-11-04T08:45:33,main,balanced,3,12,22,32,8,77,65,D
+Timestamp,Scan ID,CRITICAL,HIGH,MEDIUM,LOW,INFO,Total,Security Score,Score Trend,Remediation Rate
+2026-08-16T05:38:51+00:00,e65298d2-38c7-4ac7-bbca-7dc3480ce716,2,28,81,6,146,263,0.0,,
+2026-08-18T19:06:17+00:00,ea0fb72a-ed55-445a-bcb6-ac2d654ecf73,2,28,81,6,146,263,0.0,degrading,4.49
 ```
+
+One row per scan, oldest first. `Score Trend` and `Remediation Rate` describe
+the window as a whole and are written on the **last row only**; earlier rows
+leave them blank by design.
 
 **Example:**
 
@@ -538,15 +564,24 @@ def export_to_prometheus(analysis: Dict[str, Any], output_path: Path) -> None
 **Prometheus Metrics:**
 
 ```prometheus
-# HELP jmo_scan_findings_total Total findings by severity
-# TYPE jmo_scan_findings_total gauge
-jmo_scan_findings_total{severity="critical",branch="main",profile="balanced"} 2
-jmo_scan_findings_total{severity="high",branch="main",profile="balanced"} 10
+# HELP jmo_security_findings Total security findings by severity
+# TYPE jmo_security_findings gauge
+jmo_security_findings{severity="critical"} 2
+jmo_security_findings{severity="high"} 28
 
 # HELP jmo_security_score Security posture score (0-100)
 # TYPE jmo_security_score gauge
-jmo_security_score{branch="main",profile="balanced"} 78
+jmo_security_score 0
+
+# HELP jmo_remediation_rate Findings remediated per day
+# TYPE jmo_remediation_rate gauge
+jmo_remediation_rate 4.95
 ```
+
+Seven metrics are emitted: `jmo_security_findings` (labelled by `severity`),
+`jmo_security_score`, `jmo_remediation_rate`, `jmo_introduction_rate`,
+`jmo_net_remediation`, `jmo_scan_count`, and `jmo_rule_findings` (labelled by
+`rule_id` and `severity`). There are no `branch` or `profile` labels.
 
 **Example:**
 
@@ -619,6 +654,8 @@ def export_for_dashboard(analysis: Dict[str, Any], output_path: Path) -> None
 - `analysis` (Dict): Output from `TrendAnalyzer.analyze_trends()`
 - `output_path` (Path): Path to write dashboard JSON
 
+> **Do not name this file `dashboard-data.json` inside a results directory.** That name is already taken: `html_reporter.py` writes the HTML dashboard's **findings** there in external mode, and the dashboard fetches it expecting `{meta, findings}` or a bare array. This function emits a trend object, so writing it to that path replaces the dashboard's data with a shape it cannot read. The examples here use `trend-dashboard.json`.
+
 **JSON Structure:**
 
 ```json
@@ -656,7 +693,7 @@ from scripts.core.trend_exporters import export_for_dashboard
 
 with TrendAnalyzer() as analyzer:
     analysis = analyzer.analyze_trends()
-    export_for_dashboard(analysis, Path("dashboard-data.json"))
+    export_for_dashboard(analysis, Path("trend-dashboard.json"))
 ```
 
 ---

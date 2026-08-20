@@ -64,9 +64,13 @@ def cmd_trends_analyze(args) -> int:
 
     Usage:
         jmo trends analyze --last 10
-        jmo trends analyze --branch main --days 30
+        jmo trends analyze --branch dev --days 30
         jmo trends analyze --scan-ids abc123 def456 --format json
         jmo trends analyze --last 30 --validate-statistics
+
+    --scan-ids names the scans; --branch/--days/--last select them. The two
+    are mutually exclusive, and combining them is rejected rather than
+    silently resolved in --scan-ids' favour.
     """
     db_path = Path(getattr(args, "db", None) or DEFAULT_DB_PATH)
 
@@ -83,6 +87,32 @@ def cmd_trends_analyze(args) -> int:
         scan_ids = getattr(args, "scan_ids", None)
         validate_stats = getattr(args, "validate_statistics", False)
         verbose = getattr(args, "verbose", False)
+
+        # Naming scans and selecting scans are mutually exclusive.
+        # `_get_scans` gives --scan-ids priority over everything else, so
+        # `--scan-ids A B --last 10 --days 365 --branch dev` used to return
+        # the two named scans with all three selectors silently discarded --
+        # the same accepted-and-ignored defect as --branch on `show`.
+        if scan_ids:
+            ignored = [
+                flag
+                for flag, value in (
+                    ("--branch", branch),
+                    ("--days", days),
+                    ("--last", last_n),
+                )
+                if value is not None
+            ]
+            if ignored:
+                sys.stderr.write(
+                    f"Error: --scan-ids cannot be combined with "
+                    f"{', '.join(ignored)}.\n"
+                )
+                sys.stderr.write(
+                    "--scan-ids names the scans to analyse; the others select "
+                    "them. Use one or the other.\n"
+                )
+                return 2
 
         # Run analysis
         with TrendAnalyzer(db_path) as analyzer:
@@ -158,15 +188,9 @@ def cmd_trends_analyze(args) -> int:
                 f.write(format_html_report(analysis))
             safe_write(f"\n✅ Exported HTML to: {export_path}\n")
 
-        # Phase 5: Additional export formats.
-        #
-        # TODO(issue-915): none of the four flags below is declared by the
-        # parser, so every getattr() here is None for every possible
-        # invocation and scripts/core/trend_exporters.py is unreachable from
-        # the CLI. Its tests call the exporters directly, which is why they
-        # pass. Declaring four new user-facing flags is a feature decision,
-        # so chunk 15 measured the gap and left it: three of the four work,
-        # export_for_dashboard shared the crash fixed here as #910.
+        # Additional export formats. These four were read here and declared by
+        # no parser until #915, so every getattr() below returned None for
+        # every possible invocation.
         if getattr(args, "export_csv", None):
             export_path = Path(args.export_csv)
             export_to_csv(analysis, export_path)
