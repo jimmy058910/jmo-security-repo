@@ -56,20 +56,34 @@ jmo verify results/summaries/findings.json \
 
 ## MCP server
 
-### Authentication is off unless you set `JMO_MCP_API_KEYS`
+### The server does not authenticate callers at all
 
-The server starts with authentication disabled and logs
-`Authentication: disabled (dev mode)`. Set `JMO_MCP_API_KEYS` to a
-comma-separated list of keys to enable it; keys are compared as SHA-256 hashes.
+**There is no way to turn authentication on.** Every client that can reach the
+server process is trusted, and setting `JMO_MCP_API_KEYS` does not change that.
 
-**Read the startup log line before exposing the server to anything.** "Disabled
-(dev mode)" means every caller is trusted.
+This section used to say the opposite — that setting `JMO_MCP_API_KEYS` would
+"enable it" and that "keys are compared as SHA-256 hashes". The keys *are*
+hashed at startup, and then nothing ever compares them against anything. MCP's
+stdio transport hands the tool functions no request context, so there is no
+caller credential to check a key against.
 
-```bash
-export JMO_MCP_API_KEYS="$(openssl rand -hex 32)"
+The startup line said `Authentication: enabled` in that state. It now says:
+
+```text
+WARNING  Authentication: NOT ENFORCED -- 1 key(s) configured via
+         JMO_MCP_API_KEYS, but no transport supplies a caller credential to
+         compare them against. EVERY caller is trusted.
 ```
 
-See [MCP_SETUP.md](MCP_SETUP.md) for the full configuration reference.
+`get_server_info()` reports the same thing as `authentication_enforced: false`,
+which is the machine-readable form for a client to check.
+
+**What to do:** treat the server the way you would treat a shell. Run it as a
+subprocess of the client that needs it (the normal MCP arrangement — see
+[MCP_SETUP.md](MCP_SETUP.md)), and do not expose the process to anything you
+would not give a shell to. `JMO_MCP_RATE_LIMIT_*` works and is enforced; it is
+a throttle, not an access control, and it uses one shared bucket for all
+callers.
 
 ### One client at a time
 

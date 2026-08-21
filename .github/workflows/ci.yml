@@ -455,6 +455,42 @@ jobs:
             exit 1
           fi
 
+      - name: Assert the optional-dependency packages still collect
+        # THE GLOBAL FLOOR ABOVE CANNOT CATCH WHAT ITS OWN COMMENT CITES.
+        # Measured at chunk 20: 8993 collected against a floor of 7800 is 1193
+        # of headroom, and tests/jmo_mcp is 295 tests -- the package the mcp 2.0
+        # rename silently emptied can vanish *four times over* and the global
+        # assertion still passes.
+        #
+        # The per-package floor is set close enough to catch a single test FILE
+        # failing to collect (the smallest here is 13 tests), not just the whole
+        # tree going to zero.
+        #
+        # A package gated behind an optional dependency is the case that needs
+        # its own floor: the failure mode is an import probe going false, which
+        # takes out the whole tree at once and exits 0. Packages that are not
+        # gated fail loudly on a collection error, so they do not need an entry
+        # here. Raise a floor in the same PR that adds tests.
+        env:
+          CI: "true"
+        run: |
+          fail=0
+          check_package() {
+            pkg="$1"; floor="$2"
+            n=$(python -m pytest "$pkg" --collect-only -q \
+              -m "not smoke and not requires_tools and not docker and not slow" \
+              | grep -oE "^[0-9]+ tests collected" | cut -d' ' -f1)
+            echo "${pkg}: ${n:-0} collected (floor: ${floor})"
+            if [ -z "$n" ] || [ "$n" -lt "$floor" ]; then
+              echo "::error::${pkg} collected ${n:-0} tests, expected >=${floor}." \
+                "An optional-dependency probe went false, or tests were removed" \
+                "without lowering the floor. Uncollected tests cannot fail."
+              fail=1
+            fi
+          }
+          check_package tests/jmo_mcp 280
+          exit "$fail"
+
       - name: Run the full suite on a native (non-UTF-8) console
         # PYTHONUTF8 is DELIBERATELY ABSENT -- that is the entire point.
         # Flags match the windows-2022 shard exactly so the codec is the only

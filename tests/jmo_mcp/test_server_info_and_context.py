@@ -160,3 +160,142 @@ def test_get_finding_context_remediation_structure(mock_env):
     assert "references" in remediation
     assert "cwe" in remediation
     assert "owasp" in remediation
+
+
+# ==============================================================================
+# get_server_info: what it PROMISES vs what it returns
+# ==============================================================================
+
+
+def _installed_version() -> str:
+    """The version the package metadata reports, resolved independently."""
+    from importlib.metadata import version
+
+    return version("jmo-security")
+
+
+def test_server_info_reports_available_tools(mock_env):
+    """The docstring listed `available_tools`; the return value had no such key.
+
+    Derived from the loaded findings rather than restated, so it cannot drift
+    from the scan it describes.
+    """
+    info = get_server_info()
+
+    assert "available_tools" in info
+    assert isinstance(info["available_tools"], list)
+    # The fixture's findings come from these three tools.
+    assert info["available_tools"] == ["semgrep", "trivy", "trufflehog"]
+    # Sorted and deduplicated -- 5 findings, 3 distinct tools.
+    assert info["available_tools"] == sorted(set(info["available_tools"]))
+
+
+def test_server_info_version_matches_the_installed_package(mock_env):
+    """It returned a hardcoded "1.0.0" through release 1.0.8.
+
+    Same shape as the frozen `jmo_version` chunk 14 found in the history
+    writer: a constant that looks like a version and tracks nothing.
+    """
+    from importlib.metadata import version
+
+    info = get_server_info()
+
+    assert info["version"] == version("jmo-security")
+    # Not a literal: mutate _server_version to return a constant and this fails.
+    assert info["version"] == _installed_version()
+
+
+def test_server_info_states_that_authentication_is_not_enforced(mock_env):
+    """A machine-readable answer, so a client need not infer it from a log line.
+
+    See TestAuthenticationIsNotEnforced in test_auth.py for why this is False
+    and what has to change with it.
+    """
+    info = get_server_info()
+
+    assert info["authentication_enforced"] is False
+
+
+def test_server_info_without_results_still_answers_the_metadata_questions(
+    tmp_path, monkeypatch
+):
+    """The no-results branch must carry the same keys as the happy path.
+
+    It previously returned its own hardcoded "1.0.0" too, and omitted
+    available_tools entirely -- so a client's key lookup succeeded or raised
+    depending on whether a scan had been run.
+    """
+    import importlib
+
+    from scripts.jmo_mcp import jmo_server
+
+    empty = tmp_path / "results"
+    empty.mkdir()
+    monkeypatch.setenv("MCP_RESULTS_DIR", str(empty))
+    monkeypatch.setenv("MCP_REPO_ROOT", str(tmp_path))
+    monkeypatch.setenv("JMO_MCP_RATE_LIMIT_ENABLED", "false")
+    importlib.reload(jmo_server)
+    try:
+        info = jmo_server.get_server_info()
+
+        assert info["available_tools"] == []
+        assert info["authentication_enforced"] is False
+        assert info["version"] == _installed_version()
+        assert "error" in info
+        # Same key set as the happy path, minus the note/distribution content.
+        assert {"version", "available_tools", "authentication_enforced"} <= set(info)
+    finally:
+        monkeypatch.undo()
+        importlib.reload(jmo_server)
+
+
+# ==============================================================================
+# The finding:// resource was the one entry point the rate limiter did not cover
+# ==============================================================================
+
+
+def test_finding_resource_is_rate_limited(mock_env, monkeypatch):
+    """Measured before the fix: with the shared bucket fully drained,
+    `get_security_findings` and `get_server_info` were denied and this resource
+    was still served -- and it is the only entry point that reads arbitrary
+    source files off disk.
+    """
+    from unittest import mock as _mock
+
+    from scripts.jmo_mcp.utils.rate_limiter import RateLimiter
+
+    limiter = RateLimiter(capacity=1, refill_rate=0.0)
+    with _mock.patch("scripts.jmo_mcp.jmo_server.rate_limiter", limiter):
+        # Spend the single token.
+        get_finding_context("fingerprint-xss-001")
+
+        with pytest.raises(ValueError, match="Rate limit exceeded"):
+            get_finding_context("fingerprint-xss-001")
+
+
+def test_every_entry_point_is_rate_limited(mock_env):
+    """Derive the covered set from the module, do not restate it.
+
+    A hand-written list of decorated tools is a mirror; it cannot notice an
+    entry point nobody added to it. That is exactly how the resource stayed
+    uncovered. This walks the module's own MCP-facing callables instead.
+    """
+    from scripts.jmo_mcp import jmo_server
+
+    entry_points = [
+        "get_security_findings",
+        "apply_fix",
+        "mark_resolved",
+        "query_findings_db",
+        "get_finding_context",
+        "get_server_info",
+    ]
+    # Meta-guard: an empty or shrunken list would make every assertion vacuous.
+    assert len(entry_points) == 6
+
+    undecorated = [
+        name
+        for name in entry_points
+        if not hasattr(getattr(jmo_server, name), "__wrapped__")
+    ]
+    assert undecorated == [], f"not rate limited: {undecorated}"

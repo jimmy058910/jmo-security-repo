@@ -339,3 +339,33 @@ CMD ["python", "src/app.py"]
     binary_file.write_bytes(b"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09")
 
     return repo_root
+
+
+@pytest.fixture
+def mcp_env_with_findings(
+    monkeypatch: pytest.MonkeyPatch, results_dir_with_findings: Path
+) -> Path:
+    """Point the MCP server at a temp results dir and reload it.
+
+    The module binds RESULTS_DIR, REPO_ROOT and API_KEYS_HASHED at IMPORT, so
+    setting the environment is not enough on its own -- the reload is the half
+    that makes the setting take effect. Several test files had each grown a
+    private copy of this dance; this is the shared one.
+
+    Yields the results directory. The module is reloaded again on teardown so a
+    test that sets JMO_MCP_API_KEYS cannot leak enabled-looking state into the
+    next test in the session.
+    """
+    import importlib
+
+    import scripts.jmo_mcp.jmo_server as server_module
+
+    monkeypatch.setenv("MCP_RESULTS_DIR", str(results_dir_with_findings))
+    monkeypatch.setenv("MCP_REPO_ROOT", str(results_dir_with_findings.parent))
+    monkeypatch.setenv("JMO_MCP_RATE_LIMIT_ENABLED", "false")
+    importlib.reload(server_module)
+
+    yield results_dir_with_findings
+
+    monkeypatch.undo()
+    importlib.reload(server_module)

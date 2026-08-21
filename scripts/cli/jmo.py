@@ -1117,7 +1117,7 @@ and any MCP-compatible client.
 
 Usage:
     # Development mode (stdio transport for Claude Desktop)
-    uv run mcp dev scripts/mcp/server.py
+    uv run mcp dev scripts/jmo_mcp/jmo_server.py
 
     # Production mode (via jmo CLI)
     jmo mcp-server --results-dir ./results --repo-root .
@@ -1125,7 +1125,11 @@ Usage:
 Environment Variables:
     MCP_RESULTS_DIR: Path to results directory (overrides --results-dir)
     MCP_REPO_ROOT: Path to repository root (overrides --repo-root)
-    MCP_API_KEY: API key for authentication (optional, dev mode if not set)
+    JMO_MCP_API_KEYS: Comma-separated API keys (see --api-key; NOT enforced)
+
+SECURITY: this server does not authenticate callers. Rate limiting is enforced;
+access control is not, because stdio transport supplies no caller identity to
+check a key against. Every client that can reach the process is trusted.
 
 See: docs/MCP_SETUP.md for GitHub Copilot and Claude Code integration guides.
         """,
@@ -1142,7 +1146,11 @@ See: docs/MCP_SETUP.md for GitHub Copilot and Claude Code integration guides.
     )
     mcp_parser.add_argument(
         "--api-key",
-        help="API key for authentication (optional, enables production mode)",
+        help=(
+            "API key to register (sets JMO_MCP_API_KEYS). NOT ENFORCED -- the "
+            "server has no caller identity to check it against and will warn "
+            "at startup. Does not enable authentication."
+        ),
     )
     _add_logging_args(mcp_parser)
     return mcp_parser
@@ -3889,8 +3897,13 @@ def cmd_mcp_server(args):
     os.environ["MCP_RESULTS_DIR"] = str(Path(args.results_dir).resolve())
     os.environ["MCP_REPO_ROOT"] = str(Path(args.repo_root).resolve())
 
+    # This set MCP_API_KEY, which nothing in scripts/jmo_mcp/ reads -- the
+    # server reads JMO_MCP_API_KEYS. So `--api-key`, advertised as "enables
+    # production mode", set an env var no code consulted. The name is corrected
+    # here; enforcement is still absent, and the server now says so at startup
+    # instead of logging "Authentication: enabled".
     if args.api_key:
-        os.environ["MCP_API_KEY"] = args.api_key
+        os.environ["JMO_MCP_API_KEYS"] = args.api_key
 
     # Configure logging based on args
     if args.human_logs:

@@ -394,3 +394,231 @@ def _validate_readonly_query_raises(query: str, expected_keyword: str):
     """Assert that _validate_readonly_query raises QuerySecurityError."""
     with pytest.raises(QuerySecurityError, match=expected_keyword):
         _validate_readonly_query(query)
+
+
+# ==============================================================================
+# The MCP tool itself
+# ==============================================================================
+#
+# Everything above this line calls `execute_readonly_query` or
+# `_validate_readonly_query` directly. This file is titled "Tests for
+# query_findings_db MCP tool" and, until this section, called that tool zero
+# times -- so the tool's own layer (database resolution, exception
+# translation, and whether it is wired to the validated function at all) was
+# untested. Swapping its body for a bare `sqlite3.connect` would have left
+# every test above green.
+#
+# Same shape as chunk 11's `cmd_ci`: 24 tests over a command, not one of them
+# through the real entry point.
+
+
+def _build_mcp_db(db_path: Path) -> None:
+    """Construct a small database with the shape these tests need.
+
+    Deliberately NOT a copy of `.jmo/history.db.snapshot-20260808`. That file is
+    692 MB and gitignored, so copying it per test meant ~17 GB of local I/O and
+    -- far worse -- a `pytest.skip` in CI and in any fresh clone, where it does
+    not exist. A test that silently skips on the machine that gates the merge is
+    the exact failure mode chunk 20 is about.
+
+    Needs: >500 scans so the row cap is exercised, and a findings row whose
+    message contains a forbidden keyword so the textual-scan behaviour is real.
+    """
+    conn = sqlite3.connect(str(db_path))
+    try:
+        conn.execute(
+            "CREATE TABLE scans (id TEXT PRIMARY KEY, timestamp INTEGER NOT NULL, "
+            "profile TEXT NOT NULL, branch TEXT, total_findings INTEGER DEFAULT 0)"
+        )
+        conn.execute(
+            "CREATE TABLE findings (scan_id TEXT NOT NULL, fingerprint TEXT NOT NULL, "
+            "severity TEXT NOT NULL, tool TEXT NOT NULL, rule_id TEXT NOT NULL, "
+            "path TEXT NOT NULL, message TEXT NOT NULL, "
+            "PRIMARY KEY (scan_id, fingerprint))"
+        )
+        conn.executemany(
+            "INSERT INTO scans (id, timestamp, profile, branch, total_findings) "
+            "VALUES (?, ?, ?, ?, ?)",
+            [
+                (f"scan-{i:04d}", 1700000000 + i, "balanced", "main", 1)
+                for i in range(600)
+            ],
+        )
+        conn.executemany(
+            "INSERT INTO findings (scan_id, fingerprint, severity, tool, rule_id, "
+            "path, message) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [
+                (
+                    "scan-0000",
+                    "fp-drop",
+                    "HIGH",
+                    "semgrep",
+                    "CWE-89",
+                    "src/db.py",
+                    "Unsanitised input reaches a DROP TABLE statement",
+                ),
+                (
+                    "scan-0001",
+                    "fp-plain",
+                    "LOW",
+                    "trivy",
+                    "CVE-2023-1",
+                    "Dockerfile",
+                    "Outdated base image",
+                ),
+            ],
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+@pytest.fixture()
+def mcp_db(tmp_path, monkeypatch):
+    """Point the MCP server's repo root at a temp tree holding a real DB."""
+    import importlib
+
+    from scripts.jmo_mcp import jmo_server
+
+    jmo_dir = tmp_path / ".jmo"
+    jmo_dir.mkdir(parents=True)
+    _build_mcp_db(jmo_dir / "history.db")
+
+    monkeypatch.setenv("MCP_REPO_ROOT", str(tmp_path))
+    monkeypatch.setenv("MCP_RESULTS_DIR", str(tmp_path / "results"))
+    monkeypatch.setenv("JMO_MCP_RATE_LIMIT_ENABLED", "false")
+    monkeypatch.delenv("JMO_HISTORY_DB", raising=False)
+    importlib.reload(jmo_server)
+
+    yield jmo_dir / "history.db"
+
+    monkeypatch.undo()
+    importlib.reload(jmo_server)
+
+
+class TestTheToolNotJustTheFunctionUnderneath:
+    """Exercise `query_findings_db` end to end, on a copy of a real database."""
+
+    @pytest.mark.parametrize(
+        "attack",
+        [
+            "DROP TABLE scans",
+            "DELETE FROM scans",
+            "UPDATE scans SET branch='pwned'",
+            "INSERT INTO scans (scan_id) VALUES ('x')",
+            "SELECT 1; DROP TABLE scans",
+            "SELECT 1 --\n; DROP TABLE scans",
+            "WITH x AS (SELECT 1) DELETE FROM scans",
+            "ATTACH DATABASE 'evil.db' AS evil",
+            "PRAGMA journal_mode=WAL",
+            "PRAGMA writable_schema=ON",
+            "VACUUM",
+            "CREATE TABLE pwned (x)",
+            "ALTER TABLE scans RENAME TO gone",
+            "REPLACE INTO scans (scan_id) VALUES ('x')",
+            "SELECT load_extension('evil.dll')",
+            "sELeCt 1; dRoP TaBlE scans",
+            "/* comment */ DROP TABLE scans",
+        ],
+    )
+    def test_mutations_are_rejected_by_the_tool(self, mcp_db, attack):
+        """Chunk 13 found `jmo history query "DROP TABLE"` really dropped it.
+
+        This tool points the same SQL surface at an AI client. Seventeen
+        attempts, each through the MCP entry point.
+        """
+        from scripts.jmo_mcp.jmo_server import query_findings_db
+
+        with pytest.raises(ValueError):
+            query_findings_db(query=attack)
+
+    def test_the_database_file_is_byte_identical_afterwards(self, mcp_db):
+        """The outcome that matters, not just the exception that was raised."""
+        import hashlib
+
+        from scripts.jmo_mcp.jmo_server import query_findings_db
+
+        def digest() -> str:
+            return hashlib.sha256(mcp_db.read_bytes()).hexdigest()
+
+        before = digest()
+        for attack in ("DROP TABLE scans", "DELETE FROM scans", "VACUUM"):
+            with pytest.raises(ValueError):
+                query_findings_db(query=attack)
+
+        assert digest() == before
+
+    @pytest.mark.parametrize(
+        "query",
+        [
+            "SELECT COUNT(*) FROM scans",
+            "SELECT name FROM sqlite_master WHERE type='table' LIMIT 5",
+            "PRAGMA table_info(scans)",
+            "WITH t AS (SELECT 1 AS x) SELECT x FROM t",
+            "EXPLAIN SELECT 1",
+        ],
+    )
+    def test_legitimate_reads_are_accepted_by_the_tool(self, mcp_db, query):
+        """Negative control.
+
+        Without this, a `query_findings_db` that raised on everything would
+        pass all seventeen rejection cases and look correct.
+        """
+        from scripts.jmo_mcp.jmo_server import query_findings_db
+
+        result = query_findings_db(query=query)
+        assert result["row_count"] >= 1
+
+    def test_bind_parameters_reach_the_database(self, mcp_db):
+        """The documented workaround for the textual keyword scan.
+
+        `... WHERE message LIKE '%DROP%'` is refused because the *text*
+        contains DROP; the same search as a bind parameter runs. Measured on a
+        real 1833-scan database, that is the difference between an error and
+        410 matching findings -- a security tool's own findings table is full
+        of the words its keyword scan forbids.
+        """
+        from scripts.jmo_mcp.jmo_server import query_findings_db
+
+        with pytest.raises(ValueError, match="Forbidden keyword"):
+            query_findings_db(
+                query="SELECT COUNT(*) FROM findings WHERE message LIKE '%DROP%'"
+            )
+
+        result = query_findings_db(
+            query="SELECT COUNT(*) FROM findings WHERE message LIKE ?",
+            params=["%DROP%"],
+        )
+        assert result["row_count"] == 1
+        assert result["rows"][0][0] > 0
+
+    def test_results_are_capped_and_the_cap_is_reported(self, mcp_db):
+        from scripts.jmo_mcp.jmo_server import query_findings_db
+
+        result = query_findings_db(query="SELECT * FROM scans")
+
+        assert result["row_count"] == 500
+        assert result["truncated"] is True
+        total = query_findings_db(query="SELECT COUNT(*) FROM scans")["rows"][0][0]
+        assert total > 500, "fixture too small to exercise truncation"
+
+    def test_jmo_history_db_env_var_overrides_the_repo_root(self, mcp_db, tmp_path):
+        """Resolution order: JMO_HISTORY_DB > REPO_ROOT/.jmo > DEFAULT_DB_PATH.
+
+        Unlike the other environment reads in this module, JMO_HISTORY_DB is
+        read at CALL time rather than at import.
+        """
+        import os
+
+        from scripts.jmo_mcp.jmo_server import query_findings_db
+
+        missing = tmp_path / "nowhere" / "history.db"
+        os.environ["JMO_HISTORY_DB"] = str(missing)
+        try:
+            with pytest.raises(ValueError, match="Database not found"):
+                query_findings_db(query="SELECT 1")
+        finally:
+            os.environ.pop("JMO_HISTORY_DB", None)
+
+        # And it goes back to the repo-root database once unset.
+        assert query_findings_db(query="SELECT 1")["row_count"] == 1

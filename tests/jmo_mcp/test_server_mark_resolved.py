@@ -76,7 +76,7 @@ def test_mark_resolved_fixed(mock_env):
         comment="Manually fixed by adding DOMPurify sanitization",
     )
 
-    assert result["success"] is True
+    assert result["success"] is False
     assert result["finding_id"] == "fingerprint-xss-001"
     assert result["resolution"] == "fixed"
     assert "timestamp" in result
@@ -91,7 +91,7 @@ def test_mark_resolved_false_positive(mock_env):
         comment="This is a test file that intentionally shows SQL injection examples",
     )
 
-    assert result["success"] is True
+    assert result["success"] is False
     assert result["finding_id"] == "fingerprint-sqli-001"
     assert result["resolution"] == "false_positive"
     assert "timestamp" in result
@@ -105,7 +105,7 @@ def test_mark_resolved_wont_fix(mock_env):
         comment="Legacy system compatibility requires MD5",
     )
 
-    assert result["success"] is True
+    assert result["success"] is False
     assert result["finding_id"] == "fingerprint-crypto-001"
     assert result["resolution"] == "wont_fix"
     assert "timestamp" in result
@@ -119,7 +119,7 @@ def test_mark_resolved_risk_accepted(mock_env):
         comment="Risk accepted after security review, internal tool only",
     )
 
-    assert result["success"] is True
+    assert result["success"] is False
     assert result["finding_id"] == "fingerprint-path-traversal-001"
     assert result["resolution"] == "risk_accepted"
     assert "timestamp" in result
@@ -137,7 +137,7 @@ def test_mark_resolved_without_comment(mock_env):
         resolution="fixed",
     )
 
-    assert result["success"] is True
+    assert result["success"] is False
     assert result["finding_id"] == "fingerprint-xss-001"
     assert result["resolution"] == "fixed"
 
@@ -150,7 +150,7 @@ def test_mark_resolved_with_empty_comment(mock_env):
         comment="",
     )
 
-    assert result["success"] is True
+    assert result["success"] is False
 
 
 def test_mark_resolved_with_long_comment(mock_env):
@@ -163,7 +163,7 @@ def test_mark_resolved_with_long_comment(mock_env):
         comment=long_comment,
     )
 
-    assert result["success"] is True
+    assert result["success"] is False
 
 
 # ==============================================================================
@@ -217,7 +217,7 @@ def test_mark_resolved_all_finding_ids_valid(mock_env):
             resolution="fixed",
             comment="Test validation",
         )
-        assert result["success"] is True
+        assert result["success"] is False
         assert result["finding_id"] == finding_id
 
 
@@ -231,7 +231,7 @@ def test_mark_resolved_all_resolution_types_valid(mock_env):
             resolution=resolution,
             comment=f"Test resolution type: {resolution}",
         )
-        assert result["success"] is True
+        assert result["success"] is False
         assert result["resolution"] == resolution
 
 
@@ -295,7 +295,7 @@ def test_mark_resolved_special_characters_in_comment(mock_env):
         comment=comment,
     )
 
-    assert result["success"] is True
+    assert result["success"] is False
 
 
 def test_mark_resolved_unicode_in_comment(mock_env):
@@ -308,7 +308,7 @@ def test_mark_resolved_unicode_in_comment(mock_env):
         comment=comment,
     )
 
-    assert result["success"] is True
+    assert result["success"] is False
 
 
 def test_mark_resolved_multiline_comment(mock_env):
@@ -324,7 +324,7 @@ def test_mark_resolved_multiline_comment(mock_env):
         comment=comment,
     )
 
-    assert result["success"] is True
+    assert result["success"] is False
 
 
 def test_mark_resolved_comment_with_escape_sequences(mock_env):
@@ -337,7 +337,7 @@ def test_mark_resolved_comment_with_escape_sequences(mock_env):
         comment=comment,
     )
 
-    assert result["success"] is True
+    assert result["success"] is False
 
 
 def test_mark_resolved_missing_findings_file(tmp_path, monkeypatch):
@@ -385,7 +385,7 @@ def test_mark_resolved_rate_limit_enforcement(mock_findings_file, monkeypatch):
         resolution="fixed",
         comment="Test",
     )
-    assert result1["success"] is True
+    assert result1["success"] is False
 
     # Second request should fail (bucket exhausted)
     with pytest.raises(ValueError, match="Rate limit exceeded"):
@@ -407,7 +407,7 @@ def test_mark_resolved_rate_limit_disabled(mock_env):
             resolution="fixed",
             comment=f"Test {i}",
         )
-        assert result["success"] is True
+        assert result["success"] is False
 
 
 # ==============================================================================
@@ -436,19 +436,66 @@ def test_mark_resolved_response_structure(mock_env):
     assert isinstance(result["timestamp"], str)
 
     # Values match input
-    assert result["success"] is True
+    assert result["success"] is False
     assert result["finding_id"] == "fingerprint-xss-001"
     assert result["resolution"] == "fixed"
 
 
-def test_mark_resolved_response_note_field(mock_env):
-    """Test response contains note about Phase 2 implementation"""
+def test_mark_resolved_says_it_persisted_nothing(mock_env):
+    """The failure has to be in `success`, not in a trailing `note`.
+
+    This file previously asserted `success is True` in sixteen places AND, in
+    this test, that a `note` field said the resolution was "not yet
+    persisted" -- the contradiction was written down in one file and nobody
+    reconciled it. An agent reads `success`; it does not read prose.
+    """
     result = mark_resolved(
         finding_id="fingerprint-xss-001",
         resolution="fixed",
         comment="Test",
     )
 
-    # Note field should indicate resolution tracking is not yet persisted
-    assert "note" in result
-    assert "Phase 2" in result["note"] or "persist" in result["note"].lower()
+    assert result["success"] is False
+    assert "error" in result
+    assert "not implemented" in result["error"].lower()
+    # The reason must state the consequence, not just the absence.
+    assert "reappear" in result["error"].lower()
+
+
+def test_mark_resolved_writes_nothing_anywhere(mock_env):
+    """Prove the claim: a 'resolved' finding leaves no trace on disk.
+
+    Chunk 20's acceptance criterion: a tool's success must be derived from work
+    that demonstrably happened. Here no work happens, so the tool must not
+    report success -- and this test is what makes "no work happens" a measured
+    fact rather than a reading of the source.
+    """
+    before = {
+        p: p.stat().st_mtime_ns for p in sorted(mock_env.rglob("*")) if p.is_file()
+    }
+
+    for resolution in ("fixed", "false_positive", "wont_fix", "risk_accepted"):
+        result = mark_resolved(
+            finding_id="fingerprint-xss-001",
+            resolution=resolution,
+            comment="none of these are recorded",
+        )
+        assert result["success"] is False
+
+    after = {
+        p: p.stat().st_mtime_ns for p in sorted(mock_env.rglob("*")) if p.is_file()
+    }
+    assert before == after, "mark_resolved modified the tree while reporting failure"
+    assert not (mock_env / ".jmo" / "resolutions.json").exists()
+    assert not (mock_env / "resolutions.json").exists()
+
+
+def test_mark_resolved_still_rejects_an_unknown_finding_id(mock_env):
+    """An unknown id must fail before any success value is believed.
+
+    Distinguishes "not implemented" from "did not even look" -- the id is
+    validated against the loaded findings first, so a client cannot mistake a
+    typo'd id for a recorded resolution.
+    """
+    with pytest.raises(ValueError, match="Finding not found"):
+        mark_resolved(finding_id="no-such-finding-zzz", resolution="fixed")
