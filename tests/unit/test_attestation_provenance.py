@@ -273,9 +273,30 @@ class TestProvenanceGeneration:
         assert "semgrep" in build_def["externalParameters"]["tools"]
         assert "repo1" in build_def["externalParameters"]["targets"]
 
-        # Internal parameters (JMo internal)
+        # Internal parameters (JMo internal). `version` is known; `threads`
+        # and `timeout` are not, and are therefore absent rather than made up
+        # — they used to default to 4 and 600 and be written into every
+        # attestation as though measured.
         assert "version" in build_def["internalParameters"]
-        assert "threads" in build_def["internalParameters"]
+        assert "threads" not in build_def["internalParameters"]
+        assert "timeout" not in build_def["internalParameters"]
+
+    def test_build_definition_records_parameters_when_known(self, sample_findings_file):
+        """When the caller does know them, they are recorded."""
+        from scripts.core.attestation.provenance import ProvenanceGenerator
+
+        provenance = ProvenanceGenerator().generate(
+            findings_path=sample_findings_file,
+            profile="balanced",
+            tools=["trivy"],
+            targets=["repo1"],
+            threads=8,
+            timeout=1200,
+        )
+
+        internal = provenance["predicate"]["buildDefinition"]["internalParameters"]
+        assert internal["threads"] == 8
+        assert internal["timeout"] == 1200
 
     def test_run_details_includes_builder_info(self, sample_findings_file):
         """Test that runDetails includes builder metadata."""

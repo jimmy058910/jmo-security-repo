@@ -8,6 +8,7 @@ Tests the SigstoreSigner class which handles:
 """
 
 import json
+import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -18,6 +19,7 @@ from scripts.core.attestation.constants import (
     FULCIO_URL_STAGING,
     REKOR_URL_PRODUCTION,
     REKOR_URL_STAGING,
+    SIGNING_TIMEOUT,
 )
 from scripts.core.attestation.signer import SigstoreSigner
 
@@ -282,9 +284,16 @@ class TestSignMethod:
         # Verify sigstore command was called
         mock_run.assert_called_once()
         cmd = mock_run.call_args[0][0]
-        assert "sigstore" in cmd
-        assert "sign" in cmd
+        # sys.executable, not "python3". A bare "python3" binds to whatever is
+        # first on PATH; measured on this machine it resolved to an unrelated
+        # venv and answered "No module named sigstore" while the project venv
+        # had sigstore 4.5.0 installed.
+        assert cmd[0] == sys.executable
+        assert cmd[1:4] == ["-m", "sigstore", "sign"]
         assert "--bundle" in cmd
+        # Signing outside CI walks a human through a browser OAuth redirect,
+        # which the 30s ATTESTATION_TIMEOUT could not cover.
+        assert mock_run.call_args[1]["timeout"] == SIGNING_TIMEOUT
 
     @patch("subprocess.run")
     def test_sign_success_staging(self, mock_run, tmp_path):
@@ -443,3 +452,42 @@ class TestVerifyRekorEntry:
             signer.verify_rekor_entry(
                 "https://rekor.sigstore.dev/api/v1/log/entries/12345"
             )
+
+
+class TestSigstoreAvailability:
+    """ "sigstore is missing" and "this signature is bad" must not be the same
+    answer.
+
+    Both used to arrive as a non-zero subprocess exit routed through the same
+    error path — and the missing-module case was reached constantly, because
+    the command named `python3` rather than this interpreter.
+    """
+
+    def test_require_sigstore_names_the_interpreter_when_absent(self):
+        from scripts.core.attestation.signer import require_sigstore
+
+        with patch("importlib.util.find_spec", return_value=None):
+            with pytest.raises(RuntimeError) as excinfo:
+                require_sigstore()
+
+        assert "sigstore is not installed" in str(excinfo.value)
+        assert sys.executable in str(excinfo.value)
+
+    def test_require_sigstore_is_quiet_when_present(self):
+        """Negative control: the guard must be capable of not firing."""
+        from scripts.core.attestation.signer import require_sigstore
+
+        require_sigstore()
+
+    @patch("subprocess.run")
+    def test_sign_refuses_before_spawning_when_sigstore_is_absent(
+        self, mock_run, tmp_path
+    ):
+        attestation = tmp_path / "attestation.json"
+        attestation.write_text('{"test": "data"}', encoding="utf-8")
+
+        with patch("importlib.util.find_spec", return_value=None):
+            with pytest.raises(RuntimeError, match="sigstore is not installed"):
+                SigstoreSigner().sign(str(attestation))
+
+        mock_run.assert_not_called()

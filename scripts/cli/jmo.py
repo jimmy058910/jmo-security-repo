@@ -1863,18 +1863,25 @@ def _add_verify_args(subparsers: argparse._SubParsersAction) -> None:
 Verify cryptographic attestation and detect tampering.
 
 Verification checks:
-- Subject digest matches attestation
-- Attestation format is valid
-- Signature verification (if signed)
-- Rekor transparency log (if published)
+- Subject digest matches attestation (always)
+- Attestation format is valid (always)
+- Tamper indicators: timestamps, builder, suspicious patterns (always)
+- Signature -- ONLY when --cert-identity and --cert-oidc-issuer are given.
+  Without an expected signer a bundle proves only that somebody signed it,
+  so it is reported as NOT CHECKED rather than quietly counted as a pass.
+- Rekor transparency log -- only with --rekor-check, which needs a bundle
 
 Exit codes:
   0 - Verification succeeded
-  1 - Verification failed or tampering detected
+  1 - Verification ran and failed, or tampering was detected
+  2 - Usage error: a path does not exist or a required flag is missing,
+      so nothing was verified
 
 Example:
   jmo verify findings.json
-  jmo verify findings.json --rekor-check
+  jmo verify findings.json --rekor-check \\
+      --cert-identity you@example.com \\
+      --cert-oidc-issuer https://oauth2.sigstore.dev/auth
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -1884,12 +1891,26 @@ Example:
         "--attestation", "-a", help="Attestation file (default: <subject>.att.json)"
     )
     verify_parser.add_argument(
-        "--rekor-check",
-        action="store_true",
-        help="Verify against Rekor transparency log",
+        "--signature",
+        "-s",
+        help="Sigstore bundle to verify the attestation against "
+        "(default: <attestation>.sigstore.json)",
     )
     verify_parser.add_argument(
-        "--policy", help="Policy file for additional verification rules"
+        "--cert-identity",
+        help="Expected signer identity in the certificate SAN "
+        "(required to check a signature)",
+    )
+    verify_parser.add_argument(
+        "--cert-oidc-issuer",
+        help="Expected OIDC issuer URL in the certificate "
+        "(required to check a signature)",
+    )
+    verify_parser.add_argument(
+        "--rekor-check",
+        action="store_true",
+        help="Confirm the signature bundle's Rekor transparency log entry "
+        "exists (requires a signature check; makes a network request)",
     )
     verify_parser.add_argument(
         "--human-logs",
@@ -3975,13 +3996,29 @@ def cmd_attest(args) -> int:
 
     """
     subject_path = Path(args.subject)
-    if not subject_path.exists():
+    # is_file(), not exists(): a directory passed here used to reach open() and
+    # surface as a raw PermissionError traceback. A path that is not a readable
+    # file means nothing was attested — a usage error (2).
+    if not subject_path.is_file():
         _log(args, "ERROR", f"Subject file not found: {args.subject}")
-        return 1
+        return 2
+
+    # --rekor only takes effect through --sign. Exiting 0 having done nothing
+    # let a CI step "succeed" with no transparency-log entry to show for it.
+    if getattr(args, "rekor", False) and not getattr(args, "sign", False):
+        _log(
+            args,
+            "ERROR",
+            "--rekor requires --sign (signing is what uploads to Rekor)",
+        )
+        return 2
 
     # Load scan arguments if provided
     scan_args = {}
     if hasattr(args, "scan_args") and args.scan_args:
+        if not Path(args.scan_args).is_file():
+            _log(args, "ERROR", f"Scan args file not found: {args.scan_args}")
+            return 2
         with open(args.scan_args, encoding="utf-8") as f:
             scan_args = json.load(f)
 
@@ -3997,6 +4034,11 @@ def cmd_attest(args) -> int:
         profile=scan_args.get("profile_name", "default"),
         tools=tools,
         targets=scan_args.get("repos", []),
+        # Only claim these when the scan actually reported them. They were
+        # written as a fixed threads=4/timeout=600 into every attestation ever
+        # produced, which is an unmeasured value stated as provenance.
+        threads=scan_args.get("threads"),
+        timeout=scan_args.get("timeout"),
     )
 
     # Determine output path
@@ -4056,15 +4098,19 @@ def cmd_verify(args) -> int:
         args: Parsed command-line arguments
 
     Returns:
-        0 if verification succeeds, non-zero on error or tampering
+        0 if verification succeeds, 1 if it ran and failed, 2 if a path does
+        not exist so nothing was verified.
 
     """
     from scripts.core.attestation.verifier import AttestationVerifier
 
     subject_path = Path(args.subject)
-    if not subject_path.exists():
+    # A missing path means nothing was verified, which is a usage error (2),
+    # not a negative verdict (1). Returning 1 made "you typo'd the filename"
+    # indistinguishable from "this artifact is forged".
+    if not subject_path.is_file():
         _log(args, "ERROR", f"Subject file not found: {args.subject}")
-        return 1
+        return 2
 
     # Determine attestation path
     if hasattr(args, "attestation") and args.attestation:
@@ -4072,9 +4118,41 @@ def cmd_verify(args) -> int:
     else:
         attestation_path = str(subject_path) + ".att.json"
 
-    if not Path(attestation_path).exists():
+    if not Path(attestation_path).is_file():
         _log(args, "ERROR", f"Attestation not found: {attestation_path}")
-        return 1
+        return 2
+
+    # Signature checking is opt-in and all-or-nothing: it needs a bundle AND
+    # an expected signer. Half a signature check is not a weaker check, it is
+    # a different claim, so the partial cases are usage errors rather than
+    # quietly-skipped work.
+    cert_identity = getattr(args, "cert_identity", None)
+    cert_oidc_issuer = getattr(args, "cert_oidc_issuer", None)
+    signature_path = getattr(args, "signature", None)
+    check_rekor = getattr(args, "rekor_check", False)
+
+    if bool(cert_identity) != bool(cert_oidc_issuer):
+        _log(
+            args,
+            "ERROR",
+            "--cert-identity and --cert-oidc-issuer must be given together",
+        )
+        return 2
+
+    if cert_identity:
+        if not signature_path:
+            signature_path = attestation_path + ".sigstore.json"
+        if not Path(signature_path).is_file():
+            _log(args, "ERROR", f"Signature bundle not found: {signature_path}")
+            return 2
+    elif signature_path or check_rekor:
+        _log(
+            args,
+            "ERROR",
+            "checking a signature requires --cert-identity and "
+            "--cert-oidc-issuer naming the signer you expect",
+        )
+        return 2
 
     # Create verifier
     verifier = AttestationVerifier()
@@ -4083,19 +4161,38 @@ def cmd_verify(args) -> int:
     result = verifier.verify(
         subject_path=str(subject_path),
         attestation_path=attestation_path,
-        check_rekor=getattr(args, "rekor_check", False),
-        policy_path=getattr(args, "policy", None),
+        signature_path=signature_path,
+        check_rekor=check_rekor,
+        cert_identity=cert_identity,
+        cert_oidc_issuer=cert_oidc_issuer,
     )
 
     if result.is_valid:
         _log(args, "INFO", "✅ Attestation verified successfully")
         _log(args, "INFO", f"  Subject: {result.subject_name}")
-        _log(args, "INFO", f"  SHA-256: {result.subject_digest}")
+        algorithm = (result.subject_digest_algorithm or "digest").upper()
+        _log(args, "INFO", f"  {algorithm}: {result.subject_digest}")
         _log(args, "INFO", f"  Builder: {result.builder_id}")
-        _log(args, "INFO", f"  Build time: {result.build_time}")
+        _log(args, "INFO", f"  Build time: {result.build_time or 'not recorded'}")
+
+        if signature_path:
+            _log(args, "INFO", f"  Signature: verified ({signature_path})")
+        else:
+            _log(
+                args,
+                "WARN",
+                "  Signature: NOT CHECKED - pass --cert-identity and "
+                "--cert-oidc-issuer to check one",
+            )
 
         if result.rekor_entry:
             _log(args, "INFO", f"  Rekor entry: {result.rekor_entry}")
+
+        # Non-CRITICAL indicators do not fail verification, but they were
+        # computed and stored and then never shown to anyone - so a subject
+        # named ../../../etc/passwd and a localhost builder both printed
+        # "verified successfully" with nothing else said.
+        _log_tamper_indicators(args, result.tamper_indicators)
 
         return 0
     else:
@@ -4103,9 +4200,37 @@ def cmd_verify(args) -> int:
         _log(args, "ERROR", f"  Reason: {result.error_message}")
 
         if result.tamper_detected:
-            _log(args, "ERROR", "  ⚠️  TAMPER DETECTED - Subject has been modified!")
+            # Say which artifact moved. A CRITICAL timestamp or builder
+            # anomaly is tampering with the *attestation*; reporting every one
+            # of them as "Subject has been modified" sends the reader to the
+            # wrong file.
+            what = (
+                "Subject has been modified"
+                if result.error_message == "Subject digest mismatch"
+                else "Attestation has been altered"
+            )
+            _log(args, "ERROR", f"  ⚠️  TAMPER DETECTED - {what}!")
+
+        _log_tamper_indicators(args, result.tamper_indicators)
 
         return 1
+
+
+def _log_tamper_indicators(args, indicators) -> None:
+    """Report tamper indicators that did not by themselves fail verification.
+
+    Args:
+        args: Parsed command-line arguments (for log routing)
+        indicators: TamperIndicator list from the verification result
+    """
+    for indicator in indicators or []:
+        if indicator.severity.value == "CRITICAL":
+            continue  # already reported as the failure reason
+        _log(
+            args,
+            "WARN",
+            f"  [{indicator.severity.value}] {indicator.description}",
+        )
 
 
 def main():

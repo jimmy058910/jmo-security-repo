@@ -449,3 +449,135 @@ class TestProvenanceValidation:
         build_type = provenance["predicate"]["buildDefinition"]["buildType"]
         assert build_type.startswith("https://jmotools.com/jmo-scan/v1")
         assert "@slsa/v1" in build_type
+
+
+class TestSubjectIdentifiesWhatWasAttested:
+    """`_create_subject` hard-coded `name="findings.json"`.
+
+    An attestation over `report.sarif` that names `findings.json` does not
+    identify what it attests, and `jmo verify` printed that wrong name back as
+    though it had been read from the file.
+    """
+
+    def test_subject_name_is_the_real_filename(self, tmp_path):
+        from scripts.core.attestation.provenance import ProvenanceGenerator
+
+        subject = tmp_path / "report.sarif"
+        subject.write_text('{"runs": []}', encoding="utf-8")
+
+        statement = ProvenanceGenerator().generate(
+            findings_path=subject, profile="fast", tools=[], targets=[]
+        )
+
+        assert statement["subject"][0]["name"] == "report.sarif"
+
+    def test_subject_name_stays_a_bare_filename(self, tmp_path):
+        """check_suspicious_patterns flags "..' and a leading '/', so the name
+        must not become a path just because the caller passed one."""
+        from scripts.core.attestation.provenance import ProvenanceGenerator
+
+        nested = tmp_path / "results" / "summaries"
+        nested.mkdir(parents=True)
+        subject = nested / "findings.json"
+        subject.write_text('{"findings": []}', encoding="utf-8")
+
+        statement = ProvenanceGenerator().generate(
+            findings_path=subject, profile="fast", tools=[], targets=[]
+        )
+
+        name = statement["subject"][0]["name"]
+        assert name == "findings.json"
+        assert ".." not in name and not name.startswith("/")
+
+
+class TestGeneratedTimestamps:
+    """No caller ever passed `finished_on`, so every attestation JMo has ever
+    written omitted `finishedOn` — and the tamper detector's "Missing required
+    timestamp fields" therefore fired on every verification of a good document,
+    where nothing displayed it."""
+
+    def test_finished_on_is_recorded(self, tmp_path):
+        from scripts.core.attestation.provenance import ProvenanceGenerator
+
+        subject = tmp_path / "findings.json"
+        subject.write_text('{"findings": []}', encoding="utf-8")
+
+        metadata = ProvenanceGenerator().generate(
+            findings_path=subject, profile="fast", tools=[], targets=[]
+        )["predicate"]["runDetails"]["metadata"]
+
+        assert metadata["finishedOn"]
+        assert metadata["startedOn"] <= metadata["finishedOn"]
+
+    def test_started_on_is_stamped_before_finished_on(self, tmp_path):
+        """The clock must be read in the order the fields claim.
+
+        `_create_run_details` defaults `startedOn` internally, so passing
+        `finished_on=... or now()` at the call site stamped *finished* first
+        and *started* second — and any clock tick falling between the two calls
+        produced a document asserting it finished before it began, which
+        `check_timestamp_anomalies` rightly calls CRITICAL.
+
+        Wall-clock granularity on Windows is coarse enough that both reads
+        usually land in one tick and the strings come out equal, so the
+        assertion above only caught this under parallel load. Here the clock is
+        forced to advance on every read, which makes the ordering observable
+        every run instead of on an unlucky one.
+        """
+        from datetime import UTC, datetime, timedelta
+
+        from scripts.core.attestation.provenance import ProvenanceGenerator
+
+        subject = tmp_path / "findings.json"
+        subject.write_text('{"findings": []}', encoding="utf-8")
+
+        base = datetime(2026, 8, 21, 12, 0, 0, tzinfo=UTC)
+        ticks = iter(range(1, 100))
+
+        class Clock(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return base + timedelta(seconds=next(ticks))
+
+        with patch("scripts.core.attestation.provenance.datetime", Clock):
+            metadata = ProvenanceGenerator().generate(
+                findings_path=subject, profile="fast", tools=[], targets=[]
+            )["predicate"]["runDetails"]["metadata"]
+
+        assert metadata["startedOn"] < metadata["finishedOn"], (
+            f"startedOn {metadata['startedOn']} is not before "
+            f"finishedOn {metadata['finishedOn']}"
+        )
+
+    def test_a_generated_attestation_raises_no_tamper_indicator(self, tmp_path):
+        """The end-to-end form: JMo's own output must verify clean.
+
+        This is the guard that would have caught the missing timestamp, and it
+        is deliberately phrased over the *whole* indicator list rather than one
+        field — a document this project produces should not trip its own
+        detector at all.
+        """
+        from scripts.core.attestation.provenance import ProvenanceGenerator
+        from scripts.core.attestation.tamper_detector import TamperDetector
+
+        subject = tmp_path / "findings.json"
+        subject.write_text('{"findings": []}', encoding="utf-8")
+
+        attestation = tmp_path / "findings.json.att.json"
+        attestation.write_text(
+            json.dumps(
+                ProvenanceGenerator().generate(
+                    findings_path=subject,
+                    profile="balanced",
+                    tools=["trivy"],
+                    targets=["."],
+                )
+            ),
+            encoding="utf-8",
+        )
+
+        indicators = TamperDetector().check_all(
+            subject_path=str(subject), attestation_path=str(attestation)
+        )
+
+        assert indicators == [], [i.description for i in indicators]

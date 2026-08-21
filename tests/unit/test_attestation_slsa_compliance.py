@@ -426,6 +426,8 @@ class TestNonFalsifiableProvenance:
             subject_path=str(subject_path),
             attestation_path=str(attestation_path),
             signature_path=str(bundle_path),
+            cert_identity="you@example.com",
+            cert_oidc_issuer="https://oauth2.sigstore.dev/auth",
         )
 
         # SLSA Level 2: Signature MUST be verifiable
@@ -730,6 +732,8 @@ class TestSLSAComplianceChecker:
             subject_path=str(findings_path),
             attestation_path=str(attestation_path),
             signature_path=str(bundle_path),
+            cert_identity="you@example.com",
+            cert_oidc_issuer="https://oauth2.sigstore.dev/auth",
         )
 
         # SLSA Level 2 COMPLIANCE CHECKLIST:

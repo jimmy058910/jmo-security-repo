@@ -323,7 +323,7 @@ Generate SLSA provenance attestation for scan results.
 | `SUBJECT` | File to attest, e.g., `findings.json` (positional, required) |
 | `--output`, `-o FILE` | Output path (default: `<subject>.att.json`) |
 | `--sign` | Sign attestation with Sigstore keyless signing. In CI (GitHub Actions, GitLab CI), uses automatic OIDC. Locally, opens a browser for OAuth. |
-| `--rekor` | Upload to Rekor transparency log |
+| `--rekor` | Upload to Rekor transparency log. **Requires `--sign`** — signing is what uploads; alone it is a usage error (exit 2) |
 | `--scan-args FILE` | JSON file with original scan arguments |
 | `--tools TOOL [...]` | Tools used in scan (e.g., `trivy semgrep`) |
 | `--human-logs` | Human-friendly logs |
@@ -339,15 +339,31 @@ Verify cryptographic attestation and detect tampering.
 |------|-------------|
 | `SUBJECT` | File to verify, e.g., `findings.json` (positional, required) |
 | `--attestation`, `-a FILE` | Attestation file (default: `<subject>.att.json`) |
-| `--rekor-check` | Verify against Rekor transparency log |
-| `--policy FILE` | Policy file for additional verification rules |
+| `--signature`, `-s FILE` | Sigstore bundle (default: `<attestation>.sigstore.json`) |
+| `--cert-identity IDENTITY` | Expected signer identity in the certificate SAN. **Required to check a signature** |
+| `--cert-oidc-issuer URL` | Expected OIDC issuer in the certificate. **Required to check a signature** |
+| `--rekor-check` | Confirm the bundle's Rekor transparency log entry exists. Requires a signature check; makes a network request |
 | `--human-logs` | Human-friendly logs |
 | `--log-level LEVEL` | Log level: `DEBUG`, `INFO`, `WARN`, `ERROR` |
 
-**Exit codes:**
+**What actually gets checked.** The digest, the attestation's shape and its
+tamper indicators run on every invocation. The signature runs **only** when
+`--cert-identity` and `--cert-oidc-issuer` are both given; otherwise the output
+says `Signature: NOT CHECKED` rather than counting the skip as a pass. Keyless
+signing proves *who* signed, so a bundle checked against no expected signer
+establishes only that somebody signed it.
+
+> `--policy FILE` used to be listed here. `verify()` accepted the argument and
+> referenced it nowhere in its body, so it was a documented verification rule
+> that never ran. It has been removed rather than left silently inert — see
+> [#943](https://github.com/jimmy058910/jmo-security-repo/issues/943) for
+> attestation policy as a feature.
+
+**Exit codes:** the standard three (see [Exit Codes](#exit-codes)).
 
 - `0` - Verification succeeded
-- `1` - Verification failed or tampering detected
+- `1` - Verification ran and failed, or tampering was detected
+- `2` - A path does not exist, or a required flag is missing, so nothing was verified
 
 ---
 

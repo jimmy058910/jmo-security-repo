@@ -9,7 +9,7 @@ Tests the TamperDetector class which detects:
 """
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 from scripts.core.attestation.tamper_detector import (
@@ -1060,3 +1060,182 @@ class TestTamperIndicator:
         assert indicator.indicator_type == TamperIndicatorType.TIMESTAMP_ANOMALY
         assert indicator.description == "Test anomaly"
         assert indicator.evidence == {"key": "value"}
+
+
+class TestMalformedTimestamps:
+    """A timestamp that cannot be parsed cannot be checked.
+
+    The old code let a non-string `startedOn` raise out of the whole detector
+    (`'int' object has no attribute 'replace'`), and quietly `continue`d past
+    malformed strings. Either way the timestamp checks did not run while the
+    verification reported a pass, so this is the tamper-evasion the chunk was
+    opened for.
+    """
+
+    @staticmethod
+    def _write(tmp_path, metadata):
+        path = tmp_path / "attestation.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "_type": "https://in-toto.io/Statement/v0.1",
+                    "subject": [{"name": "findings.json", "digest": {}}],
+                    "predicateType": "https://slsa.dev/provenance/v1",
+                    "predicate": {
+                        "buildDefinition": {},
+                        "runDetails": {"builder": {"id": "x"}, "metadata": metadata},
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        return str(path)
+
+    def test_non_string_started_on_is_critical_not_an_exception(self, tmp_path):
+        detector = TamperDetector()
+
+        indicators = detector.check_timestamp_anomalies(
+            self._write(tmp_path, {"startedOn": 99999999999, "finishedOn": None})
+        )
+
+        criticals = [i for i in indicators if i.severity == TamperSeverity.CRITICAL]
+        assert len(criticals) == 1
+        assert "startedOn" in criticals[0].description
+
+    def test_unparseable_string_timestamp_is_critical(self, tmp_path):
+        detector = TamperDetector()
+
+        indicators = detector.check_timestamp_anomalies(
+            self._write(
+                tmp_path,
+                {
+                    "startedOn": datetime.now(UTC).isoformat(),
+                    "finishedOn": "not-a-timestamp",
+                },
+            )
+        )
+
+        criticals = [i for i in indicators if i.severity == TamperSeverity.CRITICAL]
+        assert len(criticals) == 1
+        assert "finishedOn" in criticals[0].description
+
+    def test_malformed_is_not_also_reported_as_missing(self, tmp_path):
+        """A field that is present but garbage is not a *missing* field."""
+        detector = TamperDetector()
+
+        indicators = detector.check_timestamp_anomalies(
+            self._write(tmp_path, {"startedOn": 1, "finishedOn": 2})
+        )
+
+        assert not [
+            i
+            for i in indicators
+            if i.indicator_type == TamperIndicatorType.MISSING_FIELD
+        ]
+
+    def test_well_formed_timestamps_produce_no_critical(self, tmp_path):
+        """The negative control: the same code path must stay quiet on good input."""
+        detector = TamperDetector()
+        now = datetime.now(UTC)
+
+        indicators = detector.check_timestamp_anomalies(
+            self._write(
+                tmp_path,
+                {
+                    "startedOn": (now - timedelta(minutes=1)).isoformat(),
+                    "finishedOn": now.isoformat(),
+                },
+            )
+        )
+
+        assert not [i for i in indicators if i.severity == TamperSeverity.CRITICAL]
+
+
+class TestToolVersionExtraction:
+    """Rollback detection read `externalParameters.tools` expecting dicts.
+
+    ProvenanceGenerator writes that key as a list of plain *strings* and puts
+    the versions in `resolvedDependencies` under `annotations.version`. The
+    fallback only triggered when `externalParameters.tools` was empty, so on
+    this project's own attestations the check found no versions and returned —
+    **tool rollback could not fire on any attestation JMo produces.**
+    """
+
+    def test_reads_versions_from_resolved_dependencies(self):
+        build_def = {
+            "externalParameters": {"tools": ["trivy", "semgrep"]},
+            "resolvedDependencies": [
+                {"name": "trivy", "annotations": {"version": "0.70.0"}},
+                {"name": "semgrep", "annotations": {"version": "1.172.0"}},
+            ],
+        }
+
+        versions = TamperDetector._tool_versions(
+            TamperDetector._tool_entries(build_def)
+        )
+
+        assert versions == {"trivy": "0.70.0", "semgrep": "1.172.0"}
+
+    def test_reads_versions_from_the_flat_shape_too(self):
+        build_def = {"resolvedDependencies": [{"name": "trivy", "version": "0.70.0"}]}
+
+        versions = TamperDetector._tool_versions(
+            TamperDetector._tool_entries(build_def)
+        )
+
+        assert versions == {"trivy": "0.70.0"}
+
+    def test_unknown_is_not_a_version(self):
+        """`_get_tool_versions` writes {"version": "unknown"} for unregistered
+        tools; treating that as a real version would make every registry miss
+        look like a downgrade."""
+        build_def = {
+            "resolvedDependencies": [
+                {"name": "x", "annotations": {"version": "unknown"}}
+            ]
+        }
+
+        assert (
+            TamperDetector._tool_versions(TamperDetector._tool_entries(build_def)) == {}
+        )
+
+    def test_rollback_fires_on_a_jmo_shaped_attestation(self, tmp_path):
+        """End to end, in the shape ProvenanceGenerator actually emits."""
+
+        def write(name, version):
+            path = tmp_path / name
+            path.write_text(
+                json.dumps(
+                    {
+                        "_type": "https://in-toto.io/Statement/v0.1",
+                        "subject": [],
+                        "predicateType": "https://slsa.dev/provenance/v1",
+                        "predicate": {
+                            "buildDefinition": {
+                                "externalParameters": {"tools": ["trivy"]},
+                                "resolvedDependencies": [
+                                    {
+                                        "name": "trivy",
+                                        "annotations": {"version": version},
+                                    }
+                                ],
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            return str(path)
+
+        indicators = TamperDetector().check_tool_rollback(
+            write("current.att.json", "0.30.0"),
+            [write("historical.att.json", "0.70.0")],
+        )
+
+        assert len(indicators) == 1
+        assert indicators[0].severity == TamperSeverity.CRITICAL
+        assert "trivy" in indicators[0].description
+
+    def test_no_rollback_when_the_version_went_up(self):
+        """Negative control: the check must be capable of staying silent."""
+        assert TamperDetector()._is_version_downgrade("0.70.0", "0.30.0") is False
