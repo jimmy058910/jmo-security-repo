@@ -175,6 +175,49 @@ def test_api_key_lands_in_the_variable_the_server_reads(run_cmd):
     assert "MCP_API_KEY" not in after
 
 
+def test_api_key_flag_actually_populates_api_keys_hashed(run_cmd):
+    """The end-to-end assertion #716 asked for.
+
+    Checking that the flag sets an environment variable is the handoff point,
+    not the outcome. #716's own suggested fix says it plainly: "add a test
+    asserting that the flag results in a non-empty API_KEYS_HASHED -- the
+    current tests set the env var directly, which is exactly why the flag path
+    was never exercised."
+
+    So this drives the whole path: flag -> environment -> module import ->
+    hashed keys. Setting JMO_MCP_API_KEYS by hand would pass even if
+    `cmd_mcp_server` went back to writing MCP_API_KEY.
+    """
+    import hashlib
+    import importlib
+
+    from scripts.jmo_mcp import jmo_server
+
+    run_cmd(api_key="prod-key-123")
+    importlib.reload(jmo_server)
+    try:
+        assert [
+            hashlib.sha256(b"prod-key-123").hexdigest()
+        ] == jmo_server.API_KEYS_HASHED
+    finally:
+        os.environ.pop("JMO_MCP_API_KEYS", None)
+        importlib.reload(jmo_server)
+
+
+def test_without_the_flag_api_keys_hashed_stays_empty(run_cmd):
+    """Negative control: the test above must be able to distinguish the states."""
+    import importlib
+
+    from scripts.jmo_mcp import jmo_server
+
+    run_cmd()
+    importlib.reload(jmo_server)
+    try:
+        assert jmo_server.API_KEYS_HASHED == []
+    finally:
+        importlib.reload(jmo_server)
+
+
 def test_log_level_and_human_logs_are_exported(run_cmd):
     _rc, after = run_cmd(log_level="DEBUG", human_logs=True)
 
