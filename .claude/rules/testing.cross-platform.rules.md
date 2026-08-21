@@ -321,6 +321,31 @@ the whole file**, producing thousands of phantom line changes that bury the real
 edit (7545 lines for a 7-line change; same class as the `update_versions.py` bug
 fixed in #556). Use `write_bytes()`, or `open(..., newline="")`.
 
+**`write_bytes()` alone is not enough — `read_text()` flips the other way.** It
+also opens with `newline=None`, and *universal newlines* converts `\r\n` to `\n`
+**on the way in**. So the obvious application of the paragraph above —
+
+```python
+s = path.read_text(encoding="utf-8")     # CRLF -> LF, silently, right here
+s = s.replace(old, new)
+path.write_bytes(s.encode("utf-8"))      # persists LF for the whole file
+```
+
+— converts a CRLF file to LF while looking like it avoided the problem. Measured
+in chunk 18: four CRLF test files flattened by a patch script written this way,
+**+3661/-2592 raw against +1402/-333 EOL-insensitive — 2259 phantom lines**.
+
+Read bytes on both ends when you are rewriting a file programmatically:
+
+```python
+raw = path.read_bytes()
+s = raw.decode("utf-8")                  # no newline translation
+path.write_bytes(s.replace(old, new).encode("utf-8"))
+```
+
+Or pass `newline=""` to `open()`, which disables translation in both directions.
+The Edit tool does not have this problem; only scripts do.
+
 Detect it before committing — raw and EOL-insensitive counts must match:
 
 ```bash
