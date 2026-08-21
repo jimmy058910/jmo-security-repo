@@ -147,11 +147,22 @@ FLAG_TYPE_CHECKS: list[tuple[list[str], str]] = [
 
 
 def _run_jmo(*args: str, timeout: int = 30) -> subprocess.CompletedProcess:
-    """Run jmo CLI command in subprocess."""
+    """Run jmo CLI command in subprocess.
+
+    `errors="replace"` rather than bare `text=True`: the decode happens in
+    subprocess's reader thread, where a `UnicodeDecodeError` is raised and then
+    swallowed, leaving `stdout` silently truncated. Several checks below now
+    treat empty output as a failure, so a swallowed decode error would surface
+    as a spurious FAIL naming the wrong cause. The codec is deliberately left
+    as the locale default -- pinning it to UTF-8 without also pinning the
+    child's `PYTHONIOENCODING` would turn a clean cp1252 round-trip into
+    mojibake.
+    """
     return subprocess.run(
         [sys.executable, "-m", "scripts.cli.jmo", *args],
         capture_output=True,
         text=True,
+        errors="replace",
         timeout=timeout,
     )
 

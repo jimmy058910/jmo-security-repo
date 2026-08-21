@@ -35,12 +35,26 @@ CLI_REFERENCE = REPO / "docs" / "CLI_REFERENCE.md"
 SUBCOMMANDS = sorted(build_parser()._subparsers._group_actions[0].choices)
 
 
-def _run(*args: str, timeout: int = 60) -> subprocess.CompletedProcess:
+def _run(*args: str, timeout: int = 25) -> subprocess.CompletedProcess:
+    """Run the CLI in a subprocess.
+
+    The timeout is deliberately below pytest-timeout's 60s Windows budget. If
+    pytest's timer wins, its thread method kills the *test* thread but not the
+    child, which becomes an orphan and multiplies across the parametrised cases
+    -- see "CRITICAL: Windows Test Hang Prevention" in
+    .claude/rules/testing.cross-platform.rules.md. Measured, each of these
+    invocations takes well under a second.
+
+    `errors="replace"` because bare `text=True` decodes with the parent's
+    locale codec inside subprocess's reader thread, where the failure is
+    swallowed and the captured output silently truncates.
+    """
     env = dict(os.environ, JMO_NON_INTERACTIVE="1")
     return subprocess.run(
         [sys.executable, "-m", "scripts.cli.jmo", *args],
         capture_output=True,
         text=True,
+        errors="replace",
         timeout=timeout,
         cwd=str(REPO),
         env=env,
