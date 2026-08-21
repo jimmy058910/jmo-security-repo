@@ -55,11 +55,19 @@ def _hint(message: str) -> None:
     print(message, file=sys.stderr)
 
 
-def _report_policy_not_found(policy_name: str, available: list[str]) -> None:
-    """Report an unknown policy name together with the names that would work."""
+def _report_policy_not_found(policy_name: str, available: list[str]) -> int:
+    """Report an unknown policy name together with the names that would work.
+
+    Returns the exit code to use: **2**, a usage error. Naming a policy that
+    does not exist means nothing was evaluated, and that must be
+    distinguishable from a policy that ran and failed. Both used to return 1
+    (#925), so a CI script could not tell a blocked release from a typo -- and
+    the typo is the dangerous one, because it looks like a working gate.
+    """
     logger.error(f"Policy not found: {policy_name}")
     if available:
         _hint(f"Available policies: {', '.join(available)}")
+    return 2
 
 
 def get_builtin_policies_dir() -> Path:
@@ -201,8 +209,7 @@ def cmd_policy_validate(args: argparse.Namespace) -> int:
     # Find policy
     policies = discover_policies()
     if policy_name not in policies:
-        _report_policy_not_found(policy_name, sorted(policies))
-        return 1
+        return _report_policy_not_found(policy_name, sorted(policies))
 
     policy_path = policies[policy_name]
 
@@ -228,21 +235,22 @@ def cmd_policy_test(args: argparse.Namespace) -> int:
         args: Parsed command-line arguments (requires args.policy, args.findings_file)
 
     Returns:
-        Exit code (0 = passed, 1 = failed/error)
+        Exit code (0 = passed, 1 = policy failed or runtime error,
+        2 = usage error). See "Exit Codes" in docs/CLI_REFERENCE.md.
     """
     policy_name = args.policy
     findings_file = Path(args.findings_file)
 
-    # Validate findings file
+    # Validate findings file. A path that does not exist is a usage error: no
+    # policy was evaluated, so this must not look like a failing gate (#925).
     if not findings_file.exists():
         logger.error(f"Findings file not found: {findings_file}")
-        return 1
+        return 2
 
     # Find policy
     policies = discover_policies()
     if policy_name not in policies:
-        _report_policy_not_found(policy_name, sorted(policies))
-        return 1
+        return _report_policy_not_found(policy_name, sorted(policies))
 
     policy_path = policies[policy_name]
 
@@ -306,8 +314,7 @@ def cmd_policy_show(args: argparse.Namespace) -> int:
     # Find policy
     policies = discover_policies()
     if policy_name not in policies:
-        _report_policy_not_found(policy_name, sorted(policies))
-        return 1
+        return _report_policy_not_found(policy_name, sorted(policies))
 
     policy_path = policies[policy_name]
 
@@ -371,7 +378,8 @@ def cmd_policy_install(args: argparse.Namespace) -> int:
         if available:
             _hint(f"Available builtin policies: {', '.join(sorted(available))}")
 
-        return 1
+        # Usage error: nothing was installed because the name does not exist.
+        return 2
 
     # Create user directory if needed
     user_dir = get_user_policies_dir()
@@ -421,7 +429,7 @@ def cmd_policy(args: argparse.Namespace) -> int:
             return cmd_policy_install(args)
         else:
             logger.error(f"Unknown policy command: {args.policy_command}")
-            return 1
+            return 2
     except OPANotFoundException as exc:
         # Four of the five subcommands build a PolicyEngine, whose constructor
         # calls _verify_opa_available() and raises this. Nothing caught it and

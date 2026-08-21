@@ -296,7 +296,9 @@ def test_cmd_policy_validate_policy_not_found(capsys):
     with patch("scripts.cli.policy_commands.discover_policies", return_value={}):
         rc = cmd_policy_validate(args)
 
-        assert rc == 1
+        assert (
+            rc == 2
+        )  # usage error, not a verdict: see docs/CLI_REFERENCE.md "Exit Codes" (#925)
 
 
 def test_cmd_policy_validate_valid_policy(tmp_path, capsys):
@@ -358,7 +360,9 @@ def test_cmd_policy_test_findings_file_not_found():
     args = argparse.Namespace(policy="test", findings_file="nonexistent.json")
 
     rc = cmd_policy_test(args)
-    assert rc == 1
+    assert (
+        rc == 2
+    )  # usage error, not a verdict: see docs/CLI_REFERENCE.md "Exit Codes" (#925)
 
 
 def test_cmd_policy_test_policy_not_found(tmp_path):
@@ -370,7 +374,9 @@ def test_cmd_policy_test_policy_not_found(tmp_path):
 
     with patch("scripts.cli.policy_commands.discover_policies", return_value={}):
         rc = cmd_policy_test(args)
-        assert rc == 1
+        assert (
+            rc == 2
+        )  # usage error, not a verdict: see docs/CLI_REFERENCE.md "Exit Codes" (#925)
 
 
 def test_cmd_policy_test_passed(tmp_path, capsys):
@@ -480,7 +486,9 @@ def test_cmd_policy_show_policy_not_found():
 
     with patch("scripts.cli.policy_commands.discover_policies", return_value={}):
         rc = cmd_policy_show(args)
-        assert rc == 1
+        assert (
+            rc == 2
+        )  # usage error, not a verdict: see docs/CLI_REFERENCE.md "Exit Codes" (#925)
 
 
 def test_cmd_policy_show_with_metadata(tmp_path, capsys):
@@ -567,7 +575,9 @@ def test_cmd_policy_install_builtin_not_found(tmp_path):
         "scripts.cli.policy_commands.get_builtin_policies_dir", return_value=builtin_dir
     ):
         rc = cmd_policy_install(args)
-        assert rc == 1
+        assert (
+            rc == 2
+        )  # usage error, not a verdict: see docs/CLI_REFERENCE.md "Exit Codes" (#925)
 
 
 def test_cmd_policy_install_success(tmp_path, capsys):
@@ -727,7 +737,9 @@ def test_cmd_policy_unknown_command():
     args = argparse.Namespace(policy_command="unknown")
 
     rc = cmd_policy(args)
-    assert rc == 1
+    assert (
+        rc == 2
+    )  # usage error, not a verdict: see docs/CLI_REFERENCE.md "Exit Codes" (#925)
 
 
 # ============================================================================
@@ -807,7 +819,9 @@ def test_unknown_policy_name_lists_the_available_ones(tmp_path, capsys):
     ):
         rc = cmd_policy_validate(args)
 
-    assert rc == 1
+    assert (
+        rc == 2
+    )  # usage error, not a verdict: see docs/CLI_REFERENCE.md "Exit Codes" (#925)
     err = capsys.readouterr().err
     assert "zero-secrets" in err, err
     assert "owasp-top-10" in err, err

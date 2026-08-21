@@ -9,31 +9,47 @@ import subprocess
 import sys
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+from scripts.cli.jmo import build_parser
 from scripts.core.validators import CategoryResult, CheckStatus
 from scripts.core.validators.cli_validator import (
     _EXIT_CODE_COUNT,
+    _FIXED_QUICK_COUNT,
     _FULL_TIER_COUNT,
     _INVALID_FLAG_COUNT,
-    _MAIN_HELP_COUNT,
     _MUTEX_COUNT,
     _REQUIRED_ARG_COUNT,
-    _SUB_SUBCOMMAND_COUNT,
     _TYPE_CHECK_COUNT,
     _VERSION_CHECK_COUNT,
     FLAG_TYPE_CHECKS,
     INVALID_FLAG_COMMANDS,
-    MAIN_SUBCOMMANDS,
     MUTUALLY_EXCLUSIVE,
     REQUIRED_ARG_COMMANDS,
-    SUB_SUBCOMMANDS,
     _help_check,
     _invalid_flag_check,
     _mutex_check,
     _required_arg_check,
     _run_jmo,
     _type_check,
+    derive_surface,
+    set_cli_surface,
     validate_cli,
 )
+
+# The surface the parser actually exposes. Every expectation below is computed
+# from this rather than restated: the previous version of this file listed 13
+# top-level subcommands as its `expected` set -- the same 13 the validator had
+# drifted to (#783) -- so it agreed with the bug instead of catching it.
+MAIN_SUBCOMMANDS, SUB_SUBCOMMANDS = derive_surface(build_parser())
+
+
+@pytest.fixture(autouse=True)
+def _inject_cli_surface():
+    """`validate_cli` reads an injected surface; the CLI layer normally supplies it."""
+    set_cli_surface(MAIN_SUBCOMMANDS, SUB_SUBCOMMANDS)
+    yield
+
 
 # ---------------------------------------------------------------------------
 # Mock helpers
@@ -111,112 +127,68 @@ def _make_mixed_mock(
 class TestConstants:
     """Verify the check group constants are correctly defined."""
 
-    def test_main_subcommands_count(self):
-        assert _MAIN_HELP_COUNT == 13
-        assert len(MAIN_SUBCOMMANDS) == 13
+    def test_main_subcommands_covers_every_parser_subcommand(self):
+        """The validator must check every subcommand the parser defines.
 
-    def test_main_subcommands_content(self):
-        expected = {
-            "wizard",
-            "scan",
-            "report",
-            "ci",
+        This used to assert `== 13` against a hand-listed set. The parser had
+        20, and the seven missing -- adapters, attest, balanced, fast, full,
+        setup, verify -- were exactly the ones nobody had added to either list
+        (#783). Restating the list here made the suite a mirror of the mirror.
+        """
+        parser_names = set(build_parser()._subparsers._group_actions[0].choices)
+        assert set(MAIN_SUBCOMMANDS) == parser_names
+        # Meta-guard: a derivation that silently returns nothing passes every
+        # assertion built on it.
+        assert len(MAIN_SUBCOMMANDS) >= 20, sorted(MAIN_SUBCOMMANDS)
+        for known in ("scan", "report", "adapters", "attest", "verify", "setup"):
+            assert known in MAIN_SUBCOMMANDS
+
+    def test_main_subcommands_includes_the_seven_that_had_drifted(self):
+        """Negative control: name the seven #783 was about.
+
+        If the derivation regresses to the old hard-coded list, the assertion
+        above still passes when both sides regress together. These seven cannot.
+        """
+        for missed in (
+            "adapters",
+            "attest",
+            "balanced",
+            "fast",
+            "full",
+            "setup",
+            "verify",
+        ):
+            assert missed in MAIN_SUBCOMMANDS
+
+    def test_sub_subcommands_match_the_parser(self):
+        """Every parent with children is covered, with the children it has."""
+        top = build_parser()._subparsers._group_actions[0].choices
+        for parent, children in SUB_SUBCOMMANDS.items():
+            nested = top[parent]._subparsers._group_actions[0].choices
+            assert set(children) == set(nested), parent
+
+        # Parents with nested commands must all be present.
+        expected_parents = {
+            name
+            for name, sub in top.items()
+            if getattr(sub, "_subparsers", None) is not None
+        }
+        assert set(SUB_SUBCOMMANDS) == expected_parents
+        assert expected_parents >= {
             "tools",
             "history",
-            "trends",
-            "diff",
+            "build",
             "policy",
             "schedule",
-            "build",
-            "validate",
-            "mcp-server",
-        }
-        assert set(MAIN_SUBCOMMANDS) == expected
-
-    def test_sub_subcommand_parents(self):
-        assert "tools" in SUB_SUBCOMMANDS
-        assert "history" in SUB_SUBCOMMANDS
-        assert "build" in SUB_SUBCOMMANDS
-        assert "policy" in SUB_SUBCOMMANDS
-        assert "schedule" in SUB_SUBCOMMANDS
-        assert "trends" in SUB_SUBCOMMANDS
-        assert "adapters" in SUB_SUBCOMMANDS
-
-    def test_tools_subcommands(self):
-        expected = {
-            "check",
-            "install",
-            "list",
-            "clean",
-            "debug",
-            "update",
-            "outdated",
-            "uninstall",
-        }
-        assert set(SUB_SUBCOMMANDS["tools"]) == expected
-
-    def test_history_subcommands(self):
-        expected = {
-            "list",
-            "show",
-            "stats",
-            "prune",
-            "query",
-            "export",
-            "store",
-            "diff",
             "trends",
-            "optimize",
-            "migrate",
-            "verify",
-            "repair",
+            "adapters",
         }
-        assert set(SUB_SUBCOMMANDS["history"]) == expected
-
-    def test_trends_subcommands(self):
-        expected = {
-            "analyze",
-            "show",
-            "regressions",
-            "score",
-            "compare",
-            "insights",
-            "explain",
-            "developers",
-        }
-        assert set(SUB_SUBCOMMANDS["trends"]) == expected
-
-    def test_policy_subcommands(self):
-        expected = {"list", "validate", "test", "show", "install"}
-        assert set(SUB_SUBCOMMANDS["policy"]) == expected
-
-    def test_schedule_subcommands(self):
-        expected = {
-            "create",
-            "list",
-            "get",
-            "update",
-            "export",
-            "install",
-            "uninstall",
-            "delete",
-            "validate",
-        }
-        assert set(SUB_SUBCOMMANDS["schedule"]) == expected
-
-    def test_build_subcommands(self):
-        expected = {"validate", "test"}
-        assert set(SUB_SUBCOMMANDS["build"]) == expected
-
-    def test_adapters_subcommands(self):
-        expected = {"list", "validate"}
-        assert set(SUB_SUBCOMMANDS["adapters"]) == expected
 
     def test_sub_subcommand_total_count(self):
         total = sum(len(v) for v in SUB_SUBCOMMANDS.values())
-        assert total == _SUB_SUBCOMMAND_COUNT
-        # 8 + 13 + 2 + 5 + 9 + 8 + 2 = 47
-        assert total == 47
+        # No literal: the count follows the parser. A floor catches a
+        # derivation that quietly found nothing.
+        assert total >= 47, f"nested surface shrank to {total}"
 
     def test_required_arg_count(self):
         assert len(REQUIRED_ARG_COMMANDS) == _REQUIRED_ARG_COUNT
@@ -253,21 +225,18 @@ class TestQuickTierCheckCount:
     """Verify the quick tier produces the expected number of checks."""
 
     def test_quick_tier_total(self):
+        """The count must come from the parser, not from a literal.
+
+        This asserted `expected == 94` and then checked the validator produced
+        94 -- both sides derived from the same stale `MAIN_SUBCOMMANDS`, so the
+        pair was self-consistent and wrong. The help-group sizes now come from
+        the parser.
+        """
         expected = (
-            _MAIN_HELP_COUNT  # 13 main --help
-            + _SUB_SUBCOMMAND_COUNT  # 47 sub-subcommand --help
-            + _REQUIRED_ARG_COUNT  # 13 required arg
-            + _INVALID_FLAG_COUNT  # 6 invalid flag
-            + _MUTEX_COUNT  # 2 mutex
-            + _TYPE_CHECK_COUNT  # 6 type checks
-            + _VERSION_CHECK_COUNT  # 3 version
-            + _EXIT_CODE_COUNT  # 4 exit codes
+            len(MAIN_SUBCOMMANDS)
+            + sum(len(v) for v in SUB_SUBCOMMANDS.values())
+            + _FIXED_QUICK_COUNT
         )
-        # 13 + 47 + 13 + 6 + 2 + 6 + 3 + 4 = 94
-        # (more than 37 from the task spec because the actual CLI has more
-        #  sub-subcommands than the spec listed)
-        assert expected == 94
-        # Verify the math by running the validator
         with patch(
             "scripts.core.validators.cli_validator.subprocess"
         ) as mock_subprocess:
@@ -277,6 +246,38 @@ class TestQuickTierCheckCount:
             mock_subprocess.TimeoutExpired = subprocess.TimeoutExpired
             result = validate_cli("quick")
             assert result.total == expected
+
+    def test_full_tier_adds_exactly_the_full_checks(self):
+        with patch(
+            "scripts.core.validators.cli_validator.subprocess"
+        ) as mock_subprocess:
+            mock_subprocess.run.return_value = _mock_completed(
+                returncode=0, stdout="JMo Security v1.0.2"
+            )
+            mock_subprocess.TimeoutExpired = subprocess.TimeoutExpired
+            quick = validate_cli("quick").total
+            full = validate_cli("full").total
+        assert full - quick == _FULL_TIER_COUNT
+
+    def test_missing_surface_errors_rather_than_reporting_an_empty_pass(self):
+        """A category that checked nothing must not read as a pass.
+
+        Without injection the loop over subcommands would simply not execute,
+        producing `[0/0 PASS]` -- the same shape as `--category bogus` printing
+        `Verdict: GO` over zero checks.
+        """
+        import scripts.core.validators.cli_validator as cv
+
+        saved = cv._CLI_SURFACE
+        try:
+            cv._CLI_SURFACE = None
+            result = validate_cli("quick")
+        finally:
+            cv._CLI_SURFACE = saved
+
+        assert result.total == 1
+        assert result.errored == 1
+        assert result.passed == 0
 
 
 # ---------------------------------------------------------------------------
@@ -529,8 +530,12 @@ class TestFullTier:
         with patch(
             "scripts.core.validators.cli_validator.subprocess"
         ) as mock_subprocess:
+            # "Repository root:" is what a `jmo build validate` that actually
+            # reached the repository prints; `_full_build_validate` now requires
+            # it, because exit code alone could not tell a real run from the
+            # "cannot find repository root" failure it passed for seven releases.
             mock_subprocess.run.return_value = _mock_completed(
-                returncode=0, stdout="output text"
+                returncode=0, stdout="Repository root: /repo\noutput text"
             )
             mock_subprocess.TimeoutExpired = subprocess.TimeoutExpired
             result = validate_cli("full")
@@ -1089,14 +1094,57 @@ class TestFullTierEdgeCases:
             _full_tools_check()
             assert mock_run.call_args.kwargs["timeout"] == _TOOLS_CHECK_TIMEOUT
 
-    def test_full_diff_auto_accepts_rc_two(self):
-        """diff --auto with rc=2 (no git context) is acceptable."""
+    def test_full_diff_auto_rejects_rc_two(self):
+        """rc=2 is argparse's usage error, and must not pass.
+
+        This test asserted the opposite -- that exit 2 "is acceptable". A check
+        that accepts 2 still passes after the flag it exercises is deleted from
+        the parser, so it could only ever fail on a hard crash. That made it
+        zero coverage while counting as one passing check.
+        """
         from scripts.core.validators.cli_validator import _full_diff_auto
 
         with patch("scripts.core.validators.cli_validator._run_jmo") as mock_run:
             mock_run.return_value = _mock_completed(returncode=2, stderr="no context")
             result = _full_diff_auto()
+            assert result.status == CheckStatus.FAIL
+
+    def test_full_diff_auto_accepts_rc_one(self):
+        """rc=1 means it ran and found nothing to compare -- still a real run."""
+        from scripts.core.validators.cli_validator import _full_diff_auto
+
+        with patch("scripts.core.validators.cli_validator._run_jmo") as mock_run:
+            mock_run.return_value = _mock_completed(returncode=1, stdout="no scans")
+            result = _full_diff_auto()
             assert result.status == CheckStatus.PASS
+
+    def test_full_build_validate_fails_when_repo_root_never_found(self):
+        """The regression guard for #303.
+
+        `jmo build` exited 1 with "Cannot find repository root" on every
+        invocation from v1.0.2 to v1.0.8, and this check reported PASS on all of
+        them because it only looked at `returncode in (0, 1)`.
+        """
+        from scripts.core.validators.cli_validator import _full_build_validate
+
+        with patch("scripts.core.validators.cli_validator._run_jmo") as mock_run:
+            mock_run.return_value = _mock_completed(
+                returncode=1,
+                stderr="Error: Cannot find repository root (looking for Dockerfile ...)",
+            )
+            result = _full_build_validate()
+            assert result.status == CheckStatus.FAIL
+            assert "repository root" in result.message
+
+    def test_full_build_validate_skips_without_docker(self):
+        from scripts.core.validators.cli_validator import _full_build_validate
+
+        with patch("scripts.core.validators.cli_validator._run_jmo") as mock_run:
+            mock_run.return_value = _mock_completed(
+                returncode=1, stderr="Error: Docker not found in PATH"
+            )
+            result = _full_build_validate()
+            assert result.status == CheckStatus.SKIP
 
     def test_full_adapters_list_fails_on_empty_output(self):
         """adapters list with rc=0 but empty output should fail."""

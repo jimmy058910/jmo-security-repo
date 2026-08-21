@@ -696,6 +696,39 @@ class TestSecurityChecks:
         assert result is None
 
     @patch("scripts.core.validators.release_validator._run_cmd")
+    def test_no_secrets_excludes_the_pytest_split_durations_index(self, mock_cmd):
+        """`.test_durations` is a generated index of `tests/`, already excluded.
+
+        It holds pytest node IDs, and one of them is the parametrised case of
+        `test_sanitize_tokens` -- a test *about* AWS-key redaction, whose
+        parameter is AWS's published example key. Adding the file to `dev` (to
+        balance the CI shards) turned the release-blocking `no-secret-patterns`
+        check red, and it stayed red unnoticed because `jmo validate` runs in
+        exactly one place: `release.yml`'s `pre-release-check`, on a tag.
+        """
+        mock_cmd.return_value = MagicMock(returncode=0, stdout=".test_durations\n")
+        with (
+            patch.object(Path, "is_file", return_value=True),
+            patch.object(
+                Path,
+                "read_text",
+                return_value='{"tests/x.py::t[AKIA" + "IOSFODNN7EXAMPLE]": 0.1}',
+            ),
+        ):
+            assert _check_no_secrets() is None
+
+    def test_the_real_tree_has_no_secret_findings(self):
+        """No mocks: the shipped gate must be green on a clean checkout.
+
+        Every other test here fabricates `git ls-files` output, so all of them
+        passed while the real repository failed the check.
+        """
+        result = _check_no_secrets()
+        assert (
+            result is None or result.status != CheckStatus.FAIL
+        ), f"{getattr(result, 'message', '')}: {getattr(result, 'details', '')}"
+
+    @patch("scripts.core.validators.release_validator._run_cmd")
     def test_no_secrets_found(self, mock_cmd):
         mock_cmd.return_value = MagicMock(returncode=0, stdout="config.py\n")
         with (

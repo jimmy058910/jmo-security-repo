@@ -1469,14 +1469,17 @@ class TestCmdHistory:
         assert result == 0
 
     def test_router_unknown_subcommand(self, capsys):
-        """Test error with unknown subcommand."""
+        """An unknown subcommand is a usage error (2), not a verdict (1).
+
+        See "Exit Codes" in docs/CLI_REFERENCE.md; #925.
+        """
 
         class Args:
             history_command = "unknown"
 
         result = cmd_history(Args())
 
-        assert result == 1
+        assert result == 2
         captured = capsys.readouterr()
         assert "Unknown history subcommand" in captured.err
 

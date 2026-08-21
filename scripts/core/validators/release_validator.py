@@ -653,6 +653,21 @@ def _check_gitignore() -> CheckResult:
 # ---------------------------------------------------------------------------
 
 # Paths excluded from secret scanning (test fixtures, docs, dev scripts, etc.)
+#
+# `.test_durations` is pytest-split's timing index: a generated map of pytest
+# node IDs to floats, derived entirely from `tests/`, which is already excluded.
+# It is tracked because a missing one unbalances the CI shards. A parametrized
+# case in `tests/unit/test_validation.py::test_sanitize_tokens` -- a test whose
+# subject is AWS-key redaction -- puts AWS's own published example key (the
+# "...7EXAMPLE" one from their docs) in its node ID, so the file matched the AWS
+# pattern. The literal is not repeated here: this check scans this file too.
+#
+# The consequence was not cosmetic: `release.yml` runs `jmo validate --tier
+# quick --json` in `pre-release-check` and fails the release on a non-zero exit,
+# with `pypi-publish` gated behind it. Adding `.test_durations` to `dev` turned
+# that gate red, and it stayed red and unnoticed because the gate only runs on a
+# tag. The message a maintainer would have got is "Potential secrets in 1
+# file(s)" -- the filename lives in `details`, which nothing rendered until now.
 _SECRETS_EXCLUDED_PREFIXES = (
     "tests/",
     "docs/",
@@ -660,6 +675,7 @@ _SECRETS_EXCLUDED_PREFIXES = (
     "scripts/dev/",
     ".github/",
     ".claude/",
+    ".test_durations",
 )
 
 # Secret patterns to scan for
