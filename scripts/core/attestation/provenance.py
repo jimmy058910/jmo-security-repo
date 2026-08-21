@@ -137,7 +137,11 @@ class ProvenanceGenerator:
             sha256=digests["sha256"], sha384=digests["sha384"], sha512=digests["sha512"]
         )
 
-        subject = Subject(name="findings.json", digest=digest)
+        # The subject's own filename, not the literal "findings.json" — an
+        # attestation over report.sarif that names findings.json does not
+        # identify what it attests. `.name` keeps it a bare filename, which is
+        # what check_suspicious_patterns expects (no "..", no leading "/").
+        subject = Subject(name=findings_path.name, digest=digest)
 
         return [subject]
 
@@ -217,8 +221,8 @@ class ProvenanceGenerator:
         profile: str,
         tools: list[str],
         targets: list[str],
-        threads: int = 4,
-        timeout: int = 600,
+        threads: int | None = None,
+        timeout: int | None = None,
     ) -> BuildDefinition:
         """Create build definition with scan parameters.
 
@@ -226,8 +230,8 @@ class ProvenanceGenerator:
             profile: Scan profile (fast, balanced, deep)
             tools: List of tools used
             targets: List of scan targets
-            threads: Number of parallel threads
-            timeout: Timeout in seconds
+            threads: Number of parallel threads, if the scan reported one
+            timeout: Timeout in seconds, if the scan reported one
 
         Returns:
             BuildDefinition object
@@ -239,6 +243,16 @@ class ProvenanceGenerator:
         # Get tool version information for resolvedDependencies
         resolved_deps = self._get_tool_versions(tools)
 
+        # Omit rather than invent. These defaulted to 4 and 600, so every
+        # attestation asserted a thread count and a timeout that nobody had
+        # measured — a false statement in the one document whose whole purpose
+        # is to be believed about how the scan ran.
+        internal: dict[str, Any] = {"version": self.jmo_version}
+        if threads is not None:
+            internal["threads"] = threads
+        if timeout is not None:
+            internal["timeout"] = timeout
+
         return BuildDefinition(
             buildType=build_type_with_slsa,
             externalParameters={
@@ -246,11 +260,7 @@ class ProvenanceGenerator:
                 "tools": tools,
                 "targets": targets,
             },
-            internalParameters={
-                "version": self.jmo_version,
-                "threads": threads,
-                "timeout": timeout,
-            },
+            internalParameters=internal,
             resolvedDependencies=resolved_deps,
         )
 
@@ -324,8 +334,8 @@ class ProvenanceGenerator:
         profile: str,
         tools: list[str],
         targets: list[str],
-        threads: int = 4,
-        timeout: int = 600,
+        threads: int | None = None,
+        timeout: int | None = None,
         invocation_id: str | None = None,
         started_on: str | None = None,
         finished_on: str | None = None,
@@ -337,11 +347,12 @@ class ProvenanceGenerator:
             profile: Scan profile name
             tools: List of tools used in scan
             targets: List of scan targets
-            threads: Number of parallel threads (default: 4)
-            timeout: Timeout in seconds (default: 600)
+            threads: Number of parallel threads, omitted from the document when
+                the caller does not know it
+            timeout: Timeout in seconds, omitted when the caller does not know it
             invocation_id: Unique scan ID (auto-generated if None)
             started_on: ISO 8601 start timestamp (current time if None)
-            finished_on: ISO 8601 finish timestamp (optional)
+            finished_on: ISO 8601 finish timestamp (set on completion if None)
 
         Returns:
             Complete in-toto statement with SLSA provenance (as dict)
@@ -358,9 +369,15 @@ class ProvenanceGenerator:
             timeout=timeout,
         )
 
-        # Create run details
+        # Create run details. finishedOn was never supplied by any caller, so
+        # every attestation JMo has produced omitted it — and the tamper
+        # detector's "Missing required timestamp fields" therefore fired on
+        # every verification of a perfectly good document. Stamp the moment
+        # generation completes: that is a fact this code actually knows.
         run_details = self._create_run_details(
-            invocation_id=invocation_id, started_on=started_on, finished_on=finished_on
+            invocation_id=invocation_id,
+            started_on=started_on,
+            finished_on=finished_on or datetime.now(UTC).isoformat(),
         )
 
         # Create SLSA provenance

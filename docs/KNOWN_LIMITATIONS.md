@@ -19,12 +19,38 @@ assuming something here is unfixable.
 `jmo attest --sign` uses Sigstore keyless signing, which authenticates through an
 OIDC redirect. In CI (GitHub Actions, GitLab CI) the ambient OIDC token is picked
 up automatically and signing works unattended. Run locally, it opens a browser
-for the OAuth redirect — so it fails on a headless server, over SSH, or inside a
-container with a `RuntimeError` naming the missing browser.
+for the OAuth redirect — so on a headless server, over SSH, or inside a container
+it fails with sigstore's own error about being unable to complete the flow.
+
+> This paragraph used to promise "a `RuntimeError` naming the missing browser".
+> That exception lives in `SigstoreSigner._get_local_oidc_token`, which
+> **nothing calls** — `sign()` shells out to `sigstore sign` and lets sigstore
+> run its own OIDC. The documented failure mode belonged to unreachable code.
 
 **What to do:** sign in CI, where the token is ambient. If you must sign on a
 headless machine, run the command somewhere with a browser and transfer the
 resulting bundle.
+
+---
+
+### Verifying a signature requires naming the signer you expect
+
+`jmo verify` checks the subject digest, the attestation's shape and its tamper
+indicators on every run. It checks the **signature** only when you pass both
+`--cert-identity` and `--cert-oidc-issuer`; otherwise it prints
+`Signature: NOT CHECKED` and says so in the output.
+
+That is deliberate. Keyless signing proves *who* signed, so a bundle validated
+without an expected signer establishes only that somebody signed it — which is
+not a security property, and reporting it as "verified" would be worse than
+reporting nothing. A bundle sitting next to an attestation is not evidence on
+its own.
+
+```bash
+jmo verify results/summaries/findings.json \
+  --cert-identity you@example.com \
+  --cert-oidc-issuer https://oauth2.sigstore.dev/auth
+```
 
 ---
 

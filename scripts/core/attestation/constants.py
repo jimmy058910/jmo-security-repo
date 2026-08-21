@@ -45,6 +45,11 @@ ATTESTATION_TIMEOUT = 30
 VERIFICATION_TIMEOUT = 20
 REKOR_TIMEOUT = 10
 
+# Keyless signing is interactive outside CI: sigstore opens a browser and waits
+# for the OAuth redirect to come back. ATTESTATION_TIMEOUT (30s) killed that
+# round trip before a human could finish it.
+SIGNING_TIMEOUT = 300
+
 # Error codes
 ERROR_CODES = {
     "INVALID_SUBJECT": 101,

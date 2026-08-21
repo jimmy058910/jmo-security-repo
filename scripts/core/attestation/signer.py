@@ -10,10 +10,12 @@ This module implements keyless signing using Sigstore infrastructure:
 Implementation uses the sigstore CLI tool for simplicity and reliability.
 """
 
+import importlib.util
 import json
 import logging
 import os
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -27,9 +29,31 @@ from .constants import (
     REKOR_TIMEOUT,
     REKOR_URL_PRODUCTION,
     REKOR_URL_STAGING,
+    SIGNING_TIMEOUT,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def require_sigstore() -> None:
+    """Fail early, and by name, when sigstore is not available.
+
+    Signing and signature verification shell out to ``sys.executable -m
+    sigstore``. If the module is absent the subprocess exits 1 with
+    "No module named sigstore" — which, routed through a verifier, reads
+    exactly like "this signature is bad". Those must never be the same
+    answer, so the absent-tool case is raised distinctly before any
+    subprocess runs.
+
+    Raises:
+        RuntimeError: If sigstore cannot be imported by this interpreter.
+    """
+    if importlib.util.find_spec("sigstore") is None:
+        raise RuntimeError(
+            "sigstore is not installed for this interpreter "
+            f"({sys.executable}). Install it with `uv sync --group dev`, or "
+            "`pip install sigstore`, then retry."
+        )
 
 
 class SigstoreSigner:
@@ -208,11 +232,17 @@ class SigstoreSigner:
         if not attestation_path_obj.exists():
             raise FileNotFoundError(f"Attestation file not found: {attestation_path}")
 
+        require_sigstore()
+
         try:
             logger.info(f"Signing attestation: {attestation_path}")
 
-            # Build sigstore CLI command
-            cmd = ["python3", "-m", "sigstore", "sign"]
+            # Build sigstore CLI command. sys.executable, never "python3":
+            # a bare "python3" binds to whatever is first on PATH, which need
+            # not be — and on Windows usually is not — the interpreter running
+            # JMo. Measured: it resolved to an unrelated venv that answered
+            # "No module named sigstore" while this venv had sigstore 4.5.0.
+            cmd = [sys.executable, "-m", "sigstore", "sign"]
 
             # Add staging flag if configured
             if self.use_staging:
@@ -233,13 +263,15 @@ class SigstoreSigner:
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=ATTESTATION_TIMEOUT,
+                # Not ATTESTATION_TIMEOUT: keyless signing outside CI walks a
+                # human through a browser OAuth redirect, which 30 seconds
+                # cannot cover.
+                timeout=SIGNING_TIMEOUT,
                 check=False,
             )
 
             if result.returncode != 0:
-                logger.error(f"Sigstore signing failed: {result.stderr}")
-                raise Exception(f"Sigstore signing failed: {result.stderr}")
+                raise RuntimeError(f"Sigstore signing failed: {result.stderr}")
 
             logger.info(f"Signature bundle saved: {bundle_path}")
 

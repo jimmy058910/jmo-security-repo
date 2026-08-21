@@ -184,6 +184,30 @@ class TamperDetector:
 
         now = datetime.now(UTC)
 
+        # A timestamp that cannot be parsed cannot be checked, and an unchecked
+        # field must not read as a checked one. The old code let a non-string
+        # raise out of the whole detector (the verifier then swallowed it and
+        # passed) and quietly skipped malformed strings. Both are reported now.
+        malformed = False
+        for field_name, value in (
+            ("startedOn", started_on),
+            ("finishedOn", finished_on),
+        ):
+            if value is not None and self._parse_timestamp(value) is None:
+                malformed = True
+                indicators.append(
+                    TamperIndicator(
+                        severity=TamperSeverity.CRITICAL,
+                        indicator_type=TamperIndicatorType.TIMESTAMP_ANOMALY,
+                        description=f"Unparseable {field_name} timestamp",
+                        evidence={field_name: repr(value)},
+                    )
+                )
+        # Downstream checks below index into these as ISO strings; drop any
+        # value that would not survive that so they operate on real timestamps.
+        started_on = started_on if self._parse_timestamp(started_on) else None
+        finished_on = finished_on if self._parse_timestamp(finished_on) else None
+
         # Check for future timestamps
         if started_on:
             try:
@@ -289,8 +313,10 @@ class TamperDetector:
             except ValueError as e:
                 logger.warning(f"Invalid finishedOn timestamp: {e}")
 
-        # Check for missing timestamps
-        if not started_on or not finished_on:
+        # Check for missing timestamps. Skipped when a field was present but
+        # malformed — that is already reported above, and calling it "missing"
+        # would misdescribe it.
+        if not malformed and (not started_on or not finished_on):
             indicators.append(
                 TamperIndicator(
                     severity=TamperSeverity.MEDIUM,
@@ -304,6 +330,24 @@ class TamperDetector:
             )
 
         return indicators
+
+    @staticmethod
+    def _parse_timestamp(value: Any) -> datetime | None:
+        """Parse an ISO 8601 timestamp, returning None for anything unusable.
+
+        Args:
+            value: Candidate timestamp from an attestation
+
+        Returns:
+            The parsed datetime, or None if value is absent, not a string, or
+            not ISO 8601.
+        """
+        if not isinstance(value, str):
+            return None
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
 
     def check_builder_consistency(
         self, attestation_path: str, historical_attestations: list[str]
@@ -435,14 +479,7 @@ class TamperDetector:
                 Path(attestation_path).read_text(encoding="utf-8")
             )
             build_def = current_data.get("predicate", {}).get("buildDefinition", {})
-
-            # Try externalParameters.tools first (ProvenanceGenerator format)
-            current_params = build_def.get("externalParameters", {})
-            current_tools = current_params.get("tools", [])
-
-            # Fallback to resolvedDependencies (alternative format)
-            if not current_tools:
-                current_tools = build_def.get("resolvedDependencies", [])
+            current_tools = self._tool_entries(build_def)
         except (
             Exception
         ) as e:  # Acceptable: file scanning safety — skip unreadable attestations
@@ -452,14 +489,7 @@ class TamperDetector:
         if not current_tools:
             return indicators  # No tools to check
 
-        # Build current tool versions dict
-        current_versions: dict[str, str] = {}
-        for tool in current_tools:
-            if isinstance(tool, dict):
-                tool_name = tool.get("name", "")
-                tool_version = tool.get("version", "")
-                if tool_name and tool_version:
-                    current_versions[tool_name] = tool_version
+        current_versions = self._tool_versions(current_tools)
 
         # Compare with historical attestations
         for historical_path in historical_attestations:
@@ -471,24 +501,9 @@ class TamperDetector:
                     "buildDefinition", {}
                 )
 
-                # Try externalParameters.tools first (ProvenanceGenerator format)
-                historical_params = historical_build_def.get("externalParameters", {})
-                historical_tools = historical_params.get("tools", [])
-
-                # Fallback to resolvedDependencies (alternative format)
-                if not historical_tools:
-                    historical_tools = historical_build_def.get(
-                        "resolvedDependencies", []
-                    )
-
-                # Build historical tool versions dict
-                historical_versions: dict[str, str] = {}
-                for tool in historical_tools:
-                    if isinstance(tool, dict):
-                        tool_name = tool.get("name", "")
-                        tool_version = tool.get("version", "")
-                        if tool_name and tool_version:
-                            historical_versions[tool_name] = tool_version
+                historical_versions = self._tool_versions(
+                    self._tool_entries(historical_build_def)
+                )
 
                 # Check for downgrades
                 for tool_name, current_version in current_versions.items():
@@ -529,6 +544,56 @@ class TamperDetector:
                 )
 
         return indicators
+
+    @staticmethod
+    def _tool_entries(build_definition: dict[str, Any]) -> list[Any]:
+        """Collect every entry that might carry a tool version.
+
+        ``externalParameters.tools`` is where ProvenanceGenerator records the
+        tool *names*, as plain strings; the versions live in
+        ``resolvedDependencies``. The old code read only the first of the two
+        and fell back to the second solely when the first was empty — so on
+        every attestation JMo actually produces it looked at a list of strings,
+        found no versions in it, and returned. **Rollback detection could not
+        fire on this project's own output.** Read both.
+
+        Args:
+            build_definition: The attestation's predicate.buildDefinition
+
+        Returns:
+            Concatenated entries from both locations
+        """
+        params = build_definition.get("externalParameters", {})
+        tools = params.get("tools", []) or []
+        resolved = build_definition.get("resolvedDependencies", []) or []
+        return [*tools, *resolved]
+
+    @staticmethod
+    def _tool_versions(entries: list[Any]) -> dict[str, str]:
+        """Map tool name -> version from mixed-shape entries.
+
+        Handles both the flat ``{"name": ..., "version": ...}`` shape and the
+        SLSA ResourceDescriptor shape ProvenanceGenerator writes, where the
+        version sits under ``annotations``. Bare strings carry a name and no
+        version, so they contribute nothing.
+
+        Args:
+            entries: Tool entries from _tool_entries()
+
+        Returns:
+            Dict of tool name to version string
+        """
+        versions: dict[str, str] = {}
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            name = entry.get("name", "")
+            version = entry.get("version") or entry.get("annotations", {}).get(
+                "version", ""
+            )
+            if name and version and version != "unknown":
+                versions[name] = version
+        return versions
 
     def check_suspicious_patterns(
         self, subject_path: str, attestation_path: str

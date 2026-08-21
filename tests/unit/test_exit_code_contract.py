@@ -140,3 +140,37 @@ def test_validate_unknown_category_is_a_usage_error():
     result = _run("validate", "--category", "definitely-not-a-category")
     assert result.returncode == 2
     assert "Unknown category" in (result.stdout + result.stderr)
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ("attest", "no-such-file-xyz.json"),
+        ("verify", "no-such-file-xyz.json"),
+        ("verify", "pyproject.toml", "--attestation", "no-such-file-xyz.att.json"),
+    ],
+)
+def test_attest_and_verify_absent_paths_are_usage_errors(args):
+    """These returned 1, which is the code for "the check ran and said no".
+
+    Nothing ran: there was no file to attest, or no attestation to check. A CI
+    gate reading 1 as "this artifact failed verification" was being handed the
+    same number for "you typed the filename wrong".
+    """
+    assert _run(*args).returncode == 2
+
+
+def test_verify_signature_flags_without_a_signer_are_usage_errors():
+    """A signature check needs a bundle *and* an expected signer.
+
+    Half of one is not a weaker check, it is a different claim, so the partial
+    invocations must not run and report a pass.
+    """
+    assert _run("verify", "pyproject.toml", "--rekor-check").returncode == 2
+    assert _run("verify", "pyproject.toml", "--cert-identity", "x").returncode == 2
+
+
+def test_attest_rekor_without_sign_is_a_usage_error():
+    """It warned and exited 0, so a CI step asking for a transparency-log entry
+    reported success without producing one."""
+    assert _run("attest", "pyproject.toml", "--rekor").returncode == 2
