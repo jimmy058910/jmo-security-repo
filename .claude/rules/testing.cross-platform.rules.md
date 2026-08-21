@@ -309,6 +309,48 @@ against ruff's **153**.
   broken capture only because it asserted `returncode == 0` as well as the absence
   of a traceback; returncode is independent of stdout decoding.
 
+### A coarse clock hides bugs a fine one exposes
+
+The habitual lesson in this repo is "green on Linux, broken on Windows".
+**Chunk 19 hit the inverse**, which is the more dangerous shape because the
+platform that looks fine is not.
+
+`ProvenanceGenerator.generate` read the wall clock for `finishedOn` before
+`startedOn`, producing an attestation that had finished before it began — a
+CRITICAL `TIMESTAMP_ANOMALY` by JMo's own tamper detector.
+
+| platform | clock granularity | how it presented |
+|---|---|---|
+| Windows | ~1 ms | both reads land in one tick, strings come out **equal**, `<=` accepts. 300 consecutive local generations were **all** equal-tick. A rare flake, and only under `-n 8`. |
+| Ubuntu ×4, macOS | ~1 µs | the reads straddle a tick nearly always. **Deterministic failure on all five shards.** |
+
+Two things follow:
+
+1. **A repeat-loop is not a substitute for a finer clock.** Running the
+   generation 300 times locally produced 0 inversions *and* 0 strictly-ordered
+   results — every sample was equal-tick, so the experiment could not
+   distinguish "ordered" from "lucky" at all. It looked like confirmation and
+   carried no information.
+2. **Do not loosen a timing assertion to stop a flake.** `startedOn <=
+   finishedOn` was the assertion that caught this. The fix is to make the guard
+   *deterministic* — patch the clock so it advances on every read — not to widen
+   the tolerance. That is what makes the mutation test possible.
+
+```python
+class Clock(datetime):
+    @classmethod
+    def now(cls, tz=None):
+        return base + timedelta(seconds=next(ticks))
+
+with patch("scripts.core.attestation.provenance.datetime", Clock):
+    ...
+```
+
+Same root cause as the known `time.monotonic` coarseness on Windows (15 ms vs
+`time.time`'s ~1 ms; use `perf_counter()`), opposite consequence: there,
+coarseness made a duration read as zero, and here it made an ordering defect
+invisible.
+
 ## Line Endings on Windows
 
 This repo has **no `.gitattributes`** and `core.autocrlf=false`, so line endings
