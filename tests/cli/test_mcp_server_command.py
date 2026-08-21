@@ -30,11 +30,16 @@ import pytest
 
 from scripts.cli import jmo as cli
 
+# Anchored to this file, not to the cwd. A relative path here would break in
+# any worker where another test has chdir'd without restoring -- an
+# intermittent failure that looks like a real regression.
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
 SERVER_SOURCES = [
-    Path("scripts/jmo_mcp/jmo_server.py"),
-    Path("scripts/jmo_mcp/utils/findings_loader.py"),
-    Path("scripts/jmo_mcp/utils/rate_limiter.py"),
-    Path("scripts/jmo_mcp/utils/source_context.py"),
+    REPO_ROOT / "scripts/jmo_mcp/jmo_server.py",
+    REPO_ROOT / "scripts/jmo_mcp/utils/findings_loader.py",
+    REPO_ROOT / "scripts/jmo_mcp/utils/rate_limiter.py",
+    REPO_ROOT / "scripts/jmo_mcp/utils/source_context.py",
 ]
 
 
@@ -280,7 +285,9 @@ def test_help_text_names_no_path_that_does_not_exist():
     referenced = re.findall(r"scripts/[\w/]+\.py", text)
     assert referenced, "help text no longer references the server module at all"
     for path in referenced:
-        assert Path(path).exists(), f"--help names a path that does not exist: {path}"
+        assert (
+            REPO_ROOT / path
+        ).exists(), f"--help names a path that does not exist: {path}"
 
 
 def test_help_text_does_not_claim_authentication(run_cmd):
