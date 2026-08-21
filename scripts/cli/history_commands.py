@@ -1082,4 +1082,7 @@ def cmd_history(args) -> int:
         sys.stderr.write(
             "Usage: jmo history {store|list|show|query|prune|export|stats|diff|trends|optimize|migrate|verify|repair}\n"
         )
-        return 1
+        # Printing a usage line and then exiting 1 says "ran, found a problem".
+        # Nothing ran. `jmo policy`, `adapters` and `schedule` already exit 2
+        # here; see "Exit Codes" in docs/CLI_REFERENCE.md.
+        return 2

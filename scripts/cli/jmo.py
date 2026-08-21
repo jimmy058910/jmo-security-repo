@@ -705,11 +705,13 @@ Two tiers:
   full       Real tools, real scans, Docker builds
 
 Examples:
-  jmo validate                     # Quick validation (176 checks)
-  jmo validate --tier full         # Full validation (207 checks)
+  jmo validate                     # Quick validation (259 checks)
+  jmo validate --tier full         # Full validation (290 checks)
   jmo validate --category cli      # CLI checks only
   jmo validate -v                  # Verbose per-check details
   jmo validate --json              # Machine-readable output
+
+Exit codes: 0 = GO, 1 = NO-GO (a check failed), 2 = usage error.
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -1988,18 +1990,25 @@ Supports three modes:
     return diff_parser
 
 
-def parse_args():
-    """Parse command-line arguments for jmo CLI."""
+def build_parser() -> argparse.ArgumentParser:
+    """Build the full jmo argument parser without parsing anything.
+
+    Split out of ``parse_args`` so the parser is available as an *oracle*.
+    ``cli_validator.MAIN_SUBCOMMANDS`` used to be a hand-maintained list and had
+    drifted to 13 of 20 subcommands (#783); a restated list cannot notice a
+    subcommand nobody added it to. Anything that needs to know the CLI surface
+    now walks this parser instead of keeping its own copy.
+    """
     ap = argparse.ArgumentParser(
         prog="jmo",
-        description="JMo Security Audit Suite - Unified security scanning with 12+ tools",
+        description="JMo Security Audit Suite - Unified security scanning with 29 tools",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 BEGINNER-FRIENDLY COMMANDS:
   wizard              Interactive wizard for guided security scanning
-  fast                Quick scan with 3 best-in-class tools (5-8 min)
-  balanced            Balanced scan with 8 production-ready tools (15-20 min)
-  full                Comprehensive scan with all 12 tools (30-60 min)
+  fast                Quick scan with 9 best-in-class tools (5-10 min)
+  balanced            Balanced scan with 17 production-ready tools (18-25 min)
+  full                Comprehensive scan with all 28 tools (40-70 min)
   setup               Verify and install security tools
 
 ADVANCED COMMANDS:
@@ -2052,6 +2061,13 @@ Documentation: https://docs.jmotools.com
     _add_tools_args(sub)  # Tool management commands
     _add_validate_args(sub)  # Pre-release validation
     add_build_args(sub)  # Docker build commands
+
+    return ap
+
+
+def parse_args():
+    """Parse command-line arguments for jmo CLI."""
+    ap = build_parser()
 
     try:
         return ap.parse_args()

@@ -1108,4 +1108,5 @@ def cmd_trends(args) -> int:
         sys.stderr.write(
             "Usage: jmo trends {analyze|show|regressions|score|compare|insights|explain|developers}\n"
         )
-        return 1
+        # Usage error, not a verdict -- see "Exit Codes" in CLI_REFERENCE.md.
+        return 2

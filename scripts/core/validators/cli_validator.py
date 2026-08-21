@@ -3,12 +3,18 @@
 Exercises every CLI subcommand, sub-subcommand, argument, and exit-code
 contract to verify the CLI surface area is intact.
 
-Quick tier: ~37 checks (--help, arg enforcement, flag validation, version)
-Full tier:  ~45 checks (adds live tool invocations)
+Check counts are derived, not fixed: the --help groups come from the parser, so
+adding a subcommand adds checks. Measured on the current surface (20 top-level
+subcommands, 47 nested): 101 quick-tier, 109 with --tier full.
+
+`tests/core/test_cli_validator.py` recomputes these from the parser rather than
+restating them, so the numbers above cannot drift silently the way the previous
+"~37 / ~45" did.
 """
 
 from __future__ import annotations
 
+import argparse
 import re
 import subprocess
 import sys
@@ -25,87 +31,56 @@ from scripts.core.validators import (
 # CLI surface-area definitions
 # ---------------------------------------------------------------------------
 
-# Top-level subcommands that must accept --help
-MAIN_SUBCOMMANDS: list[str] = [
-    "wizard",
-    "scan",
-    "report",
-    "ci",
-    "tools",
-    "history",
-    "trends",
-    "diff",
-    "policy",
-    "schedule",
-    "build",
-    "validate",
-    "mcp-server",
-]
 
-# Nested subcommands: parent -> list of child subcommands
-SUB_SUBCOMMANDS: dict[str, list[str]] = {
-    "tools": [
-        "check",
-        "install",
-        "list",
-        "clean",
-        "debug",
-        "update",
-        "outdated",
-        "uninstall",
-    ],
-    "history": [
-        "list",
-        "show",
-        "stats",
-        "prune",
-        "query",
-        "export",
-        "store",
-        "diff",
-        "trends",
-        "optimize",
-        "migrate",
-        "verify",
-        "repair",
-    ],
-    "build": [
-        "validate",
-        "test",
-    ],
-    "policy": [
-        "list",
-        "validate",
-        "test",
-        "show",
-        "install",
-    ],
-    "schedule": [
-        "create",
-        "list",
-        "get",
-        "update",
-        "export",
-        "install",
-        "uninstall",
-        "delete",
-        "validate",
-    ],
-    "trends": [
-        "analyze",
-        "show",
-        "regressions",
-        "score",
-        "compare",
-        "insights",
-        "explain",
-        "developers",
-    ],
-    "adapters": [
-        "list",
-        "validate",
-    ],
-}
+def derive_surface(
+    parser: argparse.ArgumentParser,
+) -> tuple[list[str], dict[str, list[str]]]:
+    """Read the CLI surface off a real parser: (top-level, parent -> children).
+
+    These two structures used to be hand-maintained lists. ``MAIN_SUBCOMMANDS``
+    had drifted to **13 of 20** top-level subcommands (#783) -- `adapters`,
+    `attest`, `balanced`, `fast`, `full`, `setup` and `verify` were never added
+    -- and `tests/core/test_cli_validator.py` restated the same 13 as its
+    expected set, so the suite agreed with the drift instead of catching it.
+
+    A restated list cannot notice a subcommand nobody added it to. Walking the
+    parser can, which is why `scripts.cli.jmo.build_parser` exists.
+
+    This takes the parser as an argument rather than importing it:
+    `scripts/dev/check_import_direction.py` forbids `scripts/core/` from
+    importing `scripts.cli`, at any indentation, so the CLI layer injects it
+    via `set_cli_surface`.
+    """
+    top = next(a for a in parser._actions if isinstance(a, argparse._SubParsersAction))
+    main = sorted(top.choices)
+
+    nested: dict[str, list[str]] = {}
+    for name, subparser in top.choices.items():
+        child = next(
+            (
+                a
+                for a in subparser._actions
+                if isinstance(a, argparse._SubParsersAction)
+            ),
+            None,
+        )
+        if child is not None:
+            nested[name] = sorted(child.choices)
+    return main, nested
+
+
+# Top-level subcommands that must accept --help, and the parent -> child map.
+# `None` until the CLI layer injects; deliberately not an empty list, because an
+# empty surface would generate zero --help checks and a category that skipped
+# every check it exists to run would still report PASS. See `validate_cli`.
+_CLI_SURFACE: tuple[list[str], dict[str, list[str]]] | None = None
+
+
+def set_cli_surface(main: list[str], nested: dict[str, list[str]]) -> None:
+    """Inject the CLI surface derived from the real parser."""
+    global _CLI_SURFACE
+    _CLI_SURFACE = (main, nested)
+
 
 # Commands that require arguments (run without args -> exit code 2)
 REQUIRED_ARG_COMMANDS: list[tuple[list[str], str]] = [
@@ -545,8 +520,17 @@ def _full_tools_check() -> CheckResult | None:
             status=CheckStatus.ERROR,
             message=f"Timed out ({_TOOLS_CHECK_TIMEOUT}s)",
         )
-    # tools check may return non-zero if tools are missing, but
-    # it should at least produce output and not crash
+    # tools check may return non-zero if tools are missing, but it must produce
+    # a report either way. Exit 1 alone is not evidence it ran -- an early crash
+    # exits 1 with nothing on stdout -- so the output is part of the assertion
+    # rather than only part of the message.
+    if not result.stdout.strip():
+        return CheckResult(
+            name="full: tools check",
+            status=CheckStatus.FAIL,
+            message=f"Exit {result.returncode} with no output",
+            details=result.stderr[:400],
+        )
     if result.returncode in (0, 1):
         return CheckResult(
             name="full: tools check",
@@ -616,7 +600,14 @@ def _full_history_stats() -> CheckResult | None:
             status=CheckStatus.ERROR,
             message="Timed out",
         )
-    # May return 0 or 1 depending on db existence
+    # May return 0 or 1 depending on db existence, but must say something either
+    # way -- see the note on `full: tools check`.
+    if not (result.stdout.strip() or result.stderr.strip()):
+        return CheckResult(
+            name="full: history stats",
+            status=CheckStatus.FAIL,
+            message=f"Exit {result.returncode} with no output",
+        )
     if result.returncode in (0, 1):
         return CheckResult(
             name="full: history stats",
@@ -631,7 +622,19 @@ def _full_history_stats() -> CheckResult | None:
 
 
 def _full_build_validate() -> CheckResult | None:
-    """Run 'jmo build validate' and verify it completes."""
+    """Run 'jmo build validate' and verify it reached the repository.
+
+    This check accepted `returncode in (0, 1)` and reported PASS. `jmo build`
+    had been unable to locate the repository root since #303 renamed
+    `Dockerfile` to `Dockerfile.deep` -- every invocation exited 1 -- and this
+    check reported PASS on every one of them, across seven releases.
+
+    Exit 1 is still legitimate here (version validation can fail without a
+    `GITHUB_TOKEN`, and Docker may be absent), so the exit code alone cannot
+    separate the two. The discriminator is whether the command got far enough
+    to print the repository root: both failure modes above exit *before* that
+    line, and every real outcome prints it.
+    """
     try:
         result = _run_jmo("build", "validate", timeout=60)
     except subprocess.TimeoutExpired:
@@ -640,12 +643,25 @@ def _full_build_validate() -> CheckResult | None:
             status=CheckStatus.ERROR,
             message="Timed out (60s)",
         )
-    # build validate may fail without GITHUB_TOKEN, that's acceptable
+    combined = result.stdout + result.stderr
+    if "Docker not found" in combined or "Docker daemon not running" in combined:
+        return CheckResult(
+            name="full: build validate",
+            status=CheckStatus.SKIP,
+            message="Docker not available",
+        )
+    if "Repository root:" not in combined:
+        return CheckResult(
+            name="full: build validate",
+            status=CheckStatus.FAIL,
+            message=f"Exit {result.returncode}, never located the repository root",
+            details=combined[:400],
+        )
     if result.returncode in (0, 1):
         return CheckResult(
             name="full: build validate",
             status=CheckStatus.PASS,
-            message=f"Exit {result.returncode}",
+            message=f"Exit {result.returncode}, repository root located",
         )
     return CheckResult(
         name="full: build validate",
@@ -701,7 +717,14 @@ def _full_trends_explain() -> CheckResult | None:
 
 
 def _full_diff_auto() -> CheckResult | None:
-    """Run 'jmo diff --auto' and verify it completes (may fail without git context)."""
+    """Run 'jmo diff --auto' and verify it parsed and ran.
+
+    This accepted `returncode in (0, 1, 2)`, which includes **2** -- argparse's
+    usage error. A check that accepts 2 still passes when the flag it exists to
+    exercise has been deleted from the parser, so it could only ever fail on a
+    hard crash. 2 is now a FAIL; 0 and 1 remain legitimate, because `--auto`
+    reports a real verdict on whether it found two scans to compare.
+    """
     try:
         result = _run_jmo("diff", "--auto", timeout=30)
     except subprocess.TimeoutExpired:
@@ -710,12 +733,18 @@ def _full_diff_auto() -> CheckResult | None:
             status=CheckStatus.ERROR,
             message="Timed out",
         )
-    # diff --auto may return non-zero without proper git context
-    if result.returncode in (0, 1, 2):
+    if result.returncode == 2:
+        return CheckResult(
+            name="full: diff --auto",
+            status=CheckStatus.FAIL,
+            message="Exit 2 - `diff --auto` was rejected as a usage error",
+            details=result.stderr[:400],
+        )
+    if result.returncode in (0, 1):
         return CheckResult(
             name="full: diff --auto",
             status=CheckStatus.PASS,
-            message=f"Exit {result.returncode} (acceptable without git context)",
+            message=f"Exit {result.returncode} (ran; 1 is valid without two scans)",
         )
     return CheckResult(
         name="full: diff --auto",
@@ -728,18 +757,26 @@ def _full_diff_auto() -> CheckResult | None:
 # Main validator entry point
 # ---------------------------------------------------------------------------
 
-# Count constants for testing
-_MAIN_HELP_COUNT = len(MAIN_SUBCOMMANDS)  # 13
-_INVALID_FLAG_COUNT = len(INVALID_FLAG_COMMANDS)  # 6
-_REQUIRED_ARG_COUNT = len(REQUIRED_ARG_COMMANDS)  # 13
-_MUTEX_COUNT = len(MUTUALLY_EXCLUSIVE)  # 2
-_TYPE_CHECK_COUNT = len(FLAG_TYPE_CHECKS)  # 6
+# Count constants for testing. Deliberately no literal in a trailing comment:
+# `_MAIN_HELP_COUNT = len(MAIN_SUBCOMMANDS)  # 13` was correct arithmetic over a
+# stale list, and the comment is what made the staleness look intentional.
+_INVALID_FLAG_COUNT = len(INVALID_FLAG_COMMANDS)
+_REQUIRED_ARG_COUNT = len(REQUIRED_ARG_COMMANDS)
+_MUTEX_COUNT = len(MUTUALLY_EXCLUSIVE)
+_TYPE_CHECK_COUNT = len(FLAG_TYPE_CHECKS)
 _VERSION_CHECK_COUNT = 3
 _EXIT_CODE_COUNT = 4
 _FULL_TIER_COUNT = 8
 
-# Sub-subcommand count (varies with actual CLI surface)
-_SUB_SUBCOMMAND_COUNT = sum(len(v) for v in SUB_SUBCOMMANDS.values())
+# Everything except the --help groups, which are sized by the parser.
+_FIXED_QUICK_COUNT = (
+    _REQUIRED_ARG_COUNT
+    + _INVALID_FLAG_COUNT
+    + _MUTEX_COUNT
+    + _TYPE_CHECK_COUNT
+    + _VERSION_CHECK_COUNT
+    + _EXIT_CODE_COUNT
+)
 
 
 def validate_cli(tier: str) -> CategoryResult:
@@ -754,13 +791,34 @@ def validate_cli(tier: str) -> CategoryResult:
     """
     checks: list[CheckResult] = []
 
-    # ---- Group 1: Main subcommand --help (13 checks) ----
-    for cmd in MAIN_SUBCOMMANDS:
+    if _CLI_SURFACE is None:
+        # Not a skip. A category that quietly produced zero --help checks would
+        # still report `[0/0 PASS]`, which is the exact failure mode this
+        # validator exists to catch elsewhere.
+        return CategoryResult(
+            name="CLI Completeness",
+            checks=[
+                CheckResult(
+                    name="cli-surface: injected",
+                    status=CheckStatus.ERROR,
+                    message="CLI surface was never injected; no subcommand was checked",
+                    details=(
+                        "scripts.cli.validate_commands must call "
+                        "cli_validator.set_cli_surface(*derive_surface(build_parser()))"
+                    ),
+                )
+            ],
+        )
+
+    main_subcommands, sub_subcommands = _CLI_SURFACE
+
+    # ---- Group 1: Main subcommand --help (one per parser subcommand) ----
+    for cmd in main_subcommands:
         check_fn = _help_check([cmd])
         checks.append(timed_check(f"help: {cmd}", check_fn))
 
     # ---- Group 2: Sub-subcommand --help ----
-    for parent, children in SUB_SUBCOMMANDS.items():
+    for parent, children in sub_subcommands.items():
         for child in children:
             check_fn = _help_check([parent, child])
             checks.append(timed_check(f"help: {parent} {child}", check_fn))

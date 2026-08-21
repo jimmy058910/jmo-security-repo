@@ -1050,14 +1050,19 @@ class TestCmdTrendsRouter:
         assert result in (0, 1)
 
     def test_router_unknown_subcommand(self):
-        """Test router with unknown subcommand."""
+        """An unknown subcommand is a usage error (2), not a verdict (1).
+
+        See "Exit Codes" in docs/CLI_REFERENCE.md; #925. The router prints a
+        usage line and nothing ran, so 1 -- "ran, and the answer is negative" --
+        was the wrong claim.
+        """
 
         class Args:
             trends_command = "unknown_subcommand"
 
         result = cmd_trends(Args())
 
-        assert result == 1
+        assert result == 2
 
     def test_router_missing_subcommand(self):
         """Test router with missing subcommand."""
@@ -1067,4 +1072,4 @@ class TestCmdTrendsRouter:
 
         result = cmd_trends(Args())
 
-        assert result == 1
+        assert result == 2

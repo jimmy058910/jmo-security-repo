@@ -14,9 +14,12 @@ Target Coverage: >= 85%
 
 import argparse
 import platform
+import re
 import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+from scripts.cli.build_commands import VARIANTS
 
 # ========== Category 1: Constants ==========
 
@@ -46,11 +49,25 @@ def test_default_registry():
     assert DEFAULT_REGISTRY == "ghcr.io"
 
 
-def test_default_org():
-    """Test DEFAULT_ORG has expected value."""
+def test_default_org_matches_what_release_publishes():
+    """The push target must be the namespace release.yml actually pushes to.
+
+    This asserted `DEFAULT_ORG == "jmosecurity"`, restating the constant it was
+    testing. The value was wrong -- `release.yml` publishes to
+    `${{ github.repository_owner }}/jmo-security`, i.e. `jimmy058910` -- so
+    `jmo build --push` aimed at a namespace this project does not own and
+    `jmo build test` pulled from it. A test that repeats the constant cannot
+    notice that; this one reads the workflow.
+    """
     from scripts.cli.build_commands import DEFAULT_ORG
 
-    assert DEFAULT_ORG == "jmosecurity"
+    workflow = (
+        Path(__file__).resolve().parents[2] / ".github" / "workflows" / "release.yml"
+    ).read_text(encoding="utf-8")
+
+    match = re.search(r"IMAGE_NAME_GHCR:.*?#\s*GitHub:\s*(\S+)/", workflow)
+    assert match, "release.yml no longer records the GHCR owner in a comment"
+    assert match.group(1) == DEFAULT_ORG
 
 
 def test_default_image():
@@ -164,13 +181,26 @@ def test_check_docker_success():
 # ========== Category 4: Repository Root Finding ==========
 
 
+def _make_repo(root: Path) -> Path:
+    """Build the marker set a real checkout has: versions.yaml + variant files.
+
+    These tests used to `touch` a bare file named `Dockerfile`, which is the
+    filesystem `_find_repo_root` expected and **not** the one the repo ships:
+    #303 renamed it to `Dockerfile.deep` on 2026-04-19. The tests fabricated
+    the missing file, passed, and the command was broken for seven releases --
+    while `test_variants_mapping` in this same file asserted the real name.
+    """
+    (root / "versions.yaml").touch()
+    for dockerfile in VARIANTS.values():
+        (root / dockerfile).touch()
+    return root
+
+
 def test_find_repo_root_in_current_dir(tmp_path):
     """Test _find_repo_root finds repo when in root directory."""
     from scripts.cli.build_commands import _find_repo_root
 
-    # Create required files
-    (tmp_path / "Dockerfile").touch()
-    (tmp_path / "versions.yaml").touch()
+    _make_repo(tmp_path)
 
     with patch.object(Path, "cwd", return_value=tmp_path):
         result = _find_repo_root()
@@ -181,9 +211,7 @@ def test_find_repo_root_in_subdirectory(tmp_path):
     """Test _find_repo_root finds repo when in subdirectory."""
     from scripts.cli.build_commands import _find_repo_root
 
-    # Create required files in root
-    (tmp_path / "Dockerfile").touch()
-    (tmp_path / "versions.yaml").touch()
+    _make_repo(tmp_path)
 
     # Create subdirectory
     subdir = tmp_path / "scripts" / "cli"
@@ -208,12 +236,42 @@ def test_find_repo_root_missing_versions_yaml(tmp_path):
     """Test _find_repo_root returns None when versions.yaml missing."""
     from scripts.cli.build_commands import _find_repo_root
 
-    # Only Dockerfile, no versions.yaml
-    (tmp_path / "Dockerfile").touch()
+    for dockerfile in VARIANTS.values():
+        (tmp_path / dockerfile).touch()
 
     with patch.object(Path, "cwd", return_value=tmp_path):
         result = _find_repo_root()
         assert result is None
+
+
+def test_find_repo_root_finds_the_real_checkout():
+    """The repository this test runs from must be findable.
+
+    The regression guard for #303. Every test above builds its own fixture, so
+    all four passed against a predicate that could not be satisfied anywhere in
+    the actual tree. This one has no fixture to get wrong: it asserts that the
+    real repo, with the real filenames, is what `_find_repo_root` locates.
+    """
+    from scripts.cli.build_commands import _find_repo_root
+
+    repo = Path(__file__).resolve().parents[2]
+    assert (repo / "versions.yaml").is_file(), "test is not running from a checkout"
+
+    with patch.object(Path, "cwd", return_value=repo):
+        assert _find_repo_root() == repo
+
+
+def test_no_bare_dockerfile_exists_in_the_repo():
+    """Pin the fact that made #303 invisible: there is no bare `Dockerfile`.
+
+    If one is ever reintroduced, `_find_repo_root` keeps working either way --
+    but the fixtures above would silently start describing reality again, and
+    the reason this guard exists would be lost.
+    """
+    repo = Path(__file__).resolve().parents[2]
+    assert not (repo / "Dockerfile").exists()
+    for dockerfile in VARIANTS.values():
+        assert (repo / dockerfile).is_file(), f"missing {dockerfile}"
 
 
 # ========== Category 5: Version Validation ==========
@@ -617,3 +675,102 @@ def test_add_build_args_default_values():
     assert args.org == DEFAULT_ORG
     assert args.local is False
     assert args.push is False
+
+
+# ========== Category 8: Image references and flag precedence (chunk 18) ==========
+
+
+def test_image_ref_uses_the_published_bare_variant_tags():
+    """`latest` maps to the bare variant tag, which is what release.yml pushes.
+
+    Both the build path and the `test` path used `<tag>-<variant>`
+    unconditionally, so the default run named `:latest-balanced` -- a tag
+    family the project never publishes. `release.yml` pushes bare `:fast` /
+    `:slim` / `:balanced` / `:deep` (with `:latest` pointing at deep) and
+    versioned `:1.0.2-<variant>`.
+    """
+    from scripts.cli.build_commands import (
+        DEFAULT_IMAGE,
+        DEFAULT_ORG,
+        DEFAULT_REGISTRY,
+        _image_ref,
+    )
+
+    ref = _image_ref(
+        "balanced", "latest", DEFAULT_REGISTRY, DEFAULT_ORG, DEFAULT_IMAGE, False
+    )
+    assert ref == f"{DEFAULT_REGISTRY}/{DEFAULT_ORG}/{DEFAULT_IMAGE}:balanced"
+    assert "latest-balanced" not in ref
+
+
+def test_image_ref_versioned_tag_keeps_the_variant_suffix():
+    from scripts.cli.build_commands import (
+        DEFAULT_IMAGE,
+        DEFAULT_ORG,
+        DEFAULT_REGISTRY,
+        _image_ref,
+    )
+
+    ref = _image_ref(
+        "deep", "1.0.9", DEFAULT_REGISTRY, DEFAULT_ORG, DEFAULT_IMAGE, False
+    )
+    assert ref.endswith(":1.0.9-deep")
+
+
+def test_image_ref_local():
+    from scripts.cli.build_commands import (
+        DEFAULT_IMAGE,
+        DEFAULT_ORG,
+        DEFAULT_REGISTRY,
+        _image_ref,
+    )
+
+    ref = _image_ref(
+        "slim", "latest", DEFAULT_REGISTRY, DEFAULT_ORG, DEFAULT_IMAGE, True
+    )
+    assert ref == f"{DEFAULT_IMAGE}:local-slim"
+
+
+def test_test_subparser_does_not_clobber_parent_flags():
+    """`jmo build --variant deep test` silently tested `balanced`.
+
+    argparse applies a subparser's defaults *after* the parent has parsed, so a
+    subparser re-declaring a flag overwrites the value the user gave the
+    parent. rc 0, no warning, the wrong image. `default=argparse.SUPPRESS`
+    leaves the attribute alone when the flag is absent.
+    """
+    import sys as _sys
+
+    from scripts.cli.jmo import parse_args
+
+    saved = _sys.argv
+    try:
+        _sys.argv = ["jmo", "build", "--variant", "deep", "test"]
+        args = parse_args()
+        assert args.build_command == "test"
+        assert args.variant == "deep"
+
+        _sys.argv = ["jmo", "build", "--local", "test"]
+        args = parse_args()
+        assert args.local is True
+
+        _sys.argv = ["jmo", "build", "--tag", "1.0.9", "test"]
+        assert parse_args().tag == "1.0.9"
+    finally:
+        _sys.argv = saved
+
+
+def test_explicit_subparser_flag_still_wins():
+    """The fix must not make `jmo build test --variant deep` a no-op."""
+    import sys as _sys
+
+    from scripts.cli.jmo import parse_args
+
+    saved = _sys.argv
+    try:
+        _sys.argv = ["jmo", "build", "test", "--variant", "deep"]
+        assert parse_args().variant == "deep"
+        _sys.argv = ["jmo", "build", "test"]
+        assert parse_args().variant == "balanced"
+    finally:
+        _sys.argv = saved

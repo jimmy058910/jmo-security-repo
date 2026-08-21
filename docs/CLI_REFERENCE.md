@@ -54,6 +54,46 @@ These flags are shared across multiple commands:
 
 ---
 
+## Exit Codes
+
+Every `jmo` command uses the same three codes. Individual command sections
+below say what each code *means* for that command, but never introduce a
+fourth.
+
+| Code | Meaning | Examples |
+|-----:|---------|----------|
+| `0` | Success. The command ran and the answer is affirmative. | Scan completed; `validate` verdict GO; policy passed; `--help`; `--version` |
+| `1` | The command ran, and the answer is negative — **or** it hit a runtime error. | Findings at or above `--fail-on`; `validate` verdict NO-GO; a policy FAILED; verification failed; `opa` not installed |
+| `2` | **Usage error.** The command was invoked incorrectly and did not run. | Unknown flag or subcommand; missing required argument; mutually exclusive flags; an unknown name or a path that does not exist |
+
+The distinction that matters is **1 vs 2**. `1` means the check ran and
+reported a problem; `2` means nothing was checked. A CI gate that treats every
+non-zero code as "blocked" is safe, but a gate that treats `1` as "the scan
+found something" must not also receive `1` for "you typo'd the policy name" —
+that run proved nothing while looking like a working gate.
+
+Consequently, naming something that does not exist is a usage error:
+
+```console
+$ jmo policy test does-not-exist --findings-file results/summaries/findings.json
+ERROR  Policy not found: does-not-exist
+$ echo $?
+2                     # usage error - nothing was evaluated
+
+$ jmo policy test owasp-top-10 --findings-file results/summaries/findings.json
+[X] FAILED   Violations: 101
+$ echo $?
+1                     # the policy ran and failed - block the release
+```
+
+> **Changed in v1.1.0.** `jmo policy test`, `validate`, `show` and `install`
+> previously returned `1` for both cases, and `jmo history` / `jmo trends` with
+> no subcommand printed a usage error but exited `1`. Scripts that keyed on `1`
+> meaning "any problem" are unaffected; scripts that need to tell a failed gate
+> from a broken invocation now can.
+
+---
+
 ## Commands
 
 ### jmo scan
@@ -883,7 +923,8 @@ Validate an adapter plugin file.
 
 ### jmo validate
 
-Pre-release validation system with GO/NO-GO scorecard. Runs 207 checks across 4 categories.
+Pre-release validation system with GO/NO-GO scorecard. Runs 259 checks across 4
+categories (290 with `--tier full`), measured on the current CLI surface.
 
 ```text
 jmo validate [OPTIONS]
@@ -901,12 +942,23 @@ jmo validate [OPTIONS]
 
 | Category | Quick Checks | Full Checks | What It Validates |
 |----------|-------------|-------------|-------------------|
-| CLI Completeness | 94 | 102 | Subcommand --help, arg validation, exit codes, version |
-| Scan Correctness | 80 | 92 | Adapter parsing, dedup, compliance, reporters, schema |
+| CLI Completeness | 101 | 109 | Subcommand --help, arg validation, exit codes, version |
+| Scan Correctness | 79 | 91 | Adapter parsing, dedup, compliance, reporters, schema |
 | Cross-Platform | 33 | 38 | Path handling, subprocess security, SQLite, env vars |
 | Release Artifacts | 46 | 52 | Version consistency, docs, git hygiene, code quality |
+| **Total** | **259** | **290** | |
 
-**Exit codes:** 0 = GO (all pass), 1 = NO-GO (failures found), 2 = system error.
+The CLI Completeness row is sized by the parser: it runs one `--help` check per
+top-level subcommand and one per nested subcommand, so adding a command adds
+checks here automatically.
+
+**Exit codes:** 0 = GO (all checks that ran passed), 1 = NO-GO (a check failed,
+errored, **or nothing ran at all**), 2 = usage error — for example an unknown
+`--category` value. See [Exit Codes](#exit-codes).
+
+> A `GO` covers only the checks that ran. `--tier full` degrades to `SKIP` when
+> a prerequisite is missing — with no Docker daemon, all four `docker-build-*`
+> checks skip — so the scorecard prints the skipped count alongside the verdict.
 
 **Examples:**
 
