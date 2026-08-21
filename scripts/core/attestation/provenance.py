@@ -374,10 +374,21 @@ class ProvenanceGenerator:
         # detector's "Missing required timestamp fields" therefore fired on
         # every verification of a perfectly good document. Stamp the moment
         # generation completes: that is a fact this code actually knows.
+        #
+        # Resolve both here, started first. Leaving startedOn to be defaulted
+        # inside _create_run_details stamped it *after* finishedOn, so on any
+        # clock tick that fell between the two calls the document claimed to
+        # have finished before it began — which `check_timestamp_anomalies`
+        # correctly reports as CRITICAL. Caught by the suite under load; on an
+        # idle Windows box both calls land in the same ~1ms tick and the strings
+        # come out equal, which is why it looked fine when run alone.
+        started_on = started_on or datetime.now(UTC).isoformat()
+        finished_on = finished_on or datetime.now(UTC).isoformat()
+
         run_details = self._create_run_details(
             invocation_id=invocation_id,
             started_on=started_on,
-            finished_on=finished_on or datetime.now(UTC).isoformat(),
+            finished_on=finished_on,
         )
 
         # Create SLSA provenance

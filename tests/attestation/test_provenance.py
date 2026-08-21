@@ -509,6 +509,46 @@ class TestGeneratedTimestamps:
         assert metadata["finishedOn"]
         assert metadata["startedOn"] <= metadata["finishedOn"]
 
+    def test_started_on_is_stamped_before_finished_on(self, tmp_path):
+        """The clock must be read in the order the fields claim.
+
+        `_create_run_details` defaults `startedOn` internally, so passing
+        `finished_on=... or now()` at the call site stamped *finished* first
+        and *started* second — and any clock tick falling between the two calls
+        produced a document asserting it finished before it began, which
+        `check_timestamp_anomalies` rightly calls CRITICAL.
+
+        Wall-clock granularity on Windows is coarse enough that both reads
+        usually land in one tick and the strings come out equal, so the
+        assertion above only caught this under parallel load. Here the clock is
+        forced to advance on every read, which makes the ordering observable
+        every run instead of on an unlucky one.
+        """
+        from datetime import UTC, datetime, timedelta
+
+        from scripts.core.attestation.provenance import ProvenanceGenerator
+
+        subject = tmp_path / "findings.json"
+        subject.write_text('{"findings": []}', encoding="utf-8")
+
+        base = datetime(2026, 8, 21, 12, 0, 0, tzinfo=UTC)
+        ticks = iter(range(1, 100))
+
+        class Clock(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return base + timedelta(seconds=next(ticks))
+
+        with patch("scripts.core.attestation.provenance.datetime", Clock):
+            metadata = ProvenanceGenerator().generate(
+                findings_path=subject, profile="fast", tools=[], targets=[]
+            )["predicate"]["runDetails"]["metadata"]
+
+        assert metadata["startedOn"] < metadata["finishedOn"], (
+            f"startedOn {metadata['startedOn']} is not before "
+            f"finishedOn {metadata['finishedOn']}"
+        )
+
     def test_a_generated_attestation_raises_no_tamper_indicator(self, tmp_path):
         """The end-to-end form: JMo's own output must verify clean.
 
