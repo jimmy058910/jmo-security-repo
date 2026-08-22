@@ -34,7 +34,21 @@ from tests.conftest import skip_on_windows
 #   balanced: 18 → 17 in PROFILE_TOOLS (no manual tools)
 #   slim:     14 → 13 in PROFILE_TOOLS (no manual tools)
 #   fast:      9 →  9 (bearer was never in fast)
-DOCKER_REGISTRY = "ghcr.io/jimmy058910/jmo-security"
+# Registry this suite audits. Overridable so the same tests can be pointed at an
+# image built from the CURRENT source tree rather than the published release:
+#
+#     JMO_DOCKER_REGISTRY=jmo-security-dev pytest tests/e2e/test_docker_workflows.py -m docker
+#
+# The distinction is not cosmetic. Images are rebuilt ONLY on a `v*` tag push
+# (release.yml), and every variant bakes the whole tree in via
+# `COPY . /opt/jmo-security/`. For most of a development cycle the default below
+# is therefore many commits behind `dev` -- at the time this was written, 77
+# commits and +7820/-2324 lines of `scripts/`. Running this suite with the
+# variable unset audits the RELEASED image and says nothing about working-tree
+# code. Say which of the two a finding is about.
+DOCKER_REGISTRY = os.environ.get(
+    "JMO_DOCKER_REGISTRY", "ghcr.io/jimmy058910/jmo-security"
+)
 DOCKER_VARIANTS = [
     pytest.param("deep", 24, id="deep"),
     pytest.param("balanced", 17, id="balanced"),
@@ -43,39 +57,87 @@ DOCKER_VARIANTS = [
 ]
 
 
+# Budget for a single `docker pull`. Exceeding it is reported as a FAILURE, not
+# a skip -- see ensure_image().
+PULL_TIMEOUT = 600
+
+
+def _docker(*args: str, timeout: int = 60) -> subprocess.CompletedProcess[str]:
+    """Run a docker command with a timeout that is always set.
+
+    `image_exists` previously called subprocess.run with no timeout at all, so an
+    unresponsive daemon blocked until pytest-timeout killed the test with a bare
+    stack dump and no attributable cause.
+    """
+    return subprocess.run(
+        ["docker", *args], capture_output=True, text=True, timeout=timeout
+    )
+
+
 def docker_available() -> bool:
-    """Check if Docker is available."""
+    """True if a Docker daemon is reachable."""
     try:
-        result = subprocess.run(
-            ["docker", "version"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        return result.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return _docker("version", timeout=10).returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
         return False
 
 
 def image_exists(image: str) -> bool:
-    """Check if a Docker image exists locally or can be pulled."""
-    result = subprocess.run(
-        ["docker", "image", "inspect", image],
-        capture_output=True,
-        text=True,
-    )
-    return result.returncode == 0
+    """True if the image is already present locally."""
+    try:
+        return _docker("image", "inspect", image, timeout=30).returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return False
 
 
-def pull_image(image: str) -> bool:
-    """Pull a Docker image."""
-    result = subprocess.run(
-        ["docker", "pull", image],
-        capture_output=True,
-        text=True,
-        timeout=600,
-    )
-    return result.returncode == 0
+def ensure_image(image: str) -> None:
+    """Make ``image`` available locally, or end the test with a stated reason.
+
+    The point of this helper is that the outcomes are DISTINGUISHABLE. Every call
+    site used to read::
+
+        if not image_exists(image):
+            if not pull_image(image):
+                pytest.skip(f"Could not pull image: {image}")
+
+    which collapsed "no daemon", "tag does not exist", "not logged in", "network
+    down" and "the pull ran past its own 600s budget" into one identical SKIP. A
+    genuinely missing tag then reported exactly what a machine with no Docker
+    reports -- the same signal for a real defect and for an absent prerequisite
+    (#941). `pull_image` additionally never caught TimeoutExpired, so that one
+    case raised instead of skipping, inconsistently with `docker_available`.
+
+    Environmental causes skip. Causes that indicate a real defect fail.
+    """
+    if image_exists(image):
+        return
+
+    try:
+        result = _docker("pull", image, timeout=PULL_TIMEOUT)
+    except FileNotFoundError:
+        pytest.skip("docker binary not on PATH")
+    except subprocess.TimeoutExpired:
+        pytest.fail(
+            f"docker pull {image} exceeded its own {PULL_TIMEOUT}s budget. "
+            f"This is NOT the same as an absent daemon and must not be read "
+            f"as 'skipped'."
+        )
+
+    if result.returncode == 0:
+        return
+
+    err = (result.stderr or result.stdout or "").strip()
+    lowered = err.lower()
+    if "manifest unknown" in lowered or "not found" in lowered:
+        pytest.fail(
+            f"{image} does not exist in the registry -- the tag is wrong or was "
+            f"never published: {err}"
+        )
+    if any(w in lowered for w in ("denied", "unauthorized", "authentication")):
+        pytest.skip(f"not authenticated for {image}: {err}")
+    if "daemon" in lowered or "connection refused" in lowered:
+        pytest.skip(f"docker daemon not reachable: {err}")
+    pytest.fail(f"docker pull {image} failed (rc={result.returncode}): {err}")
 
 
 @pytest.mark.docker
@@ -114,9 +176,7 @@ class TestDockerVariants:
         """
         image = f"{DOCKER_REGISTRY}:{variant}"
 
-        if not image_exists(image):
-            if not pull_image(image):
-                pytest.skip(f"Could not pull image: {image}")
+        ensure_image(image)
 
         # Subprocess timeout is 1150s — slightly less than the class-level
         # ``@pytest.mark.timeout(1200)`` so ``subprocess.TimeoutExpired`` fires
@@ -183,9 +243,7 @@ class TestDockerVariants:
         image = f"{DOCKER_REGISTRY}:{variant}"
 
         # Ensure image exists
-        if not image_exists(image):
-            if not pull_image(image):
-                pytest.skip(f"Could not pull image: {image}")
+        ensure_image(image)
 
         # Create sample vulnerable code
         src_dir = tmp_path / "src"
@@ -251,9 +309,7 @@ const query = "SELECT * FROM users WHERE id = " + userId;
         """Docker image should show help correctly."""
         image = f"{DOCKER_REGISTRY}:balanced"
 
-        if not image_exists(image):
-            if not pull_image(image):
-                pytest.skip(f"Could not pull image: {image}")
+        ensure_image(image)
 
         result = subprocess.run(
             ["docker", "run", "--rm", image, "--help"],
@@ -269,9 +325,7 @@ const query = "SELECT * FROM users WHERE id = " + userId;
         """Docker image should report version correctly."""
         image = f"{DOCKER_REGISTRY}:balanced"
 
-        if not image_exists(image):
-            if not pull_image(image):
-                pytest.skip(f"Could not pull image: {image}")
+        ensure_image(image)
 
         result = subprocess.run(
             ["docker", "run", "--rm", image, "--version"],
@@ -300,9 +354,7 @@ class TestDockerVolumeMount:
         """Results should persist to mounted volume."""
         image = f"{DOCKER_REGISTRY}:fast"
 
-        if not image_exists(image):
-            if not pull_image(image):
-                pytest.skip(f"Could not pull image: {image}")
+        ensure_image(image)
 
         # Create sample code
         (tmp_path / "test.py").write_text("password = 'secret123'")
@@ -342,9 +394,7 @@ class TestDockerVolumeMount:
         """History database should persist when mounted."""
         image = f"{DOCKER_REGISTRY}:fast"
 
-        if not image_exists(image):
-            if not pull_image(image):
-                pytest.skip(f"Could not pull image: {image}")
+        ensure_image(image)
 
         # Create .jmo directory for history
         jmo_dir = tmp_path / ".jmo"
@@ -409,9 +459,7 @@ class TestDockerToolVerification:
         """Verify each tool can actually execute in the container."""
         image = f"{DOCKER_REGISTRY}:{variant}"
 
-        if not image_exists(image):
-            if not pull_image(image):
-                pytest.skip(f"Could not pull image: {image}")
+        ensure_image(image)
 
         # Run tool version check
         result = subprocess.run(
@@ -430,9 +478,7 @@ class TestDockerToolVerification:
         """Verify all expected tools in variant are functional."""
         image = f"{DOCKER_REGISTRY}:{variant}"
 
-        if not image_exists(image):
-            if not pull_image(image):
-                pytest.skip(f"Could not pull image: {image}")
+        ensure_image(image)
 
         # Get tool list
         result = subprocess.run(
@@ -465,9 +511,7 @@ class TestDockerNonRootExecution:
         """Container should work when run as non-root user."""
         image = f"{DOCKER_REGISTRY}:fast"
 
-        if not image_exists(image):
-            if not pull_image(image):
-                pytest.skip(f"Could not pull image: {image}")
+        ensure_image(image)
 
         # Create sample code
         src_dir = tmp_path / "src"
@@ -519,9 +563,7 @@ class TestDockerNonRootExecution:
         """Container should work with UID/GID mapping."""
         image = f"{DOCKER_REGISTRY}:fast"
 
-        if not image_exists(image):
-            if not pull_image(image):
-                pytest.skip(f"Could not pull image: {image}")
+        ensure_image(image)
 
         # Create sample code
         (tmp_path / "test.py").write_text("x = 1", encoding="utf-8")
@@ -580,9 +622,7 @@ class TestDockerResourceLimits:
         """Container should work with memory limits."""
         image = f"{DOCKER_REGISTRY}:fast"
 
-        if not image_exists(image):
-            if not pull_image(image):
-                pytest.skip(f"Could not pull image: {image}")
+        ensure_image(image)
 
         (tmp_path / "test.py").write_text("x = 1", encoding="utf-8")
 
@@ -614,9 +654,7 @@ class TestDockerResourceLimits:
         """Container should work with CPU limits."""
         image = f"{DOCKER_REGISTRY}:fast"
 
-        if not image_exists(image):
-            if not pull_image(image):
-                pytest.skip(f"Could not pull image: {image}")
+        ensure_image(image)
 
         (tmp_path / "test.py").write_text("x = 1", encoding="utf-8")
 
@@ -660,9 +698,7 @@ class TestDockerHistoryPersistence:
         """History database should persist between container runs."""
         image = f"{DOCKER_REGISTRY}:fast"
 
-        if not image_exists(image):
-            if not pull_image(image):
-                pytest.skip(f"Could not pull image: {image}")
+        ensure_image(image)
 
         # Create .jmo directory for history persistence
         jmo_dir = tmp_path / ".jmo"
@@ -777,9 +813,7 @@ class TestDockerOutputFormats:
         """JSON output from container should be valid."""
         image = f"{DOCKER_REGISTRY}:fast"
 
-        if not image_exists(image):
-            if not pull_image(image):
-                pytest.skip(f"Could not pull image: {image}")
+        ensure_image(image)
 
         result = subprocess.run(
             ["docker", "run", "--rm", image, "tools", "list", "--json"],
@@ -799,9 +833,7 @@ class TestDockerOutputFormats:
         """Human-readable output should be properly formatted."""
         image = f"{DOCKER_REGISTRY}:fast"
 
-        if not image_exists(image):
-            if not pull_image(image):
-                pytest.skip(f"Could not pull image: {image}")
+        ensure_image(image)
 
         result = subprocess.run(
             ["docker", "run", "--rm", image, "tools", "check", "--human-logs"],
@@ -906,9 +938,7 @@ class TestDockerImageSize:
         """Image sizes should be within expected ranges (no runaway bloat)."""
         image = f"{DOCKER_REGISTRY}:{variant}"
 
-        if not image_exists(image):
-            if not pull_image(image):
-                pytest.skip(f"Could not pull image: {image}")
+        ensure_image(image)
 
         result = subprocess.run(
             ["docker", "image", "inspect", image, "--format={{.Size}}"],
@@ -944,9 +974,7 @@ class TestDockerToolExclusion:
         """Balanced variant should NOT include deep-profile-only tools."""
         image = f"{DOCKER_REGISTRY}:balanced"
 
-        if not image_exists(image):
-            if not pull_image(image):
-                pytest.skip(f"Could not pull image: {image}")
+        ensure_image(image)
 
         found = []
         for tool in DEEP_ONLY_TOOLS:
@@ -976,9 +1004,7 @@ class TestDockerToolExclusion:
         """Fast variant should NOT include deep-profile-only tools."""
         image = f"{DOCKER_REGISTRY}:fast"
 
-        if not image_exists(image):
-            if not pull_image(image):
-                pytest.skip(f"Could not pull image: {image}")
+        ensure_image(image)
 
         found = []
         for tool in DEEP_ONLY_TOOLS:
@@ -1008,9 +1034,7 @@ class TestDockerToolExclusion:
         """Deep variant SHOULD include the deep-profile-only tools."""
         image = f"{DOCKER_REGISTRY}:deep"
 
-        if not image_exists(image):
-            if not pull_image(image):
-                pytest.skip(f"Could not pull image: {image}")
+        ensure_image(image)
 
         missing = []
         for tool in DEEP_ONLY_TOOLS:
@@ -1053,9 +1077,7 @@ class TestDockerCLIConsistency:
         """All variants should support scan --help."""
         image = f"{DOCKER_REGISTRY}:{variant}"
 
-        if not image_exists(image):
-            if not pull_image(image):
-                pytest.skip(f"Could not pull image: {image}")
+        ensure_image(image)
 
         result = subprocess.run(
             ["docker", "run", "--rm", image, "scan", "--help"],
@@ -1075,9 +1097,7 @@ class TestDockerCLIConsistency:
         """All variants should expose the same core scan flags."""
         image = f"{DOCKER_REGISTRY}:{variant}"
 
-        if not image_exists(image):
-            if not pull_image(image):
-                pytest.skip(f"Could not pull image: {image}")
+        ensure_image(image)
 
         result = subprocess.run(
             ["docker", "run", "--rm", image, "scan", "--help"],
@@ -1158,9 +1178,7 @@ class TestDockerNamedToolPresence:
         """Each variant should have its expected named tools on PATH."""
         image = f"{DOCKER_REGISTRY}:{variant}"
 
-        if not image_exists(image):
-            if not pull_image(image):
-                pytest.skip(f"Could not pull image: {image}")
+        ensure_image(image)
 
         missing_tools = []
         for tool in expected_tools:
@@ -1190,9 +1208,7 @@ class TestDockerNamedToolPresence:
         """Deep variant should have all expected tools (comprehensive check)."""
         image = f"{DOCKER_REGISTRY}:deep"
 
-        if not image_exists(image):
-            if not pull_image(image):
-                pytest.skip(f"Could not pull image: {image}")
+        ensure_image(image)
 
         missing = []
         for tool in DEEP_EXPECTED_TOOLS:
@@ -1236,9 +1252,7 @@ class TestDockerBasicScanByVariant:
     def test_deep_basic_scan(self, tmp_path: Path):
         """Deep variant can perform a basic repository scan."""
         image = f"{DOCKER_REGISTRY}:deep"
-        if not image_exists(image):
-            if not pull_image(image):
-                pytest.skip(f"Could not pull image: {image}")
+        ensure_image(image)
 
         test_repo = tmp_path / "test-repo"
         test_repo.mkdir()
@@ -1273,9 +1287,7 @@ class TestDockerBasicScanByVariant:
     def test_balanced_basic_scan(self, tmp_path: Path):
         """Balanced variant can perform a basic repository scan."""
         image = f"{DOCKER_REGISTRY}:balanced"
-        if not image_exists(image):
-            if not pull_image(image):
-                pytest.skip(f"Could not pull image: {image}")
+        ensure_image(image)
 
         test_repo = tmp_path / "test-repo"
         test_repo.mkdir()
@@ -1309,9 +1321,7 @@ class TestDockerBasicScanByVariant:
     def test_fast_basic_scan(self, tmp_path: Path):
         """Fast variant can perform a basic repository scan."""
         image = f"{DOCKER_REGISTRY}:fast"
-        if not image_exists(image):
-            if not pull_image(image):
-                pytest.skip(f"Could not pull image: {image}")
+        ensure_image(image)
 
         test_repo = tmp_path / "test-repo"
         test_repo.mkdir()

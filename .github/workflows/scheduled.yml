@@ -207,9 +207,18 @@ jobs:
           echo ""
           echo "Scanning for secrets..."
           set -euo pipefail
-          if ! trufflehog filesystem . --json --exclude-paths .trufflehog-exclude.txt \
-              --only-verified > trufflehog-results.json 2>trufflehog-stderr.txt; then
-            EXIT_CODE=$?
+          # Same `if ! cmd; then rc=$?` defect as validate-variants below: bash's
+          # `!` replaces $? with the negated status, so EXIT_CODE was always 0 and
+          # `exit 0` reported SUCCESS on a crashed scanner -- and terminated the
+          # step before the verified-secrets check ran. A fail-open on a secret
+          # scan. Found by sweeping for the pattern in chunk 21; fixed here rather
+          # than filed because it is the same two lines in the same file.
+          set +e
+          trufflehog filesystem . --json --exclude-paths .trufflehog-exclude.txt \
+              --only-verified > trufflehog-results.json 2>trufflehog-stderr.txt
+          EXIT_CODE=$?
+          set -e
+          if [ "$EXIT_CODE" -ne 0 ]; then
             echo "::error::TruffleHog exited with code ${EXIT_CODE}"
             cat trufflehog-stderr.txt >&2
             exit "${EXIT_CODE}"
@@ -1539,16 +1548,53 @@ jobs:
           # strictly typed: `7 == true` is false).
           # Capture stderr separately so a silent-exit bug (zero stdout, non-zero rc)
           # emits a diagnosable error to the job log instead of just "exit code 1".
-          if ! docker run --rm "$IMAGE_REF" \
+          # Capture the exit code WITHOUT `if !`. Bash's `!` replaces $? with the
+          # NEGATED status, so `if ! cmd; then rc=$?` yields 0 for every failure,
+          # and the `exit "$rc"` below then exited 0 -- the step passed and the
+          # count assertion never ran. Not hypothetical: run 31925247675
+          # (2026-08-16) logged `tools check --profile deep exited with rc=0` and
+          # reported SUCCESS, while balanced/slim/fast each printed their real
+          # count. `Validate deep` had never verified anything. Measured chunk 21.
+          # `set -e` is on (Actions runs `bash -e`), which is why the original
+          # needed `if !` at all; `set +e` around the call is the fix that keeps
+          # both the guard and the true exit code.
+          set +e
+          docker run --rm "$IMAGE_REF" \
               tools check --profile "$PROFILE" --json \
-              > tools-check.json 2>tools-check.stderr.log; then
-            rc=$?
-            echo "::error::tools check --profile $PROFILE exited with rc=$rc"
+              > tools-check.json 2>tools-check.stderr.log
+          rc=$?
+          set -e
+
+          # Unparseable output is catastrophic regardless of rc.
+          if ! jq -e 'type == "object" and length > 0' tools-check.json > /dev/null 2>&1; then
+            echo "::error::tools check --profile $PROFILE produced no parseable JSON (rc=$rc)"
             echo "--- stderr ---"
             cat tools-check.stderr.log
             echo "--- stdout (tools-check.json) ---"
             cat tools-check.json
+            exit "${rc:-1}"
+          fi
+
+          # rc alone cannot judge this image. `tools check` documents rc=1 as "some
+          # tool is unavailable for ANY reason" -- including the MANUAL_INSTALL_TOOLS
+          # (akto, afl++, mobsf, falco) deliberately not baked into the deep image.
+          # So a correct deep image and a broken one both return 1. The CLI ships the
+          # discriminator for exactly this case: `manual_install` per tool
+          # (CHANGELOG v1.0.5, docs/CLI_REFERENCE.md:455). Judge on that, not on rc.
+          NON_MANUAL_MISSING=$(jq -r \
+            '[.[] | select(.installed == false and .manual_install != true)] | length' \
+            tools-check.json)
+          if [ "$rc" -ne 0 ] && [ "$NON_MANUAL_MISSING" -gt 0 ]; then
+            echo "::error::tools check --profile $PROFILE exited rc=$rc with $NON_MANUAL_MISSING non-manual tool(s) missing"
+            jq -r 'to_entries[]
+                   | select(.value.installed == false and .value.manual_install != true)
+                   | "  missing: \(.key)"' tools-check.json
+            echo "--- stderr ---"
+            cat tools-check.stderr.log
             exit "$rc"
+          fi
+          if [ "$rc" -ne 0 ]; then
+            echo "rc=$rc, and every missing tool is manual_install -- expected for $VARIANT."
           fi
 
           # Count installed tools (expected JSON shape: {tool_name: {installed: bool, ...}})
