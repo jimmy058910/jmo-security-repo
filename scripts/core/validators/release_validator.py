@@ -1505,7 +1505,18 @@ def _check_dockerfile_build(dockerfile: str) -> CheckResult:
                 f"jmo-validate-{Path(dockerfile).name.lower()}",
                 ".",
             ],
-            timeout=600,
+            # Budget derived from measured builds, not guessed. All four
+            # variants were built from dev on 2026-08-22 WITH a warm layer
+            # cache: deep 858s, balanced 572s, slim 406s, fast 259s. GHA amd64,
+            # also cached, recorded in #941: balanced 960s, deep 660s. Since
+            # --no-cache is strictly slower than every one of those, a 600s
+            # budget could not be met by deep (858s cached, 43% over before the
+            # cache is even dropped). 1800s is ~2.1x the slowest local build and
+            # ~1.9x the slowest GHA one.
+            #
+            # If this needs raising again, re-measure rather than doubling: the
+            # number is only meaningful next to the builds it must accommodate.
+            timeout=1800,
         )
         if result.returncode != 0:
             return CheckResult(
@@ -1521,10 +1532,18 @@ def _check_dockerfile_build(dockerfile: str) -> CheckResult:
             message="Docker not available",
         )
     except subprocess.TimeoutExpired:
+        # FAIL, not SKIP. A build that ran past its own budget is a finding; an
+        # absent daemon is a missing prerequisite. Reporting both as SKIP made
+        # them indistinguishable in the scorecard's status column, so a check
+        # that could never pass looked exactly like one that was never run
+        # (#941).
         return CheckResult(
             name=name,
-            status=CheckStatus.SKIP,
-            message=f"Docker build timed out for {dockerfile}",
+            status=CheckStatus.FAIL,
+            message=(
+                f"Docker build exceeded its 1800s budget for {dockerfile} "
+                f"-- this is a timeout, NOT an absent daemon"
+            ),
         )
     return None  # type: ignore[return-value]
 
