@@ -134,7 +134,13 @@ def ensure_image(image: str) -> None:
             f"never published: {err}"
         )
     if any(w in lowered for w in ("denied", "unauthorized", "authentication")):
-        pytest.skip(f"not authenticated for {image}: {err}")
+        # Genuinely ambiguous, and the message must not pretend otherwise: a
+        # registry returns 401 for an absent repository AND for a private one,
+        # deliberately, so as not to leak which repositories exist. Measured --
+        # docker says "repository does not exist or may require docker login"
+        # for both. A missing TAG in a repository we CAN see is a different
+        # matter and is caught by the "not found" branch above as a failure.
+        pytest.skip(f"cannot access {image} (absent or private): {err}")
     if "daemon" in lowered or "connection refused" in lowered:
         pytest.skip(f"docker daemon not reachable: {err}")
     pytest.fail(f"docker pull {image} failed (rc={result.returncode}): {err}")
