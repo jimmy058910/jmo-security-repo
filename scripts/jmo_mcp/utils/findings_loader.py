@@ -163,6 +163,24 @@ class FindingsLoader:
         findings = self.load_findings()
         return len(findings)
 
+    def get_tool_names(self) -> list[str]:
+        """
+        Get the distinct tool names present in the loaded findings.
+
+        ``get_server_info``'s docstring promised an ``available_tools`` key
+        listing "security tools used in scan" and its return value had no such
+        key. This supplies it.
+
+        Returns:
+            Sorted list of distinct tool names (empty if no findings)
+        """
+        names = {
+            (finding.get("tool") or {}).get("name")
+            for finding in self.load_findings()
+            if isinstance(finding.get("tool"), dict)
+        }
+        return sorted(n for n in names if n)
+
     def get_severity_distribution(self) -> dict[str, int]:
         """
         Get distribution of findings by severity.

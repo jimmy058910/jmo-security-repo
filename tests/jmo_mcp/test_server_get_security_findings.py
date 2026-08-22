@@ -206,12 +206,20 @@ def test_get_security_findings_pagination_offset(mock_env):
 
 
 def test_get_security_findings_pagination_max_limit(mock_env):
-    """Test limit cap at 1000"""
+    """Test limit cap at 1000 is REPORTED, not just applied.
+
+    This asserted `result["limit"] == 9999` with the comment "Original limit
+    preserved in response". Preserving the request is exactly the bug: a client
+    paginating with `offset += result["limit"]` after asking for 9999 advances
+    9999 places over a page of at most 1000 and skips the 8999 in between,
+    with no error anywhere. The response must carry the limit that was applied.
+    """
     result = get_security_findings(limit=9999)
 
-    # Should cap at 1000 internally, but since we have 5 findings, returns 5
+    # Capped at 1000; with 5 findings in the fixture, 5 come back.
     assert len(result["findings"]) == 5
-    assert result["limit"] == 9999  # Original limit preserved in response
+    assert result["limit"] == 1000
+    assert result["limit"] <= 1000
 
 
 def test_get_security_findings_pagination_offset_beyond_total(mock_env):
@@ -365,3 +373,66 @@ def test_get_security_findings_finding_ids_unique(mock_env):
 
     finding_ids = [f["id"] for f in result["findings"]]
     assert len(finding_ids) == len(set(finding_ids))  # All unique
+
+
+# ==============================================================================
+# Pagination inputs that are not pagination
+# ==============================================================================
+
+
+@pytest.mark.parametrize("bad_limit", [-1, -5, -1000])
+def test_negative_limit_is_rejected(mock_env, bad_limit):
+    """A negative limit silently returned zero findings.
+
+    `filter_findings` slices, and `findings[0:-5]` is a valid Python
+    expression with nothing to do with what a caller asking for -5 meant.
+    Chunk 15 found the same class in `jmo trends --last -5`, where SQLite
+    treats a negative LIMIT as no limit and every scan came back.
+    """
+    with pytest.raises(ValueError, match="limit must not be negative"):
+        get_security_findings(limit=bad_limit)
+
+
+@pytest.mark.parametrize("bad_offset", [-1, -3, -999])
+def test_negative_offset_is_rejected(mock_env, bad_offset):
+    """A negative offset returned the LAST N findings, silently.
+
+    Measured on the 5-finding fixture: offset=-3 returned 3 findings -- the
+    tail of the list -- which is a plausible-looking answer to a nonsense
+    request, and the worst kind.
+    """
+    with pytest.raises(ValueError, match="offset must not be negative"):
+        get_security_findings(offset=bad_offset)
+
+
+def test_zero_limit_and_zero_offset_are_still_accepted(mock_env):
+    """Negative control: the guard rejects negatives, not everything.
+
+    Without this, `if limit <= 0: raise` would pass the two tests above while
+    breaking `limit=0`, and a check that can only fire looks identical to a
+    correct one.
+    """
+    result = get_security_findings(limit=0, offset=0)
+    assert result["findings"] == []
+    assert result["limit"] == 0
+    assert result["total"] == 5
+
+
+def test_paginating_with_the_returned_limit_visits_every_finding(mock_env):
+    """The property the `limit` echo broke, stated end to end.
+
+    Walking pages with `offset += result["limit"]` must enumerate all findings
+    exactly once. Under the old behaviour a client that asked for 9999 got a
+    reported limit of 9999 and jumped straight past everything after page one.
+    """
+    seen: list[str] = []
+    offset = 0
+    for _ in range(20):  # generous upper bound; the fixture has 5
+        page = get_security_findings(limit=2, offset=offset)
+        if not page["findings"]:
+            break
+        seen.extend(f["id"] for f in page["findings"])
+        offset += page["limit"]
+
+    assert len(seen) == 5
+    assert len(set(seen)) == 5

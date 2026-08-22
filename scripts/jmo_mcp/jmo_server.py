@@ -7,9 +7,18 @@ to query security findings and suggest fixes.
 
 Architecture:
 - Framework: MCPServer (Official Anthropic SDK; named FastMCP before mcp 2.0)
-- Tools: get_security_findings, apply_fix, mark_resolved
+- Tools: get_security_findings, apply_fix, mark_resolved, query_findings_db,
+  get_server_info  (five; this list read "three" until it was counted)
 - Resources: finding://{id} for full context
-- Transport: stdio, HTTP, SSE
+- Transport: stdio only. `mcp.run()` is called with no arguments, which selects
+  stdio. This line claimed "stdio, HTTP, SSE"; nothing here starts an HTTP or
+  SSE listener.
+
+Not implemented, despite being callable:
+- `apply_fix(dry_run=False)` never writes a patch; it returns success=False.
+- `mark_resolved` persists nothing; it returns success=False.
+Both are documented as such in docs/MCP_SETUP.md. Do not build a workflow on
+either until they are.
 
 Usage:
     # Development mode (stdio transport)
@@ -32,6 +41,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import re
 from datetime import UTC, datetime
 from functools import wraps
 from pathlib import Path
@@ -56,9 +66,29 @@ from scripts.jmo_mcp.utils.findings_loader import FindingsLoader
 from scripts.jmo_mcp.utils.rate_limiter import RateLimiter
 from scripts.jmo_mcp.utils.source_context import SourceContextExtractor
 
-# Configure logging
+# Configure logging.
+#
+# `jmo mcp-server` accepts --log-level and --human-logs and exports them as
+# MCP_LOG_LEVEL / MCP_HUMAN_LOGS. Until this read existed, both flags were
+# parsed, advertised in --help, exported, and then discarded -- the server
+# hardcoded INFO and the long format regardless.
+_LOG_LEVELS = {
+    "DEBUG": logging.DEBUG,
+    "INFO": logging.INFO,
+    "WARN": logging.WARNING,
+    "WARNING": logging.WARNING,
+    "ERROR": logging.ERROR,
+}
+_LOG_LEVEL = _LOG_LEVELS.get(os.getenv("MCP_LOG_LEVEL", "INFO").upper(), logging.INFO)
+_HUMAN_LOGS = os.getenv("MCP_HUMAN_LOGS", "").strip() not in ("", "0", "false", "False")
+
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=_LOG_LEVEL,
+    format=(
+        "%(levelname)s %(message)s"
+        if _HUMAN_LOGS
+        else "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    ),
 )
 logger = logging.getLogger(__name__)
 
@@ -66,7 +96,16 @@ logger = logging.getLogger(__name__)
 RESULTS_DIR = Path(os.getenv("MCP_RESULTS_DIR", "./results"))
 REPO_ROOT = Path(os.getenv("MCP_REPO_ROOT", "."))
 
-# Authentication configuration
+# Authentication configuration.
+#
+# READ THIS BEFORE TRUSTING THE NAME. These hashes are computed and then never
+# compared against anything. MCP's stdio transport hands the tool functions no
+# request context, so there is nowhere to read a caller's credential from --
+# see `require_rate_limit` below. Keys are kept because the shape is right for
+# the day a transport supplies one; nothing here enforces access today.
+#
+# Bound at MODULE IMPORT: setting JMO_MCP_API_KEYS after this module is
+# imported has no effect.
 API_KEYS_RAW = os.getenv("JMO_MCP_API_KEYS", "").split(",")
 API_KEYS_HASHED = [
     hashlib.sha256(key.strip().encode()).hexdigest()
@@ -82,9 +121,23 @@ RATE_LIMIT_REFILL_RATE = float(os.getenv("JMO_MCP_RATE_LIMIT_REFILL_RATE", "1.67
 logger.info("MCP Server initialized")
 logger.info(f"Results directory: {RESULTS_DIR.resolve()}")
 logger.info(f"Repository root: {REPO_ROOT.resolve()}")
-logger.info(
-    f"Authentication: {'enabled' if API_KEYS_HASHED else 'disabled (dev mode)'}"
-)
+# This line used to read "Authentication: enabled" whenever JMO_MCP_API_KEYS was
+# set, and docs/KNOWN_LIMITATIONS.md told users in bold to read it before
+# exposing the server to anything. Measured: with keys set it logged "enabled"
+# and then served an unauthenticated caller. A security signal that reads
+# positive for a control that does not exist is worse than no signal, because it
+# ends the reader's investigation with a confirmation.
+if API_KEYS_HASHED:
+    logger.warning(
+        f"Authentication: NOT ENFORCED -- {len(API_KEYS_HASHED)} key(s) configured "
+        "via JMO_MCP_API_KEYS, but no transport supplies a caller credential to "
+        "compare them against. EVERY caller is trusted. Do not expose this "
+        "server to anything you do not already trust."
+    )
+else:
+    logger.info(
+        "Authentication: not enforced (no keys configured). Every caller is trusted."
+    )
 logger.info(
     f"Rate limiting: {'enabled' if RATE_LIMIT_ENABLED else 'disabled'} "
     f"(capacity={RATE_LIMIT_CAPACITY}, refill_rate={RATE_LIMIT_REFILL_RATE}/s)"
@@ -104,24 +157,48 @@ rate_limiter = (
     else None
 )
 
+# Every request is charged to this one bucket. Named so that the absence of
+# per-client accounting is visible at the call site rather than looking like a
+# placeholder someone forgot to fill in.
+_SHARED_BUCKET_ID = "anonymous"
 
-def require_auth_and_rate_limit(func):
+
+def _server_version() -> str:
+    """Report the installed jmo-security version.
+
+    ``get_server_info`` returned a hardcoded "1.0.0" for every release through
+    1.0.8 -- the same shape as the frozen ``jmo_version`` chunk 14 found in the
+    history writer. Resolved from package metadata so it cannot drift again.
     """
-    Decorator to enforce rate limiting on MCP tools.
+    try:
+        from importlib.metadata import PackageNotFoundError, version
 
-    NOTE: This implementation provides rate limiting infrastructure.
-    Full authentication enforcement requires MCP middleware integration
-    (planned for v1.0.2 after FastMCP adds auth hooks).
+        return version("jmo-security")
+    except (ImportError, PackageNotFoundError):  # pragma: no cover - packaging edge
+        return "unknown"
 
-    Rate Limiting:
-    - If JMO_MCP_RATE_LIMIT_ENABLED=true, enforces token bucket limits
-    - Per-client tracking by "anonymous" identifier
-    - Default: 100 requests burst, 1.67 tokens/sec (100/min sustained)
 
-    Authentication (infrastructure ready, enforcement pending):
-    - API_KEYS_HASHED populated from JMO_MCP_API_KEYS
-    - Validation logic implemented
-    - Awaiting FastMCP middleware support for enforcement
+def require_rate_limit(func):
+    """
+    Decorator enforcing the token-bucket rate limit on an MCP entry point.
+
+    This was named ``require_auth_and_rate_limit``, which was the single most
+    misleading token in this module: it appeared on every tool and read as
+    proof that callers are authenticated. The body never referenced
+    ``API_KEYS_HASHED`` and still does not. It is named for what it does.
+
+    Rate limiting:
+    - If JMO_MCP_RATE_LIMIT_ENABLED=true, enforces token bucket limits.
+    - **One shared bucket**, not one per client. ``RateLimiter`` is keyed by
+      client id and is perfectly capable of per-client buckets, but stdio
+      transport gives the tool function no request context, so there is no
+      caller identity to key on and every request is charged to the same
+      ``anonymous`` bucket. One caller can exhaust everyone's budget. The old
+      docstring said "Per-client tracking by 'anonymous' identifier", which
+      contradicts itself in a single line.
+    - Default: 100 requests burst, 1.67 tokens/sec (100/min sustained).
+
+    Authentication: **none**. See ``API_KEYS_HASHED`` above.
 
     Raises:
         ValueError: If rate limit exceeded
@@ -129,10 +206,8 @@ def require_auth_and_rate_limit(func):
 
     @wraps(func)
     def wrapper(*args, **kwargs):
-        client_id = "anonymous"
-
-        # TODO: Extract client ID from MCP request context when FastMCP adds support
-        # For now, all clients share the same rate limit bucket
+        # One shared bucket -- see the docstring. Not a per-client identifier.
+        client_id = _SHARED_BUCKET_ID
 
         # Rate limiting check
         if rate_limiter:
@@ -150,6 +225,47 @@ def require_auth_and_rate_limit(func):
         return func(*args, **kwargs)
 
     return wrapper
+
+
+_HUNK_HEADER_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@", re.MULTILINE)
+
+
+def _validate_patch(patch: str) -> None:
+    """Reject anything that is not a unified diff.
+
+    ``apply_fix(dry_run=True)`` used to echo its ``patch`` argument straight
+    back as ``dry_run_preview`` with ``success: True``, whatever it contained --
+    measured, it accepted the string ``"rm -rf / ; not a diff"``. A preview is
+    shown to a human (or an agent) as "this is the change that would be made";
+    a preview of something that is not a diff cannot be reviewed as one.
+
+    Raises:
+        ValueError: If *patch* is empty or has no unified-diff hunk header.
+    """
+    if not patch or not patch.strip():
+        raise ValueError("Patch must not be empty")
+    if not _HUNK_HEADER_RE.search(patch):
+        raise ValueError(
+            "Patch is not a unified diff: no hunk header (@@ -n,m +n,m @@) "
+            "found. Pass the output of `git diff`."
+        )
+
+
+def _validate_confidence(confidence: float) -> None:
+    """Reject a confidence score outside the documented 0.0-1.0 range.
+
+    Both 99.0 and -4.0 were accepted before this check existed, so "recommend
+    0.9+ for auto-apply" was advice about a number with no defined scale.
+
+    Raises:
+        ValueError: If *confidence* is not a real number in [0.0, 1.0].
+    """
+    if isinstance(confidence, bool) or not isinstance(confidence, (int, float)):
+        raise ValueError(
+            f"confidence must be a number, got {type(confidence).__name__}"
+        )
+    if not 0.0 <= confidence <= 1.0:
+        raise ValueError(f"confidence must be between 0.0 and 1.0, got {confidence}")
 
 
 def get_findings_loader() -> FindingsLoader:
@@ -174,7 +290,7 @@ def get_context_extractor() -> SourceContextExtractor:
 
 
 @mcp.tool()
-@require_auth_and_rate_limit
+@require_rate_limit
 def get_security_findings(
     severity: list[str] | None = None,
     tool: str | None = None,
@@ -195,14 +311,21 @@ def get_security_findings(
         tool: Filter by tool name (e.g., "semgrep", "trivy", "trufflehog")
         rule_id: Filter by rule ID (e.g., "CWE-79" for XSS)
         path: Filter by file path (substring match, e.g., "src/api")
-        limit: Maximum findings to return (default: 100, max: 1000)
-        offset: Pagination offset (default: 0)
+        limit: Maximum findings to return (default: 100, max: 1000). Must not
+            be negative. Values above 1000 are capped, and the cap is what is
+            reported back -- page with the returned `limit`, not the requested
+            one.
+        offset: Pagination offset (default: 0). Must not be negative.
+
+    Raises:
+        ValueError: If *limit* or *offset* is negative, or no scan results
+            exist.
 
     Returns:
         Dictionary with:
         - findings: List of security findings (CommonFinding schema v1.2.0)
         - total: Total count of findings matching filters
-        - limit: Applied limit
+        - limit: The limit actually applied (>= 1000 requests report 1000)
         - offset: Applied offset
 
     Example:
@@ -224,9 +347,26 @@ def get_security_findings(
             "offset": 0
         }
     """
+    # A negative limit or offset used to be accepted silently and answered with
+    # Python slice semantics, which are not pagination semantics: limit=-5
+    # returned 0 findings, and offset=-3 returned the LAST 3 findings out of 5.
+    # Neither is what a caller asking for a negative page meant, and neither was
+    # reported as an error.
+    if limit < 0:
+        raise ValueError(f"limit must not be negative, got {limit}")
+    if offset < 0:
+        raise ValueError(f"offset must not be negative, got {offset}")
+
     try:
         loader = get_findings_loader()
         all_findings = loader.load_findings()
+
+        # Cap at 1000. `applied_limit` -- not `limit` -- is what gets reported
+        # back: this returned the value the caller ASKED for while silently
+        # applying the cap, so a client paginating with `offset += limit` after
+        # requesting 5000 advanced 5000 places over a page of 1000 and skipped
+        # 4000 findings without any error.
+        applied_limit = min(limit, 1000)
 
         # Apply filters
         filtered = loader.filter_findings(
@@ -235,7 +375,7 @@ def get_security_findings(
             tool=tool,
             rule_id=rule_id,
             path=path,
-            limit=min(limit, 1000),  # Cap at 1000
+            limit=applied_limit,
             offset=offset,
         )
 
@@ -261,7 +401,7 @@ def get_security_findings(
         return {
             "findings": filtered,
             "total": total_matching,
-            "limit": limit,
+            "limit": applied_limit,
             "offset": offset,
         }
 
@@ -276,7 +416,7 @@ def get_security_findings(
 
 
 @mcp.tool()
-@require_auth_and_rate_limit
+@require_rate_limit
 def apply_fix(
     finding_id: str,
     patch: str,
@@ -285,42 +425,59 @@ def apply_fix(
     dry_run: bool = False,
 ) -> dict:
     """
-    Apply AI-suggested fix patch to resolve a security finding.
+    Preview an AI-suggested fix patch. Applying is NOT IMPLEMENTED.
 
-    IMPORTANT: Always use dry_run=True first to preview the patch before applying!
+    ``dry_run=True`` validates the patch and echoes it back for review.
+    ``dry_run=False`` writes nothing and returns ``success: False`` -- there is
+    no patch application yet. The two are distinguishable in the return value:
+    a successful preview carries ``dry_run: True``, and the write path can never
+    return ``success: True``.
 
     Args:
-        finding_id: Fingerprint ID of the finding to fix
-        patch: Unified diff patch (git diff format)
-        confidence: AI confidence score (0.0-1.0) - recommend 0.9+ for auto-apply
+        finding_id: Fingerprint ID of the finding to fix. Must exist.
+        patch: Unified diff patch (git diff format). Must contain a hunk header
+            (``@@ -n,m +n,m @@``) or ValueError is raised -- an arbitrary string
+            is not a previewable change.
+        confidence: AI confidence score, 0.0-1.0 inclusive. Out-of-range values
+            raise ValueError.
         explanation: Human-readable explanation of the fix
-        dry_run: Preview patch without applying (default: False, RECOMMEND True first)
+        dry_run: Preview patch without applying (default: False)
+
+    Raises:
+        ValueError: If *confidence* is out of range, *patch* is not a unified
+            diff, or *finding_id* matches no finding.
 
     Returns:
         Dictionary with:
-        - success: Boolean indicating if patch was applied
-        - applied_at: ISO timestamp of application (if successful)
-        - file_modified: Path to modified file (if successful)
+        - dry_run: True on a successful preview (absent on the write path)
+        - success: True only for a validated preview; never True for a write
         - dry_run_preview: Patch preview (if dry_run=True)
-        - error: Error message (if failed)
+        - error: Why nothing was written (always present when dry_run=False)
 
     Security Note:
         This function modifies source code. Use with caution and review diffs carefully.
         High-confidence fixes (≥0.9) are safer for auto-application.
 
     Example:
-        >>> # Step 1: Preview patch
+        >>> # A previewable patch needs a real hunk header.
         >>> result = apply_fix(
         ...     finding_id="fingerprint-abc123",
-        ...     patch="diff --git a/src/app.js...\\n-  res.send(userInput)\\n+  res.send(sanitize(userInput))",
+        ...     patch=(
+        ...         "--- a/src/app.js\\n+++ b/src/app.js\\n"
+        ...         "@@ -42,1 +42,1 @@\\n"
+        ...         "-  res.send(userInput)\\n"
+        ...         "+  res.send(sanitize(userInput))\\n"
+        ...     ),
         ...     confidence=0.95,
         ...     explanation="Added sanitization to prevent XSS",
         ...     dry_run=True
         ... )
-        >>> print(result["dry_run_preview"])
+        >>> result["success"], result["dry_run"]
+        (True, True)
 
-        >>> # Step 2: Apply if preview looks good
-        >>> result = apply_fix(..., dry_run=False)
+        >>> # There is no step 2 yet: the write path is not implemented.
+        >>> apply_fix(..., dry_run=False)["success"]
+        False
     """
     # TODO(security): When implementing apply_fix(), add these controls:
     #   1. Directory traversal validation on patch paths (CWE-22)
@@ -329,6 +486,11 @@ def apply_fix(
     #   4. Validate patch doesn't modify files outside project root
     #   5. Rate limit to prevent rapid-fire patch application
     try:
+        # Validate the arguments BEFORE reporting any kind of success. A
+        # preview that echoes an unvalidated string is not a preview.
+        _validate_confidence(confidence)
+        _validate_patch(patch)
+
         # Verify finding exists
         loader = get_findings_loader()
         finding = loader.get_finding_by_id(finding_id)
@@ -338,7 +500,7 @@ def apply_fix(
 
         if dry_run:
             logger.info(f"apply_fix: dry-run preview for {finding_id}")
-            return {"success": True, "dry_run_preview": patch}
+            return {"success": True, "dry_run": True, "dry_run_preview": patch}
 
         # TODO(future): Implement full patch application - see
         # https://github.com/jimmy058910/jmo-security-repo/issues
@@ -370,29 +532,39 @@ def apply_fix(
 
 
 @mcp.tool()
-@require_auth_and_rate_limit
+@require_rate_limit
 def mark_resolved(
     finding_id: str,
     resolution: str,
     comment: str | None = None,
 ) -> dict:
     """
-    Mark a security finding as resolved.
+    NOT IMPLEMENTED. Validates its arguments and persists nothing.
 
-    Use this to track resolution status without applying a fix (e.g., for
-    false positives, accepted risks, or manually fixed issues).
+    This tool always returns ``success: False``. There is no resolution store
+    yet -- no file, no database table -- so a resolution recorded here is
+    discarded and the finding reappears unchanged in the next scan. It is kept
+    callable so a client can discover the capability's absence from the return
+    value rather than from a scan that did not change.
 
     Args:
-        finding_id: Fingerprint ID of the finding
-        resolution: Resolution type (valid values: fixed, false_positive, wont_fix, risk_accepted)
+        finding_id: Fingerprint ID of the finding. Must exist; an unknown id
+            raises ValueError.
+        resolution: Resolution type (valid values: fixed, false_positive,
+            wont_fix, risk_accepted)
         comment: Optional comment explaining the resolution
 
     Returns:
         Dictionary with:
-        - success: Boolean indicating success
+        - success: always False
+        - error: why nothing was persisted
         - finding_id: Confirmed finding ID
-        - resolution: Applied resolution type
-        - timestamp: ISO timestamp of resolution
+        - resolution: Validated resolution type
+        - timestamp: ISO timestamp of the (discarded) decision
+
+    Raises:
+        ValueError: If *resolution* is not a valid type, or *finding_id* does
+            not match any finding in the loaded results.
 
     Example:
         >>> mark_resolved(
@@ -401,7 +573,8 @@ def mark_resolved(
         ...     comment="This is a test file, not production code"
         ... )
         {
-            "success": True,
+            "success": False,
+            "error": "Resolution tracking is not implemented. ...",
             "finding_id": "fingerprint-abc123",
             "resolution": "false_positive",
             "timestamp": "2025-11-01T12:00:00Z"
@@ -438,17 +611,32 @@ def mark_resolved(
 
         timestamp = datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
-        logger.info(
-            f"mark_resolved: {finding_id} → {resolution} "
-            f"(comment: {comment or 'none'})"
+        # This returned success=True while writing nothing, anywhere. Measured:
+        # a call with a valid finding id created no file, and no .jmo/ directory
+        # existed afterwards. An AI agent reads success=True as "this finding is
+        # now recorded as a false positive", stops working on it, and finds it
+        # unchanged in the next scan. The only hint was a trailing `note` field,
+        # which the documented example return value did not even include.
+        #
+        # success=False is the truthful answer for a call that persisted
+        # nothing, and it matches what apply_fix already returns for its own
+        # unimplemented path.
+        logger.warning(
+            f"mark_resolved: NOT PERSISTED -- {finding_id} -> {resolution} "
+            f"(comment: {comment or 'none'}). Resolution tracking is not "
+            "implemented; this decision was validated and then discarded."
         )
 
         return {
-            "success": True,
+            "success": False,
+            "error": (
+                "Resolution tracking is not implemented. The finding id and "
+                "resolution type were validated, but nothing was persisted and "
+                "this finding will reappear unchanged in the next scan."
+            ),
             "finding_id": finding_id,
             "resolution": resolution,
             "timestamp": timestamp,
-            "note": "Resolution tracking will be persisted in Phase 2",
         }
 
     except ValueError as e:
@@ -460,7 +648,7 @@ def mark_resolved(
 
 
 @mcp.tool()
-@require_auth_and_rate_limit
+@require_rate_limit
 def query_findings_db(
     query: str,
     params: list[str] | None = None,
@@ -542,12 +730,18 @@ def query_findings_db(
 
 
 @mcp.resource("finding://{finding_id}")
+@require_rate_limit
 def get_finding_context(finding_id: str) -> dict:
     """
     Get full context for a specific security finding.
 
     Use this resource to retrieve comprehensive information about a finding,
-    including source code context, remediation guidance, and related findings.
+    including source code context and remediation guidance.
+
+    This is the only entry point that reads arbitrary source files off disk, and
+    it was the only one the rate limiter did not cover -- measured: with the
+    shared bucket fully drained, `get_security_findings` and `get_server_info`
+    were denied and this resource was still served. It is decorated now.
 
     URI Pattern: finding://<fingerprint-id>
 
@@ -632,7 +826,7 @@ def get_finding_context(finding_id: str) -> dict:
 
 
 @mcp.tool()
-@require_auth_and_rate_limit
+@require_rate_limit
 def get_server_info() -> dict:
     """
     Get JMo Security MCP Server metadata and configuration.
@@ -641,12 +835,16 @@ def get_server_info() -> dict:
 
     Returns:
         Dictionary with:
-        - version: Server version
+        - version: installed jmo-security version (was hardcoded "1.0.0")
         - results_dir: Path to results directory
         - repo_root: Path to repository root
         - total_findings: Total findings in current scan
         - severity_distribution: Findings breakdown by severity
-        - available_tools: List of security tools used in scan
+        - available_tools: List of security tools used in scan. This key was
+          promised here and absent from the return value until it was checked.
+        - authentication_enforced: always False. There is no request context on
+          stdio transport, so JMO_MCP_API_KEYS cannot be checked against a
+          caller. Ask this rather than inferring auth from the key list.
 
     Example:
         >>> info = get_server_info()
@@ -657,21 +855,25 @@ def get_server_info() -> dict:
         loader = get_findings_loader()
 
         return {
-            "version": "1.0.0",
+            "version": _server_version(),
             "results_dir": str(RESULTS_DIR.resolve()),
             "repo_root": str(REPO_ROOT.resolve()),
             "total_findings": loader.get_total_count(),
             "severity_distribution": loader.get_severity_distribution(),
+            "available_tools": sorted(loader.get_tool_names()),
+            "authentication_enforced": False,
             "note": "Use get_security_findings() to query findings with filters",
         }
 
     except FileNotFoundError:
         return {
-            "version": "1.0.0",
+            "version": _server_version(),
             "results_dir": str(RESULTS_DIR.resolve()),
             "repo_root": str(REPO_ROOT.resolve()),
             "total_findings": 0,
             "severity_distribution": {},
+            "available_tools": [],
+            "authentication_enforced": False,
             "error": "No scan results found. Run: jmo scan --repo <path>",
         }
     except Exception as e:
@@ -684,7 +886,8 @@ def get_server_info() -> dict:
 # ============================================================================
 
 if __name__ == "__main__":
-    # This is called when running: uv run mcp dev scripts/mcp/server.py
+    # This is called when running: uv run mcp dev scripts/jmo_mcp/jmo_server.py
+    # (this comment said `scripts/mcp/server.py`, which has never existed)
     logger.info("Starting JMo Security MCP Server (stdio transport)")
     logger.info(f"Results directory: {RESULTS_DIR.resolve()}")
     logger.info(f"Repository root: {REPO_ROOT.resolve()}")

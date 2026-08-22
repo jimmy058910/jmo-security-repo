@@ -29,13 +29,18 @@ cp .mcp.json.example .claude/mcp.json
 
 ### MCP Tools Summary
 
-| Tool | Purpose | Example |
-|------|---------|---------|
-| `get_security_findings` | Query with filters | `Show HIGH in src/` |
-| `get_finding_context` | Get code context | `Get context for abc123` |
-| `apply_fix` | Apply AI patches | `Fix CWE-79 in app.js:42` |
-| `mark_resolved` | Track remediation | `Mark as false_positive` |
-| `get_server_info` | Server status | `Server status?` |
+| Tool | Purpose | Status | Example |
+|------|---------|--------|---------|
+| `get_security_findings` | Query with filters | working | `Show HIGH in src/` |
+| `get_finding_context` | Get code context (`finding://` resource) | working | `Get context for abc123` |
+| `query_findings_db` | Read-only SQL over scan history | working | `Which findings recur?` |
+| `get_server_info` | Server status | working | `Server status?` |
+| `apply_fix` | Preview an AI patch | **preview only** — applying is not implemented | `Fix CWE-79 in app.js:42` |
+| `mark_resolved` | Record a resolution | **not implemented** — persists nothing | `Mark as false_positive` |
+
+The two marked rows are callable and always return `success: False` on the path
+that would change something. They are documented in full below; do not build a
+remediation workflow on either yet.
 
 ---
 
@@ -45,7 +50,9 @@ MCP servers extend Claude Code's capabilities by providing additional context an
 
 **JMo Security MCP Server** (provided by this project):
 
-- **AI Remediation Orchestration** - Query security findings, apply fixes, track resolutions
+- **AI Remediation Orchestration** - Query security findings and scan history,
+  and preview fixes. Applying a fix and recording a resolution are not
+  implemented yet; see the tool table below.
 
 **Third-Party MCP Servers** (optional integrations):
 
@@ -55,31 +62,39 @@ MCP servers extend Claude Code's capabilities by providing additional context an
 
 ## JMo Security MCP Server (AI Remediation)
 
-The JMo Security MCP server enables AI-powered security remediation workflows. It provides tools for querying findings, applying fixes, and tracking resolutions.
+The JMo Security MCP server gives an AI client structured access to JMo scan
+results. Querying (findings, source context, scan history) is fully working.
+The two write-side tools -- applying a patch and recording a resolution -- are
+not implemented and say so in their return values.
 
 ### Features
 
 - 🔍 **Query Security Findings** - Filter and paginate scan results
-- 🔧 **Apply Fixes** - AI-suggested patches with dry-run preview
-- ✅ **Track Resolutions** - Mark findings as resolved with reason
-- 🛡️ **Rate Limiting** - Token bucket algorithm (100 req/min default)
-- 🔐 **Authentication** - API key validation (optional, for production)
+- 🗃️ **Query Scan History** - Read-only SQL over `.jmo/history.db`
+- 🔧 **Preview Fixes** - AI-suggested patches, validated and previewed.
+  **Applying them is not implemented.**
+- ✅ **Track Resolutions** - **Not implemented.** `mark_resolved` validates a
+  decision and persists nothing.
+- 🛡️ **Rate Limiting** - Token bucket algorithm (100 req/min default), one
+  shared bucket for all callers
+- 🚫 **No Authentication** - callers are not authenticated and there is no
+  setting that changes this. See [Authentication](#authentication--there-is-none).
 
 ### Quick Start
 
-**Development Mode (No Authentication):**
+**Default (rate limiting on, no authentication -- there is no other mode):**
 
 ```bash
 # Run MCP server with default settings
-uv run mcp dev scripts/jmo_mcp/server.py
+uv run mcp dev scripts/jmo_mcp/jmo_server.py
 
 # Or via environment variables
 export MCP_RESULTS_DIR=./results
 export MCP_REPO_ROOT=.
-uv run mcp dev scripts/jmo_mcp/server.py
+uv run mcp dev scripts/jmo_mcp/jmo_server.py
 ```
 
-**Production Mode (With Authentication + Rate Limiting):**
+**Tuned rate limiting** (still no authentication; see below):
 
 ```bash
 # Set API keys (comma-separated)
@@ -93,7 +108,7 @@ export JMO_MCP_RATE_LIMIT_REFILL_RATE="1.67"    # Tokens/sec (100 req/min)
 # Run server
 export MCP_RESULTS_DIR=./results
 export MCP_REPO_ROOT=.
-uv run mcp dev scripts/jmo_mcp/server.py
+uv run mcp dev scripts/jmo_mcp/jmo_server.py
 ```
 
 ### Environment Variables
@@ -102,10 +117,12 @@ uv run mcp dev scripts/jmo_mcp/server.py
 |----------|---------|-------------|
 | `MCP_RESULTS_DIR` | `./results` | Path to JMo Security scan results |
 | `MCP_REPO_ROOT` | `.` | Path to repository root (for source context) |
-| `JMO_MCP_API_KEYS` | *(empty)* | Comma-separated API keys for authentication |
+| `JMO_MCP_API_KEYS` | *(empty)* | Comma-separated API keys. Hashed at import and **never compared against anything** -- grants and denies nothing. |
 | `JMO_MCP_RATE_LIMIT_ENABLED` | `true` | Enable rate limiting |
 | `JMO_MCP_RATE_LIMIT_CAPACITY` | `100` | Burst capacity (max requests before throttling) |
 | `JMO_MCP_RATE_LIMIT_REFILL_RATE` | `1.67` | Tokens per second (1.67 = 100 req/min) |
+| `MCP_LOG_LEVEL` | `INFO` | `DEBUG`/`INFO`/`WARN`/`ERROR`. Set by `jmo mcp-server --log-level`. |
+| `MCP_HUMAN_LOGS` | *(unset)* | Terse log format. Set by `jmo mcp-server --human-logs`. |
 
 ### Available Tools
 
@@ -119,8 +136,10 @@ Query security findings with filters and pagination.
 - `tool`: Filter by tool name (e.g., `"semgrep"`, `"trivy"`)
 - `rule_id`: Filter by rule ID (e.g., `"CWE-79"`)
 - `path`: Filter by file path (substring match)
-- `limit`: Maximum findings to return (default: 100, max: 1000)
-- `offset`: Pagination offset (default: 0)
+- `limit`: Maximum findings to return (default: 100, max: 1000). Must not be
+  negative. Requests above 1000 are capped, and the **response reports the
+  applied limit** -- page with `result["limit"]`, not with what you asked for.
+- `offset`: Pagination offset (default: 0). Must not be negative.
 
 **Example:**
 
@@ -132,53 +151,99 @@ get_security_findings(severity=["HIGH", "CRITICAL"], limit=10)
 get_security_findings(tool="semgrep", path="src/api")
 ```
 
-#### 2. `apply_fix`
+#### 2. `apply_fix` — preview only; applying is NOT IMPLEMENTED
 
-Apply AI-suggested fix patch to resolve a security finding.
+Validate and preview an AI-suggested patch. **`dry_run=False` writes nothing**
+and returns `success: False`. There is no patch application yet, so do not
+build a remediation workflow on it.
 
 **Parameters:**
 
-- `finding_id`: Fingerprint ID of the finding
-- `patch`: Unified diff patch (git diff format)
-- `confidence`: AI confidence score (0.0-1.0)
+- `finding_id`: Fingerprint ID of the finding. Must exist, or `ValueError`.
+- `patch`: Unified diff (git diff format). Must contain a hunk header
+  (`@@ -n,m +n,m @@`), or `ValueError` — it used to echo any string back as a
+  "preview", including `"rm -rf / ; not a diff"`.
+- `confidence`: AI confidence score, `0.0`-`1.0` inclusive. Out of range is a
+  `ValueError`; `99.0` and `-4.0` were previously accepted.
 - `explanation`: Human-readable explanation of the fix
-- `dry_run`: Preview patch without applying (default: False)
+- `dry_run`: Preview patch without applying (default: `False`)
 
 **Example:**
 
 ```python
-# Step 1: Preview patch
+# Preview. Returns {"success": True, "dry_run": True, "dry_run_preview": ...}
 apply_fix(
     finding_id="fingerprint-abc123",
-    patch="diff --git a/src/app.js...\n-  res.send(userInput)\n+  res.send(sanitize(userInput))",
+    patch=(
+        "--- a/src/app.js\n+++ b/src/app.js\n"
+        "@@ -42,1 +42,1 @@\n"
+        "-  res.send(userInput)\n"
+        "+  res.send(sanitize(userInput))\n"
+    ),
     confidence=0.95,
     explanation="Added sanitization to prevent XSS",
     dry_run=True
 )
 
-# Step 2: Apply if preview looks good
+# There is no step 2 yet. This returns {"success": False, "error": ...}
+# and changes no file.
 apply_fix(..., dry_run=False)
 ```
 
-#### 3. `mark_resolved`
+#### 3. `mark_resolved` — validated, then discarded; NOT IMPLEMENTED
 
-Mark a security finding as resolved without applying a patch.
+Validates a resolution decision and **persists nothing**. It always returns
+`success: False`, and the finding reappears unchanged in the next scan. There
+is no resolution store — no file, no database table.
+
+It returned `success: True` until this was measured, with the caveat relegated
+to a trailing `note` field. An agent reads `success`, stops working on the
+finding, and is wrong.
 
 **Parameters:**
 
-- `finding_id`: Fingerprint ID of the finding
-- `resolution`: Resolution type (`fixed`, `false_positive`, `wont_fix`, `risk_accepted`)
+- `finding_id`: Fingerprint ID of the finding. Must exist, or `ValueError`.
+- `resolution`: Resolution type (`fixed`, `false_positive`, `wont_fix`,
+  `risk_accepted`). Anything else is a `ValueError`.
 - `comment`: Optional comment explaining the resolution
 
 **Example:**
 
 ```python
+# Returns {"success": False, "error": "Resolution tracking is not
+# implemented...", "finding_id": ..., "resolution": ..., "timestamp": ...}
 mark_resolved(
     finding_id="fingerprint-abc123",
     resolution="false_positive",
     comment="This is a test file, not production code"
 )
 ```
+
+#### 3b. `query_findings_db`
+
+Read-only SQL over the scan-history database (`.jmo/history.db`). Undocumented
+here until chunk 20 of the v1.1.0 audit; it is a real, working tool.
+
+**Parameters:**
+
+- `query`: SQL string. `SELECT` / `EXPLAIN` / `WITH` and a small allowlist of
+  `PRAGMA`s only. Note the parameter is named `query`, not `sql`.
+- `params`: Optional list of bind values for `?` placeholders.
+
+**Returns:** `{"columns": [...], "rows": [[...]], "row_count": N,
+"truncated": bool}`. Rows are **lists**, not dicts, and are capped at 500.
+
+**Safety:** the connection is opened `mode=ro` *and* the statement is validated
+against a forbidden-keyword and multi-statement policy, so writes fail at two
+independent layers. Verified in chunk 20 against a copy of a real 1833-scan
+database: 17 mutation attempts — `DROP`, `DELETE`, `ATTACH`, stacked statements,
+`PRAGMA journal_mode=WAL`, mixed case, comment-prefixed — all rejected, file
+byte-identical afterwards.
+
+One consequence worth knowing: the keyword scan is textual, so a legitimate
+search whose *text* contains a forbidden word is refused —
+`SELECT * FROM findings WHERE message LIKE '%DROP%'` does not run. Match on
+`rule_id` or use a bind parameter that does not contain the keyword.
 
 #### 4. `get_server_info`
 
@@ -197,7 +262,13 @@ Rate limiting uses a **token bucket algorithm** with burst capacity and sustaine
 
 - **Burst Capacity:** Maximum requests allowed in a burst (default: 100)
 - **Refill Rate:** Tokens added per second (default: 1.67 = 100 req/min)
-- **Per-Client:** Separate buckets for each client (by API key or IP)
+- **One shared bucket, not one per client.** This line claimed "Separate
+  buckets for each client (by API key or IP)". Measured: a second caller's
+  *first ever* request is refused once the first caller has drained the budget.
+  The limiter is per-client capable, but stdio transport gives the server no
+  caller identity to key on, so everything is charged to a single `anonymous`
+  bucket. In the normal MCP arrangement — one server subprocess per client —
+  this is the same thing; it is not if you put several clients on one process.
 
 **Examples:**
 
@@ -214,17 +285,28 @@ export JMO_MCP_RATE_LIMIT_REFILL_RATE="0.167"
 export JMO_MCP_RATE_LIMIT_ENABLED="false"
 ```
 
-### Authentication
+### Authentication — there is none
 
-**Note:** Full authentication enforcement awaits FastMCP middleware support. Currently, only rate limiting is enforced.
+**The server does not authenticate callers, and no setting turns it on.** Every
+client that can reach the process is trusted. Only rate limiting is enforced.
 
-**Infrastructure Ready:**
+**What actually happens when you set `JMO_MCP_API_KEYS`:**
 
-- API keys are SHA-256 hashed on server startup
-- Decorator pattern applied to all MCP tools
-- Authentication checks will be enabled when FastMCP adds middleware hooks
+- The keys are SHA-256 hashed at server startup, and then never compared
+  against anything. MCP's stdio transport gives the tool functions no request
+  context, so there is no caller credential to compare them to.
+- The server logs a `WARNING` saying so, and `get_server_info()` returns
+  `authentication_enforced: false`. Check that field rather than inferring
+  authentication from the presence of keys.
+- The keys are read at **module import**. Setting the variable afterwards has
+  no effect.
 
-**Setting API Keys:**
+`jmo mcp-server --api-key <key>` sets `JMO_MCP_API_KEYS` for you. It used to set
+`MCP_API_KEY`, which nothing read, while advertising itself as enabling
+"production mode".
+
+**Setting API Keys** (for the day a transport supplies caller identity — this
+grants nothing today):
 
 ```bash
 # Generate secure keys (example)
@@ -251,7 +333,7 @@ To use the JMo Security MCP server in Claude Code, add to `.claude/mcp.json`:
   "mcpServers": {
     "jmo-security": {
       "command": "uv",
-      "args": ["run", "mcp", "dev", "scripts/jmo_mcp/server.py"],
+      "args": ["run", "mcp", "dev", "scripts/jmo_mcp/jmo_server.py"],
       "env": {
         "MCP_RESULTS_DIR": "./results",
         "MCP_REPO_ROOT": ".",
@@ -352,7 +434,7 @@ For VS Code users with GitHub Copilot, add JMo Security as an MCP server:
   "github.copilot.mcp.servers": {
     "jmo-security": {
       "command": "uv",
-      "args": ["run", "mcp", "dev", "scripts/jmo_mcp/server.py"],
+      "args": ["run", "mcp", "dev", "scripts/jmo_mcp/jmo_server.py"],
       "env": {
         "MCP_RESULTS_DIR": "./results",
         "MCP_REPO_ROOT": "."
@@ -421,7 +503,7 @@ For VS Code users with GitHub Copilot, add JMo Security as an MCP server:
 
 - name: Start MCP server for AI triage
   run: |
-    uv run mcp dev scripts/jmo_mcp/server.py &
+    uv run mcp dev scripts/jmo_mcp/jmo_server.py &
     sleep 5  # Wait for server to start
 
 - name: Generate triage summary

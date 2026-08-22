@@ -907,9 +907,9 @@ The MCP server provides a standardized interface for AI tools to query security 
 |------|-------------|
 | `--results-dir DIR` | Path to results directory (default: `./results`) |
 | `--repo-root PATH` | Path to repository root (default: current directory) |
-| `--api-key KEY` | Intended to enable authentication. **Currently inert** — see [#716](https://github.com/jimmy058910/jmo-security-repo/issues/716). Set `JMO_MCP_API_KEYS` instead |
+| `--api-key KEY` | Registers a key by setting `JMO_MCP_API_KEYS`. **Does not enable authentication** — nothing enforces access control (see below). The server warns at startup |
 | `--log-level LEVEL` | Log level: `DEBUG`, `INFO`, `WARN`, `ERROR` |
-| `--human-logs` | Human-friendly colored logs instead of JSON |
+| `--human-logs` | Terser, human-friendly log format |
 
 **Environment Variables:**
 
@@ -917,7 +917,17 @@ The MCP server provides a standardized interface for AI tools to query security 
 |----------|-------------|
 | `MCP_RESULTS_DIR` | Path to results directory (overrides `--results-dir`) |
 | `MCP_REPO_ROOT` | Path to repository root (overrides `--repo-root`) |
-| `JMO_MCP_API_KEYS` | Comma-separated API keys. Authentication is **disabled** while unset — the server logs which state it is in at startup |
+| `JMO_MCP_API_KEYS` | Comma-separated API keys. Hashed at import and **never compared against anything** — setting this grants and denies nothing |
+| `MCP_LOG_LEVEL` | Log level (set by `--log-level`) |
+| `MCP_HUMAN_LOGS` | Terse log format (set by `--human-logs`) |
+
+> **The MCP server does not authenticate callers, and no setting turns it on.**
+> Rate limiting is enforced; access control is not, because stdio transport
+> supplies no caller identity to check a key against. Every client that can
+> reach the process is trusted — run it as a subprocess of the client that
+> needs it, and do not expose it to anything you would not give a shell to.
+> `get_server_info()` reports `authentication_enforced: false`. See
+> [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md#the-server-does-not-authenticate-callers-at-all).
 
 ---
 

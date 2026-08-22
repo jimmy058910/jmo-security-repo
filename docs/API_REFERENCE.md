@@ -704,29 +704,44 @@ with TrendAnalyzer() as analyzer:
 
 **Purpose:** Expose JMo Security findings and operations to AI assistants (GitHub Copilot, Claude Code, Cline, etc.) via the [Model Context Protocol](https://modelcontextprotocol.io/).
 
-**Transport:** stdio, HTTP, SSE. Run the server with:
+**Transport:** stdio only. Run the server with:
 
 ```bash
 pip install "jmo-security[mcp]"
-jmo mcp-server              # stdio mode (default, for IDE integrations)
-jmo mcp-server --http 8080  # HTTP mode (for web clients)
+jmo mcp-server              # stdio (the only mode, for IDE integrations)
 ```
+
+> This said "stdio, HTTP, SSE" and offered `jmo mcp-server --http 8080` as a
+> copy-pasteable command. `--http` is not a flag this subcommand defines:
+> argparse rejects it with `unrecognized arguments: --http 8080`. `mcp.run()`
+> is called with no arguments, which selects stdio, and nothing in the package
+> starts an HTTP or SSE listener.
 
 ### Tools Exposed
 
 AI clients call these as MCP tools. Each is annotated with `@mcp.tool()` in `scripts/jmo_mcp/jmo_server.py` and documented here with its public contract.
 
-#### `get_security_findings(severity, tool, path, limit)`
+#### `get_security_findings(severity, tool, rule_id, path, limit=100, offset=0)`
 
 Retrieve findings from the most recent scan, with optional filters.
 
 **Parameters:**
-- `severity` (str, optional): Filter by one of `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, `INFO`
+- `severity` (list[str], optional): Filter by any of `CRITICAL`, `HIGH`,
+  `MEDIUM`, `LOW`, `INFO` — a **list**, e.g. `["HIGH", "CRITICAL"]`
 - `tool` (str, optional): Filter by tool name (e.g., `trivy`, `semgrep`)
+- `rule_id` (str, optional): Filter by rule ID (e.g., `CWE-79`)
 - `path` (str, optional): Filter by file path substring
-- `limit` (int, optional): Max findings to return (default: 50)
+- `limit` (int, optional): Max findings to return (default: **100**, capped at
+  1000). Must not be negative.
+- `offset` (int, optional): Pagination offset (default: 0). Must not be
+  negative.
 
-**Returns:** List of CommonFinding-shaped dicts.
+**Returns:** `{"findings": [...], "total": N, "limit": L, "offset": O}` — a
+dict, not a list. `limit` is the limit **applied**, so paginate with
+`offset += result["limit"]`.
+
+> This documented four of six parameters, typed `severity` as a string, gave
+> `limit` a default of 50 (it is 100), and described the return as a list.
 
 **Example (Claude Code):**
 
@@ -734,43 +749,74 @@ Retrieve findings from the most recent scan, with optional filters.
 /mcp call get_security_findings severity=CRITICAL tool=semgrep limit=10
 ```
 
-#### `apply_fix(finding_id, patch, dry_run)`
+#### `apply_fix(finding_id, patch, confidence, explanation, dry_run=False)`
 
-Apply an AI-suggested patch to fix a finding.
+Validate and preview an AI-suggested patch. **Applying is not implemented.**
 
 **Parameters:**
 - `finding_id` (str, required): Fingerprint of the finding to fix
-- `patch` (str, required): Unified diff to apply
-- `dry_run` (bool, default `True`): If True, preview without writing changes
+- `patch` (str, required): Unified diff. Must contain a hunk header
+  (`@@ -n,m +n,m @@`) or `ValueError` is raised.
+- `confidence` (float, required): 0.0–1.0 inclusive; out of range raises
+  `ValueError`
+- `explanation` (str, required): Human-readable explanation of the fix
+- `dry_run` (bool, default **`False`**): If True, preview without writing
 
-**Returns:** Dict with `success`, `files_changed`, `diff_preview`.
+**Returns:** Dict with `success` and either `dry_run` + `dry_run_preview`
+(preview) or `error` (write path, always `success: False`).
 
-**Safety:** always run with `dry_run=True` first — the server returns a preview so the AI (and you) can confirm before mutating files.
+**Safety:** `dry_run` defaults to `False`, not `True`. Pass it explicitly.
+The write path currently changes nothing regardless.
 
-#### `mark_resolved(finding_id, status, reason)`
+> This entry documented the signature as `(finding_id, patch, dry_run)` with
+> `dry_run` defaulting to `True`, and a return of `files_changed` /
+> `diff_preview`. `confidence` and `explanation` are required and have no
+> defaults, so a call written from the old entry raised `TypeError`; neither
+> named return key exists; and the documented default inverted the safety of
+> the one that does.
 
-Mark a finding as fixed, false positive, or won't fix.
+#### `mark_resolved(finding_id, resolution, comment=None)`
+
+Record a resolution decision. **Not implemented — persists nothing** and always
+returns `success: False`.
 
 **Parameters:**
 - `finding_id` (str, required): Fingerprint of the finding
-- `status` (str, required): One of `fixed`, `false_positive`, `wont_fix`
-- `reason` (str, optional): Human-readable explanation stored for audit
+- `resolution` (str, required): One of `fixed`, `false_positive`, `wont_fix`,
+  `risk_accepted`
+- `comment` (str, optional): Human-readable explanation
 
-#### `query_findings_db(sql, params)`
+> The parameters were documented as `status` and `reason`; the code has never
+> accepted those names. `risk_accepted` was missing from the list, and `reason`
+> was described as "stored for audit" — nothing is stored at all.
+
+#### `query_findings_db(query, params=None)`
 
 Execute a read-only SQL query against the history database.
 
 **Parameters:**
-- `sql` (str, required): SQL query (SELECT only — writes are rejected)
-- `params` (list, optional): Parameterized query values
+- `query` (str, required): SQL. `SELECT` / `EXPLAIN` / `WITH` and an allowlist
+  of `PRAGMA`s only. **Named `query`, not `sql`.**
+- `params` (list, optional): Bind values for `?` placeholders
 
-**Returns:** List of row dicts.
+**Returns:** `{"columns": [...], "rows": [[...], ...], "row_count": N,
+"truncated": bool}` — rows are **lists**, not dicts, capped at 500.
 
 **Use case:** aggregate queries across multiple scans (e.g., "findings that reappeared 3+ scans in a row").
 
+**Safety:** two independent layers — the connection is opened `mode=ro`, and
+the statement is validated against a forbidden-keyword, multi-statement and
+unsafe-`PRAGMA` policy. The keyword scan is textual, so a search whose text
+contains e.g. `DROP` is refused; pass it as a bind parameter instead.
+
 #### `get_server_info()`
 
-Returns server metadata: version, loaded scan ID, supported transports, feature flags.
+Returns `version` (the installed package version), `results_dir`, `repo_root`,
+`total_findings`, `severity_distribution`, `available_tools`, and
+`authentication_enforced` (always `false`).
+
+> This said "loaded scan ID, supported transports, feature flags". None of
+> those keys exist.
 
 ### Resources Exposed
 
@@ -778,13 +824,31 @@ MCP resources are read-only URIs the AI can dereference for context.
 
 #### `finding://{finding_id}`
 
-Get comprehensive context for a specific finding: full description, source code context (±20 lines around the location), compliance mappings, related findings, and remediation guidance.
+Get comprehensive context for a specific finding: full description, source code context (±20 lines around the location), CWE/OWASP mappings, and remediation guidance.
+
+`related_findings` is present in the response and is **always an empty list** —
+finding it is not implemented. This entry listed it as content.
 
 **Use case:** the AI sees a finding ID in a `get_security_findings` response and fetches `finding://<id>` to get enough context to propose a fix.
 
 ### Security
 
-The MCP server ships with opt-in rate limiting and token-based auth for HTTP mode (see `scripts/jmo_mcp/utils/security.py`). stdio mode trusts the parent process. See [MCP_SETUP.md](MCP_SETUP.md) for client configuration.
+**The MCP server does not authenticate callers, and there is no setting that
+makes it.** Rate limiting is real and enforced (`JMO_MCP_RATE_LIMIT_*`), using
+a single shared bucket rather than one per client. `JMO_MCP_API_KEYS` is hashed
+at startup and never compared against anything. Ask `get_server_info()` for
+`authentication_enforced` rather than inferring it from configuration.
+
+Transport is **stdio only** — `mcp.run()` takes no arguments and there is no
+HTTP or SSE listener. stdio trusts the parent process, which is the whole of
+the security model.
+
+> This section described "token-based auth for HTTP mode (see
+> `scripts/jmo_mcp/utils/security.py`)". That module does not exist, and
+> neither does the HTTP mode.
+
+See [MCP_SETUP.md](MCP_SETUP.md) for client configuration and
+[KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) for what this means in practice.
 
 ---
 

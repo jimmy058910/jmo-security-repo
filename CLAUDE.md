@@ -202,9 +202,20 @@ The split is mechanical rather than remembered. `.gitignore` carries an explicit
 
 ### MCP Server (Security Findings API)
 
-- `get_security_findings` - Query with filters (severity, tool, path)
-- `apply_fix` - Apply AI-suggested patches (use `dry_run=True` first!)
-- `mark_resolved` - Mark as fixed/false_positive/wont_fix
+Five `@mcp.tool()` entry points plus one `@mcp.resource`, all in
+`scripts/jmo_mcp/jmo_server.py`. **stdio transport only, and callers are not
+authenticated** — `JMO_MCP_API_KEYS` is hashed at import and compared against
+nothing, so no setting turns access control on. Ask `get_server_info()` for
+`authentication_enforced` rather than inferring it.
+
+| Entry point | State |
+|---|---|
+| `get_security_findings` | working — filters + pagination; page with the **returned** `limit`, not the requested one |
+| `query_findings_db` | working — read-only SQL (`mode=ro` + statement validation, both verified) |
+| `get_finding_context` (`finding://{id}`) | working — `related_findings` is always `[]` |
+| `get_server_info` | working |
+| `apply_fix` | **preview only.** `dry_run=False` writes nothing and returns `success: False` |
+| `mark_resolved` | **not implemented.** Persists nothing and returns `success: False` |
 
 ### Key Agents (invoke naturally)
 
