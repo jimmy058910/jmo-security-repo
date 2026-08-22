@@ -28,8 +28,8 @@ The JMo Security MCP server provides programmatic access to security findings fo
 | Tool | Purpose | Key Parameters |
 |------|---------|----------------|
 | `get_security_findings` | Query findings with filters | `severity`, `tool`, `path`, `rule_id`, `limit` |
-| `apply_fix` | Apply AI-suggested patches | `finding_id`, `patch`, `confidence`, `dry_run` |
-| `mark_resolved` | Mark finding status | `finding_id`, `resolution`, `comment` |
+| `apply_fix` | **Preview** an AI patch; applying is not implemented | `finding_id`, `patch`, `confidence`, `explanation`, `dry_run` |
+| `mark_resolved` | Record a resolution as a `jmo.suppress.yml` entry | `finding_id`, `resolution`, `comment`, `expires_days` |
 | `get_server_info` | Server metadata | (none) |
 
 ### Usage Examples
@@ -38,26 +38,29 @@ The JMo Security MCP server provides programmatic access to security findings fo
 # Query high/critical findings
 get_security_findings(severity=["HIGH", "CRITICAL"], limit=10)
 
-# Preview a fix before applying (ALWAYS use dry_run first!)
+# Preview a fix. There is no apply step yet: dry_run=False writes nothing
+# and returns success=False. `confidence` and `explanation` are REQUIRED.
 apply_fix(
     finding_id="fingerprint-abc123",
-    patch="diff --git a/src/app.js...",
+    patch="--- a/src/app.js\n+++ b/src/app.js\n@@ -42,1 +42,1 @@\n-old\n+new\n",
     confidence=0.95,
     explanation="Added input sanitization",
-    dry_run=True  # Preview first!
+    dry_run=True,
 )
 
-# Mark as false positive
+# Mark as false positive -> appends an entry to jmo.suppress.yml that
+# expires in 90 days (365 max; there is no permanent option here).
 mark_resolved(
     finding_id="fingerprint-abc123",
     resolution="false_positive",
-    comment="Test file, not production"
+    comment="Test file, not production",
 )
 ```
 
 ### Resolution Types
 
-- `fixed` - Vulnerability remediated
+- `fixed` - Vulnerability remediated. **Writes no suppression**: re-scan to
+  confirm it is gone, because hiding it would mask a fix that did not take.
 - `false_positive` - Not a real vulnerability
 - `wont_fix` - Accepted risk (document why)
 - `risk_accepted` - Business decision to accept

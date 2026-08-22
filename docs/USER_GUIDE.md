@@ -2112,8 +2112,8 @@ jmo mcp-server --results-dir ./results
 | Tool | Purpose |
 |------|---------|
 | `get_security_findings` | Query findings with filters |
-| `apply_fix` | Apply AI-suggested remediation |
-| `mark_resolved` | Track remediation status |
+| `apply_fix` | **Preview** AI-suggested remediation (applying is not implemented) |
+| `mark_resolved` | Record a resolution as an expiring `jmo.suppress.yml` entry |
 | `get_server_info` | Server status and metadata |
 
 **Complete Guide:** [MCP_SETUP.md](MCP_SETUP.md)
