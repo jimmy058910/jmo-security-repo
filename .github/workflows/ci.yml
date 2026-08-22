@@ -463,14 +463,24 @@ jobs:
         # assertion still passes.
         #
         # The per-package floor is set close enough to catch a single test FILE
-        # failing to collect (the smallest here is 13 tests), not just the whole
-        # tree going to zero.
+        # failing to collect, not just the whole tree going to zero. That means
+        # the arithmetic is: floor <= collected - (smallest file - 1), so losing
+        # the smallest file drops BELOW it.
+        #
+        # THE HEADROOM IS PART OF THE SPEC, AND THIS FLOOR MISSED ITS OWN.
+        # Chunk 20 set 280 against 295 collected -- 15 of headroom against a
+        # smallest file of 13, so `test_auth.py` failing to collect would have
+        # left 282, and 282 > 280 passes. The floor could not catch the case
+        # its comment describes. Same shape as the global floor it was added to
+        # fix, one order of magnitude down. Re-measured at chunk 22.1:
+        # 314 collected, smallest file still 13, so the floor is 302.
         #
         # A package gated behind an optional dependency is the case that needs
         # its own floor: the failure mode is an import probe going false, which
         # takes out the whole tree at once and exits 0. Packages that are not
         # gated fail loudly on a collection error, so they do not need an entry
-        # here. Raise a floor in the same PR that adds tests.
+        # here. Raise a floor in the same PR that adds tests -- and recompute it
+        # from the smallest file, do not just add the delta.
         env:
           CI: "true"
         run: |
@@ -496,7 +506,7 @@ jobs:
               fail=1
             fi
           }
-          check_package tests/jmo_mcp 280
+          check_package tests/jmo_mcp 302
           exit "$fail"
 
       - name: Run the full suite on a native (non-UTF-8) console
