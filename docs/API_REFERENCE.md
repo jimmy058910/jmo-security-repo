@@ -775,20 +775,33 @@ The write path currently changes nothing regardless.
 > named return key exists; and the documented default inverted the safety of
 > the one that does.
 
-#### `mark_resolved(finding_id, resolution, comment=None)`
+#### `mark_resolved(finding_id, resolution, comment=None, expires_days=90)`
 
-Record a resolution decision. **Not implemented — persists nothing** and always
-returns `success: False`.
+Record a resolution decision by appending a suppression entry to
+`jmo.suppress.yml` under `MCP_REPO_ROOT`, keyed on the finding's fingerprint.
+The report phase already reads that file, so the finding is filtered next run.
 
 **Parameters:**
-- `finding_id` (str, required): Fingerprint of the finding
+- `finding_id` (str, required): Fingerprint of the finding. Must exist.
 - `resolution` (str, required): One of `fixed`, `false_positive`, `wont_fix`,
   `risk_accepted`
-- `comment` (str, optional): Human-readable explanation
+- `comment` (str, optional): Human-readable explanation, recorded as `reason`
+- `expires_days` (int, optional): 1-365, default 90. Out of range raises
+  `ValueError` — there is no permanent suppression through this tool.
+
+**Returns:** `success`, `suppressed`, `config_path`, `expires`, `finding_id`,
+`resolution`, `timestamp`; plus `already_suppressed: True` when an entry
+existed already, and `error` whenever `success` is `False`.
+
+**`resolution="fixed"` deliberately writes nothing** and returns
+`success: False`. A suppressed finding and a fixed one produce identical scan
+output, so suppressing a "fix" destroys the evidence that a fix did not take.
 
 > The parameters were documented as `status` and `reason`; the code has never
 > accepted those names. `risk_accepted` was missing from the list, and `reason`
-> was described as "stored for audit" — nothing is stored at all.
+> was described as "stored for audit" while nothing was stored at all. That
+> last one is now true rather than aspirational — see
+> [MCP_SETUP.md](MCP_SETUP.md#3-mark_resolved--records-the-decision-as-a-suppression).
 
 #### `query_findings_db(query, params=None)`
 

@@ -85,6 +85,26 @@ would not give a shell to. `JMO_MCP_RATE_LIMIT_*` works and is enforced; it is
 a throttle, not an access control, and it uses one shared bucket for all
 callers.
 
+**One tool writes to your repository.** `mark_resolved` appends a suppression
+entry to `jmo.suppress.yml`, so an unauthenticated caller can stop a security
+finding being reported. Two things bound it, and neither is authentication:
+every entry it writes **expires** (90 days by default, 365 at most — there is
+no permanent option through the tool), and `jmo.suppress.yml` is a tracked
+file, so the change shows up in `git diff` and in review like any other. No
+other tool writes anything.
+
+### `apply_fix` cannot apply a fix
+
+`apply_fix` validates a patch and returns it for review. `dry_run=False` writes
+nothing and returns `success: False`. Applying a patch needs traversal
+validation, backup-and-rollback, and a post-apply test run — a patch-writing
+subsystem, deliberately not built during an audit release. Tracked as
+[#951](https://github.com/jimmy058910/jmo-security-repo/issues/951) and
+deferred past v1.1.0.
+
+**What to do:** treat it as a reviewer, not an applier. Take `dry_run_preview`
+and apply it with `git apply` yourself.
+
 ### One client at a time
 
 MCP's stdio transport is a single stdin/stdout pipe, so one server process serves
