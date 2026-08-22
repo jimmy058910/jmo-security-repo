@@ -16,9 +16,14 @@ Architecture:
 
 Not implemented, despite being callable:
 - `apply_fix(dry_run=False)` never writes a patch; it returns success=False.
-- `mark_resolved` persists nothing; it returns success=False.
-Both are documented as such in docs/MCP_SETUP.md. Do not build a workflow on
-either until they are.
+  Deferred past v1.1.0 -- see #951. Documented as such in docs/MCP_SETUP.md;
+  do not build a workflow on it until it exists.
+
+Writes to disk: exactly one. `mark_resolved` appends an id-keyed entry to
+`jmo.suppress.yml` under MCP_REPO_ROOT. Callers are not authenticated (see
+below), so anything that can speak to this server can suppress a security
+finding -- bounded by a mandatory expiry (90 days default, 365 cap) and by the
+file being tracked in git, where the change is visible in a diff.
 
 Usage:
     # Development mode (stdio transport)
@@ -42,7 +47,7 @@ import hashlib
 import logging
 import os
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from functools import wraps
 from pathlib import Path
 
@@ -62,6 +67,8 @@ except ImportError:
         "  uv add 'mcp[cli]>=1.0.0'"
     )
 
+from scripts.core.exceptions import ConfigurationException
+from scripts.core.suppress import append_suppression, load_suppressions
 from scripts.jmo_mcp.utils.findings_loader import FindingsLoader
 from scripts.jmo_mcp.utils.rate_limiter import RateLimiter
 from scripts.jmo_mcp.utils.source_context import SourceContextExtractor
@@ -161,6 +168,39 @@ rate_limiter = (
 # per-client accounting is visible at the call site rather than looking like a
 # placeholder someone forgot to fill in.
 _SHARED_BUCKET_ID = "anonymous"
+
+# Suppressions written through `mark_resolved` are time-boxed, always.
+#
+# The guardrail chosen for #951a, out of the two on the table. `expires`
+# attacks the property that makes an AI-written suppression dangerous --
+# permanence -- and it is enforced by machinery that already exists and is
+# already tested (`Suppression.is_active`), not by new policy code. A
+# `dry_run`-by-default would instead return success for a call that persisted
+# nothing, which is the exact shape chunk 20 exists to remove, and would put a
+# second, oppositely-defaulted `dry_run` beside `apply_fix`'s -- whose
+# documented default was inverted once already.
+#
+# The CAP is what stops the guardrail being decorative: without it,
+# `expires_days=3650` requests a permanent suppression through a parameter
+# named for expiry, and the check could never fire.
+_DEFAULT_EXPIRES_DAYS = 90
+_MAX_EXPIRES_DAYS = 365
+
+# "fixed" is absent on purpose -- see mark_resolved's docstring. Suppressing a
+# finding the client says it fixed makes a real fix and a failed one produce
+# identical output.
+_SUPPRESSIBLE_RESOLUTIONS = ("false_positive", "wont_fix", "risk_accepted")
+
+
+def _existing_expiry(config_path: Path, finding_id: str) -> str | None:
+    """The expiry already recorded for *finding_id*, or None.
+
+    Used only when an entry is already present. Returning the freshly computed
+    date instead would report an expiry the file does not contain -- a return
+    value that disagrees with the disk it claims to describe.
+    """
+    rule = load_suppressions(str(config_path)).get(finding_id)
+    return str(rule.expires) if rule is not None and rule.expires else None
 
 
 def _server_version() -> str:
@@ -537,47 +577,65 @@ def mark_resolved(
     finding_id: str,
     resolution: str,
     comment: str | None = None,
+    expires_days: int = _DEFAULT_EXPIRES_DAYS,
 ) -> dict:
     """
-    NOT IMPLEMENTED. Validates its arguments and persists nothing.
+    Record a decision not to act on a finding, as a suppression entry.
 
-    This tool always returns ``success: False``. There is no resolution store
-    yet -- no file, no database table -- so a resolution recorded here is
-    discarded and the finding reappears unchanged in the next scan. It is kept
-    callable so a client can discover the capability's absence from the return
-    value rather than from a scan that did not change.
+    The decision is written to ``jmo.suppress.yml`` under ``MCP_REPO_ROOT`` --
+    the file the report phase already consults -- so the finding is filtered on
+    the next run. This is not a new store: ``jmo.suppress.yml`` selects on
+    ``id`` = the exact finding fingerprint plus ``reason`` and ``expires``,
+    which is precisely this call's arguments.
+
+    ``resolution="fixed"`` deliberately writes **nothing**. A fix is verified
+    by the next scan not reporting the finding; suppressing it would make a
+    real fix and a failed one produce identical output, destroying the only
+    signal that tells them apart. The other three resolutions *are* decisions
+    not to act, which is what a suppression means.
+
+    Every entry written here expires. An AI client suppressing a security
+    finding permanently is the failure mode worth designing against, so the
+    entry is time-boxed by default and cannot be written without a bound.
 
     Args:
         finding_id: Fingerprint ID of the finding. Must exist; an unknown id
-            raises ValueError.
-        resolution: Resolution type (valid values: fixed, false_positive,
-            wont_fix, risk_accepted)
-        comment: Optional comment explaining the resolution
+            raises ValueError before anything is written.
+        resolution: One of fixed, false_positive, wont_fix, risk_accepted.
+        comment: Optional explanation. Recorded as the entry's ``reason``, and
+            serialised by the YAML dumper -- it cannot inject structure.
+        expires_days: Days until the suppression lapses. 1-365 inclusive,
+            default 90. There is no way to request a permanent suppression
+            through this tool; edit the file by hand for that.
 
     Returns:
         Dictionary with:
-        - success: always False
-        - error: why nothing was persisted
-        - finding_id: Confirmed finding ID
-        - resolution: Validated resolution type
-        - timestamp: ISO timestamp of the (discarded) decision
+        - success: True only when an entry is on disk (or already was)
+        - suppressed: whether this finding is now suppressed
+        - already_suppressed: present and True if an entry existed already
+        - config_path: the file that was written
+        - expires: the entry's expiry date (YYYY-MM-DD)
+        - error: why nothing was written, whenever success is False
+        - finding_id / resolution / timestamp: the validated decision
 
     Raises:
-        ValueError: If *resolution* is not a valid type, or *finding_id* does
-            not match any finding in the loaded results.
+        ValueError: If *resolution* is not a valid type, *expires_days* is
+            outside 1-365, or *finding_id* matches no loaded finding.
 
     Example:
         >>> mark_resolved(
-        ...     finding_id="fingerprint-abc123",
+        ...     finding_id="0000eba9addb92a7",
         ...     resolution="false_positive",
         ...     comment="This is a test file, not production code"
         ... )
         {
-            "success": False,
-            "error": "Resolution tracking is not implemented. ...",
-            "finding_id": "fingerprint-abc123",
+            "success": True,
+            "suppressed": True,
+            "config_path": "/repo/jmo.suppress.yml",
+            "expires": "2026-11-20",
+            "finding_id": "0000eba9addb92a7",
             "resolution": "false_positive",
-            "timestamp": "2025-11-01T12:00:00Z"
+            "timestamp": "2026-08-22T12:00:00Z"
         }
     """
     try:
@@ -589,6 +647,18 @@ def mark_resolved(
                 f"Valid values: {', '.join(valid_resolutions)}"
             )
 
+        # Validated on every path, including the ones that would not use it: an
+        # argument the caller got wrong should be rejected, not silently
+        # ignored because this particular resolution happens not to read it.
+        if not isinstance(expires_days, int) or isinstance(expires_days, bool):
+            raise ValueError(f"expires_days must be an integer, got {expires_days!r}")
+        if not 1 <= expires_days <= _MAX_EXPIRES_DAYS:
+            raise ValueError(
+                f"expires_days must be between 1 and {_MAX_EXPIRES_DAYS}, "
+                f"got {expires_days}. There is no permanent suppression through "
+                "this tool; edit jmo.suppress.yml by hand for that."
+            )
+
         # Verify finding exists
         loader = get_findings_loader()
         finding = loader.get_finding_by_id(finding_id)
@@ -596,48 +666,73 @@ def mark_resolved(
         if not finding:
             raise ValueError(f"Finding not found: {finding_id}")
 
-        # TODO(future): Implement persistent resolution tracking - see
-        # https://github.com/jimmy058910/jmo-security-repo/issues
-        # Required steps for Phase 2:
-        # 1. Create .jmo/resolutions.json (or SQLite table in history.db)
-        #    to persist resolution decisions across scans
-        # 2. Append resolution entry: finding_id, resolution type, comment,
-        #    timestamp, user identity (from git config or env)
-        # 3. Update HTML dashboard to render resolution badges (fixed,
-        #    false_positive, wont_fix, risk_accepted) with filter support
-        # 4. Filter resolved findings from future scan reports (configurable
-        #    via jmo.yml: show_resolved: true/false)
-        # 5. Support bulk resolution import/export for team workflows
-
         timestamp = datetime.now(UTC).isoformat().replace("+00:00", "Z")
-
-        # This returned success=True while writing nothing, anywhere. Measured:
-        # a call with a valid finding id created no file, and no .jmo/ directory
-        # existed afterwards. An AI agent reads success=True as "this finding is
-        # now recorded as a false positive", stops working on it, and finds it
-        # unchanged in the next scan. The only hint was a trailing `note` field,
-        # which the documented example return value did not even include.
-        #
-        # success=False is the truthful answer for a call that persisted
-        # nothing, and it matches what apply_fix already returns for its own
-        # unimplemented path.
-        logger.warning(
-            f"mark_resolved: NOT PERSISTED -- {finding_id} -> {resolution} "
-            f"(comment: {comment or 'none'}). Resolution tracking is not "
-            "implemented; this decision was validated and then discarded."
-        )
-
-        return {
-            "success": False,
-            "error": (
-                "Resolution tracking is not implemented. The finding id and "
-                "resolution type were validated, but nothing was persisted and "
-                "this finding will reappear unchanged in the next scan."
-            ),
+        decision = {
             "finding_id": finding_id,
             "resolution": resolution,
             "timestamp": timestamp,
         }
+
+        if resolution not in _SUPPRESSIBLE_RESOLUTIONS:
+            # "fixed" is the one resolution suppression cannot express. A
+            # suppressed finding and a genuinely fixed one produce the same
+            # empty output, so writing an entry here would erase the only
+            # evidence that a fix did not take.
+            logger.info(
+                "mark_resolved: %s marked fixed; nothing written. A fix is "
+                "confirmed by the next scan, not by suppression.",
+                finding_id,
+            )
+            return {
+                **decision,
+                "success": False,
+                "suppressed": False,
+                "error": (
+                    "A 'fixed' finding is not suppressed: re-scan to confirm it "
+                    "is gone. If it persists, the fix did not take. To record a "
+                    "decision not to act, use false_positive, wont_fix or "
+                    "risk_accepted."
+                ),
+            }
+
+        expires = (datetime.now(UTC).date() + timedelta(days=expires_days)).isoformat()
+        config_path = REPO_ROOT / "jmo.suppress.yml"
+        reason = f"{resolution} via MCP mark_resolved"
+        if comment:
+            reason = f"{reason}: {comment}"
+
+        try:
+            written = append_suppression(
+                config_path,
+                finding_id=finding_id,
+                reason=reason,
+                expires=expires,
+            )
+        except ConfigurationException as exc:
+            logger.error("mark_resolved: nothing written -- %s", exc)
+            return {
+                **decision,
+                "success": False,
+                "suppressed": False,
+                "config_path": str(config_path),
+                "error": f"Suppression not written: {exc}",
+            }
+
+        result = {
+            **decision,
+            "success": True,
+            "suppressed": True,
+            "config_path": str(config_path),
+            "expires": expires,
+        }
+        if not written:
+            # Already suppressed. Reporting success is truthful -- the caller's
+            # request ("stop showing me this") holds -- but the distinction is
+            # in the return value, because the file did not change and a client
+            # diffing it would otherwise think the write silently failed.
+            result["already_suppressed"] = True
+            result["expires"] = _existing_expiry(config_path, finding_id) or expires
+        return result
 
     except ValueError as e:
         logger.error(f"mark_resolved validation error: {e}")

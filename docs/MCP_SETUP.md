@@ -36,11 +36,16 @@ cp .mcp.json.example .claude/mcp.json
 | `query_findings_db` | Read-only SQL over scan history | working | `Which findings recur?` |
 | `get_server_info` | Server status | working | `Server status?` |
 | `apply_fix` | Preview an AI patch | **preview only** — applying is not implemented | `Fix CWE-79 in app.js:42` |
-| `mark_resolved` | Record a resolution | **not implemented** — persists nothing | `Mark as false_positive` |
+| `mark_resolved` | Record a resolution as a suppression | working, with two limits | `Mark as false_positive` |
 
-The two marked rows are callable and always return `success: False` on the path
-that would change something. They are documented in full below; do not build a
-remediation workflow on either yet.
+`apply_fix` is callable and always returns `success: False` on the path that
+would change a file. Do not build a remediation workflow on it yet.
+
+`mark_resolved` writes to `jmo.suppress.yml`, so the finding is filtered on the
+next run. Two limits, both deliberate and both documented below: every entry it
+writes **expires** (90 days by default, 365 at most), and `resolution="fixed"`
+writes nothing, because a fix is confirmed by re-scanning rather than by hiding
+the finding.
 
 ---
 
@@ -73,8 +78,9 @@ not implemented and say so in their return values.
 - 🗃️ **Query Scan History** - Read-only SQL over `.jmo/history.db`
 - 🔧 **Preview Fixes** - AI-suggested patches, validated and previewed.
   **Applying them is not implemented.**
-- ✅ **Track Resolutions** - **Not implemented.** `mark_resolved` validates a
-  decision and persists nothing.
+- ✅ **Track Resolutions** - `mark_resolved` records a decision as a
+  suppression in `jmo.suppress.yml`, so the report phase filters it. Entries
+  always expire.
 - 🛡️ **Rate Limiting** - Token bucket algorithm (100 req/min default), one
   shared bucket for all callers
 - 🚫 **No Authentication** - callers are not authenticated and there is no
@@ -190,34 +196,61 @@ apply_fix(
 apply_fix(..., dry_run=False)
 ```
 
-#### 3. `mark_resolved` — validated, then discarded; NOT IMPLEMENTED
+#### 3. `mark_resolved` — records the decision as a suppression
 
-Validates a resolution decision and **persists nothing**. It always returns
-`success: False`, and the finding reappears unchanged in the next scan. There
-is no resolution store — no file, no database table.
+Appends an entry to `jmo.suppress.yml` in `MCP_REPO_ROOT`, keyed on the
+finding's fingerprint. The report phase already consults that file, so the
+finding is filtered on the next run.
 
-It returned `success: True` until this was measured, with the caveat relegated
-to a trailing `note` field. An agent reads `success`, stops working on the
-finding, and is wrong.
+This is not a new store. `jmo.suppress.yml` selects on `id` = the exact
+fingerprint, plus `reason` and an optional `expires` — which is precisely what
+this call carries. The tool used to persist nothing at all; the in-code plan
+was a separate `.jmo/resolutions.json` with its own dashboard badges and report
+filtering, i.e. a second implementation of a feature that already ships.
+
+**Two deliberate limits.**
+
+1. **Every entry expires.** `expires_days` defaults to **90** and is capped at
+   **365**. There is no way to request a permanent suppression through this
+   tool — edit `jmo.suppress.yml` by hand for that. The cap is the point: an AI
+   client suppressing a security finding forever is the failure mode this
+   guards against, and a bound that can be waived is not a bound.
+2. **`resolution="fixed"` writes nothing** and returns `success: False` with an
+   explanation. A suppressed finding and a genuinely fixed one produce the same
+   empty scan output, so suppressing a "fix" destroys the one signal that tells
+   a real fix from a failed one. Re-scan to confirm; if it persists, the fix did
+   not take. Use `wont_fix` or `risk_accepted` to record a decision not to act.
+
+**The write is byte-preserving.** Existing content is a prefix of the result —
+comments, ordering and line endings are untouched — and the candidate is parsed
+by the real suppression loader before anything on disk changes. If it would not
+load back, nothing is written and the error says why. A config whose list is in
+flow style (`suppressions: []`) is refused for that reason: rewrite it as a
+block list.
 
 **Parameters:**
 
 - `finding_id`: Fingerprint ID of the finding. Must exist, or `ValueError`.
 - `resolution`: Resolution type (`fixed`, `false_positive`, `wont_fix`,
   `risk_accepted`). Anything else is a `ValueError`.
-- `comment`: Optional comment explaining the resolution
+- `comment`: Optional explanation. Recorded as the entry's `reason`.
+- `expires_days`: 1-365, default 90. Out of range is a `ValueError`.
 
 **Example:**
 
 ```python
-# Returns {"success": False, "error": "Resolution tracking is not
-# implemented...", "finding_id": ..., "resolution": ..., "timestamp": ...}
+# Returns {"success": True, "suppressed": True, "config_path": ".../jmo.suppress.yml",
+#          "expires": "2026-11-20", "finding_id": ..., "resolution": ..., "timestamp": ...}
 mark_resolved(
-    finding_id="fingerprint-abc123",
+    finding_id="0000eba9addb92a7",
     resolution="false_positive",
     comment="This is a test file, not production code"
 )
 ```
+
+Calling it twice on the same finding is not an error: the second call returns
+`already_suppressed: True`, writes nothing, and reports the expiry that is
+actually on disk.
 
 #### 3b. `query_findings_db`
 

@@ -4,8 +4,12 @@ from __future__ import annotations
 import datetime as dt
 import fnmatch
 import logging
+import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from scripts.core.exceptions import ConfigurationException
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -451,6 +455,159 @@ def load_suppressions(path: str | None) -> dict[str, Suppression]:
         items[suppression.key] = suppression
 
     return items
+
+
+#: Matches the top-level key that holds the entry list, on its own line.
+#: A `# suppressions:` inside a comment cannot match -- `^` is followed by the
+#: `#`, not by the word.
+_ENTRY_LIST_KEY = re.compile(r"^(?:suppressions|suppress):", re.MULTILINE)
+
+#: Matches the first block-sequence item, to learn the file's own indentation.
+#: Mixing a 0-indented item into a 2-indented sequence is a YAML error, so the
+#: writer copies what is already there rather than imposing a house style.
+_FIRST_SEQUENCE_ITEM = re.compile(r"^([ \t]*)-[ \t]", re.MULTILINE)
+
+
+def append_suppression(
+    path: str | Path,
+    *,
+    finding_id: str,
+    reason: str,
+    expires: str | None = None,
+) -> bool:
+    """Append one id-keyed entry to a suppression config, byte-preserving.
+
+    This is the **only writer** of ``jmo.suppress.yml``. The file was read-only
+    for the product's whole life, and the shipped copy is ~5 KB of which most
+    is explanatory comments -- a ``yaml.safe_dump`` round-trip would delete
+    every one of them. So the existing bytes are never re-serialised: they are
+    a prefix of the result, and the new entry is appended after them. YAML
+    ignores comments, so a sequence item written past a trailing comment block
+    still joins the sequence.
+
+    The entry itself *is* rendered by the YAML dumper. Quoting a free-text
+    ``reason`` by hand is how a comment carrying a newline and a ``- path: "*"``
+    item becomes a second rule that mutes the entire scan.
+
+    Nothing is written until the candidate has been parsed **by this module's
+    own loader** and shown to contain the new rule with the previous ones
+    intact. Chunk 8 found the shipped config loading to zero rules against a
+    parser it did not match; a writer that cannot be read back is the same
+    defect from the other side.
+
+    Args:
+        path: Path to the suppression config. Created if absent.
+        finding_id: Exact finding fingerprint to suppress; becomes the entry's
+            ``id`` selector and its key in :func:`load_suppressions`.
+        reason: Free text recorded on the entry. Serialised, never interpolated.
+        expires: Optional ``YYYY-MM-DD``. Honoured by :meth:`Suppression.is_active`.
+
+    Returns:
+        True when an entry was appended. **False when *finding_id* is already
+        suppressed** -- nothing is written and that is not an error. Appending
+        a duplicate would leave the loader's rule count unchanged while the
+        file grew, so the file and the loader would disagree about how many
+        rules exist.
+
+    Raises:
+        ConfigurationException: PyYAML is missing, the existing file cannot be
+            parsed, or the result would not load back correctly. In every case
+            the file on disk is left exactly as it was.
+    """
+    if yaml is None:
+        raise ConfigurationException(
+            "suppressions", "PyYAML is not installed, so nothing can be written"
+        )
+
+    p = Path(path)
+    original = p.read_bytes() if p.exists() else b""
+
+    if original and _read_entries(p) is None:
+        # _read_entries has already logged why. It returns None for a file it
+        # could not parse and [] for one that is legitimately empty; appending
+        # to the first would produce a file that still loads to zero rules,
+        # i.e. a write that reports success and suppresses nothing.
+        raise ConfigurationException(
+            "suppressions",
+            "the existing file could not be parsed; it was left unchanged",
+            p,
+        )
+
+    before = load_suppressions(str(p)) if original else {}
+    if finding_id in before:
+        return False
+
+    text = original.decode("utf-8")
+    newline = "\r\n" if "\r\n" in text else "\n"
+    key_match = _ENTRY_LIST_KEY.search(text)
+    item_match = _FIRST_SEQUENCE_ITEM.search(text, key_match.end() if key_match else 0)
+    indent = item_match.group(1) if item_match else "  "
+
+    entry: dict[str, str] = {"id": finding_id, "reason": reason}
+    if expires:
+        entry["expires"] = expires
+    rendered = yaml.safe_dump(
+        [entry],
+        default_flow_style=False,
+        sort_keys=False,
+        allow_unicode=True,
+        width=10**6,  # never fold a long reason into a multi-line scalar
+    )
+
+    block = ""
+    if not original:
+        block += (
+            "# JMo Security Suppression Configuration"
+            + newline
+            + "# Created automatically. See docs/USER_GUIDE.md"
+            "#handling-false-positives" + newline + newline
+        )
+    if not key_match:
+        block += "suppressions:" + newline
+    block += "".join(indent + line + newline for line in rendered.splitlines())
+
+    prefix = original
+    if prefix and not prefix.endswith(newline.encode()):
+        prefix += newline.encode()
+    candidate = prefix + block.encode("utf-8")
+
+    # Validate against the real loader before anything on disk changes, then
+    # swap atomically. os.replace is atomic on Windows too, for one volume.
+    tmp = p.with_name(p.name + ".jmo-write")
+    try:
+        tmp.write_bytes(candidate)
+        after = load_suppressions(str(tmp))
+        if finding_id not in after:
+            # Reachable with real input, not merely defensive. Measured: a
+            # config whose list is in FLOW style -- `suppressions: []`, the
+            # most natural way to write an empty one -- cannot take a block
+            # sequence item after it, so the candidate is invalid YAML.
+            # Refusing leaves the user's file exactly as it was; the
+            # alternative would be re-serialising it, which destroys every
+            # comment in it.
+            raise ConfigurationException(
+                "suppressions",
+                f"the appended entry for {finding_id!r} did not load back. "
+                "This happens when the list is written in flow style "
+                "(suppressions: [...]); rewrite it as a block list "
+                "(one '- id:' item per line) and retry",
+                p,
+            )
+        # A second post-condition -- `set(before) <= set(after)`, "no existing
+        # rule was lost" -- was written here and REMOVED after mutation testing
+        # showed no input can reach it. While the write is an append, an
+        # existing rule can only vanish if the file stops parsing, and the
+        # check above already refuses that. A guard no input can trigger reads
+        # as protection and provides none; the invariant lives in
+        # test_mark_resolved_leaves_the_pre_existing_rules_loading instead. If
+        # this writer ever stops being append-only, put it back.
+        os.replace(tmp, p)
+    finally:
+        # Missing after a successful replace; present after a refusal.
+        tmp.unlink(missing_ok=True)
+
+    logger.info("Suppression appended to %s for finding %s", p, finding_id)
+    return True
 
 
 def _first_active_match(

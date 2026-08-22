@@ -214,8 +214,8 @@ nothing, so no setting turns access control on. Ask `get_server_info()` for
 | `query_findings_db` | working — read-only SQL (`mode=ro` + statement validation, both verified) |
 | `get_finding_context` (`finding://{id}`) | working — `related_findings` is always `[]` |
 | `get_server_info` | working |
-| `apply_fix` | **preview only.** `dry_run=False` writes nothing and returns `success: False` |
-| `mark_resolved` | **not implemented.** Persists nothing and returns `success: False` |
+| `apply_fix` | **preview only.** `dry_run=False` writes nothing and returns `success: False`; deferred past v1.1.0 (#951) |
+| `mark_resolved` | working — appends an id-keyed entry to `jmo.suppress.yml`. Entries **always expire** (90d default, 365 cap), and `resolution="fixed"` writes nothing by design |
 
 ### Key Agents (invoke naturally)
 
