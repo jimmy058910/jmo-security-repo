@@ -73,7 +73,22 @@ class TestSafeLoadJsonFile:
 
         with patch("scripts.core.adapters.common.logger") as mock_logger:
             safe_load_json_file(missing, log_errors=False)
-            mock_logger.debug.assert_not_called()
+            # Whole-mock assertion, not `.debug` -- the missing-file branch
+            # logs at `warning`, not `debug`, so asserting only `.debug` was
+            # never called holds regardless of whether `log_errors` is
+            # honoured.
+            #
+            # NOTE: `mock_logger.assert_not_called()` does NOT do this --
+            # measured directly. `Mock.assert_not_called()` only checks
+            # whether the mock *itself* was invoked as `mock_logger(...)`;
+            # `logger.warning(...)` calls the child mock `mock_logger.warning`,
+            # which leaves `mock_logger.called` False regardless. Asserting
+            # `mock_calls == []` is what actually inspects every child
+            # attribute call (`.debug`, `.warning`, `.info`, `.error`, ...).
+            assert mock_logger.mock_calls == [], (
+                f"Expected no logger calls with log_errors=False, got: "
+                f"{mock_logger.mock_calls}"
+            )
 
     def test_load_with_logging_enabled(self, tmp_path: Path) -> None:
         """Test that log_errors=True logs warning messages for missing files."""
@@ -185,7 +200,16 @@ class TestSafeLoadNdjsonFile:
 
         with patch("scripts.core.adapters.common.logger") as mock_logger:
             list(safe_load_ndjson_file(missing, log_errors=False))
-            mock_logger.debug.assert_not_called()
+            # Whole-mock assertion, not `.debug` -- same defect as the JSON
+            # sibling above (#834): the missing-file branch here also logs
+            # at `warning`, not `debug`, so `.debug.assert_not_called()` held
+            # whether or not `log_errors` was honoured. See the JSON sibling
+            # for why this is `mock_calls == []` and not
+            # `mock_logger.assert_not_called()`.
+            assert mock_logger.mock_calls == [], (
+                f"Expected no logger calls with log_errors=False, got: "
+                f"{mock_logger.mock_calls}"
+            )
 
 
 class TestFlattenToDicts:
