@@ -15,6 +15,7 @@ import json
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 import pytest
 
@@ -26,7 +27,7 @@ class TestV1WorkflowIntegration:
     """Test complete v1.0.0 user workflows."""
 
     @pytest.mark.requires_tools
-    def test_scan_to_dashboard_with_history(self, tmp_path):
+    def test_scan_to_dashboard_with_history(self, tmp_path, monkeypatch):
         """
         Test: Scan → Store in SQLite → Generate dashboard.
 
@@ -78,6 +79,10 @@ class TestV1WorkflowIntegration:
                 self.k8s_namespace = None
                 self.k8s_all_namespaces = False
 
+        # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933),
+        # which resolves `Path.home()` with no injection point -- redirect
+        # it so this in-process call can't write the real ~/.jmo/config.yml.
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
         scan_rc = cmd_scan(ScanArgs())
         assert scan_rc == 0, "Scan should succeed"
 
@@ -360,7 +365,7 @@ class TestV1WorkflowIntegration:
         assert "severity_trends" in export_data
 
     @pytest.mark.requires_tools
-    def test_ci_mode_with_history_and_diff(self, tmp_path):
+    def test_ci_mode_with_history_and_diff(self, tmp_path, monkeypatch):
         """
         Test: CI mode with automatic history storage and diff.
 
@@ -410,6 +415,10 @@ class TestV1WorkflowIntegration:
                 self.k8s_namespace = None
                 self.k8s_all_namespaces = False
 
+        # `jmo ci` runs `cmd_scan` internally, which unconditionally calls
+        # `_show_kofi_reminder()` (#933) -- redirect Path.home() so this
+        # in-process call can't write the real ~/.jmo/config.yml.
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
         rc = cmd_ci(CIArgs())
 
         # Exit code depends on findings (0 or 1 for success, >1 for errors)

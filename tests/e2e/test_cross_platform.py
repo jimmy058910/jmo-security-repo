@@ -15,6 +15,7 @@ Phase 1.3.2 of TESTING_RELEASE_READINESS_PLAN.md
 import json
 import os
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -27,7 +28,7 @@ class TestCrossPlatformCompatibility:
     """Test JMo works on Linux, macOS, Windows (WSL)."""
 
     @pytest.mark.skipif(sys.platform != "linux", reason="Linux only")
-    def test_linux_full_scan(self, tmp_path):
+    def test_linux_full_scan(self, tmp_path, monkeypatch):
         """
         Test full scan on Linux.
 
@@ -77,6 +78,10 @@ class TestCrossPlatformCompatibility:
                 self.k8s_all_namespaces = False
 
         # Step 1: Scan
+        # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933),
+        # which resolves `Path.home()` with no injection point -- redirect
+        # it so this in-process call can't write the real ~/.jmo/config.yml.
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
         scan_rc = cmd_scan(ScanArgs())
         assert scan_rc == 0, "Scan should succeed on Linux"
 
@@ -119,7 +124,7 @@ class TestCrossPlatformCompatibility:
         assert (repo / "app.py") != (repo / "App.py")
 
     @pytest.mark.skipif(sys.platform != "darwin", reason="macOS only")
-    def test_macos_full_scan(self, tmp_path):
+    def test_macos_full_scan(self, tmp_path, monkeypatch):
         """
         Test full scan on macOS.
 
@@ -169,6 +174,10 @@ class TestCrossPlatformCompatibility:
                 self.k8s_all_namespaces = False
 
         # Step 1: Scan
+        # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933),
+        # which resolves `Path.home()` with no injection point -- redirect
+        # it so this in-process call can't write the real ~/.jmo/config.yml.
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
         scan_rc = cmd_scan(ScanArgs())
         assert scan_rc == 0, "Scan should succeed on macOS"
 
@@ -220,7 +229,7 @@ class TestCrossPlatformCompatibility:
         sys.platform != "linux" or not os.path.exists("/mnt/c"),
         reason="WSL only (Linux kernel with Windows drives mounted at /mnt)",
     )
-    def test_windows_wsl_full_scan(self, tmp_path):
+    def test_windows_wsl_full_scan(self, tmp_path, monkeypatch):
         """
         Test full scan on Windows/WSL.
 
@@ -273,6 +282,10 @@ class TestCrossPlatformCompatibility:
                 self.k8s_all_namespaces = False
 
         # Step 1: Scan
+        # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933),
+        # which resolves `Path.home()` with no injection point -- redirect
+        # it so this in-process call can't write the real ~/.jmo/config.yml.
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
         scan_rc = cmd_scan(ScanArgs())
         assert scan_rc == 0, "Scan should succeed on Windows/WSL"
 
@@ -328,7 +341,7 @@ class TestCrossPlatformCompatibility:
         assert "Testing CRLF" in content
 
     @pytest.mark.requires_tools
-    def test_path_normalization_cross_platform(self, tmp_path):
+    def test_path_normalization_cross_platform(self, tmp_path, monkeypatch):
         """
         Test path normalization works across all platforms.
 
@@ -380,6 +393,10 @@ class TestCrossPlatformCompatibility:
                 self.k8s_all_namespaces = False
 
         # Scan using absolute path
+        # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933),
+        # which resolves `Path.home()` with no injection point -- redirect
+        # it so this in-process call can't write the real ~/.jmo/config.yml.
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
         rc = cmd_scan(ScanArgs())
         assert rc == 0, "Scan with absolute path should work"
 

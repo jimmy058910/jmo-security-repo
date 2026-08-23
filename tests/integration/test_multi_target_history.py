@@ -16,6 +16,7 @@ Phase 1.2.2 of TESTING_RELEASE_READINESS_PLAN.md
 import json
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -27,7 +28,7 @@ class TestMultiTargetHistoryIntegration:
     """Test history storage for all 6 target types."""
 
     @pytest.mark.requires_tools
-    def test_scan_all_target_types_single_history(self, tmp_path):
+    def test_scan_all_target_types_single_history(self, tmp_path, monkeypatch):
         """
         Test scanning all target types stores in single history entry.
 
@@ -83,6 +84,10 @@ class TestMultiTargetHistoryIntegration:
                 self.k8s_namespace = None
                 self.k8s_all_namespaces = False
 
+        # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933),
+        # which resolves `Path.home()` with no injection point -- redirect
+        # it so this in-process call can't write the real ~/.jmo/config.yml.
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
         scan_rc = cmd_scan(ScanArgs())
         assert scan_rc == 0, "Scan should succeed"
 
@@ -224,7 +229,7 @@ class TestMultiTargetHistoryIntegration:
         assert "infra.tf" in new_findings[0]["location"]["path"]
 
     @pytest.mark.requires_tools
-    def test_repository_scanning_with_history(self, tmp_path):
+    def test_repository_scanning_with_history(self, tmp_path, monkeypatch):
         """
         Test repository scanning stores correctly in history.
 
@@ -270,6 +275,10 @@ class TestMultiTargetHistoryIntegration:
                 self.k8s_namespace = None
                 self.k8s_all_namespaces = False
 
+        # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933),
+        # which resolves `Path.home()` with no injection point -- redirect
+        # it so this in-process call can't write the real ~/.jmo/config.yml.
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
         cmd_scan(ScanArgs())
 
         class ReportArgs:
@@ -298,7 +307,7 @@ class TestMultiTargetHistoryIntegration:
                 assert "trufflehog" in scan["tools"]
 
     @pytest.mark.requires_tools
-    def test_iac_scanning_with_history(self, tmp_path):
+    def test_iac_scanning_with_history(self, tmp_path, monkeypatch):
         """
         Test IaC scanning stores correctly in history.
 
@@ -347,6 +356,10 @@ resource "aws_s3_bucket" "test" {
                 self.k8s_namespace = None
                 self.k8s_all_namespaces = False
 
+        # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933),
+        # which resolves `Path.home()` with no injection point -- redirect
+        # it so this in-process call can't write the real ~/.jmo/config.yml.
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
         cmd_scan(ScanArgs())
 
         class ReportArgs:

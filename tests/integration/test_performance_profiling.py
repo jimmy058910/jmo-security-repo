@@ -41,7 +41,11 @@ def test_profile_flag_generates_timings(tmp_path):
         str(tmp_path / "results"),
         "--allow-missing-tools",
     ]
-    subprocess.run(cmd, check=True, timeout=120)
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point -- redirect it via the
+    # env vars Path.home() actually reads on each platform.
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    subprocess.run(cmd, check=True, timeout=120, env=env)
 
     # Generate report with profiling
     cmd_report = [
@@ -91,7 +95,11 @@ def test_timings_data_structure(tmp_path):
         str(tmp_path / "results"),
         "--allow-missing-tools",
     ]
-    subprocess.run(cmd_scan, timeout=120)
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point -- redirect it via the
+    # env vars Path.home() actually reads on each platform.
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    subprocess.run(cmd_scan, timeout=120, env=env)
 
     cmd_report = [
         sys.executable,
@@ -153,7 +161,11 @@ def test_ci_command_with_profile_generates_timings(tmp_path):
         "--allow-missing-tools",
         "--profile",  # Enable profiling
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+    # `jmo ci` runs `cmd_scan` internally, which unconditionally calls
+    # `_show_kofi_reminder()` (#933) -- redirect Path.home() via the env vars
+    # it actually reads on each platform.
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=180, env=env)
 
     # CI should succeed (exit 0 or 1 for findings)
     assert result.returncode in [0, 1]
@@ -198,7 +210,11 @@ def test_profile_without_flag_no_timings(tmp_path):
         str(tmp_path / "results"),
         "--allow-missing-tools",
     ]
-    subprocess.run(cmd_scan, timeout=120)
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point -- redirect it via the
+    # env vars Path.home() actually reads on each platform.
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    subprocess.run(cmd_scan, timeout=120, env=env)
 
     # Generate report WITHOUT --profile flag
     cmd_report = [
@@ -242,7 +258,11 @@ def test_timings_thread_recommendation(tmp_path):
         str(tmp_path / "results"),
         "--allow-missing-tools",
     ]
-    subprocess.run(cmd_scan, timeout=180)
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point -- redirect it via the
+    # env vars Path.home() actually reads on each platform.
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    subprocess.run(cmd_scan, timeout=180, env=env)
 
     cmd_report = [
         sys.executable,
@@ -289,7 +309,11 @@ def test_timings_json_is_valid_json(tmp_path):
         "--allow-missing-tools",
         "--profile",
     ]
-    subprocess.run(cmd, timeout=180)
+    # `jmo ci` runs `cmd_scan` internally, which unconditionally calls
+    # `_show_kofi_reminder()` (#933) -- redirect Path.home() via the env vars
+    # it actually reads on each platform.
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    subprocess.run(cmd, timeout=180, env=env)
 
     timings_file = tmp_path / "results" / "summaries" / "timings.json"
 

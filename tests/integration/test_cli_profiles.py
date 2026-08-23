@@ -255,6 +255,7 @@ def test_scan_retries_on_failure_then_success(tmp_path: Path, monkeypatch):
 @pytest.mark.requires_tools
 def test_per_tool_timeout_override(tmp_path: Path):
     """Test per-tool timeout override in profile."""
+    import os
     import subprocess
     import sys
 
@@ -294,7 +295,13 @@ profiles:
         str(tmp_path / "results"),
         "--allow-missing-tools",
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point. monkeypatch cannot
+    # reach across this subprocess boundary, so redirect it via the env vars
+    # Path.home() actually reads: USERPROFILE on Windows (ntpath.expanduser),
+    # HOME on Linux/macOS (posixpath.expanduser).
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, env=env)
 
     # Should complete successfully
     assert result.returncode in [0, 1]
@@ -375,9 +382,11 @@ profiles:
     ]
     # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
     # resolves `Path.home()` with no injection point. monkeypatch cannot
-    # reach across this subprocess boundary, so redirect it via the env var
-    # Path.home() actually reads on Windows (ntpath.expanduser -> USERPROFILE).
-    env = {**os.environ, "USERPROFILE": str(tmp_path)}
+    # reach across this subprocess boundary, so redirect it via the env vars
+    # Path.home() actually reads: USERPROFILE on Windows (ntpath.expanduser),
+    # HOME on Linux/macOS (posixpath.expanduser) -- each platform consults
+    # only its own var, so setting just one leaves the other exposed.
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, env=env)
     assert result.returncode in [0, 1]
 
@@ -428,9 +437,11 @@ profiles:
     ]
     # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
     # resolves `Path.home()` with no injection point. monkeypatch cannot
-    # reach across this subprocess boundary, so redirect it via the env var
-    # Path.home() actually reads on Windows (ntpath.expanduser -> USERPROFILE).
-    env = {**os.environ, "USERPROFILE": str(tmp_path)}
+    # reach across this subprocess boundary, so redirect it via the env vars
+    # Path.home() actually reads: USERPROFILE on Windows (ntpath.expanduser),
+    # HOME on Linux/macOS (posixpath.expanduser) -- each platform consults
+    # only its own var, so setting just one leaves the other exposed.
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, env=env)
     assert result.returncode in [0, 1]
 
@@ -438,6 +449,7 @@ profiles:
 @pytest.mark.requires_tools
 def test_profile_tool_selection_fast(tmp_path: Path):
     """Test fast profile invokes correct tool subset."""
+    import os
     import subprocess
     import sys
 
@@ -462,7 +474,13 @@ def test_profile_tool_selection_fast(tmp_path: Path):
         "--allow-missing-tools",
         "--human-logs",
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=240)
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point. monkeypatch cannot
+    # reach across this subprocess boundary, so redirect it via the env vars
+    # Path.home() actually reads: USERPROFILE on Windows (ntpath.expanduser),
+    # HOME on Linux/macOS (posixpath.expanduser).
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=240, env=env)
     assert result.returncode in [0, 1]
 
     # Verify expected tools invoked (check logs OR stub files)
@@ -482,6 +500,7 @@ def test_profile_tool_selection_fast(tmp_path: Path):
 @pytest.mark.requires_tools
 def test_profile_tool_selection_balanced(tmp_path: Path):
     """Test balanced profile invokes correct tool subset."""
+    import os
     import subprocess
     import sys
 
@@ -510,7 +529,13 @@ def test_profile_tool_selection_balanced(tmp_path: Path):
         "--allow-missing-tools",
         "--human-logs",
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=240)
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point. monkeypatch cannot
+    # reach across this subprocess boundary, so redirect it via the env vars
+    # Path.home() actually reads: USERPROFILE on Windows (ntpath.expanduser),
+    # HOME on Linux/macOS (posixpath.expanduser).
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=240, env=env)
     assert result.returncode in [0, 1]
 
     # Verify expected tools invoked (check logs OR stub files)
@@ -544,6 +569,7 @@ def test_profile_tool_selection_balanced(tmp_path: Path):
 @pytest.mark.requires_tools
 def test_profile_tool_selection_deep(tmp_path: Path):
     """Test deep profile invokes correct tool subset."""
+    import os
     import subprocess
     import sys
 
@@ -572,7 +598,13 @@ def test_profile_tool_selection_deep(tmp_path: Path):
         "--allow-missing-tools",
         "--human-logs",
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=240)
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point. monkeypatch cannot
+    # reach across this subprocess boundary, so redirect it via the env vars
+    # Path.home() actually reads: USERPROFILE on Windows (ntpath.expanduser),
+    # HOME on Linux/macOS (posixpath.expanduser).
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=240, env=env)
     assert result.returncode in [0, 1]
 
     # Verify expected tools invoked (check logs OR stub files)
@@ -607,6 +639,7 @@ def test_profile_tool_selection_deep(tmp_path: Path):
 @pytest.mark.requires_tools
 def test_profile_inherits_global_per_tool_config(tmp_path: Path):
     """Test profile inherits global per_tool config and merges correctly."""
+    import os
     import subprocess
     import sys
 
@@ -652,7 +685,13 @@ profiles:
         str(tmp_path / "results"),
         "--allow-missing-tools",
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point. monkeypatch cannot
+    # reach across this subprocess boundary, so redirect it via the env vars
+    # Path.home() actually reads: USERPROFILE on Windows (ntpath.expanduser),
+    # HOME on Linux/macOS (posixpath.expanduser).
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, env=env)
     assert result.returncode in [0, 1]
 
     # Verify both tools ran (check logs OR stub files)
@@ -670,6 +709,7 @@ profiles:
 @pytest.mark.requires_tools
 def test_profile_thread_override(tmp_path: Path):
     """Test profile-specific thread count override."""
+    import os
     import subprocess
     import sys
 
@@ -707,7 +747,13 @@ profiles:
         "--allow-missing-tools",
         "--human-logs",
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point. monkeypatch cannot
+    # reach across this subprocess boundary, so redirect it via the env vars
+    # Path.home() actually reads: USERPROFILE on Windows (ntpath.expanduser),
+    # HOME on Linux/macOS (posixpath.expanduser).
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, env=env)
     assert result.returncode in [0, 1]
 
     # Verify scan completed (thread count affects parallelism, not correctness)
