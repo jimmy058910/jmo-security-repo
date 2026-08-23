@@ -365,6 +365,16 @@ gh issue list --repo jimmy058910/jmo-security-repo --state open \
   enforces CWEs and 164.312 safeguards.**
   [#923](https://github.com/jimmy058910/jmo-security-repo/issues/923)
 
+### Suppression
+
+- A suppression written by the MCP `mark_resolved` tool gets an expiry date
+  computed in **UTC**, but the suppression engine decides whether it is still
+  active using the machine's **local** date. Its effective lifetime is therefore
+  up to a day longer or shorter than the number of days you asked for, depending
+  on your timezone. **What to do:** if a suppression's exact lapse day matters,
+  set the expiry a day earlier than the boundary you care about.
+  [#967](https://github.com/jimmy058910/jmo-security-repo/issues/967)
+
 ### Scheduling
 
 - `validate_cron_expression` **rejects named weekdays** (`MON`, `FRI`) that both
