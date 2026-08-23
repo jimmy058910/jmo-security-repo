@@ -14,7 +14,7 @@ Target Coverage: Full integration testing with real wizard execution.
 
 import json
 import subprocess
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -222,8 +222,21 @@ def test_wizard_policy_integration_interactive_mode(tmp_path, sample_jmo_yml):
                 )
             }
 
-            # Run wizard in non-interactive mode (yes=True)
-            exit_code = run_wizard(yes=True, policies=None, skip_policies=False)
+            # Mock ToolManager's wizard pre-flight check (#907: unmocked, it
+            # shells out to whatever scanner binaries are actually on PATH).
+            mock_tool_manager = MagicMock()
+            mock_tool_manager.get_tool_summary.return_value = MagicMock(
+                execution_ready=10, platform_applicable=18
+            )
+            mock_tool_manager.check_tool.return_value = MagicMock(
+                installed=True, version="1.0.0", startup_ok=True
+            )
+            with patch(
+                "scripts.cli.tool_manager.ToolManager",
+                return_value=mock_tool_manager,
+            ):
+                # Run wizard in non-interactive mode (yes=True)
+                exit_code = run_wizard(yes=True, policies=None, skip_policies=False)
 
             # Note: In --yes mode with no emit flags, scan executes but policy
             # evaluation happens in interactive offers block (else clause)

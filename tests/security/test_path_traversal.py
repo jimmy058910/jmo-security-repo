@@ -261,17 +261,14 @@ suppressions:
         ]
 
         for malicious_path in malicious_suppress_paths:
-            # Should fail to load or return empty list
+            # Should fail to load, or return an empty dict -- never contents
+            # read from outside the intended directory.
             try:
                 suppressions = load_suppressions(malicious_path)
-                # If it loads, should be empty list (not /etc/passwd contents)
-                assert isinstance(suppressions, list), "Should return list"
-                assert len(suppressions) == 0 or all(
-                    isinstance(s, dict) for s in suppressions
-                ), "Should not load arbitrary file contents"
-            except (FileNotFoundError, PermissionError, Exception):
-                # Expected: file doesn't exist or invalid YAML
-                pass
+            except (FileNotFoundError, PermissionError, OSError):
+                continue  # not reachable today, but a legitimate outcome
+            assert isinstance(suppressions, dict), "Should return dict"
+            assert suppressions == {}, "Should not load arbitrary file contents"
 
     def test_git_clone_path_validation(self, tmp_path):
         """Test that git repository paths prevent traversal.

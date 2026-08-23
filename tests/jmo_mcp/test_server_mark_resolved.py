@@ -695,6 +695,88 @@ def test_mark_resolved_entry_is_honoured_by_the_suppressor(mock_env_with_config)
     assert filter_suppressed([finding], load_suppressions(config)) == []
 
 
+def test_mark_resolved_expiry_agrees_between_write_and_evaluate(
+    mock_env_with_config, monkeypatch
+):
+    """Regression for #967: what mark_resolved writes is what is_active honours.
+
+    ``mark_resolved`` computes ``expires`` from ``datetime.now(UTC).date()``.
+    Before this fix, ``Suppression.is_active()`` defaulted to the LOCAL
+    ``dt.date.today()`` instead, so a suppression's effective lifetime was off
+    by up to a day for anyone not in UTC. This drives the REAL
+    ``load_suppressions -> is_active`` path with no explicit ``now=`` --
+    that argument would bypass the defaulting logic this bug lives in
+    entirely -- under a clock this test supplies itself, so it passes at any
+    wall-clock hour: nothing here reads the real system clock, on either
+    side, and the chosen instants are nowhere near the actual date this runs
+    on.
+
+    Two different monkeypatch targets, because the two modules import the
+    clock two different ways:
+      - ``jmo_server.py`` did ``from datetime import ... datetime``, a name
+        bound once at import; patching the ``datetime`` *module* would not
+        reach that already-bound name, so this rebinds ``jmo_server``'s own
+        ``datetime`` attribute instead.
+      - ``suppress.py`` did ``import datetime as dt``, so rebinding
+        ``suppress``'s ``dt`` name works -- but only if ``dt.date`` is left
+        alone. ``is_active`` still needs the real class: it calls
+        ``dt.date.fromisoformat`` and, for a hand-edited config, may see
+        ``self.expires`` as a genuine ``datetime.date`` (YAML's implicit
+        resolver parses an unquoted date scalar), which only ``isinstance``
+        against the real class recognises. Only ``datetime`` is fixed here;
+        everything else -- ``date``, ``UTC``, ``timedelta`` -- passes through
+        unchanged.
+    """
+    import datetime as real_dt
+
+    from scripts.core import suppress
+    from scripts.core.suppress import load_suppressions
+    from scripts.jmo_mcp import jmo_server
+
+    creation_instant = real_dt.datetime(2099, 6, 10, 1, 30, tzinfo=real_dt.UTC)
+
+    class _FixedAtCreation(real_dt.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return creation_instant
+
+    monkeypatch.setattr(jmo_server, "datetime", _FixedAtCreation)
+
+    result = mark_resolved(
+        finding_id="fingerprint-sqli-001",
+        resolution="false_positive",
+        comment="Regression for #967",
+        expires_days=1,
+    )
+    # UTC date at creation was 2099-06-10; +1 day is the last intended active day.
+    assert result["expires"] == "2099-06-11"
+
+    # Evaluate two calendar days after creation -- one UTC day past the
+    # expiry -- and assert it now reads as expired.
+    evaluation_instant = real_dt.datetime(2099, 6, 12, 1, 30, tzinfo=real_dt.UTC)
+
+    class _FixedAtEvaluation(real_dt.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return evaluation_instant
+
+    class _FrozenDt:
+        """``suppress.py``'s ``dt``, with only ``.datetime.now`` fixed."""
+
+        datetime = _FixedAtEvaluation
+
+        def __getattr__(self, name):
+            return getattr(real_dt, name)
+
+    monkeypatch.setattr(suppress, "dt", _FrozenDt())
+
+    rules = load_suppressions(str(mock_env_with_config / "jmo.suppress.yml"))
+    assert rules["fingerprint-sqli-001"].is_active() is False, (
+        "one UTC day past a 1-day expiry must be inactive, through the real "
+        "load_suppressions -> is_active path with no explicit now="
+    )
+
+
 def test_mark_resolved_defaults_to_a_ninety_day_expiry(mock_env_with_config):
     """A suppression written by an AI client is time-boxed by default."""
     import datetime as dt
@@ -707,7 +789,11 @@ def test_mark_resolved_defaults_to_a_ninety_day_expiry(mock_env_with_config):
         comment="Test fixture",
     )
 
-    expected = dt.date.today() + dt.timedelta(days=90)
+    # UTC on both sides (#967): mark_resolved computes `expires` from
+    # datetime.now(UTC).date(), so the expectation must use the same clock.
+    # dt.date.today() is LOCAL and disagrees with it for part of every day at
+    # a non-zero UTC offset -- this used to be a real flake, not a style nit.
+    expected = dt.datetime.now(dt.UTC).date() + dt.timedelta(days=90)
     assert result["expires"] == expected.isoformat()
 
     rule = load_suppressions(str(mock_env_with_config / "jmo.suppress.yml"))[
@@ -733,7 +819,9 @@ def test_mark_resolved_accepts_an_expiry_at_the_cap(mock_env_with_config):
     )
 
     assert result["success"] is True
-    assert result["expires"] == (dt.date.today() + dt.timedelta(days=365)).isoformat()
+    # UTC on both sides (#967) -- see the sibling test above.
+    expected = dt.datetime.now(dt.UTC).date() + dt.timedelta(days=365)
+    assert result["expires"] == expected.isoformat()
 
 
 def test_mark_resolved_rejects_an_expiry_beyond_the_cap(mock_env_with_config):

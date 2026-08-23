@@ -235,9 +235,93 @@ Two consequences worth carrying:
   security tool's Python module gets removed from the venv by a dependency sync.
   Reinstall with `jmo tools install yara` when those tests matter.
 - **#792 does not "fail to reproduce" in a synced environment — it *skips*.**
-  `test_100k_findings_memory_usage` lives in `test_stress.py` behind the psutil
-  guard. "Did not reproduce" and "did not run" are different claims and only the
-  second is true. Say which mode produced the result.
+  `test_30k_findings_memory_usage` (named `test_100k_findings_memory_usage`
+  until #792/#767 were fixed — see below) lives in `test_stress.py` behind the
+  psutil guard. "Did not reproduce" and "did not run" are different claims and
+  only the second is true. Say which mode produced the result.
+- **The skip isn't confined to PR-time — check every job that touches the file,
+  not just the one that names it.** `scheduled.yml` has *two* steps that could
+  plausibly run `test_stress.py`: the dedicated `performance-benchmarks` job
+  (targets `tests/performance/test_benchmarks.py` only, installs psutil itself)
+  and `nightly-extended-tests`'s own `Run performance benchmarks` step (targets
+  the whole `tests/performance/` directory — *this* one collects
+  `test_stress.py` too). Measured 2026-08-23: the second step does **not**
+  install psutil, so the skip fires there as well, and the step is piped
+  through `|| echo "Performance tests completed with warnings"` — swallowing
+  the exit code regardless. This memory test currently produces zero signal
+  anywhere in CI, not just at PR time. Grep for the test **file's path**, not
+  the job name you already suspect, before concluding a gate is nightly-only.
+
+## Memory-gate negative controls: a second container is not a second allocation
+
+Fixing #792 replaced what was then `test_100k_findings_memory_usage`'s psutil
+RSS-delta assertion with `tracemalloc.get_traced_memory()` peak — RSS spread
+429.6-540.4MB across 4 runs on one box for byte-identical code (machine-state
+noise); tracemalloc peak agreed to <0.01MB across the same 4 runs, including
+one under `-n 4` xdist contention. (The numbers in this section are all at the
+100k-finding scale that test used at the time; #767 below later resized it to
+30k, so the *current* file reads smaller numbers against a smaller budget —
+same mechanism, different scale.)
+
+Verifying the new gate could still fail needed a negative control: mutate
+`gather_results` to retain everything it reads. First attempt appended the
+already-referenced `fut.result()` list to a second, never-cleared module-level
+list — and **the assertion did not move at all** (680.7MB before, 680.7MB
+after). A Python list stores references, not copies: a second container
+holding the same objects `findings` already extended costs only its own
+pointer array (~800KB for 100k entries), not the payload. The mutation looked
+exactly like a real leak in code review and asserted nothing. Switching to
+`_TEMP_NEGATIVE_CONTROL_LEAK.append(copy.deepcopy(result))` forced genuine new
+allocation and moved peak to 827.2MB, correctly tripping the (then-)750MB
+budget. Re-run again after #767 resized the fixture to 30k: same shape, smaller
+numbers (170.2MB mutated vs a 150MB budget, 126.3MB restored).
+
+**When writing a memory-regression negative control, deep-copy, don't
+re-reference — the same trap the fix itself exists to catch will hide inside
+the control that's supposed to prove the fix works.**
+
+## #767: fixing what a test *reports* does not fix what it *allocates*
+
+`test_stress.py::TestExtremeLoad`'s memory test (see above — renamed
+`test_100k_findings_memory_usage` → `test_30k_findings_memory_usage`) crashed
+an xdist worker under `-n auto` (`worker 'gwN' crashed ... node down: Not
+properly terminated`), and pytest-cov lost that worker's coverage data as a
+result (`ci.yml`'s aggregate TOTAL read as low as 13% on this box — worse than
+the 32% the issue itself cited). #792's fix (RSS delta → tracemalloc peak,
+above) landed **first** and did **not** stop the crash: re-measured with the
+tracemalloc version installed, the same worker still died on the same test.
+That is not a bug in the #792 fix — the two issues are different questions.
+**A measurement fix changes what a test *reports*; it does not change what the
+test *allocates*.** `gather_results` still builds and holds the same 100k-item
+structure either way. Whatever you change to make a number more honest, ask
+separately whether the underlying code still does the same amount of real work
+— fixing the gate and fixing the crash are two different patches, and treating
+the first as having discharged the second is exactly the wrong assumption to
+carry into a report.
+
+**Check real headroom, not just the test's own footprint, before assuming a
+crash is the test being wasteful.** `systeminfo`/`wmic OS get
+FreePhysicalMemory` on this box read 16,069MB total RAM and only
+~428-660MB free even near-idle (background apps, IDE, the agent session
+itself). Twenty concurrent `-n auto` workers plus one needing several hundred
+extra MB is a genuine OOM-adjacent condition on a box in that state — xdist's
+`-n auto` sizes off `os.cpu_count()`, which has no idea how much RAM is
+actually free.
+
+**The fix that actually stopped the crash: reduce the real allocation, not
+just its reported figure.** Fixture size 100k → 30k findings. 100,000 was a
+round number, not a measured requirement, and the peak-vs-size relationship
+between 50k-100k is **not linear** on this workload (measured via a standalone
+probe script, same `gather_results` code path: 50k→242MB, 75k→504MB,
+100k→680MB — a jump disproportionate to the input growth, most likely GC/
+allocator threshold effects during JSON parsing + dedup, not confirmed further
+since it didn't need to be to pick a safe size). 30k landed at 126.3MB, ~5x
+below the crash-prone 680MB, while staying 3x the 10k reference size in
+`test_error_recovery.py`'s `test_large_findings_batch_handling` (which,
+notably, did **not** crash its worker in the same `-n auto` run — only the
+100k-scale test did, even though the original #767 report listed two
+crashers; a smaller-scale sibling test doing similar work is evidence the
+crash is about scale, not about the operation itself).
 
 ## Counting tests: compare like with like
 

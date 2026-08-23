@@ -41,7 +41,11 @@ def test_profile_flag_generates_timings(tmp_path):
         str(tmp_path / "results"),
         "--allow-missing-tools",
     ]
-    subprocess.run(cmd, check=True, timeout=120)
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point -- redirect it via the
+    # env vars Path.home() actually reads on each platform.
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    subprocess.run(cmd, check=True, timeout=120, env=env)
 
     # Generate report with profiling
     cmd_report = [
@@ -58,12 +62,16 @@ def test_profile_flag_generates_timings(tmp_path):
     timings_file = tmp_path / "results" / "summaries" / "timings.json"
     assert timings_file.exists(), "timings.json not generated with --profile flag"
 
-    # Validate structure
+    # Validate structure. `{"a": 1}` used to pass this check (#723) -- pin the
+    # exact key set the real scan -> report --profile pipeline is expected to
+    # produce, same contract as test_timings_json_matches_the_producer_contract
+    # below, but exercised here through real tools instead of fabricated stubs.
     timings = json.loads(timings_file.read_text())
-    assert isinstance(timings, dict), "timings.json should be a dictionary"
-
-    # Should have some timing data (exact structure may vary)
-    assert len(timings) > 0, "timings.json should not be empty"
+    assert set(timings) == EXPECTED_TIMINGS_KEYS, (
+        "timings.json top-level keys drifted from the producer.\n"
+        f"  missing: {sorted(EXPECTED_TIMINGS_KEYS - set(timings))}\n"
+        f"  unexpected: {sorted(set(timings) - EXPECTED_TIMINGS_KEYS)}"
+    )
 
 
 @pytest.mark.requires_tools
@@ -87,7 +95,11 @@ def test_timings_data_structure(tmp_path):
         str(tmp_path / "results"),
         "--allow-missing-tools",
     ]
-    subprocess.run(cmd_scan, timeout=120)
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point -- redirect it via the
+    # env vars Path.home() actually reads on each platform.
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    subprocess.run(cmd_scan, timeout=120, env=env)
 
     cmd_report = [
         sys.executable,
@@ -149,7 +161,11 @@ def test_ci_command_with_profile_generates_timings(tmp_path):
         "--allow-missing-tools",
         "--profile",  # Enable profiling
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+    # `jmo ci` runs `cmd_scan` internally, which unconditionally calls
+    # `_show_kofi_reminder()` (#933) -- redirect Path.home() via the env vars
+    # it actually reads on each platform.
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=180, env=env)
 
     # CI should succeed (exit 0 or 1 for findings)
     assert result.returncode in [0, 1]
@@ -160,9 +176,16 @@ def test_ci_command_with_profile_generates_timings(tmp_path):
         timings_file.exists()
     ), "ci command with --profile should generate timings.json"
 
+    # Same vacuous-pair fix as test_profile_flag_generates_timings above --
+    # {"a": 1} passed this check before. In scope because this is still one of
+    # timings.json's own tests (#723), even though only the sibling test above
+    # was named explicitly.
     timings = json.loads(timings_file.read_text())
-    assert isinstance(timings, dict)
-    assert len(timings) > 0
+    assert set(timings) == EXPECTED_TIMINGS_KEYS, (
+        "timings.json top-level keys drifted from the producer.\n"
+        f"  missing: {sorted(EXPECTED_TIMINGS_KEYS - set(timings))}\n"
+        f"  unexpected: {sorted(set(timings) - EXPECTED_TIMINGS_KEYS)}"
+    )
 
 
 @pytest.mark.requires_tools
@@ -187,7 +210,11 @@ def test_profile_without_flag_no_timings(tmp_path):
         str(tmp_path / "results"),
         "--allow-missing-tools",
     ]
-    subprocess.run(cmd_scan, timeout=120)
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point -- redirect it via the
+    # env vars Path.home() actually reads on each platform.
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    subprocess.run(cmd_scan, timeout=120, env=env)
 
     # Generate report WITHOUT --profile flag
     cmd_report = [
@@ -231,7 +258,11 @@ def test_timings_thread_recommendation(tmp_path):
         str(tmp_path / "results"),
         "--allow-missing-tools",
     ]
-    subprocess.run(cmd_scan, timeout=180)
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point -- redirect it via the
+    # env vars Path.home() actually reads on each platform.
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    subprocess.run(cmd_scan, timeout=180, env=env)
 
     cmd_report = [
         sys.executable,
@@ -278,7 +309,11 @@ def test_timings_json_is_valid_json(tmp_path):
         "--allow-missing-tools",
         "--profile",
     ]
-    subprocess.run(cmd, timeout=180)
+    # `jmo ci` runs `cmd_scan` internally, which unconditionally calls
+    # `_show_kofi_reminder()` (#933) -- redirect Path.home() via the env vars
+    # it actually reads on each platform.
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    subprocess.run(cmd, timeout=180, env=env)
 
     timings_file = tmp_path / "results" / "summaries" / "timings.json"
 
@@ -376,6 +411,17 @@ def test_timings_json_matches_the_producer_contract(tmp_path):
     assert isinstance(timings["recommended_threads"], int)
     assert timings["recommended_threads"] > 0
     assert isinstance(timings["meta"], dict)
+
+    # gather_results() only populates meta.max_workers when JMO_PROFILE=1
+    # (normalize_and_report.py:153-159) -- and --profile always exports that
+    # (report_orchestrator.py:161-162) before gather_results() runs, so it is
+    # present on every profiled run, not just some of them.
+    assert "max_workers" in timings["meta"], (
+        "meta.max_workers missing -- see normalize_and_report.py's "
+        "gather_results(), which sets it whenever JMO_PROFILE=1"
+    )
+    assert isinstance(timings["meta"]["max_workers"], int)
+    assert timings["meta"]["max_workers"] > 0
 
 
 def test_timings_jobs_is_a_flat_list_of_per_file_entries(tmp_path):

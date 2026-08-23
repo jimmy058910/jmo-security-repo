@@ -74,8 +74,12 @@ class TestUnicodeFallbacks:
     def test_values_are_ascii_strings(self) -> None:
         for key, value in UNICODE_FALLBACKS.items():
             assert isinstance(value, str)
-            # Fallback values should be pure ASCII
-            assert value.encode("ascii"), f"Fallback for {key!r} is not ASCII"
+            # Fallback values should be pure ASCII. isascii() is used rather
+            # than `value.encode("ascii")` for truthiness: the encode result
+            # is falsy for an empty string, which would wrongly forbid a
+            # codepoint mapped to "" (a legitimate way to say "renders as
+            # nothing") -- see the VARIATION SELECTOR-16 handling above.
+            assert value.isascii(), f"Fallback for {key!r} is not ASCII"
 
 
 class TestSafePrint:

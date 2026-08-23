@@ -94,7 +94,15 @@ class TestAutoFixTools:
             }
         ]
 
-        with patch("builtins.print"):  # Suppress output
+        # Mock ToolManager's post-install re-check (#907: unmocked, it
+        # shells out to whatever scanner binaries are actually on PATH).
+        mock_summary = MagicMock(execution_ready=1, platform_applicable=1)
+        with (
+            patch("builtins.print"),  # Suppress output
+            patch("scripts.cli.tool_manager.ToolManager") as mock_manager_cls,
+        ):
+            mock_manager_cls.return_value.check_profile.return_value = {}
+            mock_manager_cls.return_value.get_tool_summary.return_value = mock_summary
             should_continue, available = _auto_fix_tools(
                 fix_info=fix_info,
                 platform="linux",
@@ -128,7 +136,15 @@ class TestAutoFixTools:
             }
         ]
 
-        with patch("builtins.print"):  # Suppress output
+        # Mock ToolManager's post-install re-check (#907: unmocked, it
+        # shells out to whatever scanner binaries are actually on PATH).
+        mock_summary = MagicMock(execution_ready=1, platform_applicable=1)
+        with (
+            patch("builtins.print"),  # Suppress output
+            patch("scripts.cli.tool_manager.ToolManager") as mock_manager_cls,
+        ):
+            mock_manager_cls.return_value.check_profile.return_value = {}
+            mock_manager_cls.return_value.get_tool_summary.return_value = mock_summary
             should_continue, available = _auto_fix_tools(
                 fix_info=fix_info,
                 platform="linux",

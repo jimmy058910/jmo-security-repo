@@ -40,7 +40,16 @@ from scripts.cli.trend_commands import (
 
 @pytest.fixture
 def sample_database(tmp_path):
-    """Create a sample SQLite database with scans and findings for testing."""
+    """Create a sample SQLite database with scans and findings for testing.
+
+    Branch values are 3 NULL + 2 "dev" (scan1-3, scan4-5), matching the real
+    `.jmo/history.db` distribution -- predominantly NULL, some "dev", zero
+    "main" (#916). Every test below that wants "all 5 scans" sets its stub's
+    `branch = None`, which is what a real unset `--branch` produces and
+    genuinely exercises the NULL-inclusive query path, rather than the old
+    uniform `"main"` value that coincidentally matched a stub literal but
+    never appears in production and never touched NULL handling at all.
+    """
     db_path = tmp_path / "history.db"
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -95,7 +104,7 @@ def sample_database(tmp_path):
             "id": "scan1",
             "timestamp": base_time,
             "timestamp_iso": "2025-01-01T12:00:00Z",
-            "branch": "main",
+            "branch": None,
             "profile": "balanced",
             "tools": "trivy,semgrep",
             "critical_count": 10,
@@ -107,7 +116,7 @@ def sample_database(tmp_path):
             "id": "scan2",
             "timestamp": base_time + (86400 * 7),
             "timestamp_iso": "2025-01-08T12:00:00Z",
-            "branch": "main",
+            "branch": None,
             "profile": "balanced",
             "tools": "trivy,semgrep",
             "critical_count": 8,
@@ -119,7 +128,7 @@ def sample_database(tmp_path):
             "id": "scan3",
             "timestamp": base_time + (86400 * 14),
             "timestamp_iso": "2025-01-15T12:00:00Z",
-            "branch": "main",
+            "branch": None,
             "profile": "balanced",
             "tools": "trivy,semgrep",
             "critical_count": 6,
@@ -131,7 +140,7 @@ def sample_database(tmp_path):
             "id": "scan4",
             "timestamp": base_time + (86400 * 21),
             "timestamp_iso": "2025-01-22T12:00:00Z",
-            "branch": "main",
+            "branch": "dev",
             "profile": "balanced",
             "tools": "trivy,semgrep",
             "critical_count": 12,  # Regression!
@@ -143,7 +152,7 @@ def sample_database(tmp_path):
             "id": "scan5",
             "timestamp": base_time + (86400 * 28),
             "timestamp_iso": "2025-01-29T12:00:00Z",
-            "branch": "main",
+            "branch": "dev",
             "profile": "balanced",
             "tools": "trivy,semgrep",
             "critical_count": 4,
@@ -238,7 +247,9 @@ class TestCmdTrendsAnalyze:
 
         class Args:
             db = str(sample_database)
-            branch = "main"
+            branch = (
+                None  # matches the real distribution: no scan is ever "main" (#916)
+            )
             days = None
             last = None
             scan_ids = None
@@ -261,7 +272,9 @@ class TestCmdTrendsAnalyze:
 
         class Args:
             db = str(sample_database)
-            branch = "main"
+            branch = (
+                None  # matches the real distribution: no scan is ever "main" (#916)
+            )
             days = None
             last = None
             scan_ids = None
@@ -284,7 +297,9 @@ class TestCmdTrendsAnalyze:
 
         class Args:
             db = str(sample_database)
-            branch = "main"
+            branch = (
+                None  # matches the real distribution: no scan is ever "main" (#916)
+            )
             days = None
             last = 3  # Only last 3 scans
             scan_ids = None
@@ -307,7 +322,9 @@ class TestCmdTrendsAnalyze:
 
         class Args:
             db = str(sample_database)
-            branch = "main"
+            branch = (
+                None  # matches the real distribution: no scan is ever "main" (#916)
+            )
             days = 30  # Last 30 days
             last = None
             scan_ids = None
@@ -330,7 +347,9 @@ class TestCmdTrendsAnalyze:
 
         class Args:
             db = str(sample_database)
-            branch = "main"
+            branch = (
+                None  # matches the real distribution: no scan is ever "main" (#916)
+            )
             days = None
             last = None
             scan_ids = None
@@ -354,7 +373,9 @@ class TestCmdTrendsAnalyze:
 
         class Args:
             db = str(sample_database)
-            branch = "main"
+            branch = (
+                None  # matches the real distribution: no scan is ever "main" (#916)
+            )
             days = None
             last = None
             scan_ids = None
@@ -379,7 +400,9 @@ class TestCmdTrendsAnalyze:
 
         class Args:
             db = str(nonexistent_db)
-            branch = "main"
+            branch = (
+                None  # matches the real distribution: no scan is ever "main" (#916)
+            )
             days = None
             last = None
             scan_ids = None
@@ -402,7 +425,9 @@ class TestCmdTrendsAnalyze:
 
         class Args:
             db = str(sample_database)
-            branch = "main"
+            branch = (
+                None  # matches the real distribution: no scan is ever "main" (#916)
+            )
             days = None
             last = None
             scan_ids = None
@@ -504,7 +529,9 @@ class TestCmdTrendsRegressions:
 
         class Args:
             db = str(sample_database)
-            branch = "main"
+            branch = (
+                None  # matches the real distribution: no scan is ever "main" (#916)
+            )
             last = None
             severity = None
             fail_on_any = False
@@ -518,7 +545,9 @@ class TestCmdTrendsRegressions:
 
         class Args:
             db = str(sample_database)
-            branch = "main"
+            branch = (
+                None  # matches the real distribution: no scan is ever "main" (#916)
+            )
             last = None
             severity = "CRITICAL"  # Only CRITICAL regressions
             fail_on_any = False
@@ -532,7 +561,9 @@ class TestCmdTrendsRegressions:
 
         class Args:
             db = str(sample_database)
-            branch = "main"
+            branch = (
+                None  # matches the real distribution: no scan is ever "main" (#916)
+            )
             last = 3  # Only last 3 scans
             severity = None
             fail_on_any = False
@@ -541,24 +572,30 @@ class TestCmdTrendsRegressions:
 
         assert result == 0
 
-    def test_regressions_fail_on_any(self, sample_database):
-        """Test --fail-on-any flag behavior."""
+    def test_regressions_fail_on_any(self, sample_database, capsys):
+        """Test --fail-on-any flag behavior.
+
+        Fixture data has a real, deterministic regression: scan3->scan4
+        critical_count goes 6->12 (see sample_database). --fail-on-any must
+        detect it and exit 1 -- not merely "0 or 1 depending on the analyzer",
+        which is what the previous `assert result in (0, 1)` actually checked
+        and could not fail even if --fail-on-any stopped detecting anything.
+        """
 
         class Args:
             db = str(sample_database)
-            branch = "main"
+            branch = (
+                None  # matches the real distribution: no scan is ever "main" (#916)
+            )
             last = None
             severity = None
             fail_on_any = True  # Fail if any regressions detected
 
-        # Our sample data has a regression in scan4, so this should exit 1
         result = cmd_trends_regressions(Args())
 
-        # Expected: 1 (regression detected, fail requested)
-        # Note: Depends on TrendAnalyzer regression detection logic
-        # If no regressions: result == 0
-        # If regressions: result == 1
-        assert result in (0, 1)
+        assert result == 1
+        stderr = capsys.readouterr().err
+        assert "1 regression" in stderr
 
     def test_regressions_database_not_found(self, tmp_path):
         """Test error when database not found."""
@@ -566,7 +603,9 @@ class TestCmdTrendsRegressions:
 
         class Args:
             db = str(nonexistent_db)
-            branch = "main"
+            branch = (
+                None  # matches the real distribution: no scan is ever "main" (#916)
+            )
             last = None
             severity = None
             fail_on_any = False
@@ -589,7 +628,9 @@ class TestCmdTrendsScore:
 
         class Args:
             db = str(sample_database)
-            branch = "main"
+            branch = (
+                None  # matches the real distribution: no scan is ever "main" (#916)
+            )
             last = None
             days = None
 
@@ -602,7 +643,9 @@ class TestCmdTrendsScore:
 
         class Args:
             db = str(sample_database)
-            branch = "main"
+            branch = (
+                None  # matches the real distribution: no scan is ever "main" (#916)
+            )
             last = 3
             days = None
 
@@ -615,7 +658,9 @@ class TestCmdTrendsScore:
 
         class Args:
             db = str(sample_database)
-            branch = "main"
+            branch = (
+                None  # matches the real distribution: no scan is ever "main" (#916)
+            )
             last = None
             days = 30
 
@@ -629,7 +674,9 @@ class TestCmdTrendsScore:
 
         class Args:
             db = str(nonexistent_db)
-            branch = "main"
+            branch = (
+                None  # matches the real distribution: no scan is ever "main" (#916)
+            )
             last = None
             days = None
 
@@ -752,7 +799,9 @@ class TestCmdTrendsInsights:
 
         class Args:
             db = str(sample_database)
-            branch = "main"
+            branch = (
+                None  # matches the real distribution: no scan is ever "main" (#916)
+            )
             last = None
 
         result = cmd_trends_insights(Args())
@@ -764,7 +813,9 @@ class TestCmdTrendsInsights:
 
         class Args:
             db = str(sample_database)
-            branch = "main"
+            branch = (
+                None  # matches the real distribution: no scan is ever "main" (#916)
+            )
             last = 3
 
         result = cmd_trends_insights(Args())
@@ -777,7 +828,9 @@ class TestCmdTrendsInsights:
 
         class Args:
             db = str(nonexistent_db)
-            branch = "main"
+            branch = (
+                None  # matches the real distribution: no scan is ever "main" (#916)
+            )
             last = None
 
         result = cmd_trends_insights(Args())
@@ -888,8 +941,19 @@ class TestCmdTrendsDevelopers:
 
         assert result == 1
 
-    def test_developers_success(self, sample_database, sample_repo):
-        """Test developer attribution analysis (may return 0 or 1 based on data)."""
+    def test_developers_success(self, sample_database, sample_repo, capsys):
+        """Developer attribution against a real-but-blame-less git repo.
+
+        `sample_repo`'s ".git" is an empty directory (passes the repo-presence
+        check, has no actual git history), so git blame attribution
+        deterministically finds nothing and the command takes its documented
+        "no developer attribution data available" success path -- not a
+        coin-flip between 0 and 1. Note: `repo`/`team_file` are stub-only
+        attributes; no real `--repo`/`--team-file` flag exists on `jmo trends
+        developers` (#974), so this stub still exercises code no live CLI
+        invocation can reach -- kept anyway for the handler's own branch
+        coverage, same ruling as the other 51 stubs in this file (#916).
+        """
 
         class Args:
             last = 5
@@ -900,12 +964,20 @@ class TestCmdTrendsDevelopers:
 
         result = cmd_trends_developers(Args())
 
-        # Expected: 0 (success) or 1 (insufficient scans)
-        # Since we have 5 scans, it should succeed but may have no resolved findings
-        assert result in (0, 1)
+        assert result == 0
+        stdout = capsys.readouterr().out
+        assert "No developer attribution data available" in stdout
 
-    def test_developers_with_team_file(self, sample_database, sample_repo, tmp_path):
-        """Test developer attribution with team aggregation."""
+    def test_developers_with_team_file(
+        self, sample_database, sample_repo, tmp_path, capsys
+    ):
+        """Same deterministic no-data path as test_developers_success.
+
+        `dev_stats` comes back empty before `cmd_trends_developers` ever
+        checks `team_file`, so the team-aggregation branch is unreached here
+        too -- this test's own name notwithstanding. See #974: neither
+        `--repo` nor `--team-file` is a real `jmo trends developers` flag.
+        """
         team_file_path = tmp_path / "teams.json"
         team_file_path.write_text('{"Team A": ["dev1", "dev2"]}')
 
@@ -918,8 +990,9 @@ class TestCmdTrendsDevelopers:
 
         result = cmd_trends_developers(Args())
 
-        # Expected: 0 or 1 based on data availability
-        assert result in (0, 1)
+        assert result == 0
+        stdout = capsys.readouterr().out
+        assert "No developer attribution data available" in stdout
 
 
 # ============================================================================
@@ -936,7 +1009,9 @@ class TestCmdTrendsRouter:
         class Args:
             trends_command = "analyze"
             db = str(sample_database)
-            branch = "main"
+            branch = (
+                None  # matches the real distribution: no scan is ever "main" (#916)
+            )
             days = None
             last = None
             scan_ids = None
@@ -973,7 +1048,9 @@ class TestCmdTrendsRouter:
         class Args:
             trends_command = "regressions"
             db = str(sample_database)
-            branch = "main"
+            branch = (
+                None  # matches the real distribution: no scan is ever "main" (#916)
+            )
             last = None
             severity = None
             fail_on_any = False
@@ -988,7 +1065,9 @@ class TestCmdTrendsRouter:
         class Args:
             trends_command = "score"
             db = str(sample_database)
-            branch = "main"
+            branch = (
+                None  # matches the real distribution: no scan is ever "main" (#916)
+            )
             last = None
             days = None
 
@@ -1016,7 +1095,9 @@ class TestCmdTrendsRouter:
         class Args:
             trends_command = "insights"
             db = str(sample_database)
-            branch = "main"
+            branch = (
+                None  # matches the real distribution: no scan is ever "main" (#916)
+            )
             last = None
 
         result = cmd_trends(Args())
@@ -1034,8 +1115,13 @@ class TestCmdTrendsRouter:
 
         assert result == 0
 
-    def test_router_developers(self, sample_database, sample_repo):
-        """Test router dispatches to developers command."""
+    def test_router_developers(self, sample_database, sample_repo, capsys):
+        """Test router dispatches to developers command.
+
+        Same deterministic no-real-git-history path as
+        TestCmdTrendsDevelopers.test_developers_success -- see that test's
+        docstring.
+        """
 
         class Args:
             trends_command = "developers"
@@ -1047,7 +1133,9 @@ class TestCmdTrendsRouter:
 
         result = cmd_trends(Args())
 
-        assert result in (0, 1)
+        assert result == 0
+        stdout = capsys.readouterr().out
+        assert "No developer attribution data available" in stdout
 
     def test_router_unknown_subcommand(self):
         """An unknown subcommand is a usage error (2), not a verdict (1).

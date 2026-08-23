@@ -21,6 +21,36 @@ from scripts.cli.wizard_generators import (
 )
 
 
+def _fake_tool_manager() -> MagicMock:
+    """A `ToolManager()` replacement for tests that don't care about real
+    tool status.
+
+    `configure_advanced()` and `review_and_confirm()` both do
+    `from scripts.cli.tool_manager import ToolManager; tm = ToolManager()`
+    unconditionally, as part of printing an informational tool-count line -
+    not something any test below asserts on. Left unmocked, `tm.check_tool()`
+    resolves and shells out to whatever scanner binaries actually happen to
+    be on the machine's PATH (#907: on a dev box with a `--user` semgrep
+    install, that is a real, unmarked `semgrep --version` spawn on every one
+    of these tests). `check_profile()` is deliberately left unconfigured:
+    unconfigured on a MagicMock it iterates as empty, which
+    `review_and_confirm()`'s dynamic time-estimate path already handles.
+    """
+    tm = MagicMock()
+    tm.get_tool_summary.return_value = MagicMock(
+        execution_ready=10,
+        platform_skipped=[],
+        content_triggered=[],
+        profile_total=18,
+        platform_applicable=18,
+        profile_name="balanced",
+    )
+    tm.check_tool.return_value = MagicMock(
+        installed=True, version="1.0.0", startup_ok=True
+    )
+    return tm
+
+
 def test_profiles_complete():
     """Test that all profiles are defined with required fields."""
     required_fields = {
@@ -297,8 +327,10 @@ def test_run_wizard_non_interactive(
 
 
 @patch("scripts.cli.wizard.Path.write_text")
-def test_run_wizard_emit_makefile(mock_write):
+@patch("scripts.cli.tool_manager.ToolManager")
+def test_run_wizard_emit_makefile(mock_tool_manager_class, mock_write):
     """Test wizard with --emit-make-target."""
+    mock_tool_manager_class.return_value = _fake_tool_manager()
     rc = run_wizard(yes=True, emit_make="Makefile.security")
 
     mock_write.assert_called_once()
@@ -309,8 +341,10 @@ def test_run_wizard_emit_makefile(mock_write):
 
 @patch("scripts.cli.wizard.Path.write_text")
 @patch("scripts.cli.wizard.Path.chmod")
-def test_run_wizard_emit_script(mock_chmod, mock_write):
+@patch("scripts.cli.tool_manager.ToolManager")
+def test_run_wizard_emit_script(mock_tool_manager_class, mock_chmod, mock_write):
     """Test wizard with --emit-script."""
+    mock_tool_manager_class.return_value = _fake_tool_manager()
     rc = run_wizard(yes=True, emit_script="scan.sh")
 
     mock_write.assert_called_once()
@@ -322,8 +356,10 @@ def test_run_wizard_emit_script(mock_chmod, mock_write):
 
 @patch("scripts.cli.wizard.Path.write_text")
 @patch("scripts.cli.wizard.Path.mkdir")
-def test_run_wizard_emit_gha(mock_mkdir, mock_write):
+@patch("scripts.cli.tool_manager.ToolManager")
+def test_run_wizard_emit_gha(mock_tool_manager_class, mock_mkdir, mock_write):
     """Test wizard with --emit-gha."""
+    mock_tool_manager_class.return_value = _fake_tool_manager()
     rc = run_wizard(yes=True, emit_gha=".github/workflows/security.yml")
 
     mock_mkdir.assert_called_once_with(parents=True, exist_ok=True)
@@ -656,10 +692,12 @@ def test_select_profile(mock_choice):
 
 
 @patch("scripts.cli.wizard._prompt_yes_no", return_value=False)
-def test_configure_advanced_no_customize(mock_yes_no):
+@patch("scripts.cli.tool_manager.ToolManager")
+def test_configure_advanced_no_customize(mock_tool_manager_class, mock_yes_no):
     """Test configure_advanced with no customization."""
     from scripts.cli.wizard import configure_advanced
 
+    mock_tool_manager_class.return_value = _fake_tool_manager()
     threads, timeout, fail_on = configure_advanced("balanced")
     assert threads is None
     assert timeout is None
@@ -670,10 +708,14 @@ def test_configure_advanced_no_customize(mock_yes_no):
 @patch("builtins.input", side_effect=["8", "1200", ""])
 @patch("scripts.cli.wizard._prompt_choice", return_value="high")
 @patch("scripts.cli.wizard.get_cpu_count", return_value=4)
-def test_configure_advanced_customize(mock_cpu, mock_choice, mock_input, mock_yes_no):
+@patch("scripts.cli.tool_manager.ToolManager")
+def test_configure_advanced_customize(
+    mock_tool_manager_class, mock_cpu, mock_choice, mock_input, mock_yes_no
+):
     """Test configure_advanced with customization."""
     from scripts.cli.wizard import configure_advanced
 
+    mock_tool_manager_class.return_value = _fake_tool_manager()
     threads, timeout, fail_on = configure_advanced("balanced")
     assert threads == 8
     assert timeout == 1200
@@ -684,12 +726,14 @@ def test_configure_advanced_customize(mock_cpu, mock_choice, mock_input, mock_ye
 @patch("builtins.input", side_effect=["invalid", "30"])
 @patch("scripts.cli.wizard._prompt_choice", return_value="")
 @patch("scripts.cli.wizard.get_cpu_count", return_value=4)
+@patch("scripts.cli.tool_manager.ToolManager")
 def test_configure_advanced_invalid_inputs(
-    mock_cpu, mock_choice, mock_input, mock_yes_no
+    mock_tool_manager_class, mock_cpu, mock_choice, mock_input, mock_yes_no
 ):
     """Test configure_advanced with invalid numeric inputs."""
     from scripts.cli.wizard import configure_advanced
 
+    mock_tool_manager_class.return_value = _fake_tool_manager()
     threads, timeout, fail_on = configure_advanced("balanced")
     # Invalid thread count should fall back to profile default
     assert threads == 4  # balanced profile default
@@ -701,12 +745,14 @@ def test_configure_advanced_invalid_inputs(
 @patch("builtins.input", side_effect=["1000", "30"])  # threads > cpu*2, timeout < 60
 @patch("scripts.cli.wizard._prompt_choice", return_value="")
 @patch("scripts.cli.wizard.get_cpu_count", return_value=4)
+@patch("scripts.cli.tool_manager.ToolManager")
 def test_configure_advanced_boundary_clamping(
-    mock_cpu, mock_choice, mock_input, mock_yes_no
+    mock_tool_manager_class, mock_cpu, mock_choice, mock_input, mock_yes_no
 ):
     """Test configure_advanced clamping values to boundaries."""
     from scripts.cli.wizard import configure_advanced
 
+    mock_tool_manager_class.return_value = _fake_tool_manager()
     threads, timeout, fail_on = configure_advanced("balanced")
     # Threads should be clamped to cpu_count * 2
     assert threads == 8  # max(1, min(1000, 4*2))
@@ -715,10 +761,12 @@ def test_configure_advanced_boundary_clamping(
 
 
 @patch("scripts.cli.wizard._prompt_yes_no", return_value=False)
-def test_review_and_confirm_decline(mock_yes_no):
+@patch("scripts.cli.tool_manager.ToolManager")
+def test_review_and_confirm_decline(mock_tool_manager_class, mock_yes_no):
     """Test review_and_confirm when user declines."""
     from scripts.cli.wizard import review_and_confirm
 
+    mock_tool_manager_class.return_value = _fake_tool_manager()
     config = WizardConfig()
     config.profile = "balanced"
     config.target.type = "repo"
@@ -730,10 +778,12 @@ def test_review_and_confirm_decline(mock_yes_no):
 
 
 @patch("scripts.cli.wizard._prompt_yes_no", return_value=True)
-def test_review_and_confirm_accept(mock_yes_no):
+@patch("scripts.cli.tool_manager.ToolManager")
+def test_review_and_confirm_accept(mock_tool_manager_class, mock_yes_no):
     """Test review_and_confirm when user accepts."""
     from scripts.cli.wizard import review_and_confirm
 
+    mock_tool_manager_class.return_value = _fake_tool_manager()
     config = WizardConfig()
     config.profile = "balanced"
     config.target.type = "repo"
@@ -748,10 +798,12 @@ def test_review_and_confirm_accept(mock_yes_no):
 
 
 @patch("scripts.cli.wizard._prompt_yes_no", return_value=True)
-def test_review_and_confirm_tsv_mode(mock_yes_no):
+@patch("scripts.cli.tool_manager.ToolManager")
+def test_review_and_confirm_tsv_mode(mock_tool_manager_class, mock_yes_no):
     """Test review_and_confirm with TSV mode."""
     from scripts.cli.wizard import review_and_confirm
 
+    mock_tool_manager_class.return_value = _fake_tool_manager()
     config = WizardConfig()
     config.profile = "fast"
     config.target.type = "repo"
@@ -1030,13 +1082,17 @@ def test_emit_gha_argparse_default():
 
 @patch("scripts.cli.wizard.Path.write_text")
 @patch("scripts.cli.wizard.Path.chmod")
-def test_run_wizard_emit_script_default_filename(mock_chmod, mock_write):
+@patch("scripts.cli.tool_manager.ToolManager")
+def test_run_wizard_emit_script_default_filename(
+    mock_tool_manager_class, mock_chmod, mock_write
+):
     """Test wizard with --emit-script using default filename.
 
     This is an integration test verifying the full flow works with default filename.
     """
     # Note: We pass the default filename directly to simulate argparse behavior
     # The actual argparse integration is tested in test_emit_script_argparse_default
+    mock_tool_manager_class.return_value = _fake_tool_manager()
     rc = run_wizard(yes=True, emit_script="jmo-scan.sh")
 
     mock_write.assert_called_once()

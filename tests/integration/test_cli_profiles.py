@@ -43,6 +43,9 @@ def test_scan_profile_include_exclude_only_scans_included(tmp_path: Path, monkey
     monkeypatch.setattr(jmo, "_check_scan_tools", lambda args, tools: (tools, []))
     # Set CI=true to skip interactive prompts
     monkeypatch.setenv("CI", "true")
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point.
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
 
     # Prepare args and run scan
     args = types.SimpleNamespace(
@@ -59,6 +62,20 @@ def test_scan_profile_include_exclude_only_scans_included(tmp_path: Path, monkey
         profile_name=None,
         log_level="DEBUG",
         human_logs=True,
+        # #907: this test's `tools: [trufflehog]` under `profiles.fast` in
+        # the config above is dead config -- `_effective_scan_settings()`
+        # (scripts/cli/jmo.py:86-100) sources the tool list from
+        # `PROFILE_TOOLS[profile_name]` (tool_registry.py), never from a
+        # jmo.yml profile's own `tools:` key, so the *built-in* "fast"
+        # profile's full tool list runs here regardless -- which includes
+        # semgrep, resolved for real and run with the network-fetching
+        # `--config auto` default. This test's own purpose is include/exclude
+        # directory filtering (asserted only via trufflehog's output files
+        # below), so `--skip-tools` -- a CLI-level filter applied after
+        # profile/tool-list resolution either way -- keeps it off the
+        # network without touching what it verifies or what the stale
+        # config key was trying (and failing) to do.
+        skip_tools=["semgrep"],
     )
     rc = jmo.cmd_scan(args)
     assert rc == 0
@@ -124,6 +141,9 @@ def test_scan_per_tool_flags_injected(tmp_path: Path, monkeypatch):
     # tree kill on timeout), not subprocess.run - patching only the latter
     # records the version probes and none of the scan commands.
     monkeypatch.setattr("scripts.core.tool_runner._run_bounded", fake_run)
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point.
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
 
     args = types.SimpleNamespace(
         cmd="scan",
@@ -204,6 +224,9 @@ def test_scan_retries_on_failure_then_success(tmp_path: Path, monkeypatch):
     # tree kill on timeout), not subprocess.run - patching only the latter
     # records the version probes and none of the scan commands.
     monkeypatch.setattr("scripts.core.tool_runner._run_bounded", fake_run)
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point.
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
 
     args = types.SimpleNamespace(
         cmd="scan",
@@ -232,6 +255,7 @@ def test_scan_retries_on_failure_then_success(tmp_path: Path, monkeypatch):
 @pytest.mark.requires_tools
 def test_per_tool_timeout_override(tmp_path: Path):
     """Test per-tool timeout override in profile."""
+    import os
     import subprocess
     import sys
 
@@ -271,7 +295,13 @@ profiles:
         str(tmp_path / "results"),
         "--allow-missing-tools",
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point. monkeypatch cannot
+    # reach across this subprocess boundary, so redirect it via the env vars
+    # Path.home() actually reads: USERPROFILE on Windows (ntpath.expanduser),
+    # HOME on Linux/macOS (posixpath.expanduser).
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, env=env)
 
     # Should complete successfully
     assert result.returncode in [0, 1]
@@ -290,6 +320,7 @@ profiles:
 
 def test_per_tool_flags_override(tmp_path: Path):
     """Test per-tool flags override in profile."""
+    import os
     import subprocess
     import sys
 
@@ -300,9 +331,27 @@ def test_per_tool_flags_override(tmp_path: Path):
     (test_repo / "tests").mkdir(parents=True)
     (test_repo / "tests" / "test.py").write_text("assert True")
 
+    # #907: semgrep's production default (`--config auto`) fetches its
+    # ruleset from semgrep.dev over the network -- this test's own point is
+    # that a per_tool `flags` override reaches the real semgrep invocation,
+    # which needs semgrep genuinely resolved and run, so (unlike a plumbing
+    # test) skip-tools would defeat the point entirely. Route it through the
+    # same `per_tool.configs` hook instead, so when this test runs on a
+    # machine where semgrep actually is on PATH, it stays offline.
+    offline_semgrep_rule = tmp_path / "offline-semgrep-rule.yml"
+    offline_semgrep_rule.write_text(
+        "rules:\n"
+        "  - id: jmo-offline-flags-override-rule\n"
+        "    languages: [generic]\n"
+        "    message: offline rule for #907 test coverage, matches nothing real\n"
+        "    severity: INFO\n"
+        "    pattern: jmo-offline-flags-override-rule-never-matches-anything\n",
+        encoding="utf-8",
+    )
+
     # Create config with exclude flags
     config_file = tmp_path / "exclude-config.yml"
-    config_file.write_text("""
+    config_file.write_text(f"""
 tools: [semgrep]
 outputs: [json]
 
@@ -312,6 +361,7 @@ profiles:
     per_tool:
       semgrep:
         flags: ["--exclude", "tests"]
+        configs: ["{offline_semgrep_rule.as_posix()}"]
 """)
 
     # Run scan
@@ -330,7 +380,14 @@ profiles:
         str(tmp_path / "results"),
         "--allow-missing-tools",
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point. monkeypatch cannot
+    # reach across this subprocess boundary, so redirect it via the env vars
+    # Path.home() actually reads: USERPROFILE on Windows (ntpath.expanduser),
+    # HOME on Linux/macOS (posixpath.expanduser) -- each platform consults
+    # only its own var, so setting just one leaves the other exposed.
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, env=env)
     assert result.returncode in [0, 1]
 
     # Exact verification of excluded directories depends on semgrep log format
@@ -339,6 +396,7 @@ profiles:
 
 def test_per_tool_retries_override(tmp_path: Path):
     """Test per-tool retry override in profile."""
+    import os
     import subprocess
     import sys
 
@@ -377,13 +435,21 @@ profiles:
         str(tmp_path / "results"),
         "--allow-missing-tools",
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point. monkeypatch cannot
+    # reach across this subprocess boundary, so redirect it via the env vars
+    # Path.home() actually reads: USERPROFILE on Windows (ntpath.expanduser),
+    # HOME on Linux/macOS (posixpath.expanduser) -- each platform consults
+    # only its own var, so setting just one leaves the other exposed.
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, env=env)
     assert result.returncode in [0, 1]
 
 
 @pytest.mark.requires_tools
 def test_profile_tool_selection_fast(tmp_path: Path):
     """Test fast profile invokes correct tool subset."""
+    import os
     import subprocess
     import sys
 
@@ -408,7 +474,13 @@ def test_profile_tool_selection_fast(tmp_path: Path):
         "--allow-missing-tools",
         "--human-logs",
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=240)
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point. monkeypatch cannot
+    # reach across this subprocess boundary, so redirect it via the env vars
+    # Path.home() actually reads: USERPROFILE on Windows (ntpath.expanduser),
+    # HOME on Linux/macOS (posixpath.expanduser).
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=240, env=env)
     assert result.returncode in [0, 1]
 
     # Verify expected tools invoked (check logs OR stub files)
@@ -428,6 +500,7 @@ def test_profile_tool_selection_fast(tmp_path: Path):
 @pytest.mark.requires_tools
 def test_profile_tool_selection_balanced(tmp_path: Path):
     """Test balanced profile invokes correct tool subset."""
+    import os
     import subprocess
     import sys
 
@@ -456,7 +529,13 @@ def test_profile_tool_selection_balanced(tmp_path: Path):
         "--allow-missing-tools",
         "--human-logs",
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=240)
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point. monkeypatch cannot
+    # reach across this subprocess boundary, so redirect it via the env vars
+    # Path.home() actually reads: USERPROFILE on Windows (ntpath.expanduser),
+    # HOME on Linux/macOS (posixpath.expanduser).
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=240, env=env)
     assert result.returncode in [0, 1]
 
     # Verify expected tools invoked (check logs OR stub files)
@@ -490,6 +569,7 @@ def test_profile_tool_selection_balanced(tmp_path: Path):
 @pytest.mark.requires_tools
 def test_profile_tool_selection_deep(tmp_path: Path):
     """Test deep profile invokes correct tool subset."""
+    import os
     import subprocess
     import sys
 
@@ -518,7 +598,13 @@ def test_profile_tool_selection_deep(tmp_path: Path):
         "--allow-missing-tools",
         "--human-logs",
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=240)
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point. monkeypatch cannot
+    # reach across this subprocess boundary, so redirect it via the env vars
+    # Path.home() actually reads: USERPROFILE on Windows (ntpath.expanduser),
+    # HOME on Linux/macOS (posixpath.expanduser).
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=240, env=env)
     assert result.returncode in [0, 1]
 
     # Verify expected tools invoked (check logs OR stub files)
@@ -553,6 +639,7 @@ def test_profile_tool_selection_deep(tmp_path: Path):
 @pytest.mark.requires_tools
 def test_profile_inherits_global_per_tool_config(tmp_path: Path):
     """Test profile inherits global per_tool config and merges correctly."""
+    import os
     import subprocess
     import sys
 
@@ -598,7 +685,13 @@ profiles:
         str(tmp_path / "results"),
         "--allow-missing-tools",
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point. monkeypatch cannot
+    # reach across this subprocess boundary, so redirect it via the env vars
+    # Path.home() actually reads: USERPROFILE on Windows (ntpath.expanduser),
+    # HOME on Linux/macOS (posixpath.expanduser).
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, env=env)
     assert result.returncode in [0, 1]
 
     # Verify both tools ran (check logs OR stub files)
@@ -616,6 +709,7 @@ profiles:
 @pytest.mark.requires_tools
 def test_profile_thread_override(tmp_path: Path):
     """Test profile-specific thread count override."""
+    import os
     import subprocess
     import sys
 
@@ -653,7 +747,13 @@ profiles:
         "--allow-missing-tools",
         "--human-logs",
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point. monkeypatch cannot
+    # reach across this subprocess boundary, so redirect it via the env vars
+    # Path.home() actually reads: USERPROFILE on Windows (ntpath.expanduser),
+    # HOME on Linux/macOS (posixpath.expanduser).
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, env=env)
     assert result.returncode in [0, 1]
 
     # Verify scan completed (thread count affects parallelism, not correctness)
@@ -702,6 +802,9 @@ def test_scan_startup_does_not_version_check_unrequested_tools(
 
     monkeypatch.setattr(tm_module.ToolManager, "check_tool", _counting_check)
     monkeypatch.setenv("CI", "true")
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point.
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
 
     args = types.SimpleNamespace(
         cmd="scan",
@@ -759,6 +862,25 @@ def test_scan_startup_probes_each_tool_at_most_once(tmp_path: Path, monkeypatch)
     repos_dir = tmp_path / "repos"
     (repos_dir / "proj").mkdir(parents=True)
 
+    # #907: semgrep's production default (`--config auto`) fetches its
+    # ruleset from semgrep.dev over the network. This test's own point is
+    # resolution/probe *counting*, which needs semgrep to actually be
+    # resolved (removing it from `tools` would just make the test say
+    # nothing about it) -- so instead of skipping it, give it a fully
+    # offline, filesystem-only ruleset via the `per_tool.configs` hook
+    # `repository_scanner.py` already supports, precisely so a scan that
+    # does run to completion here never reaches the network.
+    offline_semgrep_rule = tmp_path / "offline-semgrep-rule.yml"
+    offline_semgrep_rule.write_text(
+        "rules:\n"
+        "  - id: jmo-offline-probe-rule\n"
+        "    languages: [generic]\n"
+        "    message: offline rule for #907 test coverage, matches nothing real\n"
+        "    severity: INFO\n"
+        "    pattern: jmo-offline-probe-rule-never-matches-anything\n",
+        encoding="utf-8",
+    )
+
     cfg = {
         "default_profile": "fast",
         "profiles": {
@@ -766,6 +888,7 @@ def test_scan_startup_probes_each_tool_at_most_once(tmp_path: Path, monkeypatch)
                 "tools": ["trufflehog", "semgrep", "trivy"],
                 "timeout": 60,
                 "threads": 1,
+                "per_tool": {"semgrep": {"configs": [str(offline_semgrep_rule)]}},
             }
         },
     }
@@ -796,6 +919,9 @@ def test_scan_startup_probes_each_tool_at_most_once(tmp_path: Path, monkeypatch)
 
     monkeypatch.setattr(tm_module.ToolManager, "_find_binary", _counting_find)
     monkeypatch.setenv("CI", "true")
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point.
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
 
     args = types.SimpleNamespace(
         cmd="scan",

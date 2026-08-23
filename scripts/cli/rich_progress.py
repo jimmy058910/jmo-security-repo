@@ -83,7 +83,17 @@ class RichScanProgressTracker:
         self.args = args
         self.verbose = verbose
 
-        self._lock = threading.Lock()
+        # RLock, not Lock: update_tool() calls self.console.print() directly
+        # while holding this lock, rather than self.log() -- which also
+        # acquires it -- and that split is the only reason a plain Lock
+        # doesn't already deadlock. Swapping one of those console.print()
+        # calls for the more obvious self.log() call would self-deadlock the
+        # worker thread, and because that thread is a scan future, the whole
+        # scan hangs forever waiting on it. Mirrors the sibling tracker's
+        # RLock in scripts/cli/jmo.py's ProgressTracker, which hit exactly
+        # this deadlock. See TestUpdateToolDoesNotDeadlock in
+        # tests/cli/test_rich_progress.py.
+        self._lock = threading.RLock()
         self._start_time: float | None = None
 
         # Target-level tracking

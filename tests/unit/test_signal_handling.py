@@ -52,6 +52,13 @@ def test_cmd_scan_signal_stop(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(jmo, "_check_scan_tools", lambda args, tools: (tools, []))
     # Note: _tool_exists removed in v0.9.0 refactoring - tools handled by scanners now
     # allow_missing_tools=True handles missing tools gracefully
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point. This test's own
+    # `skipif` above meant it never ran on the Windows box the original
+    # writer-hunt (#802/#933) used to find real-state leaks, so it was
+    # never caught there -- it still runs on Linux CI, where it wrote to
+    # the real ~/.jmo/config.yml unpatched (#978 CI follow-up).
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
 
     # Monkeypatch signal.signal to immediately invoke handler once to set stop flag
     captured = {"handler": None}

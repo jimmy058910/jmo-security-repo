@@ -22,7 +22,7 @@ from scripts.cli.jmo import cmd_ci, cmd_scan
 pytestmark = pytest.mark.requires_tools
 
 
-def test_container_image_scan_creates_output(tmp_path: Path):
+def test_container_image_scan_creates_output(tmp_path: Path, monkeypatch):
     """Test scanning a container image creates the correct output structure."""
 
     class Args:
@@ -54,6 +54,10 @@ def test_container_image_scan_creates_output(tmp_path: Path):
         human_logs = False
         profile_name = None
 
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point -- redirect it so this
+    # in-process call can't write the real ~/.jmo/config.yml.
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
     # This test requires trivy/syft installed; skip if missing
     rc = cmd_scan(Args())
     assert rc in (0, 1)  # 0 for success, 1 for findings
@@ -82,7 +86,7 @@ def test_container_image_scan_creates_output(tmp_path: Path):
             assert has_output, "Expected trivy.json or syft.json in image output"
 
 
-def test_iac_file_scan_creates_output(tmp_path: Path):
+def test_iac_file_scan_creates_output(tmp_path: Path, monkeypatch):
     """Test scanning an IaC file creates the correct output structure."""
     # Create a minimal Terraform file
     tf_file = tmp_path / "test.tf"
@@ -122,6 +126,10 @@ resource "aws_s3_bucket" "test" {
         human_logs = False
         profile_name = None
 
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point -- redirect it so this
+    # in-process call can't write the real ~/.jmo/config.yml.
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
     rc = cmd_scan(Args())
     assert rc in (0, 1)
 
@@ -147,7 +155,7 @@ resource "aws_s3_bucket" "test" {
             assert has_output, "Expected checkov.json or trivy.json in IaC output"
 
 
-def test_multi_target_combined_scan(tmp_path: Path):
+def test_multi_target_combined_scan(tmp_path: Path, monkeypatch):
     """Test scanning multiple target types in one command."""
     # Create repo
     repo = tmp_path / "repo"
@@ -199,6 +207,10 @@ resource "aws_s3_bucket" "test" {
         human_logs = False
         profile_name = None
 
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point -- redirect it so this
+    # in-process call can't write the real ~/.jmo/config.yml.
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
     rc = cmd_scan(Args())
     assert rc in (0, 1)
 
@@ -230,7 +242,7 @@ resource "aws_s3_bucket" "test" {
             assert len(iac_dirs) >= 1
 
 
-def test_ci_multi_target_with_fail_on(tmp_path: Path):
+def test_ci_multi_target_with_fail_on(tmp_path: Path, monkeypatch):
     """Test CI mode with multi-target scanning and severity gating."""
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -267,6 +279,10 @@ def test_ci_multi_target_with_fail_on(tmp_path: Path):
             self.human_logs = False
             self.profile_name = None
 
+    # `jmo ci` runs `cmd_scan` internally, which unconditionally calls
+    # `_show_kofi_reminder()` (#933) -- redirect Path.home() so this
+    # in-process call can't write the real ~/.jmo/config.yml.
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
     rc = cmd_ci(Args())
     # Should succeed (0) or have findings (1), but might fail (2) if CRITICAL found
     assert rc in (0, 1, 2)
@@ -279,7 +295,7 @@ def test_ci_multi_target_with_fail_on(tmp_path: Path):
     assert (summaries / "timings.json").exists()  # profile=True
 
 
-def test_images_file_batch_scanning(tmp_path: Path):
+def test_images_file_batch_scanning(tmp_path: Path, monkeypatch):
     """Test scanning multiple images from a file."""
     images_file = tmp_path / "images.txt"
     images_file.write_text("""
@@ -321,6 +337,10 @@ busybox:latest
         human_logs = False
         profile_name = None
 
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point -- redirect it so this
+    # in-process call can't write the real ~/.jmo/config.yml.
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
     rc = cmd_scan(Args())
     assert rc in (0, 1)
 
@@ -342,6 +362,7 @@ busybox:latest
 def test_repo_plus_image_deduplication(tmp_path: Path):
     """Verify findings from repo and image are deduplicated by fingerprint."""
     import json
+    import os
     import subprocess
     import sys
 
@@ -365,7 +386,13 @@ def test_repo_plus_image_deduplication(tmp_path: Path):
         str(tmp_path / "results"),
         "--allow-missing-tools",
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point. monkeypatch cannot
+    # reach across this subprocess boundary, so redirect it via the env vars
+    # Path.home() actually reads: USERPROFILE on Windows (ntpath.expanduser),
+    # HOME on Linux/macOS (posixpath.expanduser).
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=180, env=env)
     assert result.returncode in [0, 1], f"Scan failed: {result.stderr}"
 
     # Generate report
@@ -400,6 +427,7 @@ def test_repo_plus_image_deduplication(tmp_path: Path):
 
 def test_multi_target_compliance_aggregation(tmp_path: Path):
     """Verify compliance reports aggregate findings from all target types."""
+    import os
     import subprocess
     import sys
 
@@ -424,7 +452,13 @@ def test_multi_target_compliance_aggregation(tmp_path: Path):
         str(tmp_path / "results"),
         "--allow-missing-tools",
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point. monkeypatch cannot
+    # reach across this subprocess boundary, so redirect it via the env vars
+    # Path.home() actually reads: USERPROFILE on Windows (ntpath.expanduser),
+    # HOME on Linux/macOS (posixpath.expanduser).
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=180, env=env)
     assert result.returncode in [0, 1]
 
     # Generate report
@@ -454,6 +488,7 @@ def test_multi_target_compliance_aggregation(tmp_path: Path):
 
 def test_triple_target_scan(tmp_path: Path):
     """Test scanning repo + image + IaC simultaneously."""
+    import os
     import subprocess
     import sys
 
@@ -488,7 +523,13 @@ resource "aws_s3_bucket" "test" {
         str(tmp_path / "results"),
         "--allow-missing-tools",
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=240)
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point. monkeypatch cannot
+    # reach across this subprocess boundary, so redirect it via the env vars
+    # Path.home() actually reads: USERPROFILE on Windows (ntpath.expanduser),
+    # HOME on Linux/macOS (posixpath.expanduser).
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=240, env=env)
     assert result.returncode in [0, 1]
 
     # Verify results directories created
@@ -503,6 +544,7 @@ resource "aws_s3_bucket" "test" {
 
 def test_multi_target_partial_failure(tmp_path: Path):
     """Test multi-target scan continues when one target fails."""
+    import os
     import subprocess
     import sys
 
@@ -526,7 +568,13 @@ def test_multi_target_partial_failure(tmp_path: Path):
         str(tmp_path / "results"),
         "--allow-missing-tools",
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point. monkeypatch cannot
+    # reach across this subprocess boundary, so redirect it via the env vars
+    # Path.home() actually reads: USERPROFILE on Windows (ntpath.expanduser),
+    # HOME on Linux/macOS (posixpath.expanduser).
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=180, env=env)
 
     # Scan may exit with code 1 (partial failure) but should not crash
     assert result.returncode in [0, 1, 2]  # Allow partial failures

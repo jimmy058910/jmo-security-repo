@@ -102,7 +102,7 @@ def python_executable() -> str:
 
 
 @pytest.fixture
-def jmo_runner():
+def jmo_runner(monkeypatch, tmp_path):
     """
     Pytest fixture providing a helper to run JMo commands.
 
@@ -113,14 +113,49 @@ def jmo_runner():
             assert result.returncode == 0
             assert "scan" in result.stdout
 
+    Defaults the subprocess's home directory AND working directory to this
+    test's tmp_path, closing two separate real-state leaks with two separate
+    injection points:
+
+    - `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+      resolves `Path.home()` with no injection point, so a bare
+      `jmo_runner(["scan", ...])` would otherwise write to the developer's
+      real `~/.jmo/config.yml`. Both HOME (Linux/macOS) and USERPROFILE
+      (Windows -- see ntpath.expanduser) are set, since this fixture is
+      shared across all three platform e2e suites; each platform's
+      Path.home() reads only its own var and ignores the other.
+    - History storage defaults to `Path(".jmo/history.db")`, relative to the
+      process's cwd, whenever `store_history` is truthy (the CLI default)
+      and no `--history-db` override is passed (#802). Redirecting HOME does
+      NOT redirect this -- it is cwd-relative, not home-relative -- so the
+      default `cwd` here is this test's tmp_path too, unless the caller
+      passes its own `cwd=`.
+
+    monkeypatch.setattr(Path, "home", ...) in a caller's own test body has
+    NO effect here -- this spawns a real subprocess, and that patches only
+    the parent process. A test that needs a *specific* home directory (e.g.
+    test_userprofile_env_var) can still call monkeypatch.setenv("USERPROFILE"
+    / "HOME", ...) itself: it runs after this default and wins. Likewise a
+    test that needs a specific cwd can pass cwd= explicitly to the returned
+    callable.
+
     Returns:
         Callable that runs JMo commands
     """
+    fake_home = tmp_path / "home"
+    fake_home.mkdir(exist_ok=True)
+    monkeypatch.setenv("USERPROFILE", str(fake_home))
+    monkeypatch.setenv("HOME", str(fake_home))
 
     def _run(
         args: list[str], timeout: int = 120, **kwargs
     ) -> subprocess.CompletedProcess:
-        defaults = {"capture_output": True, "text": True, "timeout": timeout}
+        defaults = {
+            "capture_output": True,
+            "text": True,
+            "timeout": timeout,
+            "cwd": str(tmp_path),
+        }
         defaults.update(kwargs)
         return run_jmo_command(args, **defaults)
 
@@ -219,6 +254,396 @@ def _guard_real_jmo_install():
             "Recover with: jmo tools install --profile fast --yes",
             pytrace=False,
         )
+
+
+# ---------------------------------------------------------------------------
+# Guard: the test suite must never write to the developer's real state.
+# ---------------------------------------------------------------------------
+#
+# Two real files a test can reach without deliberately trying to (#802, #933):
+#
+#   .jmo/history.db    - the auto-storage hook in report_orchestrator.py
+#                         defaults to `Path(".jmo/history.db")` whenever
+#                         `store_history` is truthy (the CLI default: it is
+#                         `--no-store-history` that opts out) and no
+#                         `history_db` override is passed.
+#   ~/.jmo/config.yml  - `_show_kofi_reminder()` (scripts/cli/jmo.py),
+#                         reached from `cmd_scan()`, has no injection point
+#                         at all: it resolves `Path.home() / ".jmo" /
+#                         "config.yml"` unconditionally and rewrites the
+#                         whole file with `yaml.safe_dump`.
+#
+# Measured (#802) before any guard existed: +38 scans, +4240 findings,
+# +33.8MB across three full-suite runs (~13 scans/run).
+#
+# Per-test attribution, not just a session-level pass/fail: a session-scoped
+# check (`_guard_real_jmo_install`, above) can only tell you the suite
+# dirtied state somewhere across ~8000 tests, not which one. The obvious
+# per-test design for the DB - open a fresh read-only sqlite connection and
+# COUNT(*) before and after every test - was measured against this repo's
+# real 1.2GB WAL-mode history.db: 12.5ms/cycle, almost all of it
+# `sqlite3.connect()` itself (COUNT(*) and PRAGMA data_version cost the same
+# ~13ms on a fresh connection; the SAME query on a REUSED connection costs
+# ~0.1ms). At 2 reads/test across ~8000 tests that projects to ~200s added
+# to every suite half, paid whether or not anything is actually wrong.
+#
+# So the DB check is two-tier. A cheap tripwire runs on every test (measured
+# ~0.004ms/os.stat(), ~0.07s projected across a full suite): compare
+# (size, mtime_ns) of the db file AND its `-wal` sidecar - WAL-mode writes
+# land in the sidecar and do not touch the main file's mtime until a
+# checkpoint, so both must be watched or a write is invisible to this check.
+# Only when the tripwire fires does the expensive tier run (one real
+# connection, one COUNT(*)) to confirm the row count actually changed
+# (ruling out e.g. VACUUM/ANALYZE-style housekeeping that touches the file
+# without changing row counts) and to name the test that did it.
+#
+# The config.yml check has no such problem: read_bytes() on a file this
+# small measured ~0.06ms/cycle, ~1s projected across a full suite - so it
+# just compares bytes before and after every test directly.
+#
+# Known limitation under `-n 8`: two workers racing the same window can, in
+# principle, misattribute one worker's write to the other's nodeid, because
+# both are watching the same real shared file from separate processes. If
+# this guard names a test, confirm with a serial rerun (`-n0 <nodeid>`)
+# before treating the attribution as final.
+
+_REAL_HISTORY_DB = Path(".jmo/history.db").resolve()
+_REAL_JMO_CONFIG = Path.home() / ".jmo" / "config.yml"
+
+_history_db_state: dict[str, object] = {}
+_jmo_config_state: dict[str, object] = {}
+
+
+def _history_db_probe(real_db: Path) -> tuple[int, int, int, int] | None:
+    """Cheap fingerprint of the real DB: (size, mtime_ns) of the main file
+    and its -wal sidecar. None if the main file does not exist."""
+    if not real_db.exists():
+        return None
+    db_stat = real_db.stat()
+    wal = real_db.with_name(real_db.name + "-wal")
+    if wal.exists():
+        wal_stat = wal.stat()
+        wal_size, wal_mtime = wal_stat.st_size, wal_stat.st_mtime_ns
+    else:
+        wal_size, wal_mtime = 0, 0
+    return (db_stat.st_size, db_stat.st_mtime_ns, wal_size, wal_mtime)
+
+
+def _history_db_scans_count(real_db: Path) -> int:
+    """Definitive (opens a real read-only connection) scans-table count."""
+    import sqlite3
+
+    conn = sqlite3.connect(f"file:{real_db.as_posix()}?mode=ro", uri=True)
+    try:
+        return conn.execute("SELECT COUNT(*) FROM scans").fetchone()[0]
+    finally:
+        conn.close()
+
+
+def _history_db_refresh() -> None:
+    probe = _history_db_probe(_REAL_HISTORY_DB)
+    count = _history_db_scans_count(_REAL_HISTORY_DB) if probe is not None else None
+    _history_db_state["probe"] = probe
+    _history_db_state["count"] = count
+
+
+@pytest.fixture(autouse=True)
+def _guard_real_history_db(request):
+    """Fail the specific test that wrote to the real .jmo/history.db."""
+    if "probe" not in _history_db_state:
+        _history_db_refresh()
+        if _history_db_state["probe"] is None:
+            print(
+                f"\n_guard_real_history_db: {_REAL_HISTORY_DB} does not "
+                "exist -- nothing to guard this run (fresh clone or CI)."
+            )
+
+    before_probe = _history_db_state["probe"]
+    before_count = _history_db_state["count"]
+
+    yield
+
+    after_probe = _history_db_probe(_REAL_HISTORY_DB)
+    if after_probe == before_probe:
+        return  # cheap path: file untouched during this test
+
+    after_count = (
+        _history_db_scans_count(_REAL_HISTORY_DB) if after_probe is not None else None
+    )
+    _history_db_state["probe"] = after_probe
+    _history_db_state["count"] = after_count
+
+    if before_count is None and after_count is not None:
+        pytest.fail(
+            f"{request.node.nodeid} created the real history database "
+            f"{_REAL_HISTORY_DB}, which did not exist before this test.\n"
+            "Use history_db=str(tmp_path / 'history.db') and patch "
+            "store_scan -- see tests/unit/test_config_precedence.py.",
+            pytrace=False,
+        )
+    elif before_count is not None and after_count is None:
+        pytest.fail(
+            f"{request.node.nodeid} deleted the real history database "
+            f"{_REAL_HISTORY_DB} (had {before_count} scans).",
+            pytrace=False,
+        )
+    elif before_count != after_count:
+        pytest.fail(
+            f"{request.node.nodeid} wrote to the real history database "
+            f"{_REAL_HISTORY_DB}: scans {before_count} -> {after_count}.\n"
+            "Use history_db=str(tmp_path / 'history.db') and patch "
+            "store_scan -- see tests/unit/test_config_precedence.py.",
+            pytrace=False,
+        )
+    # else: the probe tripped (e.g. WAL checkpoint / VACUUM housekeeping)
+    # but the row count did not change -- not a violation. The cache above
+    # is already refreshed so the next test compares against reality.
+
+
+def _read_jmo_config_bytes() -> bytes | None:
+    return _REAL_JMO_CONFIG.read_bytes() if _REAL_JMO_CONFIG.exists() else None
+
+
+@pytest.fixture(autouse=True)
+def _guard_real_jmo_config(request):
+    """Fail the specific test that wrote to the real ~/.jmo/config.yml."""
+    if "seen" not in _jmo_config_state:
+        _jmo_config_state["seen"] = True
+        _jmo_config_state["bytes"] = _read_jmo_config_bytes()
+        if _jmo_config_state["bytes"] is None:
+            print(
+                f"\n_guard_real_jmo_config: {_REAL_JMO_CONFIG} does not "
+                "exist -- nothing to guard this run (fresh clone or CI)."
+            )
+
+    before = _jmo_config_state["bytes"]
+
+    yield
+
+    after = _read_jmo_config_bytes()
+    if after == before:
+        return
+
+    _jmo_config_state["bytes"] = after
+
+    if before is None:
+        pytest.fail(
+            f"{request.node.nodeid} created the real config file "
+            f"{_REAL_JMO_CONFIG}, which did not exist before this test.\n"
+            "_show_kofi_reminder() (scripts/cli/jmo.py) resolves "
+            "Path.home() unconditionally with no injection point -- patch "
+            "it before calling cmd_scan()/main(['scan', ...]):\n"
+            "    monkeypatch.setattr(Path, 'home', staticmethod(lambda: tmp_path))",
+            pytrace=False,
+        )
+    else:
+        pytest.fail(
+            f"{request.node.nodeid} wrote to the real config file "
+            f"{_REAL_JMO_CONFIG} ({len(before)} bytes -> "
+            f"{len(after) if after is not None else 0} bytes).\n"
+            "_show_kofi_reminder() (scripts/cli/jmo.py) resolves "
+            "Path.home() unconditionally with no injection point -- patch "
+            "it before calling cmd_scan()/main(['scan', ...]):\n"
+            "    monkeypatch.setattr(Path, 'home', staticmethod(lambda: tmp_path))",
+            pytrace=False,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Guard: an unmarked test must never spawn a real scanner binary (#907).
+# ---------------------------------------------------------------------------
+#
+# semgrep's production default (`--config auto`, repository_scanner.py
+# ~line 288) fetches its ruleset from semgrep.dev over the network. It only
+# fires when `_find_tool("semgrep")` resolves a real binary on PATH - true on
+# this maintainer's machine (a `--user` pip install outside the project venv:
+# `...\Python\Python312\Scripts\semgrep.EXE`), false on CI's sharded jobs. So
+# an unmarked test that reaches the real scan path blocks on an undeclared
+# network fetch locally, while silently taking a different path (tool
+# missing -> dropped or stubbed) on CI - a test whose behaviour depends on
+# the machine it happens to run on, with nothing declaring that dependency.
+#
+# Every tool invocation this codebase makes - semgrep's included - reaches
+# the OS via `subprocess.Popen`, NOT `subprocess.run`: `_run_bounded()`
+# (scripts/core/tool_runner.py) constructs `Popen` directly so it can
+# `communicate(timeout=...)` and walk the whole process tree on expiry (see
+# that function's docstring re: launcher scripts like dependency-check.bat
+# spawning a grandchild `java` that outlives a killed direct child).
+# Recording at `subprocess.run` - issue #907's own first suggestion - would
+# silently miss every real scan invocation; confirmed by reading
+# tool_runner.py, not assumed. Patching `Popen.__init__` catches both
+# shapes, because `subprocess.run` itself builds a `Popen` under the hood.
+#
+# The matching/recording logic is plain, public functions
+# (`scanner_binary_match`, `make_scanner_spawn_recorder`) rather than being
+# folded into the fixture, specifically so
+# tests/unit/test_scanner_spawn_guard.py can prove the recorder still
+# detects a deliberate spawn without needing a real scanner binary
+# installed, or a real process spawned, in CI - a real spawn would itself
+# need `requires_tools`, which would make that self-test depend on the very
+# exemption it exists to prove works.
+#
+# Scoped to semgrep only (#907's subject), not every scanner binary this
+# suite might spawn - see task-8-report.md for the other real binaries this
+# recorder observed and left alone, out of this task's scope.
+#
+# Two fixes are legitimate per the issue (mark `requires_tools`, or route the
+# test through an explicit offline `per_tool_config`), and the second one
+# means a REAL binary still gets spawned - just never reaching the network.
+# A blanket "any unmarked spawn fails" rule cannot tell those apart, so it
+# would force every offline-fixed test into `requires_tools` too, which is
+# actively wrong for a test whose whole point is "this must hold with no
+# tools installed" (see test_deep_scan_accounts_for_every_declared_tool's own
+# docstring for why that test in particular must never carry that marker).
+#
+# So an unmarked spawn is allowed ONLY when BOTH hold: (a) its node ID is on
+# the reviewed allowlist below, AND (b) none of its recorded argvs actually
+# used the network-fetching `--config auto` default. (b) is what keeps this
+# from degrading into "anything not literally auto is fine" for tests nobody
+# reviewed: a node ID earns its place on the allowlist by a human reading
+# task-8-report.md's reasoning for that specific test, not by an argv shape.
+# And (b) alone, without (a), would silently re-open the exact hole this
+# guard exists to close for any *new* test that happens to only ever probe
+# `--version` (no --config at all) - the class of bug this task found 23 of,
+# in the wizard's tool pre-flight check, none of which belong here.
+
+_ALLOWED_OFFLINE_SCANNER_SPAWNS = {
+    # Its own point is counting real `_find_binary` resolutions across a
+    # profile that deliberately includes semgrep - removing semgrep from the
+    # test entirely (skip-tools) would just make it assert nothing about
+    # the tool it's most likely to regress on. Fixed via
+    # `per_tool.semgrep.configs` pointing at a local rule file (task-8-report.md).
+    "tests/integration/test_cli_profiles.py::test_scan_startup_probes_each_tool_at_most_once",
+}
+
+SCANNER_BINARY_NAMES = ("semgrep",)
+
+
+def scanner_binary_match(argv0: object) -> str | None:
+    """Return the matched entry of `SCANNER_BINARY_NAMES`, or None.
+
+    Compares the resolved basename, case-insensitively, against each known
+    scanner name and its Windows `.exe` form - so both a bare `semgrep` on
+    PATH and `C:\\...\\semgrep.EXE` match, while something that merely
+    *contains* the substring ("semgrep-action", a fixture path ending in
+    `semgrep_report.json`) does not.
+
+    Splits on both `/` and `\\` explicitly, rather than delegating to
+    `pathlib.Path(...).name`: `PurePosixPath` does not treat a backslash as
+    a separator, so a Windows-style argv0 would silently fail to match on
+    the Ubuntu/macOS shards even though the same code is exercised there -
+    the same class of cross-platform trap this repo has been bitten by
+    before (see testing.cross-platform.rules.md's "Path Handling" section).
+    This way the match is identical on every platform regardless of which
+    platform's paths a given test hardcodes.
+    """
+    exe = str(argv0).replace("\\", "/").rsplit("/", 1)[-1].lower()
+    for binary in SCANNER_BINARY_NAMES:
+        if exe in (binary, f"{binary}.exe"):
+            return binary
+    return None
+
+
+def make_scanner_spawn_recorder(delegate, sink: list[tuple[str, list[str]]]):
+    """Build a `Popen.__init__` replacement that records matching spawns.
+
+    Appends `(argv[0], argv)` to `sink` for every call whose argv[0] matches
+    `scanner_binary_match`, then always calls `delegate` - so behaviour for
+    every other `Popen` call (the overwhelming majority: pytest itself,
+    coverage, the many tests that already mock subprocess execution) is
+    completely untouched.
+    """
+
+    def _recording_init(self, args, *a, **kw):
+        argv = list(args) if isinstance(args, (list, tuple)) else [args]
+        if argv and scanner_binary_match(argv[0]) is not None:
+            sink.append((str(argv[0]), [str(x) for x in argv]))
+        return delegate(self, args, *a, **kw)
+
+    return _recording_init
+
+
+def semgrep_argv_uses_config_auto(argv: list[str]) -> bool:
+    """True if `argv` passes semgrep the network-fetching `--config auto`
+    default (repository_scanner.py's `semgrep_configs = ["auto"]`).
+
+    A `--version` probe (no `--config` at all) and an explicit non-"auto"
+    `--config` value (this task's own offline-config fixes) both return
+    False. Deliberately narrow, not a general "does this reach the network"
+    oracle: semgrep's `p/xxx` / `r/xxx` registry shortcuts also pull from
+    semgrep.dev and would slip past this check. None of this task's fixes
+    use them; see task-8-report.md.
+    """
+    if "--config" not in argv:
+        return False
+    idx = argv.index("--config")
+    return idx + 1 < len(argv) and argv[idx + 1] == "auto"
+
+
+@pytest.fixture(autouse=True)
+def _guard_no_unmarked_scanner_spawn(request, monkeypatch):
+    """Fail the specific test that spawned a real scanner binary without
+    declaring `@pytest.mark.requires_tools` -- or, for the narrow case of a
+    reviewed, still-offline spawn, without an entry in
+    `_ALLOWED_OFFLINE_SCANNER_SPAWNS`.
+
+    Per-test function scope, not session scope: each test gets its own
+    fresh `Popen.__init__` patch and its own `sink` list, both local to this
+    fixture instance's closure. Unlike the shared-file DB/config guards
+    above, there is therefore no cross-worker attribution risk under
+    `-n 8` - nothing here is state shared between processes or even between
+    tests in the same process.
+
+    Detection rather than prevention, matching the other guards in this
+    file: the real spawn (if any) is still allowed to happen - this fixture
+    only names the test that caused it, after the fact.
+
+    Known blind spot, not fixed here: this can only see a `Popen` call made
+    in THIS process. Several integration tests spawn the whole `jmo` CLI as
+    a subprocess, which then spawns semgrep itself - two process hops away
+    from anything patchable here. Those were found and fixed by a one-time
+    measurement (task-8-report.md), not by this fixture, which cannot see
+    them at all, before or after the fix.
+    """
+    spawns: list[tuple[str, list[str]]] = []
+    monkeypatch.setattr(
+        subprocess.Popen,
+        "__init__",
+        make_scanner_spawn_recorder(subprocess.Popen.__init__, spawns),
+    )
+
+    yield
+
+    if not spawns:
+        return
+    if request.node.get_closest_marker("requires_tools") is not None:
+        return  # declared -- exactly what the marker is for
+
+    reaches_network = any(semgrep_argv_uses_config_auto(argv) for _, argv in spawns)
+    if not reaches_network and request.node.nodeid in _ALLOWED_OFFLINE_SCANNER_SPAWNS:
+        return  # reviewed exemption, and this run's argv confirms it stayed offline
+
+    names = sorted({name for name, _ in spawns})
+    argv_lines = "\n".join(f"  {argv!r}" for _, argv in spawns)
+    reason = (
+        "used the network-fetching --config auto default"
+        if reaches_network
+        else "is not on the reviewed _ALLOWED_OFFLINE_SCANNER_SPAWNS allowlist"
+    )
+    pytest.fail(
+        f"{request.node.nodeid} spawned a real scanner binary "
+        f"({', '.join(names)}) without @pytest.mark.requires_tools, and {reason}:\n"
+        f"{argv_lines}\n"
+        "Either mark the test requires_tools (its point is genuinely "
+        "running the real binary), or keep the real binary out of this "
+        "test's path entirely (an explicit offline per_tool_config, or "
+        "--skip-tools for a test whose invariant does not care which state "
+        "a given tool lands in). A test that deliberately keeps a real, "
+        "offline spawn needs a reviewed entry in "
+        "_ALLOWED_OFFLINE_SCANNER_SPAWNS above, not just a non-auto config. "
+        "See #907.",
+        pytrace=False,
+    )
 
 
 # ---------------------------------------------------------------------------
