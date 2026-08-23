@@ -835,11 +835,24 @@ def test_wizard_analyze_trends_flag(tmp_path, mock_db, monkeypatch):
     mock_cursor.fetchone.return_value = (3,)  # 3 scans in history
     mock_conn.execute.return_value = mock_cursor
 
+    # Mock ToolManager's wizard pre-flight check (#907: unmocked, it shells
+    # out to whatever scanner binaries are actually on PATH).
+    mock_tool_manager = mock.MagicMock()
+    mock_tool_manager.get_tool_summary.return_value = mock.MagicMock(
+        execution_ready=10, platform_applicable=18
+    )
+    mock_tool_manager.check_tool.return_value = mock.MagicMock(
+        installed=True, version="1.0.0", startup_ok=True
+    )
+
     with (
         mock.patch("scripts.cli.wizard.execute_scan", return_value=0),
         mock.patch("scripts.core.history_db.get_connection", return_value=mock_conn),
         mock.patch("scripts.cli.wizard._run_trend_command_interactive") as mock_run,
         mock.patch("builtins.print"),
+        mock.patch(
+            "scripts.cli.tool_manager.ToolManager", return_value=mock_tool_manager
+        ),
     ):  # Suppress output
         result = run_wizard(
             yes=True,
@@ -883,6 +896,16 @@ def test_wizard_export_trends_html_flag(tmp_path, mock_db, monkeypatch):
     mock_cursor.fetchone.return_value = (3,)  # 3 scans
     mock_conn.execute.return_value = mock_cursor
 
+    # Mock ToolManager's wizard pre-flight check (#907: unmocked, it shells
+    # out to whatever scanner binaries are actually on PATH).
+    mock_tool_manager = mock.MagicMock()
+    mock_tool_manager.get_tool_summary.return_value = mock.MagicMock(
+        execution_ready=10, platform_applicable=18
+    )
+    mock_tool_manager.check_tool.return_value = mock.MagicMock(
+        installed=True, version="1.0.0", startup_ok=True
+    )
+
     with (
         mock.patch("scripts.cli.wizard.execute_scan", return_value=0),
         mock.patch("scripts.core.history_db.get_connection", return_value=mock_conn),
@@ -891,6 +914,9 @@ def test_wizard_export_trends_html_flag(tmp_path, mock_db, monkeypatch):
         ) as mock_analyze,
         mock.patch("scripts.cli.trend_formatters.format_html_report") as mock_format,
         mock.patch("builtins.print"),
+        mock.patch(
+            "scripts.cli.tool_manager.ToolManager", return_value=mock_tool_manager
+        ),
     ):  # Suppress output
         mock_analyze.return_value = {}
         mock_format.return_value = "<html>Test</html>"
@@ -938,6 +964,16 @@ def test_wizard_export_trends_json_flag(tmp_path, mock_db, monkeypatch):
     mock_cursor.fetchone.return_value = (3,)  # 3 scans
     mock_conn.execute.return_value = mock_cursor
 
+    # Mock ToolManager's wizard pre-flight check (#907: unmocked, it shells
+    # out to whatever scanner binaries are actually on PATH).
+    mock_tool_manager = mock.MagicMock()
+    mock_tool_manager.get_tool_summary.return_value = mock.MagicMock(
+        execution_ready=10, platform_applicable=18
+    )
+    mock_tool_manager.check_tool.return_value = mock.MagicMock(
+        installed=True, version="1.0.0", startup_ok=True
+    )
+
     with (
         mock.patch("scripts.cli.wizard.execute_scan", return_value=0),
         mock.patch("scripts.core.history_db.get_connection", return_value=mock_conn),
@@ -946,6 +982,9 @@ def test_wizard_export_trends_json_flag(tmp_path, mock_db, monkeypatch):
         ) as mock_analyze,
         mock.patch("scripts.cli.trend_formatters.format_json_report") as mock_format,
         mock.patch("builtins.print"),
+        mock.patch(
+            "scripts.cli.tool_manager.ToolManager", return_value=mock_tool_manager
+        ),
     ):  # Suppress output
         mock_analyze.return_value = {}
         mock_format.return_value = '{"test": "report"}'
@@ -975,7 +1014,22 @@ def test_wizard_no_db_with_trend_flags(tmp_path, monkeypatch, capsys):
     repo_dir.mkdir()
     (repo_dir / ".git").mkdir()
 
-    with mock.patch("scripts.cli.wizard.execute_scan", return_value=0):
+    # Mock ToolManager's wizard pre-flight check (#907: unmocked, it shells
+    # out to whatever scanner binaries are actually on PATH).
+    mock_tool_manager = mock.MagicMock()
+    mock_tool_manager.get_tool_summary.return_value = mock.MagicMock(
+        execution_ready=10, platform_applicable=18
+    )
+    mock_tool_manager.check_tool.return_value = mock.MagicMock(
+        installed=True, version="1.0.0", startup_ok=True
+    )
+
+    with (
+        mock.patch("scripts.cli.wizard.execute_scan", return_value=0),
+        mock.patch(
+            "scripts.cli.tool_manager.ToolManager", return_value=mock_tool_manager
+        ),
+    ):
         result = run_wizard(
             yes=True,
             analyze_trends=True,
@@ -1013,8 +1067,23 @@ def test_wizard_insufficient_scans_with_trend_flags(tmp_path, monkeypatch):
     repo_dir.mkdir()
     (repo_dir / ".git").mkdir()
 
+    # Mock ToolManager's wizard pre-flight check (#907: unmocked, it shells
+    # out to whatever scanner binaries are actually on PATH).
+    mock_tool_manager = mock.MagicMock()
+    mock_tool_manager.get_tool_summary.return_value = mock.MagicMock(
+        execution_ready=10, platform_applicable=18
+    )
+    mock_tool_manager.check_tool.return_value = mock.MagicMock(
+        installed=True, version="1.0.0", startup_ok=True
+    )
+
     with mock.patch("scripts.cli.wizard.execute_scan", return_value=0):
-        with mock.patch("builtins.print"):  # Suppress output
+        with (
+            mock.patch("builtins.print"),  # Suppress output
+            mock.patch(
+                "scripts.cli.tool_manager.ToolManager", return_value=mock_tool_manager
+            ),
+        ):
             result = run_wizard(
                 yes=True,
                 analyze_trends=True,

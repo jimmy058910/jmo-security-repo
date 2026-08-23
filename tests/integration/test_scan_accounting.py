@@ -118,7 +118,16 @@ SCAN_BUDGET_S = 420
 # the invariant total at 28; §11e's reference PASS run was configured the same
 # way for the same reason. The unbounded first sync is a known open issue
 # (it likely wants an NVD API key), not something this test should absorb.
-SKIP_TOOLS = ("dependency-check",)
+#
+# semgrep is excluded for the same reason, one layer earlier (#907): its
+# production default (`--config auto`) fetches its ruleset from semgrep.dev,
+# so on a machine where semgrep is genuinely on PATH this test spawned a
+# real, unmarked, network-blocking scan of its own -- and PER_TOOL_TIMEOUT_S
+# caps it mid-fetch, producing the exact output-vs-failed contradiction the
+# comment below warns a timeout manufactures. Skipping keeps semgrep an
+# accounted `skipped` state, same as dependency-check, without this test
+# depending on network access to pass.
+SKIP_TOOLS = ("dependency-check", "semgrep")
 
 # A capped-out tool is still *accounted* - `failed` is a state like any other,
 # and this test asserts the invariant, never the distribution. That is what

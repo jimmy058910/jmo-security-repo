@@ -34,16 +34,22 @@ def test_scan_skips_missing_tools_and_runs_available(tmp_path: Path, monkeypatch
         targets = None
         results_dir = str(tmp_path / "results")
         config = str(tmp_path / "no.yml")
-        # Request multiple tools - some may be missing
+        # Request multiple tools - some may be missing. semgrep excluded
+        # (#907): its production default (`--config auto`) fetches its
+        # ruleset from semgrep.dev, and on this machine (semgrep genuinely
+        # on PATH) that meant a real, unmarked 30s network timeout here
+        # instead of the ~5-10s local run this test's budget assumed. The
+        # mixed-availability behaviour this test actually verifies -- some
+        # requested tools missing, bandit as the CI-guaranteed anchor -- is
+        # unaffected by dropping one more optional tool from the list.
         tools = [
             "trufflehog",
-            "semgrep",
             "syft",
             "trivy",
             "checkov",
             "bandit",
         ]
-        timeout = 30  # semgrep takes ~5-10s on empty dirs
+        timeout = 30
         threads = 2
         allow_missing_tools = True
 
@@ -65,11 +71,11 @@ def test_scan_skips_missing_tools_and_runs_available(tmp_path: Path, monkeypatch
     # so output is always produced -- never skip there, or the coverage rots
     # silently the way #683/#693 did.
     #
-    # On a developer box the set can legitimately come up empty. Measured case:
-    # semgrep resolves from a user-site install but, on a non-UTF-8 console,
-    # crashes inside its own config_resolver (it writes the downloaded ruleset
-    # with the locale codec and the ruleset contains U+202A). It exits 2, which
-    # jmo accepts as an OK return code, and writes no file.
+    # On a developer box the set can legitimately come up empty -- any of
+    # the remaining optional tools can be absent, or (formerly, when semgrep
+    # was still requested here) crash on its own downloaded ruleset under a
+    # non-UTF-8 console. It exits 2, which jmo accepts as an OK return code,
+    # and writes no file.
     if not any(outputs.values()):
         if in_ci:
             pytest.fail(

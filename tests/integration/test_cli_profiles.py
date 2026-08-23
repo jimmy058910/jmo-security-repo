@@ -62,6 +62,20 @@ def test_scan_profile_include_exclude_only_scans_included(tmp_path: Path, monkey
         profile_name=None,
         log_level="DEBUG",
         human_logs=True,
+        # #907: this test's `tools: [trufflehog]` under `profiles.fast` in
+        # the config above is dead config -- `_effective_scan_settings()`
+        # (scripts/cli/jmo.py:86-100) sources the tool list from
+        # `PROFILE_TOOLS[profile_name]` (tool_registry.py), never from a
+        # jmo.yml profile's own `tools:` key, so the *built-in* "fast"
+        # profile's full tool list runs here regardless -- which includes
+        # semgrep, resolved for real and run with the network-fetching
+        # `--config auto` default. This test's own purpose is include/exclude
+        # directory filtering (asserted only via trufflehog's output files
+        # below), so `--skip-tools` -- a CLI-level filter applied after
+        # profile/tool-list resolution either way -- keeps it off the
+        # network without touching what it verifies or what the stale
+        # config key was trying (and failing) to do.
+        skip_tools=["semgrep"],
     )
     rc = jmo.cmd_scan(args)
     assert rc == 0
@@ -310,9 +324,27 @@ def test_per_tool_flags_override(tmp_path: Path):
     (test_repo / "tests").mkdir(parents=True)
     (test_repo / "tests" / "test.py").write_text("assert True")
 
+    # #907: semgrep's production default (`--config auto`) fetches its
+    # ruleset from semgrep.dev over the network -- this test's own point is
+    # that a per_tool `flags` override reaches the real semgrep invocation,
+    # which needs semgrep genuinely resolved and run, so (unlike a plumbing
+    # test) skip-tools would defeat the point entirely. Route it through the
+    # same `per_tool.configs` hook instead, so when this test runs on a
+    # machine where semgrep actually is on PATH, it stays offline.
+    offline_semgrep_rule = tmp_path / "offline-semgrep-rule.yml"
+    offline_semgrep_rule.write_text(
+        "rules:\n"
+        "  - id: jmo-offline-flags-override-rule\n"
+        "    languages: [generic]\n"
+        "    message: offline rule for #907 test coverage, matches nothing real\n"
+        "    severity: INFO\n"
+        "    pattern: jmo-offline-flags-override-rule-never-matches-anything\n",
+        encoding="utf-8",
+    )
+
     # Create config with exclude flags
     config_file = tmp_path / "exclude-config.yml"
-    config_file.write_text("""
+    config_file.write_text(f"""
 tools: [semgrep]
 outputs: [json]
 
@@ -322,6 +354,7 @@ profiles:
     per_tool:
       semgrep:
         flags: ["--exclude", "tests"]
+        configs: ["{offline_semgrep_rule.as_posix()}"]
 """)
 
     # Run scan
@@ -783,6 +816,25 @@ def test_scan_startup_probes_each_tool_at_most_once(tmp_path: Path, monkeypatch)
     repos_dir = tmp_path / "repos"
     (repos_dir / "proj").mkdir(parents=True)
 
+    # #907: semgrep's production default (`--config auto`) fetches its
+    # ruleset from semgrep.dev over the network. This test's own point is
+    # resolution/probe *counting*, which needs semgrep to actually be
+    # resolved (removing it from `tools` would just make the test say
+    # nothing about it) -- so instead of skipping it, give it a fully
+    # offline, filesystem-only ruleset via the `per_tool.configs` hook
+    # `repository_scanner.py` already supports, precisely so a scan that
+    # does run to completion here never reaches the network.
+    offline_semgrep_rule = tmp_path / "offline-semgrep-rule.yml"
+    offline_semgrep_rule.write_text(
+        "rules:\n"
+        "  - id: jmo-offline-probe-rule\n"
+        "    languages: [generic]\n"
+        "    message: offline rule for #907 test coverage, matches nothing real\n"
+        "    severity: INFO\n"
+        "    pattern: jmo-offline-probe-rule-never-matches-anything\n",
+        encoding="utf-8",
+    )
+
     cfg = {
         "default_profile": "fast",
         "profiles": {
@@ -790,6 +842,7 @@ def test_scan_startup_probes_each_tool_at_most_once(tmp_path: Path, monkeypatch)
                 "tools": ["trufflehog", "semgrep", "trivy"],
                 "timeout": 60,
                 "threads": 1,
+                "per_tool": {"semgrep": {"configs": [str(offline_semgrep_rule)]}},
             }
         },
     }
