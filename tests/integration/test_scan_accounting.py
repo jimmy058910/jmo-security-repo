@@ -213,9 +213,16 @@ def test_deep_scan_accounts_for_every_declared_tool(tmp_path: Path) -> None:
             # `--history-db` above redirects the scan's DB write, but
             # `cmd_scan` also unconditionally calls `_show_kofi_reminder()`
             # (#933), which resolves `Path.home()` with no injection point
-            # at all. Redirect it via the env var Path.home() actually reads
-            # on Windows (ntpath.expanduser -> USERPROFILE).
-            env={**os.environ, "USERPROFILE": str(tmp_path)},
+            # at all. Redirect it via the env vars Path.home() actually
+            # reads: USERPROFILE on Windows (ntpath.expanduser), HOME on
+            # Linux/macOS (posixpath.expanduser) -- each platform consults
+            # only its own var and ignores the other, so setting just one
+            # leaves the other platform's real config.yml exposed. This
+            # test previously set USERPROFILE alone, which protected the
+            # Windows box this fix was measured on and missed Linux CI
+            # entirely, where it wrote to the real /home/runner/.jmo/
+            # config.yml (#978 CI follow-up).
+            env={**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)},
         )
     except subprocess.TimeoutExpired as exc:
         # `capture_output=True` means the only copy of what the scan managed to
