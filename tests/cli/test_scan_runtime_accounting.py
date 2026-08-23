@@ -128,6 +128,11 @@ def scan_env(tmp_path: Path, monkeypatch):
     scanners installed bails before the code under test and returns non-zero
     for an unrelated reason, which is exactly how two chunk-3 guards passed
     while never executing what they claimed to cover.
+
+    ``cmd_scan`` unconditionally calls ``_show_kofi_reminder()`` near the end
+    (#933), which resolves ``Path.home() / ".jmo" / "config.yml"`` with no
+    injection point. Redirect it here so every test using this fixture writes
+    to ``tmp_path`` instead of the developer's real config file.
     """
     repos_dir = tmp_path / "repos"
     (repos_dir / "proj").mkdir(parents=True)
@@ -137,6 +142,7 @@ def scan_env(tmp_path: Path, monkeypatch):
     )
     monkeypatch.setattr(jmo, "_check_scan_tools", lambda args, tools: (tools, []))
     monkeypatch.setenv("CI", "true")
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
     return _scan_args(tmp_path, cfg_path, repos_dir)
 
 

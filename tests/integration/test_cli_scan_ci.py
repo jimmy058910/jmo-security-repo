@@ -17,6 +17,9 @@ def test_scan_skips_missing_tools_and_runs_available(tmp_path: Path, monkeypatch
 
     # Set CI=true to skip interactive prompts
     monkeypatch.setenv("CI", "true")
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point.
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
 
     # Create two dummy repos
     rbase = tmp_path / "repos"
@@ -103,6 +106,10 @@ def test_ci_composes_scan_and_report(tmp_path: Path, monkeypatch):
             self.fail_on = None
             self.profile = True
 
+    # `cmd_ci` runs `cmd_scan`, which unconditionally calls
+    # `_show_kofi_reminder()` (#933) -- resolves `Path.home()` with no
+    # injection point.
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
     rc = cmd_ci(Args())
     # Expect 0 because no findings and fail_on not set
     assert rc in (0, 1)
@@ -131,6 +138,10 @@ def test_ci_runs_the_report_phase_exactly_once(tmp_path: Path, monkeypatch):
     import scripts.cli.jmo as jmo_mod
 
     monkeypatch.setenv("CI", "true")
+    # `cmd_ci` runs `cmd_scan`, which unconditionally calls
+    # `_show_kofi_reminder()` (#933) -- resolves `Path.home()` with no
+    # injection point.
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
     repo = tmp_path / "repo"
     repo.mkdir()
 

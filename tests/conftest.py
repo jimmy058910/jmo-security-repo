@@ -102,7 +102,7 @@ def python_executable() -> str:
 
 
 @pytest.fixture
-def jmo_runner():
+def jmo_runner(monkeypatch, tmp_path):
     """
     Pytest fixture providing a helper to run JMo commands.
 
@@ -113,14 +113,49 @@ def jmo_runner():
             assert result.returncode == 0
             assert "scan" in result.stdout
 
+    Defaults the subprocess's home directory AND working directory to this
+    test's tmp_path, closing two separate real-state leaks with two separate
+    injection points:
+
+    - `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+      resolves `Path.home()` with no injection point, so a bare
+      `jmo_runner(["scan", ...])` would otherwise write to the developer's
+      real `~/.jmo/config.yml`. Both HOME (Linux/macOS) and USERPROFILE
+      (Windows -- see ntpath.expanduser) are set, since this fixture is
+      shared across all three platform e2e suites; each platform's
+      Path.home() reads only its own var and ignores the other.
+    - History storage defaults to `Path(".jmo/history.db")`, relative to the
+      process's cwd, whenever `store_history` is truthy (the CLI default)
+      and no `--history-db` override is passed (#802). Redirecting HOME does
+      NOT redirect this -- it is cwd-relative, not home-relative -- so the
+      default `cwd` here is this test's tmp_path too, unless the caller
+      passes its own `cwd=`.
+
+    monkeypatch.setattr(Path, "home", ...) in a caller's own test body has
+    NO effect here -- this spawns a real subprocess, and that patches only
+    the parent process. A test that needs a *specific* home directory (e.g.
+    test_userprofile_env_var) can still call monkeypatch.setenv("USERPROFILE"
+    / "HOME", ...) itself: it runs after this default and wins. Likewise a
+    test that needs a specific cwd can pass cwd= explicitly to the returned
+    callable.
+
     Returns:
         Callable that runs JMo commands
     """
+    fake_home = tmp_path / "home"
+    fake_home.mkdir(exist_ok=True)
+    monkeypatch.setenv("USERPROFILE", str(fake_home))
+    monkeypatch.setenv("HOME", str(fake_home))
 
     def _run(
         args: list[str], timeout: int = 120, **kwargs
     ) -> subprocess.CompletedProcess:
-        defaults = {"capture_output": True, "text": True, "timeout": timeout}
+        defaults = {
+            "capture_output": True,
+            "text": True,
+            "timeout": timeout,
+            "cwd": str(tmp_path),
+        }
         defaults.update(kwargs)
         return run_jmo_command(args, **defaults)
 
@@ -217,6 +252,199 @@ def _guard_real_jmo_install():
             "and NOT monkeypatch.setenv('HOME', ...), which does not affect "
             "Path.home() on Windows.\n"
             "Recover with: jmo tools install --profile fast --yes",
+            pytrace=False,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Guard: the test suite must never write to the developer's real state.
+# ---------------------------------------------------------------------------
+#
+# Two real files a test can reach without deliberately trying to (#802, #933):
+#
+#   .jmo/history.db    - the auto-storage hook in report_orchestrator.py
+#                         defaults to `Path(".jmo/history.db")` whenever
+#                         `store_history` is truthy (the CLI default: it is
+#                         `--no-store-history` that opts out) and no
+#                         `history_db` override is passed.
+#   ~/.jmo/config.yml  - `_show_kofi_reminder()` (scripts/cli/jmo.py),
+#                         reached from `cmd_scan()`, has no injection point
+#                         at all: it resolves `Path.home() / ".jmo" /
+#                         "config.yml"` unconditionally and rewrites the
+#                         whole file with `yaml.safe_dump`.
+#
+# Measured (#802) before any guard existed: +38 scans, +4240 findings,
+# +33.8MB across three full-suite runs (~13 scans/run).
+#
+# Per-test attribution, not just a session-level pass/fail: a session-scoped
+# check (`_guard_real_jmo_install`, above) can only tell you the suite
+# dirtied state somewhere across ~8000 tests, not which one. The obvious
+# per-test design for the DB - open a fresh read-only sqlite connection and
+# COUNT(*) before and after every test - was measured against this repo's
+# real 1.2GB WAL-mode history.db: 12.5ms/cycle, almost all of it
+# `sqlite3.connect()` itself (COUNT(*) and PRAGMA data_version cost the same
+# ~13ms on a fresh connection; the SAME query on a REUSED connection costs
+# ~0.1ms). At 2 reads/test across ~8000 tests that projects to ~200s added
+# to every suite half, paid whether or not anything is actually wrong.
+#
+# So the DB check is two-tier. A cheap tripwire runs on every test (measured
+# ~0.004ms/os.stat(), ~0.07s projected across a full suite): compare
+# (size, mtime_ns) of the db file AND its `-wal` sidecar - WAL-mode writes
+# land in the sidecar and do not touch the main file's mtime until a
+# checkpoint, so both must be watched or a write is invisible to this check.
+# Only when the tripwire fires does the expensive tier run (one real
+# connection, one COUNT(*)) to confirm the row count actually changed
+# (ruling out e.g. VACUUM/ANALYZE-style housekeeping that touches the file
+# without changing row counts) and to name the test that did it.
+#
+# The config.yml check has no such problem: read_bytes() on a file this
+# small measured ~0.06ms/cycle, ~1s projected across a full suite - so it
+# just compares bytes before and after every test directly.
+#
+# Known limitation under `-n 8`: two workers racing the same window can, in
+# principle, misattribute one worker's write to the other's nodeid, because
+# both are watching the same real shared file from separate processes. If
+# this guard names a test, confirm with a serial rerun (`-n0 <nodeid>`)
+# before treating the attribution as final.
+
+_REAL_HISTORY_DB = Path(".jmo/history.db").resolve()
+_REAL_JMO_CONFIG = Path.home() / ".jmo" / "config.yml"
+
+_history_db_state: dict[str, object] = {}
+_jmo_config_state: dict[str, object] = {}
+
+
+def _history_db_probe(real_db: Path) -> tuple[int, int, int, int] | None:
+    """Cheap fingerprint of the real DB: (size, mtime_ns) of the main file
+    and its -wal sidecar. None if the main file does not exist."""
+    if not real_db.exists():
+        return None
+    db_stat = real_db.stat()
+    wal = real_db.with_name(real_db.name + "-wal")
+    if wal.exists():
+        wal_stat = wal.stat()
+        wal_size, wal_mtime = wal_stat.st_size, wal_stat.st_mtime_ns
+    else:
+        wal_size, wal_mtime = 0, 0
+    return (db_stat.st_size, db_stat.st_mtime_ns, wal_size, wal_mtime)
+
+
+def _history_db_scans_count(real_db: Path) -> int:
+    """Definitive (opens a real read-only connection) scans-table count."""
+    import sqlite3
+
+    conn = sqlite3.connect(f"file:{real_db.as_posix()}?mode=ro", uri=True)
+    try:
+        return conn.execute("SELECT COUNT(*) FROM scans").fetchone()[0]
+    finally:
+        conn.close()
+
+
+def _history_db_refresh() -> None:
+    probe = _history_db_probe(_REAL_HISTORY_DB)
+    count = _history_db_scans_count(_REAL_HISTORY_DB) if probe is not None else None
+    _history_db_state["probe"] = probe
+    _history_db_state["count"] = count
+
+
+@pytest.fixture(autouse=True)
+def _guard_real_history_db(request):
+    """Fail the specific test that wrote to the real .jmo/history.db."""
+    if "probe" not in _history_db_state:
+        _history_db_refresh()
+        if _history_db_state["probe"] is None:
+            print(
+                f"\n_guard_real_history_db: {_REAL_HISTORY_DB} does not "
+                "exist -- nothing to guard this run (fresh clone or CI)."
+            )
+
+    before_probe = _history_db_state["probe"]
+    before_count = _history_db_state["count"]
+
+    yield
+
+    after_probe = _history_db_probe(_REAL_HISTORY_DB)
+    if after_probe == before_probe:
+        return  # cheap path: file untouched during this test
+
+    after_count = (
+        _history_db_scans_count(_REAL_HISTORY_DB) if after_probe is not None else None
+    )
+    _history_db_state["probe"] = after_probe
+    _history_db_state["count"] = after_count
+
+    if before_count is None and after_count is not None:
+        pytest.fail(
+            f"{request.node.nodeid} created the real history database "
+            f"{_REAL_HISTORY_DB}, which did not exist before this test.\n"
+            "Use history_db=str(tmp_path / 'history.db') and patch "
+            "store_scan -- see tests/unit/test_config_precedence.py.",
+            pytrace=False,
+        )
+    elif before_count is not None and after_count is None:
+        pytest.fail(
+            f"{request.node.nodeid} deleted the real history database "
+            f"{_REAL_HISTORY_DB} (had {before_count} scans).",
+            pytrace=False,
+        )
+    elif before_count != after_count:
+        pytest.fail(
+            f"{request.node.nodeid} wrote to the real history database "
+            f"{_REAL_HISTORY_DB}: scans {before_count} -> {after_count}.\n"
+            "Use history_db=str(tmp_path / 'history.db') and patch "
+            "store_scan -- see tests/unit/test_config_precedence.py.",
+            pytrace=False,
+        )
+    # else: the probe tripped (e.g. WAL checkpoint / VACUUM housekeeping)
+    # but the row count did not change -- not a violation. The cache above
+    # is already refreshed so the next test compares against reality.
+
+
+def _read_jmo_config_bytes() -> bytes | None:
+    return _REAL_JMO_CONFIG.read_bytes() if _REAL_JMO_CONFIG.exists() else None
+
+
+@pytest.fixture(autouse=True)
+def _guard_real_jmo_config(request):
+    """Fail the specific test that wrote to the real ~/.jmo/config.yml."""
+    if "seen" not in _jmo_config_state:
+        _jmo_config_state["seen"] = True
+        _jmo_config_state["bytes"] = _read_jmo_config_bytes()
+        if _jmo_config_state["bytes"] is None:
+            print(
+                f"\n_guard_real_jmo_config: {_REAL_JMO_CONFIG} does not "
+                "exist -- nothing to guard this run (fresh clone or CI)."
+            )
+
+    before = _jmo_config_state["bytes"]
+
+    yield
+
+    after = _read_jmo_config_bytes()
+    if after == before:
+        return
+
+    _jmo_config_state["bytes"] = after
+
+    if before is None:
+        pytest.fail(
+            f"{request.node.nodeid} created the real config file "
+            f"{_REAL_JMO_CONFIG}, which did not exist before this test.\n"
+            "_show_kofi_reminder() (scripts/cli/jmo.py) resolves "
+            "Path.home() unconditionally with no injection point -- patch "
+            "it before calling cmd_scan()/main(['scan', ...]):\n"
+            "    monkeypatch.setattr(Path, 'home', staticmethod(lambda: tmp_path))",
+            pytrace=False,
+        )
+    else:
+        pytest.fail(
+            f"{request.node.nodeid} wrote to the real config file "
+            f"{_REAL_JMO_CONFIG} ({len(before)} bytes -> "
+            f"{len(after) if after is not None else 0} bytes).\n"
+            "_show_kofi_reminder() (scripts/cli/jmo.py) resolves "
+            "Path.home() unconditionally with no injection point -- patch "
+            "it before calling cmd_scan()/main(['scan', ...]):\n"
+            "    monkeypatch.setattr(Path, 'home', staticmethod(lambda: tmp_path))",
             pytrace=False,
         )
 

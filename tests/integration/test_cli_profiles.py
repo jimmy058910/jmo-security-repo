@@ -43,6 +43,9 @@ def test_scan_profile_include_exclude_only_scans_included(tmp_path: Path, monkey
     monkeypatch.setattr(jmo, "_check_scan_tools", lambda args, tools: (tools, []))
     # Set CI=true to skip interactive prompts
     monkeypatch.setenv("CI", "true")
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point.
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
 
     # Prepare args and run scan
     args = types.SimpleNamespace(
@@ -124,6 +127,9 @@ def test_scan_per_tool_flags_injected(tmp_path: Path, monkeypatch):
     # tree kill on timeout), not subprocess.run - patching only the latter
     # records the version probes and none of the scan commands.
     monkeypatch.setattr("scripts.core.tool_runner._run_bounded", fake_run)
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point.
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
 
     args = types.SimpleNamespace(
         cmd="scan",
@@ -204,6 +210,9 @@ def test_scan_retries_on_failure_then_success(tmp_path: Path, monkeypatch):
     # tree kill on timeout), not subprocess.run - patching only the latter
     # records the version probes and none of the scan commands.
     monkeypatch.setattr("scripts.core.tool_runner._run_bounded", fake_run)
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point.
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
 
     args = types.SimpleNamespace(
         cmd="scan",
@@ -290,6 +299,7 @@ profiles:
 
 def test_per_tool_flags_override(tmp_path: Path):
     """Test per-tool flags override in profile."""
+    import os
     import subprocess
     import sys
 
@@ -330,7 +340,12 @@ profiles:
         str(tmp_path / "results"),
         "--allow-missing-tools",
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point. monkeypatch cannot
+    # reach across this subprocess boundary, so redirect it via the env var
+    # Path.home() actually reads on Windows (ntpath.expanduser -> USERPROFILE).
+    env = {**os.environ, "USERPROFILE": str(tmp_path)}
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, env=env)
     assert result.returncode in [0, 1]
 
     # Exact verification of excluded directories depends on semgrep log format
@@ -339,6 +354,7 @@ profiles:
 
 def test_per_tool_retries_override(tmp_path: Path):
     """Test per-tool retry override in profile."""
+    import os
     import subprocess
     import sys
 
@@ -377,7 +393,12 @@ profiles:
         str(tmp_path / "results"),
         "--allow-missing-tools",
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point. monkeypatch cannot
+    # reach across this subprocess boundary, so redirect it via the env var
+    # Path.home() actually reads on Windows (ntpath.expanduser -> USERPROFILE).
+    env = {**os.environ, "USERPROFILE": str(tmp_path)}
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, env=env)
     assert result.returncode in [0, 1]
 
 
@@ -702,6 +723,9 @@ def test_scan_startup_does_not_version_check_unrequested_tools(
 
     monkeypatch.setattr(tm_module.ToolManager, "check_tool", _counting_check)
     monkeypatch.setenv("CI", "true")
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point.
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
 
     args = types.SimpleNamespace(
         cmd="scan",
@@ -796,6 +820,9 @@ def test_scan_startup_probes_each_tool_at_most_once(tmp_path: Path, monkeypatch)
 
     monkeypatch.setattr(tm_module.ToolManager, "_find_binary", _counting_find)
     monkeypatch.setenv("CI", "true")
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point.
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
 
     args = types.SimpleNamespace(
         cmd="scan",

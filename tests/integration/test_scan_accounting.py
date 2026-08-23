@@ -31,6 +31,7 @@ pinning that would pass here and fail in CI.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -200,6 +201,12 @@ def test_deep_scan_accounts_for_every_declared_tool(tmp_path: Path) -> None:
             # take the Cancel branch and produce no results directory at all.
             stdin=subprocess.DEVNULL,
             timeout=SCAN_BUDGET_S,
+            # `--history-db` above redirects the scan's DB write, but
+            # `cmd_scan` also unconditionally calls `_show_kofi_reminder()`
+            # (#933), which resolves `Path.home()` with no injection point
+            # at all. Redirect it via the env var Path.home() actually reads
+            # on Windows (ntpath.expanduser -> USERPROFILE).
+            env={**os.environ, "USERPROFILE": str(tmp_path)},
         )
     except subprocess.TimeoutExpired as exc:
         # `capture_output=True` means the only copy of what the scan managed to

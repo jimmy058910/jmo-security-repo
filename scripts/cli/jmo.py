@@ -2624,10 +2624,10 @@ def _collect_email_opt_in(args) -> None:
 
 
 def _show_kofi_reminder(args) -> None:
-    """Show Ko-Fi support reminder every 5th scan (non-intrusive).
+    """Show Ko-Fi support reminder every 3rd scan (non-intrusive).
 
     Tracks scan count in ~/.jmo/config.yml and displays friendly reminder
-    every 5 scans to support full-time development.
+    every 3 scans to support full-time development.
     """
     config_path = Path.home() / ".jmo" / "config.yml"
     config_path.parent.mkdir(exist_ok=True)
