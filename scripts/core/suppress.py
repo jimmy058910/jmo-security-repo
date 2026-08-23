@@ -169,6 +169,7 @@ class Suppression:
 
         Args:
             now (dt.date | None): Current date for testing, or None for today
+                in UTC
 
         Returns:
             bool: True if suppression is active, False if expired
@@ -176,7 +177,7 @@ class Suppression:
         Example:
             >>> suppression = Suppression(id='fp-123', expires='2025-12-31')
             >>> suppression.is_active()
-            True  # (if current date < 2025-12-31)
+            True  # (if current UTC date < 2025-12-31)
             >>> suppression.is_active(dt.date(2026, 1, 1))
             False  # (if checking future date > 2025-12-31)
 
@@ -184,6 +185,14 @@ class Suppression:
             If 'expires' not specified, suppression is always active.
             Date format: YYYY-MM-DD (ISO 8601).
             Invalid dates treated as never expires (returns True).
+            The default clock is UTC (#967), matching the write side --
+            ``mark_resolved`` in ``jmo_server.py`` computes ``expires`` from
+            ``datetime.now(UTC).date()`` -- so an entry's expiry means the
+            same calendar day on both ends, regardless of the caller's local
+            timezone. Passing local ``dt.date.today()`` here used to make a
+            suppression's effective lifetime off by up to a day: it lived a
+            day longer than requested west of UTC, and could lapse a day
+            early east of UTC.
 
         """
         if not self.expires:
@@ -214,7 +223,7 @@ class Suppression:
                 e,
             )
             return True
-        today = now or dt.date.today()
+        today = now or dt.datetime.now(dt.UTC).date()
         return today <= exp
 
 
