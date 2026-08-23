@@ -58,12 +58,16 @@ def test_profile_flag_generates_timings(tmp_path):
     timings_file = tmp_path / "results" / "summaries" / "timings.json"
     assert timings_file.exists(), "timings.json not generated with --profile flag"
 
-    # Validate structure
+    # Validate structure. `{"a": 1}` used to pass this check (#723) -- pin the
+    # exact key set the real scan -> report --profile pipeline is expected to
+    # produce, same contract as test_timings_json_matches_the_producer_contract
+    # below, but exercised here through real tools instead of fabricated stubs.
     timings = json.loads(timings_file.read_text())
-    assert isinstance(timings, dict), "timings.json should be a dictionary"
-
-    # Should have some timing data (exact structure may vary)
-    assert len(timings) > 0, "timings.json should not be empty"
+    assert set(timings) == EXPECTED_TIMINGS_KEYS, (
+        "timings.json top-level keys drifted from the producer.\n"
+        f"  missing: {sorted(EXPECTED_TIMINGS_KEYS - set(timings))}\n"
+        f"  unexpected: {sorted(set(timings) - EXPECTED_TIMINGS_KEYS)}"
+    )
 
 
 @pytest.mark.requires_tools
@@ -160,9 +164,16 @@ def test_ci_command_with_profile_generates_timings(tmp_path):
         timings_file.exists()
     ), "ci command with --profile should generate timings.json"
 
+    # Same vacuous-pair fix as test_profile_flag_generates_timings above --
+    # {"a": 1} passed this check before. In scope because this is still one of
+    # timings.json's own tests (#723), even though only the sibling test above
+    # was named explicitly.
     timings = json.loads(timings_file.read_text())
-    assert isinstance(timings, dict)
-    assert len(timings) > 0
+    assert set(timings) == EXPECTED_TIMINGS_KEYS, (
+        "timings.json top-level keys drifted from the producer.\n"
+        f"  missing: {sorted(EXPECTED_TIMINGS_KEYS - set(timings))}\n"
+        f"  unexpected: {sorted(set(timings) - EXPECTED_TIMINGS_KEYS)}"
+    )
 
 
 @pytest.mark.requires_tools
@@ -376,6 +387,17 @@ def test_timings_json_matches_the_producer_contract(tmp_path):
     assert isinstance(timings["recommended_threads"], int)
     assert timings["recommended_threads"] > 0
     assert isinstance(timings["meta"], dict)
+
+    # gather_results() only populates meta.max_workers when JMO_PROFILE=1
+    # (normalize_and_report.py:153-159) -- and --profile always exports that
+    # (report_orchestrator.py:161-162) before gather_results() runs, so it is
+    # present on every profiled run, not just some of them.
+    assert "max_workers" in timings["meta"], (
+        "meta.max_workers missing -- see normalize_and_report.py's "
+        "gather_results(), which sets it whenever JMO_PROFILE=1"
+    )
+    assert isinstance(timings["meta"]["max_workers"], int)
+    assert timings["meta"]["max_workers"] > 0
 
 
 def test_timings_jobs_is_a_flat_list_of_per_file_entries(tmp_path):
