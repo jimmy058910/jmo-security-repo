@@ -2,7 +2,18 @@
 
 **Purpose:** Pre-release manual verification for features that cannot be fully automated.
 
-> **Note:** This checklist focuses on interactive workflows, cross-platform edge cases, and commands with minimal automated test coverage. Commands like `scan`, `report`, `history`, `trends`, `diff`, `ci`, and `policy` have excellent automated coverage (8,000+ tests, 87% coverage) and are not duplicated here.
+> **What a tick on this page means.** Every `[x]` below records an observation
+> made during the **v1.0 release cycle**. They are dated evidence, not a claim
+> about the current tree. The v1.1.0 audit campaign
+> ([#785](https://github.com/jimmy058910/jmo-security-repo/issues/785))
+> subsequently falsified several of them by exercising the same surfaces against
+> real data — the corrected ones are annotated inline and cite
+> [#959](https://github.com/jimmy058910/jmo-security-repo/issues/959).
+> **Do not read an unannotated tick as re-verified for v1.1.0.** Only the two
+> #959 named were audited; the rest were left as they stand rather than
+> re-ticked without running them, which is the failure this note exists to stop.
+>
+> **Scope note:** This checklist focuses on interactive workflows, cross-platform edge cases, and commands with minimal automated test coverage. Commands like `scan`, `report`, `history`, `trends`, `diff`, `ci`, and `policy` have broad automated coverage (8,000+ tests) and are not duplicated here. *A specific coverage percentage previously appeared here; nothing in the repo enforces one — CI's only floor is 80% on the marker-filtered suite (`.github/workflows/ci.yml`), and nothing sets `--cov-fail-under` ([#756](https://github.com/jimmy058910/jmo-security-repo/issues/756)). Measure it rather than quoting it.*
 
 **Related Documentation:**
 
@@ -257,8 +268,8 @@ Automated tests cover API endpoints but not server lifecycle.
 - [x] Claude Code can connect to running server (connected via MCP)
 - [x] `get_security_findings` returns findings from results directory (117 findings, schema v1.2.0)
 - [x] Filters work: severity, tool, path (severity filter returned 29 HIGH findings)
-- [x] `apply_fix` with `dry_run=True` shows preview (verified: returns patch diff for GHA shell injection fix)
-- [x] `mark_resolved` updates finding status (verified: marked as `risk_accepted` with comment, returns timestamp)
+- [x] `apply_fix` with `dry_run=True` shows preview (verified: returns patch diff for GHA shell injection fix). **`dry_run=False` writes nothing and returns `success: False`** — apply is preview-only and deferred past v1.1.0 (#951)
+- [x] `mark_resolved` appends an id-keyed entry to `jmo.suppress.yml` (#957). Entries **always expire** — 90 days by default, 365 cap — and `resolution="fixed"` writes nothing by design. *The earlier tick here read "updates finding status (verified: marked as `risk_accepted` with comment, returns timestamp)" of a tool that persisted nothing at all until #957; what was observed was the timestamp (#959).*
 
 ### 7.3 Server Lifecycle
 
@@ -492,7 +503,7 @@ have folded 64 SBOM inventory rows into a vulnerability expectation.
 - [x] Docker wrapper scripts: bash wrapper verified, PS1 Issue #12 fixed (TTY detection), CMD wrapper verified via `cmd //c`
 - [x] Docker fast scan: 66 findings across 4 tools on Juice Shop
 - [x] Docker balanced scan: 691 findings from 6 reporting tools on Juice Shop (13/18 tools completed)
-- [x] MCP server: all 3 tools verified (`get_security_findings`, `apply_fix` dry_run, `mark_resolved`); server lifecycle verified (starts, runs, terminates cleanly)
+- [x] MCP server: **3 of 5** tools verified (`get_security_findings`, `apply_fix` dry_run, `mark_resolved`); server lifecycle verified (starts, runs, terminates cleanly). **Not verified here:** `query_findings_db` and `get_server_info`, plus the `finding://{id}` resource. *This line read "all 3 tools verified" where the server exposes five (#959).*
 - [x] Interactive wizard: 7 pexpect scenarios (native, docker, ctrl-c, invalid input, diff, yes, path formats)
 - [x] WSL scanning: /mnt/c cross-FS scan (61 findings), native path scan, cron install/uninstall, line endings
 - [x] Policy violation exit code: `jmo ci --fail-on-policy-violation` returns exit 1 when policies fail
