@@ -101,11 +101,17 @@ fmt:
 	@if command -v black >/dev/null 2>&1; then black . ; else echo 'black not found'; fi
 	@if command -v ruff >/dev/null 2>&1; then ruff format . ; else echo 'ruff not found'; fi
 
+# `lint` blocks on exactly the checks CI blocks on: `ruff check scripts/ tests/`
+# (.github/workflows/ci.yml:871) and the full pre-commit hook suite (the same
+# hooks quick-checks runs). shellcheck and both bandit scans stay `|| true`
+# (advisory) because neither is a blocking CI gate today -- failing local
+# `lint` on them would make it *stricter* than CI, the mirror image of #890's
+# bug, and would retrain contributors to ignore the command's exit status.
 lint:
 	@if command -v shellcheck >/dev/null 2>&1; then \
 		find scripts -type f -name '*.sh' -print0 | xargs -0 -I{} shellcheck {} || true; \
 	else echo 'shellcheck not found'; fi
-	@if command -v ruff >/dev/null 2>&1; then ruff check . || true; else echo 'ruff not found'; fi
+	@if command -v ruff >/dev/null 2>&1; then ruff check scripts/ tests/; else echo 'ruff not found'; fi
 	@if command -v bandit >/dev/null 2>&1; then \
 		# Strict source scan (configured via pyproject.toml [tool.bandit]); focus on Python under scripts/ \
 		bandit -q -r scripts -c pyproject.toml || true ; \
@@ -115,7 +121,7 @@ lint:
 			bandit -r tests -s B101,B404 || true ; \
 		fi ; \
 	else echo 'bandit not found'; fi
-	@if command -v pre-commit >/dev/null 2>&1; then pre-commit run --all-files || true; else echo 'pre-commit not found'; fi
+	@if command -v pre-commit >/dev/null 2>&1; then pre-commit run --all-files; else echo 'pre-commit not found'; fi
 
 typecheck:
 	@if command -v mypy >/dev/null 2>&1; then \
