@@ -286,7 +286,7 @@ JMo Security provides **4 optimized Docker image variants** for different use ca
 
 **Notes:**
 
-- **28 total tools**: 25 Docker-ready (automatically included), 3 manual install (AFL++, MobSF, Akto)
+- **28 total tools**: 24 Docker-ready (automatically included), 4 manual install (AFL++, Akto, Falco, MobSF). Falco is easy to miss here because `falcoctl` IS baked into `Dockerfile.deep` -- it is a different binary from `falco` itself, which is not.
 - **Scan times**: Estimated for typical repository (10K-50K LOC, 100-500 dependencies)
 
 ### Decision Tree
@@ -406,7 +406,7 @@ START: What is your primary use case?
 ### Choosing a Variant
 
 ```bash
-# Deep - Maximum coverage (29 tools, 26 Docker-ready) — also published as :latest
+# Deep - Maximum coverage (28 tools, 24 Docker-ready) — also published as :latest
 docker pull ghcr.io/jimmy058910/jmo-security:deep
 
 # Balanced - Production CI/CD (17 tools)
@@ -467,7 +467,7 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
 ```
 
 **Time:** 40-70 minutes
-**Tools:** All 28 tools (25 Docker-ready + 3 manual installation)
+**Tools:** All 28 tools (24 Docker-ready + 4 manual installation)
 
 ### Scan Multiple Projects
 

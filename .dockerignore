@@ -86,6 +86,13 @@ build/
 *.whl
 *.tar.gz
 node_modules/
+# Docker ignore patterns are anchored at the context root, so the rule above
+# matches ONLY ./node_modules -- it does NOT match scripts/dashboard/node_modules
+# (237MB) or scripts/api/node_modules (23MB). Both are gitignored, so a clean
+# CI checkout never had them and release builds were unaffected; a developer
+# building locally after `npm install` shipped 260MB of them into the image via
+# `COPY . /opt/jmo-security/`. Needs the explicit `**/` prefix. Measured chunk 21.
+**/node_modules/
 package-lock.json
 
 # =============================================================================
@@ -93,6 +100,10 @@ package-lock.json
 # =============================================================================
 results/
 .jmo/
+# Maintainer-local Graphify code index (gitignored, absent from a clean clone).
+# 411MB on the maintainer box, and pure build-context weight -- nothing in any
+# Dockerfile reads it. Same class as the nested node_modules above.
+graphify-out/
 *.log
 *.out
 *.err

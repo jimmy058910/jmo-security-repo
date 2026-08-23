@@ -404,7 +404,7 @@ Docker tags now match CLI profiles:
 | `balanced` | balanced | 18 | `Dockerfile.balanced` |
 | `deep` / `latest` | deep | 28* | `Dockerfile` |
 
-*3 deep profile tools require manual installation (AFL++, MobSF, Akto)
+*4 deep profile tools require manual installation (AFL++, Akto, Falco, MobSF)
 
 ### Build local images
 

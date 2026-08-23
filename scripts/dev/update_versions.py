@@ -296,6 +296,8 @@ def get_latest_github_release(repo: str) -> str | None:
             ["gh", "api", f"repos/{repo}/releases/latest"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=True,
         )
         data = json.loads(result.stdout)
@@ -314,6 +316,8 @@ def get_latest_pypi_version(package: str) -> str | None:
             ["pip", "index", "versions", package],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=True,
         )
         # Parse output: "package (X.Y.Z)"
@@ -330,6 +334,8 @@ def get_npm_version_exists(package: str, version: str) -> bool:
             ["npm", "view", f"{package}@{version}", "version"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=30,
         )
         return result.returncode == 0 and version in result.stdout
@@ -346,6 +352,8 @@ def check_github_release_exists(repo: str, version: str) -> bool:
                 ["gh", "api", f"repos/{repo}/releases/tags/{tag}"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=30,
             )
             if result.returncode == 0:
@@ -362,6 +370,8 @@ def check_pypi_version_exists(package: str, version: str) -> bool:
             ["pip", "index", "versions", package],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=30,
         )
         if result.returncode != 0:
@@ -379,6 +389,8 @@ def check_npm_version_exists(package: str, version: str) -> bool:
             ["npm", "view", f"{package}@{version}", "version"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=30,
         )
         return result.returncode == 0 and version in result.stdout
@@ -848,6 +860,8 @@ def _close_superseded_version_issues(tool_names: list[str]) -> None:
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=True,
         )
         existing_issues = _json.loads(result.stdout)

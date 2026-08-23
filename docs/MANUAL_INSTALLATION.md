@@ -571,10 +571,10 @@ docker run -v "$PWD:/scan" ghcr.io/jimmy058910/jmo-security:balanced scan --prof
 
 | Variant | Docker-Ready | Manual Tools |
 |---------|--------------|--------------|
-| **Deep/Full** | 25 | 3 (MobSF, Akto, AFL++) |
-| **Balanced** | 18 | 0 |
-| **Slim** | 14 | 0 |
-| **Fast** | 8 | 0 |
+| **Deep/Full** | 24 | 4 (AFL++, Akto, Falco, MobSF) |
+| **Balanced** | 17 | 0 |
+| **Slim** | 13 | 0 |
+| **Fast** | 9 | 0 |
 
 ### AFL++ Installation (Fuzzing)
 

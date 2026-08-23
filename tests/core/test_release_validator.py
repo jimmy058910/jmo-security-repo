@@ -1175,6 +1175,29 @@ class TestFullTierChecks:
         assert result.status == CheckStatus.SKIP
         assert "Docker not available" in result.message
 
+    @patch(
+        "scripts.core.validators.release_validator._run_cmd",
+        side_effect=subprocess.TimeoutExpired(cmd="docker build", timeout=1800),
+    )
+    @patch("scripts.core.validators.release_validator._path_exists", return_value=True)
+    def test_dockerfile_build_timeout_is_fail_not_skip(self, mock_exists, mock_cmd):
+        """A build past its own budget must FAIL, not SKIP.
+
+        This branch had no test at all, which is how it stayed wrong. Reporting a
+        timeout as SKIP made it indistinguishable in the scorecard's status
+        column from "Docker not available" -- so docker-build-deep, which could
+        not meet its 600s --no-cache budget on any measured machine (858s WITH a
+        warm cache), reported exactly what a box with no daemon reports (#941).
+
+        The companion assertion is the one directly below in
+        test_dockerfile_no_docker: an absent daemon still SKIPs. The pair is the
+        point -- either alone permits the two to collapse back together.
+        """
+        result = _check_dockerfile_build("Dockerfile")
+        assert result.status == CheckStatus.FAIL
+        assert "timeout" in result.message.lower()
+        assert "NOT an absent daemon" in result.message
+
     @patch("scripts.core.validators.release_validator._run_cmd")
     def test_dev_install_pass(self, mock_cmd):
         mock_cmd.return_value = MagicMock(returncode=0, stdout="", stderr="")
