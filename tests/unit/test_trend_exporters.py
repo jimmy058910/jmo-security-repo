@@ -475,9 +475,26 @@ def test_html_report_accepts_the_shape_the_analyzer_emits(sample_analysis) -> No
 
 
 def test_dashboard_insight_structure(sample_analysis, tmp_path):
-    """Test dashboard insights are structured correctly."""
+    """Test dashboard insights are structured correctly.
+
+    Was asserting against `sample_analysis`'s hand-built seven-key-dict
+    insights fixture -- a shape `TrendAnalyzer._generate_insights` never
+    emits (it returns `list[str]`, and always has: `trend_analyzer.py:552`).
+    `test_dashboard_export_accepts_the_shape_the_analyzer_emits` above already
+    proves the real `list[str]` shape survives export; this test now checks
+    the complementary half of the same contract: `export_for_dashboard`
+    always emits all seven keys in its output regardless of input shape (each
+    is `i.get(key, "")` with an explicit default), but for a plain-string
+    insight only `message` carries real content -- the other six are
+    genuinely empty, not merely differently-valued, because a bare string has
+    no category/severity/priority/icon/details/recommended_action to give.
+    See #916 and #910.
+    """
+    analysis = dict(sample_analysis)
+    analysis["insights"] = ["✅ Security posture is IMPROVING: 12 fewer findings"]
+
     output_path = tmp_path / "dashboard-data.json"
-    export_for_dashboard(sample_analysis, output_path)
+    export_for_dashboard(analysis, output_path)
 
     with open(output_path, encoding="utf-8") as f:
         data = json.load(f)
@@ -494,6 +511,15 @@ def test_dashboard_insight_structure(sample_analysis, tmp_path):
     assert "message" in insight
     assert "details" in insight
     assert "recommended_action" in insight
+
+    # The values, not just the keys: a plain string only fills `message`.
+    assert insight["message"] == "✅ Security posture is IMPROVING: 12 fewer findings"
+    assert insight["category"] == ""
+    assert insight["severity"] == ""
+    assert insight["priority"] == ""
+    assert insight["icon"] == ""
+    assert insight["details"] == ""
+    assert insight["recommended_action"] == ""
 
 
 def test_dashboard_normalization_included(sample_analysis, tmp_path):
