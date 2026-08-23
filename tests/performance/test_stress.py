@@ -86,6 +86,27 @@ def generate_large_findings_file(path: Path, count: int) -> None:
 # Extreme Load Tests
 # ============================================================================
 
+# #792: an absolute RSS delta (psutil `Process().memory_info().rss` before/after)
+# is not a stable quantity -- it reflects whatever the interpreter/allocator/GC
+# had already done before the call and, under xdist, whatever else that worker
+# ran first. Measured spread against the old 500MB cap, one machine, one
+# afternoon, same code: 506.0MB / 533.5MB / 535.8MB -- the gate was flipping on
+# machine state, not on the code under test. Re-measured on this same box while
+# fixing #792: three isolated runs and one run under `-n 4` xdist contention
+# all read peak RSS delta anywhere from 429.6MB to 540.4MB for the identical
+# workload -- 111MB of spread from machine state alone, confirming the report.
+#
+# `tracemalloc.get_traced_memory()` peak instead reports only what the traced
+# window itself allocated, independent of what else the interpreter/worker did
+# before or beside it. Measured across those same 4 runs (3 isolated + 1 under
+# `-n 4`): 680.7093 / 680.7093 / 680.7093 / 680.7125 MB -- agreement to better
+# than 0.01MB. Budget below is set to 750MB: ~10% headroom over that measured,
+# near-zero-spread baseline, to absorb cross-platform/Python-patch variance this
+# Windows box can't measure directly (CI pins the same Python 3.12; this test
+# does not currently run in any CI job -- see test docstring) while still
+# catching a real regression rather than machine noise.
+MEMORY_BUDGET_MB = 750  # see test docstring for the measured baseline + margin
+
 
 class TestExtremeLoad:
     """Test system behavior under extreme load."""
@@ -201,7 +222,23 @@ class TestExtremeLoad:
     @pytest.mark.timeout(300)
     @patch("scripts.core.normalize_and_report._enrich_with_priority")
     def test_100k_findings_memory_usage(self, _mock_enrich, tmp_path: Path):
-        """Verify memory usage stays under 500MB for 100k findings.
+        """Verify peak traced allocation stays within budget for 100k findings.
+
+        Gates on tracemalloc's peak traced-allocation figure rather than a
+        psutil RSS delta (see MEMORY_BUDGET_MB comment above for why). RSS is
+        still captured and logged for drift visibility, but is informational
+        only -- it is not what the assertion below checks.
+
+        This test does not run in any GitHub Actions job today (#977): psutil
+        is in no `pyproject.toml` group and not in `uv.lock`, so `uv sync`
+        never installs it and the skip below fires on every runner, including
+        `scheduled.yml`'s "Run performance benchmarks" step, which runs
+        `pytest tests/performance/` -- and that step also pipes its result
+        through `|| echo "..."`, so it would not fail the job even if the
+        assertion below did trip. Whether to add psutil to the lock file (and
+        fix the swallowed exit code) is a maintainer call, not made here --
+        this fix is scoped to making the assertion correct when the test does
+        run, e.g. locally with psutil installed, as it did for this fix.
 
         Note: EPSS/KEV enrichment is patched out — same rationale as
         test_100k_findings_processing above.
@@ -210,6 +247,8 @@ class TestExtremeLoad:
             import psutil
         except ImportError:
             pytest.skip("psutil not installed - required for memory tests")
+
+        import tracemalloc
 
         from scripts.core.normalize_and_report import gather_results
 
@@ -235,16 +274,28 @@ class TestExtremeLoad:
         (indiv / "semgrep.json").write_text(json.dumps(findings_data), encoding="utf-8")
 
         process = psutil.Process()
-        memory_before = process.memory_info().rss
+        rss_before = process.memory_info().rss
 
+        tracemalloc.start()
         findings = gather_results(tmp_path)
+        _current_bytes, peak_bytes = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
 
-        memory_after = process.memory_info().rss
-        memory_used_mb = (memory_after - memory_before) / (1024 * 1024)
+        rss_after = process.memory_info().rss
+        peak_mb = peak_bytes / (1024 * 1024)
+        rss_delta_mb = (rss_after - rss_before) / (1024 * 1024)
 
-        assert (
-            memory_used_mb < 500
-        ), f"Memory usage {memory_used_mb:.1f}MB exceeded 500MB limit"
+        # Logged unconditionally (not just on failure) so drift is visible
+        # before the gate ever trips.
+        print(
+            f"[test_100k_findings_memory_usage] tracemalloc peak={peak_mb:.1f}MB "
+            f"budget={MEMORY_BUDGET_MB}MB rss_delta={rss_delta_mb:.1f}MB (informational)"
+        )
+
+        assert peak_mb < MEMORY_BUDGET_MB, (
+            f"Peak traced allocation {peak_mb:.1f}MB exceeded {MEMORY_BUDGET_MB}MB "
+            f"budget (rss_delta was {rss_delta_mb:.1f}MB)"
+        )
         assert len(findings) > 0
 
 
