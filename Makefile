@@ -101,12 +101,45 @@ fmt:
 	@if command -v black >/dev/null 2>&1; then black . ; else echo 'black not found'; fi
 	@if command -v ruff >/dev/null 2>&1; then ruff format . ; else echo 'ruff not found'; fi
 
-# `lint` blocks on exactly the checks CI blocks on: `ruff check scripts/ tests/`
-# (.github/workflows/ci.yml:871) and the full pre-commit hook suite (the same
-# hooks quick-checks runs). shellcheck and both bandit scans stay `|| true`
-# (advisory) because neither is a blocking CI gate today -- failing local
-# `lint` on them would make it *stricter* than CI, the mirror image of #890's
-# bug, and would retrain contributors to ignore the command's exit status.
+# `lint` blocks on: this target's own `ruff check scripts/ tests/` below
+# (scope-matched to the blocking CI gate, ci.yml:871), plus these pre-commit
+# hooks -- each independently a blocking CI gate, verified by reading ci.yml
+# rather than assumed:
+#   - the 9 hooks lint-quick names explicitly (ci.yml:852-863): trailing-
+#     whitespace, end-of-file-fixer, check-yaml/json/toml, mixed-line-ending,
+#     detect-private-key, check-added-large-files, doc-links.
+#   - black, actionlint, yamllint, import-direction, yaml-env-tilde, uv-lock:
+#     each has its own unconditional, blocking step in the quick-checks job.
+# (A prior version of this comment claimed pre-commit's block WAS "the same
+# hooks quick-checks runs" -- false. lint-quick names 9 hooks, not the suite;
+# quick-checks is a separate job with its own separately-blocking steps.)
+#
+# `lint` does NOT block on (SKIP, below) because CI itself never blocks on
+# these -- failing locally on them would be *stricter* than CI, the mirror
+# image of #890's original bug:
+#   - pip-audit: network (live OSV query) + wall-clock (a CVE against an
+#     untouched dependency fails an unrelated diff). CI does run it, but as
+#     its own unconditional quick-checks step (ci.yml:104-109), not through
+#     this hook -- adding it here only duplicates the exposure, no coverage.
+#   - shfmt, bandit, mypy: excluded by ci.yml's OWN SKIP on this exact hook
+#     block; mypy and shfmt are also explicit "non-blocking preview" / `||
+#     true` elsewhere in ci.yml, and bandit duplicates this target's own
+#     advisory bandit lines above for the identical tool.
+#   - markdownlint-cli2: quick-checks' own "Lint Preview" step runs it with
+#     `|| echo "...non-blocking preview"` -- CI has decided not to gate on
+#     it yet.
+#   - shellcheck (pre-commit's hook, distinct from this target's own loop
+#     above): never invoked by CI under any path.
+#   - ruff (pre-commit's hook, distinct from the dedicated `ruff check`
+#     below): redundant with it and wider-scoped (repo-wide minus .claude/,
+#     vs. scripts/+tests/) -- leaving it blocking risks failing on a file
+#     CI's own scoped gate would never see, the "wider tree than the gate"
+#     shape of #890 by a different route.
+#
+# black stays blocking despite ci.yml's SKIP including it: it is the only
+# black signal this target has (ci.yml checks black via a separate `black
+# --check` step instead, which this target has no equivalent of), so
+# skipping it here would reopen #890 for black specifically.
 lint:
 	@if command -v shellcheck >/dev/null 2>&1; then \
 		find scripts -type f -name '*.sh' -print0 | xargs -0 -I{} shellcheck {} || true; \
@@ -121,7 +154,9 @@ lint:
 			bandit -r tests -s B101,B404 || true ; \
 		fi ; \
 	else echo 'bandit not found'; fi
-	@if command -v pre-commit >/dev/null 2>&1; then pre-commit run --all-files; else echo 'pre-commit not found'; fi
+	@if command -v pre-commit >/dev/null 2>&1; then \
+		SKIP=bandit,markdownlint-cli2,mypy,pip-audit,ruff,shellcheck,shfmt pre-commit run --all-files; \
+	else echo 'pre-commit not found'; fi
 
 typecheck:
 	@if command -v mypy >/dev/null 2>&1; then \
