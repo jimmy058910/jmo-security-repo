@@ -2,8 +2,9 @@
 
 Complete reference for all CLI commands and flags. Run `jmo <command> --help` for the latest options.
 
-**Version:** 1.0.0
-**Last Updated:** February 2026
+**Version:** 1.0.8 — tracks `__version__` in `scripts/cli/jmo.py` and `version`
+in `pyproject.toml`. **Bump all three together**; nothing guards this one (#750).
+**Last Updated:** 2026-08-22
 
 ---
 
