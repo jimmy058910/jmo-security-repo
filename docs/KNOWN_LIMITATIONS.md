@@ -255,6 +255,178 @@ image that resets `/var/spool/cron`.
 
 ---
 
+## Defects shipping in v1.1.0
+
+Everything above is behaviour we intend to keep documenting. **This section is
+different.** These are defects with fixes planned — they would normally live only
+in the issue tracker, per this file's own rule. They are listed here because a
+user can hit them in v1.1.0 and the symptom is hard to interpret without knowing
+the cause.
+
+Each links to the issue that will close it. The set was fixed by dispositioning
+every open issue before the tag, in the v1.1.0 audit campaign
+([#785](https://github.com/jimmy058910/jmo-security-repo/issues/785), chunk 22);
+every one carries the `disposition:SHIP-WITH-IT` and `user-reachable` labels, so
+the list can be regenerated rather than trusted:
+
+```bash
+gh issue list --repo jimmy058910/jmo-security-repo --state open \
+  --label disposition:SHIP-WITH-IT --label user-reachable
+```
+
+### Scanning and tool execution
+
+- A scanner that **could not read a file reports it as clean.** No adapter reads
+  its tool's own error channel, so an unparseable or unreadable file is silently
+  absent from findings rather than flagged. [#837](https://github.com/jimmy058910/jmo-security-repo/issues/837)
+- `--allow-missing-tools` **records a tool that never ran as a success**, so the
+  run summary overstates coverage. [#825](https://github.com/jimmy058910/jmo-security-repo/issues/825)
+- `jmo tools check` **exits 0 when tools are missing**, contradicting its own
+  documented contract — do not use its exit code as a CI gate.
+  [#788](https://github.com/jimmy058910/jmo-security-repo/issues/788)
+- The `deep` profile **omits `shellcheck`**, which `fast`, `slim` and `balanced`
+  all run — the most comprehensive profile is not a superset of the others.
+  [#795](https://github.com/jimmy058910/jmo-security-repo/issues/795)
+- `scancode` is invoked with no detection flag, so **its adapter can never
+  produce a finding**. Licence and copyright results will always be empty.
+  [#835](https://github.com/jimmy058910/jmo-security-repo/issues/835)
+- A path target containing `~` is **never expanded**, so a cron-installed
+  schedule scans a literal `~` directory. Use absolute paths.
+  [#926](https://github.com/jimmy058910/jmo-security-repo/issues/926)
+- The `gitlab` target type is the only one that **never writes
+  `scan-timings.json`**. [#824](https://github.com/jimmy058910/jmo-security-repo/issues/824)
+- A per-profile `per_tool` entry **replaces a tool's whole entry** instead of
+  merging, silently dropping sibling keys.
+  [#791](https://github.com/jimmy058910/jmo-security-repo/issues/791)
+- Unrecognised keys in `jmo.yml` are **ignored silently** — a typo'd key reads as
+  a working config. [#859](https://github.com/jimmy058910/jmo-security-repo/issues/859)
+- First-run output points at two commands that do not exist (`jmo config`,
+  `jmo subscribe`), and the first-run config write **clobbers other keys**.
+  [#790](https://github.com/jimmy058910/jmo-security-repo/issues/790) ·
+  [#931](https://github.com/jimmy058910/jmo-security-repo/issues/931)
+- `jmo schedule delete` raises `EOFError` on a non-TTY; every sibling prompt
+  catches it. [#789](https://github.com/jimmy058910/jmo-security-repo/issues/789)
+- The report auto-storage hook **swallows every exception**, so a scan can report
+  success having stored nothing.
+  [#801](https://github.com/jimmy058910/jmo-security-repo/issues/801)
+
+### Reporting, exports and the dashboard
+
+- **A released (pip-installed) JMo cannot build the React dashboard.** The wheel
+  carries no `scripts/dashboard/` sources, so `jmo report` falls back to a
+  **vendored build dated 2025-11-17** — which is also what CI renders. The
+  dashboard you get from a released install is that fixture, not a fresh build.
+  **What to do:** clone the repository and build from source if you need the
+  current dashboard. [#862](https://github.com/jimmy058910/jmo-security-repo/issues/862) ·
+  [#864](https://github.com/jimmy058910/jmo-security-repo/issues/864)
+- Finding locations are **not normalised**: one file can appear under four
+  spellings, and **the host's absolute path is written into SARIF and the
+  dashboard**. Treat exported artifacts as containing local filesystem paths
+  before sharing them.
+  [#861](https://github.com/jimmy058910/jmo-security-repo/issues/861)
+- Three compliance artifacts and `SUPPRESSIONS.md` **cannot be turned off** —
+  `outputs: []` still writes four files.
+  [#867](https://github.com/jimmy058910/jmo-security-repo/issues/867)
+- `--log-level` and `--human-logs` are **missing from `diff`, `history`, `trends`
+  and `policy`**. [#879](https://github.com/jimmy058910/jmo-security-repo/issues/879)
+- The documented "30-40% noise reduction" figure is unattributed and **measures
+  about 1%** on both available corpora. Treat it as unverified.
+  [#855](https://github.com/jimmy058910/jmo-security-repo/issues/855)
+
+### History
+
+- `jmo fast`, `jmo balanced` and `jmo full` **store no scan history**, while
+  `jmo scan` and `jmo ci` do — history will look empty if you use the shorthand
+  commands. [#870](https://github.com/jimmy058910/jmo-security-repo/issues/870)
+- History records **the config's tool list and profile, not what actually ran**,
+  so the `tools` column overstates the scan.
+  [#787](https://github.com/jimmy058910/jmo-security-repo/issues/787)
+- `jmo history store` **aborts the whole scan** when two findings lack an `id`.
+  [#901](https://github.com/jimmy058910/jmo-security-repo/issues/901)
+- Every *read* command rewrites the database header to WAL, so a copy taken
+  between reads is **not byte-stable**. Use `jmo history` exports rather than
+  file-level diffing to compare snapshots.
+  [#894](https://github.com/jimmy058910/jmo-security-repo/issues/894)
+
+### Deduplication, compliance and prioritisation
+
+- Phase-1 deduplication **silently discards any finding with a falsy `id`**.
+  [#848](https://github.com/jimmy058910/jmo-security-repo/issues/848)
+- Compliance mapping is starved upstream: **CWEs present in tool output never
+  reach `risk.cwe`**, so framework coverage under-reports.
+  [#845](https://github.com/jimmy058910/jmo-security-repo/issues/845)
+- `RULE_EQUIVALENCE` declares **genuinely different controls equivalent**, so
+  some cross-tool merges join findings that are not the same issue.
+  [#846](https://github.com/jimmy058910/jmo-security-repo/issues/846)
+- EPSS enrichment makes **one HTTP request per finding** whose CVE is unknown,
+  and builds an unbounded bulk URL — slow, and network-dependent, on large scans.
+  [#849](https://github.com/jimmy058910/jmo-security-repo/issues/849)
+- The `hipaa-compliance` docs describe a NIST CSF gate; **the policy actually
+  enforces CWEs and 164.312 safeguards.**
+  [#923](https://github.com/jimmy058910/jmo-security-repo/issues/923)
+
+### Suppression
+
+- A suppression written by the MCP `mark_resolved` tool gets an expiry date
+  computed in **UTC**, but the suppression engine decides whether it is still
+  active using the machine's **local** date. Its effective lifetime is therefore
+  up to a day longer or shorter than the number of days you asked for, depending
+  on your timezone. **What to do:** if a suppression's exact lapse day matters,
+  set the expiry a day earlier than the boundary you care about.
+  [#967](https://github.com/jimmy058910/jmo-security-repo/issues/967)
+
+### Scheduling
+
+- `validate_cron_expression` **rejects named weekdays** (`MON`, `FRI`) that both
+  GitHub Actions and POSIX cron accept. Use numeric days.
+  [#927](https://github.com/jimmy058910/jmo-security-repo/issues/927)
+- The GitLab CI generator **silently drops IaC, GitLab and Kubernetes targets**
+  from the exported pipeline.
+  [#928](https://github.com/jimmy058910/jmo-security-repo/issues/928)
+- **One unknown key in `schedules.json` makes every schedule unreadable**,
+  reported as a bare Python `TypeError`.
+  [#934](https://github.com/jimmy058910/jmo-security-repo/issues/934)
+
+### Attestation
+
+- An **uppercase hex digest is reported as `TAMPER DETECTED`** on an unmodified
+  subject. If you see tamper detection on an artifact you trust, check the digest
+  casing first. [#950](https://github.com/jimmy058910/jmo-security-repo/issues/950)
+- Attestations **carry no git commit** — the metadata-capture subsystem has no
+  callers. [#945](https://github.com/jimmy058910/jmo-security-repo/issues/945)
+- The in-toto Statement is **v0.1 paired with a SLSA Provenance v1 predicate**,
+  a combination consumers may reject.
+  [#946](https://github.com/jimmy058910/jmo-security-repo/issues/946)
+
+### MCP server
+
+- The rate limiter uses **one shared bucket**, so a single caller can exhaust
+  everyone's budget. [#952](https://github.com/jimmy058910/jmo-security-repo/issues/952)
+- `query_findings_db`'s read-only keyword scan **rejects legitimate security
+  queries** whose text happens to contain a blocked keyword.
+  [#953](https://github.com/jimmy058910/jmo-security-repo/issues/953)
+- `jmo mcp-server` can **prompt on stdin and consume the client's first JSON-RPC
+  message**, which presents as a client that never finishes connecting. Set
+  `JMO_NON_INTERACTIVE=1`.
+  [#958](https://github.com/jimmy058910/jmo-security-repo/issues/958)
+
+### Windows
+
+- 56 `subprocess.run(text=True)` call sites **decode as cp1252**, so non-ASCII
+  tool output can raise `UnicodeDecodeError`; one of them crashes
+  `jmo build validate`. Setting `PYTHONUTF8=1` avoids it.
+  [#963](https://github.com/jimmy058910/jmo-security-repo/issues/963)
+
+### Build
+
+- `jmo build` **aborts on version validation** (`cdxgen` routed to PyPI, `falco`
+  pinned to a `0.0.0` placeholder), and its pre-build version gate **fails open**
+  on three error paths, reporting "validation passed" when it did not run.
+  [#935](https://github.com/jimmy058910/jmo-security-repo/issues/935) ·
+  [#939](https://github.com/jimmy058910/jmo-security-repo/issues/939)
+
+---
+
 ## Reporting something not listed here
 
 Open an issue with the `bug` label. If it is a limitation rather than a defect —

@@ -735,10 +735,19 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: 'open',
-              labels: 'nightly-test-failure'
+              labels: 'nightly-test-failure',
+              sort: 'created',
+              direction: 'desc'
             });
 
-            const existingIssue = issues.data.find(issue => issue.title === title);
+            // Dedupe on the LABEL, not on a title carrying today's date (#966).
+            // A dated title can only ever match a re-run within the same UTC
+            // day, so the comment branch below could not fire across nights and
+            // one outage filed one issue per night: 14 open issues on
+            // 2026-08-22 all reported the identical `verified=163` failure.
+            // listForRepo also returns pull requests, which are never the
+            // tripwire's own issue.
+            const existingIssue = issues.data.find(issue => !issue.pull_request);
 
             if (!existingIssue) {
               await github.rest.issues.create({
