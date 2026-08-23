@@ -94,18 +94,30 @@ def generate_large_findings_file(path: Path, count: int) -> None:
 # machine state, not on the code under test. Re-measured on this same box while
 # fixing #792: three isolated runs and one run under `-n 4` xdist contention
 # all read peak RSS delta anywhere from 429.6MB to 540.4MB for the identical
-# workload -- 111MB of spread from machine state alone, confirming the report.
+# (100k-finding) workload -- 111MB of spread from machine state alone,
+# confirming the report.
 #
 # `tracemalloc.get_traced_memory()` peak instead reports only what the traced
 # window itself allocated, independent of what else the interpreter/worker did
 # before or beside it. Measured across those same 4 runs (3 isolated + 1 under
-# `-n 4`): 680.7093 / 680.7093 / 680.7093 / 680.7125 MB -- agreement to better
-# than 0.01MB. Budget below is set to 750MB: ~10% headroom over that measured,
-# near-zero-spread baseline, to absorb cross-platform/Python-patch variance this
-# Windows box can't measure directly (CI pins the same Python 3.12; this test
-# does not currently run in any CI job -- see test docstring) while still
-# catching a real regression rather than machine noise.
-MEMORY_BUDGET_MB = 750  # see test docstring for the measured baseline + margin
+# `-n 4`), all at 100k findings: 680.7093 / 680.7093 / 680.7093 / 680.7125 MB --
+# agreement to better than 0.01MB.
+#
+# #767: fixing the *measurement* did not fix the *allocation* -- the brief's own
+# prediction, confirmed. A real `-n auto` full-suite run (20 workers, this same
+# box) still crashed the worker running this test even with the tracemalloc
+# version installed: `worker 'gw12' crashed ... node down: Not properly
+# terminated`, and pytest-cov lost that worker's coverage data (TOTAL fell to
+# 13%). At the same time, `systeminfo`/`wmic` on this box read 16,069MB total
+# RAM with only ~428-660MB free even near-idle -- 20 concurrent workers plus
+# one needing an extra ~680MB is a genuine OOM-adjacent condition here, not
+# just an inefficient test. The fixture size dropped from 100k to 30k findings
+# (see test docstring) to give real headroom against that, and the budget
+# below is recalibrated to the new, smaller baseline: 30k findings measured at
+# 126.3MB isolated on this box (a standalone scaling-probe script, same code
+# path, independently read 125.50MB at the same size -- consistent within
+# ~1MB). MEMORY_BUDGET_MB = 150 is ~19% headroom over the measured value.
+MEMORY_BUDGET_MB = 150  # see test docstring for the measured baseline + margin
 
 
 class TestExtremeLoad:
@@ -221,13 +233,27 @@ class TestExtremeLoad:
 
     @pytest.mark.timeout(300)
     @patch("scripts.core.normalize_and_report._enrich_with_priority")
-    def test_100k_findings_memory_usage(self, _mock_enrich, tmp_path: Path):
-        """Verify peak traced allocation stays within budget for 100k findings.
+    def test_30k_findings_memory_usage(self, _mock_enrich, tmp_path: Path):
+        """Verify peak traced allocation stays within budget for a large batch.
 
         Gates on tracemalloc's peak traced-allocation figure rather than a
         psutil RSS delta (see MEMORY_BUDGET_MB comment above for why). RSS is
         still captured and logged for drift visibility, but is informational
         only -- it is not what the assertion below checks.
+
+        Fixture is 30k findings, not 100k (#767): 100,000 was a round number,
+        not a measured requirement, and at that scale this test's own real
+        allocation -- not just what it reported -- was enough to crash an
+        xdist worker under a real `-n auto` run on this box (`worker 'gw12'
+        crashed ... node down: Not properly terminated`, coverage TOTAL fell
+        to 13% for that run). This box measured 16,069MB total RAM with only
+        ~428-660MB free even near-idle, so 20 concurrent workers plus one
+        needing an extra ~680MB is a real OOM-adjacent condition here, not
+        merely an inefficient test. 30k keeps this a genuinely large batch --
+        3x the 10k reference size in test_error_recovery.py's
+        test_large_findings_batch_handling -- while measuring in the tens,
+        not hundreds, of MB. See MEMORY_BUDGET_MB comment above for the
+        measured value at this size.
 
         This test does not run in any GitHub Actions job today (#977): psutil
         is in no `pyproject.toml` group and not in `uv.lock`, so `uv sync`
@@ -237,8 +263,9 @@ class TestExtremeLoad:
         through `|| echo "..."`, so it would not fail the job even if the
         assertion below did trip. Whether to add psutil to the lock file (and
         fix the swallowed exit code) is a maintainer call, not made here --
-        this fix is scoped to making the assertion correct when the test does
-        run, e.g. locally with psutil installed, as it did for this fix.
+        this fix is scoped to making the assertion correct, and the allocation
+        it gates survivable under real xdist contention, when the test does
+        run -- e.g. locally with psutil installed, as it did for this fix.
 
         Note: EPSS/KEV enrichment is patched out — same rationale as
         test_100k_findings_processing above.
@@ -251,6 +278,8 @@ class TestExtremeLoad:
         import tracemalloc
 
         from scripts.core.normalize_and_report import gather_results
+
+        finding_count = 30000
 
         # Create findings
         indiv = tmp_path / "individual-repos" / "memory-test"
@@ -267,7 +296,7 @@ class TestExtremeLoad:
                         "severity": "LOW",
                     },
                 }
-                for i in range(100000)
+                for i in range(finding_count)
             ],
             "version": "1.0.0",
         }
@@ -288,7 +317,7 @@ class TestExtremeLoad:
         # Logged unconditionally (not just on failure) so drift is visible
         # before the gate ever trips.
         print(
-            f"[test_100k_findings_memory_usage] tracemalloc peak={peak_mb:.1f}MB "
+            f"[test_30k_findings_memory_usage] tracemalloc peak={peak_mb:.1f}MB "
             f"budget={MEMORY_BUDGET_MB}MB rss_delta={rss_delta_mb:.1f}MB (informational)"
         )
 
