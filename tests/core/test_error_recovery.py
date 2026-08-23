@@ -18,15 +18,13 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-import sys
 import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from conftest import IS_WINDOWS, skip_on_windows
+from tests.conftest import IS_WINDOWS, skip_on_windows
 
 # ============================================================================
 # Database Recovery Tests
