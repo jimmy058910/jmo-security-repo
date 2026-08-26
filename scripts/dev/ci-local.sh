@@ -74,9 +74,9 @@ if command -v semgrep >/dev/null 2>&1; then
 else
   log "semgrep not installed; skipping"
 fi
-if command -v gitleaks >/dev/null 2>&1; then
-  log "gitleaks detect --redact"
-  gitleaks detect --no-git --redact --report-path /tmp/gitleaks-local.sarif --report-format sarif || true
+if command -v trufflehog >/dev/null 2>&1; then
+  log "trufflehog filesystem --results=verified"
+  trufflehog filesystem . --results=verified --json >/tmp/trufflehog-local.json 2>/dev/null || true
 fi
 
 ok "Local verification complete"

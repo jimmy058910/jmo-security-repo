@@ -26,7 +26,7 @@ cat >"$COMPARISON_FILE" <<'EOF'
 EOF
 
 # Parse each tool's results across all repos
-for tool in gitleaks trufflehog semgrep noseyparker; do
+for tool in trufflehog semgrep noseyparker; do
   TOTAL=0
   REPOS=0
 
@@ -34,9 +34,6 @@ for tool in gitleaks trufflehog semgrep noseyparker; do
     if [ -f "$repo_result/${tool}.json" ]; then
       # Count findings based on tool with proper error handling
       case $tool in
-      gitleaks)
-        FINDINGS=$(jq 'if type=="array" then length else 0 end' "$repo_result/${tool}.json" 2>/dev/null || echo 0)
-        ;;
       trufflehog)
         # TruffleHog outputs newline-delimited JSON (NDJSON)
         FINDINGS=$(jq -s 'length' "$repo_result/${tool}.json" 2>/dev/null || echo 0)
@@ -68,9 +65,6 @@ for tool in gitleaks trufflehog semgrep noseyparker; do
 
   # Tool descriptions
   case $tool in
-  gitleaks)
-    STRENGTH="Fast git history scanning"
-    ;;
   trufflehog)
     STRENGTH="Secret verification"
     ;;
@@ -93,7 +87,6 @@ cat >>"$COMPARISON_FILE" <<'EOF'
 
 | Tool | Secret Detection | Vulnerability Detection | Git History | Verification | Speed |
 |------|-----------------|------------------------|-------------|--------------|-------|
-| Gitleaks | ✅ Excellent | ❌ No | ✅ Yes | ❌ No | ⚡ Fast |
 | TruffleHog | ✅ Excellent | ❌ No | ✅ Yes | ✅ Yes | 🐌 Slow |
 | Semgrep | ⚠️ Limited | ✅ Excellent | ❌ No | ❌ No | ⚡ Fast |
 | Nosey Parker | ✅ Excellent | ❌ No | ✅ Yes | ❌ No | 🐌 Slow |
@@ -102,21 +95,21 @@ cat >>"$COMPARISON_FILE" <<'EOF'
 
 ## Three-Stage Implementation Strategy
 
-### Stage 1: Pre-commit Hooks (Recommended: Gitleaks)
+### Stage 1: Pre-commit Hooks (Recommended: TruffleHog)
 **Purpose**: Prevent secrets from entering version control
 
 **Advantages**:
-- Fast execution (suitable for developer workflow)
+- Only verified secrets are reported, so the hook rarely blocks on a false positive
 - Catches secrets before commit
-- Minimal performance impact
+- Scoped to the staged range, so the cost stays proportional
 
 **Setup**:
 ```bash
-# Install pre-commit hook
-gitleaks protect --staged
+# Scan only what is about to be committed, verified findings only
+trufflehog git file://. --since-commit HEAD --results=verified --fail
 ```
 
-### Stage 2: CI/CD Pipeline (Recommended: Gitleaks + Semgrep)
+### Stage 2: CI/CD Pipeline (Recommended: TruffleHog + Semgrep)
 **Purpose**: Automated scanning on every PR/commit
 
 **Advantages**:
@@ -127,8 +120,8 @@ gitleaks protect --staged
 **Setup**:
 ```yaml
 # .github/workflows/security.yml
-- name: Gitleaks Scan
-  uses: gitleaks/gitleaks-action@v2
+- name: TruffleHog Scan
+  uses: trufflesecurity/trufflehog@main
 - name: Semgrep Scan
   uses: returntocorp/semgrep-action@v1
 ```
@@ -150,33 +143,29 @@ gitleaks protect --staged
 ## Recommendations by Repository Size
 
 ### Small Repositories (< 1000 LOC)
-- **Pre-commit**: Gitleaks
-- **CI/CD**: Gitleaks + Semgrep
+- **Pre-commit**: TruffleHog
+- **CI/CD**: TruffleHog + Semgrep
 - **Periodic**: Monthly full scan
 
 ### Medium Repositories (1000-10000 LOC)
-- **Pre-commit**: Gitleaks
-- **CI/CD**: Gitleaks + Semgrep
+- **Pre-commit**: TruffleHog
+- **CI/CD**: TruffleHog + Semgrep
 - **Periodic**: Weekly TruffleHog + Nosey Parker
 
 ### Large Repositories (> 10000 LOC)
-- **Pre-commit**: Gitleaks (fast mode)
-- **CI/CD**: Gitleaks + Semgrep (incremental)
+- **Pre-commit**: TruffleHog (staged range only)
+- **CI/CD**: TruffleHog + Semgrep (incremental)
 - **Periodic**: Bi-weekly comprehensive scan with all tools
 
 ---
 
 ## Tool Selection Guide
 
-**Choose Gitleaks when**:
-- Speed is critical
-- Integrating into pre-commit hooks
-- Git history scanning is primary concern
-
 **Choose TruffleHog when**:
 - Secret verification is essential
 - Dealing with potential false positives
 - Deep historical analysis needed
+- Integrating into pre-commit hooks
 
 **Choose Semgrep when**:
 - Looking for code vulnerabilities

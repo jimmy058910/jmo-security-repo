@@ -172,7 +172,10 @@ def test_get_tool_category_secrets():
     result = get_tool_category("trufflehog", ["secrets"])
     assert result == "secrets"
 
-    result = get_tool_category("gitleaks", ["credentials"])
+    # The tag here is deliberately not "secrets", so the tool name is the only
+    # thing that can classify it. Was "gitleaks" until #796 removed that
+    # already-retired tool from the membership list.
+    result = get_tool_category("noseyparker", ["credentials"])
     assert result == "secrets"
 
 

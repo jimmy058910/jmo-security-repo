@@ -171,9 +171,7 @@ def _is_delegation_to(node: ast.FunctionDef, callee: str) -> bool:
 
 
 def _scan_job_modules() -> list[Path]:
-    return sorted(
-        p for p in SCAN_JOBS.glob("*_scanner.py") if p.name not in {"base_scanner.py"}
-    )
+    return sorted(SCAN_JOBS.glob("*_scanner.py"))
 
 
 def test_no_scanner_reimplements_the_helpers() -> None:
