@@ -1211,6 +1211,108 @@ jobs:
                  tests/performance/test_policy_performance.py \
                  -q -rs --timeout=300
 
+  # PR-time Docker gate. #962.
+  #
+  # The 60 tests in tests/e2e/test_docker_workflows.py were executed by NOTHING:
+  # `grep -rn 'test_docker_workflows\|-m docker' .github/workflows/` returned
+  # nothing, and every marker filter in ci.yml and scheduled.yml carries
+  # `not docker`. Chunk 21 ran them by hand once and immediately found defects
+  # that had never been evaluated -- an image-size assertion failing on every
+  # published variant (#961), and 26 call sites collapsing "no daemon", "tag
+  # missing", "not logged in" and "pull timed out" into one identical SKIP.
+  #
+  # Why PATH-GATED rather than on every PR. With JMO_DOCKER_REGISTRY unset these
+  # tests audit the LAST RELEASED image, and images rebuild only on a `v*` tag
+  # push. Between tags the subject under test is therefore a CONSTANT: running
+  # them on every PR re-measures an unchanging artifact for real CI minutes and
+  # no new information. The answer can only move when a Dockerfile, the test
+  # file, or the tool registry driving the expected-tool counts changes.
+  #
+  # And why it BUILDS rather than pulls: a Dockerfile change does not alter what
+  # is published, so testing the published image would not test the change. The
+  # fast variant is used because it is the cheapest build that still exercises
+  # the whole path; the full four-variant sweep runs weekly in scheduled.yml
+  # against the published images, which is the other half of this gate.
+  #
+  # Scope is logged rather than left implicit -- `-k fast` selects 13 of 60, and
+  # a job that quietly tests a fifth of what its name suggests is its own kind
+  # of lie.
+  docker-smoke:
+    name: docker-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Detect Docker-affecting changes
+        id: changes
+        uses: dorny/paths-filter@v4
+        with:
+          filters: |
+            docker:
+              - 'Dockerfile.*'
+              - 'tests/e2e/test_docker_workflows.py'
+              - 'scripts/core/tool_registry.py'
+
+      - name: Set up uv
+        if: steps.changes.outputs.docker == 'true'
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
+          python-version: '3.12'
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Install dependencies
+        if: steps.changes.outputs.docker == 'true'
+        run: uv sync --locked --group dev
+
+      - name: Put the project venv on PATH
+        if: steps.changes.outputs.docker == 'true'
+        shell: bash
+        run: |
+          if [ -d .venv/Scripts ]; then
+            cygpath -w "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+          else
+            echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          fi
+
+      - name: Build the fast variant from THIS PR
+        if: steps.changes.outputs.docker == 'true'
+        run: docker build -t jmo-security-pr:fast -f Dockerfile.fast .
+
+      - name: "Guard: the image must exist, or every test below skips"
+        if: steps.changes.outputs.docker == 'true'
+        # ensure_image() pulls when an image is absent locally, and
+        # `jmo-security-pr` is not a registry, so a silently-failed build would
+        # turn into a pull failure rather than a clear "the build broke". Assert
+        # the artifact first so the failure names its own cause.
+        run: |
+          docker image inspect jmo-security-pr:fast --format 'built {{.Id}}'
+
+      - name: Run the fast-variant Docker tests
+        if: steps.changes.outputs.docker == 'true'
+        env:
+          # Point the suite at the image built above, NOT the published one --
+          # otherwise this job would test an artifact the PR cannot affect.
+          JMO_DOCKER_REGISTRY: jmo-security-pr
+        run: |
+          echo "::notice::Running the fast-variant subset (13 of 60 tests)."
+          echo "::notice::The other 47 target slim/balanced/deep, which this job"
+          echo "::notice::does not build. They run weekly in scheduled.yml"
+          echo "::notice::against the published images."
+          pytest tests/e2e/test_docker_workflows.py -k fast -m docker -q -rs --timeout=900
+
+      - name: Skip note (no Docker-affecting changes)
+        if: steps.changes.outputs.docker != 'true'
+        run: |
+          echo "No Dockerfile.*, test_docker_workflows.py or tool_registry.py changes."
+          echo "These tests audit the last RELEASED image, which only a v* tag rebuilds,"
+          echo "so nothing in this PR can change their answer. Full sweep runs weekly."
+
   # Tool-output contract tests for PRs that bump tool versions.
   #
   # This job is a required status check for PRs labeled dependencies+automated

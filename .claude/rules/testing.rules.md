@@ -351,6 +351,39 @@ notably, did **not** crash its worker in the same `-n auto` run — only the
 crashers; a smaller-scale sibling test doing similar work is evidence the
 crash is about scale, not about the operation itself).
 
+## The real-state guards name a test, not a culprit
+
+`_guard_real_jmo_config` and the history-db guard work by snapshotting real
+state once, then comparing after each test. That makes them cheap and it makes
+them **blame whichever test was running when they noticed a change** — not
+necessarily the one that caused it. With two pytest processes running against
+the same machine, the attribution can be simply wrong.
+
+Measured 2026-08-25. A full `tests/e2e/test_docker_workflows.py` run under WSL
+reported:
+
+```text
+ERROR at teardown of TestDockerVariants::test_docker_variant_scan[deep]
+  wrote to the real history database .jmo/history.db: scans 2470 -> 2471
+```
+
+It had not. A **concurrent** `tests/integration/test_cli_profiles.py` run on the
+Windows side wrote that row; the WSL process had taken its baseline before that
+write and attributed the difference to the test it happened to be executing.
+
+Two things settled it, and neither was reading the message again:
+
+- **Arithmetic.** Both runs reported `2470 -> 2471`. If both had written, the
+  count would be 2472. It was 2471 — one write, two accusations.
+- **Isolation.** Re-running `test_docker_variant_scan` alone, for `fast` and
+  again for `deep`, left the count at 2471 and printed no guard error.
+
+So: **before fixing a test a real-state guard names, re-run that test alone and
+watch the count.** A guard firing is evidence that *something* wrote, which is
+exactly what it is for — it is not evidence that *this* test wrote. And do not
+run two suites against this repo at once when either can touch `~/.jmo/` or
+`.jmo/`; the guards cannot tell the processes apart.
+
 ## Counting tests: compare like with like
 
 A terminal summary's `skipped` count includes **collection-level** skips, which
