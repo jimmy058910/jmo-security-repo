@@ -1064,6 +1064,112 @@ jobs:
           CI: "true"
         run: python scripts/dev/attest_smoke.py
 
+  # The only job that evaluates real Rego policies. #922.
+  #
+  # Before this existed, NO workflow installed `opa` -- `grep -rn '\bopa\b'
+  # .github/workflows/` returned only "propagation" and "opaque" -- so all 20
+  # behavioural policy tests skipped on every runner, including the 15 that were
+  # chunk 16's acceptance criterion for the entire policy surface. Chunk 16 found
+  # two SHIPPED policies (zero-secrets, hipaa-compliance) that could not fire on
+  # any input and answered PASS for everything. CI could not have caught either,
+  # and until now still could not.
+  #
+  # Why this ALWAYS runs, rather than being folded in or path-gated:
+  #   - #922 proposed adding opa to tool-contract-tests. Measured: that job is
+  #     paths-filtered to versions.yaml / Dockerfile.* / test_tool_contracts.py,
+  #     so editing a policy would not trigger it. The gate would sit dark over
+  #     exactly the changes it exists to catch.
+  #   - Path-gating on policies/** would be wrong for a second reason: these
+  #     tests are also sensitive to ADAPTER changes. test_policy_field_contract.py
+  #     exists precisely because a policy can dereference a field no adapter
+  #     produces, and that break arrives via an adapter edit.
+  # Cost is ~2 min: one pinned ~100MB static binary and 20 tests.
+  #
+  # DO NOT add continue-on-error, and do not let the opa install fail softly --
+  # see the guard step, which exists because a skipped test and a passing test
+  # are indistinguishable in a summary line.
+  policy-gate:
+    name: policy-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
+          python-version: '3.12'
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Install dependencies
+        run: uv sync --locked --group dev
+
+      - name: Put the project venv on PATH
+        shell: bash
+        run: |
+          if [ -d .venv/Scripts ]; then
+            cygpath -w "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
+          else
+            echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          fi
+
+      - name: Install opa
+        env:
+          # Pinned to versions.yaml (opa.version). Update both together.
+          OPA_VERSION: "1.18.2"
+        run: |
+          # Hardened per release.rules.md "CI install hardening": --fail so an
+          # HTML error page is never mistaken for a binary, retries for the CDN
+          # flakes that have broken other installs here, bounded timeouts. This
+          # is a bare static binary, so there is no archive to `gzip -t`; the
+          # `opa version` call below is the integrity check.
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors \
+            --connect-timeout 30 --max-time 600 \
+            "https://github.com/open-policy-agent/opa/releases/download/v${OPA_VERSION}/opa_linux_amd64_static" \
+            -o /usr/local/bin/opa
+          chmod +x /usr/local/bin/opa
+          opa version
+
+      - name: "Guard: opa must resolve, or the tests below skip silently"
+        # Without this, a failed or mislocated install makes every policy test
+        # SKIP -- and pytest reports skips as success, so the job would go green
+        # having evaluated no policy at all. That is the precise failure this job
+        # was created to end, so it must not be reproducible inside it.
+        #
+        # Asks the question the way the PRODUCT asks it: find_tool, not
+        # shutil.which. They disagree -- find_tool also searches ~/.jmo/bin and
+        # the interpreter's Scripts dir, which is how `jmo tools install opa`
+        # places it. Both test files gate on find_tool, so this one check covers
+        # them both.
+        run: |
+          python - <<'PY'
+          import sys
+
+          from scripts.core.tool_utils import find_tool
+
+          resolved = find_tool("opa")
+          if resolved is None:
+              print(
+                  "::error::opa did not resolve via find_tool(). The policy tests "
+                  "would SKIP and this job would report green having tested nothing."
+              )
+              sys.exit(1)
+          print(f"opa resolves to: {resolved}")
+          PY
+
+      - name: Run real-policy tests
+        # -rs prints skip reasons, so if anything skips despite the guard above
+        # the log says why instead of hiding it in a count.
+        run: |
+          pytest tests/integration/test_builtin_policy_decisions.py \
+                 tests/performance/test_policy_performance.py \
+                 -q -rs --timeout=300
+
   # Tool-output contract tests for PRs that bump tool versions.
   #
   # This job is a required status check for PRs labeled dependencies+automated
