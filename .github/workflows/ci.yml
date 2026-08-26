@@ -42,6 +42,12 @@ jobs:
   #     check that does not yet exist on main leaves every PR waiting on a
   #     report that never arrives, so it can only be added after it has run
   #     on main at least once.
+  #   phase-audit -- ADVISORY, and new for the same reason as policy-gate: it
+  #     does not exist on main yet. It reports red when an open issue is in no
+  #     phase of the v1.1.0 fix-program plan, or when the phase:N labels have
+  #     drifted from it. Promote it in Phase 9 alongside policy-gate and
+  #     docker-smoke; until then it is a visible X, not a gate, and this
+  #     comment says so rather than letting the job's name imply otherwise.
   #
   # `dev` has NO ruleset at all, so a PR into `dev` -- which is every chunk PR
   # in the v1.1.0 campaign -- has no required check whatsoever. That is the
@@ -1424,3 +1430,51 @@ jobs:
         run: |
           echo "No version-affecting files changed — contract tests not required."
           echo "Paths watched: versions.yaml, Dockerfile.*, tests/integration/test_tool_contracts.py"
+
+  # ==========================================================================
+  # phase-audit -- is every open issue scheduled, and do the labels agree?
+  # ==========================================================================
+  # The bar this replaces was "re-run the unclaimed-issue query at the start of
+  # each remaining phase". That is a habit, and it decayed silently three times
+  # in a row -- chunk 22's sweep was true when it closed, and every issue filed
+  # afterwards went unexamined. Each check since has been a hand-maintained
+  # list, including the one at Phase 2 closeout, which omitted an issue.
+  #
+  # The plan's phase rosters are the single source; `phase:N` labels are
+  # derived from them. `verify` fails on an open issue the plan names nowhere,
+  # and on any roster/label disagreement in EITHER direction.
+  #
+  # pull_request only, not push: every branch push runs this workflow twice and
+  # the two see different worlds, so gating on both just doubles the noise.
+  phase-audit:
+    name: phase-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Fork PRs are skipped, not passed. A contributor's PR cannot be
+    # responsible for repo-wide issue scheduling, and a skipped job reads
+    # differently from a green one -- which is the property that matters.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+    permissions:
+      contents: read
+      issues: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      # No `uv sync`: phase_audit.py is stdlib-only by design, so this job
+      # cannot be broken by a dependency change it has nothing to do with.
+      - name: Verify the plan parses and its own checksums agree
+        run: python scripts/dev/phase_audit.py derive
+
+      - name: Verify every open issue is scheduled and the labels match
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/dev/phase_audit.py verify
