@@ -13,7 +13,7 @@
 > #959 named were audited; the rest were left as they stand rather than
 > re-ticked without running them, which is the failure this note exists to stop.
 >
-> **Scope note:** This checklist focuses on interactive workflows, cross-platform edge cases, and commands with minimal automated test coverage. Commands like `scan`, `report`, `history`, `trends`, `diff`, `ci`, and `policy` have broad automated coverage (8,000+ tests) and are not duplicated here. *A specific coverage percentage previously appeared here; nothing in the repo enforces one — CI's only floor is 80% on the marker-filtered suite (`.github/workflows/ci.yml`), and nothing sets `--cov-fail-under` ([#756](https://github.com/jimmy058910/jmo-security-repo/issues/756)). Measure it rather than quoting it.*
+> **Scope note:** This checklist focuses on interactive workflows, cross-platform edge cases, and commands with minimal automated test coverage. Commands like `scan`, `report`, `history`, `trends`, `diff`, `ci`, and `policy` have broad automated coverage (8,000+ tests) and are not duplicated here. *A specific coverage percentage previously appeared here; nothing in the repo enforces one — CI's only floor is 85% on the marker-filtered suite (`.github/workflows/ci.yml`), and nothing sets `--cov-fail-under` ([#756](https://github.com/jimmy058910/jmo-security-repo/issues/756)). Measure it rather than quoting it.*
 
 **Related Documentation:**
 

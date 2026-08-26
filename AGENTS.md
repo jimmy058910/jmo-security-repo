@@ -81,7 +81,7 @@ Setup: [docs/MCP_SETUP.md](docs/MCP_SETUP.md)
 - **Subprocess security:** Never use `shell=True` — always pass command as list
 - **Adapter naming:** `PluginMetadata.name` uses underscores matching filename
 - **Compliance enrichment:** Handled centrally in `normalize_and_report.py`, not in adapters
-- **Test coverage:** CI's only enforced floor is **80%** (`.github/workflows/ci.yml:734`). Nothing sets `--cov-fail-under` anywhere (#756)
+- **Test coverage:** CI's only enforced floor is **85%** (`coverage-aggregate`'s "Verify coverage threshold" step). Nothing sets `--cov-fail-under` anywhere (#756)
 - **Conventional commits:** `feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`, `ci:`
 
 ## Documentation

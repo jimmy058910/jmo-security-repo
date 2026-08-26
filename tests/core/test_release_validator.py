@@ -972,23 +972,31 @@ class TestTestHealthChecks:
     @patch("scripts.core.validators.release_validator._path_exists")
     @patch("scripts.core.validators.release_validator._read_text")
     @patch("scripts.core.validators.release_validator._get_pyproject_data")
-    def test_coverage_threshold_accepts_the_floor_ci_enforces(
+    def test_coverage_threshold_rejects_the_superseded_floor(
         self, mock_data, mock_read, mock_exists
     ):
-        """`coverage_pct < 80` is ci.yml's real gate, so it must PASS.
+        """`coverage_pct < 80` must now WARN: #756 raised the real gate to 85.
 
-        The check demanded >=85 until #773 -- a figure nothing in the repo has
-        ever enforced (#756) -- so it WARNed against this project's own CI
-        config no matter how healthy coverage was. The other cases here use 85
-        and 50, which straddle both the old and new floors and so cannot tell
-        the two apart; this one can.
+        This is the discriminating case, and it is worth keeping for that reason
+        alone. The other cases in this class use 85 and 50, which sit on the same
+        side of both the old floor (80) and the new one (85), so neither can tell
+        the two apart. 80 is precisely the value whose verdict flips when the
+        floor moves.
+
+        History, because this test has now caught the boundary in both
+        directions: it asserted PASS on 80 while 80 was the enforced floor.
+        Before #773 the check demanded >=85 while nothing in the repo enforced
+        85 (#756), so it WARNed against the project's own CI config however
+        healthy coverage was. #756 raised the real gate to 85 after measuring
+        86.87%, so the check and ci.yml agree once more -- and 80 is now
+        correctly below the bar rather than at it.
         """
         mock_data.return_value = {"tool": {}}
         mock_exists.side_effect = lambda p: p == ".github/workflows/ci.yml"
         mock_read.return_value = "if coverage_pct < 80:\n    sys.exit(1)\n"
         result = _check_coverage_threshold()
-        assert result.status == CheckStatus.PASS
-        assert "80" in result.message
+        assert result.status == CheckStatus.WARN
+        assert "85" in result.message
 
     @patch("scripts.core.validators.release_validator._path_exists", return_value=True)
     @patch("scripts.core.validators.release_validator._read_text")

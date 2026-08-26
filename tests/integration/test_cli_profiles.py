@@ -285,6 +285,12 @@ profiles:
         "-m",
         "scripts.cli.jmo",
         "scan",
+        # The history db path is CWD-relative, so the
+        # HOME/USERPROFILE redirect below does not reach
+        # it. Without this the scan lands in the repo's
+        # real .jmo/history.db (measured: 2470 -> 2471).
+        "--history-db",
+        str(tmp_path / "history.db"),
         "--repo",
         str(test_repo),
         "--profile-name",
@@ -370,6 +376,12 @@ profiles:
         "-m",
         "scripts.cli.jmo",
         "scan",
+        # The history db path is CWD-relative, so the
+        # HOME/USERPROFILE redirect below does not reach
+        # it. Without this the scan lands in the repo's
+        # real .jmo/history.db (measured: 2470 -> 2471).
+        "--history-db",
+        str(tmp_path / "history.db"),
         "--repo",
         str(test_repo),
         "--profile-name",
@@ -425,6 +437,12 @@ profiles:
         "-m",
         "scripts.cli.jmo",
         "scan",
+        # The history db path is CWD-relative, so the
+        # HOME/USERPROFILE redirect below does not reach
+        # it. Without this the scan lands in the repo's
+        # real .jmo/history.db (measured: 2470 -> 2471).
+        "--history-db",
+        str(tmp_path / "history.db"),
         "--repo",
         str(test_repo),
         "--profile-name",
@@ -465,6 +483,12 @@ def test_profile_tool_selection_fast(tmp_path: Path):
         "-m",
         "scripts.cli.jmo",
         "scan",
+        # The history db path is CWD-relative, so the
+        # HOME/USERPROFILE redirect below does not reach
+        # it. Without this the scan lands in the repo's
+        # real .jmo/history.db (measured: 2470 -> 2471).
+        "--history-db",
+        str(tmp_path / "history.db"),
         "--repo",
         str(test_repo),
         "--profile-name",
@@ -520,6 +544,12 @@ def test_profile_tool_selection_balanced(tmp_path: Path):
         "-m",
         "scripts.cli.jmo",
         "scan",
+        # The history db path is CWD-relative, so the
+        # HOME/USERPROFILE redirect below does not reach
+        # it. Without this the scan lands in the repo's
+        # real .jmo/history.db (measured: 2470 -> 2471).
+        "--history-db",
+        str(tmp_path / "history.db"),
         "--repo",
         str(test_repo),
         "--profile-name",
@@ -589,6 +619,12 @@ def test_profile_tool_selection_deep(tmp_path: Path):
         "-m",
         "scripts.cli.jmo",
         "scan",
+        # The history db path is CWD-relative, so the
+        # HOME/USERPROFILE redirect below does not reach
+        # it. Without this the scan lands in the repo's
+        # real .jmo/history.db (measured: 2470 -> 2471).
+        "--history-db",
+        str(tmp_path / "history.db"),
         "--repo",
         str(test_repo),
         "--profile-name",
@@ -675,6 +711,12 @@ profiles:
         "-m",
         "scripts.cli.jmo",
         "scan",
+        # The history db path is CWD-relative, so the
+        # HOME/USERPROFILE redirect below does not reach
+        # it. Without this the scan lands in the repo's
+        # real .jmo/history.db (measured: 2470 -> 2471).
+        "--history-db",
+        str(tmp_path / "history.db"),
         "--repo",
         str(test_repo),
         "--profile-name",
@@ -736,6 +778,12 @@ profiles:
         "-m",
         "scripts.cli.jmo",
         "scan",
+        # The history db path is CWD-relative, so the
+        # HOME/USERPROFILE redirect below does not reach
+        # it. Without this the scan lands in the repo's
+        # real .jmo/history.db (measured: 2470 -> 2471).
+        "--history-db",
+        str(tmp_path / "history.db"),
         "--repo",
         str(test_repo),
         "--profile-name",

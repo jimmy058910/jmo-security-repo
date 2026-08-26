@@ -242,8 +242,8 @@ jmo --help
 
 > **These two blocks are templates to adopt, not descriptions of this repo.**
 > JMo's real `ci.yml` shards tests with `pytest-split` and enforces coverage
-> through an inline `if coverage_pct < 80` check in the `coverage-aggregate`
-> job (`ci.yml:734`) — not via `--cov-fail-under`, which is set nowhere here
+> through an inline `if coverage_pct < 85` check in the `coverage-aggregate`
+> job (`coverage-aggregate`'s "Verify coverage threshold" step) — not via `--cov-fail-under`, which is set nowhere here
 > (#756). The real `.pre-commit-config.yaml` has **no** `pytest-adapter-coverage`
 > hook. Copying either block verbatim into this repository would add a gate that
 > does not currently exist, which is a decision, not a fix.
