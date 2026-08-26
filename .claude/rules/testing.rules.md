@@ -2,7 +2,6 @@
 title: Testing Infrastructure & Patterns
 paths:
   - tests/**/*.py
-  - pyproject.toml
   - Makefile
 references:
   - TEST.md (complete testing guide)
