@@ -12,6 +12,47 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ==========================================================================
+  # WHAT ACTUALLY GATES A MERGE  (#960, decided and applied 2026-08-25)
+  # ==========================================================================
+  # "Blocking" has meant three separable things in this repo, and a job can
+  # satisfy the first two while gating nothing:
+  #
+  #   1. Allowed to report red        -- not `continue-on-error`.
+  #   2. Cannot report green over a failure -- no `|| echo`, no `|| true`.
+  #   3. Mechanically prevents a merge     -- named in a ruleset.
+  #
+  # Guards were repeatedly built and described as gates on meaning (1) or (2)
+  # while (3) was assumed. Before #960 exactly ONE check had property (3):
+  # `quick-checks`, and only on `main`. Everything else was advisory in the
+  # mechanical sense, however loudly it failed.
+  #
+  # Required on `refs/heads/main` (ruleset 9147592, "Protect main branch"):
+  #   quick-checks · cli-smoke · Windows native console encoding ·
+  #   Aggregate Coverage · Lint (quick checks) ·
+  #   Test ubuntu-latest Shard 1..4/4
+  #
+  # ADVISORY ON PURPOSE -- these can report red, and nothing stops a merge:
+  #   Test windows-2022 Shard 1/1  -- `continue-on-error: true`. It reports
+  #     GREEN OVER EXIT CODE 1, so requiring it would add a check that cannot
+  #     fail. Read its job LOG, never its tick, and diff the skip count too.
+  #   Test macos-latest Shard 1/1  -- cross-platform signal, not a gate.
+  #   dashboard-smoke, tool-contract-tests, policy-gate -- deliberately not in
+  #     the maintainer's chosen set. policy-gate is also too new: a required
+  #     check that does not yet exist on main leaves every PR waiting on a
+  #     report that never arrives, so it can only be added after it has run
+  #     on main at least once.
+  #
+  # `dev` has NO ruleset at all, so a PR into `dev` -- which is every chunk PR
+  # in the v1.1.0 campaign -- has no required check whatsoever. That is the
+  # recorded decision (gate `main`, keep `dev` fast), not an oversight.
+  #
+  # If you add a job here and intend it to gate, adding it to ci.yml is HALF
+  # the work. The other half is the ruleset, and nothing in this file can tell
+  # you whether that happened -- check with
+  # `gh api repos/:owner/:repo/rulesets/9147592`.
+  # ==========================================================================
+
   # Fast validation checks (2-3 minutes)
   quick-checks:
     name: quick-checks
