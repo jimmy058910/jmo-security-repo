@@ -804,20 +804,38 @@ jobs:
           line_rate = float(root.get('line-rate', 0))
           coverage_pct = line_rate * 100
 
-          print(f"📊 Combined coverage: {coverage_pct:.1f}%")
+          print(f"📊 Combined coverage: {coverage_pct:.2f}%")
 
-          # CI threshold is 80% (excludes requires_tools/docker/smoke tests).
+          # CI threshold is 85% (excludes requires_tools/docker/smoke tests).
           # The aggregate XML merge in the previous step recomputes line-rate
           # from merged <line> hits, so this reads true aggregate coverage
           # rather than shard-1's standalone value (which was the source of
           # the spurious "drop from 71.6% to 68.7%" investigated in PR #355).
-          # Raised 70 -> 80 after measuring 86.4%, stable +/-0.1 over 5 runs.
-          # `--cov-fail-under` is still unset repo-wide -- see #756.
-          if coverage_pct < 80:
-              print(f"❌ Coverage {coverage_pct:.1f}% is below 80% CI threshold")
+          #
+          # History: 70 -> 80 after measuring 86.4%, stable +/-0.1 over 5 runs.
+          # 80 -> 85 under #756, after measuring 86.87% (19704/22681 lines) on
+          # the last main run. At 80 the gate carried 6.87 points of slack --
+          # roughly 1550 lines could have gone uncovered with CI still green,
+          # which is not a floor so much as a formality.
+          #
+          # Headroom is part of the spec, so it is stated: 1.87 points, ~424
+          # lines, against a measured run-to-run variance of +/-0.1. That is
+          # ~19x the noise, which is the margin #792 did NOT have -- its 500MB
+          # RSS cap sat about 1% above a quantity that moved 111MB on machine
+          # state alone, so it tripped on noise instead of on regressions.
+          # If this gate starts flapping, re-measure the variance before
+          # lowering the floor; a flapping gate means the assumption above is
+          # wrong, not that the number is too high.
+          #
+          # `--cov-fail-under` remains unset repo-wide: this is the only
+          # enforced coverage floor in the project. Cite it as
+          # "coverage-aggregate's Verify coverage threshold step", never by
+          # line number -- the number has moved three times (734, 788, 816).
+          if coverage_pct < 85:
+              print(f"❌ Coverage {coverage_pct:.2f}% is below 85% CI threshold")
               sys.exit(1)
           else:
-              print(f"✅ Coverage {coverage_pct:.1f}% meets 80% CI threshold")
+              print(f"✅ Coverage {coverage_pct:.2f}% meets 85% CI threshold")
           EOF
 
       - name: Upload coverage to Codecov

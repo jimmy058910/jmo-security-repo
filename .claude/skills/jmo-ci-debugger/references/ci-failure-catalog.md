@@ -1016,14 +1016,14 @@ git commit --no-verify -m "emergency hotfix"
 
 ```text
 📊 Combined coverage: 78.9%
-❌ Coverage 78.9% is below 80% CI threshold
+❌ Coverage 78.9% is below 85% CI threshold
 ```
 
 Those two lines are the **real** symptom, printed by the `Verify coverage
 threshold` step of the `coverage-aggregate` job. pytest itself emits nothing
 here — `--cov-fail-under` is set nowhere (#756), so there is no
 `Coverage of N% is below threshold` line to search for. Grep the run log for
-`is below 80% CI threshold`.
+`is below 85% CI threshold`.
 
 **Root Cause:**
 
@@ -1032,8 +1032,8 @@ New code not sufficiently tested, or tests don't cover all branches.
 **Where This Occurs:**
 
 - `ci.yml`, the `Verify coverage threshold` step of the `coverage-aggregate` job
-- An inline Python check, **not** a pytest flag: `if coverage_pct < 80: sys.exit(1)`
-  (`ci.yml:734`). `--cov-fail-under` is set nowhere in this repository (#756), so
+- An inline Python check, **not** a pytest flag: `if coverage_pct < 85: sys.exit(1)`
+  (`coverage-aggregate`'s "Verify coverage threshold" step). `--cov-fail-under` is set nowhere in this repository (#756), so
   grepping for it to find the gate returns nothing and misleads.
 
 **Quick Diagnosis:**
@@ -1082,7 +1082,7 @@ def test_snyk_nested_arrays(tmp_path: Path):
 
 **Coverage Best Practices:**
 
-- **Aim for >90%:** CI fails only below 80% (`ci.yml:734`), so the buffer you are
+- **Aim for >90%:** CI fails only below 85% (`coverage-aggregate`'s "Verify coverage threshold" step), so the buffer you are
   keeping is against review and against the next regression, not against a build
   failure
 - **Test all error paths:** Not just happy path

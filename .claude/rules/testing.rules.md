@@ -16,12 +16,18 @@ references:
 
 ## Test Coverage & CI Requirements
 
-**The only enforced coverage floor is 80%**, in `.github/workflows/ci.yml:734`:
+**The only enforced coverage floor is 85%**, in `coverage-aggregate`'s "Verify coverage threshold" step:
 
 ```python
-if coverage_pct < 80:
+if coverage_pct < 85:
     sys.exit(1)
 ```
+
+Raised 80 -> 85 under #756 after measuring **86.87%** (19704/22681 lines) on a
+real `main` run. That leaves ~1.9 points of headroom against a measured
+run-to-run variance of +/-0.1. **Cite the job and step, never a line number** --
+it has been 734, 788 and 816, and two of those were stale the day they were
+written.
 
 `--cov-fail-under` is set **nowhere** — not in `make test` (`Makefile:132` runs
 `pytest --cov --cov-report=term-missing`, no threshold), not in

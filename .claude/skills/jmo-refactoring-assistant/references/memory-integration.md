@@ -243,7 +243,7 @@ named the strategy `maintain-85-percent-coverage`. **No such floor exists in thi
 repository**: `Makefile:132` runs `pytest --cov --cov-report=term-missing` with
 no threshold, `[tool.coverage.report]` in `pyproject.toml` sets no `fail_under`,
 and CI's only enforced gate is `coverage_pct < 80` at
-[`.github/workflows/ci.yml:734`](../../../../.github/workflows/ci.yml). A refactor
+[`coverage-aggregate`'s "Verify coverage threshold" step](../../../../.github/workflows/ci.yml). A refactor
 that quietly drops coverage from 87% to 86% passes every one of those, which is
 exactly why the recorded baseline — not a constant — is the thing to diff against.
 Tracked as issue #756.
