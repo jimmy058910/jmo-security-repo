@@ -150,24 +150,52 @@ jobs:
           # Detects version mismatches between local and PyPI
           bash scripts/dev/verify_badges.sh
 
-      - name: "Lint Preview (subset of lint-full)"
+      - name: "Lint (markdownlint, mypy, ruff)"
         run: |
           # mypy/ruff come from the uv-synced venv already on PATH.
+          #
+          # These three ended in `|| echo "...(non-blocking preview)"` until #960.
+          # A pipeline ending in `|| echo` always exits 0, so this step -- inside
+          # the ONE job branch protection actually requires -- ran three linters
+          # and reported green no matter what they found. Same always-zero shape
+          # as chunk 21's `if ! cmd; then rc=$?`.
+          #
+          # Cost of unswallowing was MEASURED first (2026-08-25), not guessed:
+          #   markdownlint  0 errors on tracked files. The 3692 seen locally are
+          #                 all under gitignored dirs (graphify-out/, dev-only/,
+          #                 .serena/, .claude/ HANDOFFs) that a CI checkout has
+          #                 no copy of, plus scripts/dashboard/node_modules --
+          #                 and this job runs no `npm ci`, so that is absent too.
+          #   mypy          4 errors in 1 file (scripts/dev/mcp_smoke.py), fixed
+          #                 in this same PR by narrowing an MCP content union.
+          #   ruff          clean, and separately blocking in lint-quick.
+          #
+          # `|| rc=1` assigns a literal, so all three always run and one CI round
+          # trip reports every problem. Do NOT rewrite this as `if ! cmd; then
+          # rc=$?` -- that reads the status of the negation, which is always 0.
+          #
+          # DO NOT re-add `|| echo`. A gate that runs, fails and is ignored is
+          # the worst state of the three, because it looks fixed.
+          rc=0
 
-          # Run critical lint checks (catches 80% of nightly failures early)
           echo "::group::Markdownlint"
-          npx markdownlint-cli2 "**/*.md" "#node_modules" || echo "⚠️  Markdownlint issues found (non-blocking preview)"
+          # Exclusions live in .markdownlint-cli2.jsonc "ignores" -- one source
+          # of truth, so this command behaves identically on a developer box.
+          npx markdownlint-cli2 "**/*.md" || rc=1
           echo "::endgroup::"
 
           echo "::group::Mypy (scripts only)"
-          mypy scripts/ || echo "⚠️  Mypy issues found (non-blocking preview)"
+          mypy scripts/ || rc=1
           echo "::endgroup::"
 
           echo "::group::Ruff"
-          ruff check scripts/ tests/ || echo "⚠️  Ruff issues found (non-blocking preview)"
+          ruff check scripts/ tests/ || rc=1
           echo "::endgroup::"
 
-          echo "✅ Lint preview complete. Full lint-full runs nightly at 2 AM UTC (scheduled.yml)."
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::Lint failures above. The full hook suite runs nightly (scheduled.yml lint-full)."
+          fi
+          exit "$rc"
 
       - name: Validate SARIF schema
         run: |
@@ -845,8 +873,10 @@ jobs:
           # so `~/.cache/pre-commit` becomes a literal directory under $PWD which defeats
           # the cache action and litters the repo root. Pre-commit's default
           # ($HOME/.cache/pre-commit on Linux) matches the cache action's path.
-          # Skip formatters (black, ruff --fix, shfmt) - check-only via separate hooks
-          SKIP: black,ruff,shfmt,bandit,mypy
+          # Skip formatters that have a dedicated check-only step below
+          # (black --check, ruff check). shfmt was in this list until #960 --
+          # see the shfmt hook invocation below for why it had to come out.
+          SKIP: black,ruff,bandit,mypy
         run: |
           # Run core linting hooks
           pre-commit run --all-files trailing-whitespace
@@ -861,6 +891,19 @@ jobs:
           # Until it ran here, only the nightly all-hooks job enforced it, so a
           # broken documentation link could merge and sit until the next night.
           pre-commit run --all-files doc-links
+          # shfmt via its pinned hook (v3.13.1-1), NOT a bare binary. The step
+          # this replaces was `shfmt -d ... 2>/dev/null || true`, and shfmt is
+          # installed by nothing in this job: it is absent from pyproject.toml
+          # and uv.lock, and exists only as the pre-commit hook below. So the
+          # bare call hit command-not-found, `2>/dev/null` ate the message and
+          # `|| true` ate exit 127 -- the step reported success having checked
+          # nothing, for its entire life. Measured under #960.
+          #
+          # The hook also covers more: `types: [shell]` is every shell file in
+          # the repo, where the old globs were scripts/dev/*.sh + scripts/core/*.sh.
+          # It writes, so a formatting drift surfaces as "files were modified by
+          # this hook" and fails the run -- which is the check we wanted.
+          pre-commit run --all-files shfmt
 
       - name: Check Python formatting (black --check)
         run: |
@@ -869,10 +912,6 @@ jobs:
       - name: Check Python linting (ruff check)
         run: |
           ruff check scripts/ tests/
-
-      - name: Check shell formatting (shfmt -d)
-        run: |
-          shfmt -d -i 2 -ci -bn scripts/dev/*.sh scripts/core/*.sh 2>/dev/null || true
 
   # Dashboard build smoke test — guards against silent breakage when dashboard
   # deps are bumped (Dependabot or otherwise). PR-time CI did not exercise the
