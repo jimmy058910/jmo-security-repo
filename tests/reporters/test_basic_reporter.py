@@ -356,18 +356,29 @@ def test_get_category_summary_with_tags():
 
 
 def test_get_category_summary_fallback_inference():
-    """Test category summary infers category from tool/rule when tags missing."""
+    """Category is inferred from the tool name when a finding carries no tags.
+
+    Every ruleId here avoids the words the fallback *also* matches on
+    ("secret", "key", "cve", "dockerfile", "terraform"), so the tool name is the
+    only thing that can produce each category.
+
+    The previous version used ruleId "generic-key" against tool "gitleaks" and
+    asserted `"🔑 Secrets" in categories`. That satisfied `"key" in rule`, so it
+    passed whether or not the tool list was consulted -- it could not fail when
+    gitleaks was dropped from that list (#796), which is how it survived the
+    tool's removal three releases earlier.
+    """
     findings = [
         {
             "tags": [],
-            "tool": {"name": "gitleaks", "version": "1.0"},
-            "ruleId": "generic-key",
+            "tool": {"name": "trufflehog", "version": "1.0"},
+            "ruleId": "aws-token",
             "location": {"path": "a"},
         },
         {
             "tags": [],
             "tool": {"name": "trivy", "version": "1.0"},
-            "ruleId": "CVE-2023-1234",
+            "ruleId": "GHSA-abcd-1234",
             "location": {"path": "b"},
         },
         {
@@ -378,11 +389,9 @@ def test_get_category_summary_fallback_inference():
         },
     ]
     categories = _get_category_summary(findings)
-    # Should infer from tool names
-    assert "🔑 Secrets" in categories  # gitleaks
-    assert (
-        "🛡️ Vulnerabilities" in categories or "🐳 IaC/Container" in categories
-    )  # trivy or hadolint
+    assert categories["🔑 Secrets"] == 1
+    assert categories["🛡️ Vulnerabilities"] == 1
+    assert categories["🐳 IaC/Container"] == 1
 
 
 def test_markdown_summary_empty_findings():

@@ -256,7 +256,7 @@ def _get_category_summary(findings: list[dict[str, Any]]) -> dict[str, int]:
             rule = f.get("ruleId", "").lower()
 
             if (
-                tool in ["gitleaks", "trufflehog", "noseyparker"]
+                tool in ["trufflehog", "noseyparker"]
                 or "secret" in rule
                 or "key" in rule
             ):
@@ -264,7 +264,7 @@ def _get_category_summary(findings: list[dict[str, Any]]) -> dict[str, int]:
             elif tool in ["trivy", "grype"] or "cve" in rule:
                 categories["🛡️ Vulnerabilities"] += 1
             elif (
-                tool in ["hadolint", "checkov", "tfsec"]
+                tool in ["hadolint", "checkov"]
                 or "dockerfile" in rule
                 or "terraform" in rule
             ):
