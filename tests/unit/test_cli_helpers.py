@@ -4,32 +4,6 @@ from pathlib import Path
 from scripts.cli import jmo
 
 
-def test_iter_repos_variants(tmp_path: Path):
-    # repo path
-    r1 = tmp_path / "r1"
-    r1.mkdir()
-    args = types.SimpleNamespace(repo=str(r1), repos_dir=None, targets=None)
-    out = jmo._iter_repos(args)
-    assert [p.name for p in out] == ["r1"]
-
-    # repos_dir path with two repos
-    base = tmp_path / "repos"
-    (base / "a").mkdir(parents=True)
-    (base / "b").mkdir(parents=True)
-    args = types.SimpleNamespace(repo=None, repos_dir=str(base), targets=None)
-    out = sorted([p.name for p in jmo._iter_repos(args)])
-    assert out == ["a", "b"]
-
-    # targets file
-    r2 = tmp_path / "r2"
-    r2.mkdir()
-    tf = tmp_path / "targets.txt"
-    tf.write_text(str(r1) + "\n" + str(r2) + "\n# comment\n\n", encoding="utf-8")
-    args = types.SimpleNamespace(repo=None, repos_dir=None, targets=str(tf))
-    out = sorted([p.name for p in jmo._iter_repos(args)])
-    assert out == ["r1", "r2"]
-
-
 def test_effective_scan_settings_merge(tmp_path: Path, monkeypatch):
     # Create config with defaults and a profile override
     cfg = tmp_path / "jmo.yml"

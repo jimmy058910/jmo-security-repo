@@ -1144,8 +1144,9 @@ class TestRejectedTargetsAreNamed:
 class TestApiSpecIsDiscovered:
     """`--api-spec` is advertised in `jmo scan --help` and was a no-op (#807).
 
-    The only code that handled it was jmo.py's _iter_urls, which nothing has
-    called since discovery moved to ScanOrchestrator.
+    The only code that handled it was jmo.py's _iter_urls, which nothing had
+    called since discovery moved to ScanOrchestrator. That dead helper has
+    since been deleted (#808); these tests guard the live path.
     """
 
     @staticmethod
@@ -1185,3 +1186,76 @@ class TestApiSpecIsDiscovered:
 
         assert targets.is_empty()
         assert any("--api-spec" in r for r in targets.rejected)
+
+
+class TestTargetFilesAreDecodedAndSplitPortably:
+    """Line handling and decoding for --images-file and --urls-file.
+
+    These behaviours were covered only by tests/cli/test_multi_target_helpers.py,
+    which exercised jmo.py's `_iter_*` helpers -- a parallel implementation that
+    nothing called. Those six helpers and their 53 tests were deleted in #808;
+    this class re-homes the two that describe behaviour the live path still has,
+    so the assurance survives the deletion instead of going with it.
+
+    Only two, deliberately. The deleted file also carried CRLF cases, and
+    re-homing them was tried and reverted: `Path.read_text()` opens with
+    `newline=None`, so universal newlines converts "\\r\\n" to "\\n" *during the
+    read*. A CRLF assertion here therefore holds no matter how the parsing loop
+    is mutated -- it tests CPython, not JMo. Both candidates survived every
+    mutation of `.splitlines()` and `.strip()` and were dropped rather than
+    added to the vacuous-assertion pile (#979).
+
+    Fixture content is written with `write_bytes`: `write_text` translates "\\n"
+    to os.linesep on Windows, which would make the bytes under test differ by
+    platform.
+    """
+
+    @staticmethod
+    def _orchestrator(tmp_path):
+        return ScanOrchestrator(ScanConfig(results_dir=tmp_path, tools=["trivy"]))
+
+    @staticmethod
+    def _args(**kw):
+        args = MagicMock()
+        args.image = None
+        args.images_file = None
+        args.url = None
+        args.urls_file = None
+        args.api_spec = None
+        for key, value in kw.items():
+            setattr(args, key, value)
+        return args
+
+    def test_images_file_comments_and_padding_are_not_targets(self, tmp_path):
+        """Comment and blank lines are skipped, not rejected.
+
+        Asserting `_rejected` is empty as well as the target list matters: a
+        comment that reached the validator would be *refused*, which still
+        yields one image but now reports a bogus rejection to the user.
+        """
+        images_file = tmp_path / "images.txt"
+        images_file.write_bytes(
+            b"# registry images\n\n  nginx:latest  \n\n# trailing note\n"
+        )
+
+        orch = self._orchestrator(tmp_path)
+        images = orch._discover_images(self._args(images_file=str(images_file)))
+
+        assert images == ["nginx:latest"]
+        assert orch._rejected == []
+
+    def test_urls_file_is_decoded_as_utf8_not_the_locale_codec(self, tmp_path):
+        """A non-ASCII line must round-trip verbatim into the rejection message.
+
+        Decoded with a Windows locale codec instead of UTF-8, "héllo" arrives as
+        "hÃ©llo" -- so the user is told a target they never typed was skipped.
+        Asserting the exact text is what makes the codec observable at all.
+        """
+        urls_file = tmp_path / "urls.txt"
+        urls_file.write_bytes("https://example.com\nhéllo-not-a-url\n".encode())
+
+        orch = self._orchestrator(tmp_path)
+        urls = orch._discover_urls(self._args(urls_file=str(urls_file)))
+
+        assert urls == ["https://example.com"]
+        assert any("héllo-not-a-url" in r for r in orch._rejected), orch._rejected
