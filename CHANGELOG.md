@@ -4,6 +4,10 @@ All notable changes to JMo Security will be documented in this file.
 
 ## [Unreleased]
 
+### Security
+
+- **Suppression expiries were written in UTC and evaluated against the local date**, so a suppression's effective lifetime was off by up to a day — living a day longer than requested west of UTC, and lapsing a day early east of it. A suppression is a deliberate decision to stop seeing a finding for a bounded time; drifting that boundary either hides a finding longer than intended or resurfaces one early, and both are silent. Both sides now use UTC. ([#967](https://github.com/jimmy058910/jmo-security-repo/issues/967))
+
 ## [1.0.8] - 2026-08-05
 
 Three tools that had never produced a finding in any release now work: **yara**, **prowler** and **dependency-check**. None was broken in one place — each was broken at roughly four independent layers simultaneously, which is why each had survived every release. The same investigation closed several ways a scan could report success while producing less than it found.
