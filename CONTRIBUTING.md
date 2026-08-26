@@ -245,14 +245,14 @@ These checks run automatically on commit and are also enforced in CI (note: the 
 # Quick scan with fast profile (9 tools, 5-10 min)
 jmo scan --repo . --profile fast --human-logs
 
-# Production scan with balanced profile (18 tools, 18-25 min)
+# Production scan with balanced profile (17 tools, 18-25 min)
 jmo scan --repo . --profile balanced --human-logs
 
 # Generate reports from existing scan
 jmo report ./results --profile --human-logs
 
 # CI mode with severity threshold
-jmo ci --fail-on HIGH --profile balanced
+jmo ci --fail-on HIGH --profile-name balanced
 
 # Compare scans (diff feature)
 jmo diff results-baseline/ results-current/ --format md
@@ -404,7 +404,7 @@ Docker tags now match CLI profiles:
 | `balanced` | balanced | 18 | `Dockerfile.balanced` |
 | `deep` / `latest` | deep | 28* | `Dockerfile` |
 
-*3 deep profile tools require manual installation (AFL++, MobSF, Akto)
+*4 deep profile tools require manual installation (AFL++, Akto, Falco, MobSF)
 
 ### Build local images
 

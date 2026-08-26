@@ -17,6 +17,8 @@ import logging
 import os
 import re
 import sys
+import time
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -116,6 +118,10 @@ class ScanTargets:
     urls: list[str] = field(default_factory=list)
     gitlab_repos: list[dict[str, str]] = field(default_factory=list)
     k8s_resources: list[dict[str, str]] = field(default_factory=list)
+    # Targets the caller asked for that discovery refused, with the reason.
+    # Without this, a mistyped path was indistinguishable from asking for
+    # nothing: both produced an empty ScanTargets and the same message.
+    rejected: list[str] = field(default_factory=list)
 
     def total_count(self) -> int:
         """Return total number of scan targets across all types."""
@@ -193,6 +199,62 @@ class ScanConfig:
             raise ValueError(f"max_workers must be >= 1, got {self.max_workers}")
 
 
+# How one target's scan ended, derived from the per-tool status map every
+# scanner in scan_jobs/ returns. Named constants rather than bare strings so a
+# typo at a comparison site is a NameError instead of a silently false branch.
+TARGET_OK = "ok"
+TARGET_PARTIAL = "partial"
+TARGET_FAILED = "failed"
+
+
+def classify_target_outcome(statuses: Mapping[str, Any] | None) -> str:
+    """Classify one target's scan from the booleans its scanner returned.
+
+    Args:
+        statuses: The per-tool status map from a ``scan_jobs`` scanner. Keys
+            beginning ``__`` are metadata (``__attempts__``), not tools.
+
+    Returns:
+        ``TARGET_OK`` if every tool succeeded, ``TARGET_PARTIAL`` if some did,
+        ``TARGET_FAILED`` if none did.
+
+    **An empty map is ``TARGET_FAILED``, not vacuous success.** It is what
+    ``scan_all`` appends when a scanner raised, and what a scanner returns when
+    no requested tool applied to this target type -- both cases where the target
+    contributed nothing. ``all([])`` being True is exactly the reading that
+    would let those render as a clean scan.
+
+    This exists because the information was already correct everywhere and
+    consulted nowhere: every scanner reports ``dict.fromkeys(tools, False)`` on
+    its failure paths, and the progress display decided the success symbol from
+    an elapsed time the caller hardcoded to ``1.0`` (#809).
+    """
+    if not statuses:
+        return TARGET_FAILED
+    outcomes = [bool(ok) for name, ok in statuses.items() if not name.startswith("__")]
+    if not outcomes:
+        return TARGET_FAILED
+    if all(outcomes):
+        return TARGET_OK
+    if any(outcomes):
+        return TARGET_PARTIAL
+    return TARGET_FAILED
+
+
+def _run_timed(scan_job, *args: Any, **kwargs: Any) -> tuple[str, dict, float]:
+    """Run one scan job and return its result plus the seconds it took.
+
+    Timed **inside the worker**, not around ``future.result()``: with more
+    targets than workers a future sits queued, and charging that wait to the
+    target would report a scheduling backlog as a slow scan. ``perf_counter``
+    rather than ``time.time`` because the latter is coarser than the former on
+    Windows (~15 ms vs ~1 ms) and a fast target would round to zero.
+    """
+    started = time.perf_counter()
+    name, statuses = scan_job(*args, **kwargs)
+    return name, statuses, time.perf_counter() - started
+
+
 class ScanOrchestrator:
     """
     Orchestrate multi-target security scans.
@@ -219,6 +281,10 @@ class ScanOrchestrator:
             config: Scan configuration
         """
         self.config = config
+        # Initialized here, not in discover_targets, because the _discover_*
+        # methods are also called directly (7 tests do exactly that) and must
+        # not depend on state their usual caller happens to set first.
+        self._rejected: list[str] = []
 
     def discover_targets(self, args) -> ScanTargets:
         """
@@ -231,6 +297,9 @@ class ScanOrchestrator:
             ScanTargets with all discovered targets
         """
         targets = ScanTargets()
+        # Reset per call - discover_targets may run more than once per process
+        # (the wizard and `jmo ci` both build orchestrators).
+        self._rejected = []
 
         # Discover repositories
         targets.repos = self._discover_repos(args)
@@ -253,7 +322,19 @@ class ScanOrchestrator:
         # Apply repository filters (include/exclude patterns)
         targets.repos = self._filter_repos(targets.repos)
 
+        targets.rejected = list(self._rejected)
         return targets
+
+    def _reject(self, flag: str, value: object, reason: str) -> None:
+        """Record and log a target that was asked for but will not be scanned.
+
+        `--image` and `--url` already warned on bad input; the six path-based
+        flags dropped silently, so a typo read exactly like passing no target
+        at all. Everything that refuses a target now goes through here.
+        """
+        message = f"{flag} {value!s}: {reason}"
+        self._rejected.append(message)
+        logger.warning("Not scanning %s", message)
 
     def _discover_repos(self, args) -> list[Path]:
         """
@@ -276,11 +357,14 @@ class ScanOrchestrator:
             # Check for MSYS path mangling (Git Bash on Windows + Docker)
             if _detect_msys_path_mangling(repo_path):
                 _warn_msys_path_mangling(repo_path)
+                self._reject("--repo", repo_path, "path looks MSYS-mangled")
                 return repos  # Return empty - path is invalid
 
             p = Path(repo_path)
             if p.exists():
                 repos.append(p)
+            else:
+                self._reject("--repo", repo_path, "path does not exist")
 
         # Directory of repositories
         elif getattr(args, "repos_dir", None):
@@ -289,24 +373,41 @@ class ScanOrchestrator:
             # Check for MSYS path mangling
             if _detect_msys_path_mangling(repos_dir_path):
                 _warn_msys_path_mangling(repos_dir_path)
+                self._reject("--repos-dir", repos_dir_path, "path looks MSYS-mangled")
                 return repos
 
             base = Path(repos_dir_path)
-            if base.exists() and base.is_dir():
+            if not base.exists():
+                self._reject("--repos-dir", repos_dir_path, "directory does not exist")
+            elif not base.is_dir():
+                self._reject("--repos-dir", repos_dir_path, "is not a directory")
+            else:
                 # Find all subdirectories (assumed to be repos)
                 repos.extend([p for p in base.iterdir() if p.is_dir()])
+                if not repos:
+                    self._reject(
+                        "--repos-dir", repos_dir_path, "contains no subdirectories"
+                    )
 
         # Targets file (list of repository paths)
         elif getattr(args, "targets", None):
             targets_file = Path(args.targets)
-            if targets_file.exists():
+            if not targets_file.exists():
+                self._reject("--targets", args.targets, "file does not exist")
+            else:
+                listed = 0
                 for line in targets_file.read_text(encoding="utf-8").splitlines():
                     line = line.strip()
                     if not line or line.startswith("#"):
                         continue
+                    listed += 1
                     p = Path(line)
                     if p.exists():
                         repos.append(p)
+                    else:
+                        self._reject("--targets", line, "listed path does not exist")
+                if listed == 0:
+                    self._reject("--targets", args.targets, "file lists no paths")
 
         return repos
 
@@ -328,12 +429,14 @@ class ScanOrchestrator:
             if validate_container_image(image):
                 images.append(image)
             else:
-                logger.warning(f"Skipping invalid container image: '{image}'")
+                self._reject("--image", image, "not a valid container image reference")
 
         # Images file
         if getattr(args, "images_file", None):
             images_file = Path(args.images_file)
-            if images_file.exists():
+            if not images_file.exists():
+                self._reject("--images-file", args.images_file, "file does not exist")
+            else:
                 for line in images_file.read_text(encoding="utf-8").splitlines():
                     line = line.strip()
                     if not line or line.startswith("#"):
@@ -341,7 +444,11 @@ class ScanOrchestrator:
                     if validate_container_image(line):
                         images.append(line)
                     else:
-                        logger.warning(f"Skipping invalid container image: '{line}'")
+                        self._reject(
+                            "--images-file",
+                            line,
+                            "not a valid container image reference",
+                        )
 
         return images
 
@@ -356,23 +463,19 @@ class ScanOrchestrator:
         """
         iac_files: list[tuple[str, Path]] = []
 
-        # Terraform state files
-        if getattr(args, "terraform_state", None):
-            p = Path(args.terraform_state)
+        for flag, attr, iac_type in (
+            ("--terraform-state", "terraform_state", "terraform"),
+            ("--cloudformation", "cloudformation", "cloudformation"),
+            ("--k8s-manifest", "k8s_manifest", "k8s"),
+        ):
+            value = getattr(args, attr, None)
+            if not value:
+                continue
+            p = Path(value)
             if p.exists():
-                iac_files.append(("terraform", p))
-
-        # CloudFormation templates
-        if getattr(args, "cloudformation", None):
-            p = Path(args.cloudformation)
-            if p.exists():
-                iac_files.append(("cloudformation", p))
-
-        # Kubernetes manifests
-        if getattr(args, "k8s_manifest", None):
-            p = Path(args.k8s_manifest)
-            if p.exists():
-                iac_files.append(("k8s", p))
+                iac_files.append((iac_type, p))
+            else:
+                self._reject(flag, value, "file does not exist")
 
         return iac_files
 
@@ -395,12 +498,14 @@ class ScanOrchestrator:
             if validate_url(url):
                 urls.append(url)
             else:
-                logger.warning(f"Skipping invalid URL: '{url}'")
+                self._reject("--url", url, "only http/https URLs are scanned")
 
         # URLs file
         if getattr(args, "urls_file", None):
             urls_file = Path(args.urls_file)
-            if urls_file.exists():
+            if not urls_file.exists():
+                self._reject("--urls-file", args.urls_file, "file does not exist")
+            else:
                 for line in urls_file.read_text(encoding="utf-8").splitlines():
                     line = line.strip()
                     if not line or line.startswith("#"):
@@ -408,7 +513,23 @@ class ScanOrchestrator:
                     if validate_url(line):
                         urls.append(line)
                     else:
-                        logger.warning(f"Skipping invalid URL: '{line}'")
+                        self._reject(
+                            "--urls-file", line, "only http/https URLs are scanned"
+                        )
+
+        # OpenAPI/Swagger spec. This is advertised in `jmo scan --help` but was
+        # handled only by jmo.py's _iter_urls, which nothing has called since
+        # discovery moved here - so the flag was silently accepted and dropped.
+        if getattr(args, "api_spec", None):
+            spec = args.api_spec
+            if spec.startswith(("http://", "https://")):
+                urls.append(spec)
+            else:
+                p = Path(spec)
+                if p.exists():
+                    urls.append(f"file://{p.absolute()}")
+                else:
+                    self._reject("--api-spec", spec, "spec file does not exist")
 
         return urls
 
@@ -658,7 +779,11 @@ class ScanOrchestrator:
         Args:
             targets: Discovered scan targets
             per_tool_config: Per-tool configuration overrides
-            progress_callback: Optional callback for target-level progress updates (callable)
+            progress_callback: Optional target-level progress callback, invoked
+                as ``(target_type, target_id, statuses, elapsed=<seconds>)``.
+                ``statuses`` is the scanner's per-tool boolean map -- pass it to
+                ``classify_target_outcome``; do not infer success from
+                ``elapsed``, which is a duration and says nothing about outcome.
             tool_progress_callback: Optional callback for tool-level progress (tool_name, status, count)
                                    Called when each tool starts and completes
             session: Optional ScanSession for checkpointing (skip completed targets)
@@ -744,6 +869,7 @@ class ScanOrchestrator:
                     skipped_count += 1
                     continue
                 future = executor.submit(
+                    _run_timed,
                     scan_repository,
                     repo,
                     self.config.results_dir / "individual-repos",
@@ -762,6 +888,7 @@ class ScanOrchestrator:
                     skipped_count += 1
                     continue
                 future = executor.submit(
+                    _run_timed,
                     scan_image,
                     image,
                     self.config.results_dir / "individual-images",
@@ -780,6 +907,7 @@ class ScanOrchestrator:
                     skipped_count += 1
                     continue
                 future = executor.submit(
+                    _run_timed,
                     scan_iac_file,
                     iac_type,
                     iac_path,
@@ -798,6 +926,7 @@ class ScanOrchestrator:
                     skipped_count += 1
                     continue
                 future = executor.submit(
+                    _run_timed,
                     scan_url,
                     url,
                     self.config.results_dir / "individual-web",
@@ -816,6 +945,7 @@ class ScanOrchestrator:
                     skipped_count += 1
                     continue
                 future = executor.submit(
+                    _run_timed,
                     scan_gitlab_repo,
                     gitlab_repo_info,
                     self.config.results_dir / "individual-gitlab",
@@ -836,6 +966,7 @@ class ScanOrchestrator:
                     skipped_count += 1
                     continue
                 future = executor.submit(
+                    _run_timed,
                     scan_k8s_resource,
                     k8s_resource_info,
                     self.config.results_dir / "individual-k8s",
@@ -848,14 +979,27 @@ class ScanOrchestrator:
                 futures.append(("k8s", k8s_id, future))
 
             if skipped_count > 0:
-                logger.info(
-                    f"Resuming scan: skipped {skipped_count} previously completed target(s)"
+                # WARNING, not INFO. `configure_scan_logging` sets the `scripts`
+                # logger to WARNING by default, so this was invisible at the
+                # default verbosity -- measured: present with `--log-level INFO`,
+                # absent with `--log-level WARN`. Meanwhile jmo.py's own `_log`
+                # prints INFO, so the two logging systems have different
+                # effective floors and this line was on the quiet one.
+                #
+                # It is the only thing that tells a reader their results cover
+                # fewer targets than they asked for, and the progress display
+                # ends part-way (`[1/2] ... Progress: 50%`) with no other
+                # explanation. That is not routine chatter.
+                logger.warning(
+                    "Resuming scan: skipped %d previously completed target(s); "
+                    "this run's results cover only the remaining ones",
+                    skipped_count,
                 )
 
             # Collect results as they complete
             for target_type, target_id, future in futures:
                 try:
-                    name, statuses = future.result()
+                    name, statuses, elapsed = future.result()
                     all_results.append((name, statuses))
 
                     # Checkpoint after each completed target
@@ -863,14 +1007,39 @@ class ScanOrchestrator:
 
                     # Call progress callback if provided
                     if progress_callback:
-                        progress_callback(target_type, target_id, statuses)
+                        progress_callback(
+                            target_type, target_id, statuses, elapsed=elapsed
+                        )
 
                 except Exception as e:
                     # Log error but continue with other targets
                     logger.error(
                         f"Scan failed for {target_type} {target_id}: {e}", exc_info=True
                     )
-                    # Still append partial result
+                    # Still append partial result. An empty status map is
+                    # classify_target_outcome's TARGET_FAILED, so this target is
+                    # counted as having produced nothing rather than vanishing.
                     all_results.append((target_id, {}))
+
+                    # The callback used to be skipped on this path, so a target
+                    # whose scanner *raised* never reached the progress display
+                    # at all: the run ended showing fewer completed targets than
+                    # it had, with no line saying which one was missing. A crash
+                    # is the loudest outcome there is and it was the quietest.
+                    #
+                    # Guarded, matching ToolRunner's callback handling: this call
+                    # sits *inside* an except block, so anything it raises would
+                    # replace a single target's failure with the death of the
+                    # whole scan. A progress display must not be able to do that.
+                    if progress_callback:
+                        try:
+                            progress_callback(target_type, target_id, {}, elapsed=0.0)
+                        except Exception:
+                            logger.debug(
+                                "Progress callback failed for %s %s",
+                                target_type,
+                                target_id,
+                                exc_info=True,
+                            )
 
         return all_results

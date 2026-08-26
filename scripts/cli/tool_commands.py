@@ -133,11 +133,23 @@ def cmd_tools_check(args: argparse.Namespace) -> int:
         statuses = manager.check_profile(profile)
         title = f"Tool Status for '{profile}' profile ({len(statuses)} tools)"
     else:
-        # Default: show profile summary
+        # Default: show profile summary across every profile.
+        #
+        # The exit code follows the same contract as the --profile path: a
+        # missing tool is a missing tool, and manual-install tools count exactly
+        # as they do there. Readiness used to be computed and then discarded --
+        # this branch returned 0 unconditionally while the JSON it printed said
+        # "ready": false for all four profiles -- so `jmo tools check` used as a
+        # CI gate passed with scanners missing (#788).
+        #
+        # ToolManager memoises per-tool status, so asking for the summaries here
+        # and again inside print_profile_summary costs cache hits, not probes.
+        summaries = {p: manager.get_profile_summary(p) for p in PROFILE_TOOLS}
+        missing_rc = 1 if any(s.get("missing", 0) for s in summaries.values()) else 0
+
         if output_json:
-            summaries = {p: manager.get_profile_summary(p) for p in PROFILE_TOOLS}
             print(json.dumps(summaries, indent=2))
-            return 0
+            return missing_rc
 
         print_profile_summary(manager, colorize)
 
@@ -151,7 +163,7 @@ def cmd_tools_check(args: argparse.Namespace) -> int:
                 print(f"  - {s.name}: {s.installed_version} -> {s.expected_version}")
             print("\nRun `jmo tools update --critical-only` to update")
 
-        return 0
+        return missing_rc
 
     # JSON output
     if output_json:

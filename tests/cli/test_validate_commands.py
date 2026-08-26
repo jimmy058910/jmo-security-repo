@@ -28,6 +28,56 @@ class TestRenderScorecard:
         assert "GO" in captured.out
         assert exit_code == 0
 
+    def test_skips_are_counted_and_qualify_the_go(self, capsys):
+        """A GO must disclose what never ran (#773).
+
+        `--tier full` degrades quietly: with no Docker daemon all four
+        docker-build-* checks SKIP, so a green verdict can coexist with zero
+        images built. Worse, SKIP was missing from the Result line entirely,
+        so `270/283 PASS | 5 WARN` left 8 checks unaccounted for -- the reader
+        had to subtract to notice they existed at all.
+        """
+        results = [
+            CategoryResult(
+                name="Release Artifacts",
+                checks=[
+                    CheckResult(name="version", status=CheckStatus.PASS),
+                    CheckResult(
+                        name="docker-build-dockerfile.deep",
+                        status=CheckStatus.SKIP,
+                        message="Docker not available",
+                    ),
+                    CheckResult(
+                        name="docker-build-dockerfile.fast",
+                        status=CheckStatus.SKIP,
+                        message="Docker not available",
+                    ),
+                ],
+            ),
+        ]
+        exit_code = render_scorecard(results, verbose=False)
+        captured = capsys.readouterr()
+
+        assert "2 SKIP" in captured.out
+        assert "GO" in captured.out
+        assert "covers only what ran" in captured.out
+        # Skips are not failures: the verdict and exit code stay green.
+        assert "NO-GO" not in captured.out
+        assert exit_code == 0
+
+    def test_no_skip_note_when_nothing_was_skipped(self, capsys):
+        """The qualifier must not appear on a fully-executed run."""
+        results = [
+            CategoryResult(
+                name="CLI Completeness",
+                checks=[CheckResult(name="help works", status=CheckStatus.PASS)],
+            ),
+        ]
+        render_scorecard(results, verbose=False)
+        captured = capsys.readouterr()
+        assert "SKIP" not in captured.out
+        assert "covers only what ran" not in captured.out
+
     def test_with_failures(self, capsys):
         results = [
             CategoryResult(
@@ -130,11 +180,105 @@ class TestRenderScorecard:
         assert data["verdict"] == "NO-GO"
         assert exit_code == 1
 
-    def test_empty_results(self, capsys):
+    def test_json_reports_the_tier_that_actually_ran(self, capsys):
+        """`"tier"` was the literal "quick" regardless of `--tier`.
+
+        This document is what `release.yml`'s pre-release gate consumes, so the
+        release artifact misnamed the tier that produced it.
+        """
+        render_scorecard([], verbose=False, json_output=True, tier="full")
+        assert json.loads(capsys.readouterr().out)["tier"] == "full"
+
+    def test_json_categories_reconcile(self, capsys):
+        """Per-category rows omitted `skipped` and `errored`, so they did not add up."""
+        results = [
+            CategoryResult(
+                name="CLI",
+                checks=[
+                    CheckResult(name="a", status=CheckStatus.PASS),
+                    CheckResult(name="b", status=CheckStatus.SKIP),
+                    CheckResult(name="c", status=CheckStatus.ERROR),
+                    CheckResult(name="d", status=CheckStatus.WARN),
+                ],
+            ),
+        ]
+        render_scorecard(results, verbose=False, json_output=True)
+        category = json.loads(capsys.readouterr().out)["categories"][0]
+        assert category["skipped"] == 1
+        assert category["errored"] == 1
+        accounted = (
+            category["passed"]
+            + category["failed"]
+            + category["warned"]
+            + category["skipped"]
+            + category["errored"]
+        )
+        assert accounted == category["total"]
+
+    def test_json_carries_check_details(self, capsys):
+        """28 checks populate `details`; no output mode rendered it."""
+        results = [
+            CategoryResult(
+                name="Release Artifacts",
+                checks=[
+                    CheckResult(
+                        name="no-secret-patterns",
+                        status=CheckStatus.FAIL,
+                        message="Potential secrets in 1 file(s)",
+                        details=".test_durations: AWS Access Key",
+                    )
+                ],
+            ),
+        ]
+        render_scorecard(results, verbose=False, json_output=True)
+        check = json.loads(capsys.readouterr().out)["categories"][0]["checks"][0]
+        assert check["details"] == ".test_durations: AWS Access Key"
+
+    def test_json_empty_run_is_no_go(self, capsys):
+        exit_code = render_scorecard([], verbose=False, json_output=True)
+        assert json.loads(capsys.readouterr().out)["verdict"] == "NO-GO"
+        assert exit_code == 1
+
+    def test_empty_results_are_no_go(self, capsys):
+        """Zero checks is not a pass.
+
+        This asserted `exit_code == 0`. It is the mechanism behind
+        `jmo validate --category bogus` reporting `Verdict: GO`: an empty run
+        has no failures, so every "is anything wrong?" test answered no.
+        """
         exit_code = render_scorecard([], verbose=False)
         captured = capsys.readouterr()
         assert "0/0" in captured.out
-        assert exit_code == 0
+        assert "NO-GO" in captured.out
+        assert "no checks ran" in captured.out
+        assert exit_code == 1
+
+    def test_details_are_rendered_in_verbose_mode(self, capsys):
+        """`-v` promises per-check details and printed only `message`.
+
+        `no-secret-patterns` reported "Potential secrets in 1 file(s)" while the
+        filename it had already computed sat unrendered in `details`.
+        """
+        results = [
+            CategoryResult(
+                name="Release Artifacts",
+                checks=[
+                    CheckResult(
+                        name="no-secret-patterns",
+                        status=CheckStatus.FAIL,
+                        message="Potential secrets in 1 file(s)",
+                        details=".test_durations: AWS Access Key",
+                    )
+                ],
+            )
+        ]
+        render_scorecard(results, verbose=True)
+        captured = capsys.readouterr()
+        assert ".test_durations: AWS Access Key" in captured.out
+
+    def test_tier_reaches_the_header(self, capsys):
+        render_scorecard([], verbose=False, tier="full")
+        assert "Tier: full" in capsys.readouterr().out
 
     def test_errors_count_as_failure(self, capsys):
         results = [
@@ -171,6 +315,10 @@ class TestRenderScorecard:
 
 class TestCmdValidate:
     def test_quick_tier_default(self):
+        """With no validators there is nothing to pass, so the verdict is NO-GO.
+
+        This asserted `result == 0`; see `test_empty_results_are_no_go`.
+        """
         args = argparse.Namespace(
             tier="quick",
             category=None,
@@ -181,7 +329,24 @@ class TestCmdValidate:
         with patch("scripts.cli.validate_commands._get_validators") as mock_get:
             mock_get.return_value = []
             result = cmd_validate(args)
-            assert result == 0
+            assert result == 1
+
+    def test_unknown_category_is_a_usage_error(self, capsys):
+        """`--category` has no argparse `choices=`, so a typo is caught here.
+
+        Before: every category was filtered out, the scorecard printed
+        `0/0 PASS` / `Verdict: GO`, and the command exited 0 -- a CI gate that
+        validated nothing while looking green.
+        """
+        args = argparse.Namespace(
+            tier="quick",
+            category="clis",
+            verbose=False,
+            fail_fast=False,
+            json=False,
+        )
+        assert cmd_validate(args) == 2
+        assert "Unknown category" in capsys.readouterr().err
 
     def test_full_tier(self):
         args = argparse.Namespace(
@@ -194,7 +359,7 @@ class TestCmdValidate:
         with patch("scripts.cli.validate_commands._get_validators") as mock_get:
             mock_get.return_value = []
             result = cmd_validate(args)
-            assert result == 0
+            assert result == 1
 
     def test_category_filter_parsed(self):
         args = argparse.Namespace(

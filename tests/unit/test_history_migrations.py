@@ -191,3 +191,215 @@ def test_migration_idempotent(tmp_path: Path):
     assert (
         scan_notes_count == 1
     ), f"scan_notes should appear exactly once, found {scan_notes_count} times"
+
+
+# --- #721: legacy `profile` CHECK constraint -------------------------------
+
+
+def _build_legacy_scans_table(db_path: Path) -> None:
+    """Recreate `scans` with the pre-#721 CHECK that enumerated 3 profiles.
+
+    Derived from the live DDL so that unrelated column changes stay in sync;
+    only the constraint that #721 removed is added back.
+    """
+    from scripts.core.history_db import CREATE_SCANS_TABLE
+
+    legacy_ddl = CREATE_SCANS_TABLE.replace(
+        "CHECK (target_type IN",
+        "CHECK (profile IN ('fast', 'balanced', 'deep')),\n    CHECK (target_type IN",
+    )
+    assert "CHECK (profile IN" in legacy_ddl, "legacy fixture failed to inject CHECK"
+
+    conn = get_connection(db_path)
+
+    # DROP TABLE takes the indexes with it, so capture and restore them --
+    # otherwise the fixture is an unfaithful legacy database and any test
+    # asserting the migration preserves indexes would pass vacuously.
+    index_ddl = [
+        row[0]
+        for row in conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name='scans'"
+        )
+        if row[0]  # implicit indexes have sql = NULL
+    ]
+
+    conn.execute("DROP TABLE scans")
+    conn.executescript(legacy_ddl)
+    for ddl in index_ddl:
+        conn.execute(ddl)
+    conn.commit()
+
+
+def _insert_scan(conn, scan_id: str, profile: str) -> None:
+    conn.execute(
+        """
+        INSERT INTO scans (
+            id, timestamp, timestamp_iso, profile, tools, targets,
+            target_type, total_findings, critical_count, high_count,
+            medium_count, low_count, info_count, jmo_version
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
+        """,
+        (scan_id, 0, "1970-01-01T00:00:00", profile, "[]", "[]", "repo", "test"),
+    )
+
+
+def test_migration_lets_legacy_db_store_slim_scans(tmp_path: Path):
+    """#721: an existing database can store `slim` scans after migrating.
+
+    Changing CREATE_SCANS_TABLE only fixes databases created afterwards.
+    SQLite cannot drop a CHECK constraint in place, so an existing database
+    keeps rejecting slim scans until the table is rebuilt.
+    """
+    db_path = tmp_path / "legacy.db"
+    init_database(db_path)
+    _build_legacy_scans_table(db_path)
+
+    conn = get_connection(db_path)
+    _insert_scan(conn, "pre-existing", "balanced")
+    conn.commit()
+
+    result = run_migrations(db_path)
+    assert result["errors"] == [], f"migration failed: {result['errors']}"
+
+    conn = get_connection(db_path)
+    _insert_scan(conn, "after-migration", "slim")
+    conn.commit()
+
+    stored = {
+        row[0]
+        for row in conn.execute("SELECT profile FROM scans ORDER BY id").fetchall()
+    }
+    assert stored == {"balanced", "slim"}
+
+
+def _insert_finding(conn, scan_id: str, fingerprint: str) -> None:
+    """Insert a minimal findings row for the scan (columns read from schema)."""
+    notnull = [
+        (row[1], row[2])
+        for row in conn.execute("PRAGMA table_info(findings)")
+        if row[3]
+    ]
+    values = {}
+    for name, coltype in notnull:
+        if name == "scan_id":
+            values[name] = scan_id
+        elif name == "fingerprint":
+            values[name] = fingerprint
+        elif name == "severity":
+            values[name] = "HIGH"
+        else:
+            values[name] = 0 if coltype.upper() in ("INTEGER", "REAL") else "x"
+    conn.execute(
+        f"INSERT INTO findings ({','.join(values)}) "
+        f"VALUES ({','.join('?' * len(values))})",
+        list(values.values()),
+    )
+
+
+def test_migration_preserves_existing_rows(tmp_path: Path):
+    """#721: the migration must not lose data in any table.
+
+    `findings` and `scan_metadata` both declare ON DELETE CASCADE against
+    `scans(id)`, and get_connection() sets PRAGMA foreign_keys=ON. A migration
+    that drops and recreates `scans` therefore destroys every finding in the
+    database -- silently, which is the same failure mode as the bug itself.
+    """
+    db_path = tmp_path / "legacy.db"
+    init_database(db_path)
+    _build_legacy_scans_table(db_path)
+
+    conn = get_connection(db_path)
+    for i, profile in enumerate(["fast", "balanced", "deep"]):
+        _insert_scan(conn, f"scan-{i}", profile)
+    conn.execute(
+        "UPDATE scans SET total_findings = 42, duration_seconds = 1.5 WHERE id = 'scan-1'"
+    )
+    for i in range(3):
+        _insert_finding(conn, "scan-0", f"fp-{i}")
+    conn.execute(
+        "INSERT INTO scan_metadata (scan_id, key, value) VALUES ('scan-0','k','v')"
+    )
+    conn.commit()
+
+    before = conn.execute(
+        "SELECT id, profile, total_findings, duration_seconds FROM scans ORDER BY id"
+    ).fetchall()
+    assert len(before) == 3
+
+    result = run_migrations(db_path)
+    assert result["errors"] == [], f"migration failed: {result['errors']}"
+
+    conn = get_connection(db_path)
+    after = conn.execute(
+        "SELECT id, profile, total_findings, duration_seconds FROM scans ORDER BY id"
+    ).fetchall()
+    assert [tuple(r) for r in after] == [tuple(r) for r in before]
+
+    # The cascade guard: these are what a drop-and-recreate would destroy.
+    assert (
+        conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0] == 3
+    ), "findings were destroyed -- ON DELETE CASCADE fired during the migration"
+    assert (
+        conn.execute("SELECT COUNT(*) FROM scan_metadata").fetchone()[0] == 1
+    ), "scan_metadata was destroyed -- ON DELETE CASCADE fired during the migration"
+
+
+def test_migration_keeps_dependent_schema_objects(tmp_path: Path):
+    """#721: indexes, triggers and views on `scans` must survive.
+
+    Eleven objects depend on `scans` (2 FK tables, 6 indexes, 2 triggers,
+    2 views). A rebuild drops the indexes and triggers with the table, and
+    `ALTER TABLE ... RENAME` fails outright because the triggers on `findings`
+    reference `scans`.
+    """
+    db_path = tmp_path / "legacy.db"
+    init_database(db_path)
+
+    conn = get_connection(db_path)
+    before = {
+        (row[0], row[1])
+        for row in conn.execute(
+            "SELECT type, name FROM sqlite_master WHERE type IN "
+            "('index','trigger','view') AND sql LIKE '%scans%'"
+        )
+    }
+    assert before, "fixture found no dependent objects to protect"
+
+    _build_legacy_scans_table(db_path)
+    result = run_migrations(db_path)
+    assert result["errors"] == [], f"migration failed: {result['errors']}"
+
+    conn = get_connection(db_path)
+    after = {
+        (row[0], row[1])
+        for row in conn.execute(
+            "SELECT type, name FROM sqlite_master WHERE type IN "
+            "('index','trigger','view') AND sql LIKE '%scans%'"
+        )
+    }
+    assert before - after == set(), f"migration destroyed: {sorted(before - after)}"
+
+
+def test_migration_is_idempotent_on_fresh_db(tmp_path: Path):
+    """#721: the migration is a no-op on a database that never had the CHECK.
+
+    init_database() records version 1.0.0 even though it now creates the fixed
+    schema, so run_migrations() will attempt this migration on fresh databases.
+    """
+    db_path = tmp_path / "fresh.db"
+    init_database(db_path)
+
+    conn = get_connection(db_path)
+    _insert_scan(conn, "scan-slim", "slim")
+    conn.commit()
+
+    result = run_migrations(db_path)
+    assert result["errors"] == [], f"migration failed: {result['errors']}"
+
+    result_again = run_migrations(db_path)
+    assert result_again["errors"] == []
+    assert result_again["applied"] == [], "migrations should not re-apply"
+
+    conn = get_connection(db_path)
+    rows = conn.execute("SELECT profile FROM scans").fetchall()
+    assert [r[0] for r in rows] == ["slim"]

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from .base_flow import BaseWizardFlow
-from .profile_config import get_profile_warning
+from .profile_config import PROFILES, get_profile_warning
 
 
 class RepoFlow(BaseWizardFlow):
@@ -30,17 +30,19 @@ class RepoFlow(BaseWizardFlow):
         # Display detected repositories
         self._print_detected_repos(self.detected_targets)
 
-        # Profile selection with recommendations
+        # Profile selection with recommendations. Both the descriptions and the
+        # choices come from PROFILES, which derives its tool counts from
+        # PROFILE_TOOLS -- the hardcoded copy here had drifted to the wrong
+        # counts and omitted `slim` entirely (#721).
         profile_info = [
-            "fast: 3 tools, 5-8 minutes (pre-commit, quick checks)",
-            "balanced: 8 tools, 15-20 minutes (CI/CD, regular audits)",
-            "deep: 12 tools, 30-60 minutes (security audits, compliance)",
+            f"{key}: {spec['description']}, {spec['est_time']}"
+            for key, spec in PROFILES.items()
         ]
         self.prompter.print_summary_box("📊 Profile Options", profile_info)
 
         profile = self.prompter.prompt_choice(
             "Select scan profile:",
-            choices=["fast", "balanced", "deep"],
+            choices=list(PROFILES),
             default="balanced",
         )
 

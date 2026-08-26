@@ -49,7 +49,10 @@ LinkedIn = "https://linkedin.com/in/jimmy-moceri"
 reporting = ["jsonschema>=4.0"]  # PyYAML moved to main dependencies
 email = ["resend>=2.0"]
 mcp = ["mcp[cli]>=1.0.0"]  # MCP server for AI-powered remediation (Feature #2, v1.0.0)
-attestation = ["sigstore>=2.0.0", "cryptography>=41.0.0"]  # SLSA attestation (Feature #6, v1.0.0)
+# SLSA attestation (Feature #6, v1.0.0). The cryptography floor must track the
+# one in [dependency-groups] dev below: that one hardens contributors, this one
+# is what `pip install jmo-security[attestation]` actually resolves against.
+attestation = ["sigstore>=2.0.0", "cryptography>=50.0.0"]
 visual = [
     "pytest-playwright>=0.5.2",
 ]
@@ -261,9 +264,18 @@ omit = [
     "scripts/dev/*",
 ]
 
+[tool.black]
+# Skill templates under .claude/ are scaffolding with {Tool} placeholders, not
+# valid Python — black cannot parse them. pre-commit already carries
+# `exclude: ^\.claude/` on black and ruff; this keeps the repo-wide paths
+# (`make fmt`, `black .`) behaving the same way, since CLAUDE.md tells every
+# contributor to run `make fmt` before every commit.
+extend-exclude = '^/\.claude/'
+
 [tool.ruff]
-# Exclude test fixtures that are intentionally vulnerable
-extend-exclude = ["tests/e2e/fixtures/python/vulnerable_app.py"]
+# Exclude test fixtures that are intentionally vulnerable, and the .claude/
+# skill templates (see [tool.black] above — same reason).
+extend-exclude = ["tests/e2e/fixtures/python/vulnerable_app.py", ".claude"]
 
 [tool.ruff.lint]
 # Rule set is pinned EXPLICITLY. Without this, ruff runs its *default* rules,

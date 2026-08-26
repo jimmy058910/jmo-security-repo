@@ -1,7 +1,7 @@
 # Version Management Guide
 
 **Status:** ✅ Implemented
-**Related:** [ROADMAP.md #14](../ROADMAP.md#1-tool-version-consistency--automated-dependency-management), [Issue #46](https://github.com/jimmy058910/jmo-security-repo/issues/46), [Issue #12](https://github.com/jimmy058910/jmo-security-repo/issues/12)
+**Related:** [ROADMAP.md](../ROADMAP.md), [Issue #46](https://github.com/jimmy058910/jmo-security-repo/issues/46), [Issue #12](https://github.com/jimmy058910/jmo-security-repo/issues/12)
 
 ## Table of Contents
 
@@ -20,7 +20,7 @@
 
 ## Overview
 
-JMo Security Suite uses a **5-layer version management system** to ensure Docker images and native installations always use the same tool versions. This prevents critical issues like the Trivy v0.58.1 → v0.67.2 discrepancy that caused 16 CVEs to be missed (see [ROADMAP.md #14](../ROADMAP.md#1-tool-version-consistency--automated-dependency-management)).
+JMo Security Suite uses a **5-layer version management system** to ensure Docker images and native installations always use the same tool versions. This prevents critical issues like the Trivy v0.58.1 → v0.67.2 discrepancy that caused 16 CVEs to be missed (see [ROADMAP.md](../ROADMAP.md)).
 
 ### Why This Matters
 
@@ -33,7 +33,7 @@ JMo Security Suite uses a **5-layer version management system** to ensure Docker
 
 1. **[versions.yaml](../versions.yaml)** — Single source of truth for all tool versions
 2. **[update_versions.py](../scripts/dev/update_versions.py)** — Automation script for updates
-3. **[version-check.yml](../.github/workflows/version-check.yml)** — Weekly CI checks + issue creation
+3. **[maintenance.yml](../.github/workflows/maintenance.yml) (`check-versions` job)** — Weekly CI checks + issue creation
 4. **[dependabot.yml](../.github/dependabot.yml)** — Python/Docker/Actions dependency updates
 5. **Dockerfile sync** — Automated version propagation across 3 Docker variants
 
@@ -72,7 +72,7 @@ binary_tools:
 
 ### Layer 2: Automated Version Checker
 
-**[.github/workflows/version-check.yml](../.github/workflows/version-check.yml)**
+**[.github/workflows/maintenance.yml](../.github/workflows/maintenance.yml) (`check-versions` job)**
 
 Runs weekly (Sunday 00:00 UTC) to:
 
@@ -436,7 +436,7 @@ Binary Tools:
 
 ### Weekly Version Check Workflow
 
-**[.github/workflows/version-check.yml](../.github/workflows/version-check.yml)**
+**[.github/workflows/maintenance.yml](../.github/workflows/maintenance.yml) (`check-versions` job)**
 
 **Trigger:** Weekly (Sunday 00:00 UTC) + manual dispatch
 
@@ -463,7 +463,7 @@ Binary Tools:
 # Trigger from GitHub UI: Actions → Version Consistency Check → Run workflow
 
 # Or via GitHub CLI:
-gh workflow run version-check.yml -f create_issues=true
+gh workflow run maintenance.yml -f task=check-versions
 ```
 
 ### CI Validation
@@ -631,7 +631,7 @@ gh pr create --title "deps(tools): monthly tool updates (Jan 2025)"
 
 Wait for:
 
-- ✅ version-check.yml validates consistency
+- ✅ maintenance.yml's `check-versions` job validates consistency
 - ✅ ci.yml tests pass (Ubuntu/macOS/Windows × Python 3.12/3.13)
 - ✅ Docker builds succeed (multi-arch: amd64, arm64)
 
@@ -712,7 +712,7 @@ python3 scripts/dev/update_versions.py --sync
 
 ## Related Documentation
 
-- [ROADMAP.md #14](../ROADMAP.md#1-tool-version-consistency--automated-dependency-management) — Full 5-layer system design
+- [ROADMAP.md](../ROADMAP.md) — Project roadmap and shipped features
 - [Issue #46](https://github.com/jimmy058910/jmo-security-repo/issues/46) — Tool version consistency tracking
 - [Issue #12](https://github.com/jimmy058910/jmo-security-repo/issues/12) — Dependency locking & updates
 - [CLAUDE.md](../CLAUDE.md) — AI assistant development guidance

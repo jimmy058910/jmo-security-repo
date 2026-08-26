@@ -231,5 +231,91 @@ class TestEdgeCases:
         # Just verify no errors - caching is internal implementation
 
 
+class TestSubstringFallbackBoundaries:
+    """The substring fallback must not prefix-match structured rule IDs.
+
+    `get_canonical_rule_id` falls back to substring matching so a rule ID that
+    carries a suffix still resolves -- semgrep reports
+    `...subprocess-shell-true.subprocess-shell-true` for the rule mapped here as
+    `...subprocess-shell-true`. Plain containment made that fallback fire on the
+    trailing number of every structured ID as well.
+    """
+
+    def test_numeric_suffix_does_not_prefix_match(self):
+        """CKV_K8S_1 is a substring of CKV_K8S_14 but a different rule."""
+        assert (
+            get_canonical_rule_id("checkov", "CKV_K8S_1") == "k8s-privileged-container"
+        )
+        for unrelated in (
+            "CKV_K8S_10",
+            "CKV_K8S_14",
+            "CKV_K8S_15",
+            "CKV_K8S_16",
+            "CKV_K8S_17",
+            "CKV_K8S_18",
+        ):
+            assert (
+                get_canonical_rule_id("checkov", unrelated) is None
+            ), f"{unrelated} must not resolve to CKV_K8S_1's canonical id"
+
+    def test_shorter_id_is_not_captured_by_a_longer_mapped_one(self):
+        """The reverse direction was broken too: CKV_AWS_1 inside CKV_AWS_19."""
+        assert get_canonical_rule_id("checkov", "CKV_AWS_1") is None
+        assert get_canonical_rule_id("checkov", "CKV_AWS_2") is None
+
+    def test_three_digit_ids_are_not_captured_by_single_digit_ones(self):
+        """CKV_AWS_3 (mapped) must not swallow every CKV_AWS_3xx rule."""
+        assert (
+            get_canonical_rule_id("checkov", "CKV_AWS_3") == "iac-unencrypted-storage"
+        )
+        for unrelated in (
+            "CKV_AWS_30",
+            "CKV_AWS_35",
+            "CKV_AWS_300",
+            "CKV_AWS_353",
+            "CKV_AWS_355",
+            "CKV_AWS_382",
+        ):
+            assert (
+                get_canonical_rule_id("checkov", unrelated) is None
+            ), f"{unrelated} must not resolve to CKV_AWS_3's canonical id"
+
+    def test_unrelated_checkov_rules_are_not_equivalent(self):
+        """The measured regression: two different k8s controls scored 1.0 metadata."""
+        equivalent, canonical = are_rules_equivalent(
+            "checkov", "CKV_K8S_14", "checkov", "CKV_K8S_16"
+        )
+        assert equivalent is False, (
+            f"'Image Tag should be fixed' and 'Container should not be "
+            f"privileged' are different controls, got canonical={canonical}"
+        )
+
+    def test_separator_delimited_suffix_still_matches(self):
+        """The case the fallback exists for must keep working.
+
+        This drives a real cross-tool cluster (semgrep + bandit on one line);
+        tightening the fallback must not disable it.
+        """
+        semgrep_reported = (
+            "python.lang.security.audit.subprocess-shell-true.subprocess-shell-true"
+        )
+        assert get_canonical_rule_id("semgrep", semgrep_reported) == (
+            "code-command-injection"
+        )
+        equivalent, canonical = are_rules_equivalent(
+            "semgrep", semgrep_reported, "bandit", "B602"
+        )
+        assert equivalent is True
+        assert canonical == "code-command-injection"
+
+    def test_exact_table_entries_are_untouched(self):
+        """Every (tool, rule) pair the table declares must still resolve."""
+        for canonical, members in RULE_EQUIVALENCE.items():
+            for tool, rule in members:
+                assert (
+                    get_canonical_rule_id(tool, rule) is not None
+                ), f"({tool}, {rule}) is in the table but no longer resolves"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

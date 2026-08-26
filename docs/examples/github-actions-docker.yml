@@ -229,7 +229,7 @@ jobs:
         run: |
           docker run --rm -v $(pwd):/scan \
             ghcr.io/jimmy058910/jmo-security:latest \
-            ci --repo /scan --results /scan/results --profile balanced --human-logs || true
+            ci --repo /scan --results /scan/results --profile-name balanced --human-logs || true
 
       - name: Read summary
         id: summary
@@ -280,7 +280,7 @@ jobs:
       - name: Run deep scan
         id: scan
         run: |
-          jmo ci --repo . --results results --profile deep --fail-on MEDIUM --human-logs || true
+          jmo ci --repo . --results results --profile-name deep --fail-on MEDIUM --human-logs || true
 
       - name: Upload results
         uses: actions/upload-artifact@v4

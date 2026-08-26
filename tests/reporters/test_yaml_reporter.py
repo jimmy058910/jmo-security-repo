@@ -18,7 +18,7 @@ Coverage targets:
 import json
 import logging
 from pathlib import Path
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 import yaml
@@ -108,7 +108,7 @@ def test_write_yaml_pyyaml_not_installed(tmp_path, sample_findings):
 
 
 def test_write_yaml_schema_validation_success(
-    tmp_path, sample_findings, sample_metadata
+    tmp_path, sample_findings, sample_metadata, monkeypatch
 ):
     """Test schema validation with valid findings."""
     output_path = tmp_path / "findings.yaml"
@@ -127,12 +127,19 @@ def test_write_yaml_schema_validation_success(
     schema_path = tmp_path / "schema.json"
     schema_path.write_text(json.dumps(schema), encoding="utf-8")
 
-    with patch("scripts.core.reporters.yaml_reporter.Path.__truediv__") as mock_div:
-        # Mock schema path resolution
-        mock_div.return_value = schema_path
-        write_yaml(
-            sample_findings, output_path, metadata=sample_metadata, validate=True
-        )
+    # Point the validator at this stub schema.
+    #
+    # This used to `patch("...yaml_reporter.Path.__truediv__")`, which replaces
+    # the `/` operator on `pathlib.Path` ITSELF -- process-global, not scoped to
+    # this module. Any first-time import inside that window whose module-level
+    # constant is built with `/` froze the mocked value permanently:
+    # `schema_validator.SCHEMA_PATH` ended up pointing at this tmpdir stub for
+    # the rest of the pytest session, so every later schema validation passed
+    # against `{"type": "object"}`. Patch the constant, not the operator.
+    import scripts.core.schema_validator as schema_validator
+
+    monkeypatch.setattr(schema_validator, "SCHEMA_PATH", schema_path)
+    write_yaml(sample_findings, output_path, metadata=sample_metadata, validate=True)
 
     assert output_path.exists()
     data = yaml.safe_load(output_path.read_text(encoding="utf-8"))
@@ -161,7 +168,11 @@ def test_write_yaml_jsonschema_not_installed(
     """Test validation skipped when jsonschema not installed."""
     output_path = tmp_path / "findings.yaml"
 
-    with patch("scripts.core.reporters.yaml_reporter.jsonschema", None):
+    # `yaml_reporter` no longer keeps its own `jsonschema` global. Availability
+    # is decided in one place -- `schema_validator.JSONSCHEMA_AVAILABLE` -- so
+    # that is what this must patch. Two flags for one decision is what let a
+    # test disable validation through a flag the validator never consulted.
+    with patch("scripts.core.reporters.yaml_reporter.JSONSCHEMA_AVAILABLE", False):
         # Should not raise error even with validate=True
         write_yaml(
             sample_findings, output_path, metadata=sample_metadata, validate=True
@@ -313,8 +324,8 @@ def test_jsonschema_import_handling(tmp_path, sample_findings):
     """Test validation gracefully skips when jsonschema unavailable."""
     output_path = tmp_path / "findings.yaml"
 
-    # When jsonschema is None, validation should be skipped without error
-    with patch("scripts.core.reporters.yaml_reporter.jsonschema", None):
+    # When jsonschema is unavailable, validation is skipped without error
+    with patch("scripts.core.reporters.yaml_reporter.JSONSCHEMA_AVAILABLE", False):
         write_yaml(sample_findings, output_path, metadata=None, validate=True)
 
     assert output_path.exists()
@@ -349,24 +360,15 @@ def test_schema_validation_exception_handling(tmp_path, sample_findings, caplog)
 
 
 def test_validation_error_path_coverage(tmp_path):
-    """Test to cover ValidationError exception handling path."""
-    import jsonschema
+    """A finding that fails the real schema must not stop the report.
 
+    This used to build the failure by mocking `jsonschema.validate` to raise,
+    plus `builtins.open` and `pathlib.Path.exists` -- all against an
+    implementation that opened the schema itself. `write_yaml` now delegates to
+    `schema_validator`, so the honest version is simply an invalid finding: the
+    validation error is reported, and the file is still written.
+    """
     output_path = tmp_path / "findings.yaml"
     invalid_findings = [{"no_id": "missing_required"}]
 
-    # Mock to trigger ValidationError
-    with patch("scripts.core.reporters.yaml_reporter.jsonschema") as mock_jsonschema:
-        # Mock jsonschema.validate to raise ValidationError
-        def raise_validation_error(instance, schema):
-            raise jsonschema.ValidationError("Missing required field")
-
-        mock_jsonschema.validate.side_effect = raise_validation_error
-        mock_jsonschema.ValidationError = jsonschema.ValidationError
-
-        # Mock schema file exists
-        with patch("builtins.open", mock_open(read_data='{"type": "object"}')):
-            with patch("pathlib.Path.exists", return_value=True):
-                # This should cover the ValidationError catch block (lines 56-57)
-                # even if no warning is actually logged
-                write_yaml(invalid_findings, output_path, metadata=None, validate=True)
+    write_yaml(invalid_findings, output_path, metadata=None, validate=True)

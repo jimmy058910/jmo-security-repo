@@ -17,6 +17,7 @@ They will be skipped automatically if the required tool is not available.
 import json
 import shutil
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -86,7 +87,7 @@ class TestRealToolScans:
     """E2E tests with actual security tools installed."""
 
     @requires_trivy
-    def test_trivy_scan_real_vulnerability(self, tmp_path):
+    def test_trivy_scan_real_vulnerability(self, tmp_path, monkeypatch):
         """
         Test Trivy detects real CVE in vulnerable image.
 
@@ -130,6 +131,10 @@ class TestRealToolScans:
                 self.k8s_all_namespaces = False
 
         # Run scan
+        # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933),
+        # which resolves `Path.home()` with no injection point -- redirect
+        # it so this in-process call can't write the real ~/.jmo/config.yml.
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
         rc = cmd_scan(ScanArgs())
         assert rc == 0, "Trivy scan should succeed"
 
@@ -172,7 +177,7 @@ class TestRealToolScans:
         assert found_high_cve, "Should detect at least one HIGH/CRITICAL CVE"
 
     @requires_semgrep
-    def test_semgrep_scan_real_code_issue(self, tmp_path):
+    def test_semgrep_scan_real_code_issue(self, tmp_path, monkeypatch):
         """
         Test Semgrep detects real security vulnerability (eval injection).
 
@@ -256,6 +261,10 @@ def safe_process(user_input):
                 self.k8s_all_namespaces = False
 
         # Run scan
+        # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933),
+        # which resolves `Path.home()` with no injection point -- redirect
+        # it so this in-process call can't write the real ~/.jmo/config.yml.
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
         rc = cmd_scan(ScanArgs())
         assert rc == 0, "Semgrep scan should succeed"
 
@@ -292,7 +301,7 @@ def safe_process(user_input):
         )
 
     @requires_trufflehog
-    def test_trufflehog_verified_secret_detection(self, tmp_path):
+    def test_trufflehog_verified_secret_detection(self, tmp_path, monkeypatch):
         """
         Test TruffleHog detects and verifies secrets.
 
@@ -367,6 +376,10 @@ def main():
                 self.k8s_all_namespaces = False
 
         # Run scan
+        # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933),
+        # which resolves `Path.home()` with no injection point -- redirect
+        # it so this in-process call can't write the real ~/.jmo/config.yml.
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
         rc = cmd_scan(ScanArgs())
         assert rc == 0, "TruffleHog scan should succeed"
 
@@ -418,7 +431,7 @@ def main():
             pass
 
     @requires_checkov
-    def test_checkov_iac_misconfiguration(self, tmp_path):
+    def test_checkov_iac_misconfiguration(self, tmp_path, monkeypatch):
         """
         Test Checkov detects Terraform misconfigurations.
 
@@ -490,6 +503,10 @@ resource "aws_s3_bucket" "secure_example" {
                 self.k8s_all_namespaces = False
 
         # Run scan
+        # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933),
+        # which resolves `Path.home()` with no injection point -- redirect
+        # it so this in-process call can't write the real ~/.jmo/config.yml.
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
         rc = cmd_scan(ScanArgs())
         assert rc == 0, "Checkov scan should succeed"
 

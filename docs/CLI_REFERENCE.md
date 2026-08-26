@@ -2,8 +2,9 @@
 
 Complete reference for all CLI commands and flags. Run `jmo <command> --help` for the latest options.
 
-**Version:** 1.0.0
-**Last Updated:** February 2026
+**Version:** 1.0.8 — tracks `__version__` in `scripts/cli/jmo.py` and `version`
+in `pyproject.toml`. **Bump all three together**; nothing guards this one (#750).
+**Last Updated:** 2026-08-22
 
 ---
 
@@ -51,6 +52,46 @@ These flags are shared across multiple commands:
 | `--tools TOOL...` | Override tool list | scan, ci |
 | `--fail-on SEV` | Severity threshold for exit code | report, ci, fast, balanced, full |
 | `--allow-missing-tools` | Skip missing tools instead of failing | scan, ci |
+
+---
+
+## Exit Codes
+
+Every `jmo` command uses the same three codes. Individual command sections
+below say what each code *means* for that command, but never introduce a
+fourth.
+
+| Code | Meaning | Examples |
+|-----:|---------|----------|
+| `0` | Success. The command ran and the answer is affirmative. | Scan completed; `validate` verdict GO; policy passed; `--help`; `--version` |
+| `1` | The command ran, and the answer is negative — **or** it hit a runtime error. | Findings at or above `--fail-on`; `validate` verdict NO-GO; a policy FAILED; verification failed; `opa` not installed |
+| `2` | **Usage error.** The command was invoked incorrectly and did not run. | Unknown flag or subcommand; missing required argument; mutually exclusive flags; an unknown name or a path that does not exist |
+
+The distinction that matters is **1 vs 2**. `1` means the check ran and
+reported a problem; `2` means nothing was checked. A CI gate that treats every
+non-zero code as "blocked" is safe, but a gate that treats `1` as "the scan
+found something" must not also receive `1` for "you typo'd the policy name" —
+that run proved nothing while looking like a working gate.
+
+Consequently, naming something that does not exist is a usage error:
+
+```console
+$ jmo policy test does-not-exist --findings-file results/summaries/findings.json
+ERROR  Policy not found: does-not-exist
+$ echo $?
+2                     # usage error - nothing was evaluated
+
+$ jmo policy test owasp-top-10 --findings-file results/summaries/findings.json
+[X] FAILED   Violations: 101
+$ echo $?
+1                     # the policy ran and failed - block the release
+```
+
+> **Changed in v1.1.0.** `jmo policy test`, `validate`, `show` and `install`
+> previously returned `1` for both cases, and `jmo history` / `jmo trends` with
+> no subcommand printed a usage error but exited `1`. Scripts that keyed on `1`
+> meaning "any problem" are unaffected; scripts that need to tell a failed gate
+> from a broken invocation now can.
 
 ---
 
@@ -115,6 +156,7 @@ Run security scans against repositories, images, URLs, and infrastructure.
 | Flag | Description |
 |------|-------------|
 | `--no-store-history` | Disable automatic history storage (enabled by default) |
+| `--fail-on-store-error` | Exit non-zero if the scan could not be recorded in history. Off by default: storage is enabled unless `--no-store-history`, so a failed write would otherwise redden scans run purely for their findings. The failure is always reported at `ERROR` regardless of this flag |
 | `--history-db PATH` | Path to history database (default: `.jmo/history.db`) |
 | `--no-store-raw-findings` | Don't store raw findings (security: prevents secret persistence) |
 | `--encrypt-findings` | Encrypt findings in database (requires `JMO_ENCRYPTION_KEY` env var) |
@@ -282,7 +324,7 @@ Generate SLSA provenance attestation for scan results.
 | `SUBJECT` | File to attest, e.g., `findings.json` (positional, required) |
 | `--output`, `-o FILE` | Output path (default: `<subject>.att.json`) |
 | `--sign` | Sign attestation with Sigstore keyless signing. In CI (GitHub Actions, GitLab CI), uses automatic OIDC. Locally, opens a browser for OAuth. |
-| `--rekor` | Upload to Rekor transparency log |
+| `--rekor` | Upload to Rekor transparency log. **Requires `--sign`** — signing is what uploads; alone it is a usage error (exit 2) |
 | `--scan-args FILE` | JSON file with original scan arguments |
 | `--tools TOOL [...]` | Tools used in scan (e.g., `trivy semgrep`) |
 | `--human-logs` | Human-friendly logs |
@@ -298,15 +340,31 @@ Verify cryptographic attestation and detect tampering.
 |------|-------------|
 | `SUBJECT` | File to verify, e.g., `findings.json` (positional, required) |
 | `--attestation`, `-a FILE` | Attestation file (default: `<subject>.att.json`) |
-| `--rekor-check` | Verify against Rekor transparency log |
-| `--policy FILE` | Policy file for additional verification rules |
+| `--signature`, `-s FILE` | Sigstore bundle (default: `<attestation>.sigstore.json`) |
+| `--cert-identity IDENTITY` | Expected signer identity in the certificate SAN. **Required to check a signature** |
+| `--cert-oidc-issuer URL` | Expected OIDC issuer in the certificate. **Required to check a signature** |
+| `--rekor-check` | Confirm the bundle's Rekor transparency log entry exists. Requires a signature check; makes a network request |
 | `--human-logs` | Human-friendly logs |
 | `--log-level LEVEL` | Log level: `DEBUG`, `INFO`, `WARN`, `ERROR` |
 
-**Exit codes:**
+**What actually gets checked.** The digest, the attestation's shape and its
+tamper indicators run on every invocation. The signature runs **only** when
+`--cert-identity` and `--cert-oidc-issuer` are both given; otherwise the output
+says `Signature: NOT CHECKED` rather than counting the skip as a pass. Keyless
+signing proves *who* signed, so a bundle checked against no expected signer
+establishes only that somebody signed it.
+
+> `--policy FILE` used to be listed here. `verify()` accepted the argument and
+> referenced it nowhere in its body, so it was a documented verification rule
+> that never ran. It has been removed rather than left silently inert — see
+> [#943](https://github.com/jimmy058910/jmo-security-repo/issues/943) for
+> attestation policy as a feature.
+
+**Exit codes:** the standard three (see [Exit Codes](#exit-codes)).
 
 - `0` - Verification succeeded
-- `1` - Verification failed or tampering detected
+- `1` - Verification ran and failed, or tampering was detected
+- `2` - A path does not exist, or a required flag is missing, so nothing was verified
 
 ---
 
@@ -556,7 +614,7 @@ Show security trends over time for a branch.
 
 | Flag | Description |
 |------|-------------|
-| `--branch NAME` | Branch name (default: `main`) |
+| `--branch NAME` | Branch name (default: every branch) |
 | `--days N` | Number of days to analyze (default: 30) |
 | `--json` | Output as JSON |
 | `--db PATH` | Path to SQLite database |
@@ -605,6 +663,8 @@ Repair corrupted database (dump/reimport).
 
 Statistical trend analysis using historical scan data.
 
+**Scan selection.** With no filters, a subcommand analyses every scan from the last 30 days, on every branch. `--branch` narrows to one branch and `--days` / `--last` change the window; `--days N` returns every scan in that window, with no hidden cap. A scan whose branch could not be determined is stored with no branch at all, and **no value of `--branch` can match it** — so a branch filter always narrows to less than the whole database. A query that legitimately matches nothing exits **0**, like `jmo history list`; a missing database or an unknown scan ID exits 1.
+
 **jmo trends analyze**
 
 Analyze security trends with flexible filters.
@@ -614,7 +674,7 @@ Analyze security trends with flexible filters.
 | `--days N` | Number of days to analyze |
 | `--last N` | Last N scans to analyze |
 | `--scan-ids ID [ID ...]` | Specific scan IDs to analyze |
-| `--branch NAME` | Git branch to analyze (default: `main`) |
+| `--branch NAME` | Git branch to analyze (default: every branch) |
 | `--validate-statistics` | Run Mann-Kendall statistical validation |
 | `--format FORMAT` | Output format: `terminal`, `json` (default: `terminal`) |
 | `--verbose` | Show detailed output (top rules, etc.) |
@@ -630,7 +690,6 @@ Show trend context for a specific scan.
 |------|-------------|
 | `SCAN_ID` | Scan ID to show context for (positional, required) |
 | `--context N` | Number of scans before/after to show (default: 5) |
-| `--branch NAME` | Git branch to analyze (default: `main`) |
 | `--db PATH` | Path to SQLite database |
 
 **jmo trends regressions**
@@ -642,7 +701,7 @@ List all detected regressions.
 | `--last N` | Last N scans to analyze |
 | `--severity SEV` | Filter by severity: `CRITICAL`, `HIGH` |
 | `--fail-on-any` | Exit with error code 1 if any regressions found (for CI) |
-| `--branch NAME` | Git branch to analyze (default: `main`) |
+| `--branch NAME` | Git branch to analyze (default: every branch) |
 | `--db PATH` | Path to SQLite database |
 
 **jmo trends score**
@@ -653,7 +712,7 @@ Show security posture score history.
 |------|-------------|
 | `--last N` | Last N scans to analyze |
 | `--days N` | Number of days to analyze |
-| `--branch NAME` | Git branch to analyze (default: `main`) |
+| `--branch NAME` | Git branch to analyze (default: every branch) |
 | `--db PATH` | Path to SQLite database |
 
 **jmo trends compare**
@@ -665,7 +724,6 @@ Compare two specific scans side-by-side.
 | `SCAN_ID_1` | First scan ID (positional, required) |
 | `SCAN_ID_2` | Second scan ID (positional, required) |
 | `--verbose` | Show sample findings from diff |
-| `--branch NAME` | Git branch to analyze (default: `main`) |
 | `--db PATH` | Path to SQLite database |
 
 **jmo trends insights**
@@ -675,7 +733,7 @@ List all automated insights.
 | Flag | Description |
 |------|-------------|
 | `--last N` | Last N scans to analyze |
-| `--branch NAME` | Git branch to analyze (default: `main`) |
+| `--branch NAME` | Git branch to analyze (default: every branch) |
 | `--db PATH` | Path to SQLite database |
 
 **jmo trends explain**
@@ -694,7 +752,7 @@ Show developer remediation rankings.
 |------|-------------|
 | `--last N` | Last N scans to analyze |
 | `--top N` | Show top N developers (default: 10) |
-| `--branch NAME` | Git branch to analyze (default: `main`) |
+| `--branch NAME` | Git branch to analyze (default: every branch) |
 | `--db PATH` | Path to SQLite database |
 
 ---
@@ -711,12 +769,12 @@ Create a new schedule.
 |------|-------------|
 | `--name NAME` | Schedule name (required) |
 | `--cron EXPR` | Cron expression, e.g., `0 2 * * *` (required) |
-| `--profile PROFILE` | Scan profile: `fast`, `balanced`, `deep` (required) |
+| `--profile PROFILE` | Scan profile: `fast`, `slim`, `balanced`, `deep` (required) |
 | `--repos-dir DIR` | Repository directory to scan |
 | `--image IMAGE` | Container image to scan (repeatable) |
 | `--url URL` | Web URL to scan (repeatable) |
 | `--backend BACKEND` | Backend: `github-actions`, `gitlab-ci`, `local-cron` |
-| `--timezone TZ` | Timezone for schedule (default: UTC) |
+| `--timezone TZ` | Timezone for schedule (default: UTC). **GitHub Actions has no timezone setting** — its cron is always UTC, so a non-UTC value is recorded but cannot be honoured on that backend, and `create`/`export` warn when you set one. GitLab CI surfaces it in the generated setup instructions. |
 | `--description TEXT` | Human-readable description |
 | `--label KEY=VALUE` | Label in KEY=VALUE format (repeatable) |
 | `--slack-webhook URL` | Slack webhook URL for notifications |
@@ -741,9 +799,17 @@ Create a new schedule.
 |------|-------------|
 | `NAME` | Schedule name (positional, required) |
 | `--cron EXPR` | New cron expression |
-| `--profile PROFILE` | New scan profile: `fast`, `balanced`, `deep` |
-| `--suspend` | Suspend schedule |
-| `--resume` | Resume schedule |
+| `--profile PROFILE` | New scan profile: `fast`, `slim`, `balanced`, `deep` |
+| `--suspend` | Suspend schedule (mutually exclusive with `--resume`) |
+| `--resume` | Resume schedule (mutually exclusive with `--suspend`) |
+
+At least one of these four flags is required; `jmo schedule update NAME` with
+none of them exits 1 rather than reporting a successful no-op.
+
+`--cron` is validated with `croniter`, which accepts more than either backend
+does. A 6-field expression or an `@daily`-style shorthand is accepted and
+stored, but GitHub Actions requires five POSIX fields and `jmo schedule install`
+rejects both — so `create`, `update` and `validate` all warn when they see one.
 
 **jmo schedule export**
 
@@ -842,9 +908,9 @@ The MCP server provides a standardized interface for AI tools to query security 
 |------|-------------|
 | `--results-dir DIR` | Path to results directory (default: `./results`) |
 | `--repo-root PATH` | Path to repository root (default: current directory) |
-| `--api-key KEY` | API key for authentication (enables production mode) |
+| `--api-key KEY` | Registers a key by setting `JMO_MCP_API_KEYS`. **Does not enable authentication** — nothing enforces access control (see below). The server warns at startup |
 | `--log-level LEVEL` | Log level: `DEBUG`, `INFO`, `WARN`, `ERROR` |
-| `--human-logs` | Human-friendly colored logs instead of JSON |
+| `--human-logs` | Terser, human-friendly log format |
 
 **Environment Variables:**
 
@@ -852,7 +918,17 @@ The MCP server provides a standardized interface for AI tools to query security 
 |----------|-------------|
 | `MCP_RESULTS_DIR` | Path to results directory (overrides `--results-dir`) |
 | `MCP_REPO_ROOT` | Path to repository root (overrides `--repo-root`) |
-| `MCP_API_KEY` | API key for authentication (overrides `--api-key`) |
+| `JMO_MCP_API_KEYS` | Comma-separated API keys. Hashed at import and **never compared against anything** — setting this grants and denies nothing |
+| `MCP_LOG_LEVEL` | Log level (set by `--log-level`) |
+| `MCP_HUMAN_LOGS` | Terse log format (set by `--human-logs`) |
+
+> **The MCP server does not authenticate callers, and no setting turns it on.**
+> Rate limiting is enforced; access control is not, because stdio transport
+> supplies no caller identity to check a key against. Every client that can
+> reach the process is trusted — run it as a subprocess of the client that
+> needs it, and do not expose it to anything you would not give a shell to.
+> `get_server_info()` reports `authentication_enforced: false`. See
+> [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md#the-server-does-not-authenticate-callers-at-all).
 
 ---
 
@@ -874,7 +950,8 @@ Validate an adapter plugin file.
 
 ### jmo validate
 
-Pre-release validation system with GO/NO-GO scorecard. Runs 207 checks across 4 categories.
+Pre-release validation system with GO/NO-GO scorecard. Runs 259 checks across 4
+categories (290 with `--tier full`), measured on the current CLI surface.
 
 ```text
 jmo validate [OPTIONS]
@@ -892,12 +969,23 @@ jmo validate [OPTIONS]
 
 | Category | Quick Checks | Full Checks | What It Validates |
 |----------|-------------|-------------|-------------------|
-| CLI Completeness | 94 | 102 | Subcommand --help, arg validation, exit codes, version |
-| Scan Correctness | 80 | 92 | Adapter parsing, dedup, compliance, reporters, schema |
+| CLI Completeness | 101 | 109 | Subcommand --help, arg validation, exit codes, version |
+| Scan Correctness | 79 | 91 | Adapter parsing, dedup, compliance, reporters, schema |
 | Cross-Platform | 33 | 38 | Path handling, subprocess security, SQLite, env vars |
 | Release Artifacts | 46 | 52 | Version consistency, docs, git hygiene, code quality |
+| **Total** | **259** | **290** | |
 
-**Exit codes:** 0 = GO (all pass), 1 = NO-GO (failures found), 2 = system error.
+The CLI Completeness row is sized by the parser: it runs one `--help` check per
+top-level subcommand and one per nested subcommand, so adding a command adds
+checks here automatically.
+
+**Exit codes:** 0 = GO (all checks that ran passed), 1 = NO-GO (a check failed,
+errored, **or nothing ran at all**), 2 = usage error — for example an unknown
+`--category` value. See [Exit Codes](#exit-codes).
+
+> A `GO` covers only the checks that ran. `--tier full` degrades to `SKIP` when
+> a prerequisite is missing — with no Docker daemon, all four `docker-build-*`
+> checks skip — so the scorecard prints the skipped count alongside the verdict.
 
 **Examples:**
 

@@ -169,3 +169,189 @@ def test_data_path_subprocesses_decode_explicitly() -> None:
     ), "Locale-decoded subprocess output on the scan data path:\n" + "\n".join(
         f"  {o}" for o in offenders
     )
+
+
+# Codec names that appear in the "is this stream safe?" denylists this guard
+# exists to eliminate. Deliberately not exhaustive -- it does not need to be,
+# because the point is that NO such list can be.
+_CODEC_NAME_LITERALS = frozenset(
+    {
+        "cp1252",
+        "cp437",
+        "cp850",
+        "ascii",
+        "latin-1",
+        "latin1",
+        "iso-8859-1",
+    }
+)
+
+
+def test_no_module_branches_on_the_encodings_name() -> None:
+    """Nothing may decide encodability by comparing a codec's NAME.
+
+    The definition guard above only sees `def safe_print(...)`. Two copies of
+    the broken logic survived it anyway, each through a different hole:
+
+        scripts/cli/policy_commands.py  defined `_safe_print` -- underscored,
+                                        so not in GUARDED_NAMES
+        scripts/cli/jmo.py             inlined the branch inside `_log`, so it
+                                        defined no guarded helper at all
+
+    A definition-scanner tests for the shape the bug had last time. This tests
+    for the behaviour it is actually forbidden to have, wherever it appears and
+    whatever the enclosing function is called.
+
+    Measured on cp437, the codec a real Windows console uses: the name-based
+    branch never fired, so 'Scan complete <check>' rendered '?' where the
+    canonical helper renders '[v]'. It is not a crash -- harden_console_streams
+    guarantees that -- it is the fallback table being silently skipped in
+    exactly the environment it was written for.
+
+    The fix is always the same: call safe_print/safe_write, which probe the real
+    payload against the stream's real codec.
+    """
+    offenders: list[str] = []
+
+    for path in sorted(SCRIPTS.rglob("*.py")):
+        if path == CANONICAL:
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Compare):
+                continue
+            # `enc == "cp1252"` / `enc != "ascii"` / `enc in (...)`
+            operands = list(node.comparators)
+            literals: set[str] = set()
+            for operand in operands:
+                if isinstance(operand, ast.Constant) and isinstance(operand.value, str):
+                    literals.add(operand.value.lower())
+                elif isinstance(operand, ast.Tuple | ast.List | ast.Set):
+                    for element in operand.elts:
+                        if isinstance(element, ast.Constant) and isinstance(
+                            element.value, str
+                        ):
+                            literals.add(element.value.lower())
+
+            if literals & _CODEC_NAME_LITERALS:
+                rel = path.relative_to(REPO_ROOT).as_posix()
+                offenders.append(
+                    f"{rel}:{node.lineno} branches on codec name(s) "
+                    f"{sorted(literals & _CODEC_NAME_LITERALS)}"
+                )
+
+    assert not offenders, (
+        "Encodability must be probed, never inferred from the codec's name -- "
+        "no list can enumerate the codecs you did not think of, and cp437/cp850 "
+        "are the ones a real Windows console uses. Found:\n  "
+        + "\n  ".join(offenders)
+        + "\n\nCall safe_print()/safe_write() from scripts/core/unicode_utils.py "
+        "instead; they encode the actual payload against the stream's actual "
+        "codec."
+    )
+
+
+class _LegacyConsole:
+    """A write target that reports a legacy Windows console codec.
+
+    Not `io.StringIO`: `safe_write` reads `stream.encoding` to decide what the
+    payload has to survive, and StringIO advertises none.
+    """
+
+    def __init__(self, encoding: str) -> None:
+        self.encoding = encoding
+        self._chunks: list[str] = []
+
+    def write(self, text: str) -> int:
+        """Encode on write, the way a real console does.
+
+        Storing `text` verbatim would make this fake useless: `print()` and
+        `safe_write()` would produce identical output and a caller that
+        bypassed the fallback table would look correct. Mutation-tested --
+        without this encode step, replacing `safe_write` with `print` in
+        `_write_progress_line` left the guard below green.
+        """
+        rendered = text.encode(self.encoding, "replace").decode(
+            self.encoding, "replace"
+        )
+        self._chunks.append(rendered)
+        return len(text)
+
+    def flush(self) -> None:
+        """A real stderr has one; the progress writer flushes after every line."""
+
+    def getvalue(self) -> str:
+        return "".join(self._chunks)
+
+
+def _render(text: str, codec: str) -> str:
+    """What a legacy console would actually show for `text`."""
+    from scripts.core.unicode_utils import safe_write
+
+    stream = _LegacyConsole(codec)
+    safe_write(text, stream)
+    return stream.getvalue()
+
+
+def test_scan_progress_spinner_survives_a_legacy_console() -> None:
+    """The scan spinner must remain readable AND animated on a real console.
+
+    `ProgressTracker._SPINNER_FRAMES` is Braille (U+280B..U+280F). Measured
+    before this guard existed: **all ten frames are unrenderable in cp1252,
+    cp437 and cp850** -- every codec a real Windows console uses -- and none had
+    a `UNICODE_FALLBACKS` entry. The three call sites wrote them with
+    `print(..., file=sys.stderr)`, which reaches only the stream hardening's
+    `errors="replace"`, so the spinner was a motionless `?` for the length of
+    every scan on Windows.
+
+    Two properties, not one. Checking only "is it renderable" would pass if all
+    ten frames collapsed to the same character -- readable, but no longer an
+    animation, which is the entire purpose of a spinner. Asserted as properties
+    of whatever frames the tracker declares, so changing the frame set cannot
+    walk around this the way a hardcoded list would.
+    """
+    from scripts.cli.jmo import ProgressTracker
+
+    frames = list(ProgressTracker._SPINNER_FRAMES)
+    assert frames, "the tracker must declare spinner frames for this to mean anything"
+
+    for codec in ("cp1252", "cp437", "cp850"):
+        rendered = [_render(f, codec) for f in frames]
+
+        unreadable = [f for f, r in zip(frames, rendered) if not r or "?" in r]
+        assert not unreadable, (
+            f"{len(unreadable)} of {len(frames)} spinner frames render as '?' on "
+            f"{codec}. Add a UNICODE_FALLBACKS entry for each, and make sure the "
+            f"call site uses safe_write() rather than print(file=sys.stderr) -- "
+            f"stream hardening alone only guarantees no crash, not legibility."
+        )
+
+        assert len(set(rendered)) > 1, (
+            f"every spinner frame renders identically on {codec}, so the spinner "
+            f"no longer animates. Map the frames onto a rotating substitute."
+        )
+
+
+def test_progress_line_writer_goes_through_the_fallback_table() -> None:
+    """`ProgressTracker` must write progress lines with safe_write, not print.
+
+    This is the behavioural half of the test above: the fallback table can be
+    complete and still never consulted, because `print(..., file=sys.stderr)`
+    bypasses it entirely. Asserting the rendered output rather than the source
+    keeps this true however the writer is spelled.
+    """
+    from scripts.cli.jmo import ProgressTracker
+
+    spinner = ProgressTracker._SPINNER_FRAMES[0]
+    line = f"\r[0/1] {spinner} trufflehog (0s) [0%]"
+
+    console = _LegacyConsole("cp437")
+    with patch("scripts.cli.jmo.sys.stderr", console):
+        ProgressTracker._write_progress_line(line)
+
+    written = console.getvalue()
+    assert "trufflehog" in written, "the progress line never reached the stream"
+    assert "?" not in written, (
+        "the progress line was written without the fallback table -- the spinner "
+        "degraded to '?'. Use safe_write() from scripts/core/unicode_utils.py."
+    )

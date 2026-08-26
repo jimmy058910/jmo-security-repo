@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import time
+import traceback
 from pathlib import Path
 
 from scripts.core.config import load_config_with_env_overrides
@@ -32,10 +33,23 @@ from scripts.core.suppress import (
 
 logger = logging.getLogger(__name__)
 
-# Version (from pyproject.toml)
-__version__ = "1.0.5"
-
 SEV_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
+
+# Every value `outputs:` accepts. Each one gates exactly one writer below.
+#
+# A name outside this set used to be discarded in silence: `outputs: [sarrif]`
+# or `outputs: [SARIF]` produced no SARIF file and no log record at any level,
+# so a typo in jmo.yml looked identical to a working config that happened to
+# emit fewer artifacts.
+KNOWN_OUTPUTS = (
+    "json",
+    "md",
+    "yaml",
+    "html",
+    "simple-html",
+    "sarif",
+    "csv",
+)
 
 
 def fail_code(threshold: str | None, counts: dict) -> int:
@@ -56,6 +70,58 @@ def fail_code(threshold: str | None, counts: dict) -> int:
     idx = SEV_ORDER.index(thr)
     severities = SEV_ORDER[: idx + 1]
     return 1 if any(counts.get(s, 0) > 0 for s in severities) else 0
+
+
+def _warn_unknown_outputs(cfg, args, _log_fn) -> list[str]:
+    """Report any `outputs:` value that gates no writer.
+
+    Returns the unknown names, in config order, so callers can assert on them.
+    """
+    outputs = getattr(cfg, "outputs", None) or []
+    unknown = [str(o) for o in outputs if str(o) not in KNOWN_OUTPUTS]
+    for name in unknown:
+        _log_fn(
+            args,
+            "WARN",
+            f"Unknown output format {name!r} in config 'outputs'; "
+            f"no such report will be written. Valid formats: "
+            f"{', '.join(KNOWN_OUTPUTS)}",
+        )
+        # `_log_fn` writes straight to stderr and `logger` is separately wired
+        # to it, so a WARNING on both paths prints the same line twice. The
+        # user-facing record is `_log_fn`; keep the module logger at DEBUG.
+        logger.debug("Unknown output format %r in config 'outputs'", name)
+    return unknown
+
+
+def _warn_unknown_threshold(threshold, args, _log_fn) -> str | None:
+    """Report a `--fail-on` / `fail_on:` value that gates nothing.
+
+    Returns the unrecognised value, so callers can assert on it.
+
+    `fail_code` returns 0 for any threshold outside SEV_ORDER, which is the
+    same exit code as "nothing at or above the threshold". A typo therefore
+    turns the CI gate off and looks exactly like a clean run: `--fail-on HIGHH`
+    exited 0 on a scan holding HIGH findings, and the only record at any level
+    was the summary line reporting `threshold=HIGHH` as though it had applied.
+    """
+    if not threshold:
+        return None
+    if str(threshold).upper() in SEV_ORDER:
+        return None
+    bad = str(threshold)
+    _log_fn(
+        args,
+        "WARN",
+        f"Unrecognized severity threshold {bad!r}; no threshold applied and "
+        f"the run cannot fail on findings. Valid values: "
+        f"{', '.join(SEV_ORDER)}",
+    )
+    # Same two-systems rule as `_warn_unknown_outputs` above: `_log_fn` carries
+    # the user-facing record, the module logger stays at DEBUG so the line is
+    # not printed twice.
+    logger.debug("Unrecognized severity threshold %r", bad)
+    return bad
 
 
 def cmd_report(args, _log_fn) -> int:
@@ -87,6 +153,8 @@ def cmd_report(args, _log_fn) -> int:
     results_dir = Path(rd)
     out_dir = Path(args.out) if args.out else results_dir / "summaries"
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    _warn_unknown_outputs(cfg, args, _log_fn)
 
     # Set profiling environment
     prev_profile = os.getenv("JMO_PROFILE")
@@ -186,7 +254,15 @@ def cmd_report(args, _log_fn) -> int:
         try:
             write_yaml(findings, out_dir / "findings.yaml", metadata=metadata)
         except RuntimeError as e:
-            _log_fn(args, "DEBUG", f"YAML reporter unavailable: {e}")
+            # The config asked for this artifact and it will not exist. At
+            # DEBUG that was invisible in a normal run, so findings.yaml simply
+            # went missing from a report the user had configured.
+            _log_fn(
+                args,
+                "WARN",
+                f"findings.yaml was requested in 'outputs' but was not written: {e}",
+            )
+            logger.debug("YAML reporter unavailable: %s", e)
     if "html" in cfg.outputs:
         write_html(findings, out_dir / "dashboard.html")
     if "simple-html" in cfg.outputs:
@@ -220,11 +296,13 @@ def cmd_report(args, _log_fn) -> int:
         write_pci_dss_report(findings, out_dir / "PCI_DSS_COMPLIANCE.md")
         write_attack_navigator_json(findings, out_dir / "attack-navigator.json")
     except (OSError, PermissionError) as e:
-        _log_fn(args, "DEBUG", f"Failed to write compliance reports: {e}")
-        logger.debug(f"Compliance report write failed: {e}")
+        # DEBUG hid this entirely: all three compliance artifacts could vanish
+        # from a report with no record at any level a normal run displays.
+        _log_fn(args, "WARN", f"Failed to write compliance reports: {e}")
+        logger.debug("Compliance report write failed: %s", e)
     except (KeyError, ValueError, TypeError) as e:
-        _log_fn(args, "DEBUG", f"Failed to write compliance reports: {e}")
-        logger.debug(f"Compliance data formatting error: {e}")
+        _log_fn(args, "WARN", f"Failed to write compliance reports: {e}")
+        logger.debug("Compliance data formatting error: %s", e)
 
     # Evaluate and write policy reports (v1.0.0 Feature #5: Policy-as-Code)
     # Determine policies to evaluate using configuration precedence:
@@ -371,6 +449,7 @@ def cmd_report(args, _log_fn) -> int:
 
     # Determine exit code
     threshold = args.fail_on if args.fail_on is not None else cfg.fail_on
+    _warn_unknown_threshold(threshold, args, _log_fn)
     code = fail_code(threshold, counts)
 
     _log_fn(
@@ -379,24 +458,31 @@ def cmd_report(args, _log_fn) -> int:
         f"Wrote reports to {out_dir} (threshold={threshold or 'none'}, exit={code})",
     )
 
-    # Auto-storage hook: Store scan in history database if requested
+    # Auto-storage hook: Store scan in history database if requested.
+    #
+    # `history_db_path` and `store_error` are bound OUTSIDE the try so the
+    # handler can name the database even when the failure happened before the
+    # assignment, and so the exit-code check below is reachable on the path
+    # where no store was attempted at all.
+    store_error: Exception | None = None
+    _configured_db = getattr(args, "history_db", None)
+    history_db_path = (
+        Path(_configured_db) if _configured_db else Path(".jmo/history.db")
+    )
     if getattr(args, "store_history", False):
         try:
             from scripts.core.history_db import store_scan as db_store_scan
 
-            history_db_path = getattr(args, "history_db", None)
-            if history_db_path:
-                history_db_path = Path(history_db_path)
-            else:
-                history_db_path = Path(".jmo/history.db")
-
-            # Get profile name from config
-            profile_name = (
-                getattr(args, "profile_name", None) or cfg.default_profile or "balanced"
-            )
-
-            # Get tools from config
-            tools = getattr(cfg, "tools", [])
+            # Record what the scan actually did, not what the config asks for.
+            # `profile` and `tools_used` were resolved above from
+            # .scan_metadata.json (written by the scan) with a findings-derived
+            # fallback, and `tools_used` is what findings.json's metadata
+            # already reports. Reading cfg.tools here instead made every stored
+            # row claim jmo.yml's top-level `tools:` list regardless of profile
+            # -- 1790 of 1833 rows named the same 8 tools, including one that
+            # was not installed and so cannot have run (#787).
+            profile_name = getattr(args, "profile_name", None) or profile or "balanced"
+            tools = sorted(tools_used)
 
             # Get security flags (Phase 6 Step 6.1, 6.2, 6.3)
             no_store_raw = getattr(args, "no_store_raw_findings", False)
@@ -417,13 +503,35 @@ def cmd_report(args, _log_fn) -> int:
             _log_fn(args, "INFO", f"Stored scan in history: {scan_id}")
             _log_fn(args, "INFO", f"Database: {history_db_path}")
 
-        except FileNotFoundError as e:
-            _log_fn(args, "WARN", f"Failed to store scan history: {e}")
         except Exception as e:
-            _log_fn(args, "WARN", f"Failed to store scan history: {e}")
-            import traceback
+            # Reported at ERROR, naming the consequence rather than the call
+            # that failed. History storage is on unless `--no-store-history`,
+            # so this used to be a WARN that scrolled past mid-run followed by
+            # a raw traceback -- and the exit code never saw it, so a scan
+            # could report success having stored nothing (#903).
+            store_error = e
+            _log_fn(
+                args,
+                "ERROR",
+                f"Scan results were NOT recorded in the history database "
+                f"({history_db_path}): {e}. The scan completed and its reports "
+                f"are valid, but `jmo history` will not show this run. "
+                f"Re-record it with `jmo history store --results-dir "
+                f"{results_dir}`, or pass --fail-on-store-error to make a "
+                f"failed history write exit non-zero.",
+            )
+            # The traceback is a debugging detail, not a user-facing one: this
+            # is a recoverable condition, and printing a stack trace into
+            # normal scan output makes it read as a crash.
+            _log_fn(args, "DEBUG", f"store_scan traceback: {traceback.format_exc()}")
 
-            traceback.print_exc()
-
-    # Return non-zero if either severity threshold or policy violations occurred
-    return max(code, policy_exit_code)
+    # Return non-zero if the severity threshold, a policy violation, or -- only
+    # when explicitly asked -- a failed history write says so. Storage is on by
+    # default, so failing without the flag would redden scans for users who
+    # never asked for history and ran the scan for its findings (#903).
+    store_exit_code = (
+        1
+        if store_error is not None and getattr(args, "fail_on_store_error", False)
+        else 0
+    )
+    return max(code, policy_exit_code, store_exit_code)

@@ -48,7 +48,7 @@ security-scan:
 
 .PHONY: security-report
 security-report:
-\tjmo report ./results --profile {config.profile}
+\tjmo report ./results
 
 .PHONY: security-clean
 security-clean:
@@ -86,7 +86,7 @@ security-scan-deep:
 
 .PHONY: security-report
 security-report:
-\tjmo report ./results --profile {config.profile}
+\tjmo report ./results
 
 .PHONY: security-clean
 security-clean:
@@ -116,7 +116,7 @@ security-audit-ci:
 
 .PHONY: security-audit-fast
 security-audit-fast:
-\tjmo ci --repos-dir . --profile fast --fail-on HIGH
+\tjmo ci --repos-dir . --profile-name fast --fail-on HIGH
 
 .PHONY: security-check-pipelines
 security-check-pipelines:
@@ -128,7 +128,7 @@ security-check-images:
 
 .PHONY: security-report
 security-report:
-\tjmo report ./results --profile {config.profile}
+\tjmo report ./results
 
 .PHONY: security-clean
 security-clean:
@@ -152,11 +152,11 @@ help:
 
 .PHONY: security-check-staging
 security-check-staging:
-\tjmo ci --profile balanced --fail-on HIGH --image myapp:staging
+\tjmo ci --profile-name balanced --fail-on HIGH --image myapp:staging
 
 .PHONY: security-check-production
 security-check-production:
-\tjmo ci --profile deep --fail-on CRITICAL --image myapp:production
+\tjmo ci --profile-name deep --fail-on CRITICAL --image myapp:production
 
 .PHONY: security-sbom
 security-sbom:
@@ -168,7 +168,7 @@ security-full-check:
 
 .PHONY: security-report
 security-report:
-\tjmo report ./results --profile {config.profile}
+\tjmo report ./results
 
 .PHONY: help
 help:
@@ -451,7 +451,7 @@ security-report:
   stage: report
   image: {JMO_DOCKER_IMAGE_FULL}
   script:
-    - jmo report ./results --profile {profile}
+    - jmo report ./results
   dependencies:
     - security-scan-all
   artifacts:
@@ -473,7 +473,7 @@ ci-security-audit:
   stage: security-audit
   image: {JMO_DOCKER_IMAGE_FULL}
   script:
-    - jmo ci --repos-dir . --profile {profile} --fail-on HIGH
+    - jmo ci --repos-dir . --profile-name {profile} --fail-on HIGH
   artifacts:
     paths:
       - results/
@@ -495,7 +495,7 @@ deployment-security-check:
   stage: pre-deployment
   image: {JMO_DOCKER_IMAGE_FULL}
   script:
-    - jmo ci --profile {profile} --fail-on CRITICAL --image $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+    - jmo ci --profile-name {profile} --fail-on CRITICAL --image $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
   artifacts:
     paths:
       - results/
@@ -566,7 +566,7 @@ services:
     image: {JMO_DOCKER_IMAGE_FULL}
     volumes:
       - ./results:/scan/results
-    command: report /scan/results --profile {profile}
+    command: report /scan/results
     depends_on:
       - jmo-security
 """
@@ -587,7 +587,7 @@ services:
     command: >
       ci
       --repos-dir /scan
-      --profile {profile}
+      --profile-name {profile}
       --fail-on HIGH
       --human-logs
     environment:
@@ -610,7 +610,7 @@ services:
     command: >
       ci
       --image myapp:latest
-      --profile {profile}
+      --profile-name {profile}
       --fail-on CRITICAL
       --human-logs
     environment:

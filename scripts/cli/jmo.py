@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import sys
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -19,7 +20,14 @@ from scripts.cli.policy_commands import cmd_policy
 from scripts.cli.report_orchestrator import cmd_report as _cmd_report_impl
 
 # PHASE 1 REFACTORING: Import refactored modules
-from scripts.cli.scan_orchestrator import ScanConfig, ScanOrchestrator
+from scripts.cli.scan_orchestrator import (
+    TARGET_FAILED,
+    TARGET_OK,
+    TARGET_PARTIAL,
+    ScanConfig,
+    ScanOrchestrator,
+    classify_target_outcome,
+)
 from scripts.cli.schedule_commands import cmd_schedule
 from scripts.cli.trend_commands import cmd_trends
 from scripts.core.config import load_config
@@ -28,10 +36,8 @@ from scripts.core.exceptions import (
 )
 from scripts.core.tool_registry import PROFILE_TOOLS
 from scripts.core.unicode_utils import (
-    UNICODE_FALLBACKS as _UNICODE_FALLBACKS,
-)
-from scripts.core.unicode_utils import (
     harden_console_streams,
+    safe_write,
 )
 from scripts.core.unicode_utils import (
     safe_print as _safe_print,
@@ -48,6 +54,27 @@ def _merge_dict(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     out = dict(a) if a else {}
     if b:
         out.update(b)
+    return out
+
+
+def _merge_per_tool(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
+    """Merge per-tool overrides one level deeper than ``dict.update()``.
+
+    USER_GUIDE.md:1652 promises root and per-profile ``per_tool`` blocks are
+    "merged", with profile values winning. A flat update replaces a tool's whole
+    entry, so a profile that set only ``semgrep.timeout`` silently discarded a
+    root-level ``semgrep.flags`` (#791). Merge per tool, then per key.
+    """
+    out: dict[str, Any] = {
+        tool: dict(opts) if isinstance(opts, dict) else opts
+        for tool, opts in (a or {}).items()
+    }
+    for tool, opts in (b or {}).items():
+        existing = out.get(tool)
+        if isinstance(existing, dict) and isinstance(opts, dict):
+            existing.update(opts)
+        else:
+            out[tool] = dict(opts) if isinstance(opts, dict) else opts
     return out
 
 
@@ -82,7 +109,7 @@ def _effective_scan_settings(args) -> dict[str, Any]:
     retries = cfg.retries  # May be int or RetryConfig
     if isinstance(profile.get("retries"), (int, dict)):
         retries = profile["retries"]
-    per_tool = _merge_dict(cfg.per_tool, profile.get("per_tool", {}))
+    per_tool = _merge_per_tool(cfg.per_tool, profile.get("per_tool", {}))
 
     # Handle --skip-tools flag to exclude specific tools
     skip_tools = getattr(args, "skip_tools", None) or []
@@ -96,18 +123,33 @@ def _effective_scan_settings(args) -> dict[str, Any]:
             # as "it ran and found nothing" to anyone reading the results.
             # Verified with the accounting reconciler: skipping a tool without
             # this line produces `NEVER MENTIONED` and a FAIL verdict.
-            # "scripts.cli.jmo", not __name__: this module is normally entered
-            # as `python -m scripts.cli.jmo`, where __name__ is "__main__". A
-            # __main__ logger is not a child of "scripts", so it never receives
-            # the handler configure_scan_logging() installs and falls back to
-            # logging.lastResort - pinned at WARNING, which silently drops this
-            # INFO record. Measured: the line was absent from a real scan's
-            # stderr while firing correctly under a direct import.
-            logging.getLogger("scripts.cli.jmo").info(
-                "Skipping %d tool(s) at user request (--skip-tools): %s",
-                len(dropped),
-                ", ".join(sorted(dropped)),
+            #
+            # It goes through `_log`, not the stdlib logger, because the two
+            # have different default floors: `_log` defaults to INFO while
+            # `configure_scan_logging()` defaults the `scripts` logger to WARN -
+            # deliberately, since that is the right default for library
+            # diagnostics. An `.info()` here was therefore invisible in a normal
+            # run and appeared only under `--log-level INFO|DEBUG`, which is the
+            # exact silence this line exists to prevent (#871). Measured:
+            # default 0 records, INFO 1, WARN 0, DEBUG 1.
+            #
+            # An earlier fix here corrected the logger's *parentage* - under
+            # `python -m scripts.cli.jmo` this module's __name__ is "__main__",
+            # so the module logger at the top of the file is not a child of
+            # `scripts` and never receives the handler. That was real, and the
+            # level floor was left untouched, so the record still did not reach
+            # a normal run.
+            #
+            # The stdlib record stays as a DEBUG breadcrumb under the corrected
+            # name. `_log` writes JSON to stderr directly and never touches
+            # `logging`, so emitting at the user-facing level on both prints
+            # every line twice - the trap chunk 10 measured.
+            message = (
+                f"Skipping {len(dropped)} tool(s) at user request "
+                f"(--skip-tools): {', '.join(sorted(dropped))}"
             )
+            _log(args, "INFO", message)
+            logging.getLogger("scripts.cli.jmo").debug(message)
 
     return {
         "tools": tools,
@@ -221,6 +263,16 @@ def _add_scan_config_args(parser: argparse.ArgumentParser) -> None:
         help="Disable automatic history storage (default: enabled)",
     )
     parser.add_argument(
+        "--fail-on-store-error",
+        action="store_true",
+        default=False,
+        help=(
+            "Exit non-zero if the scan could not be recorded in the history "
+            "database (default: report the failure but still exit on findings "
+            "alone)"
+        ),
+    )
+    parser.add_argument(
         "--history-db",
         default=None,
         help="Path to history database (default: .jmo/history.db)",
@@ -312,7 +364,7 @@ def _add_report_args(subparsers: argparse._SubParsersAction) -> Any:
     rp.add_argument(
         "--profile",
         action="store_true",
-        help="Collect per-tool timing and write timings.json (for profile SELECTION use --profile-name on scan/ci)",
+        help="Write timings.json: per-adapter PARSE timing for the report phase (tool run times live in scan-timings.json, written by scan). For profile SELECTION use --profile-name on scan/ci",
     )
     rp.add_argument(
         "--threads",
@@ -352,7 +404,7 @@ def _add_ci_args(subparsers: argparse._SubParsersAction) -> Any:
     cp.add_argument(
         "--profile",
         action="store_true",
-        help="Collect timings.json during report (for profile SELECTION use --profile-name)",
+        help="Write timings.json: per-adapter PARSE timing for the report phase (tool run times live in scan-timings.json, written by scan). For profile SELECTION use --profile-name",
     )
     cp.add_argument(
         "--policy",
@@ -653,11 +705,13 @@ Two tiers:
   full       Real tools, real scans, Docker builds
 
 Examples:
-  jmo validate                     # Quick validation (176 checks)
-  jmo validate --tier full         # Full validation (207 checks)
+  jmo validate                     # Quick validation (259 checks)
+  jmo validate --tier full         # Full validation (290 checks)
   jmo validate --category cli      # CLI checks only
   jmo validate -v                  # Verbose per-check details
   jmo validate --json              # Machine-readable output
+
+Exit codes: 0 = GO, 1 = NO-GO (a check failed), 2 = usage error.
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -900,14 +954,23 @@ def _add_adapters_args(
 ) -> Any:
     """Add 'adapters' subcommand arguments for plugin management."""
     adapters_parser = subparsers.add_parser("adapters", help="Manage adapter plugins")
-    adapters_subparsers = adapters_parser.add_subparsers(dest="adapters_command")
+    # `required=True` matches `policy`/`schedule`: bare `jmo adapters` prints
+    # usage and exits 2. Without it argparse left `adapters_command` as None,
+    # `cmd_adapters` fell through its if/elif to `return 0`, and the command
+    # reported success while doing nothing -- the only subcommand in the CLI
+    # that did (measured: history 1, tools 1, policy 2, schedule 2).
+    adapters_subparsers = adapters_parser.add_subparsers(
+        dest="adapters_command", required=True
+    )
 
     # List command
     adapters_subparsers.add_parser("list", help="List all loaded adapter plugins")
 
     # Validate command
     validate_parser = adapters_subparsers.add_parser(
-        "validate", help="Validate an adapter plugin file"
+        "validate",
+        help="Validate an adapter plugin file (imports it, so module-level "
+        "code runs)",
     )
     validate_parser.add_argument("file", help="Path to adapter plugin file")
 
@@ -936,7 +999,7 @@ def _add_schedule_args(
     create_parser.add_argument(
         "--profile",
         required=True,
-        choices=["fast", "balanced", "deep"],
+        choices=list(PROFILE_TOOLS),
         help="Scan profile",
     )
     create_parser.add_argument("--repos-dir", help="Repository directory to scan")
@@ -989,12 +1052,16 @@ def _add_schedule_args(
     update_parser.add_argument("name", help="Schedule name")
     update_parser.add_argument("--cron", help="New cron expression")
     update_parser.add_argument(
-        "--profile", choices=["fast", "balanced", "deep"], help="New scan profile"
+        "--profile", choices=list(PROFILE_TOOLS), help="New scan profile"
     )
-    update_parser.add_argument(
+    # Mutually exclusive: the handler resolved `--suspend --resume` with an
+    # if/elif, so suspend won and resume was discarded without a word. argparse
+    # can say so properly, and does it before anything is written.
+    suspend_group = update_parser.add_mutually_exclusive_group()
+    suspend_group.add_argument(
         "--suspend", action="store_true", help="Suspend schedule"
     )
-    update_parser.add_argument("--resume", action="store_true", help="Resume schedule")
+    suspend_group.add_argument("--resume", action="store_true", help="Resume schedule")
 
     # EXPORT
     export_parser = schedule_subparsers.add_parser(
@@ -1050,7 +1117,7 @@ and any MCP-compatible client.
 
 Usage:
     # Development mode (stdio transport for Claude Desktop)
-    uv run mcp dev scripts/mcp/server.py
+    uv run mcp dev scripts/jmo_mcp/jmo_server.py
 
     # Production mode (via jmo CLI)
     jmo mcp-server --results-dir ./results --repo-root .
@@ -1058,7 +1125,11 @@ Usage:
 Environment Variables:
     MCP_RESULTS_DIR: Path to results directory (overrides --results-dir)
     MCP_REPO_ROOT: Path to repository root (overrides --repo-root)
-    MCP_API_KEY: API key for authentication (optional, dev mode if not set)
+    JMO_MCP_API_KEYS: Comma-separated API keys (see --api-key; NOT enforced)
+
+SECURITY: this server does not authenticate callers. Rate limiting is enforced;
+access control is not, because stdio transport supplies no caller identity to
+check a key against. Every client that can reach the process is trusted.
 
 See: docs/MCP_SETUP.md for GitHub Copilot and Claude Code integration guides.
         """,
@@ -1075,7 +1146,11 @@ See: docs/MCP_SETUP.md for GitHub Copilot and Claude Code integration guides.
     )
     mcp_parser.add_argument(
         "--api-key",
-        help="API key for authentication (optional, enables production mode)",
+        help=(
+            "API key to register (sets JMO_MCP_API_KEYS). NOT ENFORCED -- the "
+            "server has no caller identity to check it against and will warn "
+            "at startup. Does not enable authentication."
+        ),
     )
     _add_logging_args(mcp_parser)
     return mcp_parser
@@ -1169,7 +1244,15 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     store_parser.add_argument(
         "--profile",
         default="balanced",
-        choices=["fast", "balanced", "deep"],
+        # Deliberately no `choices=`. It was `list(PROFILE_TOOLS)`, which is the
+        # registry only -- but `store_scan()` validates against
+        # `get_known_profiles()`, the registry PLUS any profile defined under
+        # `profiles:` in jmo.yml. argparse was therefore the narrower gate, and
+        # a user-defined profile could never reach the validator that accepts
+        # it. That is the #721 enumeration class one layer above the SQL CHECK
+        # #725 removed; `get_known_profiles()`'s own docstring says not to
+        # hardcode the list. Invalid names are rejected by store_scan() with a
+        # message naming every known profile.
         help="Scan profile that was used (default: balanced)",
     )
     store_parser.add_argument(
@@ -1188,7 +1271,7 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     list_parser.add_argument("--branch", help="Filter by branch name")
     list_parser.add_argument(
         "--profile",
-        choices=["fast", "balanced", "deep"],
+        choices=list(PROFILE_TOOLS),
         help="Filter by profile",
     )
     list_parser.add_argument(
@@ -1282,10 +1365,15 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
         "trends", help="Show security trends over time for a branch"
     )
     trends_parser.add_argument(
-        "--branch", default="main", help="Branch name (default: main)"
+        "--branch",
+        default=None,
+        help="Branch name (default: every branch)",
     )
     trends_parser.add_argument(
-        "--days", type=int, default=30, help="Number of days to analyze (default: 30)"
+        "--days",
+        type=_positive_int,
+        default=30,
+        help="Number of days to analyze (default: 30)",
     )
     trends_parser.add_argument("--json", action="store_true", help="Output as JSON")
     add_db_arg(trends_parser)
@@ -1339,6 +1427,40 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     return history_parser
 
 
+def _positive_int(value: str) -> int:
+    """argparse type for a count that must be at least 1.
+
+    Raises:
+        argparse.ArgumentTypeError: If the value is not an integer >= 1.
+    """
+    try:
+        parsed = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"expected an integer >= 1, got {value!r}"
+        ) from None
+    if parsed < 1:
+        raise argparse.ArgumentTypeError(f"expected an integer >= 1, got {parsed}")
+    return parsed
+
+
+def _non_negative_int(value: str) -> int:
+    """argparse type for a count that may be 0 but not negative.
+
+    Raises:
+        argparse.ArgumentTypeError: If the value is not an integer >= 0.
+    """
+    try:
+        parsed = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"expected an integer >= 0, got {value!r}"
+        ) from None
+    if parsed < 0:
+        raise argparse.ArgumentTypeError(f"expected an integer >= 0, got {parsed}")
+    return parsed
+
+
 def _add_trends_args(subparsers: argparse._SubParsersAction) -> Any:
     """Add 'trends' subcommand arguments for security trend analysis."""
     trends_parser = subparsers.add_parser(
@@ -1377,7 +1499,7 @@ Usage Examples:
     trends_subparsers = trends_parser.add_subparsers(dest="trends_command")
 
     # Common arguments
-    def add_common_trend_args(parser):
+    def add_common_trend_args(parser, *, branch: bool = True):
         """Add common trend analysis arguments to argparse parser.
 
         Adds arguments shared by multiple trend subcommands (analyze, show, insights)
@@ -1385,6 +1507,10 @@ Usage Examples:
 
         Args:
             parser (argparse.ArgumentParser): Parser to modify in-place
+            branch (bool): Whether this subcommand can act on a branch filter.
+                False for `show` and `compare`, which are addressed by scan
+                ID -- they accepted --branch and discarded it, so a user who
+                passed one believed a filter was in effect that never was.
 
         Returns:
             None (modifies parser in-place by adding arguments)
@@ -1397,8 +1523,9 @@ Usage Examples:
             custom.db dev
 
         Note:
-            These arguments are automatically added to all trend analysis subcommands
-            (analyze, show, regressions, score, compare, insights, explain, developers).
+            --db goes on every trend subcommand that reads the database.
+            --branch goes on the five that filter by it (analyze, regressions,
+            score, insights, developers); show and compare take scan IDs.
 
         """
         parser.add_argument(
@@ -1406,11 +1533,16 @@ Usage Examples:
             default=None,
             help="Path to SQLite database (default: .jmo/history.db)",
         )
-        parser.add_argument(
-            "--branch",
-            default="main",
-            help="Git branch to analyze (default: main)",
-        )
+        if branch:
+            parser.add_argument(
+                "--branch",
+                default=None,
+                help=(
+                    "Git branch to analyze (default: every branch). A branch "
+                    "filter cannot match a scan whose branch is unknown, and "
+                    "those are stored NULL."
+                ),
+            )
 
     # ANALYZE
     analyze_parser = trends_subparsers.add_parser(
@@ -1418,12 +1550,12 @@ Usage Examples:
     )
     analyze_parser.add_argument(
         "--days",
-        type=int,
+        type=_positive_int,
         help="Number of days to analyze (e.g., 30)",
     )
     analyze_parser.add_argument(
         "--last",
-        type=int,
+        type=_positive_int,
         help="Last N scans to analyze (e.g., 10)",
     )
     analyze_parser.add_argument(
@@ -1453,7 +1585,27 @@ Usage Examples:
     )
     analyze_parser.add_argument(
         "--export-html",
-        help="Export analysis to HTML file (Phase 4)",
+        help="Export analysis to HTML file",
+    )
+    # These four were read by cmd_trends_analyze from the day trend analysis
+    # landed and declared by nobody, so every getattr() found None and
+    # scripts/core/trend_exporters.py was unreachable from the CLI. The
+    # exporters themselves are a documented, semver-stable public API.
+    analyze_parser.add_argument(
+        "--export-csv",
+        help="Export analysis to CSV file (Excel, Google Sheets)",
+    )
+    analyze_parser.add_argument(
+        "--export-prometheus",
+        help="Export analysis as Prometheus metrics (.prom)",
+    )
+    analyze_parser.add_argument(
+        "--export-grafana",
+        help="Export a Grafana dashboard definition (JSON)",
+    )
+    analyze_parser.add_argument(
+        "--export-dashboard",
+        help="Export trend data for the JMo dashboard (JSON)",
     )
     add_common_trend_args(analyze_parser)
 
@@ -1467,11 +1619,11 @@ Usage Examples:
     )
     show_parser.add_argument(
         "--context",
-        type=int,
+        type=_non_negative_int,
         default=5,
         help="Number of scans before/after to show (default: 5)",
     )
-    add_common_trend_args(show_parser)
+    add_common_trend_args(show_parser, branch=False)
 
     # REGRESSIONS
     regressions_parser = trends_subparsers.add_parser(
@@ -1479,7 +1631,7 @@ Usage Examples:
     )
     regressions_parser.add_argument(
         "--last",
-        type=int,
+        type=_positive_int,
         help="Last N scans to analyze",
     )
     regressions_parser.add_argument(
@@ -1500,12 +1652,12 @@ Usage Examples:
     )
     score_parser.add_argument(
         "--last",
-        type=int,
+        type=_positive_int,
         help="Last N scans to analyze",
     )
     score_parser.add_argument(
         "--days",
-        type=int,
+        type=_positive_int,
         help="Number of days to analyze",
     )
     add_common_trend_args(score_parser)
@@ -1527,7 +1679,7 @@ Usage Examples:
         action="store_true",
         help="Show sample findings from diff",
     )
-    add_common_trend_args(compare_parser)
+    add_common_trend_args(compare_parser, branch=False)
 
     # INSIGHTS
     insights_parser = trends_subparsers.add_parser(
@@ -1535,7 +1687,7 @@ Usage Examples:
     )
     insights_parser.add_argument(
         "--last",
-        type=int,
+        type=_positive_int,
         help="Last N scans to analyze",
     )
     add_common_trend_args(insights_parser)
@@ -1558,12 +1710,12 @@ Usage Examples:
     )
     developers_parser.add_argument(
         "--last",
-        type=int,
+        type=_positive_int,
         help="Last N scans to analyze",
     )
     developers_parser.add_argument(
         "--top",
-        type=int,
+        type=_positive_int,
         default=10,
         help="Show top N developers (default: 10)",
     )
@@ -1719,18 +1871,25 @@ def _add_verify_args(subparsers: argparse._SubParsersAction) -> None:
 Verify cryptographic attestation and detect tampering.
 
 Verification checks:
-- Subject digest matches attestation
-- Attestation format is valid
-- Signature verification (if signed)
-- Rekor transparency log (if published)
+- Subject digest matches attestation (always)
+- Attestation format is valid (always)
+- Tamper indicators: timestamps, builder, suspicious patterns (always)
+- Signature -- ONLY when --cert-identity and --cert-oidc-issuer are given.
+  Without an expected signer a bundle proves only that somebody signed it,
+  so it is reported as NOT CHECKED rather than quietly counted as a pass.
+- Rekor transparency log -- only with --rekor-check, which needs a bundle
 
 Exit codes:
   0 - Verification succeeded
-  1 - Verification failed or tampering detected
+  1 - Verification ran and failed, or tampering was detected
+  2 - Usage error: a path does not exist or a required flag is missing,
+      so nothing was verified
 
 Example:
   jmo verify findings.json
-  jmo verify findings.json --rekor-check
+  jmo verify findings.json --rekor-check \\
+      --cert-identity you@example.com \\
+      --cert-oidc-issuer https://oauth2.sigstore.dev/auth
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -1740,12 +1899,26 @@ Example:
         "--attestation", "-a", help="Attestation file (default: <subject>.att.json)"
     )
     verify_parser.add_argument(
-        "--rekor-check",
-        action="store_true",
-        help="Verify against Rekor transparency log",
+        "--signature",
+        "-s",
+        help="Sigstore bundle to verify the attestation against "
+        "(default: <attestation>.sigstore.json)",
     )
     verify_parser.add_argument(
-        "--policy", help="Policy file for additional verification rules"
+        "--cert-identity",
+        help="Expected signer identity in the certificate SAN "
+        "(required to check a signature)",
+    )
+    verify_parser.add_argument(
+        "--cert-oidc-issuer",
+        help="Expected OIDC issuer URL in the certificate "
+        "(required to check a signature)",
+    )
+    verify_parser.add_argument(
+        "--rekor-check",
+        action="store_true",
+        help="Confirm the signature bundle's Rekor transparency log entry "
+        "exists (requires a signature check; makes a network request)",
     )
     verify_parser.add_argument(
         "--human-logs",
@@ -1799,11 +1972,16 @@ Supports three modes:
     )
 
     # Output options
+    # No argparse default. `cmd_diff` resolves an unset value to "md", which
+    # leaves `--auto` able to tell "the user did not choose" from "the user
+    # chose md" -- the distinction its advertised format suggestion needs. A
+    # default of "md" here made `args.format` permanently truthy, so
+    # `suggest_output_format()` was unreachable.
     diff_parser.add_argument(
         "--format",
         choices=["json", "md", "html", "sarif"],
-        default="md",
-        help="Output format (default: md)",
+        default=None,
+        help="Output format (default: md, or suggested by --auto)",
     )
     diff_parser.add_argument(
         "--output", type=Path, help="Output file path (default: stdout for md/json)"
@@ -1835,24 +2013,31 @@ Supports three modes:
     diff_parser.add_argument(
         "--db",
         type=Path,
-        help="Path to SQLite database (default: ~/.jmo/scans.db)",
+        help="Path to the history database (default: .jmo/history.db)",
     )
 
     return diff_parser
 
 
-def parse_args():
-    """Parse command-line arguments for jmo CLI."""
+def build_parser() -> argparse.ArgumentParser:
+    """Build the full jmo argument parser without parsing anything.
+
+    Split out of ``parse_args`` so the parser is available as an *oracle*.
+    ``cli_validator.MAIN_SUBCOMMANDS`` used to be a hand-maintained list and had
+    drifted to 13 of 20 subcommands (#783); a restated list cannot notice a
+    subcommand nobody added it to. Anything that needs to know the CLI surface
+    now walks this parser instead of keeping its own copy.
+    """
     ap = argparse.ArgumentParser(
         prog="jmo",
-        description="JMo Security Audit Suite - Unified security scanning with 12+ tools",
+        description="JMo Security Audit Suite - Unified security scanning with 29 tools",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 BEGINNER-FRIENDLY COMMANDS:
   wizard              Interactive wizard for guided security scanning
-  fast                Quick scan with 3 best-in-class tools (5-8 min)
-  balanced            Balanced scan with 8 production-ready tools (15-20 min)
-  full                Comprehensive scan with all 12 tools (30-60 min)
+  fast                Quick scan with 9 best-in-class tools (5-10 min)
+  balanced            Balanced scan with 17 production-ready tools (18-25 min)
+  full                Comprehensive scan with all 28 tools (40-70 min)
   setup               Verify and install security tools
 
 ADVANCED COMMANDS:
@@ -1905,6 +2090,13 @@ Documentation: https://docs.jmotools.com
     _add_tools_args(sub)  # Tool management commands
     _add_validate_args(sub)  # Pre-release validation
     add_build_args(sub)  # Docker build commands
+
+    return ap
+
+
+def parse_args():
+    """Parse command-line arguments for jmo CLI."""
+    ap = build_parser()
 
     try:
         return ap.parse_args()
@@ -2070,8 +2262,15 @@ def _check_scan_tools(args, requested_tools: list[str]) -> tuple[list[str], list
         requested_tools: List of tool names requested for the scan
 
     Returns:
-        Tuple of (available_tools, missing_tool_names)
-        If user cancels, returns ([], []) to signal abort
+        Tuple of (available_tools, missing_tool_names). An empty first element
+        means there is nothing to scan with, for any of three reasons: every
+        tool is missing (logged here), ``--allow-missing-tools`` left nothing
+        installed (logged by the caller, which is the only place that knows the
+        flag was the reason), or the user cancelled (logged here).
+
+        This used to say it returned ``([], [])`` on cancel. No path returns
+        that -- every one carries ``missing_names`` -- so a caller written to
+        that docstring's discriminator would never have matched.
     """
     try:
         from scripts.cli.tool_manager import get_missing_tools_for_scan
@@ -2140,6 +2339,7 @@ def _check_scan_tools(args, requested_tools: list[str]) -> tuple[list[str], list
             except KeyboardInterrupt:
                 # A person deciding to stop, unlike EOF which is the absence of
                 # a person. Cancelling is what they asked for.
+                _log(args, "ERROR", "Scan cancelled at the missing-tool prompt.")
                 return [], missing_names
 
             if choice == "1":
@@ -2154,6 +2354,7 @@ def _check_scan_tools(args, requested_tools: list[str]) -> tuple[list[str], list
             elif choice == "2":
                 return available, missing_names
             elif choice == "3":
+                _log(args, "ERROR", "Scan cancelled: you chose [3] Cancel scan.")
                 return [], missing_names
             else:
                 print("Please enter 1, 2, or 3")
@@ -2355,9 +2556,14 @@ def _collect_email_opt_in(args) -> None:
                     )
                 else:
                     # Audience add failed — saved locally, retry path available.
+                    # No `jmo subscribe` command exists, and the
+                    # `pending_subscription` flag written below is never read
+                    # back, so there is no CLI retry path to advertise (#790).
+                    # Point at the page that does exist.
                     _safe_print(
-                        "\n✅ Thanks! Saved your address. Run "
-                        "`jmo subscribe` later to finish signup.\n"
+                        "\n✅ Thanks! Saved your address locally, but signup"
+                        " did not complete.\n   Finish it at"
+                        " https://jmotools.com/subscribe.html\n"
                     )
                     _log(
                         args,
@@ -2404,8 +2610,10 @@ def _collect_email_opt_in(args) -> None:
                 yaml.dump(config, f)
             _log(args, "DEBUG", f"Email collection error (non-blocking): {e}")
     else:
-        _safe_print("\n👍 No problem! You can always add your email later with:")
-        print("   jmo config --email your@email.com\n")
+        # `jmo config` is not a subcommand -- the parser has 20 and that is not
+        # one of them (#790). Name the page that actually works.
+        _safe_print("\n👍 No problem! You can always subscribe later at:")
+        print("   https://jmotools.com/subscribe.html\n")
 
         # Mark onboarding complete even if skipped
         import yaml
@@ -2416,10 +2624,10 @@ def _collect_email_opt_in(args) -> None:
 
 
 def _show_kofi_reminder(args) -> None:
-    """Show Ko-Fi support reminder every 5th scan (non-intrusive).
+    """Show Ko-Fi support reminder every 3rd scan (non-intrusive).
 
     Tracks scan count in ~/.jmo/config.yml and displays friendly reminder
-    every 5 scans to support full-time development.
+    every 3 scans to support full-time development.
     """
     config_path = Path.home() / ".jmo" / "config.yml"
     config_path.parent.mkdir(exist_ok=True)
@@ -2643,6 +2851,24 @@ class ProgressTracker:
             secs = int(elapsed % 60)
             return f"{mins}m{secs}s"
 
+    @staticmethod
+    def _write_progress_line(progress_line: str) -> None:
+        """Write a carriage-return progress line through the fallback table.
+
+        These three call sites used `print(..., file=sys.stderr)`, which reaches
+        only `harden_console_streams`' `errors="replace"` -- the guarantee that
+        nothing crashes, not the layer that renders something readable. The
+        spinner frames are Braille (U+280B..U+280F) and **all ten are
+        unrenderable in cp1252, cp437 and cp850**, i.e. in every codec a real
+        Windows console uses, so the animation was a motionless `?` for the
+        length of the scan. `safe_write` applies `UNICODE_FALLBACKS` first,
+        which now maps the ten frames onto a rotating ASCII cycle that still
+        animates. The substitutes are one character wide, so the `:<70`
+        padding still clears the previous line exactly.
+        """
+        safe_write(f"{progress_line:<70}", sys.stderr)
+        sys.stderr.flush()
+
     def _refresh_display(self):
         """Refresh progress line with current elapsed time and spinner.
 
@@ -2671,23 +2897,47 @@ class ProgressTracker:
             f"\r[{self.tools_completed}/{self.total_tools}] "
             f"{spinner} {base_name} ({elapsed_str}) [{percentage}%]"
         )
-        print(f"{progress_line:<70}", end="", file=sys.stderr, flush=True)
+        self._write_progress_line(progress_line)
 
-    def update(self, target_type: str, target_name: str, elapsed: float):
+    def update(
+        self,
+        target_type: str,
+        target_name: str,
+        statuses: Mapping[str, Any],
+        elapsed: float = 0.0,
+    ):
         """Update progress after completing a target scan.
 
         Args:
             target_type: Type of target (repo, image, url, etc.)
             target_name: Name/identifier of target
-            elapsed: Elapsed time in seconds for this target
+            statuses: The scanner's per-tool boolean map for this target. The
+                success symbol is derived from this and nothing else.
+            elapsed: Seconds this target took, measured in the worker.
 
+        The symbol used to be ``"✓" if elapsed >= 0 else "✗"`` -- a duration
+        deciding a success question -- while the only caller passed a hardcoded
+        ``elapsed=1.0``. Both halves of the ternary were therefore constant, and
+        a target whose every tool failed printed the same ``✓`` as a clean one
+        (#809). ``(1s)`` was the same fiction; the duration is now real.
         """
         import time
+
+        outcome = classify_target_outcome(statuses)
+        failed_tools = sorted(
+            name
+            for name, ok in (statuses or {}).items()
+            if not name.startswith("__") and not ok
+        )
 
         with self._lock:
             self.completed += 1
             percentage = int((self.completed / self.total) * 100)
-            status_symbol = "✓" if elapsed >= 0 else "✗"
+            status_symbol = {
+                TARGET_OK: "✓",
+                TARGET_PARTIAL: "⚠",
+                TARGET_FAILED: "✗",
+            }[outcome]
 
             # Calculate ETA
             if self._start_time and self.completed > 0:
@@ -2706,7 +2956,31 @@ class ProgressTracker:
                 f"Progress: {percentage}% | ETA: {eta_str}"
             )
 
-            _log(self.args, "INFO", message)
+            # The level carries the outcome too, for anyone reading the JSON
+            # log stream rather than the glyph. A symbol alone is not enough:
+            # `--json-logs` consumers filter on `level`, and at INFO a total
+            # failure was indistinguishable from a clean scan there as well.
+            if outcome == TARGET_FAILED:
+                _log(
+                    self.args,
+                    "ERROR",
+                    f"{message} - contributed NO findings: "
+                    + (
+                        f"every tool failed ({', '.join(failed_tools)})"
+                        if failed_tools
+                        else "no tool ran against this target"
+                    ),
+                )
+            elif outcome == TARGET_PARTIAL:
+                _log(
+                    self.args,
+                    "WARN",
+                    f"{message} - findings MISSING from "
+                    f"{len(failed_tools)} failed tool(s): "
+                    f"{', '.join(failed_tools)}",
+                )
+            else:
+                _log(self.args, "INFO", message)
 
     def _format_duration(self, seconds: int) -> str:
         """Format duration in human-readable format."""
@@ -2803,7 +3077,7 @@ class ProgressTracker:
                         f"\r[{self.tools_completed}/{self.total_tools}] "
                         f"{spinner} {base_tool_name} (0s) [{percentage}%]"
                     )
-                    print(f"{progress_line:<70}", end="", file=sys.stderr, flush=True)
+                    self._write_progress_line(progress_line)
             else:
                 # Tool/phase completed (success, error, or timeout)
                 self.tools_in_progress.discard(tool_name)
@@ -2828,7 +3102,7 @@ class ProgressTracker:
                         f"{status_icon} {base_tool_name} [{percentage}%]"
                     )
                     # Pad to clear leftover characters
-                    print(f"{progress_line:<70}", end="", file=sys.stderr, flush=True)
+                    self._write_progress_line(progress_line)
 
                     # Print newline and stop refresh when all tools complete
                     if self.tools_completed >= self.total_tools:
@@ -2899,7 +3173,28 @@ def cmd_scan(args) -> int:
     if not os.environ.get("DOCKER_CONTAINER"):
         tools, missing_tools = _check_scan_tools(args, tools)
         if not tools:
-            # All tools missing and user cancelled
+            # Nothing left to run. Three different situations reach here and
+            # this branch used to return 1 saying nothing on any stream (#811):
+            #
+            #   * --allow-missing-tools with every tool absent. _check_scan_tools
+            #     returns ([], missing) without logging, because the flag is
+            #     checked before the "none installed" error. Silent.
+            #   * no flag, every tool absent. Already logged "None of the
+            #     requested tools are installed" -- do not repeat it.
+            #   * the user chose Cancel at the prompt. Now logged there.
+            #
+            # The comment this replaces said "user cancelled", which is the one
+            # case that cannot happen non-interactively -- and non-interactive
+            # is where the silence did the damage: a CI job asserting only
+            # `rc != 0` cannot tell this bail from the failure it meant to test.
+            if getattr(args, "allow_missing_tools", False):
+                _log(
+                    args,
+                    "ERROR",
+                    "--allow-missing-tools was given, but none of the requested "
+                    "tool(s) are installed, so there is nothing to scan with: "
+                    f"{', '.join(missing_tools)}",
+                )
             return 1
         if missing_tools:
             _log(
@@ -2928,14 +3223,27 @@ def cmd_scan(args) -> int:
     orchestrator = ScanOrchestrator(scan_config)
     targets = orchestrator.discover_targets(args)
 
-    # Validate at least one target
+    # Validate at least one target. A scan that scanned nothing is not a
+    # success: `jmo scan --repo "$REPO" || exit 1` used to pass when $REPO was
+    # a typo, because this returned 0. Same call as #788 made for
+    # `jmo tools check`. The two cases are reported differently because they
+    # are different mistakes.
     if targets.is_empty():
-        _log(
-            args,
-            "WARN",
-            "No scan targets provided (repos, images, IaC files, URLs, GitLab, or K8s resources).",
-        )
-        return 0
+        if targets.rejected:
+            _log(
+                args,
+                "ERROR",
+                "Every target was rejected, so nothing was scanned: "
+                + "; ".join(targets.rejected),
+            )
+        else:
+            _log(
+                args,
+                "ERROR",
+                "No scan targets provided (repos, images, IaC files, URLs, "
+                "GitLab, or K8s resources).",
+            )
+        return 1
 
     # Log scan targets summary
     _log(args, "INFO", f"Scan targets: {targets.summary()}")
@@ -3107,6 +3415,12 @@ def cmd_scan(args) -> int:
             f"for {total_targets} target(s)...",
         )
 
+    # Per-target outcomes, so the exit code can reflect them. `scan_all`'s
+    # return value was discarded at both call sites below, which is why a target
+    # that produced nothing could not affect the exit code however loudly the
+    # scanner reported it (#809).
+    scan_results: list[tuple[str, dict]] = []
+
     if use_rich_progress:
         # Use Rich-based progress tracker for clean, thread-safe display
         from scripts.cli.rich_progress import RichScanProgressTracker
@@ -3120,7 +3434,7 @@ def cmd_scan(args) -> int:
         # Execute scans with Rich progress context
         try:
             with rich_progress:
-                orchestrator.scan_all(
+                scan_results = orchestrator.scan_all(
                     targets,
                     per_tool_config,
                     progress_callback=rich_progress.update,
@@ -3144,9 +3458,13 @@ def cmd_scan(args) -> int:
         progress.start()
 
         # Create progress callback for orchestrator (target-level)
-        def progress_callback(target_type, target_id, statuses):
-            """Update progress tracker when scan completes."""
-            progress.update(target_type, target_id, elapsed=1.0)
+        def progress_callback(target_type, target_id, statuses, elapsed=0.0):
+            """Update progress tracker when scan completes.
+
+            This closure used to drop `statuses` and pass `elapsed=1.0`, which
+            is how a target whose every tool failed rendered `✓ ... (1s)`.
+            """
+            progress.update(target_type, target_id, statuses, elapsed=elapsed)
 
         # Create tool-level progress callback
         def tool_progress_callback(
@@ -3157,7 +3475,7 @@ def cmd_scan(args) -> int:
 
         # Execute scans via orchestrator (replaces 158 lines of inline logic)
         try:
-            orchestrator.scan_all(
+            scan_results = orchestrator.scan_all(
                 targets,
                 per_tool_config,
                 progress_callback,
@@ -3176,6 +3494,30 @@ def cmd_scan(args) -> int:
                 raise
             return 1
 
+    # A target whose every tool failed contributed nothing to this scan. That
+    # was reported correctly by each scanner, recorded correctly in
+    # scan-timings.json, and then reached neither the progress line nor the exit
+    # code -- so `jmo scan` exited 0 over a GitLab target it could not
+    # authenticate to and a k8s target that died in argument parsing (#809).
+    #
+    # Deliberately scoped to targets where *nothing* ran, not to any tool
+    # failure: individual tool failures are already reported per tool, and a
+    # deep profile legitimately has tools that do not apply everywhere. The line
+    # this draws is "did this target produce anything at all".
+    failed_targets = [
+        str(name)
+        for name, statuses in scan_results
+        if classify_target_outcome(statuses) == TARGET_FAILED
+    ]
+    if failed_targets:
+        _log(
+            args,
+            "ERROR",
+            f"{len(failed_targets)} of {len(scan_results)} target(s) produced no "
+            f"findings because no tool ran successfully against them: "
+            f"{', '.join(failed_targets)}",
+        )
+
     # Show Ko-Fi support reminder
     _show_kofi_reminder(args)
 
@@ -3191,11 +3533,27 @@ def cmd_scan(args) -> int:
         "tools": tools,
         "timestamp": datetime.now(UTC).isoformat(),
         "target_count": total_targets,
+        # The paths actually scanned. store_scan() needs these to record git
+        # context for the right repository: `results_dir/individual-repos/<name>`
+        # is an OUTPUT directory, so walking up from it finds whatever repo
+        # happens to contain the results folder, not the repo that was scanned
+        # (#780). Absolute, because the report phase may run from elsewhere.
+        "repo_paths": [str(Path(r).resolve()) for r in targets.repos],
     }
     scan_metadata_path.write_text(json.dumps(scan_metadata), encoding="utf-8")
 
     # BUG #2 FIX: Automatically run report phase to aggregate findings and store history
     # This ensures --no-store-history flag (default: enabled) actually works
+    #
+    # `jmo ci` sets skip_auto_report: it runs its own report immediately after
+    # this call, with the --fail-on/--policy flags a scan namespace does not
+    # carry. Running both wrote every artifact twice and stored two history rows
+    # for one scan. Nothing on any parser sets this attribute -- it is the
+    # internal handshake between cmd_ci and cmd_scan, and absence means "report
+    # normally", so a bare `jmo scan` is unaffected.
+    if getattr(args, "skip_auto_report", False):
+        return 1 if failed_targets else 0
+
     _log(args, "INFO", "Running report phase to aggregate findings...")
 
     # Add missing report-specific arguments to namespace
@@ -3218,8 +3576,13 @@ def cmd_scan(args) -> int:
 
     report_code = _cmd_report_impl(args, _log)
 
-    # Return report exit code if it failed, otherwise 0 (scan succeeded)
-    return report_code if report_code != 0 else 0
+    # Report's threshold verdict wins when it fails -- it is the more specific
+    # answer. Otherwise a target that produced nothing is itself a failure: the
+    # run cannot honestly claim success for a target it never scanned. Same call
+    # as #788 and #806, and a user-visible behaviour change for the CHANGELOG.
+    if report_code != 0:
+        return report_code
+    return 1 if failed_targets else 0
 
 
 def cmd_report(args) -> int:
@@ -3270,15 +3633,26 @@ def cmd_adapters(args) -> int:
 
             plugin_registry = PluginRegistry()
             loader = PluginLoader(plugin_registry)
-            loader._load_plugin(plugin_file)
-
-            _safe_print(f"✅ Valid plugin: {plugin_file}")
-            return 0
+            registered = loader._load_plugin(plugin_file)
         except (
             Exception
         ) as e:  # Acceptable: plugin validation — report error without crashing CLI
             _safe_print(f"❌ Invalid plugin: {e}")
             return 1
+
+        # The one condition this command exists to check. `_load_plugin` treats
+        # "imported fine but defines no AdapterPlugin" as a warning, not an
+        # error, so keying success off "no exception raised" passed any
+        # importable Python file: `x = 1` reported "✅ Valid plugin" and exit 0.
+        if registered is None:
+            _safe_print(
+                f"❌ Invalid plugin: {plugin_file} defines no AdapterPlugin "
+                "subclass with usable metadata"
+            )
+            return 1
+
+        _safe_print(f"✅ Valid plugin: {plugin_file} (registers '{registered}')")
+        return 0
 
     return 0
 
@@ -3523,8 +3897,13 @@ def cmd_mcp_server(args):
     os.environ["MCP_RESULTS_DIR"] = str(Path(args.results_dir).resolve())
     os.environ["MCP_REPO_ROOT"] = str(Path(args.repo_root).resolve())
 
+    # This set MCP_API_KEY, which nothing in scripts/jmo_mcp/ reads -- the
+    # server reads JMO_MCP_API_KEYS. So `--api-key`, advertised as "enables
+    # production mode", set an env var no code consulted. The name is corrected
+    # here; enforcement is still absent, and the server now says so at startup
+    # instead of logging "Authentication: enabled".
     if args.api_key:
-        os.environ["MCP_API_KEY"] = args.api_key
+        os.environ["JMO_MCP_API_KEYS"] = args.api_key
 
     # Configure logging based on args
     if args.human_logs:
@@ -3630,13 +4009,29 @@ def cmd_attest(args) -> int:
 
     """
     subject_path = Path(args.subject)
-    if not subject_path.exists():
+    # is_file(), not exists(): a directory passed here used to reach open() and
+    # surface as a raw PermissionError traceback. A path that is not a readable
+    # file means nothing was attested — a usage error (2).
+    if not subject_path.is_file():
         _log(args, "ERROR", f"Subject file not found: {args.subject}")
-        return 1
+        return 2
+
+    # --rekor only takes effect through --sign. Exiting 0 having done nothing
+    # let a CI step "succeed" with no transparency-log entry to show for it.
+    if getattr(args, "rekor", False) and not getattr(args, "sign", False):
+        _log(
+            args,
+            "ERROR",
+            "--rekor requires --sign (signing is what uploads to Rekor)",
+        )
+        return 2
 
     # Load scan arguments if provided
     scan_args = {}
     if hasattr(args, "scan_args") and args.scan_args:
+        if not Path(args.scan_args).is_file():
+            _log(args, "ERROR", f"Scan args file not found: {args.scan_args}")
+            return 2
         with open(args.scan_args, encoding="utf-8") as f:
             scan_args = json.load(f)
 
@@ -3652,6 +4047,11 @@ def cmd_attest(args) -> int:
         profile=scan_args.get("profile_name", "default"),
         tools=tools,
         targets=scan_args.get("repos", []),
+        # Only claim these when the scan actually reported them. They were
+        # written as a fixed threads=4/timeout=600 into every attestation ever
+        # produced, which is an unmeasured value stated as provenance.
+        threads=scan_args.get("threads"),
+        timeout=scan_args.get("timeout"),
     )
 
     # Determine output path
@@ -3711,15 +4111,19 @@ def cmd_verify(args) -> int:
         args: Parsed command-line arguments
 
     Returns:
-        0 if verification succeeds, non-zero on error or tampering
+        0 if verification succeeds, 1 if it ran and failed, 2 if a path does
+        not exist so nothing was verified.
 
     """
     from scripts.core.attestation.verifier import AttestationVerifier
 
     subject_path = Path(args.subject)
-    if not subject_path.exists():
+    # A missing path means nothing was verified, which is a usage error (2),
+    # not a negative verdict (1). Returning 1 made "you typo'd the filename"
+    # indistinguishable from "this artifact is forged".
+    if not subject_path.is_file():
         _log(args, "ERROR", f"Subject file not found: {args.subject}")
-        return 1
+        return 2
 
     # Determine attestation path
     if hasattr(args, "attestation") and args.attestation:
@@ -3727,9 +4131,41 @@ def cmd_verify(args) -> int:
     else:
         attestation_path = str(subject_path) + ".att.json"
 
-    if not Path(attestation_path).exists():
+    if not Path(attestation_path).is_file():
         _log(args, "ERROR", f"Attestation not found: {attestation_path}")
-        return 1
+        return 2
+
+    # Signature checking is opt-in and all-or-nothing: it needs a bundle AND
+    # an expected signer. Half a signature check is not a weaker check, it is
+    # a different claim, so the partial cases are usage errors rather than
+    # quietly-skipped work.
+    cert_identity = getattr(args, "cert_identity", None)
+    cert_oidc_issuer = getattr(args, "cert_oidc_issuer", None)
+    signature_path = getattr(args, "signature", None)
+    check_rekor = getattr(args, "rekor_check", False)
+
+    if bool(cert_identity) != bool(cert_oidc_issuer):
+        _log(
+            args,
+            "ERROR",
+            "--cert-identity and --cert-oidc-issuer must be given together",
+        )
+        return 2
+
+    if cert_identity:
+        if not signature_path:
+            signature_path = attestation_path + ".sigstore.json"
+        if not Path(signature_path).is_file():
+            _log(args, "ERROR", f"Signature bundle not found: {signature_path}")
+            return 2
+    elif signature_path or check_rekor:
+        _log(
+            args,
+            "ERROR",
+            "checking a signature requires --cert-identity and "
+            "--cert-oidc-issuer naming the signer you expect",
+        )
+        return 2
 
     # Create verifier
     verifier = AttestationVerifier()
@@ -3738,19 +4174,38 @@ def cmd_verify(args) -> int:
     result = verifier.verify(
         subject_path=str(subject_path),
         attestation_path=attestation_path,
-        check_rekor=getattr(args, "rekor_check", False),
-        policy_path=getattr(args, "policy", None),
+        signature_path=signature_path,
+        check_rekor=check_rekor,
+        cert_identity=cert_identity,
+        cert_oidc_issuer=cert_oidc_issuer,
     )
 
     if result.is_valid:
         _log(args, "INFO", "✅ Attestation verified successfully")
         _log(args, "INFO", f"  Subject: {result.subject_name}")
-        _log(args, "INFO", f"  SHA-256: {result.subject_digest}")
+        algorithm = (result.subject_digest_algorithm or "digest").upper()
+        _log(args, "INFO", f"  {algorithm}: {result.subject_digest}")
         _log(args, "INFO", f"  Builder: {result.builder_id}")
-        _log(args, "INFO", f"  Build time: {result.build_time}")
+        _log(args, "INFO", f"  Build time: {result.build_time or 'not recorded'}")
+
+        if signature_path:
+            _log(args, "INFO", f"  Signature: verified ({signature_path})")
+        else:
+            _log(
+                args,
+                "WARN",
+                "  Signature: NOT CHECKED - pass --cert-identity and "
+                "--cert-oidc-issuer to check one",
+            )
 
         if result.rekor_entry:
             _log(args, "INFO", f"  Rekor entry: {result.rekor_entry}")
+
+        # Non-CRITICAL indicators do not fail verification, but they were
+        # computed and stored and then never shown to anyone - so a subject
+        # named ../../../etc/passwd and a localhost builder both printed
+        # "verified successfully" with nothing else said.
+        _log_tamper_indicators(args, result.tamper_indicators)
 
         return 0
     else:
@@ -3758,9 +4213,37 @@ def cmd_verify(args) -> int:
         _log(args, "ERROR", f"  Reason: {result.error_message}")
 
         if result.tamper_detected:
-            _log(args, "ERROR", "  ⚠️  TAMPER DETECTED - Subject has been modified!")
+            # Say which artifact moved. A CRITICAL timestamp or builder
+            # anomaly is tampering with the *attestation*; reporting every one
+            # of them as "Subject has been modified" sends the reader to the
+            # wrong file.
+            what = (
+                "Subject has been modified"
+                if result.error_message == "Subject digest mismatch"
+                else "Attestation has been altered"
+            )
+            _log(args, "ERROR", f"  ⚠️  TAMPER DETECTED - {what}!")
+
+        _log_tamper_indicators(args, result.tamper_indicators)
 
         return 1
+
+
+def _log_tamper_indicators(args, indicators) -> None:
+    """Report tamper indicators that did not by themselves fail verification.
+
+    Args:
+        args: Parsed command-line arguments (for log routing)
+        indicators: TamperIndicator list from the verification result
+    """
+    for indicator in indicators or []:
+        if indicator.severity.value == "CRITICAL":
+            continue  # already reported as the failure reason
+        _log(
+            args,
+            "WARN",
+            f"  [{indicator.severity.value}] {indicator.description}",
+        )
 
 
 def main():
@@ -3849,16 +4332,13 @@ def _log(args, level: str, message: str) -> None:
         }.get(level, "")
         reset = "\x1b[0m"
         ts = datetime.now(UTC).strftime("%H:%M:%S")
-        # Windows-safe Unicode handling for stderr
-        safe_message = message
-        try:
-            encoding = getattr(sys.stderr, "encoding", None) or "utf-8"
-            if encoding.lower() in ("cp1252", "ascii", "latin-1", "iso-8859-1"):
-                for unicode_char, ascii_fallback in _UNICODE_FALLBACKS.items():
-                    safe_message = safe_message.replace(unicode_char, ascii_fallback)
-        except (AttributeError, LookupError):
-            pass
-        sys.stderr.write(f"{color}{level:5}{reset} {ts} {safe_message}\n")
+        # safe_write probes the payload against the stream's real codec, applies
+        # the fallback table, then replaces only what the table missed. The
+        # hand-rolled version this replaces decided from the encoding's NAME and
+        # listed cp1252/ascii/latin-1 - so on cp437 and cp850, the codecs a real
+        # Windows console actually uses, it did nothing and the table was lost.
+        # Measured: "Scan complete OK" rendered "?" there instead of "[v]".
+        safe_write(f"{color}{level:5}{reset} {ts} {message}\n", stream=sys.stderr)
         return
     rec = {
         "ts": datetime.now(UTC).isoformat().replace("+00:00", "Z"),

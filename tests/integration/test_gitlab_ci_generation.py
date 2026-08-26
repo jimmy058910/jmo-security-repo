@@ -36,7 +36,15 @@ def test_end_to_end_gitlab_ci_generation(tmp_path):
                     "exclude": ["node_modules/**"],
                 },
                 "images": ["myapp:latest"],
-                "urls": ["https://api.myapp.com"],
+                # `web.urls`, which is what `jmo schedule create --url` writes
+                # and what the GitHub Actions generator and the cron installer
+                # both read. This fixture used a flat `urls` key that only this
+                # generator looked at and nothing produced -- so the test
+                # passed while `jmo schedule create --url ... ; jmo schedule
+                # export --backend gitlab-ci` dropped the URL entirely. The
+                # legacy flat form is covered separately by
+                # test_gitlab_ci_accepts_legacy_flat_urls_key.
+                "web": {"urls": ["https://api.myapp.com"]},
             },
             results={
                 "base_dir": "./jmo-results",
@@ -93,8 +101,12 @@ def test_end_to_end_gitlab_ci_generation(tmp_path):
     assert "--repos-dir ." in scan_cmd
     assert "--include-pattern 'src/**'" in scan_cmd
     assert "--exclude-pattern 'node_modules/**'" in scan_cmd
-    assert "--image 'myapp:latest'" in scan_cmd
-    assert "--url 'https://api.myapp.com'" in scan_cmd
+    # shlex.quote leaves a value that needs no quoting alone, so these are bare.
+    # The hand-rolled f"--image '{image}'" this replaced could not survive a
+    # value containing a single quote; the quoting-is-applied-when-needed arm is
+    # pinned by test_gitlab_ci_quotes_values_that_need_it.
+    assert "--image myapp:latest" in scan_cmd
+    assert "--url https://api.myapp.com" in scan_cmd
     assert "--fail-on HIGH" in scan_cmd
     assert "--threads 4" in scan_cmd
     assert "--allow-missing-tools" in scan_cmd
@@ -193,11 +205,13 @@ def test_gitlab_ci_with_all_target_types(tmp_path):
                     "exclude": ["*-deprecated"],
                 },
                 "images": ["nginx:latest", "postgres:16-alpine", "redis:7-alpine"],
-                "urls": [
-                    "https://api.example.com",
-                    "https://app.example.com",
-                    "https://admin.example.com",
-                ],
+                "web": {
+                    "urls": [
+                        "https://api.example.com",
+                        "https://app.example.com",
+                        "https://admin.example.com",
+                    ]
+                },
             },
             results={"base_dir": "./results", "retention_days": 60},
             options={"threads": 8, "timeout": 600, "allow_missing_tools": True},
@@ -222,15 +236,15 @@ def test_gitlab_ci_with_all_target_types(tmp_path):
     assert "--include-pattern 'service-*'" in script
     assert "--exclude-pattern '*-deprecated'" in script
 
-    # Image targets
-    assert "--image 'nginx:latest'" in script
-    assert "--image 'postgres:16-alpine'" in script
-    assert "--image 'redis:7-alpine'" in script
+    # Image targets (bare: shlex.quote leaves these alone)
+    assert "--image nginx:latest" in script
+    assert "--image postgres:16-alpine" in script
+    assert "--image redis:7-alpine" in script
 
     # URL targets
-    assert "--url 'https://api.example.com'" in script
-    assert "--url 'https://app.example.com'" in script
-    assert "--url 'https://admin.example.com'" in script
+    assert "--url https://api.example.com" in script
+    assert "--url https://app.example.com" in script
+    assert "--url https://admin.example.com" in script
 
     # Options
     assert "--threads 8" in script
@@ -450,3 +464,90 @@ def test_gitlab_ci_rules_configuration(tmp_path):
     assert len(rules) == 2
     assert any(r["if"] == '$CI_PIPELINE_SOURCE == "schedule"' for r in rules)
     assert any(r["if"] == '$CI_PIPELINE_SOURCE == "web"' for r in rules)
+
+
+def _schedule_with_targets(tmp_path, name, targets):
+    """Build and persist a minimal schedule carrying `targets`."""
+    manager = ScheduleManager(config_dir=tmp_path / ".jmo")
+    spec = ScheduleSpec(
+        schedule="0 2 * * *",
+        timezone="UTC",
+        jobTemplate=JobTemplateSpec(
+            profile="fast",
+            targets=targets,
+            results={},
+            options={},
+            notifications={"enabled": False},
+        ),
+    )
+    return manager.create(ScanSchedule(metadata=ScheduleMetadata(name=name), spec=spec))
+
+
+def test_gitlab_ci_reads_the_shape_the_cli_writes(tmp_path):
+    """`--url` reaches the GitLab job, not just the GitHub Actions one.
+
+    `jmo schedule create --url X` persists targets["web"]["urls"], which the
+    GitHub Actions generator and the cron installer both read. This generator
+    read a flat targets["urls"] instead, so the URL was silently dropped from
+    every GitLab export -- rc 0, valid YAML, no warning. The fixtures in this
+    module all used the flat key, so they agreed with the generator and with
+    nothing the product emits.
+    """
+    created = _schedule_with_targets(
+        tmp_path, "cli-shape", {"web": {"urls": ["https://cli.example.com"]}}
+    )
+    script = " ".join(
+        yaml.safe_load(GitLabCIGenerator().generate(created))["security-scan"]["script"]
+    )
+    assert "--url https://cli.example.com" in script
+
+
+def test_gitlab_ci_accepts_legacy_flat_urls_key(tmp_path):
+    """Schedules written before the fix still export their URLs."""
+    created = _schedule_with_targets(
+        tmp_path, "legacy-shape", {"urls": ["https://legacy.example.com"]}
+    )
+    script = " ".join(
+        yaml.safe_load(GitLabCIGenerator().generate(created))["security-scan"]["script"]
+    )
+    assert "--url https://legacy.example.com" in script
+
+
+def test_gitlab_ci_quotes_values_that_need_it(tmp_path):
+    """A target with shell metacharacters is quoted, not interpolated raw.
+
+    The generator used a hand-rolled f"--image '{image}'", which quotes nothing
+    a value can escape from, and left --repos-dir unquoted entirely. Both are
+    interpolated into the job's `script:` shell line.
+
+    Both arms matter and are asserted separately: the quoting must appear when
+    the value needs it, and the earlier tests pin that it does NOT appear when
+    the value is ordinary. A test that only checked "is quoted" would pass on a
+    generator that quoted everything, and one that only checked "is bare" would
+    pass on the unsafe version this replaced.
+    """
+    import shlex
+
+    created = _schedule_with_targets(
+        tmp_path,
+        "needs-quoting",
+        {
+            "repositories": {"repos_dir": "/tmp/r; touch /tmp/PWNED"},
+            "images": ["evil'; id; '"],
+            "web": {"urls": ["https://x/?a=1 b"]},
+        },
+    )
+    script = " ".join(
+        yaml.safe_load(GitLabCIGenerator().generate(created))["security-scan"]["script"]
+    )
+
+    # The injected command must not survive as a separate shell word.
+    assert "; touch /tmp/PWNED" not in script.replace(
+        shlex.quote("/tmp/r; touch /tmp/PWNED"), ""
+    )
+    # Round-tripping the emitted line through the shell lexer must give back
+    # exactly the original values -- the property the quoting exists for.
+    words = shlex.split(script)
+    assert "/tmp/r; touch /tmp/PWNED" in words
+    assert "evil'; id; '" in words
+    assert "https://x/?a=1 b" in words

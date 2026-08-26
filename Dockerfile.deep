@@ -131,13 +131,6 @@ RUN GRYPE_VERSION="0.115.0" && \
     tar -xzf /tmp/grype.tar.gz -C /usr/local/bin grype && \
     chmod +x /usr/local/bin/grype
 
-# Download OSV-Scanner (SCA + Vuln - Google)
-RUN OSV_VERSION="2.3.1" && \
-    OSV_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
-    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_${OSV_ARCH}" \
-    -o /usr/local/bin/osv-scanner && \
-    chmod +x /usr/local/bin/osv-scanner
-
 # Download Lynis (System Hardening)
 RUN LYNIS_VERSION="3.1.3" && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/CISOfy/lynis/archive/refs/tags/${LYNIS_VERSION}.tar.gz" \
@@ -273,7 +266,7 @@ RUN if [ "$TARGETARCH" = "amd64" ]; then \
         echo "scancode-toolkit skipped on $TARGETARCH (extractcode-7z unavailable)"; \
     fi
 
-RUN python3 -m pip install --no-cache-dir --break-system-packages prowler==5.18.2 && \
+RUN python3 -m pip install --no-cache-dir --break-system-packages prowler==5.36.0 && \
     prowler --version && \
     echo "✓ prowler installed"
 
@@ -303,7 +296,6 @@ COPY --from=builder /usr/local/bin/noseyparker /usr/local/bin/noseyparker
 COPY --from=builder /usr/local/bin/kubescape /usr/local/bin/kubescape
 COPY --from=builder /usr/local/bin/gosec /usr/local/bin/gosec
 COPY --from=builder /usr/local/bin/grype /usr/local/bin/grype
-COPY --from=builder /usr/local/bin/osv-scanner /usr/local/bin/osv-scanner
 COPY --from=builder /usr/local/bin/horusec /usr/local/bin/horusec
 COPY --from=builder /usr/local/bin/opa /usr/local/bin/opa
 COPY --from=builder /usr/local/bin/shellcheck /usr/local/bin/shellcheck
@@ -380,7 +372,6 @@ RUN echo "=== Verifying Docker-ready tools ===" && \
     bandit --version && \
     syft version && \
     trivy --version && \
-    osv-scanner --version && \
     checkov --version && \
     hadolint --version && \
     zap -version && \
@@ -424,8 +415,12 @@ ENTRYPOINT ["jmo"]
 CMD ["--help"]
 
 # Health check: verify jmo command works
+# Exec form with an explicit shell. hadolint 2.15.0 extended DL3025 to cover
+# HEALTHCHECK, and this probe genuinely needs a shell for the redirect and the
+# `||`. Naming /bin/sh keeps the behaviour identical to the shell form Docker
+# would otherwise have wrapped it in.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD jmo --help > /dev/null || exit 1
+    CMD ["/bin/sh", "-c", "jmo --help > /dev/null || exit 1"]
 
 # Usage examples (documented in metadata):
 # Basic scan (deep profile, all 27 tools):

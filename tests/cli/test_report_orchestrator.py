@@ -419,8 +419,15 @@ def test_cmd_report_yaml_runtime_error_handling(tmp_path, mock_config, minimal_a
     ):
         cmd_report(minimal_args, mock_log)
 
-    # Verify DEBUG log for YAML unavailable
-    assert any("YAML reporter unavailable" in str(c) for c in mock_log.call_args_list)
+    # The config asked for findings.yaml and it will not exist, so this must be
+    # visible in a normal run -- it was DEBUG, i.e. invisible. Assert the level
+    # rather than the wording.
+    warned = [
+        c.args[2]
+        for c in mock_log.call_args_list
+        if len(c.args) >= 3 and str(c.args[1]).upper() in ("WARN", "ERROR")
+    ]
+    assert any("yaml" in str(m).lower() for m in warned), mock_log.call_args_list
 
 
 def test_cmd_report_writes_compliance_reports(tmp_path, mock_config, minimal_args):
@@ -980,3 +987,201 @@ def test_cmd_report_threads_int_sets_env(
         cmd_report(minimal_args, MagicMock())
 
     assert os.environ.get("JMO_THREADS") == "8"
+
+
+# =============================================================================
+# #903: a failed history write must be visible, and only fail the run on request
+# =============================================================================
+
+
+def _report_with_store(
+    tmp_path, mock_config, minimal_args, mock_log, *, store_raises=None, **arg_overrides
+):
+    """Run cmd_report with the auto-storage hook enabled.
+
+    `store_raises` is the exception `store_scan` should raise, or None for a
+    successful store. Returns cmd_report's exit code.
+    """
+    results_dir = tmp_path / "results"
+    results_dir.mkdir()
+    minimal_args.results_dir_pos = str(results_dir)
+    minimal_args.store_history = True
+    minimal_args.history_db = str(tmp_path / "history.db")
+    for key, value in arg_overrides.items():
+        setattr(minimal_args, key, value)
+
+    if store_raises is None:
+        store = MagicMock(return_value="scan-uuid")
+    else:
+        store = MagicMock(side_effect=store_raises)
+
+    with (
+        patch(
+            "scripts.cli.report_orchestrator.load_config_with_env_overrides",
+            return_value=mock_config,
+        ),
+        patch("scripts.cli.report_orchestrator.gather_results", return_value=[]),
+        patch("scripts.cli.report_orchestrator.load_suppressions", return_value={}),
+        patch("scripts.cli.report_orchestrator.write_json"),
+        patch("scripts.cli.report_orchestrator.write_markdown"),
+        patch("scripts.core.history_db.store_scan", store),
+    ):
+        return cmd_report(minimal_args, mock_log)
+
+
+def _levels(mock_log):
+    """Levels passed to the log function, in order."""
+    return [call.args[1] for call in mock_log.call_args_list if len(call.args) > 1]
+
+
+def _messages(mock_log, level):
+    return [
+        call.args[2]
+        for call in mock_log.call_args_list
+        if len(call.args) > 2 and call.args[1] == level
+    ]
+
+
+def test_successful_store_logs_no_error(tmp_path, mock_config, minimal_args):
+    mock_log = MagicMock()
+    rc = _report_with_store(tmp_path, mock_config, minimal_args, mock_log)
+    assert rc == 0
+    assert "ERROR" not in _levels(mock_log)
+
+
+def test_failed_store_does_not_change_the_exit_code_by_default(
+    tmp_path, mock_config, minimal_args
+):
+    """Storage is on unless --no-store-history, so failing by default would
+    redden scans for users who never asked for history."""
+    mock_log = MagicMock()
+    rc = _report_with_store(
+        tmp_path,
+        mock_config,
+        minimal_args,
+        mock_log,
+        store_raises=RuntimeError("disk on fire"),
+    )
+    assert rc == 0
+
+
+def test_failed_store_is_reported_at_error_naming_the_consequence(
+    tmp_path, mock_config, minimal_args
+):
+    mock_log = MagicMock()
+    _report_with_store(
+        tmp_path,
+        mock_config,
+        minimal_args,
+        mock_log,
+        store_raises=RuntimeError("disk on fire"),
+    )
+    errors = _messages(mock_log, "ERROR")
+    assert errors, "a failed history write must be reported at ERROR"
+    joined = " ".join(errors)
+    # The consequence, not just the exception -- a WARN saying "failed to store"
+    # scrolled past and read as cosmetic (#903).
+    assert "NOT recorded" in joined
+    assert "disk on fire" in joined
+    assert "jmo history store" in joined, "must say how to re-record the scan"
+    assert "--fail-on-store-error" in joined, "must name the opt-in flag"
+
+
+def test_failed_store_traceback_is_debug_not_user_facing(
+    tmp_path, mock_config, minimal_args, capsys
+):
+    """A recoverable condition must not print a stack trace into scan output."""
+    mock_log = MagicMock()
+    _report_with_store(
+        tmp_path,
+        mock_config,
+        minimal_args,
+        mock_log,
+        store_raises=RuntimeError("disk on fire"),
+    )
+    captured = capsys.readouterr()
+    assert "Traceback (most recent call last)" not in captured.out
+    assert "Traceback (most recent call last)" not in captured.err
+    # It is still recoverable at DEBUG for whoever needs it.
+    assert any("traceback" in m.lower() for m in _messages(mock_log, "DEBUG"))
+
+
+def test_fail_on_store_error_makes_a_failed_store_non_zero(
+    tmp_path, mock_config, minimal_args
+):
+    mock_log = MagicMock()
+    rc = _report_with_store(
+        tmp_path,
+        mock_config,
+        minimal_args,
+        mock_log,
+        store_raises=RuntimeError("disk on fire"),
+        fail_on_store_error=True,
+    )
+    assert rc == 1
+
+
+def test_fail_on_store_error_does_not_fail_a_successful_store(
+    tmp_path, mock_config, minimal_args
+):
+    """The flag must not turn every run non-zero -- the negative control."""
+    mock_log = MagicMock()
+    rc = _report_with_store(
+        tmp_path, mock_config, minimal_args, mock_log, fail_on_store_error=True
+    )
+    assert rc == 0
+
+
+def test_storage_disabled_is_unaffected(tmp_path, mock_config, minimal_args):
+    """The store_error / history_db_path bindings must exist even when no store
+    is attempted, or the exit-code check below them raises NameError."""
+    results_dir = tmp_path / "results"
+    results_dir.mkdir()
+    minimal_args.results_dir_pos = str(results_dir)
+    minimal_args.store_history = False
+    minimal_args.fail_on_store_error = True
+
+    mock_log = MagicMock()
+    with (
+        patch(
+            "scripts.cli.report_orchestrator.load_config_with_env_overrides",
+            return_value=mock_config,
+        ),
+        patch("scripts.cli.report_orchestrator.gather_results", return_value=[]),
+        patch("scripts.cli.report_orchestrator.load_suppressions", return_value={}),
+        patch("scripts.cli.report_orchestrator.write_json"),
+        patch("scripts.cli.report_orchestrator.write_markdown"),
+    ):
+        assert cmd_report(minimal_args, mock_log) == 0
+    assert "ERROR" not in _levels(mock_log)
+
+
+def test_real_parser_defines_fail_on_store_error_off_by_default(monkeypatch):
+    """Uses the real parser, not a stand-in: a mirror cannot notice a flag the
+    parser never defined (the chunk 11 lesson)."""
+    import sys
+
+    from scripts.cli.jmo import parse_args
+
+    monkeypatch.setattr(sys, "argv", ["jmo", "scan", "--repo", "."])
+    assert parse_args().fail_on_store_error is False
+
+    monkeypatch.setattr(
+        sys, "argv", ["jmo", "scan", "--repo", ".", "--fail-on-store-error"]
+    )
+    assert parse_args().fail_on_store_error is True
+
+
+def test_ci_forwards_fail_on_store_error_to_the_report_phase(monkeypatch):
+    """`jmo ci` must not drop the flag -- #876's class of defect."""
+    import sys
+
+    from scripts.cli.ci_orchestrator import _REPORT_REQUIRED, _phase_args
+    from scripts.cli.jmo import parse_args
+
+    monkeypatch.setattr(
+        sys, "argv", ["jmo", "ci", "--repo", ".", "--fail-on-store-error"]
+    )
+    args = parse_args()
+    forwarded = _phase_args(args, _REPORT_REQUIRED)
+    assert forwarded.fail_on_store_error is True

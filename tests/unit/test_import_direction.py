@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import re
 import subprocess
 import sys
 import textwrap
@@ -10,7 +11,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LINTER = REPO_ROOT / "scripts" / "dev" / "check_import_direction.py"
-DOC_CHECKER = REPO_ROOT / "scripts" / "dev" / "check_doc_links.sh"
+DOC_CHECKER = REPO_ROOT / "scripts" / "dev" / "check_doc_links.py"
 
 
 def _load_check_import_direction():
@@ -74,18 +75,147 @@ class TestImportDirectionLinter:
         assert len(violations) == 0
 
 
+def _load_check_doc_links():
+    """Load check_doc_links module without caching issues."""
+    spec = importlib.util.spec_from_file_location("check_doc_links", str(DOC_CHECKER))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
 class TestDocLinks:
     """Tests for check_doc_links.py."""
 
     def test_doc_links_pass(self) -> None:
-        """All documentation links in the codebase should be valid."""
+        """Every link in tracked documentation resolves to a tracked path."""
         result = subprocess.run(
-            [sys.executable, str(REPO_ROOT / "scripts" / "dev" / "check_doc_links.py")],
+            [sys.executable, str(DOC_CHECKER)],
             capture_output=True,
             text=True,
+            timeout=120,
             cwd=str(REPO_ROOT),
         )
         assert (
             result.returncode == 0
-        ), f"Broken links found:\nstdout: {result.stdout}\nstderr: {result.stderr}"
-        assert "valid" in result.stdout.lower()
+        ), f"Dead references found:\nstdout: {result.stdout}\nstderr: {result.stderr}"
+
+        # Assert it actually checked something. The previous assertion looked for
+        # the word "valid" in the output, which a checker that examined zero
+        # files would also have satisfied.
+        match = re.search(r"All links in (\d+) tracked file", result.stdout)
+        assert match, f"Unexpected success output: {result.stdout!r}"
+        assert int(match.group(1)) > 0, "Checker validated zero files"
+
+    def test_untracked_target_is_reported_distinctly(self, tmp_path: Path) -> None:
+        """A path present on disk but absent from git is UNTRACKED, not BROKEN.
+
+        This is the whole point of the checker: `Path.exists()` cannot see the
+        difference, because the file really is there on the maintainer's
+        machine. Only tracked-ness describes what a clone receives.
+        """
+        mod = _load_check_doc_links()
+        tracked = {"docs/real.md", "scripts/dev/tool.py"}
+
+        assert mod.is_tracked("docs/real.md", tracked)
+        assert not mod.is_tracked("docs/local-only.md", tracked)
+
+    def test_directory_reference_resolves_via_prefix(self) -> None:
+        """A link to a directory is satisfied by any tracked file beneath it."""
+        mod = _load_check_doc_links()
+        tracked = {".claude/agents/security-auditor.md"}
+
+        assert mod.is_tracked(".claude/agents", tracked)
+        assert mod.is_tracked(".claude/agents/", tracked)
+        assert not mod.is_tracked(".claude/skills", tracked)
+
+    def test_nested_same_length_fences_do_not_desynchronise(self) -> None:
+        """A fence carrying an info string cannot close an open fence.
+
+        Agent files show example output as a ```markdown block that itself
+        quotes ```bash blocks. Toggling on every fence loses track after the
+        first nested one and starts treating sample links as navigation --
+        which is exactly how five bogus findings appeared before this rule
+        followed CommonMark.
+        """
+        mod = _load_check_doc_links()
+        text = "\n".join(
+            [
+                "before",
+                "```markdown",
+                "[sample](does/not/exist.md)",
+                "```bash",
+                "echo hi",
+                "```",
+                "after [real](docs/real.md)",
+            ]
+        )
+        kept = "\n".join(mod.navigable_lines(text))
+
+        assert "does/not/exist.md" not in kept, "sample link leaked out of the fence"
+        assert "docs/real.md" in kept, "real link was swallowed by a desynced fence"
+
+    def test_inline_code_and_line_citations_are_not_navigation(self) -> None:
+        """Quoted links and GitHub line anchors are citations, not links."""
+        mod = _load_check_doc_links()
+
+        kept = "\n".join(mod.navigable_lines("use `[text](file.md)` for links"))
+        assert "file.md" not in kept
+
+        assert mod.LINE_ANCHOR_PATTERN.search("scripts/cli/jmo.py#L245")
+        assert not mod.LINE_ANCHOR_PATTERN.search("docs/USER_GUIDE.md#configuration")
+
+    def test_code_spans_of_any_backtick_width_are_suppressed(self) -> None:
+        """A code span is delimited by backtick runs of equal length.
+
+        Matching only single backticks left the contents of a ``double`` span
+        visible, so a quoted sample link was reported as a real BROKEN
+        reference. Doubles exist precisely to quote text containing backticks,
+        which is exactly how documentation shows a link.
+        """
+        mod = _load_check_doc_links()
+
+        for ticks in ("`", "``", "```"):
+            line = f"see {ticks}[sample](does/not/exist.md){ticks} above"
+            kept = "\n".join(mod.navigable_lines(line))
+            assert (
+                "does/not/exist.md" not in kept
+            ), f"leaked from a {len(ticks)}-backtick span"
+
+        # A genuine link on an ordinary line must still be seen.
+        kept = "\n".join(mod.navigable_lines("see [real](docs/index.md)"))
+        assert "docs/index.md" in kept
+
+    def test_every_tracked_markdown_file_is_checked(self) -> None:
+        """Coverage comes from `git ls-files`, not a hand-maintained list.
+
+        An allowlist stops covering whatever nobody remembered to add to it:
+        the previous one named nine files and left 75 tracked Markdown files
+        unchecked, which between them held 17 dead references CI called green.
+        """
+        mod = _load_check_doc_links()
+        tracked = mod.tracked_paths()
+        checked = set(mod.collect_files(tracked))
+
+        expected = {
+            p
+            for p in tracked
+            if p.endswith(".md") and not p.startswith(mod.ARCHIVAL_PREFIXES)
+        }
+        assert checked == expected
+        assert len(checked) > 100, "coverage collapsed to a small subset"
+
+        # Archival records are exempt by design; they name deleted paths on purpose.
+        assert not any(p.startswith(mod.ARCHIVAL_PREFIXES) for p in checked)
+
+    def test_console_output_is_hardened(self) -> None:
+        """The checker prints repository content, so its stream must be hardened.
+
+        Paths and link text are arbitrary; one character a cp1252 console cannot
+        encode would otherwise crash the guard itself. Per unicode_utils, fix the
+        stream once rather than guarding each call site.
+        """
+        source = DOC_CHECKER.read_text(encoding="utf-8")
+        assert "harden_console_streams()" in source
+        assert "safe_print(" in source
+        # No bare print() left behind at statement indentation.
+        assert not re.search(r"^\s+print\(", source, re.MULTILINE)

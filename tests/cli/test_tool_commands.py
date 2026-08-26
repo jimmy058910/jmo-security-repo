@@ -259,7 +259,13 @@ def test_cmd_tools_check_specific_tools():
 
 
 def test_cmd_tools_check_json_output_profile_summary():
-    """Test cmd_tools_check JSON output for profile summary."""
+    """Test cmd_tools_check JSON output for profile summary.
+
+    This asserted `result == 0` while mocking two *missing* tools, which pinned
+    the defect fixed in #788: the no-argument form returned 0 no matter what it
+    found, so `jmo tools check || exit 1` passed with scanners missing. The
+    summary is still printed; the exit code now matches the `--profile` path.
+    """
     from scripts.cli.tool_commands import cmd_tools_check
 
     mock_manager = MagicMock()
@@ -275,8 +281,8 @@ def test_cmd_tools_check_json_output_profile_summary():
         with patch("builtins.print") as mock_print:
             result = cmd_tools_check(args)
 
-    # Should print JSON
-    assert result == 0
+    # Should print JSON, and report the missing tools through the exit code
+    assert result == 1
     mock_print.assert_called()
 
 
@@ -1684,10 +1690,18 @@ class TestCmdToolsCheckComprehensive:
         assert result == 0
 
     def test_check_no_profile_shows_summary(self):
-        """Test check without profile shows summary."""
+        """Test check without profile shows summary.
+
+        The summary is what this asserts; the exit code is pinned separately by
+        tests/unit/test_config_precedence.py. `get_profile_summary` must return
+        a real dict rather than a bare Mock — since #788 the no-profile path
+        reads `missing` from it, and `Mock().get(...)` is truthy, which would
+        make the exit code an artefact of the mock rather than of the input.
+        """
         from scripts.cli.tool_commands import cmd_tools_check
 
         mock_manager = MagicMock()
+        mock_manager.get_profile_summary.return_value = {"installed": 7, "missing": 0}
         mock_manager.get_critical_outdated.return_value = []
 
         args = argparse.Namespace(
@@ -1707,7 +1721,12 @@ class TestCmdToolsCheckComprehensive:
         assert result == 0
 
     def test_check_no_profile_with_critical_outdated(self):
-        """Test check without profile with critical outdated tools."""
+        """Test check without profile with critical outdated tools.
+
+        Outdated is not missing: everything is installed here, so the exit code
+        stays 0 while the critical-update notice is still printed. See the
+        sibling test for why the summary must be a real dict.
+        """
         from scripts.cli.tool_commands import cmd_tools_check
 
         mock_outdated = MagicMock()
@@ -1716,6 +1735,7 @@ class TestCmdToolsCheckComprehensive:
         mock_outdated.expected_version = "0.50.0"
 
         mock_manager = MagicMock()
+        mock_manager.get_profile_summary.return_value = {"installed": 7, "missing": 0}
         mock_manager.get_critical_outdated.return_value = [mock_outdated]
 
         args = argparse.Namespace(

@@ -72,42 +72,52 @@ Perform comprehensive trend analysis across stored scans.
 ```python
 def analyze_trends(
     self,
-    branch: Optional[str] = None,
-    since: Optional[float] = None,
-    scans: Optional[int] = None,
-    min_scans: int = 2
-) -> Dict[str, Any]
+    branch: str | None = None,
+    days: int | None = None,
+    scan_ids: list[str] | None = None,
+    last_n: int | None = None,
+) -> dict[str, Any]
 ```
 
 **Parameters:**
 
-- `branch` (str, optional): Filter scans by Git branch (e.g., "main", "staging")
-- `since` (float, optional): Analyze scans since Unix timestamp
-- `scans` (int, optional): Analyze only the last N scans
-- `min_scans` (int): Minimum number of scans required for analysis (default: 2)
+- `branch` (str, optional): Restrict to one Git branch. `None` (the default)
+  analyses every branch. A branch filter cannot match a scan whose branch could
+  not be determined and is stored NULL, so passing one always narrows to less
+  than the whole database.
+- `days` (int, optional): Analyse the last N days. Must be >= 1. Defaults to 30
+  when neither `days` nor `last_n` is given. Returns every scan in the window --
+  there is no hidden result cap.
+- `scan_ids` (list[str], optional): Analyse exactly these scans. Mutually
+  exclusive with `branch`, `days` and `last_n`, which select scans rather than
+  name them.
+- `last_n` (int, optional): Analyse the last N scans. Must be >= 1.
+
+**Raises:** `ValueError` if `days` or `last_n` is less than 1.
 
 **Returns:** Dictionary containing:
 
 ```python
 {
-    "summary": {
+    "metadata": {
         "scan_count": 12,
-        "date_range": ["2025-10-01", "2025-11-05"],
-        "branch": "main",
-        "profile": "balanced"
+        "date_range": {                       # a mapping, not a pair
+            "start": "2025-10-01T09:12:44+00:00",
+            "end": "2025-11-05T14:30:15+00:00"
+        },
+        "branch": None,                       # None when no branch filter applied
+        "analysis_timestamp": "2025-11-05T14:31:02+00:00"
     },
     "severity_trends": {
-        "critical": {
-            "trend": "improving",  # "improving" | "stable" | "degrading"
-            "tau": -0.682,          # Kendall's Tau (-1 to +1)
-            "p_value": 0.001,       # Statistical significance
-            "significant": True,    # p < 0.05
-            "data": [6, 5, 4, 3, 2] # Historical counts
+        "by_severity": {                      # UPPERCASE keys, each a list of
+            "CRITICAL": [6, 5, 4, 3, 2],      # per-scan counts oldest-first
+            "HIGH": [...],
+            "MEDIUM": [...],
+            "LOW": [...],
+            "INFO": [...]
         },
-        "high": {...},
-        "medium": {...},
-        "low": {...},
-        "info": {...}
+        "total": [...],                       # per-scan totals
+        "timestamps": [...]                   # ISO timestamps, same order
     },
     "top_rules": [
         {
@@ -229,19 +239,31 @@ Validate whether a trend is statistically significant and classify it.
 
 ```python
 def validate_trend_significance(
-    tau: float,
-    p_value: float,
-    alpha: float = 0.05,
-    tau_threshold: float = 0.3
-) -> Dict[str, Any]
+    severity_trends: dict[str, list[int]],
+) -> dict[str, dict[str, Any]]
 ```
 
 **Parameters:**
 
-- `tau` (float): Kendall's Tau coefficient from Mann-Kendall test
-- `p_value` (float): p-value from Mann-Kendall test
-- `alpha` (float): Significance threshold (default: 0.05 = 95% confidence)
-- `tau_threshold` (float): Minimum |τ| for "improving"/"degrading" (default: 0.3)
+- `severity_trends` (dict): The `by_severity` mapping from
+  `analyze_trends()["severity_trends"]` -- severity name to a list of per-scan
+  counts. It runs the Mann-Kendall test itself rather than taking a
+  pre-computed tau and p-value.
+
+**Returns:** one entry per severity, e.g.
+
+```python
+{
+    "CRITICAL": {
+        "trend": "no_trend",   # "increasing" | "decreasing" | "no_trend"
+        "tau": -0.03,          # Kendall's Tau (-1 to +1)
+        "p_value": 0.2843,
+        "significant": False,  # p < 0.05
+        "confidence": "low"
+    },
+    "HIGH": {...}
+}
+```
 
 **Returns:**
 
@@ -505,10 +527,14 @@ def export_to_csv(analysis: Dict[str, Any], output_path: Path) -> None
 **CSV Format:**
 
 ```csv
-scan_id,timestamp,branch,profile,critical,high,medium,low,info,total,score,grade
-abc123,2025-11-05T14:30:15,main,balanced,2,10,20,30,5,67,78,C
-def456,2025-11-04T08:45:33,main,balanced,3,12,22,32,8,77,65,D
+Timestamp,Scan ID,CRITICAL,HIGH,MEDIUM,LOW,INFO,Total,Security Score,Score Trend,Remediation Rate
+2026-08-16T05:38:51+00:00,e65298d2-38c7-4ac7-bbca-7dc3480ce716,2,28,81,6,146,263,0.0,,
+2026-08-18T19:06:17+00:00,ea0fb72a-ed55-445a-bcb6-ac2d654ecf73,2,28,81,6,146,263,0.0,degrading,4.49
 ```
+
+One row per scan, oldest first. `Score Trend` and `Remediation Rate` describe
+the window as a whole and are written on the **last row only**; earlier rows
+leave them blank by design.
 
 **Example:**
 
@@ -538,15 +564,24 @@ def export_to_prometheus(analysis: Dict[str, Any], output_path: Path) -> None
 **Prometheus Metrics:**
 
 ```prometheus
-# HELP jmo_scan_findings_total Total findings by severity
-# TYPE jmo_scan_findings_total gauge
-jmo_scan_findings_total{severity="critical",branch="main",profile="balanced"} 2
-jmo_scan_findings_total{severity="high",branch="main",profile="balanced"} 10
+# HELP jmo_security_findings Total security findings by severity
+# TYPE jmo_security_findings gauge
+jmo_security_findings{severity="critical"} 2
+jmo_security_findings{severity="high"} 28
 
 # HELP jmo_security_score Security posture score (0-100)
 # TYPE jmo_security_score gauge
-jmo_security_score{branch="main",profile="balanced"} 78
+jmo_security_score 0
+
+# HELP jmo_remediation_rate Findings remediated per day
+# TYPE jmo_remediation_rate gauge
+jmo_remediation_rate 4.95
 ```
+
+Seven metrics are emitted: `jmo_security_findings` (labelled by `severity`),
+`jmo_security_score`, `jmo_remediation_rate`, `jmo_introduction_rate`,
+`jmo_net_remediation`, `jmo_scan_count`, and `jmo_rule_findings` (labelled by
+`rule_id` and `severity`). There are no `branch` or `profile` labels.
 
 **Example:**
 
@@ -619,6 +654,8 @@ def export_for_dashboard(analysis: Dict[str, Any], output_path: Path) -> None
 - `analysis` (Dict): Output from `TrendAnalyzer.analyze_trends()`
 - `output_path` (Path): Path to write dashboard JSON
 
+> **Do not name this file `dashboard-data.json` inside a results directory.** That name is already taken: `html_reporter.py` writes the HTML dashboard's **findings** there in external mode, and the dashboard fetches it expecting `{meta, findings}` or a bare array. This function emits a trend object, so writing it to that path replaces the dashboard's data with a shape it cannot read. The examples here use `trend-dashboard.json`.
+
 **JSON Structure:**
 
 ```json
@@ -656,7 +693,7 @@ from scripts.core.trend_exporters import export_for_dashboard
 
 with TrendAnalyzer() as analyzer:
     analysis = analyzer.analyze_trends()
-    export_for_dashboard(analysis, Path("dashboard-data.json"))
+    export_for_dashboard(analysis, Path("trend-dashboard.json"))
 ```
 
 ---
@@ -667,29 +704,44 @@ with TrendAnalyzer() as analyzer:
 
 **Purpose:** Expose JMo Security findings and operations to AI assistants (GitHub Copilot, Claude Code, Cline, etc.) via the [Model Context Protocol](https://modelcontextprotocol.io/).
 
-**Transport:** stdio, HTTP, SSE. Run the server with:
+**Transport:** stdio only. Run the server with:
 
 ```bash
 pip install "jmo-security[mcp]"
-jmo mcp-server              # stdio mode (default, for IDE integrations)
-jmo mcp-server --http 8080  # HTTP mode (for web clients)
+jmo mcp-server              # stdio (the only mode, for IDE integrations)
 ```
+
+> This said "stdio, HTTP, SSE" and offered `jmo mcp-server --http 8080` as a
+> copy-pasteable command. `--http` is not a flag this subcommand defines:
+> argparse rejects it with `unrecognized arguments: --http 8080`. `mcp.run()`
+> is called with no arguments, which selects stdio, and nothing in the package
+> starts an HTTP or SSE listener.
 
 ### Tools Exposed
 
 AI clients call these as MCP tools. Each is annotated with `@mcp.tool()` in `scripts/jmo_mcp/jmo_server.py` and documented here with its public contract.
 
-#### `get_security_findings(severity, tool, path, limit)`
+#### `get_security_findings(severity, tool, rule_id, path, limit=100, offset=0)`
 
 Retrieve findings from the most recent scan, with optional filters.
 
 **Parameters:**
-- `severity` (str, optional): Filter by one of `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, `INFO`
+- `severity` (list[str], optional): Filter by any of `CRITICAL`, `HIGH`,
+  `MEDIUM`, `LOW`, `INFO` — a **list**, e.g. `["HIGH", "CRITICAL"]`
 - `tool` (str, optional): Filter by tool name (e.g., `trivy`, `semgrep`)
+- `rule_id` (str, optional): Filter by rule ID (e.g., `CWE-79`)
 - `path` (str, optional): Filter by file path substring
-- `limit` (int, optional): Max findings to return (default: 50)
+- `limit` (int, optional): Max findings to return (default: **100**, capped at
+  1000). Must not be negative.
+- `offset` (int, optional): Pagination offset (default: 0). Must not be
+  negative.
 
-**Returns:** List of CommonFinding-shaped dicts.
+**Returns:** `{"findings": [...], "total": N, "limit": L, "offset": O}` — a
+dict, not a list. `limit` is the limit **applied**, so paginate with
+`offset += result["limit"]`.
+
+> This documented four of six parameters, typed `severity` as a string, gave
+> `limit` a default of 50 (it is 100), and described the return as a list.
 
 **Example (Claude Code):**
 
@@ -697,43 +749,87 @@ Retrieve findings from the most recent scan, with optional filters.
 /mcp call get_security_findings severity=CRITICAL tool=semgrep limit=10
 ```
 
-#### `apply_fix(finding_id, patch, dry_run)`
+#### `apply_fix(finding_id, patch, confidence, explanation, dry_run=False)`
 
-Apply an AI-suggested patch to fix a finding.
+Validate and preview an AI-suggested patch. **Applying is not implemented.**
 
 **Parameters:**
 - `finding_id` (str, required): Fingerprint of the finding to fix
-- `patch` (str, required): Unified diff to apply
-- `dry_run` (bool, default `True`): If True, preview without writing changes
+- `patch` (str, required): Unified diff. Must contain a hunk header
+  (`@@ -n,m +n,m @@`) or `ValueError` is raised.
+- `confidence` (float, required): 0.0–1.0 inclusive; out of range raises
+  `ValueError`
+- `explanation` (str, required): Human-readable explanation of the fix
+- `dry_run` (bool, default **`False`**): If True, preview without writing
 
-**Returns:** Dict with `success`, `files_changed`, `diff_preview`.
+**Returns:** Dict with `success` and either `dry_run` + `dry_run_preview`
+(preview) or `error` (write path, always `success: False`).
 
-**Safety:** always run with `dry_run=True` first — the server returns a preview so the AI (and you) can confirm before mutating files.
+**Safety:** `dry_run` defaults to `False`, not `True`. Pass it explicitly.
+The write path currently changes nothing regardless.
 
-#### `mark_resolved(finding_id, status, reason)`
+> This entry documented the signature as `(finding_id, patch, dry_run)` with
+> `dry_run` defaulting to `True`, and a return of `files_changed` /
+> `diff_preview`. `confidence` and `explanation` are required and have no
+> defaults, so a call written from the old entry raised `TypeError`; neither
+> named return key exists; and the documented default inverted the safety of
+> the one that does.
 
-Mark a finding as fixed, false positive, or won't fix.
+#### `mark_resolved(finding_id, resolution, comment=None, expires_days=90)`
+
+Record a resolution decision by appending a suppression entry to
+`jmo.suppress.yml` under `MCP_REPO_ROOT`, keyed on the finding's fingerprint.
+The report phase already reads that file, so the finding is filtered next run.
 
 **Parameters:**
-- `finding_id` (str, required): Fingerprint of the finding
-- `status` (str, required): One of `fixed`, `false_positive`, `wont_fix`
-- `reason` (str, optional): Human-readable explanation stored for audit
+- `finding_id` (str, required): Fingerprint of the finding. Must exist.
+- `resolution` (str, required): One of `fixed`, `false_positive`, `wont_fix`,
+  `risk_accepted`
+- `comment` (str, optional): Human-readable explanation, recorded as `reason`
+- `expires_days` (int, optional): 1-365, default 90. Out of range raises
+  `ValueError` — there is no permanent suppression through this tool.
 
-#### `query_findings_db(sql, params)`
+**Returns:** `success`, `suppressed`, `config_path`, `expires`, `finding_id`,
+`resolution`, `timestamp`; plus `already_suppressed: True` when an entry
+existed already, and `error` whenever `success` is `False`.
+
+**`resolution="fixed"` deliberately writes nothing** and returns
+`success: False`. A suppressed finding and a fixed one produce identical scan
+output, so suppressing a "fix" destroys the evidence that a fix did not take.
+
+> The parameters were documented as `status` and `reason`; the code has never
+> accepted those names. `risk_accepted` was missing from the list, and `reason`
+> was described as "stored for audit" while nothing was stored at all. That
+> last one is now true rather than aspirational — see
+> [MCP_SETUP.md](MCP_SETUP.md#3-mark_resolved--records-the-decision-as-a-suppression).
+
+#### `query_findings_db(query, params=None)`
 
 Execute a read-only SQL query against the history database.
 
 **Parameters:**
-- `sql` (str, required): SQL query (SELECT only — writes are rejected)
-- `params` (list, optional): Parameterized query values
+- `query` (str, required): SQL. `SELECT` / `EXPLAIN` / `WITH` and an allowlist
+  of `PRAGMA`s only. **Named `query`, not `sql`.**
+- `params` (list, optional): Bind values for `?` placeholders
 
-**Returns:** List of row dicts.
+**Returns:** `{"columns": [...], "rows": [[...], ...], "row_count": N,
+"truncated": bool}` — rows are **lists**, not dicts, capped at 500.
 
 **Use case:** aggregate queries across multiple scans (e.g., "findings that reappeared 3+ scans in a row").
 
+**Safety:** two independent layers — the connection is opened `mode=ro`, and
+the statement is validated against a forbidden-keyword, multi-statement and
+unsafe-`PRAGMA` policy. The keyword scan is textual, so a search whose text
+contains e.g. `DROP` is refused; pass it as a bind parameter instead.
+
 #### `get_server_info()`
 
-Returns server metadata: version, loaded scan ID, supported transports, feature flags.
+Returns `version` (the installed package version), `results_dir`, `repo_root`,
+`total_findings`, `severity_distribution`, `available_tools`, and
+`authentication_enforced` (always `false`).
+
+> This said "loaded scan ID, supported transports, feature flags". None of
+> those keys exist.
 
 ### Resources Exposed
 
@@ -741,13 +837,31 @@ MCP resources are read-only URIs the AI can dereference for context.
 
 #### `finding://{finding_id}`
 
-Get comprehensive context for a specific finding: full description, source code context (±20 lines around the location), compliance mappings, related findings, and remediation guidance.
+Get comprehensive context for a specific finding: full description, source code context (±20 lines around the location), CWE/OWASP mappings, and remediation guidance.
+
+`related_findings` is present in the response and is **always an empty list** —
+finding it is not implemented. This entry listed it as content.
 
 **Use case:** the AI sees a finding ID in a `get_security_findings` response and fetches `finding://<id>` to get enough context to propose a fix.
 
 ### Security
 
-The MCP server ships with opt-in rate limiting and token-based auth for HTTP mode (see `scripts/jmo_mcp/utils/security.py`). stdio mode trusts the parent process. See [MCP_SETUP.md](MCP_SETUP.md) for client configuration.
+**The MCP server does not authenticate callers, and there is no setting that
+makes it.** Rate limiting is real and enforced (`JMO_MCP_RATE_LIMIT_*`), using
+a single shared bucket rather than one per client. `JMO_MCP_API_KEYS` is hashed
+at startup and never compared against anything. Ask `get_server_info()` for
+`authentication_enforced` rather than inferring it from configuration.
+
+Transport is **stdio only** — `mcp.run()` takes no arguments and there is no
+HTTP or SSE listener. stdio trusts the parent process, which is the whole of
+the security model.
+
+> This section described "token-based auth for HTTP mode (see
+> `scripts/jmo_mcp/utils/security.py`)". That module does not exist, and
+> neither does the HTTP mode.
+
+See [MCP_SETUP.md](MCP_SETUP.md) for client configuration and
+[KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) for what this means in practice.
 
 ---
 
@@ -999,7 +1113,7 @@ if __name__ == "__main__":
 
 ## Further Reading
 
-- [User Guide - Trend Analysis](USER_GUIDE.md#trend-analysis-v100): CLI usage and examples
-- [User Guide - Historical Storage](USER_GUIDE.md#historical-storage-v100): Database schema and query API
+- [User Guide - Trend Analysis](USER_GUIDE.md#trend-analysis): CLI usage and examples
+- [User Guide - Historical Storage](USER_GUIDE.md#historical-storage): Database schema and query API
 - [CHANGELOG.md](../CHANGELOG.md): Feature #5 implementation details
 - [Source Code](../scripts/core/): Complete implementation with docstrings

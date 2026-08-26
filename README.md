@@ -98,7 +98,7 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
 | **Policy** | OPA |
 | **Runtime** | Trivy-RBAC, Falco, AFL++ |
 
-**Tool details:** [docs/USER_GUIDE.md#tool-overview](docs/USER_GUIDE.md#tool-overview)
+**Tool details:** [docs/PROFILES_AND_TOOLS.md](docs/PROFILES_AND_TOOLS.md)
 
 ---
 
@@ -204,7 +204,7 @@ jmo report ./results
   run: |
     docker run --rm -v ${{ github.workspace }}:/scan \
       ghcr.io/jimmy058910/jmo-security:latest \
-      ci --repo /scan --fail-on HIGH --profile balanced
+      ci --repo /scan --fail-on HIGH --profile-name balanced
 
 - name: Upload SARIF
   uses: github/codeql-action/upload-sarif@v2
@@ -218,7 +218,7 @@ jmo report ./results
 security_scan:
   image: ghcr.io/jimmy058910/jmo-security:latest
   script:
-    - jmo ci --repo . --fail-on HIGH --profile balanced
+    - jmo ci --repo . --fail-on HIGH --profile-name balanced
   artifacts:
     reports:
       sast: results/summaries/findings.sarif
@@ -253,6 +253,7 @@ security_scan:
 |----------|---------|
 | [docs/RESULTS_GUIDE.md](docs/RESULTS_GUIDE.md) | Results and output formats |
 | [docs/API_REFERENCE.md](docs/API_REFERENCE.md) | Python API docs |
+| [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) | Deliberate and environment-bound behaviour |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |
 | [ROADMAP.md](ROADMAP.md) | Future plans |
 

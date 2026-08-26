@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,60 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 SARIF_VERSION = "2.1.0"
+
+# The schema URI written into every document. The previous value,
+# `https://schemastore.azurewebsites.net/schemas/json/sarif-2.1.0.json`,
+# returns HTTP 403 -- it is the retired SchemaStore host, so any consumer that
+# resolved `$schema` to validate the document got an error page.
+SARIF_SCHEMA_URI = "https://json.schemastore.org/sarif-2.1.0.json"
+
+# SARIF requires `correlationGuid` to be a GUID. JMo's finding ids are 16-char
+# fingerprints, and clustering rewrites them to `cluster-<fp>` (#847), so the
+# value must be checked rather than assumed.
+_GUID_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}"
+    r"-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+)
+
+
+def _as_message_text(value: Any, default: str) -> str:
+    """Coerce a value into a SARIF `multiformatMessageString.text`.
+
+    SARIF requires a string. Several adapters put a **dict** in `remediation`
+    (`{"fix": ..., "steps": [...]}`), which produced a schema-invalid document.
+    """
+    if isinstance(value, str) and value:
+        return value
+    if isinstance(value, dict):
+        parts: list[str] = []
+        fix = value.get("fix")
+        if isinstance(fix, str) and fix.strip():
+            parts.append(f"Suggested fix: {fix.strip()}")
+        steps = value.get("steps")
+        if isinstance(steps, list):
+            parts.extend(str(s) for s in steps if s)
+        if parts:
+            return "\n".join(parts)
+    return default
+
+
+def _as_sarif_line(value: Any) -> int | None:
+    """Return `value` as a SARIF line number, or None if it is not one.
+
+    SARIF constrains `region.startLine`/`endLine` to `minimum: 1`, so 0, None,
+    negatives and non-numeric values must be omitted rather than emitted.
+    """
+    if isinstance(value, bool):  # bool is an int subclass; not a line number
+        return None
+    if isinstance(value, int):
+        return value if value >= 1 else None
+    if isinstance(value, str):
+        try:
+            n = int(value.strip())
+        except ValueError:
+            return None
+        return n if n >= 1 else None
+    return None
 
 
 def to_sarif(findings: list[dict[str, Any]]) -> dict[str, Any]:
@@ -46,8 +101,12 @@ def to_sarif(findings: list[dict[str, Any]]) -> dict[str, Any]:
                 "shortDescription": {"text": f.get("message", "")},
                 "fullDescription": {"text": f.get("description", "")},
                 "help": {
-                    "text": f.get("remediation", "See rule documentation"),
-                    "markdown": f.get("remediation", "See rule documentation"),
+                    "text": _as_message_text(
+                        f.get("remediation"), "See rule documentation"
+                    ),
+                    "markdown": _as_message_text(
+                        f.get("remediation"), "See rule documentation"
+                    ),
                 },
                 "properties": {
                     "tags": f.get("tags", []),
@@ -56,28 +115,34 @@ def to_sarif(findings: list[dict[str, Any]]) -> dict[str, Any]:
             },
         )
 
-        # Build location with optional snippet
-        location_obj = {
-            "physicalLocation": {
-                "artifactLocation": {"uri": f.get("location", {}).get("path", "")},
-                "region": {
-                    "startLine": f.get("location", {}).get("startLine", 0),
-                },
-            }
+        # Build location with optional snippet.
+        #
+        # SARIF constrains `region.startLine` to `minimum: 1`. Defaulting a
+        # missing line to 0 made the document schema-invalid for every finding
+        # that has no line number -- 93 of 242 on a real scan. A region is
+        # optional, so omit what is not known rather than inventing line 0.
+        physical: dict[str, Any] = {
+            "artifactLocation": {"uri": f.get("location", {}).get("path", "")},
         }
+        region: dict[str, Any] = {}
+
+        start_line = _as_sarif_line(f.get("location", {}).get("startLine"))
+        if start_line is not None:
+            region["startLine"] = start_line
+
+        # End line if available (SARIF also requires endLine >= 1)
+        end_line = _as_sarif_line(f.get("location", {}).get("endLine"))
+        if end_line is not None and start_line is not None:
+            region["endLine"] = max(end_line, start_line)
 
         # Add code snippet if available in context
         context = f.get("context") if f else None
         if context and isinstance(context, dict) and context.get("snippet"):
-            location_obj["physicalLocation"]["region"]["snippet"] = {
-                "text": context["snippet"]
-            }
+            region["snippet"] = {"text": str(context["snippet"])}
 
-        # End line if available
-        if f.get("location", {}).get("endLine"):
-            location_obj["physicalLocation"]["region"]["endLine"] = f["location"][
-                "endLine"
-            ]
+        if region:
+            physical["region"] = region
+        location_obj = {"physicalLocation": physical}
 
         result = {
             "ruleId": rule_id,
@@ -86,14 +151,19 @@ def to_sarif(findings: list[dict[str, Any]]) -> dict[str, Any]:
             "locations": [location_obj],
         }
 
-        # Add fix suggestions if available
-        remediation = f.get("remediation")
-        if remediation and isinstance(remediation, str) and len(remediation) > 0:
-            result["fixes"] = [
-                {
-                    "description": {"text": remediation},
-                }
-            ]
+        # Add remediation guidance if available.
+        #
+        # This used to emit `result.fixes`, but a SARIF `fix` REQUIRES
+        # `artifactChanges` -- an array of concrete, machine-applicable text
+        # replacements. JMo's `remediation` is prose ("Use environment
+        # variables or a secrets manager"), so every fix object it produced was
+        # schema-invalid: 239 errors on a 242-finding scan. Synthesising an
+        # artifactChange would mean inventing a replacement JMo does not have.
+        # The prose goes in `properties` instead, which SARIF leaves free-form,
+        # and it is still carried by `rules[].help.text` as before.
+        remediation_text = _as_message_text(f.get("remediation"), "")
+        if remediation_text:
+            result.setdefault("properties", {})["remediation"] = remediation_text
 
         # Add CWE/OWASP/CVE taxonomy if present in tags
         taxa = []
@@ -142,8 +212,19 @@ def to_sarif(findings: list[dict[str, Any]]) -> dict[str, Any]:
                     for t in detected_by
                 ],
             }
-            # Add correlation IDs for cross-tool tracking
-            result["correlationGuid"] = f.get("id", "")
+            # Add correlation IDs for cross-tool tracking.
+            #
+            # SARIF constrains `correlationGuid` to a GUID. JMo ids are 16-char
+            # fingerprints, and clustering rewrites them to `cluster-<fp>`
+            # (#847), so emitting one unconditionally made the document
+            # invalid. Keep the id -- it is what correlates findings across
+            # JMo's own artifacts -- but under a free-form property unless it
+            # really is a GUID.
+            finding_id = f.get("id", "")
+            if isinstance(finding_id, str) and _GUID_RE.match(finding_id):
+                result["correlationGuid"] = finding_id
+            elif finding_id:
+                result.setdefault("properties", {})["jmoFindingId"] = str(finding_id)
 
         results.append(result)
 
@@ -175,7 +256,7 @@ def to_sarif(findings: list[dict[str, Any]]) -> dict[str, Any]:
 
     return {
         "version": SARIF_VERSION,
-        "$schema": "https://schemastore.azurewebsites.net/schemas/json/sarif-2.1.0.json",
+        "$schema": SARIF_SCHEMA_URI,
         "runs": [{"tool": tool, "results": results}],
     }
 

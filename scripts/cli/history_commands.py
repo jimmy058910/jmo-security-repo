@@ -15,6 +15,8 @@ Commands:
 from __future__ import annotations
 
 import json
+import logging
+import sqlite3
 import sys
 import time
 from pathlib import Path
@@ -37,6 +39,8 @@ from scripts.core.history_db import (
 from scripts.core.history_integrity import recover_database, verify_database_integrity
 from scripts.core.history_migrations import get_current_version, run_migrations
 from scripts.core.unicode_utils import safe_write
+
+logger = logging.getLogger(__name__)
 
 
 def parse_time_delta(delta_str: str) -> int:
@@ -93,7 +97,20 @@ def cmd_history_store(args) -> int:
                     data = json.load(f)
                     # Extract unique tools from findings
                     tool_set = set()
-                    for finding in data.get("findings", []):
+                    # Accept both artifact shapes, as store_scan() does.
+                    # `summaries/findings.json` is a dict of
+                    # {"meta": ..., "findings": [...]}, but the bare-list
+                    # form is also supported downstream -- and this line
+                    # used to be an unguarded `data.get(...)`, so a list
+                    # crashed the command with an AttributeError and a
+                    # traceback instead of storing the scan.
+                    if isinstance(data, list):
+                        entries = data
+                    elif isinstance(data, dict):
+                        entries = data.get("findings", [])
+                    else:
+                        entries = []
+                    for finding in entries:
                         tool_info = finding.get("tool", {})
                         if isinstance(tool_info, dict):
                             tool_set.add(tool_info.get("name", "unknown"))
@@ -122,6 +139,13 @@ def cmd_history_store(args) -> int:
         return 0
 
     except FileNotFoundError as e:
+        sys.stderr.write(f"Error: {e}\n")
+        return 1
+    except ValueError as e:
+        # A rejected profile name is a user mistake, not a crash.
+        # store_scan() validates against get_known_profiles() -- the tool
+        # registry PLUS jmo.yml `profiles:` -- and its message names every
+        # known profile, so a traceback adds noise and no information.
         sys.stderr.write(f"Error: {e}\n")
         return 1
     except Exception as e:
@@ -166,7 +190,15 @@ def cmd_history_list(args) -> int:
         conn.close()
 
         if not scans:
-            sys.stdout.write("No scans found.\n")
+            # --json has to hold on the empty path too. This used to return
+            # before the format branch below, so `--json` emitted the prose
+            # "No scans found." and every consumer doing json.loads() got
+            # "Expecting value: line 1 column 1". `history export` already
+            # returns [] here; this makes `list` agree with it.
+            if getattr(args, "json", False):
+                sys.stdout.write("[]\n")
+            else:
+                sys.stdout.write("No scans found.\n")
             return 0
 
         # Format output
@@ -326,11 +358,36 @@ def cmd_history_query(args) -> int:
         return 1
 
     try:
-        conn = get_connection(db_path)
+        # `query` executes whatever the user typed, so open the database
+        # READ-ONLY and let SQLite be the guard. A statement-type allowlist
+        # would have to parse SQL correctly to be safe, and a
+        # startswith("SELECT") test is not that.
+        #
+        # What this closes: previously DDL ran in autocommit and PERSISTED --
+        # `jmo history query "DROP TABLE findings"` really dropped the table --
+        # while DML opened an implicit transaction that conn.close() discarded.
+        # Both reported the identical "SQL Error: 'NoneType' object is not
+        # iterable", so the same message meant "destroyed your data" and
+        # "silently did nothing" depending on the statement. On the default
+        # 1 GB history database that is unrecoverable.
+        conn = sqlite3.connect(f"{db_path.resolve().as_uri()}?mode=ro", uri=True)
+        conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
         query = args.query
         cursor.execute(query)
+
+        # Non-SELECT statements leave cursor.description as None. Rendering it
+        # raised "'NoneType' object is not iterable", which read as a SQL
+        # error from the database rather than a TypeError from this function.
+        if cursor.description is None:
+            conn.close()
+            sys.stderr.write(
+                "Error: query returned no result set. "
+                "'jmo history query' is read-only -- use a SELECT.\n"
+            )
+            return 1
+
         rows = cursor.fetchall()
 
         # Format output
@@ -554,10 +611,25 @@ def cmd_history_stats(args) -> int:
                 )
             sys.stdout.write("\n")
 
-            if stats["scans_by_branch"]:
-                sys.stdout.write("Scans by Branch:\n")
-                for item in stats["scans_by_branch"][:10]:
+            # Say what these rows do NOT cover. They are capped at 10 and carry
+            # only scans with a branch recorded, so on a real database they can
+            # sum to a small fraction of `total_scans` -- 279 of 2170 on the
+            # one this was found on -- and printing them bare invited reading
+            # the column as a full breakdown.
+            shown_branches = len(stats["scans_by_branch"])
+            distinct_branches = stats["distinct_branches"]
+            scans_without_branch = stats["scans_without_branch"]
+            if stats["scans_by_branch"] or scans_without_branch:
+                header = "Scans by Branch"
+                if distinct_branches > shown_branches:
+                    header += f" (top {shown_branches} of {distinct_branches})"
+                sys.stdout.write(header + ":\n")
+                for item in stats["scans_by_branch"]:
                     sys.stdout.write(f"  {item['branch']:20} {item['count']:4} scans\n")
+                if scans_without_branch:
+                    sys.stdout.write(
+                        f"  {'(no branch recorded)':20} {scans_without_branch:4} scans\n"
+                    )
                 sys.stdout.write("\n")
 
             if stats["scans_by_profile"]:
@@ -579,8 +651,15 @@ def cmd_history_stats(args) -> int:
                 sys.stdout.write("\n")
 
             if stats["top_tools"]:
-                sys.stdout.write("Top Tools:\n")
-                for item in stats["top_tools"][:10]:
+                # Same cap, same duty to name it. The [:10] slice that used to
+                # sit on the loop below duplicated the SQL LIMIT, so raising
+                # one would have been silently undone by the other.
+                shown_tools = len(stats["top_tools"])
+                tools_header = "Top Tools"
+                if stats["distinct_tools"] > shown_tools:
+                    tools_header += f" ({shown_tools} of {stats['distinct_tools']})"
+                sys.stdout.write(tools_header + ":\n")
+                for item in stats["top_tools"]:
                     sys.stdout.write(
                         f"  {item['tool']:20} {item['count']:6,} findings\n"
                     )
@@ -630,12 +709,15 @@ def cmd_history_diff(args) -> int:
         else:
             # Human-readable summary
             safe_write(f"\n🔍 Diff: {scan_id_1[:8]}... → {scan_id_2[:8]}...\n\n")
-            safe_write(f"✅ New findings:       {len(diff['new'])}\n")
+            # New findings are the bad direction; both counts used to carry the
+            # same green check, so a run that introduced 17 vulnerabilities
+            # read as "✅ New findings: 17".
+            safe_write(f"⚠️ New findings:       {len(diff['new'])}\n")
             safe_write(f"✅ Resolved findings:  {len(diff['resolved'])}\n")
             sys.stdout.write(f"   Unchanged findings: {len(diff['unchanged'])}\n")
 
             if diff["new"]:
-                sys.stdout.write("\n   New Findings (top 10):\n")
+                safe_write("\n⚠️ New Findings (top 10):\n")
                 for f in diff["new"][:10]:
                     severity = f["severity"]
                     rule_id = f["rule_id"]
@@ -662,10 +744,10 @@ def cmd_history_diff(args) -> int:
         sys.stderr.write(f"Error: {e}\n")
         return 1
     except Exception as e:
-        sys.stderr.write(f"Error computing diff: {e}\n")
-        import traceback
-
-        traceback.print_exc()
+        # No raw traceback: it is not actionable for a user and it buries the
+        # message. The detail stays available at DEBUG.
+        sys.stderr.write(f"Error computing diff: {type(e).__name__}: {e}\n")
+        logger.debug("history diff failed", exc_info=True)
         return 1
 
 
@@ -674,8 +756,8 @@ def cmd_history_trends(args) -> int:
     Show security trends over time for a branch.
 
     Usage:
-        jmo history trends --branch main --days 30
-        jmo history trends --branch dev --days 90 --output json
+        jmo history trends
+        jmo history trends --branch dev --days 90 --json
     """
     db_path = Path(args.db or DEFAULT_DB_PATH)
 
@@ -683,19 +765,38 @@ def cmd_history_trends(args) -> int:
         sys.stderr.write(f"Error: History database not found: {db_path}\n")
         return 1
 
-    branch = getattr(args, "branch", "main")
-    days = getattr(args, "days", 30)
+    branch = getattr(args, "branch", None)
+    days = getattr(args, "days", None) or 30
+    branch_label = f"branch {branch!r}" if branch else "all branches"
 
     try:
         conn = get_connection(db_path)
         trend = get_trend_summary(conn, branch, days)
         conn.close()
 
+        # An empty result is not an error, and a caller that asked for JSON
+        # still gets JSON -- `jmo history list` exits 0 for the same empty
+        # query on the same database.
         if not trend:
-            sys.stdout.write(
-                f"No scans found for branch '{branch}' in last {days} days\n"
-            )
-            return 1
+            if getattr(args, "json", False):
+                sys.stdout.write(
+                    json.dumps(
+                        {
+                            "scan_count": 0,
+                            "branch": branch,
+                            "days": days,
+                            "message": (
+                                f"No scans found for {branch_label} "
+                                f"in last {days} days"
+                            ),
+                        },
+                        indent=2,
+                    )
+                    + "\n"
+                )
+            else:
+                safe_write(f"No scans found for {branch_label} in last {days} days\n")
+            return 0
 
         # Output formatting
         if getattr(args, "json", False):
@@ -703,7 +804,7 @@ def cmd_history_trends(args) -> int:
             sys.stdout.write(json.dumps(trend, indent=2) + "\n")
         else:
             # Human-readable summary
-            safe_write(f"\n📊 Security Trends: {branch} (last {days} days)\n")
+            safe_write(f"\n📊 Security Trends: {branch_label} (last {days} days)\n")
             sys.stdout.write("=" * 70 + "\n\n")
 
             # Scan count and date range
@@ -820,9 +921,12 @@ def cmd_history_migrate(args) -> int:
                 safe_write("\n❌ Errors during migration:\n", sys.stderr)
                 for err in result["errors"]:
                     sys.stderr.write(f"  - {err['version']}: {err['error']}\n")
-                return 1
 
-        return 0
+        # Outside the format branch on purpose. This `return 1` used to sit
+        # inside the `else`, so `--json` -- the mode automation uses --
+        # reported a FAILED migration as success. `cmd_history_verify` had
+        # this right; migrate and repair did not.
+        return 1 if result["errors"] else 0
 
     except Exception as e:
         sys.stderr.write(f"Error running migrations: {e}\n")
@@ -929,9 +1033,11 @@ def cmd_history_repair(args) -> int:
                 sys.stdout.write(
                     f"\nBackup preserved at: {result.get('backup_path', 'N/A')}\n"
                 )
-                return 1
 
-        return 0
+        # Outside the format branch on purpose -- see cmd_history_migrate.
+        # `--json` reported a FAILED repair as success, on the most
+        # destructive command in this module.
+        return 1 if not result["success"] else 0
 
     except Exception as e:
         sys.stderr.write(f"Error repairing database: {e}\n")
@@ -976,4 +1082,7 @@ def cmd_history(args) -> int:
         sys.stderr.write(
             "Usage: jmo history {store|list|show|query|prune|export|stats|diff|trends|optimize|migrate|verify|repair}\n"
         )
-        return 1
+        # Printing a usage line and then exiting 1 says "ran, found a problem".
+        # Nothing ran. `jmo policy`, `adapters` and `schedule` already exit 2
+        # here; see "Exit Codes" in docs/CLI_REFERENCE.md.
+        return 2

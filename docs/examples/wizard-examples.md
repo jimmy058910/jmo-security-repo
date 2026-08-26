@@ -59,7 +59,7 @@ The wizard now displays a 6-step progress bar during execution:
 
 ┌─ 🚀 Preflight Check ───────────────────────────────────────────────
 │ • Profile: balanced
-│ • Command: jmo ci --profile balanced --fail-on HIGH --image nginx:latest
+│ • Command: jmo ci --profile-name balanced --fail-on HIGH --image nginx:latest
 │ • Estimated time: 18-25 minutes
 └────────────────────────────────────────────────────────────────────
 
@@ -1830,7 +1830,7 @@ docker run --rm \
 For complete documentation, see:
 
 - [docs/USER_GUIDE.md — Trend Analysis](../USER_GUIDE.md#trend-analysis)
-- [docs/API_REFERENCE.md — TrendAnalyzer API](../API_REFERENCE.md#trendanalyzer)
+- [docs/API_REFERENCE.md — TrendAnalyzer API](../API_REFERENCE.md#trendanalyzer-api)
 - [docs/examples/ci-cd-trends.md](./ci-cd-trends.md) - Complete CI/CD patterns
 
 ---

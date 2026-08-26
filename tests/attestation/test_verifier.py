@@ -10,6 +10,7 @@ Tests the AttestationVerifier class which handles:
 
 import hashlib
 import json
+import sys
 from unittest.mock import MagicMock, patch
 
 from scripts.core.attestation.tamper_detector import (
@@ -115,11 +116,12 @@ class TestVerifySubjectDigest:
 
         expected_sha256 = hashlib.sha256(b'{"test": "data"}').hexdigest()
 
-        result = verifier._verify_subject_digest(
+        ok, error = verifier._verify_subject_digest(
             str(test_file), {"sha256": expected_sha256}
         )
 
-        assert result is True
+        assert ok is True
+        assert error is None
 
     def test_verify_multiple_digests_match(self, tmp_path):
         """Test verification with multiple matching digests."""
@@ -133,7 +135,7 @@ class TestVerifySubjectDigest:
         expected_sha384 = hashlib.sha384(content).hexdigest()
         expected_sha512 = hashlib.sha512(content).hexdigest()
 
-        result = verifier._verify_subject_digest(
+        ok, error = verifier._verify_subject_digest(
             str(test_file),
             {
                 "sha256": expected_sha256,
@@ -142,7 +144,8 @@ class TestVerifySubjectDigest:
             },
         )
 
-        assert result is True
+        assert ok is True
+        assert error is None
 
     def test_verify_digest_mismatch(self, tmp_path):
         """Test verification fails with digest mismatch."""
@@ -151,11 +154,52 @@ class TestVerifySubjectDigest:
         test_file = tmp_path / "subject.json"
         test_file.write_bytes(b'{"test": "data"}')
 
-        result = verifier._verify_subject_digest(
+        ok, error = verifier._verify_subject_digest(
             str(test_file), {"sha256": "incorrect_hash_value"}
         )
 
-        assert result is False
+        assert ok is False
+        assert error == "Subject digest mismatch"
+
+    def test_verify_digest_with_no_supported_algorithm_is_not_a_pass(self, tmp_path):
+        """An attestation naming only unknown algorithms leaves nothing to
+        compare, and nothing-compared must not report as verified.
+
+        This is the shape the chunk exists for: `{"sha3_999": "deadbeef"}`
+        returned True and `jmo verify` printed "verified successfully" with
+        zero digests checked.
+        """
+        verifier = AttestationVerifier()
+
+        test_file = tmp_path / "subject.json"
+        test_file.write_bytes(b'{"test": "data"}')
+
+        ok, error = verifier._verify_subject_digest(
+            str(test_file), {"sha3_999": "deadbeef"}
+        )
+
+        assert ok is False
+        assert error is not None
+        assert "sha3_999" in error
+
+    def test_verify_digest_skips_unknown_but_honours_a_known_one(self, tmp_path):
+        """A mix still verifies on the algorithm it can compute."""
+        verifier = AttestationVerifier()
+
+        test_file = tmp_path / "subject.json"
+        content = b'{"test": "data"}'
+        test_file.write_bytes(content)
+
+        ok, error = verifier._verify_subject_digest(
+            str(test_file),
+            {
+                "sha3_999": "deadbeef",
+                "sha256": hashlib.sha256(content).hexdigest(),
+            },
+        )
+
+        assert ok is True
+        assert error is None
 
     def test_verify_partial_digest_mismatch(self, tmp_path):
         """Test verification fails if any digest mismatches."""
@@ -167,7 +211,7 @@ class TestVerifySubjectDigest:
 
         correct_sha256 = hashlib.sha256(content).hexdigest()
 
-        result = verifier._verify_subject_digest(
+        ok, error = verifier._verify_subject_digest(
             str(test_file),
             {
                 "sha256": correct_sha256,  # Correct
@@ -175,7 +219,8 @@ class TestVerifySubjectDigest:
             },
         )
 
-        assert result is False
+        assert ok is False
+        assert error == "Subject digest mismatch"
 
 
 class TestVerifySignature:
@@ -195,15 +240,26 @@ class TestVerifySignature:
         # Mock successful verification
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
-        result = verifier._verify_signature(str(attestation_file), str(bundle_file))
+        ok, detail = verifier._verify_signature(
+            str(attestation_file),
+            str(bundle_file),
+            "you@example.com",
+            "https://oauth2.sigstore.dev/auth",
+        )
 
-        assert result is True
+        assert ok is True
+        assert detail == ""
 
-        # Verify command was called
+        # The command must be one sigstore will actually run. Asserting only
+        # that "verify" and "--bundle" appear passed happily over
+        # `sigstore verify --bundle ... <file>`, which exits on an argparse
+        # error every time because `verify` dispatches to a subcommand.
         cmd = mock_run.call_args[0][0]
-        assert "sigstore" in cmd
-        assert "verify" in cmd
+        assert cmd[0] == sys.executable, "must use this interpreter, not `python3`"
+        assert cmd[1:5] == ["-m", "sigstore", "verify", "identity"]
         assert "--bundle" in cmd
+        assert "--cert-identity" in cmd
+        assert "--cert-oidc-issuer" in cmd
 
     @patch("subprocess.run")
     def test_verify_signature_failure(self, mock_run, tmp_path):
@@ -221,9 +277,18 @@ class TestVerifySignature:
             returncode=1, stdout="", stderr="Verification failed: invalid signature"
         )
 
-        result = verifier._verify_signature(str(attestation_file), str(bundle_file))
+        ok, detail = verifier._verify_signature(
+            str(attestation_file),
+            str(bundle_file),
+            "you@example.com",
+            "https://oauth2.sigstore.dev/auth",
+        )
 
-        assert result is False
+        assert ok is False
+        # sigstore's own diagnosis is carried out, not collapsed into one
+        # generic message: "the bundle is malformed" and "the trust root could
+        # not be fetched" are different answers.
+        assert "invalid signature" in detail
 
 
 class TestVerifyMethod:
@@ -402,7 +467,50 @@ class TestVerifyMethod:
         signature_file.write_text('{"bundle": "data"}')
 
         # Mock successful signature verification
-        mock_verify_sig.return_value = True
+        mock_verify_sig.return_value = (True, "")
+
+        result = verifier.verify(
+            subject_path=str(subject_file),
+            attestation_path=str(attestation_file),
+            signature_path=str(signature_file),
+            cert_identity="you@example.com",
+            cert_oidc_issuer="https://oauth2.sigstore.dev/auth",
+        )
+
+        assert result.is_valid is True
+        mock_verify_sig.assert_called_once()
+
+    def test_verify_with_bundle_but_no_expected_signer_is_refused(self, tmp_path):
+        """A bundle checked against no expected signer proves only that
+        somebody signed it, so it must not be accepted as a verification."""
+        verifier = AttestationVerifier(enable_tamper_detection=False)
+
+        subject_file = tmp_path / "findings.json"
+        content = b'{"findings": []}'
+        subject_file.write_bytes(content)
+
+        attestation_file = tmp_path / "attestation.json"
+        attestation_file.write_text(
+            json.dumps(
+                {
+                    "_type": "https://in-toto.io/Statement/v0.1",
+                    "subject": [
+                        {
+                            "name": "findings.json",
+                            "digest": {"sha256": hashlib.sha256(content).hexdigest()},
+                        }
+                    ],
+                    "predicateType": "https://slsa.dev/provenance/v1",
+                    "predicate": {
+                        "buildDefinition": {},
+                        "runDetails": {"builder": {}, "metadata": {}},
+                    },
+                }
+            )
+        )
+
+        signature_file = tmp_path / "signature.sigstore.json"
+        signature_file.write_text('{"bundle": "data"}')
 
         result = verifier.verify(
             subject_path=str(subject_file),
@@ -410,8 +518,8 @@ class TestVerifyMethod:
             signature_path=str(signature_file),
         )
 
-        assert result.is_valid is True
-        mock_verify_sig.assert_called_once()
+        assert result.is_valid is False
+        assert "cert_identity" in (result.error_message or "")
 
     @patch.object(AttestationVerifier, "_verify_signature")
     def test_verify_with_signature_failure(self, mock_verify_sig, tmp_path):
@@ -444,16 +552,72 @@ class TestVerifyMethod:
         signature_file.write_text('{"bundle": "data"}')
 
         # Mock failed signature verification
-        mock_verify_sig.return_value = False
+        mock_verify_sig.return_value = (False, "the bundle is malformed")
 
         result = verifier.verify(
             subject_path=str(subject_file),
             attestation_path=str(attestation_file),
             signature_path=str(signature_file),
+            cert_identity="you@example.com",
+            cert_oidc_issuer="https://oauth2.sigstore.dev/auth",
         )
 
         assert result.is_valid is False
-        assert result.error_message == "Signature verification failed"
+        assert result.error_message == (
+            "Signature verification failed: the bundle is malformed"
+        )
+
+    @patch("scripts.core.attestation.verifier.TamperDetector")
+    def test_tamper_detection_crash_fails_closed(
+        self, mock_tamper_detector_class, tmp_path
+    ):
+        """A tamper check that raised was logged as a warning and then
+        verification continued to `is_valid = True`.
+
+        That turned "this check could not run" into "this check found
+        nothing". Measured on the real CLI: rewriting `startedOn` from a
+        string to an integer made `.replace()` raise inside the detector, and
+        the same attestation flipped from CRITICAL tamper detected to verified
+        successfully.
+        """
+        detector = MagicMock()
+        detector.check_all.side_effect = AttributeError(
+            "'int' object has no attribute 'replace'"
+        )
+        mock_tamper_detector_class.return_value = detector
+
+        verifier = AttestationVerifier(enable_tamper_detection=True)
+
+        subject_file = tmp_path / "findings.json"
+        content = b'{"findings": []}'
+        subject_file.write_bytes(content)
+
+        attestation_file = tmp_path / "attestation.json"
+        attestation_file.write_text(
+            json.dumps(
+                {
+                    "_type": "https://in-toto.io/Statement/v0.1",
+                    "subject": [
+                        {
+                            "name": "findings.json",
+                            "digest": {"sha256": hashlib.sha256(content).hexdigest()},
+                        }
+                    ],
+                    "predicateType": "https://slsa.dev/provenance/v1",
+                    "predicate": {
+                        "buildDefinition": {},
+                        "runDetails": {"builder": {}, "metadata": {}},
+                    },
+                }
+            )
+        )
+
+        result = verifier.verify(
+            subject_path=str(subject_file), attestation_path=str(attestation_file)
+        )
+
+        assert result.is_valid is False
+        assert "could not complete" in (result.error_message or "")
 
     @patch("scripts.core.attestation.verifier.TamperDetector")
     def test_verify_with_tamper_detection_critical(

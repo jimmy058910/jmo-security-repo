@@ -3,11 +3,14 @@
 import os
 import subprocess
 import sys
+from collections import Counter
 from datetime import UTC
 from pathlib import Path
 from typing import Any
 
 from scripts.core.diff_engine import DiffEngine, DiffResult, ModifiedFinding
+from scripts.core.history_db import DEFAULT_DB_PATH
+from scripts.core.jmo_version import get_jmo_version
 from scripts.core.reporters import (
     diff_html_reporter,
     diff_json_reporter,
@@ -16,15 +19,24 @@ from scripts.core.reporters import (
 )
 from scripts.core.unicode_utils import safe_print
 
+# Severity levels a finding can carry. `--severity` is matched against these,
+# so a value outside the set can never select anything.
+VALID_SEVERITIES = ("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO")
+
 # Optional Rich library for enhanced terminal output
 try:
     from rich.console import Console
     from rich.panel import Panel
     from rich.table import Table
-    from rich.tree import Tree
 
     RICH_AVAILABLE = True
-    console = Console()
+    # stderr=True is load-bearing, not cosmetic. `Console()` writes to stdout,
+    # while the call site guards on `sys.stderr.isatty()` -- so the guard and
+    # the target were different streams, and the summary panel landed in the
+    # middle of `--format json` output whenever stderr happened to be a
+    # character device. On Windows that includes `2>NUL`, i.e. the ordinary
+    # way to silence a command in a pipeline.
+    console = Console(stderr=True)
 except ImportError:
     RICH_AVAILABLE = False
     console = None  # type: ignore[assignment]  # Graceful fallback when rich optional dep not installed
@@ -193,13 +205,15 @@ def print_diff_summary_rich(diff_result: DiffResult) -> None:
     summary_text += f"[bold green]{stats['total_resolved']}[/bold green] resolved  |  "
     summary_text += f"[bold yellow]{stats['total_modified']}[/bold yellow] modified"
 
-    # Determine trend color
-    trend = stats.get("trend", "neutral")
+    # Determine trend color. The engine emits exactly improving/stable/
+    # worsening; "degrading" and "neutral" were never reachable, and
+    # "worsening" -- the one that matters -- had no entry and fell through to
+    # white.
+    trend = stats.get("trend", "stable")
     trend_colors = {
         "improving": "green",
         "stable": "yellow",
-        "degrading": "red",
-        "neutral": "white",
+        "worsening": "red",
     }
     trend_color = trend_colors.get(trend, "white")
     trend_text = f"Trend: [{trend_color}]{trend.upper()}[/{trend_color}]"
@@ -212,43 +226,48 @@ def print_diff_summary_rich(diff_result: DiffResult) -> None:
         )
     )
 
-    # Create severity breakdown table
-    if stats.get("new", {}):
+    # Create severity breakdown table.
+    #
+    # These read `new_by_severity`/`resolved_by_severity`, which is what
+    # `DiffEngine._calculate_statistics` emits. They previously read
+    # `stats["new"]` and `stats["resolved"]` -- keys the engine has never
+    # produced -- so the table could not render from a real diff. It rendered
+    # in its unit test only because the test hand-built a statistics dict
+    # containing those keys.
+    #
+    # A "Findings by Tool" tree sat here too, reading `stats["by_tool"]`.
+    # Nothing anywhere computes that key, so it is removed rather than fed:
+    # there is no data source to point it at.
+    new_by_sev = stats.get("new_by_severity") or {}
+    resolved_by_sev = stats.get("resolved_by_severity") or {}
+    if new_by_sev or resolved_by_sev:
         table = Table(
-            title="New Findings by Severity",
+            title="Findings by Severity",
             show_header=True,
             header_style="bold magenta",
         )
         table.add_column("Severity", style="cyan", no_wrap=True)
-        table.add_column("Count", justify="right", style="yellow")
+        table.add_column("New", justify="right", style="yellow")
+        table.add_column("Resolved", justify="right", style="green")
         table.add_column("Change", justify="right")
 
-        severity_order = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
-        for sev in severity_order:
-            new_count = stats.get("new", {}).get(sev, 0)
-            resolved_count = stats.get("resolved", {}).get(sev, 0)
+        rows = 0
+        for sev in VALID_SEVERITIES:
+            new_count = new_by_sev.get(sev, 0)
+            resolved_count = resolved_by_sev.get(sev, 0)
             if new_count > 0 or resolved_count > 0:
-                change = (
-                    f"+{new_count - resolved_count}"
-                    if new_count > resolved_count
-                    else f"{new_count - resolved_count}"
-                )
-                change_style = "red" if new_count > resolved_count else "green"
+                delta = new_count - resolved_count
+                change_style = "red" if delta > 0 else "green"
                 table.add_row(
-                    sev, str(new_count), f"[{change_style}]{change}[/{change_style}]"
+                    sev,
+                    str(new_count),
+                    str(resolved_count),
+                    f"[{change_style}]{delta:+d}[/{change_style}]",
                 )
+                rows += 1
 
-        console.print(table)
-
-    # Tool breakdown
-    if stats.get("by_tool", {}):
-        tool_tree = Tree("🔧 Findings by Tool")
-        for tool, count in sorted(
-            stats.get("by_tool", {}).items(), key=lambda x: x[1], reverse=True
-        ):
-            tool_tree.add(f"[cyan]{tool}[/cyan]: {count} findings")
-
-        console.print(tool_tree)
+        if rows:
+            console.print(table)
 
 
 def cmd_diff(args) -> int:
@@ -289,7 +308,10 @@ def cmd_diff(args) -> int:
 
         baseline, current = detected
 
-        # Auto-suggest output format
+        # Auto-suggest output format. `--format` carries no argparse default,
+        # so this is reachable: it previously defaulted to "md", which made
+        # `args.format` permanently truthy and the suggestion dead code even
+        # though `--auto`'s help advertises it.
         if not getattr(args, "format", None):
             args.format = suggest_output_format(git_context)
 
@@ -365,7 +387,14 @@ def cmd_diff(args) -> int:
             if db_path:
                 db_path = Path(db_path)
             else:
-                db_path = Path.home() / ".jmo" / "scans.db"
+                # The history database is `.jmo/history.db`, which is what
+                # `jmo scan`, `jmo report`, `jmo ci` and every `jmo history`
+                # subcommand read and write. This defaulted to
+                # `~/.jmo/scans.db` -- a filename and a location the product
+                # never uses -- so `jmo diff --scan A --scan B`, the
+                # invocation printed in this command's own --help, could only
+                # ever fail.
+                db_path = DEFAULT_DB_PATH
 
             if not db_path.exists():
                 print(f"Error: Database not found: {db_path}", file=sys.stderr)
@@ -382,13 +411,35 @@ def cmd_diff(args) -> int:
         print(f"Error during diff: {e}", file=sys.stderr)
         return 1
 
-    # Apply filters
+    # Apply filters.
+    #
+    # An unusable filter value produces an empty diff, which is indistinguishable
+    # from "nothing changed" -- so say so rather than reporting a clean run.
+    # Measured before this check: `--severity high` and `--severity NOPE` each
+    # returned 0/0/0 with exit code 0 and no message, and
+    # `--severity "HIGH, LOW"` silently dropped LOW because of the space.
     if getattr(args, "severity", None):
-        severities = set(args.severity.split(","))
+        severities = {s.strip().upper() for s in args.severity.split(",") if s.strip()}
+        unknown = sorted(severities - set(VALID_SEVERITIES))
+        if unknown:
+            print(
+                f"Warning: unrecognised severity {', '.join(unknown)} "
+                f"(expected one of {', '.join(VALID_SEVERITIES)}); "
+                "no finding can match it",
+                file=sys.stderr,
+            )
         diff_result = _filter_by_severity(diff_result, severities)
 
     if getattr(args, "tool", None):
-        tools = set(args.tool.split(","))
+        tools = {t.strip() for t in args.tool.split(",") if t.strip()}
+        present = _tools_present(diff_result)
+        unknown = sorted(tools - present)
+        if unknown:
+            print(
+                f"Warning: no findings from {', '.join(unknown)} in either scan"
+                + (f" (present: {', '.join(sorted(present))})" if present else ""),
+                file=sys.stderr,
+            )
         diff_result = _filter_by_tool(diff_result, tools)
 
     if getattr(args, "only", None):
@@ -396,7 +447,9 @@ def cmd_diff(args) -> int:
 
     # Generate output
     output_path = getattr(args, "output", None)
-    format_type = getattr(args, "format", "md")
+    # `--format` has no argparse default so `--auto` can suggest one; resolve
+    # the unset case here instead.
+    format_type = getattr(args, "format", None) or "md"
 
     try:
         if format_type == "json":
@@ -420,15 +473,18 @@ def cmd_diff(args) -> int:
 
                 with secure_temp_file(prefix="jmo_diff_", suffix=".md") as tmp_path:
                     diff_md_reporter.write_markdown_diff(diff_result, tmp_path)
-                    # Use safe_print for Windows Unicode compatibility
-                    safe_print(tmp_path.read_text(encoding="utf-8"))
+                    _write_document_to_stdout(tmp_path.read_text(encoding="utf-8"))
 
         elif format_type == "html":
             if not output_path:
                 output_path = "diff-report.html"
             diff_html_reporter.write_html_diff(diff_result, Path(output_path))
             safe_print(f"✅ HTML diff report: {output_path}")
-            print(f"   Open in browser: file://{Path(output_path).absolute()}")
+            # as_uri() rather than "file://" + path: on Windows the latter
+            # produced `file://C:\Users\...`, where `C:` parses as the URI
+            # authority and the backslashes are not separators. The correct
+            # form is `file:///C:/Users/...`.
+            print(f"   Open in browser: {Path(output_path).absolute().as_uri()}")
 
         elif format_type == "sarif":
             if not output_path:
@@ -465,7 +521,10 @@ def _build_json_output(diff: DiffResult) -> dict[str, Any]:
     return {
         "meta": {
             "diff_version": "1.0.0",
-            "jmo_version": "1.0.0",
+            # Same value the file-writing path reports. These disagreed: the
+            # stdout document said 1.0.0 while `--output` said the real
+            # version, for the same command over the same data.
+            "jmo_version": get_jmo_version(),
             "timestamp": datetime.now(UTC).isoformat(),
             "baseline": {
                 "source_type": diff.baseline_source.source_type,
@@ -498,6 +557,94 @@ def _build_json_output(diff: DiffResult) -> dict[str, Any]:
     }
 
 
+def _write_document_to_stdout(text: str) -> None:
+    """Write a generated document to stdout without console substitution.
+
+    `jmo diff --format md` with no `--output` is how the Markdown is captured
+    for a PR comment -- `jmo diff a/ b/ > report.md`. Passing it through
+    `safe_print` applied the *console's* codec to a *file*: on a cp1252 box the
+    captured document read `# [?] Security Diff Report`, with the trend arrows
+    rendered as bare `?` and `[!]?`. GitHub and GitLab both consume UTF-8, so
+    the substitution is pure loss (#784).
+
+    Redirected or piped stdout therefore gets the document verbatim as UTF-8.
+    A real terminal still goes through `safe_print`, because a cp437 console
+    genuinely cannot render the characters and mojibake would be worse.
+    """
+    try:
+        is_terminal = sys.stdout.isatty()
+    except (AttributeError, ValueError):  # detached or replaced stream
+        is_terminal = False
+
+    buffer = getattr(sys.stdout, "buffer", None)
+    if is_terminal or buffer is None:
+        safe_print(text)
+        return
+
+    sys.stdout.flush()
+    buffer.write(text.encode("utf-8"))
+    if not text.endswith("\n"):
+        buffer.write(b"\n")
+    buffer.flush()
+
+
+def _tools_present(diff: DiffResult) -> set[str]:
+    """Every tool name appearing anywhere in a diff result."""
+    names: set[str] = set()
+    for finding in (*diff.new, *diff.resolved, *diff.unchanged):
+        name = (finding.get("tool") or {}).get("name")
+        if name:
+            names.add(name)
+    for mod in diff.modified:
+        for finding in (mod.baseline, mod.current):
+            name = (finding.get("tool") or {}).get("name")
+            if name:
+                names.add(name)
+    return names
+
+
+def _recalculate_statistics(
+    new: list[dict[str, Any]],
+    resolved: list[dict[str, Any]],
+    unchanged: list[dict[str, Any]],
+    modified: list[ModifiedFinding],
+) -> dict[str, Any]:
+    """Recompute diff statistics after filtering.
+
+    Shared by all three filters. They each carried their own copy of this
+    block, and all three omitted the zero-fill that
+    `DiffEngine._calculate_statistics` applies -- so `new_by_severity` held all
+    five levels in an unfiltered diff and only the non-zero ones after any
+    filter. Same command, same artifact, two different shapes.
+    """
+    new_by_sev = Counter(f.get("severity", "INFO") for f in new)
+    resolved_by_sev = Counter(f.get("severity", "INFO") for f in resolved)
+    for sev in VALID_SEVERITIES:
+        new_by_sev.setdefault(sev, 0)
+        resolved_by_sev.setdefault(sev, 0)
+
+    net_change = len(new) - len(resolved)
+    trend = (
+        "improving" if net_change < 0 else "worsening" if net_change > 0 else "stable"
+    )
+
+    mod_types: list[str] = []
+    for m in modified:
+        mod_types.extend(m.changes.keys())
+
+    return {
+        "total_new": len(new),
+        "total_resolved": len(resolved),
+        "total_unchanged": len(unchanged),
+        "total_modified": len(modified),
+        "net_change": net_change,
+        "trend": trend,
+        "new_by_severity": dict(new_by_sev),
+        "resolved_by_severity": dict(resolved_by_sev),
+        "modifications_by_type": dict(Counter(mod_types)),
+    }
+
+
 def _filter_by_severity(diff: DiffResult, severities: set[str]) -> DiffResult:
     """Filter diff result by severity levels."""
     new = [f for f in diff.new if f.get("severity") in severities]
@@ -510,32 +657,7 @@ def _filter_by_severity(diff: DiffResult, severities: set[str]) -> DiffResult:
         or m.baseline.get("severity") in severities
     ]
 
-    # Recalculate statistics
-    from collections import Counter
-
-    new_by_sev = Counter(f.get("severity", "INFO") for f in new)
-    resolved_by_sev = Counter(f.get("severity", "INFO") for f in resolved)
-    net_change = len(new) - len(resolved)
-    trend = (
-        "improving" if net_change < 0 else "worsening" if net_change > 0 else "stable"
-    )
-
-    mod_types = []  # type: ignore[var-annotated]  # List populated dynamically
-    for m in modified:
-        mod_types.extend(m.changes.keys())
-    mod_by_type = Counter(mod_types)
-
-    statistics = {
-        "total_new": len(new),
-        "total_resolved": len(resolved),
-        "total_unchanged": len(unchanged),
-        "total_modified": len(modified),
-        "net_change": net_change,
-        "trend": trend,
-        "new_by_severity": dict(new_by_sev),
-        "resolved_by_severity": dict(resolved_by_sev),
-        "modifications_by_type": dict(mod_by_type),
-    }
+    statistics = _recalculate_statistics(new, resolved, unchanged, modified)
 
     return DiffResult(
         new=new,
@@ -560,32 +682,7 @@ def _filter_by_tool(diff: DiffResult, tools: set[str]) -> DiffResult:
         or m.baseline.get("tool", {}).get("name") in tools
     ]
 
-    # Recalculate statistics
-    from collections import Counter
-
-    new_by_sev = Counter(f.get("severity", "INFO") for f in new)
-    resolved_by_sev = Counter(f.get("severity", "INFO") for f in resolved)
-    net_change = len(new) - len(resolved)
-    trend = (
-        "improving" if net_change < 0 else "worsening" if net_change > 0 else "stable"
-    )
-
-    mod_types = []  # type: ignore[var-annotated]  # List populated dynamically
-    for m in modified:
-        mod_types.extend(m.changes.keys())
-    mod_by_type = Counter(mod_types)
-
-    statistics = {
-        "total_new": len(new),
-        "total_resolved": len(resolved),
-        "total_unchanged": len(unchanged),
-        "total_modified": len(modified),
-        "net_change": net_change,
-        "trend": trend,
-        "new_by_severity": dict(new_by_sev),
-        "resolved_by_severity": dict(resolved_by_sev),
-        "modifications_by_type": dict(mod_by_type),
-    }
+    statistics = _recalculate_statistics(new, resolved, unchanged, modified)
 
     return DiffResult(
         new=new,
@@ -616,32 +713,7 @@ def _filter_by_category(diff: DiffResult, category: str) -> DiffResult:
         # Invalid category, return unchanged
         return diff
 
-    # Recalculate statistics
-    from collections import Counter
-
-    new_by_sev = Counter(f.get("severity", "INFO") for f in new)
-    resolved_by_sev = Counter(f.get("severity", "INFO") for f in resolved)
-    net_change = len(new) - len(resolved)
-    trend = (
-        "improving" if net_change < 0 else "worsening" if net_change > 0 else "stable"
-    )
-
-    mod_types = []  # type: ignore[var-annotated]  # List populated dynamically
-    for m in modified:
-        mod_types.extend(m.changes.keys())
-    mod_by_type = Counter(mod_types)
-
-    statistics = {
-        "total_new": len(new),
-        "total_resolved": len(resolved),
-        "total_unchanged": len(unchanged),
-        "total_modified": len(modified),
-        "net_change": net_change,
-        "trend": trend,
-        "new_by_severity": dict(new_by_sev),
-        "resolved_by_severity": dict(resolved_by_sev),
-        "modifications_by_type": dict(mod_by_type),
-    }
+    statistics = _recalculate_statistics(new, resolved, unchanged, modified)
 
     return DiffResult(
         new=new,

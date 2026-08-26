@@ -18,11 +18,14 @@ v1.0.0 Metadata:
     - Link back to jmo.suppress.yml for configuration
 
 Suppression Rules (jmo.suppress.yml):
-    Suppressions are defined in jmo.suppress.yml with:
-    - `id`: Finding fingerprint to suppress
+    Suppressions are defined in jmo.suppress.yml with one or more selectors --
+    `id`, `path`, `ruleId`, `severity`, `line` -- plus:
     - `reason`: Human-readable justification
     - `expires`: Optional expiration date (YYYY-MM-DD)
-    - `author`: Who approved the suppression
+
+    A selector-based rule (for example `path: ".venv/*"`) is not keyed by any
+    finding id, so the per-finding rows below resolve through the summary's
+    `suppressed_by` mapping rather than by looking the finding id up directly.
 
 Usage:
     >>> from scripts.core.reporters.suppression_reporter import write_suppression_report
@@ -91,8 +94,8 @@ def write_suppression_report(
         >>> suppressed_ids = ['fp-123']
         >>> write_suppression_report(suppressed_ids, suppressions, 'results/summaries')
         # Creates results/summaries/SUPPRESSIONS.md with table:
-        # | Fingerprint | Reason          | Expires    | Active |
-        # | fp-123      | False positive  | 2025-12-31 | yes    |
+        # | Fingerprint | Reason          | Expires    | Active | Rule   |
+        # | fp-123      | False positive  | 2025-12-31 | yes    | fp-123 |
 
     Note:
         Report includes metadata: total suppressions, active vs expired counts.
@@ -135,14 +138,22 @@ def write_suppression_report(
     else:
         lines.append("The following findings were suppressed:")
         lines.append("")
-        lines.append("| Fingerprint | Reason | Expires | Active |")
-        lines.append("|-------------|--------|---------|--------|")
+        lines.append("| Fingerprint | Reason | Expires | Active | Rule |")
+        lines.append("|-------------|--------|---------|--------|------|")
+        attribution = summary.suppressed_by if summary is not None else {}
         for fid in suppressed_ids:
-            s = suppressions.get(fid)
+            # A selector rule (path/ruleId/severity/line) is keyed by its
+            # selectors, not by any finding id, so resolve through the
+            # summary's attribution first and fall back to the id lookup.
+            rule_key = attribution.get(fid)
+            s = suppressions.get(rule_key) if rule_key else None
+            if s is None:
+                s = suppressions.get(fid)
             if not s:
                 continue
             active = "yes" if s.is_active() else "no"
             lines.append(
-                f"| `{fid}` | {s.reason or ''} | {s.expires or ''} | {active} |"
+                f"| `{fid}` | {s.reason or ''} | {s.expires or ''} | {active} "
+                f"| `{s.key}` |"
             )
     p.write_text("\n".join(lines) + "\n", encoding="utf-8")

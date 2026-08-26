@@ -46,6 +46,8 @@ import re
 import sys
 from pathlib import Path
 
+from scripts.core.unicode_utils import harden_console_streams
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -513,6 +515,15 @@ Examples:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # This module has its own entry point and never passes through
+    # `jmo.py:main()`, so it never got the stream hardening that protects the
+    # rest of the CLI. `--release-notes --dry-run` prints the assembled digest,
+    # and the digest is built from CHANGELOG.md -- which contains "→". On a
+    # cp1252 console that killed the command outright with a
+    # UnicodeEncodeError, after emitting a truncated 45-byte file. CI pins
+    # PYTHONUTF8=1, so CI could never see it; the release digest is exactly the
+    # thing a maintainer builds on a Windows console.
+    harden_console_streams()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     parser = _build_parser()
     args = parser.parse_args(argv)

@@ -191,4 +191,4 @@ Upload to GitHub: `gh code-scanning upload -r owner/repo -s findings.sarif`
 
 ---
 
-**Documentation:** [docs/RESULTS_GUIDE.md](docs/RESULTS_GUIDE.md) for complete output format specification.
+**Documentation:** [docs/RESULTS_GUIDE.md](RESULTS_GUIDE.md) for complete output format specification.

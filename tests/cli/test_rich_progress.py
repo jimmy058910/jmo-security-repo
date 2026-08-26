@@ -15,7 +15,10 @@ Covers:
 
 from __future__ import annotations
 
+import threading
 from unittest.mock import MagicMock
+
+import pytest
 
 from scripts.cli.rich_progress import (
     RichScanProgressTracker,
@@ -357,3 +360,95 @@ class TestStart:
         assert tracker._start_time is None
         tracker.start()
         assert tracker._start_time is not None
+
+
+# ========== Category 11: Deadlock Prevention ==========
+
+
+class TestUpdateToolDoesNotDeadlock:
+    """`self._lock` must be reentrant, or a future edit self-deadlocks.
+
+    Unlike its sibling `ProgressTracker` in scripts/cli/jmo.py, `update_tool()`
+    here does not call `self.log()` from any status branch today -- the
+    "retrying", "timeout" and "no_output" branches call
+    `self.console.print()` directly instead, specifically so a plain
+    `threading.Lock` does not self-deadlock. That split is easy to lose: the
+    more obvious call from inside `update_tool()` is `self.log()`, and
+    `self.log()` also acquires `self._lock`. With a plain `Lock`, one such
+    edit deadlocks the worker thread permanently -- and since that thread
+    backs a scan future, `scan_all()` blocks on `future.result()` and the
+    entire scan hangs forever.
+
+    `test_lock_is_reentrant` asserts the mechanism directly and is the test
+    that actually fails against today's source before the RLock fix.
+    `test_update_tool_returns_for_status` is a tripwire against the specific
+    future edit described above -- it cannot fail on the *current* source
+    (nothing here calls self.log() from inside the lock yet), but it will
+    catch the swap immediately if someone makes it, in a positive-cases
+    parametrization that mirrors the sibling in
+    tests/cli/test_progress_tracker.py rather than depending on nobody ever
+    writing the "obvious" line.
+    """
+
+    # Each status only formats and prints, so anything beyond a second is a
+    # deadlock rather than slowness. Generous for a loaded CI runner.
+    WATCHDOG_S = 20.0
+
+    @pytest.mark.parametrize(
+        "status",
+        ["start", "success", "retrying", "timeout", "error", "no_output"],
+    )
+    def test_update_tool_returns_for_status(self, status: str) -> None:
+        tracker = make_tracker(total_targets=1, total_tools=1)
+        returned = threading.Event()
+
+        def call_update_tool() -> None:
+            try:
+                tracker.update_tool(
+                    "semgrep",
+                    status,
+                    0,
+                    message="watchdog probe",
+                    attempt=1,
+                    max_attempts=1,
+                )
+            finally:
+                returned.set()
+
+        # Daemon thread + Event.wait, never a bare join(): a deadlocked
+        # thread must not be able to hang the suite (see
+        # .claude/rules/testing.cross-platform.rules.md). pytest-timeout's
+        # thread method cannot reliably interrupt a blocked lock
+        # acquisition, so the bound has to come from here, not the marker.
+        worker = threading.Thread(target=call_update_tool, daemon=True)
+        worker.start()
+
+        assert returned.wait(self.WATCHDOG_S), (
+            f"RichScanProgressTracker.update_tool() never returned for "
+            f"status={status!r} within {self.WATCHDOG_S}s. This is the "
+            "self-deadlock described in this class's docstring: a branch "
+            "logging from inside self._lock while _lock is a non-reentrant "
+            "threading.Lock. In a real scan this hangs the whole run, "
+            "because the tool's future never completes."
+        )
+
+    def test_lock_is_reentrant(self) -> None:
+        """Guard the mechanism directly, not just today's call pattern.
+
+        The parametrized test above cannot fail on today's source at all --
+        nothing in update_tool() currently calls self.log() from inside the
+        lock. This asserts the property that makes it *safe* if something
+        ever does, independent of what update_tool() happens to call today.
+        """
+        tracker = make_tracker(total_targets=1, total_tools=1)
+
+        with tracker._lock:
+            acquired_again = tracker._lock.acquire(timeout=5)
+            if acquired_again:
+                tracker._lock.release()
+
+        assert acquired_again, (
+            "RichScanProgressTracker._lock is not reentrant. A future edit "
+            "that calls self.log() from inside update_tool()'s "
+            "`with self._lock:` block requires RLock to avoid a self-deadlock."
+        )

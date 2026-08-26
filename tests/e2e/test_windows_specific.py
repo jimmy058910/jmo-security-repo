@@ -13,6 +13,70 @@ from __future__ import annotations
 
 from tests.conftest import windows_only
 
+# Every `scan` below pins `--tools` to one cheap, network-free scanner.
+#
+# These tests assert path, argument and subprocess handling -- not findings,
+# and not which tools ran. Every assertion in this file is "no traceback", "no
+# invalid path", or "returncode in (0, 1)", so the tool list is irrelevant to
+# all of them.
+#
+# Left unpinned they invoke the whole default profile, including
+# `semgrep --config auto`, which fetches its rule registry over the network.
+# That is minutes against `jmo_runner`'s 120 s budget, and pytest-timeout's
+# Windows thread method kills the test thread but not the child, so the xdist
+# worker goes down (#833). Measured over eight runs: the failure is *bimodal*
+# -- 0 or exactly 7 of these tests, the same 7 every time, depending on whether
+# the registry fetch was served from cache. It fires on `dev` and on any branch
+# at the same rate, which is what made it read as a regression more than once.
+# CI never saw it: CI's shards install no scanners, so the scan returns at once.
+#
+# The file already applies this same fix to its non-scan commands -- `--version`
+# rather than `tools check`, `tools debug <one>` rather than `tools check`. The
+# scanning tests were simply never given the same treatment.
+CHEAP_TOOLS = ["--tools", "bandit"]
+
+
+def test_every_scan_invocation_pins_its_tool_list():
+    """Regression guard for #833. Deliberately NOT `@windows_only`.
+
+    A source-text assertion, so it runs on every platform even though the
+    failure only shows up on Windows -- the point is to catch the omission when
+    it is written, not on whichever machine happens to be slow that day.
+
+    One missing pin brings the whole failure mode back: that call site runs the
+    full default profile, `semgrep --config auto` fetches its rule registry over
+    the network, and the xdist worker times out. Measured across the fix:
+    177-393 s with 0-10 failures before, ~15 s with 0 failures over three
+    consecutive runs after.
+    """
+    import re
+    from pathlib import Path
+
+    source = Path(__file__).read_text(encoding="utf-8")
+    # Both needles are assembled from fragments. A source-scanning guard that
+    # lives inside the file it scans will otherwise match its own literals and
+    # report itself as the violation -- which is exactly what happened twice
+    # while writing this.
+    token = chr(34) + "sc" + "an" + chr(34)
+    pinned = "CHEAP_" + "TOOLS"
+    invocations = list(re.finditer(re.escape(token), source))
+
+    # meta-guard: an extractor that finds nothing passes every check below
+    assert len(invocations) >= 10, (
+        f"found only {len(invocations)} scan invocations; that means the "
+        "extractor is broken, not that the file is clean"
+    )
+
+    unpinned = [
+        source[max(0, m.start() - 70) : m.end() + 70].replace(chr(10), " | ")
+        for m in invocations
+        if pinned not in source[m.end() : m.end() + 80]
+    ]
+    assert not unpinned, (
+        "these scan invocations do not pin --tools, so they will invoke the "
+        f"whole default profile (#833): {unpinned}"
+    )
+
 
 @windows_only
 class TestWindowsPathHandling:
@@ -31,6 +95,7 @@ class TestWindowsPathHandling:
         result = jmo_runner(
             [
                 "scan",
+                *CHEAP_TOOLS,
                 "--repo",
                 win_path,
                 "--allow-missing-tools",
@@ -57,6 +122,7 @@ class TestWindowsPathHandling:
         result = jmo_runner(
             [
                 "scan",
+                *CHEAP_TOOLS,
                 "--repo",
                 mixed_path,
                 "--allow-missing-tools",
@@ -81,6 +147,7 @@ class TestWindowsPathHandling:
         result = jmo_runner(
             [
                 "scan",
+                *CHEAP_TOOLS,
                 "--repo",
                 str(repo),
                 "--allow-missing-tools",
@@ -102,6 +169,7 @@ class TestWindowsPathHandling:
         result = jmo_runner(
             [
                 "scan",
+                *CHEAP_TOOLS,
                 "--repo",
                 str(repo),
                 "--allow-missing-tools",
@@ -124,6 +192,7 @@ class TestWindowsPathHandling:
         result = jmo_runner(
             [
                 "scan",
+                *CHEAP_TOOLS,
                 "--repo",
                 str(repo),
                 "--allow-missing-tools",
@@ -165,6 +234,7 @@ class TestWindowsPathHandling:
         result = jmo_runner(
             [
                 "scan",
+                *CHEAP_TOOLS,
                 "--repo",
                 str(deep_path),
                 "--allow-missing-tools",
@@ -204,7 +274,7 @@ class TestWindowsEnvironment:
         (repo / "test.py").write_text("x = 1", encoding="utf-8")
 
         result = jmo_runner(
-            ["scan", "--repo", str(repo), "--allow-missing-tools"],
+            ["scan", *CHEAP_TOOLS, "--repo", str(repo), "--allow-missing-tools"],
             timeout=120,
         )
 
@@ -229,6 +299,7 @@ class TestWindowsFileOperations:
             result = jmo_runner(
                 [
                     "scan",
+                    *CHEAP_TOOLS,
                     "--repo",
                     str(repo),
                     "--allow-missing-tools",
@@ -292,6 +363,7 @@ class TestWindowsOutputFormatting:
         result = jmo_runner(
             [
                 "scan",
+                *CHEAP_TOOLS,
                 "--repo",
                 str(repo),
                 "--allow-missing-tools",
@@ -334,6 +406,7 @@ class TestWindowsSubprocessHandling:
         result = jmo_runner(
             [
                 "scan",
+                *CHEAP_TOOLS,
                 "--repo",
                 str(repo),
                 "--allow-missing-tools",
@@ -354,6 +427,7 @@ class TestWindowsSubprocessHandling:
         result = jmo_runner(
             [
                 "scan",
+                *CHEAP_TOOLS,
                 "--repo",
                 str(repo),
                 "--timeout",

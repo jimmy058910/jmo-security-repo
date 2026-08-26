@@ -816,7 +816,7 @@ def test_get_remediation_priorities_dependencies():
             "severity": "HIGH",
             "ruleId": "CVE-2022-12345",
             "tags": ["vulnerability", "dependency"],
-            "tool": {"name": "osv-scanner"},
+            "tool": {"name": "grype"},
             "location": {"path": "requirements.txt"},
         },
     ]

@@ -111,6 +111,28 @@ pytest-timeout uses `timeout_method = "thread"` on Windows (signal-based doesn't
 2. But NOT the child process (which becomes an orphan).
 3. `--reruns` then retries the test, multiplying hang time.
 
+### Symptom: a local suite half suddenly takes much longer than its recorded time
+
+The same orphan mechanism bites **locally**, and it looks like a performance
+regression in whatever you just changed. Measured 2026-08-15: a suite half that
+had just run in **391 s** blew past a 600 s cap on the next run, and the cause
+was orphaned workers from *earlier* runs — several still accumulating CPU at
+**850-1020 CPU-seconds**. Killing a foreground run (timeout, Ctrl-C, tool cap)
+reliably leaves its `-n 8` workers behind.
+
+**Check before concluding your change is slow:**
+
+```powershell
+Get-Process python* | Select-Object Id, CPU, StartTime | Sort-Object StartTime
+```
+
+Old `StartTime` values with large `CPU` are orphans. Do **not** blanket-kill
+while a run is in flight — you cannot tell its workers from the strays by name,
+and you will sabotage the run you are trying to measure. Either wait for the
+current run to finish and then clear them, or start the run in the background and
+accept the slower wall clock. This is why CI has a post-test `Stop-Process`
+cleanup step.
+
 **If Windows CI hangs:**
 
 1. Check for missing `timeout=` in subprocess calls.
@@ -209,6 +231,35 @@ probes with a box-drawing character declares them safe and then dies on an emoji
    `scripts/` with `ast` and fails if anything outside `unicode_utils.py`
    **defines** `safe_print`/`safe_write`/`_can_encode_unicode`/
    `harden_console_streams`. Importing and re-exporting stay legal.
+
+   **That guard had two blind spots, and two copies survived it for months.**
+   It scans for `def <guarded name>` — the *shape the bug had last time* — while
+   what is actually forbidden is *deciding encodability from a codec's name*,
+   which can appear anywhere under any name:
+
+   | Survivor | How it slipped through |
+   |---|---|
+   | `policy_commands.py` defined `_safe_print` | **underscored** — `GUARDED_NAMES` lists `safe_print` |
+   | `jmo.py` inlined the branch inside `_log()` | defined **no** guarded helper at all |
+
+   Measured impact before the fix, on `--human-logs`:
+
+   | console codec | what it is | denylist fires? | rendered |
+   |---|---|---|---|
+   | `cp1252` | piped / redirected | yes | `[v]` `[x]` |
+   | **`cp437` / `cp850`** | **a real console** | **no** | **`?` `?`** |
+
+   Not a crash — `harden_console_streams` guarantees that — but the fallback
+   table silently skipped **in the exact environment it was written for**. The
+   name list can never be right: it must enumerate codecs nobody thought of.
+
+   So there is now a second, **behavioural** guard,
+   `test_no_module_branches_on_the_encodings_name`, which fails on any
+   comparison against a codec-name literal anywhere in `scripts/`, regardless of
+   the enclosing function's name. Both holes are mutation-tested.
+
+   **The transferable lesson: a guard that scans for last time's syntax will be
+   walked around. Assert the property, not the pattern.**
 5. **Machine-read output stays raw.** `json.dumps` defaults to
    `ensure_ascii=True`, so JSON is already pure ASCII; substituting into it would
    corrupt it.
@@ -258,6 +309,48 @@ against ruff's **153**.
   broken capture only because it asserted `returncode == 0` as well as the absence
   of a traceback; returncode is independent of stdout decoding.
 
+### A coarse clock hides bugs a fine one exposes
+
+The habitual lesson in this repo is "green on Linux, broken on Windows".
+**Chunk 19 hit the inverse**, which is the more dangerous shape because the
+platform that looks fine is not.
+
+`ProvenanceGenerator.generate` read the wall clock for `finishedOn` before
+`startedOn`, producing an attestation that had finished before it began — a
+CRITICAL `TIMESTAMP_ANOMALY` by JMo's own tamper detector.
+
+| platform | clock granularity | how it presented |
+|---|---|---|
+| Windows | ~1 ms | both reads land in one tick, strings come out **equal**, `<=` accepts. 300 consecutive local generations were **all** equal-tick. A rare flake, and only under `-n 8`. |
+| Ubuntu ×4, macOS | ~1 µs | the reads straddle a tick nearly always. **Deterministic failure on all five shards.** |
+
+Two things follow:
+
+1. **A repeat-loop is not a substitute for a finer clock.** Running the
+   generation 300 times locally produced 0 inversions *and* 0 strictly-ordered
+   results — every sample was equal-tick, so the experiment could not
+   distinguish "ordered" from "lucky" at all. It looked like confirmation and
+   carried no information.
+2. **Do not loosen a timing assertion to stop a flake.** `startedOn <=
+   finishedOn` was the assertion that caught this. The fix is to make the guard
+   *deterministic* — patch the clock so it advances on every read — not to widen
+   the tolerance. That is what makes the mutation test possible.
+
+```python
+class Clock(datetime):
+    @classmethod
+    def now(cls, tz=None):
+        return base + timedelta(seconds=next(ticks))
+
+with patch("scripts.core.attestation.provenance.datetime", Clock):
+    ...
+```
+
+Same root cause as the known `time.monotonic` coarseness on Windows (15 ms vs
+`time.time`'s ~1 ms; use `perf_counter()`), opposite consequence: there,
+coarseness made a duration read as zero, and here it made an ordering defect
+invisible.
+
 ## Line Endings on Windows
 
 This repo has **no `.gitattributes`** and `core.autocrlf=false`, so line endings
@@ -269,6 +362,31 @@ are stored byte-for-byte and are **mixed per file** (`scripts/cli/jmo.py` is LF;
 the whole file**, producing thousands of phantom line changes that bury the real
 edit (7545 lines for a 7-line change; same class as the `update_versions.py` bug
 fixed in #556). Use `write_bytes()`, or `open(..., newline="")`.
+
+**`write_bytes()` alone is not enough — `read_text()` flips the other way.** It
+also opens with `newline=None`, and *universal newlines* converts `\r\n` to `\n`
+**on the way in**. So the obvious application of the paragraph above —
+
+```python
+s = path.read_text(encoding="utf-8")     # CRLF -> LF, silently, right here
+s = s.replace(old, new)
+path.write_bytes(s.encode("utf-8"))      # persists LF for the whole file
+```
+
+— converts a CRLF file to LF while looking like it avoided the problem. Measured
+in chunk 18: four CRLF test files flattened by a patch script written this way,
+**+3661/-2592 raw against +1402/-333 EOL-insensitive — 2259 phantom lines**.
+
+Read bytes on both ends when you are rewriting a file programmatically:
+
+```python
+raw = path.read_bytes()
+s = raw.decode("utf-8")                  # no newline translation
+path.write_bytes(s.replace(old, new).encode("utf-8"))
+```
+
+Or pass `newline=""` to `open()`, which disables translation in both directions.
+The Edit tool does not have this problem; only scripts do.
 
 Detect it before committing — raw and EOL-insensitive counts must match:
 
@@ -290,8 +408,10 @@ Pytest invocations in CI workflows use these filter sets. Each filter is tuned t
 
 | Workflow:Job | Filter | Rationale |
 |---|---|---|
-| `ci.yml` quick-checks (sharded ×4) | `-m "not smoke and not requires_tools and not docker"` | Excludes tests needing PyPI release, real scanners, or Docker daemon. |
-| `ci.yml` Quick coverage check | `-m "not smoke and not requires_tools and not docker and not slow"` | Adds `not slow` for the coverage-only run (≥70% threshold). |
+| `ci.yml` test-sharded — Ubuntu ×4 (`:312`) | `-m "not smoke and not requires_tools and not docker"` | **The only job that produces coverage** (`--cov=scripts`). `coverage-aggregate` merges the four shard XMLs and enforces the 80% floor (`:734`). `slow` included. |
+| `ci.yml` test-sharded — macOS (`:327`) | `-m "not smoke and not requires_tools and not docker"` | Same suite, **no coverage** — the step is literally named "Run tests (macOS, no coverage)". |
+| `ci.yml` test-sharded — Windows (`:352`) | `-m "not smoke and not requires_tools and not docker and not slow"` | Adds `not slow` for runtime; also `-p no:xdist -p no:rerunfailures`, `--timeout=60`. **No coverage.** |
+| `ci.yml` windows-native-encoding collection floor (`:448`) | `-m "not smoke and not requires_tools and not docker and not slow"` | `--collect-only` count guard, fails under 7800 collected. Not a test run; no coverage. |
 | `ci.yml` tool-contract-tests | `-m "requires_tools"` | Tools installed via the `Install tools` step earlier in the job. |
 | `scheduled.yml` Nightly Extended | `-m "not requires_tools and not smoke"` | Includes slow tests intentionally (omit `not slow`) since nightly has the time budget. Excludes real-tool + smoke tests because runner doesn't install tools or install released package. |
 | `scheduled.yml` Tool Smoke Tests | `-m "smoke"` | Runs only `@pytest.mark.smoke` tests against released `jmo-security` PyPI package. |
@@ -306,5 +426,27 @@ Pytest invocations in CI workflows use these filter sets. Each filter is tuned t
 
 - **Always exclude `requires_tools` and `smoke`** unless the runner explicitly installs the prerequisite (real tool binaries or the released PyPI wheel).
 - **Always exclude `docker`** unless the runner has a Docker daemon (Linux runners do; macOS/Windows runners require setup).
-- **Include `slow`** only when the job has a generous timeout budget (nightly, full e2e). Exclude in PR-time CI (`ci.yml`).
+- **`slow` is NOT excluded from PR-time CI.** The **Ubuntu and macOS** shards (`:312`, `:327`) run `-m "not smoke and not requires_tools and not docker"` — slow tests included. The **Windows** shard (`:352`) and the `windows-native-encoding` collection floor (`:448`) add `and not slow`; so does `nightly-cross-platform`, which lives in **`scheduled.yml:241`**, not `ci.yml`. Exclude it when the job's budget is tight, not because it is PR-time.
+- **There is no "Quick coverage check" job.** The table above used to list one, with a `≥70% threshold` it did not have, citing `:352` — which is the Windows shard, a step named "no coverage". `ci.yml` has exactly one coverage gate: the `Verify coverage threshold` step of `coverage-aggregate` (`:734`). If you are hunting a coverage failure, that is the only place it can come from.
 - **Use `-m "<marker>"` to RUN only that marker**'s tests after installing prerequisites; use `-m "not <marker>"` to EXCLUDE.
+
+### Reproducing a shard locally
+
+**Use the sharded filter, not the coverage filter.** They are not the same suite,
+and the coverage one is strictly smaller:
+
+```bash
+# What the shards actually run -- this is the one to reproduce
+pytest tests/ -p no:xdist -m "not smoke and not requires_tools and not docker"
+```
+
+Verifying with `and not slow` appended is verifying against fewer tests than gate
+the PR. Measured on #722: a full local `tests/unit tests/cli` sweep came back
+**4552 passed, 0 failed** with the coverage filter, while shard 3 failed on
+`tests/integration/test_scan_accounting.py` — a `@pytest.mark.slow` test the
+local filter had deselected. Two independent gaps compounded: the wrong marker
+filter *and* omitting `tests/integration/` from the path list.
+
+The bullet above this one used to say slow was excluded in PR-time CI, which is
+what produced that run. It contradicted the table in this same section — when
+they disagree, the table is generated from the workflows and wins.

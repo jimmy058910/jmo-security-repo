@@ -16,10 +16,18 @@ Related:
 """
 
 import json
+import os
 import subprocess
 import sys
 
 import pytest
+
+# Every `jmo scan` subprocess below unconditionally calls
+# `_show_kofi_reminder()` (#933), which resolves `Path.home()` with no
+# injection point. Redirect it via the env vars Path.home() actually reads:
+# USERPROFILE on Windows (ntpath.expanduser), HOME on Linux/macOS
+# (posixpath.expanduser) -- each platform consults only its own var, so both
+# must be set to keep every platform off the real ~/.jmo/config.yml.
 
 
 @pytest.mark.requires_tools
@@ -45,7 +53,8 @@ def test_deep_profile_includes_all_tools(tmp_path):
         str(tmp_path / "results"),
         "--allow-missing-tools",  # Graceful degradation if tools not installed
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=240)
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=240, env=env)
 
     # Scan should complete (exit code 0 or 1 for findings)
     assert result.returncode in [
@@ -92,7 +101,8 @@ def test_deep_profile_falco_output(tmp_path):
         str(tmp_path / "results"),
         "--allow-missing-tools",
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, env=env)
     assert result.returncode in [0, 1, 2]  # May fail if tool not installed
 
     # Check if falco output generated
@@ -128,7 +138,8 @@ def test_deep_profile_aflplusplus_output(tmp_path):
         str(tmp_path / "results"),
         "--allow-missing-tools",
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, env=env)
     assert result.returncode in [0, 1, 2]
 
     # Check if afl++ output generated
@@ -161,7 +172,8 @@ def test_deep_profile_graceful_degradation(tmp_path):
         "--allow-missing-tools",
         "--human-logs",
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=240)
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=240, env=env)
 
     # Should complete successfully even if some tools missing
     assert result.returncode in [0, 1]
@@ -191,7 +203,8 @@ def test_deep_profile_report_aggregation(tmp_path):
         str(tmp_path / "results"),
         "--allow-missing-tools",
     ]
-    subprocess.run(cmd_scan, capture_output=True, timeout=240)
+    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
+    subprocess.run(cmd_scan, capture_output=True, timeout=240, env=env)
 
     # Generate report
     cmd_report = [

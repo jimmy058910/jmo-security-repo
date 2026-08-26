@@ -230,7 +230,14 @@ def test_scan_schedule_to_dict():
     assert data["metadata"]["name"] == "test"
     assert data["spec"]["schedule"] == "0 2 * * *"
     assert data["spec"]["jobTemplate"]["profile"] == "balanced"
-    assert data["spec"]["jobTemplate"]["targets"]["repos_dir"] == "~/repos"
+    # Nested, because that is the shape every consumer reads. This asserted the
+    # flat `targets["repos_dir"]`, which no generator and no cron installer has
+    # ever looked at -- so a schedule built this way exported a workflow with no
+    # target at all, and this test confirmed the broken shape rather than
+    # catching it.
+    assert data["spec"]["jobTemplate"]["targets"]["repositories"]["repos_dir"] == (
+        "~/repos"
+    )
     assert data["spec"]["backend"]["type"] == "github-actions"
     # description passed via from_simple_args is stored in annotations
     assert data["metadata"]["labels"] == {"env": "prod"}

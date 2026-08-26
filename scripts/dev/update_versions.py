@@ -70,6 +70,22 @@ except ImportError:
 # Paths
 REPO_ROOT = Path(__file__).parent.parent.parent
 VERSIONS_YAML = REPO_ROOT / "versions.yaml"
+# versions.yaml key -> the variable stem actually used in Dockerfiles and
+# workflow env: blocks, where `key.upper()` does not produce it. Deriving the
+# name silently misses abbreviations and hyphens: `noseyparker` is pinned as
+# NP_VERSION and `dependency-check` as DC_VERSION, so both were unreachable by
+# --sync and stayed correct only by luck (#797).
+VERSION_VAR_ALIASES: dict[str, str] = {
+    "dependency-check": "DC",
+    "noseyparker": "NP",
+}
+
+# Registry entries deliberately not pinned in any image or workflow, so having
+# no match is correct rather than a defect. These four are MANUAL_INSTALL_TOOLS
+# — they are not installed by any image by design, which is also why a
+# correctly-built deep container reports rc=1 from `jmo tools check`.
+UNPINNED_BY_DESIGN: set[str] = {"afl++", "akto", "mobsf", "falco"}
+
 DOCKERFILE = REPO_ROOT / "Dockerfile.deep"
 DOCKERFILE_BALANCED = REPO_ROOT / "Dockerfile.balanced"
 DOCKERFILE_SLIM = REPO_ROOT / "Dockerfile.slim"
@@ -280,6 +296,8 @@ def get_latest_github_release(repo: str) -> str | None:
             ["gh", "api", f"repos/{repo}/releases/latest"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=True,
         )
         data = json.loads(result.stdout)
@@ -298,6 +316,8 @@ def get_latest_pypi_version(package: str) -> str | None:
             ["pip", "index", "versions", package],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=True,
         )
         # Parse output: "package (X.Y.Z)"
@@ -314,6 +334,8 @@ def get_npm_version_exists(package: str, version: str) -> bool:
             ["npm", "view", f"{package}@{version}", "version"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=30,
         )
         return result.returncode == 0 and version in result.stdout
@@ -330,6 +352,8 @@ def check_github_release_exists(repo: str, version: str) -> bool:
                 ["gh", "api", f"repos/{repo}/releases/tags/{tag}"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=30,
             )
             if result.returncode == 0:
@@ -346,6 +370,8 @@ def check_pypi_version_exists(package: str, version: str) -> bool:
             ["pip", "index", "versions", package],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=30,
         )
         if result.returncode != 0:
@@ -363,6 +389,8 @@ def check_npm_version_exists(package: str, version: str) -> bool:
             ["npm", "view", f"{package}@{version}", "version"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=30,
         )
         return result.returncode == 0 and version in result.stdout
@@ -639,17 +667,29 @@ def sync_dockerfiles(dry_run: bool = False) -> bool:
         + (" (dry-run)" if dry_run else "")
     )
 
-    # Build version mapping
-    version_map = {}
+    # Build version mapping.
+    #
+    # Every entry carries BOTH pin styles it might appear as, because deriving
+    # the name from the registry key silently misses anything that does not
+    # uppercase cleanly onto its pin. That is how `prowler` shipped 18 minor
+    # versions stale in three images while --sync printed "already in sync"
+    # (#797), and how `osv-scanner`'s pin went stale before it (#702).
+    #
+    # `pypi_package` is read from versions.yaml rather than a hardcoded list:
+    # the correct names (`scancode-toolkit`, `yara-python`) were already in the
+    # registry, they just were not being used.
+    version_map: dict[str, tuple[str, str | None, str]] = {}
 
-    for tool, info in versions.get("python_tools", {}).items():
-        version_map[tool] = info["version"]
+    for section in ("python_tools", "binary_tools", "special_tools"):
+        for tool, info in (versions.get(section) or {}).items():
+            var_stem = VERSION_VAR_ALIASES.get(tool, tool.upper())
+            pkg = info.get("pypi_package")
+            pkg = pkg if isinstance(pkg, str) and pkg else None
+            version_map[tool] = (var_stem, pkg, info["version"])
 
-    for tool, info in versions.get("binary_tools", {}).items():
-        version_map[tool.upper()] = info["version"]
-
-    for tool, info in versions.get("special_tools", {}).items():
-        version_map[tool.upper()] = info["version"]
+    # Which registry entries were found in at least one file. An entry that
+    # matches nothing is the failure this function used to report as success.
+    matched: set[str] = set()
 
     # Update each Dockerfile
     for dockerfile_path in [
@@ -666,17 +706,30 @@ def sync_dockerfiles(dry_run: bool = False) -> bool:
         original_content = content
 
         # Replace version variables
-        for tool, version in version_map.items():
+        for tool, (var_stem, pkg, version) in version_map.items():
             # Pattern: TOOL_VERSION="X.Y.Z"
-            pattern = rf'{tool}_VERSION="[0-9.]+"'
-            replacement = f'{tool}_VERSION="{version}"'
-            content = re.sub(pattern, replacement, content)
+            # re.subn counts *matches*, not edits, so an already-correct pin
+            # still registers as covered.
+            pattern = rf'{re.escape(var_stem)}_VERSION="[0-9.]+"'
+            content, n = re.subn(pattern, f'{var_stem}_VERSION="{version}"', content)
+            if n:
+                matched.add(tool)
 
-            # Pattern: tool==X.Y.Z (Python packages)
-            if tool.lower() in ["bandit", "semgrep", "checkov", "ruff"]:
-                pattern = rf"{tool.lower()}==[0-9.]+"
-                replacement = f"{tool.lower()}=={version}"
-                content = re.sub(pattern, replacement, content)
+            if not pkg:
+                continue
+
+            # Three pin styles exist in these Dockerfiles and all three have to
+            # be reachable, or --sync reports success over a stale pin:
+            #   pip  -> package==X.Y.Z   (prowler, semgrep, ...)
+            #   npm  -> @scope/pkg@X.Y.Z (cdxgen)
+            # Package names come from versions.yaml's `pypi_package`, not a
+            # hardcoded list -- that list named 4 of 8 python_tools, which is
+            # how prowler drifted 18 versions unnoticed (#797).
+            sep = "@" if pkg.startswith("@") else "=="
+            pattern = rf"{re.escape(pkg)}{re.escape(sep)}[0-9][0-9.]*"
+            content, n = re.subn(pattern, f"{pkg}{sep}{version}", content)
+            if n:
+                matched.add(tool)
 
         if content != original_content:
             changes_needed = True
@@ -697,13 +750,14 @@ def sync_dockerfiles(dry_run: bool = False) -> bool:
         content = workflow_path.read_text(encoding="utf-8")
         original_content = content
 
-        for tool, version in version_map.items():
+        for tool, (var_stem, _pypi, version) in version_map.items():
             # Pattern: `<indent>TOOL_VERSION: "X.Y.Z"` (canonical YAML — single
             # space after colon, double-quoted value). yamllint enforces the
             # canonical spacing so we normalize on replace.
-            pattern = rf'{tool}_VERSION:\s+"[0-9.]+"'
-            replacement = f'{tool}_VERSION: "{version}"'
-            content = re.sub(pattern, replacement, content)
+            pattern = rf'{re.escape(var_stem)}_VERSION:\s+"[0-9.]+"'
+            content, n = re.subn(pattern, f'{var_stem}_VERSION: "{version}"', content)
+            if n:
+                matched.add(tool)
 
         if content != original_content:
             changes_needed = True
@@ -717,6 +771,23 @@ def sync_dockerfiles(dry_run: bool = False) -> bool:
                 ok(f"Updated .github/workflows/{workflow_path.name}")
         else:
             ok(f".github/workflows/{workflow_path.name} already in sync")
+
+    # A registry entry that matched nothing anywhere is the failure this
+    # function used to report as success. Reporting "already in sync" while a
+    # pin is stale is the actual defect behind #702 and #797 -- the name
+    # mapping was only what hid it.
+    unreachable = sorted(set(version_map) - matched - UNPINNED_BY_DESIGN)
+    if unreachable:
+        err(
+            f"{len(unreachable)} versions.yaml entr(ies) match no pin in any "
+            "Dockerfile or workflow, so --sync can never update them: "
+            + ", ".join(unreachable)
+        )
+        err(
+            "Add the pin, add a VERSION_VAR_ALIASES entry, or list the tool in "
+            "UNPINNED_BY_DESIGN if it is deliberately not shipped."
+        )
+        all_success = False
 
     if dry_run and changes_needed:
         err("Dockerfiles or workflows are out of sync with versions.yaml")
@@ -789,6 +860,8 @@ def _close_superseded_version_issues(tool_names: list[str]) -> None:
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=True,
         )
         existing_issues = _json.loads(result.stdout)

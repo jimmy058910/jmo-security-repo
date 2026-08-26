@@ -482,9 +482,9 @@ event scoping and no SKIP list.
 ## References
 
 - **Pre-commit Documentation:** <https://pre-commit.com/>
-- **Hook Configuration:** [.pre-commit-config.yaml](../.pre-commit-config.yaml)
+- **Hook Configuration:** [.pre-commit-config.yaml](../../.pre-commit-config.yaml)
 - **Dependency Management:** [DEPENDENCY_MANAGEMENT.md](DEPENDENCY_MANAGEMENT.md)
-- **CI Workflow:** [.github/workflows/ci.yml](../.github/workflows/ci.yml)
+- **CI Workflow:** [.github/workflows/ci.yml](../../.github/workflows/ci.yml)
 
 ---
 

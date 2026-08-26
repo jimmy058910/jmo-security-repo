@@ -387,7 +387,13 @@ class TestStoreScan:
             )
 
     def test_store_scan_invalid_profile(self, tmp_path):
-        """Test that store_scan raises ValueError for invalid profile."""
+        """Test that store_scan raises ValueError for an unknown profile.
+
+        The message changed in #721 from "Invalid profile: X" to
+        "Unknown profile: 'X'. Known profiles: ..." -- the old wording gave the
+        user no way to discover which values were valid, which is what let the
+        missing `slim` profile go unnoticed.
+        """
         db_path = tmp_path / "test.db"
 
         results_dir = tmp_path / "results"
@@ -397,7 +403,7 @@ class TestStoreScan:
         findings_json = summaries_dir / "findings.json"
         findings_json.write_text(json.dumps({"findings": []}))
 
-        with pytest.raises(ValueError, match="Invalid profile"):
+        with pytest.raises(ValueError, match="Unknown profile"):
             store_scan(
                 results_dir=results_dir,
                 profile="invalid_profile",
@@ -7104,6 +7110,108 @@ class TestExecuteReadonlyQuery:
         """Empty query raises ValueError."""
         with pytest.raises(ValueError, match="must not be empty"):
             execute_readonly_query(readonly_db, "")
+
+
+class TestProfileAcceptedByHistory:
+    """The set of storable profiles must track the tool registry.
+
+    Regression guard for #721: the `scans.profile` CHECK constraint enumerated
+    fast/balanced/deep and predated the `slim` profile, so every slim scan was
+    rejected at insert time while `jmo report` logged a WARN and still exited 0
+    -- the scan silently never entered history.
+
+    These tests fail if a profile is added to PROFILE_TOOLS (or defined in
+    jmo.yml) without history being able to store it.
+    """
+
+    @staticmethod
+    def _insert_scan(conn, scan_id: str, profile: str) -> None:
+        """Insert a minimal scan row, exercising only the profile constraint."""
+        conn.execute(
+            """
+            INSERT INTO scans (
+                id, timestamp, timestamp_iso, profile, tools, targets,
+                target_type, total_findings, critical_count, high_count,
+                medium_count, low_count, info_count, jmo_version
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
+            """,
+            (scan_id, 0, "1970-01-01T00:00:00", profile, "[]", "[]", "repo", "test"),
+        )
+
+    def test_every_registry_profile_is_storable(self, tmp_path):
+        """Every profile in PROFILE_TOOLS can be stored in history."""
+        from scripts.core.tool_registry import PROFILE_TOOLS
+
+        db_path = tmp_path / "test.db"
+        init_database(db_path)
+        conn = get_connection(db_path)
+
+        rejected = []
+        for profile in sorted(PROFILE_TOOLS):
+            try:
+                self._insert_scan(conn, f"scan-{profile}", profile)
+            except sqlite3.IntegrityError as exc:
+                rejected.append(f"{profile}: {exc}")
+        conn.commit()
+
+        assert (
+            not rejected
+        ), "history rejected profiles the tool can actually run: " + "; ".join(rejected)
+
+    @staticmethod
+    def _results_dir(tmp_path):
+        """Minimal results directory that store_scan will accept."""
+        summaries = tmp_path / "results" / "summaries"
+        summaries.mkdir(parents=True)
+        (summaries / "findings.json").write_text(json.dumps({"findings": []}))
+        return tmp_path / "results"
+
+    def test_store_scan_rejects_unknown_profile(self, tmp_path):
+        """Removing the CHECK must not let garbage profiles into history.
+
+        The constraint previously rejected unknown values as a side effect of
+        enumerating them. Validation now lives here instead, against the
+        registry, so it covers slim and user-defined profiles too.
+        """
+        with pytest.raises(ValueError, match="[Uu]nknown profile"):
+            store_scan(
+                results_dir=self._results_dir(tmp_path),
+                profile="definitely-not-a-profile",
+                tools=[],
+                db_path=tmp_path / "test.db",
+            )
+
+    def test_store_scan_accepts_slim(self, tmp_path):
+        """#721 end-to-end: a slim scan reaches the database via store_scan."""
+        scan_id = store_scan(
+            results_dir=self._results_dir(tmp_path),
+            profile="slim",
+            tools=["trivy"],
+            db_path=tmp_path / "test.db",
+        )
+        conn = get_connection(tmp_path / "test.db")
+        row = conn.execute(
+            "SELECT profile FROM scans WHERE id = ?", (scan_id,)
+        ).fetchone()
+        assert row[0] == "slim"
+
+    def test_user_defined_profile_is_storable(self, tmp_path):
+        """A custom profile from jmo.yml `profiles:` can be stored.
+
+        `Config.profiles` is a free-form dict, so users may define profiles the
+        registry has never heard of. History must not silently discard them.
+        """
+        db_path = tmp_path / "test.db"
+        init_database(db_path)
+        conn = get_connection(db_path)
+
+        self._insert_scan(conn, "scan-custom", "nightly-compliance")
+        conn.commit()
+
+        row = conn.execute(
+            "SELECT profile FROM scans WHERE id = ?", ("scan-custom",)
+        ).fetchone()
+        assert row[0] == "nightly-compliance"
 
 
 if __name__ == "__main__":

@@ -25,6 +25,18 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# Cross-tool clustering rewrites a consensus finding's `id` to
+# `cluster-<representative fingerprint>` (`dedup_enhanced.py`). Diff keys on
+# identity, so without stripping this prefix a finding that merely gained a
+# second tool's corroboration between two scans is reported as one resolved
+# plus one new finding -- i.e. as fixed (#847).
+CLUSTER_ID_PREFIX = "cluster-"
+
+# Minimum absolute change in the 0-100 priority score that counts as a real
+# move. Used both to decide whether a priority change is worth reporting and,
+# when severity is unchanged, to decide the direction of `risk_delta`.
+PRIORITY_CHANGE_THRESHOLD = 5.0
+
 
 # ============================================================================
 # Data Models
@@ -313,8 +325,26 @@ class DiffEngine:
                 f"Expected findings.json to contain a list or v1.0.0 wrapper, got {type(data).__name__}"
             )
 
-        logger.debug(f"Loaded {len(findings)} findings from {findings_path}")
-        return list(findings)
+        # `findings` must be a list of objects. A string is iterable, so
+        # `{"findings": "oops"}` used to become one finding per character --
+        # each silently discarded further down, leaving a diff that reported
+        # every finding in the other scan as new. A corrupt baseline must not
+        # read as a clean one.
+        if not isinstance(findings, list):
+            raise ValueError(
+                f"Expected 'findings' in {findings_path} to be a list, "
+                f"got {type(findings).__name__}"
+            )
+
+        usable = [f for f in findings if isinstance(f, dict)]
+        if len(usable) != len(findings):
+            logger.warning(
+                f"{len(findings) - len(usable)} of {len(findings)} entries in "
+                f"{findings_path} are not objects and were ignored"
+            )
+
+        logger.debug(f"Loaded {len(usable)} findings from {findings_path}")
+        return usable
 
     def _load_sqlite_findings(self, conn, scan_id: str) -> list[dict[str, Any]]:
         """Load findings from SQLite database."""
@@ -390,6 +420,69 @@ class DiffEngine:
     # Private Methods - Core Diff Algorithm
     # ========================================================================
 
+    @staticmethod
+    def _primary_identity(finding: dict[str, Any]) -> str | None:
+        """Return a finding's own identity, with any cluster prefix removed."""
+        fid = finding.get("id")
+        if not isinstance(fid, str) or not fid:
+            return None
+        if fid.startswith(CLUSTER_ID_PREFIX):
+            return fid[len(CLUSTER_ID_PREFIX) :] or None
+        return fid
+
+    @classmethod
+    def _identities(cls, finding: dict[str, Any]) -> list[str]:
+        """Every underlying fingerprint a finding represents.
+
+        A plain finding represents exactly its own id. A consensus finding
+        produced by cross-tool clustering represents the fingerprints of every
+        member of its cluster: the representative's, recoverable from the
+        ``cluster-`` prefix, plus each entry in ``context.duplicates``. Matching
+        on any of them keeps a finding's diff identity stable when it joins or
+        leaves a cluster, and when the cluster's representative changes (#847).
+        """
+        if not isinstance(finding, dict):
+            return []
+
+        identities: list[str] = []
+        primary = cls._primary_identity(finding)
+        if primary:
+            identities.append(primary)
+
+        context = finding.get("context")
+        duplicates = context.get("duplicates") if isinstance(context, dict) else None
+        if isinstance(duplicates, list):
+            for duplicate in duplicates:
+                if not isinstance(duplicate, dict):
+                    continue
+                did = duplicate.get("id")
+                if isinstance(did, str) and did and did not in identities:
+                    identities.append(did)
+
+        return identities
+
+    def _build_identity_lookup(
+        self, findings: list[dict[str, Any]], label: str
+    ) -> tuple[dict[str, dict[str, Any]], int]:
+        """Map every identity a finding covers to that finding.
+
+        Returns the lookup plus a count of findings carrying no usable id.
+        Those cannot be matched or classified, and were previously discarded
+        with no record at any level.
+        """
+        lookup: dict[str, dict[str, Any]] = {}
+        skipped = 0
+        for finding in findings:
+            identities = self._identities(finding)
+            if not identities:
+                skipped += 1
+                continue
+            for identity in identities:
+                lookup.setdefault(identity, finding)
+        if skipped:
+            logger.debug(f"{skipped} {label} finding(s) carry no usable id")
+        return lookup, skipped
+
     def _compare_findings(
         self,
         baseline_findings: list[dict[str, Any]],
@@ -411,40 +504,68 @@ class DiffEngine:
         """
         logger.info("Building fingerprint indexes")
 
-        # Step 1: Build indexes
-        baseline_index = {f["id"]: f for f in baseline_findings if "id" in f}
-        current_index = {f["id"]: f for f in current_findings if "id" in f}
-
-        baseline_fps = set(baseline_index.keys())
-        current_fps = set(current_index.keys())
-
-        # Step 2: Classify using set math
-        new_fps = current_fps - baseline_fps
-        resolved_fps = baseline_fps - current_fps
-        unchanged_fps = baseline_fps & current_fps
-
-        logger.info(
-            f"Classification: {len(new_fps)} new, "
-            f"{len(resolved_fps)} resolved, "
-            f"{len(unchanged_fps)} unchanged"
+        # Step 1: Build identity lookups. A finding is matched on any of the
+        # underlying fingerprints it represents, so clustering does not change
+        # a finding's diff identity (#847).
+        baseline_lookup, baseline_skipped = self._build_identity_lookup(
+            baseline_findings, "baseline"
+        )
+        current_lookup, current_skipped = self._build_identity_lookup(
+            current_findings, "current"
         )
 
-        # Step 3: Build result lists
-        new = [current_index[fp] for fp in new_fps]
-        resolved = [baseline_index[fp] for fp in resolved_fps]
-        unchanged = [current_index[fp] for fp in unchanged_fps]
+        # Step 2: Pair each current finding with the baseline finding that
+        # shares an identity with it, then classify by whether a pair exists.
+        # Classification is per finding rather than per fingerprint: a
+        # consensus finding covers several fingerprints and must still count
+        # once.
+        pairs: dict[int, dict[str, Any]] = {}
+        matched_baseline: set[int] = set()
+        for finding in current_findings:
+            for identity in self._identities(finding):
+                match = baseline_lookup.get(identity)
+                if match is None:
+                    continue
+                # Every baseline finding this one covers is accounted for, not
+                # just the first. When two findings reported separately in the
+                # baseline are clustered into one in the current scan, matching
+                # only the first left the second looking resolved -- the same
+                # false "fixed" that #847 is about, one step along.
+                matched_baseline.add(id(match))
+                pairs.setdefault(id(finding), match)
+
+        new = [
+            f for f in current_findings if self._identities(f) and id(f) not in pairs
+        ]
+        resolved = [
+            f
+            for f in baseline_findings
+            if self._identities(f) and id(f) not in matched_baseline
+        ]
+        unchanged = [f for f in current_findings if id(f) in pairs]
         modified = []
 
-        # Step 4: Detect modifications (optional)
-        if self.detect_modifications:
-            logger.info("Detecting modifications")
-            modified = self._detect_modifications(
-                baseline_index, current_index, unchanged_fps
+        logger.info(
+            f"Classification: {len(new)} new, "
+            f"{len(resolved)} resolved, "
+            f"{len(unchanged)} unchanged"
+        )
+
+        if baseline_skipped or current_skipped:
+            logger.warning(
+                f"Diff ignored {baseline_skipped} baseline and {current_skipped} "
+                "current finding(s) carrying no usable id. They appear in "
+                "neither the new, resolved nor unchanged totals."
             )
 
+        # Step 3: Detect modifications (optional)
+        if self.detect_modifications:
+            logger.info("Detecting modifications")
+            modified = self._detect_modifications(pairs, unchanged)
+
             # Remove modified findings from unchanged list
-            modified_fps = {m.fingerprint for m in modified}
-            unchanged = [f for f in unchanged if f["id"] not in modified_fps]
+            modified_objects = {id(m.current) for m in modified}
+            unchanged = [f for f in unchanged if id(f) not in modified_objects]
 
             logger.info(f"Found {len(modified)} modified findings")
 
@@ -467,31 +588,38 @@ class DiffEngine:
 
     def _detect_modifications(
         self,
-        baseline_index: dict[str, dict],
-        current_index: dict[str, dict],
-        unchanged_fps: set[str],
+        pairs: dict[int, dict[str, Any]],
+        matched: list[dict[str, Any]],
     ) -> list[ModifiedFinding]:
         """
-        Detect metadata changes in unchanged findings.
+        Detect metadata changes in findings present in both scans.
 
         Approved algorithm (DIFF_IMPLEMENTATION_PLAN.md):
         - Track 5 change types: severity, priority, compliance, CWE, message
-        - Performance: O(n) where n = len(unchanged_fps)
+        - Performance: O(n) where n = len(matched)
         - Thresholds: priority >5 pts, message >10 chars
 
+        Note on the message change type: ``message`` is an input to
+        ``common_finding.fingerprint()``, truncated at
+        ``MESSAGE_SNIPPET_LENGTH`` (120) characters. A message edit inside that
+        window therefore changes the finding's identity, and the finding is
+        reported as one resolved plus one new rather than as modified. This
+        change type is only reachable for findings whose message exceeds 120
+        characters and whose edit falls entirely beyond it -- measured at 6 of
+        34 findings on a bandit corpus and 106 of 263 on a mixed one.
+
         Args:
-            baseline_index: {fingerprint: finding}
-            current_index: {fingerprint: finding}
-            unchanged_fps: Set of fingerprints in both scans
+            pairs: {id(current finding): matching baseline finding}
+            matched: Current findings that have a baseline counterpart
 
         Returns:
             List of ModifiedFinding objects
         """
         modified = []
 
-        for fp in unchanged_fps:
-            baseline = baseline_index[fp]
-            current = current_index[fp]
+        for current in matched:
+            baseline = pairs[id(current)]
+            fp = self._primary_identity(current) or ""
 
             changes = {}
 
@@ -504,7 +632,7 @@ class DiffEngine:
             # 2. Priority score change (HIGH) - threshold 5 points
             baseline_priority = self._extract_priority(baseline)
             current_priority = self._extract_priority(current)
-            if abs(baseline_priority - current_priority) > 5.0:
+            if abs(baseline_priority - current_priority) > PRIORITY_CHANGE_THRESHOLD:
                 changes["priority"] = [baseline_priority, current_priority]
 
             # 3. Compliance framework additions (MEDIUM)
@@ -612,10 +740,7 @@ class DiffEngine:
         """
         Calculate risk trend: improved, worsened, unchanged.
 
-        Weighted factors:
-        - Severity change: 50%
-        - Priority change: 30%
-        - Compliance additions: 20%
+        Severity decides on its own when it moves; priority decides otherwise.
 
         Args:
             baseline: Baseline finding
@@ -624,39 +749,40 @@ class DiffEngine:
         Returns:
             "improved", "worsened", or "unchanged"
         """
-        score = 0.0
-
-        # Severity delta (50% weight)
         sev_scores = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1, "INFO": 0}
         baseline_sev = sev_scores.get(baseline.get("severity", "INFO"), 0)
         current_sev = sev_scores.get(current.get("severity", "INFO"), 0)
-        sev_delta = (current_sev - baseline_sev) * 0.5
-        score += sev_delta
 
-        # Priority delta (30% weight)
-        priority_delta = (
-            self._extract_priority(current) - self._extract_priority(baseline)
-        ) * 0.003
-        score += priority_delta
+        # A severity change is categorical, and it is the change the report
+        # shows the user, so it settles the direction by itself.
+        #
+        # It previously did not. The old weighted score gave a one-step
+        # severity change exactly +/-0.5 and compared with a strict `> 0.5`,
+        # so `MEDIUM -> HIGH` came out as "unchanged" whenever priority was
+        # stable -- which is every finding carrying an EPSS or CVSS score,
+        # since priority is then read from that score rather than from
+        # severity. The markdown report printed the contradiction in one line:
+        # "Severity: MEDIUM -> **HIGH** (unchanged)".
+        if current_sev != baseline_sev:
+            return "worsened" if current_sev > baseline_sev else "improved"
 
-        # Compliance additions (20% weight)
-        # More frameworks = higher priority (positive change)
-        baseline_compliance = len(
-            self._flatten_compliance(baseline.get("compliance", {}))
+        # Otherwise the priority score decides, using the same threshold that
+        # governs whether a priority change is reported at all.
+        #
+        # Compliance mappings are deliberately not a factor. Gaining a
+        # framework mapping is the same finding described better, not more
+        # risk, and at the old weight of 0.2 each, three new mappings alone
+        # reported "worsened" with severity and priority both untouched. That
+        # would fire broadly on upgrade to v1.1.0, whose compliance fix took
+        # several mapping tables from 0 matches to dozens.
+        priority_delta = self._extract_priority(current) - self._extract_priority(
+            baseline
         )
-        current_compliance = len(
-            self._flatten_compliance(current.get("compliance", {}))
-        )
-        compliance_delta = (current_compliance - baseline_compliance) * 0.2
-        score += compliance_delta
-
-        # Classify
-        if score > 0.5:
+        if priority_delta > PRIORITY_CHANGE_THRESHOLD:
             return "worsened"
-        elif score < -0.5:
+        if priority_delta < -PRIORITY_CHANGE_THRESHOLD:
             return "improved"
-        else:
-            return "unchanged"
+        return "unchanged"
 
     # ========================================================================
     # Private Methods - Statistics

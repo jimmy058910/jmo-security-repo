@@ -19,6 +19,7 @@ from scripts.core.validators.release_validator import (
     _check_contributing_exists,
     _check_coverage_threshold,
     _check_deep_profile_versions,
+    _check_dev_install,
     _check_dockerfile_build,
     _check_docs_key_files,
     _check_git_clean,
@@ -39,7 +40,6 @@ from scripts.core.validators.release_validator import (
     _check_no_skip_without_reason,
     _check_no_sleep_in_tests,
     _check_outdated_tools,
-    _check_pip_install,
     _check_precommit_order,
     _check_precommit_yml,
     _check_pypi_badge_version,
@@ -696,6 +696,39 @@ class TestSecurityChecks:
         assert result is None
 
     @patch("scripts.core.validators.release_validator._run_cmd")
+    def test_no_secrets_excludes_the_pytest_split_durations_index(self, mock_cmd):
+        """`.test_durations` is a generated index of `tests/`, already excluded.
+
+        It holds pytest node IDs, and one of them is the parametrised case of
+        `test_sanitize_tokens` -- a test *about* AWS-key redaction, whose
+        parameter is AWS's published example key. Adding the file to `dev` (to
+        balance the CI shards) turned the release-blocking `no-secret-patterns`
+        check red, and it stayed red unnoticed because `jmo validate` runs in
+        exactly one place: `release.yml`'s `pre-release-check`, on a tag.
+        """
+        mock_cmd.return_value = MagicMock(returncode=0, stdout=".test_durations\n")
+        with (
+            patch.object(Path, "is_file", return_value=True),
+            patch.object(
+                Path,
+                "read_text",
+                return_value='{"tests/x.py::t[AKIA" + "IOSFODNN7EXAMPLE]": 0.1}',
+            ),
+        ):
+            assert _check_no_secrets() is None
+
+    def test_the_real_tree_has_no_secret_findings(self):
+        """No mocks: the shipped gate must be green on a clean checkout.
+
+        Every other test here fabricates `git ls-files` output, so all of them
+        passed while the real repository failed the check.
+        """
+        result = _check_no_secrets()
+        assert (
+            result is None or result.status != CheckStatus.FAIL
+        ), f"{getattr(result, 'message', '')}: {getattr(result, 'details', '')}"
+
+    @patch("scripts.core.validators.release_validator._run_cmd")
     def test_no_secrets_found(self, mock_cmd):
         mock_cmd.return_value = MagicMock(returncode=0, stdout="config.py\n")
         with (
@@ -936,6 +969,27 @@ class TestTestHealthChecks:
         result = _check_coverage_threshold()
         assert result.status == CheckStatus.PASS
 
+    @patch("scripts.core.validators.release_validator._path_exists")
+    @patch("scripts.core.validators.release_validator._read_text")
+    @patch("scripts.core.validators.release_validator._get_pyproject_data")
+    def test_coverage_threshold_accepts_the_floor_ci_enforces(
+        self, mock_data, mock_read, mock_exists
+    ):
+        """`coverage_pct < 80` is ci.yml's real gate, so it must PASS.
+
+        The check demanded >=85 until #773 -- a figure nothing in the repo has
+        ever enforced (#756) -- so it WARNed against this project's own CI
+        config no matter how healthy coverage was. The other cases here use 85
+        and 50, which straddle both the old and new floors and so cannot tell
+        the two apart; this one can.
+        """
+        mock_data.return_value = {"tool": {}}
+        mock_exists.side_effect = lambda p: p == ".github/workflows/ci.yml"
+        mock_read.return_value = "if coverage_pct < 80:\n    sys.exit(1)\n"
+        result = _check_coverage_threshold()
+        assert result.status == CheckStatus.PASS
+        assert "80" in result.message
+
     @patch("scripts.core.validators.release_validator._path_exists", return_value=True)
     @patch("scripts.core.validators.release_validator._read_text")
     def test_conftest_exists_pass(self, mock_read, mock_exists):
@@ -1121,19 +1175,69 @@ class TestFullTierChecks:
         assert result.status == CheckStatus.SKIP
         assert "Docker not available" in result.message
 
+    @patch(
+        "scripts.core.validators.release_validator._run_cmd",
+        side_effect=subprocess.TimeoutExpired(cmd="docker build", timeout=1800),
+    )
+    @patch("scripts.core.validators.release_validator._path_exists", return_value=True)
+    def test_dockerfile_build_timeout_is_fail_not_skip(self, mock_exists, mock_cmd):
+        """A build past its own budget must FAIL, not SKIP.
+
+        This branch had no test at all, which is how it stayed wrong. Reporting a
+        timeout as SKIP made it indistinguishable in the scorecard's status
+        column from "Docker not available" -- so docker-build-deep, which could
+        not meet its 600s --no-cache budget on any measured machine (858s WITH a
+        warm cache), reported exactly what a box with no daemon reports (#941).
+
+        The companion assertion is the one directly below in
+        test_dockerfile_no_docker: an absent daemon still SKIPs. The pair is the
+        point -- either alone permits the two to collapse back together.
+        """
+        result = _check_dockerfile_build("Dockerfile")
+        assert result.status == CheckStatus.FAIL
+        assert "timeout" in result.message.lower()
+        assert "NOT an absent daemon" in result.message
+
     @patch("scripts.core.validators.release_validator._run_cmd")
-    def test_pip_install_pass(self, mock_cmd):
+    def test_dev_install_pass(self, mock_cmd):
         mock_cmd.return_value = MagicMock(returncode=0, stdout="", stderr="")
-        result = _check_pip_install()
+        result = _check_dev_install()
         assert result is None
 
     @patch("scripts.core.validators.release_validator._run_cmd")
-    def test_pip_install_fail(self, mock_cmd):
+    def test_dev_install_fail(self, mock_cmd):
         mock_cmd.return_value = MagicMock(
             returncode=1, stdout="", stderr="Could not find package"
         )
-        result = _check_pip_install()
+        result = _check_dev_install()
         assert result.status == CheckStatus.FAIL
+
+    @patch("scripts.core.validators.release_validator._run_cmd")
+    def test_dev_install_probes_uv_not_the_deleted_dev_extra(self, mock_cmd):
+        """The probe must not reference `[dev]`, which #683 removed.
+
+        Dev dependencies moved to a PEP 735 `[dependency-groups]` group, so
+        `pip install -e '.[dev]'` failing is the intended state. Asserting on
+        it made the check FAIL on a correct machine (#773).
+        """
+        mock_cmd.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        _check_dev_install()
+        cmd = mock_cmd.call_args[0][0]
+        assert cmd[0] == "uv"
+        assert not any(".[dev]" in str(part) for part in cmd)
+
+    @patch("scripts.core.validators.release_validator._run_cmd")
+    def test_dev_install_skips_when_the_tool_is_absent(self, mock_cmd):
+        """Missing tooling must SKIP, not FAIL.
+
+        The pre-#773 probe was `python -m pip`, where a missing pip *module*
+        exits 1 rather than raising -- so this guard could never fire on a uv
+        venv, which is every dev machine this project documents.
+        """
+        mock_cmd.side_effect = FileNotFoundError("uv")
+        result = _check_dev_install()
+        assert result.status == CheckStatus.SKIP
+        assert "uv not available" in result.message
 
     @patch("scripts.core.validators.release_validator._run_cmd")
     def test_jmo_entry_point_pass(self, mock_cmd):

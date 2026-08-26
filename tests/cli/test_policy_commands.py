@@ -296,7 +296,9 @@ def test_cmd_policy_validate_policy_not_found(capsys):
     with patch("scripts.cli.policy_commands.discover_policies", return_value={}):
         rc = cmd_policy_validate(args)
 
-        assert rc == 1
+        assert (
+            rc == 2
+        )  # usage error, not a verdict: see docs/CLI_REFERENCE.md "Exit Codes" (#925)
 
 
 def test_cmd_policy_validate_valid_policy(tmp_path, capsys):
@@ -358,7 +360,9 @@ def test_cmd_policy_test_findings_file_not_found():
     args = argparse.Namespace(policy="test", findings_file="nonexistent.json")
 
     rc = cmd_policy_test(args)
-    assert rc == 1
+    assert (
+        rc == 2
+    )  # usage error, not a verdict: see docs/CLI_REFERENCE.md "Exit Codes" (#925)
 
 
 def test_cmd_policy_test_policy_not_found(tmp_path):
@@ -370,7 +374,9 @@ def test_cmd_policy_test_policy_not_found(tmp_path):
 
     with patch("scripts.cli.policy_commands.discover_policies", return_value={}):
         rc = cmd_policy_test(args)
-        assert rc == 1
+        assert (
+            rc == 2
+        )  # usage error, not a verdict: see docs/CLI_REFERENCE.md "Exit Codes" (#925)
 
 
 def test_cmd_policy_test_passed(tmp_path, capsys):
@@ -480,7 +486,9 @@ def test_cmd_policy_show_policy_not_found():
 
     with patch("scripts.cli.policy_commands.discover_policies", return_value={}):
         rc = cmd_policy_show(args)
-        assert rc == 1
+        assert (
+            rc == 2
+        )  # usage error, not a verdict: see docs/CLI_REFERENCE.md "Exit Codes" (#925)
 
 
 def test_cmd_policy_show_with_metadata(tmp_path, capsys):
@@ -567,7 +575,9 @@ def test_cmd_policy_install_builtin_not_found(tmp_path):
         "scripts.cli.policy_commands.get_builtin_policies_dir", return_value=builtin_dir
     ):
         rc = cmd_policy_install(args)
-        assert rc == 1
+        assert (
+            rc == 2
+        )  # usage error, not a verdict: see docs/CLI_REFERENCE.md "Exit Codes" (#925)
 
 
 def test_cmd_policy_install_success(tmp_path, capsys):
@@ -727,4 +737,177 @@ def test_cmd_policy_unknown_command():
     args = argparse.Namespace(policy_command="unknown")
 
     rc = cmd_policy(args)
+    assert (
+        rc == 2
+    )  # usage error, not a verdict: see docs/CLI_REFERENCE.md "Exit Codes" (#925)
+
+
+# ============================================================================
+# What the user actually sees (chunk 16)
+#
+# Everything above mocks PolicyEngine and asserts the CLI's plumbing. These
+# assert the three presentation defects that plumbing tests cannot reach: an
+# exception surfaced as a traceback, a recovery hint written to a log level
+# nothing renders, and policy-authored text sent to a console it cannot encode.
+# ============================================================================
+
+
+class _Cp1252Stream:
+    """A stdout that behaves like a real Windows console: cp1252, no emoji.
+
+    safe_print probes ``stream.encoding`` rather than deciding from the codec's
+    name, so this is what makes the substitution path run under a UTF-8 pytest.
+    """
+
+    encoding = "cp1252"
+
+    def __init__(self):
+        self.text = ""
+
+    def write(self, s):
+        s.encode(self.encoding)  # raises exactly as a real console would
+        self.text += s
+        return len(s)
+
+    def flush(self):
+        pass
+
+
+def test_missing_opa_reports_the_install_hint_not_a_traceback(capsys):
+    """OPANotFoundException must not reach Python's default excepthook.
+
+    Four of the five subcommands build a PolicyEngine in their first statement,
+    and nothing caught the exception its constructor raises -- so `jmo policy
+    list` answered a first-run condition (opa is in no profile's tool list) with
+    an 18-line traceback whose last line was the friendly message the exception
+    class exists to carry. `jmo report --policy` already degraded gracefully.
+    """
+    from scripts.core.exceptions import OPANotFoundException
+
+    args = argparse.Namespace(policy_command="list")
+    with patch(
+        "scripts.cli.policy_commands.cmd_policy_list",
+        side_effect=OPANotFoundException(),
+    ):
+        rc = cmd_policy(args)
+
     assert rc == 1
+    assert "Traceback" not in capsys.readouterr().err
+
+
+def test_unknown_policy_name_lists_the_available_ones(tmp_path, capsys):
+    """The recovery hint has to be rendered, not merely constructed.
+
+    It used to go out at logger.info. `jmo policy` declares no --log-level, so
+    configure_scan_logging pins the `scripts` logger to WARNING, which discards
+    INFO at the source for every `scripts.*` child at every flag setting. A user
+    who typed `zero-secret` got "Policy not found" and no way to find the "s".
+    """
+    (tmp_path / "zero-secrets.rego").write_text("package t", encoding="utf-8")
+    (tmp_path / "owasp-top-10.rego").write_text("package t", encoding="utf-8")
+
+    args = argparse.Namespace(policy="zero-secret")
+    with (
+        patch(
+            "scripts.cli.policy_commands.get_builtin_policies_dir",
+            return_value=tmp_path,
+        ),
+        patch(
+            "scripts.cli.policy_commands.get_user_policies_dir",
+            return_value=tmp_path / "nope",
+        ),
+    ):
+        rc = cmd_policy_validate(args)
+
+    assert (
+        rc == 2
+    )  # usage error, not a verdict: see docs/CLI_REFERENCE.md "Exit Codes" (#925)
+    err = capsys.readouterr().err
+    assert "zero-secrets" in err, err
+    assert "owasp-top-10" in err, err
+
+
+def test_policy_message_survives_a_console_that_cannot_encode_it(tmp_path, monkeypatch):
+    """The .rego-authored message must go through the fallback table.
+
+    All five builtin policies put emoji in `message`, and it used to be written
+    with a bare print(). On a Windows console that degraded to a bare "?" --
+    two lines below a correctly rendered "[OK]" from the _safe_print call above
+    it. The violations block is exempt: json.dumps defaults to
+    ensure_ascii=True, so it is already pure ASCII.
+    """
+    findings_file = tmp_path / "findings.json"
+    findings_file.write_text('{"findings": []}', encoding="utf-8")
+    policy_path = tmp_path / "p.rego"
+    policy_path.write_text("package t", encoding="utf-8")
+
+    result = MagicMock()
+    result.passed = False
+    result.message = "❌ Found 3 OWASP Top 10 violations"
+    result.violation_count = 3
+    result.violations = []
+    result.warnings = ["⚠️ PCI DSS 6.2.4: weak crypto"]
+
+    engine = MagicMock()
+    engine.test_policy.return_value = result
+
+    stream = _Cp1252Stream()
+    monkeypatch.setattr("sys.stdout", stream)
+    with (
+        patch(
+            "scripts.cli.policy_commands.discover_policies",
+            return_value={"p": policy_path},
+        ),
+        patch("scripts.cli.policy_commands.PolicyEngine", return_value=engine),
+    ):
+        rc = cmd_policy_test(
+            argparse.Namespace(policy="p", findings_file=str(findings_file))
+        )
+
+    assert rc == 1
+    # Rendered through the table, not lost to errors="replace".
+    assert "[X] Found 3 OWASP Top 10 violations" in stream.text, stream.text
+    assert "[!] PCI DSS 6.2.4" in stream.text, stream.text
+    assert "?" not in stream.text, stream.text
+
+
+def test_list_total_counts_addressable_policies_not_files(tmp_path, capsys):
+    """A user copy shadowing a builtin is ONE policy, not two.
+
+    discover_policies() resolves the user copy over the builtin of the same
+    name, so validate / test / show see 5 names after installing one of the 5
+    builtins -- while `list` summed the two sections and said 6.
+    """
+    builtin = tmp_path / "builtin"
+    user = tmp_path / "user"
+    builtin.mkdir()
+    user.mkdir()
+    for name in ("zero-secrets", "owasp-top-10"):
+        (builtin / f"{name}.rego").write_text("package t", encoding="utf-8")
+    (user / "zero-secrets.rego").write_text("package t", encoding="utf-8")
+
+    engine = MagicMock()
+    engine.get_metadata.return_value = {"version": "1.0.0", "description": "d"}
+
+    with (
+        patch(
+            "scripts.cli.policy_commands.get_builtin_policies_dir", return_value=builtin
+        ),
+        patch("scripts.cli.policy_commands.get_user_policies_dir", return_value=user),
+        patch("scripts.cli.policy_commands.PolicyEngine", return_value=engine),
+    ):
+        rc = cmd_policy_list(argparse.Namespace())
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Total: 2 policies" in out, out
+    assert "zero-secrets" in out
+
+    # And the count must agree with what the other subcommands can address.
+    with (
+        patch(
+            "scripts.cli.policy_commands.get_builtin_policies_dir", return_value=builtin
+        ),
+        patch("scripts.cli.policy_commands.get_user_policies_dir", return_value=user),
+    ):
+        assert len(discover_policies()) == 2

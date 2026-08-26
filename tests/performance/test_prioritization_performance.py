@@ -4,7 +4,9 @@ Performance tests for EPSS/KEV prioritization.
 Tests API latency, cache performance, and bulk operations.
 """
 
+import statistics
 import time
+from itertools import count
 from unittest.mock import Mock, patch
 
 import pytest
@@ -12,6 +14,37 @@ import pytest
 from scripts.core.epss_integration import EPSSClient, EPSSScore
 from scripts.core.kev_integration import KEVClient, KEVEntry
 from scripts.core.priority_calculator import PriorityCalculator
+
+# Windows clock granularity, measured on a dev box:
+#
+#     time.monotonic()       15.0000 ms
+#     time.time()             0.5021 ms
+#     time.perf_counter()     0.0001 ms
+#
+# So a single sub-10ms sample timed with time.time() has ~20 usable ticks, and
+# one scheduler slice fails it -- which is exactly how #733 flaked a PR that
+# touched only the Makefile. perf_counter is the clock this repository
+# standardised on after a "just use monotonic" change made a different flake
+# 26.7% worse (see tests/unit/test_tool_runner.py).
+#
+# Granularity is necessary but not sufficient: one sample on a shared CI runner
+# measures the runner as much as the code. Sub-10ms budgets therefore take the
+# median of several runs.
+LATENCY_SAMPLES = 21
+
+
+def median_ms(operation, samples: int = LATENCY_SAMPLES) -> float:
+    """Median wall time of `operation` in milliseconds, over `samples` runs.
+
+    Median rather than mean: a single descheduled run should not move the
+    result, and that is the failure mode being defended against.
+    """
+    timings = []
+    for _ in range(samples):
+        start = time.perf_counter()
+        operation()
+        timings.append((time.perf_counter() - start) * 1000)
+    return statistics.median(timings)
 
 
 @pytest.fixture
@@ -36,9 +69,9 @@ class TestEPSSPerformance:
         client._cache_score(score)
 
         # Measure retrieval time
-        start = time.time()
+        start = time.perf_counter()
         cached_score = client.get_score("CVE-2024-1234")
-        elapsed_ms = (time.time() - start) * 1000
+        elapsed_ms = (time.perf_counter() - start) * 1000
 
         assert cached_score is not None
         assert (
@@ -67,9 +100,9 @@ class TestEPSSPerformance:
         client = EPSSClient(cache_dir=temp_cache_dir)
 
         # Measure API call time
-        start = time.time()
+        start = time.perf_counter()
         score = client.get_score("CVE-2024-5678")
-        elapsed_ms = (time.time() - start) * 1000
+        elapsed_ms = (time.perf_counter() - start) * 1000
 
         assert score is not None
         assert elapsed_ms < 500, f"API call took {elapsed_ms:.2f}ms (expected <500ms)"
@@ -94,19 +127,29 @@ class TestEPSSPerformance:
         mock_response.raise_for_status = Mock()
         mock_get.return_value = mock_response
 
-        client = EPSSClient(cache_dir=temp_cache_dir)
-
         cves = [f"CVE-2024-{i:04d}" for i in range(100)]
 
-        # Measure bulk API call time
-        start = time.time()
-        scores = client.get_scores_bulk(cves)
-        elapsed_ms = (time.time() - start) * 1000
+        # Each sample needs its own cache directory. `get_scores_bulk` consults
+        # the cache before calling `_fetch_bulk_from_api`
+        # (scripts/core/epss_integration.py:128-135), so reusing one directory
+        # would leave every sample after the first measuring a cache read - a
+        # different, far cheaper code path than the one under test.
+        scores = {}
+        run = count()
+
+        def fetch_bulk():
+            nonlocal scores
+            cache = temp_cache_dir / f"run-{next(run)}"
+            cache.mkdir()
+            scores = EPSSClient(cache_dir=cache).get_scores_bulk(cves)
+
+        elapsed_ms = median_ms(fetch_bulk)
 
         assert len(scores) == 100
-        assert (
-            elapsed_ms < 2000
-        ), f"Bulk API call took {elapsed_ms:.2f}ms (expected <2000ms)"
+        assert elapsed_ms < 2000, (
+            f"Bulk API call median took {elapsed_ms:.2f}ms over "
+            f"{LATENCY_SAMPLES} runs (expected <2000ms)"
+        )
 
     def test_cache_hit_ratio(self, temp_cache_dir):
         """Test cache effectiveness with mixed cached/uncached requests."""
@@ -177,9 +220,9 @@ class TestKEVPerformance:
         mock_get.return_value = mock_response
 
         # Measure download + parse time
-        start = time.time()
+        start = time.perf_counter()
         client = KEVClient(cache_dir=temp_cache_dir)
-        elapsed_ms = (time.time() - start) * 1000
+        elapsed_ms = (time.perf_counter() - start) * 1000
 
         assert len(client.catalog) == 1000
         assert (
@@ -219,10 +262,10 @@ class TestKEVPerformance:
         cache_path.write_text(json.dumps(catalog_data))
 
         # Measure cached load time
-        start = time.time()
+        start = time.perf_counter()
         with patch("requests.get"):  # Prevent download
             client = KEVClient(cache_dir=temp_cache_dir)
-        elapsed_ms = (time.time() - start) * 1000
+        elapsed_ms = (time.perf_counter() - start) * 1000
 
         assert len(client.catalog) == 1000
         # Threshold: 200ms accommodates Windows disk I/O variance (observed: 100-150ms)
@@ -256,13 +299,18 @@ class TestKEVPerformance:
         with patch("requests.get"):
             client = KEVClient(cache_dir=temp_cache_dir)
 
-        # Measure lookup time
-        start = time.time()
-        is_kev = client.is_kev("CVE-2024-1234")
-        elapsed_ms = (time.time() - start) * 1000
+        # A 1ms budget is BELOW time.time()'s 0.5ms Windows tick, so the old
+        # single-sample timing could only ever read ~0 or ~0.5 -- it was not
+        # measuring this lookup. Median of N with perf_counter is.
+        assert client.is_kev("CVE-2024-1234") is True
 
-        assert is_kev is True
-        assert elapsed_ms < 1, f"KEV lookup took {elapsed_ms:.2f}ms (expected <1ms)"
+        elapsed_ms = median_ms(lambda: client.is_kev("CVE-2024-1234"))
+
+        assert elapsed_ms < 1, (
+            f"KEV lookup median took {elapsed_ms:.4f}ms over {LATENCY_SAMPLES} "
+            f"runs (expected <1ms). This is an in-memory set lookup; a real "
+            f"regression here means the catalog is being re-read or re-parsed."
+        )
 
 
 class TestPriorityCalculatorPerformance:
@@ -306,15 +354,20 @@ class TestPriorityCalculatorPerformance:
             "tool": {"name": "trivy", "version": "0.50.0"},
         }
 
-        # Measure calculation time
-        start = time.time()
+        # This is the assertion that flaked CI at 15.65ms on a PR touching only
+        # the Makefile (#733). One sample on a shared runner measures the runner;
+        # the median over N measures the code.
         priority = calculator.calculate_priority(finding)
-        elapsed_ms = (time.time() - start) * 1000
-
         assert priority is not None
-        assert (
-            elapsed_ms < 10
-        ), f"Priority calculation took {elapsed_ms:.2f}ms (expected <10ms)"
+
+        elapsed_ms = median_ms(lambda: calculator.calculate_priority(finding))
+
+        assert elapsed_ms < 10, (
+            f"Priority calculation median took {elapsed_ms:.4f}ms over "
+            f"{LATENCY_SAMPLES} runs (expected <10ms). Both clients are mocked "
+            f"here, so this measures scoring arithmetic only -- a regression "
+            f"means real work crept into the calculation path."
+        )
 
     @patch("scripts.core.priority_calculator.EPSSClient")
     @patch("scripts.core.priority_calculator.KEVClient")
@@ -360,9 +413,9 @@ class TestPriorityCalculatorPerformance:
         ]
 
         # Measure bulk calculation time
-        start = time.time()
+        start = time.perf_counter()
         priorities = calculator.calculate_priorities_bulk(findings)
-        elapsed_ms = (time.time() - start) * 1000
+        elapsed_ms = (time.perf_counter() - start) * 1000
 
         assert len(priorities) == 1000
         assert (
@@ -399,9 +452,9 @@ class TestPriorityCalculatorPerformance:
         }
 
         # Measure extraction time
-        start = time.time()
+        start = time.perf_counter()
         cves = calculator._extract_cves(finding)
-        elapsed_ms = (time.time() - start) * 1000
+        elapsed_ms = (time.perf_counter() - start) * 1000
 
         # Should find all unique CVEs
         assert len(cves) >= 5

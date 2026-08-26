@@ -25,7 +25,10 @@ from scripts.core.validators import (
 
 logger = logging.getLogger(__name__)
 
-# All 28 adapter names (excluding base_adapter.py and common.py)
+# All 27 adapter names. The directory holds 29 .py files: these 27 plus
+# __init__.py and common.py. (PROFILE_TOOLS names 29 *tools*, which is a
+# different number for two reasons: `checkov-cicd` reuses the checkov adapter,
+# and `opa` is the report-phase policy engine and emits no tool output.)
 EXPECTED_ADAPTERS = sorted(
     [
         "aflplusplus",

@@ -91,6 +91,9 @@ def test_scan_each_tool_happy_paths(tmp_path: Path, monkeypatch):
 
         # Note: _tool_exists removed in v0.9.0 - tool discovery handled by scanners
         monkeypatch.setattr(subprocess, "run", make_mock_run(t))
+        # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933),
+        # which resolves `Path.home()` with no injection point.
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
 
         args = types.SimpleNamespace(
             cmd="scan",
@@ -126,6 +129,9 @@ def test_scan_fails_when_only_requested_tool_missing(tmp_path: Path, monkeypatch
     """
     # Set CI=true to skip interactive prompts
     monkeypatch.setenv("CI", "true")
+    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
+    # resolves `Path.home()` with no injection point.
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
 
     # Create test repo
     repo = tmp_path / "test-repo"

@@ -1394,11 +1394,23 @@ class TestCmdDiffSQLiteMode:
         captured = capsys.readouterr()
         assert "Database not found" in captured.err
 
-    def test_cmd_diff_sqlite_mode_default_db_not_found(
+    def test_cmd_diff_sqlite_mode_defaults_to_the_history_database(
         self, tmp_path, monkeypatch, capsys
     ):
-        """Test error when default database (~/.jmo/scans.db) doesn't exist."""
-        # Mock Path.home() to return tmp_path
+        """With no --db, SQLite mode reads the database the product writes.
+
+        This asserted the opposite: it monkeypatched `Path.home()` and expected
+        `~/.jmo/scans.db`, a filename and a location JMo has never written.
+        `jmo diff --scan A --scan B` -- the invocation printed in this
+        command's own --help -- could therefore only ever fail. The test passed
+        because it encoded the defect.
+        """
+        # Point the default at a path that does not exist, so the error names
+        # whichever database the command actually chose.
+        missing = tmp_path / "history.db"
+        monkeypatch.setattr(
+            "scripts.cli.diff_commands.DEFAULT_DB_PATH", missing, raising=True
+        )
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
         class Args:
@@ -1418,6 +1430,9 @@ class TestCmdDiffSQLiteMode:
         assert result == 1
         captured = capsys.readouterr()
         assert "Database not found" in captured.err
+        # The database it looked for, named explicitly.
+        assert str(missing) in captured.err
+        assert "scans.db" not in captured.err
 
 
 class TestCmdDiffEdgeCases:
@@ -1686,63 +1701,64 @@ class TestCmdDiffExceptionHandling:
 class TestRichOutput:
     """Tests for Rich console output functions."""
 
-    def test_print_rich_summary_with_rich_available(self, monkeypatch):
-        """Test print_diff_summary_rich when Rich is available."""
+    def test_print_rich_summary_renders_from_real_engine_statistics(self, monkeypatch):
+        """The Rich summary renders from what DiffEngine actually emits.
+
+        This test used to hand-build a statistics dict containing `new`,
+        `resolved` and `by_tool`. `DiffEngine._calculate_statistics` emits none
+        of those keys -- it emits `new_by_severity` and `resolved_by_severity`,
+        and nothing anywhere computes a per-tool breakdown. So the severity
+        table and the tool tree rendered in this test and could not render from
+        a real diff. Feeding the real shape is what makes the assertions mean
+        something.
+        """
         from unittest.mock import MagicMock
 
-        # Create mock Rich components
-        mock_console = MagicMock()
-        mock_panel_class = MagicMock()
-        mock_table_class = MagicMock()
-        mock_tree_class = MagicMock()
-
-        # Import after setting up mocks
         import scripts.cli.diff_commands as diff_module
+        from scripts.core.diff_engine import DiffEngine
 
-        # Create mock table instance
-        mock_table = MagicMock()
-        mock_table_class.return_value = mock_table
+        # The genuine article, straight from the engine.
+        statistics = DiffEngine()._calculate_statistics(
+            new=[{"severity": "HIGH"}, {"severity": "MEDIUM"}],
+            resolved=[{"severity": "LOW"}],
+            unchanged=[],
+            modified=[],
+        )
+        assert "new" not in statistics and "by_tool" not in statistics
 
-        # Create mock tree instance
-        mock_tree = MagicMock()
-        mock_tree_class.return_value = mock_tree
-
-        # Temporarily replace module values
+        mock_console = MagicMock()
         original_rich_available = diff_module.RICH_AVAILABLE
         original_console = diff_module.console
-
         try:
             diff_module.RICH_AVAILABLE = True
             diff_module.console = mock_console
 
-            # Patch Rich classes
-            monkeypatch.setattr("scripts.cli.diff_commands.Panel", mock_panel_class)
-            monkeypatch.setattr("scripts.cli.diff_commands.Table", mock_table_class)
-            monkeypatch.setattr("scripts.cli.diff_commands.Tree", mock_tree_class)
-
-            # Create a mock DiffResult with statistics property
             mock_diff_result = MagicMock()
-            mock_diff_result.statistics = {
-                "total_new": 5,
-                "total_resolved": 3,
-                "total_modified": 2,
-                "trend": "improving",
-                "new": {"HIGH": 3, "MEDIUM": 2},
-                "resolved": {"HIGH": 1, "LOW": 2},
-                "by_tool": {"semgrep": 3, "trivy": 2},
-            }
+            mock_diff_result.statistics = statistics
 
-            from scripts.cli.diff_commands import print_diff_summary_rich
+            diff_module.print_diff_summary_rich(mock_diff_result)
 
-            print_diff_summary_rich(mock_diff_result)
-
-            # Verify console.print was called
-            assert mock_console.print.called
-
+            # A summary panel and a severity table, both from real keys.
+            assert mock_console.print.call_count == 2
         finally:
-            # Restore original values
             diff_module.RICH_AVAILABLE = original_rich_available
             diff_module.console = original_console
+
+    def test_rich_console_targets_stderr_not_stdout(self):
+        """The Rich console must write where the isatty() guard looks.
+
+        `cmd_diff` decides whether to render the Rich summary from
+        `sys.stderr.isatty()`, but `Console()` defaults to stdout. The two
+        streams are independent, so the panel could land in the middle of
+        `--format json` output. On Windows this is not exotic: the CRT's
+        isatty() returns true for any character device, so an ordinary
+        `2>NUL` in a pipeline turns the guard on.
+        """
+        import scripts.cli.diff_commands as diff_module
+
+        if not diff_module.RICH_AVAILABLE:  # pragma: no cover - rich is a dep
+            pytest.skip("rich not installed")
+        assert diff_module.console.stderr is True
 
     def test_print_rich_summary_without_rich(self, monkeypatch):
         """Test print_diff_summary_rich when Rich is not available."""

@@ -6,11 +6,11 @@ Guidance for Claude Code when working with the JMo Security Audit Tool Suite rep
 
 ## Project Overview
 
-JMo Security is a terminal-first security audit toolkit orchestrating 27+ scanners with unified CLI, normalized outputs, and HTML dashboard.
+JMo Security is a terminal-first security audit toolkit orchestrating 29 scanners with unified CLI, normalized outputs, and HTML dashboard.
 
-**Version:** v1.0.5 (latest released — see CHANGELOG.md for full history)
+**Version:** v1.0.8 (latest released — see CHANGELOG.md for full history)
 **Philosophy:** Two-phase architecture: scan (invoke tools) → report (normalize, dedupe, output)
-**Test Coverage:** 8,000+ tests, 87% coverage, CI requires ≥85% (sharded across 4 parallel jobs); CI quick threshold 70% (excludes slow/docker/requires_tools/smoke)
+**Test Coverage:** 8,000+ tests, sharded across 4 parallel jobs. The **only enforced floor is 80%** (`.github/workflows/ci.yml:734`, on the marker-filtered suite — excludes slow/docker/requires_tools/smoke). Nothing sets `--cov-fail-under` (#756); measure current coverage rather than quoting a figure from this file
 
 **Key v1.0 Features:**
 
@@ -27,7 +27,7 @@ JMo Security is a terminal-first security audit toolkit orchestrating 27+ scanne
 ### Mandatory Guardrails
 
 1. **Pre-commit Order:** Black MUST run before Ruff (see `.pre-commit-config.yaml`)
-2. **Test Coverage:** CI requires ≥85% (`pytest --cov-fail-under=85`)
+2. **Test Coverage:** CI's only enforced floor is **80%** (`.github/workflows/ci.yml:734`, on the marker-filtered suite). Nothing sets `--cov-fail-under` — not `make test`, not `pyproject.toml`. Write tests to the standard the codebase holds itself to, but do not cite 85% as a gate (#756)
 3. **Subprocess Security:** NEVER use `shell=True` in subprocess calls. See [.claude/rules/python-safety.rules.md](.claude/rules/python-safety.rules.md)
 4. **Conventional Commits:** `feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`, `perf:`, `ci:`
 5. **Path Security:** Validate all user paths against directory traversal
@@ -119,10 +119,15 @@ fix the plan rather than working around it.
    - Change scope is larger than expected
    - **Action:** Present the issue, options, and recommendation before proceeding
 
-3. **Document If Deferring:** If fix requires significant research/refactoring but isn't blocking:
-   - Create GitHub issue with `technical-debt` or `enhancement` label
-   - Add `# TODO(issue-#):` comment in code at the relevant location
-   - Document in `.claude/known-issues.md` with description, root cause, proposed fix, priority (P0-P3)
+3. **Document If Deferring:** If a fix needs significant research or refactoring but isn't blocking, route it by *who needs to know*. There is no fourth option — a private notes file was tried and removed, because nothing ever closed it:
+
+   | Kind of thing | Goes to | Why there |
+   |---|---|---|
+   | Anything with a plausible fix | **GitHub issue** (`technical-debt` / `enhancement`) + `# TODO(issue-#):` at the site | It can be closed, assigned, and searched. A file can only be edited. |
+   | Behaviour a *user* can hit and we intend to keep | [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) | Ships in the repo, so users find it without reading the tracker. |
+   | A trap that only bites *developers* | the matching [`.claude/rules/*.md`](.claude/rules/) | Loads automatically when Claude touches those paths. |
+
+   > A private `known-issues` log under `.claude/` was the previous answer, and it is **gone**. It was gitignored — so this instruction pointed contributors at a file they could not see — and by the end it was 95 lines carrying a stale "Last Updated", a RESOLVED entry, and an obsolete one for a tool deleted six months earlier. A log with no close mechanism only accumulates.
 
 4. **Never Ignore:** Warnings, deprecations, and flaky tests become bugs over time
 5. **Rule of Three:** If the same approach fails 3 times, stop and change something fundamental — different angle, fresh start, or escalate to the user
@@ -187,13 +192,30 @@ python3 scripts/dev/update_versions.py --sync          # Sync Dockerfiles
 
 ## AI Tooling Ecosystem
 
-JMo Security includes agents, skills, and an MCP server for AI-assisted development.
+JMo Security ships 12 skills, 7 agents, and an MCP server for AI-assisted development. Everything named here is in the repository, so a fresh clone gets working tooling.
+
+### What ships, and what does not
+
+`.claude/` is scoped to **contributors**. Skills that generate an adapter, fabricate tests, debug CI, or map compliance frameworks are tracked. Maintainer workflows — issue and PR triage, dependency sweeps, merges, releases, marketing — are deliberately not published: they need `gh` write access or push rights to `main`, so they would be unusable to a contributor anyway. They stay on the maintainer's machine, in place under `.claude/skills/` and untracked.
+
+The split is mechanical rather than remembered. `.gitignore` carries an explicit per-skill allowlist under `.claude/`, and `scripts/dev/check_doc_links.py` fails CI and pre-commit if any tracked file links to a path a clone does not receive. **Anything this file names must be tracked** — an instruction pointing at an untracked path is a dead end for every contributor who follows it.
 
 ### MCP Server (Security Findings API)
 
-- `get_security_findings` - Query with filters (severity, tool, path)
-- `apply_fix` - Apply AI-suggested patches (use `dry_run=True` first!)
-- `mark_resolved` - Mark as fixed/false_positive/wont_fix
+Five `@mcp.tool()` entry points plus one `@mcp.resource`, all in
+`scripts/jmo_mcp/jmo_server.py`. **stdio transport only, and callers are not
+authenticated** — `JMO_MCP_API_KEYS` is hashed at import and compared against
+nothing, so no setting turns access control on. Ask `get_server_info()` for
+`authentication_enforced` rather than inferring it.
+
+| Entry point | State |
+|---|---|
+| `get_security_findings` | working — filters + pagination; page with the **returned** `limit`, not the requested one |
+| `query_findings_db` | working — read-only SQL (`mode=ro` + statement validation, both verified) |
+| `get_finding_context` (`finding://{id}`) | working — `related_findings` is always `[]` |
+| `get_server_info` | working |
+| `apply_fix` | **preview only.** `dry_run=False` writes nothing and returns `success: False`; deferred past v1.1.0 (#951) |
+| `mark_resolved` | working — appends an id-keyed entry to `jmo.suppress.yml`. Entries **always expire** (90d default, 365 cap), and `resolution="fixed"` writes nothing by design |
 
 ### Key Agents (invoke naturally)
 
@@ -204,6 +226,8 @@ JMo Security includes agents, skills, and an MCP server for AI-assisted developm
 | `code-quality-auditor` | Technical debt, refactoring opportunities |
 | `security-auditor` | Security vulnerability analysis |
 | `dependency-analyzer` | Impact analysis for changes |
+| `doc-sync-checker` | Documentation-code sync verification |
+| `codebase-explorer` | Architecture and pattern understanding |
 
 ### Key Skills (invoke with /skill-name)
 
@@ -212,7 +236,7 @@ JMo Security includes agents, skills, and an MCP server for AI-assisted developm
 - `/jmo-ci-debugger` - Debug CI/CD pipeline failures
 - `/jmo-e2e-verify` - AI-driven e2e verification with parallel sub-agents
 
-**Full documentation:** [.claude/skills/INDEX.md](.claude/skills/INDEX.md) (16 skills, 7 agents) | **Personas:** [.claude/PERSONA_GUIDELINES.md](.claude/PERSONA_GUIDELINES.md)
+**Full documentation:** [.claude/skills/INDEX.md](.claude/skills/INDEX.md) (12 skills, 7 agents) | **Personas:** [.claude/PERSONA_GUIDELINES.md](.claude/PERSONA_GUIDELINES.md)
 
 ### Parallel Work: Agent Teams vs Subagents
 
@@ -226,6 +250,37 @@ JMo Security includes agents, skills, and an MCP server for AI-assisted developm
 **Decision rule:** If teammates need to communicate findings with each other or coordinate across file boundaries, use agent teams. If work can be fire-and-forget with results reported back, use subagents.
 
 > Agent teams require `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in settings.json (experimental).
+
+### Optional: local knowledge graph (not shipped)
+
+Unlike everything else in this section, this is **maintainer-local and absent
+from a clone**. It is recorded here because a session that has it should use it,
+and because the Windows setup has a trap worth writing down once.
+
+[Graphify](https://github.com/Graphify-Labs/graphify) (`pip`/`uv` package
+`graphifyy`) indexes the repo into a queryable graph under `graphify-out/`,
+which is gitignored. Deterministic AST parsing — no LLM, no API cost. A git
+`post-commit` hook rebuilds it incrementally.
+
+| Task | Command |
+|---|---|
+| Refresh after many commits | `graphify update .` |
+| Ask a structural question | `graphify query "what connects X to Y?"` |
+| Explain one symbol | `graphify explain "store_scan"` |
+| Path between two symbols | `graphify path "A" "B"` |
+
+Check freshness with the graph's own `built_at_commit` key, **not** the file
+mtime — clustering rewrites `graph.json` without re-extracting, so mtime reads
+fresher than the content is.
+
+**Windows trap.** The hook probes for an interpreter and gives up silently
+(`could not locate a Python with graphify installed`) when every probe fails.
+Under Git Bash all four can fail at once: a hook installed from WSL pins a
+`/home/...` path; MSYS strips `.exe` from `command -v graphify`, so the launcher
+is read as a shebang and rejected; and `graphify` lives in a uv-tool venv the
+default `python` cannot import. The fix is one gitignored file —
+`graphify-out/.graphify_python` containing the absolute interpreter path. The
+MCP server needs the extra: `uv tool install "graphifyy[mcp]"`.
 
 ## Architecture Overview
 
@@ -314,14 +369,25 @@ Detailed guidelines for specific parts of the codebase. These load automatically
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `default_profile` | string | Default scan profile (fast/balanced/deep) |
+| `default_profile` | string | Default scan profile (fast/slim/balanced/deep) |
 | `fail_on` | string | Severity threshold for CI failures |
 | `retries` | int | Retries for failed tool invocations |
 | `per_tool` | object | Per-tool configuration overrides |
 | `profiles` | object | Custom profile definitions with tool lists |
-| `email` | object | Email notification settings (SMTP, recipients) |
-| `schedule` | object | Scheduled scan configuration (cron expressions) |
+| `outputs` | object | Output/reporting settings |
+| `profiling` | object | Scan/report timing instrumentation |
+| `policy` | object | Policy-as-code settings |
 | `deduplication.similarity_threshold` | float | Cross-tool clustering threshold (0.5-1.0, default: 0.65) |
+
+> This table listed `email` ("Email notification settings (SMTP, recipients)")
+> and `schedule` ("Scheduled scan configuration (cron expressions)"). **Neither
+> key exists in `jmo.yml`, nothing under `scripts/` reads either, and there is
+> no SMTP anywhere in the product** — email goes through the Resend HTTP API
+> (`scripts/core/email_service.py`), and schedules live in
+> `~/.jmo/schedules.json`, managed by `jmo schedule`. Measured in chunk 17;
+> the "SMTP" wording had already propagated into a session handoff as a real
+> hazard to plan around. The keys above are the ones the shipped `jmo.yml`
+> actually has.
 
 See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for complete configuration reference.
 
@@ -329,10 +395,11 @@ See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for complete configuration referenc
 
 | Issue | Solution |
 |-------|----------|
-| Tests failing | `make test --maxfail=1`, check coverage ≥85% |
+| Tests failing | `make test` (already carries `--maxfail=1` via `TEST_FLAGS`). No local coverage gate exists — CI's floor is 80%, `ci.yml:734` (#756) |
 | Tool not found | `jmo tools check`, then `jmo tools install` |
 | Tool startup crash | `jmo tools clean --force && jmo tools install <tool>` |
 | Pre-commit fails | `make fmt`, `make lint` |
+| `No module named pytest` (or any dep) when the venv demonstrably has it | You are on a different interpreter. On Windows the venv is `.venv/Scripts/python.exe`, never `.venv/bin/python`, and `chmod +x` is a no-op there — so `[ -x .venv/bin/python ]` is false *whatever* exists, and PATH `python3` wins. On a box with other tooling installed that is somebody else's venv. Invoke `.venv/Scripts/python.exe -m pytest` (or `uv run pytest`, which resolves the project venv on every platform — note it syncs against `uv.lock` first, so it may change your env). `Makefile:6` probes both layouts as of #722. |
 | `uv.lock needs to be updated, but --check was provided` | Deps changed in `pyproject.toml` without relocking. `make deps-lock && git add uv.lock`. Local `uv sync` refreshes a stale lock silently; CI and pre-commit hard-fail — that asymmetry is deliberate |
 | CI failures | Check matrix tests, coverage, pre-commit |
 | SQLite locked | `jmo history optimize` (runs VACUUM + ANALYZE; there is no `vacuum` subcommand) |
@@ -381,7 +448,7 @@ Key takeaways now embedded in path-scoped rules:
 
 **Features:** [docs/PROFILES_AND_TOOLS.md](docs/PROFILES_AND_TOOLS.md) | [docs/VERSION_MANAGEMENT.md](docs/VERSION_MANAGEMENT.md) | [docs/DOCKER_README.md](docs/DOCKER_README.md) | [docs/RESULTS_GUIDE.md](docs/RESULTS_GUIDE.md)
 
-**Operations:** [docs/RELEASE.md](docs/RELEASE.md) | [docs/SCHEDULE_GUIDE.md](docs/SCHEDULE_GUIDE.md) | [docs/POLICY_AS_CODE.md](docs/POLICY_AS_CODE.md)
+**Operations:** [docs/RELEASE.md](docs/RELEASE.md) | [docs/SCHEDULE_GUIDE.md](docs/SCHEDULE_GUIDE.md) | [docs/POLICY_AS_CODE.md](docs/POLICY_AS_CODE.md) | [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md)
 
 **Internal (Dev-Only):** `dev-only/` - Plans, archive, and internal documentation (not published)
 

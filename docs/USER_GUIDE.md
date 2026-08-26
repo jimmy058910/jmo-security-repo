@@ -1305,7 +1305,7 @@ jmo adapters validate ~/.jmo/adapters/custom_tool_adapter.py
 1. `~/.jmo/adapters/` - User plugins (highest priority)
 2. `scripts/core/adapters/` - Built-in plugins
 
-**Complete Guide:** [CONTRIBUTING.md — Adding Tool Adapters](../CONTRIBUTING.md#adding-tool-adapters)
+**Complete Guide:** [CONTRIBUTING.md — Adding Tool Adapters](../CONTRIBUTING.md#adding-tool-adapters-plugin-system)
 
 ## Schedule Management
 
@@ -1697,28 +1697,64 @@ suppressions:
     reason: "False positive: package is only used by a non-deployed fixture"
     expires: "<FUTURE_DATE>"
 
-  # Suppress another exact finding fingerprint without an expiration.
-  - id: "9f8e7d6c5b4a3210"
-    reason: "Accepted risk: demo fixture is never executed in production"
+  # Suppress everything under a path (glob).
+  - path: ".venv/*"
+    reason: "Third-party dependencies, vetted and not deployed"
+
+  # Suppress one rule everywhere it fires.
+  - ruleId: "B101"
+    reason: "pytest uses assert statements by design"
+
+  # Selectors combine with AND: this matches only these two lines,
+  # of this rule, in this file.
+  - path: ".github/workflows/e2e-comprehensive-tests.yml"
+    ruleId: "*run-shell-injection*"
+    line: [74, 86]
+    reason: "Read-only display of commit messages in CI logs"
 ```
 
-Current behavior is exact `id` matching only. `load_suppressions()` parses the
-`id`, `reason`, and optional `expires` fields, and `filter_suppressed()` removes
-active findings whose `id` exactly matches a suppression entry. Fields such as
-`path`, `ruleId`, `line`, and `severity` are not currently supported as
-selectors. Suppression by path or rule is tracked as a future enhancement
-(see issue #538).
+### Selectors
 
-Use the narrowest supported entry that fits:
+An entry needs **at least one** selector. When it declares several, a finding
+must satisfy **all** of them.
 
-- Copy the exact finding `id` from JSON, SARIF, or dashboard output.
-- Keep one suppression entry per reviewed finding fingerprint.
-- Keep `expires` on accepted-risk or temporary suppressions.
+| Key | Matches against | Form |
+|---|---|---|
+| `id` | the 16-char finding fingerprint | exact |
+| `path` | `location.path` | glob |
+| `ruleId` | the tool's rule identifier | glob |
+| `severity` | `CRITICAL`/`HIGH`/`MEDIUM`/`LOW`/`INFO` | exact, case-insensitive |
+| `line` | `location.startLine` | an integer, or a list of them |
+
+Plus `reason` (always write one) and optional `expires: YYYY-MM-DD`.
+
+Two behaviours are worth knowing before you write a pattern:
+
+- **`path` matches at any depth.** Tools report the same file inconsistently —
+  relative, absolute, and with either separator — so a pattern is compared
+  against the path and against each of its directory-boundary suffixes.
+  `iac/*` therefore matches `iac/main.tf`, `repo\iac\main.tf` and
+  `/home/ci/repo/iac/main.tf` alike, but not `my-iac/main.tf`. Matching is
+  **case-sensitive on every platform**, so a config behaves the same on your
+  machine as in CI.
+- **Rule identifiers differ sharply between tools.** bandit emits `B101`,
+  checkov `CKV_AWS_23`, horusec a UUID, and semgrep a long dotted path such as
+  `yaml.github-actions.security.run-shell-injection.run-shell-injection`. Use a
+  glob (`*run-shell-injection*`) unless you copied an exact id out of a report.
+
+An entry that declares **no** selector, or that uses a key JMo does not
+recognise, is reported at `WARNING` and ignored — it is never silently dropped.
+A `jmo.suppress.yml` that cannot be parsed is reported at `ERROR` and **no**
+suppressions are applied, so a broken config shows more findings, never fewer.
+
+Prefer the narrowest entry that fits: an `id` for a single reviewed finding, a
+`path` for a directory that is out of scope, and `expires` on anything you
+intend to revisit.
 
 Behavior:
 
 - Active suppressions remove matching findings from outputs.
-- A suppression summary (`SUPPRESSIONS.md`) is written alongside summaries listing the filtered IDs.
+- A suppression summary (`SUPPRESSIONS.md`) is written alongside summaries listing the filtered IDs and the rule that caught each one.
 - The tool automatically detects which key (`suppressions` or `suppress`) is present in your config.
 
 For dashboard-based triage, use the [HTML dashboard triage workflow](#6-triage-workflow):
@@ -1962,7 +1998,7 @@ Export findings to spreadsheet-friendly CSV format for Excel, Google Sheets, or 
 | `message` | Finding description |
 | `tool` | Primary detecting tool |
 | `detected_by` | All tools that detected this finding (for consensus findings) |
-| `triaged` | YES/NO - Has an active suppression rule in `jmo.suppress.yml` |
+| `triaged` | YES/NO - A suppression rule matches this finding but has EXPIRED |
 
 **Example Output:**
 
@@ -1975,7 +2011,14 @@ priority,kev,epss,severity,ruleId,path,line,message,tool,detected_by,triaged
 
 **Triage Status Integration:**
 
-The `triaged` column shows "YES" when a finding has an active suppression rule in `jmo.suppress.yml`:
+The `triaged` column shows "YES" when a suppression rule in `jmo.suppress.yml`
+matches the finding but has **expired** -- it was triaged, and that decision has
+lapsed, so the finding is back in the report.
+
+> It cannot mean "has an *active* rule", which is what this section used to say.
+> An active rule removes the finding from the report entirely, so such a row can
+> never appear in the CSV -- measured on a real scan, every one of 242 rows read
+> `NO` (#857).
 
 ```yaml
 # jmo.suppress.yml
@@ -2069,8 +2112,8 @@ jmo mcp-server --results-dir ./results
 | Tool | Purpose |
 |------|---------|
 | `get_security_findings` | Query findings with filters |
-| `apply_fix` | Apply AI-suggested remediation |
-| `mark_resolved` | Track remediation status |
+| `apply_fix` | **Preview** AI-suggested remediation (applying is not implemented) |
+| `mark_resolved` | Record a resolution as an expiring `jmo.suppress.yml` entry |
 | `get_server_info` | Server status and metadata |
 
 **Complete Guide:** [MCP_SETUP.md](MCP_SETUP.md)
@@ -2817,7 +2860,7 @@ Common failure modes in `.github/workflows/tests.yml` and how to fix them:
   - Fix locally: `make pre-commit-run` or run individual hooks. Config lives in `.pre-commit-config.yaml`; YAML rules in `.yamllint.yaml`; ruff/black use defaults in this repo. Docs: <https://pre-commit.com/>
 
 - Test coverage threshold not met
-  - Symptom: Tests pass, but `--cov-fail-under=85` fails the job.
+  - Symptom: Tests pass, but the coverage job fails with `Coverage N% is below 80% CI threshold` (`.github/workflows/ci.yml:734` — the only enforced floor).
   - Fix locally: run `pytest -q --maxfail=1 --disable-warnings --cov=. --cov-report=term-missing` to identify gaps, then add tests. High‑leverage areas include adapters' malformed/empty JSON handling and reporters' edge cases. Pytest‑cov docs: <https://pytest-cov.readthedocs.io/>
 
 - Codecov upload warnings (tokenless OIDC)

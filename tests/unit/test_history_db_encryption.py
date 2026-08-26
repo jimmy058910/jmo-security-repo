@@ -62,7 +62,27 @@ class TestRawFindingEncryption:
 
         # Assert: Original secret NOT present in encrypted data
         assert "ghp_1234567890abcdef" not in encrypted
-        assert "Raw" not in encrypted  # Field names also encrypted
+
+        # Assert: field name is not recoverable either. A bare "Raw" is only
+        # 3 chars, and `encrypted` is a Fernet token -- random base64 over a
+        # 64-char alphabet with a fresh IV each call -- so a 3-char needle
+        # collides by chance (measured: 137/200000 = 1 run in ~1460, #800).
+        # The field-name-plus-value substring is long enough that it cannot
+        # collide by chance.
+        assert '"Raw": "ghp_1234567890abcdef"' not in encrypted
+
+        # Assert: the ciphertext carries no parseable structure at all. This
+        # holds unconditionally, not by low probability: every Fernet token
+        # starts with the fixed version byte 0x80, which base64-encodes to
+        # 'g' -- never a valid JSON start character (see the module
+        # docstring example: `encrypted.startswith("gAAAAA")`).
+        with pytest.raises(json.JSONDecodeError):
+            json.loads(encrypted)
+
+        # Assert: round-trip recovers the original plaintext exactly -- the
+        # property actually worth holding (decryption works), rather than
+        # "the ciphertext doesn't superficially resemble the input".
+        assert decrypt_raw_finding(encrypted) == raw_json
 
         # Cleanup
         del os.environ["JMO_ENCRYPTION_KEY"]

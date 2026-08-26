@@ -490,7 +490,7 @@ Some tools require manual installation due to complex dependencies or platform-s
 
 The following tools have special requirements on Windows that prevent automatic installation:
 
-#### Prowler (Windows) {#prowler-windows}
+#### Prowler (Windows)
 
 **Issue:** Prowler installation on Windows fails due to long path limitations (>260 characters). The AWS SDK and its dependencies create deeply nested paths that exceed Windows' default MAX_PATH limit.
 
@@ -529,7 +529,7 @@ pip install prowler
 docker run -v "$PWD:/scan" ghcr.io/jimmy058910/jmo-security:balanced scan --profile balanced
 ```
 
-#### Lynis (Windows) {#lynis-windows}
+#### Lynis (Windows)
 
 **Issue:** Lynis is a shell script that requires a Unix shell (bash) to run. It cannot run natively on Windows without a Unix-like environment.
 
@@ -571,10 +571,10 @@ docker run -v "$PWD:/scan" ghcr.io/jimmy058910/jmo-security:balanced scan --prof
 
 | Variant | Docker-Ready | Manual Tools |
 |---------|--------------|--------------|
-| **Deep/Full** | 25 | 3 (MobSF, Akto, AFL++) |
-| **Balanced** | 18 | 0 |
-| **Slim** | 14 | 0 |
-| **Fast** | 8 | 0 |
+| **Deep/Full** | 24 | 4 (AFL++, Akto, Falco, MobSF) |
+| **Balanced** | 17 | 0 |
+| **Slim** | 13 | 0 |
+| **Fast** | 9 | 0 |
 
 ### AFL++ Installation (Fuzzing)
 

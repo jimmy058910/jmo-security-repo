@@ -43,6 +43,11 @@ from scripts.core.plugin_api import (
 # Configure logging
 logger = logging.getLogger(__name__)
 
+# Distinguishes "the file could not be parsed" from "the file contained
+# literal `null`". Both surface as None with `default=None`, and only the
+# former is a load failure.
+_UNREADABLE = object()
+
 
 @adapter_plugin(
     PluginMetadata(
@@ -154,15 +159,46 @@ def _iter_prowler_records(path: str | Path) -> list[dict[str, Any]]:
     Both are accepted, because the file on disk may predate the change: NDJSON
     is detected by the flat key, OCSF by `class_uid`/`finding_info`.
     """
-    records = list(safe_load_ndjson_file(path))
-    if records and any("CheckID" in r for r in records if isinstance(r, dict)):
-        return [r for r in records if isinstance(r, dict)]
+    # `log_errors=False` for the same reason the JSON call below carries it:
+    # this is the **first of two format probes**, not a load. Prowler 5.x
+    # normally writes a JSON array, which reaches the line-by-line fallback and
+    # fails every line -- so letting this report would fire on every healthy
+    # prowler scan. Both probes are therefore silent, and the "neither format
+    # matched" case is reported once, below, where it can be stated accurately.
+    records = list(safe_load_ndjson_file(path, log_errors=False))
+    dict_records = [r for r in records if isinstance(r, dict)]
+    if any("CheckID" in r for r in dict_records):
+        return dict_records
 
-    data = safe_load_json_file(path, default=None)
+    # OCSF records delivered one-per-line. A real shape that was recognised by
+    # neither branch: the `CheckID` test above does not match them, and the
+    # JSON-array probe below cannot parse a multi-line file at all, so they
+    # fell through and were returned unconverted -- then dropped downstream for
+    # having no `CheckID`. Converting here is what the array branch already
+    # does for the same records in a different container.
+    ndjson_ocsf = [r for r in dict_records if "finding_info" in r or "class_uid" in r]
+    if ndjson_ocsf:
+        return [_ocsf_to_native(r) for r in ndjson_ocsf]
+
+    # `log_errors=False` because this call is **speculative**: NDJSON has already
+    # been tried above, and this is the second of two formats being probed. A
+    # genuine multi-line NDJSON file is not valid JSON, so letting this warn
+    # would fire on every prowler scan of that shape -- the always-fires warning
+    # that #784 was about. The caller decides whether a parse failure is news;
+    # that is what `log_errors` is for, and this is its first real use.
+    # A sentinel, not `None`: `safe_load_json_file` returns the default when the
+    # file cannot be parsed, and a file containing literal `null` decodes *to*
+    # None -- with `default=None` those two are indistinguishable, and only one
+    # of them is a failure worth reporting.
+    data = safe_load_json_file(path, default=_UNREADABLE, log_errors=False)
+    if data is _UNREADABLE:
+        return _neither_format_matched(path, records, "could not be parsed as JSON")
     if isinstance(data, dict):
         data = [data]
     if not isinstance(data, list):
-        return [r for r in records if isinstance(r, dict)]
+        return _neither_format_matched(
+            path, records, f"parsed as {type(data).__name__}, not an object or array"
+        )
 
     ocsf = [
         r
@@ -171,6 +207,52 @@ def _iter_prowler_records(path: str | Path) -> list[dict[str, Any]]:
     ]
     if ocsf:
         return [_ocsf_to_native(r) for r in ocsf]
+
+    # An empty array -- or an array of empty objects -- is prowler saying "no
+    # findings", which is the most common healthy outcome and must stay quiet.
+    # Only a payload that actually *carries* something while matching neither
+    # format is news. Asserting that positive shape matters: the first version
+    # of this guard tested for the ABSENCE of OCSF markers, which an empty
+    # result lacks just as thoroughly as a corrupt one, so it fired on every
+    # clean scan.
+    if not any(isinstance(r, dict) and r for r in data):
+        return [r for r in records if isinstance(r, dict)]
+
+    return _neither_format_matched(
+        path, records, f"carried {len(data)} record(s) matching neither format"
+    )
+
+
+def _neither_format_matched(
+    path: str | Path, records: list[Any], reason: str
+) -> list[dict[str, Any]]:
+    """Report a prowler file that matched neither accepted format.
+
+    Both probes above run with `log_errors=False`, which is correct -- each
+    fails routinely when the *other* format is the one on disk. But that means
+    nothing reports the case where **both** fail, which is a real failure and
+    used to be completely silent. Stating it here is the only place the
+    distinction is known.
+
+    Salvages whatever dicts the NDJSON probe did recover, preserving the prior
+    return value exactly; this adds the diagnostic, not a behaviour change.
+
+    Warns unconditionally. Suppressing it when the NDJSON probe salvaged
+    something looked reasonable and was wrong: this function is only reached
+    once those records are known to carry no `CheckID`, so they are junk that
+    `_load_prowler_internal` discards anyway. Measured -- with the suppression
+    in place, `[{"totally":"unexpected"}]` produced 0 findings and 0 warnings.
+    Every genuinely healthy shape returns before reaching here: findings via
+    `CheckID` or OCSF, and a legitimately empty result via the emptiness guard
+    in `_iter_prowler_records`.
+    """
+    logger.warning(
+        "%s matched neither prowler format (no NDJSON `CheckID` records, no "
+        "OCSF `class_uid`/`finding_info` records): it %s - any findings it "
+        "contained are MISSING from this report",
+        path,
+        reason,
+    )
     return [r for r in records if isinstance(r, dict)]
 
 

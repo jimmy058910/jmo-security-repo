@@ -1,13 +1,23 @@
 # JMo Security Suppression Configuration
 # Suppress findings to reduce false positives and focus on actionable issues
 #
-# Suppression Types:
-# - By fingerprint ID (specific finding)
-# - By path pattern (glob matching)
-# - By rule ID (all instances of a rule)
-# - By severity level
+# Selectors (an entry needs at least one; an entry with several matches only
+# findings that satisfy ALL of them):
+#   id       exact 16-char finding fingerprint, from JSON/SARIF/dashboard
+#   path     glob against the file path (matches at any directory depth)
+#   ruleId   glob against the tool's rule identifier
+#   severity CRITICAL | HIGH | MEDIUM | LOW | INFO (case-insensitive)
+#   line     a line number, or a list of them
 #
-# See: https://jmotools.com/docs/suppressions
+# Plus `reason` (always include one) and optional `expires: YYYY-MM-DD`.
+# An entry using any other key, or no selector at all, is reported at WARNING
+# and ignored -- it is never silently dropped.
+#
+# Rule identifiers differ sharply between tools: bandit emits `B101`, checkov
+# `CKV_AWS_23`, horusec a UUID, and semgrep a long dotted path. Use a glob
+# unless you have copied the exact id out of a report.
+#
+# See: docs/USER_GUIDE.md#handling-false-positives
 
 suppressions:
   # =============================================================================
@@ -43,8 +53,10 @@ suppressions:
   # =============================================================================
   # Example credentials and code snippets in documentation are not security risks.
 
+  # Globbed: semgrep reports this as a long dotted rule path ending in the
+  # rule name, so an exact match on the name alone would never fire.
   - path: "docs/archive/*"
-    ruleId: "detected-aws-access-key-id-value"
+    ruleId: "*detected-aws-access-key-id-value*"
     reason: "Example credentials in archived documentation drafts (not real keys)"
 
   - path: "docs/archive/*"
@@ -57,8 +69,10 @@ suppressions:
   # Echo statements in CI logs are read-only operations with minimal risk.
   # Semgrep flags any github.* context interpolation as high risk by default.
 
+  # Measured: semgrep emits this as
+  # yaml.github-actions.security.run-shell-injection.run-shell-injection
   - path: ".github/workflows/e2e-comprehensive-tests.yml"
-    ruleId: "run-shell-injection"
+    ruleId: "*run-shell-injection*"
     line: [74, 86]
     reason: "Read-only display of commit messages in CI logs (sandboxed environment)"
 

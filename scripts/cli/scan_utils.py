@@ -8,10 +8,9 @@ from __future__ import annotations
 
 import json
 import logging
-import subprocess  # nosec B404: imported for controlled, vetted CLI invocations
-import time
+from collections.abc import Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 # Re-export from core for backward compatibility.
 # find_tool/tool_exists live in scripts.core.tool_utils to maintain clean
@@ -258,6 +257,164 @@ def report_tool_failure(result: ToolResult, reason: str) -> None:
     )
 
 
+# jmo.yml configures flags per *tool*, but trivy's flag surface is per
+# *subcommand*, and JMo drives trivy with four of them (fs, image, config, k8s).
+# Measured against trivy 0.70.0: `trivy config` is the only one that rejects
+# --no-progress, and it rejects it fatally at argument parsing - so every IaC
+# scan died before it started and contributed nothing. All four shipped profiles
+# set that flag, so no profile escaped it.
+#
+# Only value-less flags belong here: dropping one must never orphan a value
+# argument. --scanners is accepted by all four subcommands and is not listed.
+TRIVY_UNSUPPORTED_FLAGS: dict[str, frozenset[str]] = {
+    "config": frozenset({"--no-progress"}),
+}
+
+
+# Per-tool minimum timeouts (seconds) for tools that typically run long. A
+# profile default may raise these but never lower them.
+#
+# Lived in repository_scanner.py, which is why only *repository* scans honoured
+# it: the other four scanners had their own copy of `get_tool_timeout` with no
+# floor at all. Measured consequence: `zap` carries a 900 s floor and also runs
+# on `url` targets, so a `balanced` URL scan gave it the profile's 600 s -- 300 s
+# short, a third of its budget -- while the identical tool on a repository
+# target got 900 s. Shared here so one definition reaches every target type.
+TOOL_TIMEOUT_DEFAULTS: dict[str, int] = {
+    "cdxgen": 600,  # 10 min - with --no-install-deps optimization (was 30 min)
+    "dependency-check": 1200,  # 20 min - NVD database sync can take a while
+    "scancode": 1200,  # 20 min - license scanning large codebases
+    "horusec": 900,  # 15 min - multi-language SAST
+    "zap": 900,  # 15 min - DAST scanning
+    "prowler": 600,  # 10 min - cloud config scanning
+}
+
+
+# Flags JMo passes itself to control **where a tool writes and in what format**.
+# The adapter contract depends on both: `normalize_and_report` globs for a file
+# at a path JMo chose and parses it as JSON.
+#
+# A `per_tool.<tool>.flags` entry repeating one of these wins, because JMo splices
+# user flags in *after* its own and a scalar flag is last-one-wins. The tool then
+# writes something the adapter cannot read, the file exists so the run grades as
+# success, and the findings are gone. Measured on #822: `flags: ["-f","table"]`
+# took a trivy target from **2 findings to 0**, `rc=0`, nothing on any stream.
+#
+# Derived from what the scanners actually pass rather than guessed:
+#     git grep -oE '"(-o|--output|-f|--format|...)"' scripts/cli/scan_jobs/
+#
+# Deliberately narrow. Repeatable flags are **not** listed: `--scanners` unions
+# rather than replaces (measured against trivy 0.70.0), and dropping a legitimate
+# repeated `--exclude` would break working configs. Only the flags that decide
+# whether the output is readable at all belong here.
+RESERVED_OUTPUT_FLAGS: frozenset[str] = frozenset(
+    {
+        "-o",
+        "--output",
+        "--out",
+        "--output-filename",
+        "-f",
+        "--format",
+        "--output-formats",
+    }
+)
+
+
+def tool_timeout(per_tool_config: Mapping[str, Any], tool: str, default: int) -> int:
+    """Resolve one tool's timeout.
+
+    Precedence: an explicit `per_tool.<tool>.timeout` wins outright; otherwise
+    the profile default, raised to `TOOL_TIMEOUT_DEFAULTS` if the tool has a
+    floor.
+
+    Shared by all five scanners. It used to be copied into each, and only
+    `repository_scanner`'s copy applied the floor.
+    """
+    tool_cfg = per_tool_config.get(tool, {})
+    if isinstance(tool_cfg, dict):
+        override = tool_cfg.get("timeout")
+        if isinstance(override, int) and override > 0:
+            return override
+    return max(default, TOOL_TIMEOUT_DEFAULTS.get(tool, 0))
+
+
+def tool_flags(per_tool_config: Mapping[str, Any], tool: str) -> list[str]:
+    """Return a tool's configured extra flags, minus any JMo must own.
+
+    Shared by all five scanners, which each carried an identical copy that did
+    no filtering.
+
+    A dropped flag takes its **value** with it. Removing only the flag from
+    `["-f", "table"]` would leave a bare `table` in the argv, and trivy reads a
+    bare word as a scan target -- strictly worse than the collision being
+    fixed. `--format=json` is handled too, since there the value is not a
+    separate token.
+    """
+    tool_cfg = per_tool_config.get(tool, {})
+    if not isinstance(tool_cfg, dict):
+        return []
+    raw = tool_cfg.get("flags", [])
+    if not isinstance(raw, list):
+        return []
+    flags = [str(f) for f in raw]
+
+    kept: list[str] = []
+    dropped: list[str] = []
+    i = 0
+    while i < len(flags):
+        token = flags[i]
+        if token.split("=", 1)[0] not in RESERVED_OUTPUT_FLAGS:
+            kept.append(token)
+            i += 1
+            continue
+
+        dropped.append(token)
+        # `--format=json` carries its value inline; `-f json` does not. Only
+        # consume a following token when it is a value rather than the next flag.
+        if "=" not in token and i + 1 < len(flags) and not flags[i + 1].startswith("-"):
+            dropped.append(flags[i + 1])
+            i += 1
+        i += 1
+
+    if dropped:
+        logging.getLogger(__name__).warning(
+            "Ignoring %s flag(s) for %s that JMo must control -- they decide "
+            "where it writes and in what format, and the report phase cannot "
+            "read the output otherwise: %s",
+            len(dropped),
+            tool,
+            " ".join(dropped),
+        )
+    return kept
+
+
+def filter_trivy_flags(subcommand: str, flags: list[str]) -> list[str]:
+    """Drop configured trivy flags that ``subcommand`` does not accept.
+
+    Args:
+        subcommand: The trivy subcommand being invoked ("config", "fs", ...).
+        flags: Flags from per-tool configuration.
+
+    Returns:
+        The flags the subcommand actually accepts.
+    """
+    unsupported = TRIVY_UNSUPPORTED_FLAGS.get(subcommand)
+    if not unsupported:
+        return list(flags)
+
+    kept = [f for f in flags if f not in unsupported]
+    dropped = [f for f in flags if f in unsupported]
+    if dropped:
+        logging.getLogger(__name__).warning(
+            "trivy %s does not accept %s; dropping so the scan can run. "
+            "Configure it under a profile that does not reach this subcommand "
+            "if you need it.",
+            subcommand,
+            ", ".join(dropped),
+        )
+    return kept
+
+
 def write_stub(tool: str, out_path: Path) -> None:
     """Write empty JSON stub for missing tool."""
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -273,7 +430,6 @@ def write_stub(tool: str, out_path: Path) -> None:
         "checkov": {"results": {"failed_checks": []}},
         "tfsec": {"results": []},
         "bandit": {"results": []},
-        "osv-scanner": {"results": []},
         "zap": {"site": []},
         "nuclei": "",  # NDJSON format - empty string for empty file
         "falco": [],
@@ -286,77 +442,3 @@ def write_stub(tool: str, out_path: Path) -> None:
     else:
         # For JSON tools, write JSON-encoded stub
         out_path.write_text(json.dumps(payload), encoding="utf-8")
-
-
-def run_cmd(
-    cmd: list[str],
-    timeout: int,
-    retries: int = 0,
-    capture_stdout: bool = False,
-    ok_rcs: tuple[int, ...] | None = None,
-) -> tuple[int, str, str, int]:
-    """Run a command with timeout and optional retries.
-
-    Args:
-        cmd: Command and arguments as list
-        timeout: Command timeout in seconds
-        retries: Number of retry attempts (default: 0)
-        capture_stdout: Whether to capture stdout (default: False)
-        ok_rcs: Tuple of acceptable return codes (default: (0,))
-
-    Returns:
-        Tuple of (returncode, stdout, stderr, used_attempts)
-        - stdout is empty when capture_stdout=False
-        - used_attempts is how many tries were made
-    """
-    logger = logging.getLogger(__name__)
-    attempts = max(0, retries) + 1
-    used_attempts = 0
-    last_exc: Exception | None = None
-    rc = 1
-
-    for i in range(attempts):
-        used_attempts = i + 1
-        try:
-            cp = subprocess.run(  # nosec B603: executing fixed CLI tools, no shell, args vetted
-                cmd,
-                stdout=subprocess.PIPE if capture_stdout else subprocess.DEVNULL,
-                stderr=subprocess.PIPE,
-                text=True,
-                timeout=timeout,
-            )
-            rc = cp.returncode
-            success = (rc == 0) if ok_rcs is None else (rc in ok_rcs)
-            if success or i == attempts - 1:
-                return (
-                    rc,
-                    (cp.stdout or "") if capture_stdout else "",
-                    (cp.stderr or ""),
-                    used_attempts,
-                )
-            time.sleep(min(1.0 * (i + 1), 3.0))
-            continue
-        except subprocess.TimeoutExpired as e:
-            last_exc = e
-            rc = 124
-        except subprocess.CalledProcessError as e:
-            # Command failed with non-zero exit code
-            last_exc = e
-            rc = e.returncode
-            logger.debug(f"Command failed with exit code {e.returncode}: {e}")
-        except (OSError, FileNotFoundError, PermissionError) as e:
-            # System errors (command not found, permissions, etc.)
-            last_exc = e
-            rc = 1
-            logger.error(f"Command execution error: {e}")
-        except Exception as e:
-            # Unexpected errors
-            last_exc = e
-            rc = 1
-            logger.error(f"Unexpected command execution error: {e}", exc_info=True)
-
-        if i < attempts - 1:
-            time.sleep(min(1.0 * (i + 1), 3.0))
-            continue
-
-    return rc, "", str(last_exc or ""), used_attempts or 1

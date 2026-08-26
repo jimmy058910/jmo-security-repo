@@ -139,7 +139,33 @@ args: ['echo pwned > /tmp/yaml-pwned.txt']
         test_env = os.environ.copy()
         test_env["CI"] = "true"
 
-        # Test with absurdly large timeout value
+        # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933),
+        # which resolves Path.home() with no injection point, and the report
+        # phase defaults history storage to the real .jmo/history.db (#802).
+        # Redirect both via the env vars Path.home() actually reads
+        # (ntpath.expanduser / posixpath.expanduser). A *separate* directory
+        # from --repo below, not tmp_path itself, so the fake home does not
+        # nest inside the scan's own target.
+        fake_home = tmp_path / "fake_home"
+        fake_home.mkdir()
+        test_env["USERPROFILE"] = str(fake_home)
+        test_env["HOME"] = str(fake_home)
+
+        # Test with absurdly large timeout value.
+        #
+        # `--tools`/`--allow-missing-tools` bound the work to one scanner. This
+        # test asserts the CLI does not crash on a huge integer; it does not
+        # need a full profile to prove that, and running one made its runtime a
+        # function of how many scanners the developer happens to have installed
+        # (#748). CI installs none, so the scan found nothing to run and
+        # returned in seconds -- it passed there for releases while failing on
+        # any machine with real tools.
+        #
+        # Measured on a box with 8 scanners in ~/.jmo/bin: the unbounded form
+        # exceeded 45s (the 30s cap below could never be met), redirecting HOME
+        # so no tools resolve still took 26s against that 30s cap, and this
+        # bounded form takes 12s. Only the last one is independent of the
+        # machine it runs on.
         result = subprocess.run(
             [
                 sys.executable,
@@ -147,12 +173,20 @@ args: ['echo pwned > /tmp/yaml-pwned.txt']
                 "scan",
                 "--repo",
                 str(tmp_path),
+                "--tools",
+                "trufflehog",
+                "--allow-missing-tools",
                 "--timeout",
                 "999999999999999",  # Absurdly large
+                # Irrelevant to what this test checks, and avoids the real
+                # .jmo/history.db (#802) -- the HOME redirect above only
+                # covers _show_kofi_reminder()'s separate real-state write
+                # (#933), not this one.
+                "--no-store-history",
             ],
             capture_output=True,
             text=True,
-            timeout=30,  # Increased from 5s for slower systems
+            timeout=60,
             env=test_env,
         )
 

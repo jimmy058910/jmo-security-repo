@@ -12,13 +12,21 @@ Integrates with ToolRunner for execution management.
 from __future__ import annotations
 
 import re
+import time
 from collections.abc import Callable
 from pathlib import Path
 from urllib.parse import urlparse
 
 from ...core.config import RetryConfig
+from ...core.scan_timings import write_scan_timings
 from ...core.tool_runner import ToolDefinition, ToolRunner
-from ..scan_utils import find_tool, report_tool_failure, write_stub
+from ..scan_utils import (
+    find_tool,
+    report_tool_failure,
+    tool_flags,
+    tool_timeout,
+    write_stub,
+)
 
 
 def scan_url(
@@ -74,22 +82,24 @@ def scan_url(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     def get_tool_timeout(tool: str, default: int) -> int:
-        """Get timeout override for specific tool."""
-        tool_cfg = per_tool_config.get(tool, {})
-        if isinstance(tool_cfg, dict):
-            override = tool_cfg.get("timeout")
-            if isinstance(override, int) and override > 0:
-                return override
-        return default
+        """Timeout for this tool, honouring the slow-tool floor.
+
+        Delegates to the shared implementation. This copy had no floor, so a
+        tool with a `TOOL_TIMEOUT_DEFAULTS` minimum got only the profile default
+        here while the same tool got its floor on a repository target -- `zap`
+        runs on both and is 300 s short on a `balanced` URL scan.
+        """
+        return tool_timeout(per_tool_config, tool, default)
 
     def get_tool_flags(tool: str) -> list[str]:
-        """Get additional flags for specific tool."""
-        tool_cfg = per_tool_config.get(tool, {})
-        if isinstance(tool_cfg, dict):
-            flags = tool_cfg.get("flags", [])
-            if isinstance(flags, list):
-                return [str(f) for f in flags]
-        return []
+        """Extra flags for this tool, minus any JMo must own.
+
+        Delegates to the shared implementation: this was one of five identical
+        copies, none of which filtered anything, so a `per_tool` flag could
+        override JMo's own `-f`/`-o` and silently destroy the tool's findings
+        (#822).
+        """
+        return tool_flags(per_tool_config, tool)
 
     # ZAP scan for web URLs
     if "zap" in tools:
@@ -199,7 +209,18 @@ def scan_url(
     runner = ToolRunner(
         tools=tool_defs,
     )
+    tools_started = time.perf_counter()
     results = runner.run_all_parallel()
+
+    # ToolRunner already timed and classified every invocation. Record that
+    # before the loop below reduces the results to booleans (#722).
+    write_scan_timings(
+        out_dir,
+        results,
+        target=safe_name,
+        target_type="url",
+        wall_seconds=time.perf_counter() - tools_started,
+    )
 
     # Process results
     attempts_map: dict[str, int] = {}
@@ -219,11 +240,35 @@ def scan_url(
             # FileNotFoundError at exec, and was recorded as a clean scan.
             statuses[result.tool] = False
             report_tool_failure(result, "its executable was not found at run time")
-        else:
-            # Other errors (timeout, non-zero exit, etc.)
+        elif result.timed_out:
+            # A timeout gets a stub so the report phase sees a consistent file
+            # tree -- but the stub must never be the only signal. Once read, an
+            # empty stub is indistinguishable from a tool that ran and found
+            # nothing, so the timeout has to be stated on the log or it is lost.
+            tool_out = out_dir / f"{result.tool}.json"
+            if not tool_out.exists():
+                _write_stub(result.tool, tool_out)
             statuses[result.tool] = False
             if result.attempts > 0:
                 attempts_map[result.tool] = result.attempts
+            report_tool_failure(result, "it timed out")
+        else:
+            # Other errors (non-zero exit, no output, etc.). This used to record
+            # False and return without logging anything at all, so a tool that
+            # failed contributed nothing to the scan and said so on no stream
+            # (#727). A non-TTY run renders no progress display, which makes the
+            # log the only durable record.
+            statuses[result.tool] = False
+            if result.attempts > 0:
+                attempts_map[result.tool] = result.attempts
+            report_tool_failure(
+                result,
+                (
+                    "it exited with an accepted code but wrote no output"
+                    if result.status == "no_output"
+                    else "it failed"
+                ),
+            )
 
     # Include attempts metadata if any retries occurred
     if attempts_map:

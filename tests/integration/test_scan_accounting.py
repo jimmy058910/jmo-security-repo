@@ -31,6 +31,7 @@ pinning that would pass here and fail in CI.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -117,7 +118,16 @@ SCAN_BUDGET_S = 420
 # the invariant total at 28; §11e's reference PASS run was configured the same
 # way for the same reason. The unbounded first sync is a known open issue
 # (it likely wants an NVD API key), not something this test should absorb.
-SKIP_TOOLS = ("dependency-check",)
+#
+# semgrep is excluded for the same reason, one layer earlier (#907): its
+# production default (`--config auto`) fetches its ruleset from semgrep.dev,
+# so on a machine where semgrep is genuinely on PATH this test spawned a
+# real, unmarked, network-blocking scan of its own -- and PER_TOOL_TIMEOUT_S
+# caps it mid-fetch, producing the exact output-vs-failed contradiction the
+# comment below warns a timeout manufactures. Skipping keeps semgrep an
+# accounted `skipped` state, same as dependency-check, without this test
+# depending on network access to pass.
+SKIP_TOOLS = ("dependency-check", "semgrep")
 
 # A capped-out tool is still *accounted* - `failed` is a state like any other,
 # and this test asserts the invariant, never the distribution. That is what
@@ -200,6 +210,19 @@ def test_deep_scan_accounts_for_every_declared_tool(tmp_path: Path) -> None:
             # take the Cancel branch and produce no results directory at all.
             stdin=subprocess.DEVNULL,
             timeout=SCAN_BUDGET_S,
+            # `--history-db` above redirects the scan's DB write, but
+            # `cmd_scan` also unconditionally calls `_show_kofi_reminder()`
+            # (#933), which resolves `Path.home()` with no injection point
+            # at all. Redirect it via the env vars Path.home() actually
+            # reads: USERPROFILE on Windows (ntpath.expanduser), HOME on
+            # Linux/macOS (posixpath.expanduser) -- each platform consults
+            # only its own var and ignores the other, so setting just one
+            # leaves the other platform's real config.yml exposed. This
+            # test previously set USERPROFILE alone, which protected the
+            # Windows box this fix was measured on and missed Linux CI
+            # entirely, where it wrote to the real /home/runner/.jmo/
+            # config.yml (#978 CI follow-up).
+            env={**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)},
         )
     except subprocess.TimeoutExpired as exc:
         # `capture_output=True` means the only copy of what the scan managed to

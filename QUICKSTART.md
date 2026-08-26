@@ -128,7 +128,7 @@ jmo scan --image nginx:latest --results-dir ./image-scan
 **CI mode (scan + gate on severity):**
 
 ```bash
-jmo ci --repo . --fail-on HIGH --profile balanced
+jmo ci --repo . --fail-on HIGH --profile-name balanced
 ```
 
 ---
@@ -226,9 +226,9 @@ jmo scan --repo . --image myapp:latest --url https://myapp.com
 | Feature | Guide |
 |---------|-------|
 | Tool management | [docs/USER_GUIDE.md#tool-management](docs/USER_GUIDE.md#tool-management) |
-| Compare scans | [docs/USER_GUIDE.md#jmo-diff](docs/USER_GUIDE.md#jmo-diff) |
-| Track trends | [docs/USER_GUIDE.md#jmo-trends](docs/USER_GUIDE.md#jmo-trends) |
-| Scan history | [docs/USER_GUIDE.md#jmo-history](docs/USER_GUIDE.md#jmo-history) |
+| Compare scans | [docs/USER_GUIDE.md#machine-readable-diffs](docs/USER_GUIDE.md#machine-readable-diffs) |
+| Track trends | [docs/USER_GUIDE.md#trend-analysis](docs/USER_GUIDE.md#trend-analysis) |
+| Scan history | [docs/USER_GUIDE.md#historical-storage](docs/USER_GUIDE.md#historical-storage) |
 | Scheduled scans | [docs/SCHEDULE_GUIDE.md](docs/SCHEDULE_GUIDE.md) |
 | AI remediation | [docs/MCP_SETUP.md](docs/MCP_SETUP.md) |
 | Policy-as-code | [docs/POLICY_AS_CODE.md](docs/POLICY_AS_CODE.md) |

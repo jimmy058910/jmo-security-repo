@@ -746,7 +746,7 @@ docker run --rm \
 
 **Docker Compose Example:**
 
-See [docker-compose.trends.yml](../docker-compose.trends.yml) for complete example with volume persistence and multi-stage workflows.
+See [docker-compose.trends.yml](examples/docker-compose.trends.yml) for complete example with volume persistence and multi-stage workflows.
 
 ---
 

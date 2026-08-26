@@ -62,7 +62,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@v10.0.1
         with:
           version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
           python-version: '3.12'  # preserves the pin actions/setup-python held
@@ -207,9 +207,18 @@ jobs:
           echo ""
           echo "Scanning for secrets..."
           set -euo pipefail
-          if ! trufflehog filesystem . --json --exclude-paths .trufflehog-exclude.txt \
-              --only-verified > trufflehog-results.json 2>trufflehog-stderr.txt; then
-            EXIT_CODE=$?
+          # Same `if ! cmd; then rc=$?` defect as validate-variants below: bash's
+          # `!` replaces $? with the negated status, so EXIT_CODE was always 0 and
+          # `exit 0` reported SUCCESS on a crashed scanner -- and terminated the
+          # step before the verified-secrets check ran. A fail-open on a secret
+          # scan. Found by sweeping for the pattern in chunk 21; fixed here rather
+          # than filed because it is the same two lines in the same file.
+          set +e
+          trufflehog filesystem . --json --exclude-paths .trufflehog-exclude.txt \
+              --only-verified > trufflehog-results.json 2>trufflehog-stderr.txt
+          EXIT_CODE=$?
+          set -e
+          if [ "$EXIT_CODE" -ne 0 ]; then
             echo "::error::TruffleHog exited with code ${EXIT_CODE}"
             cat trufflehog-stderr.txt >&2
             exit "${EXIT_CODE}"
@@ -256,7 +265,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@v10.0.1
         with:
           version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
           python-version: ${{ matrix.python-version }}
@@ -314,7 +323,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@v10.0.1
         with:
           version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
           python-version: '3.12'  # preserves the pin actions/setup-python held
@@ -424,7 +433,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@v10.0.1
         with:
           version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
           python-version: '3.12'  # preserves the pin actions/setup-python held
@@ -561,7 +570,7 @@ jobs:
           node-version: '22'
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@v10.0.1
         with:
           version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
           python-version: '3.12'  # preserves the pin actions/setup-python held
@@ -635,7 +644,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@v10.0.1
         with:
           version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
           python-version: '3.12'  # preserves the pin actions/setup-python held
@@ -726,10 +735,19 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: 'open',
-              labels: 'nightly-test-failure'
+              labels: 'nightly-test-failure',
+              sort: 'created',
+              direction: 'desc'
             });
 
-            const existingIssue = issues.data.find(issue => issue.title === title);
+            // Dedupe on the LABEL, not on a title carrying today's date (#966).
+            // A dated title can only ever match a re-run within the same UTC
+            // day, so the comment branch below could not fire across nights and
+            // one outage filed one issue per night: 14 open issues on
+            // 2026-08-22 all reported the identical `verified=163` failure.
+            // listForRepo also returns pull requests, which are never the
+            // tripwire's own issue.
+            const existingIssue = issues.data.find(issue => !issue.pull_request);
 
             if (!existingIssue) {
               await github.rest.issues.create({
@@ -766,7 +784,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@v10.0.1
         with:
           version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
           python-version: '3.12'  # preserves the pin actions/setup-python held
@@ -883,7 +901,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@v10.0.1
         with:
           version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
           python-version: '3.12'  # preserves the pin actions/setup-python held
@@ -908,9 +926,44 @@ jobs:
             echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           fi
 
-      - name: Install external security tools via Homebrew
+      - name: Install external security tools
         run: |
-          brew install semgrep trivy syft checkov hadolint || echo "Some tools failed"
+          set -euo pipefail
+
+          # checkov is pinned from versions.yaml AT RUNTIME, not copied into
+          # this file. Two separate defects made run 31241312938 report a
+          # green tick over a scanner that found nothing (#769):
+          #
+          #   1. Homebrew installs whatever bottle is current. It gave this job
+          #      checkov 3.3.0 against a versions.yaml pin of 3.3.8, and 3.3.0
+          #      returned zero findings on a deliberately vulnerable fixture.
+          #      A hardcoded pin here would only move the drift -- that is #747
+          #      (ci.yml said trufflehog 3.94.3, versions.yaml said 3.95.9).
+          #      Reading the source of truth leaves nowhere to forget.
+          #   2. `|| echo "Some tools failed"` made a scanner that never
+          #      installed indistinguishable from one that found nothing.
+          CHECKOV_VERSION="$(python3 -c \
+            "import yaml; print(yaml.safe_load(open('versions.yaml'))['python_tools']['checkov']['version'])")"
+          echo "checkov pin from versions.yaml: ${CHECKOV_VERSION}"
+          uv pip install "checkov==${CHECKOV_VERSION}"
+
+          # Binary tools have no per-version Homebrew formulae, so they stay
+          # unpinned -- but the install may no longer fail quietly. Pinning
+          # these too is a real remaining gap, tracked separately.
+          brew install semgrep trivy syft hadolint
+
+          missing=0
+          for t in checkov semgrep trivy syft hadolint; do
+            if command -v "$t" >/dev/null 2>&1; then
+              echo "  $t -> $(command -v "$t")"
+            else
+              echo "::error::$t did not install"
+              missing=1
+            fi
+          done
+          [[ "${missing}" -eq 0 ]] || exit 1
+
+          checkov --version
 
       - name: Run macOS test suite
         run: |
@@ -952,7 +1005,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@v10.0.1
         with:
           version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
           python-version: '3.12'  # preserves the pin actions/setup-python held
@@ -1049,7 +1102,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@v10.0.1
         with:
           version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
           python-version: '3.12'  # preserves the pin actions/setup-python held
@@ -1213,15 +1266,22 @@ jobs:
               "$1" "$2" 2>/dev/null || echo 0
           }
 
+          reports=0
+          total_failed=0
+          seen=""
+
           for report_file in test-results/*/pytest-report.json; do
             if [[ -f "$report_file" ]]; then
+              reports=$((reports + 1))
               job=$(dirname "$report_file" | xargs basename \
                 | sed 's/-results-.*//' | sed 's/e2e-//')
+              seen="${seen} ${job}"
 
               total=$(get_field "$report_file" total)
               passed=$(get_field "$report_file" passed)
               failed=$(get_field "$report_file" failed)
               skipped=$(get_field "$report_file" skipped)
+              total_failed=$((total_failed + failed))
 
               {
                 echo "### $job Results"
@@ -1235,6 +1295,11 @@ jobs:
           done
 
           cat summary.md
+          cat summary.md >> "$GITHUB_STEP_SUMMARY"
+
+          echo "E2E_REPORTS=$reports" >> "$GITHUB_ENV"
+          echo "E2E_TOTAL_FAILED=$total_failed" >> "$GITHUB_ENV"
+          echo "E2E_SEEN_SUITES=${seen}" >> "$GITHUB_ENV"
 
       - name: Upload summary
         uses: actions/upload-artifact@v7
@@ -1242,6 +1307,79 @@ jobs:
           name: e2e-test-summary-${{ github.run_id }}
           path: summary.md
           retention-days: 90
+
+      # e2e-ubuntu and e2e-macos run their pytest step under
+      # `continue-on-error: true` so that results and logs still upload when
+      # tests fail. The side effect was that a failing suite rendered as a
+      # green check: run 31241312938 had `2 failed` and an explicit
+      # "E2E Release Readiness: FAIL (89.5%)" in the macOS log while every job,
+      # and the run, reported success.
+      #
+      # Those two are also the only jobs that upload a pytest-report.json, so
+      # two reports -- not five -- is the expected count here. The other three
+      # e2e jobs (tool-integration, contract, visual) have no
+      # continue-on-error, so a failure in one of them already fails the run on
+      # its own and needs no gate.
+      #
+      # This step is the gate. It runs after the artifacts are safely uploaded,
+      # reads the same pytest-report.json files the summary above already
+      # parses, and is the only thing here allowed to fail the run.
+      #
+      # Absent evidence fails too: zero reports means the suites did not run,
+      # which must not be indistinguishable from a clean pass. That is the same
+      # mistake in a different costume.
+      #
+      # TODO(issue-772): partial absence is not caught yet -- one report when
+      # two are expected still passes. Tightening that needs a count that
+      # survives adding a sixth e2e job; see the issue for the options.
+      - name: Fail the run if any e2e test failed
+        env:
+          # The suites that upload a pytest-report.json -- which is exactly the
+          # set whose pytest step runs under `continue-on-error: true`, so
+          # their failures cannot fail their own job and need this gate. The
+          # other three e2e jobs (tool-integration, contract, visual) have no
+          # continue-on-error and fail the run natively.
+          #
+          # Add a job to that set and you must add it here, or its failures go
+          # unwatched exactly as #769's did.
+          EXPECTED_E2E_SUITES: "ubuntu macos"
+        run: |
+          echo "reports found: ${E2E_REPORTS} | tests failed: ${E2E_TOTAL_FAILED}"
+          echo "suites reporting:${E2E_SEEN_SUITES:- <none>}"
+
+          if [[ "${E2E_REPORTS}" -eq 0 ]]; then
+            echo "::error::No pytest-report.json was produced by any e2e job." \
+              "The suites did not run, so this is a failure, not a pass."
+            exit 1
+          fi
+
+          # Partial absence is absent evidence too (#772). Until this check,
+          # one report where two were expected printed "All 1 e2e suite(s)
+          # reported zero failures" and exited 0 -- #769's mistake in a smaller
+          # costume, inferring health from the absence of bad news. The guard
+          # above only caught the all-or-nothing case.
+          read -ra expected_suites <<< "${EXPECTED_E2E_SUITES}"
+          missing=""
+          for suite in "${expected_suites[@]}"; do
+            case " ${E2E_SEEN_SUITES} " in
+              *" ${suite} "*) ;;
+              *) missing="${missing} ${suite}" ;;
+            esac
+          done
+          if [[ -n "${missing// /}" ]]; then
+            echo "::error::No pytest-report.json from:${missing}." \
+              "Those suites produced no evidence, which is a failure, not a pass."
+            exit 1
+          fi
+
+          if [[ "${E2E_TOTAL_FAILED}" -gt 0 ]]; then
+            echo "::error::${E2E_TOTAL_FAILED} e2e test(s) failed." \
+              "See the job summary above for the per-suite breakdown."
+            exit 1
+          fi
+
+          echo "All ${E2E_REPORTS} e2e suite(s) reported zero failures:" \
+            "${E2E_SEEN_SUITES# }."
 
 # ==============================================================================
 # PERFORMANCE TESTS - Benchmark comparison
@@ -1260,7 +1398,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@v10.0.1
         with:
           version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
           python-version: '3.12'  # preserves the pin actions/setup-python held
@@ -1419,16 +1557,53 @@ jobs:
           # strictly typed: `7 == true` is false).
           # Capture stderr separately so a silent-exit bug (zero stdout, non-zero rc)
           # emits a diagnosable error to the job log instead of just "exit code 1".
-          if ! docker run --rm "$IMAGE_REF" \
+          # Capture the exit code WITHOUT `if !`. Bash's `!` replaces $? with the
+          # NEGATED status, so `if ! cmd; then rc=$?` yields 0 for every failure,
+          # and the `exit "$rc"` below then exited 0 -- the step passed and the
+          # count assertion never ran. Not hypothetical: run 31925247675
+          # (2026-08-16) logged `tools check --profile deep exited with rc=0` and
+          # reported SUCCESS, while balanced/slim/fast each printed their real
+          # count. `Validate deep` had never verified anything. Measured chunk 21.
+          # `set -e` is on (Actions runs `bash -e`), which is why the original
+          # needed `if !` at all; `set +e` around the call is the fix that keeps
+          # both the guard and the true exit code.
+          set +e
+          docker run --rm "$IMAGE_REF" \
               tools check --profile "$PROFILE" --json \
-              > tools-check.json 2>tools-check.stderr.log; then
-            rc=$?
-            echo "::error::tools check --profile $PROFILE exited with rc=$rc"
+              > tools-check.json 2>tools-check.stderr.log
+          rc=$?
+          set -e
+
+          # Unparseable output is catastrophic regardless of rc.
+          if ! jq -e 'type == "object" and length > 0' tools-check.json > /dev/null 2>&1; then
+            echo "::error::tools check --profile $PROFILE produced no parseable JSON (rc=$rc)"
             echo "--- stderr ---"
             cat tools-check.stderr.log
             echo "--- stdout (tools-check.json) ---"
             cat tools-check.json
+            exit "${rc:-1}"
+          fi
+
+          # rc alone cannot judge this image. `tools check` documents rc=1 as "some
+          # tool is unavailable for ANY reason" -- including the MANUAL_INSTALL_TOOLS
+          # (akto, afl++, mobsf, falco) deliberately not baked into the deep image.
+          # So a correct deep image and a broken one both return 1. The CLI ships the
+          # discriminator for exactly this case: `manual_install` per tool
+          # (CHANGELOG v1.0.5, docs/CLI_REFERENCE.md:455). Judge on that, not on rc.
+          NON_MANUAL_MISSING=$(jq -r \
+            '[.[] | select(.installed == false and .manual_install != true)] | length' \
+            tools-check.json)
+          if [ "$rc" -ne 0 ] && [ "$NON_MANUAL_MISSING" -gt 0 ]; then
+            echo "::error::tools check --profile $PROFILE exited rc=$rc with $NON_MANUAL_MISSING non-manual tool(s) missing"
+            jq -r 'to_entries[]
+                   | select(.value.installed == false and .value.manual_install != true)
+                   | "  missing: \(.key)"' tools-check.json
+            echo "--- stderr ---"
+            cat tools-check.stderr.log
             exit "$rc"
+          fi
+          if [ "$rc" -ne 0 ]; then
+            echo "rc=$rc, and every missing tool is manual_install -- expected for $VARIANT."
           fi
 
           # Count installed tools (expected JSON shape: {tool_name: {installed: bool, ...}})

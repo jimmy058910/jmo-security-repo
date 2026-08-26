@@ -34,6 +34,7 @@ from scripts.core.plugin_loader import get_plugin_loader, get_plugin_registry
 # Priority calculation (v0.9.0 Feature #5: EPSS/KEV)
 from scripts.core.priority_calculator import PriorityCalculator
 from scripts.core.reporters.basic_reporter import write_json, write_markdown
+from scripts.core.scan_timings import SCAN_TIMINGS_FILENAME
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -175,6 +176,21 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
             for target in sorted(p for p in target_dir.iterdir() if p.is_dir()):
                 # Discover all tool outputs using plugin registry
                 for tool_output in target.glob("*.json"):
+                    # JMo's own scan-phase instrumentation, written by
+                    # write_scan_timings into the same directory as the tool
+                    # outputs. It is not a tool result, so no adapter exists for
+                    # it and the registry lookup below warned about it on
+                    # *every* report run (#784). A warning that always fires
+                    # teaches the reader to skip the whole class -- and "no
+                    # adapter plugin found" is precisely the message that
+                    # matters when a real adapter goes missing.
+                    #
+                    # Compared against the constant rather than the literal
+                    # string so renaming the artifact cannot quietly resurrect
+                    # the warning.
+                    if tool_output.name == SCAN_TIMINGS_FILENAME:
+                        continue
+
                     tool_name = tool_output.stem  # e.g., "trivy", "semgrep", "afl++"
 
                     # Handle special case: afl++.json → tool name is "aflplusplus"
@@ -202,59 +218,95 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
         for fut in as_completed(jobs):
             try:
                 findings.extend(fut.result())
-            except AdapterParseException as e:
-                # Adapter parsing failed - log but continue with other tools
-                logger.debug(f"Adapter parse failed: {e.tool} on {e.path}: {e.reason}")
-            except FileNotFoundError as e:
-                # Tool output missing (expected when using --allow-missing-tools)
-                logger.debug(f"Tool output file not found: {e.filename}")
             except (
                 Exception
-            ) as e:  # Acceptable: adapter parse error — skip tool, continue aggregation
-                # Unexpected error - log with traceback for debugging
+            ) as e:  # Acceptable: a broken future must not abort aggregation
+                # `_safe_load_plugin` already catches AdapterParseException,
+                # FileNotFoundError, OSError and bare Exception, returning `[]`
+                # for each -- so this loop used to carry per-type handlers that
+                # could never run. Worse, the dead `AdapterParseException` one
+                # held the *better* message (it unpacked `.tool`/`.path`/
+                # `.reason` where the live one printed only `e`), so the good
+                # diagnostic was the unreachable one. Same shape as #808 and the
+                # dead `_iter_*` helpers: two copies, and the fix lived in the
+                # one nothing calls.
+                #
+                # They are removed rather than kept "just in case": an except
+                # clause that cannot fire is a claim about behaviour that is not
+                # true. This generic one stays as a genuine backstop, because a
+                # future can fail for reasons unrelated to its callable.
                 logger.error(f"Unexpected error loading findings: {e}", exc_info=True)
     # Dedupe by id (fingerprint) - memory-efficient approach
     # Uses set for fingerprints (tiny strings) instead of dict storing full findings
     # This avoids double memory storage (dict + list copy)
     deduped = deduplicate_findings_memory_efficient(findings)
 
+    # The three enrichment stages below are best-effort by design: a failure must
+    # not block the report. But each catches every exception around a call that
+    # enriches the WHOLE list, so a single failure costs every finding its
+    # enrichment -- and at DEBUG that is invisible, because `configure_scan_logging`
+    # sets the `scripts` logger to WARNING for a normal run.
+    #
+    # Measured on a real 244-finding scan: a corrupt `~/.jmo/cache/epss_scores.db`
+    # -- an ordinary on-disk file, not a network outage -- took priority
+    # enrichment from 244/244 to 0/244 while emitting one DEBUG record and
+    # nothing at WARNING or above. The report is written, is the expected length,
+    # and silently has no EPSS/KEV data at all. Same shape as #823/#836: the
+    # failure is not the problem, the silence is.
+    #
+    # These report at WARNING and name what was lost. They cannot become the
+    # always-fires warning #784 was about, because they fire only on an actual
+    # exception -- a healthy run raises none.
+
     # Enrich Trivy findings with Syft SBOM context when available
     try:
         _enrich_trivy_with_syft(deduped)
-    except (KeyError, ValueError, TypeError) as e:
-        # Best-effort enrichment - missing SBOM data or malformed findings
-        logger.debug(f"Trivy-Syft enrichment skipped: {e}")
     except (
         Exception
     ) as e:  # Acceptable: enrichment is best-effort — must not block report generation
-        logger.debug(f"Unexpected error during Trivy-Syft enrichment: {e}")
+        logger.warning(
+            "Trivy/Syft SBOM enrichment failed, so no finding in this report "
+            "carries SBOM package context (%d findings affected): %s: %s",
+            len(deduped),
+            type(e).__name__,
+            e,
+        )
 
     # Enrich all findings with compliance framework mappings (v1.2.0)
     try:
         deduped = enrich_findings_with_compliance(deduped)
-    except FileNotFoundError as e:
-        # Compliance mapping data files missing
-        logger.debug(
-            f"Compliance enrichment skipped: mapping data not found: {e.filename}"
-        )
-    except (KeyError, ValueError, TypeError) as e:
-        # Malformed compliance data or findings
-        logger.debug(f"Compliance enrichment skipped: {e}")
     except (
         Exception
     ) as e:  # Acceptable: enrichment is best-effort — must not block report generation
-        logger.debug(f"Unexpected error during compliance enrichment: {e}")
+        # `deduped` is deliberately left bound to the un-enriched list: the
+        # assignment never happens, so the findings themselves survive intact.
+        detail = (
+            f"mapping data not found: {e.filename}"
+            if isinstance(e, FileNotFoundError)
+            else f"{type(e).__name__}: {e}"
+        )
+        logger.warning(
+            "Compliance enrichment failed, so no finding in this report carries "
+            "OWASP/CWE/CIS/NIST/PCI/MITRE mappings and the compliance reports "
+            "will be empty (%d findings affected): %s",
+            len(deduped),
+            detail,
+        )
 
     # Enrich findings with priority scores (v0.9.0 Feature #5: EPSS/KEV)
     try:
         _enrich_with_priority(deduped)
-    except (KeyError, ValueError, TypeError) as e:
-        # Missing priority data or malformed findings
-        logger.debug(f"Priority enrichment skipped: {e}")
     except (
         Exception
     ) as e:  # Acceptable: enrichment is best-effort — EPSS/KEV API failures non-fatal
-        logger.debug(f"Unexpected error during priority enrichment: {e}")
+        logger.warning(
+            "Priority enrichment failed, so no finding in this report carries an "
+            "EPSS score, KEV status or priority ranking (%d findings affected). "
+            "Check ~/.jmo/cache for an unreadable epss_scores.db or kev_catalog.json: %s: %s",
+            len(deduped),
+            type(e).__name__,
+            e,
+        )
 
     # Cross-tool deduplication clustering (v1.0.0 Feature #4 - Phase 2)
     # Threshold configurable via JMO_DEDUP_THRESHOLD env var or jmo.yml deduplication section
@@ -329,7 +381,29 @@ def _safe_load_plugin(
         logger.debug(f"Tool output not found: {path}")
         return []
     except AdapterParseException as e:
-        logger.debug(f"Adapter parse failed: {e}")
+        # WARNING, not DEBUG. `configure_scan_logging` sets the `scripts` logger
+        # to WARNING by default, so at DEBUG this was invisible in every normal
+        # run -- and what it hides is a tool that ran, exited acceptably and
+        # wrote a file JMo cannot read. Its findings are absent from the report
+        # while the scan reports success, which is the #769 / `zero-secrets`
+        # class all over again.
+        #
+        # Measured on #822: a `per_tool` flag making trivy emit a table instead
+        # of JSON took a target from 2 findings to 0, with rc=0 and not one line
+        # on any stream. Flag collision is only one cause -- a tool changing its
+        # output schema between versions does the same thing -- so this is the
+        # guard for the whole class rather than for that one bug.
+        #
+        # Message carries tool, path and reason: `AdapterParseException` already
+        # separates them, and "which tool lost its findings" is the first thing
+        # a reader needs.
+        logger.warning(
+            "%s produced output that could not be parsed, so its findings are "
+            "MISSING from this report: %s (%s)",
+            e.tool,
+            e.path,
+            e.reason,
+        )
         return []
     except (OSError, PermissionError) as e:
         logger.debug(f"Failed to read tool output {path}: {e}")

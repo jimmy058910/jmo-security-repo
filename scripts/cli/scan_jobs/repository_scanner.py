@@ -3,7 +3,7 @@ Repository Scanner
 
 Scans local Git repositories using multiple security tools.
 
-Fully Implemented Tools (28 total for v1.0.0):
+Fully Implemented Tools (26 total):
 
 Core Tools (11):
 1. TruffleHog: Verified secrets scanning
@@ -18,23 +18,22 @@ Core Tools (11):
 10. Falco: Runtime security monitoring (validates Falco rule files)
 11. AFL++: Coverage-guided fuzzing (analyzes compiled binaries)
 
-v1.0.0 New Tools (17):
+v1.0.0 New Tools (15):
 12. Checkov CI/CD: GitHub Actions workflow security
 13. Gosec: Go security analyzer
-14. OSV-Scanner: Open source vulnerability detection
-15. cdxgen: SBOM and dependency analysis
-16. ScanCode: License and copyright scanner
-17. Kubescape: Kubernetes security scanner
-18. Prowler: Multi-cloud CSPM (AWS/Azure/GCP/K8s)
-19. YARA: Malware detection
-20. Grype: Vulnerability scanner for containers/filesystems
-21. MobSF: Mobile Security Framework (Android/iOS)
-22. Lynis: System hardening and security auditing
-23. Trivy RBAC: Kubernetes RBAC security assessment
-24. Semgrep Secrets: Hardcoded credentials detection
-25. Horusec: Multi-language SAST (18+ languages)
-26. Dependency-Check: OWASP SCA for known vulnerabilities
-27. Akto: API Security testing (URL scanner only)
+14. cdxgen: SBOM and dependency analysis
+15. ScanCode: License and copyright scanner
+16. Kubescape: Kubernetes security scanner
+17. Prowler: Multi-cloud CSPM (AWS/Azure/GCP/K8s)
+18. YARA: Malware detection
+19. Grype: Vulnerability scanner for containers/filesystems
+20. MobSF: Mobile Security Framework (Android/iOS)
+21. Lynis: System hardening and security auditing
+22. Trivy RBAC: Kubernetes RBAC security assessment
+23. Semgrep Secrets: Hardcoded credentials detection
+24. Horusec: Multi-language SAST (18+ languages)
+25. Dependency-Check: OWASP SCA for known vulnerabilities
+26. Akto: API Security testing (URL scanner only)
 
 Special Tool Behaviors:
 - Nosey Parker: Multi-phase execution (init → scan → report) with automatic Docker fallback
@@ -53,27 +52,34 @@ Integrates with ToolRunner for parallel execution and resilient error handling.
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Callable
 from pathlib import Path
 
 from ...core.config import RetryConfig
 from ...core.paths import get_yara_rules_dir
+from ...core.scan_timings import write_scan_timings
 from ...core.tool_runner import ToolDefinition, ToolRunner
 from ..path_sanitizers import _sanitize_path_component, _validate_output_path
-from ..scan_utils import find_tool, report_tool_failure, write_stub
+from ..scan_utils import (
+    TOOL_TIMEOUT_DEFAULTS,
+    find_tool,
+    report_tool_failure,
+    tool_flags,
+    tool_timeout,
+    write_stub,
+)
 
 logger = logging.getLogger(__name__)
 
-# Per-tool timeout defaults (seconds) for tools that typically run longer
-# These serve as MINIMUM timeouts - user/profile configs can increase but not decrease
-TOOL_TIMEOUT_DEFAULTS: dict[str, int] = {
-    "cdxgen": 600,  # 10 min - with --no-install-deps optimization (was 30 min)
-    "dependency-check": 1200,  # 20 min - NVD database sync can take a while
-    "scancode": 1200,  # 20 min - license scanning large codebases
-    "horusec": 900,  # 15 min - multi-language SAST
-    "zap": 900,  # 15 min - DAST scanning
-    "prowler": 600,  # 10 min - cloud config scanning
-}
+# TOOL_TIMEOUT_DEFAULTS now lives in scan_utils and is re-exported here for the
+# handful of readers that reach for it by this name. It was defined in this
+# module, which is exactly why only *repository* scans honoured the floor: the
+# other four scanners could not see it and their `get_tool_timeout` copies had
+# none. `zap` carries a 900 s floor and also runs on `url` targets, so a
+# `balanced` URL scan gave it 600 s -- a third short -- while the same tool on a
+# repository target got 900 s.
+__all__ = ["TOOL_TIMEOUT_DEFAULTS", "scan_repository"]
 
 # Upper bound on file arguments passed to a single per-file tool invocation.
 # Windows caps a command line at 32767 characters; a few hundred absolute paths
@@ -213,36 +219,27 @@ def scan_repository(
     out_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
 
     def get_tool_timeout(tool: str, default: int) -> int:
-        """Get timeout for tool, respecting per-tool defaults for slow tools.
+        """Timeout for this tool, honouring the slow-tool floor.
 
-        Priority order:
-        1. User's per_tool_config timeout (if specified)
-        2. TOOL_TIMEOUT_DEFAULTS (minimum for known slow tools)
-        3. Profile default timeout
+        Priority: an explicit `per_tool.<tool>.timeout` wins outright, else the
+        profile default raised to `TOOL_TIMEOUT_DEFAULTS` if the tool has a
+        floor. Slow tools (cdxgen, dependency-check, scancode) have minimums so
+        a low profile default cannot kill them early.
 
-        Slow tools (cdxgen, dependency-check, scancode) have minimum timeouts
-        to prevent premature termination. User config can increase but profile
-        defaults can't decrease below the minimum.
+        Delegates to the shared implementation. This body was the only one of
+        five that applied the floor at all.
         """
-        # Check user's per_tool_config first
-        tool_cfg = per_tool_config.get(tool, {})
-        if isinstance(tool_cfg, dict):
-            override = tool_cfg.get("timeout")
-            if isinstance(override, int) and override > 0:
-                return override
-
-        # Use per-tool default as minimum (user didn't specify override)
-        tool_minimum = TOOL_TIMEOUT_DEFAULTS.get(tool, 0)
-        return max(default, tool_minimum)
+        return tool_timeout(per_tool_config, tool, default)
 
     def get_tool_flags(tool: str) -> list[str]:
-        """Get additional flags for specific tool."""
-        tool_cfg = per_tool_config.get(tool, {})
-        if isinstance(tool_cfg, dict):
-            flags = tool_cfg.get("flags", [])
-            if isinstance(flags, list):
-                return [str(f) for f in flags]
-        return []
+        """Extra flags for this tool, minus any JMo must own.
+
+        Delegates to the shared implementation: this was one of five identical
+        copies, none of which filtered anything, so a `per_tool` flag could
+        override JMo's own `-f`/`-o` and silently destroy the tool's findings
+        (#822).
+        """
+        return tool_flags(per_tool_config, tool)
 
     # TruffleHog: Verified secrets scanning
     # Uses filesystem mode to scan working directory (not just git history)
@@ -879,36 +876,6 @@ def scan_repository(
             _write_stub("gosec", gosec_out)
             statuses["gosec"] = True
 
-    # OSV-Scanner: Vulnerability scanner for open source
-    if "osv-scanner" in tools:
-        osv_out = out_dir / "osv.json"
-        osv_path = _find_tool("osv-scanner")
-        if osv_path:
-            osv_flags = get_tool_flags("osv-scanner")
-            osv_cmd = [
-                osv_path,
-                "--format",
-                "json",
-                "--output",
-                str(osv_out),
-                *osv_flags,
-                str(repo),
-            ]
-            tool_defs.append(
-                ToolDefinition(
-                    name="osv-scanner",
-                    command=osv_cmd,
-                    output_file=osv_out,
-                    timeout=get_tool_timeout("osv-scanner", timeout),
-                    retries=retries,
-                    ok_return_codes=(0, 1),
-                    capture_stdout=False,
-                )
-            )
-        elif allow_missing_tools:
-            _write_stub("osv-scanner", osv_out)
-            statuses["osv-scanner"] = True
-
     # cdxgen: SBOM and dependency analysis
     # Performance optimizations (v1.0.1):
     # - --no-install-deps: Don't run npm/pip install (major speedup, was causing 9+ min scans)
@@ -1399,7 +1366,19 @@ def scan_repository(
         tools=tool_defs,
         progress_callback=progress_callback,  # type: ignore[arg-type]
     )
+    tools_started = time.perf_counter()
     results = runner.run_all_parallel()
+
+    # ToolRunner already timed and classified every invocation. Record that
+    # before the loop below reduces the results to booleans, which is where it
+    # used to be lost (#722).
+    write_scan_timings(
+        out_dir,
+        results,
+        target=name,
+        target_type="repo",
+        wall_seconds=time.perf_counter() - tools_started,
+    )
 
     # Process results
     attempts_map: dict[str, int] = {}
@@ -1471,9 +1450,15 @@ def scan_repository(
             # lie being removed.
             statuses[result.tool] = False
             report_tool_failure(result, "its executable was not found at run time")
-        elif "Timeout" in result.error_message:
+        elif result.timed_out:
             # Tool timed out - write stub so report phase has consistent files
             # and mark as failed (timeout is a failure state)
+            #
+            # `result.timed_out`, not `"Timeout" in result.error_message` (#727).
+            # That match made a human-readable message load-bearing: rewording
+            # "Timeout after 600s" would have silently routed every timeout to
+            # the generic branch below, dropping the stub and the "it timed out"
+            # log line, with nothing going red.
             #
             # The stub must not be the only signal: once the report phase reads
             # it, an empty stub is indistinguishable from a tool that genuinely

@@ -12,20 +12,46 @@ Tests cover:
 - Integration with existing HTML escaping
 """
 
-import os
+import json
 import re
+from html.parser import HTMLParser
+from pathlib import Path
 
 import pytest
 
 from scripts.core.reporters.html_reporter import write_html
 
+#: The tracked source template is where the security headers are declared;
+#: `npm run build` copies them into dist/index.html verbatim.
+DASHBOARD_SOURCE_TEMPLATE = (
+    Path(__file__).resolve().parents[2] / "scripts" / "dashboard" / "index.html"
+)
+
 
 @pytest.fixture(autouse=True)
-def skip_react_build_check():
-    """Skip React build check for all tests in this file (CI compatibility)."""
-    os.environ["SKIP_REACT_BUILD_CHECK"] = "true"
-    yield
-    os.environ.pop("SKIP_REACT_BUILD_CHECK", None)
+def pinned_dashboard_template(tmp_path_factory, monkeypatch):
+    """Render every test in this file from the tracked source template.
+
+    These tests used to set ``SKIP_REACT_BUILD_CHECK``, which nothing had read
+    since ``df55c8f`` removed the ``FileNotFoundError`` it gated. They
+    therefore asserted against whichever template the machine happened to
+    have -- a real ``dist/`` build locally, the vendored test fixture in CI --
+    and would have asserted against the static fallback, which carries none of
+    these headers, on a machine with neither.
+    """
+    root = tmp_path_factory.mktemp("pinned-template")
+    reporters = root / "scripts" / "core" / "reporters"
+    reporters.mkdir(parents=True)
+    module = reporters / "html_reporter.py"
+    module.touch()
+    dist = root / "scripts" / "dashboard" / "dist"
+    dist.mkdir(parents=True)
+    (dist / "index.html").write_text(
+        DASHBOARD_SOURCE_TEMPLATE.read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    monkeypatch.setattr(
+        "scripts.core.reporters.html_reporter.__file__", str(module), raising=False
+    )
 
 
 class TestSecurityHeaders:
@@ -315,18 +341,124 @@ class TestCSPDirectiveValidation:
         assert len(csp_content) > 0  # CSP exists and is not empty
 
 
+class _EscapedElements(HTMLParser):
+    """Collect elements the parser sees outside any ``<script>`` element."""
+
+    def __init__(self, probe_tag: str):
+        super().__init__(convert_charrefs=True)
+        self._probe = probe_tag
+        self._script_depth = 0
+        self.escaped: list[dict] = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "script":
+            self._script_depth += 1
+        elif self._script_depth == 0 and tag == self._probe:
+            self.escaped.append(dict(attrs))
+
+    def handle_endtag(self, tag):
+        if tag == "script" and self._script_depth:
+            self._script_depth -= 1
+
+
+PROBE_TAG = "jmo-xss-probe"
+
+
+def elements_escaping_script_context(html_text: str) -> list[dict]:
+    """Return every ``PROBE_TAG`` element parsed outside ``<script>``.
+
+    Findings are embedded inside a ``<script>`` block, and ``PROBE_TAG`` occurs
+    in no template, so a probe element appearing outside script context can only
+    have come from finding data that escaped it.
+
+    This asserts the **property** (nothing escaped) rather than the spelling of
+    any particular escape. The assertions it replaces checked for the literal
+    string ``<\\/script>`` -- which encoded the shape the escaper had at the
+    time, and passed while ``</SCRIPT>``, ``</ScRiPt>`` and ``</script >`` all
+    still broke out, because the HTML tokenizer matches an end tag
+    case-insensitively.
+    """
+    parser = _EscapedElements(PROBE_TAG)
+    parser.feed(html_text)
+    return parser.escaped
+
+
 class TestSecurityIntegrationWithHTMLEscaping:
     """Ensure security headers work with existing HTML escaping."""
 
-    def test_xss_escaping_still_works(self, tmp_path):
-        """HTML escaping should still work with security headers."""
-        # Create finding with XSS attempt
+    # Every terminator the HTML tokenizer accepts after `</script`, in the
+    # casings it accepts them in. All but the first were reachable until
+    # v1.1.0.
+    BREAKOUTS = [
+        "</script>",
+        "</SCRIPT>",
+        "</ScRiPt>",
+        "</script >",
+        "</script/>",
+        "</script\t>",
+        "</script\n>",
+    ]
+
+    @pytest.mark.parametrize("closer", BREAKOUTS)
+    def test_script_context_cannot_be_escaped(self, tmp_path, closer):
+        """No spelling of a script end tag may escape the data block."""
+        findings = [
+            {
+                "id": "xss-test",
+                "ruleId": "TEST",
+                "severity": "HIGH",
+                "message": f"{closer}<{PROBE_TAG} onerror=alert(1)>",
+                "tool": {"name": "test", "version": "1.0.0"},
+                "location": {"path": "test.py", "startLine": 1},
+            }
+        ]
+
+        out_path = tmp_path / "dashboard.html"
+        write_html(findings, out_path)
+        html = out_path.read_text(encoding="utf-8")
+
+        escaped = elements_escaping_script_context(html)
+        assert not escaped, (
+            f"{closer!r} escaped the <script> data block; "
+            f"{len(escaped)} element(s) parsed as live markup: {escaped}"
+        )
+
+    def test_embedded_findings_remain_valid_json(self, tmp_path):
+        """Escaping must not corrupt the payload it protects.
+
+        The previous escaper emitted ``<\\script`` and ``<\\!--``, which are
+        legal JavaScript but *illegal JSON*, so the embedded data could not be
+        round-tripped. The replacement uses ``\\uXXXX``, which is both.
+        """
+        payload = "</SCRIPT> & <!-- ` </script>"
+        findings = [
+            {
+                "id": "roundtrip",
+                "ruleId": "TEST",
+                "severity": "HIGH",
+                "message": payload,
+                "tool": {"name": "test", "version": "1.0.0"},
+                "location": {"path": "test.py", "startLine": 1},
+            }
+        ]
+
+        out_path = tmp_path / "dashboard.html"
+        write_html(findings, out_path)
+        html = out_path.read_text(encoding="utf-8")
+
+        match = re.search(r"window\.__FINDINGS__ = (\[.*?\])\n", html, flags=re.DOTALL)
+        assert match, "inline findings payload not found"
+        decoded = json.loads(match.group(1))
+        assert decoded[0]["message"] == payload
+
+    def test_no_raw_script_open_tag_in_output(self, tmp_path):
+        """A payload's own <script> must never appear unescaped."""
         findings = [
             {
                 "id": "xss-test",
                 "ruleId": "<script>alert('XSS')</script>",
                 "severity": "HIGH",
-                "message": "<img src=x onerror=alert('XSS')>",
+                "message": "<script>alert('XSS')</script>",
                 "tool": {"name": "test", "version": "1.0.0"},
                 "location": {"path": "test.py", "startLine": 1},
             }
@@ -336,64 +468,7 @@ class TestSecurityIntegrationWithHTMLEscaping:
         write_html(findings, out_path)
         html = out_path.read_text(encoding="utf-8")
 
-        # SECURITY: XSS payloads should be HTML-escaped or JSON-escaped
-        # The html_reporter.py uses json.dumps() which escapes quotes as \" and special chars
-        # Then applies .replace() for script tag breakouts
-
-        # Check for dangerous unescaped patterns that would allow XSS
-        # 1. Raw <script> tag not in quoted context (XSS exploit)
-        # Note: json.dumps() will quote the payload, so <script>alert( won't execute
         assert "<script>alert(" not in html, "Raw <script> tag found (XSS risk)"
-
-        # 2. Verify script tags are properly escaped in JSON data
-        # The html_reporter applies .replace("</script>", "<\/script>") to prevent breakout
-        # So we should find the escaped version, not the raw version
-        assert (
-            "<\\script>" in html or "<\\/script>" in html
-        ), "Script tag not properly escaped"
-
-        # 3. Event handlers in JSON are safe because they're quoted strings
-        # "message": "<img onerror=alert()>" is NOT executable JavaScript
-        # Only unquoted event handlers like <img onerror=alert()> in HTML context are dangerous
-        # Since our data is in JavaScript const data = [...], the quotes protect us
-
-        # Verify no XSS in HTML context (outside <script> tags)
-        # Extract non-script HTML portions
-        html_parts = re.split(r"<script[^>]*>.*?</script>", html, flags=re.DOTALL)
-        html_only = "".join(html_parts)
-
-        # In pure HTML context, these would be dangerous
-        assert "<script>" not in html_only, "Unescaped <script> in HTML context"
-        assert (
-            "onerror=" not in html_only or 'onerror="' in html_only
-        ), "Unescaped event handler in HTML"
-
-    def test_json_breakout_prevented(self, tmp_path):
-        """JSON breakout attempts should be prevented."""
-        # Create finding with JSON/script breakout attempt
-        findings = [
-            {
-                "id": "json-breakout",
-                "ruleId": "TEST",
-                "severity": "HIGH",
-                "message": "</script><script>alert('breakout')</script><script>",
-                "tool": {"name": "test", "version": "1.0.0"},
-                "location": {"path": "test.py", "startLine": 1},
-            }
-        ]
-
-        out_path = tmp_path / "dashboard.html"
-        write_html(findings, out_path)
-        html = out_path.read_text(encoding="utf-8")
-
-        # SECURITY: Script tag should be escaped in JSON
-        # Check for the escaping pattern used in html_reporter.py
-        assert "<\\/script>" in html or "&lt;/script&gt;" in html
-        # Should NOT contain unescaped </script>
-        # (allowing the one </script> that closes the main script tag)
-        script_count = html.count("</script>")
-        # Exactly 2: one for main script block, one for email form script
-        assert script_count == 2, f"Found {script_count} </script> tags, expected 2"
 
 
 class TestSecurityCommentsAndDocumentation:

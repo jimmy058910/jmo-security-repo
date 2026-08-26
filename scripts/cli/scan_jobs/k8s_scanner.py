@@ -9,12 +9,20 @@ Integrates with ToolRunner for execution management.
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from pathlib import Path
 
 from ...core.config import RetryConfig
+from ...core.scan_timings import write_scan_timings
 from ...core.tool_runner import ToolDefinition, ToolRunner
-from ..scan_utils import find_tool, report_tool_failure, write_stub
+from ..scan_utils import (
+    find_tool,
+    report_tool_failure,
+    tool_flags,
+    tool_timeout,
+    write_stub,
+)
 
 
 def scan_k8s_resource(
@@ -55,29 +63,37 @@ def scan_k8s_resource(
 
     context = k8s_info["context"]
     namespace = k8s_info["namespace"]
-    all_namespaces = k8s_info.get("all_namespaces", "False") == "True"
+    # Two producers build this dict and they disagree: the live discovery path
+    # (scan_orchestrator._discover_k8s_resources) signals "every namespace" by
+    # writing namespace="*" and sets no all_namespaces key at all, so reading
+    # only the key made --k8s-all-namespaces unreachable. Accept both shapes.
+    all_namespaces = (
+        str(k8s_info.get("all_namespaces", "False")) == "True" or namespace == "*"
+    )
 
     safe_name = f"{context}_{namespace}".replace("/", "_").replace("*", "all")
     out_dir = results_dir / safe_name
     out_dir.mkdir(parents=True, exist_ok=True)
 
     def get_tool_timeout(tool: str, default: int) -> int:
-        """Get timeout override for specific tool."""
-        tool_cfg = per_tool_config.get(tool, {})
-        if isinstance(tool_cfg, dict):
-            override = tool_cfg.get("timeout")
-            if isinstance(override, int) and override > 0:
-                return override
-        return default
+        """Timeout for this tool, honouring the slow-tool floor.
+
+        Delegates to the shared implementation. This copy had no floor, so a
+        tool with a `TOOL_TIMEOUT_DEFAULTS` minimum got only the profile default
+        here while the same tool got its floor on a repository target -- `zap`
+        runs on both and is 300 s short on a `balanced` URL scan.
+        """
+        return tool_timeout(per_tool_config, tool, default)
 
     def get_tool_flags(tool: str) -> list[str]:
-        """Get additional flags for specific tool."""
-        tool_cfg = per_tool_config.get(tool, {})
-        if isinstance(tool_cfg, dict):
-            flags = tool_cfg.get("flags", [])
-            if isinstance(flags, list):
-                return [str(f) for f in flags]
-        return []
+        """Extra flags for this tool, minus any JMo must own.
+
+        Delegates to the shared implementation: this was one of five identical
+        copies, none of which filtered anything, so a `per_tool` flag could
+        override JMo's own `-f`/`-o` and silently destroy the tool's findings
+        (#822).
+        """
+        return tool_flags(per_tool_config, tool)
 
     # Trivy Kubernetes scan
     if "trivy" in tools:
@@ -95,18 +111,24 @@ def scan_k8s_resource(
                 *trivy_flags,
             ]
 
-            # Add context if not current
-            if context != "current":
-                trivy_cmd.extend(["--context", context])
+            # Namespace selection. trivy scans every namespace unless told
+            # otherwise, so "all namespaces" is the absence of a filter rather
+            # than a flag - there is no --all-namespaces. "default" is the
+            # sentinel _discover_k8s_resources writes when the user named no
+            # namespace, so it means "unspecified" here, not the namespace
+            # literally called default.
+            if not all_namespaces and namespace not in ("", "*", "default"):
+                trivy_cmd.extend(["--include-namespaces", namespace])
 
-            # Add namespace selection
-            if all_namespaces:
-                trivy_cmd.append("--all-namespaces")
-            elif namespace != "default":
-                trivy_cmd.extend(["-n", namespace])
+            trivy_cmd.extend(["-o", str(trivy_out)])
 
-            # Output file and target (scan all K8s resources)
-            trivy_cmd.extend(["-o", str(trivy_out), "all"])
+            # Context is a POSITIONAL argument - `trivy kubernetes [flags]
+            # [CONTEXT]` - so it goes last and takes no flag. This previously
+            # passed --context, which trivy rejects outright, and then appended
+            # a literal "all" that trivy read as the context name. Both killed
+            # the run at argument parsing, before any cluster contact.
+            if context and context != "current":
+                trivy_cmd.append(context)
 
             tool_defs.append(
                 ToolDefinition(
@@ -127,7 +149,18 @@ def scan_k8s_resource(
     runner = ToolRunner(
         tools=tool_defs,
     )
+    tools_started = time.perf_counter()
     results = runner.run_all_parallel()
+
+    # ToolRunner already timed and classified every invocation. Record that
+    # before the loop below reduces the results to booleans (#722).
+    write_scan_timings(
+        out_dir,
+        results,
+        target=safe_name,
+        target_type="k8s",
+        wall_seconds=time.perf_counter() - tools_started,
+    )
 
     # Process results
     attempts_map: dict[str, int] = {}
@@ -147,11 +180,35 @@ def scan_k8s_resource(
             # FileNotFoundError at exec, and was recorded as a clean scan.
             statuses[result.tool] = False
             report_tool_failure(result, "its executable was not found at run time")
-        else:
-            # Other errors (timeout, non-zero exit, etc.)
+        elif result.timed_out:
+            # A timeout gets a stub so the report phase sees a consistent file
+            # tree -- but the stub must never be the only signal. Once read, an
+            # empty stub is indistinguishable from a tool that ran and found
+            # nothing, so the timeout has to be stated on the log or it is lost.
+            tool_out = out_dir / f"{result.tool}.json"
+            if not tool_out.exists():
+                _write_stub(result.tool, tool_out)
             statuses[result.tool] = False
             if result.attempts > 0:
                 attempts_map[result.tool] = result.attempts
+            report_tool_failure(result, "it timed out")
+        else:
+            # Other errors (non-zero exit, no output, etc.). This used to record
+            # False and return without logging anything at all, so a tool that
+            # failed contributed nothing to the scan and said so on no stream
+            # (#727). A non-TTY run renders no progress display, which makes the
+            # log the only durable record.
+            statuses[result.tool] = False
+            if result.attempts > 0:
+                attempts_map[result.tool] = result.attempts
+            report_tool_failure(
+                result,
+                (
+                    "it exited with an accepted code but wrote no output"
+                    if result.status == "no_output"
+                    else "it failed"
+                ),
+            )
 
     # Include attempts metadata if any retries occurred
     if attempts_map:

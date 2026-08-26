@@ -15,7 +15,7 @@
 
 **Total Possible Combinations:** 6 x 28 x 3 x 5 x 6 = **15,120 test scenarios**
 **Current Test Suite:** 8,000+ tests across unit/adapters/reporters/integration
-**Coverage:** 87% (CI enforced minimum: 85%)
+**Coverage:** measure it before quoting it — CI's only enforced minimum is **80%** (`.github/workflows/ci.yml:734`), and nothing sets `--cov-fail-under` (#756)
 
 ---
 
@@ -231,7 +231,7 @@ This matrix shows which tools are tested on which platforms and execution modes.
 
 ## Matrix 4: Compliance Frameworks x Tools
 
-All 28 tools benefit from universal compliance enrichment via [scripts/core/compliance_mapper.py](../scripts/core/compliance_mapper.py).
+All 28 tools benefit from universal compliance enrichment via [scripts/core/compliance_mapper.py](../../scripts/core/compliance_mapper.py).
 
 **Supported Frameworks:**
 
@@ -244,8 +244,8 @@ All 28 tools benefit from universal compliance enrichment via [scripts/core/comp
 
 **Test Coverage:**
 
-- [tests/unit/test_compliance_mapper_direct.py](../tests/unit/test_compliance_mapper_direct.py) - Direct mapper tests
-- [tests/reporters/test_compliance_reporter.py](../tests/reporters/test_compliance_reporter.py) - Compliance report generation
+- [tests/unit/test_compliance_mapper_direct.py](../../tests/unit/test_compliance_mapper_direct.py) - Direct mapper tests
+- [tests/reporters/test_compliance_reporter.py](../../tests/reporters/test_compliance_reporter.py) - Compliance report generation
 
 **Compliance Coverage:** 100% (all tools x all frameworks)
 
@@ -311,8 +311,8 @@ All 28 tools benefit from universal compliance enrichment via [scripts/core/comp
 
 **Test Files:**
 
-- [.github/workflows/ci.yml](../.github/workflows/ci.yml) - GitHub Actions primary CI
-- [.github/workflows/release.yml](../.github/workflows/release.yml) - GitHub Actions release automation
+- [.github/workflows/ci.yml](../../.github/workflows/ci.yml) - GitHub Actions primary CI
+- [.github/workflows/release.yml](../../.github/workflows/release.yml) - GitHub Actions release automation
 
 ---
 
@@ -349,7 +349,7 @@ All 28 tools benefit from universal compliance enrichment via [scripts/core/comp
 **Current State:**
 
 - **Total Tests:** 8,000+
-- **Coverage:** 87% (CI enforced minimum: 85%)
+- **Coverage:** measure it before quoting it — CI's only enforced minimum is **80%** (`.github/workflows/ci.yml:734`); `--cov-fail-under` is set nowhere (#756)
 - **CI Platforms:** 2 OS (Linux, macOS) x 3 Python versions (3.10, 3.11, 3.12) = 6 matrix jobs
 - **Test Categories:**
   - Unit tests

@@ -149,8 +149,14 @@ class TestSarifReporterCoverage:
         assert region["startLine"] == 10
         assert region["endLine"] == 15
 
-    def test_to_sarif_with_remediation_fix(self):
-        """Test fix suggestions with remediation (lines 90-96)."""
+    def test_to_sarif_with_remediation_guidance(self):
+        """Prose remediation is carried in properties, not as a SARIF `fix`.
+
+        A SARIF `fix` requires `artifactChanges` -- concrete, applicable text
+        replacements. Emitting one for prose made every such result invalid
+        (239 schema errors on a real scan). See
+        tests/reporters/test_sarif_conformance.py.
+        """
         findings = [
             {
                 "ruleId": "fix-rule",
@@ -162,11 +168,13 @@ class TestSarifReporterCoverage:
         ]
         sarif = to_sarif(findings)
         result = sarif["runs"][0]["results"][0]
-        assert "fixes" in result
+        assert "fixes" not in result
         assert (
-            result["fixes"][0]["description"]["text"]
-            == "Update to use parameterized queries"
+            result["properties"]["remediation"] == "Update to use parameterized queries"
         )
+        # ...and it still reaches the rule's help text, as before
+        rule = sarif["runs"][0]["tool"]["driver"]["rules"][0]
+        assert rule["help"]["text"] == "Update to use parameterized queries"
 
     def test_to_sarif_with_cwe_tag(self):
         """Test CWE taxonomy tag handling (lines 102-108)."""
@@ -280,7 +288,10 @@ class TestSarifReporterCoverage:
         assert "properties" in result
         assert result["properties"]["consensus"]["detectedByCount"] == 2
         assert len(result["properties"]["consensus"]["tools"]) == 2
-        assert result["correlationGuid"] == "consensus-finding-123"
+        # SARIF constrains correlationGuid to a GUID; a JMo finding id is not
+        # one, so it is carried as a free-form property instead.
+        assert "correlationGuid" not in result
+        assert result["properties"]["jmoFindingId"] == "consensus-finding-123"
 
     def test_to_sarif_medium_severity(self):
         """Test MEDIUM severity maps to warning (line 196)."""

@@ -12,6 +12,7 @@ import json
 
 import pytest
 
+from scripts.cli.trend_formatters import format_html_report
 from scripts.core.trend_exporters import (
     export_for_dashboard,
     export_to_csv,
@@ -167,13 +168,20 @@ def test_csv_excel_compatible(sample_analysis, tmp_path):
 
 
 def test_csv_unicode_handling(tmp_path):
-    """Test CSV handles unicode characters in data."""
+    """Test CSV handles unicode characters in data.
+
+    The scan ID comes from analysis["scans"], not metadata["scan_ids"].
+    This fixture used to supply the latter -- a key TrendAnalyzer has never
+    emitted -- so it asserted that a value reached the CSV by a route no
+    real payload can take, while every real export left the column blank
+    (#918).
+    """
     analysis = {
         "metadata": {
             "branch": "main",
-            "scan_ids": ["scan-émoji-🔥"],
             "analysis_timestamp": "2025-01-01T00:00:00Z",
         },
+        "scans": [{"id": "scan-émoji-🔥"}],
         "severity_trends": {
             "by_severity": {
                 "CRITICAL": [1],
@@ -423,10 +431,70 @@ def test_dashboard_statistical_data(sample_analysis, tmp_path):
     assert "by_severity" in improvement
 
 
-def test_dashboard_insight_structure(sample_analysis, tmp_path):
-    """Test dashboard insights are structured correctly."""
+def test_dashboard_export_accepts_the_shape_the_analyzer_emits(
+    sample_analysis, tmp_path
+) -> None:
+    """`_generate_insights` returns list[str], and always has.
+
+    Every fixture in this file declared seven-key dicts instead, and
+    `test_dashboard_insight_structure` asserted all seven -- certifying a
+    contract nothing implements. `export_for_dashboard` and
+    `format_html_report` were the two consumers that read the structure, so
+    both raised `AttributeError: 'str' object has no attribute 'get'` on
+    every real payload, and `jmo trends analyze --export-html` had never
+    once produced a file. See #910.
+    """
+    analysis = dict(sample_analysis)
+    analysis["insights"] = [
+        "✅ Security posture is IMPROVING: 12 fewer findings (30.0% reduction)",
+        "⚠️  CRITICAL findings increased by 2",
+    ]
+
     output_path = tmp_path / "dashboard-data.json"
-    export_for_dashboard(sample_analysis, output_path)
+    export_for_dashboard(analysis, output_path)
+
+    with open(output_path, encoding="utf-8") as f:
+        data = json.load(f)
+
+    assert len(data["insights"]) == 2
+    assert data["insights"][0]["message"].startswith("✅ Security posture")
+    # The keys the dashboard reads are present, just empty where a plain
+    # string carries no value for them.
+    assert set(data["insights"][0]) >= {"message", "priority", "icon"}
+
+
+def test_html_report_accepts_the_shape_the_analyzer_emits(sample_analysis) -> None:
+    """The same mismatch, on the only path a CLI flag can reach (#910)."""
+    analysis = dict(sample_analysis)
+    analysis["insights"] = ["✅ posture improving", "⚠️  regressions found"]
+
+    html = format_html_report(analysis)
+
+    assert "posture improving" in html
+    assert "regressions found" in html
+
+
+def test_dashboard_insight_structure(sample_analysis, tmp_path):
+    """Test dashboard insights are structured correctly.
+
+    Was asserting against `sample_analysis`'s hand-built seven-key-dict
+    insights fixture -- a shape `TrendAnalyzer._generate_insights` never
+    emits (it returns `list[str]`, and always has: `trend_analyzer.py:552`).
+    `test_dashboard_export_accepts_the_shape_the_analyzer_emits` above already
+    proves the real `list[str]` shape survives export; this test now checks
+    the complementary half of the same contract: `export_for_dashboard`
+    always emits all seven keys in its output regardless of input shape (each
+    is `i.get(key, "")` with an explicit default), but for a plain-string
+    insight only `message` carries real content -- the other six are
+    genuinely empty, not merely differently-valued, because a bare string has
+    no category/severity/priority/icon/details/recommended_action to give.
+    See #916 and #910.
+    """
+    analysis = dict(sample_analysis)
+    analysis["insights"] = ["✅ Security posture is IMPROVING: 12 fewer findings"]
+
+    output_path = tmp_path / "dashboard-data.json"
+    export_for_dashboard(analysis, output_path)
 
     with open(output_path, encoding="utf-8") as f:
         data = json.load(f)
@@ -443,6 +511,15 @@ def test_dashboard_insight_structure(sample_analysis, tmp_path):
     assert "message" in insight
     assert "details" in insight
     assert "recommended_action" in insight
+
+    # The values, not just the keys: a plain string only fills `message`.
+    assert insight["message"] == "✅ Security posture is IMPROVING: 12 fewer findings"
+    assert insight["category"] == ""
+    assert insight["severity"] == ""
+    assert insight["priority"] == ""
+    assert insight["icon"] == ""
+    assert insight["details"] == ""
+    assert insight["recommended_action"] == ""
 
 
 def test_dashboard_normalization_included(sample_analysis, tmp_path):

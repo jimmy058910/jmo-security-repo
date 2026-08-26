@@ -382,6 +382,8 @@ class TestVerificationWithSignature:
             subject_path=str(subject_path),
             attestation_path=str(attestation_path),
             signature_path=str(bundle_path),
+            cert_identity="you@example.com",
+            cert_oidc_issuer="https://oauth2.sigstore.dev/auth",
         )
 
         assert result.is_valid is True
@@ -570,6 +572,9 @@ class TestCLISigningIntegration:
             )
         )
 
+        bundle_path = tmp_path / "findings.json.att.json.sigstore.json"
+        bundle_path.write_text(json.dumps({"verificationMaterial": {}}))
+
         # Mock verification result
         mock_verify.return_value = VerificationResult(
             is_valid=True,
@@ -587,6 +592,12 @@ class TestCLISigningIntegration:
                 "--attestation",
                 str(attestation_path),
                 "--rekor-check",
+                "--signature",
+                str(bundle_path),
+                "--cert-identity",
+                "you@example.com",
+                "--cert-oidc-issuer",
+                "https://oauth2.sigstore.dev/auth",
             ],
         )
         args = parse_args()
@@ -596,6 +607,40 @@ class TestCLISigningIntegration:
         # Verify that check_rekor=True was passed
         call_kwargs = mock_verify.call_args[1]
         assert call_kwargs.get("check_rekor") is True
+
+    def test_verify_rekor_check_without_a_signer_is_refused(
+        self, tmp_path, monkeypatch
+    ):
+        """`--rekor-check` used to be accepted and then read by nothing.
+
+        `verify()` took `check_rekor` and never referenced it in its body, so
+        the flag was a documented transparency-log check that never ran, and
+        the command still exited 0. There is no log index without a bundle, so
+        asking for the check with no bundle is a usage error.
+        """
+        import sys
+
+        from scripts.cli.jmo import cmd_verify, parse_args
+
+        subject_path = tmp_path / "findings.json"
+        subject_path.write_text(json.dumps({"findings": []}))
+        attestation_path = tmp_path / "findings.json.att.json"
+        attestation_path.write_text(json.dumps({"_type": "x"}))
+
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "jmo",
+                "verify",
+                str(subject_path),
+                "--attestation",
+                str(attestation_path),
+                "--rekor-check",
+            ],
+        )
+
+        assert cmd_verify(parse_args()) == 2
 
 
 class TestSLSALevel2Requirements:

@@ -71,7 +71,7 @@ repos:
       - id: black
         exclude: ^\.claude/
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.1
+    rev: v0.16.3
     hooks:
       - id: ruff
         args: ["--fix"]
@@ -79,7 +79,7 @@ repos:
 
   # Type checking (optimized for incremental mode)
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v2.3.0
+    rev: v2.3.1
     hooks:
       - id: mypy
         additional_dependencies: [types-PyYAML, types-croniter, types-requests, types-tabulate]
@@ -119,9 +119,16 @@ repos:
         entry: python3 scripts/dev/check_import_direction.py
         pass_filenames: false
       - id: doc-links
-        name: doc-links (validate documentation links)
+        name: doc-links (links resolve to tracked files)
         language: system
-        files: ^(CLAUDE\.md|docs/)
+        # Every Markdown file, not a hand-listed subset: the checker already
+        # scans all tracked Markdown on each run (pass_filenames: false), so
+        # `files` only decides WHEN it fires. The old list omitted 28 tracked
+        # files -- CHANGELOG.md, SECURITY.md, UPGRADE.md, CONTRIBUTORS.md and
+        # 14 READMEs -- letting a broken link in any of them skip the hook.
+        # .gitignore is in scope on purpose: changing the .claude/ allowlist can
+        # orphan a link without touching a single markdown file.
+        files: (\.md$|\.markdown$|^\.gitignore$)
         entry: python3 scripts/dev/check_doc_links.py
         pass_filenames: false
       - id: yaml-env-tilde

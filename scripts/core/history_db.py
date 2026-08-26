@@ -30,6 +30,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from scripts.core.jmo_version import get_jmo_version
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
@@ -103,7 +105,12 @@ CREATE TABLE IF NOT EXISTS scans (
     duration_seconds REAL,
 
     -- Constraints
-    CHECK (profile IN ('fast', 'balanced', 'deep')),
+    -- NOTE: `profile` is deliberately unconstrained here. A SQL CHECK can only
+    -- enumerate a fixed list, and the real rule is "a profile that exists in
+    -- tool_registry.PROFILE_TOOLS or in the user's jmo.yml `profiles:` dict" --
+    -- neither of which SQL can see. The previous enumeration predated the
+    -- `slim` profile and silently rejected every slim scan (#721). Validation
+    -- lives in store_scan(), against the registry, so it cannot drift again.
     CHECK (target_type IN ('repo', 'image', 'iac', 'url', 'gitlab', 'k8s', 'unknown'))
 );
 """
@@ -270,8 +277,24 @@ def get_connection(db_path: Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
     conn = sqlite3.connect(str(db_path), timeout=30.0)
     conn.row_factory = sqlite3.Row
 
-    # Performance optimizations
-    conn.execute("PRAGMA journal_mode=WAL;")
+    # Performance optimizations.
+    #
+    # journal_mode is the odd one out: it is a PERSISTENT, on-disk property, so
+    # setting it rewrites the database header. Two consequences that cost a
+    # chunk-13 sweep to find:
+    #   * it is a write, so it raises "attempt to write a readonly database" on
+    #     a read-only file -- taking down every read-only `jmo history` command
+    #     (a `.jmo/` volume mounted ro, an archived DB, a snapshot kept as a
+    #     fixture) with a traceback rather than a message;
+    #   * on a writable file it means merely *reading* the database mutates it
+    #     (header bytes 18/19 go 1 -> 2), so a snapshot is not byte-stable
+    #     across inspection.
+    # WAL is an optimisation, not a requirement. Best-effort it, and let a
+    # database we cannot write stay readable.
+    try:
+        conn.execute("PRAGMA journal_mode=WAL;")
+    except sqlite3.OperationalError:
+        pass
     conn.execute("PRAGMA synchronous=NORMAL;")
     conn.execute("PRAGMA cache_size=10000;")
     conn.execute("PRAGMA temp_store=MEMORY;")
@@ -784,6 +807,52 @@ def _enforce_database_permissions(db_path: Path) -> None:
         logger.warning(f"Failed to set database permissions: {e}")
 
 
+def get_known_profiles() -> set[str]:
+    """Profile names that may legitimately appear in history.
+
+    Derived at call time from the tool registry plus any profile the user
+    defined under ``profiles:`` in ``jmo.yml`` (a free-form dict). Never
+    hardcode the list: the previous enumeration of fast/balanced/deep predated
+    the ``slim`` profile and silently discarded every slim scan (#721).
+    """
+    from scripts.core.tool_registry import PROFILE_TOOLS
+
+    known = set(PROFILE_TOOLS)
+
+    try:
+        from scripts.core.config import load_config
+
+        known |= set(load_config("jmo.yml").profiles)
+    except (OSError, ValueError, TypeError, KeyError) as e:
+        # No readable jmo.yml on this path (common in tests and library use).
+        # The registry alone is a correct, if narrower, answer.
+        logger.debug(f"Could not read profiles from jmo.yml: {e}")
+
+    return known
+
+
+def _scanned_repo_paths(results_dir: Path) -> list[Path]:
+    """Return the repository paths this scan actually visited.
+
+    Read from `repo_paths` in `.scan_metadata.json`, which the scan phase
+    writes (`jmo.py`, end of `cmd_scan`). Returns an empty list for a results
+    directory produced before that key existed, or written by something other
+    than `jmo scan` -- in which case the caller leaves git context NULL rather
+    than inferring it from the results directory's own location (#780).
+    """
+    meta_path = results_dir / ".scan_metadata.json"
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    if not isinstance(meta, dict):
+        return []
+    raw = meta.get("repo_paths")
+    if not isinstance(raw, list):
+        return []
+    return [Path(entry) for entry in raw if isinstance(entry, str) and entry]
+
+
 def store_scan(
     results_dir: Path,
     profile: str,
@@ -792,7 +861,7 @@ def store_scan(
     commit_hash: str | None = None,
     branch: str | None = None,
     tag: str | None = None,
-    jmo_version: str = "1.0.0",
+    jmo_version: str | None = None,
     duration_seconds: float | None = None,
     no_store_raw: bool = False,
     encrypt_findings: bool = False,
@@ -803,13 +872,14 @@ def store_scan(
 
     Args:
         results_dir: Path to scan results directory (contains findings.json)
-        profile: Profile name ("fast" | "balanced" | "deep")
+        profile: Profile name; any key of PROFILE_TOOLS or a jmo.yml profile
         tools: List of tool names that were run
         db_path: Path to SQLite database file
         commit_hash: Git commit hash (optional, auto-detected if None)
         branch: Git branch name (optional, auto-detected if None)
         tag: Git tag (optional, auto-detected if None)
-        jmo_version: JMo Security version
+        jmo_version: JMo Security version (default: resolved via
+            get_jmo_version(), which reads installed distribution metadata)
         duration_seconds: Total scan duration in seconds
         no_store_raw: If True, don't store raw finding data (--no-store-raw-findings)
         encrypt_findings: If True, encrypt raw finding data (--encrypt-findings)
@@ -838,8 +908,12 @@ def store_scan(
     if not findings_json.exists():
         raise FileNotFoundError(f"findings.json not found: {findings_json}")
 
-    if profile not in ("fast", "balanced", "deep"):
-        raise ValueError(f"Invalid profile: {profile}")
+    known_profiles = get_known_profiles()
+    if profile not in known_profiles:
+        raise ValueError(
+            f"Unknown profile: {profile!r}. "
+            f"Known profiles: {', '.join(sorted(known_profiles))}"
+        )
 
     # Validate encryption prerequisites (Phase 6 Step 6.2)
     if encrypt_findings:
@@ -853,7 +927,11 @@ def store_scan(
     with open(findings_json, encoding="utf-8") as f:
         findings_data = json.load(f)
 
-    # Handle both list format (current) and dict format (legacy)
+    # Handle both artifact shapes. The labels here used to be reversed:
+    # `summaries/findings.json` as written by the report phase is the
+    # DICT form, {"meta": ..., "findings": [...]}; the bare list is the
+    # older one. Nothing depended on the comment, but it sent readers to
+    # the wrong branch when `jmo history store` crashed on a real file.
     if isinstance(findings_data, list):
         findings = findings_data
     elif isinstance(findings_data, dict):
@@ -872,21 +950,29 @@ def store_scan(
     target_type = detect_target_type(results_dir)
     targets = collect_targets(results_dir)
 
-    # Get Git context (if repo target and not provided)
+    # Get Git context (if repo target and not provided).
+    #
+    # This reads the paths the scan actually visited, recorded as `repo_paths`
+    # in `.scan_metadata.json`. It used to walk up from
+    # `results_dir/individual-repos/<name>` looking for a `.git` -- but that is
+    # an OUTPUT directory, so the walk found whatever repository happened to
+    # contain the results folder and recorded ITS branch and commit (#780).
+    #
+    # Measured: the same findings.json stored from two locations produced
+    # `chunk-14-history-write`/`90254a92` and `totally-unrelated-branch`/
+    # `55e25ac5` -- the second a repo holding one empty commit and no code.
+    # 1633 of 1833 rows in the reference database are NULL for the same reason
+    # (results written outside any repository), and none says `main`.
+    #
+    # When the scanned path is unknown, the fields stay NULL. NULL means "not
+    # recorded", which is true; a branch copied from an unrelated repository is
+    # not, and is worse than missing because it looks like data.
     git_ctx = {}
     if target_type == "repo" and not all([commit_hash, branch]):
-        # Try to detect Git context from first repo
-        if targets:
-            first_repo = results_dir / "individual-repos" / targets[0]
-            # Try parent directories to find .git
-            candidate = first_repo
-            for _ in range(5):  # Max 5 levels up
-                if (candidate / ".git").exists():
-                    git_ctx = get_git_context(candidate)
-                    break
-                candidate = candidate.parent
-                if candidate == candidate.parent:  # Reached filesystem root
-                    break
+        for scanned in _scanned_repo_paths(results_dir):
+            if (scanned / ".git").exists():
+                git_ctx = get_git_context(scanned)
+                break
 
     # Use provided values or detected values
     commit_hash = commit_hash or git_ctx.get("commit_hash")
@@ -897,6 +983,15 @@ def store_scan(
     )
     branch = branch or git_ctx.get("branch")
     tag = tag or git_ctx.get("tag")
+
+    # Resolve the version that is actually running. This used to be a literal
+    # default of "1.0.0" in the signature, and neither production caller
+    # overrode it -- so every scan in the reference database claimed 1.0.0
+    # across 2025-11-13 to 2026-08-17 and every release through v1.0.8 (#895).
+    # get_jmo_version() is the same resolver the `jmo diff` artifacts use, and
+    # returns "unknown" rather than a wrong number when it cannot tell.
+    if jmo_version is None:
+        jmo_version = get_jmo_version()
     is_dirty = git_ctx.get("is_dirty", 0) if git_ctx else 0
 
     # Note: Severity counts are automatically calculated by database triggers
@@ -1173,25 +1268,36 @@ def list_scans(
     branch: str | None = None,
     profile: str | None = None,
     since: int | None = None,
-    limit: int = 50,
+    limit: int | None = 50,
 ) -> list[dict[str, Any]]:
     """
     List scans with optional filters.
 
     Args:
         conn: Database connection
-        branch: Filter by branch name
+        branch: Filter by branch name. None or "" means every branch,
+            including the scans whose branch could not be determined and is
+            stored NULL.
         profile: Filter by profile name
         since: Filter by timestamp (Unix epoch seconds)
-        limit: Maximum number of results
+        limit: Maximum number of results, or None for no limit.
 
     Returns:
         List of scan metadata dicts
+
+    Raises:
+        ValueError: If limit is not None and not >= 1. A negative limit is
+            rejected rather than passed to SQL, where SQLite defines any
+            negative LIMIT as *no* limit -- so `limit=-5` would silently
+            return the entire table.
     """
+    if limit is not None and limit < 1:
+        raise ValueError(f"limit must be >= 1 or None, got {limit}")
     cursor = conn.cursor()
 
     where_clauses = []
-    params = []
+    # Mixed types: the filter values bind as TEXT, the limit as an integer.
+    params: list[Any] = []
 
     if branch:
         where_clauses.append("branch = ?")
@@ -1207,16 +1313,23 @@ def list_scans(
 
     where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
 
-    # Security: where_sql is built from internal string literals only (e.g., "profile = ?"),
-    # NOT from user input. All values use parameterized queries via params list.
+    if limit is None:
+        limit_sql = ""
+    else:
+        limit_sql = "LIMIT ?"
+        params.append(limit)
+
+    # Security: where_sql and limit_sql are built from internal string literals only
+    # (e.g., "profile = ?", "LIMIT ?"), NOT from user input. All values use
+    # parameterized queries via params list.
     cursor.execute(
         f"""
         SELECT * FROM scans
         WHERE {where_sql}
         ORDER BY timestamp DESC
-        LIMIT ?
-        """,  # nosec B608 - where_sql contains only internal literals, values are parameterized
-        params + [limit],
+        {limit_sql}
+        """,  # nosec B608 - clauses contain only internal literals, values are parameterized
+        params,
     )
 
     return [dict(row) for row in cursor.fetchall()]
@@ -1330,7 +1443,7 @@ def compute_diff(
 
 def get_trend_summary(
     conn: sqlite3.Connection,
-    branch: str,
+    branch: str | None = None,
     days: int = 30,
 ) -> dict[str, Any] | None:
     """
@@ -1340,7 +1453,9 @@ def get_trend_summary(
 
     Args:
         conn: Database connection
-        branch: Git branch name (e.g., "main", "dev")
+        branch: Git branch name (e.g., "main", "dev"). None or "" analyses
+            every branch, including scans stored with a NULL branch -- which a
+            `branch = ?` comparison can never match.
         days: Number of days to analyze (default: 30)
 
     Returns:
@@ -1376,17 +1491,25 @@ def get_trend_summary(
     end_time = int(time.time())
     start_time = end_time - (days * 86400)
 
-    # 2. Query scans in time window for branch
+    # 2. Query scans in time window, optionally narrowed to one branch
+    if branch:
+        branch_sql = "branch = ?"
+        params: tuple[Any, ...] = (branch, start_time, end_time)
+    else:
+        branch_sql = "1=1"
+        params = (start_time, end_time)
+
+    # Security: branch_sql is one of two internal literals, never user input.
     cursor = conn.execute(
-        """
+        f"""
         SELECT id, timestamp, timestamp_iso,
                total_findings, critical_count, high_count,
                medium_count, low_count, info_count
         FROM scans
-        WHERE branch = ? AND timestamp >= ? AND timestamp <= ?
+        WHERE {branch_sql} AND timestamp >= ? AND timestamp <= ?
         ORDER BY timestamp ASC
-        """,
-        (branch, start_time, end_time),
+        """,  # nosec B608 - branch_sql is an internal literal, values are parameterized
+        params,
     )
     scans = [dict(row) for row in cursor.fetchall()]
 
@@ -1483,7 +1606,24 @@ def get_database_stats(conn: sqlite3.Connection) -> dict[str, Any]:
     min_date = date_range[0]
     max_date = date_range[1]
 
-    # Scans by branch
+    # Scans by branch.
+    #
+    # Two numbers have to come back with the rows, because the rows alone are
+    # not a breakdown of `total_scans` and used to look like one:
+    #   * NULL branch is not "nothing to show" -- #780 leaves it unset for most
+    #     rows, so on a real database it is the single largest bucket. Excluded
+    #     silently, it made the rendered rows sum to a small fraction of
+    #     total_scans with nothing saying why.
+    #   * the LIMIT drops every branch past the tenth, also silently.
+    # Measured on the 2170-scan database this was found in: the table showed 10
+    # rows summing to 279 against `total_scans: 2170`, in the JSON as well as
+    # the terminal.
+    cursor.execute("SELECT COUNT(*) FROM scans WHERE branch IS NULL")
+    scans_without_branch = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(DISTINCT branch) FROM scans WHERE branch IS NOT NULL")
+    distinct_branches = cursor.fetchone()[0]
+
     cursor.execute("""
         SELECT branch, COUNT(*) as count
         FROM scans
@@ -1523,7 +1663,10 @@ def get_database_stats(conn: sqlite3.Connection) -> dict[str, Any]:
         {"severity": row[0], "count": row[1]} for row in cursor.fetchall()
     ]
 
-    # Top tools
+    # Top tools -- same LIMIT, same need to say what it dropped.
+    cursor.execute("SELECT COUNT(DISTINCT tool) FROM findings")
+    distinct_tools = cursor.fetchone()[0]
+
     cursor.execute("""
         SELECT tool, COUNT(*) as count
         FROM findings
@@ -1543,9 +1686,12 @@ def get_database_stats(conn: sqlite3.Connection) -> dict[str, Any]:
         "min_date": min_date,
         "max_date": max_date,
         "scans_by_branch": scans_by_branch,
+        "scans_without_branch": scans_without_branch,
+        "distinct_branches": distinct_branches,
         "scans_by_profile": scans_by_profile,
         "findings_by_severity": findings_by_severity,
         "top_tools": top_tools,
+        "distinct_tools": distinct_tools,
         "db_size_bytes": db_size,
         "db_size_mb": round(db_size / (1024 * 1024), 2),
     }

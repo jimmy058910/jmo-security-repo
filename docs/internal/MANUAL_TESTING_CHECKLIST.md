@@ -2,13 +2,24 @@
 
 **Purpose:** Pre-release manual verification for features that cannot be fully automated.
 
-> **Note:** This checklist focuses on interactive workflows, cross-platform edge cases, and commands with minimal automated test coverage. Commands like `scan`, `report`, `history`, `trends`, `diff`, `ci`, and `policy` have excellent automated coverage (8,000+ tests, 87% coverage) and are not duplicated here.
+> **What a tick on this page means.** Every `[x]` below records an observation
+> made during the **v1.0 release cycle**. They are dated evidence, not a claim
+> about the current tree. The v1.1.0 audit campaign
+> ([#785](https://github.com/jimmy058910/jmo-security-repo/issues/785))
+> subsequently falsified several of them by exercising the same surfaces against
+> real data — the corrected ones are annotated inline and cite
+> [#959](https://github.com/jimmy058910/jmo-security-repo/issues/959).
+> **Do not read an unannotated tick as re-verified for v1.1.0.** Only the two
+> #959 named were audited; the rest were left as they stand rather than
+> re-ticked without running them, which is the failure this note exists to stop.
+>
+> **Scope note:** This checklist focuses on interactive workflows, cross-platform edge cases, and commands with minimal automated test coverage. Commands like `scan`, `report`, `history`, `trends`, `diff`, `ci`, and `policy` have broad automated coverage (8,000+ tests) and are not duplicated here. *A specific coverage percentage previously appeared here; nothing in the repo enforces one — CI's only floor is 80% on the marker-filtered suite (`.github/workflows/ci.yml`), and nothing sets `--cov-fail-under` ([#756](https://github.com/jimmy058910/jmo-security-repo/issues/756)). Measure it rather than quoting it.*
 
 **Related Documentation:**
 
 - [TESTING_MATRIX.md](TESTING_MATRIX.md) - Automated test coverage analysis
-- [PLATFORM_NOTES.md](PLATFORM_NOTES.md) - Cross-platform development guide
-- [TEST.md](../TEST.md) - Running the automated test suite
+- [PLATFORM_NOTES.md](../PLATFORM_NOTES.md) - Cross-platform development guide
+- [TEST.md](../../TEST.md) - Running the automated test suite
 
 ---
 
@@ -257,8 +268,8 @@ Automated tests cover API endpoints but not server lifecycle.
 - [x] Claude Code can connect to running server (connected via MCP)
 - [x] `get_security_findings` returns findings from results directory (117 findings, schema v1.2.0)
 - [x] Filters work: severity, tool, path (severity filter returned 29 HIGH findings)
-- [x] `apply_fix` with `dry_run=True` shows preview (verified: returns patch diff for GHA shell injection fix)
-- [x] `mark_resolved` updates finding status (verified: marked as `risk_accepted` with comment, returns timestamp)
+- [x] `apply_fix` with `dry_run=True` shows preview (verified: returns patch diff for GHA shell injection fix). **`dry_run=False` writes nothing and returns `success: False`** — apply is preview-only and deferred past v1.1.0 (#951)
+- [x] `mark_resolved` appends an id-keyed entry to `jmo.suppress.yml` (#957). Entries **always expire** — 90 days by default, 365 cap — and `resolution="fixed"` writes nothing by design. *The earlier tick here read "updates finding status (verified: marked as `risk_accepted` with comment, returns timestamp)" of a tool that persisted nothing at all until #957; what was observed was the timestamp (#959).*
 
 ### 7.3 Server Lifecycle
 
@@ -420,12 +431,34 @@ jmo scan --image node:14      # EOL, has CVEs
 
 ### Expected Finding Counts (Approximate)
 
-| Target | Profile | Expected Findings |
-|--------|---------|-------------------|
-| Juice Shop | fast | 50-100 (native: ~100, Docker: 66) |
-| Juice Shop | balanced | 600-800 (Docker: 691 incl. 602 horusec SAST) |
+**Count non-INFO findings.** The raw total is not comparable across releases:
+`syft` and `cdxgen` emit one INFO row per SBOM package — inventory, not
+vulnerabilities — and since #771 every `shellcheck` SC1017 lands in INFO too.
+Those three account for the entire INFO bucket in both profiles below, so a
+raw total silently tracks how many dependencies the target has.
+
+| Target | Profile | Expected Findings (non-INFO) |
+|--------|---------|------------------------------|
+| Juice Shop | fast | 100-130 (measured 115; raw 239 incl. 124 INFO) |
+| Juice Shop | balanced | 600-800 (measured 698, incl. 583 horusec; raw 845 incl. 147 INFO) |
 | juice-shop:latest (image) | balanced | 150-300 |
 | TerraGoat | slim | 80-150 |
+
+Measured 2026-08-08, native on Windows, `--allow-missing-tools`, against
+`C:/Projects/juice-shop`:
+
+| Profile | non-INFO by tool | INFO by tool |
+|---|---|---|
+| fast | semgrep 71, checkov 26, trivy 9, trufflehog 5, hadolint 4 = **115** | shellcheck 83, syft 41 = **124** |
+| balanced | the same 115, plus horusec 583 = **698** | the above, plus cdxgen 23 = **147** |
+
+The two runs agree tool-for-tool — `balanced` is `fast` plus horusec and
+cdxgen — which is the cheapest way to tell a real change from scan noise.
+
+The previous entries here read `50-100` and `600-800` against *raw* totals and
+so looked badly stale (239 and 845). They were not: both bands still hold on
+the basis they were measured on. Re-deriving them from the raw totals would
+have folded 64 SBOM inventory rows into a vulnerability expectation.
 
 ---
 
@@ -434,9 +467,21 @@ jmo scan --image node:14      # EOL, has CVEs
 | Profile | Tool Count | Notes |
 |---------|-----------|-------|
 | fast | 9 | Includes OPA for policy checks |
-| slim | 14 | fast + cloud/IaC tools |
-| balanced | 18 | slim + DAST/SCA tools |
-| deep | 29 | All tools including fuzzing, mobile, host security |
+| slim | 13 | fast + cloud/IaC tools |
+| balanced | 17 | slim + DAST/SCA tools |
+| deep | 28 | All tools including fuzzing, mobile, host security. 4 of these are `MANUAL_INSTALL_TOOLS` (`afl++`, `akto`, `falco`, `mobsf`) and are deliberately absent from every Docker image |
+
+> **29 is the catalogue total, not a profile count.** The unique tool catalogue
+> has 29 entries; no profile has 29. `README.md`'s "29 tools across 12
+> categories" is correct because it says catalogue — see #731, which flags that
+> exact number as one not to "fix". `deep` is 28.
+>
+> Derive these rather than trusting the table:
+>
+> ```bash
+> python -c "from scripts.core.tool_registry import PROFILE_TOOLS; \
+>   print({p: len(t) for p, t in PROFILE_TOOLS.items()})"
+> ```
 
 ---
 
@@ -458,7 +503,7 @@ jmo scan --image node:14      # EOL, has CVEs
 - [x] Docker wrapper scripts: bash wrapper verified, PS1 Issue #12 fixed (TTY detection), CMD wrapper verified via `cmd //c`
 - [x] Docker fast scan: 66 findings across 4 tools on Juice Shop
 - [x] Docker balanced scan: 691 findings from 6 reporting tools on Juice Shop (13/18 tools completed)
-- [x] MCP server: all 3 tools verified (`get_security_findings`, `apply_fix` dry_run, `mark_resolved`); server lifecycle verified (starts, runs, terminates cleanly)
+- [x] MCP server: **3 of 5** tools verified (`get_security_findings`, `apply_fix` dry_run, `mark_resolved`); server lifecycle verified (starts, runs, terminates cleanly). **Not verified here:** `query_findings_db` and `get_server_info`, plus the `finding://{id}` resource. *This line read "all 3 tools verified" where the server exposes five (#959).*
 - [x] Interactive wizard: 7 pexpect scenarios (native, docker, ctrl-c, invalid input, diff, yes, path formats)
 - [x] WSL scanning: /mnt/c cross-FS scan (61 findings), native path scan, cron install/uninstall, line endings
 - [x] Policy violation exit code: `jmo ci --fail-on-policy-violation` returns exit 1 when policies fail
@@ -522,6 +567,6 @@ jmo scan --image node:14      # EOL, has CVEs
 **Last Updated:** 2026-02-15
 **Test Platform:** Windows 11, Python 3.12.11, Docker 29.1.5; WSL Ubuntu 24.04, Python 3.12.3, Docker 28.2.2
 **Tester:** Claude Code (automated + manual + pexpect interactive + Docker scan + WSL cross-platform verification)
-**Maintainer:** See [CONTRIBUTING.md](../CONTRIBUTING.md)
+**Maintainer:** See [CONTRIBUTING.md](../../CONTRIBUTING.md)
 **Docker Images Tested:** local-fast (9 tools), local-balanced (18 tools), local-deep (27 tools)
 **WSL Testing:** Ubuntu 24.04, /mnt/c scans, cron integration, line ending validation, cross-FS results access

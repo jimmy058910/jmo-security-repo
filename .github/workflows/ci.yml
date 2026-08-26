@@ -30,7 +30,7 @@ jobs:
           python-version: '3.12'
 
       - name: Validate GitHub workflows (actionlint)
-        uses: reviewdog/action-actionlint@v1.73.0
+        uses: reviewdog/action-actionlint@v1.73.2
         with:
           actionlint_flags: -color
           level: error
@@ -42,31 +42,31 @@ jobs:
           yamllint -c .yamllint.yaml .
 
       - name: Lint Dockerfile.fast
-        uses: hadolint/hadolint-action@v3.3.0
+        uses: hadolint/hadolint-action@v3.4.0
         with:
           dockerfile: Dockerfile.fast
           failure-threshold: warning
 
       - name: Lint Dockerfile.slim
-        uses: hadolint/hadolint-action@v3.3.0
+        uses: hadolint/hadolint-action@v3.4.0
         with:
           dockerfile: Dockerfile.slim
           failure-threshold: warning
 
       - name: Lint Dockerfile.balanced
-        uses: hadolint/hadolint-action@v3.3.0
+        uses: hadolint/hadolint-action@v3.4.0
         with:
           dockerfile: Dockerfile.balanced
           failure-threshold: warning
 
       - name: Lint Dockerfile.deep
-        uses: hadolint/hadolint-action@v3.3.0
+        uses: hadolint/hadolint-action@v3.4.0
         with:
           dockerfile: Dockerfile.deep
           failure-threshold: warning
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@v10.0.1
         with:
           version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
           python-version: '3.12'  # preserves the pin actions/setup-python held
@@ -127,7 +127,12 @@ jobs:
           tar -xzf /tmp/trufflehog.tar.gz -C /usr/local/bin trufflehog
           chmod +x /usr/local/bin/trufflehog
           trufflehog filesystem . --json --exclude-paths .trufflehog-exclude.txt --only-verified > trufflehog-results.json || true
-          VERIFIED=$(jq -r 'select(.Verified == true)' trufflehog-results.json 2>/dev/null | wc -l || echo "0")
+          # -c, not -r: trufflehog emits NDJSON, and `jq -r` pretty-prints each
+          # matching object across ~40 lines, so `wc -l` counted *lines* rather
+          # than secrets. Measured: 147 findings reported as "6090 verified
+          # secrets". The pass/fail logic was right; only the number was, and a
+          # 40x-inflated count reads like a breach during triage.
+          VERIFIED=$(jq -c 'select(.Verified == true)' trufflehog-results.json 2>/dev/null | wc -l || echo "0")
           if [ "$VERIFIED" -gt 0 ]; then
             echo "::error::Found $VERIFIED verified secrets! Review trufflehog-results.json"
             exit 1
@@ -262,7 +267,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@v10.0.1
         with:
           version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
           python-version: '3.12'  # preserves the pin actions/setup-python held
@@ -298,7 +303,6 @@ jobs:
           CI: "true"
           PYTHONUTF8: "1"
           JMO_THREADS: "2"
-          SKIP_REACT_BUILD_CHECK: "true"
         run: |
           python -m pytest -q \
             --disable-warnings \
@@ -317,7 +321,6 @@ jobs:
           CI: "true"
           PYTHONUTF8: "1"
           JMO_THREADS: "2"
-          SKIP_REACT_BUILD_CHECK: "true"
         run: |
           python -m pytest -q \
             --disable-warnings \
@@ -342,7 +345,6 @@ jobs:
           CI: "true"
           PYTHONUTF8: "1"
           JMO_THREADS: "2"
-          SKIP_REACT_BUILD_CHECK: "true"
         run: |
           python -m pytest -q \
             --disable-warnings \
@@ -400,7 +402,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@v10.0.1
         with:
           version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
           python-version: '3.12'  # preserves the pin actions/setup-python held
@@ -442,7 +444,6 @@ jobs:
         # remove tests, lower it in the same PR and say why.
         env:
           CI: "true"
-          SKIP_REACT_BUILD_CHECK: "true"
         run: |
           collected=$(python -m pytest --collect-only -q \
             -m "not smoke and not requires_tools and not docker and not slow" \
@@ -454,6 +455,60 @@ jobs:
             exit 1
           fi
 
+      - name: Assert the optional-dependency packages still collect
+        # THE GLOBAL FLOOR ABOVE CANNOT CATCH WHAT ITS OWN COMMENT CITES.
+        # Measured at chunk 20: 8993 collected against a floor of 7800 is 1193
+        # of headroom, and tests/jmo_mcp is 295 tests -- the package the mcp 2.0
+        # rename silently emptied can vanish *four times over* and the global
+        # assertion still passes.
+        #
+        # The per-package floor is set close enough to catch a single test FILE
+        # failing to collect, not just the whole tree going to zero. That means
+        # the arithmetic is: floor <= collected - (smallest file - 1), so losing
+        # the smallest file drops BELOW it.
+        #
+        # THE HEADROOM IS PART OF THE SPEC, AND THIS FLOOR MISSED ITS OWN.
+        # Chunk 20 set 280 against 295 collected -- 15 of headroom against a
+        # smallest file of 13, so `test_auth.py` failing to collect would have
+        # left 282, and 282 > 280 passes. The floor could not catch the case
+        # its comment describes. Same shape as the global floor it was added to
+        # fix, one order of magnitude down. Re-measured at chunk 22.1:
+        # 314 collected, smallest file still 13, so the floor is 302.
+        #
+        # A package gated behind an optional dependency is the case that needs
+        # its own floor: the failure mode is an import probe going false, which
+        # takes out the whole tree at once and exits 0. Packages that are not
+        # gated fail loudly on a collection error, so they do not need an entry
+        # here. Raise a floor in the same PR that adds tests -- and recompute it
+        # from the smallest file, do not just add the delta.
+        env:
+          CI: "true"
+        run: |
+          fail=0
+          check_package() {
+            pkg="$1"; floor="$2"
+            # pytest prints TWO different summary lines and this must read both:
+            #   "295 tests collected in 0.2s"            (nothing deselected)
+            #   "260/295 tests collected (35 deselected)" (something deselected)
+            # Matching only the first form means the day any test in the package
+            # gains a `slow`/`docker` marker, this reads empty, reports 0, and
+            # fires spuriously. Take the leading number either way -- that is
+            # the SELECTED count, same as the global check's `cut -d/ -f1`.
+            n=$(python -m pytest "$pkg" --collect-only -q \
+              -m "not smoke and not requires_tools and not docker and not slow" \
+              | grep -oE "^[0-9]+(/[0-9]+)? tests collected" \
+              | sed -E 's|^([0-9]+).*|\1|')
+            echo "${pkg}: ${n:-0} collected (floor: ${floor})"
+            if [ -z "$n" ] || [ "$n" -lt "$floor" ]; then
+              echo "::error::${pkg} collected ${n:-0} tests, expected >=${floor}." \
+                "An optional-dependency probe went false, or tests were removed" \
+                "without lowering the floor. Uncollected tests cannot fail."
+              fail=1
+            fi
+          }
+          check_package tests/jmo_mcp 302
+          exit "$fail"
+
       - name: Run the full suite on a native (non-UTF-8) console
         # PYTHONUTF8 is DELIBERATELY ABSENT -- that is the entire point.
         # Flags match the windows-2022 shard exactly so the codec is the only
@@ -462,7 +517,6 @@ jobs:
         env:
           CI: "true"
           JMO_THREADS: "2"
-          SKIP_REACT_BUILD_CHECK: "true"
         run: |
           python -m pytest -q \
             --disable-warnings \
@@ -724,18 +778,18 @@ jobs:
 
           print(f"📊 Combined coverage: {coverage_pct:.1f}%")
 
-          # CI threshold is 70% (excludes requires_tools/docker/smoke tests).
+          # CI threshold is 80% (excludes requires_tools/docker/smoke tests).
           # The aggregate XML merge in the previous step recomputes line-rate
           # from merged <line> hits, so this reads true aggregate coverage
           # rather than shard-1's standalone value (which was the source of
           # the spurious "drop from 71.6% to 68.7%" investigated in PR #355).
-          # Full 85% coverage is still enforced via `make test` (sequential,
-          # full suite without filtered markers).
-          if coverage_pct < 70:
-              print(f"❌ Coverage {coverage_pct:.1f}% is below 70% CI threshold")
+          # Raised 70 -> 80 after measuring 86.4%, stable +/-0.1 over 5 runs.
+          # `--cov-fail-under` is still unset repo-wide -- see #756.
+          if coverage_pct < 80:
+              print(f"❌ Coverage {coverage_pct:.1f}% is below 80% CI threshold")
               sys.exit(1)
           else:
-              print(f"✅ Coverage {coverage_pct:.1f}% meets 70% CI threshold")
+              print(f"✅ Coverage {coverage_pct:.1f}% meets 80% CI threshold")
           EOF
 
       - name: Upload coverage to Codecov
@@ -757,7 +811,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@v10.0.1
         with:
           version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
           python-version: '3.12'  # preserves the pin actions/setup-python held
@@ -803,6 +857,10 @@ jobs:
           pre-commit run --all-files mixed-line-ending
           pre-commit run --all-files detect-private-key
           pre-commit run --all-files check-added-large-files
+          # CLAUDE.md and .gitignore both promise this "fails CI and pre-commit".
+          # Until it ran here, only the nightly all-hooks job enforced it, so a
+          # broken documentation link could merge and sit until the next night.
+          pre-commit run --all-files doc-links
 
       - name: Check Python formatting (black --check)
         run: |
@@ -874,6 +932,81 @@ jobs:
         if: steps.changes.outputs.dashboard != 'true'
         run: echo "No scripts/dashboard/** changes detected; skipping dashboard build smoke."
 
+  # The only job that runs `jmo` the way a user does.
+  #
+  # Before this existed, a PR ran 8,995 tests and invoked ZERO jmo subcommands.
+  # The only two anywhere were `jmo --help` in scheduled.yml -- guarded with
+  # `|| echo`, so it cannot fail -- and `jmo validate` in the TAG-ONLY release
+  # workflow. Every test in the suite imports the functions and calls them as
+  # plain Python, which is why the v1.1.0 audit kept finding commands that were
+  # advertised and inert: `jmo mcp-server --api-key` set an environment
+  # variable no code read for its entire life (#716), and `jmo verify` reported
+  # success having compared zero digests, with CI green throughout.
+  #
+  # DO NOT add continue-on-error. A gate that cannot block is a gate that
+  # reports the thing it was built to catch as fine -- see the windows-2022
+  # shard above, which is continue-on-error and shows green over exit code 1.
+  #
+  # Both scripts run identically on a developer's machine, which is how their
+  # negative controls are exercised: break tool registration, or
+  # `_verify_subject_digest`, and watch them go red. #948, #954.
+  cli-smoke:
+    name: cli-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
+          python-version: '3.12'  # preserves the pin actions/setup-python held
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Install dependencies
+        run: uv sync --locked --group dev
+
+      - name: Put the project venv on PATH
+        # `uv sync` creates .venv but does not activate it, and setup-uv leaves
+        # its own 3.12 on PATH. Without this, `python` below is the wrong
+        # interpreter and the mcp import fails for a reason that looks like a
+        # missing dependency. GITHUB_PATH entries are prepended.
+        run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Report the interpreter this job actually got
+        # Proves the step above worked, in the same spirit as
+        # windows-native-encoding's codec probe. Both smoke scripts run through
+        # `python`, so a silent fallback to the system interpreter would make
+        # them fail on an ImportError that reads as a broken dependency.
+        run: |
+          python -c "import sys, mcp; print('python:', sys.executable); \
+            print('mcp:', mcp.__file__)"
+          case "$(python -c 'import sys; print(sys.executable)')" in
+            "$PWD/.venv/"*) echo "OK: project venv" ;;
+            *) echo "::error::python is not the project venv"; exit 1 ;;
+          esac
+
+      - name: MCP server -- start it, speak stdio, list and call its tools
+        # Fails if the server cannot start (exit 2), if the five tools are not
+        # registered, if an undocumented sixth appears, if the finding://
+        # resource template is missing, or if a real call over the wire errors.
+        # No network, no secrets. ~20s.
+        env:
+          CI: "true"
+        run: python scripts/dev/mcp_smoke.py
+
+      - name: attest/verify -- prove the tamper checks still fail
+        # Steps 3-5 are the point. Step 2 alone passes against a verifier that
+        # returns 0 unconditionally, which is close to what shipped.
+        env:
+          CI: "true"
+        run: python scripts/dev/attest_smoke.py
+
   # Tool-output contract tests for PRs that bump tool versions.
   #
   # This job is a required status check for PRs labeled dependencies+automated
@@ -907,7 +1040,7 @@ jobs:
 
       - name: Set up uv
         if: steps.changes.outputs.versions == 'true'
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@v10.0.1
         with:
           version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
           python-version: '3.12'  # preserves the pin actions/setup-python held

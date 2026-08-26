@@ -236,3 +236,132 @@ def test_resolve_then_vanish_writes_no_stub(tmp_path, caplog):
         f"the report phase reads it."
     )
     assert statuses["yara"] is False
+
+
+def test_timeout_handling_does_not_depend_on_the_message_wording(tmp_path, caplog):
+    """A timeout is routed by `result.timed_out`, not by prose (#727).
+
+    This branch writes a stub and logs "it timed out". It used to be selected by
+    `"Timeout" in result.error_message`, which made a human-readable string
+    load-bearing: rewording it would silently route every timeout to the generic
+    failure branch, dropping both signals, with no test going red.
+
+    So this passes a deliberately reworded message. The branch must still fire.
+    """
+    stubbed: list[str] = []
+    with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+        mock_runner = MagicMock()
+        MockRunner.return_value = mock_runner
+        mock_runner.run_all_parallel.return_value = [
+            ToolResult(
+                tool="semgrep",
+                status="retry_exhausted",
+                returncode=-1,
+                attempts=3,
+                timed_out=True,
+                error_message="exceeded its 600s budget",  # deliberately NOT "Timeout"
+            )
+        ]
+        with caplog.at_level(logging.ERROR):
+            _, statuses = scan_repository(
+                repo=_repo_target(tmp_path)["repo"],
+                results_dir=tmp_path,
+                tools=["semgrep"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=True,
+                find_tool_func=lambda t: f"/usr/bin/{t}",
+                write_stub_func=lambda name, path: stubbed.append(name),
+            )
+
+    assert statuses["semgrep"] is False
+    assert stubbed == ["semgrep"], (
+        "no stub was written for a timed-out tool, so the report phase will "
+        f"have no file for it at all. stubbed={stubbed}"
+    )
+    assert (
+        "timed out" in caplog.text
+    ), f"the timeout was not announced as a timeout. caplog was: {caplog.text!r}"
+
+
+def _run_timeout(
+    module: str, scan_func, target_kwargs: dict, tool: str, tmp_path: Path
+):
+    """Run a scan job whose only tool times out, with ToolRunner mocked."""
+    stubbed: list[str] = []
+    with patch(f"scripts.cli.scan_jobs.{module}.ToolRunner") as MockRunner:
+        mock_runner = MagicMock()
+        MockRunner.return_value = mock_runner
+        mock_runner.run_all_parallel.return_value = [
+            ToolResult(
+                tool=tool,
+                status="retry_exhausted",
+                returncode=-1,
+                attempts=3,
+                timed_out=True,
+                error_message="Timeout after 600s",
+            )
+        ]
+        _, statuses = scan_func(
+            **target_kwargs,
+            results_dir=tmp_path,
+            tools=[tool],
+            timeout=600,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=True,
+            find_tool_func=lambda t: f"/usr/bin/{t}",
+            write_stub_func=lambda name, path: stubbed.append(name),
+        )
+    return statuses, stubbed
+
+
+@pytest.mark.parametrize("module,scan_func,target,tool", SCANNERS)
+def test_a_timeout_names_itself_on_a_durable_stream(
+    module, scan_func, target, tool, tmp_path, caplog
+):
+    """Every scan job must say a tool timed out, not just record False.
+
+    `repository_scanner` writes a stub and logs "it timed out"; the other four
+    dropped a timeout into an `else` branch that recorded `False` and returned
+    -- no stub, and **no log call at all**. Measured: `report_tool_failure` was
+    called once per scanner (the tool-not-found path) against three times in
+    `repository_scanner`.
+
+    So a `deep` scan where checkov timed out on an IaC target produced a scan
+    that exited 0 with no output for checkov and nothing anywhere saying why.
+    That is the silent-failure class this suite exists to close.
+    """
+    with caplog.at_level(logging.ERROR):
+        statuses, _ = _run_timeout(module, scan_func, target(tmp_path), tool, tmp_path)
+
+    assert statuses[tool] is False
+    assert tool in caplog.text, (
+        f"{module}: {tool} timed out and said so on no stream. A non-TTY run "
+        f"renders no progress display, so this is the only durable record. "
+        f"caplog was: {caplog.text!r}"
+    )
+    assert "timed out" in caplog.text, (
+        f"{module}: the failure was logged but not identified as a timeout, so "
+        f"an operator cannot tell it from a crash. caplog was: {caplog.text!r}"
+    )
+
+
+@pytest.mark.parametrize("module,scan_func,target,tool", SCANNERS)
+def test_a_timeout_leaves_a_stub_so_the_report_phase_has_a_file(
+    module, scan_func, target, tool, tmp_path
+):
+    """A timed-out tool gets a stub, so the report phase sees a consistent tree.
+
+    Paired with the log assertion above, never alone: an empty stub on its own
+    is indistinguishable from a tool that ran and found nothing, which is the
+    lie #7 in the scan-core work removed. The stub is for file-shape
+    consistency; the log is what carries the meaning.
+    """
+    _, stubbed = _run_timeout(module, scan_func, target(tmp_path), tool, tmp_path)
+
+    assert tool in stubbed, (
+        f"{module}: no stub written for a timed-out {tool}, so the report phase "
+        f"has no file for it at all. stubbed={stubbed}"
+    )

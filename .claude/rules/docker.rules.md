@@ -99,7 +99,50 @@ unzip -t /tmp/foo.zip > /dev/null  # before unzip
 
 Binary-only downloads (no extraction step) don't need an integrity check — `--fail` plus the runtime version-check (`<tool> --version` in the verify stage) catches HTTP errors and serving-the-wrong-file mistakes.
 
+**Checksum verification: keep the canonical asset filename.** When a project publishes a `*_checksums.txt`, `sha256sum -c` resolves the path written *inside* that line and opens it from the working directory — it does not check whatever you piped in. So renaming the download breaks verification permanently, and the failure is easy to misread as a corrupt file:
+
+```dockerfile
+# WRONG - can never verify: the checksums line names the original asset
+curl -fsSL "$URL/actionlint_1.7.12_linux_amd64.tar.gz" -o actionlint.tar.gz
+grep " actionlint_1.7.12_linux_amd64.tar.gz$" checksums.txt | sha256sum -c -
+#   -> sha256sum: actionlint_1.7.12_linux_amd64.tar.gz: No such file or directory
+#      FAILED open or read
+
+# RIGHT - save under the name the checksums file uses
+archive="actionlint_1.7.12_linux_amd64.tar.gz"
+curl -fsSL "$URL/$archive" -o "$archive"
+grep " ${archive}$" checksums.txt | sha256sum -c -
+```
+
+Found in a documented recipe that had never been run (#749). It fails loudly rather than silently, but it fails on *every* invocation, so a recipe carrying it has provably never been executed. Run any download recipe you write.
+
 **Why this matters**: With ~50 binaries downloaded per release across 4 Dockerfile variants × 2 architectures, single-attempt downloads at even 0.5% CDN flake rate cause one transient failure most release cycles. The v1.0.3 cycle saw multiple Docker Smoke Test failures from this exact pattern (trufflehog, trivy, others — each different binary on different runs). Hardening landed in PR #349.
+
+## `.dockerignore` Patterns Are Root-Anchored (`.gitignore` Is Not)
+
+The two files look alike and match differently. Git treats a pattern with no
+leading slash as matching **at any depth**; Docker anchors at the context root
+unless the pattern is prefixed with `**/`.
+
+So `node_modules/` in `.dockerignore` excluded `./node_modules` and nothing
+else. `scripts/dashboard/node_modules` (237MB) and `scripts/api/node_modules`
+(23MB) were shipped into every locally-built image via `COPY . /opt/jmo-security/`,
+while `git check-ignore` cheerfully reported them ignored.
+
+**Release images were never affected** — both directories are gitignored, so the
+bare `actions/checkout@v7` in `release.yml`'s `docker-build-*` jobs never had
+them, and no `npm install` runs before the build. This is a local-build defect
+only, and worth stating that way: an image-size or context finding must name
+which artifact it is about.
+
+Symptom: `docker build` sits on `transferring context: NNNMB` for minutes.
+Measured before the fix: **632MB and climbing**; `graphify-out/` (411MB, also
+unlisted) plus the two `node_modules` accounted for it. After adding `**/node_modules/`
+and `graphify-out/`, a `fast` build completed in 4m19s.
+
+When adding an ignore rule for something that can appear in a subdirectory, write
+`**/name/`, and check the transferred context size rather than assuming the rule
+took.
 
 ## Image Size Measurement Dimension
 

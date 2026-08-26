@@ -13,6 +13,13 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from scripts.cli.jmo import ProgressTracker
 
+# `update()` derives the progress symbol from the scanner's per-tool status map,
+# so every call has to supply one -- including the tests that are about ETA or
+# percentages rather than about the symbol.
+ALL_OK: dict[str, bool] = {"trufflehog": True}
+ALL_FAILED: dict[str, bool] = {"trufflehog": False}
+PARTIAL: dict[str, bool] = {"trufflehog": True, "trivy": False}
+
 
 class TestProgressTracker:
     """Tests for ProgressTracker class."""
@@ -44,10 +51,10 @@ class TestProgressTracker:
 
         # Mock _log to prevent actual logging
         with patch("scripts.cli.jmo._log"):
-            tracker.update("repo", "test-repo", 10.5)
+            tracker.update("repo", "test-repo", ALL_OK, 10.5)
             assert tracker.completed == 1
 
-            tracker.update("image", "nginx:latest", 5.2)
+            tracker.update("image", "nginx:latest", ALL_OK, 5.2)
             assert tracker.completed == 2
 
     def test_update_calls_log(self):
@@ -57,7 +64,7 @@ class TestProgressTracker:
         tracker.start()
 
         with patch("scripts.cli.jmo._log") as mock_log:
-            tracker.update("repo", "my-repo", 15.0)
+            tracker.update("repo", "my-repo", ALL_OK, 15.0)
 
             # Verify _log was called
             mock_log.assert_called_once()
@@ -81,28 +88,28 @@ class TestProgressTracker:
             tracker.start()
 
             # Update 1/10 = 10%
-            tracker.update("repo", "repo1", 1.0)
+            tracker.update("repo", "repo1", ALL_OK, 1.0)
             assert "10%" in mock_log.call_args[0][2]
 
             # Update 2/10 = 20%
-            tracker.update("repo", "repo2", 1.0)
+            tracker.update("repo", "repo2", ALL_OK, 1.0)
             assert "20%" in mock_log.call_args[0][2]
 
             # Update 3-5/10 = 30-50%
-            tracker.update("repo", "repo3", 1.0)
-            tracker.update("repo", "repo4", 1.0)
-            tracker.update("repo", "repo5", 1.0)
+            tracker.update("repo", "repo3", ALL_OK, 1.0)
+            tracker.update("repo", "repo4", ALL_OK, 1.0)
+            tracker.update("repo", "repo5", ALL_OK, 1.0)
             assert "50%" in mock_log.call_args[0][2]
 
             # Update 6-9/10 = 60-90%
-            tracker.update("repo", "repo6", 1.0)
-            tracker.update("repo", "repo7", 1.0)
-            tracker.update("repo", "repo8", 1.0)
-            tracker.update("repo", "repo9", 1.0)
+            tracker.update("repo", "repo6", ALL_OK, 1.0)
+            tracker.update("repo", "repo7", ALL_OK, 1.0)
+            tracker.update("repo", "repo8", ALL_OK, 1.0)
+            tracker.update("repo", "repo9", ALL_OK, 1.0)
             assert "90%" in mock_log.call_args[0][2]
 
             # Update 10/10 = 100%
-            tracker.update("repo", "repo10", 1.0)
+            tracker.update("repo", "repo10", ALL_OK, 1.0)
             assert "100%" in mock_log.call_args[0][2]
 
     def test_format_duration_seconds(self):
@@ -143,7 +150,7 @@ class TestProgressTracker:
         # Simulate completing first target in 10 seconds
         with patch("scripts.cli.jmo._log") as mock_log, patch("time.time") as mock_time:
             mock_time.return_value = tracker._start_time + 10
-            tracker.update("repo", "repo1", 10.0)
+            tracker.update("repo", "repo1", ALL_OK, 10.0)
 
             message = mock_log.call_args[0][2]
             # ETA: 9 remaining * 10s each = 90s = 1m 30s
@@ -151,26 +158,104 @@ class TestProgressTracker:
             assert "1m 30s" in message
 
     def test_success_symbol(self):
-        """Test success symbol (✓) for positive elapsed time."""
+        """Every tool succeeded -> check mark, at INFO."""
         args = Namespace()
         tracker = ProgressTracker(total=1, args=args)
         tracker.start()
 
         with patch("scripts.cli.jmo._log") as mock_log:
-            tracker.update("repo", "success-repo", 5.0)
-            message = mock_log.call_args[0][2]
+            tracker.update("repo", "success-repo", ALL_OK, 5.0)
+            level, message = mock_log.call_args[0][1], mock_log.call_args[0][2]
             assert "✓" in message
+            assert level == "INFO"
 
     def test_failure_symbol(self):
-        """Test failure symbol (✗) for negative elapsed time."""
+        """Every tool failed -> cross, at ERROR, naming the tools.
+
+        This test used to pass ``elapsed=-1.0`` to reach the cross, because the
+        symbol was ``"✓" if elapsed >= 0 else "✗"``. No caller ever passed a
+        negative duration -- the only one passed a hardcoded ``1.0`` -- so the
+        branch it covered was unreachable in production and a target whose every
+        tool failed rendered as a success (#809). Asserting on a status map is
+        what makes this test able to fail for the reason it claims to.
+        """
         args = Namespace()
         tracker = ProgressTracker(total=1, args=args)
         tracker.start()
 
         with patch("scripts.cli.jmo._log") as mock_log:
-            tracker.update("repo", "failed-repo", -1.0)
-            message = mock_log.call_args[0][2]
+            tracker.update("repo", "failed-repo", ALL_FAILED, 5.0)
+            level, message = mock_log.call_args[0][1], mock_log.call_args[0][2]
             assert "✗" in message
+            assert level == "ERROR"
+            assert "trufflehog" in message
+            assert "NO findings" in message
+
+    def test_partial_symbol(self):
+        """Some tools failed -> warning glyph, at WARN, naming only the failures."""
+        args = Namespace()
+        tracker = ProgressTracker(total=1, args=args)
+        tracker.start()
+
+        with patch("scripts.cli.jmo._log") as mock_log:
+            tracker.update("repo", "partial-repo", PARTIAL, 5.0)
+            level, message = mock_log.call_args[0][1], mock_log.call_args[0][2]
+            assert "⚠" in message
+            assert level == "WARN"
+            assert "trivy" in message  # the one that failed
+            assert "MISSING" in message
+
+    def test_elapsed_is_reported_not_invented(self):
+        """The duration in the line is the one passed, not a constant.
+
+        The only production caller used to pass ``elapsed=1.0`` unconditionally,
+        so every target reported ``(1s)`` regardless of how long it took.
+        """
+        args = Namespace()
+        tracker = ProgressTracker(total=2, args=args)
+        tracker.start()
+
+        with patch("scripts.cli.jmo._log") as mock_log:
+            tracker.update("repo", "quick", ALL_OK, 3.0)
+            assert "(3s)" in mock_log.call_args[0][2]
+            tracker.update("repo", "slow", ALL_OK, 125.0)
+            assert "(2m 5s)" in mock_log.call_args[0][2]
+
+    def test_empty_status_map_is_a_failure_not_a_success(self):
+        """A target whose scanner raised has no statuses, and must not read as OK.
+
+        ``scan_all`` appends ``(target_id, {})`` when a scan job raises.
+        ``all([])`` is True, so a naive check would render the loudest possible
+        outcome as a clean scan.
+        """
+        args = Namespace()
+        tracker = ProgressTracker(total=1, args=args)
+        tracker.start()
+
+        with patch("scripts.cli.jmo._log") as mock_log:
+            tracker.update("repo", "crashed", {}, 0.0)
+            level, message = mock_log.call_args[0][1], mock_log.call_args[0][2]
+            assert "✗" in message
+            assert level == "ERROR"
+            assert "no tool ran" in message
+
+    def test_metadata_keys_are_not_counted_as_tools(self):
+        """``__attempts__`` rides in the status map and is not a tool."""
+        args = Namespace()
+        tracker = ProgressTracker(total=1, args=args)
+        tracker.start()
+
+        with patch("scripts.cli.jmo._log") as mock_log:
+            tracker.update(
+                "repo",
+                "r",
+                {"trufflehog": True, "__attempts__": {"trufflehog": 2}},
+                1.0,
+            )
+            level, message = mock_log.call_args[0][1], mock_log.call_args[0][2]
+            assert "✓" in message
+            assert level == "INFO"
+            assert "__attempts__" not in message
 
     def test_thread_safety(self):
         """Test ProgressTracker is thread-safe."""
@@ -184,7 +269,7 @@ class TestProgressTracker:
             threads = []
             for i in range(100):
                 t = threading.Thread(
-                    target=tracker.update, args=("repo", f"repo{i}", 0.1)
+                    target=tracker.update, args=("repo", f"repo{i}", ALL_OK, 0.1)
                 )
                 threads.append(t)
                 t.start()
@@ -212,7 +297,7 @@ class TestProgressTracker:
 
         with patch("scripts.cli.jmo._log") as mock_log:
             for idx, (target_type, target_name) in enumerate(target_types, 1):
-                tracker.update(target_type, target_name, 1.0)
+                tracker.update(target_type, target_name, ALL_OK, 1.0)
 
                 message = mock_log.call_args[0][2]
                 assert f"[{idx}/6]" in message
@@ -226,7 +311,7 @@ class TestProgressTracker:
         # Don't call start() - _start_time is None
 
         with patch("scripts.cli.jmo._log") as mock_log:
-            tracker.update("repo", "repo1", 1.0)
+            tracker.update("repo", "repo1", ALL_OK, 1.0)
             message = mock_log.call_args[0][2]
             assert "calculating..." in message
 

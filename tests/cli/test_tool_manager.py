@@ -18,6 +18,8 @@ import re
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 # ========== Category 1: VERSION_PATTERNS Constants ==========
 
 
@@ -1817,3 +1819,62 @@ class TestCleanEnvPathSeparator:
         assert (
             sentinel in entries
         ), f"the pre-existing first PATH entry was swallowed. entries[0]={entries[0]!r}"
+
+
+class TestVariantExecutionReadiness:
+    """`_verify_execution` must resolve a variant to its parent binary.
+
+    `semgrep-secrets`, `trivy-rbac` and `checkov-cicd` are TOOL_VARIANTS: they
+    run their parent's executable, which is why TOOL_BINARY_NAMES maps each to
+    it. `check_tool`'s installed check and version lookup both resolved that;
+    `_verify_execution` did not, so it probed for a binary literally named
+    `semgrep-secrets`, never found one, and reported the tool as installed-but-
+    not-executable in the same run that listed it OK.
+
+    Measured on the deep profile before the fix: `execution_ready` 18 of 21
+    installed, `not_ready` 3, and three warnings reading `Missing: <variant>`.
+    After: 21 / 0 / none.
+
+    The pre-existing tests in this file all patch `_verify_execution` out, so
+    nothing exercised this path.
+    """
+
+    @pytest.mark.parametrize(
+        "variant,parent",
+        [
+            ("semgrep-secrets", "semgrep"),
+            ("trivy-rbac", "trivy"),
+            ("checkov-cicd", "checkov"),
+        ],
+    )
+    def test_variant_is_ready_when_only_the_parent_binary_exists(self, variant, parent):
+        from scripts.cli.tool_manager import ToolManager
+
+        manager = ToolManager()
+        with (
+            patch(
+                "scripts.cli.tool_manager.tool_exists",
+                side_effect=lambda cmd, warn=False: cmd == parent,
+            ),
+            patch.object(manager, "_find_binary", return_value=None),
+        ):
+            ready, warning, missing = manager._verify_execution(variant)
+
+        assert ready is True, f"{variant} reported not-ready though {parent} exists"
+        assert warning is None, f"unexpected warning for {variant}: {warning}"
+        assert missing == []
+
+    def test_a_genuinely_absent_tool_is_still_reported_missing(self):
+        """The fix must not turn the check into an unconditional pass."""
+        from scripts.cli.tool_manager import ToolManager
+
+        manager = ToolManager()
+        with (
+            patch("scripts.cli.tool_manager.tool_exists", return_value=False),
+            patch.object(manager, "_find_binary", return_value=None),
+        ):
+            ready, warning, missing = manager._verify_execution("semgrep-secrets")
+
+        assert ready is False
+        assert warning and "Missing" in warning
+        assert missing == ["semgrep"], "should name the binary it actually probed"

@@ -18,6 +18,10 @@ from pathlib import Path
 
 import pytest
 
+from scripts.core.adapters.trufflehog_adapter import (
+    _is_pytest_name_matched_as_lob_key,
+)
+
 # Vendored trees are pruned during traversal, never filtered afterwards.
 # `rglob` descends into them regardless of any later check and stats every entry
 # it yields, which fails differently on each platform and so reads as a platform
@@ -188,7 +192,11 @@ class TestSecretsManagement:
                 ["trufflehog", "filesystem"] + scan_dirs + ["--json", "--no-update"],
                 capture_output=True,
                 text=True,
-                timeout=60,
+                # Measured at 3m46s on a Windows dev box. `Verified` means
+                # TruffleHog made a live API call per candidate, so the wall
+                # time is dominated by network round-trips, not scanning. The
+                # previous 60s budget was under a quarter of the real cost.
+                timeout=600,
             )
 
             # Parse findings
@@ -211,6 +219,14 @@ class TestSecretsManagement:
                         "node_modules" in file_path
                         or ".git/" in file_path
                         or not file_path.endswith(".py")
+                    ):
+                        continue
+
+                    # TruffleHog's Lob detector matches pytest function names
+                    # (#724). Reuse the adapter's predicate rather than a second
+                    # copy of the rule - it is the same collision.
+                    if _is_pytest_name_matched_as_lob_key(
+                        finding.get("DetectorName", ""), finding.get("Raw")
                     ):
                         continue
 

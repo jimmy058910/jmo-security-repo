@@ -27,7 +27,11 @@ export interface CommonFinding {
   }
   references?: string[]
   tags?: string[]
-  cvss?: number
+  cvss?: {
+    version?: string
+    score: number
+    vector?: string
+  }
   context?: {
     snippet?: string
     lines?: string[]

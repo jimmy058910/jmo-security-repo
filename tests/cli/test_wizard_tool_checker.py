@@ -1281,7 +1281,16 @@ class TestAutoFixToolsDependencies:
         ]
 
         # Choice 1: auto-install deps
-        with patch("builtins.input", return_value="1"):
+        # Mock ToolManager's post-install re-check (#907: unmocked, it shells
+        # out to whatever scanner binaries are actually on PATH, matching
+        # test_choice_2_skip_deps_continues's established pattern below).
+        mock_summary = MagicMock(execution_ready=1, platform_applicable=1)
+        with (
+            patch("builtins.input", return_value="1"),
+            patch("scripts.cli.tool_manager.ToolManager") as mock_manager_cls,
+        ):
+            mock_manager_cls.return_value.check_profile.return_value = {}
+            mock_manager_cls.return_value.get_tool_summary.return_value = mock_summary
             should_continue, available = _auto_fix_tools(
                 fix_info=fix_info,
                 platform="linux",
@@ -1328,7 +1337,16 @@ class TestAutoFixToolsDependencies:
         ]
 
         # Choice 1: auto-install deps
-        with patch("builtins.input", return_value="1"):
+        # Mock ToolManager's post-install re-check (#907: unmocked, it shells
+        # out to whatever scanner binaries are actually on PATH, matching
+        # test_choice_2_skip_deps_continues's established pattern below).
+        mock_summary = MagicMock(execution_ready=1, platform_applicable=1)
+        with (
+            patch("builtins.input", return_value="1"),
+            patch("scripts.cli.tool_manager.ToolManager") as mock_manager_cls,
+        ):
+            mock_manager_cls.return_value.check_profile.return_value = {}
+            mock_manager_cls.return_value.get_tool_summary.return_value = mock_summary
             should_continue, available = _auto_fix_tools(
                 fix_info=fix_info,
                 platform="linux",
@@ -1375,7 +1393,16 @@ class TestAutoFixToolsDependencies:
         ]
 
         # Choice 1: auto-install deps
-        with patch("builtins.input", return_value="1"):
+        # Mock ToolManager's post-install re-check (#907: unmocked, it shells
+        # out to whatever scanner binaries are actually on PATH, matching
+        # test_choice_2_skip_deps_continues's established pattern below).
+        mock_summary = MagicMock(execution_ready=1, platform_applicable=1)
+        with (
+            patch("builtins.input", return_value="1"),
+            patch("scripts.cli.tool_manager.ToolManager") as mock_manager_cls,
+        ):
+            mock_manager_cls.return_value.check_profile.return_value = {}
+            mock_manager_cls.return_value.get_tool_summary.return_value = mock_summary
             should_continue, available = _auto_fix_tools(
                 fix_info=fix_info,
                 platform="linux",
@@ -1537,18 +1564,25 @@ class TestAutoFixToolsDependencies:
         ]
 
         # Choice 1: auto-install deps
-        # Mock ToolInstaller to prevent real npm/pip subprocess calls
+        # Mock ToolInstaller to prevent real npm/pip subprocess calls, and
+        # ToolManager's post-install re-check (#907: unmocked, it shells out
+        # to whatever scanner binaries are actually on PATH) -- same pattern
+        # as test_choice_2_skip_deps_continues above.
         mock_progress = MagicMock()
         mock_progress.results = []
+        mock_summary = MagicMock(execution_ready=1, platform_applicable=1)
 
         with (
             patch("builtins.print"),
             patch("builtins.input", return_value="1"),
             patch("scripts.cli.tool_installer.ToolInstaller") as mock_installer_cls,
+            patch("scripts.cli.tool_manager.ToolManager") as mock_manager_cls,
         ):
             mock_installer_cls.return_value.install_tools_parallel.return_value = (
                 mock_progress
             )
+            mock_manager_cls.return_value.check_profile.return_value = {}
+            mock_manager_cls.return_value.get_tool_summary.return_value = mock_summary
             should_continue, available = _auto_fix_tools(
                 fix_info=fix_info,
                 platform="linux",
@@ -1589,7 +1623,18 @@ class TestAutoFixToolsDependencies:
             }
         ]
 
-        with patch("builtins.print"):
+        # Mock ToolManager's post-install re-check (#907: unmocked, it shells
+        # out to whatever scanner binaries are actually on PATH) -- same
+        # pattern as test_choice_2_skip_deps_continues above. Reached even
+        # with no missing deps: the re-check runs unconditionally near the
+        # end of _auto_fix_tools.
+        mock_summary = MagicMock(execution_ready=1, platform_applicable=1)
+        with (
+            patch("builtins.print"),
+            patch("scripts.cli.tool_manager.ToolManager") as mock_manager_cls,
+        ):
+            mock_manager_cls.return_value.check_profile.return_value = {}
+            mock_manager_cls.return_value.get_tool_summary.return_value = mock_summary
             # No input needed since menu should be skipped
             should_continue, available = _auto_fix_tools(
                 fix_info=fix_info,

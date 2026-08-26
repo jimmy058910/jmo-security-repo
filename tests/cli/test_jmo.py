@@ -978,3 +978,97 @@ class TestScanPathLoggingIsReachable:
             "caplog cannot see an INFO record from a scripts.* logger after a "
             "jmo command configured logging - the scan's level leaked past it"
         )
+
+
+# ========== Scan: nothing scanned is not a success (#806) ==========
+
+
+class TestScanExitsNonZeroWhenNothingWasScanned:
+    """`jmo scan --repo "$REPO" || exit 1` used to pass when $REPO was a typo.
+
+    cmd_scan returned 0 whenever discovery came up empty, so a CI gate reported
+    success for a scan that never ran. Same call as #788 made for
+    `jmo tools check`.
+    """
+
+    @staticmethod
+    def _run(argv):
+        """Run cmd_scan with tool pre-flight neutralised.
+
+        cmd_scan bails at `jmo.py:2929` when no requested tool is installed,
+        before discovery ever runs, and returns 1 (silently - #811). On a
+        runner without trufflehog that made the two exit-code tests below pass
+        for entirely the wrong reason: the missing-tool bail also returns
+        non-zero, so they were green while never reaching the code under test.
+        Pinning the pre-flight keeps these tests about target discovery.
+        """
+        from scripts.cli.jmo import cmd_scan, parse_args
+
+        with patch("sys.argv", argv):
+            args = parse_args()
+
+        with patch(
+            "scripts.cli.jmo._check_scan_tools",
+            side_effect=lambda _a, requested: (list(requested), []),
+        ):
+            return cmd_scan(args)
+
+    def test_missing_repo_path_fails(self, tmp_path, capsys):
+        rc = self._run(
+            [
+                "jmo",
+                "scan",
+                "--repo",
+                str(tmp_path / "definitely-not-here"),
+                "--results-dir",
+                str(tmp_path / "out"),
+                "--tools",
+                "trufflehog",
+                "--no-store-history",
+            ]
+        )
+        assert rc != 0, "a scan that scanned nothing reported success"
+        # Asserting the exit code alone is not enough: several earlier bail-outs
+        # also return non-zero, so this must confirm it failed *here* (#811).
+        assert "Every target was rejected" in capsys.readouterr().err
+
+    def test_no_target_flag_at_all_fails(self, tmp_path, capsys):
+        rc = self._run(
+            [
+                "jmo",
+                "scan",
+                "--results-dir",
+                str(tmp_path / "out"),
+                "--tools",
+                "trufflehog",
+                "--no-store-history",
+            ]
+        )
+        assert rc != 0
+        # Asking for nothing stays a distinct message from asking for something
+        # that does not exist.
+        assert "No scan targets provided" in capsys.readouterr().err
+
+    def test_the_rejected_target_is_named_in_the_log(self, tmp_path, caplog):
+        import logging
+
+        missing = tmp_path / "typo-here"
+        with caplog.at_level(logging.WARNING):
+            self._run(
+                [
+                    "jmo",
+                    "scan",
+                    "--repo",
+                    str(missing),
+                    "--results-dir",
+                    str(tmp_path / "out"),
+                    "--tools",
+                    "trufflehog",
+                    "--no-store-history",
+                ]
+            )
+
+        assert "typo-here" in caplog.text, (
+            "the rejected path must appear on some stream; the old message named "
+            f"no target at all:\n{caplog.text}"
+        )

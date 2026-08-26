@@ -21,6 +21,7 @@ import io
 import sys
 import threading
 import time
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 from rich.console import Console, Group
@@ -35,6 +36,12 @@ from rich.progress import (
     TimeElapsedColumn,
 )
 from rich.table import Table
+
+from scripts.cli.scan_orchestrator import (
+    TARGET_FAILED,
+    TARGET_PARTIAL,
+    classify_target_outcome,
+)
 
 if TYPE_CHECKING:
     from argparse import Namespace
@@ -76,11 +83,25 @@ class RichScanProgressTracker:
         self.args = args
         self.verbose = verbose
 
-        self._lock = threading.Lock()
+        # RLock, not Lock: update_tool() calls self.console.print() directly
+        # while holding this lock, rather than self.log() -- which also
+        # acquires it -- and that split is the only reason a plain Lock
+        # doesn't already deadlock. Swapping one of those console.print()
+        # calls for the more obvious self.log() call would self-deadlock the
+        # worker thread, and because that thread is a scan future, the whole
+        # scan hangs forever waiting on it. Mirrors the sibling tracker's
+        # RLock in scripts/cli/jmo.py's ProgressTracker, which hit exactly
+        # this deadlock. See TestUpdateToolDoesNotDeadlock in
+        # tests/cli/test_rich_progress.py.
+        self._lock = threading.RLock()
         self._start_time: float | None = None
 
         # Target-level tracking
         self.targets_completed = 0
+        # Targets that finished having produced nothing. Counted separately from
+        # `targets_completed`, because "we got to the end of it" and "it worked"
+        # are different facts and the bar only ever showed the first.
+        self.targets_failed = 0
         self.current_target: str = ""
         self.current_target_type: str = ""
 
@@ -246,7 +267,13 @@ class RichScanProgressTracker:
         """Start progress tracking timer (compatibility method)."""
         self._start_time = time.time()
 
-    def update(self, target_type: str, target_name: str, elapsed: float = 1.0) -> None:
+    def update(
+        self,
+        target_type: str,
+        target_name: str,
+        statuses: Mapping[str, Any] | None = None,
+        elapsed: float = 0.0,
+    ) -> None:
         """Update progress after completing a target scan.
 
         This method is called when an entire target (repo, image, etc.) finishes.
@@ -254,18 +281,56 @@ class RichScanProgressTracker:
         Args:
             target_type: Type of target (repo, image, url, etc.)
             target_name: Name/identifier of target
-            elapsed: Elapsed time in seconds for this target
+            statuses: The scanner's per-tool boolean map for this target.
+            elapsed: Seconds this target took, measured in the worker.
+
+        This method is passed to ``scan_all`` as ``progress_callback`` **as a
+        bound method**, so it receives whatever that call passes positionally.
+        That third positional has been the ``statuses`` dict all along, while
+        this signature declared ``elapsed: float`` -- it did not crash only
+        because the parameter was never read. The target bar therefore advanced
+        identically whether a target found everything or nothing (#809).
         """
+        outcome = classify_target_outcome(statuses)
+        failed_tools = sorted(
+            name
+            for name, ok in (statuses or {}).items()
+            if not name.startswith("__") and not ok
+        )
+
+        # Outside the lock: self.log() takes it, and re-entering a
+        # threading.Lock from the same thread deadlocks.
+        if outcome == TARGET_FAILED:
+            self.targets_failed += 1
+            self.log(
+                "ERROR",
+                f"{target_type}: {target_name} contributed NO findings - "
+                + (
+                    f"every tool failed ({', '.join(failed_tools)})"
+                    if failed_tools
+                    else "no tool ran against this target"
+                ),
+            )
+        elif outcome == TARGET_PARTIAL:
+            self.log(
+                "WARN",
+                f"{target_type}: {target_name} - findings MISSING from "
+                f"{len(failed_tools)} failed tool(s): {', '.join(failed_tools)}",
+            )
+
         with self._lock:
             self.targets_completed += 1
             self.current_target_type = target_type
             self.current_target = target_name
 
             # Update target progress bar
+            description = f"Targets [{self.targets_completed}/{self.total_targets}]"
+            if self.targets_failed:
+                description += f" ({self.targets_failed} produced nothing)"
             self.target_progress.update(
                 self.target_task,
                 completed=self.targets_completed,
-                description=f"Targets [{self.targets_completed}/{self.total_targets}]",
+                description=description,
             )
 
             # Reset tool progress for next target

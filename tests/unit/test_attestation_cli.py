@@ -142,8 +142,14 @@ class TestVerifyCommandParsing:
         args = parse_args()
         assert args.rekor_check is True
 
-    def test_verify_with_policy_flag(self, monkeypatch):
-        """Test --policy flag for additional verification rules."""
+    def test_verify_rejects_removed_policy_flag(self, monkeypatch):
+        """`--policy` was accepted, advertised, and never read.
+
+        `verify()` took a policy_path parameter it referenced nowhere in its
+        body, so the flag was a documented verification check that did not
+        exist. It is gone rather than silently inert; argparse must now reject
+        it (exit 2) instead of accepting it and doing nothing.
+        """
         import sys
 
         from scripts.cli.jmo import parse_args
@@ -151,8 +157,35 @@ class TestVerifyCommandParsing:
         monkeypatch.setattr(
             sys, "argv", ["jmo", "verify", "findings.json", "--policy", "policy.yaml"]
         )
+        with pytest.raises(SystemExit) as excinfo:
+            parse_args()
+        assert excinfo.value.code == 2
+
+    def test_verify_signature_flags_parse(self, monkeypatch):
+        """The flags that make a signature check possible must exist."""
+        import sys
+
+        from scripts.cli.jmo import parse_args
+
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "jmo",
+                "verify",
+                "findings.json",
+                "--signature",
+                "bundle.sigstore.json",
+                "--cert-identity",
+                "you@example.com",
+                "--cert-oidc-issuer",
+                "https://oauth2.sigstore.dev/auth",
+            ],
+        )
         args = parse_args()
-        assert args.policy == "policy.yaml"
+        assert args.signature == "bundle.sigstore.json"
+        assert args.cert_identity == "you@example.com"
+        assert args.cert_oidc_issuer == "https://oauth2.sigstore.dev/auth"
 
 
 class TestAttestCommandExecution:
@@ -222,7 +255,12 @@ class TestAttestCommandExecution:
         assert custom_output.exists()
 
     def test_attest_fails_on_missing_subject(self):
-        """Test that attest fails when subject file not found."""
+        """A path that does not exist is a usage error (2), not a verdict (1).
+
+        See docs/CLI_REFERENCE.md "Exit Codes": 1 means the command ran and
+        answered no; 2 means nothing ran. Attesting a filename that isn't there
+        attested nothing.
+        """
         from scripts.cli.jmo import cmd_attest
 
         args = Namespace(
@@ -238,7 +276,42 @@ class TestAttestCommandExecution:
 
         exit_code = cmd_attest(args)
 
-        assert exit_code == 1  # Error exit code
+        assert exit_code == 2
+
+    def test_attest_rekor_without_sign_is_a_usage_error(self, sample_findings):
+        """`--rekor` alone warned and exited 0, so a CI step asking for a
+        transparency-log entry "succeeded" without producing one."""
+        from scripts.cli.jmo import cmd_attest
+
+        args = Namespace(
+            subject=str(sample_findings),
+            output=None,
+            sign=False,
+            rekor=True,
+            scan_args=None,
+            tools=["trivy"],
+            human_logs=False,
+            log_level="INFO",
+        )
+
+        assert cmd_attest(args) == 2
+
+    def test_attest_directory_is_a_usage_error_not_a_traceback(self, tmp_path):
+        """A directory reached open() and surfaced a raw PermissionError."""
+        from scripts.cli.jmo import cmd_attest
+
+        args = Namespace(
+            subject=str(tmp_path),
+            output=None,
+            sign=False,
+            rekor=False,
+            scan_args=None,
+            tools=["trivy"],
+            human_logs=False,
+            log_level="INFO",
+        )
+
+        assert cmd_attest(args) == 2
 
     def test_attest_loads_scan_args_from_file(self, sample_findings, tmp_path):
         """Test that attest loads scan arguments from JSON file."""
@@ -353,7 +426,9 @@ class TestVerifyCommandExecution:
             subject=str(subject_path),
             attestation=str(attestation_path),
             rekor_check=False,
-            policy=None,
+            signature=None,
+            cert_identity=None,
+            cert_oidc_issuer=None,
             human_logs=False,
             log_level="INFO",
         )
@@ -375,7 +450,9 @@ class TestVerifyCommandExecution:
             subject=str(subject_path),
             attestation=str(attestation_path),
             rekor_check=False,
-            policy=None,
+            signature=None,
+            cert_identity=None,
+            cert_oidc_issuer=None,
             human_logs=False,
             log_level="INFO",
         )
@@ -385,24 +462,31 @@ class TestVerifyCommandExecution:
         assert exit_code == 1  # Verification failure (tamper detected)
 
     def test_verify_fails_on_missing_subject(self):
-        """Test that verify fails when subject file not found."""
+        """A missing subject is a usage error (2), not a failed verification.
+
+        Returning 1 made "you typo'd the filename" and "this artifact is
+        forged" the same signal to a CI gate. See docs/CLI_REFERENCE.md
+        "Exit Codes".
+        """
         from scripts.cli.jmo import cmd_verify
 
         args = Namespace(
             subject="/nonexistent/findings.json",
             attestation="/nonexistent/findings.json.att.json",
             rekor_check=False,
-            policy=None,
+            signature=None,
+            cert_identity=None,
+            cert_oidc_issuer=None,
             human_logs=False,
             log_level="INFO",
         )
 
         exit_code = cmd_verify(args)
 
-        assert exit_code == 1  # Error exit code
+        assert exit_code == 2
 
     def test_verify_fails_on_missing_attestation(self, tmp_path):
-        """Test that verify fails when attestation not found."""
+        """No attestation means nothing was verified — a usage error (2)."""
         from scripts.cli.jmo import cmd_verify
 
         # Create subject but no attestation
@@ -413,14 +497,16 @@ class TestVerifyCommandExecution:
             subject=str(subject_path),
             attestation=str(tmp_path / "nonexistent.att.json"),
             rekor_check=False,
-            policy=None,
+            signature=None,
+            cert_identity=None,
+            cert_oidc_issuer=None,
             human_logs=False,
             log_level="INFO",
         )
 
         exit_code = cmd_verify(args)
 
-        assert exit_code == 1  # Error exit code
+        assert exit_code == 2
 
     def test_verify_uses_default_attestation_path(self, sample_attestation):
         """Test that verify uses <subject>.att.json as default."""
@@ -436,7 +522,9 @@ class TestVerifyCommandExecution:
             subject=str(subject_path),
             attestation=None,  # Should use default path
             rekor_check=False,
-            policy=None,
+            signature=None,
+            cert_identity=None,
+            cert_oidc_issuer=None,
             human_logs=False,
             log_level="INFO",
         )
@@ -477,9 +565,11 @@ class TestVerifierClass:
         verifier = AttestationVerifier()
 
         # Wrong digest should fail verification (multi-hash format)
-        assert not verifier._verify_subject_digest(
+        ok, error = verifier._verify_subject_digest(
             str(test_file), expected_digests={"sha256": "0" * 64}  # Wrong digest
         )
+        assert ok is False
+        assert error == "Subject digest mismatch"
 
     def test_verifier_matches_correct_digest(self, tmp_path):
         """Test that verifier accepts correct digest."""
@@ -494,10 +584,14 @@ class TestVerifierClass:
         verifier = AttestationVerifier()
         expected_digest = hashlib.sha256(test_content).hexdigest()
 
-        # Multi-hash format (Phase 5 API)
-        assert verifier._verify_subject_digest(
+        # Unpack: a bare `assert verifier._verify_subject_digest(...)` on the
+        # (ok, error) tuple is true for (False, "mismatch") too, so it could
+        # not fail.
+        ok, error = verifier._verify_subject_digest(
             str(test_file), expected_digests={"sha256": expected_digest}
         )
+        assert ok is True
+        assert error is None
 
     def test_verification_result_structure(self):
         """Test VerificationResult dataclass structure."""
@@ -650,7 +744,9 @@ class TestErrorHandling:
             subject=str(subject_path),
             attestation=str(attestation_path),
             rekor_check=False,
-            policy=None,
+            signature=None,
+            cert_identity=None,
+            cert_oidc_issuer=None,
             human_logs=False,
             log_level="INFO",
         )
@@ -683,3 +779,145 @@ class TestErrorHandling:
         exit_code = cmd_attest(args)
         # May succeed depending on OS permissions
         assert isinstance(exit_code, int)
+
+
+class TestVerifyReportsWhatItDidNotCheck:
+    """A verification that never ran must never be reported as a pass.
+
+    `cmd_verify` never passed `signature_path`, so `verify()`'s signature block
+    was unreachable from the CLI while `--help` listed "Signature verification
+    (if signed)" as one of its checks. A forged `.sigstore.json` sitting beside
+    the attestation produced "verified successfully", exit 0, and no mention of
+    the bundle at all.
+    """
+
+    @pytest.fixture
+    def attested(self, tmp_path):
+        """A real subject + its real attestation, via the real generator."""
+        from scripts.core.attestation.provenance import ProvenanceGenerator
+
+        subject = tmp_path / "findings.json"
+        subject.write_text(json.dumps({"findings": []}), encoding="utf-8")
+
+        attestation = tmp_path / "findings.json.att.json"
+        attestation.write_text(
+            json.dumps(
+                ProvenanceGenerator().generate(
+                    findings_path=subject, profile="fast", tools=[], targets=[]
+                )
+            ),
+            encoding="utf-8",
+        )
+        return subject, attestation
+
+    @staticmethod
+    def _args(subject, attestation, **overrides):
+        base = {
+            "subject": str(subject),
+            "attestation": str(attestation),
+            "signature": None,
+            "cert_identity": None,
+            "cert_oidc_issuer": None,
+            "rekor_check": False,
+            "human_logs": True,
+            "log_level": "INFO",
+        }
+        base.update(overrides)
+        return Namespace(**base)
+
+    def test_unchecked_signature_is_said_out_loud(self, attested, capsys):
+        from scripts.cli.jmo import cmd_verify
+
+        subject, attestation = attested
+        assert cmd_verify(self._args(subject, attestation)) == 0
+
+        captured = capsys.readouterr()
+        assert "NOT CHECKED" in captured.err + captured.out
+
+    def test_forged_bundle_beside_the_attestation_is_not_silently_ignored(
+        self, attested, capsys
+    ):
+        """Before the fix this exited 0 having never opened the bundle. Now the
+        bundle is only consulted when a signer is named — and naming one is
+        what makes the check happen at all."""
+        from scripts.cli.jmo import cmd_verify
+
+        subject, attestation = attested
+        bundle = attestation.with_name(attestation.name + ".sigstore.json")
+        bundle.write_text("THIS IS NOT A SIGNATURE", encoding="utf-8")
+
+        # No signer named: reported as unchecked, never as verified.
+        assert cmd_verify(self._args(subject, attestation)) == 0
+        assert "NOT CHECKED" in capsys.readouterr().err
+
+        # Signer named: the bundle is actually read, and it fails.
+        code = cmd_verify(
+            self._args(
+                subject,
+                attestation,
+                cert_identity="you@example.com",
+                cert_oidc_issuer="https://oauth2.sigstore.dev/auth",
+            )
+        )
+        assert code == 1
+
+    def test_high_severity_indicators_reach_the_operator(self, attested, capsys):
+        """`result.tamper_indicators` was populated and then displayed nowhere.
+
+        A subject named ../../../etc/passwd and a localhost builder are both
+        HIGH, neither fails verification, and neither was printed — so the
+        command said "verified successfully" and nothing else.
+        """
+        from scripts.cli.jmo import cmd_verify
+
+        subject, attestation = attested
+        doc = json.loads(attestation.read_bytes().decode("utf-8"))
+        doc["predicate"]["runDetails"]["builder"]["id"] = "http://localhost:1337"
+        attestation.write_bytes(json.dumps(doc).encode("utf-8"))
+
+        assert cmd_verify(self._args(subject, attestation)) == 0
+
+        output = capsys.readouterr().err
+        assert "[HIGH]" in output
+        assert "localhost" in output
+
+    def test_clean_attestation_reports_no_indicators(self, attested, capsys):
+        """Negative control: the reporter must be capable of staying silent."""
+        from scripts.cli.jmo import cmd_verify
+
+        subject, attestation = attested
+        assert cmd_verify(self._args(subject, attestation)) == 0
+        assert "[HIGH]" not in capsys.readouterr().err
+
+    def test_tampered_subject_still_fails(self, attested):
+        """The one check that always worked must keep working."""
+        from scripts.cli.jmo import cmd_verify
+
+        subject, attestation = attested
+        subject.write_text(json.dumps({"findings": ["injected"]}), encoding="utf-8")
+
+        assert cmd_verify(self._args(subject, attestation)) == 1
+
+    def test_attestation_with_no_verifiable_digest_fails(self, attested):
+        """The headline defect: `{"sha3_999": ...}` verified successfully with
+        zero digests compared."""
+        from scripts.cli.jmo import cmd_verify
+
+        subject, attestation = attested
+        doc = json.loads(attestation.read_bytes().decode("utf-8"))
+        doc["subject"][0]["digest"] = {"sha3_999": "deadbeef"}
+        attestation.write_bytes(json.dumps(doc).encode("utf-8"))
+
+        assert cmd_verify(self._args(subject, attestation)) == 1
+
+    def test_non_string_timestamp_does_not_disable_verification(self, attested):
+        """One type change used to flip this attestation from CRITICAL tamper
+        detected to verified successfully."""
+        from scripts.cli.jmo import cmd_verify
+
+        subject, attestation = attested
+        doc = json.loads(attestation.read_bytes().decode("utf-8"))
+        doc["predicate"]["runDetails"]["metadata"]["startedOn"] = 99999999999
+        attestation.write_bytes(json.dumps(doc).encode("utf-8"))
+
+        assert cmd_verify(self._args(subject, attestation)) == 1

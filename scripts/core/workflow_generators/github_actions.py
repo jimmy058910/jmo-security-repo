@@ -6,6 +6,7 @@ Generates .github/workflows/*.yml files from ScanSchedule objects.
 from __future__ import annotations
 
 import json
+import shlex
 from typing import Any
 
 import yaml
@@ -209,7 +210,24 @@ class GitHubActionsGenerator:
         # Human-readable logs for GitHub Actions
         args.append("--human-logs")
 
-        return " ".join(args)
+        # Quote every element before it lands in the step's `run:` shell line.
+        #
+        # This used to be a bare `" ".join(args)`. The values come straight from
+        # `jmo schedule create --repos-dir/--image/--url/...`, so
+        # `--repos-dir '/tmp/r; touch /tmp/PWNED'` produced a workflow whose
+        # `run:` line ended the docker command at the `;` and executed the rest
+        # in the runner, with the job's permissions; `$(id)` substituted for the
+        # same reason. The everyday version of the same bug is quieter and hits
+        # more people: a path containing a space split into two arguments.
+        #
+        # `shlex.quote` is what `cron_installer._generate_cron_entry` already
+        # uses for these identical fields -- the cron path validated and quoted
+        # them while this one did neither. Runners are Linux, so POSIX quoting
+        # is the correct dialect. Flags and ordinary paths are returned
+        # unchanged, and a `${{ secrets.* }}` expression is substituted by
+        # GitHub before the shell sees the line, so quoting it protects the
+        # substituted value rather than breaking it.
+        return " ".join(shlex.quote(arg) for arg in args)
 
     def _upload_results_step(self, schedule: ScanSchedule) -> dict[str, Any]:
         """Generate artifact upload step.

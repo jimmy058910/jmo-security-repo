@@ -72,7 +72,7 @@ We provide **four Docker image variants** matching our scan profiles:
 
 ### 1. **Deep** (`ghcr.io/jimmy058910/jmo-security:latest` or `:deep`)
 
-- **Tools:** 28 tools (25 Docker-ready + 3 manual installation)
+- **Tools:** 28 tools (24 Docker-ready + 4 manual installation)
 - **Image Size:** ~1.97 GB
 - **Scan Time:** 40-70 minutes
 - **Vulnerabilities:** Highest count (includes all tool dependencies)

@@ -1381,6 +1381,8 @@ class TestVerificationIntegration:
             subject_path=str(findings_path),
             attestation_path=str(attestation_path),
             signature_path=str(bundle_path),
+            cert_identity="you@example.com",
+            cert_oidc_issuer="https://oauth2.sigstore.dev/auth",
         )
 
         assert result.is_valid is True
@@ -1423,6 +1425,8 @@ class TestVerificationIntegration:
                 subject_path=str(findings_path),
                 attestation_path=str(attestation_path),
                 signature_path=str(bundle_path),
+                cert_identity="you@example.com",
+                cert_oidc_issuer="https://oauth2.sigstore.dev/auth",
             )
 
             assert result.is_valid is False

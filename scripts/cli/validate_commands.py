@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 from scripts.core.validators import (
     CategoryResult,
     CheckStatus,
+    UnknownCategoryError,
     ValidatorFn,
     run_validators,
 )
@@ -27,11 +28,24 @@ def _get_validators() -> list[ValidatorFn]:
     """Return list of all validator functions.
 
     Lazy imports to keep jmo startup fast.
+
+    Also injects the CLI surface into `cli_validator`. `scripts/core/` may not
+    import `scripts.cli` (enforced by `scripts/dev/check_import_direction.py`),
+    so the validator cannot fetch the parser itself -- but this module is in the
+    CLI layer and can. Deriving it from the parser is what stops
+    `MAIN_SUBCOMMANDS` drifting again (#783).
     """
-    from scripts.core.validators.cli_validator import validate_cli
+    from scripts.cli.jmo import build_parser
+    from scripts.core.validators.cli_validator import (
+        derive_surface,
+        set_cli_surface,
+        validate_cli,
+    )
     from scripts.core.validators.platform_validator import validate_platform
     from scripts.core.validators.release_validator import validate_release
     from scripts.core.validators.scan_validator import validate_scans
+
+    set_cli_surface(*derive_surface(build_parser()))
 
     return [validate_cli, validate_scans, validate_platform, validate_release]
 
@@ -50,20 +64,29 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
     validators = _get_validators()
 
-    results = run_validators(
-        validators=validators,
-        tier=tier,
-        fail_fast=fail_fast,
-        categories=categories,
-    )
+    try:
+        results = run_validators(
+            validators=validators,
+            tier=tier,
+            fail_fast=fail_fast,
+            categories=categories,
+        )
+    except UnknownCategoryError as exc:
+        # Usage error, not a verdict. `--category` has no argparse `choices=`
+        # because it is comma-separated, so this is where a typo is caught.
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
 
-    return render_scorecard(results, verbose=verbose, json_output=json_output)
+    return render_scorecard(
+        results, verbose=verbose, json_output=json_output, tier=tier
+    )
 
 
 def render_scorecard(
     results: list[CategoryResult],
     verbose: bool = False,
     json_output: bool = False,
+    tier: str = "quick",
 ) -> int:
     """Render validation results and return exit code.
 
@@ -71,17 +94,18 @@ def render_scorecard(
         results: List of CategoryResult from validators.
         verbose: Show per-check details.
         json_output: Output as JSON instead of terminal.
+        tier: The tier that actually ran, for the report header.
 
     Returns:
         0 if all checks pass (GO), 1 if any failures (NO-GO).
     """
     if json_output:
-        return _render_json(results)
+        return _render_json(results, tier=tier)
 
-    return _render_terminal(results, verbose=verbose)
+    return _render_terminal(results, verbose=verbose, tier=tier)
 
 
-def _render_json(results: list[CategoryResult]) -> int:
+def _render_json(results: list[CategoryResult], tier: str = "quick") -> int:
     """Render results as JSON to stdout."""
     total_pass = sum(r.passed for r in results)
     total_fail = sum(r.failed for r in results)
@@ -90,12 +114,14 @@ def _render_json(results: list[CategoryResult]) -> int:
     total_error = sum(r.errored for r in results)
     total = sum(r.total for r in results)
 
-    has_failures = total_fail > 0 or total_error > 0
+    has_failures = total_fail > 0 or total_error > 0 or total == 0
     verdict = "NO-GO" if has_failures else "GO"
 
     data = {
         "verdict": verdict,
-        "tier": "quick",
+        # Was hard-coded to "quick". `jmo validate --tier full --json` reported
+        # `"tier": "quick"`, and this document is what release.yml consumes.
+        "tier": tier,
         "platform": platform.system(),
         "python": platform.python_version(),
         "summary": {
@@ -112,12 +138,21 @@ def _render_json(results: list[CategoryResult]) -> int:
                 "passed": r.passed,
                 "failed": r.failed,
                 "warned": r.warned,
+                # `skipped` and `errored` were omitted, so the category rows did
+                # not reconcile: passed + failed + warned < total whenever
+                # anything skipped, with no key saying where the rest went.
+                "skipped": r.skipped,
+                "errored": r.errored,
                 "total": r.total,
                 "checks": [
                     {
                         "name": c.name,
                         "status": c.status.value,
                         "message": c.message,
+                        # `details` is where the checks put the actionable part
+                        # -- which file, which line. 28 checks populate it and
+                        # nothing rendered it, in either output mode.
+                        "details": c.details,
                         "duration_ms": round(c.duration_ms, 1),
                     }
                     for c in r.checks
@@ -131,7 +166,9 @@ def _render_json(results: list[CategoryResult]) -> int:
     return 1 if has_failures else 0
 
 
-def _render_terminal(results: list[CategoryResult], verbose: bool) -> int:
+def _render_terminal(
+    results: list[CategoryResult], verbose: bool, tier: str = "quick"
+) -> int:
     """Render results as terminal scorecard."""
     use_color = _supports_color()
 
@@ -140,8 +177,12 @@ def _render_terminal(results: list[CategoryResult], verbose: bool) -> int:
     total_warn = sum(r.warned for r in results)
     total = sum(r.total for r in results)
     total_error = sum(r.errored for r in results)
+    total_skip = sum(r.skipped for r in results)
 
-    has_failures = total_fail > 0 or total_error > 0
+    # A run with no checks has no failures, so every "is anything wrong?" test
+    # answered no and the verdict came out GO. `jmo validate --category bogus`
+    # printed `0/0 PASS` / `Verdict: GO` and exited 0.
+    has_failures = total_fail > 0 or total_error > 0 or total == 0
 
     # Header
     _print_line("")
@@ -149,7 +190,7 @@ def _render_terminal(results: list[CategoryResult], verbose: bool) -> int:
     _print_line("=" * 55)
     _print_line(
         f"Platform: {platform.system()} {platform.release()} | "
-        f"Python: {platform.python_version()}"
+        f"Python: {platform.python_version()} | Tier: {tier}"
     )
     _print_line("")
 
@@ -165,6 +206,14 @@ def _render_terminal(results: list[CategoryResult], verbose: bool) -> int:
                 if check.message:
                     msg += f" - {check.message}"
                 _print_line(msg)
+                # `--verbose` promises "per-check details" and rendered only
+                # `message`. The one thing that names the offending file lives
+                # in `details`, and no output mode printed it -- so
+                # `no-secret-patterns` reported "Potential secrets in 1 file(s)"
+                # and the filename existed nowhere the user could reach.
+                if check.details:
+                    for line in str(check.details).splitlines():
+                        _print_line(f"      {line}")
             _print_line("")
 
     # Summary
@@ -178,6 +227,12 @@ def _render_terminal(results: list[CategoryResult], verbose: bool) -> int:
         parts.append(f"{total_fail} FAIL")
     if total_error > 0:
         parts.append(f"{total_error} ERROR")
+    # SKIP was absent from this line until #773, so the checks between
+    # total_pass and total were simply unaccounted for -- `270/283 PASS |
+    # 5 WARN` with no hint where the other 8 went. The JSON renderer has always
+    # reported `skipped`; only the terminal scorecard dropped it.
+    if total_skip > 0:
+        parts.append(f"{total_skip} SKIP")
 
     _print_line(f"Result: {' | '.join(parts)}")
 
@@ -187,6 +242,17 @@ def _render_terminal(results: list[CategoryResult], verbose: bool) -> int:
         verdict_display = _colorize("GO", "green", use_color)
 
     _print_line(f"Verdict: {verdict_display}")
+
+    if total == 0:
+        _print_line("  (no checks ran - a verdict over zero checks is never GO)")
+
+    # A GO says nothing about checks that never ran, and `--tier full` degrades
+    # quietly when a prerequisite is missing: with no Docker daemon all four
+    # docker-build-* checks SKIP, so a green verdict can coexist with zero
+    # images built. Say that where the verdict is read rather than leaving it
+    # to be inferred from the rows above.
+    if not has_failures and total_skip > 0:
+        _print_line(f"  ({total_skip} check(s) skipped - GO covers only what ran)")
 
     return 1 if has_failures else 0
 

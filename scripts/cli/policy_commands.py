@@ -23,24 +23,51 @@ import sys
 from pathlib import Path
 from typing import Any, cast
 
+from scripts.core.exceptions import OPANotFoundException
 from scripts.core.policy_engine import PolicyEngine
-from scripts.core.unicode_utils import UNICODE_FALLBACKS as _UNICODE_FALLBACKS
+
+# This module used to define its own _safe_print, deciding from the encoding's
+# NAME whether output was safe. cp437 and cp850 - the OEM codepages a real
+# Windows console uses - are not on any such list, so the substitution never ran
+# there and the fallback table was lost exactly where it was meant to help.
+# The canonical helper probes the payload against the stream's real codec
+# instead. Importing under the old private name keeps the five call sites below
+# unchanged.
+from scripts.core.unicode_utils import safe_print as _safe_print
 
 logger = logging.getLogger(__name__)
 
 
-def _safe_print(text: str) -> None:
-    """Print with Unicode fallback for Windows cp1252 compatibility."""
-    try:
-        encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
-        if encoding.lower() in ("cp1252", "ascii", "latin-1", "iso-8859-1"):
-            for unicode_char, ascii_fallback in _UNICODE_FALLBACKS.items():
-                text = text.replace(unicode_char, ascii_fallback)
-        print(text)
-    except UnicodeEncodeError:
-        for unicode_char, ascii_fallback in _UNICODE_FALLBACKS.items():
-            text = text.replace(unicode_char, ascii_fallback)
-        print(text)
+def _hint(message: str) -> None:
+    """Print a recovery hint the user will actually see.
+
+    These hints used to go out at `logger.info`. `jmo policy` declares no
+    `--log-level` flag, so `configure_scan_logging` reads `args.log_level` as
+    absent and pins the `scripts` logger to WARNING -- which discards INFO
+    records at the source, for every `scripts.*` child, at every flag setting.
+    Six `logger.info` calls in this module were therefore unreachable, including
+    all four "Available policies" lines. Measured: `jmo policy validate
+    zero-secret` printed "Policy not found: zero-secret" and nothing else, so
+    the one thing that would have shown the user the missing "s" never rendered.
+
+    stderr, because stdout is reserved for programmatic output.
+    """
+    print(message, file=sys.stderr)
+
+
+def _report_policy_not_found(policy_name: str, available: list[str]) -> int:
+    """Report an unknown policy name together with the names that would work.
+
+    Returns the exit code to use: **2**, a usage error. Naming a policy that
+    does not exist means nothing was evaluated, and that must be
+    distinguishable from a policy that ran and failed. Both used to return 1
+    (#925), so a CI script could not tell a blocked release from a typo -- and
+    the typo is the dangerous one, because it looks like a working gate.
+    """
+    logger.error(f"Policy not found: {policy_name}")
+    if available:
+        _hint(f"Available policies: {', '.join(available)}")
+    return 2
 
 
 def get_builtin_policies_dir() -> Path:
@@ -153,7 +180,18 @@ def cmd_policy_list(args: argparse.Namespace) -> int:
             print(f"  {policy_name:25s} v{version:10s} {desc}")
         print()
 
-    print(f"Total: {len(builtin_policies) + len(user_policies)} policies")
+    # Count addressable policies, not files. `discover_policies()` resolves a
+    # user copy over the builtin of the same name, so a shadowed pair is ONE
+    # policy: after `jmo policy install zero-secrets` this line said "Total: 6
+    # policies" while only 5 names could be passed to validate / test / show.
+    builtin_names = {str(cast(dict[str, Any], p)["name"]) for p in builtin_policies}
+    user_names = {str(cast(dict[str, Any], p)["name"]) for p in user_policies}
+    shadowed = sorted(builtin_names & user_names)
+
+    total = f"Total: {len(builtin_names | user_names)} policies"
+    if shadowed:
+        total += f" ({len(shadowed)} builtin overridden: {', '.join(shadowed)})"
+    print(total)
     return 0
 
 
@@ -171,9 +209,7 @@ def cmd_policy_validate(args: argparse.Namespace) -> int:
     # Find policy
     policies = discover_policies()
     if policy_name not in policies:
-        logger.error(f"Policy not found: {policy_name}")
-        logger.info(f"Available policies: {', '.join(sorted(policies.keys()))}")
-        return 1
+        return _report_policy_not_found(policy_name, sorted(policies))
 
     policy_path = policies[policy_name]
 
@@ -199,22 +235,22 @@ def cmd_policy_test(args: argparse.Namespace) -> int:
         args: Parsed command-line arguments (requires args.policy, args.findings_file)
 
     Returns:
-        Exit code (0 = passed, 1 = failed/error)
+        Exit code (0 = passed, 1 = policy failed or runtime error,
+        2 = usage error). See "Exit Codes" in docs/CLI_REFERENCE.md.
     """
     policy_name = args.policy
     findings_file = Path(args.findings_file)
 
-    # Validate findings file
+    # Validate findings file. A path that does not exist is a usage error: no
+    # policy was evaluated, so this must not look like a failing gate (#925).
     if not findings_file.exists():
         logger.error(f"Findings file not found: {findings_file}")
-        return 1
+        return 2
 
     # Find policy
     policies = discover_policies()
     if policy_name not in policies:
-        logger.error(f"Policy not found: {policy_name}")
-        logger.info(f"Available policies: {', '.join(sorted(policies.keys()))}")
-        return 1
+        return _report_policy_not_found(policy_name, sorted(policies))
 
     policy_path = policies[policy_name]
 
@@ -237,19 +273,25 @@ def cmd_policy_test(args: argparse.Namespace) -> int:
             _safe_print("❌ FAILED")
 
         print()
-        print(f"Message: {result.message}")
+        # `message` and the warnings below are authored inside the .rego
+        # policy and carry emoji. They used to go through bare print(), so
+        # on a Windows console they degraded to a bare "?" two lines under a
+        # correctly rendered "[OK]" from the _safe_print call above.
+        _safe_print(f"Message: {result.message}")
         print(f"Violations: {result.violation_count}")
         print(f"Warnings: {len(result.warnings)}")
 
         if result.violations:
             print("\nViolations:")
             for i, violation in enumerate(result.violations, 1):
+                # json.dumps defaults to ensure_ascii=True, so this is
+                # already pure ASCII and must not be substituted into.
                 print(f"  {i}. {json.dumps(violation, indent=4)}")
 
         if result.warnings:
             print("\nWarnings:")
             for warning in result.warnings:
-                print(f"  - {warning}")
+                _safe_print(f"  - {warning}")
 
         return 0 if result.passed else 1
 
@@ -272,9 +314,7 @@ def cmd_policy_show(args: argparse.Namespace) -> int:
     # Find policy
     policies = discover_policies()
     if policy_name not in policies:
-        logger.error(f"Policy not found: {policy_name}")
-        logger.info(f"Available policies: {', '.join(sorted(policies.keys()))}")
-        return 1
+        return _report_policy_not_found(policy_name, sorted(policies))
 
     policy_path = policies[policy_name]
 
@@ -336,9 +376,10 @@ def cmd_policy_install(args: argparse.Namespace) -> int:
             [p.stem for p in builtin_dir.glob("*.rego")] if builtin_dir.exists() else []
         )
         if available:
-            logger.info(f"Available builtin policies: {', '.join(sorted(available))}")
+            _hint(f"Available builtin policies: {', '.join(sorted(available))}")
 
-        return 1
+        # Usage error: nothing was installed because the name does not exist.
+        return 2
 
     # Create user directory if needed
     user_dir = get_user_policies_dir()
@@ -351,10 +392,9 @@ def cmd_policy_install(args: argparse.Namespace) -> int:
             logger.warning(
                 f"Policy '{policy_name}' already installed at: {user_policy_path}"
             )
-            logger.info("Use --force to overwrite")
+            _hint("Use --force to overwrite.")
             return 1
-        else:
-            logger.info(f"Overwriting existing policy: {user_policy_path}")
+        logger.warning(f"Overwriting existing policy: {user_policy_path}")
 
     # Copy policy
     shutil.copy2(policy_path, user_policy_path)
@@ -375,17 +415,33 @@ def cmd_policy(args: argparse.Namespace) -> int:
     Returns:
         Exit code from subcommand
     """
-    # Dispatch to subcommand
-    if args.policy_command == "list":
-        return cmd_policy_list(args)
-    elif args.policy_command == "validate":
-        return cmd_policy_validate(args)
-    elif args.policy_command == "test":
-        return cmd_policy_test(args)
-    elif args.policy_command == "show":
-        return cmd_policy_show(args)
-    elif args.policy_command == "install":
-        return cmd_policy_install(args)
-    else:
-        logger.error(f"Unknown policy command: {args.policy_command}")
+    try:
+        # Dispatch to subcommand
+        if args.policy_command == "list":
+            return cmd_policy_list(args)
+        elif args.policy_command == "validate":
+            return cmd_policy_validate(args)
+        elif args.policy_command == "test":
+            return cmd_policy_test(args)
+        elif args.policy_command == "show":
+            return cmd_policy_show(args)
+        elif args.policy_command == "install":
+            return cmd_policy_install(args)
+        else:
+            logger.error(f"Unknown policy command: {args.policy_command}")
+            return 2
+    except OPANotFoundException as exc:
+        # Four of the five subcommands build a PolicyEngine, whose constructor
+        # calls _verify_opa_available() and raises this. Nothing caught it and
+        # main() has no top-level handler, so the exception reached Python's
+        # default excepthook: `jmo policy list` answered a first-run condition
+        # -- opa is in no profile's tool list and is not installed by default --
+        # with an 18-line traceback whose last line was the friendly
+        # INSTALL_INSTRUCTIONS the exception class exists to carry.
+        #
+        # `jmo report --policy` already degraded gracefully here
+        # (policy_reporter logs "Policy evaluation skipped: ..." at WARN), so
+        # this only brings the `policy` command into line with the rest of the
+        # CLI. `install` is a file copy and never reaches the engine.
+        logger.error(str(exc))
         return 1

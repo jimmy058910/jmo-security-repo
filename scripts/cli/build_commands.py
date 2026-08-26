@@ -23,10 +23,37 @@ VARIANTS = {
     "deep": "Dockerfile.deep",
 }
 
-# Default registry configuration
+# Default registry configuration. The org must match what release.yml pushes to
+# -- `IMAGE_NAME_GHCR: ${{ github.repository_owner }}/jmo-security` -- which is
+# `jimmy058910`, not `jmosecurity`. With the old value `jmo build --push` aimed
+# at a namespace this project does not own, and `jmo build test` pulled from it.
 DEFAULT_REGISTRY = "ghcr.io"
-DEFAULT_ORG = "jmosecurity"
+DEFAULT_ORG = "jimmy058910"
 DEFAULT_IMAGE = "jmo-security"
+
+
+def _image_ref(
+    variant: str,
+    tag: str,
+    registry: str,
+    org: str,
+    image_name: str,
+    local: bool,
+) -> str:
+    """Return the image reference for a variant, matching what release.yml publishes.
+
+    The build path and the `test` path each computed this independently, and
+    both produced `<tag>-<variant>` unconditionally -- so the default run named
+    `:latest-balanced`. That tag family does not exist: `release.yml` publishes
+    bare `:fast` / `:slim` / `:balanced` / `:deep` (with `:latest` pointing at
+    deep) plus versioned `:1.0.2-<variant>`. `jmo build test` therefore asked
+    for an image that is never pushed, and could only work with `--local`.
+    """
+    if local:
+        return f"{image_name}:local-{variant}"
+    if tag == "latest":
+        return f"{registry}/{org}/{image_name}:{variant}"
+    return f"{registry}/{org}/{image_name}:{tag}-{variant}"
 
 
 def _detect_arch() -> str:
@@ -65,11 +92,23 @@ def _check_docker() -> bool:
 
 
 def _find_repo_root() -> Path | None:
-    """Find the repository root (directory containing Dockerfile)."""
-    # Start from current directory and walk up
+    """Find the repository root (a directory holding versions.yaml and a variant).
+
+    This probed for a file named exactly ``Dockerfile``. #303 renamed that file
+    to ``Dockerfile.deep`` on 2026-04-19, and nothing here followed: the
+    predicate became unsatisfiable anywhere in the tree, so the function
+    returned None on every call and `jmo build` answered every invocation --
+    from inside the repository root -- with "Cannot find repository root". It
+    stayed that way across v1.0.2 through v1.0.8.
+
+    The marker is now the variant set the command actually builds, so renaming
+    a variant cannot silently disable the command again.
+    """
     current = Path.cwd()
-    for parent in [current] + list(current.parents):
-        if (parent / "Dockerfile").exists() and (parent / "versions.yaml").exists():
+    for parent in [current, *current.parents]:
+        if not (parent / "versions.yaml").exists():
+            continue
+        if any((parent / df).exists() for df in VARIANTS.values()):
             return parent
     return None
 
@@ -87,11 +126,19 @@ def _validate_versions(repo_root: Path) -> bool:
 
     print("Validating tool versions...")
     try:
+        # `text=True` alone decodes with the *parent's* locale codec. On a
+        # cp1252 console `update_versions.py --validate` emits bytes that codec
+        # cannot decode, and the failure is raised inside subprocess's reader
+        # thread, where it is swallowed -- so `result.stdout` came back
+        # truncated with only a stray traceback on the console to show for it.
+        # See "Subprocess tests: pin BOTH ends" in
+        # .claude/rules/testing.cross-platform.rules.md.
         result = subprocess.run(
             [sys.executable, str(validate_script), "--validate"],
             cwd=str(repo_root),
             capture_output=True,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=120,
         )
         if result.returncode != 0:
@@ -134,10 +181,7 @@ def _build_image(
         return 1
 
     # Determine image tag
-    if local:
-        full_tag = f"{image_name}:local-{variant}"
-    else:
-        full_tag = f"{registry}/{org}/{image_name}:{tag}-{variant}"
+    full_tag = _image_ref(variant, tag, registry, org, image_name, local)
 
     # Detect architecture
     arch = platform_target or _detect_arch()
@@ -201,15 +245,21 @@ def cmd_build(args: argparse.Namespace) -> int:
 
     Builds Docker images for JMo Security suite.
     """
-    # Check Docker availability
-    if not _check_docker():
+    build_cmd = getattr(args, "build_command", None)
+
+    # Docker is checked before the repository, but `build validate` only runs
+    # `update_versions.py --validate` -- it never touches Docker. Requiring a
+    # daemon for it made the one subcommand that works offline refuse to run,
+    # and is why `jmo validate --tier full` could only ever SKIP it.
+    if build_cmd != "validate" and not _check_docker():
         return 1
 
     # Find repository root
     repo_root = _find_repo_root()
     if not repo_root:
         print(
-            "Error: Cannot find repository root (looking for Dockerfile and versions.yaml)",
+            "Error: Cannot find repository root "
+            "(looking for versions.yaml and a Dockerfile.<variant>)",
             file=sys.stderr,
         )
         print(
@@ -218,9 +268,6 @@ def cmd_build(args: argparse.Namespace) -> int:
         return 1
 
     print(f"Repository root: {repo_root}")
-
-    # Handle subcommands
-    build_cmd = getattr(args, "build_command", None)
 
     if build_cmd == "validate":
         # Just validate versions
@@ -231,12 +278,14 @@ def cmd_build(args: argparse.Namespace) -> int:
 
     if build_cmd == "test":
         # Test a built image
-        variant = args.variant
-        local = args.local
-        if local:
-            image = f"{DEFAULT_IMAGE}:local-{variant}"
-        else:
-            image = f"{args.registry}/{args.org}/{DEFAULT_IMAGE}:{args.tag}-{variant}"
+        image = _image_ref(
+            args.variant,
+            args.tag,
+            args.registry,
+            args.org,
+            DEFAULT_IMAGE,
+            args.local,
+        )
 
         print(f"Testing image: {image}")
         cmds = [
@@ -324,17 +373,18 @@ Build Docker images for JMo Security suite.
 
 Replaces Makefile docker-* targets with unified CLI commands.
 
-Variants:
-  fast      8 tools, ~502 MB  - CI/CD, pre-commit hooks
-  slim      14 tools, ~557 MB - Cloud/IaC focused
-  balanced  18 tools, ~1.4 GB - Production scans (DEFAULT)
-  deep      28 tools, ~2.0 GB - Comprehensive audits
+Variants (tool counts come from PROFILE_TOOLS; see docs/PROFILES_AND_TOOLS.md):
+  fast       9 tools - CI/CD, pre-commit hooks
+  slim      13 tools - Cloud/IaC focused
+  balanced  17 tools - Production scans (DEFAULT)
+  deep      28 tools - Comprehensive audits
 
 Examples:
-  jmo build                           # Build balanced variant (local)
+  jmo build                           # Build balanced variant, registry tag
+  jmo build --local                   # Build balanced with a local-only tag
   jmo build --variant deep            # Build deep/full variant
   jmo build --all --local             # Build all variants with local tags
-  jmo build --push --tag v1.0.0       # Build and push to registry
+  jmo build --push --tag 1.0.9        # Build and push to registry
   jmo build validate                  # Validate versions before building
   jmo build test --variant balanced   # Test a built image
 
@@ -355,7 +405,15 @@ Pre-build Validation:
         help="Validate tool versions exist upstream (GitHub, PyPI, npm). Set GITHUB_TOKEN env var to avoid API rate limiting",
     )
 
-    # TEST subcommand
+    # TEST subcommand.
+    #
+    # Every flag here is also declared on the parent `build` parser. argparse
+    # applies a subparser's defaults *after* the parent has already parsed, so a
+    # subparser default overwrites a value the user gave the parent: measured,
+    # `jmo build --variant deep test` produced `variant='balanced'` -- rc 0, no
+    # warning, the wrong image tested. `default=SUPPRESS` leaves the attribute
+    # untouched when the flag is absent, so the parent's value survives and an
+    # explicit `jmo build test --variant deep` still wins.
     test_parser = build_subparsers.add_parser(
         "test",
         help="Test a built Docker image",
@@ -363,27 +421,28 @@ Pre-build Validation:
     test_parser.add_argument(
         "--variant",
         choices=list(VARIANTS.keys()),
-        default="balanced",
+        default=argparse.SUPPRESS,
         help="Variant to test (default: balanced)",
     )
     test_parser.add_argument(
         "--local",
         action="store_true",
+        default=argparse.SUPPRESS,
         help="Test local-tagged image",
     )
     test_parser.add_argument(
         "--registry",
-        default=DEFAULT_REGISTRY,
+        default=argparse.SUPPRESS,
         help=f"Docker registry (default: {DEFAULT_REGISTRY})",
     )
     test_parser.add_argument(
         "--org",
-        default=DEFAULT_ORG,
+        default=argparse.SUPPRESS,
         help=f"Docker organization (default: {DEFAULT_ORG})",
     )
     test_parser.add_argument(
         "--tag",
-        default="latest",
+        default=argparse.SUPPRESS,
         help="Image tag (default: latest)",
     )
 
