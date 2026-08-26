@@ -2,18 +2,18 @@
 Sigstore signing for SLSA attestations.
 
 This module implements keyless signing using Sigstore infrastructure:
-- OIDC token acquisition (GitHub Actions, GitLab CI, local OAuth)
 - Fulcio certificate signing
 - Rekor transparency log upload
 - Signature bundle creation
 
-Implementation uses the sigstore CLI tool for simplicity and reliability.
+Implementation shells out to the sigstore CLI, which performs its own OIDC
+token acquisition (GitHub Actions, GitLab CI, or a local browser flow). This
+module does not acquire or handle OIDC tokens itself.
 """
 
 import importlib.util
 import json
 import logging
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -22,10 +22,8 @@ from typing import Any
 import requests
 
 from .constants import (
-    ATTESTATION_TIMEOUT,
     FULCIO_URL_PRODUCTION,
     FULCIO_URL_STAGING,
-    OIDC_ISSUER_URL_PRODUCTION,
     REKOR_TIMEOUT,
     REKOR_URL_PRODUCTION,
     REKOR_URL_STAGING,
@@ -61,7 +59,7 @@ class SigstoreSigner:
     Sigstore-based signer for attestations.
 
     Uses keyless signing with Fulcio CA and Rekor transparency log.
-    Supports multiple OIDC providers (GitHub Actions, GitLab CI, local OAuth).
+    OIDC is performed by the sigstore CLI this class invokes, not here.
     """
 
     def __init__(self, config: dict[str, Any] | None = None):
@@ -93,118 +91,6 @@ class SigstoreSigner:
         logger.debug(
             f"Sigstore signer initialized: Fulcio={self.fulcio_url}, Rekor={self.rekor_url}"
         )
-
-    def _detect_ci_environment(self) -> str:
-        """
-        Detect CI environment for OIDC token acquisition.
-
-        Returns:
-            "github", "gitlab", or "local"
-        """
-        if "ACTIONS_ID_TOKEN_REQUEST_URL" in os.environ:
-            return "github"
-        elif "CI_JOB_JWT" in os.environ:
-            return "gitlab"
-        else:
-            return "local"
-
-    def _get_oidc_token(self) -> str:
-        """
-        Acquire OIDC token from CI environment or local OAuth flow.
-
-        Returns:
-            OIDC token string
-
-        Raises:
-            Exception: If token acquisition fails
-        """
-        ci_env = self._detect_ci_environment()
-
-        if ci_env == "github":
-            return self._get_github_oidc_token()
-        elif ci_env == "gitlab":
-            return self._get_gitlab_oidc_token()
-        else:
-            return self._get_local_oidc_token()
-
-    def _get_github_oidc_token(self) -> str:
-        """
-        Acquire OIDC token from GitHub Actions.
-
-        Uses ACTIONS_ID_TOKEN_REQUEST_URL and ACTIONS_ID_TOKEN_REQUEST_TOKEN
-        environment variables.
-
-        Returns:
-            OIDC token string
-
-        Raises:
-            Exception: If token request fails
-        """
-        token_url = os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"]
-        request_token = os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]
-
-        headers = {
-            "Authorization": f"Bearer {request_token}",
-            "Accept": "application/json",
-        }
-
-        # Request token with audience for Sigstore
-        params = {"audience": "sigstore"}
-
-        response = requests.get(
-            token_url, headers=headers, params=params, timeout=ATTESTATION_TIMEOUT
-        )
-        response.raise_for_status()
-
-        token_data = response.json()
-        return str(token_data["value"])
-
-    def _get_gitlab_oidc_token(self) -> str:
-        """
-        Acquire OIDC token from GitLab CI.
-
-        Uses CI_JOB_JWT environment variable.
-
-        Returns:
-            OIDC token string
-        """
-        return os.environ["CI_JOB_JWT"]
-
-    def _get_local_oidc_token(self) -> str:
-        """
-        Acquire OIDC token via local OAuth flow.
-
-        Uses sigstore-python's OAuth flow to get token interactively.
-        This requires a browser for the OIDC authentication redirect.
-        In non-interactive environments (CI without OIDC, containers, SSH),
-        this will fail — use GitHub Actions or GitLab CI OIDC instead.
-
-        Returns:
-            OIDC token string
-
-        Raises:
-            RuntimeError: If OAuth flow fails (e.g., no browser available)
-        """
-        try:
-            # Use sigstore-python's built-in OAuth flow
-            from sigstore.oidc import Issuer
-
-            issuer = Issuer(OIDC_ISSUER_URL_PRODUCTION)
-            token = issuer.identity_token()
-            # sigstore 4.x: IdentityToken dropped .value; the raw token is
-            # exposed via __str__.
-            return str(token)
-        except (
-            Exception
-        ) as e:  # Acceptable: re-raises after logging — OIDC failure is fatal for signing
-            logger.error(
-                f"Local OIDC token acquisition failed: {e}\n"
-                "Sigstore keyless signing requires browser-based OIDC authentication.\n"
-                "In CI environments, set ACTIONS_ID_TOKEN_REQUEST_URL (GitHub Actions) "
-                "or CI_JOB_JWT (GitLab CI) for automatic OIDC token acquisition.\n"
-                "For local signing, ensure a browser is available for the OAuth redirect."
-            )
-            raise
 
     def sign(self, attestation_path: str) -> dict[str, Any]:
         """
