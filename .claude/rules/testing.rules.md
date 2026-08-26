@@ -229,10 +229,32 @@ comparing like with like.
 
 Two consequences worth carrying:
 
-- **`psutil` is deliberate; `yara-python` is collateral.** The benchmark job
-  installs psutil itself and says so in a comment, so those 2 skips are correct
-  behaviour and must not be "fixed". The 7 yara skips are the real cost: a
-  security tool's Python module gets removed from the venv by a dependency sync.
+- **~~`psutil` is deliberate~~ — CORRECTED 2026-08-25 (#977). It was a defect,
+  and this bullet said not to fix it.** The reasoning above ("the benchmark job
+  installs psutil itself, so those 2 skips are correct behaviour and must not be
+  'fixed'") was measured wrong by the bullet three below this one, written five
+  days later: the job that installs psutil runs `test_benchmarks.py` only, while
+  `test_stress.py` is collected by a *different* step that installs nothing and
+  swallows its exit code. So the skips were not correct behaviour anywhere.
+
+  The fix was smaller than adding psutil to the lock file. `test_stress.py`'s
+  assertion had already moved to `tracemalloc` (stdlib) when #792 was fixed — it
+  used psutil only for an informational RSS line, so it was skipping for a
+  dependency it no longer needed. It now runs everywhere with psutil optional.
+  `test_benchmarks.py`'s memory benchmark was **deleted**: it never called any
+  processing function between its baseline and peak reads, and its fixture wrote
+  CommonFinding-shaped objects into `individual-repos/*.json` where adapters
+  expect raw tool output, so `gather_results` returned **0 findings** (measured).
+  It asserted a 500MB budget on work that did not happen.
+
+  Measured before/after with psutil blocked: **13 passed / 2 skipped** →
+  **14 passed / 0 skipped**.
+
+  **The transferable part: a bullet saying "this is correct, do not fix it" ages
+  worse than one recording a measurement.** Prefer stating what was measured and
+  when; let the reader draw the conclusion.
+- **`yara-python` is collateral.** The 7 yara skips are a real cost: a security
+  tool's Python module gets removed from the venv by a dependency sync.
   Reinstall with `jmo tools install yara` when those tests matter.
 - **#792 does not "fail to reproduce" in a synced environment — it *skips*.**
   `test_30k_findings_memory_usage` (named `test_100k_findings_memory_usage`
