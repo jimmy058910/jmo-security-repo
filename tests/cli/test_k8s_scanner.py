@@ -13,6 +13,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 
 from scripts.cli.scan_jobs.k8s_scanner import scan_k8s_resource
+from scripts.cli.scan_utils import not_attempted_tools
 
 
 class TestK8sScanner:
@@ -323,7 +324,10 @@ class TestK8sScanner:
             # Trivy should have stub written
             assert len(stub_calls) == 1
             assert any("trivy" in path for _, path in stub_calls)
-            assert statuses["trivy"] is True
+            # Stubbed, so it did not succeed. This read `is True`, which
+            # encoded the defect as the contract (#825).
+            assert statuses["trivy"] is False
+            assert not_attempted_tools(statuses) == ["trivy"]
 
     def test_per_tool_flags_applied(self, tmp_path):
         """Test that per_tool_config flags are correctly applied"""

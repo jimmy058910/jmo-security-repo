@@ -36,11 +36,21 @@ default_profile: fast
         config=str(cfg), profile_name=None, tools=None, threads=None, timeout=None
     )
     eff = jmo._effective_scan_settings(args)
-    # From default_profile 'fast' - tools come from PROFILE_TOOLS registry (single source of truth),
-    # NOT from jmo.yml profiles section. Other settings (threads, retries, etc.) still merge from config.
-    from scripts.core.tool_registry import PROFILE_TOOLS
-
-    assert eff["tools"] == PROFILE_TOOLS["fast"]
+    # The profile declares `tools: [semgrep]`, and that is what it gets.
+    #
+    # This assertion used to read `eff["tools"] == PROFILE_TOOLS["fast"]`, with
+    # a comment saying tool lists come from the registry "NOT from jmo.yml
+    # profiles section". That described #975 rather than a contract: a
+    # documented, user-facing key was being ignored, and the test pinned the
+    # ignoring as though it were intended. `profiles:` is documented in
+    # CLAUDE.md's config table as "custom profile definitions with tool lists",
+    # and now is one.
+    #
+    # PROFILE_TOOLS remains the single source of truth for the BUILT-IN
+    # profiles -- a profile block with no `tools:` key still resolves from it,
+    # which `test_the_builtin_profile_still_applies_without_a_tools_key` in
+    # tests/unit/test_config_precedence.py pins.
+    assert eff["tools"] == ["semgrep"]
     assert eff["threads"] == 1
     assert eff["timeout"] == 111  # inherited from base config
     assert eff["retries"] == 0

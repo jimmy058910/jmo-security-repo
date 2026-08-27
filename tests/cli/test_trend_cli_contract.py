@@ -121,6 +121,20 @@ EXPECTED_SUBCOMMANDS = frozenset(
 # tolerated, so it should be added only alongside an open issue.
 KNOWN_UNDEFINED_READS: dict[str, frozenset[str]] = {}
 
+# Dests read by `main()` rather than by any subcommand handler, and therefore
+# exempt from the "defined but never read" half of the property below.
+#
+# This is not an exception in the sense KNOWN_UNDEFINED_READS is -- there is no
+# defect being tolerated. `jmo.main()` calls `configure_scan_logging(args)`
+# once, before routing, and that function reads `log_level` and `human_logs`
+# off whatever namespace it is handed. A per-handler read would be the bug: it
+# would mean each subcommand configuring logging for itself.
+#
+# They are exempt from the "defined but unread" direction ONLY. A handler that
+# reads a dest its parser does not define is still an AttributeError waiting to
+# happen, and is still caught.
+PROCESS_WIDE_DESTS = frozenset({"log_level", "human_logs"})
+
 _SOURCE = Path(trend_commands.__file__)
 
 
@@ -329,7 +343,10 @@ def test_every_subcommand_dest_is_read_by_its_own_handler():
     for action, dest_set in dests.items():
         handler = routing[action]
         read = _args_read_by(handler)
-        missing = dest_set - read
+        # `--log-level` / `--human-logs` are configured once by `main()`, not by
+        # any handler, so "the handler never reads it" is correct for them
+        # rather than a defect (#879).
+        missing = dest_set - read - PROCESS_WIDE_DESTS
         extra = read - dest_set - KNOWN_UNDEFINED_READS.get(action, frozenset())
         if missing:
             unread[action] = sorted(missing)
@@ -344,6 +361,64 @@ def test_every_subcommand_dest_is_read_by_its_own_handler():
         "these trends subcommands' handlers read args.X for a dest their own "
         "parser never defines (AttributeError on real invocation), beyond "
         f"the filed exceptions in KNOWN_UNDEFINED_READS: {undefined}"
+    )
+
+
+def test_process_wide_dests_are_actually_read_by_main():
+    """The exemption above must name flags something really does consult.
+
+    Without this, `PROCESS_WIDE_DESTS` could forgive any dest at all, which is
+    the failure mode of every allowlist: it stops being a statement about the
+    code and becomes a place to put whatever went red.
+
+    Asserted against `configure_scan_logging` by AST, and against `main()`
+    calling it, because the exemption's whole claim is "read once, centrally,
+    before routing".
+    """
+    from scripts.cli import jmo as jmo_mod
+
+    tree = ast.parse(Path(jmo_mod.__file__).read_bytes().decode("utf-8"))
+
+    def _function(name: str) -> ast.FunctionDef:
+        return next(
+            n
+            for n in ast.walk(tree)
+            if isinstance(n, ast.FunctionDef) and n.name == name
+        )
+
+    # `_args_read_by` is bound to trend_commands.py's source, so the same scan
+    # is done here against jmo.py: both `args.X` and `getattr(args, "X", ...)`.
+    configure = _function("configure_scan_logging")
+    read_by_configure: set[str] = set()
+    for node in ast.walk(configure):
+        if (
+            isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "args"
+        ):
+            read_by_configure.add(node.attr)
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "getattr"
+            and len(node.args) >= 2
+            and isinstance(node.args[0], ast.Name)
+            and node.args[0].id == "args"
+            and isinstance(node.args[1], ast.Constant)
+        ):
+            read_by_configure.add(node.args[1].value)
+
+    assert read_by_configure >= PROCESS_WIDE_DESTS, (
+        "configure_scan_logging does not read "
+        f"{sorted(PROCESS_WIDE_DESTS - read_by_configure)}; the exemption is "
+        "forgiving a dest nothing consults"
+    )
+
+    main_fn = _function("main")
+    calls = {ast.unparse(n.func) for n in ast.walk(main_fn) if isinstance(n, ast.Call)}
+    assert "configure_scan_logging" in calls, (
+        "main() no longer configures logging centrally, so these dests are no "
+        "longer process-wide and the exemption is wrong"
     )
 
 

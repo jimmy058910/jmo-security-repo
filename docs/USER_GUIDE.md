@@ -1213,7 +1213,13 @@ This reverts to Phase 1 deduplication only (same tool, same location).
 - tools: [trufflehog, noseyparker, semgrep, syft, trivy, checkov, hadolint, zap, nuclei, falco, afl++, bandit]
   - Note: Added Nuclei for API security scanning (CVEs, misconfigurations, 4000+ templates)
   - Note: Removed deprecated tools (gitleaks, tfsec, osv-scanner). Added DAST (zap), runtime security (falco), and fuzzing (afl++)
-- outputs: [json, md, yaml, html, simple-html, sarif, csv]
+- outputs: [json, md, yaml, html, simple-html, sarif, csv, compliance, suppressions]
+  - `compliance` gates `COMPLIANCE_SUMMARY.md`, `PCI_DSS_COMPLIANCE.md` and
+    `attack-navigator.json`; `suppressions` gates `SUPPRESSIONS.md`. Both are on by
+    default. Before #867 all four were written unconditionally, so `outputs: []`
+    still produced them
+  - Note: `outputs:` with no list items parses as `None`, not `[]`, so the **default**
+    formats apply. Write `outputs: []` to request none
 - fail_on: "CRITICAL|HIGH|MEDIUM|LOW|INFO" (empty means do not gate)
 - threads: integer worker hint (auto if unset)
 - include / exclude: repo name glob filters (applied when using --repos-dir or --targets)
@@ -1228,7 +1234,7 @@ Example:
 
 ```yaml
 tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, zap, nuclei]
-outputs: [json, md, yaml, html, simple-html, sarif, csv]
+outputs: [json, md, yaml, html, simple-html, sarif, csv, compliance, suppressions]
 fail_on: ""
 default_profile: balanced
 threads: 4

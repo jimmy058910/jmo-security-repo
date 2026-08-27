@@ -105,8 +105,19 @@ class TrendAnalyzer:
         self.conn: sqlite3.Connection | None = None
 
     def __enter__(self):
-        """Context manager entry."""
-        self.conn = get_connection(self.db_path)
+        """Context manager entry.
+
+        Read-only: nothing in this class executes a write or commits, and a
+        writable connection sets `journal_mode`, which is persistent -- so
+        merely analysing trends rewrote the database header and changed the
+        file's checksum (#894). `jmo trends` reached here even after its own
+        connection was made read-only, because this is a second one.
+
+        Conditional on the file existing so a caller that does not pre-check
+        still gets today's behaviour: a read-only connection cannot create a
+        database, and every `jmo trends` command checks first.
+        """
+        self.conn = get_connection(self.db_path, read_only=Path(self.db_path).exists())
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):

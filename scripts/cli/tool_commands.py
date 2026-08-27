@@ -314,6 +314,8 @@ def cmd_tools_debug(args: argparse.Namespace) -> int:
                     ["file", binary_path],
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     timeout=5,
                 )
                 if file_result.returncode == 0:
@@ -374,6 +376,8 @@ def cmd_tools_debug(args: argparse.Namespace) -> int:
                 cmd,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=timeout,
                 env=manager._get_clean_env(),
             )
@@ -987,6 +991,8 @@ def cmd_tools_uninstall(args: argparse.Namespace) -> int:
                 [sys.executable, "-m", "pip", "uninstall", "-y", "jmo-security"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
             if result.returncode == 0:
                 print(colorize("done", "green"))
@@ -1037,6 +1043,8 @@ def _check_pip_package(package: str) -> bool:
             [sys.executable, "-m", "pip", "show", package],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         return result.returncode == 0
     except Exception:
@@ -1107,6 +1115,8 @@ def _uninstall_tools(tools: list[tuple[str, str]], errors: list[str]) -> None:
                 [sys.executable, "-m", "pip", "uninstall", "-y"] + pip_tools,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=120,
             )
             if result.returncode == 0:
@@ -1126,6 +1136,8 @@ def _uninstall_tools(tools: list[tuple[str, str]], errors: list[str]) -> None:
                     ["npm", "uninstall", "-g", pkg],
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     timeout=60,
                 )
             print(colorize("    done", "green"))

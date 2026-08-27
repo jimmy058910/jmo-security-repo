@@ -22,6 +22,7 @@ keep it that way.
 from __future__ import annotations
 
 import ast
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -108,10 +109,16 @@ def test_main_hardens_streams_before_parsing_args() -> None:
 # a policy that certifies "no secrets" because the scanner's output was
 # destroyed is a false assurance.
 #
-# This guard is deliberately scoped to the data path rather than all ~73
-# `text=True` sites in `scripts/`. PR #696 fixed all 153 lint-visible encoding
-# sites and repaired zero actual failures; scope comes from failures, not from
-# an enumerable pattern. Add a module here when it starts handling foreign bytes.
+# This tuple is the *strict* tier: on the data path a capture must not carry
+# `text=` at all, because these modules are expected to be read as bytes and
+# decoded deliberately. PR #696 fixed all 153 lint-visible encoding sites and
+# repaired zero actual failures; scope comes from failures, not from an
+# enumerable pattern. Add a module here when it starts handling foreign bytes.
+#
+# The weaker rule below -- name a codec and an error handler -- applies to every
+# capturing call under `scripts/`, and it widened on the same principle rather
+# than against it: #936 and #963 are two measured `UnicodeDecodeError`
+# tracebacks out of `jmo build validate` on a cp1252 console, not a lint count.
 DATA_PATH_MODULES = (
     "core/tool_runner.py",  # scanner stdout over arbitrary repo content
     "core/policy_engine.py",  # OPA JSON; decides PASS/FAIL
@@ -168,6 +175,98 @@ def test_data_path_subprocesses_decode_explicitly() -> None:
         not offenders
     ), "Locale-decoded subprocess output on the scan data path:\n" + "\n".join(
         f"  {o}" for o in offenders
+    )
+
+
+def test_every_capturing_subprocess_pins_its_decoder() -> None:
+    """No capturing subprocess call anywhere in `scripts/` may decode by locale.
+
+    `text=True` without `encoding=` decodes the child's bytes with
+    `locale.getpreferredencoding()` -- cp1252 on a default Windows box -- and it
+    does so inside subprocess's reader *thread*. The `UnicodeDecodeError` is
+    raised and swallowed there, the thread dies, and `subprocess.run` returns
+    with a truncated or empty buffer. The caller sees "no output", never an
+    error, so the failure is silent at every level (#936, #963):
+
+        Exception in thread Thread-29 (_readerthread):
+        UnicodeDecodeError: 'charmap' codec can't decode byte 0x8f in position 16920
+
+    `errors=` is required independently of `encoding=`: strict is the default,
+    and one unmappable byte discards the whole capture rather than mangling one
+    character. A version probe should degrade, not vanish.
+
+    The rule is about the property, not the shape: it fires only where a decode
+    actually happens. `capture_output=True` on its own yields **bytes** and
+    never reaches a codec, so the 20 calls that only test `returncode` are not
+    offenders -- an earlier draft of this guard flagged them and was wrong.
+
+    This class has no lint. `PLW1514` covers `open()` and `read_text()` only, so
+    the console-encoding burn-down (`ffd750e`) fixed every file-I/O site and left
+    all 56 subprocess sites untouched -- and CI cannot see them either, because
+    `ci.yml` sets `PYTHONUTF8: "1"`, an environment no real Windows user has.
+    An AST guard is the only thing that can hold this line.
+    """
+    offenders: list[str] = []
+
+    for path in sorted(SCRIPTS.rglob("*.py")):
+        rel = path.relative_to(SCRIPTS).as_posix()
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for lineno, kwargs in _capturing_subprocess_calls(tree):
+            decodes = kwargs & {"text", "universal_newlines", "encoding"}
+            if not decodes:
+                continue  # bytes out; no codec is involved
+            if "encoding" not in kwargs:
+                offenders.append(
+                    f"{rel}:{lineno} decodes with text= but names no encoding= "
+                    "(host locale, inside a reader thread)"
+                )
+            elif "errors" not in kwargs:
+                offenders.append(
+                    f"{rel}:{lineno} has encoding= but no errors= "
+                    "(strict discards the whole capture on one bad byte)"
+                )
+
+    assert not offenders, (
+        f"{len(offenders)} capturing subprocess call(s) decode by host locale:\n"
+        + "\n".join(f"  {o}" for o in offenders)
+    )
+
+
+def test_installer_runner_survives_undecodable_bytes() -> None:
+    """The shared installer runner must degrade on a bad byte, not lose the capture.
+
+    Every tool installer shells out through `DefaultSubprocessRunner.run`, and
+    the security tools' `--version` output is the least predictable text in the
+    product. This drives a real child process emitting bytes that are invalid in
+    **UTF-8** -- so the test is falsifiable on any host, rather than depending on
+    the runner's locale being cp1252, which CI's `PYTHONUTF8: "1"` guarantees it
+    is not.
+
+    The property is that the text on *both sides* of the bad bytes survives.
+    Asserting only "no exception" would pass against a truncated capture, which
+    is the actual #963 symptom: the reader thread dies, `subprocess.run` returns,
+    and the caller reads a short string as if the tool had said less.
+    """
+    from scripts.cli.installers.base import DefaultSubprocessRunner
+
+    result = DefaultSubprocessRunner().run(
+        [
+            sys.executable,
+            "-c",
+            "import sys; sys.stdout.buffer.write(b'head\\xff\\xfetail')",
+        ],
+        timeout=60,
+    )
+
+    assert result.returncode == 0
+    assert result.stdout.startswith("head"), f"capture truncated: {result.stdout!r}"
+    assert result.stdout.endswith("tail"), (
+        "text after the undecodable bytes was lost -- the reader thread died "
+        f"rather than replacing them: {result.stdout!r}"
+    )
+    assert "�" in result.stdout, (
+        "the bad bytes vanished instead of becoming replacement characters: "
+        f"{result.stdout!r}"
     )
 
 

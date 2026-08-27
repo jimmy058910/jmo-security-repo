@@ -938,7 +938,14 @@ outputs:
             "hadolint",
             "zap",
         ]
-        assert config.outputs == ["json", "md", "yaml", "html"]
+        assert config.outputs == [
+            "json",
+            "md",
+            "yaml",
+            "html",
+            "compliance",
+            "suppressions",
+        ]
     finally:
         scripts.core.config.yaml = original_yaml
 

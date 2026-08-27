@@ -5,6 +5,7 @@ Tests the gitlab_scanner module with various scenarios.
 Updated to mock scan_repository() and subprocess.run() instead of ToolRunner.
 """
 
+import json
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -801,6 +802,145 @@ spec:
                     or "image:postgres:14:trivy" in statuses
                 )
                 assert mock_scan_image.call_count == 2
+
+
+class TestAbandonedGitlabTargetsStillGetTimings:
+    """#824: gitlab was the only target type that never wrote scan-timings.json.
+
+    Five of the six scanners call `write_scan_timings`; `gitlab_scanner` had no
+    import and no call. On the success path that was masked -- it delegates to
+    `scan_repository`, which writes the artifact into a temp dir, and the copy
+    loop globs `*.json` and carries it across. On the four failure paths it was
+    not masked at all, and those are the ones where the row matters: an absent
+    file is indistinguishable from a target nobody requested, so the scan-phase
+    instrumentation added in #722 had a hole invisible from the artifact.
+
+    #809 was filed on the premise that "the accounting layer is fine --
+    `scan-timings.json` records the truth". True for five target types, false
+    for the sixth, and the sixth's gap is exactly the failure case.
+    """
+
+    GITLAB_INFO = {
+        "full_path": "group/project",
+        "url": "https://gitlab.com",
+        "repo": "project",
+        "group": "group",
+    }
+
+    def _timings(self, results_dir: Path) -> dict:
+        path = results_dir / "group_project" / "scan-timings.json"
+        assert path.exists(), (
+            f"no scan-timings.json written for the abandoned target: "
+            f"{sorted(p.name for p in results_dir.rglob('*'))}"
+        )
+        return json.loads(path.read_bytes().decode("utf-8"))
+
+    def test_a_missing_token_still_records_a_row(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("GITLAB_TOKEN", raising=False)
+
+        _full_path, statuses = scan_gitlab_repo(
+            gitlab_info=dict(self.GITLAB_INFO),
+            results_dir=tmp_path,
+            tools=["trufflehog", "semgrep"],
+            timeout=600,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=False,
+        )
+
+        assert statuses == {"trufflehog": False, "semgrep": False}
+        doc = self._timings(tmp_path)
+        assert doc["target"] == "group/project"
+        assert doc["target_type"] == "gitlab"
+        assert doc["tools"] == [], "no tool ran, so none may be timed"
+        assert doc["outcome"] == "failed-before-tools"
+        assert "token" in doc["error"].lower(), doc["error"]
+
+    def test_a_failed_clone_still_records_a_row(self, tmp_path):
+        with patch(
+            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run"
+        ) as mock_subprocess:
+            mock_subprocess.return_value = MagicMock(
+                returncode=128, stderr=b"fatal: repository not found"
+            )
+            _full_path, statuses = scan_gitlab_repo(
+                gitlab_info={**self.GITLAB_INFO, "token": "glpat-x"},
+                results_dir=tmp_path,
+                tools=["trufflehog"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+            )
+
+        assert statuses == {"trufflehog": False}
+        doc = self._timings(tmp_path)
+        assert doc["outcome"] == "failed-before-tools"
+        assert "128" in doc["error"], doc["error"]
+
+    def test_a_clone_timeout_still_records_a_row(self, tmp_path):
+        import subprocess as _sp
+
+        with patch(
+            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+            side_effect=_sp.TimeoutExpired(cmd="git clone", timeout=600),
+        ):
+            _full_path, statuses = scan_gitlab_repo(
+                gitlab_info={**self.GITLAB_INFO, "token": "glpat-x"},
+                results_dir=tmp_path,
+                tools=["trufflehog"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+            )
+
+        assert statuses == {"trufflehog": False}
+        doc = self._timings(tmp_path)
+        assert doc["outcome"] == "failed-before-tools"
+        assert "timeout" in doc["error"].lower(), doc["error"]
+
+    def test_an_unexpected_error_still_records_a_row(self, tmp_path):
+        with patch(
+            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+            side_effect=RuntimeError("disk on fire"),
+        ):
+            _full_path, statuses = scan_gitlab_repo(
+                gitlab_info={**self.GITLAB_INFO, "token": "glpat-x"},
+                results_dir=tmp_path,
+                tools=["trufflehog"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+            )
+
+        assert statuses == {"trufflehog": False}
+        doc = self._timings(tmp_path)
+        assert doc["outcome"] == "failed-before-tools"
+        assert "disk on fire" in doc["error"], doc["error"]
+
+    def test_a_successful_scan_is_not_labelled_as_abandoned(self, tmp_path):
+        """Negative control.
+
+        Without it, labelling every gitlab target `failed-before-tools` passes
+        all four tests above -- and would make the field useless, which is the
+        whole reason the schema version was bumped.
+        """
+        from scripts.core.scan_timings import (
+            OUTCOME_FAILED_BEFORE_TOOLS,
+            write_scan_timings,
+        )
+
+        out = tmp_path / "ok"
+        out.mkdir()
+        write_scan_timings(
+            out, [], target="group/project", target_type="gitlab", wall_seconds=1.0
+        )
+        doc = json.loads((out / "scan-timings.json").read_bytes().decode("utf-8"))
+        assert doc["outcome"] != OUTCOME_FAILED_BEFORE_TOOLS
+        assert doc["outcome"] == "completed"
+        assert doc["error"] is None
 
 
 if __name__ == "__main__":

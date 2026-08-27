@@ -39,6 +39,7 @@ from rich.table import Table
 
 from scripts.cli.scan_orchestrator import (
     TARGET_FAILED,
+    TARGET_NOT_ATTEMPTED,
     TARGET_PARTIAL,
     classify_target_outcome,
 )
@@ -291,11 +292,16 @@ class RichScanProgressTracker:
         because the parameter was never read. The target bar therefore advanced
         identically whether a target found everything or nothing (#809).
         """
+        from scripts.cli.scan_utils import not_attempted_tools
+
         outcome = classify_target_outcome(statuses)
+        # Excluded for the same reason as in `ScanProgressReporter`: a stubbed
+        # tool is False now, and accusing it of failing would be wrong (#825).
+        skipped_tools = set(not_attempted_tools(statuses))
         failed_tools = sorted(
             name
             for name, ok in (statuses or {}).items()
-            if not name.startswith("__") and not ok
+            if not name.startswith("__") and not ok and name not in skipped_tools
         )
 
         # Outside the lock: self.log() takes it, and re-entering a
@@ -311,11 +317,24 @@ class RichScanProgressTracker:
                     else "no tool ran against this target"
                 ),
             )
+        elif outcome == TARGET_NOT_ATTEMPTED:
+            self.log(
+                "WARN",
+                f"{target_type}: {target_name} - NO tool ran against this "
+                f"target; {len(skipped_tools)} stubbed and their empty output "
+                f"is NOT a clean result: {', '.join(sorted(skipped_tools))}",
+            )
         elif outcome == TARGET_PARTIAL:
             self.log(
                 "WARN",
                 f"{target_type}: {target_name} - findings MISSING from "
                 f"{len(failed_tools)} failed tool(s): {', '.join(failed_tools)}",
+            )
+        elif skipped_tools:
+            self.log(
+                "WARN",
+                f"{target_type}: {target_name} - {len(skipped_tools)} tool(s) "
+                f"were stubbed and did NOT run: {', '.join(sorted(skipped_tools))}",
             )
 
         with self._lock:

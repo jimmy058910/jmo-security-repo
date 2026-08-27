@@ -142,6 +142,8 @@ def validate_k8s_context(context: str, timeout: int = 5) -> bool:
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout,
             check=False,
         )

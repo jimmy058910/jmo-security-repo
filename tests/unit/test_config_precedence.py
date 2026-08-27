@@ -187,6 +187,94 @@ def _effective_per_tool(tmp_path: Path) -> dict:
     return jmo_mod._effective_scan_settings(args)["per_tool"]
 
 
+class TestProfileToolListIsHonoured:
+    """#975: `profiles.<name>.tools` was documented, user-facing, and inert.
+
+    `_effective_scan_settings` resolved the tool list from the built-in
+    `PROFILE_TOOLS` mapping and never looked at the profile's own `tools:` key.
+    A user who wrote `profiles: {fast: {tools: [trufflehog]}}` got the full
+    built-in `fast` profile instead -- measured, one configured tool resolving
+    to nine, with semgrep among them fetching its ruleset over the network.
+
+    Every test here asserts the **negative**, because that is the shape the
+    defect hid behind. `tests/integration/test_cli_profiles.py` sets exactly
+    this config and passes, having only ever checked that trufflehog's output
+    appeared. A test that asserts the included tool is present cannot notice
+    that eight excluded ones are too.
+    """
+
+    def _tools(self, tmp_path: Path, body: str, **overrides) -> list[str]:
+        fields = {
+            "config": _write_cfg(tmp_path, body),
+            "profile_name": None,
+            "threads": None,
+            "timeout": None,
+            "tools": None,
+            "skip_tools": None,
+        }
+        fields.update(overrides)
+        return jmo_mod._effective_scan_settings(argparse.Namespace(**fields))["tools"]
+
+    def test_a_configured_tool_list_excludes_everything_else(self, tmp_path: Path):
+        tools = self._tools(
+            tmp_path,
+            "default_profile: fast\nprofiles:\n  fast:\n    tools:\n    - trufflehog\n",
+        )
+        assert tools == ["trufflehog"]
+        # Named explicitly: semgrep is the one that reaches the network, and it
+        # is how the defect was noticed at all.
+        assert "semgrep" not in tools, (
+            "a profile asking for one tool still resolved semgrep, which then "
+            "fetches its ruleset over the network"
+        )
+
+    def test_the_builtin_profile_still_applies_without_a_tools_key(
+        self, tmp_path: Path
+    ):
+        """Negative control: overriding must not become the only behaviour.
+
+        Without this, resolving `[]` for every profile would satisfy the test
+        above while breaking every user who never wrote a `tools:` key.
+        """
+        tools = self._tools(tmp_path, "default_profile: fast\n")
+        assert len(tools) > 1 and "semgrep" in tools
+
+    def test_an_empty_list_is_not_a_narrowing(self, tmp_path: Path):
+        """`tools: []` asks for nothing, which is not a scan.
+
+        Treated as absent rather than as "run no tools", so a truncated config
+        does not silently produce an empty scan that reports success.
+        """
+        tools = self._tools(
+            tmp_path, "default_profile: fast\nprofiles:\n  fast:\n    tools: []\n"
+        )
+        assert len(tools) > 1
+
+    def test_the_cli_flag_still_outranks_the_config(self, tmp_path: Path):
+        tools = self._tools(
+            tmp_path,
+            "default_profile: fast\nprofiles:\n  fast:\n    tools:\n    - trufflehog\n",
+            tools=["gosec"],
+        )
+        assert tools == ["gosec"]
+
+    def test_a_profile_that_is_not_built_in_can_define_its_own_tools(
+        self, tmp_path: Path
+    ):
+        """The documented use: a profile name PROFILE_TOOLS has never heard of.
+
+        Before the fix this fell through to the top-level `tools:` key, so a
+        custom profile could not narrow anything at all.
+        """
+        tools = self._tools(
+            tmp_path,
+            "default_profile: mine\ntools:\n- semgrep\n- trivy\n"
+            "profiles:\n  mine:\n    tools:\n    - bandit\n",
+        )
+        assert tools == ["bandit"]
+        assert "semgrep" not in tools and "trivy" not in tools
+
+
 def test_per_tool_profile_value_wins_over_the_root_value(tmp_path: Path):
     assert _effective_per_tool(tmp_path)["semgrep"]["timeout"] == 222
 
@@ -296,6 +384,68 @@ def test_history_falls_back_to_config_profile_when_no_scan_metadata(
         jmo_mod.cmd_report(args)
 
     assert store.call_args.kwargs["profile"] == "fast"
+
+
+def test_history_infers_tools_from_findings_when_scan_metadata_has_none(
+    tmp_path: Path,
+):
+    """The middle rung of #787's chain: metadata absent, findings present.
+
+    ``tools_used`` resolves scan metadata -> tools named by the findings ->
+    nothing.  Rung 1 and the profile side of rung 2 are pinned above; this pins
+    the tool side of rung 2, which is what runs whenever a results directory is
+    reported without the scan's own ``.scan_metadata.json`` beside it (``jmo
+    report`` on a directory copied off another machine, or produced before the
+    metadata file existed).
+
+    The config names a completely different tool, so a pass means the findings
+    won and not merely that *some* list arrived.
+    """
+    results_dir = tmp_path / "results"
+    repo = results_dir / "individual-repos" / "repo1"
+    repo.mkdir(parents=True)
+    # No .scan_metadata.json: rung 1 is unavailable by construction.
+    (repo / "trufflehog.json").write_bytes(
+        json.dumps(
+            [
+                {
+                    "schemaVersion": "1.0.0",
+                    "id": "finding-1",
+                    "ruleId": "R1",
+                    "message": "m",
+                    "severity": "LOW",
+                    "tool": {"name": "trufflehog", "version": "1"},
+                    "location": {"path": "a.txt", "startLine": 1},
+                }
+            ]
+        ).encode("utf-8")
+    )
+    cfg_path = _write_cfg(
+        tmp_path,
+        "default_profile: fast\ntools:\n- semgrep\n- nuclei\noutputs:\n- json\n",
+    )
+
+    args = argparse.Namespace(
+        cmd="report",
+        results_dir=str(results_dir),
+        out=str(results_dir / "summaries"),
+        config=cfg_path,
+        fail_on=None,
+        profile=False,
+        threads=None,
+        store_history=True,
+        history_db=str(tmp_path / "history.db"),
+        profile_name=None,
+    )
+
+    with patch("scripts.core.history_db.store_scan", return_value="scan-id") as store:
+        jmo_mod.cmd_report(args)
+
+    assert store.called, "report did not reach the history-storage hook"
+    assert store.call_args.kwargs["tools"] == ["trufflehog"], (
+        "history did not fall back to the tools the findings name: "
+        f"{store.call_args.kwargs['tools']}"
+    )
 
 
 # --------------------------------------------------------------------------
@@ -414,6 +564,191 @@ def _parser_subcommands() -> set[str]:
     top = captured.get("cmd")
     assert top is not None, "could not capture the top-level subparsers action"
     return set(top.choices)
+
+
+def _walk_parsers(parser, prefix=""):
+    """Yield (command path, parser) for a parser and every subparser under it."""
+    yield prefix.strip(), parser
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            for name, sub in action.choices.items():
+                yield from _walk_parsers(sub, f"{prefix} {name}")
+
+
+def _leaf_parsers() -> list[tuple[str, argparse.ArgumentParser]]:
+    """Every command a user can actually run, with its parser.
+
+    A parser that owns subparsers is a namespace (`jmo history`), not a command
+    -- you cannot run it alone -- so only the leaves are returned.
+    """
+    captured: dict[str, argparse._SubParsersAction] = {}
+    original = argparse.ArgumentParser.add_subparsers
+
+    def _capture(self, *a, **kw):
+        action = original(self, *a, **kw)
+        captured.setdefault(kw.get("dest") or "positional", action)
+        captured.setdefault(f"_root:{id(self)}", self)  # type: ignore[arg-type]
+        return action
+
+    argv = sys.argv
+    argparse.ArgumentParser.add_subparsers = _capture  # type: ignore[method-assign]
+    try:
+        sys.argv = ["jmo", "--help"]
+        with (
+            contextlib.redirect_stdout(io.StringIO()),
+            contextlib.redirect_stderr(io.StringIO()),
+            contextlib.suppress(SystemExit),
+        ):
+            jmo_mod.parse_args()
+    finally:
+        argparse.ArgumentParser.add_subparsers = original  # type: ignore[method-assign]
+        sys.argv = argv
+
+    top = captured.get("cmd")
+    assert top is not None, "could not capture the top-level subparsers action"
+
+    leaves: list[tuple[str, argparse.ArgumentParser]] = []
+    for name, sub in top.choices.items():
+        for path, parser in _walk_parsers(sub, name):
+            has_children = any(
+                isinstance(a, argparse._SubParsersAction) for a in parser._actions
+            )
+            if not has_children:
+                leaves.append((path, parser))
+    return leaves
+
+
+def _dests(parser) -> set[str]:
+    return {a.dest for a in parser._actions if a.dest != "help"}
+
+
+def test_leaf_parser_extractor_finds_the_real_tree():
+    """Meta-guard: every assertion below is built on this derivation.
+
+    An extractor that silently returns nothing makes them all vacuously true --
+    the same failure the `KNOWN_OUTPUTS` and ci-forwarding guards protect
+    against.
+    """
+    leaves = dict(_leaf_parsers())
+    assert len(leaves) >= 40, f"expected the full command tree, got {sorted(leaves)}"
+    for expected in ("scan", "diff", "history list", "trends show", "policy list"):
+        assert (
+            expected in leaves
+        ), f"extractor missed `jmo {expected}`: {sorted(leaves)}"
+
+
+def test_log_level_and_human_logs_travel_together():
+    """`--log-level` and `--human-logs` are one control, not two (#879).
+
+    `jmo setup` carried `--human-logs` alone: it could change the log FORMAT
+    but not the LEVEL. Asserting coherence rather than universality, because
+    some commands legitimately have neither -- what must never happen is half
+    of the pair, which reads as support for something that is not there.
+    """
+    offenders = []
+    for path, parser in _leaf_parsers():
+        dests = _dests(parser)
+        if ("log_level" in dests) != ("human_logs" in dests):
+            present = "log_level" if "log_level" in dests else "human_logs"
+            offenders.append(f"jmo {path}: has {present} and not the other")
+    assert not offenders, "half a logging control:\n" + "\n".join(
+        f"  {o}" for o in offenders
+    )
+
+
+def test_every_command_that_reads_the_database_can_set_its_log_level():
+    """Regression for #879.
+
+    `jmo diff`, and every `history`/`trends`/`policy` subcommand, emitted
+    records nobody could turn up or down: `jmo diff --format html` warns on
+    every run, and the diff engine warns when findings carry no usable id. A
+    user could neither raise the floor to see the INFO detail nor lower it to
+    silence a warning they had accepted.
+
+    Derived from the command tree, so a subcommand added tomorrow is covered
+    without editing this list.
+    """
+    missing = [
+        f"jmo {path}"
+        for path, parser in _leaf_parsers()
+        if (path == "diff" or path.split()[0] in {"history", "trends", "policy"})
+        and "log_level" not in _dests(parser)
+    ]
+    assert not missing, "commands that emit records but cannot be tuned:\n" + "\n".join(
+        f"  {m}" for m in missing
+    )
+
+
+def test_diff_log_level_actually_changes_what_is_emitted(tmp_path: Path):
+    """Accepting the flag and honouring it are different claims.
+
+    `main()` already called `configure_scan_logging(args)` for every command,
+    so wiring was never the gap -- but a test that only asserts the parser
+    accepts `--log-level` would pass against a build where the value went
+    nowhere. This drives the real CLI and compares the two levels' output.
+
+    Run as a subprocess because `configure_scan_logging` mutates the `scripts`
+    logger process-wide; doing that in-process would leak into other tests.
+    """
+    import subprocess
+
+    baseline = tmp_path / "a"
+    current = tmp_path / "b"
+    for side, entries in (
+        (
+            baseline,
+            [
+                {
+                    "id": "x",
+                    "ruleId": "R",
+                    "severity": "LOW",
+                    "message": "m",
+                    "tool": {"name": "semgrep"},
+                    "location": {"path": "a.py", "startLine": 1},
+                }
+            ],
+        ),
+        (current, []),
+    ):
+        (side / "summaries").mkdir(parents=True)
+        (side / "summaries" / "findings.json").write_bytes(
+            json.dumps(entries).encode("utf-8")
+        )
+
+    def run(level: str) -> list[str]:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "scripts.cli.jmo",
+                "diff",
+                str(baseline),
+                str(current),
+                "--log-level",
+                level,
+            ],
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=120,
+        )
+        assert proc.returncode == 0, proc.stderr
+        return [ln for ln in proc.stderr.splitlines() if ln.strip()]
+
+    quiet = run("WARN")
+    verbose = run("DEBUG")
+
+    assert len(verbose) > len(quiet), (
+        "--log-level DEBUG emitted no more than WARN, so the flag parses but "
+        f"does nothing: {len(verbose)} vs {len(quiet)} lines"
+    )
+    assert any(
+        '"level": "DEBUG"' in ln for ln in verbose
+    ), f"no DEBUG record reached stderr: {verbose[:3]}"
+    assert not any('"level": "DEBUG"' in ln for ln in quiet), (
+        "WARN already emitted DEBUG records, so the comparison above is not "
+        "measuring the flag"
+    )
 
 
 # Two unambiguous ways of naming a command: backtick-quoted, or followed by a

@@ -155,7 +155,20 @@ class Config:
             "zap",
         ]
     )
-    outputs: list[str] = field(default_factory=lambda: ["json", "md", "yaml", "html"])
+    # `compliance` and `suppressions` are here so gating them under #867 does
+    # not change what a config that never mentions `outputs:` produces. They
+    # were written unconditionally before, outside any gate; being in the
+    # default keeps that true while making `outputs: []` mean what it says.
+    outputs: list[str] = field(
+        default_factory=lambda: [
+            "json",
+            "md",
+            "yaml",
+            "html",
+            "compliance",
+            "suppressions",
+        ]
+    )
     fail_on: str = ""
     threads: int | str | None = None  # int for explicit count, 'auto' for detection
     include: list[str] = field(default_factory=list)

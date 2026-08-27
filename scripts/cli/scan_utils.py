@@ -415,6 +415,61 @@ def filter_trivy_flags(subcommand: str, flags: list[str]) -> list[str]:
     return kept
 
 
+# The key a scanner's status map carries its not-attempted tools under.
+# `__`-prefixed by the same convention as `__attempts__`: every consumer of the
+# map already skips those, so adding this one cannot make an existing reader
+# mistake it for a tool.
+NOT_ATTEMPTED_KEY = "__not_attempted__"
+
+# Why a tool was never executed. Two reasons, because they mean different
+# things to whoever reads the scan: one is a gap in the environment the user can
+# close, the other is a correct decision about this target. Both are still
+# "did not run", which is the distinction #825 is about, and both were recorded
+# as a success before it.
+NOT_ATTEMPTED_MISSING = "not installed"
+NOT_ATTEMPTED_NOTHING_APPLICABLE = "nothing for it to scan"
+
+
+def record_not_attempted(
+    statuses: dict, tool: str, reason: str = NOT_ATTEMPTED_MISSING
+) -> None:
+    """Record that `tool` never ran, distinctly from having run and failed.
+
+    Under `--allow-missing-tools` every scanner used to write
+    ``statuses[tool] = True`` beside its stub -- the same value a tool that ran
+    successfully gets. So a secret scanner that was never executed produced an
+    empty result and a success, which is the `zero-secrets` shape: a policy
+    certifying "no secrets" because nothing looked (#825).
+
+    `False` is the honest boolean -- the tool did not run, so it did not
+    succeed -- and the tool is also listed under `NOT_ATTEMPTED_KEY`, so
+    `classify_target_outcome` can leave it out of the vote entirely rather than
+    counting it as a failure. Those are different things: a target where one
+    tool ran cleanly and two were never installed has not partially failed.
+
+    On a normal host the pre-flight removes missing tools before the scanners
+    run, so this fires only when `find_tool` disagrees with it at scan time.
+    **In a container the pre-flight is skipped entirely** (`jmo.py` gates it on
+    `DOCKER_CONTAINER`), so this is the normal path there -- a `deep` image is
+    expected to be missing the four MANUAL_INSTALL_TOOLS.
+    """
+    statuses[tool] = False
+    statuses.setdefault(NOT_ATTEMPTED_KEY, {})[tool] = reason
+
+
+def not_attempted_tools(statuses: Mapping[str, Any] | None) -> list[str]:
+    """The tools a target never ran, sorted. Empty when everything was tried.
+
+    Takes a `Mapping` rather than a `dict` because every caller reads a status
+    map it does not own -- `classify_target_outcome` and both progress
+    reporters annotate theirs as `Mapping`.
+    """
+    if not statuses:
+        return []
+    recorded = statuses.get(NOT_ATTEMPTED_KEY) or {}
+    return sorted(recorded) if isinstance(recorded, dict) else []
+
+
 def write_stub(tool: str, out_path: Path) -> None:
     """Write empty JSON stub for missing tool."""
     out_path.parent.mkdir(parents=True, exist_ok=True)

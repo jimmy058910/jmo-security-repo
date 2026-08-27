@@ -113,6 +113,8 @@ def clone_target(target: str, dest: Path) -> str:
         cwd=dest,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
     )
     version = result.stdout.strip() if result.returncode == 0 else "unknown"
 
@@ -137,7 +139,9 @@ def run_scan(target_path: Path, profile: str, results_dir: Path) -> int:
         str(results_dir),
     ]
 
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(
+        cmd, capture_output=True, text=True, encoding="utf-8", errors="replace"
+    )
 
     if result.returncode != 0:
         logger.warning(f"Scan exited with code {result.returncode}")

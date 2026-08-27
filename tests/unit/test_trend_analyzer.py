@@ -46,6 +46,29 @@ def trend_temp_db():
 
 
 @pytest.fixture
+def seed_conn(trend_temp_db):
+    """A separate write handle for seeding rows a test needs to exist.
+
+    Several tests below used to insert their fixture rows through
+    `analyzer.conn`. That connection is read-only since #894 -- `TrendAnalyzer`
+    executes no write and never commits, and a writable connection sets the
+    persistent `journal_mode` pragma, so merely analysing trends rewrote the
+    database header.
+
+    Seeding through a handle the code under test does not own is the more
+    honest arrangement anyway: it stops a setup step from depending on an
+    implementation detail of the thing being tested. A separate connection's
+    committed rows are visible to an already-open reader, which is what makes
+    the substitution behaviour-preserving.
+    """
+    conn = sqlite3.connect(str(trend_temp_db))
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
+@pytest.fixture
 def sample_scans_data():
     """Sample scan data for testing (10 scans showing improvement)."""
     return [
@@ -808,7 +831,7 @@ def test_get_scans_with_scan_ids(trend_temp_db, tmp_path):
         assert scans[0]["timestamp"] <= scans[1]["timestamp"]
 
 
-def test_get_scans_with_days_filter(trend_temp_db, tmp_path):
+def test_get_scans_with_days_filter(trend_temp_db, tmp_path, seed_conn):
     """Test _get_scans() with days parameter (lines 198-210)."""
     import time
     from datetime import datetime
@@ -820,7 +843,7 @@ def test_get_scans_with_days_filter(trend_temp_db, tmp_path):
         old_timestamp_iso = datetime.fromtimestamp(old_timestamp, tz=UTC).isoformat()
 
         # Insert directly to control timestamp
-        conn = analyzer.conn
+        conn = seed_conn
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -894,14 +917,14 @@ def test_severity_trends_medium_confidence(trend_temp_db, tmp_path):
         assert result["confidence"] == "medium"
 
 
-def test_detect_regressions_high_threshold(trend_temp_db, tmp_path):
+def test_detect_regressions_high_threshold(trend_temp_db, tmp_path, seed_conn):
     """Test HIGH severity regression detection threshold (line 408)."""
     from datetime import datetime
 
     # Store 2 scans with HIGH increase >= 3
     # Need to manually insert with specific counts to test threshold
     with TrendAnalyzer(db_path=trend_temp_db) as analyzer:
-        conn = analyzer.conn
+        conn = seed_conn
         cursor = conn.cursor()
 
         # Baseline scan with 2 HIGH
@@ -971,14 +994,14 @@ def test_detect_regressions_high_threshold(trend_temp_db, tmp_path):
         assert high_regression["increase"] == 3
 
 
-def test_generate_insights_low_scan_frequency(trend_temp_db):
+def test_generate_insights_low_scan_frequency(trend_temp_db, seed_conn):
     """Test low scan frequency insight generation (lines 497-498)."""
     import time
     from datetime import datetime
 
     # Store 5 scans over 30 days (< 1 scan/week) - need 5+ scans for frequency insight
     with TrendAnalyzer(db_path=trend_temp_db) as analyzer:
-        conn = analyzer.conn
+        conn = seed_conn
         cursor = conn.cursor()
 
         now = int(time.time())
@@ -1036,7 +1059,7 @@ def test_generate_insights_low_scan_frequency(trend_temp_db):
         assert "scans/week" in low_freq_insight
 
 
-def test_calculate_security_score_all_grades(trend_temp_db):
+def test_calculate_security_score_all_grades(trend_temp_db, seed_conn):
     """Test all security score grade boundaries (lines 547, 551, 559)."""
     from datetime import datetime
 
@@ -1052,14 +1075,14 @@ def test_calculate_security_score_all_grades(trend_temp_db):
     for critical, high, medium, expected_grade in test_cases:
         # Clear database
         with TrendAnalyzer(db_path=trend_temp_db) as analyzer:
-            conn = analyzer.conn
+            conn = seed_conn
             conn.execute("DELETE FROM scans")
             conn.execute("DELETE FROM findings")
             conn.commit()
 
         # Store scan with specific counts using direct SQL insert
         with TrendAnalyzer(db_path=trend_temp_db) as analyzer:
-            conn = analyzer.conn
+            conn = seed_conn
             cursor = conn.cursor()
             timestamp_iso = datetime.fromtimestamp(1000, tz=UTC).isoformat()
             cursor.execute(
@@ -1203,13 +1226,13 @@ def test_format_trend_summary_with_security_score(
     assert "Grade:" in summary
 
 
-def test_format_trend_summary_with_many_regressions(trend_temp_db):
+def test_format_trend_summary_with_many_regressions(trend_temp_db, seed_conn):
     """Test format_trend_summary with > 5 regressions (line 800)."""
     from datetime import datetime
 
     # Store baseline scan + 7 scans with increasing CRITICAL counts
     with TrendAnalyzer(db_path=trend_temp_db) as analyzer:
-        conn = analyzer.conn
+        conn = seed_conn
         cursor = conn.cursor()
 
         # Baseline
@@ -1313,7 +1336,9 @@ def test_format_trend_summary_with_insights(trend_temp_db, sample_scans_data, tm
     assert any(insight in summary for insight in insights)
 
 
-def test_format_trend_summary_verbose_mode(trend_temp_db, sample_scans_data, tmp_path):
+def test_format_trend_summary_verbose_mode(
+    trend_temp_db, sample_scans_data, tmp_path, seed_conn
+):
     """Test format_trend_summary verbose mode with top_rules (lines 814-822)."""
     for scan_data in sample_scans_data:
         results_dir = tmp_path / f"results_{scan_data['commit_hash']}"
@@ -1334,7 +1359,7 @@ def test_format_trend_summary_verbose_mode(trend_temp_db, sample_scans_data, tmp
 
     with TrendAnalyzer(db_path=trend_temp_db) as analyzer:
         # Add some findings to get top_rules
-        conn = analyzer.conn
+        conn = seed_conn
         # Fix: Provide all required parameters
         scan_ids = [
             s["id"]

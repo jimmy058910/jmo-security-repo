@@ -50,6 +50,12 @@ KNOWN_OUTPUTS = (
     "simple-html",
     "sarif",
     "csv",
+    # Added under #867. These artifacts were written unconditionally, outside
+    # any gate, so `outputs: []` -- an explicit request for no output formats --
+    # still produced four files. Both default to ON, so a config that does not
+    # mention them is unchanged.
+    "compliance",
+    "suppressions",
 )
 
 
@@ -301,7 +307,14 @@ def cmd_report(args, _log_fn) -> int:
             columns=csv_columns,
             suppressions=suppressions,
         )
-    if suppressions:
+    # Gated on `outputs` as well as on there being suppression rules at all.
+    # Before chunk 8 `load_suppressions()` returned {} for the shipped
+    # jmo.suppress.yml (#538), so this never fired; now that the shipped config
+    # loads 11 usable rules, every user of it gets a SUPPRESSIONS.md -- often
+    # one that says "No suppressions matched any findings." That was a new
+    # artifact appearing as a side effect of an unrelated fix, with no key that
+    # could turn it off (#867).
+    if "suppressions" in cfg.outputs and suppressions:
         write_suppression_report(
             [str(x) for x in suppressed_ids],
             suppressions,
@@ -311,9 +324,10 @@ def cmd_report(args, _log_fn) -> int:
 
     # Write compliance framework reports (v1.2.0)
     try:
-        write_compliance_summary(findings, out_dir / "COMPLIANCE_SUMMARY.md")
-        write_pci_dss_report(findings, out_dir / "PCI_DSS_COMPLIANCE.md")
-        write_attack_navigator_json(findings, out_dir / "attack-navigator.json")
+        if "compliance" in cfg.outputs:
+            write_compliance_summary(findings, out_dir / "COMPLIANCE_SUMMARY.md")
+            write_pci_dss_report(findings, out_dir / "PCI_DSS_COMPLIANCE.md")
+            write_attack_navigator_json(findings, out_dir / "attack-navigator.json")
     except (OSError, PermissionError) as e:
         # DEBUG hid this entirely: all three compliance artifacts could vanish
         # from a report with no record at any level a normal run displays.
@@ -471,11 +485,12 @@ def cmd_report(args, _log_fn) -> int:
     _warn_unknown_threshold(threshold, args, _log_fn)
     code = fail_code(threshold, counts)
 
-    _log_fn(
-        args,
-        "INFO",
-        f"Wrote reports to {out_dir} (threshold={threshold or 'none'}, exit={code})",
-    )
+    # The one-line summary is emitted AFTER the storage hook, at the bottom of
+    # this function, so it can name the storage outcome and the exit code the
+    # run actually returns. It used to be emitted here, which put it *above* the
+    # store attempt: the only trace of a failed write was a single ERROR line in
+    # a wall of scan output, and the line a user reads to find out how the run
+    # went could not mention it (#801).
 
     # Auto-storage hook: Store scan in history database if requested.
     #
@@ -484,6 +499,7 @@ def cmd_report(args, _log_fn) -> int:
     # assignment, and so the exit-code check below is reachable on the path
     # where no store was attempted at all.
     store_error: Exception | None = None
+    stored_ok = False
     _configured_db = getattr(args, "history_db", None)
     history_db_path = (
         Path(_configured_db) if _configured_db else Path(".jmo/history.db")
@@ -519,6 +535,7 @@ def cmd_report(args, _log_fn) -> int:
                 collect_metadata=collect_metadata,
             )
 
+            stored_ok = True
             _log_fn(args, "INFO", f"Stored scan in history: {scan_id}")
             _log_fn(args, "INFO", f"Database: {history_db_path}")
 
@@ -553,4 +570,26 @@ def cmd_report(args, _log_fn) -> int:
         if store_error is not None and getattr(args, "fail_on_store_error", False)
         else 0
     )
-    return max(code, policy_exit_code, store_exit_code)
+    final_code = max(code, policy_exit_code, store_exit_code)
+
+    # One line carrying every verdict the run produced. `history=` is here
+    # because an ERROR scrolls past mid-scan while this line is what a user
+    # actually goes looking for, and "the row was not written" is exactly the
+    # kind of failure that otherwise reads as success (#801). `exit=` reports
+    # what the process returns rather than the severity verdict alone -- with
+    # --fail-on-store-error the two differ, and the old line printed the
+    # severity code while the function returned something else.
+    if not getattr(args, "store_history", False):
+        history_state = "off"
+    elif stored_ok:
+        history_state = "stored"
+    else:
+        history_state = "NOT STORED"
+    _log_fn(
+        args,
+        "INFO",
+        f"Wrote reports to {out_dir} (threshold={threshold or 'none'}, "
+        f"exit={final_code}, history={history_state})",
+    )
+
+    return final_code

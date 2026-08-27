@@ -149,6 +149,8 @@ class SigstoreSigner:
                 cmd,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 # Not ATTESTATION_TIMEOUT: keyless signing outside CI walks a
                 # human through a browser OAuth redirect, which 30 seconds
                 # cannot cover.

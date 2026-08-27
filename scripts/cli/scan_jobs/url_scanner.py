@@ -22,6 +22,7 @@ from ...core.scan_timings import write_scan_timings
 from ...core.tool_runner import ToolDefinition, ToolRunner
 from ..scan_utils import (
     find_tool,
+    record_not_attempted,
     report_tool_failure,
     tool_flags,
     tool_timeout,
@@ -133,7 +134,7 @@ def scan_url(
             )
         elif allow_missing_tools:
             _write_stub("zap", zap_out)
-            statuses["zap"] = True
+            record_not_attempted(statuses, "zap")
 
     # Nuclei scan for web URLs (CVEs, misconfigurations, exposures)
     if "nuclei" in tools:
@@ -167,7 +168,7 @@ def scan_url(
             )
         elif allow_missing_tools:
             _write_stub("nuclei", nuclei_out)
-            statuses["nuclei"] = True
+            record_not_attempted(statuses, "nuclei")
 
     # Akto: API Security testing (OWASP Top 10 API vulnerabilities)
     # v1.0.0 addition
@@ -203,7 +204,7 @@ def scan_url(
             )
         elif allow_missing_tools:
             _write_stub("akto", akto_out)
-            statuses["akto"] = True
+            record_not_attempted(statuses, "akto")
 
     # Execute all tools with ToolRunner
     runner = ToolRunner(

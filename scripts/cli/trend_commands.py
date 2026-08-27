@@ -290,7 +290,7 @@ def cmd_trends_show(args) -> int:
         return 1
 
     try:
-        conn = get_connection(db_path)
+        conn = get_connection(db_path, read_only=True)
 
         # Get the target scan
         scan = get_scan_by_id(conn, scan_id)
@@ -572,7 +572,7 @@ def cmd_trends_compare(args) -> int:
         return 1
 
     try:
-        conn = get_connection(db_path)
+        conn = get_connection(db_path, read_only=True)
 
         # Get both scans
         scan1 = get_scan_by_id(conn, scan_id_1)
@@ -913,7 +913,7 @@ def cmd_trends_developers(args) -> int:
             return 0
 
         # Get resolved fingerprints (first scan - last scan)
-        conn = get_connection(effective_db_path)
+        conn = get_connection(effective_db_path, read_only=True)
         scan_ids = [s["id"] for s in report["scans"]]
 
         first_scan = get_scan_by_id(conn, scan_ids[0])
