@@ -93,14 +93,56 @@ def deduplicate_findings_memory_efficient(
     """
     seen_fingerprints: set[str] = set()
     result: list[dict[str, Any]] = []
+    dropped: list[dict[str, Any]] = []
 
     for finding in findings:
         fingerprint = finding.get("id")
-        if fingerprint and fingerprint not in seen_fingerprints:
+        if not fingerprint:
+            # NOT deduplicated - discarded. Before #848 this fell out of the
+            # `if fingerprint and ...` test with no log record at any level and
+            # no count in the report to compare against, so a finding a tool
+            # produced and JMo deleted looked exactly like a finding that never
+            # existed. The drop itself is kept: a finding with no id cannot be
+            # deduplicated, suppressed, diffed or referenced, and
+            # `calculate_priorities_bulk` reads `finding["id"]` unguarded. What
+            # changes is that it is now counted and named.
+            dropped.append(finding)
+            continue
+        if fingerprint not in seen_fingerprints:
             seen_fingerprints.add(fingerprint)
             result.append(finding)
 
+    _report_dropped_findings(dropped)
     return result
+
+
+def _report_dropped_findings(dropped: list[dict[str, Any]]) -> None:
+    """Name the tools whose findings were discarded for having no id (#848).
+
+    WARNING because `configure_scan_logging` sets the `scripts` logger to
+    WARNING for a normal run - the level below it is invisible in exactly the
+    situation this exists to report. Silent on a healthy scan, which every
+    corpus measured so far is: #843 found 0 of 264 real findings with an empty
+    id, so this must not become the always-fires shape #784 removed.
+
+    The schema does say `minLength: 1` on `id`, but nothing between the
+    adapters and this function validates against it - `schema_validator` is
+    reached only by `jmo validate` and the YAML reporter. The contract is
+    documented, not enforced, so this path is reachable by any adapter that
+    ships a falsy id.
+    """
+    if not dropped:
+        return
+    by_tool: dict[str, int] = {}
+    for finding in dropped:
+        tool = (finding.get("tool") or {}).get("name") or "unknown"
+        by_tool[tool] = by_tool.get(tool, 0) + 1
+    logger.warning(
+        "Discarded %d finding(s) with no id - they are MISSING from this "
+        "report and were not deduplicated, they were deleted (by tool: %s)",
+        len(dropped),
+        ", ".join(f"{tool}={n}" for tool, n in sorted(by_tool.items())),
+    )
 
 
 def deduplicate_findings_streaming(
@@ -125,15 +167,24 @@ def deduplicate_findings_streaming(
         deduplicate_findings_memory_efficient: Faster for moderate-sized datasets
     """
     seen: set[str] = set()
+    dropped: list[dict[str, Any]] = []
 
     def _gen():
         for finding in findings:
             fp = finding.get("id")
-            if fp and fp not in seen:
+            if not fp:
+                # Identical shape to `deduplicate_findings_memory_efficient`,
+                # and identically silent before #848. Two copies of a data-loss
+                # path is how one gets fixed and the other does not.
+                dropped.append(finding)
+                continue
+            if fp not in seen:
                 seen.add(fp)
                 yield finding
 
-    return list(_gen())
+    out = list(_gen())
+    _report_dropped_findings(dropped)
+    return out
 
 
 def scan_roots(results_dir: Path) -> tuple[str, ...]:
