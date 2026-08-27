@@ -31,6 +31,7 @@ import yaml
 from scripts.cli import jmo
 from scripts.cli.scan_orchestrator import (
     TARGET_FAILED,
+    TARGET_NOT_ATTEMPTED,
     TARGET_OK,
     TARGET_PARTIAL,
     _run_timed,
@@ -74,6 +75,236 @@ class TestClassifyTargetOutcome:
         assert (
             classify_target_outcome({"trivy": False, "__attempts__": {"trivy": 3}})
             == TARGET_FAILED
+        )
+
+
+class TestStubbedToolIsNotASuccess:
+    """#825: `--allow-missing-tools` recorded a tool that never ran as `True`.
+
+    Every scanner had the shape::
+
+        elif allow_missing_tools:
+            _write_stub("trivy", trivy_out)
+            statuses["trivy"] = True
+
+    so a tool that was never executed carried the same value as one that ran
+    and succeeded, and an empty stub was written that the report phase reads as
+    "this tool found nothing". That is the `zero-secrets` shape: an empty result
+    from a secret scanner that never ran satisfies a zero-secrets policy.
+
+    On a normal host the pre-flight removes missing tools before the scanners
+    run, so this fires only when `find_tool` disagrees with it at scan time.
+    **In a container the pre-flight is skipped entirely** -- `jmo.py` gates it
+    on `DOCKER_CONTAINER` -- so it is the normal path there, not an edge case:
+    a `deep` image is expected to be missing the four MANUAL_INSTALL_TOOLS.
+    """
+
+    @pytest.mark.parametrize(
+        ("statuses", "expected", "why"),
+        [
+            pytest.param(
+                {"trivy": False, "__not_attempted__": {"trivy": "not installed"}},
+                TARGET_NOT_ATTEMPTED,
+                "the only tool was stubbed",
+                id="all-stubbed",
+            ),
+            pytest.param(
+                {
+                    "trivy": True,
+                    "nuclei": False,
+                    "__not_attempted__": {"nuclei": "not installed"},
+                },
+                TARGET_OK,
+                "what ran, worked",
+                id="one-ran-one-stubbed",
+            ),
+            pytest.param(
+                {
+                    "trivy": False,
+                    "nuclei": False,
+                    "__not_attempted__": {"nuclei": "not installed"},
+                },
+                TARGET_FAILED,
+                "the tool that ran failed; the stub does not soften that",
+                id="one-failed-one-stubbed",
+            ),
+            pytest.param(
+                {"trivy": False, "trufflehog": False},
+                TARGET_FAILED,
+                "no stubs: both genuinely ran and failed",
+                id="no-stubs-still-failed",
+            ),
+        ],
+    )
+    def test_a_stub_does_not_vote(self, statuses, expected, why):
+        """A tool that never ran gets no vote, in either direction.
+
+        `True` was the original bug. `False` would be the opposite error: a
+        target where one tool ran cleanly and two were not installed has not
+        partially failed.
+        """
+        assert classify_target_outcome(statuses) == expected, why
+
+    def test_record_not_attempted_sets_false_and_records_the_reason(self):
+        from scripts.cli.scan_utils import (
+            NOT_ATTEMPTED_KEY,
+            not_attempted_tools,
+            record_not_attempted,
+        )
+
+        statuses: dict = {}
+        record_not_attempted(statuses, "trivy")
+        record_not_attempted(statuses, "mobsf", "nothing for it to scan")
+
+        # False, not True: the tool did not run, so it did not succeed.
+        assert statuses["trivy"] is False
+        assert statuses["mobsf"] is False
+        assert not_attempted_tools(statuses) == ["mobsf", "trivy"]
+        # The two reasons are kept apart: one is a gap in the environment the
+        # user can close, the other is a correct decision about this target.
+        assert statuses[NOT_ATTEMPTED_KEY]["trivy"] == "not installed"
+        assert statuses[NOT_ATTEMPTED_KEY]["mobsf"] == "nothing for it to scan"
+
+    def _stubbed_scan(self, scan_env, tmp_path, monkeypatch):
+        """A scan where no tool resolves, so every one is stubbed."""
+        scan_env.allow_missing_tools = True
+        monkeypatch.setattr(
+            "scripts.cli.scan_jobs.repository_scanner.find_tool",
+            lambda *a, **k: None,
+        )
+        return jmo.cmd_scan(scan_env)
+
+    def test_a_fully_stubbed_target_still_exits_zero(
+        self, scan_env, tmp_path, monkeypatch, capsys
+    ):
+        """`--allow-missing-tools` is what makes this reachable.
+
+        Making it non-zero would invert what the flag is for, which is the
+        objection the issue raises against simply flipping True to False.
+        """
+        rc = self._stubbed_scan(scan_env, tmp_path, monkeypatch)
+        assert rc == 0
+
+    @staticmethod
+    def _lines(err: str, needle: str) -> list[str]:
+        return [ln for ln in err.splitlines() if needle in ln]
+
+    def test_the_per_target_line_says_no_tool_ran(
+        self, scan_env, tmp_path, monkeypatch, capsys
+    ):
+        """The progress line for this target, specifically.
+
+        Asserted separately from the end-of-scan summary below, because both
+        carry the tool's name and the word STUBBED -- so a test that only looks
+        at the whole stream passes with either one deleted. Both survived a
+        mutation run for exactly that reason.
+        """
+        self._stubbed_scan(scan_env, tmp_path, monkeypatch)
+        err = capsys.readouterr().err
+
+        # `[1/1]` is the progress line and nothing else.
+        progress = self._lines(err, "[1/1]")
+        assert len(progress) == 1, f"expected one progress line: {progress}"
+        line = progress[0]
+        assert '"level": "WARN"' in line, "the progress line was logged at INFO"
+        assert "NO tool ran against this target" in line
+        assert "trufflehog" in line, "the stubbed tool is not named on its own line"
+        # The glyph is matched escaped: `_log` emits JSON, and json.dumps'
+        # ensure_ascii default renders U+25CB as the six characters `○`.
+        assert "\\u25cb" in line, "the progress line still shows a pass/fail glyph"
+        assert "\\u2713" not in line, "a fully stubbed target rendered as a success"
+
+    def test_the_end_of_scan_summary_names_the_stubbed_tools(
+        self, scan_env, tmp_path, monkeypatch, capsys
+    ):
+        """The run-level line, which is what a user reads after a long scan.
+
+        A per-target line scrolls past on a 50-repo run; this one does not.
+        """
+        self._stubbed_scan(scan_env, tmp_path, monkeypatch)
+        err = capsys.readouterr().err
+
+        summary = self._lines(err, "were STUBBED, not executed")
+        assert len(summary) == 1, f"expected one end-of-scan summary: {summary}"
+        line = summary[0]
+        assert '"level": "WARN"' in line
+        assert "proj: trufflehog" in line, "the summary does not attribute per target"
+        assert "not the same as finding nothing" in line
+
+    def test_the_scan_metadata_carries_which_tools_were_stubbed(
+        self, scan_env, tmp_path, monkeypatch, capsys
+    ):
+        """The report phase cannot tell a stub from a clean run on its own.
+
+        A stub is that tool's own empty-result shape, in a file with that
+        tool's own name, so once the scan process is gone there is nothing to
+        distinguish it. The scan->report handoff has to carry it.
+        """
+        self._stubbed_scan(scan_env, tmp_path, monkeypatch)
+        capsys.readouterr()
+
+        meta = json.loads(
+            (tmp_path / "results" / ".scan_metadata.json").read_bytes().decode("utf-8")
+        )
+        assert meta["stubbed_tools"] == {"proj": ["trufflehog"]}
+
+    def test_a_real_scan_reports_no_stubs(self, scan_env, capsys):
+        """Negative control, in both directions.
+
+        Without it, reporting every target as stubbed would satisfy every test
+        above, and `stubbed_tools` would be noise rather than a signal.
+        """
+        with patch("scripts.cli.scan_jobs.scan_repository") as mock_scan:
+            mock_scan.return_value = ("proj", {"trufflehog": True})
+            assert jmo.cmd_scan(scan_env) == 0
+
+        err = capsys.readouterr().err
+        assert "STUBBED" not in err
+        assert "\\u2713" in err, "a clean target should still carry the tick"
+
+    def test_no_stub_site_records_a_bare_true(self):
+        """Drift guard: the next `elif allow_missing_tools:` must not regress.
+
+        38 sites wrote a stub and then claimed success. An AST scan is what
+        keeps the 39th from doing the same -- and it covers all five scanners,
+        which is where a per-scanner test would leave gaps.
+
+        Derived, with a floor, so an extractor that finds nothing cannot pass.
+        """
+        import ast
+
+        scan_jobs = Path(jmo.__file__).parent / "scan_jobs"
+        offenders: list[str] = []
+        stub_calls = 0
+        for path in sorted(scan_jobs.glob("*.py")):
+            tree = ast.parse(path.read_bytes().decode("utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                body = getattr(node, "body", None)
+                if not isinstance(body, list):
+                    continue
+                for first, second in itertools.pairwise(body):
+                    if not (
+                        isinstance(first, ast.Expr)
+                        and isinstance(first.value, ast.Call)
+                        and "write_stub" in ast.unparse(first.value.func)
+                    ):
+                        continue
+                    stub_calls += 1
+                    if (
+                        isinstance(second, ast.Assign)
+                        and "statuses[" in ast.unparse(second.targets[0])
+                        and isinstance(second.value, ast.Constant)
+                        and second.value.value is True
+                    ):
+                        offenders.append(f"{path.name}:{second.lineno}")
+
+        assert (
+            stub_calls >= 30
+        ), f"AST scan found only {stub_calls} stub calls; extractor is broken"
+        assert not offenders, (
+            "a stub is written and the tool recorded as a successful run at:\n"
+            + "\n".join(f"  {o}" for o in offenders)
+            + "\nUse record_not_attempted(statuses, <tool>) instead."
         )
 
 
@@ -275,6 +506,18 @@ class TestProfileShortcutsStoreHistory:
             str(tmp_path / "results"),
             "--config",
             scan_env.config,
+            # Isolation that has to hold for the MUTATED path, not just this
+            # one. The assertion below is that cmd_profile refuses before
+            # scanning -- so in a passing run nothing here is reached. Mutating
+            # the refusal away is exactly what makes it run, and without these
+            # two flags it then resolved the full 9-tool fast profile and wrote
+            # two rows into the developer's real .jmo/history.db, because #870
+            # gave the shortcuts store_history=True. A test is only isolated if
+            # it is isolated when its guard is removed.
+            "--history-db",
+            str(tmp_path / "history.db"),
+            "--tools",
+            "trufflehog",
             "--profile-name",
             "deep",
         ]
@@ -282,6 +525,9 @@ class TestProfileShortcutsStoreHistory:
             args = parse_args()
 
         assert jmo.cmd_profile(args, "fast") == 2
+        assert not (
+            tmp_path / "history.db"
+        ).exists(), "the refusal happened after a scan, not before it"
 
     @pytest.mark.parametrize(
         ("extra", "expected"),

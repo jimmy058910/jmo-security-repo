@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from scripts.cli.scan_utils import not_attempted_tools
 from scripts.core.config import RetryConfig
 from scripts.core.tool_registry import filter_tools_for_scan_type
 from scripts.core.validation import validate_container_image, validate_url
@@ -227,6 +228,12 @@ class ScanConfig:
 TARGET_OK = "ok"
 TARGET_PARTIAL = "partial"
 TARGET_FAILED = "failed"
+# Every requested tool was stubbed rather than run. Distinct from FAILED, which
+# means tools ran and produced nothing: here nothing was attempted, and under
+# `--allow-missing-tools` that is what the user asked for -- so it must not
+# redden the run. It must still be said out loud, because an empty stub from a
+# secret scanner that never ran satisfies a zero-secrets policy (#825).
+TARGET_NOT_ATTEMPTED = "not-attempted"
 
 
 def classify_target_outcome(statuses: Mapping[str, Any] | None) -> str:
@@ -234,11 +241,13 @@ def classify_target_outcome(statuses: Mapping[str, Any] | None) -> str:
 
     Args:
         statuses: The per-tool status map from a ``scan_jobs`` scanner. Keys
-            beginning ``__`` are metadata (``__attempts__``), not tools.
+            beginning ``__`` are metadata (``__attempts__``,
+            ``__not_attempted__``), not tools.
 
     Returns:
-        ``TARGET_OK`` if every tool succeeded, ``TARGET_PARTIAL`` if some did,
-        ``TARGET_FAILED`` if none did.
+        ``TARGET_OK`` if every tool that ran succeeded, ``TARGET_PARTIAL`` if
+        some did, ``TARGET_FAILED`` if none did, and ``TARGET_NOT_ATTEMPTED``
+        if no tool ran at all because every one was stubbed (#825).
 
     **An empty map is ``TARGET_FAILED``, not vacuous success.** It is what
     ``scan_all`` appends when a scanner raised, and what a scanner returns when
@@ -253,9 +262,21 @@ def classify_target_outcome(statuses: Mapping[str, Any] | None) -> str:
     """
     if not statuses:
         return TARGET_FAILED
-    outcomes = [bool(ok) for name, ok in statuses.items() if not name.startswith("__")]
+    # A tool that was never executed does not get a vote. It used to get a
+    # `True` -- the same value a successful run gets -- so a target where every
+    # tool was stubbed read as a clean scan (#825). Counting it as `False`
+    # instead would be the opposite error: a target where one tool ran cleanly
+    # and two were not installed has not partially failed.
+    skipped = set(not_attempted_tools(statuses))
+    outcomes = [
+        bool(ok)
+        for name, ok in statuses.items()
+        if not name.startswith("__") and name not in skipped
+    ]
     if not outcomes:
-        return TARGET_FAILED
+        # Nothing was tried. `--allow-missing-tools` is what makes this
+        # reachable, and it is not a failure -- it is the thing that flag buys.
+        return TARGET_NOT_ATTEMPTED if skipped else TARGET_FAILED
     if all(outcomes):
         return TARGET_OK
     if any(outcomes):

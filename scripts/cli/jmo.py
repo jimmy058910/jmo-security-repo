@@ -22,6 +22,7 @@ from scripts.cli.report_orchestrator import cmd_report as _cmd_report_impl
 # PHASE 1 REFACTORING: Import refactored modules
 from scripts.cli.scan_orchestrator import (
     TARGET_FAILED,
+    TARGET_NOT_ATTEMPTED,
     TARGET_OK,
     TARGET_PARTIAL,
     ScanConfig,
@@ -2884,11 +2885,17 @@ class ProgressTracker:
         """
         import time
 
+        from scripts.cli.scan_utils import not_attempted_tools
+
         outcome = classify_target_outcome(statuses)
+        # A stubbed tool is False now, so it must be excluded here or every
+        # "findings MISSING from N failed tool(s)" line would accuse tools that
+        # were never installed of failing (#825).
+        skipped_tools = set(not_attempted_tools(statuses))
         failed_tools = sorted(
             name
             for name, ok in (statuses or {}).items()
-            if not name.startswith("__") and not ok
+            if not name.startswith("__") and not ok and name not in skipped_tools
         )
 
         with self._lock:
@@ -2898,6 +2905,9 @@ class ProgressTracker:
                 TARGET_OK: "✓",
                 TARGET_PARTIAL: "⚠",
                 TARGET_FAILED: "✗",
+                # Hollow, so it reads as neither pass nor fail at a glance --
+                # which is what "no tool ran here" is.
+                TARGET_NOT_ATTEMPTED: "○",
             }[outcome]
 
             # Calculate ETA
@@ -2932,6 +2942,18 @@ class ProgressTracker:
                         else "no tool ran against this target"
                     ),
                 )
+            elif outcome == TARGET_NOT_ATTEMPTED:
+                # Not an error: --allow-missing-tools is what makes this
+                # reachable and the run still exits 0. But an empty stub from a
+                # secret scanner that never ran satisfies a zero-secrets
+                # policy, so it cannot be silent either (#825).
+                _log(
+                    self.args,
+                    "WARN",
+                    f"{message} - NO tool ran against this target; "
+                    f"{len(skipped_tools)} stubbed and their empty output is "
+                    f"NOT a clean result: {', '.join(sorted(skipped_tools))}",
+                )
             elif outcome == TARGET_PARTIAL:
                 _log(
                     self.args,
@@ -2939,6 +2961,16 @@ class ProgressTracker:
                     f"{message} - findings MISSING from "
                     f"{len(failed_tools)} failed tool(s): "
                     f"{', '.join(failed_tools)}",
+                )
+            elif skipped_tools:
+                # The tools that ran all succeeded, so this is not a warning
+                # about the scan -- but which tools were stubbed is still the
+                # difference between "clean" and "not looked at".
+                _log(
+                    self.args,
+                    "WARN",
+                    f"{message} - {len(skipped_tools)} tool(s) were stubbed and "
+                    f"did NOT run: {', '.join(sorted(skipped_tools))}",
                 )
             else:
                 _log(self.args, "INFO", message)
@@ -3080,7 +3112,7 @@ def cmd_scan(args) -> int:
     import time
 
     # Clear tool warning deduplication tracker at scan start (Fix 1.3 - Issue #3)
-    from scripts.cli.scan_utils import clear_tool_warnings
+    from scripts.cli.scan_utils import clear_tool_warnings, not_attempted_tools
 
     clear_tool_warnings()
 
@@ -3486,6 +3518,32 @@ def cmd_scan(args) -> int:
             f"{', '.join(failed_targets)}",
         )
 
+    # Per target, which tools were stubbed rather than run (#825). The stub is
+    # a real file containing that tool's own empty-result shape, so nothing
+    # downstream can tell it from a clean scan -- which is how a `zero-secrets`
+    # policy passes on a run where no secret scanner executed. The run still
+    # exits on findings alone: `--allow-missing-tools` bought that, and taking
+    # it back here would invert what the flag is for.
+    stubbed_by_target = {
+        str(name): not_attempted_tools(statuses)
+        for name, statuses in scan_results
+        if not_attempted_tools(statuses)
+    }
+    if stubbed_by_target:
+        total_stubbed = sum(len(v) for v in stubbed_by_target.values())
+        _log(
+            args,
+            "WARN",
+            f"{total_stubbed} tool run(s) across {len(stubbed_by_target)} of "
+            f"{len(scan_results)} target(s) were STUBBED, not executed. Their "
+            f"output files are empty because nothing looked, which is not the "
+            f"same as finding nothing: "
+            + "; ".join(
+                f"{target}: {', '.join(tools_)}"
+                for target, tools_ in sorted(stubbed_by_target.items())
+            ),
+        )
+
     # Show Ko-Fi support reminder
     _show_kofi_reminder(args)
 
@@ -3506,6 +3564,11 @@ def cmd_scan(args) -> int:
         # aggregation, not the ~20 minutes of scanning, and a wrong number reads
         # as measured where N/A is honestly empty (#981).
         "duration_seconds": round(time.perf_counter() - scan_started, 3),
+        # Which tools were stubbed rather than run, per target (#825). Carried
+        # across the scan->report handoff because a stub is indistinguishable
+        # from a clean result once the scan process is gone: it is that tool's
+        # own empty-result shape in a file with that tool's own name.
+        "stubbed_tools": stubbed_by_target,
         # The paths actually scanned. store_scan() needs these to record git
         # context for the right repository: `results_dir/individual-repos/<name>`
         # is an OUTPUT directory, so walking up from it finds whatever repo

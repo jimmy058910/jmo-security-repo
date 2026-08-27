@@ -20,6 +20,7 @@ from ...core.tool_runner import ToolDefinition, ToolRunner
 from ..path_sanitizers import _sanitize_path_component, _validate_output_path
 from ..scan_utils import (
     find_tool,
+    record_not_attempted,
     report_tool_failure,
     tool_flags,
     tool_timeout,
@@ -121,7 +122,7 @@ def scan_image(
             )
         elif allow_missing_tools:
             _write_stub("trivy", trivy_out)
-            statuses["trivy"] = True
+            record_not_attempted(statuses, "trivy")
 
     # Syft SBOM generation
     if "syft" in tools:
@@ -149,7 +150,7 @@ def scan_image(
             )
         elif allow_missing_tools:
             _write_stub("syft", syft_out)
-            statuses["syft"] = True
+            record_not_attempted(statuses, "syft")
 
     # Execute all tools with ToolRunner
     runner = ToolRunner(

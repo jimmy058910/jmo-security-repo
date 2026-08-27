@@ -13,6 +13,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 
 from scripts.cli.scan_jobs.image_scanner import scan_image
+from scripts.cli.scan_utils import not_attempted_tools
 
 
 class TestImageScanner:
@@ -259,8 +260,11 @@ class TestImageScanner:
             assert len(stub_calls) == 2
             assert any("trivy" in path for _, path in stub_calls)
             assert any("syft" in path for _, path in stub_calls)
-            assert statuses["trivy"] is True
-            assert statuses["syft"] is True
+            # Both stubbed, so neither succeeded (#825). These read `is True`,
+            # which pinned the defect as the contract.
+            assert statuses["trivy"] is False
+            assert statuses["syft"] is False
+            assert not_attempted_tools(statuses) == ["syft", "trivy"]
 
     def test_per_tool_flags_applied(self, tmp_path):
         """Test that per_tool_config flags are correctly applied"""

@@ -13,6 +13,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 
 from scripts.cli.scan_jobs.repository_scanner import scan_repository
+from scripts.cli.scan_utils import not_attempted_tools
 
 
 class TestRepositoryScanner:
@@ -357,7 +358,12 @@ class TestRepositoryScanner:
                 write_stub_func=mock_write_stub,
             )
 
-            assert statuses["zap"] is True
+            # Stubbed, not run. `False` plus a `__not_attempted__` record is
+            # the point of #825: an empty zap report from a scan that never
+            # looked is not a clean web scan. This assertion read `is True`,
+            # which pinned the defect as the contract.
+            assert statuses["zap"] is False
+            assert not_attempted_tools(statuses) == ["zap"]
             # No tool definitions should be created (stub written directly)
             MockRunner.assert_called_once()
             args, kwargs = MockRunner.call_args
@@ -443,7 +449,8 @@ class TestRepositoryScanner:
                 write_stub_func=mock_write_stub,
             )
 
-            assert statuses["falco"] is True
+            assert statuses["falco"] is False
+            assert not_attempted_tools(statuses) == ["falco"]
 
     @pytest.mark.skipif(
         sys.platform == "win32",
@@ -531,7 +538,8 @@ class TestRepositoryScanner:
                 write_stub_func=mock_write_stub,
             )
 
-            assert statuses["afl++"] is True
+            assert statuses["afl++"] is False
+            assert not_attempted_tools(statuses) == ["afl++"]
 
     def test_deep_profile_all_11_tools(self, tmp_path):
         """Test deep profile executes all 11 tools correctly"""
@@ -668,10 +676,14 @@ class TestRepositoryScanner:
             assert any("semgrep" in str(call[1]) for call in stub_calls)
             assert any("trivy" in str(call[1]) for call in stub_calls)
 
-            # All tools should be marked as True in statuses
-            assert statuses["trufflehog"] is True
-            assert statuses["semgrep"] is True
-            assert statuses["trivy"] is True
+            # All three were stubbed, so none of them succeeded (#825).
+            for tool in ("trufflehog", "semgrep", "trivy"):
+                assert statuses[tool] is False, f"{tool} was stubbed, not run"
+            assert not_attempted_tools(statuses) == [
+                "semgrep",
+                "trivy",
+                "trufflehog",
+            ]
 
     def test_allow_missing_tools_all_scanners(self, tmp_path):
         """Test allow_missing_tools for all 11 deep profile tools"""
@@ -722,7 +734,10 @@ class TestRepositoryScanner:
             # All 11 tools should have stubs written
             assert len(stub_calls) == 11
             for tool in all_tools:
-                assert statuses[tool] is True, f"{tool} should be marked True"
+                assert statuses[tool] is False, f"{tool} was stubbed, not run"
+                assert tool in not_attempted_tools(
+                    statuses
+                ), f"{tool} was stubbed but not recorded as not-attempted"
                 # For afl++, check for "aflplusplus" in path (++ is sanitized)
                 search_term = "aflplusplus" if tool == "afl++" else tool
                 assert any(
@@ -885,9 +900,13 @@ class TestRepositoryScanner:
             assert statuses["trufflehog"] is True
             assert statuses["trivy"] is True
 
-            # Missing tools should have stubs
-            assert statuses["semgrep"] is True
-            assert statuses["bandit"] is True
+            # Missing tools should have stubs, and a stub is not a success.
+            # This is the discriminating case: trufflehog and trivy really ran,
+            # so the True above and the False here cannot both come from a
+            # constant (#825).
+            assert statuses["semgrep"] is False
+            assert statuses["bandit"] is False
+            assert not_attempted_tools(statuses) == ["bandit", "semgrep"]
 
             # Stubs should be written for missing tools only
             assert "semgrep" in list(stub_calls)
