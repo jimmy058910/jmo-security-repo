@@ -298,6 +298,68 @@ def test_history_falls_back_to_config_profile_when_no_scan_metadata(
     assert store.call_args.kwargs["profile"] == "fast"
 
 
+def test_history_infers_tools_from_findings_when_scan_metadata_has_none(
+    tmp_path: Path,
+):
+    """The middle rung of #787's chain: metadata absent, findings present.
+
+    ``tools_used`` resolves scan metadata -> tools named by the findings ->
+    nothing.  Rung 1 and the profile side of rung 2 are pinned above; this pins
+    the tool side of rung 2, which is what runs whenever a results directory is
+    reported without the scan's own ``.scan_metadata.json`` beside it (``jmo
+    report`` on a directory copied off another machine, or produced before the
+    metadata file existed).
+
+    The config names a completely different tool, so a pass means the findings
+    won and not merely that *some* list arrived.
+    """
+    results_dir = tmp_path / "results"
+    repo = results_dir / "individual-repos" / "repo1"
+    repo.mkdir(parents=True)
+    # No .scan_metadata.json: rung 1 is unavailable by construction.
+    (repo / "trufflehog.json").write_bytes(
+        json.dumps(
+            [
+                {
+                    "schemaVersion": "1.0.0",
+                    "id": "finding-1",
+                    "ruleId": "R1",
+                    "message": "m",
+                    "severity": "LOW",
+                    "tool": {"name": "trufflehog", "version": "1"},
+                    "location": {"path": "a.txt", "startLine": 1},
+                }
+            ]
+        ).encode("utf-8")
+    )
+    cfg_path = _write_cfg(
+        tmp_path,
+        "default_profile: fast\ntools:\n- semgrep\n- nuclei\noutputs:\n- json\n",
+    )
+
+    args = argparse.Namespace(
+        cmd="report",
+        results_dir=str(results_dir),
+        out=str(results_dir / "summaries"),
+        config=cfg_path,
+        fail_on=None,
+        profile=False,
+        threads=None,
+        store_history=True,
+        history_db=str(tmp_path / "history.db"),
+        profile_name=None,
+    )
+
+    with patch("scripts.core.history_db.store_scan", return_value="scan-id") as store:
+        jmo_mod.cmd_report(args)
+
+    assert store.called, "report did not reach the history-storage hook"
+    assert store.call_args.kwargs["tools"] == ["trufflehog"], (
+        "history did not fall back to the tools the findings name: "
+        f"{store.call_args.kwargs['tools']}"
+    )
+
+
 # --------------------------------------------------------------------------
 # #788 - `jmo tools check` exit code is the same contract in every form
 # --------------------------------------------------------------------------
