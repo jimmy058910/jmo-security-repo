@@ -120,6 +120,43 @@ updates:
           - "minor"
           - "patch"
 
+  # pre-commit hook revisions (.pre-commit-config.yaml)
+  #
+  # Ten pinned revs were updated only by hand. Nine of the ten measured current
+  # when this was added, so it was never rot -- the hazard is sharper: ruff is
+  # pinned in BOTH this file's hooks and uv.lock, and after #990 bumped the
+  # lock they disagreed. The hook runs `ruff --fix`, so it REWROTE code at
+  # 0.16.3 while `make lint` and CI CHECKED it at 0.16.4, and `ci.yml` skips the
+  # ruff hook by design so CI could never see the split (#1015).
+  #
+  # Dependabot alone does not close that: it compares each manifest against
+  # upstream, never against the other manifest, so it would have opened a PR
+  # for 0.16.5 without noticing the 0.16.3/0.16.4 disagreement. The guard in
+  # tests/unit/test_toolchain_version_agreement.py is the part that does.
+  #
+  # Bot PRs from this ecosystem must NOT be admin-merged: a ruff or black bump
+  # can reflow the codebase, and the reflow is the thing to review.
+  - package-ecosystem: "pre-commit"
+    directory: "/"
+    # Retargeted from the default branch (main) to dev for the v1.1.0
+    # audit campaign: every bot PR against main widens a divergence the
+    # release has to fast-forward across. Revert once v1.1.0 ships.
+    target-branch: "dev"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "jimmy058910"
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "deps(pre-commit)"
+      include: "scope"
+
   # npm dependencies - scripts/api
   - package-ecosystem: "npm"
     directory: "/scripts/api"
