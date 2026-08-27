@@ -297,7 +297,7 @@ jmo tools install --profile balanced --print-script > install-tools.sh
 |---------|------------|----------|---------|
 | fast (9 tools) | ~5-8 min | ~2-3 min | ~2.5x |
 | balanced (17 tools) | ~12-18 min | ~4-6 min | ~3x |
-| deep (28 tools) | ~20-30 min | ~6-10 min | ~3x |
+| deep (29 tools) | ~20-30 min | ~6-10 min | ~3x |
 
 **Installation methods (platform-specific):**
 
@@ -439,7 +439,7 @@ The `jmo scan` and `jmo wizard` commands automatically check for missing tools:
 | `fast` | 9 | Pre-commit, PR validation |
 | `slim` | 13 | Cloud/IaC, AWS/Azure/GCP/K8s |
 | `balanced` | 17 | Production CI/CD |
-| `deep` | 28 | Comprehensive audits |
+| `deep` | 29 | Comprehensive audits |
 
 **Fast profile tools:** trufflehog, semgrep, syft, trivy, checkov, hadolint, nuclei, shellcheck
 
@@ -816,7 +816,7 @@ jmo scan --repo ./app1 --image app1:latest --results-dir ./results
 # Fast profile for quick feedback (9 tools, 300s timeout)
 jmo scan --image nginx:latest --profile-name fast
 
-# Deep profile for comprehensive audits (28 tools, 900s timeout)
+# Deep profile for comprehensive audits (29 tools, 900s timeout)
 jmo scan --k8s-context prod --k8s-all-namespaces --profile-name deep
 ```
 
@@ -2558,7 +2558,7 @@ jobs:
 
 **Goal:** Maximum coverage with **deep profile** for compliance/audits
 
-**Profile:** `deep` (28 tools: full suite including noseyparker, bandit, zap, nuclei, falco, afl++)
+**Profile:** `deep` (29 tools: full suite including noseyparker, bandit, zap, nuclei, falco, afl++)
 
 **Configuration:**
 
@@ -2750,7 +2750,7 @@ jobs:
 | **Pre-commit** | N/A | TruffleHog, Semgrep IDE | < 30s | Local commit | Any finding |
 | **Commit/PR** | fast | 9 tools | 5-10 min | Push, PR | HIGH+ |
 | **Build** | balanced | 17 tools | 18-25 min | Main branch, PR | HIGH+ |
-| **Deep Audit** | deep | 28 tools | 40-70 min | Weekly, manual | MEDIUM+ |
+| **Deep Audit** | deep | 29 tools | 40-70 min | Weekly, manual | MEDIUM+ |
 | **Runtime** | N/A | Falco, Trivy | Continuous | Always | CRITICAL |
 
 **Key Principle:** Fail fast with fast profile in PR stage, comprehensive coverage in build stage, exhaustive audits weekly.
@@ -2950,7 +2950,7 @@ For complete CLI documentation with all flags and options, see **[CLI_REFERENCE.
 | `jmo wizard` | Interactive guided scanning |
 | `jmo fast` | Quick scan (9 tools, 5-10 min) |
 | `jmo balanced` | Production scan (17 tools, 18-25 min) |
-| `jmo full` | Comprehensive audit (28 tools, 40-70 min) |
+| `jmo full` | Comprehensive audit (29 tools, 40-70 min) |
 | `jmo scan` | Low-level scan with full control |
 | `jmo report` | Generate reports from scan results |
 | `jmo ci` | Scan + report for CI/CD pipelines |

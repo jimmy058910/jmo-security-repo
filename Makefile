@@ -44,7 +44,7 @@ help:
 	@echo "  setup     - Check security tool installation (jmo tools check)"
 	@echo "  fast      - Fast profile scan (9 tools) via jmo"
 	@echo "  balanced  - Balanced profile scan (17 tools) via jmo"
-	@echo "  full      - Deep profile scan (28 tools) via jmo"
+	@echo "  full      - Deep profile scan (29 tools) via jmo"
 	@echo "  attack-navigator - Open ATT&CK Navigator with scan findings (auto-serve)"
 	@echo ""
 	@echo "Sample Fixture Targets:"

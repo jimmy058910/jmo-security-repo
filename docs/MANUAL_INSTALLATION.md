@@ -571,7 +571,7 @@ docker run -v "$PWD:/scan" ghcr.io/jimmy058910/jmo-security:balanced scan --prof
 
 | Variant | Docker-Ready | Manual Tools |
 |---------|--------------|--------------|
-| **Deep/Full** | 24 | 4 (AFL++, Akto, Falco, MobSF) |
+| **Deep/Full** | 25 | 4 (AFL++, Akto, Falco, MobSF) |
 | **Balanced** | 17 | 0 |
 | **Slim** | 13 | 0 |
 | **Fast** | 9 | 0 |

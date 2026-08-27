@@ -2478,7 +2478,7 @@ def _collect_email_opt_in(args) -> None:
                 else:
                     # Audience add failed — saved locally, retry path available.
                     # No `jmo subscribe` command exists, and the
-                    # `pending_subscription` flag written below is never read
+                    # `pending_subscription` flag written above is never read
                     # back, so there is no CLI retry path to advertise (#790).
                     # Point at the page that does exist.
                     _safe_print(
