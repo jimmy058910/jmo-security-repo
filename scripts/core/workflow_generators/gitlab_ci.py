@@ -2,11 +2,36 @@
 
 from __future__ import annotations
 
+import logging
 import shlex
 from datetime import UTC
 from typing import Any
 
 from scripts.core.schedule_manager import ScanSchedule
+
+logger = logging.getLogger(__name__)
+
+# Top-level `targets` keys this generator knows how to put on a command line.
+# Anything outside this set is warned about rather than dropped in silence --
+# the point of #928 was never that GitLab supported less, it was that it said
+# nothing while doing so.
+_HANDLED_TARGET_KEYS = frozenset(
+    {"repositories", "images", "iac", "web", "gitlab", "kubernetes", "urls"}
+)
+
+# Keys that are real features with no `jmo scan` flag to carry them.
+#
+# `repositories.include` / `exclude` reach a scan through `jmo.yml`'s `include:`
+# / `exclude:` (read at jmo.py's ScanConfig construction as `eff.get("include")`
+# / `eff.get("exclude")`), not through the command line -- `jmo scan` defines no
+# `--include-pattern` or `--exclude-pattern`. This generator emitted both
+# anyway, so the one target key it handled and its peers did not produced a
+# command that exits 2. Naming them here keeps the warning specific enough to
+# be actionable instead of "unsupported key".
+_CONFIG_ONLY_REPOSITORY_KEYS = {
+    "include": "include",
+    "exclude": "exclude",
+}
 
 
 class GitLabCIGenerator:
@@ -129,24 +154,69 @@ class GitLabCIGenerator:
         cmd_parts.append(f"--profile {shlex.quote(spec.profile)}")
 
         # Targets
+        #
+        # All six documented target types, mirroring
+        # `github_actions.py::_build_scan_args` and `cron_installer.py`. This
+        # generator handled three of them -- repositories, images and
+        # web.urls -- so an IaC, GitLab or Kubernetes target exported correctly
+        # to GitHub Actions and to local cron, and exported to GitLab CI with
+        # the target missing from the command line: valid YAML, rc 0, no
+        # warning (#928). `web.api_spec` was a fourth casualty the issue did
+        # not name; both peers emit it.
         targets = spec.targets
+        name = schedule.metadata.name
+
+        unhandled = sorted(set(targets) - _HANDLED_TARGET_KEYS)
+        if unhandled:
+            logger.warning(
+                "%s: GitLab CI export ignores target key(s) %s -- the generated "
+                "`jmo scan` command will not include them.",
+                name,
+                ", ".join(unhandled),
+            )
+
+        # 1. Repositories
         if "repositories" in targets:
             repos = targets["repositories"]
             if "repo" in repos:
                 cmd_parts.append(f"--repo {shlex.quote(repos['repo'])}")
             if "repos_dir" in repos:
                 cmd_parts.append(f"--repos-dir {shlex.quote(repos['repos_dir'])}")
-            if "include" in repos:
-                for pattern in repos["include"]:
-                    cmd_parts.append(f"--include-pattern {shlex.quote(pattern)}")
-            if "exclude" in repos:
-                for pattern in repos["exclude"]:
-                    cmd_parts.append(f"--exclude-pattern {shlex.quote(pattern)}")
+            for key, config_key in _CONFIG_ONLY_REPOSITORY_KEYS.items():
+                if repos.get(key):
+                    logger.warning(
+                        "%s: repositories.%s cannot be expressed on the "
+                        "`jmo scan` command line; set `%s:` in jmo.yml instead. "
+                        "(This generator used to emit --%s-pattern, which "
+                        "`jmo scan` does not define -- the exported command "
+                        "exited 2.)",
+                        name,
+                        key,
+                        config_key,
+                        key,
+                    )
 
+        # 2. Container images
         if "images" in targets:
             for image in targets["images"]:
                 cmd_parts.append(f"--image {shlex.quote(image)}")
 
+        # 3. IaC files
+        if "iac" in targets:
+            iac = targets["iac"]
+            if "terraform_state" in iac:
+                cmd_parts.append(
+                    f"--terraform-state {shlex.quote(iac['terraform_state'])}"
+                )
+            if "cloudformation" in iac:
+                cmd_parts.append(
+                    f"--cloudformation {shlex.quote(iac['cloudformation'])}"
+                )
+            if "k8s_manifest" in iac:
+                cmd_parts.append(f"--k8s-manifest {shlex.quote(iac['k8s_manifest'])}")
+
+        # 4. Web URLs and API specs
+        #
         # Web URLs live under targets["web"]["urls"] -- that is what the CLI
         # writes and what the GitHub Actions generator and the cron installer
         # both read. This generator read a flat targets["urls"] that nothing
@@ -154,9 +224,37 @@ class GitLabCIGenerator:
         # GitHub Actions and dropped the URL entirely on GitLab, silently and
         # at rc 0. The flat form is still accepted for any schedule written
         # before this fix.
-        urls = targets.get("web", {}).get("urls", []) or targets.get("urls", [])
+        web = targets.get("web", {})
+        urls = web.get("urls", []) or targets.get("urls", [])
         for url in urls:
             cmd_parts.append(f"--url {shlex.quote(url)}")
+        if "api_spec" in web:
+            cmd_parts.append(f"--api-spec {shlex.quote(web['api_spec'])}")
+
+        # 5. GitLab repos
+        #
+        # The token is passed as a CI variable reference, not a literal, so the
+        # rendered .gitlab-ci.yml never carries a secret. `$GITLAB_TOKEN` is a
+        # masked project variable in GitLab's own model, matching what the
+        # GitHub generator does with `${{ secrets.GITLAB_TOKEN }}`.
+        if "gitlab" in targets:
+            gitlab = targets["gitlab"]
+            if "repo" in gitlab:
+                cmd_parts.append(f"--gitlab-repo {shlex.quote(gitlab['repo'])}")
+            if "group" in gitlab:
+                cmd_parts.append(f"--gitlab-group {shlex.quote(gitlab['group'])}")
+            if "token" in gitlab:
+                cmd_parts.append("--gitlab-token ${GITLAB_TOKEN}")
+
+        # 6. Kubernetes clusters
+        if "kubernetes" in targets:
+            k8s = targets["kubernetes"]
+            if "context" in k8s:
+                cmd_parts.append(f"--k8s-context {shlex.quote(k8s['context'])}")
+            if "namespace" in k8s:
+                cmd_parts.append(f"--k8s-namespace {shlex.quote(k8s['namespace'])}")
+            elif k8s.get("all_namespaces"):
+                cmd_parts.append("--k8s-all-namespaces")
 
         # Results directory
         cmd_parts.append("--results-dir ${RESULTS_DIR}")
