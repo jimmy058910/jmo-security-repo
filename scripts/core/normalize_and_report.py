@@ -34,6 +34,7 @@ from scripts.core.common_finding import (
     fingerprint,
 )
 from scripts.core.compliance_mapper import enrich_findings_with_compliance
+from scripts.core.cwe_extraction import backfill_risk_cwe
 from scripts.core.exceptions import AdapterParseException
 
 # Plugin system (v0.9.0)
@@ -510,6 +511,16 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
             type(e).__name__,
             e,
         )
+
+    # Lift each tool's own CWE into `risk.cwe` BEFORE compliance enrichment
+    # (#845). Order is the whole point: `enrich_finding_with_compliance` reads
+    # CWEs from `risk.cwe` and nowhere else, so a CWE that arrives after this
+    # call reaches no framework. Measured before the fix -- bandit reported a
+    # CWE on 17 of 17 findings and 0 reached the mapper, and `cweTop25_2024`
+    # was populated on 0 findings in the whole corpus.
+    filled = backfill_risk_cwe(deduped)
+    if filled:
+        logger.info("Lifted a tool-reported CWE into risk.cwe on %d finding(s)", filled)
 
     # Enrich all findings with compliance framework mappings (v1.2.0)
     try:
