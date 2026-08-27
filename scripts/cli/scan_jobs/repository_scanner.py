@@ -916,8 +916,24 @@ def scan_repository(
         scancode_path = _find_tool("scancode")
         if scancode_path:
             scancode_flags = get_tool_flags("scancode")
+            # ScanCode emits detection data only for the detectors it is asked
+            # for. With none requested it walks the tree and writes structure
+            # only -- `path`, `type`, `scan_errors` and nothing else -- so
+            # `scancode_adapter`, which reads `license_detections` and
+            # `copyrights`, was structurally incapable of returning a finding.
+            # A `deep` scan spent up to twenty minutes producing a file that
+            # could not contribute one, and graded the tool `success` (#835).
+            #
+            # Exactly the two the adapter reads. Measured against scancode
+            # 32.5.0: `--license --copyright` and `--license --copyright
+            # --package --info` produce the *same* 2 findings on the same
+            # fixture, but the second writes 34 keys per entry against 11 --
+            # 23 per entry that nothing consumes, on a tree that ran to 30,496
+            # entries in the recorded juice-shop scan.
             scancode_cmd = [
                 scancode_path,
+                "--license",
+                "--copyright",
                 "--json",
                 str(scancode_out),
                 *scancode_flags,

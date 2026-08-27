@@ -1379,5 +1379,127 @@ class TestFailedToolsAreReported:
         assert "trivy" not in caplog.text
 
 
+class TestScancodeIsAskedToDetectSomething:
+    """#835: scancode ran for up to 20 minutes and could not produce a finding.
+
+    ScanCode emits detection data only for the detectors it is asked for. JMo
+    asked for none, so it walked the tree and wrote structure only -- `path`,
+    `type`, `scan_errors` -- while `scancode_adapter` reads `license_detections`
+    and `copyrights`. Neither key could exist in output produced that way.
+
+    Measured against the real scancode 32.5.0 rather than its documentation,
+    which is what the issue asked for before shipping:
+
+    | invocation | keys/entry | license_detections | adapter findings |
+    |---|---|---|---|
+    | as JMo invoked it | 3 | 0 | **0** |
+    | `--license --copyright` | 11 | 2 | **2** |
+    | + `--package --info` | 34 | 2 | **2** |
+
+    The last row is why the flag set is two and not the four the issue
+    suggested: the extra pair adds 23 keys per entry that nothing reads, on a
+    tree that ran to 30,496 entries in the recorded juice-shop scan.
+    """
+
+    def _scancode_command(self, tmp_path) -> list[str]:
+        """The argv `scan_repository` builds for scancode, captured."""
+        from scripts.core.tool_runner import ToolResult
+
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / "LICENSE").write_text("MIT License\n")
+
+        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+            mock_runner.run_all_parallel.return_value = [
+                ToolResult(tool="scancode", status="success", attempts=1)
+            ]
+            scan_repository(
+                repo=repo,
+                results_dir=tmp_path,
+                tools=["scancode"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+                # `_find_tool` is a closure over `scan_repository`, so it cannot
+                # be patched on the module. The function takes this injection
+                # point for exactly this reason.
+                find_tool_func=lambda name: (
+                    "/usr/bin/scancode" if name == "scancode" else None
+                ),
+            )
+            args, kwargs = MockRunner.call_args
+            tool_defs = kwargs.get("tools") or (args[0] if args else [])
+
+        scancode_defs = [d for d in tool_defs if d.name == "scancode"]
+        assert (
+            len(scancode_defs) == 1
+        ), f"expected exactly one scancode invocation, got {len(scancode_defs)}"
+        return list(scancode_defs[0].command)
+
+    def test_the_detectors_the_adapter_reads_are_requested(self, tmp_path):
+        cmd = self._scancode_command(tmp_path)
+        assert "--license" in cmd, (
+            "scancode is invoked with no license detector, so "
+            "`license_detections` cannot appear in its output and the adapter "
+            f"cannot produce a finding: {cmd}"
+        )
+        assert "--copyright" in cmd, f"no copyright detector requested: {cmd}"
+
+    def test_the_flag_set_stays_minimal(self, tmp_path):
+        """Negative control, and the reason it is two flags and not four.
+
+        Without this, adding every detector scancode offers would pass the test
+        above while making a `deep` scan slower and its output larger for data
+        no adapter reads.
+        """
+        cmd = self._scancode_command(tmp_path)
+        unread_detectors = [
+            f for f in ("--package", "--info", "--email", "--url") if f in cmd
+        ]
+        assert not unread_detectors, (
+            "these detectors produce keys `scancode_adapter` never reads, at a "
+            f"cost paid on every entry of the scanned tree: {unread_detectors}"
+        )
+
+    def test_per_tool_flags_are_still_appended(self, tmp_path):
+        """The defaults must not displace configuration.
+
+        `get_tool_flags("scancode")` resolves `per_tool.scancode.flags`, and a
+        user who adds a detector must still get it.
+        """
+        from scripts.core.tool_runner import ToolResult
+
+        repo = tmp_path / "repo"
+        repo.mkdir()
+
+        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+            mock_runner.run_all_parallel.return_value = [
+                ToolResult(tool="scancode", status="success", attempts=1)
+            ]
+            scan_repository(
+                repo=repo,
+                results_dir=tmp_path,
+                tools=["scancode"],
+                timeout=600,
+                retries=0,
+                per_tool_config={"scancode": {"flags": ["--max-depth", "3"]}},
+                allow_missing_tools=False,
+                find_tool_func=lambda name: (
+                    "/usr/bin/scancode" if name == "scancode" else None
+                ),
+            )
+            args, kwargs = MockRunner.call_args
+            defs = kwargs.get("tools") or (args[0] if args else [])
+
+        cmd = next(d.command for d in defs if d.name == "scancode")
+        assert "--max-depth" in cmd and "3" in cmd, f"per-tool flags dropped: {cmd}"
+        assert "--license" in cmd, f"defaults dropped by per-tool config: {cmd}"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
