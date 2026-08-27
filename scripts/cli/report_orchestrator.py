@@ -471,11 +471,12 @@ def cmd_report(args, _log_fn) -> int:
     _warn_unknown_threshold(threshold, args, _log_fn)
     code = fail_code(threshold, counts)
 
-    _log_fn(
-        args,
-        "INFO",
-        f"Wrote reports to {out_dir} (threshold={threshold or 'none'}, exit={code})",
-    )
+    # The one-line summary is emitted AFTER the storage hook, at the bottom of
+    # this function, so it can name the storage outcome and the exit code the
+    # run actually returns. It used to be emitted here, which put it *above* the
+    # store attempt: the only trace of a failed write was a single ERROR line in
+    # a wall of scan output, and the line a user reads to find out how the run
+    # went could not mention it (#801).
 
     # Auto-storage hook: Store scan in history database if requested.
     #
@@ -484,6 +485,7 @@ def cmd_report(args, _log_fn) -> int:
     # assignment, and so the exit-code check below is reachable on the path
     # where no store was attempted at all.
     store_error: Exception | None = None
+    stored_ok = False
     _configured_db = getattr(args, "history_db", None)
     history_db_path = (
         Path(_configured_db) if _configured_db else Path(".jmo/history.db")
@@ -519,6 +521,7 @@ def cmd_report(args, _log_fn) -> int:
                 collect_metadata=collect_metadata,
             )
 
+            stored_ok = True
             _log_fn(args, "INFO", f"Stored scan in history: {scan_id}")
             _log_fn(args, "INFO", f"Database: {history_db_path}")
 
@@ -553,4 +556,26 @@ def cmd_report(args, _log_fn) -> int:
         if store_error is not None and getattr(args, "fail_on_store_error", False)
         else 0
     )
-    return max(code, policy_exit_code, store_exit_code)
+    final_code = max(code, policy_exit_code, store_exit_code)
+
+    # One line carrying every verdict the run produced. `history=` is here
+    # because an ERROR scrolls past mid-scan while this line is what a user
+    # actually goes looking for, and "the row was not written" is exactly the
+    # kind of failure that otherwise reads as success (#801). `exit=` reports
+    # what the process returns rather than the severity verdict alone -- with
+    # --fail-on-store-error the two differ, and the old line printed the
+    # severity code while the function returned something else.
+    if not getattr(args, "store_history", False):
+        history_state = "off"
+    elif stored_ok:
+        history_state = "stored"
+    else:
+        history_state = "NOT STORED"
+    _log_fn(
+        args,
+        "INFO",
+        f"Wrote reports to {out_dir} (threshold={threshold or 'none'}, "
+        f"exit={final_code}, history={history_state})",
+    )
+
+    return final_code

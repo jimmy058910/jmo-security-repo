@@ -1156,6 +1156,108 @@ def test_storage_disabled_is_unaffected(tmp_path, mock_config, minimal_args):
     assert "ERROR" not in _levels(mock_log)
 
 
+def _summary_line(mock_log) -> str:
+    """The one line a user reads to find out how the run went."""
+    lines = [m for m in _messages(mock_log, "INFO") if m.startswith("Wrote reports to")]
+    assert len(lines) == 1, f"expected exactly one summary line, got {lines}"
+    return lines[0]
+
+
+def test_summary_line_reports_a_successful_store(tmp_path, mock_config, minimal_args):
+    """Regression for #801, positive control.
+
+    An ERROR about a failed write scrolls past mid-scan; this line is what a
+    user goes looking for afterwards, and it said nothing about history at all.
+    """
+    mock_log = MagicMock()
+    _report_with_store(tmp_path, mock_config, minimal_args, mock_log)
+    assert "history=stored" in _summary_line(mock_log)
+
+
+def test_summary_line_says_a_scan_was_not_recorded(tmp_path, mock_config, minimal_args):
+    """Regression for #801: the failure has to reach the summary, not just a log.
+
+    Paired with the positive control above, so the assertion distinguishes
+    outcomes rather than merely finding the substring "history".
+    """
+    mock_log = MagicMock()
+    rc = _report_with_store(
+        tmp_path,
+        mock_config,
+        minimal_args,
+        mock_log,
+        store_raises=RuntimeError("disk on fire"),
+    )
+    assert rc == 0, "storage stays best-effort without the opt-in flag"
+    assert "history=NOT STORED" in _summary_line(mock_log)
+
+
+def test_summary_line_distinguishes_storage_being_off_from_failing(
+    tmp_path, mock_config, minimal_args
+):
+    """--no-store-history is not a failure and must not read like one."""
+    results_dir = tmp_path / "results"
+    results_dir.mkdir()
+    minimal_args.results_dir_pos = str(results_dir)
+    minimal_args.store_history = False
+
+    mock_log = MagicMock()
+    with (
+        patch(
+            "scripts.cli.report_orchestrator.load_config_with_env_overrides",
+            return_value=mock_config,
+        ),
+        patch("scripts.cli.report_orchestrator.gather_results", return_value=[]),
+        patch("scripts.cli.report_orchestrator.load_suppressions", return_value={}),
+        patch("scripts.cli.report_orchestrator.write_json"),
+        patch("scripts.cli.report_orchestrator.write_markdown"),
+    ):
+        cmd_report(minimal_args, mock_log)
+    line = _summary_line(mock_log)
+    assert "history=off" in line
+    assert "NOT STORED" not in line
+
+
+def test_summary_line_reports_the_exit_code_the_run_returns(
+    tmp_path, mock_config, minimal_args
+):
+    """The summary used to print the severity verdict, not the returned code.
+
+    With --fail-on-store-error the two differ, so a run that exited 1 announced
+    `exit=0` on the line explaining what it did (#801).
+    """
+    mock_log = MagicMock()
+    rc = _report_with_store(
+        tmp_path,
+        mock_config,
+        minimal_args,
+        mock_log,
+        store_raises=RuntimeError("disk on fire"),
+        fail_on_store_error=True,
+    )
+    assert rc == 1
+    assert f"exit={rc}" in _summary_line(mock_log)
+
+
+def test_summary_line_comes_after_the_storage_records(
+    tmp_path, mock_config, minimal_args
+):
+    """Ordering is the whole fix: the line cannot name an outcome it precedes."""
+    mock_log = MagicMock()
+    _report_with_store(tmp_path, mock_config, minimal_args, mock_log)
+    messages = [call.args[2] for call in mock_log.call_args_list if len(call.args) > 2]
+    summary_at = next(
+        i for i, m in enumerate(messages) if m.startswith("Wrote reports to")
+    )
+    stored_at = next(
+        i for i, m in enumerate(messages) if m.startswith("Stored scan in history")
+    )
+    assert stored_at < summary_at, (
+        "the summary was emitted before the store attempt, which is how it came "
+        "to report nothing about it"
+    )
+
+
 def test_real_parser_defines_fail_on_store_error_off_by_default(monkeypatch):
     """Uses the real parser, not a stand-in: a mirror cannot notice a flag the
     parser never defined (the chunk 11 lesson)."""
