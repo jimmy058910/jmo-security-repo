@@ -181,3 +181,51 @@ def test_the_recorder_captures_an_installer_spawn(monkeypatch) -> None:
 
     assert [argv for _, argv in sink] == [["uv", "pip", "install", "bandit==1.9.4"]]
     assert len(calls) == 2, "the recorder must always delegate, matched or not"
+
+
+def test_every_allowlist_entry_names_a_test_that_exists() -> None:
+    """The allowlist must not rot.
+
+    Each entry is a node ID, matched by string equality, so a renamed or deleted
+    test leaves a dead entry behind *and* silently loses its exemption -- the
+    guard would start failing a test nobody changed, and the reasoning attached
+    to the stale entry would be misread as covering something else.
+
+    Checked structurally (file exists, function defined in it) rather than by
+    collecting: collecting from inside a test would recurse, and the entries
+    include platform-gated tests this platform never collects at all.
+    """
+    import ast
+    from pathlib import Path
+
+    from tests.conftest import _ALLOWED_OFFLINE_SCANNER_SPAWNS
+
+    repo_root = Path(__file__).resolve().parents[2]
+    broken: list[str] = []
+
+    for node_id in sorted(_ALLOWED_OFFLINE_SCANNER_SPAWNS):
+        rel, _, qualname = node_id.partition("::")
+        path = repo_root / rel
+        if not path.is_file():
+            broken.append(f"{node_id} -- no such file")
+            continue
+        func = qualname.rsplit("::", 1)[-1]
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        names = {
+            n.name
+            for n in ast.walk(tree)
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        if func not in names:
+            broken.append(f"{node_id} -- {rel} defines no {func}")
+
+    assert (
+        not broken
+    ), "stale _ALLOWED_OFFLINE_SCANNER_SPAWNS entries:\n  " + "\n  ".join(broken)
+
+
+def test_the_allowlist_is_not_empty() -> None:
+    """Meta-guard for the meta-guard: an empty set passes the check above."""
+    from tests.conftest import _ALLOWED_OFFLINE_SCANNER_SPAWNS
+
+    assert len(_ALLOWED_OFFLINE_SCANNER_SPAWNS) >= 5

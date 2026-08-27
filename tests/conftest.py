@@ -534,6 +534,26 @@ _ALLOWED_OFFLINE_SCANNER_SPAWNS = {
     "tests/cli/test_jmo.py::TestScanExitsNonZeroWhenNothingWasScanned::test_no_target_flag_at_all_fails",
     "tests/cli/test_jmo.py::TestScanExitsNonZeroWhenNothingWasScanned::test_the_rejected_target_is_named_in_the_log",
     #
+    # `.venv/bin/bandit` during a real end-to-end scan, one entry per platform.
+    #
+    # Found by CI, not locally, and that is the point worth recording: these are
+    # platform-gated (`skipif(sys.platform != ...)`), so a Windows box cannot run
+    # any of them and a clean local suite says nothing about them. **A change to
+    # the recorder's scope must be verified on CI**, because widening it newly
+    # covers tests the local platform never executes. Same shape as Phase 0's
+    # "CI found 45 real-state writers a Windows box cannot see".
+    #
+    # Allowlisted rather than marked `requires_tools`: bandit is a dev
+    # dependency, so it is present in the venv on every runner, and these are
+    # the only end-to-end full-scan coverage each platform has. Marking them
+    # would remove that from the shards where it currently runs, for no safety
+    # gain. The spawn is offline. The WSL sibling is included pre-emptively --
+    # it fires under `/mnt/c` and neither CI nor this machine's default shell
+    # reaches it.
+    "tests/e2e/test_cross_platform.py::TestCrossPlatformCompatibility::test_linux_full_scan",
+    "tests/e2e/test_cross_platform.py::TestCrossPlatformCompatibility::test_macos_full_scan",
+    "tests/e2e/test_cross_platform.py::TestCrossPlatformCompatibility::test_windows_wsl_full_scan",
+    #
     # `opa version`. This one must NOT get the marker: it is deliberately not
     # skipped -- its point is that the skip guard and the product agree about
     # whether OPA is usable, on every machine including those without it, and
