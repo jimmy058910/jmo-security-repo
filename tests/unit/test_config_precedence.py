@@ -478,6 +478,191 @@ def _parser_subcommands() -> set[str]:
     return set(top.choices)
 
 
+def _walk_parsers(parser, prefix=""):
+    """Yield (command path, parser) for a parser and every subparser under it."""
+    yield prefix.strip(), parser
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            for name, sub in action.choices.items():
+                yield from _walk_parsers(sub, f"{prefix} {name}")
+
+
+def _leaf_parsers() -> list[tuple[str, argparse.ArgumentParser]]:
+    """Every command a user can actually run, with its parser.
+
+    A parser that owns subparsers is a namespace (`jmo history`), not a command
+    -- you cannot run it alone -- so only the leaves are returned.
+    """
+    captured: dict[str, argparse._SubParsersAction] = {}
+    original = argparse.ArgumentParser.add_subparsers
+
+    def _capture(self, *a, **kw):
+        action = original(self, *a, **kw)
+        captured.setdefault(kw.get("dest") or "positional", action)
+        captured.setdefault(f"_root:{id(self)}", self)  # type: ignore[arg-type]
+        return action
+
+    argv = sys.argv
+    argparse.ArgumentParser.add_subparsers = _capture  # type: ignore[method-assign]
+    try:
+        sys.argv = ["jmo", "--help"]
+        with (
+            contextlib.redirect_stdout(io.StringIO()),
+            contextlib.redirect_stderr(io.StringIO()),
+            contextlib.suppress(SystemExit),
+        ):
+            jmo_mod.parse_args()
+    finally:
+        argparse.ArgumentParser.add_subparsers = original  # type: ignore[method-assign]
+        sys.argv = argv
+
+    top = captured.get("cmd")
+    assert top is not None, "could not capture the top-level subparsers action"
+
+    leaves: list[tuple[str, argparse.ArgumentParser]] = []
+    for name, sub in top.choices.items():
+        for path, parser in _walk_parsers(sub, name):
+            has_children = any(
+                isinstance(a, argparse._SubParsersAction) for a in parser._actions
+            )
+            if not has_children:
+                leaves.append((path, parser))
+    return leaves
+
+
+def _dests(parser) -> set[str]:
+    return {a.dest for a in parser._actions if a.dest != "help"}
+
+
+def test_leaf_parser_extractor_finds_the_real_tree():
+    """Meta-guard: every assertion below is built on this derivation.
+
+    An extractor that silently returns nothing makes them all vacuously true --
+    the same failure the `KNOWN_OUTPUTS` and ci-forwarding guards protect
+    against.
+    """
+    leaves = dict(_leaf_parsers())
+    assert len(leaves) >= 40, f"expected the full command tree, got {sorted(leaves)}"
+    for expected in ("scan", "diff", "history list", "trends show", "policy list"):
+        assert (
+            expected in leaves
+        ), f"extractor missed `jmo {expected}`: {sorted(leaves)}"
+
+
+def test_log_level_and_human_logs_travel_together():
+    """`--log-level` and `--human-logs` are one control, not two (#879).
+
+    `jmo setup` carried `--human-logs` alone: it could change the log FORMAT
+    but not the LEVEL. Asserting coherence rather than universality, because
+    some commands legitimately have neither -- what must never happen is half
+    of the pair, which reads as support for something that is not there.
+    """
+    offenders = []
+    for path, parser in _leaf_parsers():
+        dests = _dests(parser)
+        if ("log_level" in dests) != ("human_logs" in dests):
+            present = "log_level" if "log_level" in dests else "human_logs"
+            offenders.append(f"jmo {path}: has {present} and not the other")
+    assert not offenders, "half a logging control:\n" + "\n".join(
+        f"  {o}" for o in offenders
+    )
+
+
+def test_every_command_that_reads_the_database_can_set_its_log_level():
+    """Regression for #879.
+
+    `jmo diff`, and every `history`/`trends`/`policy` subcommand, emitted
+    records nobody could turn up or down: `jmo diff --format html` warns on
+    every run, and the diff engine warns when findings carry no usable id. A
+    user could neither raise the floor to see the INFO detail nor lower it to
+    silence a warning they had accepted.
+
+    Derived from the command tree, so a subcommand added tomorrow is covered
+    without editing this list.
+    """
+    missing = [
+        f"jmo {path}"
+        for path, parser in _leaf_parsers()
+        if (path == "diff" or path.split()[0] in {"history", "trends", "policy"})
+        and "log_level" not in _dests(parser)
+    ]
+    assert not missing, "commands that emit records but cannot be tuned:\n" + "\n".join(
+        f"  {m}" for m in missing
+    )
+
+
+def test_diff_log_level_actually_changes_what_is_emitted(tmp_path: Path):
+    """Accepting the flag and honouring it are different claims.
+
+    `main()` already called `configure_scan_logging(args)` for every command,
+    so wiring was never the gap -- but a test that only asserts the parser
+    accepts `--log-level` would pass against a build where the value went
+    nowhere. This drives the real CLI and compares the two levels' output.
+
+    Run as a subprocess because `configure_scan_logging` mutates the `scripts`
+    logger process-wide; doing that in-process would leak into other tests.
+    """
+    import subprocess
+
+    baseline = tmp_path / "a"
+    current = tmp_path / "b"
+    for side, entries in (
+        (
+            baseline,
+            [
+                {
+                    "id": "x",
+                    "ruleId": "R",
+                    "severity": "LOW",
+                    "message": "m",
+                    "tool": {"name": "semgrep"},
+                    "location": {"path": "a.py", "startLine": 1},
+                }
+            ],
+        ),
+        (current, []),
+    ):
+        (side / "summaries").mkdir(parents=True)
+        (side / "summaries" / "findings.json").write_bytes(
+            json.dumps(entries).encode("utf-8")
+        )
+
+    def run(level: str) -> list[str]:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "scripts.cli.jmo",
+                "diff",
+                str(baseline),
+                str(current),
+                "--log-level",
+                level,
+            ],
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=120,
+        )
+        assert proc.returncode == 0, proc.stderr
+        return [ln for ln in proc.stderr.splitlines() if ln.strip()]
+
+    quiet = run("WARN")
+    verbose = run("DEBUG")
+
+    assert len(verbose) > len(quiet), (
+        "--log-level DEBUG emitted no more than WARN, so the flag parses but "
+        f"does nothing: {len(verbose)} vs {len(quiet)} lines"
+    )
+    assert any(
+        '"level": "DEBUG"' in ln for ln in verbose
+    ), f"no DEBUG record reached stderr: {verbose[:3]}"
+    assert not any('"level": "DEBUG"' in ln for ln in quiet), (
+        "WARN already emitted DEBUG records, so the comparison above is not "
+        "measuring the flag"
+    )
+
+
 # Two unambiguous ways of naming a command: backtick-quoted, or followed by a
 # flag. Plain prose ("the .jmo directory", "jmo entry point failed") matches
 # neither, which is what keeps this guard from crying wolf.

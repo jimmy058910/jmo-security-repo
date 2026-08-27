@@ -667,9 +667,10 @@ def _add_setup_args(subparsers: argparse._SubParsersAction) -> Any:
         action="store_true",
         help="Force reinstallation of all tools",
     )
-    setup_parser.add_argument(
-        "--human-logs", action="store_true", help="Human-friendly logs"
-    )
+    # `--human-logs` used to be declared here on its own, which left `jmo setup`
+    # as the only command carrying one half of the pair: it could change the
+    # log FORMAT but not the log LEVEL. The two are one control (#879).
+    _add_logging_args(setup_parser)
     setup_parser.add_argument(
         "--strict",
         action="store_true",
@@ -1228,6 +1229,7 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     store_parser = history_subparsers.add_parser(
         "store", help="Manually store a completed scan"
     )
+    _add_logging_args(store_parser)
     store_parser.add_argument(
         "--results-dir",
         required=True,
@@ -1260,6 +1262,7 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
 
     # LIST
     list_parser = history_subparsers.add_parser("list", help="List all scans")
+    _add_logging_args(list_parser)
     list_parser.add_argument("--branch", help="Filter by branch name")
     list_parser.add_argument(
         "--profile",
@@ -1279,6 +1282,7 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     show_parser = history_subparsers.add_parser(
         "show", help="Show detailed scan information"
     )
+    _add_logging_args(show_parser)
     show_parser.add_argument(
         "scan_id", help="Scan UUID (full or partial, e.g., 'abc123')"
     )
@@ -1292,6 +1296,7 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     query_parser = history_subparsers.add_parser(
         "query", help="Execute custom SQL query"
     )
+    _add_logging_args(query_parser)
     query_parser.add_argument("query", help="SQL query to execute")
     query_parser.add_argument(
         "--format",
@@ -1303,6 +1308,7 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
 
     # PRUNE
     prune_parser = history_subparsers.add_parser("prune", help="Delete old scans")
+    _add_logging_args(prune_parser)
     prune_parser.add_argument(
         "--older-than",
         required=True,
@@ -1322,6 +1328,7 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     export_parser = history_subparsers.add_parser(
         "export", help="Export scans to JSON/CSV"
     )
+    _add_logging_args(export_parser)
     export_parser.add_argument(
         "--scan-id", help="Export specific scan by UUID (optional)"
     )
@@ -1340,6 +1347,7 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     stats_parser = history_subparsers.add_parser(
         "stats", help="Show database statistics"
     )
+    _add_logging_args(stats_parser)
     stats_parser.add_argument("--json", action="store_true", help="Output as JSON")
     add_db_arg(stats_parser)
 
@@ -1347,6 +1355,7 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     diff_parser = history_subparsers.add_parser(
         "diff", help="Compare two scans and show differences"
     )
+    _add_logging_args(diff_parser)
     diff_parser.add_argument("scan_id_1", help="First scan ID (baseline)")
     diff_parser.add_argument("scan_id_2", help="Second scan ID (comparison)")
     diff_parser.add_argument("--json", action="store_true", help="Output as JSON")
@@ -1356,6 +1365,7 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     trends_parser = history_subparsers.add_parser(
         "trends", help="Show security trends over time for a branch"
     )
+    _add_logging_args(trends_parser)
     trends_parser.add_argument(
         "--branch",
         default=None,
@@ -1374,6 +1384,7 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     optimize_parser = history_subparsers.add_parser(
         "optimize", help="Optimize database performance (VACUUM, ANALYZE)"
     )
+    _add_logging_args(optimize_parser)
     optimize_parser.add_argument(
         "--json", action="store_true", help="Output results as JSON"
     )
@@ -1383,6 +1394,7 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     migrate_parser = history_subparsers.add_parser(
         "migrate", help="Apply pending database schema migrations"
     )
+    _add_logging_args(migrate_parser)
     migrate_parser.add_argument(
         "--target-version",
         default=None,
@@ -1397,6 +1409,7 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     verify_parser = history_subparsers.add_parser(
         "verify", help="Verify database integrity (PRAGMA checks)"
     )
+    _add_logging_args(verify_parser)
     verify_parser.add_argument(
         "--json", action="store_true", help="Output results as JSON"
     )
@@ -1406,6 +1419,7 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     repair_parser = history_subparsers.add_parser(
         "repair", help="Repair corrupted database (dump/reimport)"
     )
+    _add_logging_args(repair_parser)
     repair_parser.add_argument(
         "--force",
         action="store_true",
@@ -1540,6 +1554,7 @@ Usage Examples:
     analyze_parser = trends_subparsers.add_parser(
         "analyze", help="Analyze security trends with flexible filters"
     )
+    _add_logging_args(analyze_parser)
     analyze_parser.add_argument(
         "--days",
         type=_positive_int,
@@ -1605,6 +1620,7 @@ Usage Examples:
     show_parser = trends_subparsers.add_parser(
         "show", help="Show trend context for a specific scan"
     )
+    _add_logging_args(show_parser)
     show_parser.add_argument(
         "scan_id",
         help="Scan ID to show context for",
@@ -1621,6 +1637,7 @@ Usage Examples:
     regressions_parser = trends_subparsers.add_parser(
         "regressions", help="List all detected regressions"
     )
+    _add_logging_args(regressions_parser)
     regressions_parser.add_argument(
         "--last",
         type=_positive_int,
@@ -1642,6 +1659,7 @@ Usage Examples:
     score_parser = trends_subparsers.add_parser(
         "score", help="Show security posture score history"
     )
+    _add_logging_args(score_parser)
     score_parser.add_argument(
         "--last",
         type=_positive_int,
@@ -1658,6 +1676,7 @@ Usage Examples:
     compare_parser = trends_subparsers.add_parser(
         "compare", help="Compare two specific scans side-by-side"
     )
+    _add_logging_args(compare_parser)
     compare_parser.add_argument(
         "scan_id_1",
         help="First scan ID",
@@ -1677,6 +1696,7 @@ Usage Examples:
     insights_parser = trends_subparsers.add_parser(
         "insights", help="List all automated insights"
     )
+    _add_logging_args(insights_parser)
     insights_parser.add_argument(
         "--last",
         type=_positive_int,
@@ -1688,6 +1708,7 @@ Usage Examples:
     explain_parser = trends_subparsers.add_parser(
         "explain", help="Explain how trend metrics are calculated"
     )
+    _add_logging_args(explain_parser)
     explain_parser.add_argument(
         "metric",
         nargs="?",
@@ -1700,6 +1721,7 @@ Usage Examples:
     developers_parser = trends_subparsers.add_parser(
         "developers", help="Show developer remediation rankings (Phase 5)"
     )
+    _add_logging_args(developers_parser)
     developers_parser.add_argument(
         "--last",
         type=_positive_int,
@@ -1783,18 +1805,23 @@ See: docs/POLICY_AS_CODE.md for complete documentation.
     )
 
     # LIST
-    policy_subparsers.add_parser("list", help="List all available policies")
+    policy_list_parser = policy_subparsers.add_parser(
+        "list", help="List all available policies"
+    )
+    _add_logging_args(policy_list_parser)
 
     # VALIDATE
     validate_parser = policy_subparsers.add_parser(
         "validate", help="Validate policy syntax"
     )
+    _add_logging_args(validate_parser)
     validate_parser.add_argument("policy", help="Policy name (without .rego extension)")
 
     # TEST
     test_parser = policy_subparsers.add_parser(
         "test", help="Test policy with findings file"
     )
+    _add_logging_args(test_parser)
     test_parser.add_argument("policy", help="Policy name (without .rego extension)")
     test_parser.add_argument(
         "--findings-file",
@@ -1806,12 +1833,14 @@ See: docs/POLICY_AS_CODE.md for complete documentation.
     show_parser = policy_subparsers.add_parser(
         "show", help="Display policy metadata and content"
     )
+    _add_logging_args(show_parser)
     show_parser.add_argument("policy", help="Policy name (without .rego extension)")
 
     # INSTALL
     install_parser = policy_subparsers.add_parser(
         "install", help="Install builtin policy to user directory"
     )
+    _add_logging_args(install_parser)
     install_parser.add_argument(
         "policy", help="Policy name to install (without .rego extension)"
     )
@@ -2030,6 +2059,14 @@ Supports three modes:
         type=Path,
         help="Path to the history database (default: .jmo/history.db)",
     )
+
+    # `jmo diff` emits records and could not be turned up or down: the diff
+    # engine warns when findings carry no usable id or a findings.json holds
+    # non-object entries, and `--format html` warns on every run. `main()`
+    # already calls `configure_scan_logging(args)` for every command, so
+    # accepting the flag is the whole fix -- it reads `log_level` off whatever
+    # namespace it is handed (#879).
+    _add_logging_args(diff_parser)
 
     return diff_parser
 
