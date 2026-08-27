@@ -1507,8 +1507,12 @@ jobs:
           #   balanced: 17 in profile (no manual tools)
           #   slim:     13 in profile (no manual tools)
           #   fast:      9 (unchanged)
+          # Then #795 added shellcheck to deep (it was in the other three and
+          # not the most comprehensive one); Dockerfile.deep already built and
+          # verified the binary, so only the profile count moves:
+          #   deep:     29 profile - 4 manual = 25 in image
           - variant: deep
-            expected_tools: 24   # 28 profile - 4 manual-only = 24
+            expected_tools: 25   # 29 profile - 4 manual-only = 25
             profile: deep
           - variant: balanced
             expected_tools: 17

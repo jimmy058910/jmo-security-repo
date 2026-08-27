@@ -380,9 +380,35 @@ def validate_tool_name(tool_name: str, registry: ToolRegistry | None = None) -> 
 #   - \*(/[0-9]+)?           : * or */N (every N)
 #   - [0-9]+(-[0-9]+)?(/[0-9]+)?  : number, or range, with optional step
 CRON_FIELD_PATTERN = r"(\*(/[0-9]+)?|[0-9]+(-[0-9]+)?(/[0-9]+)?)(,(\*(/[0-9]+)?|[0-9]+(-[0-9]+)?(/[0-9]+)?))*"
+
+# POSIX cron defines three-letter names for the month and day-of-week fields,
+# and GitHub Actions, Vixie cron and croniter all accept them. The numeric-only
+# pattern above rejected them, so `jmo schedule create --cron "0 2 * * MON"`
+# succeeded and `jmo schedule install` then refused the schedule it had just
+# written -- this validator was the only thing in the stack saying no (#927).
+#
+# The names are spelled out rather than matched as [A-Za-z]{3} on purpose: an
+# explicit alternation cannot admit a three-letter word that is not a real
+# month or weekday, so widening the format check does not widen what reaches
+# the shell. Names are legal ONLY in these two fields -- minute, hour and
+# day-of-month stay numeric, exactly as cron requires.
+CRON_MONTH_NAMES = "JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC"
+CRON_DOW_NAMES = "SUN|MON|TUE|WED|THU|FRI|SAT"
+
+
+def _cron_named_field_pattern(names: str) -> str:
+    """Build a field pattern accepting numbers or ``names``, in ranges and lists."""
+    term = rf"(\*(/[0-9]+)?|([0-9]+|{names})(-([0-9]+|{names}))?(/[0-9]+)?)"
+    return rf"{term}(,{term})*"
+
+
+CRON_MONTH_FIELD_PATTERN = _cron_named_field_pattern(CRON_MONTH_NAMES)
+CRON_DOW_FIELD_PATTERN = _cron_named_field_pattern(CRON_DOW_NAMES)
+
 CRON_SCHEDULE_PATTERN = re.compile(
     rf"^{CRON_FIELD_PATTERN}\s+{CRON_FIELD_PATTERN}\s+{CRON_FIELD_PATTERN}\s+"
-    rf"{CRON_FIELD_PATTERN}\s+{CRON_FIELD_PATTERN}$"
+    rf"{CRON_MONTH_FIELD_PATTERN}\s+{CRON_DOW_FIELD_PATTERN}$",
+    re.IGNORECASE,
 )
 
 # Characters that should never appear in cron expressions

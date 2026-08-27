@@ -117,3 +117,41 @@ def test_osv_scanner_is_gone():
             " re-adding it needs an adapter, a binary name and an execution"
             " command, not just a registry entry."
         )
+
+
+def test_deep_is_a_superset_of_every_other_profile():
+    """`deep` must run everything the lighter profiles run.
+
+    `shellcheck` was in `fast`, `slim` and `balanced` and NOT in `deep` -- the
+    only tool anywhere in that position. So a user escalating from `balanced`
+    to the profile documented as "comprehensive" silently LOST shell-script
+    linting, with nothing warning them and the binary already sitting in the
+    deep image (#795).
+
+    This assertion was deliberately absent from this file when #782 added it,
+    because "should deep be a superset?" was then an open question. #795
+    answered it yes, so it is an invariant now rather than an observation.
+
+    Asserts the property (nothing is missing from deep) rather than a count, so
+    it keeps holding as profiles change size.
+    """
+    deep = set(registry.PROFILE_TOOLS["deep"])
+    for profile, tools in registry.PROFILE_TOOLS.items():
+        if profile == "deep":
+            continue
+        missing = sorted(set(tools) - deep)
+        assert not missing, (
+            f"`deep` does not run {missing}, which `{profile}` does. A user who "
+            f"escalates to deep would lose them silently. Either add them to "
+            f"deep or record why deep is not a superset."
+        )
+
+
+def test_deep_covers_the_whole_profile_universe():
+    """The complement of the superset rule, stated as its own claim.
+
+    Follows from the test above, but names the consequence a reader checks by
+    hand: `jmo scan --profile deep` runs every tool the registry knows how to
+    run, so the deep count and the catalogue count are the same number.
+    """
+    assert set(registry.PROFILE_TOOLS["deep"]) == _profile_universe()

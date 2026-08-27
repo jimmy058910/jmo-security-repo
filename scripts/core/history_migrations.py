@@ -273,6 +273,17 @@ def run_migrations(db_path: Path, target_version: str | None = None) -> dict[str
         ) as e:  # Acceptable: migration failure triggers rollback — must catch all errors
             logger.error(f"❌ Migration {migration.version} failed: {e}")
 
+            # One failed migration is one error entry. Appending inside the
+            # rollback handler *and* unconditionally afterwards made
+            # len(errors) 1 or 2 for the same single failure, depending only on
+            # whether migrate_down also raised -- and `history migrate --json`
+            # exposes that array for automation to count (#908). Build one
+            # dict, and attach rollback_error to it only when there is one.
+            error_entry: dict[str, Any] = {
+                "version": migration.version,
+                "error": str(e),
+            }
+
             # Attempt rollback
             try:
                 logger.info(f"Attempting rollback of {migration.version}")
@@ -286,15 +297,9 @@ def run_migrations(db_path: Path, target_version: str | None = None) -> dict[str
                 logger.error(
                     f"❌ Rollback of {migration.version} failed: {rollback_error}"
                 )
-                errors.append(
-                    {
-                        "version": migration.version,
-                        "error": str(e),
-                        "rollback_error": str(rollback_error),
-                    }
-                )
+                error_entry["rollback_error"] = str(rollback_error)
 
-            errors.append({"version": migration.version, "error": str(e)})
+            errors.append(error_entry)
 
             # Stop applying further migrations
             break

@@ -104,7 +104,15 @@ PROFILE_TOOLS: dict[str, list[str]] = {
         "mobsf",
         "lynis",
         "opa",  # Policy engine for policy-as-code evaluation
-    ],  # 28 tools
+        # shellcheck was in fast, slim and balanced but NOT deep -- the only
+        # tool anywhere in that position, so `deep` was not a superset of the
+        # profile a user escalates to it from, and escalating silently LOST
+        # shell-script linting with nothing said (#795). Dockerfile.deep has
+        # always built and verified the binary, so the image already shipped it;
+        # only the profile never asked for it. Enforced from here on by
+        # tests/unit/test_tool_registry_consistency.py.
+        "shellcheck",
+    ],  # 29 tools
 }
 
 # Tool name normalization - maps jmo.yml names to binary names

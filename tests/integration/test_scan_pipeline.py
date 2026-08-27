@@ -15,6 +15,7 @@ Runtime: ~5-15 minutes depending on profile
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -24,6 +25,54 @@ import pytest
 
 # Project paths
 PROJECT_ROOT = Path(__file__).parent.parent.parent
+
+
+@pytest.fixture(autouse=True)
+def isolated_jmo_state(tmp_path_factory, monkeypatch):
+    """Keep `run_scan`'s child process out of the developer's real state.
+
+    Every test here shells out -- `run_scan` spawns
+    ``sys.executable -m scripts.cli.jmo scan``. A child process does not
+    inherit ``monkeypatch.setattr(Path, "home", ...)``; the only things that
+    cross the boundary are the environment and the working directory. So the
+    documented remedy for in-process tests could never work here, and these
+    five wrote the real files on every run:
+
+      * ``~/.jmo/config.yml`` -- ``_show_kofi_reminder`` resolves
+        ``Path.home()`` in the CHILD, so redirect it with HOME/USERPROFILE.
+      * ``.jmo/history.db`` -- relative to the child's cwd, which it inherits,
+        so redirect it by chdir-ing the parent.
+
+    Nightly Integration Tests failed on exactly this, every night, from a
+    fresh runner where the guards saw the files being CREATED (#985). PR-time
+    CI never runs this file -- `-m "not requires_tools"` deselects all of it --
+    so the nightly was the only place it could show up.
+
+    Autouse so a test added later is isolated without having to know any of
+    the above. ``JMO_NON_INTERACTIVE`` is set for the recorded reason: a
+    scan otherwise hangs on the first-run email prompt, and a fresh sandbox
+    home is exactly the "first run" that triggers it.
+    """
+    sandbox = tmp_path_factory.mktemp("jmo-sandbox")
+    monkeypatch.setenv("HOME", str(sandbox))
+    monkeypatch.setenv("USERPROFILE", str(sandbox))
+    monkeypatch.setenv("JMO_NON_INTERACTIVE", "1")
+    # `python -m scripts.cli.jmo` must still resolve after the chdir. The
+    # editable install already makes it importable from anywhere; this is
+    # belt and braces for an environment where it is not.
+    existing = os.environ.get("PYTHONPATH", "")
+    monkeypatch.setenv(
+        "PYTHONPATH",
+        (
+            os.pathsep.join([str(PROJECT_ROOT), existing])
+            if existing
+            else str(PROJECT_ROOT)
+        ),
+    )
+    monkeypatch.chdir(sandbox)
+    return sandbox
+
+
 SAMPLES_DIR = PROJECT_ROOT / "tests" / "fixtures" / "samples"
 SCHEMA_FILE = PROJECT_ROOT / "docs" / "schemas" / "common_finding.v1.json"
 

@@ -334,7 +334,7 @@ Dockerfile.*         # 4 variants (see .claude/rules/docker.rules.md)
 | `fast` | 9 | 5-10 min | Pre-commit, PR validation | `:fast` |
 | `slim` | 13 | 12-18 min | Cloud/IaC, AWS/Azure/GCP/K8s | `:slim` |
 | `balanced` | 17 | 18-25 min | Production scans, CI/CD | `:balanced` |
-| `deep` | 28 | 40-70 min | Compliance audits, pentests | `:deep` (default) |
+| `deep` | 29 | 40-70 min | Compliance audits, pentests | `:deep` (default) |
 
 **Note:** The heavyweight image lives at `Dockerfile.deep` (also pulled via `:latest` and `:deep` bare tags). See PROFILES_AND_TOOLS.md for complete tool lists.
 

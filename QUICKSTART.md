@@ -56,7 +56,7 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
 | `fast` | 9 | 502 MB | CI/CD gates, pre-commit |
 | `slim` | 14 | 557 MB | Cloud/IaC, AWS/Azure/GCP/K8s |
 | `balanced` | 18 | 1.4 GB | Production pipelines |
-| `deep` | 28 | 2.0 GB | Complete audits |
+| `deep` | 29 | 2.0 GB | Complete audits |
 
 **Complete guide:** [docs/DOCKER_README.md](docs/DOCKER_README.md)
 
@@ -140,7 +140,7 @@ jmo ci --repo . --fail-on HIGH --profile-name balanced
 | `fast` | 9 | 5-10 min | Pre-commit, PR validation |
 | `slim` | 14 | 12-18 min | Cloud/IaC, AWS/Azure/GCP/K8s |
 | `balanced` | 18 | 18-25 min | CI/CD pipelines |
-| `deep` | 28 | 40-70 min | Full security audits |
+| `deep` | 29 | 40-70 min | Full security audits |
 
 ---
 

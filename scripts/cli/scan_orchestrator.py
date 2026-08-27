@@ -30,6 +30,28 @@ from scripts.core.validation import validate_container_image, validate_url
 logger = logging.getLogger(__name__)
 
 
+def _user_path(value: str) -> Path:
+    """Build a ``Path`` from user-supplied text, expanding a leading ``~``.
+
+    ``Path("~/repos")`` is a relative path whose first component is the single
+    character ``~``. Nothing in the scan layer expanded it, so a schedule
+    created with ``--repos-dir ~/repos`` scanned a directory of that literal
+    name relative to the cwd -- which does not exist, so the run reported
+    nothing to scan and no error (#926).
+
+    The cron backend cannot fix this for us: ``cron_installer`` passes the
+    value through ``shlex.quote``, and a *quoted* tilde is not expanded by the
+    shell either. Un-quoting would reintroduce the shell injection that
+    quoting closed, so the expansion belongs here -- in the process that
+    actually has a home directory, independent of how the command was quoted.
+
+    Applied to every path-valued target flag rather than only ``--repos-dir``:
+    a user who types ``~`` means their home directory whichever flag they typed
+    it on, and a per-flag rule is how the next one of these gets filed.
+    """
+    return Path(value).expanduser()
+
+
 def _detect_msys_path_mangling(path_str: str) -> bool:
     """
     Detect if a path has been mangled by Git Bash's MSYS layer on Windows.
@@ -360,7 +382,7 @@ class ScanOrchestrator:
                 self._reject("--repo", repo_path, "path looks MSYS-mangled")
                 return repos  # Return empty - path is invalid
 
-            p = Path(repo_path)
+            p = _user_path(repo_path)
             if p.exists():
                 repos.append(p)
             else:
@@ -376,7 +398,7 @@ class ScanOrchestrator:
                 self._reject("--repos-dir", repos_dir_path, "path looks MSYS-mangled")
                 return repos
 
-            base = Path(repos_dir_path)
+            base = _user_path(repos_dir_path)
             if not base.exists():
                 self._reject("--repos-dir", repos_dir_path, "directory does not exist")
             elif not base.is_dir():
@@ -391,7 +413,7 @@ class ScanOrchestrator:
 
         # Targets file (list of repository paths)
         elif getattr(args, "targets", None):
-            targets_file = Path(args.targets)
+            targets_file = _user_path(args.targets)
             if not targets_file.exists():
                 self._reject("--targets", args.targets, "file does not exist")
             else:
@@ -401,7 +423,7 @@ class ScanOrchestrator:
                     if not line or line.startswith("#"):
                         continue
                     listed += 1
-                    p = Path(line)
+                    p = _user_path(line)
                     if p.exists():
                         repos.append(p)
                     else:
@@ -433,7 +455,7 @@ class ScanOrchestrator:
 
         # Images file
         if getattr(args, "images_file", None):
-            images_file = Path(args.images_file)
+            images_file = _user_path(args.images_file)
             if not images_file.exists():
                 self._reject("--images-file", args.images_file, "file does not exist")
             else:
@@ -471,7 +493,7 @@ class ScanOrchestrator:
             value = getattr(args, attr, None)
             if not value:
                 continue
-            p = Path(value)
+            p = _user_path(value)
             if p.exists():
                 iac_files.append((iac_type, p))
             else:
@@ -502,7 +524,7 @@ class ScanOrchestrator:
 
         # URLs file
         if getattr(args, "urls_file", None):
-            urls_file = Path(args.urls_file)
+            urls_file = _user_path(args.urls_file)
             if not urls_file.exists():
                 self._reject("--urls-file", args.urls_file, "file does not exist")
             else:
@@ -526,7 +548,7 @@ class ScanOrchestrator:
             if spec.startswith(("http://", "https://")):
                 urls.append(spec)
             else:
-                p = Path(spec)
+                p = _user_path(spec)
                 if p.exists():
                     urls.append(f"file://{p.absolute()}")
                 else:

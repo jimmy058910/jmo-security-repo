@@ -865,7 +865,7 @@ Build Docker images for JMo Security.
 | `fast` | 9 | ~502 MB | CI/CD, pre-commit hooks |
 | `slim` | 13 | ~557 MB | Cloud/IaC focused |
 | `balanced` | 17 | ~1.4 GB | Production scans (default) |
-| `deep` | 28 | ~2.0 GB | Comprehensive audits |
+| `deep` | 29 | ~2.0 GB | Comprehensive audits |
 
 | Flag | Description |
 |------|-------------|

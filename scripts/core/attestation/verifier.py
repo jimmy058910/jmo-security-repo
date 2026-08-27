@@ -112,7 +112,18 @@ class AttestationVerifier:
                 continue
 
             compared += 1
-            if actual_digest != expected_digest:
+            # hexdigest() is always lowercase; in-toto does not mandate a case
+            # for hex digest values. Comparing raw made an attestation whose
+            # sha256 was written in uppercase fail as TAMPER DETECTED against a
+            # subject nothing had touched -- an accusation, aimed at the wrong
+            # artifact, over a formatting difference (#950). Only JMo's own
+            # generator emits lowercase, so the whole suite missed it.
+            #
+            # Case and surrounding whitespace are the only things normalised.
+            # Neither can make two different digests compare equal, so this
+            # narrows what is reported as tampering without widening what
+            # verifies.
+            if actual_digest.strip().lower() != str(expected_digest).strip().lower():
                 logger.error(
                     f"{algorithm.upper()} digest mismatch: {actual_digest} != {expected_digest}"
                 )

@@ -1,6 +1,6 @@
 # JMo Security Suite - All-in-One Docker Image (Deep)
 # Base: Ubuntu 24.04 with 24 Docker-ready security tools pre-installed
-# Tools: 28 in PROFILE_TOOLS["deep"], 24 baked in image, 4 manual-only | Multi-arch: amd64, arm64
+# Tools: 29 in PROFILE_TOOLS["deep"], 25 baked in image, 4 manual-only | Multi-arch: amd64, arm64
 # Note: 4 tools require manual install outside Docker (PROFILE_TOOLS but not in image):
 # MobSF, Akto, AFL++, Falco (see docs/MANUAL_INSTALLATION.md and scripts/core/tool_registry.py MANUAL_INSTALL_TOOLS)
 

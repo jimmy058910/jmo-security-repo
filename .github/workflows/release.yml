@@ -785,7 +785,7 @@ jobs:
           {
             echo ""
             echo "**Target Sizes:**"
-            echo "- Deep: ~1.97 GB (28 tools, 4 of them manual-install)"
+            echo "- Deep: ~1.97 GB (29 tools, 4 of them manual-install)"
             echo "- Balanced: ~1.41 GB (17 tools, production CI/CD)"
             echo "- Slim: ~557 MB (13 tools, cloud-focused)"
             echo "- Fast: ~502 MB (9 tools, CI/CD gate)"
