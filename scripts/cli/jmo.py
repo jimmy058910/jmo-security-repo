@@ -83,8 +83,14 @@ def _effective_scan_settings(args) -> dict[str, Any]:
 
     Returns dict with keys: tools, threads, timeout, include, exclude, retries, per_tool, skip_tools
 
-    Note: Tool lists come from PROFILE_TOOLS in tool_registry.py (single source of truth).
-    jmo.yml profiles only configure threads, timeout, per_tool settings - not tool lists.
+    Note: `PROFILE_TOOLS` in tool_registry.py is the single source of truth for
+    the **built-in** profiles. A `jmo.yml` profile that declares its own
+    `tools:` overrides it for that profile -- `profiles:` is a documented
+    user-facing key, and ignoring half of it silently is what #975 was.
+
+    This note used to say jmo.yml profiles configure "threads, timeout,
+    per_tool settings - not tool lists", which described the defect rather than
+    the intent.
     """
     cfg = load_config(getattr(args, "config", None))
     profile_name = getattr(args, "profile_name", None) or cfg.default_profile
@@ -92,11 +98,25 @@ def _effective_scan_settings(args) -> dict[str, Any]:
     if profile_name and isinstance(cfg.profiles, dict):
         profile = cfg.profiles.get(profile_name, {}) or {}
 
-    # Tool list priority: CLI --tools > PROFILE_TOOLS registry > config default
-    # Note: jmo.yml profiles no longer contain tools: arrays (moved to tool_registry.py)
+    # Tool list priority:
+    #   CLI --tools > the profile's own tools: > PROFILE_TOOLS registry > cfg.tools
+    #
+    # The profile's own list used to be skipped entirely (#975). `profiles:` is
+    # a documented, user-facing key -- CLAUDE.md's config table calls it "custom
+    # profile definitions with tool lists" -- and a user who wrote
+    # `profiles: {fast: {tools: [trufflehog]}}` got the full built-in `fast`
+    # profile instead: measured, one configured tool resolving to nine, semgrep
+    # among them and fetching its ruleset over the network.
+    #
+    # Silently ignoring configuration is worse than rejecting it: there is no
+    # signal to debug against, and the only reason this was ever noticed was
+    # semgrep processes appearing in a run that could not have invoked it.
     tools = getattr(args, "tools", None)
     if not tools:
-        if profile_name and profile_name in PROFILE_TOOLS:
+        configured_tools = profile.get("tools")
+        if isinstance(configured_tools, list) and configured_tools:
+            tools = [str(t) for t in configured_tools]
+        elif profile_name and profile_name in PROFILE_TOOLS:
             tools = PROFILE_TOOLS[profile_name]
         else:
             tools = cfg.tools  # Fallback to top-level config tools

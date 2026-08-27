@@ -187,6 +187,94 @@ def _effective_per_tool(tmp_path: Path) -> dict:
     return jmo_mod._effective_scan_settings(args)["per_tool"]
 
 
+class TestProfileToolListIsHonoured:
+    """#975: `profiles.<name>.tools` was documented, user-facing, and inert.
+
+    `_effective_scan_settings` resolved the tool list from the built-in
+    `PROFILE_TOOLS` mapping and never looked at the profile's own `tools:` key.
+    A user who wrote `profiles: {fast: {tools: [trufflehog]}}` got the full
+    built-in `fast` profile instead -- measured, one configured tool resolving
+    to nine, with semgrep among them fetching its ruleset over the network.
+
+    Every test here asserts the **negative**, because that is the shape the
+    defect hid behind. `tests/integration/test_cli_profiles.py` sets exactly
+    this config and passes, having only ever checked that trufflehog's output
+    appeared. A test that asserts the included tool is present cannot notice
+    that eight excluded ones are too.
+    """
+
+    def _tools(self, tmp_path: Path, body: str, **overrides) -> list[str]:
+        fields = {
+            "config": _write_cfg(tmp_path, body),
+            "profile_name": None,
+            "threads": None,
+            "timeout": None,
+            "tools": None,
+            "skip_tools": None,
+        }
+        fields.update(overrides)
+        return jmo_mod._effective_scan_settings(argparse.Namespace(**fields))["tools"]
+
+    def test_a_configured_tool_list_excludes_everything_else(self, tmp_path: Path):
+        tools = self._tools(
+            tmp_path,
+            "default_profile: fast\nprofiles:\n  fast:\n    tools:\n    - trufflehog\n",
+        )
+        assert tools == ["trufflehog"]
+        # Named explicitly: semgrep is the one that reaches the network, and it
+        # is how the defect was noticed at all.
+        assert "semgrep" not in tools, (
+            "a profile asking for one tool still resolved semgrep, which then "
+            "fetches its ruleset over the network"
+        )
+
+    def test_the_builtin_profile_still_applies_without_a_tools_key(
+        self, tmp_path: Path
+    ):
+        """Negative control: overriding must not become the only behaviour.
+
+        Without this, resolving `[]` for every profile would satisfy the test
+        above while breaking every user who never wrote a `tools:` key.
+        """
+        tools = self._tools(tmp_path, "default_profile: fast\n")
+        assert len(tools) > 1 and "semgrep" in tools
+
+    def test_an_empty_list_is_not_a_narrowing(self, tmp_path: Path):
+        """`tools: []` asks for nothing, which is not a scan.
+
+        Treated as absent rather than as "run no tools", so a truncated config
+        does not silently produce an empty scan that reports success.
+        """
+        tools = self._tools(
+            tmp_path, "default_profile: fast\nprofiles:\n  fast:\n    tools: []\n"
+        )
+        assert len(tools) > 1
+
+    def test_the_cli_flag_still_outranks_the_config(self, tmp_path: Path):
+        tools = self._tools(
+            tmp_path,
+            "default_profile: fast\nprofiles:\n  fast:\n    tools:\n    - trufflehog\n",
+            tools=["gosec"],
+        )
+        assert tools == ["gosec"]
+
+    def test_a_profile_that_is_not_built_in_can_define_its_own_tools(
+        self, tmp_path: Path
+    ):
+        """The documented use: a profile name PROFILE_TOOLS has never heard of.
+
+        Before the fix this fell through to the top-level `tools:` key, so a
+        custom profile could not narrow anything at all.
+        """
+        tools = self._tools(
+            tmp_path,
+            "default_profile: mine\ntools:\n- semgrep\n- trivy\n"
+            "profiles:\n  mine:\n    tools:\n    - bandit\n",
+        )
+        assert tools == ["bandit"]
+        assert "semgrep" not in tools and "trivy" not in tools
+
+
 def test_per_tool_profile_value_wins_over_the_root_value(tmp_path: Path):
     assert _effective_per_tool(tmp_path)["semgrep"]["timeout"] == 222
 
