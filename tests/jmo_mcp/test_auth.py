@@ -138,12 +138,19 @@ class TestRateLimitingBasics:
 
 
 class TestTheBucketIsSharedNotPerClient:
-    """`docs/MCP_SETUP.md` claimed 'Separate buckets for each client'.
+    """Unauthenticated callers share one bucket, and that is now the *fallback*.
 
-    Measured: a second caller's *first ever* request is denied once the first
-    caller has drained the budget, because every request is charged to the same
-    ``anonymous`` bucket. The ``RateLimiter`` itself is per-client capable; the
-    call site has no caller identity to key on.
+    `docs/MCP_SETUP.md` once claimed "Separate buckets for each client", which
+    was false: every request was charged to a hardcoded ``anonymous`` bucket, so
+    a second caller's first ever request was denied once the first had drained
+    the budget. Chunk 20 corrected the docs; #952 then made the accounting real
+    -- ``require_rate_limit`` now keys on the request's authenticated principal
+    when the transport supplies one.
+
+    These tests are unchanged and still pass, because they call the decorated
+    functions with **no auth context installed** -- which is exactly what stdio
+    does. So they now pin the fallback rather than the whole behaviour. The
+    per-principal half lives in ``test_rate_limit_identity.py``.
     """
 
     def test_a_second_caller_inherits_the_first_callers_exhausted_budget(self):

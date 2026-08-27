@@ -82,7 +82,8 @@ not implemented and say so in their return values.
   suppression in `jmo.suppress.yml`, so the report phase filters it. Entries
   always expire.
 - 🛡️ **Rate Limiting** - Token bucket algorithm (100 req/min default), one
-  shared bucket for all callers
+  bucket per authenticated principal, falling back to a single shared bucket on
+  a transport that supplies no identity (which stdio does not)
 - 🚫 **No Authentication** - callers are not authenticated and there is no
   setting that changes this. See [Authentication](#authentication--there-is-none).
 
@@ -295,13 +296,23 @@ Rate limiting uses a **token bucket algorithm** with burst capacity and sustaine
 
 - **Burst Capacity:** Maximum requests allowed in a burst (default: 100)
 - **Refill Rate:** Tokens added per second (default: 1.67 = 100 req/min)
-- **One shared bucket, not one per client.** This line claimed "Separate
-  buckets for each client (by API key or IP)". Measured: a second caller's
-  *first ever* request is refused once the first caller has drained the budget.
-  The limiter is per-client capable, but stdio transport gives the server no
-  caller identity to key on, so everything is charged to a single `anonymous`
-  bucket. In the normal MCP arrangement — one server subprocess per client —
-  this is the same thing; it is not if you put several clients on one process.
+- **One bucket per authenticated principal.** The key is the
+  `(client_id, issuer, subject)` triple mcp's own `principal_components`
+  returns, read from the request's auth context — so two users of one OAuth
+  client get separate budgets whenever the token verifier supplies a subject.
+  **Under stdio there is no principal**, so every request falls back to a
+  single `anonymous` bucket. That is not a limitation there: each client spawns
+  its own server subprocess, so one bucket per process is one bucket per
+  client. It would matter only if several clients were pointed at one
+  long-lived process, which requires an HTTP transport, which is where the
+  per-principal keying takes effect.
+
+  This line has been wrong in both directions. It originally claimed "Separate
+  buckets for each client (by API key or IP)", which was false — every request
+  was charged to a hardcoded `anonymous` bucket, and a second caller's *first
+  ever* request was refused once the first had drained the budget. Chunk 20
+  corrected it to describe the shared bucket; #952 then made the accounting
+  real.
 
 **Examples:**
 

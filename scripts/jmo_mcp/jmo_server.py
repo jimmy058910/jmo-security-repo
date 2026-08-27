@@ -164,10 +164,49 @@ rate_limiter = (
     else None
 )
 
-# Every request is charged to this one bucket. Named so that the absence of
-# per-client accounting is visible at the call site rather than looking like a
+# The bucket used when the transport supplies no caller identity -- stdio, and
+# any HTTP deployment without an auth provider. Named so the absence of
+# per-caller accounting is visible at the call site rather than looking like a
 # placeholder someone forgot to fill in.
 _SHARED_BUCKET_ID = "anonymous"
+
+
+def _current_client_id() -> str:
+    """The caller's identity for rate-limit accounting, or the shared bucket.
+
+    Every request used to be charged to ``_SHARED_BUCKET_ID`` unconditionally,
+    so one caller could exhaust everyone's budget: with ``capacity=2``, one
+    caller spent both tokens and a second was refused on its first ever request
+    (#952). ``RateLimiter`` was per-client capable throughout; the call site had
+    nothing to key on.
+
+    mcp 2.0 does supply one. ``get_access_token()`` reads a ``ContextVar``, so
+    it is callable from here with no signature change and no request object
+    threaded through, and ``principal_components`` is mcp's own answer to "who
+    is this token's principal" -- the same triple session ownership uses, so two
+    users of one OAuth client are distinct whenever the verifier supplies a
+    subject.
+
+    Returns the shared bucket on an unauthenticated transport, which is the
+    honest answer rather than a hardcoded one. Under stdio that is unchanged
+    behaviour and correctly so: each client spawns its own server process, so
+    one bucket per process is one bucket per client.
+
+    The key is the ``(client_id, issuer, subject)`` triple, never the token --
+    the caller identity is logged at DEBUG below, and a bearer token in a log
+    line would be a worse bug than the one this fixes.
+    """
+    try:
+        from mcp.server.auth.middleware.auth_context import get_access_token
+        from mcp.server.auth.provider import principal_components
+    except ImportError:  # pragma: no cover - older mcp without the auth module
+        return _SHARED_BUCKET_ID
+
+    token = get_access_token()
+    if token is None:
+        return _SHARED_BUCKET_ID
+    return repr(principal_components(token))
+
 
 # Suppressions written through `mark_resolved` are time-boxed, always.
 #
@@ -229,13 +268,12 @@ def require_rate_limit(func):
 
     Rate limiting:
     - If JMO_MCP_RATE_LIMIT_ENABLED=true, enforces token bucket limits.
-    - **One shared bucket**, not one per client. ``RateLimiter`` is keyed by
-      client id and is perfectly capable of per-client buckets, but stdio
-      transport gives the tool function no request context, so there is no
-      caller identity to key on and every request is charged to the same
-      ``anonymous`` bucket. One caller can exhaust everyone's budget. The old
-      docstring said "Per-client tracking by 'anonymous' identifier", which
-      contradicts itself in a single line.
+    - **One bucket per authenticated principal**, falling back to a single
+      shared ``anonymous`` bucket when the transport supplies no identity. See
+      ``_current_client_id``. Under stdio -- the only transport this server
+      currently runs -- there is no principal, so the shared bucket is what is
+      used; that is not a limitation there, because each client spawns its own
+      server process.
     - Default: 100 requests burst, 1.67 tokens/sec (100/min sustained).
 
     Authentication: **none**. See ``API_KEYS_HASHED`` above.
@@ -246,8 +284,9 @@ def require_rate_limit(func):
 
     @wraps(func)
     def wrapper(*args, **kwargs):
-        # One shared bucket -- see the docstring. Not a per-client identifier.
-        client_id = _SHARED_BUCKET_ID
+        # Derived from the request's authenticated principal when the transport
+        # supplies one, falling back to the shared bucket when it does not.
+        client_id = _current_client_id()
 
         # Rate limiting check
         if rate_limiter:
