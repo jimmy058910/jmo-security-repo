@@ -18,6 +18,8 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import logging
 import os
 import time
@@ -25,6 +27,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
+from scripts.core.adapters.common import normalize_finding_path
+from scripts.core.common_finding import (
+    FINGERPRINT_LENGTH,
+    MESSAGE_SNIPPET_LENGTH,
+    fingerprint,
+)
 from scripts.core.compliance_mapper import enrich_findings_with_compliance
 from scripts.core.exceptions import AdapterParseException
 
@@ -122,6 +130,121 @@ def deduplicate_findings_streaming(
                 yield finding
 
     return list(_gen())
+
+
+def scan_roots(results_dir: Path) -> tuple[str, ...]:
+    """Absolute directories this scan visited, for #861 path normalization.
+
+    Read from ``repo_paths`` in ``.scan_metadata.json``, the same key
+    ``history_db._scanned_repo_paths`` uses. Returns an empty tuple when the
+    file is absent or unreadable -- a results directory produced by something
+    other than `jmo scan` still normalizes separators and leading separators,
+    it just cannot strip a host prefix it was never told about.
+    """
+    try:
+        meta = json.loads(
+            (results_dir / ".scan_metadata.json").read_text(encoding="utf-8")
+        )
+    except (OSError, json.JSONDecodeError):
+        return ()
+    if not isinstance(meta, dict):
+        return ()
+    raw = meta.get("repo_paths")
+    if not isinstance(raw, list):
+        return ()
+    return tuple(entry for entry in raw if isinstance(entry, str) and entry)
+
+
+def _legacy_plugin_fingerprint(
+    tool: str, rule_id: str, path: str, start_line: Any, message: str
+) -> str:
+    """The formula in ``AdapterPlugin.get_fingerprint``.
+
+    There are **two** fingerprint formulas in this codebase and they disagree:
+    :func:`~scripts.core.common_finding.fingerprint` coerces a missing line to
+    ``0`` and strips the message, while ``get_fingerprint`` renders a missing
+    line as ``""`` and does not strip. trivy, trufflehog and semgrep use the
+    second. Reproducing both is what lets
+    :func:`_normalize_paths_and_ids` *prove* an id was path-derived instead of
+    assuming it.
+    """
+    parts = [tool, rule_id, path, str(start_line), message[:MESSAGE_SNIPPET_LENGTH]]
+    return hashlib.sha256("|".join(parts).encode()).hexdigest()[:FINGERPRINT_LENGTH]
+
+
+def _normalize_paths_and_ids(
+    findings: list[dict[str, Any]], roots: tuple[str, ...]
+) -> tuple[int, int]:
+    """Normalize ``location.path`` in place and re-key path-derived ids (#861).
+
+    Returns ``(paths_changed, ids_rekeyed)``.
+
+    **The id is only recomputed when the existing one can be shown to have come
+    from the old path.** That check is not defensive padding -- it is load
+    bearing. Four adapters deliberately fingerprint on something that is *not*
+    ``location.path``:
+
+    ==============  =====================================================
+    ``zap``         ``f"{uri}:{method}:{param}:{idx}"`` -- one alert on one
+                    URI yields several findings that differ only by param
+    ``cdxgen``      ``component_id``
+    ``nuclei``      the matched URL
+    ``mobsf``       the literal ``"AndroidManifest.xml"`` on one branch
+    ==============  =====================================================
+
+    Re-keying those from ``location.path`` would give every instance the same
+    id, and `deduplicate_findings_memory_efficient` would then delete all but
+    the first -- turning a path cleanup into silent finding loss, which is the
+    exact failure class this campaign keeps finding. Deriving the answer from
+    the data rather than from a hard-coded allowlist also means a new adapter
+    with a custom key is safe on the day it lands, with nothing to remember.
+    """
+    paths_changed = 0
+    ids_rekeyed = 0
+
+    for finding in findings:
+        location = finding.get("location")
+        if not isinstance(location, dict):
+            continue
+        original = location.get("path")
+        if not isinstance(original, str) or not original:
+            continue
+
+        normalized = normalize_finding_path(original, roots)
+        if normalized == original:
+            continue
+
+        location["path"] = normalized
+        paths_changed += 1
+
+        current = finding.get("id")
+        if not isinstance(current, str) or not current:
+            continue
+        tool = (finding.get("tool") or {}).get("name", "")
+        rule_id = finding.get("ruleId", "") or ""
+        message = finding.get("message", "") or ""
+        start_line = location.get("startLine")
+
+        if current == fingerprint(tool, rule_id, original, start_line, message):
+            finding["id"] = fingerprint(tool, rule_id, normalized, start_line, message)
+            ids_rekeyed += 1
+        elif current == _legacy_plugin_fingerprint(
+            tool,
+            rule_id,
+            original,
+            start_line if start_line is not None else "",
+            message,
+        ):
+            finding["id"] = _legacy_plugin_fingerprint(
+                tool,
+                rule_id,
+                normalized,
+                start_line if start_line is not None else "",
+                message,
+            )
+            ids_rekeyed += 1
+
+    return paths_changed, ids_rekeyed
 
 
 def gather_results(results_dir: Path) -> list[dict[str, Any]]:
@@ -236,6 +359,24 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
                 # true. This generic one stays as a genuine backstop, because a
                 # future can fail for reasons unrelated to its callable.
                 logger.error(f"Unexpected error loading findings: {e}", exc_info=True)
+
+    # Normalize `location.path` to one repo-relative POSIX spelling **before**
+    # dedup (#861). Order matters: dedup keys on `id`, and `id` is derived from
+    # the path, so two spellings of one location are two ids and survive dedup
+    # as separate findings. Measured on a real scan, `python/vulnerable_app.py`
+    # arrived under both `C:\...\repos\fixturecopy\python\vulnerable_app.py`
+    # (bandit) and `python\vulnerable_app.py` (horusec).
+    paths_changed, ids_rekeyed = _normalize_paths_and_ids(
+        findings, scan_roots(results_dir)
+    )
+    if paths_changed:
+        logger.info(
+            "Normalized %d finding path(s) to repo-relative POSIX form "
+            "(%d finding id(s) re-keyed)",
+            paths_changed,
+            ids_rekeyed,
+        )
+
     # Dedupe by id (fingerprint) - memory-efficient approach
     # Uses set for fingerprints (tiny strings) instead of dict storing full findings
     # This avoids double memory storage (dict + list copy)
