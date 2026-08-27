@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import json
+import logging
 import uuid
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 from croniter import croniter
+
+logger = logging.getLogger(__name__)
+
+_T = TypeVar("_T")
 
 
 @dataclass
@@ -386,16 +391,73 @@ class ScheduleManager:
         """Convert dataclass to dict."""
         return asdict(schedule)
 
+    def _rehydrate(
+        self, cls: type[_T], data: dict[str, Any], *, where: str, name: str
+    ) -> _T:
+        """Build *cls* from *data*, tolerating keys *cls* does not declare.
+
+        Splatting the stored dict straight in made **one** unrecognised key
+        anywhere in the file take out *every* schedule: `list()` rehydrates the
+        whole manifest in one pass, and `get`/`update`/`export`/`install`/
+        `uninstall`/`validate` all route through it. Only `create` and `delete`
+        read the raw JSON, so `jmo schedule delete` was the sole way back.
+
+        An unknown key means "written by a newer version", which is exactly
+        what a long-lived user file whose format already records an
+        `apiVersion` should survive. A *missing* required key is a different
+        thing -- genuine corruption -- and still raises, because inventing a
+        default there would report a schedule the user never wrote.
+
+        The filter is derived from ``dataclasses.fields``, not a hand-kept
+        allowlist: a new field must become loadable without a second edit.
+        """
+        known = {f.name for f in fields(cls)}  # type: ignore[arg-type]
+        unknown = sorted(set(data) - known)
+        if unknown:
+            # Warn rather than drop silently. `update` re-serialises with
+            # `asdict`, so a tolerated key nobody mentions is deleted from the
+            # file one command later -- silent data loss dressed as leniency.
+            logger.warning(
+                "%s: ignoring unrecognised %s key(s) %s in %s. "
+                "This schedule was probably written by a newer version of jmo; "
+                "these keys are dropped if the schedule is updated.",
+                name,
+                where,
+                ", ".join(unknown),
+                self.schedules_file,
+            )
+        return cls(**{k: v for k, v in data.items() if k in known})
+
     def _from_dict(self, data: dict) -> ScanSchedule:
         """Convert dict to dataclass."""
+        # Name first: it is what makes the warnings below identify *which*
+        # schedule in the manifest carries the surprise. Read defensively --
+        # a manifest broken enough to lack it should still produce warnings
+        # that say so rather than a KeyError from the logging call.
+        name = str(data.get("metadata", {}).get("name", "<unnamed>"))
+
         # Reconstruct nested dataclasses
-        metadata = ScheduleMetadata(**data["metadata"])
-        backend = BackendConfig(**data["spec"]["backend"])
-        job_template = JobTemplateSpec(**data["spec"]["jobTemplate"])
-        spec = ScheduleSpec(
-            **{**data["spec"], "backend": backend, "jobTemplate": job_template}
+        metadata = self._rehydrate(
+            ScheduleMetadata, data["metadata"], where="metadata", name=name
         )
-        status = ScheduleStatus(**data["status"])
+        backend = self._rehydrate(
+            BackendConfig, data["spec"]["backend"], where="spec.backend", name=name
+        )
+        job_template = self._rehydrate(
+            JobTemplateSpec,
+            data["spec"]["jobTemplate"],
+            where="spec.jobTemplate",
+            name=name,
+        )
+        spec = self._rehydrate(
+            ScheduleSpec,
+            {**data["spec"], "backend": backend, "jobTemplate": job_template},
+            where="spec",
+            name=name,
+        )
+        status = self._rehydrate(
+            ScheduleStatus, data["status"], where="status", name=name
+        )
 
         return ScanSchedule(
             apiVersion=data["apiVersion"],
