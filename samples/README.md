@@ -271,7 +271,7 @@ cat results/summaries/timings.json
 - **fast** profile: 5-10 minutes (9 tools)
 - **slim** profile: 12-18 minutes (13 tools)
 - **balanced** profile: 18-25 minutes (17 tools)
-- **deep** profile: 40-70 minutes (28 tools)
+- **deep** profile: 40-70 minutes (29 tools)
 
 ## Ethical Guidelines
 

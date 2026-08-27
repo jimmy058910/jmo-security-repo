@@ -469,12 +469,14 @@ have folded 64 SBOM inventory rows into a vulnerability expectation.
 | fast | 9 | Includes OPA for policy checks |
 | slim | 13 | fast + cloud/IaC tools |
 | balanced | 17 | slim + DAST/SCA tools |
-| deep | 28 | All tools including fuzzing, mobile, host security. 4 of these are `MANUAL_INSTALL_TOOLS` (`afl++`, `akto`, `falco`, `mobsf`) and are deliberately absent from every Docker image |
+| deep | 29 | All tools including fuzzing, mobile, host security. 4 of these are `MANUAL_INSTALL_TOOLS` (`afl++`, `akto`, `falco`, `mobsf`) and are deliberately absent from every Docker image |
 
-> **29 is the catalogue total, not a profile count.** The unique tool catalogue
-> has 29 entries; no profile has 29. `README.md`'s "29 tools across 12
-> categories" is correct because it says catalogue — see #731, which flags that
-> exact number as one not to "fix". `deep` is 28.
+> **`deep` is the whole catalogue now -- 29 -- and that is by design.**
+> This note used to say "no profile has 29", because `shellcheck` was in fast,
+> slim and balanced but not deep. #795 made the most comprehensive profile a
+> superset of the others, so deep and the catalogue coincide at 29;
+> tests/unit/test_tool_registry_consistency.py
+> asserts it. `README.md`'s "29 tools across 12 categories" is still correct.
 >
 > Derive these rather than trusting the table:
 >

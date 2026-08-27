@@ -59,7 +59,25 @@ FROM_EMAIL = os.getenv("JMO_FROM_EMAIL", "marketing@jmotools.com")
 # sending release digests. This list used to name a third touchpoint,
 # `jmo subscribe`, which is not a subcommand and never was (#790).
 JMO_UPDATES_AUDIENCE_ID = "fb900b6d-10de-4171-97df-e4e5eebf20fd"
-RESEND_AUDIENCE_ID = os.getenv("RESEND_AUDIENCE_ID", JMO_UPDATES_AUDIENCE_ID)
+
+# Deliberately NOT defaulted to JMO_UPDATES_AUDIENCE_ID.
+#
+# This module and newsletter_broadcast.py are documented as targeting the same
+# audience and read the same environment variable -- with different defaults.
+# Unset (the normal case), this one added CLI signups to the hardcoded
+# production audience while its sibling had no audience at all and exited 1.
+# Coupled by intent, uncoupled by default value (#929).
+#
+# They now resolve identically, and the shared default is the empty one: with a
+# production id baked into source, the only thing standing between "someone
+# exported RESEND_API_KEY to try the welcome path" and real subscribers
+# receiving mail was a credential happening to be absent. Safety should not
+# depend on that. Unset, add_contact_to_audience() returns False and sends
+# nothing, which is the direction to fail in.
+#
+# The constant above stays as the record of WHICH audience is canonical --
+# export it as RESEND_AUDIENCE_ID to target it.
+RESEND_AUDIENCE_ID = os.getenv("RESEND_AUDIENCE_ID", "")
 
 # Email templates
 WELCOME_EMAIL_HTML = """

@@ -1719,6 +1719,29 @@ Usage Examples:
         default=10,
         help="Show top N developers (default: 10)",
     )
+    # cmd_trends_developers has always READ these two; no flag defined them, so
+    # `repo` could only ever be Path.cwd() and the `if team_file:` branch was
+    # unreachable from any real invocation (#974).
+    #
+    # Added rather than deleted, for two measured reasons. The team machinery
+    # behind that branch is complete and tested -- aggregate_by_team,
+    # load_team_mapping, format_team_stats and TeamStats, with 24 references in
+    # tests/unit/test_developer_attribution.py -- so deleting the branch would
+    # orphan a working feature whose only defect was having no door. And the
+    # command already tells the user "Use --repo to specify the repository
+    # path" when it is run outside a git repo: advice for a flag that did not
+    # exist, which is the same defect class as #790.
+    developers_parser.add_argument(
+        "--repo",
+        help="Repository path for git blame attribution (default: current directory)",
+    )
+    developers_parser.add_argument(
+        "--team-file",
+        help=(
+            "JSON file mapping developer email to team name, to aggregate the "
+            'rankings by team (e.g. {"alice@example.com": "Backend Team"})'
+        ),
+    )
     add_common_trend_args(developers_parser)
 
     return trends_parser
@@ -2037,7 +2060,7 @@ BEGINNER-FRIENDLY COMMANDS:
   wizard              Interactive wizard for guided security scanning
   fast                Quick scan with 9 best-in-class tools (5-10 min)
   balanced            Balanced scan with 17 production-ready tools (18-25 min)
-  full                Comprehensive scan with all 28 tools (40-70 min)
+  full                Comprehensive scan with all 29 tools (40-70 min)
   setup               Verify and install security tools
 
 ADVANCED COMMANDS:
@@ -2071,7 +2094,7 @@ Documentation: https://docs.jmotools.com
     _add_profile_args(
         sub, "balanced", "Balanced scan with 17 production-ready tools (18-25 min)"
     )
-    _add_profile_args(sub, "full", "Comprehensive scan with all 28 tools (40-70 min)")
+    _add_profile_args(sub, "full", "Comprehensive scan with all 29 tools (40-70 min)")
     _add_setup_args(sub)
 
     # Advanced commands
@@ -2353,6 +2376,45 @@ def _check_first_run() -> bool:
         return False
 
 
+def _update_jmo_config(config_path: Path, updates: dict[str, Any]) -> None:
+    """Read-modify-write ``~/.jmo/config.yml``, preserving keys we do not set.
+
+    Every write in the first-run flow used to build a fresh dict and dump it
+    over the file, so the invalid-email branch wrote ``{onboarding_completed:
+    True}`` alone and discarded everything else the file held -- a real one on
+    this machine carried ``scan_count: 685`` (#931). ``_show_kofi_reminder``
+    already loads-then-updates; this is the same discipline, in one place, for
+    the five sites that did not.
+
+    Never raises: first-run bookkeeping must not take down the scan that
+    triggered it, and the caller has no better recovery than carrying on.
+    """
+    import yaml
+
+    config: dict[str, Any] = {}
+    if config_path.exists():
+        try:
+            with open(config_path, encoding="utf-8") as f:
+                config = yaml.safe_load(f) or {}
+            if not isinstance(config, dict):
+                # A config.yml holding a list or scalar is not something we can
+                # merge into. Treat it as empty rather than crashing, and say so.
+                logger.debug(f"{config_path} is not a mapping; starting fresh")
+                config = {}
+        except (OSError, UnicodeDecodeError, yaml.YAMLError, ValueError) as e:
+            logger.debug(f"Failed to read {config_path}, not merging: {e}")
+            config = {}
+
+    config.update(updates)
+
+    try:
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(config_path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(config, f, default_flow_style=False)
+    except (OSError, PermissionError, UnicodeEncodeError, yaml.YAMLError) as e:
+        logger.debug(f"Failed to write {config_path}: {e}")
+
+
 def _collect_email_opt_in(args) -> None:
     """Non-intrusive email collection on first run."""
     # Skip if not interactive (Docker, CI/CD, etc.)
@@ -2394,16 +2456,15 @@ def _collect_email_opt_in(args) -> None:
 
                 # Track pending_subscription so a future `jmo subscribe --retry`
                 # can re-attempt the audience add when offline at signup time.
-                import yaml
-
-                config = {
-                    "email": email,
-                    "email_opt_in": True,
-                    "onboarding_completed": True,
-                    "pending_subscription": not subscribed,
-                }
-                with open(config_path, "w", encoding="utf-8") as f:
-                    yaml.dump(config, f)
+                _update_jmo_config(
+                    config_path,
+                    {
+                        "email": email,
+                        "email_opt_in": True,
+                        "onboarding_completed": True,
+                        "pending_subscription": not subscribed,
+                    },
+                )
 
                 if subscribed and welcomed:
                     _safe_print(
@@ -2417,7 +2478,7 @@ def _collect_email_opt_in(args) -> None:
                 else:
                     # Audience add failed — saved locally, retry path available.
                     # No `jmo subscribe` command exists, and the
-                    # `pending_subscription` flag written below is never read
+                    # `pending_subscription` flag written above is never read
                     # back, so there is no CLI retry path to advertise (#790).
                     # Point at the page that does exist.
                     _safe_print(
@@ -2433,41 +2494,36 @@ def _collect_email_opt_in(args) -> None:
             else:
                 _safe_print("\n❌ Invalid email address. Skipping...\n")
                 # Mark onboarding complete even if email invalid
-                import yaml
-
-                config = {"onboarding_completed": True}
-                with open(config_path, "w", encoding="utf-8") as f:
-                    yaml.dump(config, f)
-        except ImportError:
-            # email_service module not available (resend not installed)
-            _safe_print("\n✅ Thanks! You're all set.\n")
-            import yaml
-
-            config = {
-                "email": email,
-                "email_opt_in": True,
-                "onboarding_completed": True,
-            }
-            with open(config_path, "w", encoding="utf-8") as f:
-                yaml.dump(config, f)
-            _log(
-                args,
-                "DEBUG",
-                "Email recorded but welcome email not sent (install resend: pip install resend)",
+                _update_jmo_config(config_path, {"onboarding_completed": True})
+        except (ImportError, OSError, PermissionError, UnicodeEncodeError) as e:
+            # There used to be a separate `except ImportError` here that printed
+            # "Thanks! You're all set." Its own comment said it covered "resend
+            # not installed" -- but email_service catches that itself at module
+            # scope and sets RESEND_AVAILABLE = False, so the guarded import
+            # succeeds either way and the branch could not be reached. Measured
+            # with resend genuinely absent: import OK, RESEND_AVAILABLE False,
+            # subscribe_to_newsletter() -> (False, False), which lands in the
+            # honest `else` above (#931).
+            #
+            # It is folded in here rather than deleted outright because the sole
+            # caller does not guard this function, so a real ImportError would
+            # take down `jmo scan`. What does not survive is the message: this
+            # path sent nothing, so it must not claim the user is all set.
+            logger.debug(f"Email collection error (non-blocking): {e}")
+            _safe_print(
+                "\n✅ Thanks! Saved your address locally, but signup did not"
+                " complete.\n   Finish it at"
+                " https://jmotools.com/subscribe.html\n"
             )
-        except (OSError, PermissionError, UnicodeEncodeError) as e:
-            # File write errors - fail gracefully
-            logger.debug(f"Failed to write config during email collection: {e}")
-            _safe_print("\n✅ Thanks! You're all set.\n")
-            import yaml
-
-            config = {
-                "email": email,
-                "email_opt_in": True,
-                "onboarding_completed": True,
-            }
-            with open(config_path, "w", encoding="utf-8") as f:
-                yaml.dump(config, f)
+            _update_jmo_config(
+                config_path,
+                {
+                    "email": email,
+                    "email_opt_in": True,
+                    "onboarding_completed": True,
+                    "pending_subscription": True,
+                },
+            )
             _log(args, "DEBUG", f"Email collection error (non-blocking): {e}")
     else:
         # `jmo config` is not a subcommand -- the parser has 20 and that is not
@@ -2476,11 +2532,7 @@ def _collect_email_opt_in(args) -> None:
         print("   https://jmotools.com/subscribe.html\n")
 
         # Mark onboarding complete even if skipped
-        import yaml
-
-        config = {"onboarding_completed": True}
-        with open(config_path, "w", encoding="utf-8") as f:
-            yaml.dump(config, f)
+        _update_jmo_config(config_path, {"onboarding_completed": True})
 
 
 def _show_kofi_reminder(args) -> None:
@@ -3705,6 +3757,31 @@ def _prompt_install_dependency(dep_type: str) -> bool:
     else:
         sys.stderr.write("\n⚠️  MCP SDK is not installed.\n\n")
         package = "mcp[cli]>=1.0.0"
+
+    # Do not read stdin unless a human is on the other end of it.
+    #
+    # The only caller is cmd_mcp_server, where stdin IS the MCP client's
+    # JSON-RPC pipe. A pipe with data waiting does not raise EOFError -- input()
+    # succeeds and returns the client's first message, normally the `initialize`
+    # request. That does not start with y/yes/empty, so the branch declined, the
+    # command returned 1, and the client saw a connection that closed after
+    # swallowing its handshake -- a symptom pointing away from the real cause
+    # (#958). The EOFError guard below cannot help: EOF is not what happens.
+    #
+    # This is the guard the other prompt sites in this file already use --
+    # _collect_email_opt_in checks isatty and JMO_NON_INTERACTIVE/CI, and the
+    # resume prompt checks isatty on both streams. This one was the omission
+    # against the file's own convention, not a missing convention.
+    if (
+        not sys.stdin.isatty()
+        or os.environ.get("JMO_NON_INTERACTIVE")
+        or os.environ.get("CI")
+    ):
+        sys.stderr.write(
+            f"  Not installing automatically: stdin is not a terminal.\n"
+            f"  Install it with: pip install '{package}'\n"
+        )
+        return False
 
     try:
         response = input(f"Install {package}? [Y/n]: ").strip().lower()

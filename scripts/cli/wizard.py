@@ -137,8 +137,13 @@ def _get_db_path() -> Path:
     return WizardConfig.get_db_path()
 
 
-# Version (from pyproject.toml)
-__version__ = "1.0.5"
+# No __version__ here on purpose. This module used to declare "1.0.5" while
+# jmo.py said 1.0.8 -- three releases of drift in a value nothing read (#875).
+# A second declaration that no code, test or docs consult is only a trap for
+# whoever finds it and believes it. The version the tool reports lives at
+# scripts/cli/jmo.py:__version__, and anything needing it at runtime should
+# call scripts.core.jmo_version.get_jmo_version(), which resolves from
+# installed distribution metadata and falls back to pyproject.toml.
 
 # Standardized error message templates for tool issues
 # These provide consistent, actionable guidance for different failure scenarios

@@ -977,6 +977,70 @@ def test_delete_schedule_not_found():
     mock_error.assert_called()
 
 
+def test_delete_schedule_declines_on_eof(sample_schedule):
+    """A closed stdin declines the delete instead of raising (#789).
+
+    `schedule delete` was the only prompt in the CLI that raised EOFError on a
+    non-TTY, exiting with a traceback rather than declining to act -- and it
+    guards a destructive action. `history prune`, `tools uninstall`, the
+    first-run prompt and the resume prompt all decline.
+
+    The fix landed in a45e5b4 with no test, so nothing would have noticed it
+    being reverted. This is that test.
+    """
+    args = create_mock_args(name="nightly-deep", force=False)
+
+    with patch("scripts.cli.schedule_commands.ScheduleManager") as MockManager:
+        mock_manager = MockManager.return_value
+        mock_manager.get.return_value = sample_schedule
+
+        with patch("builtins.input", side_effect=EOFError):
+            with patch("scripts.cli.schedule_commands._info") as mock_info:
+                result = _cmd_schedule_delete(args, mock_manager)
+
+    assert result == 0, "a declined delete is not an error"
+    mock_manager.delete.assert_not_called()
+    mock_info.assert_called()
+
+
+def test_delete_schedule_declines_on_keyboard_interrupt(sample_schedule):
+    """Ctrl-C at the confirmation prompt is also a decline, not a traceback."""
+    args = create_mock_args(name="nightly-deep", force=False)
+
+    with patch("scripts.cli.schedule_commands.ScheduleManager") as MockManager:
+        mock_manager = MockManager.return_value
+        mock_manager.get.return_value = sample_schedule
+
+        with patch("builtins.input", side_effect=KeyboardInterrupt):
+            with patch("scripts.cli.schedule_commands._info"):
+                result = _cmd_schedule_delete(args, mock_manager)
+
+    assert result == 0
+    mock_manager.delete.assert_not_called()
+
+
+def test_force_still_deletes_without_reading_stdin(sample_schedule):
+    """Negative control: declining on EOF must not have disarmed --force.
+
+    Guarding the prompt by never deleting would pass both tests above.
+    """
+    args = create_mock_args(name="nightly-deep", force=True)
+
+    with patch("scripts.cli.schedule_commands.ScheduleManager") as MockManager:
+        mock_manager = MockManager.return_value
+        mock_manager.get.return_value = sample_schedule
+
+        def _boom(*a, **k):
+            raise AssertionError("--force read stdin")
+
+        with patch("builtins.input", side_effect=_boom):
+            with patch("scripts.cli.schedule_commands._success"):
+                result = _cmd_schedule_delete(args, mock_manager)
+
+    assert result == 0
+    mock_manager.delete.assert_called_once()
+
+
 # ========== Test Category 10: _cmd_schedule_validate ==========
 
 

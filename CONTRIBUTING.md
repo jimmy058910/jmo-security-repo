@@ -35,7 +35,7 @@ CLI profiles and Docker variants are unified - same 4 profiles, same tools:
 | `fast` | 9 | 5-10 min | Pre-commit, PR validation | `jmo-security:fast` |
 | `slim` | 13 | 12-18 min | Cloud/IaC (AWS/Azure/GCP/K8s) | `jmo-security:slim` |
 | `balanced` | 17 | 18-25 min | Production scans, CI/CD | `jmo-security:balanced` |
-| `deep` | 28 | 40-70 min | Compliance audits, pentests | `jmo-security:deep` |
+| `deep` | 29 | 40-70 min | Compliance audits, pentests | `jmo-security:deep` |
 
 **Canonical tool reference:** [docs/PROFILES_AND_TOOLS.md](docs/PROFILES_AND_TOOLS.md)
 
@@ -402,7 +402,7 @@ Docker tags now match CLI profiles:
 | `fast` | fast | 9 | `Dockerfile.fast` |
 | `slim` | slim | 14 | `Dockerfile.slim` |
 | `balanced` | balanced | 18 | `Dockerfile.balanced` |
-| `deep` / `latest` | deep | 28* | `Dockerfile` |
+| `deep` / `latest` | deep | 29* | `Dockerfile` |
 
 *4 deep profile tools require manual installation (AFL++, Akto, Falco, MobSF)
 

@@ -377,7 +377,7 @@ Variants (tool counts come from PROFILE_TOOLS; see docs/PROFILES_AND_TOOLS.md):
   fast       9 tools - CI/CD, pre-commit hooks
   slim      13 tools - Cloud/IaC focused
   balanced  17 tools - Production scans (DEFAULT)
-  deep      28 tools - Comprehensive audits
+  deep      29 tools - Comprehensive audits
 
 Examples:
   jmo build                           # Build balanced variant, registry tag

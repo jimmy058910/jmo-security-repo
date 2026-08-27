@@ -21,7 +21,7 @@ open results/summaries/dashboard.html
 
 | Tag | Size | Tools | Use Case |
 |-----|------|-------|----------|
-| `latest`, `X.Y.Z-deep` | ~1.97 GB | 28 tools | Complete scanning (deep profile, all tools) |
+| `latest`, `X.Y.Z-deep` | ~1.97 GB | 29 tools | Complete scanning (deep profile, all tools) |
 | `X.Y.Z-balanced` | ~1.41 GB | 17 tools | Production CI/CD pipelines (balanced profile) |
 | `X.Y.Z-slim` | ~557 MB | 13 tools | Cloud-focused scanning (IaC, K8s, containers) |
 | `X.Y.Z-fast` | ~502 MB | 9 tools | CI/CD gate, pre-commit hooks (fast profile) |
@@ -29,10 +29,10 @@ open results/summaries/dashboard.html
 ## Features
 
 - 🎯 **Multi-Target Scanning**: Repos, containers, IaC, URLs, Kubernetes, GitLab
-- 🔐 **28 Security Tools** (24 Docker-ready + 4 manual): Secrets (TruffleHog, Nosey Parker, Semgrep-Secrets), SAST (Semgrep, Bandit, Gosec, Horusec), SBOM (Syft, CDXgen, ScanCode), SCA (Trivy, Grype, Dependency-Check), IaC (Checkov, Checkov-CICD), Cloud (Prowler, Kubescape), DAST (ZAP, Nuclei, Akto*), Dockerfile (Hadolint), OPA (Policy), Mobile (MobSF*), Malware (YARA), System (Lynis), Runtime (Trivy-RBAC, Falco*), Fuzzing (AFL++*) |*Manual install required
+- 🔐 **29 Security Tools** (25 Docker-ready + 4 manual): Secrets (TruffleHog, Nosey Parker, Semgrep-Secrets), SAST (Semgrep, Bandit, Gosec, Horusec), SBOM (Syft, CDXgen, ScanCode), SCA (Trivy, Grype, Dependency-Check), IaC (Checkov, Checkov-CICD), Cloud (Prowler, Kubescape), DAST (ZAP, Nuclei, Akto*), Dockerfile (Hadolint), OPA (Policy), Mobile (MobSF*), Malware (YARA), System (Lynis), Runtime (Trivy-RBAC, Falco*), Fuzzing (AFL++*) |*Manual install required
 - 📊 **Unified Reporting**: JSON, Markdown, HTML dashboard, SARIF, YAML, compliance reports
 - ⚡ **Parallel Execution**: Scan multiple targets simultaneously with auto-detected CPU threads
-- 🎨 **4 Docker Variants**: Fast (9 tools, 5-10 min), Balanced (17 tools, 18-25 min), Slim (13 tools, cloud-focused), Deep (28 tools, 40-70 min)
+- 🎨 **4 Docker Variants**: Fast (9 tools, 5-10 min), Balanced (17 tools, 18-25 min), Slim (13 tools, cloud-focused), Deep (29 tools, 40-70 min)
 - 📈 **Real-Time Progress**: Live scan progress with ETA estimation
 
 ## What's New in v1.0.0 (February 2026)
