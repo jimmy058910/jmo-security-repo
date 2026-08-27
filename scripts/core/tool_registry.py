@@ -582,10 +582,16 @@ class ToolRegistry:
             # Determine apt package
             apt_pkg = info.get("apt_package")
 
-            # Parse npm package from pypi_package field if it starts with @
-            npm_pkg = None
+            # `npm_package:` is the declared form. The `@`-prefix inference
+            # below is the legacy shape -- cdxgen carried its scoped npm name
+            # under `pypi_package` until #935, and this heuristic is why the
+            # *installer* worked while `update_versions.py --validate` did not:
+            # only one of the two readers knew the rule. Kept so an entry still
+            # using the old shape keeps installing, and so that this stays the
+            # single place that decides.
+            npm_pkg = info.get("npm_package")
             pypi_pkg = info.get("pypi_package")
-            if pypi_pkg and pypi_pkg.startswith("@"):
+            if npm_pkg is None and pypi_pkg and pypi_pkg.startswith("@"):
                 npm_pkg = pypi_pkg
                 pypi_pkg = None
 

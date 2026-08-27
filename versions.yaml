@@ -33,7 +33,12 @@ python_tools:
     notes: v1.0.0 - License compliance (OSS/GPL/MIT/Apache)
   cdxgen:
     version: 12.0.0
-    pypi_package: '@cyclonedx/cdxgen'
+    # npm, not PyPI. PyPI has no scoped names, so `pypi_package:
+    # '@cyclonedx/cdxgen'` could never validate -- and it aborted every
+    # `jmo build` until #935. It lives in python_tools because that section is
+    # about how a tool is installed in this file's taxonomy, not about which
+    # registry publishes it; the validator now dispatches on the package field.
+    npm_package: '@cyclonedx/cdxgen'
     description: Multi-language SBOM generator (CycloneDX/SPDX)
     update_check: npm view @cyclonedx/cdxgen version
     critical: false
