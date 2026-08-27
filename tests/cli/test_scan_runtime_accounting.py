@@ -149,6 +149,220 @@ def scan_env(tmp_path: Path, monkeypatch):
     return _scan_args(tmp_path, cfg_path, repos_dir)
 
 
+class TestProfileShortcutsStoreHistory:
+    """#870: `jmo fast|balanced|full` silently stored nothing.
+
+    `cmd_profile` copies the *profile* parser's namespace into `cmd_ci`, and
+    that parser defined 12 dests to `jmo ci`'s 42. `store_history` was among the
+    30 missing, and `report_orchestrator` gates storage on
+    `getattr(args, "store_history", False)` -- so an absent attribute meant OFF
+    while the parser that defines it defaults it ON. `jmo history list` and
+    `jmo trends` were permanently empty for anyone who only ran `jmo fast`, and
+    the shortcuts had no `--no-store-history` to turn it on either.
+
+    The parser-parity guards live in `test_ci_arg_forwarding.py`. This asserts
+    the behaviour they exist to protect, because "the dest is defined" and "a
+    row reaches the database" are different claims.
+    """
+
+    def _profile_args(self, scan_env, tmp_path, db):
+        """The shortcut's namespace, as its own parser would produce it."""
+        import sys
+
+        from scripts.cli.jmo import parse_args
+
+        argv = [
+            "jmo",
+            "fast",
+            "--repos-dir",
+            scan_env.repos_dir,
+            "--results-dir",
+            str(tmp_path / "results"),
+            "--config",
+            scan_env.config,
+            "--history-db",
+            str(db),
+            # Pinned for the same reason as the duration test: naming a profile
+            # otherwise resolves the full tool list and the version check spawns
+            # a real binary, which the #907 guard refuses.
+            "--tools",
+            "trufflehog",
+        ]
+        with patch.object(sys, "argv", argv):
+            return parse_args()
+
+    def test_jmo_fast_records_the_scan_in_history(self, scan_env, tmp_path):
+        db = tmp_path / "history.db"
+        args = self._profile_args(scan_env, tmp_path, db)
+
+        assert (
+            args.store_history is True
+        ), "the shortcut parser still does not define store_history"
+
+        with (
+            patch("scripts.cli.scan_jobs.scan_repository") as mock_scan,
+            patch("scripts.cli.jmo._open_results"),
+        ):
+            mock_scan.return_value = ("proj", {"trufflehog": True})
+            rc = jmo.cmd_profile(args, "fast")
+
+        assert rc == 0
+        assert db.exists(), "jmo fast created no history database at all"
+        con = sqlite3.connect(f"file:{db.as_posix()}?mode=ro", uri=True)
+        try:
+            rows = con.execute("SELECT profile FROM scans").fetchall()
+        finally:
+            con.close()
+        assert len(rows) == 1, f"expected exactly one stored scan, got {rows}"
+        assert rows[0][0] == "fast", "the row must name the shortcut's profile"
+
+    def test_no_store_history_now_turns_it_off(self, scan_env, tmp_path):
+        """The other half of the fix: the flag has to exist AND work.
+
+        Without this the test above passes on a build that stores
+        unconditionally, which was option 2 in the issue and the thing option 1
+        was chosen over.
+        """
+        import sys
+
+        from scripts.cli.jmo import parse_args
+
+        db = tmp_path / "history.db"
+        argv = [
+            "jmo",
+            "fast",
+            "--repos-dir",
+            scan_env.repos_dir,
+            "--results-dir",
+            str(tmp_path / "results"),
+            "--config",
+            scan_env.config,
+            "--history-db",
+            str(db),
+            "--tools",
+            "trufflehog",
+            "--no-store-history",
+        ]
+        with patch.object(sys, "argv", argv):
+            args = parse_args()
+        assert args.store_history is False
+
+        with (
+            patch("scripts.cli.scan_jobs.scan_repository") as mock_scan,
+            patch("scripts.cli.jmo._open_results"),
+        ):
+            mock_scan.return_value = ("proj", {"trufflehog": True})
+            assert jmo.cmd_profile(args, "fast") == 0
+
+        assert not db.exists(), "--no-store-history still wrote a database"
+
+    def test_a_contradictory_profile_name_is_refused(self, scan_env, tmp_path):
+        """`--profile-name` now exists on the shortcuts and cmd_profile sets it.
+
+        Overriding what the user typed in silence is the class this campaign
+        keeps finding, so the contradiction is an error instead.
+        """
+        import sys
+
+        from scripts.cli.jmo import parse_args
+
+        argv = [
+            "jmo",
+            "fast",
+            "--repos-dir",
+            scan_env.repos_dir,
+            "--results-dir",
+            str(tmp_path / "results"),
+            "--config",
+            scan_env.config,
+            "--profile-name",
+            "deep",
+        ]
+        with patch.object(sys, "argv", argv):
+            args = parse_args()
+
+        assert jmo.cmd_profile(args, "fast") == 2
+
+    @pytest.mark.parametrize(
+        ("extra", "expected"),
+        [
+            pytest.param([], True, id="default-allows-missing-tools"),
+            pytest.param(["--strict"], False, id="strict-disables-stubs"),
+        ],
+    )
+    def test_strict_still_controls_stubbing(self, scan_env, tmp_path, extra, expected):
+        """`--allow-missing-tools` now exists here too, so say which one wins.
+
+        The shortcuts allow missing tools by default -- the opposite of
+        `jmo ci` -- and `--strict` is the flag that turns that off. Both rows
+        matter: without the first, setting the value to a constant `False`
+        passes; without the second, a constant `True` passes.
+        """
+        import sys
+
+        from scripts.cli.jmo import parse_args
+
+        argv = [
+            "jmo",
+            "fast",
+            "--repos-dir",
+            scan_env.repos_dir,
+            "--results-dir",
+            str(tmp_path / "results"),
+            "--config",
+            scan_env.config,
+            "--no-store-history",
+            *extra,
+        ]
+        with patch.object(sys, "argv", argv):
+            args = parse_args()
+
+        captured = {}
+
+        def fake_ci(ns):
+            captured["ns"] = ns
+            return 0
+
+        with (
+            patch("scripts.cli.jmo.cmd_ci", fake_ci),
+            patch("scripts.cli.jmo._open_results"),
+        ):
+            assert jmo.cmd_profile(args, "fast") == 0
+
+        assert captured["ns"].allow_missing_tools is expected
+
+    def test_a_matching_profile_name_is_accepted(self, scan_env, tmp_path):
+        """Negative control: only a contradiction may be refused."""
+        import sys
+
+        from scripts.cli.jmo import parse_args
+
+        argv = [
+            "jmo",
+            "fast",
+            "--repos-dir",
+            scan_env.repos_dir,
+            "--results-dir",
+            str(tmp_path / "results"),
+            "--config",
+            scan_env.config,
+            "--tools",
+            "trufflehog",
+            "--no-store-history",
+            "--profile-name",
+            "fast",
+        ]
+        with patch.object(sys, "argv", argv):
+            args = parse_args()
+
+        with (
+            patch("scripts.cli.scan_jobs.scan_repository") as mock_scan,
+            patch("scripts.cli.jmo._open_results"),
+        ):
+            mock_scan.return_value = ("proj", {"trufflehog": True})
+            assert jmo.cmd_profile(args, "fast") == 0
+
+
 class TestScanRecordsItsOwnDuration:
     """#981: `scans.duration_seconds` was NULL on 2472 of 2472 rows.
 

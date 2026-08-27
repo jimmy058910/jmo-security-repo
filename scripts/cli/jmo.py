@@ -429,34 +429,29 @@ def _add_ci_args(subparsers: argparse._SubParsersAction) -> Any:
 def _add_profile_args(
     subparsers: argparse._SubParsersAction, profile_name: str, description: str
 ) -> Any:
-    """Add profile-based scan command (fast/balanced/full)."""
+    """Add profile-based scan command (fast/balanced/full).
+
+    Built from the same helpers `jmo ci` uses, because `cmd_profile` routes
+    through `cmd_ci` by copying this namespace. A hand-written subset drifted
+    from what the destination reads: the profile parser defined 12 dests to
+    `ci`'s 42, and `store_history` was one of the 30 missing. The report phase
+    gates storage on `getattr(args, "store_history", False)`, so an absent
+    attribute meant OFF while the parser that defines it defaults it ON --
+    `jmo fast` silently stored nothing, and had no flag to turn it on either
+    (#870).
+
+    Sharing the helpers is what makes that unrepeatable for the next flag,
+    rather than fixing this one. The three arguments below are genuinely
+    profile-only: `jmo ci` has no `--no-open` or `--strict`, and `--fail-on`
+    it declares itself.
+    """
     profile_parser = subparsers.add_parser(profile_name, help=description)
 
-    # Target selection (mutually exclusive)
     target_group = profile_parser.add_mutually_exclusive_group(required=False)
-    target_group.add_argument("--repo", help="Path to a single repository to scan")
-    target_group.add_argument(
-        "--repos-dir", help="Directory whose immediate subfolders are repos to scan"
-    )
-    target_group.add_argument(
-        "--targets", help="File listing repo paths (one per line)"
-    )
+    _add_target_args(profile_parser, target_group=target_group)
+    _add_scan_config_args(profile_parser)
+    _add_logging_args(profile_parser)
 
-    # Scan configuration
-    profile_parser.add_argument(
-        "--results-dir",
-        default="results",
-        help="Results directory (default: results)",
-    )
-    profile_parser.add_argument(
-        "--threads", type=int, default=None, help="Override threads"
-    )
-    profile_parser.add_argument(
-        "--timeout",
-        type=int,
-        default=None,
-        help="Override per-tool timeout seconds",
-    )
     profile_parser.add_argument(
         "--fail-on",
         default=None,
@@ -468,13 +463,10 @@ def _add_profile_args(
     profile_parser.add_argument(
         "--strict",
         action="store_true",
-        help="Fail if tools are missing (disable stubs)",
-    )
-    profile_parser.add_argument(
-        "--human-logs", action="store_true", help="Human-friendly logs"
-    )
-    profile_parser.add_argument(
-        "--config", default="jmo.yml", help="Config file (default: jmo.yml)"
+        help=(
+            "Fail if tools are missing (disable stubs). Overrides "
+            "--allow-missing-tools, which the shortcuts default to ON"
+        ),
     )
 
     return profile_parser
@@ -3704,6 +3696,18 @@ def cmd_profile(args, profile_name: str):
 
     actual_profile = profile_map.get(profile_name, "balanced")
 
+    # Since #870 these parsers carry the full `jmo ci` flag surface, so two
+    # dests now exist that this function also sets. Neither may be overridden
+    # in silence -- that is the class this campaign keeps finding.
+    requested_profile = getattr(args, "profile_name", None)
+    if requested_profile and requested_profile != actual_profile:
+        sys.stderr.write(
+            f"Error: `jmo {profile_name}` IS the {actual_profile} profile; "
+            f"--profile-name {requested_profile} contradicts it.\n"
+            f"Use `jmo ci --profile-name {requested_profile}` instead.\n"
+        )
+        return 2
+
     # Create a modified args object for cmd_ci
     # Copy all attributes from args
     ci_args = argparse.Namespace(**vars(args))
@@ -3711,6 +3715,11 @@ def cmd_profile(args, profile_name: str):
     # Set profile-specific attributes
     ci_args.cmd = "ci"  # Route through CI command for scan + report
     ci_args.profile_name = actual_profile
+    # `--strict` is the shortcuts' control. They allow missing tools by
+    # default -- the opposite of `jmo ci`, preserved deliberately rather than
+    # quietly aligned, because that is a UX decision and not this issue's. So
+    # `--allow-missing-tools` now exists here but asks for what already holds;
+    # `--strict` is the only one of the pair that changes anything.
     ci_args.allow_missing_tools = not args.strict
 
     # Run CI command (scan + report + threshold check)

@@ -353,3 +353,107 @@ def test_phase_required_lists_carry_nothing_extra():
     # flag supplies it, so `_phase_args` always overrides it to None.
     assert set(_SCAN_REQUIRED) == scan_needs
     assert set(_REPORT_REQUIRED) == report_needs
+
+
+# ---------------------------------------------------------------------------
+# #870: the profile shortcuts route through cmd_ci, so they inherit this
+# contract. They used to satisfy none of it.
+# ---------------------------------------------------------------------------
+
+# Dests `jmo ci` defines that a shortcut deliberately does not, each verified
+# to be tolerated by its consumer rather than assumed to be:
+#   policies, profile  -- supplied by _REPORT_REQUIRED when absent
+#   fail_on_policy_violation, strict_versions -- read via getattr(..., False)
+# `--profile` is excluded for a second reason: on a command named after a
+# profile, a boolean timing flag spelled `--profile` is a trap, and profile
+# selection is `--profile-name` anyway.
+SHORTCUT_OMITTED_DESTS = frozenset(
+    {"policies", "profile", "fail_on_policy_violation", "strict_versions"}
+)
+
+
+def profile_parser_dests(name: str = "fast") -> set[str]:
+    """Every dest a profile shortcut accepts, read off the real parser."""
+    ap = argparse.ArgumentParser(prog="jmo")
+    sub = ap.add_subparsers(dest="cmd")
+    parser = jmo._add_profile_args(sub, name, "help text")
+    return {a.dest for a in parser._actions if a.dest != "help"}
+
+
+def profile_parser_defaults(name: str = "fast") -> dict[str, object]:
+    ap = argparse.ArgumentParser(prog="jmo")
+    sub = ap.add_subparsers(dest="cmd")
+    parser = jmo._add_profile_args(sub, name, "help text")
+    return {a.dest: a.default for a in parser._actions if a.dest != "help"}
+
+
+def ci_parser_defaults() -> dict[str, object]:
+    ap = argparse.ArgumentParser(prog="jmo")
+    sub = ap.add_subparsers(dest="cmd")
+    parser = _add_ci_args(sub)
+    return {a.dest: a.default for a in parser._actions if a.dest != "help"}
+
+
+def test_profile_dest_extractor_finds_a_real_parser():
+    """Meta-guard, same reason as the ci one: empty passes everything."""
+    dests = profile_parser_dests()
+    assert len(dests) >= 35, f"expected the full surface, got {sorted(dests)}"
+    assert "repo" in dests, "target args missing (_add_target_args)"
+    assert "timeout" in dests, "scan config args missing (_add_scan_config_args)"
+    assert "log_level" in dests, "logging args missing (_add_logging_args)"
+    assert "no_open" in dests, "the shortcut's own args missing"
+
+
+@pytest.mark.parametrize("name", ["fast", "balanced", "full"])
+def test_shortcut_parsers_define_every_ci_dest(name):
+    """The defect itself.
+
+    `cmd_profile` builds its ci namespace by copying the *profile* parser's,
+    so any dest that parser does not define arrives absent. `store_history`
+    was one: `report_orchestrator` gates storage on
+    `getattr(args, "store_history", False)`, so absent meant OFF while the
+    parser that defines it defaults it ON. `jmo fast` silently stored nothing
+    and had no flag to turn it on either (#870).
+
+    Derived from both parsers, so the next flag added to `_add_scan_config_args`
+    is covered without editing this file.
+    """
+    missing = ci_parser_dests() - profile_parser_dests(name) - SHORTCUT_OMITTED_DESTS
+    assert not missing, (
+        f"`jmo {name}` does not define {sorted(missing)}, which `jmo ci` does. "
+        "An absent dest reads as its consumer's getattr default, which is not "
+        "necessarily the parser default -- that is exactly #870."
+    )
+
+
+@pytest.mark.parametrize("name", ["fast", "balanced", "full"])
+def test_shared_dests_carry_the_same_default(name):
+    """A dest both define but default differently is the same bug, quieter.
+
+    `store_history` would have been caught by the presence check above; a flag
+    that exists on both with opposite defaults would not.
+    """
+    ci = ci_parser_defaults()
+    prof = profile_parser_defaults(name)
+    disagree = {
+        d: (prof[d], ci[d])
+        for d in set(ci) & set(prof)
+        # `cmd` is the subcommand's own name and is meant to differ.
+        if d != "cmd" and prof[d] != ci[d]
+    }
+    assert not disagree, (
+        f"`jmo {name}` and `jmo ci` disagree on defaults " f"(shortcut, ci): {disagree}"
+    )
+
+
+def test_omitted_dests_are_actually_omitted():
+    """Negative control for SHORTCUT_OMITTED_DESTS.
+
+    Without it the exception list could name dests the shortcut *does* define,
+    silently widening what the guard above forgives.
+    """
+    defined = profile_parser_dests() & SHORTCUT_OMITTED_DESTS
+    assert not defined, (
+        f"{sorted(defined)} are in the omitted list but the parser defines "
+        "them; remove them from SHORTCUT_OMITTED_DESTS"
+    )
