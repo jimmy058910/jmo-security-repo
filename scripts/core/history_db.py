@@ -913,6 +913,57 @@ def _scan_duration_seconds(results_dir: Path) -> float | None:
     return float(raw) if raw >= 0 else None
 
 
+def _by_tool(findings: list[dict[str, Any]]) -> str:
+    """`tool=count` pairs, so a count points at something actionable."""
+    counts: dict[str, int] = {}
+    for finding in findings:
+        tool = (finding.get("tool") or {}).get("name") or "unknown"
+        counts[tool] = counts.get(tool, 0) + 1
+    return ", ".join(f"{tool}={n}" for tool, n in sorted(counts.items()))
+
+
+def _report_findings_not_stored(
+    no_id: list[dict[str, Any]],
+    duplicate_id: list[dict[str, Any]],
+    scan_id: str,
+) -> None:
+    """Name the tools whose findings could not be recorded, and how many (#901).
+
+    WARNING rather than INFO for the same reason as the read-side reporter in
+    `normalize_and_report`: `configure_scan_logging` floors the `scripts` logger
+    at WARNING for a normal run, so anything below it is invisible in exactly
+    the situation this exists to make visible.
+
+    Kept separate from that reporter rather than shared, because the two say
+    different true things. There, findings were deleted from the report. Here
+    the report still has them and only the history row does not, so `jmo diff`
+    against this scan will read them as new.
+
+    The two causes are reported separately for the same reason: a finding with
+    no id is unkeyable, while a repeated id means two findings JMo considers
+    the same one. Only the second is plausibly benign, and collapsing them
+    would hide which one happened.
+    """
+    if no_id:
+        logger.warning(
+            "Scan %s: %d finding(s) had no id and were NOT recorded in the "
+            "history database - they remain in this scan's reports, so a later "
+            "`jmo diff` against this scan will read them as new (by tool: %s)",
+            scan_id,
+            len(no_id),
+            _by_tool(no_id),
+        )
+    if duplicate_id:
+        logger.warning(
+            "Scan %s: %d finding(s) repeated an id already seen in this scan "
+            "and were NOT recorded in the history database - two findings with "
+            "one id are one finding to every other part of JMo (by tool: %s)",
+            scan_id,
+            len(duplicate_id),
+            _by_tool(duplicate_id),
+        )
+
+
 def store_scan(
     results_dir: Path,
     profile: str,
@@ -1156,8 +1207,36 @@ def store_scan(
 
             # Insert findings (batch insert for performance)
             finding_rows = []
+            # `findings` has PRIMARY KEY (scan_id, fingerprint), and the
+            # fingerprint is the finding's id. Every finding without one used to
+            # arrive as the same empty string, so the second collided and
+            # `sqlite3.IntegrityError` aborted the whole transaction -- the scan
+            # row and every other finding in it were discarded to store nothing.
+            # Reproduced with a two-entry findings.json whose entries carry no
+            # id: 0 scans stored (#901).
+            #
+            # Skipped and counted, which is the same answer #848 reached for the
+            # read side of this condition. A finding with no id cannot be
+            # deduplicated, suppressed, diffed or referenced, so it has nothing
+            # to be keyed on -- but losing one must not lose the other 500.
+            #
+            # A repeated id is the same collision with a different trigger, and
+            # it is reachable the same way: `jmo history store` accepts any
+            # findings.json, and two entries sharing an id abort the scan
+            # identically. Measured -- both shapes stored 0 scans. Fixing only
+            # the falsy half would leave the defect in place behind the other.
+            dropped_no_id: list[dict[str, Any]] = []
+            dropped_duplicate: list[dict[str, Any]] = []
+            seen_fingerprints: set[str] = set()
             for finding in findings:
-                fingerprint = finding.get("id", "")
+                fingerprint = finding.get("id")
+                if not fingerprint:
+                    dropped_no_id.append(finding)
+                    continue
+                if fingerprint in seen_fingerprints:
+                    dropped_duplicate.append(finding)
+                    continue
+                seen_fingerprints.add(fingerprint)
                 severity = finding.get("severity", "INFO").upper()
                 tool_info = finding.get("tool", {})
                 tool_name = (
@@ -1293,8 +1372,9 @@ def store_scan(
                 (scan_id, str(results_dir.absolute())),
             )
 
+        _report_findings_not_stored(dropped_no_id, dropped_duplicate, scan_id)
         logger.info(
-            f"Stored scan {scan_id}: {len(findings)} findings from {len(tools)} tools"
+            f"Stored scan {scan_id}: {len(finding_rows)} findings from {len(tools)} tools"
         )
         return scan_id
 

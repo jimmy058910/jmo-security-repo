@@ -505,6 +505,143 @@ class TestStoreAcceptsBothFindingsShapes:
         ]
 
 
+def _results_with_findings(root: Path, entries: list[dict]) -> Path:
+    """A results directory whose `findings.json` holds exactly `entries`."""
+    results = _make_results(root, [])
+    (results / "summaries" / "findings.json").write_bytes(
+        json.dumps(entries).encode("utf-8")
+    )
+    return results
+
+
+def _stored_fingerprints(db_path: Path) -> list[str]:
+    con = sqlite3.connect(f"file:{Path(db_path).as_posix()}?mode=ro", uri=True)
+    try:
+        return [r[0] for r in con.execute("SELECT fingerprint FROM findings")]
+    finally:
+        con.close()
+
+
+class TestOneBadFindingDoesNotDiscardTheScan:
+    """#901 -- a fingerprint collision aborted the entire transaction.
+
+    `findings` has PRIMARY KEY (scan_id, fingerprint) and the fingerprint is
+    the finding's id, so two findings that collide raised
+    `sqlite3.IntegrityError` and the scan row plus every other finding in it
+    went with them. Measured before the fix: 0 scans stored, both times.
+
+    Both triggers are covered. The issue names only the falsy one, but a
+    repeated non-empty id aborts identically and is reachable the same way --
+    `jmo history store` accepts any findings.json. Fixing half of a defect
+    leaves the defect.
+
+    Every assertion checks what was stored, not that the call returned an id:
+    `store_scan` returning a UUID is exactly what it did while writing nothing.
+    """
+
+    def test_two_findings_with_no_id_no_longer_discard_the_scan(self, tmp_path):
+        results = _results_with_findings(
+            tmp_path / "res",
+            [{"tool": {"name": "semgrep"}}, {"tool": {"name": "trivy"}}],
+        )
+        store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
+
+        assert (
+            _stored_row(tmp_path / "h.db") is not None
+        ), "the scan row itself was discarded because two findings collided"
+        assert _stored_fingerprints(tmp_path / "h.db") == []
+
+    def test_two_findings_sharing_an_id_no_longer_discard_the_scan(self, tmp_path):
+        results = _results_with_findings(
+            tmp_path / "res",
+            [
+                {"id": "same", "tool": {"name": "semgrep"}},
+                {"id": "same", "tool": {"name": "trivy"}},
+            ],
+        )
+        store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
+
+        assert _stored_row(tmp_path / "h.db") is not None
+        assert _stored_fingerprints(tmp_path / "h.db") == [
+            "same"
+        ], "the first of a colliding pair must survive"
+
+    def test_good_findings_survive_alongside_bad_ones(self, tmp_path):
+        """The point of the fix: losing one finding must not lose the rest."""
+        results = _results_with_findings(
+            tmp_path / "res",
+            [
+                {"id": "a", "tool": {"name": "semgrep"}},
+                {"tool": {"name": "trivy"}},
+                {"id": "a", "tool": {"name": "gosec"}},
+                {"id": "b", "tool": {"name": "trivy"}},
+            ],
+        )
+        store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
+
+        assert sorted(_stored_fingerprints(tmp_path / "h.db")) == ["a", "b"]
+
+    def test_distinct_ids_are_all_stored(self, tmp_path):
+        """Negative control: the skip must not be over-broad."""
+        results = _results_with_findings(
+            tmp_path / "res",
+            [
+                {"id": "a", "tool": {"name": "semgrep"}},
+                {"id": "b", "tool": {"name": "trivy"}},
+                {"id": "c", "tool": {"name": "gosec"}},
+            ],
+        )
+        store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
+
+        assert sorted(_stored_fingerprints(tmp_path / "h.db")) == ["a", "b", "c"]
+
+    def test_the_two_causes_are_reported_separately_and_by_tool(self, tmp_path, caplog):
+        """A silent skip is the failure this campaign keeps meeting.
+
+        WARNING, not INFO: `configure_scan_logging` floors the `scripts` logger
+        at WARNING for a normal run, so INFO would be invisible in exactly the
+        situation this exists to make visible.
+        """
+        import logging
+
+        results = _results_with_findings(
+            tmp_path / "res",
+            [
+                {"id": "a", "tool": {"name": "semgrep"}},
+                {"tool": {"name": "trivy"}},
+                {"id": "a", "tool": {"name": "gosec"}},
+            ],
+        )
+        with caplog.at_level(logging.WARNING, logger="scripts.core.history_db"):
+            store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
+
+        warnings = [
+            r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING
+        ]
+        no_id = [m for m in warnings if "had no id" in m]
+        dup = [m for m in warnings if "repeated an id" in m]
+        assert len(no_id) == 1, f"missing the no-id report: {warnings}"
+        assert len(dup) == 1, f"missing the duplicate-id report: {warnings}"
+        # Attribution, not just a count: a number nobody can act on is not a
+        # report. The two causes must name their own tool, not each other's.
+        assert "trivy=1" in no_id[0]
+        assert "gosec=1" in dup[0]
+
+    def test_a_clean_scan_reports_nothing(self, tmp_path, caplog):
+        """Negative control for the reporter, so it cannot fire unconditionally."""
+        import logging
+
+        results = _results_with_findings(
+            tmp_path / "res", [{"id": "a", "tool": {"name": "semgrep"}}]
+        )
+        with caplog.at_level(logging.WARNING, logger="scripts.core.history_db"):
+            store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
+
+        assert not [
+            r for r in caplog.records if "NOT recorded" in r.getMessage()
+        ], "a clean scan produced a data-loss warning"
+
+
 def _results_with_duration(root: Path, duration: object) -> Path:
     """A results directory whose `.scan_metadata.json` carries `duration`.
 
