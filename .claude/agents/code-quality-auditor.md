@@ -41,9 +41,9 @@ You have access to all code analysis tools:
 
 **Target Thresholds:**
 
-- **Test Coverage:** ≥85% as a review target — **not a CI gate**. CI's only
-  enforced floor is 80% (`.github/workflows/ci.yml:734`); `--cov-fail-under` is
-  set nowhere in this repository (#756)
+- **Test Coverage:** ≥85% — and as of #756 this **is** the CI gate. CI's
+  enforced floor is 85% (`coverage-aggregate`'s "Verify coverage threshold" step);
+  `--cov-fail-under` is still set nowhere, so nothing enforces it locally
 - **Cyclomatic Complexity:** ≤10 per function
 - **File Length:** ≤500 lines (exceptions: adapters ≤300 lines)
 - **Function Length:** ≤50 lines
@@ -720,7 +720,7 @@ RETRIES_DEEP = 1
 RETRIES_MAX = 3
 
 # Coverage constants
-COVERAGE_THRESHOLD = 85  # review target; CI's enforced floor is 80% (#756)
+COVERAGE_THRESHOLD = 85  # matches CI's enforced floor as of #756
 
 # Schema versions
 SCHEMA_VERSION_CURRENT = "1.2.0"
@@ -921,7 +921,7 @@ pyright scripts/
 # 5. Run tests
 make test
 
-# 6. Check coverage (CI's only floor is 80%, at ci.yml:734 -- see #756)
+# 6. Check coverage (CI's only floor is 85%, in coverage-aggregate -- see #756)
 pytest --cov=scripts --cov-report=term-missing
 ```
 

@@ -94,6 +94,7 @@ async def _probe(results_dir: Path, repo_root: Path) -> list[str]:
     """Return a list of failure messages; empty means every check passed."""
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
+    from mcp.types import TextContent
 
     failures: list[str] = []
 
@@ -148,11 +149,25 @@ async def _probe(results_dir: Path, repo_root: Path) -> list[str]:
             if getattr(result, "is_error", False):
                 failures.append(f"get_server_info returned an error: {result.content}")
             else:
-                payload = json.loads(result.content[0].text)
-                print(f"  call_tool    -- get_server_info -> {sorted(payload)}")
-                for key in ("version", "authentication_enforced"):
-                    if key not in payload:
-                        failures.append(f"get_server_info has no {key!r} key")
+                # `content` is a union -- text/image/audio/resource-link/embedded
+                # -- and only TextContent carries `.text`. Narrowing here rather
+                # than assuming index 0 is text keeps this file's contract that a
+                # failure says *where*: an image block or an empty list becomes a
+                # named failure instead of an AttributeError or IndexError three
+                # frames down. This is also what unblocked mypy in quick-checks,
+                # which had been swallowing these 4 errors via `|| echo` (#960).
+                block = result.content[0] if result.content else None
+                if not isinstance(block, TextContent):
+                    failures.append(
+                        "get_server_info returned "
+                        f"{type(block).__name__} content, expected TextContent"
+                    )
+                else:
+                    payload = json.loads(block.text)
+                    print(f"  call_tool    -- get_server_info -> {sorted(payload)}")
+                    for key in ("version", "authentication_enforced"):
+                        if key not in payload:
+                            failures.append(f"get_server_info has no {key!r} key")
 
     return failures
 

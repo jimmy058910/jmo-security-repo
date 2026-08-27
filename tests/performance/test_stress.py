@@ -255,25 +255,38 @@ class TestExtremeLoad:
         not hundreds, of MB. See MEMORY_BUDGET_MB comment above for the
         measured value at this size.
 
-        This test does not run in any GitHub Actions job today (#977): psutil
-        is in no `pyproject.toml` group and not in `uv.lock`, so `uv sync`
-        never installs it and the skip below fires on every runner, including
-        `scheduled.yml`'s "Run performance benchmarks" step, which runs
-        `pytest tests/performance/` -- and that step also pipes its result
-        through `|| echo "..."`, so it would not fail the job even if the
-        assertion below did trip. Whether to add psutil to the lock file (and
-        fix the swallowed exit code) is a maintainer call, not made here --
-        this fix is scoped to making the assertion correct, and the allocation
-        it gates survivable under real xdist contention, when the test does
-        run -- e.g. locally with psutil installed, as it did for this fix.
+        Until #977 this test ran in NO GitHub Actions job, for two independent
+        reasons, either of which alone was enough to make it inert:
+
+        1. It skipped on a missing `psutil`, which is in no `pyproject.toml`
+           group and not in `uv.lock`, so `uv sync` cannot install it. Both
+           fixed here by not needing psutil: the assertion is `tracemalloc`
+           (stdlib), and psutil now only decorates the log line.
+        2. `scheduled.yml`'s "Run performance benchmarks" step -- the only job
+           that runs `pytest tests/performance/` at all -- piped through
+           `|| echo "..."`, so a tripped assertion could not fail it either.
+           That swallow is removed in the same PR.
+
+        Adding psutil to the lock file was the other available answer and was
+        rejected: it would make the tests run while leaving the assertion
+        depending on a package it never reads. Removing the dependency is
+        strictly smaller and makes the gate live on every runner.
 
         Note: EPSS/KEV enrichment is patched out — same rationale as
         test_100k_findings_processing above.
         """
+        # psutil is NOT required to run this test, and it no longer skips for it
+        # (#977). The assertion below gates on `tracemalloc`, which is stdlib;
+        # psutil supplies only the informational rss_delta line. The old
+        # `pytest.skip` here meant the gate skipped on every CI runner -- psutil
+        # is in no pyproject.toml group and not in uv.lock, so `uv sync` cannot
+        # install it -- for want of a dependency the assertion never used. An
+        # inline skip inside a test body is also indistinguishable from a pass in
+        # a summary line, which is how this went unnoticed.
         try:
             import psutil
         except ImportError:
-            pytest.skip("psutil not installed - required for memory tests")
+            psutil = None
 
         import tracemalloc
 
@@ -302,29 +315,37 @@ class TestExtremeLoad:
         }
         (indiv / "semgrep.json").write_text(json.dumps(findings_data), encoding="utf-8")
 
-        process = psutil.Process()
-        rss_before = process.memory_info().rss
+        process = psutil.Process() if psutil is not None else None
+        rss_before = process.memory_info().rss if process is not None else 0
 
         tracemalloc.start()
         findings = gather_results(tmp_path)
         _current_bytes, peak_bytes = tracemalloc.get_traced_memory()
         tracemalloc.stop()
 
-        rss_after = process.memory_info().rss
         peak_mb = peak_bytes / (1024 * 1024)
-        rss_delta_mb = (rss_after - rss_before) / (1024 * 1024)
+        if process is not None:
+            rss_after = process.memory_info().rss
+            rss_note = f"{(rss_after - rss_before) / (1024 * 1024):.1f}MB"
+        else:
+            rss_note = "unavailable (psutil not installed)"
 
         # Logged unconditionally (not just on failure) so drift is visible
         # before the gate ever trips.
         print(
             f"[test_30k_findings_memory_usage] tracemalloc peak={peak_mb:.1f}MB "
-            f"budget={MEMORY_BUDGET_MB}MB rss_delta={rss_delta_mb:.1f}MB (informational)"
+            f"budget={MEMORY_BUDGET_MB}MB rss_delta={rss_note} (informational)"
         )
 
         assert peak_mb < MEMORY_BUDGET_MB, (
             f"Peak traced allocation {peak_mb:.1f}MB exceeded {MEMORY_BUDGET_MB}MB "
-            f"budget (rss_delta was {rss_delta_mb:.1f}MB)"
+            f"budget (rss_delta was {rss_note})"
         )
+        # Not decoration: without it a fixture that parses to nothing would sail
+        # under any memory budget. That is exactly how the 10k benchmark this
+        # test replaces stayed green -- it wrote CommonFinding-shaped objects into
+        # individual-repos/*.json, where adapters expect RAW tool output, so
+        # gather_results returned 0 findings (measured, #977).
         assert len(findings) > 0
 
 

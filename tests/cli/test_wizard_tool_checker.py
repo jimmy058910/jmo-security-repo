@@ -12,6 +12,47 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _never_install_for_real():
+    """Stop any test in this module from performing a REAL tool install.
+
+    `_auto_fix_tools` routes a remediation whose ``jmo_install`` contains
+    "jmo tools install" to ``ToolInstaller.install_tools_parallel``. Six tests
+    here built exactly such a remediation and patched only ``ToolManager`` --
+    a different class -- so a run shelled out to::
+
+        uv pip install --python .venv/Scripts/python.exe --quiet bandit==1.9.4
+
+    a real network install into the developer's venv, from a unit test.
+    Measured with a Popen-level recorder, because the repo's own scanner-spawn
+    recorder is deliberately scoped to semgrep (#907) and so could not see it:
+    "no guard fired" was not evidence of no spawn.
+
+    #976 reported this as one test spawning bandit. It is six tests, and they
+    install rather than spawn -- which is worse, since it mutates the
+    environment the rest of the suite then runs in, and on a clean runner adds
+    a package `uv.lock` does not carry.
+
+    Scoped to the module rather than patched at six call sites on purpose: a
+    per-site fix leaves the seventh test to rediscover this. As a fixture the
+    property is true by construction -- nothing in this file installs anything.
+    Tests that genuinely assert on installer behaviour still patch it
+    themselves; their patch simply shadows this one for the test body, then
+    unwinds back to it.
+
+    `progress.results` must be a real empty list: the caller iterates it, and a
+    bare MagicMock attribute is not iterable.
+    """
+    with patch("scripts.cli.tool_installer.ToolInstaller") as installer_cls:
+        progress = MagicMock()
+        progress.results = []
+        installer_cls.return_value.install_tools_parallel.return_value = progress
+        yield installer_cls
+
+
 # ============================================================================
 # Mock classes for testing
 # ============================================================================

@@ -90,6 +90,73 @@ def image_exists(image: str) -> bool:
         return False
 
 
+def _has_registry_host(repo: str) -> bool:
+    """True if ``repo`` names a registry we can ask for a manifest.
+
+    Docker's own rule: the first path component is a host only if it contains a
+    "." or a ":", or is exactly "localhost". So `ghcr.io/owner/name` qualifies
+    and a local build tag like `jmo-security-dev` does not.
+    """
+    if "/" not in repo:
+        return False
+    head = repo.split("/", 1)[0]
+    return "." in head or ":" in head or head == "localhost"
+
+
+def registry_compressed_mb(image: str) -> float | None:
+    """Compressed size in MiB the REGISTRY reports for ``image`` on linux/amd64.
+
+    Returns None when ``image`` has no registry host to ask (a local build), so
+    the caller can say so rather than silently reporting a wrong number. Every
+    other failure mode is a real defect and fails loudly — the same principle
+    `ensure_image` above applies to pulls (#941): outcomes must stay
+    distinguishable, because one blanket skip hides bugs and absent
+    prerequisites behind the same signal.
+    """
+    repo = image.rsplit(":", 1)[0]
+    if not _has_registry_host(repo):
+        return None
+
+    result = _docker("manifest", "inspect", image, timeout=60)
+    if result.returncode != 0:
+        pytest.fail(
+            f"docker manifest inspect {image} failed (rc={result.returncode}): "
+            f"{result.stderr.strip()[:400]}"
+        )
+    doc = json.loads(result.stdout)
+
+    layers = doc.get("layers")
+    if layers is None:
+        # A manifest LIST (multi-arch). Resolve the linux/amd64 child by digest,
+        # then sum that child's layers. Summing the list itself would add the
+        # per-arch manifest sizes — a few KB — and quietly report ~0 MiB.
+        amd64 = [
+            m["digest"]
+            for m in doc.get("manifests", [])
+            if m.get("platform", {}).get("architecture") == "amd64"
+            and m.get("platform", {}).get("os") == "linux"
+        ]
+        if not amd64:
+            pytest.fail(f"{image}: manifest list has no linux/amd64 entry")
+        child = _docker("manifest", "inspect", f"{repo}@{amd64[0]}", timeout=60)
+        if child.returncode != 0:
+            pytest.fail(
+                f"docker manifest inspect {repo}@{amd64[0]} failed "
+                f"(rc={child.returncode}): {child.stderr.strip()[:400]}"
+            )
+        layers = json.loads(child.stdout).get("layers", [])
+
+    total = sum(int(layer["size"]) for layer in layers)
+    if total <= 0:
+        # Without this, an empty or unexpected manifest shape yields 0 and the
+        # range assertion below would be judging a number nothing produced.
+        pytest.fail(
+            f"{image}: manifest reported {len(layers)} layer(s) totalling "
+            f"{total} bytes, which cannot be right"
+        )
+    return total / (1024 * 1024)
+
+
 def ensure_image(image: str) -> None:
     """Make ``image`` available locally, or end the test with a stated reason.
 
@@ -856,20 +923,41 @@ class TestDockerOutputFormats:
 
 
 # Image size ranges in MB (min, max) — allow generous tolerance for registry builds
-# Image size ranges match `docker image inspect --format={{.Size}}` output —
-# the UNCOMPRESSED total layer size on disk, not the compressed pull size.
-# (Compressed pull is typically 30-40% of uncompressed.)
-# Updated for v1.0.3 image content (run 24949522217 measured deep=6187MB,
-# balanced=5091MB). Buffer: ±20% to absorb tool-version drift between
-# releases without flaking tests.
+# Compressed download size in MiB, summed from the REGISTRY manifest.
+# Deliberately NOT `docker image inspect --format={{.Size}}` — see #961.
+#
+# `.Size` reports whatever the daemon's image store decides it means. Under the
+# containerd snapshotter it is compressed content; under the classic graph
+# driver it was unpacked layers. Same image, two answers 4.4x apart:
+#
+#     docker images         SIZE: 9.56GB      (unpacked snapshot)
+#     docker image inspect .Size: 2057 MiB    (compressed content)
+#
+# These ranges were calibrated against graph-driver semantics, and the storage
+# backend changed underneath them. The result was a test that failed against the
+# images users pull TODAY: published :fast measured 511 MiB against a 1000 MiB
+# floor. That is not a dev-vs-released difference — the published v1.0.8 image
+# and a local build of `dev` measured within 1.4% of each other.
+#
+# Which unit `.Size` means is therefore not a property of this test, and no
+# amount of recalibrating it fixes that. A manifest sum cannot drift the same
+# way: it is a property of the artifact in the registry, not of whichever daemon
+# happens to run the test. It is also the number users actually experience.
+#
+# Measured 2026-08-25 against published v1.0.8, linux/amd64:
+#     fast 511    slim 806    balanced 1796    deep 2033   MiB
+# Cross-checked: the manifest sum for :fast equals what `docker image inspect`
+# reports under containerd on the same image, confirming the two agree once the
+# store's unit is known — the manifest just does not depend on knowing it.
+#
+# Bands are +/-20%, the buffer this file has always used, now applied to
+# MEASURED values rather than extrapolated ones. Widen only after re-measuring;
+# a band that no longer contains reality is how this test spent months red.
 IMAGE_SIZE_RANGES = {
-    "deep": (
-        5000,
-        8500,
-    ),  # Deep: ~6-7 GB uncompressed (29 tools incl. JREs, scancode, opa)
-    "balanced": (4000, 7000),  # Balanced: ~5 GB uncompressed (17 tools)
-    "slim": (1500, 3500),  # Slim: ~2-3 GB uncompressed (13 tools, cloud-focused)
-    "fast": (1000, 3000),  # Fast: ~1.5-2.5 GB uncompressed (9 tools)
+    "deep": (1620, 2440),  # measured 2033 MiB (24 baked tools; 4 manual-install)
+    "balanced": (1430, 2160),  # measured 1796 MiB (17 tools)
+    "slim": (640, 970),  # measured 806 MiB (13 tools, cloud-focused)
+    "fast": (400, 620),  # measured 511 MiB (9 tools)
 }
 
 # Tools that are deep-profile-only (should NOT appear in lighter variants).
@@ -941,27 +1029,32 @@ class TestDockerImageSize:
         ],
     )
     def test_image_size_within_range(self, variant: str, size_range: tuple):
-        """Image sizes should be within expected ranges (no runaway bloat)."""
+        """Compressed download size stays inside its measured band.
+
+        Reads the registry manifest rather than `docker image inspect`, because
+        the latter's unit is decided by the daemon's image store and changed
+        underneath this test once already (#961). No `ensure_image` here: a
+        manifest query needs no local copy, so this does not pull ~2 GB just to
+        read a number.
+        """
         image = f"{DOCKER_REGISTRY}:{variant}"
 
-        ensure_image(image)
+        size_mb = registry_compressed_mb(image)
+        if size_mb is None:
+            pytest.skip(
+                f"{DOCKER_REGISTRY!r} is not registry-qualified, so it has no "
+                "manifest to measure. This check is about the artifact users "
+                "download; point JMO_DOCKER_REGISTRY at a registry-qualified "
+                "name (the default is the published GHCR repo) to run it."
+            )
 
-        result = subprocess.run(
-            ["docker", "image", "inspect", image, "--format={{.Size}}"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-
-        assert result.returncode == 0, f"Failed to inspect {image}"
-
-        size_bytes = int(result.stdout.strip())
-        size_mb = size_bytes / (1024 * 1024)
         min_mb, max_mb = size_range
-
         assert min_mb <= size_mb <= max_mb, (
-            f"{image} size {size_mb:.0f} MB out of expected range [{min_mb}, {max_mb}] MB. "
-            f"This may indicate bloated dependencies or missing tools."
+            f"{image} compressed size {size_mb:.0f} MiB is outside the measured "
+            f"band [{min_mb}, {max_mb}] MiB. Either the image really changed "
+            f"(bloat, or tools dropped), or the band needs re-measuring against "
+            f"the current release -- see the IMAGE_SIZE_RANGES comment before "
+            f"widening it."
         )
 
 

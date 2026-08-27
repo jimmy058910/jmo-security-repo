@@ -26,7 +26,7 @@ log "OS: $OS | WSL: $WSL"
 
 REQ_TOOLS=(python3 pip3 jq curl git)
 # Curated tools by category
-OPT_TOOLS=(gitleaks noseyparker semgrep syft trivy checkov hadolint tfsec trufflehog shellcheck shfmt docker)
+OPT_TOOLS=(noseyparker semgrep syft trivy checkov hadolint trufflehog shellcheck shfmt docker)
 
 missing=()
 for t in "${REQ_TOOLS[@]}"; do
@@ -58,7 +58,7 @@ hint_install() {
   case "$OS" in
   Darwin)
     case "$tool" in
-    gitleaks | semgrep | hadolint | checkov | trivy | syft | tfsec) echo "brew install $tool" ;;
+    semgrep | hadolint | checkov | trivy | syft) echo "brew install $tool" ;;
     trufflehog) echo "brew install trufflesecurity/trufflehog/trufflehog" ;;
     noseyparker) echo "brew install noseyparker (or see upstream)" ;;
     *) echo "brew install $tool" ;;
@@ -67,14 +67,12 @@ hint_install() {
   Linux)
     case "$tool" in
     semgrep) echo "pipx install semgrep || pip3 install --user semgrep" ;;
-    gitleaks) echo "curl -sSL https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks-linux-amd64 -o /usr/local/bin/gitleaks && chmod +x /usr/local/bin/gitleaks" ;;
     trufflehog) echo "pipx install trufflehog || pip3 install --user truffleHog" ;;
     noseyparker) echo "Prefer container: docker run ghcr.io/praetorian-inc/noseyparker:latest ... (local binary may require newer glibc)" ;;
     syft) echo "curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin" ;;
     trivy) echo "curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/install.sh | sh -s -- -b /usr/local/bin" ;;
     checkov) echo "pipx install checkov || pip3 install --user checkov" ;;
     hadolint) echo "curl -sSL https://github.com/hadolint/hadolint/releases/latest/download/hadolint-$(uname -s)-$(uname -m) -o /usr/local/bin/hadolint && chmod +x /usr/local/bin/hadolint" ;;
-    tfsec) echo "curl -sSL https://github.com/aquasecurity/tfsec/releases/latest/download/tfsec-linux-amd64 -o /usr/local/bin/tfsec && chmod +x /usr/local/bin/tfsec" ;;
     *) echo "sudo apt-get install -y $tool" ;;
     esac
     ;;

@@ -518,8 +518,9 @@ class ScanOrchestrator:
                         )
 
         # OpenAPI/Swagger spec. This is advertised in `jmo scan --help` but was
-        # handled only by jmo.py's _iter_urls, which nothing has called since
-        # discovery moved here - so the flag was silently accepted and dropped.
+        # handled only by jmo.py's _iter_urls, which nothing had called since
+        # discovery moved here - so the flag was silently accepted and dropped
+        # (#807). That dead helper has since been deleted (#808).
         if getattr(args, "api_spec", None):
             spec = args.api_spec
             if spec.startswith(("http://", "https://")):

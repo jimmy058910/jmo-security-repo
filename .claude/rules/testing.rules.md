@@ -16,12 +16,18 @@ references:
 
 ## Test Coverage & CI Requirements
 
-**The only enforced coverage floor is 80%**, in `.github/workflows/ci.yml:734`:
+**The only enforced coverage floor is 85%**, in `coverage-aggregate`'s "Verify coverage threshold" step:
 
 ```python
-if coverage_pct < 80:
+if coverage_pct < 85:
     sys.exit(1)
 ```
+
+Raised 80 -> 85 under #756 after measuring **86.87%** (19704/22681 lines) on a
+real `main` run. That leaves ~1.9 points of headroom against a measured
+run-to-run variance of +/-0.1. **Cite the job and step, never a line number** --
+it has been 734, 788 and 816, and two of those were stale the day they were
+written.
 
 `--cov-fail-under` is set **nowhere** — not in `make test` (`Makefile:132` runs
 `pytest --cov --cov-report=term-missing`, no threshold), not in
@@ -229,10 +235,32 @@ comparing like with like.
 
 Two consequences worth carrying:
 
-- **`psutil` is deliberate; `yara-python` is collateral.** The benchmark job
-  installs psutil itself and says so in a comment, so those 2 skips are correct
-  behaviour and must not be "fixed". The 7 yara skips are the real cost: a
-  security tool's Python module gets removed from the venv by a dependency sync.
+- **~~`psutil` is deliberate~~ — CORRECTED 2026-08-25 (#977). It was a defect,
+  and this bullet said not to fix it.** The reasoning above ("the benchmark job
+  installs psutil itself, so those 2 skips are correct behaviour and must not be
+  'fixed'") was measured wrong by the bullet three below this one, written five
+  days later: the job that installs psutil runs `test_benchmarks.py` only, while
+  `test_stress.py` is collected by a *different* step that installs nothing and
+  swallows its exit code. So the skips were not correct behaviour anywhere.
+
+  The fix was smaller than adding psutil to the lock file. `test_stress.py`'s
+  assertion had already moved to `tracemalloc` (stdlib) when #792 was fixed — it
+  used psutil only for an informational RSS line, so it was skipping for a
+  dependency it no longer needed. It now runs everywhere with psutil optional.
+  `test_benchmarks.py`'s memory benchmark was **deleted**: it never called any
+  processing function between its baseline and peak reads, and its fixture wrote
+  CommonFinding-shaped objects into `individual-repos/*.json` where adapters
+  expect raw tool output, so `gather_results` returned **0 findings** (measured).
+  It asserted a 500MB budget on work that did not happen.
+
+  Measured before/after with psutil blocked: **13 passed / 2 skipped** →
+  **14 passed / 0 skipped**.
+
+  **The transferable part: a bullet saying "this is correct, do not fix it" ages
+  worse than one recording a measurement.** Prefer stating what was measured and
+  when; let the reader draw the conclusion.
+- **`yara-python` is collateral.** The 7 yara skips are a real cost: a security
+  tool's Python module gets removed from the venv by a dependency sync.
   Reinstall with `jmo tools install yara` when those tests matter.
 - **#792 does not "fail to reproduce" in a synced environment — it *skips*.**
   `test_30k_findings_memory_usage` (named `test_100k_findings_memory_usage`
@@ -322,6 +350,39 @@ notably, did **not** crash its worker in the same `-n auto` run — only the
 100k-scale test did, even though the original #767 report listed two
 crashers; a smaller-scale sibling test doing similar work is evidence the
 crash is about scale, not about the operation itself).
+
+## The real-state guards name a test, not a culprit
+
+`_guard_real_jmo_config` and the history-db guard work by snapshotting real
+state once, then comparing after each test. That makes them cheap and it makes
+them **blame whichever test was running when they noticed a change** — not
+necessarily the one that caused it. With two pytest processes running against
+the same machine, the attribution can be simply wrong.
+
+Measured 2026-08-25. A full `tests/e2e/test_docker_workflows.py` run under WSL
+reported:
+
+```text
+ERROR at teardown of TestDockerVariants::test_docker_variant_scan[deep]
+  wrote to the real history database .jmo/history.db: scans 2470 -> 2471
+```
+
+It had not. A **concurrent** `tests/integration/test_cli_profiles.py` run on the
+Windows side wrote that row; the WSL process had taken its baseline before that
+write and attributed the difference to the test it happened to be executing.
+
+Two things settled it, and neither was reading the message again:
+
+- **Arithmetic.** Both runs reported `2470 -> 2471`. If both had written, the
+  count would be 2472. It was 2471 — one write, two accusations.
+- **Isolation.** Re-running `test_docker_variant_scan` alone, for `fast` and
+  again for `deep`, left the count at 2471 and printed no guard error.
+
+So: **before fixing a test a real-state guard names, re-run that test alone and
+watch the count.** A guard firing is evidence that *something* wrote, which is
+exactly what it is for — it is not evidence that *this* test wrote. And do not
+run two suites against this repo at once when either can touch `~/.jmo/` or
+`.jmo/`; the guards cannot tell the processes apart.
 
 ## Counting tests: compare like with like
 

@@ -188,7 +188,7 @@ CI Failure
     |   +-- Other test failures -> Check test code
     |
     +-- coverage-aggregate (after the shards)
-    |   +-- "is below 80% CI threshold" -> #9 Test Coverage
+    |   +-- "is below 85% CI threshold" -> #9 Test Coverage
     |       (the gate lives here, NOT in test-matrix -- the shards carry no
     |        coverage threshold of their own)
     |

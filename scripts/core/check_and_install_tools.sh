@@ -200,10 +200,6 @@ TOOLS["semgrep"]="Semgrep (SAST Scanner)"
 CHECK_CMDS["semgrep"]="semgrep --version"
 INSTALL_CMDS_PIPX["semgrep"]="pipx install semgrep"
 
-TOOLS["gitleaks"]="Gitleaks (Secret Scanner)"
-CHECK_CMDS["gitleaks"]="gitleaks version"
-INSTALL_CMDS_MANUAL["gitleaks"]="wget https://github.com/zricethezav/gitleaks/releases/latest/download/gitleaks-linux-amd64 -O /tmp/gitleaks && chmod +x /tmp/gitleaks && sudo mv /tmp/gitleaks /usr/local/bin/"
-
 TOOLS["trufflehog"]="TruffleHog (Secret Scanner)"
 CHECK_CMDS["trufflehog"]="trufflehog --version"
 INSTALL_CMDS_MANUAL["trufflehog"]="curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b ~/.local/bin"
@@ -216,7 +212,7 @@ INSTALL_CMDS_MANUAL["noseyparker"]="echo 'Download from: https://github.com/prae
 echo -e "${BLUE}Checking tool installation status...${NC}"
 echo "=================================================="
 
-for tool in bash git jq cloc python3 pipx semgrep gitleaks trufflehog noseyparker; do
+for tool in bash git jq cloc python3 pipx semgrep trufflehog noseyparker; do
   tool_name="${TOOLS[$tool]}"
   check_cmd="${CHECK_CMDS[$tool]}"
 
@@ -381,7 +377,7 @@ if [ "$MODE" = "auto-install" ]; then
 
   # Re-check all tools
   final_check=true
-  for tool in bash git jq cloc python3 pipx semgrep gitleaks trufflehog noseyparker; do
+  for tool in bash git jq cloc python3 pipx semgrep trufflehog noseyparker; do
     tool_name="${TOOLS[$tool]}"
     check_cmd="${CHECK_CMDS[$tool]}"
 

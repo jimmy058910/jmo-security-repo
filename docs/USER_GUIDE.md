@@ -2860,7 +2860,7 @@ Common failure modes in `.github/workflows/tests.yml` and how to fix them:
   - Fix locally: `make pre-commit-run` or run individual hooks. Config lives in `.pre-commit-config.yaml`; YAML rules in `.yamllint.yaml`; ruff/black use defaults in this repo. Docs: <https://pre-commit.com/>
 
 - Test coverage threshold not met
-  - Symptom: Tests pass, but the coverage job fails with `Coverage N% is below 80% CI threshold` (`.github/workflows/ci.yml:734` — the only enforced floor).
+  - Symptom: Tests pass, but the coverage job fails with `Coverage N% is below 85% CI threshold` (`coverage-aggregate`'s "Verify coverage threshold" step — the only enforced floor).
   - Fix locally: run `pytest -q --maxfail=1 --disable-warnings --cov=. --cov-report=term-missing` to identify gaps, then add tests. High‑leverage areas include adapters' malformed/empty JSON handling and reporters' edge cases. Pytest‑cov docs: <https://pytest-cov.readthedocs.io/>
 
 - Codecov upload warnings (tokenless OIDC)

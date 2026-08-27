@@ -35,10 +35,6 @@ check_tool "cloc" \
   "cloc --version" \
   "apt install cloc OR brew install cloc" || ALL_INSTALLED=false
 
-check_tool "Gitleaks" \
-  "gitleaks version" \
-  "Download from https://github.com/zricethezav/gitleaks/releases" || ALL_INSTALLED=false
-
 check_tool "TruffleHog" \
   "trufflehog --version" \
   "curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b ~/.local/bin" || ALL_INSTALLED=false

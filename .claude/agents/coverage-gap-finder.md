@@ -31,9 +31,10 @@ You have access to all testing analysis tools:
 
 ### Coverage Requirements
 
-- **CI Enforcement:** **80%**, and only there — `.github/workflows/ci.yml:734`
-  (`if coverage_pct < 80: sys.exit(1)`). `--cov-fail-under` is set nowhere in
-  this repository (#756), so treat any higher figure as an aspiration, not a gate
+- **CI Enforcement:** **85%**, and only there — `coverage-aggregate`'s "Verify coverage threshold" step
+  (`if coverage_pct < 85: sys.exit(1)`). `--cov-fail-under` is set nowhere in
+  this repository (#756), so there is no *local* gate. Raised from 80% after
+  measuring 86.87%, leaving ~1.9 points of headroom against +/-0.1 variance
 - **Command:** `pytest tests/ --cov=scripts --cov-report=term-missing`
 - **Current Status:** 8,000+ tests. **Measure current coverage before quoting
   it** — a percentage copied from a doc is how the 85% claim survived unchecked
@@ -739,8 +740,8 @@ def test_specific_edge_case(tmp_path: Path):
 
 5. **"Will this code pass CI?"**
    - Run coverage check
-   - Compare to CI's **80%** floor (`ci.yml:734`) — that is the only number that
-     can fail the build. Report 85% separately, as a target rather than a gate
+   - Compare to CI's **85%** floor (`coverage-aggregate`'s "Verify coverage threshold" step) — that is
+     the only number that can fail the build
    - Report pass/fail
    - List gaps if failing
 

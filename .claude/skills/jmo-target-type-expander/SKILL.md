@@ -349,6 +349,6 @@ When adding a new target type, verify all items:
 ### Quality Assurance
 
 - [ ] Pre-commit hooks pass (`make fmt && make lint`)
-- [ ] Full test suite passes (`make test`; CI's enforced coverage floor is 80%,
-      in `.github/workflows/ci.yml:734` -- nothing sets `--cov-fail-under=85`)
+- [ ] Full test suite passes (`make test`; CI's enforced coverage floor is 85%,
+      in `coverage-aggregate`'s "Verify coverage threshold" step -- nothing sets `--cov-fail-under=85`)
 - [ ] CI pipeline passes

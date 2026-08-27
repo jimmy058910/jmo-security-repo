@@ -23,9 +23,11 @@ for the OAuth redirect — so on a headless server, over SSH, or inside a contai
 it fails with sigstore's own error about being unable to complete the flow.
 
 > This paragraph used to promise "a `RuntimeError` naming the missing browser".
-> That exception lives in `SigstoreSigner._get_local_oidc_token`, which
-> **nothing calls** — `sign()` shells out to `sigstore sign` and lets sigstore
-> run its own OIDC. The documented failure mode belonged to unreachable code.
+> That exception lived in `SigstoreSigner._get_local_oidc_token`, which
+> **nothing called** — `sign()` shells out to `sigstore sign` and lets sigstore
+> run its own OIDC. The documented failure mode belonged to unreachable code,
+> and that code has since been deleted (#944). The error you see is sigstore's
+> own.
 
 **What to do:** sign in CI, where the token is ambient. If you must sign on a
 headless machine, run the command somewhere with a browser and transfer the

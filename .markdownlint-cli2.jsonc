@@ -20,10 +20,26 @@
     "MD051": false,
     "MD060": false
   },
+  // Respect .gitignore, so this config sees exactly what a CI checkout has.
+  //
+  // Added with #960, when markdownlint stopped being swallowed by `|| echo` in
+  // ci.yml's quick-checks. Measured at the time: the CI command reported 3692
+  // errors on a developer box and 0 in CI, because every one of them was under
+  // a gitignored path CI never clones -- graphify-out/ (2867), dev-only/ (707),
+  // .claude/ HANDOFFs (71), .serena/ (30), metrics/ (10), results/ (6) -- plus
+  // scripts/dashboard/node_modules, which the "ignores" glob below does not
+  // catch because "node_modules/**" matches only a TOP-LEVEL directory.
+  //
+  // Enumerating those paths here would be a second mirror of .gitignore that
+  // drifts. Reusing .gitignore is the same source of truth CI's checkout uses,
+  // so local and CI cannot disagree. Verified: 180 files linted vs 179 tracked
+  // .md, and .claude/rules/*.md are still linted (they are tracked, so the
+  // ".claude/*" line in .gitignore does not reach them).
+  "gitignore": true,
   "ignores": [
     "results-*/**",
     ".playwright-mcp/**",
-    "node_modules/**",
+    "**/node_modules/**",
     "paperclip/**"
   ]
 }
