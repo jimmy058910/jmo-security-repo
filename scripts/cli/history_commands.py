@@ -21,6 +21,9 @@ import sys
 import time
 from pathlib import Path
 
+from rich.console import Console
+from rich.table import Table
+
 from scripts.core.history_db import (
     DEFAULT_DB_PATH,
     compute_diff,
@@ -41,6 +44,27 @@ from scripts.core.history_migrations import get_current_version, run_migrations
 from scripts.core.unicode_utils import safe_write
 
 logger = logging.getLogger(__name__)
+
+# Width used when stdout is not a terminal (a pipe, a file, a CI log, pytest's
+# capture). Rich falls back to 80 columns there, which is narrower than this
+# table's eight columns need -- values would wrap mid-token and the aligned
+# output would be worse than the unaligned line it replaced. A terminal keeps
+# its real width.
+_NON_TTY_TABLE_WIDTH = 120
+
+
+def _table_console() -> Console:
+    """A Console for table output on stdout.
+
+    stdout, not stderr: this *is* the command's output, unlike
+    `diff_commands.py`'s summary panel, which is commentary alongside a
+    machine-readable payload and therefore goes to stderr. The `--json` and
+    `--csv` branches never construct a Console at all, so nothing can land in
+    the middle of a parseable payload.
+    """
+    if sys.stdout.isatty():
+        return Console()
+    return Console(width=_NON_TTY_TABLE_WIDTH)
 
 
 def parse_time_delta(delta_str: str) -> int:
@@ -205,63 +229,49 @@ def cmd_history_list(args) -> int:
         if getattr(args, "json", False):
             sys.stdout.write(json.dumps(scans, indent=2) + "\n")
         else:
-            # Table output
-            try:
-                from tabulate import tabulate
+            # Table output. One rendering path, via `rich`.
+            #
+            # There used to be two, and the `tabulate` one was unreachable for
+            # every user and every developer: `tabulate` is not a runtime
+            # dependency -- only `types-tabulate`, a *type stub*, and only in
+            # the dev group -- so the import always raised and the ImportError
+            # fallback was the live path on every normal install (#1011).
+            #
+            # That is worse than a cosmetic loss. The dead branch was the only
+            # place rendering Duration, so populating `scans.duration_seconds`
+            # (#981) still showed a user nothing, and no test could have caught
+            # it: nothing can exercise a branch whose import always fails.
+            #
+            # `rich` rather than adding `tabulate` to the runtime dependencies:
+            # it is already a runtime dependency and already renders tables in
+            # this CLI (`diff_commands.py`).
+            table = Table(show_header=True, header_style="bold magenta")
+            table.add_column("Scan ID", style="cyan", no_wrap=True)
+            table.add_column("Timestamp", no_wrap=True)
+            table.add_column("Branch")
+            table.add_column("Profile", no_wrap=True)
+            table.add_column("Findings", justify="right", no_wrap=True)
+            table.add_column("Critical", justify="right", style="red", no_wrap=True)
+            table.add_column("High", justify="right", style="yellow", no_wrap=True)
+            table.add_column("Duration (s)", justify="right", no_wrap=True)
 
-                headers = [
-                    "Scan ID",
-                    "Timestamp",
-                    "Branch",
-                    "Profile",
-                    "Findings",
-                    "Critical",
-                    "High",
-                    "Duration (s)",
-                ]
-                table_data = []
-                for scan in scans:
-                    table_data.append(
-                        [
-                            scan["id"][:8] + "...",
-                            scan["timestamp_iso"][:19].replace("T", " "),
-                            scan["branch"] or "N/A",
-                            scan["profile"],
-                            scan["total_findings"],
-                            scan["critical_count"],
-                            scan["high_count"],
-                            (
-                                f"{scan['duration_seconds']:.1f}"
-                                if scan["duration_seconds"]
-                                else "N/A"
-                            ),
-                        ]
-                    )
-
-                sys.stdout.write(
-                    tabulate(table_data, headers=headers, tablefmt="grid") + "\n"
-                )
-
-            except ImportError:
-                # Fallback to simple format if tabulate not available.
-                #
-                # This is not the rare branch it looks like: `tabulate` is not a
-                # runtime dependency -- only `types-tabulate`, a stub, and only
-                # in the dev group -- so a normal install reaches *this* code
-                # every time and the table above never runs. Duration was
-                # missing from this line entirely, which meant populating the
-                # column would still have shown a user nothing (#981).
-                for scan in scans:
-                    duration = (
-                        f"{scan['duration_seconds']:.1f}s"
+            for scan in scans:
+                table.add_row(
+                    scan["id"][:8] + "...",
+                    scan["timestamp_iso"][:19].replace("T", " "),
+                    scan["branch"] or "N/A",
+                    scan["profile"],
+                    str(scan["total_findings"]),
+                    str(scan["critical_count"]),
+                    str(scan["high_count"]),
+                    (
+                        f"{scan['duration_seconds']:.1f}"
                         if scan["duration_seconds"]
                         else "N/A"
-                    )
-                    sys.stdout.write(
-                        f"{scan['id'][:8]}... {scan['timestamp_iso'][:19]} {scan['branch'] or 'N/A':15} "
-                        f"{scan['profile']:8} {scan['total_findings']:3} findings ({scan['critical_count']} CRITICAL, {scan['high_count']} HIGH) "
-                        f"in {duration}\n"
-                    )
+                    ),
+                )
+
+            _table_console().print(table)
 
         return 0
 
@@ -413,18 +423,14 @@ def cmd_history_query(args) -> int:
             writer.writerow([desc[0] for desc in cursor.description])
             writer.writerows(rows)
         else:
-            # Table format
-            try:
-                from tabulate import tabulate
-
-                headers = [desc[0] for desc in cursor.description]
-                sys.stdout.write(
-                    tabulate(rows, headers=headers, tablefmt="grid") + "\n"
-                )
-            except ImportError:
-                # Fallback to simple format
-                for row in rows:
-                    sys.stdout.write(" | ".join(str(v) for v in row) + "\n")
+            # Table format. Same single-path rendering as `history list` --
+            # this was the second of the two unreachable tabulate sites (#1011).
+            table = Table(show_header=True, header_style="bold magenta")
+            for desc in cursor.description:
+                table.add_column(str(desc[0]))
+            for row in rows:
+                table.add_row(*("" if v is None else str(v) for v in row))
+            _table_console().print(table)
 
         conn.close()
         return 0
