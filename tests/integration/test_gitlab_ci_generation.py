@@ -99,8 +99,11 @@ def test_end_to_end_gitlab_ci_generation(tmp_path):
     scan_cmd = " ".join(script)
     assert "--profile deep" in scan_cmd
     assert "--repos-dir ." in scan_cmd
-    assert "--include-pattern 'src/**'" in scan_cmd
-    assert "--exclude-pattern 'node_modules/**'" in scan_cmd
+    # Not emitted, deliberately: `jmo scan` defines no --include-pattern /
+    # --exclude-pattern, so emitting them produced a command that exits 2
+    # (#928). The feature lives in jmo.yml's `include:` / `exclude:` instead.
+    assert "--include-pattern" not in scan_cmd
+    assert "--exclude-pattern" not in scan_cmd
     # shlex.quote leaves a value that needs no quoting alone, so these are bare.
     # The hand-rolled f"--image '{image}'" this replaced could not survive a
     # value containing a single quote; the quoting-is-applied-when-needed arm is
@@ -210,8 +213,20 @@ def test_gitlab_ci_with_all_target_types(tmp_path):
                         "https://api.example.com",
                         "https://app.example.com",
                         "https://admin.example.com",
-                    ]
+                    ],
+                    "api_spec": "./openapi.yaml",
                 },
+                # This test is named for "all target types" and carried three
+                # of six, so it could not fail for the thing its name promises
+                # -- which is exactly #928: GitLab dropped iac, gitlab and
+                # kubernetes (and web.api_spec) with valid YAML and rc 0.
+                "iac": {
+                    "terraform_state": "./infra.tfstate",
+                    "cloudformation": "./stack.yaml",
+                    "k8s_manifest": "./deploy.yaml",
+                },
+                "gitlab": {"repo": "group/project", "group": "platform"},
+                "kubernetes": {"context": "prod", "namespace": "payments"},
             },
             results={"base_dir": "./results", "retention_days": 60},
             options={"threads": 8, "timeout": 600, "allow_missing_tools": True},
@@ -230,11 +245,11 @@ def test_gitlab_ci_with_all_target_types(tmp_path):
     # Verify all target types are in the scan command
     script = " ".join(workflow["security-scan"]["script"])
 
-    # Repository targets
+    # Repository targets. include/exclude are deliberately absent: `jmo scan`
+    # defines no flag for them (#928) -- they belong in jmo.yml.
     assert "--repos-dir ./repos" in script
-    assert "--include-pattern 'app-*'" in script
-    assert "--include-pattern 'service-*'" in script
-    assert "--exclude-pattern '*-deprecated'" in script
+    assert "--include-pattern" not in script
+    assert "--exclude-pattern" not in script
 
     # Image targets (bare: shlex.quote leaves these alone)
     assert "--image nginx:latest" in script
@@ -245,6 +260,20 @@ def test_gitlab_ci_with_all_target_types(tmp_path):
     assert "--url https://api.example.com" in script
     assert "--url https://app.example.com" in script
     assert "--url https://admin.example.com" in script
+    assert "--api-spec ./openapi.yaml" in script
+
+    # IaC targets
+    assert "--terraform-state ./infra.tfstate" in script
+    assert "--cloudformation ./stack.yaml" in script
+    assert "--k8s-manifest ./deploy.yaml" in script
+
+    # GitLab targets
+    assert "--gitlab-repo group/project" in script
+    assert "--gitlab-group platform" in script
+
+    # Kubernetes targets
+    assert "--k8s-context prod" in script
+    assert "--k8s-namespace payments" in script
 
     # Options
     assert "--threads 8" in script

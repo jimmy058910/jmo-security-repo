@@ -569,21 +569,25 @@ class TestTheToolNotJustTheFunctionUnderneath:
         result = query_findings_db(query=query)
         assert result["row_count"] >= 1
 
-    def test_bind_parameters_reach_the_database(self, mcp_db):
-        """The documented workaround for the textual keyword scan.
+    def test_both_the_inline_and_the_bound_form_reach_the_database(self, mcp_db):
+        """A forbidden word inside a string literal is data, not SQL.
 
-        `... WHERE message LIKE '%DROP%'` is refused because the *text*
-        contains DROP; the same search as a bind parameter runs. Measured on a
-        real 1833-scan database, that is the difference between an error and
-        410 matching findings -- a security tool's own findings table is full
-        of the words its keyword scan forbids.
+        This used to assert the opposite for the inline form -- it pinned the
+        *workaround* for the textual keyword scan, because `... WHERE message
+        LIKE '%DROP%'` was refused for the text it searched for. On a real
+        1833-scan database that was the difference between an error and 410
+        matching findings, and a security tool's own findings table is full of
+        the words its keyword scan forbids (#953).
+
+        Both forms now run. Bind parameters remain the better habit, and the
+        second half of this test keeps them covered.
         """
         from scripts.jmo_mcp.jmo_server import query_findings_db
 
-        with pytest.raises(ValueError, match="Forbidden keyword"):
-            query_findings_db(
-                query="SELECT COUNT(*) FROM findings WHERE message LIKE '%DROP%'"
-            )
+        inline = query_findings_db(
+            query="SELECT COUNT(*) FROM findings WHERE message LIKE '%DROP%'"
+        )
+        assert inline["row_count"] == 1
 
         result = query_findings_db(
             query="SELECT COUNT(*) FROM findings WHERE message LIKE ?",
@@ -591,6 +595,7 @@ class TestTheToolNotJustTheFunctionUnderneath:
         )
         assert result["row_count"] == 1
         assert result["rows"][0][0] > 0
+        assert result["rows"][0][0] == inline["rows"][0][0]
 
     def test_results_are_capped_and_the_cap_is_reported(self, mcp_db):
         from scripts.jmo_mcp.jmo_server import query_findings_db

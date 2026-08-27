@@ -312,7 +312,7 @@ class TestCIModeIntegration:
         )
 
         # Should generate valid attestation
-        assert statement["_type"] == "https://in-toto.io/Statement/v0.1"
+        assert statement["_type"] == "https://in-toto.io/Statement/v1"
         assert "predicate" in statement
 
     def test_ci_mode_skips_attestation_without_flag(self, tmp_path):
@@ -418,7 +418,7 @@ class TestCIModeIntegration:
         # Should be valid JSON
         with open(attestation_path_str, encoding="utf-8") as f:
             data = json.load(f)
-            assert data["_type"] == "https://in-toto.io/Statement/v0.1"
+            assert data["_type"] == "https://in-toto.io/Statement/v1"
 
     def test_ci_mode_includes_scan_metadata_in_attestation(self, tmp_path):
         """Test attestation includes scan metadata from CI args."""
@@ -462,7 +462,7 @@ class TestCIModeIntegration:
         )
 
         # Attestation should be generated successfully
-        assert statement["_type"] == "https://in-toto.io/Statement/v0.1"
+        assert statement["_type"] == "https://in-toto.io/Statement/v1"
 
         # Threshold check would run after this (tested separately in CI integration)
 

@@ -27,6 +27,7 @@ from scripts.core.cron_installer import (
     CronInstaller,
     CronInstallError,
     CronNotAvailableError,
+    CronValidationError,
     UnsupportedPlatformError,
 )
 from scripts.core.schedule_manager import (
@@ -43,6 +44,27 @@ from scripts.core.validation import SCHEDULE_NAME_PATTERN
 from scripts.core.workflow_generators import (
     GitHubActionsGenerator,
     GitLabCIGenerator,
+)
+
+# The failure modes a *user* can cause, as opposed to the ones jmo causes.
+#
+# - the cron family: platform unsupported, cron absent, install failed, input
+#   rejected by validation
+# - OSError: the schedules file is unreadable, unwritable, or on a full disk
+# - ValueError: croniter on a bad expression, and json.JSONDecodeError (a
+#   ValueError subclass) on a manifest that is not JSON at all
+# - KeyError / TypeError: a manifest missing a key the reader requires.
+#   Rarer since `_rehydrate` began tolerating *unknown* keys, but a *missing*
+#   required key is still a hard failure by design -- see #934.
+_EXPECTED_SCHEDULE_ERRORS = (
+    CronInstallError,
+    CronNotAvailableError,
+    CronValidationError,
+    UnsupportedPlatformError,
+    OSError,
+    ValueError,
+    KeyError,
+    TypeError,
 )
 
 
@@ -75,8 +97,17 @@ def cmd_schedule(args):
         else:
             _error(f"Unknown schedule action: {args.schedule_action}")
             return 1
-    except Exception as e:
-        _error(str(e))
+    except _EXPECTED_SCHEDULE_ERRORS as e:
+        # Report with the file, so a user who has to hand-edit knows where.
+        # This was a blanket `except Exception: _error(str(e))`, which rendered
+        # a `TypeError` from the manifest reader as its bare constructor
+        # message -- no file, no schedule name, no remedy -- and swallowed
+        # genuine programming errors into the same one-line report, making a
+        # bug in a handler indistinguishable from bad user input. Anything not
+        # named below now propagates and produces a traceback, which is what a
+        # bug should look like.
+        _error(f"{type(e).__name__}: {e}")
+        _error(f"Schedule file: {manager.schedules_file}")
         return 1
 
 

@@ -3932,10 +3932,84 @@ _FORBIDDEN_RE = re.compile(
 )
 
 
+def _code_only(sql: str) -> str | None:
+    """Return *sql* with string literals, quoted identifiers and comments blanked.
+
+    One left-to-right pass, so the scanner always knows whether it is inside a
+    literal or a comment. Every later check then runs on **code**, which is the
+    only text a keyword can legitimately appear in.
+
+    This exists because the keyword scan used to run on the raw query, so a
+    legitimate `SELECT` whose *data* mentioned a forbidden word was refused --
+    and a security tool's own findings table is full of the words its keyword
+    scan forbids (#953). The function it lives in already stripped string
+    literals one step later, for exactly this reason, before the
+    multi-statement check; the keyword scan simply did not use it.
+
+    Doing both in one pass also fixes an ordering bug: comments used to be
+    stripped *before* literals, so a `--` inside a string was treated as a
+    comment and `SELECT '--x'` became `SELECT '`.
+
+    Elided text is replaced by a space, never removed, so two tokens either
+    side of a literal cannot be glued into one.
+
+    Returns:
+        The code-only text, or ``None`` if the input ends inside a string
+        literal or block comment. That is the only way elision could hide real
+        SQL -- an unclosed quote swallows everything after it -- and it is
+        invalid SQL regardless, so refusing it is what makes this sound.
+    """
+    out: list[str] = []
+    i = 0
+    n = len(sql)
+    while i < n:
+        ch = sql[i]
+
+        if ch == "'" or ch == '"':
+            # A single-quoted string literal, or a double-quoted identifier.
+            # SQLite escapes the delimiter by doubling it, which this handles
+            # naturally: the closing quote is consumed, then the next
+            # iteration re-opens on the doubled one.
+            quote = ch
+            i += 1
+            while i < n:
+                if sql[i] == quote:
+                    if i + 1 < n and sql[i + 1] == quote:
+                        i += 2
+                        continue
+                    break
+                i += 1
+            if i >= n:
+                return None  # unterminated
+            i += 1
+            out.append(" ")
+            continue
+
+        if sql.startswith("--", i):
+            i = sql.find("\n", i)
+            if i == -1:
+                i = n
+            out.append(" ")
+            continue
+
+        if sql.startswith("/*", i):
+            end = sql.find("*/", i + 2)
+            if end == -1:
+                return None  # unterminated block comment
+            i = end + 2
+            out.append(" ")
+            continue
+
+        out.append(ch)
+        i += 1
+
+    return "".join(out)
+
+
 def _validate_readonly_query(query: str) -> None:
     """Validate that a query is safe for read-only execution.
 
-    Security layers:
+    Security layers, all applied to the code-only text (see ``_code_only``):
     1. Prefix check - only SELECT / EXPLAIN / WITH / safe PRAGMA
     2. Forbidden keyword scan (word-boundary regex)
     3. Multi-statement rejection (semicolon followed by non-whitespace)
@@ -3948,10 +4022,10 @@ def _validate_readonly_query(query: str) -> None:
     if not stripped:
         raise QuerySecurityError("Empty query")
 
-    # Strip SQL comments for analysis
-    clean = re.sub(r"--[^\n]*", "", stripped)
-    clean = re.sub(r"/\*.*?\*/", "", clean, flags=re.DOTALL)
-    clean = clean.strip()
+    code = _code_only(stripped)
+    if code is None:
+        raise QuerySecurityError("Unterminated string literal or comment")
+    clean = code.strip()
 
     if not clean:
         raise QuerySecurityError("Query contains only comments")
@@ -3970,11 +4044,9 @@ def _validate_readonly_query(query: str) -> None:
     if match:
         raise QuerySecurityError(f"Forbidden keyword: {match.group(0)}")
 
-    # 3. Multi-statement rejection
-    #    Remove string literals first so semicolons inside strings don't
-    #    trigger a false positive.
-    no_strings = re.sub(r"'[^']*'", "", clean)
-    parts = [p.strip() for p in no_strings.split(";") if p.strip()]
+    # 3. Multi-statement rejection. Literals are already blanked, so a
+    #    semicolon inside a string cannot reach here.
+    parts = [p.strip() for p in clean.split(";") if p.strip()]
     if len(parts) > 1:
         raise QuerySecurityError("Multiple statements not allowed")
 

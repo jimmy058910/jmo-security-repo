@@ -83,9 +83,12 @@ class TestGitLabCIGeneratorBranchCoverage:
 
         # Should not have repos-dir
         assert "--repos-dir" not in script
-        # Should have include/exclude patterns
-        assert "--include-pattern 'src/**'" in script
-        assert "--exclude-pattern 'test/**'" in script
+        # Must NOT emit --include-pattern / --exclude-pattern: `jmo scan`
+        # defines neither, so the exported command exited 2 (#928). The
+        # feature is real but config-only -- `include:` / `exclude:` in
+        # jmo.yml -- so the generator warns instead of inventing a flag.
+        assert "--include-pattern" not in script
+        assert "--exclude-pattern" not in script
 
     def test_generate_notification_jobs_empty_channels(self):
         """Test _generate_notification_jobs with empty channels list (line 224->223)."""

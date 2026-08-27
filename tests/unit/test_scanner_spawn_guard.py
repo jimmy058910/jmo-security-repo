@@ -55,7 +55,11 @@ def test_scanner_binary_match_detects_semgrep_variants(argv0):
 @pytest.mark.parametrize(
     "argv0",
     [
-        "trufflehog",
+        # `trufflehog` used to be here, asserting the narrow scope. It IS a
+        # profile scanner, and the recorder watching only semgrep is the defect
+        # #994 fixed -- so a test pinning its absence pinned the bug. The
+        # watched set is now derived from PROFILE_TOOLS; see
+        # tests/unit/test_spawn_guard_scope.py.
         "black",
         "python",
         "semgrep-action",  # a different binary that merely starts with the name
@@ -65,7 +69,7 @@ def test_scanner_binary_match_detects_semgrep_variants(argv0):
         "",
     ],
 )
-def test_scanner_binary_match_ignores_non_semgrep(argv0):
+def test_scanner_binary_match_ignores_unrelated_binaries(argv0):
     assert scanner_binary_match(argv0) is None
 
 

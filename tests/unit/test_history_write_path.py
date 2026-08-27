@@ -741,7 +741,13 @@ class TestScanDurationReachesTheDatabase:
         self, tmp_path, capsys
     ):
         """Negative control: without it, the test above passes on any output
-        that happens to contain the number, including a findings count."""
+        that happens to contain the number, including a findings count.
+
+        Matched on the bare cell rather than the old fallback's prose "in N/A":
+        `history list` now renders one Rich table instead of an unaligned line
+        per scan, because the aligned branch it used to have could never run --
+        `tabulate` is not a runtime dependency (#1011).
+        """
         results = _make_results(tmp_path / "res", None)
         store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
 
@@ -753,7 +759,10 @@ class TestScanDurationReachesTheDatabase:
             json = False
 
         assert hc.cmd_history_list(_Args()) == 0
-        assert "in N/A" in capsys.readouterr().out
+        out = capsys.readouterr().out
+        assert "Duration (s)" in out, f"the column header is missing:\n{out}"
+        assert "N/A" in out, f"an absent duration is not marked N/A:\n{out}"
+        assert "1234.5" not in out
 
     def test_history_show_prints_the_duration_line(self, tmp_path, capsys):
         """The second reader: `Duration:` is guarded on a truthy value, so it

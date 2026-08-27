@@ -121,8 +121,15 @@ def _validate_versions(repo_root: Path) -> bool:
     """
     validate_script = repo_root / "scripts" / "dev" / "update_versions.py"
     if not validate_script.exists():
-        print("Warning: Version validation script not found, skipping validation")
-        return True
+        print(
+            "Version validation script not found: " f"{validate_script}",
+            file=sys.stderr,
+        )
+        print(
+            "Cannot verify tool versions. Use --skip-validate to build anyway.",
+            file=sys.stderr,
+        )
+        return False
 
     print("Validating tool versions...")
     try:
@@ -149,11 +156,24 @@ def _validate_versions(repo_root: Path) -> bool:
         print("All versions validated successfully")
         return True
     except subprocess.TimeoutExpired:
-        print("Warning: Version validation timed out, proceeding anyway")
-        return True
+        # Was `return True`. A gate that never completed has not passed, and
+        # this timeout is a real risk rather than a theoretical one: --validate
+        # makes ~29 network calls to PyPI, npm and the GitHub API against a
+        # 120s budget, and the GitHub calls are rate-limited without a
+        # GITHUB_TOKEN. `--skip-validate` already exists for callers who want
+        # to bypass the check, so the error paths do not need to be lenient to
+        # keep the command usable (#939).
+        print(
+            "Version validation timed out after 120s (it makes ~29 network "
+            "calls; GitHub is rate-limited without GITHUB_TOKEN).",
+            file=sys.stderr,
+        )
+        print("Use --skip-validate to build without it.", file=sys.stderr)
+        return False
     except Exception as e:
-        print(f"Warning: Version validation error: {e}, proceeding anyway")
-        return True
+        print(f"Version validation failed to run: {e}", file=sys.stderr)
+        print("Use --skip-validate to build without it.", file=sys.stderr)
+        return False
 
 
 def _build_image(

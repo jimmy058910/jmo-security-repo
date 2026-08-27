@@ -70,8 +70,12 @@ repos:
     hooks:
       - id: black
         exclude: ^\.claude/
+  # Must match uv.lock's ruff. This hook runs `--fix`, so a version split means
+  # the hook REWRITES code at one version while `make lint` and CI CHECK it at
+  # another -- and ci.yml skips this hook by design, so CI cannot see it.
+  # Pinned by tests/unit/test_toolchain_version_agreement.py (#1015).
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.3
+    rev: v0.16.4
     hooks:
       - id: ruff
         args: ["--fix"]
@@ -82,7 +86,7 @@ repos:
     rev: v2.3.1
     hooks:
       - id: mypy
-        additional_dependencies: [types-PyYAML, types-croniter, types-requests, types-tabulate]
+        additional_dependencies: [types-PyYAML, types-croniter, types-requests]
         args:
           - --config-file=pyproject.toml
           - scripts/

@@ -51,6 +51,9 @@ import json
 import re
 import subprocess
 import sys
+import urllib.error
+import urllib.parse
+import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -343,8 +346,46 @@ def get_npm_version_exists(package: str, version: str) -> bool:
         return False
 
 
-def check_github_release_exists(repo: str, version: str) -> bool:
-    """Check if a specific GitHub release version exists."""
+# "I could not check" is not "it does not exist".
+#
+# All three checkers below used to shell out to an external CLI and return
+# `False` from `except FileNotFoundError`, so a missing tool was reported as a
+# missing *release* -- a false failure indistinguishable from a real one. That
+# is the fail-closed twin of #939's fail-open gate, and on Windows it fired
+# every time: `subprocess.run(["npm", ...])` with shell=False cannot resolve
+# `npm.CMD` (Windows does not apply PATHEXT to a bare name in list form), so
+# `check_npm_version_exists` had never once succeeded there. Measured: cdxgen
+# 12.0.0 IS published on npm (236 versions, latest 12.8.4) and the check
+# reported it absent. Same shape as the recorded ".exe omission made scanners
+# inert" trap.
+#
+# npm and PyPI are now queried over plain HTTP, which needs no CLI at all and
+# removes the dependency on a `pip` that a uv-created venv does not ship.
+# GitHub keeps `gh` because it carries the auth that avoids anonymous rate
+# limits, but reports UNKNOWN rather than False when `gh` is absent.
+EXISTS = "exists"
+ABSENT = "absent"
+UNKNOWN = "unknown"
+
+
+def _registry_json(url: str) -> dict | None:
+    """GET *url* as JSON, or None if it could not be fetched.
+
+    None means "could not check" -- distinct from a 404, which is an answer.
+    """
+    request = urllib.request.Request(url, headers={"Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:  # nosec B310
+            data = json.loads(response.read().decode("utf-8"))
+            return data if isinstance(data, dict) else {}
+    except urllib.error.HTTPError as exc:
+        return {} if exc.code == 404 else None
+    except (urllib.error.URLError, TimeoutError, ValueError, OSError):
+        return None
+
+
+def check_github_release_exists(repo: str, version: str) -> str:
+    """Whether a GitHub release exists: EXISTS, ABSENT or UNKNOWN."""
     try:
         # Try both with and without 'v' prefix
         for tag in [f"v{version}", version]:
@@ -357,143 +398,125 @@ def check_github_release_exists(repo: str, version: str) -> bool:
                 timeout=30,
             )
             if result.returncode == 0:
-                return True
-        return False
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return False
+                return EXISTS
+        return ABSENT
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return UNKNOWN
 
 
-def check_pypi_version_exists(package: str, version: str) -> bool:
-    """Check if a specific PyPI package version exists."""
-    try:
-        result = subprocess.run(
-            ["pip", "index", "versions", package],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=30,
+def check_pypi_version_exists(package: str, version: str) -> str:
+    """Whether a PyPI release exists: EXISTS, ABSENT or UNKNOWN."""
+    data = _registry_json(f"https://pypi.org/pypi/{urllib.parse.quote(package)}/json")
+    if data is None:
+        return UNKNOWN
+    return EXISTS if version in (data.get("releases") or {}) else ABSENT
+
+
+def check_npm_version_exists(package: str, version: str) -> str:
+    """Whether an npm release exists: EXISTS, ABSENT or UNKNOWN.
+
+    The scoped name must be percent-encoded -- `@cyclonedx/cdxgen` becomes
+    `@cyclonedx%2Fcdxgen`, or the slash is read as a path separator.
+    """
+    data = _registry_json(
+        f"https://registry.npmjs.org/{urllib.parse.quote(package, safe='@')}"
+    )
+    if data is None:
+        return UNKNOWN
+    return EXISTS if version in (data.get("versions") or {}) else ABSENT
+
+
+# A MANUAL_INSTALL tool ships in no image, so it has nothing to pin. `0.0.0` is
+# the placeholder those entries carry -- not a claim that release 0.0.0 exists,
+# which is how the validator read it, failing every `jmo build` (#935).
+UNPINNED_SENTINEL = "0.0.0"
+
+
+def _validate_one(tool: str, info: dict) -> tuple[str, str]:
+    """Classify one versions.yaml entry as passed / failed / unpinned.
+
+    Dispatches on **which package field the entry carries**, not on which
+    section it lives in. The section is about how a tool is installed; the
+    registry to ask is a property of the package. Conflating the two is what
+    sent `cdxgen`'s scoped npm name to PyPI, where it could never be found --
+    and the dedicated npm block written to catch that could never fire, because
+    the `python_tools` loop always claimed cdxgen first (into `failed` when
+    `pypi_package` was set, into `passed` as "skipped" when it was not).
+
+    Returns:
+        (bucket, message) where bucket is "passed", "failed" or "unpinned".
+    """
+    version = str(info["version"])
+
+    if version == UNPINNED_SENTINEL and tool in MANUAL_INSTALL_TOOLS:
+        # Deliberately a third state, not folded into "passed". #373 established
+        # this shape for `jmo tools check`: a user must be able to tell "we
+        # deliberately do not pin this" from "this validated". The sentinel is
+        # honoured *only* for MANUAL_INSTALL_TOOLS -- a 0.0.0 on a tool that
+        # ships in an image is a genuinely unset version and must still fail.
+        return "unpinned", f"{tool}: unpinned (manual install, no image)"
+
+    def _report(state: str, registry: str, package: str) -> tuple[str, str]:
+        if state == EXISTS:
+            return "passed", f"{tool}: {version} (exists on {registry})"
+        if state == UNKNOWN:
+            # Failed, not passed. A check that could not run has not passed --
+            # the same rule #939 applies to `jmo build`'s gate. The message
+            # says which, so a network outage is not mistaken for a bad pin.
+            return (
+                "failed",
+                f"{tool}: {version} COULD NOT CHECK on {registry} ({package})",
+            )
+        return "failed", f"{tool}: {version} NOT FOUND on {registry} ({package})"
+
+    npm_package = info.get("npm_package")
+    if npm_package:
+        return _report(
+            check_npm_version_exists(npm_package, version), "npm", npm_package
         )
-        if result.returncode != 0:
-            return False
-        # Check if version appears in available versions
-        return version in result.stdout
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return False
 
-
-def check_npm_version_exists(package: str, version: str) -> bool:
-    """Check if a specific npm package version exists."""
-    try:
-        result = subprocess.run(
-            ["npm", "view", f"{package}@{version}", "version"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=30,
+    pypi_package = info.get("pypi_package")
+    if pypi_package:
+        return _report(
+            check_pypi_version_exists(pypi_package, version), "PyPI", pypi_package
         )
-        return result.returncode == 0 and version in result.stdout
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return False
+
+    github_repo = info.get("github_repo")
+    if github_repo:
+        return _report(
+            check_github_release_exists(github_repo, version), "GitHub", github_repo
+        )
+
+    return "passed", f"{tool}: {version} (skipped - manual validation required)"
 
 
-def validate_all_versions() -> tuple[list[str], list[str]]:
+def validate_all_versions() -> tuple[list[str], list[str], list[str]]:
     """
     Validate that all versions in versions.yaml exist upstream.
 
     Returns:
-        Tuple of (passed_tools, failed_tools)
+        (passed, failed, unpinned). `unpinned` is the MANUAL_INSTALL tools
+        carrying the sentinel version -- a third state rather than a silent
+        pass, so "we deliberately do not pin this" is distinguishable from
+        "this validated" (the shape #373 established for `jmo tools check`).
     """
     versions = load_versions()
-    passed = []
-    failed = []
+    passed: list[str] = []
+    failed: list[str] = []
+    unpinned: list[str] = []
+    buckets = {"passed": passed, "failed": failed, "unpinned": unpinned}
 
-    log("Validating Python tool versions on PyPI...")
-    for tool, info in versions.get("python_tools", {}).items():
-        version = info["version"]
-        pypi_package = info.get("pypi_package")
-        if not pypi_package:
-            # Skip tools without PyPI package
-            ok(f"{tool}: {version} (skipped - no PyPI package)")
-            passed.append(tool)
+    for section in ("python_tools", "binary_tools", "special_tools"):
+        entries = versions.get(section) or {}
+        if not entries:
             continue
+        log(f"Validating {section.replace('_', ' ')}...")
+        for tool, info in entries.items():
+            bucket, message = _validate_one(tool, info)
+            (err if bucket == "failed" else ok)(message)
+            buckets[bucket].append(tool)
 
-        if check_pypi_version_exists(pypi_package, version):
-            ok(f"{tool}: {version} (exists on PyPI)")
-            passed.append(tool)
-        else:
-            err(f"{tool}: {version} NOT FOUND on PyPI ({pypi_package})")
-            failed.append(tool)
-
-    log("Validating binary tool versions on GitHub...")
-    for tool, info in versions.get("binary_tools", {}).items():
-        version = info["version"]
-        github_repo = info.get("github_repo")
-        if not github_repo:
-            ok(f"{tool}: {version} (skipped - no GitHub repo)")
-            passed.append(tool)
-            continue
-
-        if check_github_release_exists(github_repo, version):
-            ok(f"{tool}: {version} (exists on GitHub)")
-            passed.append(tool)
-        else:
-            err(f"{tool}: {version} NOT FOUND on GitHub ({github_repo})")
-            failed.append(tool)
-
-    log("Validating special tool versions...")
-    for tool, info in versions.get("special_tools", {}).items():
-        version = info["version"]
-        github_repo = info.get("github_repo")
-        npm_package = info.get("npm_package")
-
-        if npm_package:
-            if check_npm_version_exists(npm_package, version):
-                ok(f"{tool}: {version} (exists on npm)")
-                passed.append(tool)
-            else:
-                err(f"{tool}: {version} NOT FOUND on npm ({npm_package})")
-                failed.append(tool)
-        elif github_repo:
-            if check_github_release_exists(github_repo, version):
-                ok(f"{tool}: {version} (exists on GitHub)")
-                passed.append(tool)
-            else:
-                err(f"{tool}: {version} NOT FOUND on GitHub ({github_repo})")
-                failed.append(tool)
-        else:
-            ok(f"{tool}: {version} (skipped - manual validation required)")
-            passed.append(tool)
-
-    # Check npm tools specifically (cdxgen is in special_tools but uses npm)
-    log("Validating npm tool versions...")
-    npm_tools = {
-        "cdxgen": (
-            "@cyclonedx/cdxgen",
-            versions.get("python_tools", {}).get("cdxgen", {}).get("version"),
-        ),
-    }
-    # Also check from special_tools if cdxgen is there
-    if "cdxgen" in versions.get("special_tools", {}):
-        npm_tools["cdxgen"] = (
-            "@cyclonedx/cdxgen",
-            versions["special_tools"]["cdxgen"]["version"],
-        )
-
-    for tool, (package, version) in npm_tools.items():
-        if not version:
-            continue
-        if tool in passed or tool in failed:
-            continue  # Already validated
-        if check_npm_version_exists(package, version):
-            ok(f"{tool}: {version} (exists on npm)")
-            passed.append(tool)
-        else:
-            err(f"{tool}: {version} NOT FOUND on npm ({package})")
-            failed.append(tool)
-
-    return passed, failed
+    return passed, failed, unpinned
 
 
 def check_latest_versions() -> dict[str, tuple[str, str, bool]]:
@@ -1311,9 +1334,12 @@ def main() -> int:
 
         elif args.validate:
             log("Validating all tool versions exist upstream...")
-            passed, failed = validate_all_versions()
+            passed, failed, unpinned = validate_all_versions()
             print()
-            log(f"Validation complete: {len(passed)} passed, {len(failed)} failed")
+            log(
+                f"Validation complete: {len(passed)} passed, {len(failed)} failed, "
+                f"{len(unpinned)} unpinned (manual install)"
+            )
             if failed:
                 err(f"Failed tools: {', '.join(failed)}")
                 err("Fix these versions before building Docker images")

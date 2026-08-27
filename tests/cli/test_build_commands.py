@@ -278,12 +278,19 @@ def test_no_bare_dockerfile_exists_in_the_repo():
 
 
 def test_validate_versions_script_not_found(tmp_path):
-    """Test _validate_versions returns True when script not found."""
+    """A missing validation script means the gate is absent, not satisfied.
+
+    This asserted True until #939: an absent script, a timeout and any
+    exception all returned "validation passed", so the only condition that
+    could stop a build was the validator running to completion and exiting
+    non-zero. `--skip-validate` already exists for callers who want to bypass
+    the check, so the error paths do not need to be lenient.
+    """
     from scripts.cli.build_commands import _validate_versions
 
     # No validation script
     result = _validate_versions(tmp_path)
-    assert result is True
+    assert result is False
 
 
 def test_validate_versions_success(tmp_path):
@@ -325,7 +332,12 @@ def test_validate_versions_failure(tmp_path):
 
 
 def test_validate_versions_timeout(tmp_path):
-    """Test _validate_versions returns True on timeout (proceeds anyway)."""
+    """A gate that never completed has not passed (#939).
+
+    A real risk, not a theoretical one: --validate makes ~29 network calls
+    against a 120s budget, and the GitHub calls are rate-limited without a
+    GITHUB_TOKEN.
+    """
     from scripts.cli.build_commands import _validate_versions
 
     # Create validation script
@@ -337,11 +349,11 @@ def test_validate_versions_timeout(tmp_path):
         "subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="test", timeout=120)
     ):
         result = _validate_versions(tmp_path)
-        assert result is True
+        assert result is False
 
 
 def test_validate_versions_exception(tmp_path):
-    """Test _validate_versions returns True on exception (proceeds anyway)."""
+    """A gate that crashed has not passed (#939)."""
     from scripts.cli.build_commands import _validate_versions
 
     # Create validation script
@@ -351,7 +363,7 @@ def test_validate_versions_exception(tmp_path):
 
     with patch("subprocess.run", side_effect=Exception("Error")):
         result = _validate_versions(tmp_path)
-        assert result is True
+        assert result is False
 
 
 # ========== Category 6: Image Building ==========

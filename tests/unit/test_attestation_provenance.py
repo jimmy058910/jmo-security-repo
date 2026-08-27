@@ -231,7 +231,7 @@ class TestProvenanceGeneration:
         )
 
         # Validate structure
-        assert provenance["_type"] == "https://in-toto.io/Statement/v0.1"
+        assert provenance["_type"] == "https://in-toto.io/Statement/v1"
         assert provenance["predicateType"] == "https://slsa.dev/provenance/v1"
         assert "subject" in provenance
         assert "predicate" in provenance
@@ -514,7 +514,7 @@ class TestConstants:
         """Test in-toto version constant."""
         from scripts.core.attestation.constants import INTOTO_VERSION
 
-        assert INTOTO_VERSION == "https://in-toto.io/Statement/v0.1"
+        assert INTOTO_VERSION == "https://in-toto.io/Statement/v1"
 
     def test_jmo_build_type_constant(self):
         """Test JMo build type constant."""

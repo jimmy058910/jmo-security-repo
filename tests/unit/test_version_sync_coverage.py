@@ -56,11 +56,21 @@ def _pin_patterns(tool: str, info: dict) -> list[str]:
         rf'{re.escape(var_stem)}_VERSION="[0-9.]+"',  # Dockerfile shell var
         rf'{re.escape(var_stem)}_VERSION:\s+"[0-9.]+"',  # workflow env: block
     ]
-    pkg = info.get("pypi_package")
-    if isinstance(pkg, str) and pkg:
-        # npm scoped packages pin as `@scope/name@X.Y.Z`, pip as `name==X.Y.Z`.
-        sep = "@" if pkg.startswith("@") else "=="
-        patterns.append(rf"{re.escape(pkg)}{re.escape(sep)}[0-9][0-9.]*")
+    # Read whichever package field the entry carries, not just `pypi_package`.
+    #
+    # cdxgen's scoped npm name lived under `pypi_package` until #935 -- which is
+    # why the branch below had to sniff a leading `@` to guess the separator.
+    # Now that `npm_package:` is declared, reading only `pypi_package` made this
+    # test report cdxgen as unreachable by `--sync` when its Dockerfile pin had
+    # not moved at all. Same conflation the validator had: the registry to ask
+    # is a property of the package, not of the field it happens to sit in.
+    for key, sep in (("npm_package", "@"), ("pypi_package", "==")):
+        pkg = info.get(key)
+        if isinstance(pkg, str) and pkg:
+            # A scoped npm name under the legacy `pypi_package` key still pins
+            # as `@scope/name@X.Y.Z`.
+            actual = "@" if pkg.startswith("@") else sep
+            patterns.append(rf"{re.escape(pkg)}{re.escape(actual)}[0-9][0-9.]*")
     return patterns
 
 

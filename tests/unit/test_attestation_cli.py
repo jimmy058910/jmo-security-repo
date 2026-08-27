@@ -378,7 +378,7 @@ class TestAttestCommandExecution:
         attestation = json.loads(attestation_path.read_text(encoding="utf-8"))
 
         # Verify in-toto statement structure
-        assert attestation["_type"] == "https://in-toto.io/Statement/v0.1"
+        assert attestation["_type"] == "https://in-toto.io/Statement/v1"
         assert attestation["predicateType"] == "https://slsa.dev/provenance/v1"
         assert "subject" in attestation
         assert "predicate" in attestation

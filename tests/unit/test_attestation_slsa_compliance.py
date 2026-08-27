@@ -47,7 +47,7 @@ class TestProvenanceExistence:
 
         # SLSA Level 2: Provenance MUST exist
         assert statement is not None
-        assert statement["_type"] == "https://in-toto.io/Statement/v0.1"
+        assert statement["_type"] == "https://in-toto.io/Statement/v1"
         assert "predicate" in statement
 
     def test_provenance_includes_slsa_version(self, tmp_path):
