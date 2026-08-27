@@ -1133,13 +1133,20 @@ def _check_test_count() -> CheckResult:
         )
 
 
-# The floor CI actually enforces, at .github/workflows/ci.yml:734
-# (`if coverage_pct < 80: sys.exit(1)`). This check demanded 85 until #773 -- a
-# number nothing in the repo has ever enforced (#756), so it could only ever
-# WARN, no matter how healthy coverage was. #766 raised the real floor from 70
-# to 80 and updated its citations; this site was missed because only
-# `--tier full` reaches it and that tier had never been run.
-_ENFORCED_COVERAGE_FLOOR = 80
+# The floor CI actually enforces, in coverage-aggregate's "Verify coverage
+# threshold" step (`if coverage_pct < 85: sys.exit(1)`). Cite the job and step,
+# not a line number: that citation has read 734, 788 and 816, and was stale at
+# two of the three.
+#
+# History, which is a full circle worth keeping: this check demanded 85 until
+# #773, when it was lowered to 80 because 85 was a number nothing in the repo
+# enforced (#756) -- so it could only ever WARN, however healthy coverage was.
+# #756 has now raised the REAL floor to 85 (measured 86.87%), so 85 is correct
+# here again, this time backed by a gate that can fail.
+#
+# Keep this in step with ci.yml. #766's floor raise missed this site because
+# only `--tier full` reaches it and that tier had never been run.
+_ENFORCED_COVERAGE_FLOOR = 85
 
 
 def _check_coverage_threshold() -> CheckResult:
@@ -1182,7 +1189,7 @@ def _check_coverage_threshold() -> CheckResult:
                     status=CheckStatus.PASS,
                     message=f"CI enforces {threshold}% coverage",
                 )
-        # Also check inline Python threshold (e.g. "if coverage_pct < 80:").
+        # Also check inline Python threshold (e.g. "if coverage_pct < 85:").
         # This is the branch that actually fires: nothing in this repo sets
         # --cov-fail-under (#756), so ci.yml's inline check is the only gate.
         m = re.search(r"coverage_pct\s*<\s*(\d+)", ci)

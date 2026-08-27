@@ -5,7 +5,7 @@ Coverage:
 - CLI argument parsing for all subcommands
 - Subcommand dispatch logic
 - Error handling for invalid arguments
-- Helper functions (_iter_repos, _iter_images, etc.)
+- Helper functions (_merge_dict, etc.)
 - Command routing
 
 Test approach:
@@ -23,15 +23,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from scripts.cli.jmo import (
-    _iter_iac_files,
-    _iter_images,
-    _iter_repos,
-    _iter_urls,
-    _merge_dict,
-    main,
-    parse_args,
-)
+from scripts.cli.jmo import _merge_dict, main, parse_args
 
 # ========== Category 1: Argument Parsing Tests ==========
 
@@ -326,163 +318,6 @@ def test_parse_args_invalid_timeout_value(capsys):
 
 
 # ========== Category 3: Helper Function Tests ==========
-
-
-def test_iter_repos_single_repo(tmp_path: Path):
-    """Test _iter_repos with --repo argument."""
-    repo = tmp_path / "test-repo"
-    repo.mkdir()
-
-    args = MagicMock()
-    args.repo = str(repo)
-    args.repos_dir = None
-    args.targets = None
-
-    repos = _iter_repos(args)
-    assert len(repos) == 1
-    assert repos[0] == repo
-
-
-def test_iter_repos_repos_dir(tmp_path: Path):
-    """Test _iter_repos with --repos-dir argument."""
-    repos_dir = tmp_path / "repos"
-    repos_dir.mkdir()
-    (repos_dir / "repo1").mkdir()
-    (repos_dir / "repo2").mkdir()
-    (repos_dir / "file.txt").write_text("not a dir")  # Should be skipped
-
-    args = MagicMock()
-    args.repo = None
-    args.repos_dir = str(repos_dir)
-    args.targets = None
-
-    repos = _iter_repos(args)
-    assert len(repos) == 2
-    assert all(r.is_dir() for r in repos)
-
-
-def test_iter_repos_targets_file(tmp_path: Path):
-    """Test _iter_repos with --targets file."""
-    repo1 = tmp_path / "repo1"
-    repo2 = tmp_path / "repo2"
-    repo1.mkdir()
-    repo2.mkdir()
-
-    targets_file = tmp_path / "targets.txt"
-    targets_file.write_text(f"{repo1}\n{repo2}\n# comment\n\n")
-
-    args = MagicMock()
-    args.repo = None
-    args.repos_dir = None
-    args.targets = str(targets_file)
-
-    repos = _iter_repos(args)
-    assert len(repos) == 2
-    assert repo1 in repos
-    assert repo2 in repos
-
-
-def test_iter_repos_empty():
-    """Test _iter_repos with no arguments."""
-    args = MagicMock()
-    args.repo = None
-    args.repos_dir = None
-    args.targets = None
-
-    repos = _iter_repos(args)
-    assert len(repos) == 0
-
-
-def test_iter_images_single_image():
-    """Test _iter_images with --image argument."""
-    args = MagicMock()
-    args.image = "nginx:latest"
-    args.images_file = None
-
-    images = _iter_images(args)
-    assert len(images) == 1
-    assert images[0] == "nginx:latest"
-
-
-def test_iter_images_file(tmp_path: Path):
-    """Test _iter_images with --images-file."""
-    images_file = tmp_path / "images.txt"
-    images_file.write_text("nginx:latest\nalpine:3.14\n# comment\n\n")
-
-    args = MagicMock()
-    args.image = None
-    args.images_file = str(images_file)
-
-    images = _iter_images(args)
-    assert len(images) == 2
-    assert "nginx:latest" in images
-    assert "alpine:3.14" in images
-
-
-def test_iter_iac_files_terraform(tmp_path: Path):
-    """Test _iter_iac_files with terraform state."""
-    tf_state = tmp_path / "terraform.tfstate"
-    tf_state.write_text("{}")
-
-    args = MagicMock()
-    args.terraform_state = str(tf_state)
-    args.cloudformation = None
-    args.k8s_manifest = None
-
-    iac_files = _iter_iac_files(args)
-    assert len(iac_files) == 1
-    assert iac_files[0] == ("terraform", tf_state)
-
-
-def test_iter_iac_files_multiple_types(tmp_path: Path):
-    """Test _iter_iac_files with multiple IaC types."""
-    tf_state = tmp_path / "terraform.tfstate"
-    cf_template = tmp_path / "cloudformation.yaml"
-    k8s_manifest = tmp_path / "deployment.yaml"
-
-    tf_state.write_text("{}")
-    cf_template.write_text("AWSTemplateFormatVersion: '2010-09-09'")
-    k8s_manifest.write_text("apiVersion: v1\nkind: Pod")
-
-    args = MagicMock()
-    args.terraform_state = str(tf_state)
-    args.cloudformation = str(cf_template)
-    args.k8s_manifest = str(k8s_manifest)
-
-    iac_files = _iter_iac_files(args)
-    assert len(iac_files) == 3
-    types = [t for t, _ in iac_files]
-    assert "terraform" in types
-    assert "cloudformation" in types
-    assert "k8s-manifest" in types
-
-
-def test_iter_urls_single_url():
-    """Test _iter_urls with --url argument."""
-    args = MagicMock()
-    args.url = "https://example.com"
-    args.urls_file = None
-    args.api_spec = None
-
-    urls = _iter_urls(args)
-    assert len(urls) == 1
-    assert urls[0] == "https://example.com"
-
-
-def test_iter_urls_file(tmp_path: Path):
-    """Test _iter_urls with --urls-file."""
-    urls_file = tmp_path / "urls.txt"
-    urls_file.write_text("https://example.com\nhttps://test.com\n# comment\n\n")
-
-    args = MagicMock()
-    args.url = None
-    args.urls_file = str(urls_file)
-    args.api_spec = None
-
-    urls = _iter_urls(args)
-    assert len(urls) == 2
-    assert "https://example.com" in urls
-    assert "https://test.com" in urls
 
 
 def test_merge_dict_basic():

@@ -190,9 +190,10 @@ pytest tests/integration/ -v
 pytest tests/ --cov=scripts --cov-report=term-missing
 ```
 
-**Status:** report the measured number against CI's actual floor — **80%**
-(`.github/workflows/ci.yml:734`). Nothing sets `--cov-fail-under` (#756), so a
-figure like 84% is **passing**, not "below threshold". Flag a *drop from the
+**Status:** report the measured number against CI's actual floor — **85%**
+(`coverage-aggregate`'s "Verify coverage threshold" step). Nothing sets `--cov-fail-under`
+(#756), so there is no local gate. A figure like 84% is now **failing**: the
+floor was raised from 80% under #756. Flag a *drop from the
 previous release* rather than a miss against a constant that isn't enforced.
 **Action:** Add tests to reach 85%+
 

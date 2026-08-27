@@ -203,7 +203,7 @@ def fingerprint(
     Truncated to FINGERPRINT_LENGTH hex chars for readability.
 
     Args:
-        tool: Tool name (e.g., "gitleaks", "semgrep")
+        tool: Tool name (e.g., "trufflehog", "semgrep")
         rule_id: Rule or vulnerability ID
         path: File path where finding occurred
         start_line: Line number (0 if not applicable)

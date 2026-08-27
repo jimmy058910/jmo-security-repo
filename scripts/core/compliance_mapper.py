@@ -937,7 +937,7 @@ def get_tool_category(tool_name: str, tags: list[str]) -> str | None:
     tool = tool_name.lower()
 
     # Secrets scanners
-    if tool in ["trufflehog", "gitleaks", "noseyparker"] or "secrets" in tags:
+    if tool in ["trufflehog", "noseyparker"] or "secrets" in tags:
         return "secrets"
 
     # SAST tools
@@ -949,7 +949,7 @@ def get_tool_category(tool_name: str, tags: list[str]) -> str | None:
         return "sca"
 
     # IaC scanners
-    if tool in ["checkov", "tfsec", "hadolint"] or "iac" in tags:
+    if tool in ["checkov", "hadolint"] or "iac" in tags:
         return "iac"
 
     # DAST tools

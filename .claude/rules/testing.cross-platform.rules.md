@@ -408,7 +408,7 @@ Pytest invocations in CI workflows use these filter sets. Each filter is tuned t
 
 | Workflow:Job | Filter | Rationale |
 |---|---|---|
-| `ci.yml` test-sharded — Ubuntu ×4 (`:312`) | `-m "not smoke and not requires_tools and not docker"` | **The only job that produces coverage** (`--cov=scripts`). `coverage-aggregate` merges the four shard XMLs and enforces the 80% floor (`:734`). `slow` included. |
+| `ci.yml` test-sharded — Ubuntu ×4 (`:312`) | `-m "not smoke and not requires_tools and not docker"` | **The only job that produces coverage** (`--cov=scripts`). `coverage-aggregate` merges the four shard XMLs and enforces the 85% floor. `slow` included. |
 | `ci.yml` test-sharded — macOS (`:327`) | `-m "not smoke and not requires_tools and not docker"` | Same suite, **no coverage** — the step is literally named "Run tests (macOS, no coverage)". |
 | `ci.yml` test-sharded — Windows (`:352`) | `-m "not smoke and not requires_tools and not docker and not slow"` | Adds `not slow` for runtime; also `-p no:xdist -p no:rerunfailures`, `--timeout=60`. **No coverage.** |
 | `ci.yml` windows-native-encoding collection floor (`:448`) | `-m "not smoke and not requires_tools and not docker and not slow"` | `--collect-only` count guard, fails under 7800 collected. Not a test run; no coverage. |
@@ -427,7 +427,7 @@ Pytest invocations in CI workflows use these filter sets. Each filter is tuned t
 - **Always exclude `requires_tools` and `smoke`** unless the runner explicitly installs the prerequisite (real tool binaries or the released PyPI wheel).
 - **Always exclude `docker`** unless the runner has a Docker daemon (Linux runners do; macOS/Windows runners require setup).
 - **`slow` is NOT excluded from PR-time CI.** The **Ubuntu and macOS** shards (`:312`, `:327`) run `-m "not smoke and not requires_tools and not docker"` — slow tests included. The **Windows** shard (`:352`) and the `windows-native-encoding` collection floor (`:448`) add `and not slow`; so does `nightly-cross-platform`, which lives in **`scheduled.yml:241`**, not `ci.yml`. Exclude it when the job's budget is tight, not because it is PR-time.
-- **There is no "Quick coverage check" job.** The table above used to list one, with a `≥70% threshold` it did not have, citing `:352` — which is the Windows shard, a step named "no coverage". `ci.yml` has exactly one coverage gate: the `Verify coverage threshold` step of `coverage-aggregate` (`:734`). If you are hunting a coverage failure, that is the only place it can come from.
+- **There is no "Quick coverage check" job.** The table above used to list one, with a `≥70% threshold` it did not have, citing `:352` — which is the Windows shard, a step named "no coverage". `ci.yml` has exactly one coverage gate: the `Verify coverage threshold` step of `coverage-aggregate`. If you are hunting a coverage failure, that is the only place it can come from.
 - **Use `-m "<marker>"` to RUN only that marker**'s tests after installing prerequisites; use `-m "not <marker>"` to EXCLUDE.
 
 ### Reproducing a shard locally

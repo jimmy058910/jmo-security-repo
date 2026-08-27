@@ -269,7 +269,7 @@ Linux)
     # Wait for background installers to finish
     bg_wait
   else
-    warn "Unsupported Linux distribution: please install dependencies manually (python3, pip, jq, curl, semgrep, gitleaks, trufflehog, shellcheck, shfmt)"
+    warn "Unsupported Linux distribution: please install dependencies manually (python3, pip, jq, curl, semgrep, trufflehog, shellcheck, shfmt)"
   fi
   ;;
 *)

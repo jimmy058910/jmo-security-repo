@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # update_tools.sh — Update curated tools user-locally (no sudo), idempotent.
-# Targets: gitleaks, trivy (binary). Nosey Parker is containerized by default.
+# Targets: trivy (binary). Nosey Parker is containerized by default.
 
 set -u
 IFS=$'\n\t'
@@ -15,23 +15,6 @@ warn() { echo -e "${YELLOW}[warn]${NC} $*"; }
 
 mkdir -p "$HOME/.local/bin" 2>/dev/null || true
 case ":$PATH:" in *":$HOME/.local/bin:"*) : ;; *) export PATH="$HOME/.local/bin:$PATH" ;; esac
-
-update_gitleaks() {
-  log "Updating gitleaks"
-  local TAG FILE URL ARCH
-  ARCH=$(uname -m)
-  TAG=$(curl -sSL https://api.github.com/repos/gitleaks/gitleaks/releases/latest | jq -r '.tag_name') || return 0
-  FILE="gitleaks_${TAG#v}_linux_x64.tar.gz"
-  [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ] && FILE="gitleaks_${TAG#v}_linux_arm64.tar.gz"
-  URL="https://github.com/gitleaks/gitleaks/releases/download/${TAG}/$FILE"
-  curl -fsSL "$URL" -o /tmp/gitleaks.tgz || {
-    warn "download failed"
-    return 0
-  }
-  tar -xzf /tmp/gitleaks.tgz -C /tmp gitleaks 2>/dev/null || true
-  install -m 0755 /tmp/gitleaks "$HOME/.local/bin/gitleaks" 2>/dev/null || true
-  ok "$(gitleaks version 2>/dev/null || echo gitleaks updated)"
-}
 
 update_trivy() {
   log "Updating trivy"
@@ -51,11 +34,6 @@ update_trivy() {
 }
 
 case "${1:-all}" in
-gitleaks) update_gitleaks ;;
-trivy) update_trivy ;;
-all)
-  update_gitleaks
-  update_trivy
-  ;;
+trivy | all) update_trivy ;;
 *) log "Unknown target: $1" ;;
 esac

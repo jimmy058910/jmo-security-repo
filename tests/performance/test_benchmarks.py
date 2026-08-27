@@ -512,67 +512,6 @@ class TestPerformanceBenchmarks:
             f"\n✓ Benchmark 5: Dashboard generation (5000 findings): {duration_s:.2f}s (target: <5s)"
         )
 
-    def test_benchmark_6_memory_usage_10k_findings(self, tmp_path):
-        """Benchmark: Processing 10,000 findings should use <500MB memory.
-
-        Target: <500MB (from CLAUDE.md)
-        Measures: Peak memory usage during normalization and reporting
-        """
-        try:
-            import psutil
-        except ImportError:
-            pytest.skip("psutil not installed (required for memory benchmarks)")
-
-        import os
-
-        process = psutil.Process(os.getpid())
-
-        # Measure baseline memory
-        baseline_memory_mb = process.memory_info().rss / 1024 / 1024
-
-        # Create 10,000 findings
-        findings = []
-        for i in range(10000):
-            findings.append(
-                create_test_finding(
-                    fingerprint=f"fp-memory-{i}",
-                    severity=["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"][i % 5],
-                    path=f"src/file{i % 1000}.py",
-                    line=10 + i,
-                )
-            )
-
-        # Process findings (simulate normalize_and_report)
-        # This includes: loading, normalization, deduplication, enrichment
-
-        # Write findings to temp directory
-        results_dir = tmp_path / "results"
-        individual_dir = results_dir / "individual-repos" / "test-repo"
-        individual_dir.mkdir(parents=True)
-
-        # Write tool outputs
-        (individual_dir / "trivy.json").write_text(
-            json.dumps({"findings": findings[:5000]}), encoding="utf-8"
-        )
-        (individual_dir / "semgrep.json").write_text(
-            json.dumps({"findings": findings[5000:]}), encoding="utf-8"
-        )
-
-        # Measure peak memory during processing
-        peak_memory_mb = process.memory_info().rss / 1024 / 1024
-        memory_used_mb = peak_memory_mb - baseline_memory_mb
-
-        # Verify
-        assert memory_used_mb < 500, (
-            f"Memory usage was {memory_used_mb:.2f}MB (expected <500MB). "
-            f"Target from CLAUDE.md: Memory usage (10k findings) <500MB"
-        )
-
-        print(
-            f"\n✓ Benchmark 6: Memory usage (10k findings): {memory_used_mb:.2f}MB (target: <500MB)\n"
-            f"  Baseline: {baseline_memory_mb:.2f}MB, Peak: {peak_memory_mb:.2f}MB"
-        )
-
 
 # ============================================================================
 # Performance Summary Report

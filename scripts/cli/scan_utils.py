@@ -419,7 +419,6 @@ def write_stub(tool: str, out_path: Path) -> None:
     """Write empty JSON stub for missing tool."""
     out_path.parent.mkdir(parents=True, exist_ok=True)
     stubs = {
-        "gitleaks": [],
         "trufflehog": [],
         "semgrep": {"results": []},
         "noseyparker": {"matches": []},
@@ -428,7 +427,6 @@ def write_stub(tool: str, out_path: Path) -> None:
         "grype": {"matches": []},
         "hadolint": [],
         "checkov": {"results": {"failed_checks": []}},
-        "tfsec": {"results": []},
         "bandit": {"results": []},
         "zap": {"site": []},
         "nuclei": "",  # NDJSON format - empty string for empty file
