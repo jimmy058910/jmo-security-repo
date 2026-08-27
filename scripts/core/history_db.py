@@ -256,25 +256,53 @@ CREATE_VIEWS = [
 ]
 
 
-def get_connection(db_path: Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
+def read_only_uri(db_path: Path) -> str:
+    """Return a `file:...?mode=ro` URI for `db_path`.
+
+    Windows needs forward slashes and an extra leading slash before the drive
+    letter, so `C:\\x\\y.db` becomes `file:///C:/x/y.db`. Factored out of
+    `query_findings` (the first read-only connection in this file) so
+    `get_connection` spells it the same way.
+    """
+    uri_path = Path(db_path).resolve().as_posix()
+    if not uri_path.startswith("/"):
+        uri_path = "/" + uri_path
+    return f"file://{uri_path}?mode=ro"
+
+
+def get_connection(
+    db_path: Path = DEFAULT_DB_PATH, *, read_only: bool = False
+) -> sqlite3.Connection:
     """
     Get database connection with optimizations.
 
     Args:
         db_path: Path to SQLite database file
+        read_only: Open the file read-only and skip the `journal_mode` pragma.
+            Pass this from any command that only reads. `journal_mode` is a
+            persistent, on-disk property, so setting it means *reading* the
+            database rewrites its header -- bytes 18/19 go 1 -> 2 and the file's
+            checksum changes with no row touched. Measured: a single
+            `jmo history stats` against a rollback-journal database changed its
+            sha256 while leaving its size identical (#894).
+
+            The file must already exist: a read-only connection cannot create
+            one. Every `jmo history` / `jmo trends` command checks that first.
 
     Returns:
         sqlite3.Connection with row_factory set
 
     Note:
-        - Creates .jmo directory if it doesn't exist
-        - Enables WAL mode for better concurrency
+        - Creates .jmo directory if it doesn't exist (writable mode only)
+        - Enables WAL mode for better concurrency (writable mode only)
         - Sets pragmas for performance
     """
     db_path = Path(db_path)
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-
-    conn = sqlite3.connect(str(db_path), timeout=30.0)
+    if read_only:
+        conn = sqlite3.connect(read_only_uri(db_path), uri=True, timeout=30.0)
+    else:
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(str(db_path), timeout=30.0)
     conn.row_factory = sqlite3.Row
 
     # Performance optimizations.
@@ -290,11 +318,17 @@ def get_connection(db_path: Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
     #     (header bytes 18/19 go 1 -> 2), so a snapshot is not byte-stable
     #     across inspection.
     # WAL is an optimisation, not a requirement. Best-effort it, and let a
-    # database we cannot write stay readable.
-    try:
-        conn.execute("PRAGMA journal_mode=WAL;")
-    except sqlite3.OperationalError:
-        pass
+    # database we cannot write stay readable. Skipped outright under
+    # `read_only`, which is the difference between "survives a read-only file"
+    # and "does not touch a writable one" -- the second is what makes a snapshot
+    # usable as a fixture, and what `read_only` is for.
+    if not read_only:
+        try:
+            conn.execute("PRAGMA journal_mode=WAL;")
+        except sqlite3.OperationalError:
+            pass
+    # The remaining pragmas are all connection-local, so they are safe on a
+    # read-only handle and are left in place for both modes.
     conn.execute("PRAGMA synchronous=NORMAL;")
     conn.execute("PRAGMA cache_size=10000;")
     conn.execute("PRAGMA temp_store=MEMORY;")
@@ -3929,16 +3963,7 @@ def execute_readonly_query(
     # Security validation
     _validate_readonly_query(query)
 
-    # Normalise path for the URI (forward-slash, absolute)
-    # On Windows sqlite3 URI mode requires forward slashes and an extra
-    # leading slash for the drive letter, e.g. file:///C:/path/to/db
-    abs_path = db_path.resolve()
-    uri_path = abs_path.as_posix()
-    if not uri_path.startswith("/"):
-        # Windows drive-letter path like "C:/..." → "/C:/..."
-        uri_path = "/" + uri_path
-
-    conn = sqlite3.connect(f"file://{uri_path}?mode=ro", uri=True)
+    conn = sqlite3.connect(read_only_uri(db_path), uri=True)
     try:
         conn.row_factory = None  # tuples for compact output
 

@@ -244,7 +244,11 @@ class DiffEngine:
         )
 
         db_path = db_path or DEFAULT_DB_PATH
-        conn = get_connection(db_path)
+        # Loading two scans to diff them is a pure read; a writable connection
+        # would set the persistent `journal_mode` pragma and rewrite the header
+        # (#894). Conditional on existence because a read-only connection cannot
+        # create a database.
+        conn = get_connection(db_path, read_only=Path(db_path).exists())
 
         try:
             logger.info(f"Loading baseline scan {baseline_scan_id} from database")

@@ -168,7 +168,7 @@ def cmd_history_list(args) -> int:
         return 1
 
     try:
-        conn = get_connection(db_path)
+        conn = get_connection(db_path, read_only=True)
 
         # Parse filters
         branch = getattr(args, "branch", None)
@@ -282,7 +282,7 @@ def cmd_history_show(args) -> int:
         return 1
 
     try:
-        conn = get_connection(db_path)
+        conn = get_connection(db_path, read_only=True)
 
         # Resolve scan ID
         scan_id = getattr(args, "scan_id", None)
@@ -509,7 +509,7 @@ def cmd_history_export(args) -> int:
         return 1
 
     try:
-        conn = get_connection(db_path)
+        conn = get_connection(db_path, read_only=True)
 
         # Get scans
         scan_id = getattr(args, "scan_id", None)
@@ -605,7 +605,7 @@ def cmd_history_stats(args) -> int:
         return 1
 
     try:
-        conn = get_connection(db_path)
+        conn = get_connection(db_path, read_only=True)
         stats = get_database_stats(conn)
         conn.close()
 
@@ -711,7 +711,7 @@ def cmd_history_diff(args) -> int:
         return 1
 
     try:
-        conn = get_connection(db_path)
+        conn = get_connection(db_path, read_only=True)
         diff = compute_diff(conn, scan_id_1, scan_id_2)
         conn.close()
 
@@ -783,7 +783,7 @@ def cmd_history_trends(args) -> int:
     branch_label = f"branch {branch!r}" if branch else "all branches"
 
     try:
-        conn = get_connection(db_path)
+        conn = get_connection(db_path, read_only=True)
         trend = get_trend_summary(conn, branch, days)
         conn.close()
 
