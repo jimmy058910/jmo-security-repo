@@ -10,9 +10,28 @@ build types.
 # v1 is the current stable version as of 2024
 SLSA_VERSION = "https://slsa.dev/provenance/v1"
 
-# in-toto Statement version
-# v0.1 is the current version for in-toto attestations
-INTOTO_VERSION = "https://in-toto.io/Statement/v0.1"
+# in-toto Statement version.
+#
+# v1 is current. JMo emitted v0.1 while carrying a SLSA Provenance v1
+# predicate, and this comment asserted v0.1 was "the current version" -- it was
+# not, and SLSA Provenance v1 is specified to travel in a v1 Statement.
+# Generator and verifier agreed with each other, so nothing was broken *inside*
+# JMo; the cost was entirely external, since the point of publishing provenance
+# is that cosign / slsa-verifier read it (#946).
+INTOTO_VERSION = "https://in-toto.io/Statement/v1"
+
+# What the verifier will read. Emitting is single-valued; accepting is not.
+#
+# v0.1 stays readable because this is a security component: refusing a document
+# JMo itself issued would turn a version bump into an inability to check
+# anything already published. `verifier.py` used to compare against the v0.1
+# **literal** rather than the constant, which is why "flip the constant" was
+# never the one-line fix it looked like -- it would have left JMo unable to
+# verify its own fresh output.
+INTOTO_VERSIONS_ACCEPTED = (
+    INTOTO_VERSION,
+    "https://in-toto.io/Statement/v0.1",
+)
 
 # JMo-specific build type
 # Identifies JMo Security scans in SLSA provenance

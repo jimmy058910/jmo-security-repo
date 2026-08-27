@@ -142,7 +142,7 @@ class InTotoStatement:
 
     Structure:
         {
-            "_type": "https://in-toto.io/Statement/v0.1",
+            "_type": "https://in-toto.io/Statement/v1",
             "subject": [{"name": "...", "digest": {...}}],
             "predicateType": "https://slsa.dev/provenance/v1",
             "predicate": {...}

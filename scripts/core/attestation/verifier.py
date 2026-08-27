@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from .constants import (
+    INTOTO_VERSIONS_ACCEPTED,
     REKOR_URL,
     VERIFICATION_TIMEOUT,
 )
@@ -177,8 +178,11 @@ class AttestationVerifier:
             with open(attestation_path, encoding="utf-8") as f:
                 attestation_data = json.load(f)
 
-            # Parse as InTotoStatement
-            if attestation_data.get("_type") != "https://in-toto.io/Statement/v0.1":
+            # Parse as InTotoStatement. Read from constants rather than a
+            # literal: this comparison hardcoded the v0.1 string, so the
+            # generator's INTOTO_VERSION and the verifier's accepted version
+            # were two independent facts that happened to agree (#946).
+            if attestation_data.get("_type") not in INTOTO_VERSIONS_ACCEPTED:
                 result.error_message = "Invalid attestation format"
                 return result
 

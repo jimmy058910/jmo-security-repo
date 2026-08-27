@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from .constants import INTOTO_VERSION, JMO_BUILD_TYPE, SLSA_VERSION
+from .metadata_capture import MetadataCapture
 from .models import (
     BuildDefinition,
     Builder,
@@ -216,6 +217,28 @@ class ProvenanceGenerator:
             # Fallback to tool name
             return f"urn:jmo:tool:{tool_info.name}"
 
+    def _scanned_source(self, targets: list[str]) -> dict[str, Any]:
+        """Git context for the scanned tree, or ``{}``.
+
+        `MetadataCapture` was 183 lines with 23 tests and **no callers** -- its
+        own docstring named `ProvenanceGenerator` as the caller, and this class
+        did not import it. So the commit SHA it knows how to read never reached
+        the attestation, and JMo's provenance could not answer "which commit was
+        scanned" (#945).
+
+        Which repo was the open question. The subject's directory is not the
+        scanned tree -- `findings.json` lives in the results directory, which
+        need not be a repo at all -- so the context comes from the scan's own
+        targets, and **only when there is exactly one**. Two targets mean no
+        single commit describes the scan, and asserting one anyway would be a
+        fresh false statement in the one document whose purpose is to be
+        believed. `capture_git_context` already degrades to ``{}`` outside a
+        repository, so a non-repo target is silently, correctly empty.
+        """
+        if len(targets) != 1:
+            return {}
+        return MetadataCapture().capture_git_context(targets[0])
+
     def _create_build_definition(
         self,
         profile: str,
@@ -253,13 +276,35 @@ class ProvenanceGenerator:
         if timeout is not None:
             internal["timeout"] = timeout
 
+        external: dict[str, Any] = {
+            "profile": profile,
+            "tools": tools,
+            "targets": targets,
+        }
+
+        # The commit goes in `resolvedDependencies` as a ResourceDescriptor with
+        # a `gitCommit` digest -- SLSA v1's own shape for "the exact source this
+        # was built from", and what an external verifier looks for. Branch and
+        # tag are not digests, so they belong in externalParameters instead.
+        # Both are omitted entirely when unknown; a `source` key present but
+        # empty would read as a measurement that came back blank.
+        git_context = self._scanned_source(targets)
+        commit = git_context.get("commit")
+        if commit:
+            resolved_deps.append(
+                {
+                    "name": "scanned-source",
+                    "uri": f"file://{targets[0]}",
+                    "digest": {"gitCommit": commit},
+                }
+            )
+        source = {k: v for k, v in git_context.items() if k != "commit" and v}
+        if source:
+            external["source"] = source
+
         return BuildDefinition(
             buildType=build_type_with_slsa,
-            externalParameters={
-                "profile": profile,
-                "tools": tools,
-                "targets": targets,
-            },
+            externalParameters=external,
             internalParameters=internal,
             resolvedDependencies=resolved_deps,
         )

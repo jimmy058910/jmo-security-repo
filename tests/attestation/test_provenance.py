@@ -443,7 +443,10 @@ class TestProvenanceValidation:
             targets=["repo1"],
         )
 
-        assert provenance["_type"] == "https://in-toto.io/Statement/v0.1"
+        # v1, not v0.1: a SLSA Provenance v1 predicate is specified to
+        # travel in an in-toto Statement v1, and external verifiers
+        # (cosign, slsa-verifier) expect the pair to agree (#946).
+        assert provenance["_type"] == "https://in-toto.io/Statement/v1"
         assert provenance["predicateType"] == "https://slsa.dev/provenance/v1"
 
         build_type = provenance["predicate"]["buildDefinition"]["buildType"]
