@@ -43,6 +43,10 @@ from scripts.core.plugin_loader import get_plugin_loader, get_plugin_registry
 from scripts.core.priority_calculator import PriorityCalculator
 from scripts.core.reporters.basic_reporter import write_json, write_markdown
 from scripts.core.scan_timings import SCAN_TIMINGS_FILENAME
+from scripts.core.tool_diagnostics import (
+    ToolDiagnostic,
+    extract_tool_diagnostics,
+)
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -247,6 +251,56 @@ def _normalize_paths_and_ids(
     return paths_changed, ids_rekeyed
 
 
+def collect_tool_diagnostics(results_dir: Path) -> list[ToolDiagnostic]:
+    """Files the tools said they could not analyse (#837).
+
+    Walks the same tree as :func:`gather_results` but answers a different
+    question, so it is a separate pass rather than a second return value: the
+    adapters' contract stays `list[Finding]`, and only the five tools with a
+    known error channel pay an extra parse.
+
+    A file a tool could not read is not "clean" - it was never looked at - and
+    before this nothing in the report distinguished the two. Measured: bandit
+    named 2 unparseable files, and they appeared 0 times across findings.json,
+    SUMMARY.md, dashboard.html, findings.sarif and findings.csv, with 0 log
+    records at any level.
+    """
+    roots = scan_roots(results_dir)
+    loader = get_plugin_loader()
+    out: list[ToolDiagnostic] = []
+
+    for target_dir in _target_dirs(results_dir):
+        if not target_dir.exists():
+            continue
+        for target in sorted(p for p in target_dir.iterdir() if p.is_dir()):
+            for tool_output in target.glob("*.json"):
+                if tool_output.name == SCAN_TIMINGS_FILENAME:
+                    continue
+                tool_name = tool_output.stem
+                if tool_name == "afl++":
+                    tool_name = "aflplusplus"
+                adapter_name = loader._tool_to_adapter_name(tool_name)
+                out.extend(extract_tool_diagnostics(adapter_name, tool_output, roots))
+    return out
+
+
+def _target_dirs(results_dir: Path) -> list[Path]:
+    """The six target-type directories a scan can write.
+
+    Defined once because `gather_results` and `collect_tool_diagnostics` must
+    walk the same set - a seventh target type added to one and not the other
+    would go unreported in exactly the silent way #837 is about.
+    """
+    return [
+        results_dir / "individual-repos",
+        results_dir / "individual-images",
+        results_dir / "individual-iac",
+        results_dir / "individual-web",
+        results_dir / "individual-gitlab",
+        results_dir / "individual-k8s",
+    ]
+
+
 def gather_results(results_dir: Path) -> list[dict[str, Any]]:
     findings: list[dict[str, Any]] = []
 
@@ -282,14 +336,7 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
             logger.debug(f"Failed to update profiling metadata: {e}")
 
     # Scan all target type directories: repos, images, IaC, web, gitlab, k8s
-    target_dirs = [
-        results_dir / "individual-repos",
-        results_dir / "individual-images",
-        results_dir / "individual-iac",
-        results_dir / "individual-web",
-        results_dir / "individual-gitlab",
-        results_dir / "individual-k8s",
-    ]
+    target_dirs = _target_dirs(results_dir)
 
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
         for target_dir in target_dirs:
