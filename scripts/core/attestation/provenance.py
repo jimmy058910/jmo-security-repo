@@ -17,6 +17,7 @@ Usage:
 import hashlib
 import logging
 import os
+import re
 import sys
 import uuid
 from datetime import UTC, datetime
@@ -237,7 +238,33 @@ class ProvenanceGenerator:
         """
         if len(targets) != 1:
             return {}
-        return MetadataCapture().capture_git_context(targets[0])
+
+        # Only look where a repository could be. `cmd_attest` fills `targets`
+        # from `--scan-args`'s `repos`, which may hold repository *names*
+        # rather than paths; shelling out to `git -C repo1` for those is a
+        # pointless spawn whose failure we would then discard anyway.
+        target = str(targets[0])
+        if not Path(target).is_dir():
+            return {}
+
+        captured = MetadataCapture().capture_git_context(target)
+
+        # Validate before believing. A commit is 7-40 hex characters; anything
+        # else is not a measurement and has no place in a document whose whole
+        # purpose is to be believed. This is not hypothetical padding -- a test
+        # that patches `subprocess.run` wholesale hands this code a Mock where
+        # a SHA should be, and without the check that Mock reached
+        # `json.dumps`. Silent JSON corruption in an attestation is a worse
+        # failure than an omitted field.
+        context: dict[str, Any] = {}
+        commit = captured.get("commit")
+        if isinstance(commit, str) and re.fullmatch(r"[0-9a-f]{7,40}", commit):
+            context["commit"] = commit
+        for key in ("branch", "tag"):
+            value = captured.get(key)
+            if isinstance(value, str) and value:
+                context[key] = value
+        return context
 
     def _create_build_definition(
         self,

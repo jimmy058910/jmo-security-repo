@@ -201,6 +201,7 @@ def sample_findings_large_set():
     return findings
 
 
+@pytest.mark.requires_tools
 @pytest.mark.skipif(
     not opa_available(), reason="OPA binary not found (PATH or ~/.jmo/bin)"
 )
@@ -233,6 +234,7 @@ def test_policy_evaluation_performance_small(
     )
 
 
+@pytest.mark.requires_tools
 @pytest.mark.skipif(
     not opa_available(), reason="OPA binary not found (PATH or ~/.jmo/bin)"
 )
@@ -269,6 +271,7 @@ def test_policy_evaluation_performance_large(
     )
 
 
+@pytest.mark.requires_tools
 @pytest.mark.skipif(
     not opa_available(), reason="OPA binary not found (PATH or ~/.jmo/bin)"
 )
@@ -319,6 +322,7 @@ def test_all_policies_performance(
     )
 
 
+@pytest.mark.requires_tools
 @pytest.mark.skipif(
     not opa_available(), reason="OPA binary not found (PATH or ~/.jmo/bin)"
 )

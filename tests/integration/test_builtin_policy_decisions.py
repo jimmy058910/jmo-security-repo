@@ -62,10 +62,21 @@ POLICIES = [
     "zero-secrets",
 ]
 
-pytestmark = pytest.mark.skipif(
-    find_tool("opa") is None,
-    reason="OPA binary not found (PATH or ~/.jmo/bin)",
-)
+# `requires_tools` alongside the skipif, not instead of it. These tests shell
+# out to a real `opa eval` against real .rego policies -- running the real
+# binary is the point -- and the marker is what declares that. The skipif alone
+# left the dependency undeclared: the tests ran here and skipped on CI, which is
+# machine-dependent behaviour with nothing saying so. Invisible until the spawn
+# recorder stopped watching only semgrep (#994). The marker also means the
+# tool-contract job, which installs the tools, now runs them instead of
+# skipping them.
+pytestmark = [
+    pytest.mark.requires_tools,
+    pytest.mark.skipif(
+        find_tool("opa") is None,
+        reason="OPA binary not found (PATH or ~/.jmo/bin)",
+    ),
+]
 
 
 def _adapter_findings(records: dict[str, Any]) -> list[dict[str, Any]]:

@@ -264,7 +264,15 @@ def test_cmd_schedule_unknown_action():
 
 
 def test_cmd_schedule_exception_handling():
-    """Test cmd_schedule handles exceptions gracefully."""
+    """Test cmd_schedule reports a user-caused failure with its context.
+
+    The handler was a blanket `except Exception: _error(str(e))`, which printed
+    a bare message with no file and no schedule name, and swallowed genuine
+    programming errors into the same one-line report (#934). It now names the
+    exception type and the schedules file, so the two assertions below moved
+    from `assert_called_once_with("Test error")` to checking that the message
+    is present and that the file is too.
+    """
     args = create_mock_args(
         schedule_action="create", name="test", cron="0 2 * * *", repos_dir="~/repos"
     )
@@ -275,7 +283,10 @@ def test_cmd_schedule_exception_handling():
             result = cmd_schedule(args)
 
     assert result == 1
-    mock_error.assert_called_once_with("Test error")
+    reported = " ".join(str(c[0][0]) for c in mock_error.call_args_list)
+    assert "Test error" in reported
+    assert "ValueError" in reported
+    assert "schedules.json" in reported
 
 
 # ========== Test Category 2: _cmd_schedule_create ==========

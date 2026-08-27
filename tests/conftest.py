@@ -514,9 +514,151 @@ _ALLOWED_OFFLINE_SCANNER_SPAWNS = {
     # the tool it's most likely to regress on. Fixed via
     # `per_tool.semgrep.configs` pointing at a local rule file (task-8-report.md).
     "tests/integration/test_cli_profiles.py::test_scan_startup_probes_each_tool_at_most_once",
+    #
+    # The four below were invisible until the recorder stopped watching only
+    # semgrep (#994). Each was read individually; none reaches the network.
+    #
+    # `bandit -r <tmp repo>`. The test's whole point is that an *available*
+    # tool runs while missing ones are skipped, and bandit is a dev dependency
+    # so it is available on every machine and in CI alike -- marking this
+    # `requires_tools` would exclude it from the shards where it currently
+    # passes, which is a coverage loss for no safety gain. Offline: bandit
+    # fetches nothing.
+    "tests/integration/test_cli_scan_ci.py::test_scan_skips_missing_tools_and_runs_available",
+    #
+    # `trufflehog --version`, three times. These are target-discovery tests --
+    # they patch `_check_scan_tools` precisely so the tool pre-flight stops
+    # deciding the outcome -- and the probe is what the pre-flight does before
+    # discovery bails. A version probe fetches nothing.
+    "tests/cli/test_jmo.py::TestScanExitsNonZeroWhenNothingWasScanned::test_missing_repo_path_fails",
+    "tests/cli/test_jmo.py::TestScanExitsNonZeroWhenNothingWasScanned::test_no_target_flag_at_all_fails",
+    "tests/cli/test_jmo.py::TestScanExitsNonZeroWhenNothingWasScanned::test_the_rejected_target_is_named_in_the_log",
+    #
+    # `opa version`. This one must NOT get the marker: it is deliberately not
+    # skipped -- its point is that the skip guard and the product agree about
+    # whether OPA is usable, on every machine including those without it, and
+    # the defect it was written for was a guard that skipped. `requires_tools`
+    # would exclude it from exactly the runs it exists to cover. The probe is
+    # an availability check and fetches nothing.
+    "tests/performance/test_policy_performance.py::test_availability_check_agrees_with_the_product",
+    #
+    # `trivy --version`. Reviewed and allowed as offline, but flagged: the test
+    # mocks `ToolManager` and sets `binary_path = None`, so a real trivy probe
+    # means `cmd_tools_debug` has a second resolution path the mock does not
+    # cover -- i.e. on a machine without trivy this test exercises something
+    # different from what it does here. That is a test defect the widened
+    # recorder surfaced and it is filed separately; the spawn itself is
+    # harmless.
+    "tests/cli/test_tool_commands.py::TestCmdToolsDebugComprehensive::test_debug_tool_binary_not_found",
 }
 
-SCANNER_BINARY_NAMES = ("semgrep",)
+
+def _basename(argv0: object) -> str:
+    """The lowercased basename of *argv0*, on every platform.
+
+    Splits on both `/` and `\\` explicitly rather than delegating to
+    `pathlib.PurePosixPath`, which does not treat a backslash as a separator --
+    so a Windows-style argv0 would silently fail to match on the Ubuntu and
+    macOS shards even though the same code runs there.
+    """
+    return str(argv0).replace("\\", "/").rsplit("/", 1)[-1].lower()
+
+
+def _profile_scanner_binaries() -> tuple[str, ...]:
+    """Every binary a profile can invoke, derived from the tool registry.
+
+    Was the literal ``("semgrep",)`` -- #907's subject -- and that scope was
+    itself the blind spot #994 is about. #976 item 2 reported
+    `test_no_deps_skips_menu` spawning a real `bandit`; running it produced no
+    guard error, which read as "the issue is stale". It was not. A Popen-level
+    recorder watching every spawn showed what was actually happening:
+
+        uv.EXE pip install --python .venv/Scripts/python.exe --quiet bandit==1.9.4
+
+    Not a spawn -- a real network package install into the developer's venv,
+    from a unit test. **"No guard fired" was read as "nothing spawned", and the
+    guard's scope made that reading wrong.**
+
+    Derived from `PROFILE_TOOLS` and `TOOL_BINARY_NAMES` rather than listed, so
+    a tool added to a profile is covered without a second edit. A hand-kept list
+    is the same failure mode one level up: it is always missing whatever nobody
+    thought of.
+    """
+    from scripts.core.tool_registry import PROFILE_TOOLS, TOOL_BINARY_NAMES
+
+    names: set[str] = set()
+    for tools in PROFILE_TOOLS.values():
+        for tool in tools:
+            binary = TOOL_BINARY_NAMES.get(tool, tool)
+            # Strip a wrapper-script suffix: the registry records
+            # `dependency-check.sh` and `zap.sh`, but the images symlink the
+            # bare name too, and either form is a real spawn.
+            names.add(binary)
+            if "." in binary:
+                names.add(binary.rsplit(".", 1)[0])
+    return tuple(sorted(names))
+
+
+SCANNER_BINARY_NAMES = _profile_scanner_binaries()
+
+# The property, not a binary list: no test may spawn a process that installs a
+# package or downloads a payload. A list of scanner names will always be
+# missing whatever nobody thought of -- and in this case what nobody thought of
+# was not a scanner at all, it was `uv`.
+#
+# Keyed on (basename, required argv tokens) so that `uv run` and `git` stay
+# fine while `uv pip install` and `npm install` do not. curl and wget need no
+# verb: fetching a payload during a unit test is the thing being forbidden.
+_INSTALLER_ARGV_SHAPES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("uv", ("pip", "install")),
+    ("uv", ("tool", "install")),
+    ("uv", ("add",)),
+    ("uv", ("sync",)),
+    ("pip", ("install",)),
+    ("pip3", ("install",)),
+    ("npm", ("install",)),
+    ("npm", ("i",)),
+    ("npx", ()),
+    ("yarn", ("add",)),
+    ("pnpm", ("add",)),
+    ("brew", ("install",)),
+    ("cargo", ("install",)),
+    ("gem", ("install",)),
+    ("apt", ("install",)),
+    ("apt-get", ("install",)),
+    ("curl", ()),
+    ("wget", ()),
+)
+
+
+def installer_argv_match(argv: list[str]) -> str | None:
+    """Return a description of the install/download this argv performs, or None.
+
+    Matches on the whole argv rather than argv[0], because the offending call
+    was `uv pip install` -- `uv` itself is an ordinary, harmless binary and
+    `uv run` is used legitimately.
+    """
+    if not argv:
+        return None
+    exe = _basename(argv[0])
+    rest = [str(a) for a in argv[1:]]
+
+    # `python -m pip install ...` reaches the same place by another route.
+    if exe.startswith("python") and rest[:2] == ["-m", "pip"] and "install" in rest:
+        return "python -m pip install"
+
+    for name, required in _INSTALLER_ARGV_SHAPES:
+        if exe not in (name, f"{name}.exe", f"{name}.cmd", f"{name}.bat"):
+            continue
+        if all(token in rest for token in required):
+            return " ".join([name, *required]) if required else name
+    return None
+
+
+# Tests that may legitimately reach an installer or a downloader: they declare
+# it. `docker` joins `requires_tools` here because a container test's whole
+# point is a real image doing real work.
+_SPAWN_DECLARING_MARKERS = ("requires_tools", "docker", "smoke")
 
 
 def scanner_binary_match(argv0: object) -> str | None:
@@ -537,7 +679,7 @@ def scanner_binary_match(argv0: object) -> str | None:
     This way the match is identical on every platform regardless of which
     platform's paths a given test hardcodes.
     """
-    exe = str(argv0).replace("\\", "/").rsplit("/", 1)[-1].lower()
+    exe = _basename(argv0)
     for binary in SCANNER_BINARY_NAMES:
         if exe in (binary, f"{binary}.exe"):
             return binary
@@ -556,8 +698,12 @@ def make_scanner_spawn_recorder(delegate, sink: list[tuple[str, list[str]]]):
 
     def _recording_init(self, args, *a, **kw):
         argv = list(args) if isinstance(args, (list, tuple)) else [args]
-        if argv and scanner_binary_match(argv[0]) is not None:
-            sink.append((str(argv[0]), [str(x) for x in argv]))
+        strs = [str(x) for x in argv]
+        if argv and (
+            scanner_binary_match(argv[0]) is not None
+            or installer_argv_match(strs) is not None
+        ):
+            sink.append((str(argv[0]), strs))
         return delegate(self, args, *a, **kw)
 
     return _recording_init
@@ -616,8 +762,36 @@ def _guard_no_unmarked_scanner_spawn(request, monkeypatch):
 
     if not spawns:
         return
-    if request.node.get_closest_marker("requires_tools") is not None:
-        return  # declared -- exactly what the marker is for
+    declared = any(
+        request.node.get_closest_marker(m) is not None for m in _SPAWN_DECLARING_MARKERS
+    )
+
+    # Installs and downloads first, and they have NO allowlist. A unit test that
+    # reaches the network to install a package is never acceptable, whatever the
+    # reviewed reasoning -- and this is the class the semgrep-only scope hid:
+    # six tests in tests/cli/test_wizard_tool_checker.py could reach
+    # `ToolInstaller.install_tools_parallel`, only one patched it, and the
+    # recorder reported nothing because `uv` is not a scanner (#994).
+    installs = [
+        (installer_argv_match(argv), argv)
+        for _, argv in spawns
+        if installer_argv_match(argv) is not None
+    ]
+    if installs and not declared:
+        lines = "\n".join(f"  {kind}: {argv!r}" for kind, argv in installs)
+        pytest.fail(
+            f"{request.node.nodeid} spawned a process that installs or "
+            f"downloads:\n{lines}\n"
+            "A unit test must not reach the network to fetch a package. Patch "
+            "the installer (see tests/cli/test_wizard_tool_checker.py's "
+            "module-scoped autouse fixture), or mark the test "
+            f"{'/'.join(_SPAWN_DECLARING_MARKERS)} if it genuinely needs the "
+            "real thing. There is deliberately no allowlist for this. See #994.",
+            pytrace=False,
+        )
+
+    if declared:
+        return  # declared -- exactly what the markers are for
 
     reaches_network = any(semgrep_argv_uses_config_auto(argv) for _, argv in spawns)
     if not reaches_network and request.node.nodeid in _ALLOWED_OFFLINE_SCANNER_SPAWNS:
