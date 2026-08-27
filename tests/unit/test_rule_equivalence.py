@@ -174,9 +174,21 @@ class TestSecretDetectionEquivalence:
         assert canonical is None or canonical == "secret-aws-access-key"
 
     def test_github_token_equivalence(self):
-        """Test GitHub token detection across tools."""
-        canonical = get_canonical_rule_id("gitleaks", "github-pat")
-        assert canonical == "secret-github-token"
+        """Test GitHub token detection across tools.
+
+        Used to assert on `("gitleaks", "github-pat")`. gitleaks has no
+        adapter, is absent from `PROFILE_TOOLS` and from `versions.yaml`, and
+        appeared nowhere in the product except `RULE_EQUIVALENCE` - so this
+        pinned an entry that could never match a real finding. Its six tuples
+        were removed in #846; the assertion now uses two tools that exist, and
+        checks they agree, which is what a cross-tool equivalence test is for.
+        """
+        canonical1 = get_canonical_rule_id("trufflehog", "github-pat")
+        canonical2 = get_canonical_rule_id(
+            "noseyparker", "GitHub Personal Access Token"
+        )
+
+        assert canonical1 == canonical2 == "secret-github-token"
 
 
 class TestKubernetesEquivalence:

@@ -63,6 +63,8 @@ def detect_git_context() -> dict[str, Any] | None:
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=5,
         )
         current_branch = result.stdout.strip() if result.returncode == 0 else None
@@ -88,6 +90,8 @@ def detect_git_context() -> dict[str, Any] | None:
             ["git", "config", "--get", "remote.origin.url"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=5,
         )
         remote_url = result.stdout.strip() if result.returncode == 0 else ""

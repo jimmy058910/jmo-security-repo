@@ -13,6 +13,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 
 from scripts.cli.scan_jobs.repository_scanner import scan_repository
+from scripts.cli.scan_utils import not_attempted_tools
 
 
 class TestRepositoryScanner:
@@ -357,7 +358,12 @@ class TestRepositoryScanner:
                 write_stub_func=mock_write_stub,
             )
 
-            assert statuses["zap"] is True
+            # Stubbed, not run. `False` plus a `__not_attempted__` record is
+            # the point of #825: an empty zap report from a scan that never
+            # looked is not a clean web scan. This assertion read `is True`,
+            # which pinned the defect as the contract.
+            assert statuses["zap"] is False
+            assert not_attempted_tools(statuses) == ["zap"]
             # No tool definitions should be created (stub written directly)
             MockRunner.assert_called_once()
             args, kwargs = MockRunner.call_args
@@ -443,7 +449,8 @@ class TestRepositoryScanner:
                 write_stub_func=mock_write_stub,
             )
 
-            assert statuses["falco"] is True
+            assert statuses["falco"] is False
+            assert not_attempted_tools(statuses) == ["falco"]
 
     @pytest.mark.skipif(
         sys.platform == "win32",
@@ -531,7 +538,8 @@ class TestRepositoryScanner:
                 write_stub_func=mock_write_stub,
             )
 
-            assert statuses["afl++"] is True
+            assert statuses["afl++"] is False
+            assert not_attempted_tools(statuses) == ["afl++"]
 
     def test_deep_profile_all_11_tools(self, tmp_path):
         """Test deep profile executes all 11 tools correctly"""
@@ -668,10 +676,14 @@ class TestRepositoryScanner:
             assert any("semgrep" in str(call[1]) for call in stub_calls)
             assert any("trivy" in str(call[1]) for call in stub_calls)
 
-            # All tools should be marked as True in statuses
-            assert statuses["trufflehog"] is True
-            assert statuses["semgrep"] is True
-            assert statuses["trivy"] is True
+            # All three were stubbed, so none of them succeeded (#825).
+            for tool in ("trufflehog", "semgrep", "trivy"):
+                assert statuses[tool] is False, f"{tool} was stubbed, not run"
+            assert not_attempted_tools(statuses) == [
+                "semgrep",
+                "trivy",
+                "trufflehog",
+            ]
 
     def test_allow_missing_tools_all_scanners(self, tmp_path):
         """Test allow_missing_tools for all 11 deep profile tools"""
@@ -722,7 +734,10 @@ class TestRepositoryScanner:
             # All 11 tools should have stubs written
             assert len(stub_calls) == 11
             for tool in all_tools:
-                assert statuses[tool] is True, f"{tool} should be marked True"
+                assert statuses[tool] is False, f"{tool} was stubbed, not run"
+                assert tool in not_attempted_tools(
+                    statuses
+                ), f"{tool} was stubbed but not recorded as not-attempted"
                 # For afl++, check for "aflplusplus" in path (++ is sanitized)
                 search_term = "aflplusplus" if tool == "afl++" else tool
                 assert any(
@@ -885,9 +900,13 @@ class TestRepositoryScanner:
             assert statuses["trufflehog"] is True
             assert statuses["trivy"] is True
 
-            # Missing tools should have stubs
-            assert statuses["semgrep"] is True
-            assert statuses["bandit"] is True
+            # Missing tools should have stubs, and a stub is not a success.
+            # This is the discriminating case: trufflehog and trivy really ran,
+            # so the True above and the False here cannot both come from a
+            # constant (#825).
+            assert statuses["semgrep"] is False
+            assert statuses["bandit"] is False
+            assert not_attempted_tools(statuses) == ["bandit", "semgrep"]
 
             # Stubs should be written for missing tools only
             assert "semgrep" in list(stub_calls)
@@ -1377,6 +1396,128 @@ class TestFailedToolsAreReported:
 
         assert statuses["trivy"] is True
         assert "trivy" not in caplog.text
+
+
+class TestScancodeIsAskedToDetectSomething:
+    """#835: scancode ran for up to 20 minutes and could not produce a finding.
+
+    ScanCode emits detection data only for the detectors it is asked for. JMo
+    asked for none, so it walked the tree and wrote structure only -- `path`,
+    `type`, `scan_errors` -- while `scancode_adapter` reads `license_detections`
+    and `copyrights`. Neither key could exist in output produced that way.
+
+    Measured against the real scancode 32.5.0 rather than its documentation,
+    which is what the issue asked for before shipping:
+
+    | invocation | keys/entry | license_detections | adapter findings |
+    |---|---|---|---|
+    | as JMo invoked it | 3 | 0 | **0** |
+    | `--license --copyright` | 11 | 2 | **2** |
+    | + `--package --info` | 34 | 2 | **2** |
+
+    The last row is why the flag set is two and not the four the issue
+    suggested: the extra pair adds 23 keys per entry that nothing reads, on a
+    tree that ran to 30,496 entries in the recorded juice-shop scan.
+    """
+
+    def _scancode_command(self, tmp_path) -> list[str]:
+        """The argv `scan_repository` builds for scancode, captured."""
+        from scripts.core.tool_runner import ToolResult
+
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / "LICENSE").write_text("MIT License\n")
+
+        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+            mock_runner.run_all_parallel.return_value = [
+                ToolResult(tool="scancode", status="success", attempts=1)
+            ]
+            scan_repository(
+                repo=repo,
+                results_dir=tmp_path,
+                tools=["scancode"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+                # `_find_tool` is a closure over `scan_repository`, so it cannot
+                # be patched on the module. The function takes this injection
+                # point for exactly this reason.
+                find_tool_func=lambda name: (
+                    "/usr/bin/scancode" if name == "scancode" else None
+                ),
+            )
+            args, kwargs = MockRunner.call_args
+            tool_defs = kwargs.get("tools") or (args[0] if args else [])
+
+        scancode_defs = [d for d in tool_defs if d.name == "scancode"]
+        assert (
+            len(scancode_defs) == 1
+        ), f"expected exactly one scancode invocation, got {len(scancode_defs)}"
+        return list(scancode_defs[0].command)
+
+    def test_the_detectors_the_adapter_reads_are_requested(self, tmp_path):
+        cmd = self._scancode_command(tmp_path)
+        assert "--license" in cmd, (
+            "scancode is invoked with no license detector, so "
+            "`license_detections` cannot appear in its output and the adapter "
+            f"cannot produce a finding: {cmd}"
+        )
+        assert "--copyright" in cmd, f"no copyright detector requested: {cmd}"
+
+    def test_the_flag_set_stays_minimal(self, tmp_path):
+        """Negative control, and the reason it is two flags and not four.
+
+        Without this, adding every detector scancode offers would pass the test
+        above while making a `deep` scan slower and its output larger for data
+        no adapter reads.
+        """
+        cmd = self._scancode_command(tmp_path)
+        unread_detectors = [
+            f for f in ("--package", "--info", "--email", "--url") if f in cmd
+        ]
+        assert not unread_detectors, (
+            "these detectors produce keys `scancode_adapter` never reads, at a "
+            f"cost paid on every entry of the scanned tree: {unread_detectors}"
+        )
+
+    def test_per_tool_flags_are_still_appended(self, tmp_path):
+        """The defaults must not displace configuration.
+
+        `get_tool_flags("scancode")` resolves `per_tool.scancode.flags`, and a
+        user who adds a detector must still get it.
+        """
+        from scripts.core.tool_runner import ToolResult
+
+        repo = tmp_path / "repo"
+        repo.mkdir()
+
+        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+            mock_runner.run_all_parallel.return_value = [
+                ToolResult(tool="scancode", status="success", attempts=1)
+            ]
+            scan_repository(
+                repo=repo,
+                results_dir=tmp_path,
+                tools=["scancode"],
+                timeout=600,
+                retries=0,
+                per_tool_config={"scancode": {"flags": ["--max-depth", "3"]}},
+                allow_missing_tools=False,
+                find_tool_func=lambda name: (
+                    "/usr/bin/scancode" if name == "scancode" else None
+                ),
+            )
+            args, kwargs = MockRunner.call_args
+            defs = kwargs.get("tools") or (args[0] if args else [])
+
+        cmd = next(d.command for d in defs if d.name == "scancode")
+        assert "--max-depth" in cmd and "3" in cmd, f"per-tool flags dropped: {cmd}"
+        assert "--license" in cmd, f"defaults dropped by per-tool config: {cmd}"
 
 
 if __name__ == "__main__":

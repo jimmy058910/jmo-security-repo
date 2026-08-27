@@ -1,10 +1,12 @@
 """Tests for history CLI commands."""
 
+import hashlib
 import json
 import os
 import sqlite3
 import stat
 import time
+from pathlib import Path
 
 import pytest
 
@@ -2100,12 +2102,17 @@ class TestReadPathDoesNotWriteToTheDatabase:
     kept as a fixture -- failed outright with `attempt to write a readonly
     database`, surfaced as a traceback rather than a message.
 
-    Scope note: on a WRITABLE database the pragma still succeeds and still
-    converts the file to WAL, so merely reading is still not byte-neutral
-    there. That is deliberate (WAL is wanted for the real database, and the
-    write path shares this connection helper) and is tracked separately. The
-    guarantee asserted here is narrower and is the one that matters: a database
-    we cannot write is left unwritten, and stays readable.
+    The writable case used to be excluded here, on the reasoning that WAL is
+    wanted for the real database and the write path shares this helper. It was
+    tracked as #894 and is now closed: `get_connection` takes `read_only`, and
+    every command that only reads passes it, so reading a writable database is
+    byte-neutral too. Measured before the fix -- one `jmo history stats` against
+    a rollback-journal database changed its sha256 with its size unchanged,
+    because header bytes 18/19 went 1 -> 2.
+
+    That matters beyond tidiness: this repo's audit protocol is "snapshot the
+    database first", and a snapshot whose checksum moves the moment anything
+    inspects it cannot be used to prove a fixture was untouched.
     """
 
     @staticmethod
@@ -2167,6 +2174,174 @@ class TestReadPathDoesNotWriteToTheDatabase:
 
         assert result == 0, f"list failed on a read-only database: {captured.err}"
         assert len(json.loads(captured.out)) == 2
+
+    # ---- #894: the writable case ----------------------------------------
+
+    @staticmethod
+    def _digest(path) -> str:
+        return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+    def test_reading_a_writable_database_leaves_it_byte_identical(
+        self, sample_database, capsys
+    ):
+        """The file is writable, so nothing stops the pragma but the fix.
+
+        Asserting on the whole file's digest rather than on header byte 18:
+        byte 18 is where this defect happened to show up, and pinning the
+        symptom would miss the next write that lands somewhere else.
+        """
+        assert sample_database.read_bytes()[18] == 1, (
+            "fixture is not on the rollback journal, so a WAL conversion would "
+            "have nothing to do and this test could not fail"
+        )
+        before = self._digest(sample_database)
+
+        assert cmd_history_stats(self._stats_args(sample_database)) == 0
+        capsys.readouterr()
+
+        assert self._digest(sample_database) == before, (
+            "a pure read rewrote the database; a snapshot cannot be used as a "
+            "fixture if inspecting it changes its checksum"
+        )
+
+    def test_a_writable_connection_still_converts_the_file(self, sample_database):
+        """Negative control, and a reproduction of the defect itself.
+
+        The same helper without `read_only` runs the same SELECT and the file
+        changes. Without this, the test above would pass on a build where the
+        pragma had simply stopped working for an unrelated reason, or where the
+        fixture was already WAL and had nothing left to convert.
+
+        Deliberately drives `get_connection` rather than a write *command*:
+        this isolates the one mechanism at issue -- a persistent pragma set
+        while only reading -- instead of a command that also deletes rows.
+        """
+        from scripts.core.history_db import get_connection
+
+        before = self._digest(sample_database)
+
+        conn = get_connection(sample_database)  # writable: the pre-fix path
+        try:
+            conn.execute("SELECT COUNT(*) FROM scans").fetchone()
+        finally:
+            conn.close()
+
+        assert self._digest(sample_database) != before, (
+            "a writable connection did not convert the file, so the read-only "
+            "assertion above is not distinguishing anything"
+        )
+        assert sample_database.read_bytes()[18] == 2, "expected a WAL header"
+
+    def test_a_read_only_connection_refuses_writes(self, sample_database):
+        """`read_only` opens the file `mode=ro`, not merely skips a pragma.
+
+        Both halves of the fix independently prevent the header rewrite, so
+        neither is killed by asserting the file is unchanged. This pins the
+        half that byte-identity cannot see: the handle itself rejects a write.
+        """
+        from scripts.core.history_db import get_connection
+
+        conn = get_connection(sample_database, read_only=True)
+        try:
+            with pytest.raises(sqlite3.OperationalError, match="readonly"):
+                conn.execute("DELETE FROM scans")
+        finally:
+            conn.close()
+
+    def test_a_read_only_connection_attempts_no_write_pragma(
+        self, sample_database, monkeypatch
+    ):
+        """The other half: it does not rely on an exception handler.
+
+        `PRAGMA journal_mode=WAL` on a `mode=ro` handle raises
+        `attempt to write a readonly database`, which `get_connection` catches
+        and ignores. That works, but it means read-only connections survive
+        only because a bare `except` is there -- narrow the except later and
+        every read command breaks. Skipping the pragma outright is the actual
+        contract, so it is asserted directly.
+        """
+        from scripts.core import history_db
+
+        statements: list[str] = []
+        real_connect = sqlite3.connect
+
+        def spy_connect(*args, **kwargs):
+            conn = real_connect(*args, **kwargs)
+            conn.set_trace_callback(statements.append)
+            return conn
+
+        monkeypatch.setattr(history_db.sqlite3, "connect", spy_connect)
+        history_db.get_connection(sample_database, read_only=True).close()
+
+        assert statements, "trace callback recorded nothing; the spy is inert"
+        offenders = [s for s in statements if "journal_mode" in s.lower()]
+        assert not offenders, (
+            "a read-only connection issued a persistent write pragma and "
+            f"relied on the handler to swallow it: {offenders}"
+        )
+
+    def test_every_history_reader_opens_its_connection_read_only(self):
+        """Drift guard: a new read command must not regress this silently.
+
+        Behavioural coverage above runs one command. This asserts the property
+        across every `get_connection` call on the history read path, including
+        the two shared readers a per-command test would miss -- `TrendAnalyzer`
+        and `diff_engine` each open a *second* connection, and `jmo trends`
+        still rewrote the header after its own connection was made read-only.
+
+        The write list is one entry with a reason, not a convenience: prune
+        deletes rows and must hold a writable handle.
+        """
+        import ast
+
+        write_sites = {"cmd_history_prune"}
+        scripts = Path(__file__).resolve().parents[2] / "scripts"
+        files = [
+            scripts / "cli" / "history_commands.py",
+            scripts / "cli" / "trend_commands.py",
+            scripts / "core" / "trend_analyzer.py",
+            scripts / "core" / "diff_engine.py",
+        ]
+
+        offenders: list[str] = []
+        found: list[str] = []
+        for path in files:
+            src = path.read_bytes().decode("utf-8")
+            tree = ast.parse(src, filename=str(path))
+            funcs = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                if ast.unparse(node.func) != "get_connection":
+                    continue
+                owner = min(
+                    (f for f in funcs if f.lineno <= node.lineno <= f.end_lineno),
+                    key=lambda f: f.end_lineno - f.lineno,
+                    default=None,
+                )
+                name = owner.name if owner else "<module>"
+                where = f"{path.name}:{node.lineno} ({name})"
+                found.append(where)
+                kw = next((k for k in node.keywords if k.arg == "read_only"), None)
+                passes = kw is not None and not (
+                    isinstance(kw.value, ast.Constant) and kw.value.value is False
+                )
+                if name in write_sites:
+                    if passes:
+                        offenders.append(f"{where} is a writer but asks for read_only")
+                elif not passes:
+                    offenders.append(f"{where} reads but does not pass read_only")
+
+        # Meta-guard: an extractor that silently finds nothing passes every
+        # assertion built on it.
+        assert len(found) >= 12, f"extractor found only {len(found)} sites: {found}"
+        joined = " ".join(found)
+        for expected in ("cmd_history_stats", "__enter__", "cmd_trends_show"):
+            assert expected in joined, f"extractor missed {expected}: {found}"
+
+        assert not offenders, "read path opens writable connections:\n" + "\n".join(
+            f"  {o}" for o in offenders
+        )
 
 
 class TestStatsDisclosesWhatItLeftOut:

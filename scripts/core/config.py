@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import logging
 import math
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from typing import Any as AnyType
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     import yaml as YamlModule
@@ -152,7 +155,20 @@ class Config:
             "zap",
         ]
     )
-    outputs: list[str] = field(default_factory=lambda: ["json", "md", "yaml", "html"])
+    # `compliance` and `suppressions` are here so gating them under #867 does
+    # not change what a config that never mentions `outputs:` produces. They
+    # were written unconditionally before, outside any gate; being in the
+    # default keeps that true while making `outputs: []` mean what it says.
+    outputs: list[str] = field(
+        default_factory=lambda: [
+            "json",
+            "md",
+            "yaml",
+            "html",
+            "compliance",
+            "suppressions",
+        ]
+    )
     fail_on: str = ""
     threads: int | str | None = None  # int for explicit count, 'auto' for detection
     include: list[str] = field(default_factory=list)
@@ -179,6 +195,64 @@ class Config:
         if isinstance(self.retries, RetryConfig):
             return self.retries
         return RetryConfig.from_flat_retries(self.retries)
+
+
+#: Top-level ``jmo.yml`` keys ``load_config`` actually reads.
+#:
+#: This is deliberately a hand-written set of *YAML* keys rather than the
+#: ``Config`` dataclass's field names: the two are not the same. ``profiling``
+#: is a nested block whose children flatten onto the dataclass as
+#: ``profiling_min_threads`` and friends, so a set derived from the dataclass
+#: would reject the real key and accept three that may not be written.
+#:
+#: It cannot silently drift out of step with the loader:
+#: ``tests/unit/test_config_unknown_keys.py`` AST-walks ``load_config`` for
+#: every ``data.get("...")`` / ``"..." in data`` and asserts the two agree in
+#: both directions. Add a key here in the same commit that reads it.
+RECOGNISED_CONFIG_KEYS: frozenset[str] = frozenset(
+    {
+        "deduplication",
+        "default_profile",
+        "exclude",
+        "fail_on",
+        "include",
+        "log_level",
+        "outputs",
+        "per_tool",
+        "policy",
+        "profiles",
+        "profiling",
+        "retries",
+        "threads",
+        "timeout",
+        "tools",
+    }
+)
+
+
+def _warn_unrecognised_config_keys(path: Path, data: dict) -> None:
+    """Warn about top-level ``jmo.yml`` keys that configure nothing.
+
+    Config used to discard anything it did not recognise in total silence: no
+    warning, no error, the setting simply did nothing. That is how
+    ``exclude_paths`` survived in ``docs/RESULTS_GUIDE.md`` as documented
+    guidance for suppressing false positives -- the real key is ``exclude``, and
+    a user following the docs got no findings suppressed and no indication why
+    (#859). The same silence swallows any typo.
+
+    Top-level keys only. ``profiling``'s children are checked by the loader
+    itself, and users legitimately keep YAML anchors and comments, which never
+    reach this mapping.
+    """
+    unknown = sorted(set(data) - RECOGNISED_CONFIG_KEYS)
+    if not unknown:
+        return
+    named = ", ".join(repr(k) for k in unknown)
+    logger.warning(
+        f"{path} has unrecognised top-level key(s) {named}; they configure "
+        f"nothing and are ignored. Recognised keys: "
+        f"{', '.join(sorted(RECOGNISED_CONFIG_KEYS))}"
+    )
 
 
 def load_config(path: str | None) -> Config:
@@ -233,6 +307,17 @@ def load_config(path: str | None) -> Config:
     if yaml is None:
         return Config()
     data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    if not isinstance(data, dict):
+        # A jmo.yml holding a list or a scalar is not a config. Every reader
+        # below assumes a mapping, so this used to die on `data.get(...)` with
+        # an AttributeError from inside a function whose docstring says it
+        # raises nothing. Say what happened and fall back to defaults.
+        logger.warning(
+            f"{p} does not contain a top-level mapping "
+            f"(found {type(data).__name__}); ignoring it and using defaults"
+        )
+        return Config()
+    _warn_unrecognised_config_keys(p, data)
     cfg = Config()
     if isinstance(data.get("tools"), list):
         cfg.tools = [str(x) for x in data["tools"]]

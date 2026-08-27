@@ -50,7 +50,14 @@ def test_config_default_values():
 
     # Verify default outputs
     assert isinstance(cfg.outputs, list)
-    assert cfg.outputs == ["json", "md", "yaml", "html"]
+    assert cfg.outputs == [
+        "json",
+        "md",
+        "yaml",
+        "html",
+        "compliance",
+        "suppressions",
+    ]
 
     # Verify other defaults
     assert cfg.fail_on == ""
@@ -128,7 +135,14 @@ def test_load_config_empty_file(tmp_path: Path):
 
     # Should return defaults
     assert len(cfg.tools) == 7
-    assert cfg.outputs == ["json", "md", "yaml", "html"]
+    assert cfg.outputs == [
+        "json",
+        "md",
+        "yaml",
+        "html",
+        "compliance",
+        "suppressions",
+    ]
 
 
 def test_load_config_minimal_valid(tmp_path: Path):
@@ -209,7 +223,14 @@ outputs: json
     cfg = load_config(str(yaml_file))
 
     # Should use defaults
-    assert cfg.outputs == ["json", "md", "yaml", "html"]
+    assert cfg.outputs == [
+        "json",
+        "md",
+        "yaml",
+        "html",
+        "compliance",
+        "suppressions",
+    ]
 
 
 # ========== Category 4: Fail-On Configuration ==========

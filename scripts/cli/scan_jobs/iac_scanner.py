@@ -21,6 +21,7 @@ from ..path_sanitizers import _sanitize_path_component, _validate_output_path
 from ..scan_utils import (
     filter_trivy_flags,
     find_tool,
+    record_not_attempted,
     report_tool_failure,
     tool_flags,
     tool_timeout,
@@ -119,7 +120,7 @@ def scan_iac_file(
             )
         elif allow_missing_tools:
             _write_stub("checkov", checkov_out)
-            statuses["checkov"] = True
+            record_not_attempted(statuses, "checkov")
 
     # Trivy config scan for IaC files
     if "trivy" in tools:
@@ -151,7 +152,7 @@ def scan_iac_file(
             )
         elif allow_missing_tools:
             _write_stub("trivy", trivy_out)
-            statuses["trivy"] = True
+            record_not_attempted(statuses, "trivy")
 
     # Execute all tools with ToolRunner
     runner = ToolRunner(

@@ -584,7 +584,11 @@ def to_markdown_summary(findings: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-def write_markdown(findings: list[dict[str, Any]], out_path: str | Path) -> None:
+def write_markdown(
+    findings: list[dict[str, Any]],
+    out_path: str | Path,
+    unanalysed: list[tuple[str, str, str]] | None = None,
+) -> None:
     """Write findings to Markdown SUMMARY.md file.
 
     Generates human-readable Markdown summary with severity counts,
@@ -593,6 +597,10 @@ def write_markdown(findings: list[dict[str, Any]], out_path: str | Path) -> None
     Args:
         findings (list[dict[str, Any]]): List of CommonFinding dictionaries
         out_path (str | Path): Path to write SUMMARY.md (e.g., results/summaries/SUMMARY.md)
+        unanalysed: ``(tool, path, reason)`` triples for files a tool reported
+            it could not analyse (#837). A reader cannot otherwise tell
+            "0 findings in this file" from "this file was never looked at".
+            The section is omitted entirely when there are none.
 
     Returns:
         None (writes file to disk)
@@ -615,4 +623,34 @@ def write_markdown(findings: list[dict[str, Any]], out_path: str | Path) -> None
     """
     p = Path(out_path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(to_markdown_summary(findings), encoding="utf-8")
+    body = to_markdown_summary(findings)
+    if unanalysed:
+        body += _unanalysed_section(unanalysed)
+    p.write_text(body, encoding="utf-8")
+
+
+def _unanalysed_section(unanalysed: list[tuple[str, str, str]]) -> str:
+    """Render the files tools reported they could not analyse (#837).
+
+    Deliberately rendered only when non-empty. A "0 files could not be
+    analysed" line on every healthy run is the always-fires shape #784
+    removed, and it trains the reader to skip the section on the one run where
+    it matters.
+    """
+    files = sorted({path for _, path, _ in unanalysed if path})
+    lines = [
+        "",
+        "## Files that could not be analysed",
+        "",
+        f"{len(files) or len(unanalysed)} item(s) a tool reported it could not "
+        "read. These are **not** clean results - they were never scanned, and "
+        "any finding they contain is absent from this report.",
+        "",
+        "| Tool | Path | Reason |",
+        "| --- | --- | --- |",
+    ]
+    for tool, path, reason in sorted(unanalysed):
+        safe = reason.replace("|", "\\|")
+        lines.append(f"| {tool} | `{path or '(run-level)'}` | {safe} |")
+    lines.append("")
+    return "\n".join(lines)

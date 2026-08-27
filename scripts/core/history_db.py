@@ -256,25 +256,53 @@ CREATE_VIEWS = [
 ]
 
 
-def get_connection(db_path: Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
+def read_only_uri(db_path: Path) -> str:
+    """Return a `file:...?mode=ro` URI for `db_path`.
+
+    Windows needs forward slashes and an extra leading slash before the drive
+    letter, so `C:\\x\\y.db` becomes `file:///C:/x/y.db`. Factored out of
+    `query_findings` (the first read-only connection in this file) so
+    `get_connection` spells it the same way.
+    """
+    uri_path = Path(db_path).resolve().as_posix()
+    if not uri_path.startswith("/"):
+        uri_path = "/" + uri_path
+    return f"file://{uri_path}?mode=ro"
+
+
+def get_connection(
+    db_path: Path = DEFAULT_DB_PATH, *, read_only: bool = False
+) -> sqlite3.Connection:
     """
     Get database connection with optimizations.
 
     Args:
         db_path: Path to SQLite database file
+        read_only: Open the file read-only and skip the `journal_mode` pragma.
+            Pass this from any command that only reads. `journal_mode` is a
+            persistent, on-disk property, so setting it means *reading* the
+            database rewrites its header -- bytes 18/19 go 1 -> 2 and the file's
+            checksum changes with no row touched. Measured: a single
+            `jmo history stats` against a rollback-journal database changed its
+            sha256 while leaving its size identical (#894).
+
+            The file must already exist: a read-only connection cannot create
+            one. Every `jmo history` / `jmo trends` command checks that first.
 
     Returns:
         sqlite3.Connection with row_factory set
 
     Note:
-        - Creates .jmo directory if it doesn't exist
-        - Enables WAL mode for better concurrency
+        - Creates .jmo directory if it doesn't exist (writable mode only)
+        - Enables WAL mode for better concurrency (writable mode only)
         - Sets pragmas for performance
     """
     db_path = Path(db_path)
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-
-    conn = sqlite3.connect(str(db_path), timeout=30.0)
+    if read_only:
+        conn = sqlite3.connect(read_only_uri(db_path), uri=True, timeout=30.0)
+    else:
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(str(db_path), timeout=30.0)
     conn.row_factory = sqlite3.Row
 
     # Performance optimizations.
@@ -290,11 +318,17 @@ def get_connection(db_path: Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
     #     (header bytes 18/19 go 1 -> 2), so a snapshot is not byte-stable
     #     across inspection.
     # WAL is an optimisation, not a requirement. Best-effort it, and let a
-    # database we cannot write stay readable.
-    try:
-        conn.execute("PRAGMA journal_mode=WAL;")
-    except sqlite3.OperationalError:
-        pass
+    # database we cannot write stay readable. Skipped outright under
+    # `read_only`, which is the difference between "survives a read-only file"
+    # and "does not touch a writable one" -- the second is what makes a snapshot
+    # usable as a fixture, and what `read_only` is for.
+    if not read_only:
+        try:
+            conn.execute("PRAGMA journal_mode=WAL;")
+        except sqlite3.OperationalError:
+            pass
+    # The remaining pragmas are all connection-local, so they are safe on a
+    # read-only handle and are left in place for both modes.
     conn.execute("PRAGMA synchronous=NORMAL;")
     conn.execute("PRAGMA cache_size=10000;")
     conn.execute("PRAGMA temp_store=MEMORY;")
@@ -853,6 +887,83 @@ def _scanned_repo_paths(results_dir: Path) -> list[Path]:
     return [Path(entry) for entry in raw if isinstance(entry, str) and entry]
 
 
+def _scan_duration_seconds(results_dir: Path) -> float | None:
+    """Return the scan phase's own wall clock, or None if it was not recorded.
+
+    Read from `duration_seconds` in `.scan_metadata.json`, written at the end of
+    `cmd_scan`. Both production callers of `store_scan` sit in the *report*
+    phase, whose only clock measures aggregation -- roughly thirty seconds
+    standing in for a twenty-minute scan. Substituting it would fill the column
+    with a plausible wrong number, and `jmo history list` renders NULL as "N/A",
+    which is honestly empty (#981).
+
+    None is therefore the correct answer for a results directory produced before
+    this key existed, or by something other than `jmo scan`.
+    """
+    try:
+        meta = json.loads((results_dir / ".scan_metadata.json").read_text("utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(meta, dict):
+        return None
+    raw = meta.get("duration_seconds")
+    # bool is an int subclass, and `True` would store as 1.0 second.
+    if isinstance(raw, bool) or not isinstance(raw, int | float):
+        return None
+    return float(raw) if raw >= 0 else None
+
+
+def _by_tool(findings: list[dict[str, Any]]) -> str:
+    """`tool=count` pairs, so a count points at something actionable."""
+    counts: dict[str, int] = {}
+    for finding in findings:
+        tool = (finding.get("tool") or {}).get("name") or "unknown"
+        counts[tool] = counts.get(tool, 0) + 1
+    return ", ".join(f"{tool}={n}" for tool, n in sorted(counts.items()))
+
+
+def _report_findings_not_stored(
+    no_id: list[dict[str, Any]],
+    duplicate_id: list[dict[str, Any]],
+    scan_id: str,
+) -> None:
+    """Name the tools whose findings could not be recorded, and how many (#901).
+
+    WARNING rather than INFO for the same reason as the read-side reporter in
+    `normalize_and_report`: `configure_scan_logging` floors the `scripts` logger
+    at WARNING for a normal run, so anything below it is invisible in exactly
+    the situation this exists to make visible.
+
+    Kept separate from that reporter rather than shared, because the two say
+    different true things. There, findings were deleted from the report. Here
+    the report still has them and only the history row does not, so `jmo diff`
+    against this scan will read them as new.
+
+    The two causes are reported separately for the same reason: a finding with
+    no id is unkeyable, while a repeated id means two findings JMo considers
+    the same one. Only the second is plausibly benign, and collapsing them
+    would hide which one happened.
+    """
+    if no_id:
+        logger.warning(
+            "Scan %s: %d finding(s) had no id and were NOT recorded in the "
+            "history database - they remain in this scan's reports, so a later "
+            "`jmo diff` against this scan will read them as new (by tool: %s)",
+            scan_id,
+            len(no_id),
+            _by_tool(no_id),
+        )
+    if duplicate_id:
+        logger.warning(
+            "Scan %s: %d finding(s) repeated an id already seen in this scan "
+            "and were NOT recorded in the history database - two findings with "
+            "one id are one finding to every other part of JMo (by tool: %s)",
+            scan_id,
+            len(duplicate_id),
+            _by_tool(duplicate_id),
+        )
+
+
 def store_scan(
     results_dir: Path,
     profile: str,
@@ -880,7 +991,10 @@ def store_scan(
         tag: Git tag (optional, auto-detected if None)
         jmo_version: JMo Security version (default: resolved via
             get_jmo_version(), which reads installed distribution metadata)
-        duration_seconds: Total scan duration in seconds
+        duration_seconds: Total scan duration in seconds. Defaults to the value
+            the scan phase recorded in `.scan_metadata.json`; pass one only if
+            you have a better measurement than the scan's own wall clock. The
+            report phase does not -- see `_scan_duration_seconds` (#981)
         no_store_raw: If True, don't store raw finding data (--no-store-raw-findings)
         encrypt_findings: If True, encrypt raw finding data (--encrypt-findings)
         collect_metadata: If True, collect hostname/username (default: False, privacy-first)
@@ -903,6 +1017,13 @@ def store_scan(
     # Validate inputs
     if not results_dir.exists():
         raise FileNotFoundError(f"Results directory not found: {results_dir}")
+
+    # Fall back to the scan's own recorded wall clock. Read here rather than in
+    # each caller for the same reason `repo_paths` is: both production callers
+    # run in the report phase, and neither has a duration worth passing. The
+    # column was NULL on 2470 of 2470 rows before this (#981).
+    if duration_seconds is None:
+        duration_seconds = _scan_duration_seconds(results_dir)
 
     findings_json = results_dir / "summaries" / "findings.json"
     if not findings_json.exists():
@@ -1086,8 +1207,36 @@ def store_scan(
 
             # Insert findings (batch insert for performance)
             finding_rows = []
+            # `findings` has PRIMARY KEY (scan_id, fingerprint), and the
+            # fingerprint is the finding's id. Every finding without one used to
+            # arrive as the same empty string, so the second collided and
+            # `sqlite3.IntegrityError` aborted the whole transaction -- the scan
+            # row and every other finding in it were discarded to store nothing.
+            # Reproduced with a two-entry findings.json whose entries carry no
+            # id: 0 scans stored (#901).
+            #
+            # Skipped and counted, which is the same answer #848 reached for the
+            # read side of this condition. A finding with no id cannot be
+            # deduplicated, suppressed, diffed or referenced, so it has nothing
+            # to be keyed on -- but losing one must not lose the other 500.
+            #
+            # A repeated id is the same collision with a different trigger, and
+            # it is reachable the same way: `jmo history store` accepts any
+            # findings.json, and two entries sharing an id abort the scan
+            # identically. Measured -- both shapes stored 0 scans. Fixing only
+            # the falsy half would leave the defect in place behind the other.
+            dropped_no_id: list[dict[str, Any]] = []
+            dropped_duplicate: list[dict[str, Any]] = []
+            seen_fingerprints: set[str] = set()
             for finding in findings:
-                fingerprint = finding.get("id", "")
+                fingerprint = finding.get("id")
+                if not fingerprint:
+                    dropped_no_id.append(finding)
+                    continue
+                if fingerprint in seen_fingerprints:
+                    dropped_duplicate.append(finding)
+                    continue
+                seen_fingerprints.add(fingerprint)
                 severity = finding.get("severity", "INFO").upper()
                 tool_info = finding.get("tool", {})
                 tool_name = (
@@ -1223,8 +1372,9 @@ def store_scan(
                 (scan_id, str(results_dir.absolute())),
             )
 
+        _report_findings_not_stored(dropped_no_id, dropped_duplicate, scan_id)
         logger.info(
-            f"Stored scan {scan_id}: {len(findings)} findings from {len(tools)} tools"
+            f"Stored scan {scan_id}: {len(finding_rows)} findings from {len(tools)} tools"
         )
         return scan_id
 
@@ -3893,16 +4043,7 @@ def execute_readonly_query(
     # Security validation
     _validate_readonly_query(query)
 
-    # Normalise path for the URI (forward-slash, absolute)
-    # On Windows sqlite3 URI mode requires forward slashes and an extra
-    # leading slash for the drive letter, e.g. file:///C:/path/to/db
-    abs_path = db_path.resolve()
-    uri_path = abs_path.as_posix()
-    if not uri_path.startswith("/"):
-        # Windows drive-letter path like "C:/..." → "/C:/..."
-        uri_path = "/" + uri_path
-
-    conn = sqlite3.connect(f"file://{uri_path}?mode=ro", uri=True)
+    conn = sqlite3.connect(read_only_uri(db_path), uri=True)
     try:
         conn.row_factory = None  # tuples for compact output
 

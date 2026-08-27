@@ -70,6 +70,8 @@ def _run_cmd(cmd: list[str], timeout: int = 60) -> subprocess.CompletedProcess[s
         cmd,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=timeout,
         cwd=str(_ROOT),
     )

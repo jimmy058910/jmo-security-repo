@@ -62,8 +62,11 @@ from ...core.scan_timings import write_scan_timings
 from ...core.tool_runner import ToolDefinition, ToolRunner
 from ..path_sanitizers import _sanitize_path_component, _validate_output_path
 from ..scan_utils import (
+    NOT_ATTEMPTED_MISSING,
+    NOT_ATTEMPTED_NOTHING_APPLICABLE,
     TOOL_TIMEOUT_DEFAULTS,
     find_tool,
+    record_not_attempted,
     report_tool_failure,
     tool_flags,
     tool_timeout,
@@ -270,7 +273,7 @@ def scan_repository(
             )
         elif allow_missing_tools:
             _write_stub("trufflehog", trufflehog_out)
-            statuses["trufflehog"] = True
+            record_not_attempted(statuses, "trufflehog")
 
     # Semgrep: Static analysis
     if "semgrep" in tools:
@@ -316,7 +319,7 @@ def scan_repository(
             )
         elif allow_missing_tools:
             _write_stub("semgrep", semgrep_out)
-            statuses["semgrep"] = True
+            record_not_attempted(statuses, "semgrep")
 
     # Trivy: Vulnerability and secrets scanning
     if "trivy" in tools:
@@ -350,7 +353,7 @@ def scan_repository(
             )
         elif allow_missing_tools:
             _write_stub("trivy", trivy_out)
-            statuses["trivy"] = True
+            record_not_attempted(statuses, "trivy")
 
     # Syft: SBOM generation
     if "syft" in tools:
@@ -378,7 +381,7 @@ def scan_repository(
             )
         elif allow_missing_tools:
             _write_stub("syft", syft_out)
-            statuses["syft"] = True
+            record_not_attempted(statuses, "syft")
 
     # Checkov: IaC policy checks
     if "checkov" in tools:
@@ -407,7 +410,7 @@ def scan_repository(
             )
         elif allow_missing_tools:
             _write_stub("checkov", checkov_out)
-            statuses["checkov"] = True
+            record_not_attempted(statuses, "checkov")
 
     # Hadolint: Dockerfile linting
     if "hadolint" in tools:
@@ -446,7 +449,7 @@ def scan_repository(
                 )
         elif allow_missing_tools:
             _write_stub("hadolint", hadolint_out)
-            statuses["hadolint"] = True
+            record_not_attempted(statuses, "hadolint")
 
     # ShellCheck: shell script static analysis
     #
@@ -490,7 +493,7 @@ def scan_repository(
                 )
         elif allow_missing_tools:
             _write_stub("shellcheck", shellcheck_out)
-            statuses["shellcheck"] = True
+            record_not_attempted(statuses, "shellcheck")
 
     # Bandit: Python security analysis
     if "bandit" in tools:
@@ -521,7 +524,7 @@ def scan_repository(
             )
         elif allow_missing_tools:
             _write_stub("bandit", bandit_out)
-            statuses["bandit"] = True
+            record_not_attempted(statuses, "bandit")
 
     # Nosey Parker: Deep secrets detection with Docker fallback
     if "noseyparker" in tools:
@@ -624,7 +627,7 @@ def scan_repository(
                 )
             elif allow_missing_tools:
                 _write_stub("noseyparker", noseyparker_out)
-                statuses["noseyparker"] = True
+                record_not_attempted(statuses, "noseyparker")
 
     # ZAP: Web vulnerability scanning (limited to repositories with web servers)
     # Note: ZAP is best suited for live URLs (see url_scanner.py).
@@ -703,10 +706,10 @@ def scan_repository(
             else:
                 # No web files found - write empty stub
                 _write_stub("zap", zap_out)
-                statuses["zap"] = True
+                record_not_attempted(statuses, "zap", NOT_ATTEMPTED_NOTHING_APPLICABLE)
         elif allow_missing_tools:
             _write_stub("zap", zap_out)
-            statuses["zap"] = True
+            record_not_attempted(statuses, "zap")
 
     # Falco: Runtime security monitoring (repository rules analysis)
     # Note: Falco is best suited for live containers/K8s (see k8s_scanner.py).
@@ -744,10 +747,12 @@ def scan_repository(
             else:
                 # No Falco rules found - write empty stub
                 _write_stub("falco", falco_out)
-                statuses["falco"] = True
+                record_not_attempted(
+                    statuses, "falco", NOT_ATTEMPTED_NOTHING_APPLICABLE
+                )
         elif allow_missing_tools:
             _write_stub("falco", falco_out)
-            statuses["falco"] = True
+            record_not_attempted(statuses, "falco")
 
     # AFL++: Coverage-guided fuzzing (repository binary analysis)
     # Note: AFL++ requires instrumented binaries and fuzzing harness.
@@ -805,10 +810,12 @@ def scan_repository(
             else:
                 # No fuzzable binaries found - write empty stub
                 _write_stub("afl++", afl_out)
-                statuses["afl++"] = True
+                record_not_attempted(
+                    statuses, "afl++", NOT_ATTEMPTED_NOTHING_APPLICABLE
+                )
         elif allow_missing_tools:
             _write_stub("afl++", afl_out)
-            statuses["afl++"] = True
+            record_not_attempted(statuses, "afl++")
 
     # ========== v1.0.0 New Tools (17 total) ==========
 
@@ -846,7 +853,7 @@ def scan_repository(
             )
         elif allow_missing_tools:
             _write_stub("checkov-cicd", checkov_cicd_out)
-            statuses["checkov-cicd"] = True
+            record_not_attempted(statuses, "checkov-cicd")
 
     # Gosec: Go security analyzer
     if "gosec" in tools:
@@ -874,7 +881,7 @@ def scan_repository(
             )
         elif allow_missing_tools:
             _write_stub("gosec", gosec_out)
-            statuses["gosec"] = True
+            record_not_attempted(statuses, "gosec")
 
     # cdxgen: SBOM and dependency analysis
     # Performance optimizations (v1.0.1):
@@ -908,7 +915,7 @@ def scan_repository(
             )
         elif allow_missing_tools:
             _write_stub("cdxgen", cdxgen_out)
-            statuses["cdxgen"] = True
+            record_not_attempted(statuses, "cdxgen")
 
     # ScanCode: License and copyright scanner
     if "scancode" in tools:
@@ -916,8 +923,24 @@ def scan_repository(
         scancode_path = _find_tool("scancode")
         if scancode_path:
             scancode_flags = get_tool_flags("scancode")
+            # ScanCode emits detection data only for the detectors it is asked
+            # for. With none requested it walks the tree and writes structure
+            # only -- `path`, `type`, `scan_errors` and nothing else -- so
+            # `scancode_adapter`, which reads `license_detections` and
+            # `copyrights`, was structurally incapable of returning a finding.
+            # A `deep` scan spent up to twenty minutes producing a file that
+            # could not contribute one, and graded the tool `success` (#835).
+            #
+            # Exactly the two the adapter reads. Measured against scancode
+            # 32.5.0: `--license --copyright` and `--license --copyright
+            # --package --info` produce the *same* 2 findings on the same
+            # fixture, but the second writes 34 keys per entry against 11 --
+            # 23 per entry that nothing consumes, on a tree that ran to 30,496
+            # entries in the recorded juice-shop scan.
             scancode_cmd = [
                 scancode_path,
+                "--license",
+                "--copyright",
                 "--json",
                 str(scancode_out),
                 *scancode_flags,
@@ -936,7 +959,7 @@ def scan_repository(
             )
         elif allow_missing_tools:
             _write_stub("scancode", scancode_out)
-            statuses["scancode"] = True
+            record_not_attempted(statuses, "scancode")
 
     # Kubescape: Kubernetes security scanner
     if "kubescape" in tools:
@@ -967,7 +990,7 @@ def scan_repository(
             )
         elif allow_missing_tools:
             _write_stub("kubescape", kubescape_out)
-            statuses["kubescape"] = True
+            record_not_attempted(statuses, "kubescape")
 
     # Prowler: Multi-cloud CSPM (AWS/Azure/GCP/K8s)
     # Note: Prowler scans cloud infrastructure, not code repositories
@@ -1037,7 +1060,15 @@ def scan_repository(
             )
         elif allow_missing_tools or not cloud_files:
             _write_stub("prowler", prowler_out)
-            statuses["prowler"] = True
+            record_not_attempted(
+                statuses,
+                "prowler",
+                (
+                    NOT_ATTEMPTED_MISSING
+                    if not prowler_path
+                    else NOT_ATTEMPTED_NOTHING_APPLICABLE
+                ),
+            )
 
     # YARA: Malware detection
     if "yara" in tools:
@@ -1089,7 +1120,7 @@ def scan_repository(
             )
         elif allow_missing_tools:
             _write_stub("yara", yara_out)
-            statuses["yara"] = True
+            record_not_attempted(statuses, "yara")
 
     # Grype: Vulnerability scanner for containers and filesystems
     if "grype" in tools:
@@ -1117,7 +1148,7 @@ def scan_repository(
             )
         elif allow_missing_tools:
             _write_stub("grype", grype_out)
-            statuses["grype"] = True
+            record_not_attempted(statuses, "grype")
 
     # MobSF: Mobile Security Framework (Android/iOS)
     # Note: Only runs if APK/IPA files are detected
@@ -1150,7 +1181,15 @@ def scan_repository(
             )
         elif allow_missing_tools or not mobile_files:
             _write_stub("mobsf", mobsf_out)
-            statuses["mobsf"] = True
+            record_not_attempted(
+                statuses,
+                "mobsf",
+                (
+                    NOT_ATTEMPTED_MISSING
+                    if not mobsf_path
+                    else NOT_ATTEMPTED_NOTHING_APPLICABLE
+                ),
+            )
 
     # Lynis: System hardening and security auditing
     # Note: Lynis scans the local system, not code repositories
@@ -1159,7 +1198,7 @@ def scan_repository(
         lynis_out = out_dir / "lynis.json"
         if allow_missing_tools:
             _write_stub("lynis", lynis_out)
-            statuses["lynis"] = True
+            record_not_attempted(statuses, "lynis", NOT_ATTEMPTED_NOTHING_APPLICABLE)
 
     # Trivy RBAC: Kubernetes RBAC security assessment
     # Note: Requires K8s manifests in repository
@@ -1199,7 +1238,15 @@ def scan_repository(
             )
         elif allow_missing_tools or not k8s_manifests:
             _write_stub("trivy-rbac", trivy_rbac_out)
-            statuses["trivy-rbac"] = True
+            record_not_attempted(
+                statuses,
+                "trivy-rbac",
+                (
+                    NOT_ATTEMPTED_MISSING
+                    if not trivy_rbac_path
+                    else NOT_ATTEMPTED_NOTHING_APPLICABLE
+                ),
+            )
 
     # Semgrep Secrets: Hardcoded credentials detection
     if "semgrep-secrets" in tools:
@@ -1230,7 +1277,7 @@ def scan_repository(
             )
         elif allow_missing_tools:
             _write_stub("semgrep-secrets", semgrep_secrets_out)
-            statuses["semgrep-secrets"] = True
+            record_not_attempted(statuses, "semgrep-secrets")
 
     # Horusec: Multi-language SAST scanner (18+ languages)
     # Uses --disable-docker (-D) flag to run native engines without Docker dependency
@@ -1265,7 +1312,7 @@ def scan_repository(
             )
         elif allow_missing_tools:
             _write_stub("horusec", horusec_out)
-            statuses["horusec"] = True
+            record_not_attempted(statuses, "horusec")
 
     # Dependency-Check: OWASP SCA for known vulnerabilities
     if "dependency-check" in tools:
@@ -1299,7 +1346,7 @@ def scan_repository(
             )
         elif allow_missing_tools:
             _write_stub("dependency-check", dependency_check_out)
-            statuses["dependency-check"] = True
+            record_not_attempted(statuses, "dependency-check")
 
     # ========== End of v1.0.0 New Tools ==========
 
@@ -1503,7 +1550,7 @@ def scan_repository(
             # Partial success - write stub
             noseyparker_out = out_dir / "noseyparker.json"
             _write_stub("noseyparker", noseyparker_out)
-            statuses["noseyparker"] = True
+            record_not_attempted(statuses, "noseyparker")
         else:
             statuses["noseyparker"] = False
 

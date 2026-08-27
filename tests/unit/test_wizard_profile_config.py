@@ -42,7 +42,9 @@ class TestProfiles:
         assert len(PROFILES["fast"]["tools"]) == 9
         assert len(PROFILES["slim"]["tools"]) == 13
         assert len(PROFILES["balanced"]["tools"]) == 17
-        assert len(PROFILES["deep"]["tools"]) == 28
+        # 28 -> 29 in #795: shellcheck was in fast/slim/balanced but not
+        # deep, so the most comprehensive profile was not a superset.
+        assert len(PROFILES["deep"]["tools"]) == 29
 
 
 class TestCalculateTimeEstimate:

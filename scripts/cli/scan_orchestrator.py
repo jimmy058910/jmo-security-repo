@@ -23,11 +23,34 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from scripts.cli.scan_utils import not_attempted_tools
 from scripts.core.config import RetryConfig
 from scripts.core.tool_registry import filter_tools_for_scan_type
 from scripts.core.validation import validate_container_image, validate_url
 
 logger = logging.getLogger(__name__)
+
+
+def _user_path(value: str) -> Path:
+    """Build a ``Path`` from user-supplied text, expanding a leading ``~``.
+
+    ``Path("~/repos")`` is a relative path whose first component is the single
+    character ``~``. Nothing in the scan layer expanded it, so a schedule
+    created with ``--repos-dir ~/repos`` scanned a directory of that literal
+    name relative to the cwd -- which does not exist, so the run reported
+    nothing to scan and no error (#926).
+
+    The cron backend cannot fix this for us: ``cron_installer`` passes the
+    value through ``shlex.quote``, and a *quoted* tilde is not expanded by the
+    shell either. Un-quoting would reintroduce the shell injection that
+    quoting closed, so the expansion belongs here -- in the process that
+    actually has a home directory, independent of how the command was quoted.
+
+    Applied to every path-valued target flag rather than only ``--repos-dir``:
+    a user who types ``~`` means their home directory whichever flag they typed
+    it on, and a per-flag rule is how the next one of these gets filed.
+    """
+    return Path(value).expanduser()
 
 
 def _detect_msys_path_mangling(path_str: str) -> bool:
@@ -205,6 +228,12 @@ class ScanConfig:
 TARGET_OK = "ok"
 TARGET_PARTIAL = "partial"
 TARGET_FAILED = "failed"
+# Every requested tool was stubbed rather than run. Distinct from FAILED, which
+# means tools ran and produced nothing: here nothing was attempted, and under
+# `--allow-missing-tools` that is what the user asked for -- so it must not
+# redden the run. It must still be said out loud, because an empty stub from a
+# secret scanner that never ran satisfies a zero-secrets policy (#825).
+TARGET_NOT_ATTEMPTED = "not-attempted"
 
 
 def classify_target_outcome(statuses: Mapping[str, Any] | None) -> str:
@@ -212,11 +241,13 @@ def classify_target_outcome(statuses: Mapping[str, Any] | None) -> str:
 
     Args:
         statuses: The per-tool status map from a ``scan_jobs`` scanner. Keys
-            beginning ``__`` are metadata (``__attempts__``), not tools.
+            beginning ``__`` are metadata (``__attempts__``,
+            ``__not_attempted__``), not tools.
 
     Returns:
-        ``TARGET_OK`` if every tool succeeded, ``TARGET_PARTIAL`` if some did,
-        ``TARGET_FAILED`` if none did.
+        ``TARGET_OK`` if every tool that ran succeeded, ``TARGET_PARTIAL`` if
+        some did, ``TARGET_FAILED`` if none did, and ``TARGET_NOT_ATTEMPTED``
+        if no tool ran at all because every one was stubbed (#825).
 
     **An empty map is ``TARGET_FAILED``, not vacuous success.** It is what
     ``scan_all`` appends when a scanner raised, and what a scanner returns when
@@ -231,9 +262,21 @@ def classify_target_outcome(statuses: Mapping[str, Any] | None) -> str:
     """
     if not statuses:
         return TARGET_FAILED
-    outcomes = [bool(ok) for name, ok in statuses.items() if not name.startswith("__")]
+    # A tool that was never executed does not get a vote. It used to get a
+    # `True` -- the same value a successful run gets -- so a target where every
+    # tool was stubbed read as a clean scan (#825). Counting it as `False`
+    # instead would be the opposite error: a target where one tool ran cleanly
+    # and two were not installed has not partially failed.
+    skipped = set(not_attempted_tools(statuses))
+    outcomes = [
+        bool(ok)
+        for name, ok in statuses.items()
+        if not name.startswith("__") and name not in skipped
+    ]
     if not outcomes:
-        return TARGET_FAILED
+        # Nothing was tried. `--allow-missing-tools` is what makes this
+        # reachable, and it is not a failure -- it is the thing that flag buys.
+        return TARGET_NOT_ATTEMPTED if skipped else TARGET_FAILED
     if all(outcomes):
         return TARGET_OK
     if any(outcomes):
@@ -360,7 +403,7 @@ class ScanOrchestrator:
                 self._reject("--repo", repo_path, "path looks MSYS-mangled")
                 return repos  # Return empty - path is invalid
 
-            p = Path(repo_path)
+            p = _user_path(repo_path)
             if p.exists():
                 repos.append(p)
             else:
@@ -376,7 +419,7 @@ class ScanOrchestrator:
                 self._reject("--repos-dir", repos_dir_path, "path looks MSYS-mangled")
                 return repos
 
-            base = Path(repos_dir_path)
+            base = _user_path(repos_dir_path)
             if not base.exists():
                 self._reject("--repos-dir", repos_dir_path, "directory does not exist")
             elif not base.is_dir():
@@ -391,7 +434,7 @@ class ScanOrchestrator:
 
         # Targets file (list of repository paths)
         elif getattr(args, "targets", None):
-            targets_file = Path(args.targets)
+            targets_file = _user_path(args.targets)
             if not targets_file.exists():
                 self._reject("--targets", args.targets, "file does not exist")
             else:
@@ -401,7 +444,7 @@ class ScanOrchestrator:
                     if not line or line.startswith("#"):
                         continue
                     listed += 1
-                    p = Path(line)
+                    p = _user_path(line)
                     if p.exists():
                         repos.append(p)
                     else:
@@ -433,7 +476,7 @@ class ScanOrchestrator:
 
         # Images file
         if getattr(args, "images_file", None):
-            images_file = Path(args.images_file)
+            images_file = _user_path(args.images_file)
             if not images_file.exists():
                 self._reject("--images-file", args.images_file, "file does not exist")
             else:
@@ -471,7 +514,7 @@ class ScanOrchestrator:
             value = getattr(args, attr, None)
             if not value:
                 continue
-            p = Path(value)
+            p = _user_path(value)
             if p.exists():
                 iac_files.append((iac_type, p))
             else:
@@ -502,7 +545,7 @@ class ScanOrchestrator:
 
         # URLs file
         if getattr(args, "urls_file", None):
-            urls_file = Path(args.urls_file)
+            urls_file = _user_path(args.urls_file)
             if not urls_file.exists():
                 self._reject("--urls-file", args.urls_file, "file does not exist")
             else:
@@ -526,7 +569,7 @@ class ScanOrchestrator:
             if spec.startswith(("http://", "https://")):
                 urls.append(spec)
             else:
-                p = Path(spec)
+                p = _user_path(spec)
                 if p.exists():
                     urls.append(f"file://{p.absolute()}")
                 else:

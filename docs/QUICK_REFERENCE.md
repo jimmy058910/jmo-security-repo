@@ -16,7 +16,7 @@ jmo scan --repo . --profile-name slim
 # Balanced scan (17 tools, 18-25 min)
 jmo scan --repo . --profile-name balanced
 
-# Deep scan (28 tools, 40-70 min)
+# Deep scan (29 tools, 40-70 min)
 jmo scan --repo . --profile-name deep
 
 # Custom results directory

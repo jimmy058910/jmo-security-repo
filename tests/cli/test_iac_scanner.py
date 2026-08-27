@@ -13,6 +13,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 
 from scripts.cli.scan_jobs.iac_scanner import scan_iac_file
+from scripts.cli.scan_utils import not_attempted_tools
 
 
 class TestIacScanner:
@@ -290,8 +291,12 @@ class TestIacScanner:
             assert len(stub_calls) == 2
             assert any("checkov" in path for _, path in stub_calls)
             assert any("trivy" in path for _, path in stub_calls)
-            assert statuses["checkov"] is True
-            assert statuses["trivy"] is True
+            # Both stubbed, so neither succeeded. These read `is True`, which
+            # encoded the defect as the contract -- the same correction this
+            # file's `test_scan_url_tool_not_found_error` sibling records (#825).
+            assert statuses["checkov"] is False
+            assert statuses["trivy"] is False
+            assert not_attempted_tools(statuses) == ["checkov", "trivy"]
 
     def test_per_tool_flags_applied(self, tmp_path):
         """Test that per_tool_config flags are correctly applied"""

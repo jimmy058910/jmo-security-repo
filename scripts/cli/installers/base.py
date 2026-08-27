@@ -89,14 +89,27 @@ class DefaultSubprocessRunner:
         timeout: int = 120,
         capture_output: bool = True,
         text: bool = True,
+        encoding: str = "utf-8",
+        errors: str = "replace",
         **kwargs,
     ) -> subprocess.CompletedProcess:
-        """Execute command via subprocess.run with security defaults."""
+        """Execute command via subprocess.run with security defaults.
+
+        `encoding`/`errors` are pinned rather than left to `text=True`, which
+        would decode with `locale.getpreferredencoding()` -- cp1252 on a default
+        Windows box. Every tool installer routes through here, and the security
+        tools' own `--version` and help output routinely carries box drawing and
+        accented characters; a `UnicodeDecodeError` in subprocess's reader thread
+        is swallowed there, so the caller sees an empty capture rather than an
+        error (#963).
+        """
         return subprocess.run(
             cmd,
             timeout=timeout,
             capture_output=capture_output,
             text=text,
+            encoding=encoding,
+            errors=errors,
             **kwargs,
         )
 

@@ -13,6 +13,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 
 from scripts.cli.scan_jobs.url_scanner import scan_url
+from scripts.cli.scan_utils import not_attempted_tools
 
 
 class TestUrlScanner:
@@ -270,8 +271,12 @@ class TestUrlScanner:
             assert len(stub_calls) == 2
             assert any("zap" in path for _, path in stub_calls)
             assert any("nuclei" in path for _, path in stub_calls)
-            assert statuses["zap"] is True
-            assert statuses["nuclei"] is True
+            # Both stubbed, so neither succeeded -- the same correction
+            # `test_scan_url_tool_not_found_error` below already records for
+            # the resolved-then-failed case (#825).
+            assert statuses["zap"] is False
+            assert statuses["nuclei"] is False
+            assert not_attempted_tools(statuses) == ["nuclei", "zap"]
 
     def test_per_tool_flags_applied(self, tmp_path):
         """Test that per_tool_config flags are correctly applied"""
@@ -387,8 +392,10 @@ class TestUrlScanner:
                     find_tool_func=mock_find_tool,
                 )
 
-                # Stub should be written for missing Akto
-                assert statuses["akto"] is True
+                # Stub should be written for missing Akto, and a stub is not a
+                # successful run (#825).
+                assert statuses["akto"] is False
+                assert not_attempted_tools(statuses) == ["akto"]
                 mock_stub.assert_called()
 
     def test_scan_url_tool_not_found_error(self, tmp_path):

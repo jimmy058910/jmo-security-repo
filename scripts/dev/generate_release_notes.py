@@ -74,6 +74,8 @@ def get_contributors_since_last_release() -> list[str]:
             ["git", "describe", "--tags", "--abbrev=0", "HEAD^"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
         )
 
@@ -84,6 +86,8 @@ def get_contributors_since_last_release() -> list[str]:
                 ["git", "log", "--format=%an <%ae>"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 check=True,
             )
         else:
@@ -93,6 +97,8 @@ def get_contributors_since_last_release() -> list[str]:
                 ["git", "log", f"{last_tag}..HEAD", "--format=%an <%ae>"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 check=True,
             )
 

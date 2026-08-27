@@ -241,3 +241,94 @@ class TestUnknownFailOnThreshold:
 
         assert rc == 0
         assert any("HIGHH" in m for m in log.at("WARN", "ERROR")), log.records
+
+
+class TestUnrequestedArtifactsAreNotWritten:
+    """#867: four artifacts appeared that no config had asked for.
+
+    Chunk 10 fixed the converse -- an `outputs:` value that gates no writer was
+    discarded in silence, so `outputs: [sarrif]` produced no SARIF and no log
+    record. This is the other direction, and the chunk's acceptance criterion
+    ("every artifact the config *requests* is present or fails loudly") did not
+    reach it.
+
+    Measured before the fix: `outputs: []`, an explicit request for no output
+    formats, still wrote `attack-navigator.json`, `COMPLIANCE_SUMMARY.md`,
+    `PCI_DSS_COMPLIANCE.md` and `SUPPRESSIONS.md`.
+
+    `SUPPRESSIONS.md` was the newest of the four and the least expected. Before
+    chunk 8, `load_suppressions()` returned {} for the shipped
+    jmo.suppress.yml (#538), so it never appeared; once that config loaded 11
+    usable rules, every user of it started getting the file -- often one saying
+    "No suppressions matched any findings." A new artifact as a side effect of
+    an unrelated fix, with no key that could turn it off.
+    """
+
+    COMPLIANCE_ARTIFACTS = (
+        "COMPLIANCE_SUMMARY.md",
+        "PCI_DSS_COMPLIANCE.md",
+        "attack-navigator.json",
+    )
+
+    def _run(self, tmp_path: Path, outputs: list[str]) -> Path:
+        out = tmp_path / "summaries"
+        cfg = tmp_path / "jmo.yml"
+        cfg.write_bytes(
+            ("outputs:\n" + "".join(f"- {o}\n" for o in outputs)).encode("utf-8")
+            if outputs
+            else b"outputs: []\n"
+        )
+        args = _args(tmp_path, out)
+        args.config = str(cfg)
+        with patch.object(report_orchestrator, "gather_results", return_value=[]):
+            report_orchestrator.cmd_report(args, _Recorder())
+        return out
+
+    def test_empty_outputs_writes_nothing(self, tmp_path):
+        out = self._run(tmp_path, [])
+        written = sorted(p.name for p in out.iterdir()) if out.exists() else []
+        assert (
+            written == []
+        ), f"`outputs: []` asked for no output formats and produced: {written}"
+
+    def test_compliance_gates_all_three_of_its_artifacts(self, tmp_path):
+        """One name, three files -- so the gate must cover all three.
+
+        Two of them being gated and the third not would be the same defect
+        wearing a smaller number.
+        """
+        out = self._run(tmp_path, ["json"])
+        for name in self.COMPLIANCE_ARTIFACTS:
+            assert not (out / name).exists(), f"{name} written without `compliance`"
+
+    def test_requesting_compliance_writes_all_three(self, tmp_path):
+        """Positive control: the gate must not be a way to lose the feature."""
+        out = self._run(tmp_path, ["compliance"])
+        for name in self.COMPLIANCE_ARTIFACTS:
+            assert (out / name).exists(), f"{name} missing despite `compliance`"
+
+    def test_suppressions_is_gated_separately_from_compliance(self, tmp_path):
+        """They are different artifacts and must not share one switch.
+
+        SUPPRESSIONS.md reports what the run suppressed; the other three report
+        framework coverage. Folding them into one name would mean a user who
+        wants compliance output cannot decline the suppression report.
+        """
+        out = self._run(tmp_path, ["compliance"])
+        assert not (
+            out / "SUPPRESSIONS.md"
+        ).exists(), "SUPPRESSIONS.md is riding on the `compliance` switch"
+
+    def test_the_shipped_default_still_writes_all_four(self, tmp_path):
+        """The behaviour change must be confined to configs that opt out.
+
+        A config with no `outputs:` key at all is the common case, and it must
+        produce exactly what it did before this gate existed.
+        """
+        out = tmp_path / "summaries"
+        args = _args(tmp_path, out)
+        args.config = None
+        with patch.object(report_orchestrator, "gather_results", return_value=[]):
+            report_orchestrator.cmd_report(args, _Recorder())
+        for name in (*self.COMPLIANCE_ARTIFACTS, "SUPPRESSIONS.md"):
+            assert (out / name).exists(), f"{name} lost from the default config"

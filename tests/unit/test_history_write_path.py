@@ -503,3 +503,272 @@ class TestStoreAcceptsBothFindingsShapes:
             "semgrep",
             "trivy",
         ]
+
+
+def _results_with_findings(root: Path, entries: list[dict]) -> Path:
+    """A results directory whose `findings.json` holds exactly `entries`."""
+    results = _make_results(root, [])
+    (results / "summaries" / "findings.json").write_bytes(
+        json.dumps(entries).encode("utf-8")
+    )
+    return results
+
+
+def _stored_fingerprints(db_path: Path) -> list[str]:
+    con = sqlite3.connect(f"file:{Path(db_path).as_posix()}?mode=ro", uri=True)
+    try:
+        return [r[0] for r in con.execute("SELECT fingerprint FROM findings")]
+    finally:
+        con.close()
+
+
+class TestOneBadFindingDoesNotDiscardTheScan:
+    """#901 -- a fingerprint collision aborted the entire transaction.
+
+    `findings` has PRIMARY KEY (scan_id, fingerprint) and the fingerprint is
+    the finding's id, so two findings that collide raised
+    `sqlite3.IntegrityError` and the scan row plus every other finding in it
+    went with them. Measured before the fix: 0 scans stored, both times.
+
+    Both triggers are covered. The issue names only the falsy one, but a
+    repeated non-empty id aborts identically and is reachable the same way --
+    `jmo history store` accepts any findings.json. Fixing half of a defect
+    leaves the defect.
+
+    Every assertion checks what was stored, not that the call returned an id:
+    `store_scan` returning a UUID is exactly what it did while writing nothing.
+    """
+
+    def test_two_findings_with_no_id_no_longer_discard_the_scan(self, tmp_path):
+        results = _results_with_findings(
+            tmp_path / "res",
+            [{"tool": {"name": "semgrep"}}, {"tool": {"name": "trivy"}}],
+        )
+        store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
+
+        assert (
+            _stored_row(tmp_path / "h.db") is not None
+        ), "the scan row itself was discarded because two findings collided"
+        assert _stored_fingerprints(tmp_path / "h.db") == []
+
+    def test_two_findings_sharing_an_id_no_longer_discard_the_scan(self, tmp_path):
+        results = _results_with_findings(
+            tmp_path / "res",
+            [
+                {"id": "same", "tool": {"name": "semgrep"}},
+                {"id": "same", "tool": {"name": "trivy"}},
+            ],
+        )
+        store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
+
+        assert _stored_row(tmp_path / "h.db") is not None
+        assert _stored_fingerprints(tmp_path / "h.db") == [
+            "same"
+        ], "the first of a colliding pair must survive"
+
+    def test_good_findings_survive_alongside_bad_ones(self, tmp_path):
+        """The point of the fix: losing one finding must not lose the rest."""
+        results = _results_with_findings(
+            tmp_path / "res",
+            [
+                {"id": "a", "tool": {"name": "semgrep"}},
+                {"tool": {"name": "trivy"}},
+                {"id": "a", "tool": {"name": "gosec"}},
+                {"id": "b", "tool": {"name": "trivy"}},
+            ],
+        )
+        store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
+
+        assert sorted(_stored_fingerprints(tmp_path / "h.db")) == ["a", "b"]
+
+    def test_distinct_ids_are_all_stored(self, tmp_path):
+        """Negative control: the skip must not be over-broad."""
+        results = _results_with_findings(
+            tmp_path / "res",
+            [
+                {"id": "a", "tool": {"name": "semgrep"}},
+                {"id": "b", "tool": {"name": "trivy"}},
+                {"id": "c", "tool": {"name": "gosec"}},
+            ],
+        )
+        store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
+
+        assert sorted(_stored_fingerprints(tmp_path / "h.db")) == ["a", "b", "c"]
+
+    def test_the_two_causes_are_reported_separately_and_by_tool(self, tmp_path, caplog):
+        """A silent skip is the failure this campaign keeps meeting.
+
+        WARNING, not INFO: `configure_scan_logging` floors the `scripts` logger
+        at WARNING for a normal run, so INFO would be invisible in exactly the
+        situation this exists to make visible.
+        """
+        import logging
+
+        results = _results_with_findings(
+            tmp_path / "res",
+            [
+                {"id": "a", "tool": {"name": "semgrep"}},
+                {"tool": {"name": "trivy"}},
+                {"id": "a", "tool": {"name": "gosec"}},
+            ],
+        )
+        with caplog.at_level(logging.WARNING, logger="scripts.core.history_db"):
+            store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
+
+        warnings = [
+            r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING
+        ]
+        no_id = [m for m in warnings if "had no id" in m]
+        dup = [m for m in warnings if "repeated an id" in m]
+        assert len(no_id) == 1, f"missing the no-id report: {warnings}"
+        assert len(dup) == 1, f"missing the duplicate-id report: {warnings}"
+        # Attribution, not just a count: a number nobody can act on is not a
+        # report. The two causes must name their own tool, not each other's.
+        assert "trivy=1" in no_id[0]
+        assert "gosec=1" in dup[0]
+
+    def test_a_clean_scan_reports_nothing(self, tmp_path, caplog):
+        """Negative control for the reporter, so it cannot fire unconditionally."""
+        import logging
+
+        results = _results_with_findings(
+            tmp_path / "res", [{"id": "a", "tool": {"name": "semgrep"}}]
+        )
+        with caplog.at_level(logging.WARNING, logger="scripts.core.history_db"):
+            store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
+
+        assert not [
+            r for r in caplog.records if "NOT recorded" in r.getMessage()
+        ], "a clean scan produced a data-loss warning"
+
+
+def _results_with_duration(root: Path, duration: object) -> Path:
+    """A results directory whose `.scan_metadata.json` carries `duration`.
+
+    Written as a separate helper rather than a parameter on `_make_results`
+    because the point of several tests below is a *malformed* value, and the
+    metadata has to be built without the shaping `_make_results` applies.
+    """
+    results = _make_results(root, [])
+    meta = json.loads((results / ".scan_metadata.json").read_bytes().decode("utf-8"))
+    meta["duration_seconds"] = duration
+    (results / ".scan_metadata.json").write_bytes(json.dumps(meta).encode("utf-8"))
+    return results
+
+
+class TestScanDurationReachesTheDatabase:
+    """#981 -- `duration_seconds` was NULL on 2472 of 2472 rows.
+
+    The column, the parameter and both readers all existed; no production
+    caller ever passed a value, so `jmo history list`'s Duration column and
+    `jmo history show`'s `Duration:` line were dead branches in the product.
+
+    Every assertion here checks the value, not that the call succeeded. A test
+    asserting `store_scan()` returns an id passes today against a column that
+    is 100% NULL, which is the shape that let this survive.
+    """
+
+    def test_the_scans_own_duration_is_stored(self, tmp_path):
+        results = _results_with_duration(tmp_path / "res", 1234.5)
+        store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
+        assert _stored_row(tmp_path / "h.db")["duration_seconds"] == 1234.5
+
+    def test_absent_metadata_stores_null_rather_than_a_guess(self, tmp_path):
+        """`jmo history store` on a directory with no metadata has no duration.
+
+        NULL renders as "N/A", which is honestly empty. The failure this issue
+        is about is the opposite -- filling the column with the report phase's
+        ~30 seconds, which reads as measured.
+        """
+        results = _make_results(tmp_path / "res", None)
+        store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
+        assert _stored_row(tmp_path / "h.db")["duration_seconds"] is None
+
+    def test_an_explicit_argument_wins_over_the_metadata(self, tmp_path):
+        """The parameter stays usable for a caller with a better measurement."""
+        results = _results_with_duration(tmp_path / "res", 1234.5)
+        store_scan(
+            results,
+            "balanced",
+            ["semgrep"],
+            db_path=tmp_path / "h.db",
+            duration_seconds=7.0,
+        )
+        assert _stored_row(tmp_path / "h.db")["duration_seconds"] == 7.0
+
+    @pytest.mark.parametrize(
+        "junk",
+        [
+            pytest.param(True, id="bool-True-would-store-as-1.0-seconds"),
+            pytest.param("1234.5", id="string"),
+            pytest.param(-1.0, id="negative"),
+            pytest.param(None, id="explicit-null"),
+            pytest.param([12], id="list"),
+        ],
+    )
+    def test_a_malformed_duration_stores_null(self, tmp_path, junk):
+        """`.scan_metadata.json` is a file on disk and can say anything.
+
+        `True` is the one that matters: bool is an int subclass, so an
+        unguarded isinstance check stores it as a 1.0-second scan.
+        """
+        results = _results_with_duration(tmp_path / "res", junk)
+        store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
+        assert _stored_row(tmp_path / "h.db")["duration_seconds"] is None
+
+    def test_history_list_renders_the_duration_it_stored(self, tmp_path, capsys):
+        """The reader end: the Duration column had never printed a number.
+
+        Goes through `cmd_history_list` rather than asserting on the row again,
+        because "the column is populated" and "a user can see it" are different
+        claims and only the second is what the issue is about.
+        """
+        results = _results_with_duration(tmp_path / "res", 1234.5)
+        store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
+
+        class _Args:
+            db = str(tmp_path / "h.db")
+            limit = 10
+            profile = None
+            branch = None
+            json = False
+
+        assert hc.cmd_history_list(_Args()) == 0
+        out = capsys.readouterr().out
+        assert "1234.5" in out, f"duration is still not rendered:\n{out}"
+
+    def test_history_list_still_says_na_when_there_is_no_duration(
+        self, tmp_path, capsys
+    ):
+        """Negative control: without it, the test above passes on any output
+        that happens to contain the number, including a findings count."""
+        results = _make_results(tmp_path / "res", None)
+        store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
+
+        class _Args:
+            db = str(tmp_path / "h.db")
+            limit = 10
+            profile = None
+            branch = None
+            json = False
+
+        assert hc.cmd_history_list(_Args()) == 0
+        assert "in N/A" in capsys.readouterr().out
+
+    def test_history_show_prints_the_duration_line(self, tmp_path, capsys):
+        """The second reader: `Duration:` is guarded on a truthy value, so it
+        had never printed for any scan in the database's recorded history."""
+        results = _results_with_duration(tmp_path / "res", 1234.5)
+        scan_id = store_scan(
+            results, "balanced", ["semgrep"], db_path=tmp_path / "h.db"
+        )
+
+        class _Args:
+            db = str(tmp_path / "h.db")
+            scan_id = None
+            json = False
+
+        _Args.scan_id = scan_id
+        assert hc.cmd_history_show(_Args()) == 0
+        out = capsys.readouterr().out
+        assert "Duration:" in out and "1234.5" in out, out

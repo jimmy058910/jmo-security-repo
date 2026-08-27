@@ -29,7 +29,7 @@ This document is the authoritative reference for which tools are included in eac
 | **fast** | 9 | 5-10 min | Pre-commit, PR validation | `jmo-security:fast` |
 | **slim** | 13 | 12-18 min | Cloud/IaC (AWS/Azure/GCP/K8s) | `jmo-security:slim` |
 | **balanced** | 17 | 18-25 min | Production scans, CI/CD | `jmo-security:balanced` |
-| **deep** | 28 | 40-70 min | Compliance audits, pentests | `jmo-security:deep` |
+| **deep** | 29 | 40-70 min | Compliance audits, pentests | `jmo-security:deep` |
 
 **Installation:**
 
@@ -83,7 +83,7 @@ If you are unsure, start with `balanced` for CI or `fast` for local validation, 
 
 **Tools included:** Slim profile + DAST (ZAP), license scanning (ScanCode), SBOM generation (CDXgen), and Go-specific analysis (Gosec).
 
-### Deep Profile (28 tools)
+### Deep Profile (29 tools)
 
 **Purpose:** Comprehensive security audits for compliance and penetration testing.
 
@@ -166,11 +166,11 @@ balanced:
   # Note: dependency-check moved to deep profile only (slow first-run NVD download)
 ```
 
-### Deep Profile (28 tools)
+### Deep Profile (29 tools)
 
 ```yaml
 deep:
-  # Core scanning (13)
+  # Core scanning (14)
   - trufflehog
   - semgrep
   - syft
@@ -178,6 +178,7 @@ deep:
   - checkov
   - hadolint
   - nuclei
+  - shellcheck    # Shell script analysis (also in fast/slim/balanced)
   - prowler
   - kubescape
   - grype
@@ -683,7 +684,7 @@ apt-get install -y git curl jq shellcheck ca-certificates
 docker run -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:fast scan
 docker run -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:slim scan
 docker run -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:balanced scan
-docker run -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:deep scan  # 28 tools, 4 need manual install
+docker run -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:deep scan  # 29 tools, 4 need manual install
 ```
 
 **Registries:**
@@ -760,7 +761,7 @@ for profile in ['fast', 'slim', 'balanced', 'deep']:
 # fast: 9 tools
 # slim: 13 tools
 # balanced: 17 tools
-# deep: 28 tools
+# deep: 29 tools
 ```
 
 ---

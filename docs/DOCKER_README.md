@@ -279,14 +279,14 @@ JMo Security provides **4 optimized Docker image variants** for different use ca
 
 | Variant | Tag | Size | Tools | Scan Time | Best For |
 |---------|-----|------|-------|-----------|----------|
-| **Deep** | `:deep`, `:latest` | ~1.97 GB | 28 | 40-70 min | Complete security audits, local development |
+| **Deep** | `:deep`, `:latest` | ~1.97 GB | 29 | 40-70 min | Complete security audits, local development |
 | **Balanced** | `:balanced` | ~1.41 GB | 17 | 18-25 min | Production CI/CD, regular audits |
 | **Slim** | `:slim` | ~557 MB | 13 | 12-18 min | Cloud-focused, IaC, container security |
 | **Fast** | `:fast` | ~502 MB | 9 | 5-10 min | CI/CD gates, pre-commit hooks |
 
 **Notes:**
 
-- **28 total tools**: 24 Docker-ready (automatically included), 4 manual install (AFL++, Akto, Falco, MobSF). Falco is easy to miss here because `falcoctl` IS baked into `Dockerfile.deep` -- it is a different binary from `falco` itself, which is not.
+- **29 total tools**: 25 Docker-ready (automatically included), 4 manual install (AFL++, Akto, Falco, MobSF). Falco is easy to miss here because `falcoctl` IS baked into `Dockerfile.deep` -- it is a different binary from `falco` itself, which is not.
 - **Scan times**: Estimated for typical repository (10K-50K LOC, 100-500 dependencies)
 
 ### Decision Tree
@@ -296,7 +296,7 @@ START: What is your primary use case?
 
 ├─ Complete security audit (pre-release, compliance)
 │  → Use DEEP variant (:deep)
-│     - 28 tools, 40-70 min scans
+│     - 29 tools, 40-70 min scans
 │     - Best for: Security teams, audits, compliance
 
 ├─ Production CI/CD (daily/weekly scans)
@@ -406,7 +406,7 @@ START: What is your primary use case?
 ### Choosing a Variant
 
 ```bash
-# Deep - Maximum coverage (28 tools, 24 Docker-ready) — also published as :latest
+# Deep - Maximum coverage (29 tools, 25 Docker-ready) — also published as :latest
 docker pull ghcr.io/jimmy058910/jmo-security:deep
 
 # Balanced - Production CI/CD (17 tools)
@@ -467,7 +467,7 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
 ```
 
 **Time:** 40-70 minutes
-**Tools:** All 28 tools (24 Docker-ready + 4 manual installation)
+**Tools:** All 29 tools (25 Docker-ready + 4 manual installation)
 
 ### Scan Multiple Projects
 
@@ -1364,7 +1364,7 @@ docker run --rm --user $(id -u):$(id -g) \
 | Fast | 8 | 5-10 min | CI/CD gates, pre-commit |
 | Slim | 13 | 10-15 min | Cloud/IaC scanning |
 | Balanced | 17 | 18-25 min | Production audits |
-| Deep | 28 | 20-30 min | Comprehensive security |
+| Deep | 29 | 20-30 min | Comprehensive security |
 
 **Solutions:**
 

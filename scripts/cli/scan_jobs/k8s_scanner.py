@@ -18,6 +18,7 @@ from ...core.scan_timings import write_scan_timings
 from ...core.tool_runner import ToolDefinition, ToolRunner
 from ..scan_utils import (
     find_tool,
+    record_not_attempted,
     report_tool_failure,
     tool_flags,
     tool_timeout,
@@ -143,7 +144,7 @@ def scan_k8s_resource(
             )
         elif allow_missing_tools:
             _write_stub("trivy", trivy_out)
-            statuses["trivy"] = True
+            record_not_attempted(statuses, "trivy")
 
     # Execute all tools with ToolRunner
     runner = ToolRunner(

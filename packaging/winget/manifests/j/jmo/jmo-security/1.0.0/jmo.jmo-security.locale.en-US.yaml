@@ -40,7 +40,7 @@ Description: |-
   - fast: 8 tools, 5-10 min (pre-commit, PR validation)
   - slim: 14 tools, 12-18 min (Cloud/IaC, AWS/Azure/GCP/K8s)
   - balanced: 18 tools, 18-25 min (Production scans, CI/CD)
-  - deep: 28 tools, 40-70 min (Compliance audits, pentests)
+  - deep: 29 tools, 40-70 min (Compliance audits, pentests)
 
   What's New in v1.0.0:
   - 28 security scanners with unified profiles

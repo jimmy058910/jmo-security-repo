@@ -14,7 +14,6 @@ in `pyproject.toml`. **Bump all three together**; nothing guards this one (#750)
 |---------|---------|
 | `jmo wizard` | Interactive guided scanning |
 | `jmo fast` | Quick scan (9 tools, 5-10 min) |
-| `jmo slim` | Cloud/IaC scan (13 tools, 12-18 min) |
 | `jmo balanced` | Production scan (17 tools, 18-25 min) |
 | `jmo full` | Comprehensive audit (29 tools, 40-70 min) |
 | `jmo scan` | Low-level scan with full control |
@@ -205,32 +204,49 @@ Combined scan + report for CI/CD pipelines. Supports all `jmo scan` flags plus:
 
 ---
 
-### jmo fast / slim / balanced / full
+### jmo fast / balanced / full
 
-Beginner-friendly shortcut commands with sensible defaults.
+Beginner-friendly shortcut commands with sensible defaults. Each runs a scan and
+a report, exactly as `jmo ci` does — they route through it.
 
 | Command | Tools | Time | Description |
 |---------|-------|------|-------------|
 | `jmo fast` | 9 | 5-10 min | Quick pre-commit/PR validation |
-| `jmo slim` | 13 | 12-18 min | Cloud/IaC scanning (AWS, Azure, GCP, K8s) |
 | `jmo balanced` | 17 | 18-25 min | Production scans |
 | `jmo full` | 28 | 40-70 min | Comprehensive audits |
 
-**Common flags (all three commands):**
+> **There is no `jmo slim` command.** This table used to list one; `slim` is a
+> *profile*, not a shortcut, and is reached with
+> `jmo scan --profile-name slim` or `jmo ci --profile-name slim` (13 tools,
+> 12-18 min, cloud/IaC). Corrected under [#1012](https://github.com/jimmy058910/jmo-security-repo/issues/1012).
+
+**Flags.** Since [#870](https://github.com/jimmy058910/jmo-security-repo/issues/870)
+these commands accept the whole `jmo ci` scan surface — every flag under
+[jmo scan](#jmo-scan)'s target selection and scan configuration, plus
+`--log-level` and `--human-logs`. Before that they accepted 11 of them, and
+`--no-store-history` was among the missing: the shortcuts stored no scan history
+at all, so `jmo history list` and `jmo trends` were empty for anyone who only
+ran `jmo fast`.
+
+Their own flags, which `jmo ci` does not have:
 
 | Flag | Description |
 |------|-------------|
-| `--repo PATH` | Path to repository to scan |
-| `--repos-dir DIR` | Directory of repos to scan |
-| `--targets FILE` | File listing repo paths (one per line) |
-| `--results-dir DIR` | Results directory (default: `results`) |
-| `--threads N` | Override thread count |
-| `--timeout SECS` | Override per-tool timeout |
 | `--fail-on SEV` | Severity threshold to fail (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, `INFO`) |
 | `--no-open` | Don't open results after run |
 | `--strict` | Fail if tools are missing (no stubs) |
-| `--human-logs` | Human-friendly logs |
-| `--config FILE` | Config file (default: `jmo.yml`) |
+
+Two differences from `jmo ci` worth knowing:
+
+- **Missing tools are allowed by default here**, and `--strict` is what turns
+  that off. `jmo ci` defaults the other way. `--allow-missing-tools` exists on
+  these commands but asks for what already holds.
+- **`--profile-name` is redundant**: the command *is* the profile. Passing one
+  that agrees is accepted; passing one that contradicts (`jmo fast
+  --profile-name deep`) is an error rather than a silent override.
+
+`--policy`, `--fail-on-policy-violation`, `--strict-versions` and `--profile`
+(the timing flag) are `jmo ci` only. Use `jmo ci` when you need them.
 
 ---
 
@@ -865,7 +881,7 @@ Build Docker images for JMo Security.
 | `fast` | 9 | ~502 MB | CI/CD, pre-commit hooks |
 | `slim` | 13 | ~557 MB | Cloud/IaC focused |
 | `balanced` | 17 | ~1.4 GB | Production scans (default) |
-| `deep` | 28 | ~2.0 GB | Comprehensive audits |
+| `deep` | 29 | ~2.0 GB | Comprehensive audits |
 
 | Flag | Description |
 |------|-------------|

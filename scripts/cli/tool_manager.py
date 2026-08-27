@@ -1445,6 +1445,8 @@ class ToolManager:
                 cmd,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=timeout,
                 env=clean_env,
                 cwd=cwd,
@@ -1524,6 +1526,8 @@ class ToolManager:
                             fallback_cmd,
                             capture_output=True,
                             text=True,
+                            encoding="utf-8",
+                            errors="replace",
                             timeout=timeout,
                             env=clean_env,
                             cwd=cwd,
@@ -1862,6 +1866,8 @@ class ToolManager:
                 ["node", "--version"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=5,
             )
             if result.returncode == 0:
@@ -1886,6 +1892,8 @@ class ToolManager:
                 ["java", "-version"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=10,
             )
             # Java outputs version info to stderr

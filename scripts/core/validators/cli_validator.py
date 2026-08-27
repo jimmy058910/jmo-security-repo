@@ -15,6 +15,7 @@ restating them, so the numbers above cannot drift silently the way the previous
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -153,16 +154,23 @@ def _run_jmo(*args: str, timeout: int = 30) -> subprocess.CompletedProcess:
     subprocess's reader thread, where a `UnicodeDecodeError` is raised and then
     swallowed, leaving `stdout` silently truncated. Several checks below now
     treat empty output as a failure, so a swallowed decode error would surface
-    as a spurious FAIL naming the wrong cause. The codec is deliberately left
-    as the locale default -- pinning it to UTF-8 without also pinning the
-    child's `PYTHONIOENCODING` would turn a clean cp1252 round-trip into
-    mojibake.
+    as a spurious FAIL naming the wrong cause.
+
+    The codec used to be left as the locale default, because pinning the parent
+    to UTF-8 without also pinning the child's `PYTHONIOENCODING` turns a clean
+    cp1252 round-trip into mojibake. Both ends are pinned here now, which is the
+    condition that note named (#963). Only `PYTHONIOENCODING` is set, not
+    `PYTHONUTF8` -- the latter would also change the child's *file* handling,
+    and this validator exists to observe how the real CLI behaves, not to hand
+    it an environment no user has.
     """
     return subprocess.run(
         [sys.executable, "-m", "scripts.cli.jmo", *args],
         capture_output=True,
         text=True,
+        encoding="utf-8",
         errors="replace",
+        env={**os.environ, "PYTHONIOENCODING": "utf-8"},
         timeout=timeout,
     )
 

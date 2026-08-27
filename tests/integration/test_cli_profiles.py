@@ -62,20 +62,13 @@ def test_scan_profile_include_exclude_only_scans_included(tmp_path: Path, monkey
         profile_name=None,
         log_level="DEBUG",
         human_logs=True,
-        # #907: this test's `tools: [trufflehog]` under `profiles.fast` in
-        # the config above is dead config -- `_effective_scan_settings()`
-        # (scripts/cli/jmo.py:86-100) sources the tool list from
-        # `PROFILE_TOOLS[profile_name]` (tool_registry.py), never from a
-        # jmo.yml profile's own `tools:` key, so the *built-in* "fast"
-        # profile's full tool list runs here regardless -- which includes
-        # semgrep, resolved for real and run with the network-fetching
-        # `--config auto` default. This test's own purpose is include/exclude
-        # directory filtering (asserted only via trufflehog's output files
-        # below), so `--skip-tools` -- a CLI-level filter applied after
-        # profile/tool-list resolution either way -- keeps it off the
-        # network without touching what it verifies or what the stale
-        # config key was trying (and failing) to do.
-        skip_tools=["semgrep"],
+        # `--skip-tools semgrep` used to be required here, and the comment it
+        # replaced explained why: `profiles.fast.tools: [trufflehog]` above was
+        # dead config, so the built-in `fast` list ran regardless -- including
+        # semgrep, resolved for real and fetching its ruleset over the network
+        # (#907). The config now does what it says (#975), so the workaround is
+        # gone and this test exercises the key it was always relying on.
+        skip_tools=None,
     )
     rc = jmo.cmd_scan(args)
     assert rc == 0
@@ -84,6 +77,24 @@ def test_scan_profile_include_exclude_only_scans_included(tmp_path: Path, monkey
     assert (indiv / "a" / "trufflehog.json").exists()
     assert (indiv / "b" / "trufflehog.json").exists()
     assert not (indiv / "skipme").exists()
+
+    # The negative half, which is what #975 asks for and what this test's shape
+    # could never catch: a tool the configuration excludes must not run.
+    # Asserting the included tool appears says nothing about the eight that
+    # also did.
+    # `scan-timings.json` is the scan phase's own diagnostic, not a tool's
+    # output -- every target gets one whatever ran.
+    not_a_tool_output = {"trufflehog.json", "scan-timings.json"}
+    for scanned in ("a", "b"):
+        stray = sorted(
+            p.name
+            for p in (indiv / scanned).iterdir()
+            if p.name not in not_a_tool_output
+        )
+        assert stray == [], (
+            f"`profiles.fast.tools: [trufflehog]` excluded these, and they ran "
+            f"anyway in {scanned}: {stray}"
+        )
 
 
 def test_scan_per_tool_flags_injected(tmp_path: Path, monkeypatch):

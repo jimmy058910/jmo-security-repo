@@ -8,7 +8,7 @@
 **Dimensions:**
 
 - **6 Target Types:** Repositories, Container Images, IaC Files, Web URLs, GitLab Repos, Kubernetes Clusters
-- **28 Tools:** Organized across 4 profiles (fast: 9, slim: 13, balanced: 17, deep: 28)
+- **29 Tools:** Organized across 4 profiles (fast: 9, slim: 13, balanced: 17, deep: 29)
 - **3 OS Platforms:** Linux, macOS, WSL (Windows Subsystem for Linux)
 - **5 Execution Modes:** CLI (native), Docker (fast), Docker (slim), Docker (balanced), Docker (deep)
 - **6 Compliance Frameworks:** OWASP Top 10 2021, CWE Top 25 2024, CIS Controls v8.1, NIST CSF 2.0, PCI DSS 4.0, MITRE ATT&CK v16.1
@@ -35,7 +35,7 @@ Fast + prowler, kubescape, grype, horusec, dependency-check
 
 Slim + zap, scancode, cdxgen, gosec
 
-### Deep Profile (28 tools, 40-70 min)
+### Deep Profile (29 tools, 40-70 min)
 
 Core (13): trufflehog, semgrep, syft, trivy, checkov, hadolint, nuclei, prowler, kubescape, grype, horusec, dependency-check, zap
 
@@ -89,12 +89,16 @@ This matrix shows which tools can scan which target types.
 
 **Coverage Summary:**
 
-- **Repositories:** 22/28 tools
-- **Container Images:** 4/28 tools (trivy, syft, grype, cdxgen)
-- **IaC Files:** 5/28 tools (trivy, checkov, prowler, kubescape, checkov-cicd)
-- **Web URLs:** 3/28 tools (nuclei, zap, akto)
-- **GitLab Repos:** 20/28 tools (same as repos minus specialized)
-- **Kubernetes Clusters:** 5/28 tools (trivy, prowler, kubescape, trivy-rbac, falco)
+Derived from `filter_tools_for_scan_type(PROFILE_TOOLS["deep"], <type>)`,
+not maintained by hand -- the previous figures (22/4/5/3/20/5 of 28) did
+not match what that function returns for any of the six types.
+
+- **Repositories:** 26/29 tools
+- **Container Images:** 2/29 tools (syft, trivy)
+- **IaC Files:** 3/29 tools (checkov, kubescape, trivy)
+- **Web URLs:** 3/29 tools (akto, nuclei, zap)
+- **GitLab Repos:** 27/29 tools (repos plus nuclei)
+- **Kubernetes Clusters:** 1/29 tools (trivy)
 
 ---
 

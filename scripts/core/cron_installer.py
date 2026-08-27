@@ -173,7 +173,12 @@ class CronInstaller:
         """
         try:
             result = subprocess.run(
-                ["crontab", "-l"], capture_output=True, text=True, check=False
+                ["crontab", "-l"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                check=False,
             )
             if result.returncode == 0:
                 return (
@@ -202,6 +207,8 @@ class CronInstaller:
                 ["crontab", "-"],
                 input=content,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 capture_output=True,
                 check=True,
             )

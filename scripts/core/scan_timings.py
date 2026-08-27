@@ -34,7 +34,16 @@ SCAN_TIMINGS_FILENAME = "scan-timings.json"
 # any external tooling) can then refuse a shape they do not understand instead
 # of silently misreading it -- which is exactly how the report-phase schema
 # drifted for months without anything noticing (#718 chunk A).
-SCAN_TIMINGS_SCHEMA_VERSION = 1
+# Version 2 adds `outcome` and `error`. Bumped rather than added silently
+# because an empty `tools` list is otherwise ambiguous: a target that failed
+# before any tool ran looks exactly like one whose tools all applied to a
+# different target type. #824 asked for the bump on exactly that ground.
+SCAN_TIMINGS_SCHEMA_VERSION = 2
+
+# `outcome` values. Deliberately two, not a boolean: "did the tools run" is the
+# question, and a name says which side of it a document is on.
+OUTCOME_COMPLETED = "completed"
+OUTCOME_FAILED_BEFORE_TOOLS = "failed-before-tools"
 
 
 def build_scan_timings(
@@ -43,14 +52,23 @@ def build_scan_timings(
     target: str,
     target_type: str,
     wall_seconds: float,
+    outcome: str = OUTCOME_COMPLETED,
+    error: str | None = None,
 ) -> dict[str, Any]:
     """Build the scan-timings document for one target.
 
     Args:
         results: The `ToolResult` list `ToolRunner.run_all_parallel()` returned.
         target: Target identifier (repository name, image ref, URL, ...).
-        target_type: One of 'repo', 'image', 'iac', 'url', 'k8s'.
+        target_type: One of 'repo', 'image', 'iac', 'url', 'k8s', 'gitlab'.
         wall_seconds: Elapsed time of the parallel tool batch.
+        outcome: `OUTCOME_COMPLETED` when the tool batch ran, or
+            `OUTCOME_FAILED_BEFORE_TOOLS` when the target was abandoned first
+            -- a clone that failed, a missing credential, a timeout. In the
+            second case `results` is empty because there is nothing to time,
+            and the point of the document is that a target which produced
+            nothing still gets a row (#824).
+        error: One line saying why, when `outcome` is not completed.
 
     Returns:
         A JSON-serializable dict.
@@ -65,6 +83,8 @@ def build_scan_timings(
         "target": target,
         "target_type": target_type,
         "wall_seconds": round(wall_seconds, 3),
+        "outcome": outcome,
+        "error": error,
         # `to_dict()` and never `dataclasses.asdict()`: the latter would include
         # `stdout` and `stderr`, and on a secret scanner stdout *is* the
         # secrets. This artifact is meant to be pasteable into an issue.
@@ -79,6 +99,8 @@ def write_scan_timings(
     target: str,
     target_type: str,
     wall_seconds: float,
+    outcome: str = OUTCOME_COMPLETED,
+    error: str | None = None,
 ) -> Path | None:
     """Write `scan-timings.json` into a target's output directory.
 
@@ -86,8 +108,10 @@ def write_scan_timings(
         out_dir: The target's output directory (sibling of `trivy.json` etc.).
         results: The `ToolResult` list from `ToolRunner.run_all_parallel()`.
         target: Target identifier.
-        target_type: One of 'repo', 'image', 'iac', 'url', 'k8s'.
+        target_type: One of 'repo', 'image', 'iac', 'url', 'k8s', 'gitlab'.
         wall_seconds: Elapsed time of the parallel tool batch.
+        outcome: See `build_scan_timings`.
+        error: See `build_scan_timings`.
 
     Returns:
         The path written, or None if it could not be written.
@@ -104,8 +128,14 @@ def write_scan_timings(
         target=target,
         target_type=target_type,
         wall_seconds=wall_seconds,
+        outcome=outcome,
+        error=error,
     )
     try:
+        # `out_dir` is not created here on purpose: an unwritable or absent
+        # destination must report no file written rather than conjuring one.
+        # A caller that reaches this before any tool has made the directory --
+        # the gitlab failure paths -- creates it itself.
         path.write_text(json.dumps(document, indent=2), encoding="utf-8")
     except OSError as e:
         logger.warning(

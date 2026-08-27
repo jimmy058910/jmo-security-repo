@@ -22,6 +22,7 @@ from scripts.cli.report_orchestrator import cmd_report as _cmd_report_impl
 # PHASE 1 REFACTORING: Import refactored modules
 from scripts.cli.scan_orchestrator import (
     TARGET_FAILED,
+    TARGET_NOT_ATTEMPTED,
     TARGET_OK,
     TARGET_PARTIAL,
     ScanConfig,
@@ -83,8 +84,14 @@ def _effective_scan_settings(args) -> dict[str, Any]:
 
     Returns dict with keys: tools, threads, timeout, include, exclude, retries, per_tool, skip_tools
 
-    Note: Tool lists come from PROFILE_TOOLS in tool_registry.py (single source of truth).
-    jmo.yml profiles only configure threads, timeout, per_tool settings - not tool lists.
+    Note: `PROFILE_TOOLS` in tool_registry.py is the single source of truth for
+    the **built-in** profiles. A `jmo.yml` profile that declares its own
+    `tools:` overrides it for that profile -- `profiles:` is a documented
+    user-facing key, and ignoring half of it silently is what #975 was.
+
+    This note used to say jmo.yml profiles configure "threads, timeout,
+    per_tool settings - not tool lists", which described the defect rather than
+    the intent.
     """
     cfg = load_config(getattr(args, "config", None))
     profile_name = getattr(args, "profile_name", None) or cfg.default_profile
@@ -92,11 +99,25 @@ def _effective_scan_settings(args) -> dict[str, Any]:
     if profile_name and isinstance(cfg.profiles, dict):
         profile = cfg.profiles.get(profile_name, {}) or {}
 
-    # Tool list priority: CLI --tools > PROFILE_TOOLS registry > config default
-    # Note: jmo.yml profiles no longer contain tools: arrays (moved to tool_registry.py)
+    # Tool list priority:
+    #   CLI --tools > the profile's own tools: > PROFILE_TOOLS registry > cfg.tools
+    #
+    # The profile's own list used to be skipped entirely (#975). `profiles:` is
+    # a documented, user-facing key -- CLAUDE.md's config table calls it "custom
+    # profile definitions with tool lists" -- and a user who wrote
+    # `profiles: {fast: {tools: [trufflehog]}}` got the full built-in `fast`
+    # profile instead: measured, one configured tool resolving to nine, semgrep
+    # among them and fetching its ruleset over the network.
+    #
+    # Silently ignoring configuration is worse than rejecting it: there is no
+    # signal to debug against, and the only reason this was ever noticed was
+    # semgrep processes appearing in a run that could not have invoked it.
     tools = getattr(args, "tools", None)
     if not tools:
-        if profile_name and profile_name in PROFILE_TOOLS:
+        configured_tools = profile.get("tools")
+        if isinstance(configured_tools, list) and configured_tools:
+            tools = [str(t) for t in configured_tools]
+        elif profile_name and profile_name in PROFILE_TOOLS:
             tools = PROFILE_TOOLS[profile_name]
         else:
             tools = cfg.tools  # Fallback to top-level config tools
@@ -429,34 +450,29 @@ def _add_ci_args(subparsers: argparse._SubParsersAction) -> Any:
 def _add_profile_args(
     subparsers: argparse._SubParsersAction, profile_name: str, description: str
 ) -> Any:
-    """Add profile-based scan command (fast/balanced/full)."""
+    """Add profile-based scan command (fast/balanced/full).
+
+    Built from the same helpers `jmo ci` uses, because `cmd_profile` routes
+    through `cmd_ci` by copying this namespace. A hand-written subset drifted
+    from what the destination reads: the profile parser defined 12 dests to
+    `ci`'s 42, and `store_history` was one of the 30 missing. The report phase
+    gates storage on `getattr(args, "store_history", False)`, so an absent
+    attribute meant OFF while the parser that defines it defaults it ON --
+    `jmo fast` silently stored nothing, and had no flag to turn it on either
+    (#870).
+
+    Sharing the helpers is what makes that unrepeatable for the next flag,
+    rather than fixing this one. The three arguments below are genuinely
+    profile-only: `jmo ci` has no `--no-open` or `--strict`, and `--fail-on`
+    it declares itself.
+    """
     profile_parser = subparsers.add_parser(profile_name, help=description)
 
-    # Target selection (mutually exclusive)
     target_group = profile_parser.add_mutually_exclusive_group(required=False)
-    target_group.add_argument("--repo", help="Path to a single repository to scan")
-    target_group.add_argument(
-        "--repos-dir", help="Directory whose immediate subfolders are repos to scan"
-    )
-    target_group.add_argument(
-        "--targets", help="File listing repo paths (one per line)"
-    )
+    _add_target_args(profile_parser, target_group=target_group)
+    _add_scan_config_args(profile_parser)
+    _add_logging_args(profile_parser)
 
-    # Scan configuration
-    profile_parser.add_argument(
-        "--results-dir",
-        default="results",
-        help="Results directory (default: results)",
-    )
-    profile_parser.add_argument(
-        "--threads", type=int, default=None, help="Override threads"
-    )
-    profile_parser.add_argument(
-        "--timeout",
-        type=int,
-        default=None,
-        help="Override per-tool timeout seconds",
-    )
     profile_parser.add_argument(
         "--fail-on",
         default=None,
@@ -468,13 +484,10 @@ def _add_profile_args(
     profile_parser.add_argument(
         "--strict",
         action="store_true",
-        help="Fail if tools are missing (disable stubs)",
-    )
-    profile_parser.add_argument(
-        "--human-logs", action="store_true", help="Human-friendly logs"
-    )
-    profile_parser.add_argument(
-        "--config", default="jmo.yml", help="Config file (default: jmo.yml)"
+        help=(
+            "Fail if tools are missing (disable stubs). Overrides "
+            "--allow-missing-tools, which the shortcuts default to ON"
+        ),
     )
 
     return profile_parser
@@ -675,9 +688,10 @@ def _add_setup_args(subparsers: argparse._SubParsersAction) -> Any:
         action="store_true",
         help="Force reinstallation of all tools",
     )
-    setup_parser.add_argument(
-        "--human-logs", action="store_true", help="Human-friendly logs"
-    )
+    # `--human-logs` used to be declared here on its own, which left `jmo setup`
+    # as the only command carrying one half of the pair: it could change the
+    # log FORMAT but not the log LEVEL. The two are one control (#879).
+    _add_logging_args(setup_parser)
     setup_parser.add_argument(
         "--strict",
         action="store_true",
@@ -1236,6 +1250,7 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     store_parser = history_subparsers.add_parser(
         "store", help="Manually store a completed scan"
     )
+    _add_logging_args(store_parser)
     store_parser.add_argument(
         "--results-dir",
         required=True,
@@ -1268,6 +1283,7 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
 
     # LIST
     list_parser = history_subparsers.add_parser("list", help="List all scans")
+    _add_logging_args(list_parser)
     list_parser.add_argument("--branch", help="Filter by branch name")
     list_parser.add_argument(
         "--profile",
@@ -1287,6 +1303,7 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     show_parser = history_subparsers.add_parser(
         "show", help="Show detailed scan information"
     )
+    _add_logging_args(show_parser)
     show_parser.add_argument(
         "scan_id", help="Scan UUID (full or partial, e.g., 'abc123')"
     )
@@ -1300,6 +1317,7 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     query_parser = history_subparsers.add_parser(
         "query", help="Execute custom SQL query"
     )
+    _add_logging_args(query_parser)
     query_parser.add_argument("query", help="SQL query to execute")
     query_parser.add_argument(
         "--format",
@@ -1311,6 +1329,7 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
 
     # PRUNE
     prune_parser = history_subparsers.add_parser("prune", help="Delete old scans")
+    _add_logging_args(prune_parser)
     prune_parser.add_argument(
         "--older-than",
         required=True,
@@ -1330,6 +1349,7 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     export_parser = history_subparsers.add_parser(
         "export", help="Export scans to JSON/CSV"
     )
+    _add_logging_args(export_parser)
     export_parser.add_argument(
         "--scan-id", help="Export specific scan by UUID (optional)"
     )
@@ -1348,6 +1368,7 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     stats_parser = history_subparsers.add_parser(
         "stats", help="Show database statistics"
     )
+    _add_logging_args(stats_parser)
     stats_parser.add_argument("--json", action="store_true", help="Output as JSON")
     add_db_arg(stats_parser)
 
@@ -1355,6 +1376,7 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     diff_parser = history_subparsers.add_parser(
         "diff", help="Compare two scans and show differences"
     )
+    _add_logging_args(diff_parser)
     diff_parser.add_argument("scan_id_1", help="First scan ID (baseline)")
     diff_parser.add_argument("scan_id_2", help="Second scan ID (comparison)")
     diff_parser.add_argument("--json", action="store_true", help="Output as JSON")
@@ -1364,6 +1386,7 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     trends_parser = history_subparsers.add_parser(
         "trends", help="Show security trends over time for a branch"
     )
+    _add_logging_args(trends_parser)
     trends_parser.add_argument(
         "--branch",
         default=None,
@@ -1382,6 +1405,7 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     optimize_parser = history_subparsers.add_parser(
         "optimize", help="Optimize database performance (VACUUM, ANALYZE)"
     )
+    _add_logging_args(optimize_parser)
     optimize_parser.add_argument(
         "--json", action="store_true", help="Output results as JSON"
     )
@@ -1391,6 +1415,7 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     migrate_parser = history_subparsers.add_parser(
         "migrate", help="Apply pending database schema migrations"
     )
+    _add_logging_args(migrate_parser)
     migrate_parser.add_argument(
         "--target-version",
         default=None,
@@ -1405,6 +1430,7 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     verify_parser = history_subparsers.add_parser(
         "verify", help="Verify database integrity (PRAGMA checks)"
     )
+    _add_logging_args(verify_parser)
     verify_parser.add_argument(
         "--json", action="store_true", help="Output results as JSON"
     )
@@ -1414,6 +1440,7 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     repair_parser = history_subparsers.add_parser(
         "repair", help="Repair corrupted database (dump/reimport)"
     )
+    _add_logging_args(repair_parser)
     repair_parser.add_argument(
         "--force",
         action="store_true",
@@ -1548,6 +1575,7 @@ Usage Examples:
     analyze_parser = trends_subparsers.add_parser(
         "analyze", help="Analyze security trends with flexible filters"
     )
+    _add_logging_args(analyze_parser)
     analyze_parser.add_argument(
         "--days",
         type=_positive_int,
@@ -1613,6 +1641,7 @@ Usage Examples:
     show_parser = trends_subparsers.add_parser(
         "show", help="Show trend context for a specific scan"
     )
+    _add_logging_args(show_parser)
     show_parser.add_argument(
         "scan_id",
         help="Scan ID to show context for",
@@ -1629,6 +1658,7 @@ Usage Examples:
     regressions_parser = trends_subparsers.add_parser(
         "regressions", help="List all detected regressions"
     )
+    _add_logging_args(regressions_parser)
     regressions_parser.add_argument(
         "--last",
         type=_positive_int,
@@ -1650,6 +1680,7 @@ Usage Examples:
     score_parser = trends_subparsers.add_parser(
         "score", help="Show security posture score history"
     )
+    _add_logging_args(score_parser)
     score_parser.add_argument(
         "--last",
         type=_positive_int,
@@ -1666,6 +1697,7 @@ Usage Examples:
     compare_parser = trends_subparsers.add_parser(
         "compare", help="Compare two specific scans side-by-side"
     )
+    _add_logging_args(compare_parser)
     compare_parser.add_argument(
         "scan_id_1",
         help="First scan ID",
@@ -1685,6 +1717,7 @@ Usage Examples:
     insights_parser = trends_subparsers.add_parser(
         "insights", help="List all automated insights"
     )
+    _add_logging_args(insights_parser)
     insights_parser.add_argument(
         "--last",
         type=_positive_int,
@@ -1696,6 +1729,7 @@ Usage Examples:
     explain_parser = trends_subparsers.add_parser(
         "explain", help="Explain how trend metrics are calculated"
     )
+    _add_logging_args(explain_parser)
     explain_parser.add_argument(
         "metric",
         nargs="?",
@@ -1708,6 +1742,7 @@ Usage Examples:
     developers_parser = trends_subparsers.add_parser(
         "developers", help="Show developer remediation rankings (Phase 5)"
     )
+    _add_logging_args(developers_parser)
     developers_parser.add_argument(
         "--last",
         type=_positive_int,
@@ -1718,6 +1753,29 @@ Usage Examples:
         type=_positive_int,
         default=10,
         help="Show top N developers (default: 10)",
+    )
+    # cmd_trends_developers has always READ these two; no flag defined them, so
+    # `repo` could only ever be Path.cwd() and the `if team_file:` branch was
+    # unreachable from any real invocation (#974).
+    #
+    # Added rather than deleted, for two measured reasons. The team machinery
+    # behind that branch is complete and tested -- aggregate_by_team,
+    # load_team_mapping, format_team_stats and TeamStats, with 24 references in
+    # tests/unit/test_developer_attribution.py -- so deleting the branch would
+    # orphan a working feature whose only defect was having no door. And the
+    # command already tells the user "Use --repo to specify the repository
+    # path" when it is run outside a git repo: advice for a flag that did not
+    # exist, which is the same defect class as #790.
+    developers_parser.add_argument(
+        "--repo",
+        help="Repository path for git blame attribution (default: current directory)",
+    )
+    developers_parser.add_argument(
+        "--team-file",
+        help=(
+            "JSON file mapping developer email to team name, to aggregate the "
+            'rankings by team (e.g. {"alice@example.com": "Backend Team"})'
+        ),
     )
     add_common_trend_args(developers_parser)
 
@@ -1768,18 +1826,23 @@ See: docs/POLICY_AS_CODE.md for complete documentation.
     )
 
     # LIST
-    policy_subparsers.add_parser("list", help="List all available policies")
+    policy_list_parser = policy_subparsers.add_parser(
+        "list", help="List all available policies"
+    )
+    _add_logging_args(policy_list_parser)
 
     # VALIDATE
     validate_parser = policy_subparsers.add_parser(
         "validate", help="Validate policy syntax"
     )
+    _add_logging_args(validate_parser)
     validate_parser.add_argument("policy", help="Policy name (without .rego extension)")
 
     # TEST
     test_parser = policy_subparsers.add_parser(
         "test", help="Test policy with findings file"
     )
+    _add_logging_args(test_parser)
     test_parser.add_argument("policy", help="Policy name (without .rego extension)")
     test_parser.add_argument(
         "--findings-file",
@@ -1791,12 +1854,14 @@ See: docs/POLICY_AS_CODE.md for complete documentation.
     show_parser = policy_subparsers.add_parser(
         "show", help="Display policy metadata and content"
     )
+    _add_logging_args(show_parser)
     show_parser.add_argument("policy", help="Policy name (without .rego extension)")
 
     # INSTALL
     install_parser = policy_subparsers.add_parser(
         "install", help="Install builtin policy to user directory"
     )
+    _add_logging_args(install_parser)
     install_parser.add_argument(
         "policy", help="Policy name to install (without .rego extension)"
     )
@@ -2016,6 +2081,14 @@ Supports three modes:
         help="Path to the history database (default: .jmo/history.db)",
     )
 
+    # `jmo diff` emits records and could not be turned up or down: the diff
+    # engine warns when findings carry no usable id or a findings.json holds
+    # non-object entries, and `--format html` warns on every run. `main()`
+    # already calls `configure_scan_logging(args)` for every command, so
+    # accepting the flag is the whole fix -- it reads `log_level` off whatever
+    # namespace it is handed (#879).
+    _add_logging_args(diff_parser)
+
     return diff_parser
 
 
@@ -2037,7 +2110,7 @@ BEGINNER-FRIENDLY COMMANDS:
   wizard              Interactive wizard for guided security scanning
   fast                Quick scan with 9 best-in-class tools (5-10 min)
   balanced            Balanced scan with 17 production-ready tools (18-25 min)
-  full                Comprehensive scan with all 28 tools (40-70 min)
+  full                Comprehensive scan with all 29 tools (40-70 min)
   setup               Verify and install security tools
 
 ADVANCED COMMANDS:
@@ -2071,7 +2144,7 @@ Documentation: https://docs.jmotools.com
     _add_profile_args(
         sub, "balanced", "Balanced scan with 17 production-ready tools (18-25 min)"
     )
-    _add_profile_args(sub, "full", "Comprehensive scan with all 28 tools (40-70 min)")
+    _add_profile_args(sub, "full", "Comprehensive scan with all 29 tools (40-70 min)")
     _add_setup_args(sub)
 
     # Advanced commands
@@ -2353,6 +2426,45 @@ def _check_first_run() -> bool:
         return False
 
 
+def _update_jmo_config(config_path: Path, updates: dict[str, Any]) -> None:
+    """Read-modify-write ``~/.jmo/config.yml``, preserving keys we do not set.
+
+    Every write in the first-run flow used to build a fresh dict and dump it
+    over the file, so the invalid-email branch wrote ``{onboarding_completed:
+    True}`` alone and discarded everything else the file held -- a real one on
+    this machine carried ``scan_count: 685`` (#931). ``_show_kofi_reminder``
+    already loads-then-updates; this is the same discipline, in one place, for
+    the five sites that did not.
+
+    Never raises: first-run bookkeeping must not take down the scan that
+    triggered it, and the caller has no better recovery than carrying on.
+    """
+    import yaml
+
+    config: dict[str, Any] = {}
+    if config_path.exists():
+        try:
+            with open(config_path, encoding="utf-8") as f:
+                config = yaml.safe_load(f) or {}
+            if not isinstance(config, dict):
+                # A config.yml holding a list or scalar is not something we can
+                # merge into. Treat it as empty rather than crashing, and say so.
+                logger.debug(f"{config_path} is not a mapping; starting fresh")
+                config = {}
+        except (OSError, UnicodeDecodeError, yaml.YAMLError, ValueError) as e:
+            logger.debug(f"Failed to read {config_path}, not merging: {e}")
+            config = {}
+
+    config.update(updates)
+
+    try:
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(config_path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(config, f, default_flow_style=False)
+    except (OSError, PermissionError, UnicodeEncodeError, yaml.YAMLError) as e:
+        logger.debug(f"Failed to write {config_path}: {e}")
+
+
 def _collect_email_opt_in(args) -> None:
     """Non-intrusive email collection on first run."""
     # Skip if not interactive (Docker, CI/CD, etc.)
@@ -2394,16 +2506,15 @@ def _collect_email_opt_in(args) -> None:
 
                 # Track pending_subscription so a future `jmo subscribe --retry`
                 # can re-attempt the audience add when offline at signup time.
-                import yaml
-
-                config = {
-                    "email": email,
-                    "email_opt_in": True,
-                    "onboarding_completed": True,
-                    "pending_subscription": not subscribed,
-                }
-                with open(config_path, "w", encoding="utf-8") as f:
-                    yaml.dump(config, f)
+                _update_jmo_config(
+                    config_path,
+                    {
+                        "email": email,
+                        "email_opt_in": True,
+                        "onboarding_completed": True,
+                        "pending_subscription": not subscribed,
+                    },
+                )
 
                 if subscribed and welcomed:
                     _safe_print(
@@ -2417,7 +2528,7 @@ def _collect_email_opt_in(args) -> None:
                 else:
                     # Audience add failed — saved locally, retry path available.
                     # No `jmo subscribe` command exists, and the
-                    # `pending_subscription` flag written below is never read
+                    # `pending_subscription` flag written above is never read
                     # back, so there is no CLI retry path to advertise (#790).
                     # Point at the page that does exist.
                     _safe_print(
@@ -2433,41 +2544,36 @@ def _collect_email_opt_in(args) -> None:
             else:
                 _safe_print("\n❌ Invalid email address. Skipping...\n")
                 # Mark onboarding complete even if email invalid
-                import yaml
-
-                config = {"onboarding_completed": True}
-                with open(config_path, "w", encoding="utf-8") as f:
-                    yaml.dump(config, f)
-        except ImportError:
-            # email_service module not available (resend not installed)
-            _safe_print("\n✅ Thanks! You're all set.\n")
-            import yaml
-
-            config = {
-                "email": email,
-                "email_opt_in": True,
-                "onboarding_completed": True,
-            }
-            with open(config_path, "w", encoding="utf-8") as f:
-                yaml.dump(config, f)
-            _log(
-                args,
-                "DEBUG",
-                "Email recorded but welcome email not sent (install resend: pip install resend)",
+                _update_jmo_config(config_path, {"onboarding_completed": True})
+        except (ImportError, OSError, PermissionError, UnicodeEncodeError) as e:
+            # There used to be a separate `except ImportError` here that printed
+            # "Thanks! You're all set." Its own comment said it covered "resend
+            # not installed" -- but email_service catches that itself at module
+            # scope and sets RESEND_AVAILABLE = False, so the guarded import
+            # succeeds either way and the branch could not be reached. Measured
+            # with resend genuinely absent: import OK, RESEND_AVAILABLE False,
+            # subscribe_to_newsletter() -> (False, False), which lands in the
+            # honest `else` above (#931).
+            #
+            # It is folded in here rather than deleted outright because the sole
+            # caller does not guard this function, so a real ImportError would
+            # take down `jmo scan`. What does not survive is the message: this
+            # path sent nothing, so it must not claim the user is all set.
+            logger.debug(f"Email collection error (non-blocking): {e}")
+            _safe_print(
+                "\n✅ Thanks! Saved your address locally, but signup did not"
+                " complete.\n   Finish it at"
+                " https://jmotools.com/subscribe.html\n"
             )
-        except (OSError, PermissionError, UnicodeEncodeError) as e:
-            # File write errors - fail gracefully
-            logger.debug(f"Failed to write config during email collection: {e}")
-            _safe_print("\n✅ Thanks! You're all set.\n")
-            import yaml
-
-            config = {
-                "email": email,
-                "email_opt_in": True,
-                "onboarding_completed": True,
-            }
-            with open(config_path, "w", encoding="utf-8") as f:
-                yaml.dump(config, f)
+            _update_jmo_config(
+                config_path,
+                {
+                    "email": email,
+                    "email_opt_in": True,
+                    "onboarding_completed": True,
+                    "pending_subscription": True,
+                },
+            )
             _log(args, "DEBUG", f"Email collection error (non-blocking): {e}")
     else:
         # `jmo config` is not a subcommand -- the parser has 20 and that is not
@@ -2476,11 +2582,7 @@ def _collect_email_opt_in(args) -> None:
         print("   https://jmotools.com/subscribe.html\n")
 
         # Mark onboarding complete even if skipped
-        import yaml
-
-        config = {"onboarding_completed": True}
-        with open(config_path, "w", encoding="utf-8") as f:
-            yaml.dump(config, f)
+        _update_jmo_config(config_path, {"onboarding_completed": True})
 
 
 def _show_kofi_reminder(args) -> None:
@@ -2783,11 +2885,17 @@ class ProgressTracker:
         """
         import time
 
+        from scripts.cli.scan_utils import not_attempted_tools
+
         outcome = classify_target_outcome(statuses)
+        # A stubbed tool is False now, so it must be excluded here or every
+        # "findings MISSING from N failed tool(s)" line would accuse tools that
+        # were never installed of failing (#825).
+        skipped_tools = set(not_attempted_tools(statuses))
         failed_tools = sorted(
             name
             for name, ok in (statuses or {}).items()
-            if not name.startswith("__") and not ok
+            if not name.startswith("__") and not ok and name not in skipped_tools
         )
 
         with self._lock:
@@ -2797,6 +2905,9 @@ class ProgressTracker:
                 TARGET_OK: "✓",
                 TARGET_PARTIAL: "⚠",
                 TARGET_FAILED: "✗",
+                # Hollow, so it reads as neither pass nor fail at a glance --
+                # which is what "no tool ran here" is.
+                TARGET_NOT_ATTEMPTED: "○",
             }[outcome]
 
             # Calculate ETA
@@ -2831,6 +2942,18 @@ class ProgressTracker:
                         else "no tool ran against this target"
                     ),
                 )
+            elif outcome == TARGET_NOT_ATTEMPTED:
+                # Not an error: --allow-missing-tools is what makes this
+                # reachable and the run still exits 0. But an empty stub from a
+                # secret scanner that never ran satisfies a zero-secrets
+                # policy, so it cannot be silent either (#825).
+                _log(
+                    self.args,
+                    "WARN",
+                    f"{message} - NO tool ran against this target; "
+                    f"{len(skipped_tools)} stubbed and their empty output is "
+                    f"NOT a clean result: {', '.join(sorted(skipped_tools))}",
+                )
             elif outcome == TARGET_PARTIAL:
                 _log(
                     self.args,
@@ -2838,6 +2961,16 @@ class ProgressTracker:
                     f"{message} - findings MISSING from "
                     f"{len(failed_tools)} failed tool(s): "
                     f"{', '.join(failed_tools)}",
+                )
+            elif skipped_tools:
+                # The tools that ran all succeeded, so this is not a warning
+                # about the scan -- but which tools were stubbed is still the
+                # difference between "clean" and "not looked at".
+                _log(
+                    self.args,
+                    "WARN",
+                    f"{message} - {len(skipped_tools)} tool(s) were stubbed and "
+                    f"did NOT run: {', '.join(sorted(skipped_tools))}",
                 )
             else:
                 _log(self.args, "INFO", message)
@@ -2979,13 +3112,20 @@ def cmd_scan(args) -> int:
     import time
 
     # Clear tool warning deduplication tracker at scan start (Fix 1.3 - Issue #3)
-    from scripts.cli.scan_utils import clear_tool_warnings
+    from scripts.cli.scan_utils import clear_tool_warnings, not_attempted_tools
 
     clear_tool_warnings()
 
     # Check for first-run email prompt (non-blocking)
     if _check_first_run():
         _collect_email_opt_in(args)
+
+    # Wall clock for the scan phase, handed to the report phase through
+    # .scan_metadata.json so `jmo history` can show a real duration (#981).
+    # Started here rather than at the top of the function so an interactive
+    # first-run prompt is not counted as scan time, and `perf_counter` rather
+    # than `monotonic` because monotonic is the coarser of the two on Windows.
+    scan_started = time.perf_counter()
 
     # Load effective settings with profile/per-tool overrides
     eff = _effective_scan_settings(args)
@@ -3378,6 +3518,32 @@ def cmd_scan(args) -> int:
             f"{', '.join(failed_targets)}",
         )
 
+    # Per target, which tools were stubbed rather than run (#825). The stub is
+    # a real file containing that tool's own empty-result shape, so nothing
+    # downstream can tell it from a clean scan -- which is how a `zero-secrets`
+    # policy passes on a run where no secret scanner executed. The run still
+    # exits on findings alone: `--allow-missing-tools` bought that, and taking
+    # it back here would invert what the flag is for.
+    stubbed_by_target = {
+        str(name): not_attempted_tools(statuses)
+        for name, statuses in scan_results
+        if not_attempted_tools(statuses)
+    }
+    if stubbed_by_target:
+        total_stubbed = sum(len(v) for v in stubbed_by_target.values())
+        _log(
+            args,
+            "WARN",
+            f"{total_stubbed} tool run(s) across {len(stubbed_by_target)} of "
+            f"{len(scan_results)} target(s) were STUBBED, not executed. Their "
+            f"output files are empty because nothing looked, which is not the "
+            f"same as finding nothing: "
+            + "; ".join(
+                f"{target}: {', '.join(tools_)}"
+                for target, tools_ in sorted(stubbed_by_target.items())
+            ),
+        )
+
     # Show Ko-Fi support reminder
     _show_kofi_reminder(args)
 
@@ -3393,6 +3559,16 @@ def cmd_scan(args) -> int:
         "tools": tools,
         "timestamp": datetime.now(UTC).isoformat(),
         "target_count": total_targets,
+        # The report phase stores this in history. It has no clock of its own
+        # that means anything here: its `elapsed` measures the ~30 seconds of
+        # aggregation, not the ~20 minutes of scanning, and a wrong number reads
+        # as measured where N/A is honestly empty (#981).
+        "duration_seconds": round(time.perf_counter() - scan_started, 3),
+        # Which tools were stubbed rather than run, per target (#825). Carried
+        # across the scan->report handoff because a stub is indistinguishable
+        # from a clean result once the scan process is gone: it is that tool's
+        # own empty-result shape in a file with that tool's own name.
+        "stubbed_tools": stubbed_by_target,
         # The paths actually scanned. store_scan() needs these to record git
         # context for the right repository: `results_dir/individual-repos/<name>`
         # is an OUTPUT directory, so walking up from it finds whatever repo
@@ -3640,6 +3816,18 @@ def cmd_profile(args, profile_name: str):
 
     actual_profile = profile_map.get(profile_name, "balanced")
 
+    # Since #870 these parsers carry the full `jmo ci` flag surface, so two
+    # dests now exist that this function also sets. Neither may be overridden
+    # in silence -- that is the class this campaign keeps finding.
+    requested_profile = getattr(args, "profile_name", None)
+    if requested_profile and requested_profile != actual_profile:
+        sys.stderr.write(
+            f"Error: `jmo {profile_name}` IS the {actual_profile} profile; "
+            f"--profile-name {requested_profile} contradicts it.\n"
+            f"Use `jmo ci --profile-name {requested_profile}` instead.\n"
+        )
+        return 2
+
     # Create a modified args object for cmd_ci
     # Copy all attributes from args
     ci_args = argparse.Namespace(**vars(args))
@@ -3647,6 +3835,11 @@ def cmd_profile(args, profile_name: str):
     # Set profile-specific attributes
     ci_args.cmd = "ci"  # Route through CI command for scan + report
     ci_args.profile_name = actual_profile
+    # `--strict` is the shortcuts' control. They allow missing tools by
+    # default -- the opposite of `jmo ci`, preserved deliberately rather than
+    # quietly aligned, because that is a UX decision and not this issue's. So
+    # `--allow-missing-tools` now exists here but asks for what already holds;
+    # `--strict` is the only one of the pair that changes anything.
     ci_args.allow_missing_tools = not args.strict
 
     # Run CI command (scan + report + threshold check)
@@ -3706,6 +3899,31 @@ def _prompt_install_dependency(dep_type: str) -> bool:
         sys.stderr.write("\n⚠️  MCP SDK is not installed.\n\n")
         package = "mcp[cli]>=1.0.0"
 
+    # Do not read stdin unless a human is on the other end of it.
+    #
+    # The only caller is cmd_mcp_server, where stdin IS the MCP client's
+    # JSON-RPC pipe. A pipe with data waiting does not raise EOFError -- input()
+    # succeeds and returns the client's first message, normally the `initialize`
+    # request. That does not start with y/yes/empty, so the branch declined, the
+    # command returned 1, and the client saw a connection that closed after
+    # swallowing its handshake -- a symptom pointing away from the real cause
+    # (#958). The EOFError guard below cannot help: EOF is not what happens.
+    #
+    # This is the guard the other prompt sites in this file already use --
+    # _collect_email_opt_in checks isatty and JMO_NON_INTERACTIVE/CI, and the
+    # resume prompt checks isatty on both streams. This one was the omission
+    # against the file's own convention, not a missing convention.
+    if (
+        not sys.stdin.isatty()
+        or os.environ.get("JMO_NON_INTERACTIVE")
+        or os.environ.get("CI")
+    ):
+        sys.stderr.write(
+            f"  Not installing automatically: stdin is not a terminal.\n"
+            f"  Install it with: pip install '{package}'\n"
+        )
+        return False
+
     try:
         response = input(f"Install {package}? [Y/n]: ").strip().lower()
     except (EOFError, KeyboardInterrupt):
@@ -3718,6 +3936,8 @@ def _prompt_install_dependency(dep_type: str) -> bool:
                 [sys.executable, "-m", "pip", "install", package],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=120,
             )
             if result.returncode == 0:

@@ -2,8 +2,6 @@ import json
 import types
 from pathlib import Path
 
-import pytest
-
 from scripts.cli import jmo
 
 
@@ -15,10 +13,33 @@ def _repo(tmp_path: Path) -> Path:
     return r
 
 
-@pytest.mark.requires_tools
 def test_scan_each_tool_happy_paths(tmp_path: Path, monkeypatch):
+    """Each requested tool is resolved and invoked exactly once (#980).
+
+    Two things were wrong, and only the second is the one the issue named.
+
+    1. **The mock was on the wrong function.** This patched `subprocess.run`,
+       but `tool_runner` stopped calling it: `_run_bounded` uses
+       `subprocess.Popen` so a timeout can kill the whole process tree (a
+       launcher script's grandchildren hold the pipes open otherwise). The
+       mock therefore intercepted nothing, Popen tried to execute a path that
+       does not exist, and the FileNotFoundError surfaced as "Tool not found:
+       /usr/bin/trufflehog" through scan_utils' failure logger.
+    2. **The fabricated paths were POSIX-shaped.** `/usr/bin/<tool>` is not a
+       plausible resolution on Windows for anything, so the test was
+       accidentally platform-specific. It now hands back real files under
+       `tmp_path`, which is true on every platform.
+
+    **The requires_tools marker is gone on purpose.** That marker is excluded
+    from every PR-time shard, so this test ran nowhere -- not on Windows CI,
+    not on Linux CI, only for someone running the full local suite, which is
+    how it stayed red long enough to be absorbed as noise. It mocks tool
+    resolution and tool execution both, so it requires no tool and never did.
+    """
     repo = _repo(tmp_path)
     out_base = tmp_path / "results"
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
 
     # Active tools only (v0.5.0+)
     # Removed: gitleaks, noseyparker, tfsec (deprecated/not implemented)
@@ -36,11 +57,18 @@ def test_scan_each_tool_happy_paths(tmp_path: Path, monkeypatch):
     import subprocess
     from unittest.mock import MagicMock
 
+    from scripts.core import tool_runner
+
     for t in tools:
-        # Mock shutil.which to simulate tool being installed
+        # Resolve to a real file under tmp_path rather than a fabricated
+        # /usr/bin/<tool>: any existence check then passes, and the path
+        # shape is valid on Windows as well as POSIX.
         def fake_which_factory(current: str):
+            resolved = bin_dir / current
+            resolved.write_text("", encoding="utf-8")
+
             def _fake_which(name: str):
-                return f"/usr/bin/{name}" if name == current else None
+                return str(resolved) if name == current else None
 
             return _fake_which
 
@@ -50,6 +78,17 @@ def test_scan_each_tool_happy_paths(tmp_path: Path, monkeypatch):
             """Create subprocess.run mock for specific tool."""
 
             def mock_run(cmd, *args, **kwargs):
+                # The resolved program must be a path that EXISTS. Without
+                # this the fixture data is unchecked, and a mock returning
+                # "/usr/bin/<tool>" passes every assertion below while being
+                # something no platform could execute -- which is how this
+                # test came to be POSIX-shaped and red on Windows (#980).
+                # Mutation-tested: reverting the resolution to a fabricated
+                # path fails here rather than passing silently.
+                assert Path(cmd[0]).exists(), (
+                    f"the scan invoked {cmd[0]!r}, which does not exist -- "
+                    "shutil.which was mocked with a fabricated path"
+                )
                 # Use basename to handle both bare names and full paths
                 # (e.g., "semgrep" vs "/usr/bin/semgrep" from shutil.which)
                 prog = Path(cmd[0]).name
@@ -90,7 +129,12 @@ def test_scan_each_tool_happy_paths(tmp_path: Path, monkeypatch):
             return mock_run
 
         # Note: _tool_exists removed in v0.9.0 - tool discovery handled by scanners
+        #
+        # Patch BOTH: `_run_bounded` is what tool_runner actually calls, and
+        # `subprocess.run` still covers incidental probes elsewhere in the
+        # scan path. Patching only the latter is what made this test red.
         monkeypatch.setattr(subprocess, "run", make_mock_run(t))
+        monkeypatch.setattr(tool_runner, "_run_bounded", make_mock_run(t))
         # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933),
         # which resolves `Path.home()` with no injection point.
         monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))

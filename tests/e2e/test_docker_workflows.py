@@ -34,6 +34,9 @@ from tests.conftest import skip_on_windows
 #   balanced: 18 → 17 in PROFILE_TOOLS (no manual tools)
 #   slim:     14 → 13 in PROFILE_TOOLS (no manual tools)
 #   fast:      9 →  9 (bearer was never in fast)
+# Then #795 added shellcheck to deep -- it was in the other three profiles and
+# not the most comprehensive one, and Dockerfile.deep already built it:
+#   deep:     28 → 29 in PROFILE_TOOLS, minus 4 manual = 25 expected installable
 # Registry this suite audits. Overridable so the same tests can be pointed at an
 # image built from the CURRENT source tree rather than the published release:
 #
@@ -50,7 +53,7 @@ DOCKER_REGISTRY = os.environ.get(
     "JMO_DOCKER_REGISTRY", "ghcr.io/jimmy058910/jmo-security"
 )
 DOCKER_VARIANTS = [
-    pytest.param("deep", 24, id="deep"),
+    pytest.param("deep", 25, id="deep"),
     pytest.param("balanced", 17, id="balanced"),
     pytest.param("slim", 13, id="slim"),
     pytest.param("fast", 9, id="fast"),
@@ -1215,7 +1218,12 @@ class TestDockerCLIConsistency:
         """All variants should report the same jmo package version."""
         versions: dict[str, str] = {}
 
-        for variant, _ in [("deep", 28), ("balanced", 18), ("slim", 14), ("fast", 8)]:
+        # Names only. This list used to carry tool counts bound to `_` and read
+        # by nothing -- and by the time #795 touched it they had drifted to
+        # (28, 18, 14, 8) against an actual (28, 17, 13, 9), wrong in three of
+        # four entries. A number nobody reads cannot stay right; DOCKER_VARIANTS
+        # above is the one place a count belongs.
+        for variant in ("deep", "balanced", "slim", "fast"):
             image = f"{DOCKER_REGISTRY}:{variant}"
 
             if not image_exists(image):

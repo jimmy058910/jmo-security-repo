@@ -18,6 +18,8 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import logging
 import os
 import time
@@ -25,7 +27,14 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
+from scripts.core.adapters.common import normalize_finding_path
+from scripts.core.common_finding import (
+    FINGERPRINT_LENGTH,
+    MESSAGE_SNIPPET_LENGTH,
+    fingerprint,
+)
 from scripts.core.compliance_mapper import enrich_findings_with_compliance
+from scripts.core.cwe_extraction import backfill_risk_cwe
 from scripts.core.exceptions import AdapterParseException
 
 # Plugin system (v0.9.0)
@@ -35,6 +44,10 @@ from scripts.core.plugin_loader import get_plugin_loader, get_plugin_registry
 from scripts.core.priority_calculator import PriorityCalculator
 from scripts.core.reporters.basic_reporter import write_json, write_markdown
 from scripts.core.scan_timings import SCAN_TIMINGS_FILENAME
+from scripts.core.tool_diagnostics import (
+    ToolDiagnostic,
+    extract_tool_diagnostics,
+)
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -81,14 +94,56 @@ def deduplicate_findings_memory_efficient(
     """
     seen_fingerprints: set[str] = set()
     result: list[dict[str, Any]] = []
+    dropped: list[dict[str, Any]] = []
 
     for finding in findings:
         fingerprint = finding.get("id")
-        if fingerprint and fingerprint not in seen_fingerprints:
+        if not fingerprint:
+            # NOT deduplicated - discarded. Before #848 this fell out of the
+            # `if fingerprint and ...` test with no log record at any level and
+            # no count in the report to compare against, so a finding a tool
+            # produced and JMo deleted looked exactly like a finding that never
+            # existed. The drop itself is kept: a finding with no id cannot be
+            # deduplicated, suppressed, diffed or referenced, and
+            # `calculate_priorities_bulk` reads `finding["id"]` unguarded. What
+            # changes is that it is now counted and named.
+            dropped.append(finding)
+            continue
+        if fingerprint not in seen_fingerprints:
             seen_fingerprints.add(fingerprint)
             result.append(finding)
 
+    _report_dropped_findings(dropped)
     return result
+
+
+def _report_dropped_findings(dropped: list[dict[str, Any]]) -> None:
+    """Name the tools whose findings were discarded for having no id (#848).
+
+    WARNING because `configure_scan_logging` sets the `scripts` logger to
+    WARNING for a normal run - the level below it is invisible in exactly the
+    situation this exists to report. Silent on a healthy scan, which every
+    corpus measured so far is: #843 found 0 of 264 real findings with an empty
+    id, so this must not become the always-fires shape #784 removed.
+
+    The schema does say `minLength: 1` on `id`, but nothing between the
+    adapters and this function validates against it - `schema_validator` is
+    reached only by `jmo validate` and the YAML reporter. The contract is
+    documented, not enforced, so this path is reachable by any adapter that
+    ships a falsy id.
+    """
+    if not dropped:
+        return
+    by_tool: dict[str, int] = {}
+    for finding in dropped:
+        tool = (finding.get("tool") or {}).get("name") or "unknown"
+        by_tool[tool] = by_tool.get(tool, 0) + 1
+    logger.warning(
+        "Discarded %d finding(s) with no id - they are MISSING from this "
+        "report and were not deduplicated, they were deleted (by tool: %s)",
+        len(dropped),
+        ", ".join(f"{tool}={n}" for tool, n in sorted(by_tool.items())),
+    )
 
 
 def deduplicate_findings_streaming(
@@ -113,15 +168,189 @@ def deduplicate_findings_streaming(
         deduplicate_findings_memory_efficient: Faster for moderate-sized datasets
     """
     seen: set[str] = set()
+    dropped: list[dict[str, Any]] = []
 
     def _gen():
         for finding in findings:
             fp = finding.get("id")
-            if fp and fp not in seen:
+            if not fp:
+                # Identical shape to `deduplicate_findings_memory_efficient`,
+                # and identically silent before #848. Two copies of a data-loss
+                # path is how one gets fixed and the other does not.
+                dropped.append(finding)
+                continue
+            if fp not in seen:
                 seen.add(fp)
                 yield finding
 
-    return list(_gen())
+    out = list(_gen())
+    _report_dropped_findings(dropped)
+    return out
+
+
+def scan_roots(results_dir: Path) -> tuple[str, ...]:
+    """Absolute directories this scan visited, for #861 path normalization.
+
+    Read from ``repo_paths`` in ``.scan_metadata.json``, the same key
+    ``history_db._scanned_repo_paths`` uses. Returns an empty tuple when the
+    file is absent or unreadable -- a results directory produced by something
+    other than `jmo scan` still normalizes separators and leading separators,
+    it just cannot strip a host prefix it was never told about.
+    """
+    try:
+        meta = json.loads(
+            (results_dir / ".scan_metadata.json").read_text(encoding="utf-8")
+        )
+    except (OSError, json.JSONDecodeError):
+        return ()
+    if not isinstance(meta, dict):
+        return ()
+    raw = meta.get("repo_paths")
+    if not isinstance(raw, list):
+        return ()
+    return tuple(entry for entry in raw if isinstance(entry, str) and entry)
+
+
+def _legacy_plugin_fingerprint(
+    tool: str, rule_id: str, path: str, start_line: Any, message: str
+) -> str:
+    """The formula in ``AdapterPlugin.get_fingerprint``.
+
+    There are **two** fingerprint formulas in this codebase and they disagree:
+    :func:`~scripts.core.common_finding.fingerprint` coerces a missing line to
+    ``0`` and strips the message, while ``get_fingerprint`` renders a missing
+    line as ``""`` and does not strip. trivy, trufflehog and semgrep use the
+    second. Reproducing both is what lets
+    :func:`_normalize_paths_and_ids` *prove* an id was path-derived instead of
+    assuming it.
+    """
+    parts = [tool, rule_id, path, str(start_line), message[:MESSAGE_SNIPPET_LENGTH]]
+    return hashlib.sha256("|".join(parts).encode()).hexdigest()[:FINGERPRINT_LENGTH]
+
+
+def _normalize_paths_and_ids(
+    findings: list[dict[str, Any]], roots: tuple[str, ...]
+) -> tuple[int, int]:
+    """Normalize ``location.path`` in place and re-key path-derived ids (#861).
+
+    Returns ``(paths_changed, ids_rekeyed)``.
+
+    **The id is only recomputed when the existing one can be shown to have come
+    from the old path.** That check is not defensive padding -- it is load
+    bearing. Four adapters deliberately fingerprint on something that is *not*
+    ``location.path``:
+
+    ==============  =====================================================
+    ``zap``         ``f"{uri}:{method}:{param}:{idx}"`` -- one alert on one
+                    URI yields several findings that differ only by param
+    ``cdxgen``      ``component_id``
+    ``nuclei``      the matched URL
+    ``mobsf``       the literal ``"AndroidManifest.xml"`` on one branch
+    ==============  =====================================================
+
+    Re-keying those from ``location.path`` would give every instance the same
+    id, and `deduplicate_findings_memory_efficient` would then delete all but
+    the first -- turning a path cleanup into silent finding loss, which is the
+    exact failure class this campaign keeps finding. Deriving the answer from
+    the data rather than from a hard-coded allowlist also means a new adapter
+    with a custom key is safe on the day it lands, with nothing to remember.
+    """
+    paths_changed = 0
+    ids_rekeyed = 0
+
+    for finding in findings:
+        location = finding.get("location")
+        if not isinstance(location, dict):
+            continue
+        original = location.get("path")
+        if not isinstance(original, str) or not original:
+            continue
+
+        normalized = normalize_finding_path(original, roots)
+        if normalized == original:
+            continue
+
+        location["path"] = normalized
+        paths_changed += 1
+
+        current = finding.get("id")
+        if not isinstance(current, str) or not current:
+            continue
+        tool = (finding.get("tool") or {}).get("name", "")
+        rule_id = finding.get("ruleId", "") or ""
+        message = finding.get("message", "") or ""
+        start_line = location.get("startLine")
+
+        if current == fingerprint(tool, rule_id, original, start_line, message):
+            finding["id"] = fingerprint(tool, rule_id, normalized, start_line, message)
+            ids_rekeyed += 1
+        elif current == _legacy_plugin_fingerprint(
+            tool,
+            rule_id,
+            original,
+            start_line if start_line is not None else "",
+            message,
+        ):
+            finding["id"] = _legacy_plugin_fingerprint(
+                tool,
+                rule_id,
+                normalized,
+                start_line if start_line is not None else "",
+                message,
+            )
+            ids_rekeyed += 1
+
+    return paths_changed, ids_rekeyed
+
+
+def collect_tool_diagnostics(results_dir: Path) -> list[ToolDiagnostic]:
+    """Files the tools said they could not analyse (#837).
+
+    Walks the same tree as :func:`gather_results` but answers a different
+    question, so it is a separate pass rather than a second return value: the
+    adapters' contract stays `list[Finding]`, and only the five tools with a
+    known error channel pay an extra parse.
+
+    A file a tool could not read is not "clean" - it was never looked at - and
+    before this nothing in the report distinguished the two. Measured: bandit
+    named 2 unparseable files, and they appeared 0 times across findings.json,
+    SUMMARY.md, dashboard.html, findings.sarif and findings.csv, with 0 log
+    records at any level.
+    """
+    roots = scan_roots(results_dir)
+    loader = get_plugin_loader()
+    out: list[ToolDiagnostic] = []
+
+    for target_dir in _target_dirs(results_dir):
+        if not target_dir.exists():
+            continue
+        for target in sorted(p for p in target_dir.iterdir() if p.is_dir()):
+            for tool_output in target.glob("*.json"):
+                if tool_output.name == SCAN_TIMINGS_FILENAME:
+                    continue
+                tool_name = tool_output.stem
+                if tool_name == "afl++":
+                    tool_name = "aflplusplus"
+                adapter_name = loader._tool_to_adapter_name(tool_name)
+                out.extend(extract_tool_diagnostics(adapter_name, tool_output, roots))
+    return out
+
+
+def _target_dirs(results_dir: Path) -> list[Path]:
+    """The six target-type directories a scan can write.
+
+    Defined once because `gather_results` and `collect_tool_diagnostics` must
+    walk the same set - a seventh target type added to one and not the other
+    would go unreported in exactly the silent way #837 is about.
+    """
+    return [
+        results_dir / "individual-repos",
+        results_dir / "individual-images",
+        results_dir / "individual-iac",
+        results_dir / "individual-web",
+        results_dir / "individual-gitlab",
+        results_dir / "individual-k8s",
+    ]
 
 
 def gather_results(results_dir: Path) -> list[dict[str, Any]]:
@@ -159,14 +388,7 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
             logger.debug(f"Failed to update profiling metadata: {e}")
 
     # Scan all target type directories: repos, images, IaC, web, gitlab, k8s
-    target_dirs = [
-        results_dir / "individual-repos",
-        results_dir / "individual-images",
-        results_dir / "individual-iac",
-        results_dir / "individual-web",
-        results_dir / "individual-gitlab",
-        results_dir / "individual-k8s",
-    ]
+    target_dirs = _target_dirs(results_dir)
 
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
         for target_dir in target_dirs:
@@ -236,6 +458,24 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
                 # true. This generic one stays as a genuine backstop, because a
                 # future can fail for reasons unrelated to its callable.
                 logger.error(f"Unexpected error loading findings: {e}", exc_info=True)
+
+    # Normalize `location.path` to one repo-relative POSIX spelling **before**
+    # dedup (#861). Order matters: dedup keys on `id`, and `id` is derived from
+    # the path, so two spellings of one location are two ids and survive dedup
+    # as separate findings. Measured on a real scan, `python/vulnerable_app.py`
+    # arrived under both `C:\...\repos\fixturecopy\python\vulnerable_app.py`
+    # (bandit) and `python\vulnerable_app.py` (horusec).
+    paths_changed, ids_rekeyed = _normalize_paths_and_ids(
+        findings, scan_roots(results_dir)
+    )
+    if paths_changed:
+        logger.info(
+            "Normalized %d finding path(s) to repo-relative POSIX form "
+            "(%d finding id(s) re-keyed)",
+            paths_changed,
+            ids_rekeyed,
+        )
+
     # Dedupe by id (fingerprint) - memory-efficient approach
     # Uses set for fingerprints (tiny strings) instead of dict storing full findings
     # This avoids double memory storage (dict + list copy)
@@ -271,6 +511,16 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
             type(e).__name__,
             e,
         )
+
+    # Lift each tool's own CWE into `risk.cwe` BEFORE compliance enrichment
+    # (#845). Order is the whole point: `enrich_finding_with_compliance` reads
+    # CWEs from `risk.cwe` and nowhere else, so a CWE that arrives after this
+    # call reaches no framework. Measured before the fix -- bandit reported a
+    # CWE on 17 of 17 findings and 0 reached the mapper, and `cweTop25_2024`
+    # was populated on 0 findings in the whole corpus.
+    filled = backfill_risk_cwe(deduped)
+    if filled:
+        logger.info("Lifted a tool-reported CWE into risk.cwe on %d finding(s)", filled)
 
     # Enrich all findings with compliance framework mappings (v1.2.0)
     try:

@@ -15,11 +15,24 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import Any, cast
 
 logger = logging.getLogger(__name__)
+
+# A `location.path` that is not a filesystem path at all. Measured in #861:
+# `location.path` is polymorphic across the 29 adapters, and three of the four
+# shapes must survive normalization untouched --
+#
+#   zap    -> a full URL (`uri.split("?")[0]`, zap_adapter.py:110)
+#   lynis  -> a bare hostname, and `f"{hostname}:{package}"`
+#   others -> a filesystem path, in four different spellings
+#
+# Only the last shape is what #861 is about. Rewriting a URL's separators or
+# stripping a hostname would corrupt data that was already correct, so the
+# normalizer refuses anything carrying a URL scheme.
+_URL_SCHEME_SEPARATOR = "://"
 
 
 def safe_load_json_file(
@@ -290,3 +303,82 @@ def _flatten_to_dicts(obj: Any) -> Iterator[dict[str, Any]]:
     elif isinstance(obj, list):
         for item in obj:
             yield from _flatten_to_dicts(item)
+
+
+def normalize_finding_path(path: str, roots: Sequence[str] = ()) -> str:
+    r"""Reduce a tool-reported ``location.path`` to one repo-relative POSIX spelling.
+
+    Tools disagree about how to name the file they found something in. Measured
+    on one `deep` scan of one directory (#861), ``python/vulnerable_app.py``
+    reached ``findings.json`` under **two** spellings at once -- bandit's
+    ``C:\Users\...\repos\fixturecopy\python\vulnerable_app.py`` (17 findings)
+    and horusec's ``python\vulnerable_app.py`` (2). 17 of 82 findings carried
+    the scanning machine's home directory, which then shipped into
+    ``findings.sarif`` (17 occurrences) and ``dashboard.html`` (34) -- the two
+    artifacts people upload and share.
+
+    Because ``path`` is an input to
+    :func:`~scripts.core.common_finding.fingerprint`, two spellings are also two
+    finding ids, so nothing downstream can tell they are one location.
+
+    Args:
+        path: The value an adapter put in ``location.path``.
+        roots: Absolute directories the scan actually visited, from
+            ``.scan_metadata.json``'s ``repo_paths``. A path under one of them
+            is rewritten relative to it; that is what removes the host prefix.
+
+    Returns:
+        The normalized path. Anything this function cannot confidently treat as
+        a filesystem path is returned **unchanged**.
+
+    Examples:
+        >>> normalize_finding_path("python\\vulnerable_app.py")
+        'python/vulnerable_app.py'
+        >>> normalize_finding_path("/iac/aws-s3-public.tf")
+        'iac/aws-s3-public.tf'
+        >>> normalize_finding_path("https://example.com/a/b")
+        'https://example.com/a/b'
+    """
+    if not path:
+        return path
+
+    # URLs (zap) and bare hostnames (lynis) are not filesystem paths. Returning
+    # them untouched is the whole reason this is one shared function rather than
+    # a `.replace()` at 29 call sites: the guard has to exist exactly once.
+    if _URL_SCHEME_SEPARATOR in path:
+        return path
+
+    unified = path.replace("\\", "/")
+
+    # Rewrite relative to the deepest matching scan root. Deepest, not first:
+    # `--repos-dir` can produce nested roots, and a shallower one would leave a
+    # stray prefix on every finding under the deeper one.
+    best = ""
+    for root in roots:
+        if not root:
+            continue
+        root_unified = root.replace("\\", "/").rstrip("/")
+        if not root_unified:
+            continue
+        # Windows paths are case-insensitive and tools do not agree on the case
+        # of the drive letter, so compare case-folded but slice the original.
+        if unified.casefold().startswith(root_unified.casefold() + "/") and len(
+            root_unified
+        ) > len(best):
+            best = root_unified
+    if best:
+        return unified[len(best) + 1 :]
+
+    # A drive letter or UNC prefix that matched no root is genuinely outside
+    # every scanned tree. Stripping it would be a lie, and rewriting the drive
+    # letter is the exact mistake #538 made: an over-eager normalization turned
+    # the pattern `C:/*` into `*` and suppressed an entire scan.
+    if (len(unified) > 1 and unified[1] == ":") or unified.startswith("//"):
+        return unified
+
+    # A stray leading separator. Measured at 64 of 242 findings in #861, where
+    # it came from an adapter stripping a prefix and leaving the separator
+    # behind. `suppress.py::_normalize_path` already strips it on both sides of
+    # its comparison, so this brings the stored path into line with the form the
+    # suppression engine has been compensating for.
+    return unified.lstrip("/")
