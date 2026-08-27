@@ -12,7 +12,7 @@ from pathlib import Path
 
 from scripts.core.config import load_config_with_env_overrides
 from scripts.core.exceptions import OPANotFoundException
-from scripts.core.normalize_and_report import gather_results
+from scripts.core.normalize_and_report import collect_tool_diagnostics, gather_results
 from scripts.core.reporters.basic_reporter import write_json, write_markdown
 from scripts.core.reporters.compliance_reporter import (
     write_attack_navigator_json,
@@ -30,6 +30,7 @@ from scripts.core.suppress import (
     filter_suppressed_with_summary,
     load_suppressions,
 )
+from scripts.core.tool_diagnostics import summarize
 
 logger = logging.getLogger(__name__)
 
@@ -175,6 +176,20 @@ def cmd_report(args, _log_fn) -> int:
     findings = gather_results(results_dir)
     elapsed = time.perf_counter() - start
 
+    # Files the tools said they could not analyse (#837). WARNING, not INFO:
+    # `configure_scan_logging` sets the `scripts` logger to WARNING for a normal
+    # run, so anything quieter is invisible exactly when it matters. It cannot
+    # become the always-fires warning #784 removed, because a healthy scan
+    # produces no diagnostics and this stays silent.
+    diagnostics = collect_tool_diagnostics(results_dir)
+    if diagnostics:
+        logger.warning(
+            "%s - they are NOT clean results, and any finding they contain is "
+            "absent from this report: %s",
+            summarize(diagnostics),
+            "; ".join(sorted({d.render() for d in diagnostics})[:10]),
+        )
+
     # Apply suppressions
     sup_file = (
         (results_dir / "jmo.suppress.yml")
@@ -249,7 +264,11 @@ def cmd_report(args, _log_fn) -> int:
     if "json" in cfg.outputs:
         write_json(findings, out_dir / "findings.json", metadata=metadata)
     if "md" in cfg.outputs:
-        write_markdown(findings, out_dir / "SUMMARY.md")
+        write_markdown(
+            findings,
+            out_dir / "SUMMARY.md",
+            unanalysed=[(d.tool, d.path, d.reason) for d in diagnostics],
+        )
     if "yaml" in cfg.outputs:
         try:
             write_yaml(findings, out_dir / "findings.yaml", metadata=metadata)

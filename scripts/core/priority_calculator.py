@@ -16,7 +16,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from scripts.core.epss_integration import EPSSClient
+from scripts.core.epss_integration import EPSSClient, EPSSScore
 from scripts.core.kev_integration import KEVClient
 
 
@@ -73,6 +73,10 @@ class PriorityCalculator:
 
         self.epss_client = EPSSClient(cache_dir=cache_path)
         self.kev_client = KEVClient(cache_dir=cache_path)
+        # Set only for the duration of `calculate_priorities_bulk`; None means
+        # "no pre-warmed result, ask the client" so a standalone
+        # `calculate_priority` call keeps working unchanged (#849).
+        self._epss_bulk: dict[str, EPSSScore] | None = None
 
     def calculate_priority(self, finding: dict) -> PriorityScore:
         """Calculate priority score for a finding.
@@ -103,7 +107,17 @@ class PriorityCalculator:
         epss_score = None
         epss_percentile = None
         if cves:
-            epss_data = self.epss_client.get_score(cves[0])  # Use first CVE
+            # `_epss_bulk` is the pre-warmed result of one bulk call, set by
+            # `calculate_priorities_bulk`. Without it this called `get_score`
+            # per finding, and `get_scores_bulk`'s result was discarded into
+            # `_` -- so the bulk request was an optimisation only for CVEs
+            # EPSS knows about. Measured (#849): 2000 findings whose CVEs EPSS
+            # does not score produced 1 bulk request and then 2000 individual
+            # ones.
+            if self._epss_bulk is not None:
+                epss_data = self._epss_bulk.get(cves[0])
+            else:
+                epss_data = self.epss_client.get_score(cves[0])  # Use first CVE
             if epss_data:
                 epss_score = epss_data.epss
                 epss_percentile = epss_data.percentile
@@ -169,14 +183,18 @@ class PriorityCalculator:
             all_cves.extend(cves)
             finding_cves[finding["id"]] = cves
 
-        # Bulk fetch EPSS scores (reduces API calls)
-        _ = self.epss_client.get_scores_bulk(list(set(all_cves)))  # Pre-warm cache
-
-        # Calculate priorities
-        priorities = {}
-        for finding in findings:
-            priority = self.calculate_priority(finding)
-            priorities[finding["id"]] = priority
+        # Bulk fetch EPSS scores, then USE the result. It was previously bound
+        # to `_` and discarded as a cache pre-warm, which only helps for CVEs
+        # EPSS has a score for -- a miss is not cached, so every unscored CVE
+        # still produced its own request inside the loop below (#849).
+        self._epss_bulk = self.epss_client.get_scores_bulk(list(set(all_cves)))
+        try:
+            priorities = {}
+            for finding in findings:
+                priority = self.calculate_priority(finding)
+                priorities[finding["id"]] = priority
+        finally:
+            self._epss_bulk = None
 
         return priorities
 

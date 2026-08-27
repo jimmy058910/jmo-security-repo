@@ -23,6 +23,26 @@ from __future__ import annotations
 # Mapping of equivalent rules across tools
 # Format: {canonical_id: [(tool, rule_id), ...]}
 # Canonical IDs use lowercase-with-dashes format
+#
+# A match here returns 1.0 from `dedup_enhanced.metadata_similarity` -- the
+# strongest possible signal -- so a wrong entry does not merely fail to help,
+# it actively drives clustering. Two different controls listed together get
+# merged into one finding, and the loser is only visible inside
+# `context.duplicates`.
+#
+# COMMENT CONVENTION (#846). The table mixes two different relationships, and
+# not marking which is which is how a wrong entry survived: the comment on
+# `CKV_AWS_17` said "RDS encryption" while the rule checkov actually ships
+# under that id is "Ensure all data stored in RDS is not publicly accessible".
+#
+#   `# alias:` one tool reporting one check under more than one id
+#             (trivy `:latest tag used` and `DS001`; hadolint DL3018/DL3019)
+#   `# cross:` different tools reporting the SAME issue -- what the table is
+#             for, and the only relationship that should span tool names
+#
+# When adding an entry, quote the tool's own rule description rather than
+# paraphrasing it. Three groups were measured wrong in #846 and every one was
+# caught by comparing against `check_name` from a real scan.
 RULE_EQUIVALENCE: dict[str, list[tuple[str, str]]] = {
     # ===== Dockerfile Best Practices =====
     "dockerfile-latest-tag": [
@@ -86,24 +106,37 @@ RULE_EQUIVALENCE: dict[str, list[tuple[str, str]]] = {
     # ===== Infrastructure as Code =====
     "iac-public-s3-bucket": [
         ("trivy", "Public S3 bucket"),
-        ("checkov", "CKV_AWS_19"),
-        ("checkov", "CKV_AWS_20"),  # S3 Block Public Access
-        ("checkov", "CKV_AWS_21"),  # S3 versioning
+        # cross: "S3 Bucket has an ACL defined which allows public READ access."
+        ("checkov", "CKV_AWS_20"),
         ("prowler", "s3_bucket_public_access"),
+        # REMOVED (#846), measured against checkov's own `check_name`:
+        #   CKV_AWS_21 "Ensure all data stored in the S3 bucket have versioning
+        #              enabled" -- versioning, not public access
+        #   CKV_AWS_19 "...securely encrypted at rest" -- encryption, not
+        #              public access
+        # Neither has a cross-tool counterpart here, so they are dropped rather
+        # than relocated. A group is for one issue reported by several tools.
     ],
     "iac-unencrypted-storage": [
         ("trivy", "Unencrypted storage"),
-        ("checkov", "CKV_AWS_3"),  # EBS encryption
-        ("checkov", "CKV_AWS_17"),  # RDS encryption
+        ("checkov", "CKV_AWS_3"),  # cross: EBS volume encryption
         ("prowler", "ec2_ebs_volume_encryption"),
+        # REMOVED (#846): CKV_AWS_17. Its inline comment here said "RDS
+        # encryption"; checkov's own `check_name`, measured on a real scan, is
+        # "Ensure all data stored in RDS is not publicly accessible". The
+        # comment described a different rule than the one listed, which is how
+        # a public-access control ended up in an encryption group.
     ],
     "iac-security-group-open-ingress": [
         ("trivy", "Security group allows open ingress"),
-        ("trivy", "DS031"),
-        ("checkov", "CKV_AWS_23"),  # Security group ingress
-        ("checkov", "CKV_AWS_24"),  # Security group 0.0.0.0/0
-        ("checkov", "CKV_AWS_25"),  # Security group unrestricted SSH
+        ("trivy", "DS031"),  # alias: same trivy check, id form
+        # cross: both are "ingress from 0.0.0.0:0", to port 22 and 3389
+        ("checkov", "CKV_AWS_24"),
+        ("checkov", "CKV_AWS_25"),
         ("prowler", "ec2_securitygroup_allow_ingress_from_internet"),
+        # REMOVED (#846): CKV_AWS_23 "Ensure every security group and rule has
+        # a description" -- a documentation control, not an ingress finding.
+        # Measured from checkov's own `check_name`.
     ],
     # ===== Kubernetes Security =====
     "k8s-privileged-container": [
@@ -137,22 +170,17 @@ RULE_EQUIVALENCE: dict[str, list[tuple[str, str]]] = {
     "secret-aws-access-key": [
         ("trufflehog", "AWS"),
         ("trufflehog", "aws-access-token"),
-        ("gitleaks", "aws-access-token"),
-        ("gitleaks", "aws-secret-access-key"),
         ("semgrep", "generic.secrets.security.detected-aws-account-id"),
         ("noseyparker", "AWS Access Key ID"),
     ],
     "secret-github-token": [
         ("trufflehog", "Github"),
         ("trufflehog", "github-pat"),
-        ("gitleaks", "github-pat"),
-        ("gitleaks", "github-token"),
         ("semgrep", "generic.secrets.security.detected-github-pat"),
         ("noseyparker", "GitHub Personal Access Token"),
     ],
     "secret-private-key": [
         ("trufflehog", "PrivateKey"),
-        ("gitleaks", "private-key"),
         ("semgrep", "generic.secrets.security.detected-private-key"),
         ("noseyparker", "PEM-Encoded Private Key"),
     ],
@@ -183,7 +211,6 @@ RULE_EQUIVALENCE: dict[str, list[tuple[str, str]]] = {
         ("bandit", "B105"),
         ("bandit", "B106"),
         ("trufflehog", "Password"),
-        ("gitleaks", "generic-password"),
     ],
 }
 
