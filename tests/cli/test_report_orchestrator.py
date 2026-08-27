@@ -113,7 +113,10 @@ def test_fail_code_case_insensitive():
 def mock_config():
     """Create mock configuration."""
     cfg = MagicMock()
-    cfg.outputs = ["json", "md"]
+    # `compliance` and `suppressions` are in the shipped default and gate the
+    # four artifacts #867 made switchable. A fixture without them would make
+    # every test here run with those writers off, which is not what a user has.
+    cfg.outputs = ["json", "md", "compliance", "suppressions"]
     cfg.fail_on = None
     cfg.threads = None
     cfg.profiling_default_threads = 4
