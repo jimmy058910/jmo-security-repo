@@ -853,6 +853,32 @@ def _scanned_repo_paths(results_dir: Path) -> list[Path]:
     return [Path(entry) for entry in raw if isinstance(entry, str) and entry]
 
 
+def _scan_duration_seconds(results_dir: Path) -> float | None:
+    """Return the scan phase's own wall clock, or None if it was not recorded.
+
+    Read from `duration_seconds` in `.scan_metadata.json`, written at the end of
+    `cmd_scan`. Both production callers of `store_scan` sit in the *report*
+    phase, whose only clock measures aggregation -- roughly thirty seconds
+    standing in for a twenty-minute scan. Substituting it would fill the column
+    with a plausible wrong number, and `jmo history list` renders NULL as "N/A",
+    which is honestly empty (#981).
+
+    None is therefore the correct answer for a results directory produced before
+    this key existed, or by something other than `jmo scan`.
+    """
+    try:
+        meta = json.loads((results_dir / ".scan_metadata.json").read_text("utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(meta, dict):
+        return None
+    raw = meta.get("duration_seconds")
+    # bool is an int subclass, and `True` would store as 1.0 second.
+    if isinstance(raw, bool) or not isinstance(raw, int | float):
+        return None
+    return float(raw) if raw >= 0 else None
+
+
 def store_scan(
     results_dir: Path,
     profile: str,
@@ -880,7 +906,10 @@ def store_scan(
         tag: Git tag (optional, auto-detected if None)
         jmo_version: JMo Security version (default: resolved via
             get_jmo_version(), which reads installed distribution metadata)
-        duration_seconds: Total scan duration in seconds
+        duration_seconds: Total scan duration in seconds. Defaults to the value
+            the scan phase recorded in `.scan_metadata.json`; pass one only if
+            you have a better measurement than the scan's own wall clock. The
+            report phase does not -- see `_scan_duration_seconds` (#981)
         no_store_raw: If True, don't store raw finding data (--no-store-raw-findings)
         encrypt_findings: If True, encrypt raw finding data (--encrypt-findings)
         collect_metadata: If True, collect hostname/username (default: False, privacy-first)
@@ -903,6 +932,13 @@ def store_scan(
     # Validate inputs
     if not results_dir.exists():
         raise FileNotFoundError(f"Results directory not found: {results_dir}")
+
+    # Fall back to the scan's own recorded wall clock. Read here rather than in
+    # each caller for the same reason `repo_paths` is: both production callers
+    # run in the report phase, and neither has a duration worth passing. The
+    # column was NULL on 2470 of 2470 rows before this (#981).
+    if duration_seconds is None:
+        duration_seconds = _scan_duration_seconds(results_dir)
 
     findings_json = results_dir / "summaries" / "findings.json"
     if not findings_json.exists():

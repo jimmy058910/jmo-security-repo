@@ -503,3 +503,135 @@ class TestStoreAcceptsBothFindingsShapes:
             "semgrep",
             "trivy",
         ]
+
+
+def _results_with_duration(root: Path, duration: object) -> Path:
+    """A results directory whose `.scan_metadata.json` carries `duration`.
+
+    Written as a separate helper rather than a parameter on `_make_results`
+    because the point of several tests below is a *malformed* value, and the
+    metadata has to be built without the shaping `_make_results` applies.
+    """
+    results = _make_results(root, [])
+    meta = json.loads((results / ".scan_metadata.json").read_bytes().decode("utf-8"))
+    meta["duration_seconds"] = duration
+    (results / ".scan_metadata.json").write_bytes(json.dumps(meta).encode("utf-8"))
+    return results
+
+
+class TestScanDurationReachesTheDatabase:
+    """#981 -- `duration_seconds` was NULL on 2472 of 2472 rows.
+
+    The column, the parameter and both readers all existed; no production
+    caller ever passed a value, so `jmo history list`'s Duration column and
+    `jmo history show`'s `Duration:` line were dead branches in the product.
+
+    Every assertion here checks the value, not that the call succeeded. A test
+    asserting `store_scan()` returns an id passes today against a column that
+    is 100% NULL, which is the shape that let this survive.
+    """
+
+    def test_the_scans_own_duration_is_stored(self, tmp_path):
+        results = _results_with_duration(tmp_path / "res", 1234.5)
+        store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
+        assert _stored_row(tmp_path / "h.db")["duration_seconds"] == 1234.5
+
+    def test_absent_metadata_stores_null_rather_than_a_guess(self, tmp_path):
+        """`jmo history store` on a directory with no metadata has no duration.
+
+        NULL renders as "N/A", which is honestly empty. The failure this issue
+        is about is the opposite -- filling the column with the report phase's
+        ~30 seconds, which reads as measured.
+        """
+        results = _make_results(tmp_path / "res", None)
+        store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
+        assert _stored_row(tmp_path / "h.db")["duration_seconds"] is None
+
+    def test_an_explicit_argument_wins_over_the_metadata(self, tmp_path):
+        """The parameter stays usable for a caller with a better measurement."""
+        results = _results_with_duration(tmp_path / "res", 1234.5)
+        store_scan(
+            results,
+            "balanced",
+            ["semgrep"],
+            db_path=tmp_path / "h.db",
+            duration_seconds=7.0,
+        )
+        assert _stored_row(tmp_path / "h.db")["duration_seconds"] == 7.0
+
+    @pytest.mark.parametrize(
+        "junk",
+        [
+            pytest.param(True, id="bool-True-would-store-as-1.0-seconds"),
+            pytest.param("1234.5", id="string"),
+            pytest.param(-1.0, id="negative"),
+            pytest.param(None, id="explicit-null"),
+            pytest.param([12], id="list"),
+        ],
+    )
+    def test_a_malformed_duration_stores_null(self, tmp_path, junk):
+        """`.scan_metadata.json` is a file on disk and can say anything.
+
+        `True` is the one that matters: bool is an int subclass, so an
+        unguarded isinstance check stores it as a 1.0-second scan.
+        """
+        results = _results_with_duration(tmp_path / "res", junk)
+        store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
+        assert _stored_row(tmp_path / "h.db")["duration_seconds"] is None
+
+    def test_history_list_renders_the_duration_it_stored(self, tmp_path, capsys):
+        """The reader end: the Duration column had never printed a number.
+
+        Goes through `cmd_history_list` rather than asserting on the row again,
+        because "the column is populated" and "a user can see it" are different
+        claims and only the second is what the issue is about.
+        """
+        results = _results_with_duration(tmp_path / "res", 1234.5)
+        store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
+
+        class _Args:
+            db = str(tmp_path / "h.db")
+            limit = 10
+            profile = None
+            branch = None
+            json = False
+
+        assert hc.cmd_history_list(_Args()) == 0
+        out = capsys.readouterr().out
+        assert "1234.5" in out, f"duration is still not rendered:\n{out}"
+
+    def test_history_list_still_says_na_when_there_is_no_duration(
+        self, tmp_path, capsys
+    ):
+        """Negative control: without it, the test above passes on any output
+        that happens to contain the number, including a findings count."""
+        results = _make_results(tmp_path / "res", None)
+        store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
+
+        class _Args:
+            db = str(tmp_path / "h.db")
+            limit = 10
+            profile = None
+            branch = None
+            json = False
+
+        assert hc.cmd_history_list(_Args()) == 0
+        assert "in N/A" in capsys.readouterr().out
+
+    def test_history_show_prints_the_duration_line(self, tmp_path, capsys):
+        """The second reader: `Duration:` is guarded on a truthy value, so it
+        had never printed for any scan in the database's recorded history."""
+        results = _results_with_duration(tmp_path / "res", 1234.5)
+        scan_id = store_scan(
+            results, "balanced", ["semgrep"], db_path=tmp_path / "h.db"
+        )
+
+        class _Args:
+            db = str(tmp_path / "h.db")
+            scan_id = None
+            json = False
+
+        _Args.scan_id = scan_id
+        assert hc.cmd_history_show(_Args()) == 0
+        out = capsys.readouterr().out
+        assert "Duration:" in out and "1234.5" in out, out

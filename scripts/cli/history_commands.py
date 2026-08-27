@@ -243,11 +243,24 @@ def cmd_history_list(args) -> int:
                 )
 
             except ImportError:
-                # Fallback to simple format if tabulate not available
+                # Fallback to simple format if tabulate not available.
+                #
+                # This is not the rare branch it looks like: `tabulate` is not a
+                # runtime dependency -- only `types-tabulate`, a stub, and only
+                # in the dev group -- so a normal install reaches *this* code
+                # every time and the table above never runs. Duration was
+                # missing from this line entirely, which meant populating the
+                # column would still have shown a user nothing (#981).
                 for scan in scans:
+                    duration = (
+                        f"{scan['duration_seconds']:.1f}s"
+                        if scan["duration_seconds"]
+                        else "N/A"
+                    )
                     sys.stdout.write(
                         f"{scan['id'][:8]}... {scan['timestamp_iso'][:19]} {scan['branch'] or 'N/A':15} "
-                        f"{scan['profile']:8} {scan['total_findings']:3} findings ({scan['critical_count']} CRITICAL, {scan['high_count']} HIGH)\n"
+                        f"{scan['profile']:8} {scan['total_findings']:3} findings ({scan['critical_count']} CRITICAL, {scan['high_count']} HIGH) "
+                        f"in {duration}\n"
                     )
 
         return 0

@@ -3039,6 +3039,13 @@ def cmd_scan(args) -> int:
     if _check_first_run():
         _collect_email_opt_in(args)
 
+    # Wall clock for the scan phase, handed to the report phase through
+    # .scan_metadata.json so `jmo history` can show a real duration (#981).
+    # Started here rather than at the top of the function so an interactive
+    # first-run prompt is not counted as scan time, and `perf_counter` rather
+    # than `monotonic` because monotonic is the coarser of the two on Windows.
+    scan_started = time.perf_counter()
+
     # Load effective settings with profile/per-tool overrides
     eff = _effective_scan_settings(args)
     cfg = load_config(args.config)
@@ -3445,6 +3452,11 @@ def cmd_scan(args) -> int:
         "tools": tools,
         "timestamp": datetime.now(UTC).isoformat(),
         "target_count": total_targets,
+        # The report phase stores this in history. It has no clock of its own
+        # that means anything here: its `elapsed` measures the ~30 seconds of
+        # aggregation, not the ~20 minutes of scanning, and a wrong number reads
+        # as measured where N/A is honestly empty (#981).
+        "duration_seconds": round(time.perf_counter() - scan_started, 3),
         # The paths actually scanned. store_scan() needs these to record git
         # context for the right repository: `results_dir/individual-repos/<name>`
         # is an OUTPUT directory, so walking up from it finds whatever repo

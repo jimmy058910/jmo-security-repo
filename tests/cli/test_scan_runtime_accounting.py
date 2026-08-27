@@ -16,8 +16,11 @@ code under test, and that bail also returns non-zero.
 
 from __future__ import annotations
 
+import itertools
 import json
 import logging
+import sqlite3
+import time
 import types
 from pathlib import Path
 from unittest.mock import patch
@@ -144,6 +147,87 @@ def scan_env(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("CI", "true")
     monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
     return _scan_args(tmp_path, cfg_path, repos_dir)
+
+
+class TestScanRecordsItsOwnDuration:
+    """#981: `scans.duration_seconds` was NULL on 2472 of 2472 rows.
+
+    The column, the `store_scan` parameter and both readers all existed. No
+    production caller ever passed a value, so the number a user sees was `N/A`
+    for the entire recorded history of the database.
+
+    The tempting one-line fix -- pass the report phase's `elapsed`, which is
+    already in scope at the call site -- is wrong: that times aggregation,
+    roughly thirty seconds standing in for a twenty-minute scan. A wrong number
+    reads as measured, while NULL renders as honestly empty. So the scan phase
+    records its own wall clock and hands it over in `.scan_metadata.json`.
+
+    This drives the whole chain rather than any one link, because each link was
+    individually present and working before the fix.
+    """
+
+    def test_a_scan_stores_a_duration_a_user_can_read(
+        self, scan_env, tmp_path, monkeypatch
+    ):
+        db = tmp_path / "history.db"
+        scan_env.store_history = True
+        scan_env.history_db = str(db)
+        # The shared fixture's config names no default_profile, which makes
+        # cmd_scan record profile="custom" -- a value store_scan rejects, so
+        # the run would exit 0 having stored nothing and this test would be
+        # asserting against an empty table.
+        #
+        # --tools is pinned alongside it because naming a profile otherwise
+        # resolves the full 17-tool balanced list, and the version check then
+        # spawns a real `semgrep --version` -- which the #907 guard correctly
+        # refuses. The profile here is a label on the row, not a tool list.
+        scan_env.profile_name = "balanced"
+        scan_env.tools = ["trufflehog"]
+
+        # A clock that advances 1000s per read, so the recorded value cannot be
+        # confused with the real wall clock of a mocked scan (well under a
+        # second). Patching rather than sleeping is the same call as the
+        # attestation-ordering fix: make the guard deterministic instead of
+        # widening its tolerance.
+        #
+        # It starts at a large offset on purpose. `perf_counter`'s zero point is
+        # undefined, so a duration must be a *delta* between two reads -- and
+        # with the clock based at zero, forgetting the subtraction produces a
+        # number that passes every "is it plausible" check. The offset is what
+        # makes the two cases distinguishable.
+        clock_base = 500_000.0
+        ticks = itertools.count(clock_base, 1000.0)
+        monkeypatch.setattr(time, "perf_counter", lambda: next(ticks))
+
+        with patch("scripts.cli.scan_jobs.scan_repository") as mock_scan:
+            mock_scan.return_value = ("proj", {"trufflehog": True})
+            assert jmo.cmd_scan(scan_env) == 0
+
+        meta = json.loads(
+            (tmp_path / "results" / ".scan_metadata.json").read_bytes().decode("utf-8")
+        )
+        assert "duration_seconds" in meta, (
+            "the scan phase did not record its duration, so the report phase "
+            "has nothing to store"
+        )
+        assert meta["duration_seconds"] >= 1000.0, (
+            "the recorded duration did not come from the patched clock: "
+            f"{meta['duration_seconds']}"
+        )
+        assert meta["duration_seconds"] < clock_base, (
+            "the duration is an absolute clock reading, not an elapsed time -- "
+            f"{meta['duration_seconds']} is past the clock's own base offset"
+        )
+
+        con = sqlite3.connect(f"file:{db.as_posix()}?mode=ro", uri=True)
+        try:
+            stored = con.execute("SELECT duration_seconds FROM scans").fetchone()[0]
+        finally:
+            con.close()
+        assert stored == meta["duration_seconds"], (
+            "the scan's duration did not reach the database: "
+            f"stored={stored!r} recorded={meta['duration_seconds']!r}"
+        )
 
 
 class TestScanExitCodeReflectsTargetOutcome:
