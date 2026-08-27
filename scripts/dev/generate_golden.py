@@ -225,7 +225,14 @@ def get_installed_version(tool_name: str) -> str | None:
         return None
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+        )
         output = result.stdout + result.stderr
         # Extract version from output (usually first line with version number)
         for line in output.split("\n"):
@@ -273,6 +280,8 @@ def run_tool(
             cmd,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=300,  # 5 minute timeout
             cwd=PROJECT_ROOT,
         )

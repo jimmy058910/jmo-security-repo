@@ -98,6 +98,8 @@ class MetadataCapture:
                 ["git", "-C", repo_path, "rev-parse", "HEAD"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 check=False,
                 timeout=5,
             )
@@ -109,6 +111,8 @@ class MetadataCapture:
                 ["git", "-C", repo_path, "rev-parse", "--abbrev-ref", "HEAD"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 check=False,
                 timeout=5,
             )
@@ -120,6 +124,8 @@ class MetadataCapture:
                 ["git", "-C", repo_path, "describe", "--tags", "--exact-match"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 check=False,
                 timeout=5,
             )

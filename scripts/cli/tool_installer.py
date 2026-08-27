@@ -180,7 +180,12 @@ def install_dependency(
                     if not is_root and sudo_available:
                         install_cmd = ["sudo"] + install_cmd
                     result = subprocess.run(
-                        install_cmd, capture_output=True, text=True, timeout=300
+                        install_cmd,
+                        capture_output=True,
+                        text=True,
+                        encoding="utf-8",
+                        errors="replace",
+                        timeout=300,
                     )
 
                     if result.returncode == 0:
@@ -212,6 +217,8 @@ def install_dependency(
                 actual_command,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=300,  # 5 minute timeout for package install
                 shell=False,  # IMPORTANT: Never use shell=True
             )
@@ -1048,6 +1055,8 @@ class ToolInstaller:
                     venv_cmd,
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     timeout=120,
                 )
                 if result.returncode != 0:
@@ -1092,6 +1101,8 @@ class ToolInstaller:
                 [str(python_path), "-m", "pip", "install", "--quiet", package_spec],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=600,
             )
 
@@ -1124,6 +1135,8 @@ class ToolInstaller:
                         [str(tool_path), "--version"],
                         capture_output=True,
                         text=True,
+                        encoding="utf-8",
+                        errors="replace",
                         timeout=30,
                         env=clean_env,
                     )
@@ -1218,6 +1231,8 @@ class ToolInstaller:
                 cmd,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=600,
             )
 
@@ -1340,6 +1355,8 @@ class ToolInstaller:
                 cmd,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=600,
             )
 
@@ -1546,6 +1563,8 @@ class ToolInstaller:
                 cmd,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=300,
             )
 
@@ -1614,6 +1633,8 @@ class ToolInstaller:
                 cmd,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=600,
             )
 
@@ -1695,6 +1716,8 @@ class ToolInstaller:
                 cmd,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=300,
             )
 
@@ -1758,6 +1781,8 @@ class ToolInstaller:
                         [node_cmd, "--version"],
                         capture_output=True,
                         text=True,
+                        encoding="utf-8",
+                        errors="replace",
                         timeout=10,
                     )
                     if ver_result.returncode == 0:
@@ -1790,6 +1815,8 @@ class ToolInstaller:
                 cmd,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=300,
             )
 
@@ -1946,6 +1973,8 @@ class ToolInstaller:
                     download_cmd,
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     timeout=300,
                 )
 
@@ -2082,6 +2111,8 @@ class ToolInstaller:
                     download_cmd,
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     timeout=60,
                 )
 
@@ -2114,6 +2145,8 @@ class ToolInstaller:
                     install_cmd,
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     timeout=300,
                     env={**os.environ, "INSTALL_DIR": str(self.install_dir)},
                 )
@@ -2240,6 +2273,8 @@ class ToolInstaller:
                     ],
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     timeout=30,
                 )
                 current_tag = (
@@ -2281,6 +2316,8 @@ class ToolInstaller:
                 ],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=120,
             )
 
@@ -2357,7 +2394,12 @@ class ToolInstaller:
                     return failed("no download tool available (curl/wget)")
 
                 proc = subprocess.run(
-                    download_cmd, capture_output=True, text=True, timeout=300
+                    download_cmd,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=300,
                 )
                 if proc.returncode != 0:
                     return failed(
@@ -2500,6 +2542,8 @@ class ToolInstaller:
                     download_cmd,
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     timeout=600,  # Larger timeout for bigger apps
                 )
 
@@ -2582,6 +2626,8 @@ class ToolInstaller:
                                     cwd=str(app_dir),
                                     capture_output=True,
                                     text=True,
+                                    encoding="utf-8",
+                                    errors="replace",
                                     timeout=300,  # Configure can take a while
                                 )
                                 if configure_result.returncode != 0:

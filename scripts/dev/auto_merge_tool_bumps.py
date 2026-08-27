@@ -143,6 +143,8 @@ def list_candidate_prs() -> list[dict]:
         ],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         check=True,
     )
     data: list[dict] = json.loads(proc.stdout or "[]")
@@ -176,6 +178,8 @@ def merge_pr(number: int, dry_run: bool) -> MergeOutcome:
         ["gh", "pr", "merge", str(number), "--squash", "--delete-branch"],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=120,
     )
     if result.returncode == 0:
@@ -219,6 +223,8 @@ def _ensure_label(name: str, color: str, description: str) -> None:
         check=False,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=60,
     )
 
