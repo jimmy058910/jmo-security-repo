@@ -44,6 +44,11 @@ EXPECTED_TOP_LEVEL_KEYS = {
     "target",
     "target_type",
     "wall_seconds",
+    # Schema 2 (#824). A document with an empty `tools` list is otherwise
+    # ambiguous: a target abandoned before any tool ran reads identically to
+    # one whose requested tools all applied to a different target type.
+    "outcome",
+    "error",
     "tools",
 }
 
@@ -97,6 +102,32 @@ def test_top_level_keys_are_pinned_to_the_producer(tmp_path: Path) -> None:
     assert doc["schema_version"] == SCAN_TIMINGS_SCHEMA_VERSION
     assert doc["target"] == "demo"
     assert doc["target_type"] == "repo"
+
+
+def test_schema_version_is_pinned_to_a_literal() -> None:
+    """The version is only useful if it moves when the shape does.
+
+    The assertion above compares the document to the producer's own constant,
+    which is a tautology: change the constant and it still passes. So does
+    changing the key set without touching the constant, which is the failure
+    the version exists to prevent -- a consumer cannot refuse a shape it does
+    not understand if the shape changed under a version that did not.
+
+    The literal here is the second opinion. It sits next to
+    `EXPECTED_TOP_LEVEL_KEYS` on purpose: both edits belong in the same commit,
+    and this test is what makes a bump a deliberate act rather than something
+    that can be forgotten.
+
+    Version 2 added `outcome` and `error` (#824).
+    """
+    assert SCAN_TIMINGS_SCHEMA_VERSION == 2, (
+        "the schema version changed without this literal being updated; if the "
+        "document's shape changed, update EXPECTED_TOP_LEVEL_KEYS too"
+    )
+    assert len(EXPECTED_TOP_LEVEL_KEYS) == 7, (
+        "the top-level key set changed size without a schema-version bump: "
+        f"{sorted(EXPECTED_TOP_LEVEL_KEYS)}"
+    )
 
 
 def test_per_tool_entries_are_exactly_tool_result_to_dict(tmp_path: Path) -> None:

@@ -39,11 +39,16 @@ import os
 import re
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 import yaml
 
 from scripts.core.config import RetryConfig
+from scripts.core.scan_timings import (
+    OUTCOME_FAILED_BEFORE_TOOLS,
+    write_scan_timings,
+)
 from scripts.core.secure_temp import secure_temp_dir
 from scripts.core.validation import sanitize_subprocess_output
 
@@ -51,6 +56,58 @@ from .image_scanner import scan_image
 from .repository_scanner import scan_repository
 
 logger = logging.getLogger(__name__)
+
+
+def _gitlab_out_dir(results_dir: Path, full_path: str) -> Path:
+    """The directory this target's artifacts land in.
+
+    Derived here as well as at the success path's copy step, because the
+    failure paths return before that step runs and still need somewhere to put
+    a timings document.
+    """
+    return results_dir / full_path.replace("/", "_").replace("*", "all")
+
+
+def _record_abandoned_target(
+    results_dir: Path,
+    full_path: str,
+    tools: list[str],
+    started: float,
+    reason: str,
+) -> dict[str, bool]:
+    """Write a timings row for a target abandoned before any tool ran (#824).
+
+    `scan-timings.json` was written by five of the six scanners; gitlab never
+    called it at all. On the success path that was masked -- `scan_gitlab_repo`
+    delegates to `scan_repository`, which writes the artifact into a temp dir,
+    and the copy loop globs `*.json` and carries it across. On the four failure
+    paths it was not masked at all, and those are the ones where it matters:
+    an absent file is indistinguishable from a target nobody asked for, so the
+    scan-phase instrumentation had a hole nothing could see from the artifact.
+
+    Returns the all-false status map every one of those paths already returned,
+    so the call reads as a single statement at each site.
+    """
+    out_dir = _gitlab_out_dir(results_dir, full_path)
+    # These paths return before any tool has written output, so the target's
+    # directory does not exist yet. `write_scan_timings` deliberately does not
+    # create one -- an absent destination there must mean "nothing written".
+    try:
+        out_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        # A diagnostic must never be the reason a scan result is lost.
+        logger.warning("Could not create %s for scan timings: %s", out_dir, exc)
+        return dict.fromkeys(tools, False)
+    write_scan_timings(
+        out_dir,
+        [],
+        target=full_path,
+        target_type="gitlab",
+        wall_seconds=time.perf_counter() - started,
+        outcome=OUTCOME_FAILED_BEFORE_TOOLS,
+        error=reason,
+    )
+    return dict.fromkeys(tools, False)
 
 
 def _discover_container_images(repo_path: Path) -> set[str]:
@@ -179,6 +236,7 @@ def scan_gitlab_repo(
         Tuple of (full_path, statuses_dict)
         statuses_dict contains tool success/failure and __attempts__ metadata
     """
+    started = time.perf_counter()
     full_path = gitlab_info["full_path"]
     gitlab_url = gitlab_info["url"]
     gitlab_token = gitlab_info.get("token", os.getenv("GITLAB_TOKEN"))
@@ -188,7 +246,9 @@ def scan_gitlab_repo(
         logger.error(
             f"GitLab token missing for {full_path}: set GITLAB_TOKEN env var or pass --gitlab-token"
         )
-        statuses = dict.fromkeys(tools, False)
+        statuses = _record_abandoned_target(
+            results_dir, full_path, tools, started, "no GitLab token"
+        )
         return full_path, statuses
 
     # Create secure temporary directory for clone (0o700 permissions, auto-cleanup)
@@ -254,7 +314,13 @@ def scan_gitlab_repo(
                 logger.error(
                     f"GitLab clone failed for {full_path}: git returned {result.returncode} - {stderr_msg}"
                 )
-                statuses = dict.fromkeys(tools, False)
+                statuses = _record_abandoned_target(
+                    results_dir,
+                    full_path,
+                    tools,
+                    started,
+                    f"git clone returned {result.returncode}: {stderr_msg}",
+                )
                 return full_path, statuses
 
             # Create temporary results directory
@@ -329,7 +395,13 @@ def scan_gitlab_repo(
                 f"GitLab clone timeout for {full_path}: git clone exceeded {timeout}s timeout",
                 exc_info=True,
             )
-            statuses = dict.fromkeys(tools, False)
+            statuses = _record_abandoned_target(
+                results_dir,
+                full_path,
+                tools,
+                started,
+                f"git clone exceeded the {timeout}s timeout",
+            )
             return full_path, statuses
         except Exception as e:
             # Any other error - return failure for all tools
@@ -337,6 +409,12 @@ def scan_gitlab_repo(
                 f"GitLab scan failed for {full_path}: {type(e).__name__}: {e}",
                 exc_info=True,
             )
-            statuses = dict.fromkeys(tools, False)
+            statuses = _record_abandoned_target(
+                results_dir,
+                full_path,
+                tools,
+                started,
+                f"{type(e).__name__}: {e}",
+            )
             return full_path, statuses
         # Note: No finally block needed - secure_temp_dir context manager handles cleanup
