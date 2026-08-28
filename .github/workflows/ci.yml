@@ -49,14 +49,22 @@ jobs:
   #     docker-smoke; until then it is a visible X, not a gate, and this
   #     comment says so rather than letting the job's name imply otherwise.
   #
-  # `dev` has NO ruleset at all, so a PR into `dev` -- which is every chunk PR
-  # in the v1.1.0 campaign -- has no required check whatsoever. That is the
-  # recorded decision (gate `main`, keep `dev` fast), not an oversight.
+  # `dev` carries ruleset 21702985 ("Protect dev branch"), and its rules are
+  # `deletion` and `non_fast_forward` -- nothing else. It has NO REQUIRED
+  # STATUS CHECKS, so a PR into `dev` -- which is every phase PR of the v1.1.0
+  # fix program -- can merge over a red advisory job. That is the recorded
+  # decision (gate `main`, keep `dev` fast), not an oversight. The ruleset
+  # exists for a different reason: to stop `dev` being deleted, which #993
+  # added after auto-delete-on-merge ate the branch three times.
+  #
+  # Until #1038 this block described the branch as carrying no protection at
+  # all. That was true when written and false from 2026-08-27; see #993.
   #
   # If you add a job here and intend it to gate, adding it to ci.yml is HALF
   # the work. The other half is the ruleset, and nothing in this file can tell
-  # you whether that happened -- check with
-  # `gh api repos/:owner/:repo/rulesets/9147592`.
+  # you whether that happened. Check the one that governs the branch you mean:
+  #   main -> `gh api repos/:owner/:repo/rulesets/9147592`
+  #   dev  -> `gh api repos/:owner/:repo/rulesets/21702985`
   # ==========================================================================
 
   # Fast validation checks (2-3 minutes)
