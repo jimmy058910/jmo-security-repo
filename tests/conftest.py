@@ -580,14 +580,19 @@ _ALLOWED_OFFLINE_SCANNER_SPAWNS = {
     # an availability check and fetches nothing.
     "tests/performance/test_policy_performance.py::test_availability_check_agrees_with_the_product",
     #
-    # `trivy --version`. Reviewed and allowed as offline, but flagged: the test
-    # mocks `ToolManager` and sets `binary_path = None`, so a real trivy probe
-    # means `cmd_tools_debug` has a second resolution path the mock does not
-    # cover -- i.e. on a machine without trivy this test exercises something
-    # different from what it does here. That is a test defect the widened
-    # recorder surfaced and it is filed separately; the spawn itself is
-    # harmless.
-    "tests/cli/test_tool_commands.py::TestCmdToolsDebugComprehensive::test_debug_tool_binary_not_found",
+    # REMOVED 2026-08-28 (#1021): `test_debug_tool_binary_not_found` no longer
+    # spawns `trivy --version`, so its entry is gone rather than kept as a
+    # comfort. The spawn was never about trivy -- it was two inert mocks.
+    # `cmd_tools_debug` re-imports `ToolManager` INSIDE its own body, so
+    # `patch("scripts.cli.tool_commands.ToolManager")` replaced an attribute
+    # the function never reads, and the mocked method (`check_tool`) is not one
+    # it calls at all. The real resolver ran, found the real binary, and the
+    # test's only assertion -- `result == 0` -- was true down both paths.
+    #
+    # The tests now patch `ToolManager._find_binary` on the class and assert on
+    # OUTPUT, which is the only thing that differs between the branches. This
+    # allowlist is what keeps that honest: putting the inert patch back makes
+    # the recorder fire here rather than passing quietly.
 }
 
 
