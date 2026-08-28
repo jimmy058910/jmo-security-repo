@@ -1,22 +1,34 @@
-"""A dashboard must say which template produced it.
+"""A dashboard must say which template produced it, and be the real one.
 
-``write_html`` renders one of several documents. Two of them are not the
-product: a build vendored into ``tests/fixtures/dashboard/`` so the suite can
-run without Node, and a static summary page. Because
-``scripts/dashboard/dist/`` is gitignored, CI and every fresh clone take the
-*fixture* branch -- and before v1.1.0 that branch logged nothing at any level
-and produced a document whose head was byte-identical to the real build's.
+``write_html`` renders one of two documents: the built React bundle at
+``scripts/dashboard/dist/index.html``, or a static summary page. These tests
+hold two lines.
 
-Measured on ``origin/dev`` at 4d47be4, rendering the same 242 findings:
+**Provenance.** Whoever opens ``dashboard.html`` days later never sees the log
+line, so the artifact itself has to say where it came from. Measured on
+``origin/dev`` at 4d47be4, rendering the same 242 findings, when there were
+three rungs and none of them said:
 
     rung                 bytes      <title>                    log records
     react build (dist)   1,834,086  JMo Security Dashboard     0
     test fixture         1,773,454  JMo Security Dashboard     0
     static fallback          1,649  JMo Security - Findings..  1 WARNING
 
-The harmless rung was the loud one. These tests hold the line that every rung
-is now distinguishable, in the log *and* in the artifact -- whoever opens
-``dashboard.html`` days later never sees the log line.
+The harmless rung was the loud one.
+
+**The bundle is the product.** The third rung above is gone. It existed only
+because ``scripts/dashboard/dist/`` was gitignored, so no distribution carried
+a dashboard at all (#862) and CI rendered a 2025-11-17 vendored build (#864).
+The bundle is now tracked and shipped as package data, which is what
+``test_the_shipped_bundle_*`` guards -- if it stops satisfying the injection
+contract, every dashboard silently degrades to the static page.
+
+Freshness -- whether the tracked bundle still matches its sources -- is not
+checkable here, because it needs Node. It belongs to ``dashboard-smoke``, which
+rebuilds and compares byte for byte. The mtime check that used to live in
+``_resolve_template`` was deleted rather than moved: with ``dist/`` tracked,
+git's checkout order made every build input newer than the bundle, so it
+reported "stale" on every fresh clone.
 """
 
 from __future__ import annotations
@@ -24,6 +36,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import subprocess
 import time
 from pathlib import Path
 
@@ -33,8 +46,6 @@ from scripts.core.reporters.html_reporter import (
     PROVENANCE_META_NAME,
     TEMPLATE_FALLBACK,
     TEMPLATE_REACT_BUILD,
-    TEMPLATE_REACT_BUILD_STALE,
-    TEMPLATE_TEST_FIXTURE,
     write_html,
 )
 
@@ -52,22 +63,14 @@ FINDINGS = [{"id": "f1", "severity": "HIGH", "message": "example"}]
 #: Repo paths that must keep satisfying the contracts write_html asserts.
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DASHBOARD_SOURCE = REPO_ROOT / "scripts" / "dashboard" / "index.html"
-VENDORED_FIXTURE = (
-    REPO_ROOT / "tests" / "fixtures" / "dashboard" / "test-inline-dashboard.html"
-)
+SHIPPED_BUNDLE = REPO_ROOT / "scripts" / "dashboard" / "dist" / "index.html"
 
 
-def build_tree(
-    root: Path,
-    *,
-    react: str | None = None,
-    fixture: str | None = None,
-) -> Path:
+def build_tree(root: Path, *, react: str | None = None) -> Path:
     """Lay out a fake repo and return the path html_reporter should think it is.
 
-    ``write_html`` resolves both the build and the fixture relative to its own
-    ``__file__``, so pointing that at a tree we control is what selects a rung
-    deterministically.
+    ``write_html`` resolves the build relative to its own ``__file__``, so
+    pointing that at a tree we control is what selects a rung deterministically.
     """
     reporters = root / "scripts" / "core" / "reporters"
     reporters.mkdir(parents=True, exist_ok=True)
@@ -77,12 +80,6 @@ def build_tree(
         dist = root / "scripts" / "dashboard" / "dist"
         dist.mkdir(parents=True, exist_ok=True)
         (dist / "index.html").write_text(react, encoding="utf-8")
-    if fixture is not None:
-        fixture_dir = root / "tests" / "fixtures" / "dashboard"
-        fixture_dir.mkdir(parents=True, exist_ok=True)
-        (fixture_dir / "test-inline-dashboard.html").write_text(
-            fixture, encoding="utf-8"
-        )
     return module
 
 
@@ -119,11 +116,8 @@ def test_every_template_source_is_distinguishable(tmp_path, monkeypatch):
     """
     rendered: dict[str, str] = {}
 
-    react_tree = build_tree(tmp_path / "a", react=TEMPLATE_HTML, fixture=TEMPLATE_HTML)
+    react_tree = build_tree(tmp_path / "a", react=TEMPLATE_HTML)
     rendered["react"] = render(monkeypatch, react_tree, tmp_path / "a.html")
-
-    fixture_tree = build_tree(tmp_path / "b", fixture=TEMPLATE_HTML)
-    rendered["fixture"] = render(monkeypatch, fixture_tree, tmp_path / "b.html")
 
     bare_tree = build_tree(tmp_path / "c")
     rendered["fallback"] = render(monkeypatch, bare_tree, tmp_path / "c.html")
@@ -131,23 +125,17 @@ def test_every_template_source_is_distinguishable(tmp_path, monkeypatch):
     declared = {name: declared_source(html) for name, html in rendered.items()}
     assert declared == {
         "react": TEMPLATE_REACT_BUILD,
-        "fixture": TEMPLATE_TEST_FIXTURE,
         "fallback": TEMPLATE_FALLBACK,
     }
-    assert len(set(declared.values())) == 3, "two rungs declare the same origin"
+    assert len(set(declared.values())) == 2, "two rungs declare the same origin"
 
 
 def test_only_the_real_build_is_unbannered(tmp_path, monkeypatch):
     """A template that is not the product says so in the page itself."""
     react = build_tree(tmp_path / "a", react=TEMPLATE_HTML)
-    fixture = build_tree(tmp_path / "b", fixture=TEMPLATE_HTML)
     bare = build_tree(tmp_path / "c")
 
     assert banner_source(render(monkeypatch, react, tmp_path / "a.html")) is None
-    assert (
-        banner_source(render(monkeypatch, fixture, tmp_path / "b.html"))
-        == TEMPLATE_TEST_FIXTURE
-    )
     assert (
         banner_source(render(monkeypatch, bare, tmp_path / "c.html"))
         == TEMPLATE_FALLBACK
@@ -172,23 +160,6 @@ def test_a_real_build_does_not_warn(tmp_path, monkeypatch, caplog):
     assert records_at_or_above(caplog, logging.INFO), "the chosen template is unlogged"
 
 
-def test_the_test_fixture_warns_and_names_itself(tmp_path, monkeypatch, caplog):
-    """The dangerous rung must be the loud one.
-
-    On origin/dev this branch emitted zero records at any level, including
-    DEBUG -- so a CI-produced dashboard was indistinguishable from the product.
-    """
-    tree = build_tree(tmp_path, fixture=TEMPLATE_HTML)
-    with caplog.at_level(logging.DEBUG, logger=LOGGER_NAME):
-        render(monkeypatch, tree, tmp_path / "out.html")
-
-    warnings = records_at_or_above(caplog, logging.WARNING)
-    assert len(warnings) == 1, f"expected one warning, got {warnings}"
-    message = warnings[0].getMessage()
-    assert "TEST FIXTURE" in message
-    assert "npm run build" in message
-
-
 def test_the_static_fallback_warns(tmp_path, monkeypatch, caplog):
     tree = build_tree(tmp_path)
     with caplog.at_level(logging.DEBUG, logger=LOGGER_NAME):
@@ -198,65 +169,46 @@ def test_the_static_fallback_warns(tmp_path, monkeypatch, caplog):
     assert "npm run build" in warnings[0].getMessage()
 
 
-# --- staleness ---------------------------------------------------------------
+# --- mtime is not a staleness signal for a tracked bundle --------------------
 
 
-def test_a_build_older_than_its_sources_is_reported_stale(
+def test_checkout_order_does_not_make_the_tracked_bundle_look_stale(
     tmp_path, monkeypatch, caplog
 ):
-    """A stale build is the second way to get a wrong dashboard silently.
+    """A build input newer than the bundle must not change the verdict.
 
-    Measured at the start of this chunk: the local ``dist/index.html`` was three
-    months old and 219 KB larger than a fresh build, and nothing said so.
+    This is the regression test for the check that used to live here. ``dist/``
+    is tracked now, and ``git checkout`` writes a tree in path order: measured
+    on a fresh clone of this repo with the bundle tracked, mtimes spread over
+    17.3 ms, ``scripts/dashboard/dist/`` sorted before every build input, and
+    all seven landed newer -- ``_resolve_template`` returned ``react-build-stale``
+    naming ``src/App.tsx``, +26.5 ms. Deterministically, on every clone.
+
+    So the property is not "staleness is detected", it is "mtime cannot be
+    consulted". Re-introducing any mtime comparison fails this test.
     """
     tree = build_tree(tmp_path, react=TEMPLATE_HTML)
-    src = tmp_path / "scripts" / "dashboard" / "src"
+    dashboard = tmp_path / "scripts" / "dashboard"
+    src = dashboard / "src"
     src.mkdir(parents=True)
-    app = src / "App.tsx"
-    app.write_text("// newer than the build\n", encoding="utf-8")
-    future = time.time() + 10
-    os.utime(app, (future, future))
+
+    # Every input the deleted check looked at, all newer than the bundle --
+    # exactly the state a fresh clone produces.
+    future = time.time() + 60
+    for rel in ("src/App.tsx", "package.json", "package-lock.json", "index.html"):
+        f = dashboard / rel
+        f.write_text("// newer than the bundle\n", encoding="utf-8")
+        os.utime(f, (future, future))
 
     with caplog.at_level(logging.DEBUG, logger=LOGGER_NAME):
         html = render(monkeypatch, tree, tmp_path / "out.html")
 
-    assert declared_source(html) == TEMPLATE_REACT_BUILD_STALE
-    warnings = records_at_or_above(caplog, logging.WARNING)
-    assert len(warnings) == 1
-    assert "STALE" in warnings[0].getMessage()
-    assert "App.tsx" in warnings[0].getMessage()
-
-
-def test_a_dependency_change_also_makes_a_build_stale(tmp_path, monkeypatch):
-    """package.json counts as a build input.
-
-    This chunk opened with ``npm run build`` failing because the installed tree
-    was five months behind ``package-lock.json`` -- recharts 2.15.4 against a
-    locked 3.8.1. A dependency change invalidates a bundle exactly as a source
-    change does.
-    """
-    tree = build_tree(tmp_path, react=TEMPLATE_HTML)
-    pkg = tmp_path / "scripts" / "dashboard" / "package.json"
-    pkg.write_text("{}\n", encoding="utf-8")
-    future = time.time() + 10
-    os.utime(pkg, (future, future))
-
-    html = render(monkeypatch, tree, tmp_path / "out.html")
-    assert declared_source(html) == TEMPLATE_REACT_BUILD_STALE
-
-
-def test_a_fresh_build_is_not_reported_stale(tmp_path, monkeypatch):
-    """The negative control: sources older than the build are fine."""
-    src_root = tmp_path / "scripts" / "dashboard" / "src"
-    src_root.mkdir(parents=True)
-    app = src_root / "App.tsx"
-    app.write_text("// older than the build\n", encoding="utf-8")
-    past = time.time() - 600
-    os.utime(app, (past, past))
-
-    tree = build_tree(tmp_path, react=TEMPLATE_HTML)
-    html = render(monkeypatch, tree, tmp_path / "out.html")
     assert declared_source(html) == TEMPLATE_REACT_BUILD
+    assert banner_source(html) is None, "a clone must not render a banner"
+    assert records_at_or_above(caplog, logging.WARNING) == [], (
+        "a fresh clone must not warn: every build input is newer than the "
+        "bundle there, which says nothing about whether it is current"
+    )
 
 
 # --- the build contract ------------------------------------------------------
@@ -266,9 +218,9 @@ def test_the_shipped_source_template_declares_the_expected_placeholder():
     """``write_html`` injects findings by string-replacing this exact text.
 
     If the source template's spelling drifts -- an added space, a minifier
-    change -- every dashboard silently degrades to the static fallback. The
-    built ``dist/`` is gitignored so it cannot be asserted here, but its source
-    is tracked and is where any such drift starts.
+    change -- every dashboard silently degrades to the static fallback. This
+    asserts the *source*; the test below asserts the built artifact, which is
+    what actually gets rendered.
     """
     source = DASHBOARD_SOURCE.read_text(encoding="utf-8")
     assert "window.__FINDINGS__ = []" in source, (
@@ -277,11 +229,74 @@ def test_the_shipped_source_template_declares_the_expected_placeholder():
     )
 
 
-def test_the_vendored_fixture_still_satisfies_the_placeholder_contract():
-    """The fixture is what CI renders. If it drifts, CI renders the fallback."""
-    assert VENDORED_FIXTURE.exists(), f"{VENDORED_FIXTURE} is missing"
-    fixture = VENDORED_FIXTURE.read_text(encoding="utf-8")
-    assert "window.__FINDINGS__ = []" in fixture
+def test_the_shipped_bundle_is_tracked_and_present():
+    """The bundle is the product, so its absence is a packaging failure.
+
+    Before #862 this file could not be asserted at all: ``dist/`` was covered
+    by a blanket ``dist/`` in ``.gitignore``, so a wheel built from a clean
+    checkout carried 0 of its 196 entries under ``scripts/dashboard/`` and a
+    pip-installed ``jmo report`` produced a 2,468-byte static page every time.
+    It is tracked and declared as package data now, and this is the check that
+    it stays that way.
+    """
+    assert SHIPPED_BUNDLE.exists(), (
+        f"{SHIPPED_BUNDLE} is missing. It is tracked in git and shipped as "
+        "package data -- without it every dashboard is the static fallback"
+    )
+    assert SHIPPED_BUNDLE.stat().st_size > 100_000, (
+        "the bundle is implausibly small for a single-file Vite build; "
+        "vite-plugin-singlefile inlines all JS and CSS into it"
+    )
+
+    # Present on disk is not the property that matters -- an ignored file is
+    # present for whoever built it and absent from every clone, which is
+    # exactly the state #862 describes. So ask git, not the filesystem.
+    if not (REPO_ROOT / ".git").exists():
+        pytest.skip("not a git checkout, so tracking cannot be verified here")
+    listed = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", "--", SHIPPED_BUNDLE.as_posix()],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert listed.returncode == 0, (
+        f"{SHIPPED_BUNDLE} exists but git does not track it, so no clone and no "
+        f"sdist would have it: {listed.stderr.strip()}. Check the dist/ "
+        "negations in .gitignore."
+    )
+
+
+def test_the_shipped_bundle_satisfies_the_placeholder_contract():
+    """If the built bundle drifts, every dashboard degrades to the fallback.
+
+    This is the always-on half of the dashboard's gate: it needs no Node, so it
+    runs in the ordinary test shards, which are required checks. The other half
+    -- whether the bundle still matches its sources -- needs a rebuild and lives
+    in ``dashboard-smoke``.
+    """
+    bundle = SHIPPED_BUNDLE.read_text(encoding="utf-8")
+    assert "window.__FINDINGS__ = []" in bundle, (
+        f"{SHIPPED_BUNDLE} no longer contains the placeholder write_html "
+        "replaces; every dashboard would fall back to the static page"
+    )
+
+
+def test_rendering_from_the_shipped_bundle_declares_the_real_build(tmp_path):
+    """End to end on the real artifact, not a synthetic one.
+
+    Every other test here builds a fake tree with a two-line template. This one
+    renders the file a user actually gets, so a bundle that is present and
+    contains the placeholder but still fails to produce a ``react-build``
+    document cannot pass.
+    """
+    out = tmp_path / "dashboard.html"
+    write_html(FINDINGS, out)
+    html = out.read_text(encoding="utf-8")
+
+    assert declared_source(html) == TEMPLATE_REACT_BUILD
+    assert banner_source(html) is None
+    assert '"f1"' in html, "findings were not injected into the bundle"
 
 
 def test_a_template_without_the_placeholder_falls_back_and_says_so(

@@ -1,0 +1,16 @@
+# The built dashboard bundle is a generated artifact that ships verbatim in the
+# wheel, so its bytes are part of the contract: `dashboard-smoke` rebuilds it
+# and compares byte-for-byte.
+#
+# Without `-text`, a clone whose `core.autocrlf` is `true` (the Git-for-Windows
+# default -- this repo sets `false` locally, but that setting does NOT travel to
+# a clone) rewrites every LF to CRLF on checkout. That silently changes the
+# bytes of the shipped dashboard and would make the rebuild comparison fail on
+# Windows for a reason that has nothing to do with the dashboard. Measured: a
+# scratch clone of this repo emitted "LF will be replaced by CRLF" for this file
+# before this rule existed.
+#
+# `-diff` keeps a 757 KB minified single-file bundle out of textual diffs;
+# `linguist-generated` collapses it in GitHub's PR view and excludes it from
+# language stats.
+scripts/dashboard/dist/index.html -text -diff linguist-generated

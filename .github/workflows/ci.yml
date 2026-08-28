@@ -990,10 +990,35 @@ jobs:
   # build` per scripts/dashboard/package.json:"build", which is the same path
   # the release pipeline bundles, so build success here implies release
   # bundleability.
+  # Owns the two halves of the dashboard contract that the test shards cannot.
+  #
+  #   1. The wheel actually carries the bundle. Before #862 it did not: a wheel
+  #      built from a clean checkout held 196 entries and 0 under
+  #      scripts/dashboard/, because `dist/` was covered by a blanket
+  #      `.gitignore` rule and `packages.find` collects Python packages only.
+  #      A pip-installed `jmo report` produced a 2,468-byte static page every
+  #      time while the README advertised a React dashboard. The shards assert
+  #      the bundle is present in the TREE; only building a wheel proves it is
+  #      in the DISTRIBUTION, so that check is here and is unconditional.
+  #
+  #   2. The tracked bundle still matches its sources. That needs Node, so it
+  #      cannot live in the shards. It replaces the mtime check that used to be
+  #      in html_reporter: with `dist/` tracked, git checkout order made every
+  #      build input newer than the bundle, so that check reported "stale" on
+  #      every fresh clone (measured: 17.3 ms of spread, all 7 inputs newer).
+  #
+  # The paths filter is deliberately wider than `scripts/dashboard/**`.
+  # `html_reporter.py` depends on the build contract (it string-replaces a
+  # placeholder the bundle must contain) and `pyproject.toml` / `.gitignore` /
+  # `.gitattributes` are what put the bundle in the wheel intact -- a change to
+  # any of them can break shipping without touching a dashboard source file.
+  #
+  # NOTE: this job is advisory -- it is not in ruleset 9147592's required set.
+  # Promoting it belongs with policy-gate and phase-audit in Phase 9.
   dashboard-smoke:
     name: dashboard-smoke
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: read
       pull-requests: read
@@ -1008,6 +1033,68 @@ jobs:
           filters: |
             dashboard:
               - 'scripts/dashboard/**'
+              - 'scripts/core/reporters/html_reporter.py'
+              - 'pyproject.toml'
+              - '.gitignore'
+              - '.gitattributes'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          version: "0.11.15"  # pinned: single uv version across all sites (PR #488)
+          python-version: '3.12'
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      # Unconditional: the distribution check.
+      #
+      # setuptools keeps two caches `uv build` never invalidates, and they break
+      # this check in OPPOSITE directions, so both are removed first. A fresh
+      # runner has neither -- this is what keeps the step honest when someone
+      # runs it locally, where it was measurably vacuous without them:
+      #   build/lib/             never pruned, so the wheel ships files the tree
+      #                          no longer has (measured: scripts/cli/scan_jobs/
+      #                          base_scanner.py, deleted in 841cf7d2, in a
+      #                          wheel built months later from a clean worktree)
+      #   *.egg-info/SOURCES.txt re-read under include-package-data, so the
+      #                          wheel ships files whose package-data
+      #                          declaration was deleted -- this check passed
+      #                          against a pyproject.toml with no
+      #                          [tool.setuptools.package-data] at all
+      - name: Verify the wheel carries the built dashboard
+        run: |
+          set -euo pipefail
+          rm -rf build dist ./*.egg-info
+          uv build --wheel --out-dir dist-check
+          python - <<'PY'
+          import hashlib
+          import pathlib
+          import sys
+          import zipfile
+
+          wheel = next(pathlib.Path("dist-check").glob("*.whl"))
+          member = "scripts/dashboard/dist/index.html"
+          with zipfile.ZipFile(wheel) as zf:
+              names = zf.namelist()
+              print(f"{wheel.name}: {len(names)} entries")
+              if member not in names:
+                  under = [n for n in names if n.startswith("scripts/dashboard/")]
+                  print(f"::error::{member} is not in the wheel "
+                        f"({len(under)} entries under scripts/dashboard/). "
+                        "A pip-installed jmo would render the static fallback. "
+                        "Check [tool.setuptools.package-data] in pyproject.toml "
+                        "and the dist/ negations in .gitignore.")
+                  sys.exit(1)
+              packaged = zf.read(member)
+
+          tracked = pathlib.Path(member).read_bytes()
+          print(f"packaged {len(packaged)} B  sha256={hashlib.sha256(packaged).hexdigest()}")
+          print(f"tracked  {len(tracked)} B  sha256={hashlib.sha256(tracked).hexdigest()}")
+          if packaged != tracked:
+              print("::error::the wheel's dashboard differs from the tracked one")
+              sys.exit(1)
+          print("OK: the wheel ships the tracked dashboard bundle verbatim")
+          PY
 
       - name: Set up Node.js 22
         if: steps.changes.outputs.dashboard == 'true'
@@ -1027,14 +1114,38 @@ jobs:
         working-directory: scripts/dashboard
         run: npm run build
 
+      # The freshness gate. `npm run build` writes over the tracked file, so
+      # git itself is the comparison: if the rebuild reproduces what is
+      # committed there is no diff. Measured locally before this existed: two
+      # consecutive builds and one from three days earlier all produced
+      # sha256 664766e5..., so the build is byte-reproducible on one machine.
+      # Whether Linux reproduces a Windows build is what this step measures for
+      # the first time -- if it turns out not to, the honest fix is a property
+      # comparison here, not deleting the gate.
+      - name: Verify the committed bundle matches a fresh build
+        if: steps.changes.outputs.dashboard == 'true'
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- scripts/dashboard/dist/index.html; then
+            echo "OK: the committed bundle reproduces byte for byte"
+            exit 0
+          fi
+          {
+            echo "::error::scripts/dashboard/dist/index.html is out of date."
+            echo "committed: $(git show HEAD:scripts/dashboard/dist/index.html | sha256sum)"
+            echo "rebuilt:   $(sha256sum < scripts/dashboard/dist/index.html)"
+            echo "Run 'npm run build' in scripts/dashboard/ and commit the result."
+          }
+          exit 1
+
       - name: Test dashboard (jest)
         if: steps.changes.outputs.dashboard == 'true'
         working-directory: scripts/dashboard
         run: npm test
 
-      - name: Skip note (no dashboard changes)
+      - name: Skip note (no dashboard source changes)
         if: steps.changes.outputs.dashboard != 'true'
-        run: echo "No scripts/dashboard/** changes detected; skipping dashboard build smoke."
+        run: echo "No dashboard-relevant changes; the wheel check above still ran."
 
   # The only job that runs `jmo` the way a user does.
   #

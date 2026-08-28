@@ -140,6 +140,24 @@ license-files = ["LICENSE", "LICENSE-MIT", "LICENSE-APACHE"]
 [tool.setuptools.packages.find]
 include = ["scripts*"]
 
+# The built React dashboard. `packages.find` collects Python packages, and
+# `scripts/dashboard/` has no `__init__.py`, so before this entry the wheel
+# carried 0 files under `scripts/dashboard/` out of 197 -- a pip-installed jmo
+# had no dashboard template at all and `jmo report` emitted the static fallback
+# every time (#862).
+#
+# Declared against the `scripts` package rather than by making the JS directory
+# a Python package: package-data patterns may descend into non-package
+# subdirectories, so this ships the artifact without putting `scripts.dashboard`
+# on the import path or in pytest/mypy's way.
+#
+# Only `index.html` -- `vite-plugin-singlefile` inlines the JS and CSS into it,
+# so it is the whole dashboard. The sibling `stats.html` is the bundle
+# visualiser's output and embeds absolute build-machine paths; it is gitignored
+# and must not ship.
+[tool.setuptools.package-data]
+scripts = ["dashboard/dist/index.html"]
+
 [tool.mypy]
 python_version = "3.12"
 warn_return_any = true

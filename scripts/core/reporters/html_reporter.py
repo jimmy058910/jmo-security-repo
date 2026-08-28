@@ -4,7 +4,6 @@ from __future__ import annotations
 import html
 import json
 import logging
-from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -17,23 +16,36 @@ INLINE_THRESHOLD = 1000
 
 # --- Template provenance -----------------------------------------------------
 #
-# write_html renders one of several documents and, before v1.1.0, the artifact
-# did not say which. Two of them are not the product:
+# write_html renders one of two documents, and the artifact says which:
 #
-#   react-build        the real dashboard, produced by `npm run build`
-#   react-build-stale  a real build, but older than the sources it was built
-#                      from -- so it can be missing fixes that are on main
-#   test-fixture       a build vendored into tests/ so the suite can run
-#                      without Node. It is not the product: it lags src/ and
-#                      it fetches a different data file in external mode
-#   fallback           a static summary page with no dashboard at all
+#   react-build  the real dashboard, `scripts/dashboard/dist/index.html`
+#   fallback     a static summary page with no dashboard at all
 #
-# `scripts/dashboard/dist/` is gitignored, so CI and every fresh clone take the
-# test-fixture branch -- which used to log nothing at any level and produce a
-# document whose head is byte-identical to the real build's.
+# That list used to have four entries. The other two are gone, and both
+# deletions are the point of #862/#864 rather than a tidy-up:
+#
+#   test-fixture       a build vendored into tests/ so the suite could run
+#                      without Node. It existed only because dist/ was
+#                      gitignored, so CI and every fresh clone rendered it --
+#                      a 2025-11-17 bundle that fetched a different data file
+#                      in external mode than the reporter wrote. dist/ is now
+#                      tracked, so no real tree can reach that branch. Keeping
+#                      it would mean a second artifact going stale unwatched,
+#                      and a missing bundle degrading *silently* to a
+#                      nine-month-old build instead of loudly to the fallback.
+#
+#   react-build-stale  a real build older than the sources it came from,
+#                      detected by comparing mtimes. Measured on a fresh clone
+#                      with dist/ tracked: git checkout writes files in path
+#                      order and spreads their mtimes over ~17ms, `dist/`
+#                      sorts before every build input, so all seven inputs land
+#                      newer and EVERY clone reported "stale". A check that is
+#                      wrong on every clone trains people to ignore it.
+#                      Freshness now belongs to `dashboard-smoke`, which has
+#                      Node and rebuilds the bundle to compare it byte for
+#                      byte -- the only check that can actually answer the
+#                      question.
 TEMPLATE_REACT_BUILD = "react-build"
-TEMPLATE_REACT_BUILD_STALE = "react-build-stale"
-TEMPLATE_TEST_FIXTURE = "test-fixture"
 TEMPLATE_FALLBACK = "fallback"
 
 #: Name of the <meta> tag that records which template produced a dashboard.
@@ -41,20 +53,7 @@ PROVENANCE_META_NAME = "jmo-dashboard-template"
 
 #: Templates that are not the product. These also get a visible in-page banner,
 #: because a log line is not visible to whoever opens the HTML file later.
-NON_PRODUCT_TEMPLATES = frozenset({TEMPLATE_TEST_FIXTURE, TEMPLATE_FALLBACK})
-
-#: Files whose mtime, if newer than dist/index.html, means the build is stale.
-#: package.json / package-lock.json are included deliberately: a dependency
-#: change invalidates a bundle just as surely as a source change does.
-_BUILD_INPUT_FILES = (
-    "index.html",
-    "package.json",
-    "package-lock.json",
-    "vite.config.ts",
-    "tailwind.config.js",
-    "postcss.config.js",
-    "tsconfig.json",
-)
+NON_PRODUCT_TEMPLATES = frozenset({TEMPLATE_FALLBACK})
 
 
 def escape_json_for_script(payload: str) -> str:
@@ -109,41 +108,14 @@ def _exists(path: Path) -> bool:
         return False
 
 
-def _build_inputs(dashboard_dir: Path) -> Iterator[Path]:
-    """Yield every file whose change should invalidate ``dist/index.html``."""
-    src = dashboard_dir / "src"
-    if _exists(src):
-        try:
-            yield from (p for p in src.rglob("*") if p.is_file())
-        except OSError:  # pragma: no cover - defensive, same class as _exists
-            pass
-    for name in _BUILD_INPUT_FILES:
-        candidate = dashboard_dir / name
-        if _exists(candidate):
-            yield candidate
-
-
-def _stale_build_input(dashboard_dir: Path, build_path: Path) -> Path | None:
-    """Return a build input newer than the build itself, or ``None``.
-
-    Only the first such file is reported: the point is to name a concrete
-    reason the build is out of date, not to enumerate every one.
-    """
-    try:
-        built_at = build_path.stat().st_mtime
-    except OSError:
-        return None
-    for candidate in _build_inputs(dashboard_dir):
-        try:
-            if candidate.stat().st_mtime > built_at:
-                return candidate
-        except OSError:
-            continue
-    return None
-
-
 def _resolve_template() -> tuple[str | None, str]:
     """Pick the dashboard template and say, out loud, which one was picked.
+
+    ``scripts/dashboard/dist/index.html`` is tracked and shipped as package
+    data, so this resolves to the real build in a source checkout, in CI, and
+    in a ``pip install``ed wheel alike -- one path, three environments. The
+    fallback is now reached only when the bundle is genuinely absent, which is
+    a broken installation rather than an ordinary state.
 
     Returns:
         ``(template_html, source)``. ``template_html`` is ``None`` when no
@@ -156,43 +128,15 @@ def _resolve_template() -> tuple[str | None, str]:
     react_build_path = dashboard_dir / "dist" / "index.html"
 
     if _exists(react_build_path):
-        template = react_build_path.read_text(encoding="utf-8")
-        stale = _stale_build_input(dashboard_dir, react_build_path)
-        if stale is not None:
-            logger.warning(
-                "Dashboard rendered from a STALE React build: %s is newer than "
-                "%s. Run 'npm run build' in %s -- this report may be missing "
-                "dashboard fixes that are already in the source tree.",
-                stale,
-                react_build_path,
-                dashboard_dir,
-            )
-            return template, TEMPLATE_REACT_BUILD_STALE
         logger.info("Dashboard rendered from the React build at %s", react_build_path)
-        return template, TEMPLATE_REACT_BUILD
-
-    # Go up to repo root: scripts/core/reporters/ -> scripts/core -> scripts -> repo_root
-    repo_root = Path(__file__).parent.parent.parent.parent
-    fixture_path = (
-        repo_root / "tests" / "fixtures" / "dashboard" / "test-inline-dashboard.html"
-    )
-    if _exists(fixture_path):
-        logger.warning(
-            "No dashboard build at %s, so this report was rendered from the "
-            "TEST FIXTURE at %s. That fixture is a vendored old build kept so "
-            "the test suite can run without Node -- it is NOT the product and "
-            "its behaviour differs from a real build. Run 'npm run build' in "
-            "%s to produce the real dashboard.",
-            react_build_path,
-            fixture_path,
-            dashboard_dir,
-        )
-        return fixture_path.read_text(encoding="utf-8"), TEMPLATE_TEST_FIXTURE
+        return react_build_path.read_text(encoding="utf-8"), TEMPLATE_REACT_BUILD
 
     logger.warning(
-        "React dashboard build not found. "
-        "Run 'npm run build' in %s for the interactive dashboard. "
-        "Using fallback HTML.",
+        "No dashboard build at %s, so this report is the static fallback page "
+        "and not the interactive dashboard. That file is tracked in git and "
+        "shipped in the wheel, so its absence means an incomplete checkout or "
+        "a broken install -- in a source tree, run 'npm run build' in %s.",
+        react_build_path,
         dashboard_dir,
     )
     return None, TEMPLATE_FALLBACK
@@ -231,8 +175,10 @@ def _insert_non_product_banner(doc: str, source: str) -> str:
         "<strong>This is not the built JMo dashboard.</strong> "
         f"It was rendered from the <code>{html.escape(source)}</code> template "
         "because <code>scripts/dashboard/dist/index.html</code> was missing. "
-        "Run <code>npm run build</code> in <code>scripts/dashboard/</code> and "
-        "re-run <code>jmo report</code> for the real dashboard."
+        "That file is tracked in git and shipped in the wheel, so this means "
+        "an incomplete checkout or a broken install &mdash; reinstall, or in a "
+        "source tree run <code>npm run build</code> in "
+        "<code>scripts/dashboard/</code> and re-run <code>jmo report</code>."
         "</div>"
     )
     # React renders into #root and leaves its siblings alone, so a banner
@@ -380,7 +326,7 @@ def _write_fallback_html(
     <div class="alert" data-{PROVENANCE_META_NAME}-banner="{source}">
         <strong>⚠️  Fallback HTML Mode</strong><br>
         This is a simplified HTML report. The interactive React dashboard was not available.<br>
-        To view the full interactive dashboard, build the React app with <code>npm run build</code> in <code>scripts/dashboard/</code>.
+        <code>scripts/dashboard/dist/index.html</code> is tracked in git and shipped in the wheel, so this means an incomplete checkout or a broken install &mdash; reinstall, or in a source tree run <code>npm run build</code> in <code>scripts/dashboard/</code>.
     </div>
     <div class="stats">
         <h2>Summary</h2>
