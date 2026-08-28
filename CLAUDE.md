@@ -2,7 +2,10 @@
 
 Guidance for Claude Code when working with the JMo Security Audit Tool Suite repository.
 
-> **Path-scoped rules** live in [`.claude/rules/`](.claude/rules/). They load automatically when Claude touches files matching their `paths:` frontmatter. See the [Path-Scoped Rules](#path-scoped-rules) section below for the full index.
+> **Path-scoped rules** live in [`.claude/rules/`](.claude/rules/). They load
+> automatically when Claude touches files matching their `paths:` frontmatter —
+> this is measured, not aspirational. Keep `paths:` narrow: a rule scoped to
+> `scripts/**/*.py` loads on every source file in the product.
 
 ## Project Overview
 
@@ -12,27 +15,19 @@ JMo Security is a terminal-first security audit toolkit orchestrating 29 scanner
 **Philosophy:** Two-phase architecture: scan (invoke tools) → report (normalize, dedupe, output)
 **Test Coverage:** 8,000+ tests, sharded across 4 parallel jobs. The **only enforced floor is 85%** (`coverage-aggregate`'s "Verify coverage threshold" step, on the marker-filtered suite — excludes slow/docker/requires_tools/smoke). Raised from 80% under #756 after measuring 86.87%. Nothing sets `--cov-fail-under`; measure current coverage rather than quoting a figure from this file
 
-**Key v1.0 Features:**
+**Key v1.0 Features:** SQLite historical storage, machine-readable diffs, Mann-Kendall trend analysis, CSV export, dual-mode HTML dashboard, cross-tool deduplication (30-40% noise reduction).
 
-- SQLite historical storage for scan persistence and trend analysis
-- Machine-readable diffs for comparing scans and detecting regressions
-- Trend analysis with Mann-Kendall statistical significance testing
-- CSV export and dual-mode HTML dashboard for reporting
-- Cross-tool deduplication with 30-40% noise reduction
-
-## AI Assistant Quality Standards
-
-**CRITICAL:** Quality and correctness take precedence over speed. Always verify changes before proposing them.
-
-### Mandatory Guardrails
+## Mandatory Guardrails
 
 1. **Pre-commit Order:** Black MUST run before Ruff (see `.pre-commit-config.yaml`)
 2. **Test Coverage:** CI's only enforced floor is **85%** (`coverage-aggregate`'s "Verify coverage threshold" step, on the marker-filtered suite). Nothing sets `--cov-fail-under` — not `make test`, not `pyproject.toml`, so there is still no *local* gate. Cite the step, never a line number: it has moved three times (#756)
-3. **Subprocess Security:** NEVER use `shell=True` in subprocess calls. See [.claude/rules/python-safety.rules.md](.claude/rules/python-safety.rules.md)
-4. **Conventional Commits:** `feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`, `perf:`, `ci:`
-5. **Path Security:** Validate all user paths against directory traversal
-6. **Cross-Platform Testing:** Tests MUST pass on Windows, Linux, macOS. See [.claude/rules/testing.cross-platform.rules.md](.claude/rules/testing.cross-platform.rules.md)
-7. **Git Configuration:** Refines the Bash-tool default ("NEVER update the git config"). **Never** modify identity (`user.*`), signing (`commit.gpgsign`, `gpg.*`), commit templates (`commit.template`), or merge/rebase behavior (`pull.rebase`, `merge.*`, `rebase.*`) without explicit user authorization. **Permitted to unblock standard tooling**: routine repo-local unsets that restore values already equal to their default (e.g. `git config --unset core.hooksPath` when it points to `.git/hooks`, which lets `pre-commit install --install-hooks` proceed). When in doubt, ask first.
+3. **Conventional Commits:** `feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`, `perf:`, `ci:`
+4. **Git Configuration:** Refines the Bash-tool default ("NEVER update the git config"). **Never** modify identity (`user.*`), signing (`commit.gpgsign`, `gpg.*`), commit templates (`commit.template`), or merge/rebase behavior (`pull.rebase`, `merge.*`, `rebase.*`) without explicit user authorization. **Permitted to unblock standard tooling**: routine repo-local unsets that restore values already equal to their default (e.g. `git config --unset core.hooksPath` when it points to `.git/hooks`, which lets `pre-commit install --install-hooks` proceed). When in doubt, ask first.
+
+Subprocess safety (never `shell=True`), path-traversal validation, and cross-platform
+test requirements are enforced in [python-safety.rules.md](.claude/rules/python-safety.rules.md)
+and [testing.cross-platform.rules.md](.claude/rules/testing.cross-platform.rules.md),
+which load when you touch the relevant files.
 
 ### Before Every Commit
 
@@ -86,51 +81,28 @@ So: **spend the first hour measuring, then plan.** When executing someone else's
 plan, verify its central claims before building on them, and when one is wrong,
 fix the plan rather than working around it.
 
+### Where Deferred Work Goes
+
+There is no fourth option — a private notes file was tried and removed, because
+nothing ever closed it:
+
+| Kind of thing | Goes to | Why there |
+|---|---|---|
+| Anything with a plausible fix | **GitHub issue** (`technical-debt` / `enhancement`) + `# TODO(issue-#):` at the site | It can be closed, assigned, and searched. A file can only be edited. |
+| Behaviour a *user* can hit and we intend to keep | [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) | Ships in the repo, so users find it without reading the tracker. |
+| A trap that only bites *developers* | the matching [`.claude/rules/*.md`](.claude/rules/) | Loads automatically when Claude touches those paths. |
+
+> A private `known-issues` log under `.claude/` was the previous answer, and it is
+> **gone**. It was gitignored — so this instruction pointed contributors at a file
+> they could not see — and by the end it was 95 lines carrying a stale "Last
+> Updated", a RESOLVED entry, and an obsolete one for a tool deleted six months
+> earlier. A log with no close mechanism only accumulates.
+
 ### Artifact Guardrails (CI blocks these)
 
 - No `venv/`, `__pycache__/`, `build/`, `dist/` in git
 - No files >10MB (`check-added-large-files` hook)
 - No secrets (detect-private-key pre-commit hook + TruffleHog CI scan)
-
-### Proactive Issue Resolution
-
-**CRITICAL:** When encountering issues (test failures, deprecation warnings, linting errors), address them immediately rather than deferring. Technical debt compounds quickly.
-
-**Decision Framework:**
-
-| Issue Type | Scale | Action |
-|------------|-------|--------|
-| Small & Simple | Single clear solution | **Fix immediately** - deprecation warnings, threshold adjustments, typos |
-| Complex OR Multiple Solutions | Architectural impact or trade-offs | **Stop & discuss first** - get alignment before implementing |
-| Blocking | CI broken, security vulnerability | **Fix immediately** - but document reasoning |
-
-**Issue Handling Protocol:**
-
-1. **Fix Now (Small & Simple):** If the fix is straightforward with one clear solution
-   - Deprecation warnings: Update to recommended API
-   - Performance test thresholds: Adjust with documented reasoning
-   - Linting errors: Apply the fix
-   - Single failing test: Fix the root cause
-
-2. **Stop & Discuss (Complex/Multiple Solutions):** If any of these apply:
-   - Multiple valid approaches exist
-   - Fix affects architecture or public API
-   - Uncertainty about the right solution
-   - Change scope is larger than expected
-   - **Action:** Present the issue, options, and recommendation before proceeding
-
-3. **Document If Deferring:** If a fix needs significant research or refactoring but isn't blocking, route it by *who needs to know*. There is no fourth option — a private notes file was tried and removed, because nothing ever closed it:
-
-   | Kind of thing | Goes to | Why there |
-   |---|---|---|
-   | Anything with a plausible fix | **GitHub issue** (`technical-debt` / `enhancement`) + `# TODO(issue-#):` at the site | It can be closed, assigned, and searched. A file can only be edited. |
-   | Behaviour a *user* can hit and we intend to keep | [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) | Ships in the repo, so users find it without reading the tracker. |
-   | A trap that only bites *developers* | the matching [`.claude/rules/*.md`](.claude/rules/) | Loads automatically when Claude touches those paths. |
-
-   > A private `known-issues` log under `.claude/` was the previous answer, and it is **gone**. It was gitignored — so this instruction pointed contributors at a file they could not see — and by the end it was 95 lines carrying a stale "Last Updated", a RESOLVED entry, and an obsolete one for a tool deleted six months earlier. A log with no close mechanism only accumulates.
-
-4. **Never Ignore:** Warnings, deprecations, and flaky tests become bugs over time
-5. **Rule of Three:** If the same approach fails 3 times, stop and change something fundamental — different angle, fresh start, or escalate to the user
 
 ### Plan Mode Format
 
@@ -147,7 +119,7 @@ jmo tools install --profile balanced   # Install security tools
 make test-fast                         # Fast parallel tests (recommended for dev)
 ```
 
-> **Note:** `make test` runs sequentially with coverage. Use `make test-fast` for 3-5x faster parallel execution during development. Requires `pytest-xdist` (included in dev deps).
+> `make test` runs sequentially with coverage. Use `make test-fast` for 3-5x faster parallel execution during development (requires `pytest-xdist`, included in dev deps).
 
 ### Essential Commands
 
@@ -159,27 +131,17 @@ make test-fast                         # Fast parallel tests (recommended for de
 | `jmo report ./results` | Generate reports from scan |
 | `jmo ci --fail-on HIGH` | CI/CD mode with threshold |
 | `jmo tools check` | Check tool installation status |
-| `jmo tools install --profile balanced` | Install tools (parallel by default, 3-4x faster) |
+| `jmo tools install --profile balanced` | Install tools (parallel by default, 3-4x faster; `--sequential` to debug, `--jobs N` default 4, max 8) |
 | `jmo tools clean --force` | Remove isolated venvs (pip conflict tools) |
 | `jmo diff results-A/ results-B/` | Compare scans |
 | `jmo history list` | View scan history |
-| `jmo validate` | Pre-release validation scorecard (quick tier) |
-| `jmo validate --tier full` | Full validation with real tools |
-| `make deps-sync` | Install/refresh the dev env from `uv.lock` |
-| `make deps-lock` | Regenerate `uv.lock` after changing deps in `pyproject.toml` |
-| `make fmt` | Format code (Black + Ruff) |
-| `make lint` | Lint checks |
+| `jmo validate` / `jmo validate --tier full` | Pre-release validation scorecard (quick / with real tools) |
+| `make deps-sync` / `make deps-lock` | Install from `uv.lock` / regenerate after a `pyproject.toml` change |
+| `make fmt` / `make lint` / `make typecheck` | Format (Black + Ruff) / lint / mypy |
 | `make test-fast` | Parallel tests, no coverage (fastest dev loop) |
-| `make test-parallel` | Parallel tests with coverage (CI-like) |
-| `make test` | Sequential tests with coverage (original) |
-| `make test-e2e` | E2E tests (pytest-native) |
-| `make test-e2e-visual` | Dashboard visual tests (Playwright) |
-| `make test-e2e-report` | E2E tests with JSON report |
-| `python scripts/dev/test_wizard_tools.py` | Test wizard tool detection (non-interactive) |
-
-> **Note:** `jmo tools install` uses parallel installation by default. Use `--sequential` for debugging or `--jobs N` to adjust workers (default: 4, max: 8).
->
-> **Wizard Testing:** Run `python scripts/dev/test_wizard_tools.py --profile balanced` before `jmo wizard` to verify tool infrastructure. The script tests isolated venvs, version detection, and dependency checks (Java, Node.js, bash) non-interactively.
+| `make test-parallel` / `make test` | Parallel with coverage (CI-like) / sequential with coverage |
+| `make test-e2e` / `-visual` / `-report` | E2E (pytest-native) / Playwright dashboard / JSON report |
+| `python scripts/dev/test_wizard_tools.py --profile balanced` | Test wizard tool detection (non-interactive). Run before `jmo wizard` — it tests isolated venvs, version detection, and Java/Node/bash deps |
 
 ### Version Management (CRITICAL)
 
@@ -192,7 +154,11 @@ python3 scripts/dev/update_versions.py --sync          # Sync Dockerfiles
 
 ## AI Tooling Ecosystem
 
-JMo Security ships 12 skills, 7 agents, and an MCP server for AI-assisted development. Everything named here is in the repository, so a fresh clone gets working tooling.
+JMo Security ships 12 skills, 7 agents, and an MCP server for AI-assisted development.
+Claude Code lists the available skills and agents automatically, so they are not
+enumerated here. Full index: [.claude/skills/INDEX.md](.claude/skills/INDEX.md) ·
+personas: [.claude/PERSONA_GUIDELINES.md](.claude/PERSONA_GUIDELINES.md) ·
+MCP entry points and their measured state: [.claude/rules/mcp.rules.md](.claude/rules/mcp.rules.md).
 
 ### What ships, and what does not
 
@@ -200,67 +166,14 @@ JMo Security ships 12 skills, 7 agents, and an MCP server for AI-assisted develo
 
 The split is mechanical rather than remembered. `.gitignore` carries an explicit per-skill allowlist under `.claude/`, and `scripts/dev/check_doc_links.py` fails CI and pre-commit if any tracked file links to a path a clone does not receive. **Anything this file names must be tracked** — an instruction pointing at an untracked path is a dead end for every contributor who follows it.
 
-### MCP Server (Security Findings API)
-
-Five `@mcp.tool()` entry points plus one `@mcp.resource`, all in
-`scripts/jmo_mcp/jmo_server.py`. **stdio transport only, and callers are not
-authenticated** — `JMO_MCP_API_KEYS` is hashed at import and compared against
-nothing, so no setting turns access control on. Ask `get_server_info()` for
-`authentication_enforced` rather than inferring it.
-
-| Entry point | State |
-|---|---|
-| `get_security_findings` | working — filters + pagination; page with the **returned** `limit`, not the requested one |
-| `query_findings_db` | working — read-only SQL (`mode=ro` + statement validation, both verified) |
-| `get_finding_context` (`finding://{id}`) | working — `related_findings` is always `[]` |
-| `get_server_info` | working |
-| `apply_fix` | **preview only.** `dry_run=False` writes nothing and returns `success: False`; deferred past v1.1.0 (#951) |
-| `mark_resolved` | working — appends an id-keyed entry to `jmo.suppress.yml`. Entries **always expire** (90d default, 365 cap), and `resolution="fixed"` writes nothing by design |
-
-### Key Agents (invoke naturally)
-
-| Agent | Purpose |
-|-------|---------|
-| `coverage-gap-finder` | Find untested code paths, missing test categories |
-| `release-readiness` | Pre-release checklist verification |
-| `code-quality-auditor` | Technical debt, refactoring opportunities |
-| `security-auditor` | Security vulnerability analysis |
-| `dependency-analyzer` | Impact analysis for changes |
-| `doc-sync-checker` | Documentation-code sync verification |
-| `codebase-explorer` | Architecture and pattern understanding |
-
-### Key Skills (invoke with /skill-name)
-
-- `/jmo-adapter-generator` - Generate new tool adapters with tests
-- `/jmo-test-fabricator` - Create comprehensive test suites
-- `/jmo-ci-debugger` - Debug CI/CD pipeline failures
-- `/jmo-e2e-verify` - AI-driven e2e verification with parallel sub-agents
-
-**Full documentation:** [.claude/skills/INDEX.md](.claude/skills/INDEX.md) (12 skills, 7 agents) | **Personas:** [.claude/PERSONA_GUIDELINES.md](.claude/PERSONA_GUIDELINES.md)
-
-### Parallel Work: Agent Teams vs Subagents
-
-| Use **Agent Teams** when | Use **Subagents** when |
-|--------------------------|------------------------|
-| Multi-file refactors spanning 3+ modules | Focused research or single-file tasks |
-| Cross-layer changes (CLI + core + adapters + tests) | Quick searches, file reads, code exploration |
-| Competing hypotheses during debugging | Tasks where only the result matters |
-| Parallel code review (security + perf + coverage) | Sequential work with dependencies |
-
-**Decision rule:** If teammates need to communicate findings with each other or coordinate across file boundaries, use agent teams. If work can be fire-and-forget with results reported back, use subagents.
-
-> Agent teams require `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in settings.json (experimental).
-
 ### Optional: local knowledge graph (not shipped)
 
-Unlike everything else in this section, this is **maintainer-local and absent
-from a clone**. It is recorded here because a session that has it should use it,
-and because the Windows setup has a trap worth writing down once.
+Maintainer-local and **absent from a clone**. Recorded here because a session that
+has it should use it, and because the Windows setup has traps worth writing down once.
 
-[Graphify](https://github.com/Graphify-Labs/graphify) (`pip`/`uv` package
-`graphifyy`) indexes the repo into a queryable graph under `graphify-out/`,
-which is gitignored. Deterministic AST parsing — no LLM, no API cost. A git
-`post-commit` hook rebuilds it incrementally.
+[Graphify](https://github.com/Graphify-Labs/graphify) (`uv` tool `graphifyy`, currently
+**0.9.50**) indexes the repo into `graphify-out/` — deterministic AST parsing, no LLM,
+no API cost. Git `post-commit` / `post-checkout` hooks rebuild it incrementally.
 
 | Task | Command |
 |---|---|
@@ -268,10 +181,17 @@ which is gitignored. Deterministic AST parsing — no LLM, no API cost. A git
 | Ask a structural question | `graphify query "what connects X to Y?"` |
 | Explain one symbol | `graphify explain "store_scan"` |
 | Path between two symbols | `graphify path "A" "B"` |
+| Upgrade (machine-global; affects every repo) | `uv tool upgrade graphifyy && graphify install --platform claude` |
 
-Check freshness with the graph's own `built_at_commit` key, **not** the file
-mtime — clustering rewrites `graph.json` without re-extracting, so mtime reads
-fresher than the content is.
+The MCP server is registered **project-scoped in `~/.claude.json`**, not in a repo
+`.mcp.json` — grepping the repo for its wiring finds nothing, and that absence is
+**not** evidence it is unwired. Confirm with `/mcp`.
+
+**Freshness is `built_at_commit` inside `graph.json`, not the file mtime** —
+clustering rewrites `graph.json` without re-extracting, so mtime reads fresher than
+the content is. A hook that fires during a rebase or squash simulation can stamp the
+graph with a commit that is not an ancestor of `HEAD`; check with
+`git merge-base --is-ancestor <built_at_commit> HEAD` before trusting it.
 
 **Windows trap.** The hook probes for an interpreter and gives up silently
 (`could not locate a Python with graphify installed`) when every probe fails.
@@ -279,8 +199,9 @@ Under Git Bash all four can fail at once: a hook installed from WSL pins a
 `/home/...` path; MSYS strips `.exe` from `command -v graphify`, so the launcher
 is read as a shebang and rejected; and `graphify` lives in a uv-tool venv the
 default `python` cannot import. The fix is one gitignored file —
-`graphify-out/.graphify_python` containing the absolute interpreter path. The
-MCP server needs the extra: `uv tool install "graphifyy[mcp]"`.
+`graphify-out/.graphify_python` containing the absolute interpreter path. Re-run
+`graphify install --platform claude` after **every** upgrade, or the installed
+skill keeps its old `.graphify_version` stamp while the binary moves on.
 
 ## Architecture Overview
 
@@ -291,43 +212,29 @@ MCP server needs the extra: `uv tool install "graphifyy[mcp]"`.
 
 **Enrichment Architecture:** Compliance enrichment (OWASP, CWE, CIS, NIST, PCI DSS, MITRE ATT&CK) is handled centrally in `normalize_and_report.py` after all findings are collected. Adapters return raw findings without enrichment.
 
-### Directory Structure
-
-```text
-scripts/
-├── cli/             # CLI commands (jmo.py, scan/report orchestrators, wizard)
-│   ├── installers/  # Tool installation strategies (Strategy pattern)
-│   └── ui/          # UI components (progress reporters)
-├── core/            # Core logic (normalize_and_report.py, config.py, history_db.py)
-│   ├── adapters/    # Tool parsers (see .claude/rules/adapters.rules.md)
-│   └── reporters/   # Output formatters (see .claude/rules/reporters.rules.md)
-└── dev/             # Helper scripts (update_versions.py)
-
-tests/               # 8,000+ tests across unit/adapters/reporters/integration
-.github/workflows/   # CI/CD (see .claude/rules/release.rules.md)
-Dockerfile.*         # 4 variants (see .claude/rules/docker.rules.md)
-```
-
 ### Key Files
 
 | File | Purpose |
 |------|---------|
 | `scripts/cli/jmo.py` | Main CLI entry point |
-| `scripts/cli/tool_installer.py` | Tool installation orchestrator |
-| `scripts/cli/installers/` | Strategy pattern installers (pip, npm, brew, binary) |
+| `scripts/cli/tool_installer.py` + `installers/` | Tool installation orchestrator; Strategy-pattern installers (pip, npm, brew, binary) |
+| `scripts/cli/ui/` | UI components (progress reporters) |
 | `scripts/core/normalize_and_report.py` | Aggregation engine |
 | `scripts/core/common_finding.py` | CommonFinding schema v1.2.0 |
 | `scripts/core/schema_validator.py` | JSON schema validation for findings |
 | `scripts/core/install_config.py` | Installation URLs, timeouts, isolated tools config |
-| `docs/schemas/common_finding.v1.json` | CommonFinding JSON Schema (Draft 2020-12) |
 | `scripts/core/adapters/*.py` | Tool output parsers (27 adapters) |
-| `jmo.yml` | Main configuration |
-| `versions.yaml` | Tool version registry |
-| `Dockerfile.*` | Docker variants: `Dockerfile.deep` (heavyweight, also tagged `:latest`), `.fast`, `.slim`, `.balanced` |
+| `scripts/core/reporters/` | Output formatters |
+| `scripts/jmo_mcp/jmo_server.py` | MCP server (see [mcp.rules.md](.claude/rules/mcp.rules.md)) |
+| `docs/schemas/common_finding.v1.json` | CommonFinding JSON Schema (Draft 2020-12) |
+| `jmo.yml` / `versions.yaml` | Main configuration / tool version registry |
+| `Dockerfile.*` | `Dockerfile.deep` (heavyweight, also tagged `:latest`), `.fast`, `.slim`, `.balanced` |
+
+`tests/` holds 8,000+ tests across unit/adapters/reporters/integration; `.github/workflows/` holds CI/CD.
 
 ## Scan Profiles
 
-> **Canonical Reference:** [docs/PROFILES_AND_TOOLS.md](docs/PROFILES_AND_TOOLS.md) - Complete tool lists, tool selection philosophy, content-triggered execution, scan type matrices, dependencies, manual installation
+> **Canonical Reference:** [docs/PROFILES_AND_TOOLS.md](docs/PROFILES_AND_TOOLS.md) — complete tool lists, tool selection philosophy, content-triggered execution, scan type matrices, dependencies, manual installation
 
 | Profile | Tools | Time | Use Case | Docker Tag |
 |---------|-------|------|----------|------------|
@@ -336,25 +243,27 @@ Dockerfile.*         # 4 variants (see .claude/rules/docker.rules.md)
 | `balanced` | 17 | 18-25 min | Production scans, CI/CD | `:balanced` |
 | `deep` | 29 | 40-70 min | Compliance audits, pentests | `:deep` (default) |
 
-**Note:** The heavyweight image lives at `Dockerfile.deep` (also pulled via `:latest` and `:deep` bare tags). See PROFILES_AND_TOOLS.md for complete tool lists.
+**Note:** The heavyweight image lives at `Dockerfile.deep` (also pulled via `:latest` and `:deep` bare tags).
 
 ## Path-Scoped Rules
 
-Detailed guidelines for specific parts of the codebase. These load automatically when Claude touches matching files:
+These load automatically when Claude touches matching files. **Their `paths:`
+frontmatter is load-bearing** — widening it taxes every turn that touches those
+files, so scope a rule to the code it actually governs.
 
 | Rule File | Applies To | Key Topics |
 |-----------|-----------|-----------|
 | [adapters.rules.md](.claude/rules/adapters.rules.md) | `scripts/core/adapters/`, `tests/adapters/` | New tool adapters, naming conventions, compliance enrichment |
 | [reporters.rules.md](.claude/rules/reporters.rules.md) | `scripts/core/reporters/`, `tests/reporters/` | Output reporters, CommonFinding normalization |
 | [python-safety.rules.md](.claude/rules/python-safety.rules.md) | All Python code | Subprocess security (CWE-78), secrets, logging |
-| [testing.rules.md](.claude/rules/testing.rules.md) | `tests/**/*.py` | Test organization, pytest patterns, mocking, coverage |
-| [testing.cross-platform.rules.md](.claude/rules/testing.cross-platform.rules.md) | Windows/macOS/Linux tests | Path handling, hang prevention, platform skips |
-| [release.rules.md](.claude/rules/release.rules.md) | `.github/workflows/`, release scripts | CI/CD pipelines, version management, troubleshooting |
+| [mcp.rules.md](.claude/rules/mcp.rules.md) | `scripts/jmo_mcp/` | MCP entry points and their measured state |
+| [windows-encoding.rules.md](.claude/rules/windows-encoding.rules.md) | CLI, reporters, dev scripts, `tests/` | Console codecs, the `PYTHONUTF8` blind spot, newline translation |
+| [testing.rules.md](.claude/rules/testing.rules.md) | `tests/**/*.py`, `Makefile` | Test organization, pytest patterns, mocking, coverage |
+| [testing.cross-platform.rules.md](.claude/rules/testing.cross-platform.rules.md) | `tests/`, `ci.yml` | Windows hangs, platform skips, Docker UID, marker filters |
+| [release.rules.md](.claude/rules/release.rules.md) | `.github/workflows/`, `update_versions.py` | CI/CD pipelines, version management, release troubleshooting |
 | [docker.rules.md](.claude/rules/docker.rules.md) | `Dockerfile*`, container code | Volumes, multi-arch, registries, arm64 limitations |
 
 ## Configuration
-
-### Core Files
 
 | File | Purpose |
 |------|---------|
@@ -379,15 +288,12 @@ Detailed guidelines for specific parts of the codebase. These load automatically
 | `policy` | object | Policy-as-code settings |
 | `deduplication.similarity_threshold` | float | Cross-tool clustering threshold (0.5-1.0, default: 0.65) |
 
-> This table listed `email` ("Email notification settings (SMTP, recipients)")
-> and `schedule` ("Scheduled scan configuration (cron expressions)"). **Neither
-> key exists in `jmo.yml`, nothing under `scripts/` reads either, and there is
-> no SMTP anywhere in the product** — email goes through the Resend HTTP API
-> (`scripts/core/email_service.py`), and schedules live in
-> `~/.jmo/schedules.json`, managed by `jmo schedule`. Measured in chunk 17;
-> the "SMTP" wording had already propagated into a session handoff as a real
-> hazard to plan around. The keys above are the ones the shipped `jmo.yml`
-> actually has.
+> There is **no `email` and no `schedule` key**, and no SMTP anywhere in the
+> product — email goes through the Resend HTTP API
+> (`scripts/core/email_service.py`) and schedules live in `~/.jmo/schedules.json`,
+> managed by `jmo schedule`. Both keys were documented here in error and the "SMTP"
+> wording had already propagated into a session handoff as a real hazard to plan
+> around. The table above is what the shipped `jmo.yml` actually has.
 
 See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for complete configuration reference.
 
@@ -396,51 +302,21 @@ See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for complete configuration referenc
 | Issue | Solution |
 |-------|----------|
 | Tests failing | `make test` (already carries `--maxfail=1` via `TEST_FLAGS`). No local coverage gate exists — CI's floor is 85%, in `coverage-aggregate`'s "Verify coverage threshold" step (#756) |
-| Tool not found | `jmo tools check`, then `jmo tools install` |
-| Tool startup crash | `jmo tools clean --force && jmo tools install <tool>` |
+| Tool not found, or tool startup crash | `jmo tools check`, then `jmo tools install`; for a crash, `jmo tools clean --force && jmo tools install <tool>` |
 | Pre-commit fails | `make fmt`, `make lint` |
-| `No module named pytest` (or any dep) when the venv demonstrably has it | You are on a different interpreter. On Windows the venv is `.venv/Scripts/python.exe`, never `.venv/bin/python`, and `chmod +x` is a no-op there — so `[ -x .venv/bin/python ]` is false *whatever* exists, and PATH `python3` wins. On a box with other tooling installed that is somebody else's venv. Invoke `.venv/Scripts/python.exe -m pytest` (or `uv run pytest`, which resolves the project venv on every platform — note it syncs against `uv.lock` first, so it may change your env). `Makefile:6` probes both layouts as of #722. |
+| `No module named pytest` when the venv demonstrably has it | You are on a different interpreter. On Windows the venv is `.venv/Scripts/python.exe`, never `.venv/bin/python`, and `chmod +x` is a no-op there — so `[ -x .venv/bin/python ]` is false *whatever* exists, and PATH `python3` wins. Use `.venv/Scripts/python.exe -m pytest` or `uv run pytest` (resolves the project venv everywhere — note it syncs against `uv.lock` first). `Makefile:6` probes both layouts as of #722 |
 | `uv.lock needs to be updated, but --check was provided` | Deps changed in `pyproject.toml` without relocking. `make deps-lock && git add uv.lock`. Local `uv sync` refreshes a stale lock silently; CI and pre-commit hard-fail — that asymmetry is deliberate |
-| CI failures | Check matrix tests, coverage, pre-commit |
 | SQLite locked | `jmo history optimize` (runs VACUUM + ANALYZE; there is no `vacuum` subcommand) |
 | Docker persistence | Mount `.jmo/` volume |
-| Daily nightly fails — but visible failure count is exactly 5 | `--maxfail=5` truncation. Fix visible 5, dispatch nightly via `gh workflow run scheduled.yml --ref main -f task=nightly`, repeat. See `.claude/rules/testing.rules.md` "Bug Archeology" section. |
-| Code on main works but Docker images don't | Container code is whatever shipped in the last release tag. `scripts/cli/` and `scripts/core/` fixes don't propagate until next `v*` tag triggers `release.yml` and rebuilds GHCR images. Test-level fixes in `tests/` ARE effective immediately because pytest runs on the host. |
-| `PermissionError: [Errno 13]` from `Path.exists()` inside container | Python 3.12 changed `pathlib.Path.exists()` to propagate `PermissionError`. UID-mismatch on bind-mounted dir (host UID 1001 vs container `USER jmo` UID 1000) → EACCES. Fix in test: `os.chmod(tmp_path, 0o777)` before `docker run`. Fix in code: wrap `p.exists()` in `try/except OSError`. See `.claude/rules/testing.cross-platform.rules.md` "Docker Bind-Mount UID Mismatch". |
-| `expected_tools` count off by one after PROFILE_TOOLS change | Counts in `tests/e2e/test_docker_workflows.py::DOCKER_VARIANTS`, `DEEP_EXPECTED_TOOLS` lists, AND `.github/workflows/scheduled.yml` matrix all need cascading updates. Grep for the variant counts (`14`, `18`, `25`) across both directories simultaneously. |
-| Docker build fails with `tar: not in gzip format` or `gzip: stdin: not in gzip format` | A binary download returned an HTML error page or partial body — `curl -sSL` exits 0 on HTTP errors. Every download in `Dockerfile.*` MUST use `curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600`, plus `gzip -t`/`xz -t`/`unzip -t` integrity check before extraction. See `.claude/rules/docker.rules.md` "Download Hardening Convention". |
-| `UnicodeEncodeError` / `UnicodeDecodeError` locally on Windows but CI is green | CI sets `PYTHONUTF8: "1"` (`ci.yml:299,318,343`), forcing UTF-8 for `open()`, `read_text()` **and** stdio — an environment no real user has. Reproduce with `PYTHONUTF8` unset. Console output goes through `harden_console_streams()` + `safe_write()` in `scripts/core/unicode_utils.py`; never denylist by encoding **name** (cp437/cp850 have box drawing but not emoji). See `.claude/rules/testing.cross-platform.rules.md` "Console Encoding (Windows)". |
-| `ruff --select PLW1514` says "All checks passed" on a file that demonstrably fails to decode | PLW1514 flags `p.read_text()` only when it can prove the receiver is a `Path`; it cannot type `(tmp_path / "x").read_text()` — the dominant pytest idiom. 153 flagged vs 1198 real sites. Treat the lint count as a **lower bound**, and don't make the rule the sole guard. |
-| A commit shows thousands of changed lines for a small edit | `Path.write_text()` on Windows translates `\n` → `\r\n` (`newline=None` → `os.linesep`), converting a whole LF file. Use `write_bytes()`. Detect with `git diff --ignore-cr-at-eol --numstat` vs plain `--numstat`. `grep -c $'\r'` is NOT a reliable check under MSYS. |
-
-For release-specific issues, see [.claude/rules/release.rules.md](.claude/rules/release.rules.md) (now ~25 troubleshooting entries covering pytest-timeout traps, PRE_COMMIT_HOME literals, Python 3.12 OSError propagation, tag-naming conventions, dev↔main reconciliation, and more). For Windows hang issues + Docker UID-mismatch, see [.claude/rules/testing.cross-platform.rules.md](.claude/rules/testing.cross-platform.rules.md). For contributing-specific CI troubleshooting, see [CONTRIBUTING.md#ci-troubleshooting](CONTRIBUTING.md#ci-troubleshooting).
-
-### Recent Major Lessons (v1.0.4 → v1.0.5 quick-wins cycle, 2026-04-26 → 2026-04-27)
-
-The v1.0.3 release cycle exposed multiple layered bugs that had been latent for several releases. v1.0.4 then shipped the Dockerfile download hardening (PR #350) to GHCR images for the first time, plus root-cause fixes for two more long-standing issues:
-
-- **Coverage merge silent no-op** (PR #357): `coverage-aggregate` job's merge function had been a complete no-op since pytest-split was introduced — `hasattr(elem, '__iter__')` returns False for ElementTree Elements. Threshold was reading shard-1 in isolation (~68-72%) instead of true aggregate (~88%).
-- **CI install hardening** (PR #358): Extended PR #350's Dockerfile convention to all 14 `curl <upstream>/install.sh | sh` sites in workflows. Pinned to `versions.yaml`.
-- **v1.0.4 release pipeline** went **22/22 success, 8/8 Docker builds with zero retries** — first clean release in the project's history (prior baseline: ~50% smoke flake rate). **v1.0.5 then matched it: 22/22 + 8/8, zero retries, second consecutive clean release.**
-
-Post-v1.0.4 verification (PRs #361, #362) surfaced 2 latent bugs that had been masked by the chronic flake noise; these landed in **v1.0.5 quick-wins** (PRs #371, #373):
-
-- **Missing `pytest-benchmark` dep** (PR #361): Performance Benchmarks job in scheduled.yml had been broken since added.
-- **Windows perf-test flakes** (PR #362 → broader-pattern fix in #371): 2 hardcoded perf thresholds didn't account for GHA Windows runner slowness; superseded by `-m "not slow"` filter on `nightly-cross-platform`.
-- **Branch coverage merge scope-limit** (#371): Per-line union math + root recompute completed PR #357's line-rate fix.
-- **`jmo tools check` MANUAL state** (#373): 4 `MANUAL_INSTALL_TOOLS` (afl++/mobsf/akto/falco) now render distinctly from MISSING in all output paths (table, summary, JSON `manual_install: bool`). Architecture: `MANUAL = "manual"` added to `ToolStatusType` enum + `manual_install: bool = False` field on `ToolStatus`, threading through existing `_derive_status_type` / `STATUS_COLORS` / `status_text` rendering.
-- **`--maxfail` 5→20 bump + `$GITHUB_STEP_SUMMARY` failure rollup** (#373): nightly-extended-tests's truncation cap was 0.06% of suite. New `Summarize pytest failures` step renders all caught failures (capped 50 entries) into the run's Summary tab so future archeology cycles see everything at once.
-
-Key takeaways now embedded in path-scoped rules:
-
-- **Bug archeology pattern**: `--maxfail=5` truncation hid deeper failures. Required 5 successive PRs (#343 → #347) to dig through all layers in v1.0.3. v1.0.5 mitigated via cap bump + Step Summary rollup.
-- **Tag schema**: `:latest` IS the deep variant. NO `:latest-deep`/`:latest-slim` tags exist. NO `:full` alias (removed in v1.0.5). Verify with `gh api .../packages/container/.../versions`.
-- **CLI flag drift**: `jmo ci --profile` is a boolean (timing flag); profile selection uses `--profile-name`.
-- **Image size dimension**: `docker image inspect --format={{.Size}}` returns UNCOMPRESSED total layers, not compressed pull size. Off by 2-3×.
-- **`MANUAL_INSTALL_TOOLS` UX**: 4 tools (afl-fuzz/mobsf/akto/falco) are in `PROFILE_TOOLS["deep"]` but intentionally NOT in any image — they need manual install. Since v1.0.5, `jmo tools check` distinguishes them visually (cyan MANUAL vs red MISSING) and via `manual_install` JSON field. rc=1 semantics preserved per PR #332's deep-container test pattern.
-- **dev↔main divergence**: 41 commits sat on local `dev` for 11 days, eventually requiring careful audit + reconciliation merge (PR #339). Future-proof: regular `dev → main` cadence + `/merge-pr` skill (PR #372) automate it.
-- **Workflow filter convention**: Nightly Extended Tests must use `-m "not requires_tools and not smoke"`. Cross-platform jobs use `-m "not slow"` (broader pattern from #371, supersedes per-test `skipif(sys.platform=="win32")`).
-- **2-PR release cadence**: PR #371/#373 (content) → PR #374 (release-prep with version bumps + CHANGELOG header). Keeps review surface clean: content commits separate from mechanical version bumps.
+| Daily nightly fails, and the visible failure count is exactly 5 | `--maxfail=5` truncation. Fix the visible 5, re-dispatch with `gh workflow run scheduled.yml --ref main -f task=nightly`, repeat. See [testing.rules.md](.claude/rules/testing.rules.md) "Bug Archeology" |
+| Code on main works but Docker images don't | Container code is whatever shipped in the last release tag. `scripts/cli/` and `scripts/core/` fixes don't propagate until the next `v*` tag triggers `release.yml` and rebuilds GHCR images. `tests/` fixes ARE effective immediately — pytest runs on the host |
+| `PermissionError: [Errno 13]` from `Path.exists()` inside a container | Python 3.12 propagates it instead of returning False. UID mismatch on a bind mount (host 1001 vs container `USER jmo` 1000). In a test: `os.chmod(tmp_path, 0o777)` before `docker run`. In code: wrap in `try/except OSError`. See [testing.cross-platform.rules.md](.claude/rules/testing.cross-platform.rules.md) |
+| `expected_tools` count off by one after a PROFILE_TOOLS change | Counts in `tests/e2e/test_docker_workflows.py::DOCKER_VARIANTS`, the `DEEP_EXPECTED_TOOLS` lists, AND `.github/workflows/scheduled.yml` all need cascading updates. Grep the variant counts (`14`, `18`, `25`) across both directories at once |
+| Docker build fails with `tar: not in gzip format` / `gzip: stdin: not in gzip format` | A binary download returned an HTML error page or partial body — `curl -sSL` exits 0 on HTTP errors. Every download in `Dockerfile.*` MUST use `curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600`, plus a `gzip -t`/`xz -t`/`unzip -t` integrity check before extraction. See [docker.rules.md](.claude/rules/docker.rules.md) |
+| `UnicodeEncodeError` / `UnicodeDecodeError` locally on Windows but CI is green | CI sets `PYTHONUTF8: "1"` (`ci.yml:299,318,343`), forcing UTF-8 for `open()`, `read_text()` **and** stdio — an environment no real user has. Reproduce with `PYTHONUTF8` unset. See [windows-encoding.rules.md](.claude/rules/windows-encoding.rules.md) |
+| `ruff --select PLW1514` says "All checks passed" on a file that demonstrably fails to decode | It flags `p.read_text()` only when it can prove the receiver is a `Path`; it cannot type `(tmp_path / "x").read_text()` — the dominant pytest idiom. 153 flagged vs 1198 real sites. Treat the lint count as a **lower bound**, never the sole guard |
+| A commit shows thousands of changed lines for a small edit | `Path.write_text()` on Windows translates `\n` → `\r\n` (`newline=None` → `os.linesep`), converting a whole LF file. Use `write_bytes()`. Detect with `git diff --ignore-cr-at-eol --numstat` vs plain `--numstat`. `grep -c $'\r'` is NOT reliable under MSYS |
+| CI failures generally | Check matrix tests, coverage, pre-commit. Release-specific: [release.rules.md](.claude/rules/release.rules.md) (~25 entries). Contributor-facing: [CONTRIBUTING.md#ci-troubleshooting](CONTRIBUTING.md#ci-troubleshooting) |
 
 ## Documentation References
 
@@ -450,13 +326,13 @@ Key takeaways now embedded in path-scoped rules:
 
 **Operations:** [docs/RELEASE.md](docs/RELEASE.md) | [docs/SCHEDULE_GUIDE.md](docs/SCHEDULE_GUIDE.md) | [docs/POLICY_AS_CODE.md](docs/POLICY_AS_CODE.md) | [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md)
 
-**Internal (Dev-Only):** `dev-only/` - Plans, archive, and internal documentation (not published)
+**Internal (Dev-Only):** `dev-only/` — plans, archive, and internal documentation (not published)
 
 ## Notes
 
-- Agent threads reset cwd between bash calls - use absolute paths
-- Avoid emojis unless explicitly requested
 - CommonFinding v1.2.0 includes compliance mappings (OWASP, CWE, CIS, NIST, PCI DSS, MITRE)
-- Cross-tool dedup uses similarity clustering (configurable via `deduplication.similarity_threshold`, default: 0.65)
+- Cross-tool dedup uses similarity clustering (`deduplication.similarity_threshold`, default 0.65)
+- Agent threads reset cwd between bash calls — use absolute paths
+- Avoid emojis unless explicitly requested
 - Only create documentation with long-term value; use `.claude/` for temporary work
-- **Scope Discipline:** When given a bounded task (e.g., "root directory files only", "just these 13 bugs"), stay strictly within that scope — do not expand to adjacent directories, related systems, or broader reorganizations unless explicitly asked
+- **Scope Discipline:** When given a bounded task ("root directory files only", "just these 13 bugs"), stay strictly within it — do not expand to adjacent directories, related systems, or broader reorganizations unless explicitly asked
