@@ -35,6 +35,7 @@ accommodating normal platform variance. Ideal targets are documented for
 reference when optimizing performance.
 """
 
+import itertools
 import json
 import sqlite3
 import sys
@@ -53,6 +54,7 @@ from scripts.core.history_db import (
     store_scan,
     upsert_findings_batch,
 )
+from tests.conftest import median_seconds_with_setup
 
 # ============================================================================
 # Fixtures
@@ -683,11 +685,42 @@ def test_sql_injection_resistance(perf_db, tmp_path):
 
 
 # ============================================================================
+
+# Each median sample needs its own database file, and a fresh one per sample is
+# what makes the measurement honest (#742). The counter keeps the paths unique
+# without depending on timing.
+_counter = itertools.count()
+
+
+def _insert_scan_row(conn, scan_id: str, profile: str) -> None:
+    """The scan row both batch-insert benchmarks need before measuring."""
+    conn.execute(
+        """
+        INSERT INTO scans (
+            id, timestamp, timestamp_iso, profile, tools, targets, target_type,
+            total_findings, critical_count, high_count, medium_count, low_count,
+            info_count, jmo_version
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
+        """,
+        (
+            scan_id,
+            int(time.time()),
+            "2025-01-01T00:00:00Z",
+            profile,
+            "[]",
+            "[]",
+            "repo",
+            "1.0.0",
+        ),
+    )
+    conn.commit()
+
+
 # Batch Insert Performance (New optimized functions)
 # ============================================================================
 
 
-def test_batch_insert_findings_optimized_performance(perf_db):
+def test_batch_insert_findings_optimized_performance(perf_db, tmp_path):
     """
     Test optimized batch insert with deferred count calculation.
 
@@ -738,16 +771,41 @@ def test_batch_insert_findings_optimized_performance(perf_db):
             }
         )
 
-    # Measure optimized insert time
-    start = time.time()
-    count = batch_insert_findings_optimized(conn, scan_id, findings)
-    elapsed = time.time() - start
+    # A MEDIAN over fresh databases, not one sample (#742).
+    #
+    # The measured region inserts 10,000 rows, so it cannot be repeated against
+    # the same connection: sample two would measure a conflict path, not an
+    # insert. `median_seconds_with_setup` rebuilds the precondition -- a fresh
+    # database with the scan row and nothing else -- before each sample, and
+    # excludes that cost from the clock.
+    def _fresh_connection():
+        db_path = tmp_path / f"opt_{next(_counter)}.db"
+        init_database(db_path)
+        fresh = get_connection(db_path)
+        _insert_scan_row(fresh, scan_id, "balanced")
+        return fresh
 
-    # Verify insert count
-    assert count == 10000
+    inserted: list[int] = []
+
+    def _measure(fresh):
+        inserted.append(batch_insert_findings_optimized(fresh, scan_id, findings))
+        fresh.close()
+
+    elapsed = median_seconds_with_setup(_fresh_connection, _measure)
+
+    # Every sample must have done the same work; a run that inserted fewer rows
+    # measured something else.
+    assert inserted and set(inserted) == {
+        10000
+    }, f"samples inserted differing row counts: {sorted(set(inserted))}"
 
     # Verify performance target: <1 second for 10k findings
-    assert elapsed < 1.0, f"Optimized batch insert took {elapsed:.2f}s, expected <1s"
+    assert (
+        elapsed < 1.0
+    ), f"Optimized batch insert took {elapsed:.2f}s (median), expected <1s"
+
+    count = batch_insert_findings_optimized(conn, scan_id, findings)
+    assert count == 10000
 
     # Verify counts are correct
     cursor = conn.execute(
@@ -767,7 +825,7 @@ def test_batch_insert_findings_optimized_performance(perf_db):
     conn.close()
 
 
-def test_upsert_findings_batch_performance(perf_db):
+def test_upsert_findings_batch_performance(perf_db, tmp_path):
     """
     Test batch upsert performance with conflict handling.
 
@@ -813,25 +871,56 @@ def test_upsert_findings_batch_performance(perf_db):
             }
         )
 
-    # First upsert
-    start = time.time()
-    count1 = upsert_findings_batch(conn, scan_id, findings)
-    elapsed1 = time.time() - start
+    # TWO medians over fresh databases, not two single samples (#742).
+    #
+    # The two regions measure genuinely different work -- an insert of 5,000
+    # new fingerprints, then an update of the same 5,000 -- so each needs its
+    # own precondition. Timing them in sequence against one connection is what
+    # made both single-sample: the "first" upsert can only be first once.
+    def _db_with_scan():
+        db_path = tmp_path / f"upsert_{next(_counter)}.db"
+        init_database(db_path)
+        fresh = get_connection(db_path)
+        _insert_scan_row(fresh, scan_id, "fast")
+        return fresh
 
-    assert count1 == 5000
-    assert elapsed1 < 0.5, f"First upsert took {elapsed1:.2f}s, expected <0.5s"
+    def _db_with_findings_already_in():
+        fresh = _db_with_scan()
+        upsert_findings_batch(fresh, scan_id, findings)
+        return fresh
 
-    # Second upsert (should update existing rows)
-    # Modify some findings
+    first_counts: list[int] = []
+
+    def _measure_insert(fresh):
+        first_counts.append(upsert_findings_batch(fresh, scan_id, findings))
+        fresh.close()
+
+    elapsed1 = median_seconds_with_setup(_db_with_scan, _measure_insert)
+    assert first_counts and set(first_counts) == {
+        5000
+    }, f"insert samples differed: {sorted(set(first_counts))}"
+    assert elapsed1 < 0.5, f"First upsert took {elapsed1:.2f}s (median), expected <0.5s"
+
+    # Modify some findings so the second region is genuinely an update.
     for f in findings[:1000]:
         f["severity"] = "CRITICAL"
 
-    start = time.time()
-    count2 = upsert_findings_batch(conn, scan_id, findings)
-    elapsed2 = time.time() - start
+    second_counts: list[int] = []
 
-    assert count2 == 5000
-    assert elapsed2 < 0.5, f"Second upsert took {elapsed2:.2f}s, expected <0.5s"
+    def _measure_update(fresh):
+        second_counts.append(upsert_findings_batch(fresh, scan_id, findings))
+        fresh.close()
+
+    elapsed2 = median_seconds_with_setup(_db_with_findings_already_in, _measure_update)
+    assert second_counts and set(second_counts) == {
+        5000
+    }, f"update samples differed: {sorted(set(second_counts))}"
+    assert (
+        elapsed2 < 0.5
+    ), f"Second upsert took {elapsed2:.2f}s (median), expected <0.5s"
+
+    # Leave the fixture connection in the state the assertions below expect.
+    upsert_findings_batch(conn, scan_id, findings)
 
     # Verify counts are correct after updates
     cursor = conn.execute(

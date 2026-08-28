@@ -985,6 +985,38 @@ def median_seconds(operation, samples: int = LATENCY_SAMPLES) -> float:
     return statistics.median(timings)
 
 
+def median_seconds_with_setup(
+    setup, operation, samples: int = LATENCY_SAMPLES
+) -> float:
+    """Median wall time of `operation`, with `setup` run UNTIMED before each sample.
+
+    The tool `median_seconds` is missing for the operations its own docstring
+    excludes. Anything that mutates a database cannot be repeated in place --
+    the second sample of an INSERT measures an UPDATE -- so the choice was a
+    single sample or nothing. This is the third option: rebuild the
+    precondition each time and time only the operation.
+
+    `setup()` returns whatever state `operation(state)` needs, and its cost is
+    outside the clock. That separation is the whole point: a conversion that
+    folds fixture construction into the measurement reports the fixture, and
+    #742 measured that shape costing 21 fresh databases per test.
+
+    Use it when the measured region is stateful. Use `median_seconds` when it
+    is not -- the extra fixture is waste, and `setup` returning a shared object
+    would silently re-introduce the very problem this exists to avoid.
+    """
+    import statistics
+    import time
+
+    timings = []
+    for _ in range(samples):
+        state = setup()
+        start = time.perf_counter()
+        operation(state)
+        timings.append(time.perf_counter() - start)
+    return statistics.median(timings)
+
+
 # ---------------------------------------------------------------------------
 # Repo walking that prunes during traversal, not after.
 # ---------------------------------------------------------------------------

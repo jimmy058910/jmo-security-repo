@@ -41,17 +41,25 @@ measures the runner's mood.
 Measured headroom from #742, by forcing each budget to 0 and reading the elapsed
 value out of the failure message::
 
-    2.3x  test_prioritization_performance.py::test_bulk_api_latency
-    2.7x  test_benchmarks.py::test_benchmark_3_trend_analysis_50_scans
-    3.8x  test_history_db_performance.py::test_upsert_findings_batch_performance
-    4.4x  test_benchmarks.py::test_benchmark_1_sqlite_scan_insert_100_findings
-    5.3x  test_history_db_performance.py::test_batch_insert_findings_optimized_performance
+    2.3x  test_prioritization_performance.py::test_bulk_api_latency         CONVERTED
+    2.7x  test_benchmarks.py::test_benchmark_3_trend_analysis_50_scans       CONVERTED
+    3.8x  test_history_db_performance.py::test_upsert_findings_batch_performance    CONVERTED
+    4.4x  test_benchmarks.py::test_benchmark_1_sqlite_scan_insert_100_findings      CONVERTED
+    5.3x  test_history_db_performance.py::test_batch_insert_findings_optimized_performance  CONVERTED
     ...   14 others between 10x and 689x
 
 #733 broke at 1.6x over budget. Under ~3x is a flake waiting for a busy runner;
-3-6x is worth hardening; beyond that the budget is doing its job. So this is a
-**ratchet, not a conversion**: it pins what exists per file, so the population
-cannot grow while the hardening is done a few tests at a time.
+3-6x is worth hardening; beyond that the budget is doing its job.
+
+**Every test in that band is now converted** -- the whole table above, not only
+the 3-6x rows. Each needed a different fresh precondition, which is why they
+could not be done as one change: a fresh CACHE DIRECTORY for the EPSS bulk
+fetch, nothing at all for the read-only trend analysis, and a fresh DATABASE
+for the three that write rows. What remains in the inventory is the >6x
+population, where the budget is doing its job.
+
+So this stays a **ratchet**: it pins what exists per file so the population
+cannot grow, and a conversion lowers it.
 
 `median_seconds` (`tests/conftest.py`) is the conversion target, and a converted
 test drops out of this inventory automatically -- it calls the helper rather
@@ -81,22 +89,38 @@ _CLOCK_READS = {"perf_counter", "monotonic", "time", "process_time"}
 # file -> number of tests that read a clock directly and assert against a
 # numeric literal. Measured 2026-08-28. A test converted to `median_seconds`
 # leaves this inventory on its own, so these only go down.
+# 48, down from the 61 first recorded here. TWO separate movements, and they
+# must not be conflated:
+#
+#   -12  the detector was over-matching. It asked "does a clock appear" and
+#        counted `int(time.time())` used as a TIMESTAMP COLUMN VALUE. Three
+#        files leave the inventory entirely on that correction
+#        (test_scan_session, test_attestation_provenance,
+#        test_history_db_future_integrations) and test_history_db.py drops
+#        6 -> 1. Nothing about those tests changed.
+#    -3  three budgets were genuinely CONVERTED to a median over fresh
+#        databases -- the whole 3-6x headroom band from the table above:
+#        test_upsert_findings_batch_performance (two regions),
+#        test_batch_insert_findings_optimized_performance, and
+#        test_benchmark_1_sqlite_scan_insert_100_findings.
+#
+# The second is what the ratchet exists to record. The first is a measurement
+# of the instrument, and it mattered: the over-match made the conversion
+# INVISIBLE, because the scan-row INSERT beside each timing site still called
+# `time.time()`. A count that cannot fall cannot ratchet.
 SINGLE_SAMPLE_BUDGETS: dict[str, int] = {
-    "tests/cli/test_scan_session.py": 3,
     "tests/cli/test_wizard_edge_cases.py": 2,
     "tests/edge_cases/test_diff_edge_cases.py": 1,
-    "tests/performance/test_benchmarks.py": 4,
+    "tests/performance/test_benchmarks.py": 3,
     "tests/performance/test_history_db_perf.py": 4,
     "tests/performance/test_load.py": 5,
     "tests/performance/test_prioritization_performance.py": 6,
     "tests/performance/test_stress.py": 4,
     "tests/unit/test_attestation_cicd.py": 1,
-    "tests/unit/test_attestation_provenance.py": 1,
     "tests/unit/test_dedup_enhanced.py": 3,
     "tests/unit/test_diff_engine.py": 2,
-    "tests/unit/test_history_db.py": 6,
-    "tests/unit/test_history_db_future_integrations.py": 1,
-    "tests/unit/test_history_db_performance.py": 11,
+    "tests/unit/test_history_db.py": 1,
+    "tests/unit/test_history_db_performance.py": 9,
     "tests/unit/test_normalize_and_report_more.py": 1,
     "tests/unit/test_plugin_loader.py": 1,
     "tests/unit/test_tool_runner.py": 4,
@@ -114,12 +138,59 @@ def _tracked_test_modules() -> list[str]:
     )
 
 
-def _single_sample_budget_tests(source: str) -> list[str]:
-    """Tests that read a clock directly and assert against a numeric literal.
+def _is_clock_call(node: ast.AST) -> bool:
+    return (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr in _CLOCK_READS
+    )
 
-    A test converted to ``median_seconds`` calls the helper instead of a clock,
-    so it does not match -- which is why converting one reduces the count here
-    rather than needing a second list of exemptions.
+
+def _measures_a_duration(fn: ast.AST) -> bool:
+    """Does this function SUBTRACT two clock reads, rather than just read one?
+
+    Requiring a subtraction, not a read, is a correction to the first version
+    of this guard (#742). That one asked only "does a clock appear", which
+    cannot tell ``elapsed = time.time() - start`` from ``int(time.time())``
+    used as a **timestamp column value** -- and the history-db tests do the
+    latter constantly, because every scan row needs one.
+
+    Measured: the loose rule counted **61** tests, of which **49** time
+    anything. The 12 others stamp a value and happen to assert some number,
+    which any test may do. Worse, the over-match made a real conversion
+    INVISIBLE: converting the two upsert budgets to `median_seconds_with_setup`
+    removed both timing sites and the count did not move, because the scan-row
+    INSERT beside them still called `time.time()`. A ratchet that cannot see a
+    conversion cannot be lowered by one, which is the whole mechanism.
+
+    Both operand shapes are accepted -- a clock call inside the subtraction,
+    and a name bound from one (``start = perf_counter() ... end - start``).
+    The second finds nothing in the corpus today; it is here because its
+    absence is a property of this codebase rather than of the rule.
+    """
+    clock_names = {
+        target.id
+        for node in ast.walk(fn)
+        if isinstance(node, ast.Assign) and _is_clock_call(node.value)
+        for target in node.targets
+        if isinstance(target, ast.Name)
+    }
+    for sub in ast.walk(fn):
+        if not (isinstance(sub, ast.BinOp) and isinstance(sub.op, ast.Sub)):
+            continue
+        if any(_is_clock_call(c) for c in ast.walk(sub)):
+            return True
+        if any(isinstance(c, ast.Name) and c.id in clock_names for c in ast.walk(sub)):
+            return True
+    return False
+
+
+def _single_sample_budget_tests(source: str) -> list[str]:
+    """Tests that time an operation once and assert against a numeric literal.
+
+    A test converted to ``median_seconds`` calls the helper instead of
+    subtracting clocks, so it does not match -- which is why converting one
+    reduces the count here rather than needing a second list of exemptions.
     """
     try:
         tree = ast.parse(source)
@@ -131,13 +202,7 @@ def _single_sample_budget_tests(source: str) -> list[str]:
             continue
         if not node.name.startswith("test_"):
             continue
-        reads_clock = any(
-            isinstance(call, ast.Call)
-            and isinstance(call.func, ast.Attribute)
-            and call.func.attr in _CLOCK_READS
-            for call in ast.walk(node)
-        )
-        if not reads_clock:
+        if not _measures_a_duration(node):
             continue
         asserts_number = any(
             isinstance(stmt, ast.Assert)
@@ -211,6 +276,47 @@ _ATTRIBUTION = re.compile(
 )
 # The corrections themselves name CLAUDE.md in order to say it is not the source.
 _DISCLAIMER = re.compile(r"\bnot in\b|\bnever\b|\bno performance\b", re.IGNORECASE)
+
+
+def test_median_seconds_with_setup_keeps_the_setup_off_the_clock() -> None:
+    """The separation the helper exists for, asserted directly.
+
+    Every converted budget has enough headroom to absorb its own fixture cost,
+    so folding the setup INTO the measurement leaves each of them green --
+    verified by mutation, which is how this test came to exist. The budgets
+    cannot police the helper; only the helper's own contract can.
+
+    The margin is deliberately coarse: setup sleeps 20x longer than the
+    operation, so a Windows `perf_counter` resolution of ~1 ms cannot explain
+    the difference either way.
+    """
+    import time as _time
+
+    from tests.conftest import median_seconds_with_setup
+
+    setup_calls = 0
+
+    def slow_setup() -> str:
+        nonlocal setup_calls
+        setup_calls += 1
+        _time.sleep(0.05)
+        return "state"
+
+    def quick_operation(state: str) -> None:
+        assert state == "state", "setup's return value must reach the operation"
+        _time.sleep(0.0025)
+
+    elapsed = median_seconds_with_setup(slow_setup, quick_operation, samples=3)
+
+    assert setup_calls == 3, (
+        f"setup ran {setup_calls} times for 3 samples; it must be rebuilt per "
+        "sample or the second sample measures the first one's leftovers"
+    )
+    assert elapsed < 0.03, (
+        f"median was {elapsed * 1000:.1f}ms for a 2.5ms operation behind a 50ms "
+        "setup -- the setup is being timed, so the measurement reports the "
+        "fixture rather than the code"
+    )
 
 
 def test_no_test_credits_claude_md_with_a_performance_target() -> None:
