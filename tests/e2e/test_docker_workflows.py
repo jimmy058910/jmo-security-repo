@@ -216,6 +216,87 @@ def ensure_image(image: str) -> None:
     pytest.fail(f"docker pull {image} failed (rc={result.returncode}): {err}")
 
 
+def absent_without_excuse(tools: dict[str, dict]) -> list[str]:
+    """Tools the image's own profile lists, does not excuse, and lacks.
+
+    `tools` is `jmo tools check --profile X --json` output from INSIDE the
+    image: `{name: {"installed": bool, "manual_install": bool, ...}}`.
+
+    A tool the image itself marks `manual_install` is deliberately absent --
+    `MANUAL_INSTALL_TOOLS` are listed in the profile and never baked in. Any
+    other absence is a real gap, and naming it beats reporting a total.
+    """
+    return sorted(
+        name
+        for name, status in tools.items()
+        if not status.get("manual_install", False)
+        and not status.get("installed", False)
+    )
+
+
+class TestVariantExpectationRule:
+    """The `absent_without_excuse` rule, without a Docker daemon.
+
+    Regression for #1039. Unmarked on purpose: markers are per-class in this
+    file, so these run in the ordinary shards while everything around them
+    needs `docker`. The rule they cover is the one that decides whether a
+    nightly goes red, and it was previously a hardcoded count that could not be
+    exercised anywhere without a daemon.
+
+    Payloads are reconstructed from nightly run 33177110349's own output.
+    """
+
+    MANUAL = ("afl++", "akto", "falco", "mobsf")
+
+    def _payload(self, names: list[str], extra_missing: tuple[str, ...] = ()) -> dict:
+        missing = set(self.MANUAL) | set(extra_missing)
+        return {
+            n: {"installed": n not in missing, "manual_install": n in self.MANUAL}
+            for n in names
+        }
+
+    # `deep` at v1.0.8 -- what the shipped image actually contains.
+    V1_0_8_DEEP = [f"tool{i}" for i in range(24)] + list(MANUAL)
+    # `deep` on main -- `shellcheck` joined the profile after the tag.
+    MAIN_DEEP = [f"tool{i}" for i in range(25)] + list(MANUAL)
+
+    def test_a_release_skewed_image_is_not_a_failure(self) -> None:
+        """The nightly's actual case: 28-tool image, 29-tool checkout.
+
+        `PROFILE_TOOLS["deep"]` holds 28 entries at `v1.0.8` and 29 on `main`.
+        The image is built by the last `v*` tag and `tests/` runs from the
+        working tree, so a count computed here is a claim about main asserted
+        against a release. 28 - 4 manual = 24 installed, against an expected 25
+        -- and every one of the four absences was a `manual_install` tool.
+        """
+        assert absent_without_excuse(self._payload(self.V1_0_8_DEEP)) == []
+
+    def test_a_matching_image_is_also_not_a_failure(self) -> None:
+        """The control: after the tag, image and checkout agree."""
+        assert absent_without_excuse(self._payload(self.MAIN_DEEP)) == []
+
+    def test_a_genuinely_missing_tool_is_named(self) -> None:
+        """What the rule exists for, and the count could only ever total."""
+        tools = self._payload(self.MAIN_DEEP, extra_missing=("tool7",))
+        assert absent_without_excuse(tools) == ["tool7"]
+
+    def test_a_manual_tool_is_never_reported(self) -> None:
+        """`MANUAL_INSTALL_TOOLS` are listed in the profile and never shipped."""
+        tools = self._payload(self.MAIN_DEEP)
+        assert all(not tools[m]["installed"] for m in self.MANUAL)
+        assert absent_without_excuse(tools) == []
+
+    def test_a_tool_missing_its_manual_flag_is_reported(self) -> None:
+        """The excuse must be the image's, not the reader's.
+
+        A payload whose `manual_install` key is absent entirely must not be
+        read as excused -- that is the difference between "the image says this
+        is manual" and "we could not tell".
+        """
+        tools = {"afl++": {"installed": False}}
+        assert absent_without_excuse(tools) == ["afl++"]
+
+
 @pytest.mark.docker
 @pytest.mark.e2e
 @pytest.mark.slow
@@ -294,21 +375,46 @@ class TestDockerVariants:
                 f"stderr={result.stderr[:500]} stdout={result.stdout[:500]}"
             )
 
-        # Shape is {tool_name: {installed: bool, ...}} — iterate values, not keys.
-        installed = sum(
-            1 for status in tools.values() if status.get("installed", False)
+        # Shape is {tool_name: {installed: bool, manual_install: bool, ...}}.
+        #
+        # The expectation is derived from the IMAGE'S OWN profile, not from the
+        # checkout's `PROFILE_TOOLS`. Those are different programs: an image
+        # ships whatever code the last `v*` tag built, while `tests/` runs from
+        # the working tree immediately. A count computed here is therefore a
+        # claim about main asserted against a release, and it goes red for a
+        # reason that has nothing to do with either being wrong.
+        #
+        # Measured on nightly run 33177110349 (#1039): `deep` reported 24
+        # installed against an expected 25, and the four tools reporting
+        # installed=false were exactly the four MANUAL_INSTALL_TOOLS -- i.e. a
+        # correctly built image. `PROFILE_TOOLS["deep"]` holds 28 entries at
+        # `v1.0.8` and 29 on `main`, because `shellcheck` was added to the
+        # profile after the tag. 28 - 4 = 24, and 29 - 4 = 25. Nothing was
+        # broken; the two numbers described two different builds.
+        #
+        # So the rule asserted is the one that is true of every correct image:
+        # a tool the image itself does not mark `manual_install` must be
+        # installed. That is stronger than a floor -- it names the offender
+        # rather than reporting a total -- and it cannot drift at a release.
+        absent = absent_without_excuse(tools)
+        manual = sorted(n for n, s in tools.items() if s.get("manual_install", False))
+        installed = sum(1 for s in tools.values() if s.get("installed", False))
+
+        assert not absent, (
+            f"{variant} variant is missing {len(absent)} tool(s) its own profile "
+            f"lists and does not mark manual_install: {absent}. "
+            f"({installed} installed, {len(tools)} in the image's profile, "
+            f"{len(manual)} manual: {manual})"
         )
 
-        # On assertion failure, enumerate which tools report installed=false so
-        # the log shows the specific image-drift diagnosis instead of just a
-        # count mismatch. Saves a round-trip dispatch to identify the missing
-        # tool when PROFILE_TOOLS and the Dockerfile get out of sync.
-        missing_names = sorted(
-            name for name, status in tools.items() if not status.get("installed", False)
-        )
-        assert installed >= expected_tools, (
-            f"{variant} variant has {installed} tools, expected at least "
-            f"{expected_tools}. Tools reporting installed=false: {missing_names}"
+        # Meta-guard. Every assertion above is satisfied by an empty or
+        # near-empty `tools` dict, which is what a broken image or a changed
+        # output shape would produce. `expected_tools` is no longer the
+        # expectation -- it is a floor on how much this test is looking at.
+        assert len(tools) >= expected_tools - 1, (
+            f"{variant} reported only {len(tools)} tools in its profile; the "
+            f"checkout expects around {expected_tools}. A shortfall of more "
+            f"than one is image drift worth reading, not release skew."
         )
 
     @pytest.mark.parametrize("variant,_expected_tools", DOCKER_VARIANTS)
