@@ -21,7 +21,7 @@
 ### "Fix introduces breaking changes"
 
 **Cause:** Security fix changes API contract
-**Fix:** Review --dry-run output, adjust API versioning
+**Fix:** Read the patch before it lands (there is no preview mode), then adjust API versioning
 
 ### "Security tests failing"
 
