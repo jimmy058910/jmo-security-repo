@@ -11,7 +11,8 @@ Tests cover:
 - Export pagination
 - Memory usage
 
-Performance Targets (from CLAUDE.md):
+Performance Targets (declared in tests/performance/__init__.py, not in
+CLAUDE.md -- see #742):
     Ideal targets (fast CI/Linux):
     - Single scan insert: <50ms
     - History list (10k scans): <100ms
@@ -171,7 +172,7 @@ def test_single_scan_insert_performance(perf_db, tmp_path):
     """
     Test single scan insert performance (target: <200ms).
 
-    Performance requirement from CLAUDE.md:
+    Performance requirement (tests/performance/__init__.py):
     - Single scan insert: <50ms ideal, <200ms acceptable
 
     Note: Windows and slower platforms may see 80-150ms due to:
@@ -249,7 +250,7 @@ def test_history_list_performance_10k_scans(perf_db, tmp_path):
     """
     Test list_scans() performance with 10k scans (target: <500ms).
 
-    Performance requirement from CLAUDE.md:
+    Performance requirement (tests/performance/__init__.py):
     - History list (10k scans): <100ms ideal, <500ms acceptable
 
     Note: This test inserts 10k scans first, which is the bulk of the time.
@@ -292,7 +293,7 @@ def test_trend_analysis_query_performance(perf_db, tmp_path):
     """
     Test trend analysis query performance (target: <200ms).
 
-    Performance requirement from CLAUDE.md:
+    Performance requirement (tests/performance/__init__.py):
     - Trend analysis (30 days): <200ms
     """
     # Insert 50 scans with time series data

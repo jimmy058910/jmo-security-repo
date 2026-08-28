@@ -8,7 +8,11 @@ This module contains performance benchmarks for critical paths:
 - HTML dashboard generation (React build)
 - Memory usage (large scans)
 
-All benchmarks establish baseline performance targets from CLAUDE.md:
+These are the targets this repository set for itself. **They do not come
+from CLAUDE.md**, which has never contained a performance section --
+`git log -S` finds no commit that ever added one. Thirteen citations across
+three files said otherwise (#742), which made every number look externally
+sourced when this docstring is the source:
 - SQLite scan insert: <50ms
 - History list (10k scans): <100ms
 - Trend analysis (30 days): <200ms
