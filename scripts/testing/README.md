@@ -12,7 +12,7 @@ Interactive testing script that walks through all email collection touchpoints.
 
 ```bash
 ./scripts/testing/test_email_system.sh
-```markdown
+```
 
 **Tests:**
 
@@ -29,7 +29,7 @@ Starts a local HTTP server to test the subscribe page without CORS issues.
 
 ```bash
 ./scripts/testing/serve_subscribe_page.sh
-```markdown
+```
 
 Opens `<http://localhost:8000/subscribe.html`> in your browser.
 
@@ -44,7 +44,7 @@ Quick test script for Resend API email sending.
 ```bash
 export RESEND_API_KEY="your_key_here"
 ./scripts/testing/test_resend_now.sh
-```markdown
+```
 
 Tests direct email sending via Resend API (bypasses Vercel).
 
@@ -52,8 +52,7 @@ Tests direct email sending via Resend API (bypasses Vercel).
 
 For complete testing instructions, see:
 
-- [TESTING_COMMANDS.md](../../TESTING_COMMANDS.md) - WSL-friendly commands
-- [DEPLOYMENT_SUMMARY.md](../../DEPLOYMENT_SUMMARY.md) - Full deployment status
+- [TEST.md](../../TEST.md) - the complete testing guide
 
 ## Requirements
 

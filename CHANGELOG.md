@@ -1293,7 +1293,7 @@ python3 scripts/dev/update_versions.py --report
 # Check outdated + create GitHub issues
 
 python3 scripts/dev/update_versions.py --check-outdated --create-issues
-```text
+```
 **Features:**
 
 - GitHub API integration for latest releases
@@ -1475,7 +1475,7 @@ jmo scan \
 # CI mode with multi-target support
 
 jmo ci --image nginx:latest --url <https://api.example.com> --fail-on HIGH
-```text
+```
 **Results Directory Structure (Updated):**
 
 ```text
@@ -1494,7 +1494,7 @@ results/
     ├── COMPLIANCE_SUMMARY.md
     ├── PCI_DSS_COMPLIANCE.md
     └── attack-navigator.json
-```text
+```
 **Implementation Details:**
 
 **CLI Arguments Added (25 new arguments):**
@@ -1530,7 +1530,7 @@ results/
 --k8s-context CONTEXT            # Kubernetes context
 --k8s-namespace NAMESPACE        # Specific namespace
 --k8s-all-namespaces             # Scan all namespaces
-```text
+```
 **Target Collection Functions:**
 
 - `_iter_images()` - Collect container images from `--image` and `--images-file`
@@ -1700,7 +1700,7 @@ No breaking changes. All new features are additive:
     ]
   }
 }
-```text
+```
 **Compliance Mapping Module** ([scripts/core/compliance_mapper.py](scripts/core/compliance_mapper.py)):
 
 - **1000+ rule mappings** across all tools and frameworks
@@ -1837,7 +1837,7 @@ coverage: Verified secrets, SAST, SCA, containers, IaC, Dockerfiles, DAST
 tools: [trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, falco, afl++]
 use_case: Security audits, compliance scans, pre-release validation
 coverage: Static, dynamic, runtime, fuzzing, dual secrets scanners, dual Python SAST
-```text
+```
 **New Adapters:**
 
 - **ZAP adapter** ([scripts/core/adapters/zap_adapter.py](scripts/core/adapters/zap_adapter.py)):
@@ -2032,7 +2032,7 @@ Total findings: 57 | 🔴 36 HIGH | 🟡 20 MEDIUM | ⚪ 1 LOW
 
 - 🔑 Secrets: 32 findings (56% of total)
 - 🔧 Code Quality: 25 findings (44% of total)
-```text
+```
 **Files Changed:**
 
 - `scripts/core/reporters/basic_reporter.py` - Complete markdown summary redesign (+150 lines)
@@ -2358,7 +2358,7 @@ jmotools wizard --docker
 jmotools wizard --emit-make-target Makefile.security
 jmotools wizard --emit-script scan.sh
 jmotools wizard --emit-gha .github/workflows/security.yml
-```text
+```
 **Testing:**
 
 - 18 unit tests covering all wizard functionality
@@ -2410,7 +2410,7 @@ container:
 steps:
 
   - run: jmo ci --repo . --fail-on HIGH --profile
-```text
+```
 **Testing:**
 
 - Integration tests: `tests/integration/test_docker_images.py`

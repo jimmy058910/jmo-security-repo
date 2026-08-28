@@ -375,7 +375,7 @@ Claude: [Queries with filters: severity=["HIGH", "CRITICAL"], path="auth/"]
 
 **Get detailed finding context:**
 
-```text
+````text
 You: Show me the full context for finding fingerprint-abc123
 
 Claude: [Uses finding:// resource to get source code + remediation]
@@ -404,7 +404,7 @@ References:
 - <https://owasp.org/www-community/attacks/xss/>
 - <https://cwe.mitre.org/data/definitions/79.html>
 
-```text
+````
 
 ### Fix Suggestion Workflow
 
