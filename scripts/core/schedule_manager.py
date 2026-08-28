@@ -16,6 +16,57 @@ logger = logging.getLogger(__name__)
 
 _T = TypeVar("_T")
 
+# `jmo scan` puts `--repo`, `--repos-dir` and `--targets` in one mutually
+# exclusive group, so a schedule carrying more than one of them renders a
+# command that exits 2 in every consumer -- at scan time, in CI, long after the
+# schedule was accepted (#1020).
+#
+# The rule is stated here rather than derived at run time because
+# `scripts/core/` must not import `scripts/cli/`; `check_import_direction.py`
+# enforces that, and it is right to. Restating a rule is a mirror, and mirrors
+# drift, so `tests/unit/test_schedule_mutually_exclusive_targets.py` reads the
+# real parser and fails if this set stops matching the group it describes --
+# including if a fourth option joins it.
+#
+# Only the first two are reachable from a schedule today: no consumer emits
+# `--targets`. It is listed because the authority lists it, not because a
+# generator uses it.
+MUTUALLY_EXCLUSIVE_REPOSITORY_KEYS: tuple[str, ...] = ("repo", "repos_dir", "targets")
+
+# The `targets["repositories"]` key each scan flag corresponds to. Keeping the
+# mapping explicit is what lets the test compare two vocabularies without
+# guessing at a transformation between them.
+REPOSITORY_KEY_TO_SCAN_FLAG: dict[str, str] = {
+    "repo": "--repo",
+    "repos_dir": "--repos-dir",
+    "targets": "--targets",
+}
+
+
+class ConflictingTargetsError(ValueError):
+    """A schedule names more than one mutually exclusive repository target."""
+
+
+def _reject_conflicting_repository_targets(repositories: dict[str, Any]) -> None:
+    """Raise if `repositories` names more than one exclusive target.
+
+    Checks the whole set rather than the one pair that was filed, so a future
+    writer that reaches `targets` is covered without another fix.
+    """
+    named = [
+        key
+        for key in MUTUALLY_EXCLUSIVE_REPOSITORY_KEYS
+        if repositories.get(key) not in (None, "", [], {})
+    ]
+    if len(named) > 1:
+        flags = ", ".join(REPOSITORY_KEY_TO_SCAN_FLAG[key] for key in named)
+        raise ConflictingTargetsError(
+            f"schedule names {len(named)} mutually exclusive repository targets "
+            f"({', '.join(named)}). `jmo scan` accepts only one of {flags}, so "
+            f"this schedule would render a command that exits 2 in every "
+            f"consumer. Pass exactly one."
+        )
+
 
 @dataclass
 class ScheduleMetadata:
@@ -162,6 +213,11 @@ class ScanSchedule:
                 repositories["repo"] = repo
             if repos_dir:
                 repositories["repos_dir"] = repos_dir
+            # Reject at the point of entry, where the caller can still fix it.
+            # Accepting both here is a write-now/fail-later defect: the schedule
+            # stores cleanly, and every consumer then renders a `jmo scan`
+            # command that exits 2 the first time the cron fires.
+            _reject_conflicting_repository_targets(repositories)
             targets["repositories"] = repositories
 
         # `--image` and `--url` are repeatable on the CLI and the consumers

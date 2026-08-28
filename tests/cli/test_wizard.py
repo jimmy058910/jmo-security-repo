@@ -164,7 +164,7 @@ def test_generate_command_docker_mode():
 
     assert "docker run" in cmd
     assert JMO_DOCKER_IMAGE_FULL in cmd
-    assert "--profile deep" in cmd
+    assert "--profile-name deep" in cmd
     assert "/scan" in cmd
     assert "/results" in cmd
 
@@ -267,7 +267,7 @@ def test_generate_github_actions_docker():
     assert "container:" in workflow
     assert JMO_DOCKER_IMAGE_FULL in workflow
     assert "jmo scan" in workflow
-    assert "--profile deep" in workflow
+    assert "--profile-name deep" in workflow
     assert "actions/checkout@v4" in workflow
     assert "upload-artifact@v4" in workflow
     assert "upload-sarif@v3" in workflow
@@ -385,7 +385,7 @@ def test_run_wizard_emit_gha_docker():
     assert "container:" in workflow
     assert f"image: {JMO_DOCKER_IMAGE_FULL}" in workflow
     assert "jmo scan" in workflow  # Docker uses `jmo` directly
-    assert "--profile balanced" in workflow
+    assert "--profile-name balanced" in workflow
     assert "--fail-on HIGH" in workflow
 
     # Should NOT have Python setup
