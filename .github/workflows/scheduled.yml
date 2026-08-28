@@ -471,10 +471,10 @@ jobs:
           # Avoids upstream install.sh GitHub-API "latest" lookups that have
           # flaked in CI (see PR #350 + release.rules.md).
           TRIVY_VERSION: "0.70.0"
-          GRYPE_VERSION: "0.115.0"
+          GRYPE_VERSION: "0.118.0"
           SYFT_VERSION: "1.46.0"
           TRUFFLEHOG_VERSION: "3.95.9"
-          HADOLINT_VERSION: "2.14.0"
+          HADOLINT_VERSION: "2.15.1"
         run: |
           # Install tools needed for smoke tests
           # Core SAST/SCA tools
@@ -1141,7 +1141,7 @@ jobs:
           # PR gates disagree.
           TRIVY_VERSION: "0.70.0"
           TRUFFLEHOG_VERSION: "3.95.9"
-          HADOLINT_VERSION: "2.14.0"
+          HADOLINT_VERSION: "2.15.1"
         run: |
           # Install tools needed for contract validation
           # Trivy - vulnerability scanner

@@ -19,7 +19,7 @@ python_tools:
     update_check: pip index versions checkov
     critical: true
   ruff:
-    version: 0.15.20
+    version: 0.16.5
     pypi_package: ruff
     description: Python linter and formatter
     update_check: pip index versions ruff
@@ -115,7 +115,7 @@ binary_tools:
     apt_package: null
     notes: 'CRITICAL: Outdated versions miss CVEs (see ROADMAP.md #14)'
   hadolint:
-    version: 2.14.0
+    version: 2.15.1
     github_repo: hadolint/hadolint
     description: Dockerfile linter
     release_pattern: hadolint-Linux-{arch}
@@ -180,7 +180,7 @@ binary_tools:
     critical: false
     notes: v1.0.0 - Go-specific SAST
   grype:
-    version: 0.115.0
+    version: 0.118.0
     github_repo: anchore/grype
     description: Vulnerability scanner for containers/filesystems
     release_pattern: grype_{version}_linux_{arch}.tar.gz
@@ -365,6 +365,30 @@ update_policies:
   automated_check_schedule: Weekly (Sunday 00:00 UTC)
   manual_review_schedule: First Monday of each month
 version_history:
+- date: '2026-08-28'
+  action: Updated grype
+  tools_updated:
+  - tool: grype
+    old_version: 0.115.0
+    new_version: 0.118.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-08-28'
+  action: Updated hadolint
+  tools_updated:
+  - tool: hadolint
+    old_version: 2.14.0
+    new_version: 2.15.1
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-08-28'
+  action: Updated ruff
+  tools_updated:
+  - tool: ruff
+    old_version: 0.15.20
+    new_version: 0.16.5
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
 - date: '2026-08-02'
   action: Automated version update
   tools_updated: []
