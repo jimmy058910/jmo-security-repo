@@ -492,6 +492,26 @@ regenerate-samples: samples-scan samples-report samples-verify
 # These targets are for local development and pre-release testing.
 # ============================================================================
 
+# `dist-clean` is not housekeeping -- it is a CORRECTNESS prerequisite, and
+# `dist` depends on it for that reason (#1031).
+#
+# setuptools keeps two caches `uv build` never invalidates, and they drift in
+# opposite directions:
+#
+#   build/lib/              never pruned, so a wheel ships modules DELETED from
+#                           the tree. Measured: a file planted only in
+#                           build/lib/ and tracked nowhere appeared in the
+#                           wheel -- 198 entries stale against 197 clean.
+#   *.egg-info/SOURCES.txt  re-read under include-package-data, so a wheel
+#                           ships files whose package-data DECLARATION was
+#                           deleted. That is the dangerous half: it makes a
+#                           packaging gate vacuous, and Phase 7's dashboard
+#                           wheel check passed against a pyproject.toml that no
+#                           longer declared the artifact it was checking for.
+#
+# Both directories are gitignored, so nothing surfaces the drift. Releases build
+# on a fresh checkout and are safe; LOCAL verification is what this protects,
+# which is precisely the activity that decides whether a release goes out.
 dist-clean:
 	@echo "[dist-clean] Removing build artifacts..."
 	@rm -rf build/ dist/ *.egg-info/
@@ -499,10 +519,14 @@ dist-clean:
 
 dist: dist-clean
 	@echo "[dist] Building source distribution and wheel..."
-	@$(PY) -m pip install --quiet build 2>/dev/null || true
-	$(PY) -m build
+	@# `uv build`, not `$(PY) -m build`: this project's venv is created by uv
+	@# and ships NO pip, so the old `pip install --quiet build || true` failed
+	@# silently and `python -m build` then died with `No module named build`.
+	@# `make dist` could not work in the environment CONTRIBUTING.md tells a
+	@# contributor to create.
+	uv build
 	@echo ""
-	@echo "[dist] ✅ Built packages:"
+	@echo "[dist] Built packages:"
 	@ls -lh dist/
 
 dist-verify: dist
