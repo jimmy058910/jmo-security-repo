@@ -82,7 +82,7 @@ Used in dashboards, CLI output, dedup summaries, trend reports, compliance dashb
 | `severity-low` | `#7cb342` | CVSS 0.1–3.9, hardening recs |
 | `severity-info` | `#757575` | informational, best-practice nudges |
 
-These match the existing dashboard config (`scripts/dashboard/tailwind.config.js`) — kept stable on purpose.
+These match the existing dashboard config (`scripts/dashboard/src/index.css`'s `@theme` block) — kept stable on purpose.
 
 ### Brand primary
 
@@ -220,6 +220,6 @@ Cosmetic clarifications (typo fixes, expanded examples) can ship as a normal com
 
 ## Cross-references
 
-- Existing dashboard tokens: `scripts/dashboard/tailwind.config.js`
+- Existing dashboard tokens: `scripts/dashboard/src/index.css` (`@theme`)
 - Existing voice doc: AGENTS.md (brand voice section in CEO instructions)
 - Consumer issues: [JMOAA-51](/JMOAA/issues/JMOAA-51) signup form, [JMOAA-53](/JMOAA/issues/JMOAA-53) newsletter, [JMOAA-45](/JMOAA/issues/JMOAA-45) outbound system

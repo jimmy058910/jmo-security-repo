@@ -26,7 +26,7 @@ const FilterPanel = forwardRef<HTMLInputElement, FilterPanelProps>(
     ref
   ) {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 space-y-4 transition-colors">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 space-y-4 transition-colors">
       {/* Severity checkboxes */}
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -39,7 +39,7 @@ const FilterPanel = forwardRef<HTMLInputElement, FilterPanelProps>(
                 type="checkbox"
                 checked={severities.has(sev)}
                 onChange={() => onSeverityChange(sev)}
-                className="rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary dark:bg-gray-700"
+                className="rounded-sm border-gray-300 dark:border-gray-600 text-primary focus:ring-primary dark:bg-gray-700"
               />
               <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">{sev}</span>
             </label>
@@ -55,7 +55,7 @@ const FilterPanel = forwardRef<HTMLInputElement, FilterPanelProps>(
         <select
           value={selectedTool}
           onChange={(e) => onToolChange(e.target.value)}
-          className="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-primary focus:ring-primary sm:text-sm dark:bg-gray-700 dark:text-white"
+          className="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-xs focus:border-primary focus:ring-primary sm:text-sm dark:bg-gray-700 dark:text-white"
         >
           <option value="">All Tools</option>
           {tools.map((tool) => (
@@ -77,7 +77,7 @@ const FilterPanel = forwardRef<HTMLInputElement, FilterPanelProps>(
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder="Search rule, message, or path..."
-          className="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-primary focus:ring-primary sm:text-sm dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
+          className="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-xs focus:border-primary focus:ring-primary sm:text-sm dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
         />
       </div>
     </div>

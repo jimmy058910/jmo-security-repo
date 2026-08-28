@@ -41,7 +41,7 @@ export default function SeverityChart({ findings }: SeverityChartProps) {
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 transition-colors">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 transition-colors">
       <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
         Severity Distribution
       </h3>

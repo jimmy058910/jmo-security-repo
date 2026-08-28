@@ -162,7 +162,7 @@ export default function App() {
                   }
                   enableDiffMode()
                 }}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary"
                 aria-label="Enable diff mode"
               >
                 <GitCompare className="w-4 h-4 mr-2" />
@@ -173,7 +173,7 @@ export default function App() {
             {isDiffMode && (
               <button
                 onClick={disableDiffMode}
-                className="inline-flex items-center px-4 py-2 border border-primary rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                className="inline-flex items-center px-4 py-2 border border-primary rounded-md shadow-xs text-sm font-medium text-white bg-primary hover:bg-primary-dark focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary"
                 aria-label="Exit diff mode"
               >
                 Exit Diff Mode
@@ -269,7 +269,7 @@ export default function App() {
 
             {/* Filters Row: Severity Chips + Tool Dropdown + Search + Count */}
             {!isDiffMode && (
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 transition-colors">
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 transition-colors">
                 <div className="flex flex-wrap gap-4 items-center">
                   {/* Severity Filter Chips */}
                   <div className="flex flex-wrap gap-2 items-center">
@@ -363,7 +363,7 @@ export default function App() {
             {isDiffMode && diff ? (
               <DiffView diff={diff} />
             ) : (
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow transition-colors">
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm transition-colors">
                 <FindingsTable findings={filteredFindings} />
               </div>
             )}
@@ -374,7 +374,7 @@ export default function App() {
         {viewMode === 'trends' && (
           <Suspense
             fallback={
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 transition-colors">
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 transition-colors">
                 <div className="flex items-center justify-center h-96">
                   <div className="text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
@@ -394,7 +394,7 @@ export default function App() {
         {viewMode === 'compliance' && (
           <Suspense
             fallback={
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 transition-colors">
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 transition-colors">
                 <div className="flex items-center justify-center h-96">
                   <div className="text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
@@ -414,7 +414,7 @@ export default function App() {
         {viewMode === 'analytics' && (
           <div className="space-y-6">
             {/* Severity Distribution Chart - Full Width */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 transition-colors">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 transition-colors">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
                 📊 Severity Distribution
               </h2>
@@ -424,7 +424,7 @@ export default function App() {
             {/* Summary Statistics Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Total Findings */}
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 transition-colors">
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 transition-colors">
                 <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
                   Total Findings
                 </div>
@@ -437,7 +437,7 @@ export default function App() {
               </div>
 
               {/* Critical + High */}
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 transition-colors">
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 transition-colors">
                 <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
                   Critical + High
                 </div>
@@ -450,7 +450,7 @@ export default function App() {
               </div>
 
               {/* Tools Used */}
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 transition-colors">
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 transition-colors">
                 <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
                   Tools Used
                 </div>
@@ -463,7 +463,7 @@ export default function App() {
               </div>
 
               {/* Files Affected */}
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 transition-colors">
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 transition-colors">
                 <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
                   Files Affected
                 </div>
@@ -477,7 +477,7 @@ export default function App() {
             </div>
 
             {/* Top Tools by Findings */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 transition-colors">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 transition-colors">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
                 🔍 Top Tools by Findings
               </h2>

@@ -119,7 +119,7 @@ scripts/
 │   ├── package.json
 │   ├── vite.config.ts            # Vite + vite-plugin-singlefile
 │   ├── tsconfig.json
-│   └── tailwind.config.js
+│   └── src/index.css              # tailwind 4 config lives in CSS (#390)
 └── core/
     └── reporters/
         └── html_reporter.py           # HTML dashboard generator (legacy + React)

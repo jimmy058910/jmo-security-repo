@@ -73,7 +73,7 @@ export default function DiffView({ diff }: DiffViewProps) {
     return (
       <div
         key={finding.id}
-        className={`p-4 mb-2 rounded ${categoryStyles[category]}`}
+        className={`p-4 mb-2 rounded-sm ${categoryStyles[category]}`}
       >
         <div className="flex items-start justify-between">
           <div className="flex-1">
@@ -141,7 +141,7 @@ export default function DiffView({ diff }: DiffViewProps) {
       <div className="mb-6">
         <button
           onClick={() => toggleSection(category)}
-          className="flex items-center gap-2 w-full text-left mb-3 hover:bg-gray-100 dark:hover:bg-gray-700 p-2 rounded transition-colors"
+          className="flex items-center gap-2 w-full text-left mb-3 hover:bg-gray-100 dark:hover:bg-gray-700 p-2 rounded-sm transition-colors"
         >
           {isExpanded ? (
             <ChevronDown className="w-5 h-5 text-gray-600 dark:text-gray-400" />
@@ -181,7 +181,7 @@ export default function DiffView({ diff }: DiffViewProps) {
   return (
     <div className="space-y-6">
       {/* Diff Summary Header */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 transition-colors">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 transition-colors">
         <div className="flex items-center gap-3 mb-4">
           <GitCompare className="w-6 h-6 text-primary" />
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -229,7 +229,7 @@ export default function DiffView({ diff }: DiffViewProps) {
         <div className="flex gap-2">
           <button
             onClick={() => setCategoryFilter('all')}
-            className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+            className={`px-3 py-1 rounded-sm text-sm font-medium transition-colors ${
               categoryFilter === 'all'
                 ? 'bg-primary text-white'
                 : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
@@ -239,7 +239,7 @@ export default function DiffView({ diff }: DiffViewProps) {
           </button>
           <button
             onClick={() => setCategoryFilter('new')}
-            className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+            className={`px-3 py-1 rounded-sm text-sm font-medium transition-colors ${
               categoryFilter === 'new'
                 ? 'bg-red-600 text-white'
                 : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50'
@@ -249,7 +249,7 @@ export default function DiffView({ diff }: DiffViewProps) {
           </button>
           <button
             onClick={() => setCategoryFilter('fixed')}
-            className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+            className={`px-3 py-1 rounded-sm text-sm font-medium transition-colors ${
               categoryFilter === 'fixed'
                 ? 'bg-green-600 text-white'
                 : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50'
@@ -259,7 +259,7 @@ export default function DiffView({ diff }: DiffViewProps) {
           </button>
           <button
             onClick={() => setCategoryFilter('modified')}
-            className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+            className={`px-3 py-1 rounded-sm text-sm font-medium transition-colors ${
               categoryFilter === 'modified'
                 ? 'bg-yellow-600 text-white'
                 : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 hover:bg-yellow-200 dark:hover:bg-yellow-900/50'
@@ -271,7 +271,7 @@ export default function DiffView({ diff }: DiffViewProps) {
       </div>
 
       {/* Diff Sections */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 transition-colors">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 transition-colors">
         {renderSection(
           'New Findings (Regressions)',
           summary.new,

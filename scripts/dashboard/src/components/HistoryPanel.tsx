@@ -45,7 +45,7 @@ export default function HistoryPanel({
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 space-y-3 transition-colors">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 space-y-3 transition-colors">
       <div className="flex items-center gap-2">
         <History className="w-5 h-5 text-primary" />
         <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
@@ -61,7 +61,7 @@ export default function HistoryPanel({
         <select
           value={selectedScanId || ''}
           onChange={(e) => onScanSelect(e.target.value || null)}
-          className="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-primary focus:ring-primary text-sm dark:bg-gray-700 dark:text-white"
+          className="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-xs focus:border-primary focus:ring-primary text-sm dark:bg-gray-700 dark:text-white"
         >
           <option value="">Current Scan</option>
           {scans.map((scan) => (
@@ -82,7 +82,7 @@ export default function HistoryPanel({
           <select
             value={baselineScanId || ''}
             onChange={(e) => onBaselineScanSelect(e.target.value || null)}
-            className="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-primary focus:ring-primary text-sm dark:bg-gray-700 dark:text-white"
+            className="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-xs focus:border-primary focus:ring-primary text-sm dark:bg-gray-700 dark:text-white"
           >
             <option value="">Select baseline...</option>
             {scans.map((scan) => (

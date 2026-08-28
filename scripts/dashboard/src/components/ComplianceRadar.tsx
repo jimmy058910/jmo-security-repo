@@ -174,7 +174,7 @@ export default function ComplianceRadar({ findings }: ComplianceRadarProps) {
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 transition-colors">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 transition-colors">
       <div className="flex items-center gap-3 mb-4">
         <Shield className="w-6 h-6 text-primary" />
         <h2 className="text-xl font-bold text-gray-900 dark:text-white">
@@ -241,7 +241,7 @@ export default function ComplianceRadar({ findings }: ComplianceRadarProps) {
           {complianceData.map(item => (
             <div
               key={item.framework}
-              className="flex justify-between items-center p-3 rounded bg-gray-50 dark:bg-gray-700"
+              className="flex justify-between items-center p-3 rounded-sm bg-gray-50 dark:bg-gray-700"
             >
               <div className="flex flex-col">
                 <a
