@@ -260,7 +260,7 @@ def generate_github_actions(config: Any, profiles: dict[str, Any]) -> str:
     if config.use_docker:
         # Docker-based workflow
         scan_cmd_lines = [
-            f"jmo scan --results results --profile {config.profile}",
+            f"jmo scan --results-dir results --profile-name {config.profile}",
             f"--threads {threads}",
             f"--timeout {timeout}",
         ]

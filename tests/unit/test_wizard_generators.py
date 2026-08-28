@@ -187,7 +187,7 @@ def test_generate_github_actions_docker_mode(mock_config, mock_profiles):
     assert "runs-on: ubuntu-latest" in result
     assert "container:" in result
     assert f"image: {JMO_DOCKER_IMAGE_FULL}" in result
-    assert "jmo scan --results results --profile balanced" in result
+    assert "jmo scan --results-dir results --profile-name balanced" in result
     assert "--threads 4" in result
     assert "--timeout 600" in result
     assert "upload-artifact@v4" in result

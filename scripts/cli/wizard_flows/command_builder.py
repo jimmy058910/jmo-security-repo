@@ -158,8 +158,8 @@ def build_command_parts(config: WizardConfig) -> list[str]:
         ]
         cmd_parts.extend(target_flags)
 
-        cmd_parts.extend(["--results", "/results"])
-        cmd_parts.extend(["--profile", config.profile])
+        cmd_parts.extend(["--results-dir", "/results"])
+        cmd_parts.extend(["--profile-name", config.profile])
 
     else:
         # Native command

@@ -371,7 +371,7 @@ def test_deployment_build_command_with_images():
 
     assert "jmo" in cmd
     assert "ci" in cmd
-    assert "--profile" in cmd
+    assert "--profile-name" in cmd
     assert "deep" in cmd
     assert "--fail-on" in cmd
     assert "CRITICAL" in cmd
@@ -479,7 +479,7 @@ def test_dependency_build_command_basic(tmp_path, monkeypatch):
 
     assert "jmo" in cmd
     assert "scan" in cmd
-    assert "--profile" in cmd
+    assert "--profile-name" in cmd
     assert "balanced" in cmd
     assert "--tools" in cmd
     assert "syft" in cmd

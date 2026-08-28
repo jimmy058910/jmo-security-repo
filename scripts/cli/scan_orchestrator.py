@@ -115,7 +115,7 @@ def _warn_msys_path_mangling(path_str: str) -> None:
 ║
 ║ Example:
 ║    MSYS_NO_PATHCONV=1 docker run --rm -v "C:\\Projects\\myrepo:/scan" \\
-║      jmo-security:fast scan --repo /scan --profile fast
+║      jmo-security:fast scan --repo /scan --profile-name fast
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
     sys.stderr.write(warning)

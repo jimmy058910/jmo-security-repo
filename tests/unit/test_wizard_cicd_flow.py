@@ -397,7 +397,7 @@ def test_build_command_basic():
 
     assert "jmo" in cmd
     assert "ci" in cmd
-    assert "--profile" in cmd
+    assert "--profile-name" in cmd
     assert "fast" in cmd
     assert "--fail-on" in cmd
     assert "HIGH" in cmd

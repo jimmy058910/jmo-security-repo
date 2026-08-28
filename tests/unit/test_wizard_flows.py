@@ -206,7 +206,7 @@ class TestRepoFlow:
 
         assert cmd[0] == "jmo"
         assert cmd[1] == "scan"
-        assert "--profile" in cmd
+        assert "--profile-name" in cmd
         assert "fast" in cmd
         assert "--repo" in cmd
 
@@ -647,7 +647,7 @@ def test_entire_stack_flow_build_command_empty_targets(mock_base_init):
 
     cmd = flow.build_command(targets, options)
 
-    assert cmd == ["jmo", "scan", "--profile", "deep"]
+    assert cmd == ["jmo", "scan", "--profile-name", "deep"]
 
 
 @patch("scripts.cli.wizard_flows.stack_flow.BaseWizardFlow.__init__", return_value=None)

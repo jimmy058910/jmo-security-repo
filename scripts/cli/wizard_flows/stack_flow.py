@@ -76,7 +76,7 @@ class EntireStackFlow(BaseWizardFlow):
         Returns:
             Command list
         """
-        cmd = ["jmo", "scan", "--profile", options["profile"]]
+        cmd = ["jmo", "scan", "--profile-name", options["profile"]]
 
         # Add repositories
         if targets["repos"]:

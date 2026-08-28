@@ -139,7 +139,7 @@ class DeploymentFlow(BaseWizardFlow):
         cmd = [
             "jmo",
             "ci",
-            "--profile",
+            "--profile-name",
             options["profile"],
             "--fail-on",
             options["fail_on"],
