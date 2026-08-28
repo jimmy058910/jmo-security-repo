@@ -370,6 +370,76 @@ def fetch_issues(state: str = "all", limit: int = 1000) -> dict[int, Issue]:
     return out
 
 
+@dataclass
+class MergedPR:
+    """A merged PR and the two disagreeing views of what it closed.
+
+    `named` is what the body claims; `linked` is what GitHub actually recorded
+    in `closingIssuesReferences`. A gap between them is a keyword that will
+    never fire - most often because the PR's base was not the default branch,
+    which is the only condition under which GitHub records nothing at all.
+    """
+
+    number: int
+    base: str
+    merged_at: str
+    named: set[int] = field(default_factory=set)
+    linked: set[int] = field(default_factory=set)
+
+
+def fetch_merged_prs(limit: int = 1000) -> list[MergedPR]:
+    raw = _gh(
+        "pr",
+        "list",
+        "--state",
+        "merged",
+        "--limit",
+        str(limit),
+        "--json",
+        "number,baseRefName,body,mergedAt,closingIssuesReferences",
+    )
+    return [
+        MergedPR(
+            number=row["number"],
+            base=row["baseRefName"],
+            merged_at=(row.get("mergedAt") or "")[:10],
+            named=closing_keywords(row.get("body") or ""),
+            linked={ref["number"] for ref in row["closingIssuesReferences"]},
+        )
+        for row in json.loads(raw)
+    ]
+
+
+def inert_closers(
+    prs: list[MergedPR], issues: dict[int, Issue]
+) -> list[tuple[MergedPR, list[int]]]:
+    """Merged PRs whose body named an OPEN issue GitHub never linked.
+
+    This is the half of the fixed-but-open population that the phase rosters
+    cannot see. `cmd_closers` derives "fixed" from "the issue's phase landed",
+    so anything fixed before the phase program existed - the whole 22-chunk
+    campaign - is outside it. Measured: `a45e5b4` (PR #793, base `dev`) closed
+    #787 through #791 in its body on 2026-08-09 and all five sat open for
+    seventeen days while the gate printed `MISSING: 0`.
+
+    The discriminator is `named - linked`, NOT "the base was not `main`". It
+    measures the state GitHub recorded instead of inferring it from a branch
+    name, so it also catches a PR that linked three of the five issues it
+    named. Restricting to numbers present in `issues` is what makes it precise:
+    six merged PRs in this repo say `Closes #N` about another PULL REQUEST,
+    GitHub correctly records no closing reference, and `gh issue list` does not
+    return PRs - so the map lookup drops all six without a special case.
+    """
+    found: list[tuple[MergedPR, list[int]]] = []
+    for pr in prs:
+        gap = sorted(
+            n for n in pr.named - pr.linked if n in issues and issues[n].state == "OPEN"
+        )
+        if gap:
+            found.append((pr, gap))
+    return sorted(found, key=lambda row: row[0].number)
+
+
 def _phase_labels(issue: Issue) -> set[str]:
     return {name for name in issue.labels if name.startswith(LABEL_PREFIX)}
 
@@ -393,7 +463,29 @@ def _git(*args: str) -> str:
 # `Phase 2 — Delete before refactor (4 issues) (#997)`, as squashed onto `dev`.
 # Git is the authority on what landed; the plan's `**DONE**` column is prose
 # a session writes about itself.
-_PHASE_SUBJECT = re.compile(r"^Phase (\d+)\s*[—-]", re.MULTILINE)
+#
+# The optional conventional-commit prefix is load-bearing, not tolerance for
+# sloppiness. Phase 6 squashed as `fix: Phase 6 - subsystems ...` and Phase 7 as
+# `fix(dashboard): Phase 7 - ...`, so a bare `^Phase` anchor reported
+# `[0, 1, 2, 3, 4, 5, 8]` and dropped both phases from the fixed-but-open
+# population. It gave the right answer only because every Phase 6 and 7 issue
+# happened to be closed by then; one of them without a closing keyword would
+# have synced to `main` still open, behind `MISSING: 0`.
+#
+# The prefix is ANCHORED, never skipped over. Dropping the `^` makes three real
+# subjects report a phase that never landed - measured across all 1165 subjects
+# in this repository, these are the only three, and all three are on `dev`:
+#
+#   feat(dedup): complete cross-tool deduplication (Phase 0-9)       -> phase 0
+#   feat(dedup): implement cross-tool deduplication (Phase 0-7)      -> phase 0
+#   feat(wizard): implement Feature #4 Phase 1 - Enhanced workflows  -> phase 1
+#
+# Phases 0 and 1 have both landed, so the resulting SET is unchanged and the
+# defect is invisible in the aggregate. That is why the guard asserts each
+# subject alone.
+_PHASE_SUBJECT = re.compile(
+    r"^(?:[a-z]+(?:\([^()]*\))?!?:[ \t]*)?Phase (\d+)\s*[—-]", re.MULTILINE
+)
 
 # `Closes #960`, `fixes #12`, `Resolved: #3`. Case-insensitive: a
 # `grep 'closes #'` misses every capitalised one, which is how #538 was missed.
@@ -409,6 +501,18 @@ _CLOSING_KEYWORD = re.compile(
 )
 
 
+def phases_in_subjects(text: str) -> set[int]:
+    """Phase numbers named by a squash subject in `text`, one subject per line.
+
+    Split out from `landed_phases` so the recognition rule is testable without
+    a repository: the same separation `closing_keywords` already has from
+    `keywords_in_range`, and for the same reason. The 22 tests this module had
+    before covered the plan parser and the label projection, and not one of
+    them could see that two landed phases were going unrecognised.
+    """
+    return {int(m) for m in _PHASE_SUBJECT.findall(text)}
+
+
 def landed_phases(ref: str = "origin/dev") -> set[int]:
     """Phase numbers whose squash commit is reachable from `ref`.
 
@@ -416,8 +520,7 @@ def landed_phases(ref: str = "origin/dev") -> set[int]:
     satisfies every assertion built on it, which is the shape that let the
     unclaimed-issue bar decay in the first place.
     """
-    subjects = _git("log", ref, "--format=%s")
-    found = {int(m) for m in _PHASE_SUBJECT.findall(subjects)}
+    found = phases_in_subjects(_git("log", ref, "--format=%s"))
     if not found:
         raise RuntimeError(
             f"no `Phase N — ...` commit subjects found on {ref}. Either the "
@@ -619,19 +722,42 @@ def cmd_closers(plan: PlanIndex, rev_range: str, ref: str, check: bool) -> int:
     print(f"  covered by a keyword: {len(covered)}  {_fmt(covered)}")
     print(f"  MISSING             : {len(missing)}  {_fmt(missing)}")
 
-    if not missing:
-        print("\nevery issue fixed on dev carries a closing keyword in range")
-        return 0
-    if not check:
+    # The second population, which the phase rosters structurally cannot reach.
+    # Run unconditionally rather than behind a flag: the whole finding is that
+    # the bookkeeping looked done and was not, and a sweep nobody remembers to
+    # ask for is the same failure with an extra step.
+    inert = inert_closers(fetch_merged_prs(), issues)
+    print(f"inert keywords      : {len(inert)} merged PR(s) named an open issue")
+    for pr, gap in inert:
+        print(f"  PR #{pr.number} (base {pr.base}, {pr.merged_at}) -> {_fmt(gap)}")
+
+    if not missing and not inert:
         print(
-            "\nPut these in an individual COMMIT message, one `Closes #N` each. "
-            "A PR body targeting `dev` is inert - GitHub records no closing "
-            "reference for a PR whose base is not the default branch."
+            "\nevery issue fixed on dev carries a closing keyword in range, and "
+            "no merged PR named an open issue GitHub did not link"
         )
         return 0
+
+    if missing:
+        print(
+            f"\n{len(missing)} issue(s) are fixed on {ref} with no closing "
+            "keyword in its history, so the sync will not close them. Put these "
+            "in an individual COMMIT message, one `Closes #N` each. A PR body "
+            "targeting `dev` is inert - GitHub records no closing reference for "
+            "a PR whose base is not the default branch."
+        )
+    if inert:
+        print(
+            f"\n{len(inert)} merged PR(s) name an OPEN issue with a closing "
+            "keyword GitHub never recorded, so those issues are fixed and "
+            "nothing will close them. Carry the keywords on a bookkeeping "
+            "commit, the way #1000's eleven were."
+        )
+    if not check:
+        return 0
     print(
-        f"\n::error::{len(missing)} issue(s) are fixed on {ref} with no closing "
-        "keyword in its history, so the sync will not close them."
+        f"\n::error::{len(missing)} unclosed fixed issue(s) and {len(inert)} "
+        f"PR(s) with an inert keyword. Neither will close at the sync."
     )
     return 1
 

@@ -24,10 +24,14 @@ import pytest
 
 from scripts.dev.phase_audit import (
     DEFAULT_PLAN,
+    Issue,
+    MergedPR,
     PlanParseError,
     closing_keywords,
+    inert_closers,
     load_plan,
     parse_plan,
+    phases_in_subjects,
 )
 
 # The plan separates a summary row's phase number from its name with an EM DASH
@@ -307,3 +311,166 @@ def test_finds_every_keyword_in_a_multi_issue_body() -> None:
     """A bookkeeping commit carries one line per issue; all of them must count."""
     body = "\n".join(f"Closes #{n}" for n in (960, 962, 961, 922, 756))
     assert closing_keywords(body) == {960, 962, 961, 922, 756}
+
+
+# --------------------------------------------------------------------------
+# Which commit subjects count as a phase having landed
+#
+# `landed_phases` decides the population `closers --check` gates on. A phase it
+# fails to recognise silently drops that phase's open issues from the check, so
+# the gate reports `MISSING: 0` over issues that will sync to `main` still open
+# - the exact failure it exists to prevent. Subjects below are real, taken from
+# `git log origin/dev --format=%s`.
+# --------------------------------------------------------------------------
+
+
+LANDED_SUBJECTS = [
+    f"Phase 8 {DASH} claims and documentation (#1045)",
+    f"fix(dashboard): Phase 7 {DASH} ship the built dashboard (#1033)",
+    f"fix: Phase 6 {DASH} subsystems (schedule, MCP, attest) (#1022)",
+    f"Phase 5 {DASH} the command surface (14 issues) (#1013)",
+]
+
+MENTION_ONLY_SUBJECTS = [
+    # Bookkeeping commits: they name a phase and land nothing.
+    "docs(plan): schedule #1047 and #1048 into Phase 9 (#1049)",
+    "docs(plan): record Phase 7's merge SHA (#1034)",
+    f"merge: sync dev -> main (Phases 1, 2 and 2.5) {DASH} no release (#1002)",
+    # 2.5 is not a numbered phase in the plan, and `2.` is not `2 {DASH}`.
+    f"Phase 2.5 {DASH} instruments for the fix program's own tracking (#1001)",
+    # Predate the fix program: `Phase N` here is some feature's own phase N.
+    "feat(history): Phase 9 complete - SQLite storage 100% production-ready",
+    "refactor(wizard): complete Phase 5 cleanup and documentation (Final)",
+    # These three are the ones an unanchored regex actually misreads - measured
+    # across all 1165 subjects in this repository, they are the only ones.
+    "feat(dedup): complete cross-tool deduplication (Phase 0-9)",
+    "feat(dedup): implement cross-tool deduplication (Phase 0-7)",
+    "feat(wizard): implement Feature #4 Phase 1 - Enhanced workflows",
+]
+
+REAL_SUBJECTS = "\n".join(LANDED_SUBJECTS + MENTION_ONLY_SUBJECTS)
+
+
+def test_recognises_a_squash_behind_a_conventional_commit_prefix() -> None:
+    """The defect. Phases 6 and 7 squashed with a `fix:` / `fix(scope):` prefix.
+
+    A bare `^Phase` anchor reported `[0, 1, 2, 3, 4, 5, 8]` on `origin/dev`.
+    It gave the right answer only because every Phase 6 and 7 issue happened to
+    be closed by then; one of them without a closing keyword would have synced
+    still open, behind a green gate.
+    """
+    assert phases_in_subjects(REAL_SUBJECTS) == {5, 6, 7, 8}
+
+
+def test_a_subject_that_merely_mentions_a_phase_has_not_landed_it() -> None:
+    """Why the conventional-commit prefix is ANCHORED and not skipped over.
+
+    Each subject is asserted ALONE, and that is the point. Asserting against
+    the union hides a false positive whenever a true positive contributes the
+    same number: dropping the `^` makes `(Phase 0-9)` report phase 0 and
+    `Feature #4 Phase 1 - Enhanced workflows` report phase 1, but phases 0 and
+    1 really did land, so the aggregate set is unchanged and the mutation
+    survives. The first version of this test asserted the union and did exactly
+    that.
+    """
+    for subject in MENTION_ONLY_SUBJECTS:
+        assert phases_in_subjects(subject) == set(), subject
+
+
+def test_a_bare_phase_subject_is_still_recognised() -> None:
+    """The other control: the original unprefixed form must keep working."""
+    assert phases_in_subjects(f"Phase 0 {DASH} instruments (17 issues) (#978)") == {0}
+
+
+def test_a_hyphen_separator_is_accepted_but_a_word_is_not() -> None:
+    """`[—-]` is the separator set; `Phase 9 complete` is prose, not a landing."""
+    assert phases_in_subjects("Phase 3 - one-liners") == {3}
+    assert phases_in_subjects("Phase 3 complete - one-liners") == set()
+
+
+# --------------------------------------------------------------------------
+# The second population: keywords GitHub never recorded
+#
+# `closers` derives "fixed" from "this issue's phase landed", so anything fixed
+# before the phase program existed is outside it. That window - the 22-chunk
+# campaign - is where inert keywords are most likely, because every chunk PR
+# was based on `dev`.
+# --------------------------------------------------------------------------
+
+
+def _issue_map(states: dict[int, str]) -> dict[int, Issue]:
+    return {n: Issue(number=n, state=s) for n, s in states.items()}
+
+
+def test_flags_a_keyword_github_never_recorded() -> None:
+    """PR #793's shape: five keywords in the body, zero closing references.
+
+    `a45e5b4` fixed #787 through #791 on 2026-08-09 through a PR based on
+    `dev`, so GitHub recorded nothing, and all five sat open for seventeen days
+    while `closers --check` printed `MISSING: 0`.
+    """
+    pr = MergedPR(
+        number=793,
+        base="dev",
+        merged_at="2026-08-09",
+        named={787, 788, 789, 790, 791},
+        linked=set(),
+    )
+    issues = _issue_map(dict.fromkeys((787, 788, 789, 790, 791), "OPEN"))
+    assert inert_closers([pr], issues) == [(pr, [787, 788, 789, 790, 791])]
+
+
+def test_ignores_a_keyword_that_names_a_pull_request() -> None:
+    """Six merged PRs here say `Closes #N` about another PULL REQUEST.
+
+    GitHub correctly records no closing reference for those, so a bare
+    `named - linked` gap reports all six as defects. `gh issue list` does not
+    return PRs, so absence from the issue map discriminates them without a
+    special case - PR #96's body literally reads "Merges PR #95 ... Closes #95".
+    """
+    pr = MergedPR(
+        number=96, base="main", merged_at="2025-10-27", named={95}, linked=set()
+    )
+    assert inert_closers([pr], _issue_map({})) == []
+
+
+def test_ignores_an_issue_that_is_already_closed() -> None:
+    """The population is what still needs action, not what once did.
+
+    #1000's eleven have this shape now: named by PR #995 / #997, never linked,
+    and closed since by a bookkeeping commit.
+    """
+    pr = MergedPR(
+        number=995, base="dev", merged_at="2026-08-26", named={960}, linked=set()
+    )
+    assert inert_closers([pr], _issue_map({960: "CLOSED"})) == []
+
+
+def test_catches_a_pr_that_linked_only_some_of_what_it_named() -> None:
+    """Why the discriminator is `named - linked` and not `base != main`.
+
+    A base-branch test sees this PR as fine, because its base IS the default
+    branch. Only comparing the two sets finds the one issue that will not
+    close.
+    """
+    pr = MergedPR(
+        number=1,
+        base="main",
+        merged_at="2026-01-01",
+        named={10, 11, 12},
+        linked={10, 12},
+    )
+    issues = _issue_map({10: "CLOSED", 11: "OPEN", 12: "CLOSED"})
+    assert inert_closers([pr], issues) == [(pr, [11])]
+
+
+def test_a_fully_linked_pr_is_not_flagged() -> None:
+    """The control. PR #986's shape: base `main`, every keyword recorded."""
+    pr = MergedPR(
+        number=986,
+        base="main",
+        merged_at="2026-08-25",
+        named={10, 11},
+        linked={10, 11},
+    )
+    assert inert_closers([pr], _issue_map({10: "OPEN", 11: "OPEN"})) == []
