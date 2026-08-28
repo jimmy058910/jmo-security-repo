@@ -554,6 +554,24 @@ _ALLOWED_OFFLINE_SCANNER_SPAWNS = {
     "tests/e2e/test_cross_platform.py::TestCrossPlatformCompatibility::test_macos_full_scan",
     "tests/e2e/test_cross_platform.py::TestCrossPlatformCompatibility::test_windows_wsl_full_scan",
     #
+    # `trufflehog filesystem scripts/ tests/ .github/ --json --no-update`.
+    #
+    # This one must NOT get the marker either, for a different reason than the
+    # opa case below: **no CI job covers `tests/security/`**. Every
+    # `requires_tools` invocation in ci.yml and scheduled.yml is path-scoped,
+    # and none of those paths includes this directory -- so marking it moved
+    # the test from *visibly skipped* in the main shards to *invisibly
+    # deselected* everywhere. Measured at Phase 6 closeout: 158
+    # `requires_tools` tests exist, 157 are reachable by some job, and this was
+    # the one that was not. It never executed on CI either way (bare
+    # `trufflehog` is not on the runners' PATH, so it hits FileNotFoundError
+    # and skips), but a skip is countable and a deselect is not.
+    #
+    # `--no-update` means it does not phone home; it is a local filesystem
+    # scan. The underlying gap -- that `tests/security/` is outside every CI
+    # path scope -- is filed separately.
+    "tests/security/test_secrets_management.py::TestSecretsManagement::test_trufflehog_scan_no_verified_secrets",
+    #
     # `opa version`. This one must NOT get the marker: it is deliberately not
     # skipped -- its point is that the skip guard and the product agree about
     # whether OPA is usable, on every machine including those without it, and
