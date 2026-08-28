@@ -42,7 +42,7 @@ open results/summaries/dashboard.html
 - **Machine-Readable Diffs**: Compare scans with `jmo diff` for CI/CD integration
 - **28 Security Tools**: Expanded from 11 to 28 tools across all profiles
 - **Tool Management**: `jmo tools install/check/update/outdated` commands
-- **Enhanced Deduplication**: 30-40% noise reduction with cross-tool similarity clustering
+- **Enhanced Deduplication**: Cross-tool similarity clustering collapses findings several tools report for the same issue into one consensus finding
 
 ## Multi-Target Scanning
 

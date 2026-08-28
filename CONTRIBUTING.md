@@ -274,7 +274,7 @@ make screenshots-demo
 
 - **SQLite historical storage:** Trend analysis with `jmo history` and `jmo trends`
 - **Machine-readable diffs:** CI/CD integration with `jmo diff`
-- **Cross-tool deduplication:** 30-40% noise reduction via similarity clustering
+- **Cross-tool deduplication:** Similarity clustering collapses findings several tools report for the same issue
 - **6 compliance frameworks:** OWASP, CWE, CIS, NIST, PCI DSS, MITRE mappings
 
 ## Sample Fixtures and Output Regeneration
@@ -1455,7 +1455,7 @@ This project was built by **James (Jimmy) Moceri** as a capstone for the **Insti
 - 28 security scanners with plugin adapter architecture
 - SQLite historical storage for trend analysis
 - Machine-readable diffs for CI/CD integration
-- Cross-tool deduplication (30-40% noise reduction)
+- Cross-tool deduplication via similarity clustering
 - 4 unified scan profiles (fast/slim/balanced/deep)
 
 **Professional Background:**

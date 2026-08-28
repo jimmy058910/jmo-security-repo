@@ -1,7 +1,7 @@
 """Performance benchmarks for JMo Security critical paths.
 
 This test suite establishes performance baselines for key operations:
-1. SQLite scan insert: <50ms (CLAUDE.md target)
+1. SQLite scan insert: <50ms
 2. Diff engine (1000 findings): <500ms
 3. Trend analysis (50 scans): <100ms
 4. Cross-tool deduplication (1000 findings): <2s
@@ -287,7 +287,7 @@ class TestPerformanceBenchmarks:
     def test_benchmark_2_diff_engine_1000_findings(self, tmp_path):
         """Benchmark: Diff engine with 1000 findings should be <500ms.
 
-        Target: <500ms (from CLAUDE.md)
+        Target: <500ms (tests/performance/__init__.py)
         Measures: Fingerprint-based diff computation
         """
         # Create baseline findings (1000 findings)
@@ -323,7 +323,7 @@ class TestPerformanceBenchmarks:
         assert diff_result is not None
         assert duration_ms < 500, (
             f"Diff engine took {duration_ms:.2f}ms (expected <500ms). "
-            f"Target from CLAUDE.md: Diff (1000 findings) <500ms"
+            f"Target (tests/performance/__init__.py): Diff (1000 findings) <500ms"
         )
 
         # Verify diff logic
@@ -337,7 +337,7 @@ class TestPerformanceBenchmarks:
     def test_benchmark_3_trend_analysis_50_scans(self, perf_db, tmp_path):
         """Benchmark: Trend analysis for 50 scans should be <100ms.
 
-        Target: <100ms (from CLAUDE.md)
+        Target: <100ms (tests/performance/__init__.py, relaxed from <200ms)
         Measures: Statistical trend analysis with Mann-Kendall test
         """
         db_path, conn = perf_db
@@ -411,7 +411,7 @@ class TestPerformanceBenchmarks:
     def test_benchmark_4_cross_tool_deduplication_1000_findings(self, tmp_path):
         """Benchmark: Cross-tool deduplication of 1000 findings should be <2s.
 
-        Target: <2s (from CLAUDE.md)
+        Target: <2s (tests/performance/__init__.py)
         Measures: Similarity clustering across multiple tools
 
         NOTE: CI threshold relaxed to <25s to account for slower CI runners
@@ -430,7 +430,7 @@ class TestPerformanceBenchmarks:
         # Relaxed threshold for CI (GitHub Actions runners are ~10-12x slower)
         assert duration_s < 25.0, (
             f"Deduplication took {duration_s:.2f}s (expected <25s for CI, <2s local). "
-            f"Target from CLAUDE.md: Deduplication (1000 findings) <2s"
+            f"Target (tests/performance/__init__.py): Deduplication (1000 findings) <2s"
         )
 
         # Verify clustering reduced duplicates
@@ -449,7 +449,7 @@ class TestPerformanceBenchmarks:
     def test_benchmark_5_html_dashboard_5000_findings(self, tmp_path):
         """Benchmark: HTML dashboard generation with 5000 findings should be <5s.
 
-        Target: <5s (from CLAUDE.md)
+        Target: <5s (tests/performance/__init__.py)
         Measures: React dashboard build (dual-mode: external JSON for >1000)
         """
         # Create 5000 findings
@@ -493,7 +493,7 @@ class TestPerformanceBenchmarks:
         # Verify
         assert duration_s < 5.0, (
             f"Dashboard generation took {duration_s:.2f}s (expected <5s). "
-            f"Target from CLAUDE.md: Dashboard (5000 findings) <5s"
+            f"Target (tests/performance/__init__.py): Dashboard (5000 findings) <5s"
         )
 
         # Verify dashboard file created
@@ -530,7 +530,7 @@ def test_performance_summary(tmp_path):
     JMo Security v1.0.0 Performance Benchmark Targets
     ============================================================
 
-    Critical Path Benchmarks (from CLAUDE.md):
+    Critical Path Benchmarks (declared in tests/performance/__init__.py):
 
     1. SQLite Scan Insert (100 findings)
        Target: <50ms

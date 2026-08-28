@@ -131,13 +131,23 @@ API_KEY = "sk-1234567890abcdef"  # ❌ CRITICAL: Verified secret
 
 **Criteria:**
 
-- ❌ FAIL: Any HIGH/CRITICAL finding mapped to PCI DSS requirements
-- ✅ PASS: Zero HIGH/CRITICAL PCI DSS findings
+- ❌ FAIL: a CRITICAL or HIGH finding mapped to one of **five** critical
+  requirements — and only those five:
 
-**Key Requirements:**
+  | Requirement | Subject |
+  |---|---|
+  | 2.2.4 | System security parameters |
+  | 3.5.1 | Cryptographic key protection |
+  | 4.2.1 | Strong cryptography for transmission |
+  | 6.2.4 | Software security vulnerabilities |
+  | 8.3.6 | Password/passphrase strength |
 
-- Requirement 3: Protect stored cardholder data
-- Requirement 6: Develop secure systems and applications
+- ⚠️ WARN: a **MEDIUM or LOW** finding mapped to any PCI DSS requirement
+- ✅ PASS: no CRITICAL or HIGH finding maps to one of the five
+
+**A HIGH finding mapped to any other requirement produces neither a violation
+nor a warning.** The warning rule matches MEDIUM and LOW only, so the gate is
+narrower than "any finding mapped to PCI DSS" in both directions.
 - Requirement 8: Identify and authenticate access
 - Requirement 11: Test security systems regularly
 
@@ -164,12 +174,25 @@ API_KEY = "sk-1234567890abcdef"  # ❌ CRITICAL: Verified secret
 
 **Criteria:**
 
-- ❌ FAIL: HIGH/CRITICAL findings related to:
-  - Data encryption (NIST CSF PR.DS-1, PR.DS-2)
-  - Access controls (PR.AC-1, PR.AC-3, PR.AC-4)
-  - Audit logging (DE.AE-3, DE.CM-1)
-  - Vulnerability management (ID.RA-1, DE.CM-8)
-- ✅ PASS: Zero HIGH/CRITICAL HIPAA-related findings
+- ❌ FAIL: a CRITICAL or HIGH finding whose `risk.cwe` holds one of ten
+  HIPAA-critical CWEs, reported against the 45 CFR 164.312 technical safeguard
+  it breaches:
+
+  | Safeguard | CWEs |
+  |---|---|
+  | 164.312(a)(1) Access Control | CWE-22, CWE-79, CWE-89, CWE-200, CWE-284 |
+  | 164.312(a)(2)(i) Unique User ID | CWE-798 |
+  | 164.312(a)(2)(iv) Encryption | CWE-326, CWE-327 |
+  | 164.312(d) Person/Entity Authentication | CWE-306 |
+  | 164.312(e)(1) Transmission Security | CWE-319 |
+
+- ✅ PASS: no CRITICAL or HIGH finding carries any of those CWEs
+
+**This gate reads `risk.cwe` and nothing else.** It does not consult
+`compliance.nistCsf2_0`, so a HIGH finding tagged only with a NIST CSF control
+passes, and a HIGH finding carrying `CWE-79` fails whether or not it has any
+NIST mapping. Violations are counted per breached safeguard, so one finding
+matching two mapped CWEs is two violations.
 
 **Use Case:** Healthcare applications, PHI handling, HIPAA audits
 
@@ -722,4 +745,4 @@ Git's `core.autocrlf=false` in a `.gitattributes` entry for `*.rego` prevents th
 
 ---
 
-**Last Updated:** April 2026 | **JMo Security v1.0.1**
+**Last Updated:** August 2026 | **JMo Security v1.0.8**

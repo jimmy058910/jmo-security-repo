@@ -5,7 +5,8 @@ Deduplication accuracy tests for JMo Security.
 These tests validate that the cross-tool deduplication system:
 - Correctly merges duplicate findings from different tools
 - Does NOT incorrectly merge distinct findings
-- Achieves expected noise reduction (20-40%)
+- Reduces a finding set when tools genuinely overlap (the size of the
+  reduction is corpus-dependent and is not asserted here)
 
 The deduplication system uses LSH (Locality Sensitive Hashing) clustering
 to identify similar findings across tools.

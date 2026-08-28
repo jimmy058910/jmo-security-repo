@@ -300,7 +300,7 @@ JMo Security intentionally includes **overlapping tools** for defense-in-depth c
 | **Grype** | Anchore vulnerability DB | Different data sources, catches CVEs Trivy may miss |
 | **Dependency-Check** | OWASP NVD | OWASP compliance reporting, CPE matching |
 
-**Rationale:** Vulnerability databases have different update cycles and coverage. Running multiple SCA tools with different databases reduces blind spots. Cross-tool deduplication (30-40% reduction) prevents duplicate noise.
+**Rationale:** Vulnerability databases have different update cycles and coverage. Running multiple SCA tools with different databases reduces blind spots. Cross-tool deduplication collapses that overlap into consensus findings.
 
 ### Why Multiple SAST Scanners?
 
@@ -790,4 +790,4 @@ When adding or removing tools:
 
 ---
 
-**Last Updated:** April 2026 | **JMo Security v1.0.1**
+**Last Updated:** August 2026 | **JMo Security v1.0.8**

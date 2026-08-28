@@ -15,20 +15,50 @@ modules. Importing `scripts.jmo_mcp` executes its package init and would tie
 this guard to whether `mcp` is installed - the same coupling that turned an
 ImportError into 235 silently uncollected tests during the mcp 2.0 rename. A
 guard that a dependency problem can switch off is not a guard.
+
+## The prose headers (#750)
+
+Three code sites were never the whole surface. Documentation states the version
+too, in a header or a footer, and nothing checked those - so `README.md` said
+**v1.0.1** and `QUICKSTART.md` said **v1.0.0** while the project shipped 1.0.8,
+across four releases. #750 was filed against `docs/CLI_REFERENCE.md`; by the
+time Phase 8 reached it that one header had been corrected by hand at `92650ec`
+and annotated as tracking `__version__`, while **eight others had gone stale**.
+Fixing a header without a guard buys one release.
+
+Only *current-release* claims are checked, and only in their three anchored
+shapes. A **floor** is a different statement and stays exempt:
+`docs/SAMPLE_OUTPUTS.md`'s `**Version:** v1.0.0+` says "1.0.0 or later", which
+is still true and would be wrong to bump. Archival records are exempt for the
+same reason they are in `check_doc_links` - a dated plan quoting the README's
+v1.0.0 subtitle is reporting history, not claiming a version.
 """
 
 from __future__ import annotations
 
 import ast
+import importlib.util
+import re
 import tomllib
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+DOC_CHECKER = REPO_ROOT / "scripts" / "dev" / "check_doc_links.py"
 
 # Every module carrying a hand-maintained copy of the version.
 VERSION_SITES = (
     "scripts/cli/jmo.py",
     "scripts/jmo_mcp/__init__.py",
+)
+
+# Anchored to the line shape, because prose legitimately names old versions:
+# CLAUDE.md discusses v1.0.4 release archaeology, and CHANGELOG.md is nothing
+# but old version numbers. Each of these says "this document describes the
+# current release" and nothing else does.
+_CURRENT_VERSION_CLAIMS = (
+    re.compile(r"^\*\*Version:\*\*\s+v?(\d+\.\d+\.\d+)(?!\+)"),
+    re.compile(r"^\*\*v(\d+\.\d+\.\d+)\*\*\s*\|"),
+    re.compile(r"\|\s*\*\*JMo Security v(\d+\.\d+\.\d+)\*\*"),
 )
 
 
@@ -75,3 +105,58 @@ def test_every_version_site_is_readable() -> None:
     for rel in VERSION_SITES:
         assert (REPO_ROOT / rel).is_file(), f"version site {rel} no longer exists"
         assert _module_version(rel), f"version site {rel} has an empty __version__"
+
+
+def _doc_link_checker():
+    """Reuse the repo's own "tracked" and "archival" definitions, not a copy."""
+    spec = importlib.util.spec_from_file_location("check_doc_links", str(DOC_CHECKER))
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _documented_versions() -> list[tuple[str, int, str]]:
+    """Every (file, line, version) where a tracked doc states a current release."""
+    mod = _doc_link_checker()
+    docs = sorted(
+        p
+        for p in mod.tracked_paths()
+        if p.endswith(".md") and not p.startswith(mod.ARCHIVAL_PREFIXES)
+    )
+    # Coverage comes from git, so a gitignored file cannot make this red locally
+    # and green in CI - the failure mode the #855 guard hit on its first run.
+    assert len(docs) >= 100, f"doc discovery looks wrong: {len(docs)}"
+
+    claims: list[tuple[str, int, str]] = []
+    for rel in docs:
+        text = (REPO_ROOT / rel).read_text(encoding="utf-8", errors="replace")
+        for lineno, line in enumerate(text.splitlines(), start=1):
+            for pattern in _CURRENT_VERSION_CLAIMS:
+                match = pattern.search(line)
+                if match:
+                    claims.append((rel, lineno, match.group(1)))
+    return claims
+
+
+def test_documentation_version_headers_match_pyproject() -> None:
+    """Regression for #750: a prose version header nothing checked."""
+    canonical = _pyproject_version()
+    claims = _documented_versions()
+
+    # Meta-guard: an extractor that matches nothing passes on everything. These
+    # three files are the ones whose headers were verified by hand.
+    covered = {rel for rel, _, _ in claims}
+    for expected in ("CLAUDE.md", "README.md", "docs/CLI_REFERENCE.md"):
+        assert expected in covered, f"no version header found in {expected}"
+
+    stale = [
+        f"{rel}:{lineno}: states {found}, project is {canonical}"
+        for rel, lineno, found in claims
+        if found != canonical
+    ]
+    assert not stale, (
+        "documentation states a project version that is not the current one. "
+        "A release bumps these with pyproject.toml; a floor claim (v1.0.0+) is "
+        "a different statement and is not matched here:\n" + "\n".join(stale)
+    )

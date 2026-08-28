@@ -139,7 +139,7 @@ docker run --rm \
   ghcr.io/jimmy058910/jmo-security:latest scan --repo /scan
 ```
 
-The SQLite history DB (`.jmo/history.db`) persists between container runs so `jmo history`, `jmo diff`, and `jmo trend` all work.
+The SQLite history DB (`.jmo/history.db`) persists between container runs so `jmo history`, `jmo diff`, and `jmo trends` all work.
 
 ### Why are there three Docker registries?
 
@@ -240,7 +240,7 @@ CSV export is built in:
 jmo report ./results --format csv --output findings.csv
 ```
 
-Prometheus / Grafana export via `jmo trend` and the exporter API (see [docs/API_REFERENCE.md](API_REFERENCE.md#trend-exporters-api)).
+Prometheus / Grafana export via `jmo trends` and the exporter API (see [docs/API_REFERENCE.md](API_REFERENCE.md#trend-exporters-api)).
 
 ---
 
@@ -276,4 +276,4 @@ Originally a capstone project at Institute of Data × Michigan Tech University's
 
 ---
 
-**Last Updated:** April 2026 | **JMo Security v1.0.1**
+**Last Updated:** August 2026 | **JMo Security v1.0.8**

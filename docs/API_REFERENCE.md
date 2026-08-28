@@ -869,7 +869,7 @@ See [MCP_SETUP.md](MCP_SETUP.md) for client configuration and
 
 **Module:** `scripts.core.history_db`
 
-**Purpose:** Read and write the SQLite history database that stores scan results across runs. Used internally by `jmo history`, `jmo diff`, `jmo trend`, and the MCP server's `query_findings_db` tool. Also callable directly by user scripts.
+**Purpose:** Read and write the SQLite history database that stores scan results across runs. Used internally by `jmo history`, `jmo diff`, `jmo trends`, and the MCP server's `query_findings_db` tool. Also callable directly by user scripts.
 
 **Default location:** `.jmo/history.db` (relative to the current working directory).
 

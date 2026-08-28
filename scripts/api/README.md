@@ -69,7 +69,7 @@ vercel env add RESEND_API_KEY
 
 # Select environment: Production
 
-```yaml
+```
 
 **Your API will be live at:**
 
@@ -106,7 +106,7 @@ netlify deploy --prod
 # 4. Set environment variable
 
 netlify env:set RESEND_API_KEY re_your_key_here
-```bash
+```
 
 ### AWS Lambda (via Serverless Framework)
 
@@ -142,7 +142,7 @@ EOF
 # 3. Deploy
 
 serverless deploy
-```markdown
+```
 
 ### Docker Deployment
 
@@ -170,7 +170,7 @@ docker run -d -p 3000:3000 \
   -e RESEND_API_KEY=re_your_key_here \
   --name jmo-subscribe-api \
   jmo-subscribe-api
-```bash
+```
 
 ---
 
@@ -192,7 +192,7 @@ npm start
 
 # Server runs on <http://localhost:3000>
 
-```yaml
+```
 
 **Test subscription:**
 
@@ -220,7 +220,7 @@ http POST localhost:3000/api/subscribe email=test@example.com source=test
 
 # }
 
-```markdown
+```
 
 **Test health check:**
 
@@ -241,7 +241,7 @@ curl <http://localhost:3000/api/health>
 
 # }
 
-```yaml
+```
 
 ---
 
@@ -258,7 +258,7 @@ Subscribe an email to the newsletter.
   "email": "user@example.com",
   "source": "cli|dashboard|website|subscribe_page|github_readme"
 }
-```markdown
+```
 
 **Success Response (200):**
 
@@ -268,7 +268,7 @@ Subscribe an email to the newsletter.
   "message": "✅ Thanks! Check your inbox for a welcome email.",
   "email_id": "re_abc123xyz..."
 }
-```markdown
+```
 
 **Error Responses:**
 
@@ -293,7 +293,7 @@ Subscribe an email to the newsletter.
   "error": "server_error",
   "message": "Failed to process subscription. Please try again later."
 }
-```markdown
+```
 
 ### GET /api/health
 
@@ -308,7 +308,7 @@ Health check endpoint for monitoring.
   "version": "1.0.0",
   "timestamp": "2025-10-16T12:34:56.789Z"
 }
-```yaml
+```
 
 ---
 
@@ -343,7 +343,7 @@ curl -i <http://localhost:3000/api/subscribe> ...
 
 # RateLimit-Reset: 1697468400
 
-```yaml
+```
 
 ---
 
@@ -382,7 +382,7 @@ Sentry.init({ dsn: process.env.SENTRY_DSN });
 
 // Add error handler
 app.use(Sentry.Handlers.errorHandler());
-```yaml
+```
 
 ---
 
@@ -430,7 +430,7 @@ vercel env add RESEND_API_KEY
 # Netlify
 
 netlify env:set RESEND_API_KEY re_your_key_here
-```yaml
+```
 
 ### "Email sent successfully but no email received"
 
@@ -473,7 +473,7 @@ Update all frontend forms to use your deployed API URL:
 
 ```html
 <form action="<https://jmo-security-subscribe-api.vercel.app/api/subscribe"> method="post">
-```javascript
+```
 
 **Subscribe Page** (`docs/subscribe.html`):
 
@@ -483,7 +483,7 @@ const response = await fetch('<https://jmo-security-subscribe-api.vercel.app/api
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ email, source: 'subscribe_page' })
 });
-```yaml
+```
 
 ---
 

@@ -10,7 +10,7 @@
 
 ```bash
 cat results/summaries/SUMMARY.md
-```text
+```
 **Look for:**
 
 - Total CRITICAL + HIGH count (your immediate priority)
@@ -20,7 +20,7 @@ cat results/summaries/SUMMARY.md
 **Example:**
 ```text
 Total: 8058 | 🔴 3 CRITICAL | 🔴 91 HIGH | 🟡 280 MEDIUM
-```text
+```
 **Translation:** 94 findings to review (not 8058)
 
 ---
@@ -38,7 +38,7 @@ jq '[.[] | select(.severity == "CRITICAL" or .severity == "HIGH")
 # Count them
 
 jq 'length' priority.json
-```text
+```
 **Common patterns to ignore:**
 
 - `.venv/`, `node_modules/` → Dependencies (not your code)
@@ -55,7 +55,7 @@ jq 'length' priority.json
 
 jq 'group_by(.ruleId) | map({rule: .[0].ruleId, count: length, severity: .[0].severity})
     | sort_by(.count) | reverse | .[0:10]' priority.json
-```text
+```
 **Why:** Fixing 1 root cause can eliminate 50+ findings
 
 **Example:**
@@ -63,7 +63,7 @@ jq 'group_by(.ruleId) | map({rule: .[0].ruleId, count: length, severity: .[0].se
 [
   {"rule": "CVE-2023-12345", "count": 50, "severity": "HIGH"}
 ]
-```text
+```
 **Fix:** One `pip install --upgrade vulnerable-package` fixes all 50
 
 ---
@@ -81,7 +81,7 @@ jq 'group_by(.ruleId) | map({rule: .[0].ruleId, count: length, severity: .[0].se
 **Quick check for Bandit B101 in tests:**
 ```bash
 jq '[.[] | select(.ruleId == "B101" and (.location.path | contains("test")))] | length' priority.json
-```text
+```
 ---
 
 ## Step 5: Suppress Noise (3 minutes)
@@ -105,12 +105,12 @@ suppressions:
   - ruleId: "B101"
 
     reason: "pytest uses assert extensively"
-```text
+```
 **Re-run scan to verify:**
 ```bash
 jmo balanced --repos-dir .
 cat results/summaries/SUPPRESSIONS.md
-```text
+```
 ---
 
 ## Common Queries (Copy-Paste)
@@ -119,32 +119,32 @@ cat results/summaries/SUPPRESSIONS.md
 
 ```bash
 jq '[.[] | select(.tags[]? == "secret")]' results/summaries/findings.json
-```text
+```
 
 ### Find Exploitable CVEs (CVSS ≥7.0)
 
 ```bash
 jq '[.[] | select(.cvss? and (.cvss.score >= 7.0))]' results/summaries/findings.json
-```text
+```
 
 ### Find SQL Injection
 
 ```bash
 jq '[.[] | select(.ruleId | contains("sql") or (.message | ascii_downcase | contains("sql injection")))]' results/summaries/findings.json
-```text
+```
 
 ### Get OWASP A03 (Injection) Findings
 
 ```bash
 jq '[.[] | select(.compliance.owaspTop10_2021[]? == "A03:2021")]' results/summaries/findings.json
-```text
+```
 
 ### Group by File
 
 ```bash
 jq 'group_by(.location.path) | map({file: .[0].location.path, count: length})
     | sort_by(.count) | reverse | .[0:20]' results/summaries/findings.json
-```text
+```
 ---
 
 ## Triage Decision Tree
@@ -169,7 +169,7 @@ Is it a systemic issue (50+ occurrences)?
 Is it a false positive?
   YES → Add to jmo.suppress.yml
   NO → FIX IMMEDIATELY
-```text
+```
 ---
 
 ## File Quick Reference
@@ -228,7 +228,7 @@ Is it a false positive?
 
   with:
     sarif_file: results/summaries/findings.sarif
-```text
+```
 ---
 
 ## Troubleshooting

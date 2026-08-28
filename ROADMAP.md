@@ -22,7 +22,7 @@ v1.0 delivers the full production scanning platform:
 - SLSA attestation for supply chain security
 - MCP server for AI-assisted remediation
 - React dashboard with interactive filtering
-- Cross-tool deduplication (30-40% noise reduction)
+- Cross-tool deduplication (similarity clustering into consensus findings)
 
 **Documentation:** [CHANGELOG.md](CHANGELOG.md) is the authoritative record of
 what shipped in which release. This file covers only what has *not* shipped yet.
@@ -77,7 +77,7 @@ Highlights of the v1.0 line:
 - **SLSA attestation** — Sigstore keyless signing, Rekor transparency log
 - **Policy-as-Code** — OPA 1.0+ with Rego v1 syntax
 - **AI remediation** — MCP server for Copilot/Claude integration
-- **Cross-tool deduplication** — Similarity clustering, 30-40% noise reduction
+- **Cross-tool deduplication** — Similarity clustering into consensus findings
 - **Scan accounting** — every declared tool lands in exactly one accounted state,
   so a tool can no longer vanish between running and reporting (v1.0.8)
 

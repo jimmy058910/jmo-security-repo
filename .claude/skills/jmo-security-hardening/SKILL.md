@@ -77,47 +77,57 @@ Use this skill when you encounter security findings from:
 
 ## Usage
 
-### Basic Invocation
+### Basic invocation
 
-```bash
-# Fix CSRF vulnerability
-claude skill jmo-security-hardening \
-  --finding-id HIGH-001 \
-  --target scripts/api/subscribe_endpoint.js \
-  --vulnerability csrf
+```text
+/jmo-security-hardening csrf in scripts/api/subscribe_endpoint.js (HIGH-001)
 ```
 
-### Advanced Options
+### Naming a sanitizer, or a whole class of sites
 
-```bash
-# Fix path traversal with custom sanitization across all targets
-claude skill jmo-security-hardening \
-  --finding-id MEDIUM-001 \
-  --target scripts/cli/jmo.py \
-  --vulnerability path_traversal \
-  --sanitizer-name _sanitize_path_component \
-  --apply-to-all-targets
+```text
+/jmo-security-hardening path_traversal in scripts/cli/jmo.py (MEDIUM-001),
+reusing _sanitize_path_component, across every target type
 ```
 
-### Batch Fix
+### Several findings at once
 
-```bash
-# Fix all HIGH findings at once
-claude skill jmo-security-hardening \
-  --findings HIGH-001,HIGH-002 \
-  --auto-detect-targets \
-  --dry-run  # Preview fixes first
+```text
+/jmo-security-hardening HIGH-001 and HIGH-002 -- show me each patch before
+anything is written
 ```
+
+Everything after the skill name is one string, so ask for what you want in that
+sentence. See [Invocation](#invocation) for what asking does and does not
+guarantee.
 
 ---
 
-## Parameters
+## Invocation
 
-### Required
+This is a Claude Code skill, not a command-line program. There is no argument
+parser: the frontmatter declares `argument-hint: <CWE-ID or vulnerability-type>`,
+and `$ARGUMENTS` (line 12) receives everything after the skill name as one
+string.
 
-- `--finding-id ID`: Security finding ID from audit report (e.g., HIGH-001)
-- `--target PATH`: File to patch
-- `--vulnerability TYPE`: Type of vulnerability to fix
+```text
+/jmo-security-hardening shell_injection in scripts/cli/wizard.py (HIGH-002)
+```
+
+Name the vulnerability, the file and the finding id in plain language. The
+vocabulary below belongs in that sentence; it is not a flag set.
+
+> **Removed, not reworded.** Earlier revisions documented `--finding-id`,
+> `--target`, `--vulnerability`, `--sanitizer-name`, `--apply-to-all-targets`,
+> `--security-level`, `--dry-run`, `--skip-tests`, `--generate-docs`,
+> `--findings` and `--auto-detect-targets` as options, and showed
+> `claude skill jmo-security-hardening ...` as the way to run it. **None was
+> ever implemented** -- nothing in this repository parses any of them, and that
+> is not the invocation form either. They are deleted rather than corrected
+> because `--dry-run` reads as a guarantee that nothing is written, `--skip-tests`
+> reads as a supported way to ship a security fix without tests, and
+> `--security-level ... (default: strict)` reads as a default that is being
+> applied. All three are false, and the last two are false about a security tool.
 
 ### Vulnerability Types
 
@@ -130,14 +140,19 @@ claude skill jmo-security-hardening \
 | `try_except_pass` | CWE-703 | Add logging, replace broad exceptions |
 | `input_validation` | - | Validation decorators, edge case tests |
 
-### Optional
+### Scope and Safety
 
-- `--sanitizer-name NAME`: Custom name for sanitization function (default: auto-generated)
-- `--apply-to-all-targets`: Apply fix to all similar code patterns
-- `--security-level LEVEL`: Strictness (paranoid/strict/balanced/lenient, default: strict)
-- `--dry-run`: Preview fixes without applying
-- `--skip-tests`: Skip test generation (not recommended)
-- `--generate-docs`: Generate security documentation
+File access is whatever `allowed-tools` grants (`Read, Write, Edit, Glob, Grep,
+Bash`), mediated by Claude Code's permission prompts. The expectations behind the
+removed flags are worth keeping -- as working rules for whoever runs the skill,
+not as settings that enforce themselves:
+
+| Working rule | What actually enforces it |
+|---|---|
+| Preview before writing | **Nothing.** Ask for the patch in your prompt and read it, or commit first so `git diff` is the preview |
+| A security fix ships with tests | **Nothing.** The tests are this skill's value; if you skip them, say so in the commit rather than in a flag |
+| Apply the strictest safe fix | **Nothing.** There is no strictness setting; state the level you want in the sentence |
+| Reuse the existing sanitizers | `scripts/cli/path_sanitizers.py` already has `_sanitize_path_component` and `_validate_output_path`. Do not write a second pair |
 
 ---
 
@@ -148,11 +163,8 @@ see [examples/vulnerability-fix-examples.md](examples/vulnerability-fix-examples
 
 ### Shell Injection Fix (HIGH-002)
 
-```bash
-claude skill jmo-security-hardening \
-  --finding-id HIGH-002 \
-  --target scripts/cli/wizard.py \
-  --vulnerability shell_injection
+```text
+/jmo-security-hardening shell_injection in scripts/cli/wizard.py (HIGH-002)
 ```
 
 Replaces `shell=True` with list-based subprocess args via `generate_docker_args()`,
@@ -160,12 +172,8 @@ validates all command arguments, and generates 50-input fuzzing test suite.
 
 ### Path Traversal Fix (MEDIUM-001)
 
-```bash
-claude skill jmo-security-hardening \
-  --finding-id MEDIUM-001 \
-  --target scripts/cli/jmo.py \
-  --vulnerability path_traversal \
-  --apply-to-all-targets
+```text
+/jmo-security-hardening path_traversal in scripts/cli/jmo.py (MEDIUM-001), across every target type
 ```
 
 Creates `_sanitize_path_component()` and `_validate_output_path()` utilities,
@@ -212,7 +220,7 @@ fix details, validation results, and deployment checklist.
 
 ### During Fix Application
 
-1. **Start with --dry-run:** Preview changes
+1. **Ask for the patch first:** read it before it is written -- nothing previews for you
 2. **One vulnerability at a time:** Don't batch HIGH + MEDIUM
 3. **Verify fix effectiveness:** Test with malicious inputs
 
@@ -250,14 +258,21 @@ After using this skill, you should see:
 
 ## Example Workflow
 
-```bash
-# Phase 0: Fix HIGH findings
-claude skill jmo-security-hardening --finding-id HIGH-001 --target scripts/api/subscribe_endpoint.js --vulnerability csrf
-claude skill jmo-security-hardening --finding-id HIGH-002 --target scripts/cli/wizard.py --vulnerability shell_injection
+```text
+Phase 0, the HIGH findings, one invocation each:
 
-# Phase 1: Fix MEDIUM findings
-claude skill jmo-security-hardening --finding-id MEDIUM-001 --target scripts/cli/jmo.py --vulnerability path_traversal --apply-to-all-targets
-claude skill jmo-security-hardening --finding-id MEDIUM-002 --target scripts/core/reporters/html_reporter.py --vulnerability missing_headers
+  /jmo-security-hardening csrf in scripts/api/subscribe_endpoint.js (HIGH-001)
+  /jmo-security-hardening shell_injection in scripts/cli/wizard.py (HIGH-002)
+
+Phase 1, the MEDIUM findings:
+
+  /jmo-security-hardening path_traversal in scripts/cli/jmo.py (MEDIUM-001), across every target type
+  /jmo-security-hardening missing_headers in scripts/core/reporters/html_reporter.py (MEDIUM-002)
+```
+
+Then validate, which is a real shell:
+
+```bash
 
 # Validate all fixes
 bandit -r scripts/ -f json

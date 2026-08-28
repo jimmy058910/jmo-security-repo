@@ -15,7 +15,7 @@ JMo Security is a terminal-first security audit toolkit orchestrating 29 scanner
 **Philosophy:** Two-phase architecture: scan (invoke tools) → report (normalize, dedupe, output)
 **Test Coverage:** 8,000+ tests, sharded across 4 parallel jobs. The **only enforced floor is 85%** (`coverage-aggregate`'s "Verify coverage threshold" step, on the marker-filtered suite — excludes slow/docker/requires_tools/smoke). Raised from 80% under #756 after measuring 86.87%. Nothing sets `--cov-fail-under`; measure current coverage rather than quoting a figure from this file
 
-**Key v1.0 Features:** SQLite historical storage, machine-readable diffs, Mann-Kendall trend analysis, CSV export, dual-mode HTML dashboard, cross-tool deduplication (30-40% noise reduction).
+**Key v1.0 Features:** SQLite historical storage, machine-readable diffs, Mann-Kendall trend analysis, CSV export, dual-mode HTML dashboard, cross-tool deduplication (similarity clustering into consensus findings).
 
 ## Mandatory Guardrails
 

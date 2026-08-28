@@ -427,11 +427,11 @@ CI/YAML architectural rebuild release. Ships PR #350's Dockerfile download harde
 - **Feature #8: Cross-Tool Deduplication** - Intelligent clustering of duplicate findings across multiple security tools
   - `scripts/core/dedup_enhanced.py`: Multi-dimensional similarity engine (SimilarityCalculator, FindingClusterer)
   - Integration: Second-pass clustering in `normalize_and_report.py` after fingerprint deduplication
-  - Similarity algorithm: Three weighted components (Location 35%, Message 40%, Metadata 25%)
+  - Similarity algorithm: Three weighted components (Location 50%, Message 25%, Metadata 25%)
     - Location matching: Path normalization + line range overlap (Jaccard index + gap penalty)
     - Message matching: Hybrid fuzzy + token matching via rapidfuzz + security keyword extraction
     - Metadata matching: CWE/CVE/Rule ID family matching with type conflict detection
-  - Clustering: Greedy algorithm with 0.75 similarity threshold (configurable 0.70-0.85)
+  - Clustering: Greedy below 500 findings, LSH at or above; 0.65 similarity threshold (configurable 0.5-1.0)
   - Consensus findings: Highest-severity finding becomes representative, others stored in `context.duplicates`
   - Confidence levels: HIGH (4+ tools), MEDIUM (2-3 tools), LOW (1 tool)
   - Configuration: `jmo.yml` deduplication section with `cross_tool_clustering`, `similarity_threshold`, component weights
@@ -442,7 +442,7 @@ CI/YAML architectural rebuild release. Ships PR #350's Dockerfile download harde
     - SARIF: Consensus metadata in `properties.consensus` field
   - Test coverage: 41/41 tests passing (38 unit + 3 integration), 95% code coverage
   - Performance: <2 seconds for 1000 findings, <5 seconds for 10K findings
-  - Impact: 30-40% reduction in reported findings, noise elimination, high-confidence prioritization
+  - Impact: noise elimination and high-confidence prioritization; the size of the reduction depends on how much the profile's tools overlap
   - See [docs/USER_GUIDE.md#cross-tool-deduplication-v100](docs/USER_GUIDE.md#cross-tool-deduplication-v100) for complete documentation
 
 ### Changed
@@ -1293,7 +1293,7 @@ python3 scripts/dev/update_versions.py --report
 # Check outdated + create GitHub issues
 
 python3 scripts/dev/update_versions.py --check-outdated --create-issues
-```text
+```
 **Features:**
 
 - GitHub API integration for latest releases
@@ -1475,7 +1475,7 @@ jmo scan \
 # CI mode with multi-target support
 
 jmo ci --image nginx:latest --url <https://api.example.com> --fail-on HIGH
-```text
+```
 **Results Directory Structure (Updated):**
 
 ```text
@@ -1494,7 +1494,7 @@ results/
     ├── COMPLIANCE_SUMMARY.md
     ├── PCI_DSS_COMPLIANCE.md
     └── attack-navigator.json
-```text
+```
 **Implementation Details:**
 
 **CLI Arguments Added (25 new arguments):**
@@ -1530,7 +1530,7 @@ results/
 --k8s-context CONTEXT            # Kubernetes context
 --k8s-namespace NAMESPACE        # Specific namespace
 --k8s-all-namespaces             # Scan all namespaces
-```text
+```
 **Target Collection Functions:**
 
 - `_iter_images()` - Collect container images from `--image` and `--images-file`
@@ -1700,7 +1700,7 @@ No breaking changes. All new features are additive:
     ]
   }
 }
-```text
+```
 **Compliance Mapping Module** ([scripts/core/compliance_mapper.py](scripts/core/compliance_mapper.py)):
 
 - **1000+ rule mappings** across all tools and frameworks
@@ -1837,7 +1837,7 @@ coverage: Verified secrets, SAST, SCA, containers, IaC, Dockerfiles, DAST
 tools: [trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, falco, afl++]
 use_case: Security audits, compliance scans, pre-release validation
 coverage: Static, dynamic, runtime, fuzzing, dual secrets scanners, dual Python SAST
-```text
+```
 **New Adapters:**
 
 - **ZAP adapter** ([scripts/core/adapters/zap_adapter.py](scripts/core/adapters/zap_adapter.py)):
@@ -2032,7 +2032,7 @@ Total findings: 57 | 🔴 36 HIGH | 🟡 20 MEDIUM | ⚪ 1 LOW
 
 - 🔑 Secrets: 32 findings (56% of total)
 - 🔧 Code Quality: 25 findings (44% of total)
-```text
+```
 **Files Changed:**
 
 - `scripts/core/reporters/basic_reporter.py` - Complete markdown summary redesign (+150 lines)
@@ -2358,7 +2358,7 @@ jmotools wizard --docker
 jmotools wizard --emit-make-target Makefile.security
 jmotools wizard --emit-script scan.sh
 jmotools wizard --emit-gha .github/workflows/security.yml
-```text
+```
 **Testing:**
 
 - 18 unit tests covering all wizard functionality
@@ -2410,7 +2410,7 @@ container:
 steps:
 
   - run: jmo ci --repo . --fail-on HIGH --profile
-```text
+```
 **Testing:**
 
 - Integration tests: `tests/integration/test_docker_images.py`
