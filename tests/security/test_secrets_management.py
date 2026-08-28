@@ -179,7 +179,6 @@ class TestSecretsManagement:
             "detect-private-key" in config_content
         ), "pre-commit config must include detect-private-key hook"
 
-    @pytest.mark.requires_tools
     def test_trufflehog_scan_no_verified_secrets(self):
         """Test that TruffleHog doesn't find verified secrets in production code.
 
