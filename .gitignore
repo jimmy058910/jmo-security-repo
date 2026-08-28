@@ -39,6 +39,16 @@ __pycache__/
 .mypy_cache/
 build/
 dist/
+# ...except the built dashboard, which IS the product and must ship in the
+# wheel. It was gitignored by the blanket `dist/` above, so no distribution
+# ever carried it (#862) and CI fell through to a vendored 2025-11-17 build
+# (#864). Git cannot re-include a file whose parent directory is excluded, so
+# the directory is un-excluded first, then its contents re-excluded, then the
+# one artifact re-included. `stats.html` stays ignored deliberately: the
+# bundle-visualiser output embeds absolute build-machine paths.
+!scripts/dashboard/dist/
+scripts/dashboard/dist/*
+!scripts/dashboard/dist/index.html
 *.egg-info/
 *.whl
 *.egg
