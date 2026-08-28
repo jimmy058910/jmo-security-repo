@@ -246,41 +246,46 @@ def test_write_html_creates_parent_directory(tmp_path):
     assert output_path.parent.exists()
 
 
-def test_write_html_with_test_fixture(tmp_path, sample_findings):
-    """Test using test fixture when React build missing but fixture available."""
+def test_write_html_without_a_bundle_uses_the_static_fallback(
+    tmp_path, sample_findings
+):
+    """A tree with no built bundle degrades to the static page, and says so.
+
+    This replaced ``test_write_html_with_test_fixture``, which exercised a rung
+    that no longer exists: ``write_html`` used to fall from the React build to a
+    build vendored under ``tests/fixtures/dashboard/``, because
+    ``scripts/dashboard/dist/`` was gitignored and no real tree had one. The
+    bundle is tracked now (#862), so the fixture branch was unreachable and was
+    deleted along with its 697 KB 2025-11-17 artifact (#864). What matters here
+    is that a missing bundle degrades *loudly* rather than to a stale build.
+    """
     output_path = tmp_path / "output" / "dashboard.html"
 
-    # Create fake module structure (React build won't exist)
-    fake_scripts_dir = tmp_path / "scripts"
-    fake_core_dir = fake_scripts_dir / "core"
-    fake_reporters_dir = fake_core_dir / "reporters"
+    # Fake module structure with no scripts/dashboard/dist/index.html in it.
+    fake_reporters_dir = tmp_path / "scripts" / "core" / "reporters"
     fake_reporters_dir.mkdir(parents=True)
     fake_module_file = fake_reporters_dir / "html_reporter.py"
     fake_module_file.touch()
 
-    # Create test fixture at tests/fixtures/dashboard/test-inline-dashboard.html
-    # (repo root is tmp_path/)
+    # A fixture at the old location must NOT be picked up any more.
     fixture_dir = tmp_path / "tests" / "fixtures" / "dashboard"
     fixture_dir.mkdir(parents=True)
-    fixture_file = fixture_dir / "test-inline-dashboard.html"
-    fixture_file.write_text(
+    (fixture_dir / "test-inline-dashboard.html").write_text(
         "<!DOCTYPE html><html><head><title>Fixture</title></head>"
         '<body><div id="fixture-test"></div>'
         "<script>window.__FINDINGS__ = []</script></body></html>",
         encoding="utf-8",
     )
 
-    # Set environment to skip React build check (allows fallback to fixture)
-    # Mock __file__ to use our tmp_path structure
     with patch("scripts.core.reporters.html_reporter.__file__", str(fake_module_file)):
         write_html(sample_findings, output_path)
 
-        assert output_path.exists()
-        html = output_path.read_text(encoding="utf-8")
+    assert output_path.exists()
+    html = output_path.read_text(encoding="utf-8")
 
-        # Verify fixture template was used (not React build, not fallback)
-        assert "fixture-test" in html
-        assert "window.__FINDINGS__ = [{" in html
+    assert "fixture-test" not in html, "the deleted fixture rung was resurrected"
+    assert 'content="fallback"' in html
+    assert "Fallback HTML Mode" in html
 
 
 def test_write_html_empty_findings(tmp_path):

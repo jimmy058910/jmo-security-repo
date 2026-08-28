@@ -279,51 +279,37 @@ class TestPrioritizationWorkflow:
 
         html_content = output_path.read_text(encoding="utf-8")
 
-        # Check if React build OR test fixture exists (determines which assertions to run)
+        # The built bundle is tracked and shipped as package data (#862), so
+        # this branch is no longer conditional. It used to be: `dist/` was
+        # gitignored, so the assertions below ran only where a developer had
+        # run `npm run build`, and CI took an `else` that asserted nothing but
+        # `<!DOCTYPE html>`. A test that weakens itself when the artifact is
+        # missing cannot detect the artifact going missing.
         from pathlib import Path as RealPath
 
-        dashboard_dir = (
-            RealPath(__file__).parent.parent.parent / "scripts" / "dashboard"
-        )
-        react_build_exists = (dashboard_dir / "dist" / "index.html").exists()
-
-        # Also check for test fixtures (used in CI when React build doesn't exist)
-        repo_root = RealPath(__file__).parent.parent.parent
-        test_fixture_exists = (
-            repo_root
-            / "tests"
-            / "fixtures"
+        bundle = (
+            RealPath(__file__).parent.parent.parent
+            / "scripts"
             / "dashboard"
-            / "test-inline-dashboard.html"
-        ).exists()
+            / "dist"
+            / "index.html"
+        )
+        assert bundle.exists(), f"{bundle} is tracked in git and must be present"
 
-        if react_build_exists or test_fixture_exists:
-            # React implementation: Verify data is embedded with priority field
-            # Check that findings are embedded with priority data
-            assert "test-001" in html_content  # Finding ID
-            assert "test-002" in html_content  # Finding ID
-            assert '"priority":' in html_content  # Priority field in JSON data
+        # Findings are embedded with priority data
+        assert "test-001" in html_content  # Finding ID
+        assert "test-002" in html_content  # Finding ID
+        assert '"priority":' in html_content  # Priority field in JSON data
 
-            # Verify priority sub-fields are embedded (epss, is_kev, etc.)
-            assert '"epss":' in html_content  # EPSS score field
-            assert '"is_kev":' in html_content  # KEV boolean field
-            assert "0.95" in html_content  # EPSS value from test-001
-            assert "0.75" in html_content  # EPSS value from test-002
+        # Verify priority sub-fields are embedded (epss, is_kev, etc.)
+        assert '"epss":' in html_content  # EPSS score field
+        assert '"is_kev":' in html_content  # KEV boolean field
+        assert "0.95" in html_content  # EPSS value from test-001
+        assert "0.75" in html_content  # EPSS value from test-002
 
-            # React dashboard has root div for mounting
-            assert (
-                '<div id="root"></div>' in html_content or 'id="root"' in html_content
-            )
-        else:
-            # Fallback HTML mode (CI without React build)
-            # Just verify basic HTML structure
-            assert "<!DOCTYPE html>" in html_content
-            assert "JMo Security" in html_content
-            # Fallback mode shows summary, not individual findings
-            assert (
-                "Total Findings: 2" in html_content
-                or "Total Findings:</strong> 2" in html_content
-            )
+        # React dashboard has root div for mounting
+        assert '<div id="root"></div>' in html_content or 'id="root"' in html_content
+        assert "JMo Security" in html_content
 
     @patch("scripts.core.priority_calculator.EPSSClient")
     @patch("scripts.core.priority_calculator.KEVClient")
