@@ -144,7 +144,7 @@ profiles (fast/balanced/deep)
 
 **Output Format:**
 
-```markdown
+````markdown
 ## Impact Analysis: Adding 'priority' Field to CommonFinding
 
 ### Summary
@@ -349,7 +349,7 @@ Before merging:
 - [ ] Migration guide in CHANGELOG
 - [ ] Pre-commit hooks pass
 
-```text
+````
 
 ---
 
@@ -376,7 +376,7 @@ Before merging:
 
 **Output Format:**
 
-```markdown
+````markdown
 ## Files Importing normalize_and_report.py
 
 ### Direct Imports (3 files)
@@ -425,7 +425,7 @@ If you modify `normalize_and_report.py`:
 - ✅ Update `test_cli_scan_ci.py` to test new behavior
 - ✅ Run integration tests: `pytest tests/integration/ -v`
 
-```text
+````
 
 ---
 

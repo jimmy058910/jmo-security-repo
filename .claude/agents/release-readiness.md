@@ -77,7 +77,7 @@ docs/                      # Version mentions
 
 **Output Format:**
 
-```markdown
+````markdown
 # Release Readiness Report: v0.7.0
 
 **Status:** ⚠️ NOT READY (4 blockers found)
@@ -499,7 +499,7 @@ After successful release:
 - [ ] Update project website (if applicable)
 - [ ] Close GitHub milestone (if applicable)
 
-```text
+````
 
 ---
 

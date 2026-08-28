@@ -131,7 +131,7 @@ You have access to all security analysis tools:
 
 **Output Format:**
 
-```markdown
+`````markdown
 # Security Audit Report: JMo Security v1.0.0
 
 **Audit Date:** 2025-10-17
@@ -475,7 +475,7 @@ Docker-based scanning requires access to Docker socket (`/var/run/docker.sock`),
 
 **Documentation:**
 
-```markdown
+````markdown
 ## Security Considerations
 
 ### Docker Socket Access
@@ -509,7 +509,7 @@ JMo Security's Docker-based scanning requires access to the Docker socket, which
    sudo usermod -aG docker $USER  # Use sparingly
    ```
 
-```text
+````
 
 ---
 
@@ -730,7 +730,7 @@ semgrep --config=p/security-audit --config=p/owasp-top-ten scripts/
 3. Add security testing to CI workflow
 4. Schedule quarterly security audits
 
-```text
+`````
 
 ---
 

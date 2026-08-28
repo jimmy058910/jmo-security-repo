@@ -61,16 +61,28 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DOC_CHECKER = REPO_ROOT / "scripts" / "dev" / "check_doc_links.py"
 
 # file -> (info-string closers, ends inside an unclosed fence)
-# Measured 2026-08-28 after the Phase 8 repair. See #1044.
+#
+# Was 13 files at #740, 8 after Phase 8, and is **1** after Phase 9 (#1044).
+# The seven `.claude/agents/*.md` files were all one defect with one repair:
+# each embeds a sample REPORT at three backticks, the report contains code
+# samples at three backticks, and CommonMark reads the first inner closer as
+# closing the report. Promoting the container to four backticks and closing it
+# where the author meant to fixes each -- and the author's close is always
+# there to be found, spelled ```text immediately before the next task heading.
+# `security-auditor.md` needed FIVE, because its report embeds a documentation
+# sample which itself embeds bash.
+#
+# The counts collapsed 11, 6, 4, 4, 4, 2, 1 -> 0. That is what a real repair
+# looks like here, per the ratchet note above.
+#
+# **`packaging/README.md` is NOT the same defect and is split out (#1051).**
+# Its strays are not a nested sample: `792bd921` ("comprehensive markdownlint
+# fixes") took the file from 336 to 785 lines by DUPLICATING fenced content as
+# bare text and leaving a stray ```text opener after each copy. Repairing it
+# means deleting duplicated prose, not promoting a container, and that is a
+# different reading with a different risk.
 KNOWN_BROKEN: dict[str, tuple[int, bool]] = {
-    ".claude/agents/doc-sync-checker.md": (11, True),
     "packaging/README.md": (7, True),
-    ".claude/agents/coverage-gap-finder.md": (6, False),
-    ".claude/agents/codebase-explorer.md": (4, False),
-    ".claude/agents/dependency-analyzer.md": (4, False),
-    ".claude/agents/security-auditor.md": (4, False),
-    ".claude/agents/release-readiness.md": (2, False),
-    ".claude/agents/code-quality-auditor.md": (1, False),
 }
 
 
