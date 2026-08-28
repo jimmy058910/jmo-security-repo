@@ -1,6 +1,6 @@
 # Quick Start - JMo Security
 
-**v1.0.0** | Get scanning in 5 minutes.
+**v1.0.8** | Get scanning in 5 minutes.
 
 ---
 

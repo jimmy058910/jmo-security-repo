@@ -246,4 +246,4 @@ If a scan fails after upgrade, check [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOT
 
 ---
 
-**Last Updated:** April 2026 | **JMo Security v1.0.1**
+**Last Updated:** August 2026 | **JMo Security v1.0.8**

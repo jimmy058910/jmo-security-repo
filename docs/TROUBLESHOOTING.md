@@ -258,4 +258,4 @@ If validation passes locally but GitHub rejects it, open an Issue with the full 
 
 ---
 
-**Last Updated:** April 2026 | **JMo Security v1.0.1**
+**Last Updated:** August 2026 | **JMo Security v1.0.8**

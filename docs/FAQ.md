@@ -276,4 +276,4 @@ Originally a capstone project at Institute of Data × Michigan Tech University's
 
 ---
 
-**Last Updated:** April 2026 | **JMo Security v1.0.1**
+**Last Updated:** August 2026 | **JMo Security v1.0.8**
