@@ -32,7 +32,7 @@ JMo Security is an automated security audit framework for scanning code reposito
 - **28 Security Scanners** - Secrets, SAST, SBOM, SCA, IaC, DAST, and more
 - **6 Target Types** - Repos, images, IaC files, URLs, GitLab, Kubernetes
 - **Unified Output** - JSON, SARIF, Markdown, CSV export, dual-mode HTML dashboard
-- **Cross-Tool Deduplication** - 30-40% noise reduction
+- **Cross-Tool Deduplication** - Findings several tools report for the same issue collapse into one consensus finding
 - **SQLite Historical Storage** - Track security posture over time with persistent history
 - **Machine-Readable Diffs** - Compare scans, detect regressions
 - **Trend Analysis** - Mann-Kendall statistical analysis, security scores

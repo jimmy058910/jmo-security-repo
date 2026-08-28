@@ -114,7 +114,7 @@ ReleaseNotes: |-
   - jmo tools: Manage tool installation and updates
 
   Performance:
-  - 30-40% noise reduction via cross-tool deduplication
+  - Cross-tool deduplication collapses the same issue from several scanners into one finding
   - 87% test coverage (2,981 tests)
   - CommonFinding schema v1.2.0 with fingerprint-based deduplication
 

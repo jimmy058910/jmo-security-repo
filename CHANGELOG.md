@@ -427,11 +427,11 @@ CI/YAML architectural rebuild release. Ships PR #350's Dockerfile download harde
 - **Feature #8: Cross-Tool Deduplication** - Intelligent clustering of duplicate findings across multiple security tools
   - `scripts/core/dedup_enhanced.py`: Multi-dimensional similarity engine (SimilarityCalculator, FindingClusterer)
   - Integration: Second-pass clustering in `normalize_and_report.py` after fingerprint deduplication
-  - Similarity algorithm: Three weighted components (Location 35%, Message 40%, Metadata 25%)
+  - Similarity algorithm: Three weighted components (Location 50%, Message 25%, Metadata 25%)
     - Location matching: Path normalization + line range overlap (Jaccard index + gap penalty)
     - Message matching: Hybrid fuzzy + token matching via rapidfuzz + security keyword extraction
     - Metadata matching: CWE/CVE/Rule ID family matching with type conflict detection
-  - Clustering: Greedy algorithm with 0.75 similarity threshold (configurable 0.70-0.85)
+  - Clustering: Greedy below 500 findings, LSH at or above; 0.65 similarity threshold (configurable 0.5-1.0)
   - Consensus findings: Highest-severity finding becomes representative, others stored in `context.duplicates`
   - Confidence levels: HIGH (4+ tools), MEDIUM (2-3 tools), LOW (1 tool)
   - Configuration: `jmo.yml` deduplication section with `cross_tool_clustering`, `similarity_threshold`, component weights
@@ -442,7 +442,7 @@ CI/YAML architectural rebuild release. Ships PR #350's Dockerfile download harde
     - SARIF: Consensus metadata in `properties.consensus` field
   - Test coverage: 41/41 tests passing (38 unit + 3 integration), 95% code coverage
   - Performance: <2 seconds for 1000 findings, <5 seconds for 10K findings
-  - Impact: 30-40% reduction in reported findings, noise elimination, high-confidence prioritization
+  - Impact: noise elimination and high-confidence prioritization; the size of the reduction depends on how much the profile's tools overlap
   - See [docs/USER_GUIDE.md#cross-tool-deduplication-v100](docs/USER_GUIDE.md#cross-tool-deduplication-v100) for complete documentation
 
 ### Changed

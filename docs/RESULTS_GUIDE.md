@@ -1282,7 +1282,7 @@ priority = (severity_score * epss_multiplier * kev_multiplier * reachability_mul
 
 ## Cross-Tool Deduplication
 
-JMo Security automatically clusters duplicate findings detected by multiple tools, reducing noise by 30-40%.
+JMo Security automatically clusters duplicate findings detected by multiple tools into a single consensus finding. How much this shrinks a report depends entirely on how much the profile's tools overlap; see [Known limitations](KNOWN_LIMITATIONS.md#deduplication) for what it measures on the corpora this repository can reproduce.
 
 ### How It Works
 
@@ -1385,8 +1385,7 @@ This reverts to Phase 1 deduplication only (same tool, same location).
 |--------|-------|
 | Time | <2 seconds for 1000 findings, <10 seconds for 10000 findings |
 | Scalability | LSH algorithm enables O(n log n) clustering for large scans |
-| Reduction | 30-40% fewer reported findings (noise elimination) |
-| Accuracy | >=85% clustering accuracy (validated on 200+ finding sample) |
+| Reduction | Depends on how much the profile's tools overlap — see [Known limitations](KNOWN_LIMITATIONS.md#deduplication) |
 
 ### Best Practices
 

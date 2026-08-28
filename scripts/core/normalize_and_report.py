@@ -848,8 +848,8 @@ def _cluster_cross_tool_duplicates(
 
     Groups similar findings from different tools into consensus findings with
     detected_by arrays. Uses multi-dimensional similarity matching on:
-    - Location (path + line numbers): 35% weight
-    - Message content (fuzzy text matching): 40% weight
+    - Location (path + line numbers): 50% weight
+    - Message content (fuzzy text matching): 25% weight
     - Metadata (CWE, CVE, rule IDs): 25% weight
 
     Args:
