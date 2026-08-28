@@ -12,7 +12,7 @@ JMo Security orchestrates **12 external security tools**. On Windows, only **7 o
 
 | Tool | Category | Native Windows Support | Notes |
 |------|----------|------------------------|-------|
-| **TruffleHog** | Secrets Scanning | ✅ Full support | Go binary, verified secrets, 95% fewer false positives |
+| **TruffleHog** | Secrets Scanning | ✅ Full support | Go binary, verified secrets only |
 | **Trivy** | Vulnerability Scanning | ✅ Full support | Go binary, scans containers/IaC/files |
 | **Syft** | SBOM Generation | ✅ Full support | Go binary, generates Software Bill of Materials |
 | **Checkov** | IaC Security | ✅ Full support | Python, scans Terraform/CloudFormation/K8s |

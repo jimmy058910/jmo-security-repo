@@ -183,6 +183,166 @@ def _quantified_dedup_claims(text: str, mod) -> list[tuple[int, str]]:
     return hits
 
 
+# A false-positive rate is the same defect as #855's reduction figure with a
+# different subject, and a worse one: a reduction figure oversells a feature,
+# while a false-positive rate is ADVICE. A reader who sees `noseyparker
+# ~30-40%` reasonably decides not to run it, or to discount its findings by a
+# third.
+_FALSE_POSITIVE_WORD = re.compile(r"false[\s_-]?positive", re.IGNORECASE)
+_TABLE_SEPARATOR = re.compile(r"^\s*\|[\s:|-]+\|\s*$")
+
+
+def _cells(line: str) -> list[str]:
+    return [c.strip() for c in line.strip().strip("|").split("|")]
+
+
+def _quantified_false_positive_claims(text: str, mod) -> list[tuple[int, str]]:
+    """Lines giving a percentage for a false-positive rate.
+
+    Two shapes, because the defect had two:
+
+    **In a table column.** `docs/USAGE_MATRIX.md`'s Matrix 8 carried a
+    `False Positive Rate` column for 24 tools -- the issue said 11 -- and not
+    one data row contained the words "false positive". The vocabulary lived in
+    the HEADER and the numbers lived below it, exactly as #855's retired
+    `| Reduction | 30-40% |` row kept its subject two headings up. So a table
+    header is tracked the way that guard tracks a heading stack, and a
+    percentage in a column whose header names false positives is a hit.
+
+    **In prose.** `<10% false positives` as a profile-selection criterion in a
+    contributor doc: vocabulary and number on one line, nothing to correlate.
+
+    Fence tracking is shared with the deduplication guard, and for the reason
+    recorded there: a YAML sample opening `# jmo.yml` reads as an h1 and pops
+    the heading stack.
+    """
+    hits: list[tuple[int, str]] = []
+    opener: str | None = None
+    fp_columns: set[int] = set()
+    header_cells: list[str] | None = None
+
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        fence = mod.FENCE_PATTERN.match(line)
+        if fence:
+            marker, info = fence.group("marker"), fence.group("info")
+            if opener is None:
+                opener = marker
+                continue
+            if marker[0] == opener[0] and len(marker) >= len(opener) and not info:
+                opener = None
+            continue
+        if opener is not None:
+            continue
+
+        if not line.strip().startswith("|"):
+            # Any non-table line ends the current table's column context.
+            fp_columns, header_cells = set(), None
+            if _FALSE_POSITIVE_WORD.search(line) and _PCT.search(line):
+                hits.append((lineno, line))
+            continue
+
+        if _TABLE_SEPARATOR.match(line) and header_cells is not None:
+            fp_columns = {
+                i
+                for i, cell in enumerate(header_cells)
+                if _FALSE_POSITIVE_WORD.search(cell)
+            }
+            continue
+
+        cells = _cells(line)
+        if fp_columns:
+            for index in fp_columns:
+                if index < len(cells) and _PCT.search(cells[index]):
+                    hits.append((lineno, line))
+                    break
+        elif _FALSE_POSITIVE_WORD.search(line) and _PCT.search(line):
+            hits.append((lineno, line))
+        header_cells = cells
+    return hits
+
+
+def test_no_user_facing_doc_quantifies_a_false_positive_rate() -> None:
+    """Regression for #1047: an advertised false-positive rate has no source.
+
+    `git grep -i "false positive rate" -- scripts/ tests/` is empty, and the
+    only commit ever to touch the column was a documentation reorganisation.
+
+    `CHANGELOG.md` is out of scope, and that is not an oversight: it is already
+    in `check_doc_links.ARCHIVAL_PREFIXES`, because frozen release notes record
+    what was claimed at the time rather than advising a reader today. Its
+    "95% false positive reduction" lines stay.
+    """
+    mod = _doc_link_checker()
+    tracked = mod.tracked_paths()
+
+    candidates = sorted(
+        p
+        for p in tracked
+        if p.endswith(CHECKED_SUFFIXES)
+        and not p.startswith(mod.ARCHIVAL_PREFIXES)
+        and p not in EXTRA_ALLOWED
+    )
+    assert len(candidates) >= 100, f"file discovery looks wrong: {len(candidates)}"
+
+    offenders = [
+        f"{rel}:{lineno}: {line.strip()[:100]}"
+        for rel in candidates
+        for lineno, line in _quantified_false_positive_claims(
+            (REPO_ROOT / rel).read_text(encoding="utf-8", errors="replace"), mod
+        )
+    ]
+
+    assert not offenders, (
+        "user-facing text gives a false-positive percentage, which no corpus in "
+        "this repository reproduces (#1047). A false-positive rate depends on "
+        "the codebase, the rule set and the tool version -- none of which this "
+        "project measures -- and it is read as advice about which scanners to "
+        "trust:\n" + "\n".join(offenders)
+    )
+
+
+def test_the_false_positive_detector_finds_the_shape_it_was_written_for() -> None:
+    """The rule, on the table it was written for.
+
+    The repository no longer contains one, which is the fix -- so without this
+    the assertion above is green over a population of zero and cannot tell a
+    working detector from one that returns nothing.
+    """
+    mod = _doc_link_checker()
+
+    table = "\n".join(
+        [
+            "## Matrix 8: Tool-Specific Use Cases",
+            "",
+            "| Tool | Primary Use Case | Common Flags | False Positive Rate |",
+            "|------|------------------|--------------|---------------------|",
+            "| **trufflehog** | Verified secret detection | `--only-verified` | ~5% (verified) |",
+            "| **noseyparker** | Deep secret scanning | N/A | ~30-40% |",
+            "| **syft** | SBOM generation | `-q` | 0% (informational) |",
+        ]
+    )
+    hits = _quantified_false_positive_claims(table, mod)
+    assert [n for n, _ in hits] == [5, 6, 7], f"expected all three rows, got {hits}"
+
+    # The same table without the column must be clean -- otherwise the detector
+    # is reporting the rows rather than the claim.
+    cleaned = "\n".join(
+        line.rsplit("|", 2)[0] + "|" if line.startswith("|") else line
+        for line in table.splitlines()
+    )
+    assert _quantified_false_positive_claims(cleaned, mod) == []
+
+    # The prose shape, which has no column to correlate.
+    prose = "| **fast** | <5 min, core capability, <10% false positives | trufflehog |"
+    assert _quantified_false_positive_claims(prose, mod)
+
+    # A percentage with no false-positive vocabulary anywhere is not a hit.
+    assert (
+        _quantified_false_positive_claims("Coverage is 85% on the marker suite.", mod)
+        == []
+    )
+
+
 def test_clustering_docstring_states_the_real_weights() -> None:
     """The documented similarity weights must equal the code's defaults (#855).
 

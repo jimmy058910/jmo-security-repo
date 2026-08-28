@@ -136,7 +136,7 @@ per_tool:
 
 | Profile | Criteria | Examples |
 |---------|----------|----------|
-| **fast** | <5 min, core capability, <10% false positives | trufflehog, semgrep, trivy |
+| **fast** | <5 min, core capability, high-precision by design | trufflehog, semgrep, trivy |
 | **balanced** | Production-ready, SAST/DAST/SCA/IaC/CSPM | prowler, kubescape, akto |
 | **deep** | Specialized, >10 min, fuzzing, runtime, mobile | mobsf, lynis, afl++ |
 
