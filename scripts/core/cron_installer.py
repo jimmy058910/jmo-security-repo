@@ -251,7 +251,7 @@ class CronInstaller:
 
         Format:
             # JMo Security Schedule: nightly-deep
-            0 2 * * * jmo scan --profile deep --repos-dir ~/repos --results-dir ~/jmo-results/$(date +%Y-%m-%d)
+            0 2 * * * jmo scan --profile-name deep --repos-dir ~/repos --results-dir ~/jmo-results/$(date +%Y-%m-%d)
             # End JMo Schedule
 
         Args:
@@ -285,7 +285,7 @@ class CronInstaller:
             )
 
         # Build jmo command with validated inputs
-        jmo_cmd = f"jmo scan --profile {spec.profile}"
+        jmo_cmd = f"jmo scan --profile-name {spec.profile}"
 
         # Add targets with validation
         targets = spec.targets

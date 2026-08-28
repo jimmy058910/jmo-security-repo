@@ -187,7 +187,7 @@ def test_generate_github_actions_docker_mode(mock_config, mock_profiles):
     assert "runs-on: ubuntu-latest" in result
     assert "container:" in result
     assert f"image: {JMO_DOCKER_IMAGE_FULL}" in result
-    assert "jmo scan --results results --profile balanced" in result
+    assert "jmo scan --results-dir results --profile-name balanced" in result
     assert "--threads 4" in result
     assert "--timeout 600" in result
     assert "upload-artifact@v4" in result
@@ -405,7 +405,7 @@ def test_generate_gitlab_ci_default_workflow():
     assert "- security-scan" in result
     assert "security-scan:" in result
     assert f"image: {JMO_DOCKER_IMAGE_FULL}" in result
-    assert "jmo scan --repo . --profile balanced" in result
+    assert "jmo scan --repo . --profile-name balanced" in result
     assert "artifacts:" in result
     assert "sast: results/summaries/findings.sarif" in result
 
@@ -418,7 +418,7 @@ def test_generate_gitlab_ci_stack_workflow():
     assert "- report" in result
     assert "security-scan-all:" in result
     assert "security-report:" in result
-    assert "jmo scan --repos-dir . --profile deep" in result
+    assert "jmo scan --repos-dir . --profile-name deep" in result
     assert "jmo report ./results" in result
     assert "dependencies:" in result
 
@@ -449,7 +449,7 @@ def test_generate_gitlab_ci_dependency_workflow():
 
     # Should use default template
     assert "security-scan:" in result
-    assert "jmo scan --repo . --profile balanced" in result
+    assert "jmo scan --repo . --profile-name balanced" in result
 
 
 # generate_docker_compose tests
@@ -466,7 +466,7 @@ def test_generate_docker_compose_default_workflow():
     assert "./results:/scan/results" in result
     assert "scan" in result
     assert "--repo /scan" in result
-    assert "--profile balanced" in result
+    assert "--profile-name balanced" in result
     assert "JMO_THREADS=auto" in result
 
 
@@ -480,7 +480,7 @@ def test_generate_docker_compose_stack_workflow():
     assert "- jmo-security" in result
     assert "scan" in result
     assert "--repos-dir /scan" in result
-    assert "--profile deep" in result
+    assert "--profile-name deep" in result
     # `jmo report` has no profile-selection flag at all -- it reads the profile
     # from .scan_metadata.json. This used to assert `--profile {profile}`, which
     # made the generated command exit 2.

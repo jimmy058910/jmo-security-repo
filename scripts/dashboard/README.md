@@ -78,7 +78,7 @@ scripts/dashboard/
 ├── package.json                 # npm dependencies
 ├── vite.config.ts               # Vite build configuration
 ├── tsconfig.json                # TypeScript configuration
-├── tailwind.config.js           # Tailwind CSS configuration
+├── postcss.config.js            # PostCSS (@tailwindcss/postcss)
 └── README.md                    # This file
 ```
 

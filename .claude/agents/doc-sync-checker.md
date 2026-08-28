@@ -117,7 +117,7 @@ You have access to all documentation analysis tools:
 
 **Output Format:**
 
-```markdown
+````markdown
 ## Documentation Updates Needed: Snyk Adapter Addition
 
 ### Summary
@@ -393,7 +393,7 @@ After making updates:
 - docs/index.md link: 2 min
 - Validation: 8 min
 
-```text
+````
 
 ---
 
@@ -473,7 +473,7 @@ After making updates:
 
 **Output Format:**
 
-```markdown
+````markdown
 ## Outdated Version References
 
 ### Must Update (Current Version)
@@ -503,7 +503,7 @@ After making updates:
 1. **CHANGELOG.md:45** - v0.5.0 release section ✅ (historical, keep as-is)
 2. **CHANGELOG.md:120** - v0.4.0 release section ✅ (historical, keep as-is)
 
-```text
+````
 
 ---
 
@@ -555,7 +555,7 @@ After making updates:
 
 **Output Format:**
 
-```markdown
+````markdown
 ## Broken Links Found: 5
 
 ### Internal File Links (2 broken)
@@ -620,7 +620,7 @@ After making updates:
    **Issue:** URL ends with "-repo" (should be just "jmo-security")
    **Fix:** Change to `https://github.com/jimmy058910/jmo-security`
 
-```text
+````
 
 ---
 
@@ -683,7 +683,7 @@ markdownlint docs/ README.md QUICKSTART.md
 
 ### Change Format:
 
-```markdown
+````markdown
 **File:** docs/USER_GUIDE.md
 **Line:** 340
 **Section:** Tool Reference
@@ -702,7 +702,7 @@ Supported tools: trivy, semgrep, trufflehog, snyk
 
 **Reason:** Snyk adapter was added in PR #XX
 
-```text
+````
 
 ---
 

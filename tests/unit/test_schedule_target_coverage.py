@@ -170,16 +170,18 @@ def test_every_flag_a_consumer_emits_resolves_to_a_real_jmo_scan_flag(
     peer comparison would have called GitLab the *complete* one. `jmo scan`
     defines neither flag, so that export produced a command that exits 2.
 
-    Resolution matches argparse's own rule -- an exact name, or an unambiguous
-    prefix of exactly one -- rather than exact names only. Both generators emit
-    `--profile`, which `jmo scan` does not define; it works solely because
-    `--profile-name` is the only option starting with that prefix, so argparse's
-    `allow_abbrev` default accepts it. An exact-name assertion would fail here
-    for a command that runs correctly today. (That the generators depend on an
-    abbreviation is a real fragility -- a second `--profile*` option would break
-    every generated workflow at once -- and it is filed separately rather than
-    fixed here, because renaming the emitted flag is a behaviour change and this
-    issue is about dropped targets.)
+    Resolution now requires an EXACT option name. It used to accept argparse's
+    own rule -- an exact name, or an unambiguous prefix of exactly one --
+    because both generators emitted `--profile`, which `jmo scan` does not
+    define, and which worked solely because `--profile-name` was the only option
+    starting with that prefix. #1019 fixed the generators, so the looser rule no
+    longer has anything to protect, and keeping it would leave the fragility it
+    documented available to the next emitter.
+
+    The fragility was concrete: a second `--profile*` option on `jmo scan` --
+    `--profile-config`, `--profile-timings`, `--profiles` are all plausible --
+    turns every previously exported workflow into `ambiguous option: --profile`
+    at once, and does so without failing the tests of the change that added it.
     """
     defined = _scan_option_strings()
     # NOT `_maximal_schedule()`. MAXIMAL_TARGETS deliberately omits
@@ -197,15 +199,14 @@ def test_every_flag_a_consumer_emits_resolves_to_a_real_jmo_scan_flag(
     }
     argv = ARGV_BUILDERS[consumer](schedule)
 
-    unresolvable = sorted(
-        tok
-        for tok in {t for t in argv if t.startswith("--")}
-        if tok not in defined and len([d for d in defined if d.startswith(tok)]) != 1
+    undefined = sorted(
+        tok for tok in {t for t in argv if t.startswith("--")} if tok not in defined
     )
 
-    assert not unresolvable, (
-        f"{consumer} emits {unresolvable}, which `jmo scan` neither defines nor "
-        f"resolves by prefix. The generated command would exit 2."
+    assert not undefined, (
+        f"{consumer} emits {undefined}, which `jmo scan` does not define. Any "
+        f"that argparse resolves by prefix today works only while no second "
+        f"option shares that prefix -- emit the canonical name (#1019)."
     )
 
 
@@ -286,7 +287,7 @@ def test_the_argv_extractors_actually_found_something() -> None:
     for consumer, builder in ARGV_BUILDERS.items():
         argv = builder(_maximal_schedule())
         assert len(argv) >= 10, f"{consumer} extractor produced only {argv}"
-        assert "--profile" in argv, f"{consumer} extractor missed --profile"
+        assert "--profile-name" in argv, f"{consumer} extractor missed --profile-name"
 
 
 # ---------------------------------------------------------------------------

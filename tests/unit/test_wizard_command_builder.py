@@ -414,7 +414,7 @@ def test_build_command_parts_docker_repo(tmp_path):
     assert "--rm" in cmd
     assert JMO_DOCKER_IMAGE_FULL in cmd
     assert "scan" in cmd
-    assert "--profile" in cmd
+    assert "--profile-name" in cmd
     assert "fast" in cmd
 
 

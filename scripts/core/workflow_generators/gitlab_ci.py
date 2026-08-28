@@ -151,7 +151,7 @@ class GitLabCIGenerator:
 
         # Build jmo scan command
         cmd_parts = ["jmo scan"]
-        cmd_parts.append(f"--profile {shlex.quote(spec.profile)}")
+        cmd_parts.append(f"--profile-name {shlex.quote(spec.profile)}")
 
         # Targets
         #

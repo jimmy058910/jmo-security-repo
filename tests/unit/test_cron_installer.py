@@ -83,7 +83,13 @@ def test_install_to_crontab(sample_schedule):
 
         assert "# JMo Security Schedule: test-schedule" in cron_content
         assert "0 2 * * *" in cron_content
-        assert "jmo scan --profile balanced" in cron_content
+        # `--profile-name`, not `--profile`: `jmo scan` defines only the
+        # former, and #1019 stopped every emitter relying on argparse
+        # resolving the abbreviation. The `existing_crontab` fixtures below
+        # deliberately KEEP the old spelling -- they stand for entries a
+        # previous version wrote, and preserving those is the behaviour
+        # under test.
+        assert "jmo scan --profile-name balanced" in cron_content
         assert "# End JMo Schedule" in cron_content
 
 

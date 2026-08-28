@@ -131,7 +131,7 @@ def test_multi_target_support():
     assert "--gitlab-token" in scan_cmd
     assert "--k8s-context prod" in scan_cmd
     assert "--k8s-namespace default" in scan_cmd
-    assert "--profile deep" in scan_cmd
+    assert "--profile-name deep" in scan_cmd
 
 
 def test_notification_steps():

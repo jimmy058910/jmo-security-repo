@@ -564,7 +564,21 @@ def check_latest_versions() -> dict[str, tuple[str, str, bool]]:
     log("Checking latest versions for special tools...")
     for tool, info in versions.get("special_tools", {}).items():
         current = info["version"]
-        latest = get_latest_github_release(info["github_repo"])
+        # `special_tools` is a mixed section: most entries are GitHub releases,
+        # but `yara` is a PyPI package. Indexing `github_repo` unconditionally
+        # raised `KeyError: 'github_repo'` and took the whole command down --
+        # AFTER printing every other tool's result, so it read as a successful
+        # run with a stray traceback rather than a failure. `python_tools`
+        # already dispatches on which key is present; this now does the same.
+        pypi_package = info.get("pypi_package")
+        github_repo = info.get("github_repo")
+        if pypi_package:
+            latest = get_latest_pypi_version(pypi_package)
+        elif github_repo:
+            latest = get_latest_github_release(github_repo)
+        else:
+            warn(f"{tool}: no pypi_package or github_repo to check against")
+            continue
         if latest:
             is_outdated = current != latest
             results[tool] = (current, latest, is_outdated)

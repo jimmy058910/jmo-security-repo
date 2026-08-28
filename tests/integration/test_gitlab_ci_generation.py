@@ -97,7 +97,7 @@ def test_end_to_end_gitlab_ci_generation(tmp_path):
     assert isinstance(script, list)
     assert "mkdir -p ${RESULTS_DIR}" in script
     scan_cmd = " ".join(script)
-    assert "--profile deep" in scan_cmd
+    assert "--profile-name deep" in scan_cmd
     assert "--repos-dir ." in scan_cmd
     # Not emitted, deliberately: `jmo scan` defines no --include-pattern /
     # --exclude-pattern, so emitting them produced a command that exits 2

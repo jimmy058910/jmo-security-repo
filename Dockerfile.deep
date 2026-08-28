@@ -50,7 +50,7 @@ RUN TRIVY_VERSION="0.70.0" && \
     tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy
 
 # Download Hadolint (Dockerfile)
-RUN HADOLINT_VERSION="2.14.0" && \
+RUN HADOLINT_VERSION="2.15.1" && \
     HADOLINT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "x86_64") && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-Linux-${HADOLINT_ARCH}" \
     -o /usr/local/bin/hadolint && \
@@ -123,7 +123,7 @@ RUN GOSEC_VERSION="2.28.0" && \
     chmod +x /usr/local/bin/gosec
 
 # Download Grype (SCA + Vuln - Anchore)
-RUN GRYPE_VERSION="0.115.0" && \
+RUN GRYPE_VERSION="0.118.0" && \
     GRYPE_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/anchore/grype/releases/download/v${GRYPE_VERSION}/grype_${GRYPE_VERSION}_linux_${GRYPE_ARCH}.tar.gz" \
     -o /tmp/grype.tar.gz && \
@@ -251,7 +251,7 @@ RUN python3 -m pip install --no-cache-dir --break-system-packages checkov==3.3.8
     checkov --version && \
     echo "✓ checkov installed"
 
-RUN python3 -m pip install --no-cache-dir --break-system-packages ruff==0.15.20 && \
+RUN python3 -m pip install --no-cache-dir --break-system-packages ruff==0.16.5 && \
     echo "✓ ruff installed"
 
 RUN python3 -m pip install --no-cache-dir --break-system-packages yara-python==4.5.4 && \

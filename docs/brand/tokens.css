@@ -118,7 +118,7 @@
   }
 }
 
-/* Class-based dark mode (matches dashboard's tailwind config) */
+/* Class-based dark mode (matches the dashboard's @custom-variant dark) */
 :root.dark,
 .dark {
   --jmo-bg:           var(--jmo-neutral-900);

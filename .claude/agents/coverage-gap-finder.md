@@ -106,7 +106,7 @@ Every adapter test must have 5 categories:
 
 **Output Format:**
 
-```markdown
+````markdown
 ## Adapter Coverage Analysis
 
 ### Summary
@@ -327,7 +327,7 @@ To bring all adapters to ≥85% coverage:
 **Total Time:** 1.5 hours
 **Result:** All 27 adapters at ≥85% coverage
 
-```text
+````
 
 ---
 
@@ -352,7 +352,7 @@ To bring all adapters to ≥85% coverage:
    - Category 5: `def test_<tool>_<specific_edge_case>`
 
 **Output Format:**
-```markdown
+````markdown
 ## Test Category Coverage Analysis
 
 ### Summary
@@ -448,7 +448,7 @@ def test_zap_compliance_enrichment(tmp_path: Path):
     assert "A03:2021" in out[0]["compliance"]["owaspTop10_2021"]  # Injection
 ```
 
-```text
+````
 
 ---
 
@@ -481,7 +481,7 @@ def test_zap_compliance_enrichment(tmp_path: Path):
 
 **Output Format:**
 
-```markdown
+````markdown
 ## Untested Functions in jmo.py
 
 ### Functions Found: 24
@@ -571,7 +571,7 @@ def test_iter_images_from_file(tmp_path):
 - `_iter_repos(args)` - ✅ Tested in test_jmo_args.py
 - ... (12 more tested functions)
 
-```text
+````
 
 ---
 

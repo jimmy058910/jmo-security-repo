@@ -292,7 +292,7 @@ def test_schedule_export_github_actions(tmp_path):
     # Verify scan command
     job = workflow["jobs"]["security-scan"]
     scan_step = [s for s in job["steps"] if "Run JMo Security Scan" in s["name"]][0]
-    assert "--profile deep" in scan_step["run"]
+    assert "--profile-name deep" in scan_step["run"]
     # Quoted, because every value interpolated into the `run:` shell line is now
     # shlex.quote()d -- the same treatment cron_installer.py:298 has always given
     # this exact field. Quoting does suppress shell tilde expansion, which is a

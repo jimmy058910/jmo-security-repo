@@ -216,6 +216,35 @@ Remember to update CHANGELOG.md with user-facing changes.
 
 > **📋 Comprehensive Testing:** For full manual verification across all platforms (Windows, WSL, Linux, macOS, Docker), see the [Manual Testing Checklist](internal/MANUAL_TESTING_CHECKLIST.md).
 
+### Never inspect a wheel you built without cleaning first
+
+`uv build` reuses two setuptools caches it never invalidates, and they drift in **opposite**
+directions:
+
+- **`build/lib/` is never pruned**, so the wheel ships modules that have been
+  **deleted** from the tree. Measured: a file present only in `build/lib/`, and
+  tracked nowhere, appeared in the wheel — **198 entries stale against 197
+  clean**.
+- **`*.egg-info/SOURCES.txt` is re-read** under `include-package-data`, so the
+  wheel ships files whose `package-data` **declaration was deleted**. This half
+  makes a packaging gate *vacuous*: a check for "does the wheel contain X" can
+  pass against a `pyproject.toml` that no longer declares X.
+
+Both directories are gitignored, so nothing surfaces the drift. **Releases are
+safe** — CI builds on a fresh checkout. What is not safe is the *local*
+verification this checklist asks you to do, and it fails in the reassuring
+direction.
+
+Use **`make dist`**, which depends on `dist-clean` for exactly this reason. By
+hand:
+
+```bash
+rm -rf build dist ./*.egg-info && uv build
+```
+
+`tests/unit/test_dist_build_cleans_first.py` fails if a Makefile target ever
+builds a distribution without cleaning first.
+
 **🔴 CRITICAL FIRST STEP: Update ALL security tools to latest versions**
 
 1. **Update ALL security tools (MANDATORY - enforced by CI):**

@@ -64,7 +64,7 @@ export default function KeyboardShortcutsHelp() {
                     {shortcut.keys.map((key, kidx) => (
                       <kbd
                         key={kidx}
-                        className="px-2 py-1 text-sm font-semibold text-gray-800 bg-gray-100 border border-gray-300 rounded dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600"
+                        className="px-2 py-1 text-sm font-semibold text-gray-800 bg-gray-100 border border-gray-300 rounded-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600"
                       >
                         {key}
                       </kbd>
@@ -75,7 +75,7 @@ export default function KeyboardShortcutsHelp() {
             </div>
 
             <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">
-              Press <kbd className="px-1 py-0.5 text-xs bg-gray-100 dark:bg-gray-700 rounded">Esc</kbd> to close
+              Press <kbd className="px-1 py-0.5 text-xs bg-gray-100 dark:bg-gray-700 rounded-sm">Esc</kbd> to close
             </p>
           </div>
         </div>

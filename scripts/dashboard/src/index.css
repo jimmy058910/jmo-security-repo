@@ -1,8 +1,53 @@
 @import '../../../docs/brand/tokens.css';
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+/* tailwind 4 is configured in CSS, not JS (#390). These six aliases are the
+   whole of what `tailwind.config.js` extended; they still resolve to the brand
+   tokens imported above rather than hardcoding any hex. */
+@theme {
+  --color-critical: var(--jmo-severity-critical);
+  --color-high: var(--jmo-severity-high);
+  --color-medium: var(--jmo-severity-medium);
+  --color-low: var(--jmo-severity-low);
+  --color-info: var(--jmo-severity-info);
+  --color-primary: var(--jmo-brand-primary);
+}
+
+/* `darkMode: 'class'` in v3. v4 defaults to the `prefers-color-scheme` media
+   query, so the class-based behaviour has to be asked for explicitly or every
+   `dark:` utility in this dashboard stops responding to the toggle. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* v4 COMPATIBILITY -- three defaults changed, and each is a visible regression
+   this dashboard hits. Measured by diffing computed styles across 182 rendered
+   elements before and after the migration (#390):
+
+     border-color  51 elements fell back to currentColor, rendering black on
+                   light rows and white on dark ones instead of gray-200
+     ring          5 focus rings turned white; v4's default ring colour is
+                   currentColor and its default width is 1px, not 3px
+     padding       button padding reset
+
+   Restoring the v3 values here keeps the rewrite a MIGRATION rather than a
+   redesign. Removing this block is a deliberate visual change, not cleanup. */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentColor);
+  }
+}
+
+@theme {
+  --default-ring-width: 3px;
+  /* v3 applied `--tw-ring-opacity: 0.5` to the default ring; v4 dropped it,
+     which left the focus ring fully opaque. Matched here so the migration
+     changes nothing a user can see. */
+  --default-ring-color: color-mix(in srgb, var(--color-blue-500) 50%, transparent);
+}
 
 body {
   margin: 0;

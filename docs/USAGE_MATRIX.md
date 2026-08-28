@@ -303,32 +303,44 @@ This matrix shows the recommended execution mode for each use case.
 
 ## Matrix 8: Tool-Specific Use Cases
 
-| Tool | Primary Use Case | Target Types | Common Flags | False Positive Rate |
-|------|------------------|--------------|--------------|---------------------|
-| **trufflehog** | Verified secret detection | Repos, GitLab | `--only-verified` | ~5% (verified) |
-| **noseyparker** | Deep secret scanning | Repos | `--max-matches-per-file 100` | ~30-40% |
-| **semgrep** | Multi-language SAST | Repos | `--config auto` | ~10-15% |
-| **bandit** | Python-specific SAST | Repos | `--severity-level high` | ~20-30% |
-| **syft** | SBOM generation | Repos, Images | `-q` | 0% (informational) |
-| **trivy** | Universal vulnerability scanner | All types | `--severity HIGH,CRITICAL` | ~5-10% |
-| **checkov** | IaC policy enforcement | Repos, IaC | `--framework terraform` | ~15-20% |
-| **hadolint** | Dockerfile best practices | Repos | `--ignore DL3008` | ~10-15% |
-| **nuclei** | Fast vulnerability scanner | URLs | N/A | ~10-15% |
-| **zap** | DAST web scanning | URLs | `-config spider.maxDuration=10` | ~20-30% |
-| **prowler** | Cloud security (AWS/Azure/GCP) | IaC, K8s | N/A | ~10-15% |
-| **kubescape** | Kubernetes security | IaC, K8s | N/A | ~10-15% |
-| **grype** | Vulnerability scanner | Repos, Images | N/A | ~5-10% |
-| **horusec** | Multi-language SAST | Repos | N/A | ~20-25% |
-| **dependency-check** | OWASP SCA | Repos | N/A | ~10-15% |
-| **scancode** | License/copyright scanning | Repos | N/A | ~5% |
-| **cdxgen** | CycloneDX SBOM | Repos, Images | N/A | 0% (informational) |
-| **gosec** | Go security analyzer | Repos | N/A | ~15-20% |
-| **yara** | Malware pattern detection | Repos | N/A | ~10-15% |
-| **falco** | Runtime security | K8s | N/A | ~5-10% |
-| **akto** | API security | URLs | N/A | ~15-20% |
-| **afl++** | Coverage-guided fuzzing | Repos | `-m none` | Varies |
-| **mobsf** | Mobile security | Repos | N/A | ~15-20% |
-| **lynis** | System hardening audit | N/A | N/A | ~10-15% |
+| Tool | Primary Use Case | Target Types | Common Flags |
+|------|------------------|--------------|--------------|
+| **trufflehog** | Verified secret detection | Repos, GitLab | `--only-verified` |
+| **noseyparker** | Deep secret scanning | Repos | `--max-matches-per-file 100` |
+| **semgrep** | Multi-language SAST | Repos | `--config auto` |
+| **bandit** | Python-specific SAST | Repos | `--severity-level high` |
+| **syft** | SBOM generation | Repos, Images | `-q` |
+| **trivy** | Universal vulnerability scanner | All types | `--severity HIGH,CRITICAL` |
+| **checkov** | IaC policy enforcement | Repos, IaC | `--framework terraform` |
+| **hadolint** | Dockerfile best practices | Repos | `--ignore DL3008` |
+| **nuclei** | Fast vulnerability scanner | URLs | N/A |
+| **zap** | DAST web scanning | URLs | `-config spider.maxDuration=10` |
+| **prowler** | Cloud security (AWS/Azure/GCP) | IaC, K8s | N/A |
+| **kubescape** | Kubernetes security | IaC, K8s | N/A |
+| **grype** | Vulnerability scanner | Repos, Images | N/A |
+| **horusec** | Multi-language SAST | Repos | N/A |
+| **dependency-check** | OWASP SCA | Repos | N/A |
+| **scancode** | License/copyright scanning | Repos | N/A |
+| **cdxgen** | CycloneDX SBOM | Repos, Images | N/A |
+| **gosec** | Go security analyzer | Repos | N/A |
+| **yara** | Malware pattern detection | Repos | N/A |
+| **falco** | Runtime security | K8s | N/A |
+| **akto** | API security | URLs | N/A |
+| **afl++** | Coverage-guided fuzzing | Repos | `-m none` |
+| **mobsf** | Mobile security | Repos | N/A |
+| **lynis** | System hardening audit | N/A | N/A |
+
+> **There is deliberately no false-positive-rate column.** One existed and gave a
+> figure for all 24 tools; nothing in this repository derived any of them
+> (`git grep -i "false positive rate" -- scripts/ tests/` is empty), and the only
+> commit ever to touch the column was a documentation reorganisation. A
+> false-positive rate is *advice*: a reader who sees a high one for a scanner
+> reasonably decides not to run it, or to discount what it finds. An invented
+> one is worse than none.
+> Rates depend on your codebase, your rule set and the tool's version, and this
+> project measures none of those. Use `jmo.suppress.yml` and
+> [POLICY_AS_CODE.md](POLICY_AS_CODE.md) to tune what reaches you, and each
+> tool's own documentation for its precision guidance. (#1047)
 
 ---
 

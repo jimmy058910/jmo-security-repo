@@ -43,7 +43,7 @@ def jmo_scan_runner(tmp_path):
 
         def test_scan(jmo_scan_runner):
             rc, stdout, stderr, results_dir = jmo_scan_runner([
-                "ci", "--repo", ".", "--profile", "fast"
+                "ci", "--repo", ".", "--profile-name", "fast"
             ])
             assert rc in (0, 1)
     """

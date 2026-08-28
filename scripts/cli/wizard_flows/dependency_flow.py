@@ -67,7 +67,7 @@ class DependencyFlow(BaseWizardFlow):
             Command list focused on syft + trivy for dependencies
         """
         # Use syft + trivy for dependency scanning
-        cmd = ["jmo", "scan", "--profile", "balanced", "--tools", "syft", "trivy"]
+        cmd = ["jmo", "scan", "--profile-name", "balanced", "--tools", "syft", "trivy"]
 
         # Add repository for code dependencies
         cmd.extend(["--repo", str(Path.cwd())])

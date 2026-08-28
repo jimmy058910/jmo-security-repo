@@ -66,23 +66,23 @@ security-scan-all:
 
 .PHONY: security-scan-repos
 security-scan-repos:
-\tjmo scan --repos-dir . --profile balanced
+\tjmo scan --repos-dir . --profile-name balanced
 
 .PHONY: security-scan-images
 security-scan-images:
-\tjmo scan --images-file detected-images.txt --profile balanced
+\tjmo scan --images-file detected-images.txt --profile-name balanced
 
 .PHONY: security-scan-iac
 security-scan-iac:
-\tjmo scan --terraform-state terraform/*.tfstate --profile balanced
+\tjmo scan --terraform-state terraform/*.tfstate --profile-name balanced
 
 .PHONY: security-scan-fast
 security-scan-fast:
-\tjmo scan --repos-dir . --profile fast
+\tjmo scan --repos-dir . --profile-name fast
 
 .PHONY: security-scan-deep
 security-scan-deep:
-\tjmo scan --repos-dir . --profile deep
+\tjmo scan --repos-dir . --profile-name deep
 
 .PHONY: security-report
 security-report:
@@ -160,7 +160,7 @@ security-check-production:
 
 .PHONY: security-sbom
 security-sbom:
-\tjmo scan --tools syft --profile fast --image myapp:latest
+\tjmo scan --tools syft --profile-name fast --image myapp:latest
 
 .PHONY: security-full-check
 security-full-check:
@@ -260,7 +260,7 @@ def generate_github_actions(config: Any, profiles: dict[str, Any]) -> str:
     if config.use_docker:
         # Docker-based workflow
         scan_cmd_lines = [
-            f"jmo scan --results results --profile {config.profile}",
+            f"jmo scan --results-dir results --profile-name {config.profile}",
             f"--threads {threads}",
             f"--timeout {timeout}",
         ]
@@ -436,7 +436,7 @@ security-scan-all:
   stage: security-scan
   image: {JMO_DOCKER_IMAGE_FULL}
   script:
-    - jmo scan --repos-dir . --profile {profile}
+    - jmo scan --repos-dir . --profile-name {profile}
   artifacts:
     paths:
       - results/
@@ -515,7 +515,7 @@ security-scan:
   stage: security-scan
   image: {JMO_DOCKER_IMAGE_FULL}
   script:
-    - jmo scan --repo . --profile {profile}
+    - jmo scan --repo . --profile-name {profile}
   artifacts:
     paths:
       - results/
@@ -557,7 +557,7 @@ services:
     command: >
       scan
       --repos-dir /scan
-      --profile {profile}
+      --profile-name {profile}
       --human-logs
     environment:
       - JMO_THREADS=auto
@@ -633,7 +633,7 @@ services:
     command: >
       scan
       --repo /scan
-      --profile {profile}
+      --profile-name {profile}
       --human-logs
     environment:
       - JMO_THREADS=auto

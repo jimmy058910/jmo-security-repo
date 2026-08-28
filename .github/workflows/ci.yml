@@ -1498,7 +1498,7 @@ jobs:
           # Pinned to versions.yaml. Update both files together when bumping.
           TRIVY_VERSION: "0.70.0"
           TRUFFLEHOG_VERSION: "3.95.9"
-          HADOLINT_VERSION: "2.14.0"
+          HADOLINT_VERSION: "2.15.1"
         run: |
           # Same install block as scheduled.yml:tool-contract-tests — kept in
           # sync manually. Any drift means the weekly and PR gates disagree.

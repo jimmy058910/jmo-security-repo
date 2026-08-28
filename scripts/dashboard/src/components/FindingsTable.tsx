@@ -232,7 +232,7 @@ export default function FindingsTable({ findings }: FindingsTableProps) {
 
   return (
     <Tooltip.Provider delayDuration={300}>
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm">
         {/* TOP PAGINATION CONTROLS */}
         {sortedFindings.length > 0 && <PaginationControls />}
 
@@ -285,7 +285,7 @@ export default function FindingsTable({ findings }: FindingsTableProps) {
                     {finding.priority?.priority.toFixed(0) || '0'}
                   </span>
                   {finding.priority?.is_kev && (
-                    <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-red-600 text-white">
+                    <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-bold bg-red-600 text-white">
                       KEV
                     </span>
                   )}
@@ -302,7 +302,7 @@ export default function FindingsTable({ findings }: FindingsTableProps) {
                     </Tooltip.Trigger>
                     <Tooltip.Portal>
                       <Tooltip.Content
-                        className="bg-gray-900 dark:bg-gray-700 text-white px-3 py-2 rounded text-sm max-w-md shadow-lg z-50"
+                        className="bg-gray-900 dark:bg-gray-700 text-white px-3 py-2 rounded-sm text-sm max-w-md shadow-lg z-50"
                         sideOffset={5}
                         side="top"
                       >
@@ -321,7 +321,7 @@ export default function FindingsTable({ findings }: FindingsTableProps) {
                     </Tooltip.Trigger>
                     <Tooltip.Portal>
                       <Tooltip.Content
-                        className="bg-gray-900 dark:bg-gray-700 text-white px-3 py-2 rounded text-sm max-w-md shadow-lg z-50"
+                        className="bg-gray-900 dark:bg-gray-700 text-white px-3 py-2 rounded-sm text-sm max-w-md shadow-lg z-50"
                         sideOffset={5}
                         side="top"
                       >
@@ -340,7 +340,7 @@ export default function FindingsTable({ findings }: FindingsTableProps) {
                     </Tooltip.Trigger>
                     <Tooltip.Portal>
                       <Tooltip.Content
-                        className="bg-gray-900 dark:bg-gray-700 text-white px-3 py-2 rounded text-sm max-w-md shadow-lg z-50"
+                        className="bg-gray-900 dark:bg-gray-700 text-white px-3 py-2 rounded-sm text-sm max-w-md shadow-lg z-50"
                         sideOffset={5}
                         side="top"
                       >
@@ -363,7 +363,7 @@ export default function FindingsTable({ findings }: FindingsTableProps) {
                       <p className="text-sm text-gray-700 dark:text-gray-300">{finding.description || finding.message}</p>
 
                       {finding.context?.snippet && (
-                        <div className="bg-gray-900 text-gray-100 p-4 rounded font-mono text-xs overflow-x-auto">
+                        <div className="bg-gray-900 text-gray-100 p-4 rounded-sm font-mono text-xs overflow-x-auto">
                           {finding.context.snippet}
                         </div>
                       )}

@@ -1843,133 +1843,129 @@ class TestCmdToolsDebugComprehensive:
         # Should return 1 (usage error)
         assert result == 1
 
-    def test_debug_tool_found_with_version(self):
-        """Test debug when tool is found and version detected."""
+    def test_debug_tool_found_with_version(self, capsys):
+        """Test debug when tool is found and version detected.
+
+        Patches `ToolManager._find_binary` on the class, not the
+        `scripts.cli.tool_commands.ToolManager` module attribute. The attribute
+        patch is INERT here: `cmd_tools_debug` does its own
+        `from scripts.cli.tool_manager import ToolManager` inside the function
+        body, so it never reads the module attribute the patch replaced, and
+        the real resolver ran (#1021). The assertion is on OUTPUT, because the
+        return code is 0 down every one of these paths.
+        """
         from scripts.cli.tool_commands import cmd_tools_debug
+        from scripts.cli.tool_manager import ToolManager
 
-        mock_status = MagicMock()
-        mock_status.name = "trivy"
-        mock_status.installed = True
-        mock_status.installed_version = "0.50.0"
-        mock_status.binary_path = "/usr/local/bin/trivy"
+        args = argparse.Namespace(tools=["trivy"])
 
-        mock_manager = MagicMock()
-        mock_manager.check_tool.return_value = mock_status
-        mock_manager._get_clean_env.return_value = {}
-
-        args = argparse.Namespace(
-            tools=["trivy"],  # List, not single string
-        )
-
-        with patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager):
+        with patch.object(
+            ToolManager, "_find_binary", return_value="/usr/local/bin/trivy"
+        ):
             with patch(
                 "scripts.cli.tool_commands.colorize", side_effect=lambda x, _: x
             ):
-                with patch("builtins.print"):
-                    with patch("subprocess.run") as mock_run:
-                        mock_run.return_value = MagicMock(
-                            returncode=0,
-                            stdout="Version: 0.50.0",
-                            stderr="",
-                        )
-                        result = cmd_tools_debug(args)
+                with patch("subprocess.run") as mock_run:
+                    mock_run.return_value = MagicMock(
+                        returncode=0, stdout="Version: 0.50.0", stderr=""
+                    )
+                    result = cmd_tools_debug(args)
 
+        out = capsys.readouterr().out
         assert result == 0
+        assert "Binary path: /usr/local/bin/trivy" in out
+        assert "NOT FOUND" not in out, "took the not-found path while claiming found"
+        assert "Version: 0.50.0" in out
 
-    def test_debug_tool_version_timeout(self):
+    def test_debug_tool_version_timeout(self, capsys):
         """Test debug when version command times out."""
         import subprocess
 
         from scripts.cli.tool_commands import cmd_tools_debug
+        from scripts.cli.tool_manager import ToolManager
 
-        mock_status = MagicMock()
-        mock_status.name = "trivy"
-        mock_status.installed = True
-        mock_status.binary_path = "/usr/local/bin/trivy"
+        args = argparse.Namespace(tools=["trivy"])
 
-        mock_manager = MagicMock()
-        mock_manager.check_tool.return_value = mock_status
-        mock_manager._get_clean_env.return_value = {}
-
-        args = argparse.Namespace(
-            tools=["trivy"],
-        )
-
-        with patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager):
+        with patch.object(
+            ToolManager, "_find_binary", return_value="/usr/local/bin/trivy"
+        ):
             with patch(
                 "scripts.cli.tool_commands.colorize", side_effect=lambda x, _: x
             ):
-                with patch("builtins.print"):
-                    with patch("subprocess.run") as mock_run:
-                        mock_run.side_effect = subprocess.TimeoutExpired("cmd", 10)
-                        result = cmd_tools_debug(args)
-
-        assert result == 0
-
-    def test_debug_tool_binary_not_found(self):
-        """Test debug when binary path doesn't exist."""
-        from scripts.cli.tool_commands import cmd_tools_debug
-
-        mock_status = MagicMock()
-        mock_status.name = "trivy"
-        mock_status.installed = True
-        mock_status.binary_path = None  # No binary path
-
-        mock_manager = MagicMock()
-        mock_manager.check_tool.return_value = mock_status
-
-        args = argparse.Namespace(
-            tools=["trivy"],
-        )
-
-        with patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager):
-            with patch(
-                "scripts.cli.tool_commands.colorize", side_effect=lambda x, _: x
-            ):
-                with patch("builtins.print"):
+                with patch("subprocess.run") as mock_run:
+                    mock_run.side_effect = subprocess.TimeoutExpired("cmd", 10)
                     result = cmd_tools_debug(args)
 
+        out = capsys.readouterr().out
         assert result == 0
+        assert "NOT FOUND" not in out, "took the not-found path while claiming found"
+        assert "TIMEOUT" in out.upper(), "the timeout branch never reported itself"
 
-    def test_debug_tool_permission_error(self):
-        """Test debug when permission error executing binary."""
+    def test_debug_tool_binary_not_found(self, capsys):
+        """Test debug when the binary cannot be resolved at all.
+
+        Regression for #1021. This test used to patch
+        `scripts.cli.tool_commands.ToolManager` and set `binary_path = None` on
+        a mock whose `check_tool` `cmd_tools_debug` never calls. Both were
+        inert, so the command resolved and probed the REAL trivy -- the spawn
+        recorder caught `['C:\\\\Users\\\\...\\\\trivy.exe', '--version']` -- and
+        the single `result == 0` assertion passed either way. On a machine
+        without trivy it exercised the not-found path; on one with trivy, the
+        found path. Nothing declared which.
+
+        `NOT FOUND` is the discriminator: it is printed only on the branch this
+        test is named for, and that branch `continue`s before any spawn.
+        """
         from scripts.cli.tool_commands import cmd_tools_debug
+        from scripts.cli.tool_manager import ToolManager
 
-        mock_status = MagicMock()
-        mock_status.name = "trivy"
-        mock_status.installed = True
-        mock_status.binary_path = "/usr/local/bin/trivy"
+        args = argparse.Namespace(tools=["trivy"])
 
-        mock_manager = MagicMock()
-        mock_manager.check_tool.return_value = mock_status
-        mock_manager._get_clean_env.return_value = {}
-
-        # Mock file command result (first subprocess.run call)
-        # cmd_tools_debug makes TWO subprocess calls:
-        # 1. `file` command to check binary type (line 267)
-        # 2. Version command (line 298)
-        mock_file_result = MagicMock()
-        mock_file_result.returncode = 0
-        mock_file_result.stdout = "executable"
-
-        args = argparse.Namespace(
-            tools=["trivy"],
-        )
-
-        with patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager):
+        with patch.object(ToolManager, "_find_binary", return_value=None):
             with patch(
                 "scripts.cli.tool_commands.colorize", side_effect=lambda x, _: x
             ):
-                with patch("builtins.print"):
-                    with patch("subprocess.run") as mock_run:
-                        # Use list: first call (file) succeeds, second (version) raises
-                        mock_run.side_effect = [
-                            mock_file_result,
-                            PermissionError("Access denied"),
-                        ]
-                        result = cmd_tools_debug(args)
+                result = cmd_tools_debug(args)
 
+        out = capsys.readouterr().out
         assert result == 0
+        assert "Binary path: NOT FOUND" in out
+        assert "could not be found in PATH" in out
+        assert "--- Running version command ---" not in out, (
+            "the not-found branch must `continue` before the version probe; "
+            "reaching it means a real binary was resolved"
+        )
+
+    def test_debug_tool_permission_error(self, capsys):
+        """Test debug when permission error executing binary."""
+        from scripts.cli.tool_commands import cmd_tools_debug
+        from scripts.cli.tool_manager import ToolManager
+
+        # cmd_tools_debug makes TWO subprocess calls: `file` on the binary,
+        # then the version command.
+        mock_file_result = MagicMock(returncode=0, stdout="executable")
+
+        args = argparse.Namespace(tools=["trivy"])
+
+        with patch.object(
+            ToolManager, "_find_binary", return_value="/usr/local/bin/trivy"
+        ):
+            with patch(
+                "scripts.cli.tool_commands.colorize", side_effect=lambda x, _: x
+            ):
+                with patch("subprocess.run") as mock_run:
+                    mock_run.side_effect = [
+                        mock_file_result,
+                        PermissionError("Access denied"),
+                    ]
+                    result = cmd_tools_debug(args)
+
+        out = capsys.readouterr().out
+        assert result == 0
+        assert "NOT FOUND" not in out, "took the not-found path while claiming found"
+        assert (
+            "PERMISSION" in out.upper()
+        ), "the permission branch never reported itself"
 
 
 class TestCmdToolsUpdateWithInstaller:

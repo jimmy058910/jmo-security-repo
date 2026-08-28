@@ -91,7 +91,7 @@ export default function TrendsPanel({ scans, allFindings }: TrendsPanelProps) {
 
   if (scans.length < 2) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 transition-colors">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 transition-colors">
         <div className="flex items-center gap-3 mb-4">
           <BarChart3 className="w-6 h-6 text-primary" />
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">
@@ -108,7 +108,7 @@ export default function TrendsPanel({ scans, allFindings }: TrendsPanelProps) {
   return (
     <div className="space-y-6">
       {/* Trend Summary */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 transition-colors">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 transition-colors">
         <div className="flex items-center gap-3 mb-4">
           <BarChart3 className="w-6 h-6 text-primary" />
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">
@@ -169,7 +169,7 @@ export default function TrendsPanel({ scans, allFindings }: TrendsPanelProps) {
       </div>
 
       {/* Line Chart: Findings Over Time */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 transition-colors">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 transition-colors">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
           Findings Over Time
         </h3>
@@ -228,7 +228,7 @@ export default function TrendsPanel({ scans, allFindings }: TrendsPanelProps) {
       </div>
 
       {/* Bar Chart: Top 10 Rules */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 transition-colors">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 transition-colors">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
           Top 10 Most Frequent Rules
         </h3>

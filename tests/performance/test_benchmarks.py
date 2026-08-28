@@ -12,6 +12,7 @@ Run with: pytest tests/performance/ -v --tb=short
 Mark tests with @pytest.mark.benchmark for CI filtering.
 """
 
+import itertools
 import json
 import time
 from datetime import datetime
@@ -31,7 +32,11 @@ from scripts.core.history_db import (
 from scripts.core.normalize_and_report import _cluster_cross_tool_duplicates
 from scripts.core.reporters.html_reporter import write_html
 from scripts.core.trend_analyzer import TrendAnalyzer
-from tests.conftest import LATENCY_SAMPLES, median_seconds
+from tests.conftest import (
+    LATENCY_SAMPLES,
+    median_seconds,
+    median_seconds_with_setup,
+)
 
 # ============================================================================
 # Test Fixtures and Helper Functions
@@ -254,8 +259,43 @@ class TestPerformanceBenchmarks:
             parents=True, exist_ok=True
         )
 
-        # Benchmark scan insert
-        start = time.time()
+        # A MEDIAN over fresh databases, not one sample (#742).
+        #
+        # `store_scan` writes a row, so re-running it against the same database
+        # measures a growing table rather than an insert into an empty one.
+        # `median_seconds_with_setup` builds a fresh database per sample and
+        # keeps that cost off the clock.
+        counter = itertools.count()
+        stored: list[str] = []
+
+        def _fresh_db():
+            fresh_path = tmp_path / f"bench1_{next(counter)}.db"
+            init_database(fresh_path)
+            return fresh_path
+
+        def _store(fresh_path):
+            stored.append(
+                store_scan(
+                    results_dir=results_dir,
+                    profile=scan_data["profile"],
+                    tools=scan_data["tools"],
+                    db_path=fresh_path,
+                    commit_hash=scan_data["git_commit"],
+                    branch=scan_data["git_branch"],
+                )
+            )
+
+        duration_ms = median_seconds_with_setup(_fresh_db, _store) * 1000
+
+        # Verify: every sample must have stored a scan, or the median timed a
+        # failure path rather than an insert.
+        assert stored and all(
+            s is not None for s in stored
+        ), "Scan ID should be returned"
+
+        # The samples wrote to throwaway databases. The retrieval assertions
+        # below read the FIXTURE connection, so the row they look up has to be
+        # written there -- and its id is this store's, not a sample's.
         scan_id = store_scan(
             results_dir=results_dir,
             profile=scan_data["profile"],
@@ -264,10 +304,6 @@ class TestPerformanceBenchmarks:
             commit_hash=scan_data["git_commit"],
             branch=scan_data["git_branch"],
         )
-        duration_ms = (time.time() - start) * 1000
-
-        # Verify
-        assert scan_id is not None, "Scan ID should be returned"
         # Threshold: 200ms accommodates Windows I/O variance (observed: 70-150ms)
         # while still catching major regressions (10x+ slowdown)
         assert duration_ms < 200, (

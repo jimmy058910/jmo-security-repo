@@ -148,7 +148,7 @@ class CICDFlow(BaseWizardFlow):
         cmd = [
             "jmo",
             "ci",
-            "--profile",
+            "--profile-name",
             options["profile"],
             "--fail-on",
             "HIGH",  # Fail on high severity in CI/CD

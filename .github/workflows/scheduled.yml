@@ -471,10 +471,10 @@ jobs:
           # Avoids upstream install.sh GitHub-API "latest" lookups that have
           # flaked in CI (see PR #350 + release.rules.md).
           TRIVY_VERSION: "0.70.0"
-          GRYPE_VERSION: "0.115.0"
+          GRYPE_VERSION: "0.118.0"
           SYFT_VERSION: "1.46.0"
           TRUFFLEHOG_VERSION: "3.95.9"
-          HADOLINT_VERSION: "2.14.0"
+          HADOLINT_VERSION: "2.15.1"
         run: |
           # Install tools needed for smoke tests
           # Core SAST/SCA tools
@@ -1141,7 +1141,7 @@ jobs:
           # PR gates disagree.
           TRIVY_VERSION: "0.70.0"
           TRUFFLEHOG_VERSION: "3.95.9"
-          HADOLINT_VERSION: "2.14.0"
+          HADOLINT_VERSION: "2.15.1"
         run: |
           # Install tools needed for contract validation
           # Trivy - vulnerability scanner
@@ -1304,9 +1304,15 @@ jobs:
           cat summary.md
           cat summary.md >> "$GITHUB_STEP_SUMMARY"
 
-          echo "E2E_REPORTS=$reports" >> "$GITHUB_ENV"
-          echo "E2E_TOTAL_FAILED=$total_failed" >> "$GITHUB_ENV"
-          echo "E2E_SEEN_SUITES=${seen}" >> "$GITHUB_ENV"
+          # Grouped rather than three separate redirects: shellcheck's SC2129,
+          # which actionlint surfaces. It only fires where shellcheck is on
+          # PATH, so it is invisible locally and red in the nightly's
+          # `--all-files` lint. Same idiom as the `> summary.md` block above.
+          {
+            echo "E2E_REPORTS=$reports"
+            echo "E2E_TOTAL_FAILED=$total_failed"
+            echo "E2E_SEEN_SUITES=${seen}"
+          } >> "$GITHUB_ENV"
 
       - name: Upload summary
         uses: actions/upload-artifact@v7
@@ -1615,14 +1621,29 @@ jobs:
 
           # Count installed tools (expected JSON shape: {tool_name: {installed: bool, ...}})
           INSTALLED=$(jq '[.[] | select(.installed == true)] | length' tools-check.json)
+          PROFILE_SIZE=$(jq 'length' tools-check.json)
           echo "installed_count=$INSTALLED" >> "$GITHUB_OUTPUT"
 
-          echo "Installed tools: $INSTALLED (expected: $EXPECTED_TOOLS)"
+          echo "Installed tools: $INSTALLED of $PROFILE_SIZE in the image's own profile (checkout expects ~$EXPECTED_TOOLS)"
 
-          if [ "$INSTALLED" -lt "$EXPECTED_TOOLS" ]; then
-            echo "::error::Tool count $INSTALLED is less than expected $EXPECTED_TOOLS"
-            echo "Missing tools:"
-            jq -r 'to_entries[] | select(.value.installed == false) | .key' tools-check.json
+          # `$EXPECTED_TOOLS` is NOT the pass condition. It cannot be: it is
+          # computed from the checkout's PROFILE_TOOLS, while the image ships
+          # whatever the last `v*` tag built, and the two are different programs.
+          # Measured (#1039): PROFILE_TOOLS["deep"] holds 28 entries at v1.0.8
+          # and 29 on main -- `shellcheck` joined the profile after the tag -- so
+          # a perfectly good deep image reports 28 - 4 manual = 24 against an
+          # expectation of 25 and fails for no defect at all.
+          #
+          # The real pass condition is NON_MANUAL_MISSING above, which is
+          # derived from the image's own output and names the offender. This
+          # stays only as a META-GUARD: it catches an image whose profile
+          # collapsed or whose output shape changed, where "0 non-manual
+          # missing" would otherwise be vacuously true. One tool of slack
+          # absorbs exactly the release skew described above.
+          if [ "$PROFILE_SIZE" -lt "$((EXPECTED_TOOLS - 1))" ]; then
+            echo "::error::the image's own $PROFILE profile lists only $PROFILE_SIZE tools; the checkout expects around $EXPECTED_TOOLS."
+            echo "A shortfall of more than one is image drift, not release skew."
+            jq -r 'to_entries[] | select(.value.installed == false) | "  installed=false: \(.key)"' tools-check.json
             exit 1
           fi
 

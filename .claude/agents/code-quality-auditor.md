@@ -123,7 +123,7 @@ You have access to all code analysis tools:
 
 **Output Format:**
 
-```markdown
+````markdown
 # Code Quality Audit Report: JMo Security v1.0.0
 
 **Audit Date:** 2025-10-17
@@ -948,6 +948,8 @@ pytest --cov=scripts --cov-report=term-missing
 - Type Hint Coverage: 95% (+17%)
 
 **Quality Score:** 78/100 → 92/100 (+18%)
+
+````
 
 ---
 

@@ -416,7 +416,7 @@ To contribute a policy to the official JMo policy marketplace:
 
 4. **Real-World Validation:**
    - ✅ Tested on 3+ real codebases
-   - ✅ False positive rate <5%
+   - ✅ Reviewed for false positives against those codebases
    - ✅ No false negatives on known vulnerable code
 
 ### Submission Process

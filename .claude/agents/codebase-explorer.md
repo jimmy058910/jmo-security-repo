@@ -71,7 +71,7 @@ You have access to all codebase exploration tools:
 
 **Output Format:**
 
-```markdown
+````markdown
 ## Error Handling in Adapters
 
 ### Pattern Overview
@@ -108,7 +108,7 @@ def load_trivy(path: str | Path) -> List[Dict[str, Any]]:
 ✅ All use encoding="utf-8", errors="ignore"
 ✅ All check file existence before reading
 
-```text
+````
 
 ---
 
@@ -125,7 +125,7 @@ def load_trivy(path: str | Path) -> List[Dict[str, Any]]:
 6. Create flow diagram in markdown
 
 **Output Format:**
-```markdown
+````markdown
 ## Two-Phase Workflow Architecture
 
 ### Phase 1: Scan (jmo.py:cmd_scan)
@@ -221,7 +221,7 @@ def gather_results(results_dir: Path):
 └─────────────────────────────────────────────────────────┘
 ```
 
-```text
+````
 
 ---
 
@@ -255,6 +255,7 @@ def gather_results(results_dir: Path):
 ## Output Best Practices
 
 ### Always Include:
+
 1. **Executive summary** (2-3 sentences)
 2. **Code examples** with file paths and line numbers
 3. **Patterns identified** (what's consistent, what varies)
@@ -262,13 +263,15 @@ def gather_results(results_dir: Path):
 5. **References** (file:line format for easy navigation)
 
 ### Code Reference Format:
-```
-
-[filename.py:42-51](scripts/core/adapters/trivy_adapter.py#L42-L51)
 
 ```text
 
+[filename.py:42-51](scripts/core/adapters/trivy_adapter.py#L42-L51)
+
+```
+
 ### Pattern Summary Format:
+
 ```markdown
 ## Pattern Summary
 
