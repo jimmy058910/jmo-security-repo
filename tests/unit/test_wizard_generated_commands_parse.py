@@ -212,6 +212,50 @@ def test_generated_command_is_accepted_by_the_parser(label, argv):
     assert ok, f"{label}: `jmo {' '.join(argv)}` is rejected by jmo's own parser\n{err}"
 
 
+def _scan_option_strings(subcommand: str) -> set[str]:
+    parser = jmo.build_parser()
+    for action in parser._actions:
+        if isinstance(getattr(action, "choices", None), dict):
+            sub = action.choices.get(subcommand)
+            if sub is None:
+                return set()
+            return {opt for act in sub._actions for opt in act.option_strings}
+    return set()
+
+
+@pytest.mark.parametrize(
+    ("label", "argv"),
+    [(label, cmd) for label, cmd in ALL_COMMANDS],
+    ids=[f"{label}:{' '.join(cmd[:3])}" for label, cmd in ALL_COMMANDS],
+)
+def test_every_generated_flag_is_defined_exactly(label, argv):
+    """Parsing is not enough: an abbreviation parses until it does not.
+
+    The test above asks whether argparse ACCEPTS the command, and it accepts an
+    unambiguous prefix. So `jmo scan --profile deep` passed it for as long as
+    `--profile-name` was the only option starting with `--profile` -- twenty
+    generated commands relied on that, across the Makefile, GitLab CI and
+    docker-compose templates.
+
+    The correctness of every generated artifact then rests on a constraint
+    nobody knows about: that no second `jmo scan` option may ever begin with
+    `--profile`. One plausible future flag breaks all twenty at once, with
+    `ambiguous option`, and does NOT break the tests of the change that added
+    it (#1019).
+    """
+    defined = _scan_option_strings(argv[0])
+    if not defined:
+        pytest.skip(f"`jmo {argv[0]}` is not a subcommand with options")
+    undefined = sorted(
+        tok for tok in argv if tok.startswith("--") and tok not in defined
+    )
+    assert not undefined, (
+        f"{label}: `jmo {' '.join(argv)}` emits {undefined}, which "
+        f"`jmo {argv[0]}` does not define. It may resolve by prefix today; "
+        f"emit the canonical name (#1019)."
+    )
+
+
 def test_a_known_bad_command_is_actually_rejected():
     """Negative control.
 

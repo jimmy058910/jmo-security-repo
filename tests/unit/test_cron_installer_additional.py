@@ -396,7 +396,7 @@ def test_generate_cron_entry_comprehensive_all_targets(basic_schedule):
     entry = installer._generate_cron_entry(basic_schedule)
 
     # Verify profile
-    assert "jmo scan --profile deep" in entry
+    assert "jmo scan --profile-name deep" in entry
 
     # Verify all targets
     assert "--repos-dir" in entry and "~/repos" in entry
