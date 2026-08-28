@@ -28,13 +28,23 @@ def _sanitize_path_component(name: str) -> str:
 
     Examples:
         >>> _sanitize_path_component("../../../etc/passwd")
-        '___etc_passwd'
+        '______etc_passwd'
         >>> _sanitize_path_component("normal-repo")
         'normal-repo'
         >>> _sanitize_path_component("..hidden")
-        'hidden'
+        '_hidden'
         >>> _sanitize_path_component("nginx:latest")
         'nginx_latest'
+
+    Note the underscore counts, because the statement order below produces them
+    and the obvious guesses are wrong. ``/`` is replaced *before* ``..``, so the
+    three separators in ``../../../`` each become an underscore of their own --
+    six, not three. And ``..`` is replaced *before* ``lstrip(".")``, so
+    ``"..hidden"`` is already ``"_hidden"`` by the time the strip runs and there
+    is no leading dot left for it to remove.
+
+    Both are safe, and both were documented as the values they would have had if
+    the order were reversed (#758).
 
     Related: MEDIUM-001 (Path Traversal Prevention)
     """
@@ -77,12 +87,24 @@ def _validate_output_path(base_dir: Path, output_dir: Path) -> Path:
         ValueError: If output_dir is outside base_dir
 
     Examples:
-        >>> base = Path("/tmp/results")
-        >>> _validate_output_path(base, base / "repo1")  # OK
-        PosixPath('/tmp/results/repo1')
+        A path inside the base is returned, resolved:
 
-        >>> _validate_output_path(base, base / ".." / "etc")  # BLOCKS
-        ValueError: Path traversal detected: /tmp/etc outside /tmp/results
+        >>> base = Path("results").resolve()
+        >>> _validate_output_path(base, base / "repo1") == base / "repo1"
+        True
+
+        One that escapes it raises, which is the whole contract:
+
+        >>> _validate_output_path(base, base / ".." / "etc")
+        Traceback (most recent call last):
+            ...
+        ValueError: Path traversal detected: ...
+
+    Compared as paths rather than shown as a repr, and matched with an ellipsis
+    rather than a literal message: the previous examples asserted
+    ``PosixPath('/tmp/results/repo1')`` and an exception line with no
+    ``Traceback`` header, so neither could pass anywhere and the second could not
+    pass on Windows at any value (#758).
 
     Related: MEDIUM-001 (Defense-in-Depth Validation)
     """
