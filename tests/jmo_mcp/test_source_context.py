@@ -167,7 +167,11 @@ class TestGetContext:
 
         # Should be readable with errors='replace' (replacement characters)
         assert context["path"] == "binary.dat"
-        assert len(context["lines"]) > 0  # Should have replacement characters
+        # Check the claim the old comment only asserted in prose: each of the 8
+        # invalid bytes becomes one U+FFFD. A length check passes for any decode
+        # that yields text at all -- including a codec that maps these bytes to
+        # ordinary characters instead of flagging them as undecodable.
+        assert context["lines"] == "\ufffd" * 8
         assert "error" not in context  # errors='replace' handles it gracefully
 
     def test_get_context_none_end_line(self, repo_root_with_files: Path):

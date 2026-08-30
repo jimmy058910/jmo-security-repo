@@ -79,7 +79,11 @@ def test_get_server_info_with_findings(mock_env):
     assert "severity_distribution" in result
 
     assert result["total_findings"] == 5  # From fixtures
-    assert isinstance(result["severity_distribution"], dict)
+    # The distribution must be the fixture's actual breakdown, and must account
+    # for every finding counted above. A type check passes on `{}` -- i.e. on a
+    # loader that stopped distributing anything at all.
+    assert result["severity_distribution"] == {"CRITICAL": 2, "HIGH": 2, "MEDIUM": 1}
+    assert sum(result["severity_distribution"].values()) == result["total_findings"]
 
 
 def test_get_server_info_without_findings(tmp_path, monkeypatch):
