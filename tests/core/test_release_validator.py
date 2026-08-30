@@ -775,6 +775,37 @@ class TestSecurityChecks:
         result = _check_no_artifact_dirs()
         assert result.status == CheckStatus.FAIL
 
+    def test_no_artifact_dirs_passes_on_the_real_tree(self):
+        """The gate must pass on THIS repo, whose dashboard bundle is tracked.
+
+        Every other test for this check mocks `_run_cmd`, so all of them stayed
+        green while the real gate went red: #1033 began tracking
+        `scripts/dashboard/dist/index.html`, whose path contains `dist/`.
+        `pre-release-check` runs `jmo validate --tier quick` and `pypi-publish`
+        declares `needs: pre-release-check`, so on a `v*` tag the release
+        pipeline would have stopped at its first job. The last tag (v1.0.8)
+        predates #1033, so nothing had run it since.
+        """
+        result = _check_no_artifact_dirs()
+        assert result is None, getattr(result, "details", result)
+
+    @patch("scripts.core.validators.release_validator._run_cmd")
+    def test_no_artifact_dirs_still_fails_for_other_build_output(self, mock_cmd):
+        """The exemption is one path, not a `dist/` carve-out.
+
+        Without this, allowing the dashboard bundle could be "fixed" by skipping
+        `dist/` wholesale, which would silently stop catching every other build
+        artifact the check exists for.
+        """
+        mock_cmd.return_value = MagicMock(
+            returncode=0,
+            stdout="scripts/dashboard/dist/index.html\nsome/other/dist/bundle.js\n",
+        )
+        result = _check_no_artifact_dirs()
+        assert result.status == CheckStatus.FAIL
+        assert "some/other/dist/bundle.js" in result.details
+        assert "scripts/dashboard/dist/index.html" not in result.details
+
     def test_suppression_file_exists(self):
         """Test against real filesystem."""
         result = _check_suppression_file()
