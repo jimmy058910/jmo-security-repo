@@ -801,9 +801,23 @@ class TestSanitizeUrlForLogging:
 class TestOutputSanitizationPatterns:
     """Test the sanitization pattern definitions."""
 
-    def test_patterns_list_not_empty(self):
-        """Patterns list should contain sanitization rules."""
-        assert len(OUTPUT_SANITIZATION_PATTERNS) > 0
+    def test_patterns_redact_the_credential_shapes_they_name(self):
+        """This list is a security control, so assert it redacts -- not that it exists.
+
+        ``len(...) > 0`` survived a list stripped to a single useless entry, and
+        ``test_patterns_have_correct_structure`` below iterates the list, so an
+        emptied list passes it vacuously too. Neither notices that a pattern
+        stopped matching, which is the only failure that leaks a secret into a
+        log. These go through the real consumer.
+        """
+        for secret, marker in (
+            ("ghp_" + "a" * 36, "***GITHUB_TOKEN_REDACTED***"),
+            ("AKIA" + "B" * 16, "***AWS_KEY_REDACTED***"),
+            ("glpat-" + "c" * 20, "***GITLAB_TOKEN_REDACTED***"),
+        ):
+            result = sanitize_subprocess_output(f"leaked {secret} here")
+            assert secret not in result, f"{marker} pattern stopped redacting"
+            assert marker in result
 
     def test_patterns_have_correct_structure(self):
         """Each pattern should be a 3-tuple: (regex, replacement, flags)."""

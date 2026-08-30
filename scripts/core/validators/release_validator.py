@@ -817,6 +817,22 @@ def _check_no_large_files() -> CheckResult:
     return None  # type: ignore[return-value]
 
 
+# Build output this repo tracks on purpose. Kept as an explicit set rather than
+# a `dist/` carve-out so that any OTHER build artifact still fails the check.
+#
+# `scripts/dashboard/dist/index.html` is the shipped dashboard bundle: `jmo
+# report` serves it directly, and `dashboard-smoke` gates it against a fresh
+# `npm run build` (#862, #1033). Tracking it is the fix, not the defect --
+# before #1033, a released install got no dashboard at all.
+#
+# Without this exemption `pre-release-check` fails on every `v*` tag, and since
+# `pypi-publish` declares `needs: pre-release-check`, the whole release pipeline
+# stops at its first job. That went unnoticed because the last tag (v1.0.8)
+# predates #1033, and every unit test for this check mocks `_run_cmd` -- so
+# nothing exercised it against the real tree.
+_DELIBERATELY_TRACKED_BUILD_OUTPUT = frozenset({"scripts/dashboard/dist/index.html"})
+
+
 def _check_no_artifact_dirs() -> CheckResult:
     """No artifact directories tracked in git."""
     try:
@@ -838,6 +854,8 @@ def _check_no_artifact_dirs() -> CheckResult:
     artifact_dirs = ["venv/", "node_modules/", "dist/", "build/", "__pycache__/"]
     found: list[str] = []
     for fpath in files:
+        if fpath in _DELIBERATELY_TRACKED_BUILD_OUTPUT:
+            continue
         for ad in artifact_dirs:
             if fpath.startswith(ad) or f"/{ad}" in fpath:
                 found.append(fpath)

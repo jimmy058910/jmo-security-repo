@@ -63,13 +63,25 @@ class _StrictStream(StringIO):
 class TestUnicodeFallbacks:
     """Verify the UNICODE_FALLBACKS mapping is well-formed."""
 
-    def test_non_empty(self) -> None:
-        assert len(UNICODE_FALLBACKS) > 0
+    def test_covers_the_box_drawing_characters_the_cli_emits(self) -> None:
+        """Name characters the CLI actually prints, not just a count.
 
-    def test_keys_are_unicode_strings(self) -> None:
+        Every other test in this class is a ``for key in UNICODE_FALLBACKS``
+        loop, so an emptied mapping makes all of them pass vacuously and the
+        replaced ``len(...) > 0`` was their only guard. Box-drawing is the case
+        that matters: ``windows-encoding.rules.md`` records that cp437/cp850 DO
+        render these, so a probe using one wrongly declares those codecs safe.
+        """
+        assert {"─", "│", "┌", "┘"} <= set(UNICODE_FALLBACKS)
+
+    def test_keys_are_the_non_ascii_characters_needing_a_fallback(self) -> None:
+        """A key that is already ASCII needs no fallback and signals a typo.
+
+        ``len(key) > 0`` accepted an ASCII key, which would silently rewrite a
+        character that renders correctly everywhere.
+        """
         for key in UNICODE_FALLBACKS:
-            assert isinstance(key, str)
-            assert len(key) > 0
+            assert not key.isascii(), f"{key!r} is ASCII and needs no fallback"
 
     def test_values_are_ascii_strings(self) -> None:
         for key, value in UNICODE_FALLBACKS.items():
