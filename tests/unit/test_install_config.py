@@ -57,8 +57,18 @@ class TestTimeoutConstants:
 class TestBinaryUrls:
     """Verify BINARY_URLS entries are well-formed."""
 
-    def test_non_empty(self) -> None:
-        assert len(BINARY_URLS) > 0
+    def test_covers_the_binary_installed_tools(self) -> None:
+        """Name the tools, because the well-formedness test below cannot.
+
+        Every ``test_*_well_formed`` in this file parametrizes over the
+        constant's own keys, so emptying the constant collects **zero** cases and
+        pytest reports ``SKIPPED [NOTSET]`` with exit 0 — quiet, not red. The
+        replaced ``len(...) > 0`` was the only guard against that, and it still
+        could not notice a single tool being dropped. Naming them can.
+        """
+        assert {"trivy", "grype", "syft", "trufflehog", "nuclei", "gosec"} <= set(
+            BINARY_URLS
+        )
 
     @pytest.mark.parametrize("tool", list(BINARY_URLS.keys()))
     def test_url_values_are_non_empty_strings(self, tool: str) -> None:
@@ -92,8 +102,14 @@ class TestBinaryUrls:
 class TestExtractAppUrls:
     """Verify EXTRACT_APP_URLS entries."""
 
-    def test_non_empty(self) -> None:
-        assert len(EXTRACT_APP_URLS) > 0
+    def test_covers_the_three_archive_distributed_tools(self) -> None:
+        """The extract-app tools, named.
+
+        Both other tests in this class iterate the constant — one by
+        ``parametrize``, one by ``for tool in EXTRACT_APP_URLS`` — so an empty
+        dict makes both vacuously pass rather than fail.
+        """
+        assert set(EXTRACT_APP_URLS) == {"dependency-check", "scancode", "zap"}
 
     @pytest.mark.parametrize("tool", list(EXTRACT_APP_URLS.keys()))
     def test_url_values_well_formed(self, tool: str) -> None:
@@ -118,8 +134,14 @@ class TestExtractAppUrls:
 class TestInstallScripts:
     """Verify INSTALL_SCRIPTS entries."""
 
-    def test_non_empty(self) -> None:
-        assert len(INSTALL_SCRIPTS) > 0
+    def test_covers_the_upstream_installer_script_tools(self) -> None:
+        """The four tools with an upstream ``install.sh``, named.
+
+        ``release.rules.md`` records that piping these scripts is banned in CI
+        precisely because they resolve "latest" at runtime; the set is small and
+        deliberate, so pin it rather than asserting it is merely non-empty.
+        """
+        assert set(INSTALL_SCRIPTS) == {"grype", "kubescape", "syft", "trivy"}
 
     @pytest.mark.parametrize("tool", list(INSTALL_SCRIPTS.keys()))
     def test_scripts_are_https_urls(self, tool: str) -> None:
@@ -147,8 +169,15 @@ class TestInstallPriorities:
 class TestIsolatedTools:
     """Verify ISOLATED_TOOLS configuration."""
 
-    def test_non_empty(self) -> None:
-        assert len(ISOLATED_TOOLS) > 0
+    def test_covers_the_pydantic_conflicting_tools(self) -> None:
+        """The three tools that need their own venv, named.
+
+        Isolation exists for one measured reason: prowler pins ``pydantic<2``
+        while semgrep and checkov need ``>=2``. Dropping a tool from this dict
+        does not fail any other test in the class — they all parametrize over
+        its keys — it just silently reinstates the conflict.
+        """
+        assert set(ISOLATED_TOOLS) == {"prowler", "semgrep", "checkov"}
 
     @pytest.mark.parametrize("tool", list(ISOLATED_TOOLS.keys()))
     def test_required_keys(self, tool: str) -> None:
@@ -158,15 +187,28 @@ class TestIsolatedTools:
         assert "reason" in config, f"{tool} missing 'reason' key"
 
     @pytest.mark.parametrize("tool", list(ISOLATED_TOOLS.keys()))
-    def test_package_is_string(self, tool: str) -> None:
-        assert isinstance(ISOLATED_TOOLS[tool]["package"], str)
-        assert len(ISOLATED_TOOLS[tool]["package"]) > 0
+    def test_package_matches_the_tool_name(self, tool: str) -> None:
+        """The pip package installed into the isolated venv is the tool itself.
+
+        ``len(...) > 0`` passed for any string, including a wrong package name —
+        which is the failure that would actually bite, since the installer feeds
+        this value straight to pip.
+        """
+        assert ISOLATED_TOOLS[tool]["package"] == tool
 
     @pytest.mark.parametrize("tool", list(ISOLATED_TOOLS.keys()))
-    def test_conflicts_is_list(self, tool: str) -> None:
+    def test_conflicts_name_other_isolated_tools(self, tool: str) -> None:
+        """Every conflict resolves to another isolated tool, and never to self.
+
+        ``test_conflicts_are_symmetric`` below guards the pairing but skips any
+        conflict not in ``ISOLATED_TOOLS`` (``if conflict in ISOLATED_TOOLS``),
+        so a typo'd name silently passed both it and the replaced
+        ``len(conflicts) > 0``.
+        """
         conflicts = ISOLATED_TOOLS[tool]["conflicts_with"]
         assert isinstance(conflicts, list)
-        assert len(conflicts) > 0
+        assert tool not in conflicts, f"{tool} conflicts with itself"
+        assert set(conflicts) <= set(ISOLATED_TOOLS) and conflicts
 
     def test_conflicts_are_symmetric(self) -> None:
         """If A conflicts with B, B should conflict with A."""
@@ -181,8 +223,25 @@ class TestIsolatedTools:
 class TestSpecialInstall:
     """Verify SPECIAL_INSTALL dict."""
 
-    def test_non_empty(self) -> None:
-        assert len(SPECIAL_INSTALL) > 0
+    def test_maps_each_non_standard_tool_to_its_install_method(self) -> None:
+        """Pin the whole mapping: ``tool_manager`` dispatches on these values.
+
+        Eight static entries, each choosing an install strategy, so equality is
+        cheaper to maintain than it looks and strictly more useful than the
+        replaced ``len(...) > 0`` — which passed for a dict that had lost every
+        entry, while ``test_values_are_known_methods`` below would have collected
+        zero cases and skipped.
+        """
+        assert SPECIAL_INSTALL == {
+            "zap": "extract_app",
+            "dependency-check": "extract_app",
+            "scancode": "extract_app",
+            "falco": "manual",
+            "afl++": "manual",
+            "mobsf": "docker",
+            "akto": "docker",
+            "lynis": "clone",
+        }
 
     @pytest.mark.parametrize("tool", list(SPECIAL_INSTALL.keys()))
     def test_values_are_known_methods(self, tool: str) -> None:
@@ -212,10 +271,18 @@ class TestDependencyConfig:
         assert "node" in DEPENDENCY_MANUAL_COMMANDS
 
     @pytest.mark.parametrize("dep", list(DEPENDENCY_VERIFY_COMMANDS.keys()))
-    def test_verify_commands_are_lists(self, dep: str) -> None:
+    def test_verify_command_invokes_the_dependency_with_a_version_flag(
+        self, dep: str
+    ) -> None:
+        """A verify command runs the dependency's own binary and asks its version.
+
+        ``len(cmd) > 0`` accepted any list, including one naming the wrong binary
+        or omitting the flag — and the command is spawned with ``shell=False``,
+        so a wrong argv is a silent verification failure, not a crash.
+        """
         cmd = DEPENDENCY_VERIFY_COMMANDS[dep]
-        assert isinstance(cmd, list)
-        assert len(cmd) > 0
+        assert cmd[0] == dep
+        assert cmd[1] in ("-version", "--version")
 
     @pytest.mark.parametrize("dep", list(DEPENDENCY_INSTALL_COMMANDS.keys()))
     def test_install_commands_cover_platforms(self, dep: str) -> None:

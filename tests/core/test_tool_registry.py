@@ -16,10 +16,11 @@ from scripts.core.tool_registry import (
 class TestToolPlatformRequirements:
     """Tests for TOOL_PLATFORM_REQUIREMENTS dict structure."""
 
-    def test_platform_requirements_dict_exists(self):
-        """TOOL_PLATFORM_REQUIREMENTS should be a non-empty dict."""
-        assert isinstance(TOOL_PLATFORM_REQUIREMENTS, dict)
-        assert len(TOOL_PLATFORM_REQUIREMENTS) > 0
+    # `test_platform_requirements_dict_exists` was deleted here (#979). It
+    # asserted `isinstance(dict)` and `len(...) > 0` on a module-level literal,
+    # and unlike the parametrized canaries elsewhere in this sweep it was
+    # genuinely redundant: `test_known_linux_only_tools` below indexes the dict
+    # directly, so an emptied constant reddens it rather than skipping.
 
     def test_known_linux_only_tools(self):
         """Linux-only tools should be defined."""
@@ -63,9 +64,10 @@ class TestGetPlatformStatus:
         """Linux-only tools should NOT be supported on Windows."""
         status = get_platform_status("falco", "windows")
         assert status["supported"] is False
-        assert status["reason"] is not None
-        assert len(status["reason"]) > 0
-        assert "workarounds" in status
+        # Not merely "a reason exists" -- the reason a user reads must name the
+        # actual constraint, and `len(...) > 0` passed for any string at all.
+        assert "Linux kernel" in status["reason"]
+        assert status["workarounds"] == ["docker"]
 
     def test_linux_only_tool_on_macos(self):
         """Linux-only tools should NOT be supported on macOS."""
@@ -167,12 +169,20 @@ class TestGetSkippedToolsForProfile:
         # Universal tools should NOT be skipped
         assert "trivy" not in skipped_names
 
-    def test_skipped_includes_reasons(self):
-        """Skipped tools should include reasons."""
+    def test_skipped_reason_matches_the_platform_status_reason(self):
+        """The skip list and the per-tool status must give the same reason.
+
+        These are two producers of one fact: `jmo scan` prints the skip reason,
+        `jmo tools check` prints the status reason, and a user comparing them
+        should not see two different explanations. The replaced
+        `len(reason) > 0` accepted any non-empty string, so the two could drift
+        apart -- or one could degrade to a placeholder -- with the loop still
+        green for every tool.
+        """
         skipped = get_skipped_tools_for_profile("deep", "windows")
+        assert skipped, "deep/windows must skip the Linux-only tools"
         for tool_name, reason in skipped:
-            assert isinstance(reason, str)
-            assert len(reason) > 0
+            assert reason == get_platform_status(tool_name, "windows")["reason"]
 
     def test_fast_profile_no_skipped_on_linux(self):
         """Fast profile should have no skipped tools on Linux."""

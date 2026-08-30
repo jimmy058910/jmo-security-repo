@@ -549,9 +549,12 @@ def test_get_install_hint_auto_detect_platform():
         pypi_package="bandit",
     )
 
-    # Should not raise, should auto-detect platform
+    # Should not raise, should auto-detect platform. Assert the hint carries a
+    # runnable command naming the package -- `len(hint) > 0` passed for any
+    # string, including one that had lost the package name entirely, which is
+    # the only part of the hint a user actually needs.
     hint = get_install_hint(tool)
-    assert len(hint) > 0
+    assert "pip install bandit" in hint
 
 
 # ========== Category 6: Edge Cases ==========

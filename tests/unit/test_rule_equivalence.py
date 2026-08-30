@@ -23,10 +23,19 @@ from scripts.core.rule_equivalence import (
 class TestRuleEquivalenceMapping:
     """Test the RULE_EQUIVALENCE mapping structure."""
 
-    def test_mapping_exists(self):
-        """Test that the mapping is properly defined."""
-        assert isinstance(RULE_EQUIVALENCE, dict)
-        assert len(RULE_EQUIVALENCE) > 0
+    def test_maps_the_documented_cross_tool_equivalence(self):
+        """The module docstring's own example, asserted.
+
+        ``test_mapping_structure`` below is a ``for ... in RULE_EQUIVALENCE``
+        loop, so an emptied mapping passes it vacuously; the replaced
+        ``isinstance``/``len > 0`` pair was the only guard, and it could not
+        notice a canonical id losing the very tools it exists to equate.
+        """
+        latest_tag = RULE_EQUIVALENCE["dockerfile-latest-tag"]
+        assert ("trivy", ":latest tag used") in latest_tag
+        assert ("hadolint", "DL3006") in latest_tag
+        # An equivalence naming one tool cannot dedupe anything across tools.
+        assert len({tool for tool, _ in latest_tag}) >= 2
 
     def test_mapping_structure(self):
         """Test that all entries have correct structure."""
