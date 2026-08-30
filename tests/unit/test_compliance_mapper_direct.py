@@ -244,7 +244,8 @@ def test_map_to_cis_controls_sast():
     from scripts.core.compliance_mapper import map_to_cis_controls_v8_1
 
     result = map_to_cis_controls_v8_1("semgrep", ["sast"])
-    assert len(result) > 0
+    # SAST maps to the secure-application-development control family (16.x).
+    assert any(c["control"] == "16.2" for c in result)
 
 
 def test_map_to_cis_controls_vuln():
@@ -252,7 +253,8 @@ def test_map_to_cis_controls_vuln():
     from scripts.core.compliance_mapper import map_to_cis_controls_v8_1
 
     result = map_to_cis_controls_v8_1("trivy", ["vulnerability"])
-    assert len(result) > 0
+    # Vulnerability scanning maps to the continuous vuln-management family (7.x).
+    assert any(c["control"] == "7.1" for c in result)
 
 
 def test_map_to_cis_controls_empty():
@@ -281,7 +283,8 @@ def test_map_to_nist_csf_vuln():
     from scripts.core.compliance_mapper import map_to_nist_csf_2_0
 
     result = map_to_nist_csf_2_0("trivy", ["vulnerability"], [])
-    assert len(result) > 0
+    # Vulnerability findings map to IDENTIFY / ID.RA (risk assessment).
+    assert any(m["function"] == "IDENTIFY" and m["category"] == "ID.RA" for m in result)
 
 
 def test_map_to_nist_csf_empty():
@@ -310,7 +313,8 @@ def test_map_to_pci_dss_vuln():
     from scripts.core.compliance_mapper import map_to_pci_dss_4_0
 
     result = map_to_pci_dss_4_0("trivy", ["vulnerability"], [])
-    assert len(result) > 0
+    # Vulnerability scanning maps to PCI DSS requirement 11.3.1.
+    assert any(r["requirement"] == "11.3.1" for r in result)
 
 
 def test_map_to_pci_dss_empty():
@@ -341,7 +345,8 @@ def test_map_to_mitre_attack_injection():
     from scripts.core.compliance_mapper import map_to_mitre_attack
 
     result = map_to_mitre_attack("semgrep", ["injection"], ["CWE-89"], "sql-injection")
-    assert len(result) > 0
+    # SQL injection (CWE-89) maps to T1190 Exploit Public-Facing Application.
+    assert any(t["technique"] == "T1190" for t in result)
 
 
 def test_map_to_mitre_attack_empty():
@@ -487,9 +492,10 @@ def test_enrich_finding_risk_as_non_dict():
 
     result = enrich_finding_with_compliance(finding)
 
-    # Should handle gracefully
-    # May or may not have compliance based on tool/tags
-    assert isinstance(result, dict)
+    # Malformed risk must not break tool-based enrichment: semgrep+sast still
+    # yields the CIS mapping, and the finding's identity is preserved.
+    assert "cisControlsV8_1" in result.get("compliance", {})
+    assert result["ruleId"] == "test-rule"
 
 
 def test_enrich_finding_all_frameworks():
@@ -573,8 +579,10 @@ def test_enrich_finding_empty_cwes_list():
     finding = create_finding(cwes=[])
     result = enrich_finding_with_compliance(finding)
 
-    # May or may not have compliance based on tool/rule
-    assert isinstance(result, dict)
+    # No CWE and an unknown tool -> nothing to map; enrichment adds no
+    # compliance block rather than fabricating one, and preserves the finding.
+    assert "compliance" not in result
+    assert result["ruleId"] == "test-rule"
 
 
 def test_enrich_finding_empty_tags_list():
@@ -584,8 +592,9 @@ def test_enrich_finding_empty_tags_list():
     finding = create_finding(tags=[])
     result = enrich_finding_with_compliance(finding)
 
-    # May or may not have compliance
-    assert isinstance(result, dict)
+    # Empty tags + unknown tool + no CWE -> no compliance block fabricated.
+    assert "compliance" not in result
+    assert result["ruleId"] == "test-rule"
 
 
 def test_enrich_finding_missing_tool_field():
@@ -610,9 +619,9 @@ def test_enrich_finding_missing_risk_field():
 
     result = enrich_finding_with_compliance(finding)
 
-    # Should still work with tool-based mappings
-    # May or may not have compliance
-    assert isinstance(result, dict)
+    # Missing risk field must not break tool-based enrichment (semgrep+sast).
+    assert "cisControlsV8_1" in result.get("compliance", {})
+    assert result["ruleId"] == "test-rule"
 
 
 def test_enrich_finding_case_insensitive_cwes():
