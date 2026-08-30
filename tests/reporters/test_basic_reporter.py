@@ -286,8 +286,11 @@ def test_get_remediation_priorities_docker():
         }
     ]
     priorities = _get_remediation_priorities(findings)
-    # Should include Docker-related priority
-    assert len(priorities) > 0
+    # The Docker branch must name the offending rule and give container-specific
+    # advice; a generic priority string would satisfy a bare count check.
+    assert len(priorities) == 1
+    assert "missing-user" in priorities[0]
+    assert "container security" in priorities[0].lower()
 
 
 def test_get_remediation_priorities_mixed():

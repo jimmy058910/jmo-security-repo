@@ -245,8 +245,10 @@ def test_nuclei_v110_remediation_without_field(tmp_path: Path):
     assert len(findings) == 1
 
     item = findings[0]
-    assert isinstance(item.remediation, str)
-    assert len(item.remediation) > 0
+    # With no remediation in the template output the adapter substitutes its
+    # generic fallback sentence -- assert that exact text, so a fallback that
+    # regressed to a placeholder or to echoing the template id would fail.
+    assert item.remediation == "Review finding and apply vendor-recommended fixes."
 
 
 def test_nuclei_v110_cwe_metadata(tmp_path: Path):

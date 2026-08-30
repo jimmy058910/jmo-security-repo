@@ -262,7 +262,7 @@ def test_sarif_empty_location():
 
 
 def test_sarif_valid_json(tmp_path, sample_diff_result):
-    """Test output is valid JSON."""
+    """Test output is valid JSON that identifies itself as SARIF 2.1.0."""
     out_path = tmp_path / "diff.sarif"
     write_sarif_diff(sample_diff_result, out_path)
 
@@ -270,7 +270,12 @@ def test_sarif_valid_json(tmp_path, sample_diff_result):
     with open(out_path, encoding="utf-8") as f:
         data = json.load(f)
 
-    assert isinstance(data, dict)
+    # A parseable dict is not enough: SARIF consumers dispatch on these three
+    # keys, and reject the document outright if the version does not match.
+    assert set(data) == {"$schema", "version", "runs"}
+    assert data["version"] == "2.1.0"
+    assert "sarif-schema-2.1.0.json" in data["$schema"]
+    assert data["runs"][0]["tool"]["driver"]["name"] == "JMo Security Diff"
 
 
 def test_sarif_unicode_handling(tmp_path):

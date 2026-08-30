@@ -251,7 +251,7 @@ def test_json_modified_findings(tmp_path, sample_diff_result):
 
 
 def test_json_valid_format(tmp_path, sample_diff_result):
-    """Test that output is valid JSON."""
+    """Test that output is valid JSON with the full diff-document shape."""
     out_path = tmp_path / "diff.json"
     write_json_diff(sample_diff_result, out_path)
 
@@ -259,7 +259,18 @@ def test_json_valid_format(tmp_path, sample_diff_result):
     with open(out_path, encoding="utf-8") as f:
         data = json.load(f)
 
-    assert isinstance(data, dict)
+    # The document is the diff schema, not merely *a* dict: every section a
+    # consumer reads is present, and nothing else is emitted alongside them.
+    assert set(data) == {
+        "meta",
+        "statistics",
+        "new_findings",
+        "resolved_findings",
+        "modified_findings",
+    }
+    assert data["meta"]["diff_version"] == "1.0.0"
+    assert data["meta"]["baseline"]["path"] == "baseline-results/"
+    assert data["meta"]["current"]["path"] == "current-results/"
 
 
 def test_json_round_trip(tmp_path, sample_diff_result):
