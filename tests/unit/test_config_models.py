@@ -156,7 +156,13 @@ class TestWizardConfig:
     def test_to_dict_target_is_dict(self) -> None:
         wc = WizardConfig()
         d = wc.to_dict()
-        assert isinstance(d["target"], dict)
+        # The nested TargetConfig must serialise through its own to_dict(), not
+        # collapse to an empty mapping or a bare string: a type check passes on
+        # `{}`, which is what a target that stopped serialising would return.
+        assert d["target"] == wc.target.to_dict()
+        assert d["target"]["type"] == "repo"
+        assert d["target"]["gitlab_url"] == "https://gitlab.com"
+        assert d["target"]["k8s_all_namespaces"] is False
 
     def test_set_db_path_and_get(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Reset class-level state

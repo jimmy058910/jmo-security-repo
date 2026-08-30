@@ -317,8 +317,12 @@ class TestFunctionalQueries:
 
     def test_query_explain(self, test_db):
         result = execute_readonly_query(test_db, "EXPLAIN SELECT * FROM scans LIMIT 1")
+        # EXPLAIN returns SQLite's VDBE program, so the columns are the opcode
+        # listing -- NOT the scans table's own columns. A bare count check is
+        # satisfied either way, so it cannot tell the two apart.
         assert result["row_count"] > 0
-        assert len(result["columns"]) > 0
+        assert result["columns"][:2] == ["addr", "opcode"]
+        assert "profile" not in result["columns"]
 
     def test_allow_safe_pragma(self, test_db):
         result = execute_readonly_query(test_db, "PRAGMA table_info(scans)")

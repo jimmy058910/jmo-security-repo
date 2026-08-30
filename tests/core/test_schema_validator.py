@@ -440,8 +440,11 @@ class TestValidateDirectory:
         write_json(tmp_path, "findings.json", [])
 
         result = validate_directory(tmp_path)
-        # Empty array means no findings to validate → no errors
-        assert isinstance(result, dict)
+        # Empty array means no findings to validate -> no errors. The return is
+        # keyed by file path and holds ONLY files that failed, so "no errors"
+        # must be the empty mapping; a type check accepts any report at all,
+        # including one that lists every file it merely visited.
+        assert result == {}
 
     def test_nonexistent_directory(self, tmp_path: Path):
         """Test error for missing directory."""
@@ -479,7 +482,13 @@ class TestValidateDirectory:
 
         # Only process .json files (default)
         result = validate_directory(tmp_path, glob_pattern="*.json")
-        assert isinstance(result, dict)
+        assert result == {}
+
+        # ...and the control that proves the glob is what excluded readme.txt,
+        # rather than it having been skipped for some unrelated reason: widen
+        # the pattern and the same file now reports an error.
+        widened = validate_directory(tmp_path, glob_pattern="*")
+        assert [Path(p).name for p in widened] == ["readme.txt"]
 
     def test_files_with_errors_included(self, tmp_path: Path):
         """Test that only files with errors are in result."""
