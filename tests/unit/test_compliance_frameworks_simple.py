@@ -42,8 +42,8 @@ def test_cwe_top_25_structure():
 
 def test_cwe_to_owasp_exists():
     """Test CWE_TO_OWASP_TOP10_2021 exists and has mappings."""
-    assert CWE_TO_OWASP_TOP10_2021
-    assert len(CWE_TO_OWASP_TOP10_2021) > 0
+    # A well-known mapping must be present (non-emptiness alone is vacuous).
+    assert "A03:2021" in CWE_TO_OWASP_TOP10_2021["CWE-79"]
 
 
 def test_cwe_to_owasp_structure():
@@ -60,8 +60,8 @@ def test_cwe_to_owasp_structure():
 
 def test_cis_controls_exists():
     """Test CIS_CONTROLS_V8_1 exists and has entries."""
-    assert CIS_CONTROLS_V8_1
-    assert len(CIS_CONTROLS_V8_1) > 0
+    # The SAST tool category must map to at least one CIS control.
+    assert "sast" in CIS_CONTROLS_V8_1
 
 
 def test_cis_controls_has_tool_categories():
@@ -88,8 +88,8 @@ def test_cis_controls_has_tool_categories():
 
 def test_nist_csf_exists():
     """Test NIST_CSF_2_0 exists and has entries."""
-    assert NIST_CSF_2_0
-    assert len(NIST_CSF_2_0) > 0
+    # The SAST tool category must map to at least one NIST CSF function.
+    assert "sast" in NIST_CSF_2_0
 
 
 def test_nist_csf_has_tool_categories():
@@ -105,8 +105,8 @@ def test_nist_csf_has_tool_categories():
 
 def test_cwe_to_nist_csf_exists():
     """Test CWE_TO_NIST_CSF_2_0 exists and has mappings."""
-    assert CWE_TO_NIST_CSF_2_0
-    assert len(CWE_TO_NIST_CSF_2_0) > 0
+    # CWE-79 must map to Detect / continuous monitoring (DE.CM).
+    assert any(m["category"] == "DE.CM" for m in CWE_TO_NIST_CSF_2_0["CWE-79"])
 
 
 def test_cwe_to_nist_csf_structure():
@@ -121,8 +121,8 @@ def test_cwe_to_nist_csf_structure():
 
 def test_pci_dss_exists():
     """Test PCI_DSS_4_0 exists and has entries."""
-    assert PCI_DSS_4_0
-    assert len(PCI_DSS_4_0) > 0
+    # The SAST tool category must map to at least one PCI DSS requirement.
+    assert "sast" in PCI_DSS_4_0
 
 
 def test_pci_dss_has_tool_categories():
@@ -138,8 +138,8 @@ def test_pci_dss_has_tool_categories():
 
 def test_cwe_to_pci_dss_exists():
     """Test CWE_TO_PCI_DSS_4_0 exists and has mappings."""
-    assert CWE_TO_PCI_DSS_4_0
-    assert len(CWE_TO_PCI_DSS_4_0) > 0
+    # CWE-89 (SQL injection) must map to PCI DSS requirement 6.2.4.
+    assert any(r["requirement"] == "6.2.4" for r in CWE_TO_PCI_DSS_4_0["CWE-89"])
 
 
 def test_cwe_to_pci_dss_structure():
@@ -154,8 +154,8 @@ def test_cwe_to_pci_dss_structure():
 
 def test_mitre_attack_exists():
     """Test MITRE_ATTACK exists and has entries."""
-    assert MITRE_ATTACK
-    assert len(MITRE_ATTACK) > 0
+    # The SCA tool category must map to at least one MITRE ATT&CK technique.
+    assert "sca" in MITRE_ATTACK
 
 
 def test_mitre_attack_has_tool_categories():
@@ -171,8 +171,8 @@ def test_mitre_attack_has_tool_categories():
 
 def test_cwe_to_mitre_attack_exists():
     """Test CWE_TO_MITRE_ATTACK exists and has mappings."""
-    assert CWE_TO_MITRE_ATTACK
-    assert len(CWE_TO_MITRE_ATTACK) > 0
+    # CWE-89 (SQL injection) must map to technique T1190.
+    assert any(t["technique"] == "T1190" for t in CWE_TO_MITRE_ATTACK["CWE-89"])
 
 
 def test_cwe_to_mitre_attack_structure():
@@ -180,35 +180,6 @@ def test_cwe_to_mitre_attack_structure():
     for cwe_id, techniques in CWE_TO_MITRE_ATTACK.items():
         assert cwe_id.startswith("CWE-")
         assert isinstance(techniques, list)
-
-
-# ========== Category 7: Data Integrity ==========
-
-
-def test_all_frameworks_are_dicts():
-    """Test all framework data structures are dictionaries."""
-    assert isinstance(CWE_TOP_25_2024, dict)
-    assert isinstance(CWE_TO_OWASP_TOP10_2021, dict)
-    assert isinstance(CIS_CONTROLS_V8_1, dict)
-    assert isinstance(NIST_CSF_2_0, dict)
-    assert isinstance(CWE_TO_NIST_CSF_2_0, dict)
-    assert isinstance(PCI_DSS_4_0, dict)
-    assert isinstance(CWE_TO_PCI_DSS_4_0, dict)
-    assert isinstance(MITRE_ATTACK, dict)
-    assert isinstance(CWE_TO_MITRE_ATTACK, dict)
-
-
-def test_all_frameworks_non_empty():
-    """Test all framework data structures contain data."""
-    assert len(CWE_TOP_25_2024) > 0
-    assert len(CWE_TO_OWASP_TOP10_2021) > 0
-    assert len(CIS_CONTROLS_V8_1) > 0
-    assert len(NIST_CSF_2_0) > 0
-    assert len(CWE_TO_NIST_CSF_2_0) > 0
-    assert len(PCI_DSS_4_0) > 0
-    assert len(CWE_TO_PCI_DSS_4_0) > 0
-    assert len(MITRE_ATTACK) > 0
-    assert len(CWE_TO_MITRE_ATTACK) > 0
 
 
 def test_cwe_top_25_all_imported():

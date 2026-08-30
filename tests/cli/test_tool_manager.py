@@ -766,7 +766,7 @@ def test_verify_execution_missing_deps():
 
     assert ready is False
     assert "Missing" in warning
-    assert len(missing) > 0
+    assert "java" in missing  # zap requires a Java runtime
 
 
 def test_verify_execution_cdxgen_node_version():
@@ -794,7 +794,7 @@ def test_get_remediation_for_tool_known():
     result = get_remediation_for_tool("trivy", "linux")
 
     assert "commands" in result
-    assert len(result["commands"]) > 0
+    assert any("trivy" in cmd for cmd in result["commands"])
 
 
 def test_get_remediation_for_tool_unknown():
@@ -1012,17 +1012,20 @@ def test_print_profile_summary_renders_manual_split():
 
 
 def test_get_missing_tools_for_scan():
-    """Test get_missing_tools_for_scan function."""
+    """Unavailable tools are returned in the missing list, by name.
+
+    The old body passed the string "fast" -- iterated character by character
+    into `for tool in tools` -- and captured the (available, missing) tuple as
+    `missing`, so the check was ``len((available, missing)) > 0``, always 2 and
+    unfalsifiable (#979). Pass a real list and unpack the tuple.
+    """
     from scripts.cli.tool_manager import get_missing_tools_for_scan
 
-    with patch("shutil.which") as mock_which:
-        # Make all tools "not found"
-        mock_which.return_value = None
+    with patch("shutil.which", return_value=None):
+        available, missing = get_missing_tools_for_scan(["zzz-not-a-tool", "qqq-nope"])
 
-        missing = get_missing_tools_for_scan("fast")
-
-    # All fast profile tools should be reported missing
-    assert len(missing) > 0
+    assert available == []
+    assert {status.name for status in missing} == {"zzz-not-a-tool", "qqq-nope"}
 
 
 class TestGetRemediationForTool:

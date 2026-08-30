@@ -116,18 +116,21 @@ class TestValidateFinding:
         valid_finding["schemaVersion"] = "99.99.99"
         errors = validate_finding(valid_finding)
         assert len(errors) > 0
+        assert any("schemaVersion" in err for err in errors)
 
     def test_missing_tool_name_fails(self, valid_finding: dict[str, Any]) -> None:
         """Tool object without name should fail."""
         del valid_finding["tool"]["name"]
         errors = validate_finding(valid_finding)
         assert len(errors) > 0
+        assert any("name" in err for err in errors)
 
     def test_missing_location_path_fails(self, valid_finding: dict[str, Any]) -> None:
         """Location without path should fail."""
         del valid_finding["location"]["path"]
         errors = validate_finding(valid_finding)
         assert len(errors) > 0
+        assert any("path" in err for err in errors)
 
     def test_additional_fields_allowed(self, valid_finding: dict[str, Any]) -> None:
         """Additional fields should be allowed (additionalProperties: true)."""
@@ -278,6 +281,9 @@ class TestValidateDirectory:
         """Non-existent directory should report error."""
         errors = validate_directory(Path("/nonexistent/path"))
         assert len(errors) > 0
+        assert any(
+            "Directory not found" in msg for msgs in errors.values() for msg in msgs
+        )
 
 
 class TestFixtureCompliance:
