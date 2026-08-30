@@ -74,7 +74,13 @@ def test_semgrep_v110_autofix(tmp_path: Path):
     assert "fix" in item.remediation
     assert "cursor.execute" in item.remediation["fix"]
     assert "steps" in item.remediation
-    assert len(item.remediation["steps"]) > 0
+    # The autofix path emits the full apply/test/commit sequence; a count check
+    # alone passes if the adapter drops to a single step or emits placeholders.
+    assert item.remediation["steps"] == [
+        "Apply the suggested fix above",
+        "Test the changes",
+        "Commit the fix",
+    ]
 
 
 def test_semgrep_v110_remediation_without_autofix(tmp_path: Path):

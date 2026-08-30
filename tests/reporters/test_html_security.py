@@ -333,12 +333,18 @@ class TestCSPDirectiveValidation:
 
     def test_csp_form_action_restricted(self, csp_content):
         """CSP should not include form-action (React dashboard has no forms)."""
-        # React dashboard has no form submission, so form-action directive
-        # is not needed. CSP is still secure without it.
-        # NOTE: form-action is optional - its absence is not a security issue
-        # when there are no forms that submit data.
-        # This test now just verifies CSP exists (checked by other tests)
-        assert len(csp_content) > 0  # CSP exists and is not empty
+        # React dashboard has no form submission, so form-action is deliberately
+        # omitted rather than forgotten. Assert the omission itself: if a form is
+        # ever added to the dashboard, form-action must be added with it (it does
+        # not inherit from default-src), and this test is the reminder.
+        directives = {
+            part.strip().split()[0] for part in csp_content.split(";") if part.strip()
+        }
+        assert "default-src" in directives, "CSP did not parse into directives"
+        assert "form-action" not in directives, (
+            "form-action appeared in the CSP; if the dashboard now submits forms "
+            "this is correct, but the docstring above must be updated to match"
+        )
 
 
 class _EscapedElements(HTMLParser):

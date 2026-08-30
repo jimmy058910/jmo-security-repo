@@ -947,9 +947,12 @@ def test_sarif_driver_metadata():
     assert "informationUri" in driver
     assert "github.com" in driver["informationUri"]
 
-    # Rules should be present
+    # Rules are derived from the findings' ruleIds, not a static catalogue:
+    # the one finding supplied carries ruleId "test-rule", so that is the one
+    # rule the driver must advertise, described by that finding's message.
     assert "rules" in driver
-    assert len(driver["rules"]) > 0
+    assert [rule["id"] for rule in driver["rules"]] == ["test-rule"]
+    assert driver["rules"][0]["shortDescription"]["text"] == "Test finding"
 
 
 def test_sarif_handles_findings_without_optional_fields():
