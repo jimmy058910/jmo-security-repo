@@ -33,6 +33,20 @@ class TestProfiles:
             assert isinstance(profile["tools"], list)
             assert len(profile["tools"]) > 0
 
+        # Sizes are pinned by test_profile_tool_counts, and #795 is exactly the
+        # bug a size cannot see: shellcheck was in fast/slim/balanced but not
+        # deep, so the most comprehensive profile was not a superset. Swap one
+        # tool for another and every count below stays identical.
+        for lighter, heavier in (
+            ("fast", "slim"),
+            ("slim", "balanced"),
+            ("balanced", "deep"),
+        ):
+            omitted = set(PROFILES[lighter]["tools"]) - set(PROFILES[heavier]["tools"])
+            assert (
+                not omitted
+            ), f"{heavier} omits {sorted(omitted)} present in {lighter}"
+
     def test_fast_is_smallest_profile(self):
         assert len(PROFILES["fast"]["tools"]) <= len(PROFILES["slim"]["tools"])
         assert len(PROFILES["slim"]["tools"]) <= len(PROFILES["balanced"]["tools"])

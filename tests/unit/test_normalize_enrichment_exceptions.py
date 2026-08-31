@@ -471,9 +471,16 @@ class TestSbomIndexEdgeCases:
             {"tool": {"name": "syft"}, "tags": ["package"]},
         ]
         by_path, by_name = nr._build_syft_indexes(findings)
-        # Non-dict findings should be skipped
-        assert isinstance(by_path, dict)
-        assert isinstance(by_name, dict)
+
+        # "Skipped" means the three junk entries contributed nothing -- a type
+        # check cannot tell that from their being absorbed, or indexed as
+        # garbage. Exactly one package, from the single dict finding, is indexed.
+        indexed = [pkg for entries in by_path.values() for pkg in entries]
+        assert len(indexed) == 1, by_path
+        # It carries no title, so it indexes with an empty name...
+        assert indexed[0]["name"] == ""
+        # ...and therefore contributes nothing to the by-name index.
+        assert by_name == {}
 
     def test_build_syft_indexes_non_dict_raw(self):
         """Test _build_syft_indexes handles non-dict raw field (line 407)."""

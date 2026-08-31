@@ -23,6 +23,7 @@ import sqlite3
 import string
 import threading
 import time
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
@@ -229,7 +230,12 @@ class TestExtremeLoad:
             elapsed < 120
         ), f"Processing 100k findings took {elapsed:.1f}s (target: <120s on CI)"
         assert isinstance(findings, list)
-        assert len(findings) > 0
+        # A partial parse -- one adapter silently yielding nothing -- makes a
+        # fifth of the corpus vanish while `len(findings) > 0` stays true.
+        # gather_results does not dedupe, so the whole corpus must survive.
+        assert len(findings) == len(tools) * findings_per_tool
+        by_tool = Counter(f["tool"]["name"] for f in findings)
+        assert by_tool == dict.fromkeys(tools, findings_per_tool)
 
     @pytest.mark.timeout(300)
     @patch("scripts.core.normalize_and_report._enrich_with_priority")
