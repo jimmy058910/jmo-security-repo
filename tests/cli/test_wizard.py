@@ -15,6 +15,7 @@ from scripts.cli.wizard import (
 )
 from scripts.cli.wizard_generators import (
     JMO_DOCKER_IMAGE_FULL,
+    JMO_DOCKER_TAG,
     generate_github_actions,
     generate_makefile_target,
     generate_shell_script,
@@ -177,6 +178,21 @@ def test_generate_command_docker_mode():
     assert "--profile-name deep" in cmd
     assert "/scan" in cmd
     assert "/results" in cmd
+
+
+def test_docker_tag_tracks_the_shipped_version():
+    """The wizard's Docker tag must name the release the user is running.
+
+    #1075: every other assertion about the image compares JMO_DOCKER_IMAGE_FULL
+    to a string rendered from that same constant, so all five stayed green while
+    the hand-maintained tag sat at v1.0.5 through v1.0.6, v1.0.7 and v1.0.8 --
+    `jmo wizard` emitted `docker run ... :v1.0.5` while `jmo --version` said
+    1.0.8. A guard has to compare against an independent authority.
+    """
+    from scripts.cli.jmo import __version__
+
+    assert f"v{__version__}" == JMO_DOCKER_TAG
+    assert JMO_DOCKER_IMAGE_FULL.endswith(f":v{__version__}")
 
 
 def test_generate_command_tsv_mode():
