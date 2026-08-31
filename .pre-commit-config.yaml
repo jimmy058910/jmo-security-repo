@@ -75,7 +75,7 @@ repos:
   # another -- and ci.yml skips this hook by design, so CI cannot see it.
   # Pinned by tests/unit/test_toolchain_version_agreement.py (#1015).
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.4
+    rev: v0.16.5
     hooks:
       - id: ruff
         args: ["--fix"]
