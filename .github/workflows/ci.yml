@@ -2,8 +2,21 @@
 name: CI
 
 # checkov:skip=CKV2_GHA_1: CI workflow requires write permissions for uploading coverage and SARIF results
+# A bare `push:` fires on EVERY branch, and `pull_request:` then re-runs the
+# same work, so a feature branch was tested twice before merge and a third time
+# on `dev` afterwards -- ~165 compute-minutes per PR, 56 of them for a
+# docs-only plan edit. Scoping `push` to the long-lived branches drops the
+# duplicate. Nothing is lost: `pull_request` still covers every feature branch,
+# and it tests the MERGE commit, which is the relevant view for a squash-merge
+# workflow. The branch-head view returns on the post-merge `dev` run.
+#
+# `main` must stay listed -- the release sync is a fast-forward PUSH to main,
+# never a PR, so this is the only trigger that runs CI there. Tags no longer
+# start CI, which is deliberate: `release.yml` owns `v*` and is self-contained
+# (no `workflow_run`, no dependency on any ci.yml job).
 on:
   push:
+    branches: [main, dev]
   pull_request:
   workflow_dispatch:
 
@@ -36,7 +49,11 @@ jobs:
   #   Test windows-2022 Shard 1/1  -- `continue-on-error: true`. It reports
   #     GREEN OVER EXIT CODE 1, so requiring it would add a check that cannot
   #     fail. Read its job LOG, never its tick, and diff the skip count too.
-  #   Test macos-latest Shard 1/1  -- cross-platform signal, not a gate.
+  #   Test macos-latest Shard 1/1  -- cross-platform signal, not a gate, and as
+  #     of 2026-08-30 it no longer runs on `pull_request` at all: see the
+  #     matrix comment in test-sharded. It still runs on every `dev`/`main`
+  #     push, so every merge is covered -- but a PR's checks list will not
+  #     contain it, which is expected and not a missing report.
   #   dashboard-smoke, tool-contract-tests, policy-gate -- deliberately not in
   #     the maintainer's chosen set. policy-gate is also too new: a required
   #     check that does not yet exist on main leaves every PR waiting on a
@@ -325,26 +342,30 @@ jobs:
       contents: read
     strategy:
       fail-fast: false
+      # macOS is ADVISORY -- see the gating comment at the top of this file. It
+      # is not one of the nine checks the `main` ruleset requires, yet it is
+      # ~11 of this workflow's ~55 compute-minutes and carries a 10x multiplier
+      # wherever Actions is billed. So it runs on `dev`/`main` pushes -- which
+      # means on every merge -- and on workflow_dispatch, but not on each PR
+      # revision. Ubuntu and Windows are unchanged on both events.
+      #
+      # This must be built as a single `include:` expression. `exclude:` cannot
+      # express it: exclude is applied BEFORE include, so it never removes an
+      # entry that include added -- and every entry here comes from include.
       matrix:
-        include:
-          - os: ubuntu-latest
-            shard: 1
-            total-shards: 4
-          - os: ubuntu-latest
-            shard: 2
-            total-shards: 4
-          - os: ubuntu-latest
-            shard: 3
-            total-shards: 4
-          - os: ubuntu-latest
-            shard: 4
-            total-shards: 4
-          - os: macos-latest
-            shard: 1
-            total-shards: 1
-          - os: windows-2022
-            shard: 1
-            total-shards: 1
+        include: >-
+          ${{ fromJSON(github.event_name == 'pull_request'
+          && '[{"os":"ubuntu-latest","shard":1,"total-shards":4},
+          {"os":"ubuntu-latest","shard":2,"total-shards":4},
+          {"os":"ubuntu-latest","shard":3,"total-shards":4},
+          {"os":"ubuntu-latest","shard":4,"total-shards":4},
+          {"os":"windows-2022","shard":1,"total-shards":1}]'
+          || '[{"os":"ubuntu-latest","shard":1,"total-shards":4},
+          {"os":"ubuntu-latest","shard":2,"total-shards":4},
+          {"os":"ubuntu-latest","shard":3,"total-shards":4},
+          {"os":"ubuntu-latest","shard":4,"total-shards":4},
+          {"os":"macos-latest","shard":1,"total-shards":1},
+          {"os":"windows-2022","shard":1,"total-shards":1}]') }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
