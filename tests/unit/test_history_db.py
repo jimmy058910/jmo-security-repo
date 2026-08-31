@@ -2611,7 +2611,7 @@ class TestEncryptionDecryption:
 
     def test_encrypt_raw_finding_success(self, monkeypatch):
         """Test successful encryption of raw finding."""
-        from scripts.core.history_db import encrypt_raw_finding
+        from scripts.core.history_db import decrypt_raw_finding, encrypt_raw_finding
 
         # Set encryption key
         monkeypatch.setenv("JMO_ENCRYPTION_KEY", "test-encryption-key-32-chars!!")
@@ -2622,9 +2622,13 @@ class TestEncryptionDecryption:
 
         # Should be encrypted (not equal to original)
         assert encrypted != raw_json
-        # Should be a non-empty string
-        assert len(encrypted) > 0
         assert isinstance(encrypted, str)
+
+        # Non-emptiness cannot tell ciphertext from a stub. Encryption is only
+        # useful if it hides the secret AND gives the plaintext back intact --
+        # a lossy ciphertext is silent data loss, not a failed write.
+        assert "my-api-key" not in encrypted
+        assert decrypt_raw_finding(encrypted) == raw_json
 
     def test_encrypt_raw_finding_missing_key(self, monkeypatch):
         """Test encryption fails without JMO_ENCRYPTION_KEY."""

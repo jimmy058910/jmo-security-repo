@@ -418,9 +418,61 @@ class TestReactDashboardHelpers:
         """Search with branch filter works correctly."""
         db_path, conn, scan_ids, current_time = db_with_sample_scans
 
+        # The shared fixture puts every scan on `main`, so "the results are all
+        # on main" would hold even if the filter were ignored entirely. Give the
+        # filter something it has to exclude.
+        conn.execute(
+            """
+            INSERT INTO scans (
+                id, timestamp, timestamp_iso, branch, profile,
+                jmo_version, tools, targets, target_type, total_findings
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "scan-feature",
+                current_time,
+                "2025-01-01T00:00:00Z",
+                "feature/x",
+                "balanced",
+                "1.0.0",
+                json.dumps(["trivy"]),
+                json.dumps(["repo-test"]),
+                "repo",
+                1,
+            ),
+        )
+        conn.execute(
+            """
+            INSERT INTO findings (
+                fingerprint, scan_id, tool, rule_id, severity,
+                path, start_line, message
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "fp-feature",
+                "scan-feature",
+                "trivy",
+                "RULE-F",
+                # CRITICAL on an early-sorting path, so an unfiltered search
+                # would rank it inside the limit=50 window below.
+                "CRITICAL",
+                "src/feature.py",
+                1,
+                "Security issue on the feature branch",
+            ),
+        )
+        conn.commit()
+
         # Search in main branch
         findings = search_findings(conn, "Security", {"branch": "main", "limit": 50})
         assert len(findings) > 0
+        returned_scans = {f["scan_id"] for f in findings}
+        assert "scan-feature" not in returned_scans
+        assert returned_scans <= set(scan_ids)
+
+        # Selecting the other branch must return exactly its own finding.
+        findings = search_findings(conn, "Security", {"branch": "feature/x"})
+        assert [f["fingerprint"] for f in findings] == ["fp-feature"]
 
         # Search in nonexistent branch
         findings = search_findings(conn, "Security", {"branch": "nonexistent"})
@@ -618,12 +670,18 @@ class TestComplianceHelpers:
 
         # Verify OWASP categories
         owasp = frameworks["owasp_top10_2021"]
-        if len(owasp) > 0:
-            # Should have A01:2021 and A03:2021 from test data
-            for category, data in owasp.items():
-                assert "count" in data
-                assert "severities" in data
-                assert isinstance(data["severities"], dict)
+
+        # The comment below used to assert nothing: `if len(owasp) > 0` skipped
+        # the whole loop when the aggregation returned nothing at all.
+        assert set(owasp) == {"A01:2021", "A03:2021"}
+
+        for category, data in owasp.items():
+            assert set(data) == {"count", "severities"}
+            # A breakdown that does not account for the total is incoherent,
+            # and a dict that is merely a dict cannot show that.
+            severities = data["severities"]
+            assert set(severities) == {"CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"}
+            assert sum(severities.values()) == data["count"], (category, severities)
 
     def test_get_compliance_summary_nonexistent_scan(self, db_with_sample_scans):
         """Compliance summary raises ValueError for nonexistent scan."""

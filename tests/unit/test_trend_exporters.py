@@ -319,7 +319,24 @@ def test_grafana_dashboard_structure(sample_analysis, tmp_path):
     assert "dashboard" in dashboard
     assert "panels" in dashboard["dashboard"]
     assert isinstance(dashboard["dashboard"]["panels"], list)
-    assert len(dashboard["dashboard"]["panels"]) > 0
+
+    # Grafana keys a dashboard by uid on import; a drifted uid silently creates a
+    # second dashboard instead of updating this one.
+    assert dashboard["dashboard"]["uid"] == "jmo-security-trends"
+
+    # export_to_grafana documents exactly five panels; pin the count so the
+    # per-panel loop below cannot go vacuous on an empty list.
+    panels = dashboard["dashboard"]["panels"]
+    assert len(panels) == 5, [p.get("title") for p in panels]
+
+    # Every panel must be independently renderable: a unique id (Grafana
+    # discards duplicates on import), a title, a layout box and a query.
+    panel_ids = [p["id"] for p in panels]
+    assert len(panel_ids) == len(set(panel_ids)), f"duplicate panel ids: {panel_ids}"
+    for panel in panels:
+        assert panel["title"], f"panel {panel['id']} has no title"
+        assert set(panel["gridPos"]) == {"h", "w", "x", "y"}, panel["gridPos"]
+        assert panel["targets"], f"panel {panel['id']} has no query targets"
 
 
 def test_grafana_panel_configuration(sample_analysis, tmp_path):
@@ -602,8 +619,30 @@ def test_prometheus_scraping_compatible(sample_analysis, tmp_path):
     help_lines = [line for line in lines if line.startswith("# HELP")]
     type_lines = [line for line in lines if line.startswith("# TYPE")]
 
-    assert len(help_lines) > 0
-    assert len(type_lines) > 0
+    # A scraper rejects a family it has no TYPE for, and the family names are the
+    # exporter's public contract with every downstream dashboard and alert rule.
+    # "At least one of each" cannot see a dropped or renamed declaration.
+    help_names = [line.split()[2] for line in help_lines]
+    type_names = [line.split()[2] for line in type_lines]
+
+    assert help_names == type_names, f"HELP/TYPE disagree: {help_names} vs {type_names}"
+    assert set(help_names) == {
+        "jmo_security_findings",
+        "jmo_security_score",
+        "jmo_remediation_rate",
+        "jmo_introduction_rate",
+        "jmo_net_remediation",
+        "jmo_scan_count",
+        "jmo_rule_findings",
+    }
+    # Every declared type must be one Prometheus understands.
+    declared_types = {line.split()[3] for line in type_lines}
+    assert declared_types <= {
+        "counter",
+        "gauge",
+        "histogram",
+        "summary",
+    }, declared_types
 
     # Metric lines should not have # prefix
     metric_lines = [line for line in lines if not line.startswith("#") and line.strip()]
@@ -628,13 +667,24 @@ def test_dashboard_data_consumption(sample_analysis, tmp_path):
     # Frontend would need these fields
     assert data["version"] == "1.0.0"
     assert isinstance(data["security_score"], (int, float))
-    assert isinstance(data["severity_trends"]["by_severity"], dict)
     assert isinstance(data["insights"], list)
+
+    # The frontend draws one line per severity. A dict that is merely a dict
+    # carries no series at all, so pin which series must be there.
+    by_severity = data["severity_trends"]["by_severity"]
+    assert set(by_severity) == {"CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"}
 
     # Should have usable timestamps
     timestamps = data["severity_trends"]["timestamps"]
     assert len(timestamps) > 0
     assert "T" in timestamps[0]  # ISO format
+
+    # Every series is plotted against that shared axis, so a series of a
+    # different length renders misaligned rather than failing loudly.
+    for severity, series in by_severity.items():
+        assert len(series) == len(
+            timestamps
+        ), f"{severity} has {len(series)} points for {len(timestamps)} timestamps"
 
 
 def test_all_exports_handle_empty_data(empty_analysis, tmp_path):
