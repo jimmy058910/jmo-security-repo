@@ -19,7 +19,10 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from scripts.core.attestation.tamper_detector import TamperSeverity
+from scripts.core.attestation.tamper_detector import (
+    TamperIndicatorType,
+    TamperSeverity,
+)
 
 # ============================================================================
 # Test Class 1: Multi-Hash Digest Verification (6 tests)
@@ -570,8 +573,20 @@ class TestBuilderConsistencyChecks:
             str(current_path), historical_paths
         )
 
-        # Should detect deviation from established pattern
-        assert len(indicators) > 0
+        # Should detect deviation from established pattern -- one CRITICAL
+        # BUILDER_INCONSISTENCY per historical attestation contradicted, each
+        # naming the builder it deviated from. A count check alone passes on
+        # any indicator, including an unrelated missing-field warning.
+        assert len(indicators) == len(historical_paths)
+        assert all(
+            ind.indicator_type == TamperIndicatorType.BUILDER_INCONSISTENCY
+            and ind.severity == TamperSeverity.CRITICAL
+            and ind.evidence["current_builder_id"]
+            == "https://suspicious.example.com/builder"
+            and ind.evidence["historical_builder_id"]
+            == "https://github.com/actions/runner"
+            for ind in indicators
+        )
 
     def test_builder_version_change_warning(self, tmp_path):
         """Test warning on builder version change (not necessarily malicious)."""
@@ -907,8 +922,16 @@ class TestSuspiciousPatternDetection:
             str(findings_path), str(attestation_path)
         )
 
-        # Should detect mismatch
-        assert len(indicators) > 0
+        # NOTE (#1069): despite this test's name, JMo has NO findings-count
+        # mismatch check -- check_suspicious_patterns never reads
+        # externalParameters.findings_count. The only indicator this fixture
+        # produces is the missing-field warning below, which is why the old
+        # `len(indicators) > 0` was green while verifying nothing about counts.
+        # Assert what the detector actually does; the gap is tracked in #1069.
+        assert [ind.indicator_type for ind in indicators] == [
+            TamperIndicatorType.MISSING_FIELD
+        ]
+        assert indicators[0].evidence["missing_fields"] == ["predicate.runDetails"]
 
     def test_detect_unusual_subject_name(self, tmp_path):
         """Test detecting unusual subject file names."""
@@ -959,8 +982,16 @@ class TestSuspiciousPatternDetection:
             str(findings_path), str(attestation_path)
         )
 
-        # Should detect missing required fields
-        assert len(indicators) > 0
+        # Should detect missing required fields -- and name BOTH of them, since
+        # this fixture omits the predicate entirely. A count check passes even
+        # if only one of the two were reported.
+        assert [ind.indicator_type for ind in indicators] == [
+            TamperIndicatorType.MISSING_FIELD
+        ]
+        assert indicators[0].evidence["missing_fields"] == [
+            "predicate.buildDefinition",
+            "predicate.runDetails",
+        ]
 
     def test_detect_suspicious_builder_patterns(self, tmp_path):
         """Test detecting suspicious builder patterns (localhost, private IPs)."""
@@ -986,8 +1017,17 @@ class TestSuspiciousPatternDetection:
             str(findings_path), str(attestation_path)
         )
 
-        # Should warn about localhost builder
-        assert len(indicators) > 0
+        # Should warn about localhost builder. This fixture also trips the
+        # missing-field check, so a bare count is satisfied by that alone --
+        # single out the SUSPICIOUS_PATTERN indicator and name the builder.
+        suspicious = [
+            ind
+            for ind in indicators
+            if ind.indicator_type == TamperIndicatorType.SUSPICIOUS_PATTERN
+        ]
+        assert len(suspicious) == 1
+        assert suspicious[0].severity == TamperSeverity.HIGH
+        assert suspicious[0].evidence["builder_id"] == "http://localhost:8080/builder"
 
     def test_accept_normal_attestation(self, tmp_path):
         """Test accepting normal, well-formed attestation."""
@@ -1103,8 +1143,16 @@ class TestAttackScenarioSimulation:
         detector = TamperDetector()
         indicators = detector.check_timestamp_anomalies(str(attestation_path))
 
-        # Should warn about stale attestation
-        assert len(indicators) > 0
+        # Should warn about stale attestation, and report the age it measured
+        # against the configured maximum. A count check passes on any anomaly,
+        # including one raised for an unrelated timestamp reason -- and this
+        # test exists to prove the REPLAY defence specifically.
+        assert [ind.indicator_type for ind in indicators] == [
+            TamperIndicatorType.TIMESTAMP_ANOMALY
+        ]
+        assert indicators[0].evidence["age_days"] == 730
+        assert indicators[0].evidence["max_age_days"] == 90
+        assert "replay" in indicators[0].description.lower()
 
     def test_defend_against_tool_bypass_attack(self, tmp_path):
         """Test detecting tool bypass (running older vulnerable tool version)."""
@@ -1143,8 +1191,16 @@ class TestAttackScenarioSimulation:
             str(current_path), [str(historical_path)]
         )
 
-        # Should detect suspicious rollback
-        assert len(indicators) > 0
+        # Should detect suspicious rollback -- naming the tool and BOTH versions,
+        # since "a downgrade happened" is the whole claim. A count check cannot
+        # tell a downgrade report from any other indicator about this pair.
+        assert [ind.indicator_type for ind in indicators] == [
+            TamperIndicatorType.TOOL_ROLLBACK
+        ]
+        assert indicators[0].severity == TamperSeverity.CRITICAL
+        assert indicators[0].evidence["tool_name"] == "trivy"
+        assert indicators[0].evidence["historical_version"] == "0.45.0"
+        assert indicators[0].evidence["current_version"] == "0.20.0"
 
     def test_defend_against_builder_impersonation(self, tmp_path):
         """Test detecting builder impersonation attack."""
@@ -1178,8 +1234,21 @@ class TestAttackScenarioSimulation:
             str(current_path), [str(historical_path)]
         )
 
-        # Should detect builder change
-        assert len(indicators) > 0
+        # Should detect builder change. Note the detector flags the CHANGE, not
+        # the typosquat as such -- so assert both ids, which is what makes the
+        # near-identical "actlons" vs "actions" pair the thing under test.
+        assert [ind.indicator_type for ind in indicators] == [
+            TamperIndicatorType.BUILDER_INCONSISTENCY
+        ]
+        assert indicators[0].severity == TamperSeverity.CRITICAL
+        assert (
+            indicators[0].evidence["current_builder_id"]
+            == "https://github.com/actlons/runner"
+        )
+        assert (
+            indicators[0].evidence["historical_builder_id"]
+            == "https://github.com/actions/runner"
+        )
 
     def test_defend_against_timestamp_manipulation(self, tmp_path):
         """Test detecting timestamp manipulation attack."""

@@ -279,8 +279,11 @@ class TestScanMetadataCapture:
 
             metadata = capture.capture_git_context(repo_path="/fake/repo")
 
-            # Should return empty dict or defaults
-            assert isinstance(metadata, dict)
+            # When git fails the capture yields NOTHING rather than defaults --
+            # no empty-string commit, no placeholder branch, which would each
+            # end up asserted as provenance downstream. `isinstance(dict)` is
+            # satisfied by every one of those outcomes.
+            assert metadata == {}
 
 
 # ============================================================================
@@ -526,7 +529,10 @@ class TestCICDErrorHandling:
         # Invalid inputs should not crash
         try:
             metadata = capture.from_scan_args(profile=None, tools=None, repos=None)
-            assert isinstance(metadata, dict)
+            # All-None input must produce no metadata at all -- not a dict of
+            # None values, which would serialise `"profile": null` into the
+            # attestation. A type check accepts that outcome.
+            assert metadata == {}
         except Exception:
             pytest.fail("Should handle invalid metadata gracefully")
 

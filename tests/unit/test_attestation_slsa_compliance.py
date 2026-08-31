@@ -21,6 +21,7 @@ Test Coverage: 25 tests for SLSA Level 2 validation
 import hashlib
 import json
 from unittest.mock import Mock, patch
+from urllib.parse import urlparse
 
 # ============================================================================
 # Test Class 1: Provenance Existence (5 tests)
@@ -179,7 +180,16 @@ class TestBuildServiceRequirements:
         builder = run_details.get("builder", {})
 
         assert "id" in builder
-        assert len(builder["id"]) > 0
+        # SLSA requires the builder id to IDENTIFY the build service, so assert
+        # it is an absolute https URL and not one of _detect_builder_id()'s
+        # unknown/unknown placeholders. The host varies with the CI environment,
+        # so pin the shape and the negative case rather than one literal --
+        # `len(...) > 0` accepts "unknown/unknown", and "" is the only value it
+        # rejects.
+        parsed = urlparse(builder["id"])
+        assert parsed.scheme == "https", builder["id"]
+        assert parsed.netloc, builder["id"]
+        assert "unknown/unknown" not in builder["id"]
 
     def test_build_service_detects_github_actions(self, tmp_path):
         """Test build service detects GitHub Actions."""
@@ -557,8 +567,11 @@ class TestBuildParametersCaptured:
             mock_run.return_value = Mock(returncode=0, stdout="abc123def", stderr="")
             git_context = capture.capture_git_context(".")
 
-            # SLSA Level 2: Source info SHOULD be captured
-            assert isinstance(git_context, dict)
+            # SLSA Level 2: Source info SHOULD be captured -- name the fields,
+            # because "is a dict" is equally true of `{}`, i.e. of a capture
+            # that recorded no source provenance whatsoever.
+            assert set(git_context) == {"commit", "branch", "tag"}
+            assert git_context["commit"] == "abc123def"
 
     def test_ci_metadata_captured(self, tmp_path):
         """Test CI metadata is captured in CI environment."""
