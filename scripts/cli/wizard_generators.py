@@ -14,13 +14,22 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
+from scripts.cli.jmo import __version__
+
 if TYPE_CHECKING:
     pass
 
-# Docker image configuration - use versioned tag for reproducibility
-# This should be updated with each release
+# Docker image configuration - a versioned tag, for reproducibility.
+#
+# DERIVED, not written down (#1075). This was a hand-maintained literal with the
+# comment "This should be updated with each release"; it was bumped for v1.0.4
+# and v1.0.5 and then missed v1.0.6, v1.0.7 and v1.0.8, so `jmo wizard` handed
+# users a `docker run ... :v1.0.5` command while `jmo --version` said 1.0.8.
+# The release bump touches jmo.py, pyproject.toml and docs/CLI_REFERENCE.md and
+# never touched this file, which is why it decayed silently. Deriving it removes
+# the failure mode instead of adding a fourth entry to that checklist.
 JMO_DOCKER_IMAGE = "ghcr.io/jimmy058910/jmo-security"
-JMO_DOCKER_TAG = "v1.0.5"  # Pin to release version, not :latest
+JMO_DOCKER_TAG = f"v{__version__}"  # pinned to this release, not :latest
 JMO_DOCKER_IMAGE_FULL = f"{JMO_DOCKER_IMAGE}:{JMO_DOCKER_TAG}"
 
 
