@@ -51,13 +51,33 @@ class TestFindingsFormatHandling:
 
         # Verify scan stored
         assert scan_id is not None
-        assert len(scan_id) > 0
 
         # Verify findings stored
         conn = get_connection(db_path)
         cursor = conn.execute("SELECT COUNT(*) FROM findings")
         count = cursor.fetchone()[0]
         assert count == 1
+
+        # A non-empty id says nothing about whether it addresses what was
+        # stored, and the returned handle is the caller's only way back here.
+        assert [r[0] for r in conn.execute("SELECT id FROM scans")] == [scan_id]
+
+        # This test exists because a LIST findings.json was being read as a
+        # dict. Counting rows cannot tell a parsed finding from an empty one --
+        # the list's fields have to survive into the row.
+        row = conn.execute(
+            "SELECT scan_id, rule_id, severity, path, start_line, message, tool "
+            "FROM findings"
+        ).fetchone()
+        assert tuple(row) == (
+            scan_id,
+            "test-rule",
+            "HIGH",
+            "test.py",
+            10,
+            "Test finding",
+            "test-tool",
+        )
 
     def test_store_scan_with_dict_format_findings(self, tmp_path):
         """Test store_scan() with findings in dict (legacy format)."""
