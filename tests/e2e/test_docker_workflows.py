@@ -542,7 +542,7 @@ class TestDockerVolumeMount:
         (tmp_path / "test.py").write_text("password = 'secret123'")
 
         # Run scan
-        subprocess.run(
+        proc = subprocess.run(
             [
                 "docker",
                 "run",
@@ -565,12 +565,21 @@ class TestDockerVolumeMount:
             timeout=600,
         )
 
-        # Check results exist on host
+        # Check results exist on host. This used to sit under
+        # `if results_dir.exists():` -- so a mount that delivered nothing back
+        # to the host left the test green, which is the exact failure the test
+        # exists to catch.
         results_dir = tmp_path / "results"
-        if results_dir.exists():
-            # Should have some output files
-            output_files = list(results_dir.glob("*"))
-            assert len(output_files) > 0  # Should have at least one output file
+        assert results_dir.is_dir(), (
+            f"scan wrote nothing back through the volume mount "
+            f"(exit {proc.returncode}): {proc.stderr[-500:]}"
+        )
+
+        # ...and the scan's own layout must survive the mount, not merely some
+        # file. `findings.json` is what every downstream consumer reads.
+        assert (results_dir / "summaries" / "findings.json").is_file(), sorted(
+            p.name for p in results_dir.rglob("*")
+        )
 
     def test_history_db_mount(self, tmp_path: Path):
         """History database should persist when mounted."""

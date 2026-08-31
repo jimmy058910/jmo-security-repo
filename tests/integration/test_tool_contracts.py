@@ -344,6 +344,19 @@ class TestToolContracts:
         except FileNotFoundError as e:
             pytest.skip(str(e))
 
+        # The root type the contract declares is the one thing that is true for
+        # every tool and reachable on every path. See #1073: the branch
+        # structure below left this test assertion-free for all nine tools --
+        # the `else` needs dict output AND falsy `required_keys`, but all three
+        # tools with `required_keys: []` parse to lists (`is_array_root` or
+        # `is_ndjson`), and the other six only reach a `logger.info`.
+        expects_array = bool(contract.get("is_array_root") or contract.get("is_ndjson"))
+        assert isinstance(output, list if expects_array else dict), (
+            f"{tool_name}: contract declares a "
+            f"{'array' if expects_array else 'object'} root, "
+            f"got {type(output).__name__}"
+        )
+
         # Should have some output
         if isinstance(output, dict):
             # For dict output, check it's not empty or has results

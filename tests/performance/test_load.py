@@ -182,8 +182,11 @@ class TestLargeRepositoryScanning:
 
         duration_s = time.time() - start
 
-        # Verify
-        assert len(all_findings) > 0
+        # Verify. See #1074: nothing between `start` above and here calls into
+        # scripts/ at all -- this re-reads files the test just wrote,
+        # so the honest assertion is the exact round-trip count (3 tools x 200
+        # findings each), not that the standard library returned something.
+        assert len(all_findings) == 3 * 200
         assert duration_s < 300, (
             f"10K LOC scan took {duration_s:.2f}s (expected <300s). "
             f"Target: <5 minutes for medium repos"

@@ -290,9 +290,24 @@ def test_generate_command_list_docker_mode():
 
     result = generate_command_list(config)
 
-    # Docker mode should have different command structure
+    # "Different command structure" is the whole claim, and the non-Docker
+    # command satisfies `len(result) > 0` just as well. What actually
+    # distinguishes Docker mode is that host paths are bind-mounted and the
+    # scan runs against CONTAINER paths inside the image.
     assert isinstance(result, list)
-    assert len(result) > 0
+    assert result[0] == "docker"
+    assert "run" in result[:3]
+    assert any(a.endswith(":/scan") for a in result), result
+    assert any(a.endswith(":/results") for a in result), result
+
+    image = next((a for a in result if a.startswith("ghcr.io/")), None)
+    assert image is not None, result
+    assert image.startswith("ghcr.io/jimmy058910/jmo-security:"), image
+
+    # The jmo subcommand runs inside the container, immediately after the image.
+    assert result[result.index(image) + 1] == "scan"
+    assert result[result.index("--repos-dir") + 1] == "/scan"
+    assert result[result.index("--results-dir") + 1] == "/results"
 
 
 # =============================================================================

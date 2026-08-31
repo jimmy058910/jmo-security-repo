@@ -453,7 +453,11 @@ class TestFormatEdgeCases:
 
             result = safe_load_json_file(json_file)
             assert result is not None, f"Failed for {desc}"
-            assert isinstance(result, dict), f"Wrong type for {desc}"
+            # The docstring's claim is that these four are SEMANTICALLY
+            # different. One shared type check treats them identically -- it
+            # passes whether [] came back as [], as None, or was dropped
+            # entirely. Round-tripping is what "handled appropriately" means.
+            assert result == data, f"{desc} did not round-trip: {result!r}"
 
     def test_ndjson_with_blank_lines_and_whitespace(self, tmp_path: Path) -> None:
         """Test NDJSON with various blank/whitespace lines.

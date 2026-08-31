@@ -75,8 +75,18 @@ def test_profiles_complete():
         # Only required or optional fields are allowed
         extra_fields = profile_keys - required_fields - optional_fields
         assert not extra_fields, f"Unexpected fields {extra_fields} in {profile_name}"
-        assert isinstance(profile["tools"], list)
-        assert len(profile["tools"]) > 0
+        tools = profile["tools"]
+        assert isinstance(tools, list)
+        assert tools, f"{profile_name} lists no tools"
+        # Counting says nothing about what is in the list. A blank entry is
+        # dispatched as an empty tool name and a repeated one runs the tool
+        # twice -- neither changes the count's verdict.
+        assert all(
+            isinstance(t, str) and t.strip() for t in tools
+        ), f"blank tool name in {profile_name}: {tools}"
+        assert len(tools) == len(
+            set(tools)
+        ), f"duplicate tools in {profile_name}: {tools}"
         assert isinstance(profile["timeout"], int)
         assert profile["timeout"] > 0
         assert isinstance(profile["threads"], int)
