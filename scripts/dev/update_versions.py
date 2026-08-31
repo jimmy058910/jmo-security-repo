@@ -72,6 +72,15 @@ except ImportError:
 
 # Paths
 REPO_ROOT = Path(__file__).parent.parent.parent
+
+# Run directly (`python scripts/dev/update_versions.py`) and sys.path[0] is
+# scripts/dev, not the repo root - so scripts.core is not importable without
+# this. Same bootstrap as scripts/dev/check_doc_links.py.
+if __package__ in (None, ""):  # pragma: no cover - only on direct execution
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts.core.unicode_utils import harden_console_streams  # noqa: E402
+
 VERSIONS_YAML = REPO_ROOT / "versions.yaml"
 # versions.yaml key -> the variable stem actually used in Dockerfiles and
 # workflow env: blocks, where `key.upper()` does not produce it. Deriving the
@@ -1187,6 +1196,16 @@ def update_all_tools(
 
 def main() -> int:
     """Main entry point."""
+    # This script prints non-ASCII on 39 lines -- the `->` arrow in the
+    # "UPDATE AVAILABLE" warning among them -- through bare `print()`. On a
+    # cp1252 console that raised UnicodeEncodeError and killed the command with
+    # exit 1, and only ever *when a tool needed updating*: with everything
+    # current, `--check-latest` never formats an arrow and exits 0. So the
+    # documented, "NEVER manually edit versions" path failed exactly when it had
+    # something to say. Harden the stream rather than the 39 call sites, per
+    # .claude/rules/windows-encoding.rules.md; it is a no-op on UTF-8.
+    harden_console_streams()
+
     parser = argparse.ArgumentParser(
         description="Manage tool versions for JMo Security Suite",
         formatter_class=argparse.RawDescriptionHelpFormatter,
