@@ -26,6 +26,8 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "scripts"
 CANONICAL = SCRIPTS / "core" / "unicode_utils.py"
@@ -95,6 +97,40 @@ def test_main_hardens_streams_before_parsing_args() -> None:
         "harden",
         "parse_args",
     ], f"Expected harden_console_streams() before parse_args(), got: {called}"
+
+
+def test_update_versions_hardens_streams_before_emitting() -> None:
+    """`update_versions.py --check-latest` must survive a legacy console.
+
+    It prints `current -> latest` with a U+2192 arrow through a bare `print()`.
+    On cp1252 that raised UnicodeEncodeError and killed the command with exit 1
+    -- and only ever *when a tool needed updating*, since with everything
+    current no arrow is ever formatted. So CLAUDE.md's mandated version path
+    ("NEVER manually edit tool versions") failed precisely when it had something
+    to report. Measured 2026-08-31: 15 of 27 tools were outdated and the command
+    could not say so.
+
+    #1089 tracks the other nine `scripts/dev` scripts with the same shape.
+    """
+    import scripts.dev.update_versions as uv
+
+    recorder = MagicMock()
+    # Raise out of main() as soon as the parser is built, so nothing after it
+    # runs -- the assertion is purely about ordering.
+    recorder.parser.side_effect = RuntimeError("stop after parser construction")
+
+    with (
+        patch.object(uv, "harden_console_streams", recorder.harden),
+        patch.object(uv.argparse, "ArgumentParser", recorder.parser),
+        pytest.raises(RuntimeError, match="stop after parser construction"),
+    ):
+        uv.main()
+
+    called = [name for name, _, _ in recorder.mock_calls]
+    assert called[:2] == [
+        "harden",
+        "parser",
+    ], f"Expected harden_console_streams() before the parser is built, got: {called}"
 
 
 # Modules whose subprocess output carries bytes we do not control: scanner
