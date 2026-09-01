@@ -342,7 +342,7 @@ jobs:
 
       - name: Install security tools (for pre-release checks)
         env:
-          TRUFFLEHOG_VERSION: "3.95.9"  # Pin per versions.yaml — see release.rules.md
+          TRUFFLEHOG_VERSION: "3.97.1"  # Pin per versions.yaml — see release.rules.md
         run: |
           # Install TruffleHog for secrets scanning
           v="$TRUFFLEHOG_VERSION"  # short alias to keep URL line under 140 chars
