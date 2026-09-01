@@ -470,7 +470,7 @@ jobs:
           # Pinned to versions.yaml. Update both files together when bumping.
           # Avoids upstream install.sh GitHub-API "latest" lookups that have
           # flaked in CI (see PR #350 + release.rules.md).
-          TRIVY_VERSION: "0.70.0"
+          TRIVY_VERSION: "0.74.0"
           GRYPE_VERSION: "0.118.0"
           SYFT_VERSION: "1.51.1"
           TRUFFLEHOG_VERSION: "3.97.1"
@@ -1039,7 +1039,7 @@ jobs:
 
       - name: Install security tools for integration tests
         env:
-          TRIVY_VERSION: "0.70.0"  # Pin per versions.yaml
+          TRIVY_VERSION: "0.74.0"  # Pin per versions.yaml
           TRUFFLEHOG_VERSION: "3.97.1"
         run: |
           # Semgrep - for SQL injection detection tests
@@ -1139,7 +1139,7 @@ jobs:
           # Pinned to versions.yaml — kept in sync with ci.yml's
           # tool-contract-tests block. Any drift means the weekly and
           # PR gates disagree.
-          TRIVY_VERSION: "0.70.0"
+          TRIVY_VERSION: "0.74.0"
           TRUFFLEHOG_VERSION: "3.97.1"
           HADOLINT_VERSION: "2.15.1"
         run: |

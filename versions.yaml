@@ -102,7 +102,7 @@ binary_tools:
     update_check: gh api repos/anchore/syft/releases/latest
     critical: true
   trivy:
-    version: 0.70.0
+    version: 0.74.0
     github_repo: aquasecurity/trivy
     description: Vulnerability/misconfig/secrets scanner
     release_pattern: trivy_{version}_Linux-{arch}.tar.gz
@@ -158,7 +158,7 @@ binary_tools:
     brew_package: nuclei
     notes: 'Requires templates update: nuclei -update-templates'
   kubescape:
-    version: 3.0.47
+    version: 4.0.12
     github_repo: kubescape/kubescape
     description: Kubernetes security scanner (NSA/CISA hardening)
     release_pattern: kubescape_{version}_linux_{arch}
@@ -365,6 +365,32 @@ update_policies:
   automated_check_schedule: Weekly (Sunday 00:00 UTC)
   manual_review_schedule: First Monday of each month
 version_history:
+- date: '2026-09-01'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-09-01'
+  action: Updated trivy
+  tools_updated:
+  - tool: trivy
+    old_version: 0.70.0
+    new_version: 0.74.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-09-01'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-09-01'
+  action: Updated kubescape
+  tools_updated:
+  - tool: kubescape
+    old_version: 3.0.47
+    new_version: 4.0.12
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
 - date: '2026-09-01'
   action: Automated version update
   tools_updated: []

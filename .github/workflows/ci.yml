@@ -1517,7 +1517,7 @@ jobs:
         if: steps.changes.outputs.versions == 'true'
         env:
           # Pinned to versions.yaml. Update both files together when bumping.
-          TRIVY_VERSION: "0.70.0"
+          TRIVY_VERSION: "0.74.0"
           TRUFFLEHOG_VERSION: "3.97.1"
           HADOLINT_VERSION: "2.15.1"
         run: |
