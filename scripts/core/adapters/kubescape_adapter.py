@@ -125,77 +125,130 @@ def _load_kubescape_internal(path: str | Path) -> list[dict[str, Any]]:
 
     out: list[dict[str, Any]] = []
 
-    # Kubescape JSON structure varies by scan type:
-    # - Framework scan: {"summaryDetails": {"controls": {...}}, "resources": [...]}
-    # - General scan: {"summaryDetails": {"controls": {...}}, "prioritizedResource": [...]}
+    # Kubescape puts per-resource verdicts in `results[]`, NOT in
+    # `summaryDetails.controls`. Each results[] entry is one scanned resource:
+    #
+    #   {"resourceID": "...", "controls": [
+    #       {"controlID": "C-0004", "name": "...",
+    #        "status": {"status": "failed"}, "severity": "High", "rules": [...]}]}
+    #
+    # `summaryDetails.controls` is a per-control ROLL-UP whose failure signal is
+    # an integer at `ResourceCounters.failedResources` -- it never carries the
+    # resource IDs needed to locate a finding.
+    #
+    # This function previously read a TOP-LEVEL `failedResources` LIST off each
+    # summary control and skipped the control when it was empty. Kubescape has
+    # never emitted that key: measured against the same insecure Pod manifest,
+    # v3.0.47 and v4.0.12 produce byte-compatible shapes (identical top-level
+    # keys, identical control-record keys, 130 controls each) and NEITHER has
+    # it. So every control was skipped and the adapter returned [] for every
+    # real scan, in every profile that ships kubescape (slim/balanced/deep),
+    # while the tool exited 0 and wrote a populated file. #1094.
     if not isinstance(data, dict):
         return []
 
-    # Extract summary details
+    # Summary roll-up: used only to enrich a finding with scoreFactor and
+    # description, which the per-resource control record does not carry.
     summary_details = data.get("summaryDetails", {})
     if not isinstance(summary_details, dict):
-        return []
-
-    # Extract controls
-    controls = summary_details.get("controls", {})
-    if not isinstance(controls, dict):
-        return []
+        summary_details = {}
+    controls_summary = summary_details.get("controls", {})
+    if not isinstance(controls_summary, dict):
+        controls_summary = {}
 
     # Extract framework name if present
     framework_name = str(summary_details.get("frameworkName", ""))
 
-    # Extract resources (maps resource ID to K8s resource details)
+    # Resource lookup. The K8s object is nested under `object`; reading
+    # `res["kind"]` (as this did) yields "Unknown" for every resource even when
+    # the map is populated.
+    resource_map: dict[str, dict[str, Any]] = {}
     resources = data.get("resources", [])
-    resource_map = {}
     if isinstance(resources, list):
         for res in resources:
-            if isinstance(res, dict):
-                res_id = res.get("resourceID")
-                if res_id:
-                    resource_map[res_id] = res
+            if not isinstance(res, dict):
+                continue
+            res_id = res.get("resourceID")
+            if not res_id:
+                continue
+            obj = res.get("object")
+            obj = obj if isinstance(obj, dict) else {}
+            meta = obj.get("metadata")
+            meta = meta if isinstance(meta, dict) else {}
+            resource_map[str(res_id)] = {
+                "kind": str(obj.get("kind") or "Unknown"),
+                "name": str(meta.get("name") or res_id),
+                "namespace": str(meta.get("namespace") or ""),
+                "raw": res,
+            }
 
-    # Process each control
-    for control_id, control_data in controls.items():
-        if not isinstance(control_data, dict):
+    # One finding per (resource, failed control) pair.
+    results = data.get("results", [])
+    if not isinstance(results, list):
+        return []
+
+    for result in results:
+        if not isinstance(result, dict):
+            continue
+        res_id = str(result.get("resourceID") or "")
+        resource_info = resource_map.get(
+            res_id,
+            {
+                "kind": "Unknown",
+                "name": res_id or "unknown",
+                "namespace": "",
+                "raw": {},
+            },
+        )
+        resource = resource_info["raw"]
+        resource_kind = resource_info["kind"]
+        resource_name = resource_info["name"]
+        resource_namespace = resource_info["namespace"]
+
+        result_controls = result.get("controls")
+        if not isinstance(result_controls, list):
             continue
 
-        # Extract control metadata
-        control_name = str(control_data.get("name", control_id))
-        control_desc = str(control_data.get("description", ""))
+        for control_entry in result_controls:
+            if not isinstance(control_entry, dict):
+                continue
 
-        # Extract score factor (represents severity in Kubescape's unintuitive naming)
-        score_factor = control_data.get("scoreFactor", 0)
+            # `status` is an object in v3/v4 ({"status": "failed", ...}); tolerate
+            # a bare string in case an older or newer shape flattens it.
+            status = control_entry.get("status")
+            status_value = status.get("status") if isinstance(status, dict) else status
+            if status_value != "failed":
+                continue
 
-        # Determine severity based on score factor
-        # scoreFactor: 0-3 = LOW, 4-6 = MEDIUM, 7-9 = HIGH, 10 = CRITICAL
-        if score_factor >= 10:
-            severity = "CRITICAL"
-        elif score_factor >= 7:
-            severity = "HIGH"
-        elif score_factor >= 4:
-            severity = "MEDIUM"
-        else:
-            severity = "LOW"
+            control_id = str(control_entry.get("controlID") or "")
+            if not control_id:
+                continue
 
-        # Extract failed resources for this control
-        failed_resources = control_data.get("failedResources", [])
-        if not isinstance(failed_resources, list):
-            failed_resources = []
+            control_data = controls_summary.get(control_id)
+            if not isinstance(control_data, dict):
+                control_data = {}
 
-        # Extract remediation
-        remediation = str(control_data.get("remediation", ""))
+            control_name = str(
+                control_entry.get("name") or control_data.get("name") or control_id
+            )
+            control_desc = str(control_data.get("description", ""))
 
-        # If control passed (no failed resources), skip
-        if not failed_resources:
-            continue
+            # Extract score factor (represents severity in Kubescape's unintuitive naming)
+            score_factor = control_data.get("scoreFactor", 0)
 
-        # Create findings for each failed resource
-        for failed_res_id in failed_resources:
-            # Extract resource details
-            resource = resource_map.get(failed_res_id, {})
-            resource_kind = str(resource.get("kind", "Unknown"))
-            resource_name = str(resource.get("name", failed_res_id))
-            resource_namespace = str(resource.get("namespace", ""))
+            # Determine severity based on score factor
+            # scoreFactor: 0-3 = LOW, 4-6 = MEDIUM, 7-9 = HIGH, 10 = CRITICAL
+            if score_factor >= 10:
+                severity = "CRITICAL"
+            elif score_factor >= 7:
+                severity = "HIGH"
+            elif score_factor >= 4:
+                severity = "MEDIUM"
+            else:
+                severity = "LOW"
+
+            # Extract remediation
+            remediation = str(control_data.get("remediation", ""))
 
             # Build message
             message = f"Control failed: {control_name}"

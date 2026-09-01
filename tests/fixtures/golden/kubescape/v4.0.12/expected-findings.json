@@ -1,0 +1,2425 @@
+[
+  {
+    "compliance": null,
+    "context": {
+      "control_id": "C-0004",
+      "control_name": "Resources memory limit and request",
+      "framework": null,
+      "resource_kind": "Pod",
+      "resource_name": "insecure-pod",
+      "resource_namespace": null,
+      "score_factor": 8
+    },
+    "cvss": null,
+    "description": "Resources memory limit and request",
+    "id": "7a41196e3a698217",
+    "location": {
+      "path": "Pod/insecure-pod",
+      "startLine": 0
+    },
+    "message": "Control failed: Resources memory limit and request (Pod: insecure-pod)",
+    "raw": {
+      "control": {
+        "ResourceCounters": {
+          "excludedResources": 0,
+          "failedResources": 1,
+          "passedResources": 0,
+          "skippedResources": 0
+        },
+        "category": {
+          "id": "Cat-5",
+          "name": "Workload",
+          "subCategory": {
+            "id": "Cat-7",
+            "name": "Resource management"
+          }
+        },
+        "complianceScore": 0,
+        "controlID": "C-0004",
+        "name": "Resources memory limit and request",
+        "resourceIDs": {},
+        "score": 100,
+        "scoreFactor": 8,
+        "severity": "High",
+        "status": "failed",
+        "statusInfo": {
+          "status": "failed"
+        },
+        "subStatusCounters": {
+          "ignoredResources": 0
+        }
+      },
+      "resource": {
+        "object": {
+          "apiVersion": "v1",
+          "kind": "Pod",
+          "metadata": {
+            "name": "insecure-pod"
+          },
+          "sourcePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml:0",
+          "spec": {
+            "containers": [
+              {
+                "image": "nginx:latest",
+                "name": "app",
+                "resources": {},
+                "securityContext": {
+                  "privileged": true,
+                  "runAsUser": 0
+                }
+              }
+            ]
+          }
+        },
+        "resourceID": "path=2871149968/api=/v1//Pod/insecure-pod",
+        "source": {
+          "fileType": "YAML",
+          "lastCommit": {
+            "date": "0001-01-01T00:00:00Z"
+          },
+          "path": "C:\\Users\\Jimmy",
+          "relativePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml"
+        }
+      }
+    },
+    "references": [],
+    "remediation": "Review Kubernetes resource configuration",
+    "risk": null,
+    "ruleId": "C-0004",
+    "schemaVersion": "1.2.0",
+    "severity": "HIGH",
+    "tags": [
+      "k8s-security",
+      "misconfiguration"
+    ],
+    "title": "Resources memory limit and request",
+    "tool": {
+      "name": "kubescape",
+      "version": "3.0.0"
+    }
+  },
+  {
+    "compliance": null,
+    "context": {
+      "control_id": "C-0009",
+      "control_name": "Resource limits",
+      "framework": null,
+      "resource_kind": "Pod",
+      "resource_name": "insecure-pod",
+      "resource_namespace": null,
+      "score_factor": 7
+    },
+    "cvss": null,
+    "description": "Resource limits",
+    "id": "ae4ffcd4705f90dd",
+    "location": {
+      "path": "Pod/insecure-pod",
+      "startLine": 0
+    },
+    "message": "Control failed: Resource limits (Pod: insecure-pod)",
+    "raw": {
+      "control": {
+        "ResourceCounters": {
+          "excludedResources": 0,
+          "failedResources": 1,
+          "passedResources": 0,
+          "skippedResources": 0
+        },
+        "category": {
+          "id": "Cat-5",
+          "name": "Workload"
+        },
+        "complianceScore": 0,
+        "controlID": "C-0009",
+        "name": "Resource limits",
+        "resourceIDs": {},
+        "score": 100,
+        "scoreFactor": 7,
+        "severity": "High",
+        "status": "failed",
+        "statusInfo": {
+          "status": "failed"
+        },
+        "subStatusCounters": {
+          "ignoredResources": 0
+        }
+      },
+      "resource": {
+        "object": {
+          "apiVersion": "v1",
+          "kind": "Pod",
+          "metadata": {
+            "name": "insecure-pod"
+          },
+          "sourcePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml:0",
+          "spec": {
+            "containers": [
+              {
+                "image": "nginx:latest",
+                "name": "app",
+                "resources": {},
+                "securityContext": {
+                  "privileged": true,
+                  "runAsUser": 0
+                }
+              }
+            ]
+          }
+        },
+        "resourceID": "path=2871149968/api=/v1//Pod/insecure-pod",
+        "source": {
+          "fileType": "YAML",
+          "lastCommit": {
+            "date": "0001-01-01T00:00:00Z"
+          },
+          "path": "C:\\Users\\Jimmy",
+          "relativePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml"
+        }
+      }
+    },
+    "references": [],
+    "remediation": "Review Kubernetes resource configuration",
+    "risk": null,
+    "ruleId": "C-0009",
+    "schemaVersion": "1.2.0",
+    "severity": "HIGH",
+    "tags": [
+      "k8s-security",
+      "misconfiguration"
+    ],
+    "title": "Resource limits",
+    "tool": {
+      "name": "kubescape",
+      "version": "3.0.0"
+    }
+  },
+  {
+    "compliance": null,
+    "context": {
+      "control_id": "C-0013",
+      "control_name": "Non-root containers",
+      "framework": null,
+      "resource_kind": "Pod",
+      "resource_name": "insecure-pod",
+      "resource_namespace": null,
+      "score_factor": 6
+    },
+    "cvss": null,
+    "description": "Non-root containers",
+    "id": "56d8146be9070921",
+    "location": {
+      "path": "Pod/insecure-pod",
+      "startLine": 0
+    },
+    "message": "Control failed: Non-root containers (Pod: insecure-pod)",
+    "raw": {
+      "control": {
+        "ResourceCounters": {
+          "excludedResources": 0,
+          "failedResources": 1,
+          "passedResources": 0,
+          "skippedResources": 0
+        },
+        "category": {
+          "id": "Cat-5",
+          "name": "Workload",
+          "subCategory": {
+            "id": "Cat-9",
+            "name": "Node escape"
+          }
+        },
+        "complianceScore": 0,
+        "controlID": "C-0013",
+        "name": "Non-root containers",
+        "resourceIDs": {},
+        "score": 100,
+        "scoreFactor": 6,
+        "severity": "Medium",
+        "status": "failed",
+        "statusInfo": {
+          "status": "failed"
+        },
+        "subStatusCounters": {
+          "ignoredResources": 0
+        }
+      },
+      "resource": {
+        "object": {
+          "apiVersion": "v1",
+          "kind": "Pod",
+          "metadata": {
+            "name": "insecure-pod"
+          },
+          "sourcePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml:0",
+          "spec": {
+            "containers": [
+              {
+                "image": "nginx:latest",
+                "name": "app",
+                "resources": {},
+                "securityContext": {
+                  "privileged": true,
+                  "runAsUser": 0
+                }
+              }
+            ]
+          }
+        },
+        "resourceID": "path=2871149968/api=/v1//Pod/insecure-pod",
+        "source": {
+          "fileType": "YAML",
+          "lastCommit": {
+            "date": "0001-01-01T00:00:00Z"
+          },
+          "path": "C:\\Users\\Jimmy",
+          "relativePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml"
+        }
+      }
+    },
+    "references": [],
+    "remediation": "Review Kubernetes resource configuration",
+    "risk": null,
+    "ruleId": "C-0013",
+    "schemaVersion": "1.2.0",
+    "severity": "MEDIUM",
+    "tags": [
+      "k8s-security",
+      "misconfiguration"
+    ],
+    "title": "Non-root containers",
+    "tool": {
+      "name": "kubescape",
+      "version": "3.0.0"
+    }
+  },
+  {
+    "compliance": null,
+    "context": {
+      "control_id": "C-0016",
+      "control_name": "Allow privilege escalation",
+      "framework": null,
+      "resource_kind": "Pod",
+      "resource_name": "insecure-pod",
+      "resource_namespace": null,
+      "score_factor": 6
+    },
+    "cvss": null,
+    "description": "Allow privilege escalation",
+    "id": "2b5ee6a087467a70",
+    "location": {
+      "path": "Pod/insecure-pod",
+      "startLine": 0
+    },
+    "message": "Control failed: Allow privilege escalation (Pod: insecure-pod)",
+    "raw": {
+      "control": {
+        "ResourceCounters": {
+          "excludedResources": 0,
+          "failedResources": 1,
+          "passedResources": 0,
+          "skippedResources": 0
+        },
+        "category": {
+          "id": "Cat-5",
+          "name": "Workload",
+          "subCategory": {
+            "id": "Cat-9",
+            "name": "Node escape"
+          }
+        },
+        "complianceScore": 0,
+        "controlID": "C-0016",
+        "name": "Allow privilege escalation",
+        "resourceIDs": {},
+        "score": 100,
+        "scoreFactor": 6,
+        "severity": "Medium",
+        "status": "failed",
+        "statusInfo": {
+          "status": "failed"
+        },
+        "subStatusCounters": {
+          "ignoredResources": 0
+        }
+      },
+      "resource": {
+        "object": {
+          "apiVersion": "v1",
+          "kind": "Pod",
+          "metadata": {
+            "name": "insecure-pod"
+          },
+          "sourcePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml:0",
+          "spec": {
+            "containers": [
+              {
+                "image": "nginx:latest",
+                "name": "app",
+                "resources": {},
+                "securityContext": {
+                  "privileged": true,
+                  "runAsUser": 0
+                }
+              }
+            ]
+          }
+        },
+        "resourceID": "path=2871149968/api=/v1//Pod/insecure-pod",
+        "source": {
+          "fileType": "YAML",
+          "lastCommit": {
+            "date": "0001-01-01T00:00:00Z"
+          },
+          "path": "C:\\Users\\Jimmy",
+          "relativePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml"
+        }
+      }
+    },
+    "references": [],
+    "remediation": "Review Kubernetes resource configuration",
+    "risk": null,
+    "ruleId": "C-0016",
+    "schemaVersion": "1.2.0",
+    "severity": "MEDIUM",
+    "tags": [
+      "k8s-security",
+      "misconfiguration"
+    ],
+    "title": "Allow privilege escalation",
+    "tool": {
+      "name": "kubescape",
+      "version": "3.0.0"
+    }
+  },
+  {
+    "compliance": null,
+    "context": {
+      "control_id": "C-0017",
+      "control_name": "Immutable container filesystem",
+      "framework": null,
+      "resource_kind": "Pod",
+      "resource_name": "insecure-pod",
+      "resource_namespace": null,
+      "score_factor": 3
+    },
+    "cvss": null,
+    "description": "Immutable container filesystem",
+    "id": "612dfdbedd43a2f1",
+    "location": {
+      "path": "Pod/insecure-pod",
+      "startLine": 0
+    },
+    "message": "Control failed: Immutable container filesystem (Pod: insecure-pod)",
+    "raw": {
+      "control": {
+        "ResourceCounters": {
+          "excludedResources": 0,
+          "failedResources": 1,
+          "passedResources": 0,
+          "skippedResources": 0
+        },
+        "category": {
+          "id": "Cat-5",
+          "name": "Workload",
+          "subCategory": {
+            "id": "Cat-9",
+            "name": "Node escape"
+          }
+        },
+        "complianceScore": 0,
+        "controlID": "C-0017",
+        "name": "Immutable container filesystem",
+        "resourceIDs": {},
+        "score": 100,
+        "scoreFactor": 3,
+        "severity": "Low",
+        "status": "failed",
+        "statusInfo": {
+          "status": "failed"
+        },
+        "subStatusCounters": {
+          "ignoredResources": 0
+        }
+      },
+      "resource": {
+        "object": {
+          "apiVersion": "v1",
+          "kind": "Pod",
+          "metadata": {
+            "name": "insecure-pod"
+          },
+          "sourcePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml:0",
+          "spec": {
+            "containers": [
+              {
+                "image": "nginx:latest",
+                "name": "app",
+                "resources": {},
+                "securityContext": {
+                  "privileged": true,
+                  "runAsUser": 0
+                }
+              }
+            ]
+          }
+        },
+        "resourceID": "path=2871149968/api=/v1//Pod/insecure-pod",
+        "source": {
+          "fileType": "YAML",
+          "lastCommit": {
+            "date": "0001-01-01T00:00:00Z"
+          },
+          "path": "C:\\Users\\Jimmy",
+          "relativePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml"
+        }
+      }
+    },
+    "references": [],
+    "remediation": "Review Kubernetes resource configuration",
+    "risk": null,
+    "ruleId": "C-0017",
+    "schemaVersion": "1.2.0",
+    "severity": "LOW",
+    "tags": [
+      "k8s-security",
+      "misconfiguration"
+    ],
+    "title": "Immutable container filesystem",
+    "tool": {
+      "name": "kubescape",
+      "version": "3.0.0"
+    }
+  },
+  {
+    "compliance": null,
+    "context": {
+      "control_id": "C-0018",
+      "control_name": "Configured readiness probe",
+      "framework": null,
+      "resource_kind": "Pod",
+      "resource_name": "insecure-pod",
+      "resource_namespace": null,
+      "score_factor": 3
+    },
+    "cvss": null,
+    "description": "Configured readiness probe",
+    "id": "0e31b9f6cf12d955",
+    "location": {
+      "path": "Pod/insecure-pod",
+      "startLine": 0
+    },
+    "message": "Control failed: Configured readiness probe (Pod: insecure-pod)",
+    "raw": {
+      "control": {
+        "ResourceCounters": {
+          "excludedResources": 0,
+          "failedResources": 1,
+          "passedResources": 0,
+          "skippedResources": 0
+        },
+        "category": {
+          "id": "Cat-5",
+          "name": "Workload"
+        },
+        "complianceScore": 0,
+        "controlID": "C-0018",
+        "name": "Configured readiness probe",
+        "resourceIDs": {},
+        "score": 100,
+        "scoreFactor": 3,
+        "severity": "Low",
+        "status": "failed",
+        "statusInfo": {
+          "status": "failed"
+        },
+        "subStatusCounters": {
+          "ignoredResources": 0
+        }
+      },
+      "resource": {
+        "object": {
+          "apiVersion": "v1",
+          "kind": "Pod",
+          "metadata": {
+            "name": "insecure-pod"
+          },
+          "sourcePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml:0",
+          "spec": {
+            "containers": [
+              {
+                "image": "nginx:latest",
+                "name": "app",
+                "resources": {},
+                "securityContext": {
+                  "privileged": true,
+                  "runAsUser": 0
+                }
+              }
+            ]
+          }
+        },
+        "resourceID": "path=2871149968/api=/v1//Pod/insecure-pod",
+        "source": {
+          "fileType": "YAML",
+          "lastCommit": {
+            "date": "0001-01-01T00:00:00Z"
+          },
+          "path": "C:\\Users\\Jimmy",
+          "relativePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml"
+        }
+      }
+    },
+    "references": [],
+    "remediation": "Review Kubernetes resource configuration",
+    "risk": null,
+    "ruleId": "C-0018",
+    "schemaVersion": "1.2.0",
+    "severity": "LOW",
+    "tags": [
+      "k8s-security",
+      "misconfiguration"
+    ],
+    "title": "Configured readiness probe",
+    "tool": {
+      "name": "kubescape",
+      "version": "3.0.0"
+    }
+  },
+  {
+    "compliance": null,
+    "context": {
+      "control_id": "C-0030",
+      "control_name": "Ingress and Egress blocked",
+      "framework": null,
+      "resource_kind": "Pod",
+      "resource_name": "insecure-pod",
+      "resource_namespace": null,
+      "score_factor": 6
+    },
+    "cvss": null,
+    "description": "Ingress and Egress blocked",
+    "id": "50138e43740e8729",
+    "location": {
+      "path": "Pod/insecure-pod",
+      "startLine": 0
+    },
+    "message": "Control failed: Ingress and Egress blocked (Pod: insecure-pod)",
+    "raw": {
+      "control": {
+        "ResourceCounters": {
+          "excludedResources": 0,
+          "failedResources": 1,
+          "passedResources": 0,
+          "skippedResources": 0
+        },
+        "category": {
+          "id": "Cat-4",
+          "name": "Network"
+        },
+        "complianceScore": 0,
+        "controlID": "C-0030",
+        "name": "Ingress and Egress blocked",
+        "resourceIDs": {},
+        "score": 100,
+        "scoreFactor": 6,
+        "severity": "Medium",
+        "status": "failed",
+        "statusInfo": {
+          "status": "failed"
+        },
+        "subStatusCounters": {
+          "ignoredResources": 0
+        }
+      },
+      "resource": {
+        "object": {
+          "apiVersion": "v1",
+          "kind": "Pod",
+          "metadata": {
+            "name": "insecure-pod"
+          },
+          "sourcePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml:0",
+          "spec": {
+            "containers": [
+              {
+                "image": "nginx:latest",
+                "name": "app",
+                "resources": {},
+                "securityContext": {
+                  "privileged": true,
+                  "runAsUser": 0
+                }
+              }
+            ]
+          }
+        },
+        "resourceID": "path=2871149968/api=/v1//Pod/insecure-pod",
+        "source": {
+          "fileType": "YAML",
+          "lastCommit": {
+            "date": "0001-01-01T00:00:00Z"
+          },
+          "path": "C:\\Users\\Jimmy",
+          "relativePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml"
+        }
+      }
+    },
+    "references": [],
+    "remediation": "Review Kubernetes resource configuration",
+    "risk": null,
+    "ruleId": "C-0030",
+    "schemaVersion": "1.2.0",
+    "severity": "MEDIUM",
+    "tags": [
+      "k8s-security",
+      "misconfiguration"
+    ],
+    "title": "Ingress and Egress blocked",
+    "tool": {
+      "name": "kubescape",
+      "version": "3.0.0"
+    }
+  },
+  {
+    "compliance": null,
+    "context": {
+      "control_id": "C-0034",
+      "control_name": "Automatic mapping of service account",
+      "framework": null,
+      "resource_kind": "Pod",
+      "resource_name": "insecure-pod",
+      "resource_namespace": null,
+      "score_factor": 6
+    },
+    "cvss": null,
+    "description": "Automatic mapping of service account",
+    "id": "f6427a2d8f3a2d27",
+    "location": {
+      "path": "Pod/insecure-pod",
+      "startLine": 0
+    },
+    "message": "Control failed: Automatic mapping of service account (Pod: insecure-pod)",
+    "raw": {
+      "control": {
+        "ResourceCounters": {
+          "excludedResources": 0,
+          "failedResources": 1,
+          "passedResources": 0,
+          "skippedResources": 0
+        },
+        "category": {
+          "id": "Cat-3",
+          "name": "Secrets"
+        },
+        "complianceScore": 0,
+        "controlID": "C-0034",
+        "name": "Automatic mapping of service account",
+        "resourceIDs": {},
+        "score": 100,
+        "scoreFactor": 6,
+        "severity": "Medium",
+        "status": "failed",
+        "statusInfo": {
+          "status": "failed"
+        },
+        "subStatusCounters": {
+          "ignoredResources": 0
+        }
+      },
+      "resource": {
+        "object": {
+          "apiVersion": "v1",
+          "kind": "Pod",
+          "metadata": {
+            "name": "insecure-pod"
+          },
+          "sourcePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml:0",
+          "spec": {
+            "containers": [
+              {
+                "image": "nginx:latest",
+                "name": "app",
+                "resources": {},
+                "securityContext": {
+                  "privileged": true,
+                  "runAsUser": 0
+                }
+              }
+            ]
+          }
+        },
+        "resourceID": "path=2871149968/api=/v1//Pod/insecure-pod",
+        "source": {
+          "fileType": "YAML",
+          "lastCommit": {
+            "date": "0001-01-01T00:00:00Z"
+          },
+          "path": "C:\\Users\\Jimmy",
+          "relativePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml"
+        }
+      }
+    },
+    "references": [],
+    "remediation": "Review Kubernetes resource configuration",
+    "risk": null,
+    "ruleId": "C-0034",
+    "schemaVersion": "1.2.0",
+    "severity": "MEDIUM",
+    "tags": [
+      "k8s-security",
+      "misconfiguration"
+    ],
+    "title": "Automatic mapping of service account",
+    "tool": {
+      "name": "kubescape",
+      "version": "3.0.0"
+    }
+  },
+  {
+    "compliance": null,
+    "context": {
+      "control_id": "C-0050",
+      "control_name": "Resources CPU limit and request",
+      "framework": null,
+      "resource_kind": "Pod",
+      "resource_name": "insecure-pod",
+      "resource_namespace": null,
+      "score_factor": 8
+    },
+    "cvss": null,
+    "description": "Resources CPU limit and request",
+    "id": "d8c7bdba604be455",
+    "location": {
+      "path": "Pod/insecure-pod",
+      "startLine": 0
+    },
+    "message": "Control failed: Resources CPU limit and request (Pod: insecure-pod)",
+    "raw": {
+      "control": {
+        "ResourceCounters": {
+          "excludedResources": 0,
+          "failedResources": 1,
+          "passedResources": 0,
+          "skippedResources": 0
+        },
+        "category": {
+          "id": "Cat-5",
+          "name": "Workload",
+          "subCategory": {
+            "id": "Cat-7",
+            "name": "Resource management"
+          }
+        },
+        "complianceScore": 0,
+        "controlID": "C-0050",
+        "name": "Resources CPU limit and request",
+        "resourceIDs": {},
+        "score": 100,
+        "scoreFactor": 8,
+        "severity": "High",
+        "status": "failed",
+        "statusInfo": {
+          "status": "failed"
+        },
+        "subStatusCounters": {
+          "ignoredResources": 0
+        }
+      },
+      "resource": {
+        "object": {
+          "apiVersion": "v1",
+          "kind": "Pod",
+          "metadata": {
+            "name": "insecure-pod"
+          },
+          "sourcePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml:0",
+          "spec": {
+            "containers": [
+              {
+                "image": "nginx:latest",
+                "name": "app",
+                "resources": {},
+                "securityContext": {
+                  "privileged": true,
+                  "runAsUser": 0
+                }
+              }
+            ]
+          }
+        },
+        "resourceID": "path=2871149968/api=/v1//Pod/insecure-pod",
+        "source": {
+          "fileType": "YAML",
+          "lastCommit": {
+            "date": "0001-01-01T00:00:00Z"
+          },
+          "path": "C:\\Users\\Jimmy",
+          "relativePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml"
+        }
+      }
+    },
+    "references": [],
+    "remediation": "Review Kubernetes resource configuration",
+    "risk": null,
+    "ruleId": "C-0050",
+    "schemaVersion": "1.2.0",
+    "severity": "HIGH",
+    "tags": [
+      "k8s-security",
+      "misconfiguration"
+    ],
+    "title": "Resources CPU limit and request",
+    "tool": {
+      "name": "kubescape",
+      "version": "3.0.0"
+    }
+  },
+  {
+    "compliance": null,
+    "context": {
+      "control_id": "C-0055",
+      "control_name": "Linux hardening",
+      "framework": null,
+      "resource_kind": "Pod",
+      "resource_name": "insecure-pod",
+      "resource_namespace": null,
+      "score_factor": 4
+    },
+    "cvss": null,
+    "description": "Linux hardening",
+    "id": "c675a372a3cb87e6",
+    "location": {
+      "path": "Pod/insecure-pod",
+      "startLine": 0
+    },
+    "message": "Control failed: Linux hardening (Pod: insecure-pod)",
+    "raw": {
+      "control": {
+        "ResourceCounters": {
+          "excludedResources": 0,
+          "failedResources": 1,
+          "passedResources": 0,
+          "skippedResources": 0
+        },
+        "category": {
+          "id": "Cat-5",
+          "name": "Workload",
+          "subCategory": {
+            "id": "Cat-9",
+            "name": "Node escape"
+          }
+        },
+        "complianceScore": 0,
+        "controlID": "C-0055",
+        "name": "Linux hardening",
+        "resourceIDs": {},
+        "score": 100,
+        "scoreFactor": 4,
+        "severity": "Medium",
+        "status": "failed",
+        "statusInfo": {
+          "status": "failed"
+        },
+        "subStatusCounters": {
+          "ignoredResources": 0
+        }
+      },
+      "resource": {
+        "object": {
+          "apiVersion": "v1",
+          "kind": "Pod",
+          "metadata": {
+            "name": "insecure-pod"
+          },
+          "sourcePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml:0",
+          "spec": {
+            "containers": [
+              {
+                "image": "nginx:latest",
+                "name": "app",
+                "resources": {},
+                "securityContext": {
+                  "privileged": true,
+                  "runAsUser": 0
+                }
+              }
+            ]
+          }
+        },
+        "resourceID": "path=2871149968/api=/v1//Pod/insecure-pod",
+        "source": {
+          "fileType": "YAML",
+          "lastCommit": {
+            "date": "0001-01-01T00:00:00Z"
+          },
+          "path": "C:\\Users\\Jimmy",
+          "relativePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml"
+        }
+      }
+    },
+    "references": [],
+    "remediation": "Review Kubernetes resource configuration",
+    "risk": null,
+    "ruleId": "C-0055",
+    "schemaVersion": "1.2.0",
+    "severity": "MEDIUM",
+    "tags": [
+      "k8s-security",
+      "misconfiguration"
+    ],
+    "title": "Linux hardening",
+    "tool": {
+      "name": "kubescape",
+      "version": "3.0.0"
+    }
+  },
+  {
+    "compliance": null,
+    "context": {
+      "control_id": "C-0056",
+      "control_name": "Configured liveness probe",
+      "framework": null,
+      "resource_kind": "Pod",
+      "resource_name": "insecure-pod",
+      "resource_namespace": null,
+      "score_factor": 4
+    },
+    "cvss": null,
+    "description": "Configured liveness probe",
+    "id": "7e8e71f252e42ca3",
+    "location": {
+      "path": "Pod/insecure-pod",
+      "startLine": 0
+    },
+    "message": "Control failed: Configured liveness probe (Pod: insecure-pod)",
+    "raw": {
+      "control": {
+        "ResourceCounters": {
+          "excludedResources": 0,
+          "failedResources": 1,
+          "passedResources": 0,
+          "skippedResources": 0
+        },
+        "category": {
+          "id": "Cat-5",
+          "name": "Workload"
+        },
+        "complianceScore": 0,
+        "controlID": "C-0056",
+        "name": "Configured liveness probe",
+        "resourceIDs": {},
+        "score": 100,
+        "scoreFactor": 4,
+        "severity": "Medium",
+        "status": "failed",
+        "statusInfo": {
+          "status": "failed"
+        },
+        "subStatusCounters": {
+          "ignoredResources": 0
+        }
+      },
+      "resource": {
+        "object": {
+          "apiVersion": "v1",
+          "kind": "Pod",
+          "metadata": {
+            "name": "insecure-pod"
+          },
+          "sourcePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml:0",
+          "spec": {
+            "containers": [
+              {
+                "image": "nginx:latest",
+                "name": "app",
+                "resources": {},
+                "securityContext": {
+                  "privileged": true,
+                  "runAsUser": 0
+                }
+              }
+            ]
+          }
+        },
+        "resourceID": "path=2871149968/api=/v1//Pod/insecure-pod",
+        "source": {
+          "fileType": "YAML",
+          "lastCommit": {
+            "date": "0001-01-01T00:00:00Z"
+          },
+          "path": "C:\\Users\\Jimmy",
+          "relativePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml"
+        }
+      }
+    },
+    "references": [],
+    "remediation": "Review Kubernetes resource configuration",
+    "risk": null,
+    "ruleId": "C-0056",
+    "schemaVersion": "1.2.0",
+    "severity": "MEDIUM",
+    "tags": [
+      "k8s-security",
+      "misconfiguration"
+    ],
+    "title": "Configured liveness probe",
+    "tool": {
+      "name": "kubescape",
+      "version": "3.0.0"
+    }
+  },
+  {
+    "compliance": null,
+    "context": {
+      "control_id": "C-0057",
+      "control_name": "Privileged container",
+      "framework": null,
+      "resource_kind": "Pod",
+      "resource_name": "insecure-pod",
+      "resource_namespace": null,
+      "score_factor": 8
+    },
+    "cvss": null,
+    "description": "Privileged container",
+    "id": "d585eab422ce199b",
+    "location": {
+      "path": "Pod/insecure-pod",
+      "startLine": 0
+    },
+    "message": "Control failed: Privileged container (Pod: insecure-pod)",
+    "raw": {
+      "control": {
+        "ResourceCounters": {
+          "excludedResources": 0,
+          "failedResources": 1,
+          "passedResources": 0,
+          "skippedResources": 0
+        },
+        "category": {
+          "id": "Cat-5",
+          "name": "Workload",
+          "subCategory": {
+            "id": "Cat-9",
+            "name": "Node escape"
+          }
+        },
+        "complianceScore": 0,
+        "controlID": "C-0057",
+        "name": "Privileged container",
+        "resourceIDs": {},
+        "score": 100,
+        "scoreFactor": 8,
+        "severity": "High",
+        "status": "failed",
+        "statusInfo": {
+          "status": "failed"
+        },
+        "subStatusCounters": {
+          "ignoredResources": 0
+        }
+      },
+      "resource": {
+        "object": {
+          "apiVersion": "v1",
+          "kind": "Pod",
+          "metadata": {
+            "name": "insecure-pod"
+          },
+          "sourcePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml:0",
+          "spec": {
+            "containers": [
+              {
+                "image": "nginx:latest",
+                "name": "app",
+                "resources": {},
+                "securityContext": {
+                  "privileged": true,
+                  "runAsUser": 0
+                }
+              }
+            ]
+          }
+        },
+        "resourceID": "path=2871149968/api=/v1//Pod/insecure-pod",
+        "source": {
+          "fileType": "YAML",
+          "lastCommit": {
+            "date": "0001-01-01T00:00:00Z"
+          },
+          "path": "C:\\Users\\Jimmy",
+          "relativePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml"
+        }
+      }
+    },
+    "references": [],
+    "remediation": "Review Kubernetes resource configuration",
+    "risk": null,
+    "ruleId": "C-0057",
+    "schemaVersion": "1.2.0",
+    "severity": "HIGH",
+    "tags": [
+      "k8s-security",
+      "misconfiguration"
+    ],
+    "title": "Privileged container",
+    "tool": {
+      "name": "kubescape",
+      "version": "3.0.0"
+    }
+  },
+  {
+    "compliance": null,
+    "context": {
+      "control_id": "C-0061",
+      "control_name": "Pods in default namespace",
+      "framework": null,
+      "resource_kind": "Pod",
+      "resource_name": "insecure-pod",
+      "resource_namespace": null,
+      "score_factor": 3
+    },
+    "cvss": null,
+    "description": "Pods in default namespace",
+    "id": "7aaa3598d3e3e5c0",
+    "location": {
+      "path": "Pod/insecure-pod",
+      "startLine": 0
+    },
+    "message": "Control failed: Pods in default namespace (Pod: insecure-pod)",
+    "raw": {
+      "control": {
+        "ResourceCounters": {
+          "excludedResources": 0,
+          "failedResources": 1,
+          "passedResources": 0,
+          "skippedResources": 0
+        },
+        "category": {
+          "id": "Cat-5",
+          "name": "Workload"
+        },
+        "complianceScore": 0,
+        "controlID": "C-0061",
+        "name": "Pods in default namespace",
+        "resourceIDs": {},
+        "score": 100,
+        "scoreFactor": 3,
+        "severity": "Low",
+        "status": "failed",
+        "statusInfo": {
+          "status": "failed"
+        },
+        "subStatusCounters": {
+          "ignoredResources": 0
+        }
+      },
+      "resource": {
+        "object": {
+          "apiVersion": "v1",
+          "kind": "Pod",
+          "metadata": {
+            "name": "insecure-pod"
+          },
+          "sourcePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml:0",
+          "spec": {
+            "containers": [
+              {
+                "image": "nginx:latest",
+                "name": "app",
+                "resources": {},
+                "securityContext": {
+                  "privileged": true,
+                  "runAsUser": 0
+                }
+              }
+            ]
+          }
+        },
+        "resourceID": "path=2871149968/api=/v1//Pod/insecure-pod",
+        "source": {
+          "fileType": "YAML",
+          "lastCommit": {
+            "date": "0001-01-01T00:00:00Z"
+          },
+          "path": "C:\\Users\\Jimmy",
+          "relativePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml"
+        }
+      }
+    },
+    "references": [],
+    "remediation": "Review Kubernetes resource configuration",
+    "risk": null,
+    "ruleId": "C-0061",
+    "schemaVersion": "1.2.0",
+    "severity": "LOW",
+    "tags": [
+      "k8s-security",
+      "misconfiguration"
+    ],
+    "title": "Pods in default namespace",
+    "tool": {
+      "name": "kubescape",
+      "version": "3.0.0"
+    }
+  },
+  {
+    "compliance": null,
+    "context": {
+      "control_id": "C-0073",
+      "control_name": "Naked pods",
+      "framework": null,
+      "resource_kind": "Pod",
+      "resource_name": "insecure-pod",
+      "resource_namespace": null,
+      "score_factor": 3
+    },
+    "cvss": null,
+    "description": "Naked pods",
+    "id": "584612fc56a3f426",
+    "location": {
+      "path": "Pod/insecure-pod",
+      "startLine": 0
+    },
+    "message": "Control failed: Naked pods (Pod: insecure-pod)",
+    "raw": {
+      "control": {
+        "ResourceCounters": {
+          "excludedResources": 0,
+          "failedResources": 1,
+          "passedResources": 0,
+          "skippedResources": 0
+        },
+        "category": {
+          "id": "Cat-5",
+          "name": "Workload"
+        },
+        "complianceScore": 0,
+        "controlID": "C-0073",
+        "name": "Naked pods",
+        "resourceIDs": {},
+        "score": 100,
+        "scoreFactor": 3,
+        "severity": "Low",
+        "status": "failed",
+        "statusInfo": {
+          "status": "failed"
+        },
+        "subStatusCounters": {
+          "ignoredResources": 0
+        }
+      },
+      "resource": {
+        "object": {
+          "apiVersion": "v1",
+          "kind": "Pod",
+          "metadata": {
+            "name": "insecure-pod"
+          },
+          "sourcePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml:0",
+          "spec": {
+            "containers": [
+              {
+                "image": "nginx:latest",
+                "name": "app",
+                "resources": {},
+                "securityContext": {
+                  "privileged": true,
+                  "runAsUser": 0
+                }
+              }
+            ]
+          }
+        },
+        "resourceID": "path=2871149968/api=/v1//Pod/insecure-pod",
+        "source": {
+          "fileType": "YAML",
+          "lastCommit": {
+            "date": "0001-01-01T00:00:00Z"
+          },
+          "path": "C:\\Users\\Jimmy",
+          "relativePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml"
+        }
+      }
+    },
+    "references": [],
+    "remediation": "Review Kubernetes resource configuration",
+    "risk": null,
+    "ruleId": "C-0073",
+    "schemaVersion": "1.2.0",
+    "severity": "LOW",
+    "tags": [
+      "k8s-security",
+      "misconfiguration"
+    ],
+    "title": "Naked pods",
+    "tool": {
+      "name": "kubescape",
+      "version": "3.0.0"
+    }
+  },
+  {
+    "compliance": null,
+    "context": {
+      "control_id": "C-0076",
+      "control_name": "Label usage for resources",
+      "framework": null,
+      "resource_kind": "Pod",
+      "resource_name": "insecure-pod",
+      "resource_namespace": null,
+      "score_factor": 2
+    },
+    "cvss": null,
+    "description": "Label usage for resources",
+    "id": "a71869ace437dd20",
+    "location": {
+      "path": "Pod/insecure-pod",
+      "startLine": 0
+    },
+    "message": "Control failed: Label usage for resources (Pod: insecure-pod)",
+    "raw": {
+      "control": {
+        "ResourceCounters": {
+          "excludedResources": 0,
+          "failedResources": 1,
+          "passedResources": 0,
+          "skippedResources": 0
+        },
+        "category": {
+          "id": "Cat-5",
+          "name": "Workload"
+        },
+        "complianceScore": 0,
+        "controlID": "C-0076",
+        "name": "Label usage for resources",
+        "resourceIDs": {},
+        "score": 100,
+        "scoreFactor": 2,
+        "severity": "Low",
+        "status": "failed",
+        "statusInfo": {
+          "status": "failed"
+        },
+        "subStatusCounters": {
+          "ignoredResources": 0
+        }
+      },
+      "resource": {
+        "object": {
+          "apiVersion": "v1",
+          "kind": "Pod",
+          "metadata": {
+            "name": "insecure-pod"
+          },
+          "sourcePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml:0",
+          "spec": {
+            "containers": [
+              {
+                "image": "nginx:latest",
+                "name": "app",
+                "resources": {},
+                "securityContext": {
+                  "privileged": true,
+                  "runAsUser": 0
+                }
+              }
+            ]
+          }
+        },
+        "resourceID": "path=2871149968/api=/v1//Pod/insecure-pod",
+        "source": {
+          "fileType": "YAML",
+          "lastCommit": {
+            "date": "0001-01-01T00:00:00Z"
+          },
+          "path": "C:\\Users\\Jimmy",
+          "relativePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml"
+        }
+      }
+    },
+    "references": [],
+    "remediation": "Review Kubernetes resource configuration",
+    "risk": null,
+    "ruleId": "C-0076",
+    "schemaVersion": "1.2.0",
+    "severity": "LOW",
+    "tags": [
+      "k8s-security",
+      "misconfiguration"
+    ],
+    "title": "Label usage for resources",
+    "tool": {
+      "name": "kubescape",
+      "version": "3.0.0"
+    }
+  },
+  {
+    "compliance": null,
+    "context": {
+      "control_id": "C-0077",
+      "control_name": "K8s common labels usage",
+      "framework": null,
+      "resource_kind": "Pod",
+      "resource_name": "insecure-pod",
+      "resource_namespace": null,
+      "score_factor": 2
+    },
+    "cvss": null,
+    "description": "K8s common labels usage",
+    "id": "ef39e35f5760499f",
+    "location": {
+      "path": "Pod/insecure-pod",
+      "startLine": 0
+    },
+    "message": "Control failed: K8s common labels usage (Pod: insecure-pod)",
+    "raw": {
+      "control": {
+        "ResourceCounters": {
+          "excludedResources": 0,
+          "failedResources": 1,
+          "passedResources": 0,
+          "skippedResources": 0
+        },
+        "category": {
+          "id": "Cat-5",
+          "name": "Workload"
+        },
+        "complianceScore": 0,
+        "controlID": "C-0077",
+        "name": "K8s common labels usage",
+        "resourceIDs": {},
+        "score": 100,
+        "scoreFactor": 2,
+        "severity": "Low",
+        "status": "failed",
+        "statusInfo": {
+          "status": "failed"
+        },
+        "subStatusCounters": {
+          "ignoredResources": 0
+        }
+      },
+      "resource": {
+        "object": {
+          "apiVersion": "v1",
+          "kind": "Pod",
+          "metadata": {
+            "name": "insecure-pod"
+          },
+          "sourcePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml:0",
+          "spec": {
+            "containers": [
+              {
+                "image": "nginx:latest",
+                "name": "app",
+                "resources": {},
+                "securityContext": {
+                  "privileged": true,
+                  "runAsUser": 0
+                }
+              }
+            ]
+          }
+        },
+        "resourceID": "path=2871149968/api=/v1//Pod/insecure-pod",
+        "source": {
+          "fileType": "YAML",
+          "lastCommit": {
+            "date": "0001-01-01T00:00:00Z"
+          },
+          "path": "C:\\Users\\Jimmy",
+          "relativePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml"
+        }
+      }
+    },
+    "references": [],
+    "remediation": "Review Kubernetes resource configuration",
+    "risk": null,
+    "ruleId": "C-0077",
+    "schemaVersion": "1.2.0",
+    "severity": "LOW",
+    "tags": [
+      "k8s-security",
+      "misconfiguration"
+    ],
+    "title": "K8s common labels usage",
+    "tool": {
+      "name": "kubescape",
+      "version": "3.0.0"
+    }
+  },
+  {
+    "compliance": null,
+    "context": {
+      "control_id": "C-0190",
+      "control_name": "Ensure that Service Account Tokens are only mounted where necessary",
+      "framework": null,
+      "resource_kind": "Pod",
+      "resource_name": "insecure-pod",
+      "resource_namespace": null,
+      "score_factor": 5
+    },
+    "cvss": null,
+    "description": "Ensure that Service Account Tokens are only mounted where necessary",
+    "id": "b18ce7bde1e805d8",
+    "location": {
+      "path": "Pod/insecure-pod",
+      "startLine": 0
+    },
+    "message": "Control failed: Ensure that Service Account Tokens are only mounted where necessary (Pod: insecure-pod)",
+    "raw": {
+      "control": {
+        "ResourceCounters": {
+          "excludedResources": 0,
+          "failedResources": 1,
+          "passedResources": 0,
+          "skippedResources": 0
+        },
+        "category": {
+          "id": "Cat-5",
+          "name": "Workload"
+        },
+        "complianceScore": 0,
+        "controlID": "C-0190",
+        "name": "Ensure that Service Account Tokens are only mounted where necessary",
+        "resourceIDs": {},
+        "score": 100,
+        "scoreFactor": 5,
+        "severity": "Medium",
+        "status": "failed",
+        "statusInfo": {
+          "status": "failed"
+        },
+        "subStatusCounters": {
+          "ignoredResources": 0
+        }
+      },
+      "resource": {
+        "object": {
+          "apiVersion": "v1",
+          "kind": "Pod",
+          "metadata": {
+            "name": "insecure-pod"
+          },
+          "sourcePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml:0",
+          "spec": {
+            "containers": [
+              {
+                "image": "nginx:latest",
+                "name": "app",
+                "resources": {},
+                "securityContext": {
+                  "privileged": true,
+                  "runAsUser": 0
+                }
+              }
+            ]
+          }
+        },
+        "resourceID": "path=2871149968/api=/v1//Pod/insecure-pod",
+        "source": {
+          "fileType": "YAML",
+          "lastCommit": {
+            "date": "0001-01-01T00:00:00Z"
+          },
+          "path": "C:\\Users\\Jimmy",
+          "relativePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml"
+        }
+      }
+    },
+    "references": [],
+    "remediation": "Review Kubernetes resource configuration",
+    "risk": null,
+    "ruleId": "C-0190",
+    "schemaVersion": "1.2.0",
+    "severity": "MEDIUM",
+    "tags": [
+      "k8s-security",
+      "misconfiguration"
+    ],
+    "title": "Ensure that Service Account Tokens are only mounted where necessary",
+    "tool": {
+      "name": "kubescape",
+      "version": "3.0.0"
+    }
+  },
+  {
+    "compliance": null,
+    "context": {
+      "control_id": "C-0210",
+      "control_name": "Ensure that the seccomp profile is set to docker/default in your pod definitions",
+      "framework": null,
+      "resource_kind": "Pod",
+      "resource_name": "insecure-pod",
+      "resource_namespace": null,
+      "score_factor": 4
+    },
+    "cvss": null,
+    "description": "Ensure that the seccomp profile is set to docker/default in your pod definitions",
+    "id": "5fc23e3e6fb367af",
+    "location": {
+      "path": "Pod/insecure-pod",
+      "startLine": 0
+    },
+    "message": "Control failed: Ensure that the seccomp profile is set to docker/default in your pod definitions (Pod: insecure-pod)",
+    "raw": {
+      "control": {
+        "ResourceCounters": {
+          "excludedResources": 0,
+          "failedResources": 1,
+          "passedResources": 0,
+          "skippedResources": 0
+        },
+        "category": {
+          "id": "Cat-5",
+          "name": "Workload"
+        },
+        "complianceScore": 0,
+        "controlID": "C-0210",
+        "name": "Ensure that the seccomp profile is set to docker/default in your pod definitions",
+        "resourceIDs": {},
+        "score": 100,
+        "scoreFactor": 4,
+        "severity": "Medium",
+        "status": "failed",
+        "statusInfo": {
+          "status": "failed"
+        },
+        "subStatusCounters": {
+          "ignoredResources": 0
+        }
+      },
+      "resource": {
+        "object": {
+          "apiVersion": "v1",
+          "kind": "Pod",
+          "metadata": {
+            "name": "insecure-pod"
+          },
+          "sourcePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml:0",
+          "spec": {
+            "containers": [
+              {
+                "image": "nginx:latest",
+                "name": "app",
+                "resources": {},
+                "securityContext": {
+                  "privileged": true,
+                  "runAsUser": 0
+                }
+              }
+            ]
+          }
+        },
+        "resourceID": "path=2871149968/api=/v1//Pod/insecure-pod",
+        "source": {
+          "fileType": "YAML",
+          "lastCommit": {
+            "date": "0001-01-01T00:00:00Z"
+          },
+          "path": "C:\\Users\\Jimmy",
+          "relativePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml"
+        }
+      }
+    },
+    "references": [],
+    "remediation": "Review Kubernetes resource configuration",
+    "risk": null,
+    "ruleId": "C-0210",
+    "schemaVersion": "1.2.0",
+    "severity": "MEDIUM",
+    "tags": [
+      "k8s-security",
+      "misconfiguration"
+    ],
+    "title": "Ensure that the seccomp profile is set to docker/default in your pod definitions",
+    "tool": {
+      "name": "kubescape",
+      "version": "3.0.0"
+    }
+  },
+  {
+    "compliance": null,
+    "context": {
+      "control_id": "C-0211",
+      "control_name": "Apply Security Context to Your Pods and Containers",
+      "framework": null,
+      "resource_kind": "Pod",
+      "resource_name": "insecure-pod",
+      "resource_namespace": null,
+      "score_factor": 8
+    },
+    "cvss": null,
+    "description": "Apply Security Context to Your Pods and Containers",
+    "id": "e16a8c2a7c67ebc9",
+    "location": {
+      "path": "Pod/insecure-pod",
+      "startLine": 0
+    },
+    "message": "Control failed: Apply Security Context to Your Pods and Containers (Pod: insecure-pod)",
+    "raw": {
+      "control": {
+        "ResourceCounters": {
+          "excludedResources": 0,
+          "failedResources": 1,
+          "passedResources": 0,
+          "skippedResources": 0
+        },
+        "category": {
+          "id": "Cat-5",
+          "name": "Workload"
+        },
+        "complianceScore": 0,
+        "controlID": "C-0211",
+        "name": "Apply Security Context to Your Pods and Containers",
+        "resourceIDs": {},
+        "score": 100,
+        "scoreFactor": 8,
+        "severity": "High",
+        "status": "failed",
+        "statusInfo": {
+          "status": "failed"
+        },
+        "subStatusCounters": {
+          "ignoredResources": 0
+        }
+      },
+      "resource": {
+        "object": {
+          "apiVersion": "v1",
+          "kind": "Pod",
+          "metadata": {
+            "name": "insecure-pod"
+          },
+          "sourcePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml:0",
+          "spec": {
+            "containers": [
+              {
+                "image": "nginx:latest",
+                "name": "app",
+                "resources": {},
+                "securityContext": {
+                  "privileged": true,
+                  "runAsUser": 0
+                }
+              }
+            ]
+          }
+        },
+        "resourceID": "path=2871149968/api=/v1//Pod/insecure-pod",
+        "source": {
+          "fileType": "YAML",
+          "lastCommit": {
+            "date": "0001-01-01T00:00:00Z"
+          },
+          "path": "C:\\Users\\Jimmy",
+          "relativePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml"
+        }
+      }
+    },
+    "references": [],
+    "remediation": "Review Kubernetes resource configuration",
+    "risk": null,
+    "ruleId": "C-0211",
+    "schemaVersion": "1.2.0",
+    "severity": "HIGH",
+    "tags": [
+      "k8s-security",
+      "misconfiguration"
+    ],
+    "title": "Apply Security Context to Your Pods and Containers",
+    "tool": {
+      "name": "kubescape",
+      "version": "3.0.0"
+    }
+  },
+  {
+    "compliance": null,
+    "context": {
+      "control_id": "C-0237",
+      "control_name": "Check if signature exists",
+      "framework": null,
+      "resource_kind": "Pod",
+      "resource_name": "insecure-pod",
+      "resource_namespace": null,
+      "score_factor": 7
+    },
+    "cvss": null,
+    "description": "Check if signature exists",
+    "id": "3efebfaff0b38a48",
+    "location": {
+      "path": "Pod/insecure-pod",
+      "startLine": 0
+    },
+    "message": "Control failed: Check if signature exists (Pod: insecure-pod)",
+    "raw": {
+      "control": {
+        "ResourceCounters": {
+          "excludedResources": 0,
+          "failedResources": 1,
+          "passedResources": 0,
+          "skippedResources": 0
+        },
+        "category": {
+          "id": "Cat-5",
+          "name": "Workload",
+          "subCategory": {
+            "id": "Cat-6",
+            "name": "Supply chain"
+          }
+        },
+        "complianceScore": 0,
+        "controlID": "C-0237",
+        "name": "Check if signature exists",
+        "resourceIDs": {},
+        "score": 100,
+        "scoreFactor": 7,
+        "severity": "High",
+        "status": "failed",
+        "statusInfo": {
+          "status": "failed"
+        },
+        "subStatusCounters": {
+          "ignoredResources": 0
+        }
+      },
+      "resource": {
+        "object": {
+          "apiVersion": "v1",
+          "kind": "Pod",
+          "metadata": {
+            "name": "insecure-pod"
+          },
+          "sourcePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml:0",
+          "spec": {
+            "containers": [
+              {
+                "image": "nginx:latest",
+                "name": "app",
+                "resources": {},
+                "securityContext": {
+                  "privileged": true,
+                  "runAsUser": 0
+                }
+              }
+            ]
+          }
+        },
+        "resourceID": "path=2871149968/api=/v1//Pod/insecure-pod",
+        "source": {
+          "fileType": "YAML",
+          "lastCommit": {
+            "date": "0001-01-01T00:00:00Z"
+          },
+          "path": "C:\\Users\\Jimmy",
+          "relativePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml"
+        }
+      }
+    },
+    "references": [],
+    "remediation": "Review Kubernetes resource configuration",
+    "risk": null,
+    "ruleId": "C-0237",
+    "schemaVersion": "1.2.0",
+    "severity": "HIGH",
+    "tags": [
+      "k8s-security",
+      "misconfiguration"
+    ],
+    "title": "Check if signature exists",
+    "tool": {
+      "name": "kubescape",
+      "version": "3.0.0"
+    }
+  },
+  {
+    "compliance": null,
+    "context": {
+      "control_id": "C-0260",
+      "control_name": "Missing network policy",
+      "framework": null,
+      "resource_kind": "Pod",
+      "resource_name": "insecure-pod",
+      "resource_namespace": null,
+      "score_factor": 5
+    },
+    "cvss": null,
+    "description": "Missing network policy",
+    "id": "06c872b494054770",
+    "location": {
+      "path": "Pod/insecure-pod",
+      "startLine": 0
+    },
+    "message": "Control failed: Missing network policy (Pod: insecure-pod)",
+    "raw": {
+      "control": {
+        "ResourceCounters": {
+          "excludedResources": 0,
+          "failedResources": 1,
+          "passedResources": 0,
+          "skippedResources": 0
+        },
+        "category": {
+          "id": "Cat-4",
+          "name": "Network"
+        },
+        "complianceScore": 0,
+        "controlID": "C-0260",
+        "name": "Missing network policy",
+        "resourceIDs": {},
+        "score": 100,
+        "scoreFactor": 5,
+        "severity": "Medium",
+        "status": "failed",
+        "statusInfo": {
+          "status": "failed"
+        },
+        "subStatusCounters": {
+          "ignoredResources": 0
+        }
+      },
+      "resource": {
+        "object": {
+          "apiVersion": "v1",
+          "kind": "Pod",
+          "metadata": {
+            "name": "insecure-pod"
+          },
+          "sourcePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml:0",
+          "spec": {
+            "containers": [
+              {
+                "image": "nginx:latest",
+                "name": "app",
+                "resources": {},
+                "securityContext": {
+                  "privileged": true,
+                  "runAsUser": 0
+                }
+              }
+            ]
+          }
+        },
+        "resourceID": "path=2871149968/api=/v1//Pod/insecure-pod",
+        "source": {
+          "fileType": "YAML",
+          "lastCommit": {
+            "date": "0001-01-01T00:00:00Z"
+          },
+          "path": "C:\\Users\\Jimmy",
+          "relativePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml"
+        }
+      }
+    },
+    "references": [],
+    "remediation": "Review Kubernetes resource configuration",
+    "risk": null,
+    "ruleId": "C-0260",
+    "schemaVersion": "1.2.0",
+    "severity": "MEDIUM",
+    "tags": [
+      "k8s-security",
+      "misconfiguration"
+    ],
+    "title": "Missing network policy",
+    "tool": {
+      "name": "kubescape",
+      "version": "3.0.0"
+    }
+  },
+  {
+    "compliance": null,
+    "context": {
+      "control_id": "C-0268",
+      "control_name": "Ensure CPU requests are set",
+      "framework": null,
+      "resource_kind": "Pod",
+      "resource_name": "insecure-pod",
+      "resource_namespace": null,
+      "score_factor": 3
+    },
+    "cvss": null,
+    "description": "Ensure CPU requests are set",
+    "id": "43066e8ba133d099",
+    "location": {
+      "path": "Pod/insecure-pod",
+      "startLine": 0
+    },
+    "message": "Control failed: Ensure CPU requests are set (Pod: insecure-pod)",
+    "raw": {
+      "control": {
+        "ResourceCounters": {
+          "excludedResources": 0,
+          "failedResources": 1,
+          "passedResources": 0,
+          "skippedResources": 0
+        },
+        "category": {
+          "id": "Cat-5",
+          "name": "Workload",
+          "subCategory": {
+            "id": "Cat-7",
+            "name": "Resource management"
+          }
+        },
+        "complianceScore": 0,
+        "controlID": "C-0268",
+        "name": "Ensure CPU requests are set",
+        "resourceIDs": {},
+        "score": 100,
+        "scoreFactor": 3,
+        "severity": "Low",
+        "status": "failed",
+        "statusInfo": {
+          "status": "failed"
+        },
+        "subStatusCounters": {
+          "ignoredResources": 0
+        }
+      },
+      "resource": {
+        "object": {
+          "apiVersion": "v1",
+          "kind": "Pod",
+          "metadata": {
+            "name": "insecure-pod"
+          },
+          "sourcePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml:0",
+          "spec": {
+            "containers": [
+              {
+                "image": "nginx:latest",
+                "name": "app",
+                "resources": {},
+                "securityContext": {
+                  "privileged": true,
+                  "runAsUser": 0
+                }
+              }
+            ]
+          }
+        },
+        "resourceID": "path=2871149968/api=/v1//Pod/insecure-pod",
+        "source": {
+          "fileType": "YAML",
+          "lastCommit": {
+            "date": "0001-01-01T00:00:00Z"
+          },
+          "path": "C:\\Users\\Jimmy",
+          "relativePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml"
+        }
+      }
+    },
+    "references": [],
+    "remediation": "Review Kubernetes resource configuration",
+    "risk": null,
+    "ruleId": "C-0268",
+    "schemaVersion": "1.2.0",
+    "severity": "LOW",
+    "tags": [
+      "k8s-security",
+      "misconfiguration"
+    ],
+    "title": "Ensure CPU requests are set",
+    "tool": {
+      "name": "kubescape",
+      "version": "3.0.0"
+    }
+  },
+  {
+    "compliance": null,
+    "context": {
+      "control_id": "C-0269",
+      "control_name": "Ensure memory requests are set",
+      "framework": null,
+      "resource_kind": "Pod",
+      "resource_name": "insecure-pod",
+      "resource_namespace": null,
+      "score_factor": 3
+    },
+    "cvss": null,
+    "description": "Ensure memory requests are set",
+    "id": "3d000f8cc02e7018",
+    "location": {
+      "path": "Pod/insecure-pod",
+      "startLine": 0
+    },
+    "message": "Control failed: Ensure memory requests are set (Pod: insecure-pod)",
+    "raw": {
+      "control": {
+        "ResourceCounters": {
+          "excludedResources": 0,
+          "failedResources": 1,
+          "passedResources": 0,
+          "skippedResources": 0
+        },
+        "category": {
+          "id": "Cat-5",
+          "name": "Workload",
+          "subCategory": {
+            "id": "Cat-7",
+            "name": "Resource management"
+          }
+        },
+        "complianceScore": 0,
+        "controlID": "C-0269",
+        "name": "Ensure memory requests are set",
+        "resourceIDs": {},
+        "score": 100,
+        "scoreFactor": 3,
+        "severity": "Low",
+        "status": "failed",
+        "statusInfo": {
+          "status": "failed"
+        },
+        "subStatusCounters": {
+          "ignoredResources": 0
+        }
+      },
+      "resource": {
+        "object": {
+          "apiVersion": "v1",
+          "kind": "Pod",
+          "metadata": {
+            "name": "insecure-pod"
+          },
+          "sourcePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml:0",
+          "spec": {
+            "containers": [
+              {
+                "image": "nginx:latest",
+                "name": "app",
+                "resources": {},
+                "securityContext": {
+                  "privileged": true,
+                  "runAsUser": 0
+                }
+              }
+            ]
+          }
+        },
+        "resourceID": "path=2871149968/api=/v1//Pod/insecure-pod",
+        "source": {
+          "fileType": "YAML",
+          "lastCommit": {
+            "date": "0001-01-01T00:00:00Z"
+          },
+          "path": "C:\\Users\\Jimmy",
+          "relativePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml"
+        }
+      }
+    },
+    "references": [],
+    "remediation": "Review Kubernetes resource configuration",
+    "risk": null,
+    "ruleId": "C-0269",
+    "schemaVersion": "1.2.0",
+    "severity": "LOW",
+    "tags": [
+      "k8s-security",
+      "misconfiguration"
+    ],
+    "title": "Ensure memory requests are set",
+    "tool": {
+      "name": "kubescape",
+      "version": "3.0.0"
+    }
+  },
+  {
+    "compliance": null,
+    "context": {
+      "control_id": "C-0270",
+      "control_name": "Ensure CPU limits are set",
+      "framework": null,
+      "resource_kind": "Pod",
+      "resource_name": "insecure-pod",
+      "resource_namespace": null,
+      "score_factor": 8
+    },
+    "cvss": null,
+    "description": "Ensure CPU limits are set",
+    "id": "49d611d6d018eb4f",
+    "location": {
+      "path": "Pod/insecure-pod",
+      "startLine": 0
+    },
+    "message": "Control failed: Ensure CPU limits are set (Pod: insecure-pod)",
+    "raw": {
+      "control": {
+        "ResourceCounters": {
+          "excludedResources": 0,
+          "failedResources": 1,
+          "passedResources": 0,
+          "skippedResources": 0
+        },
+        "category": {
+          "id": "Cat-5",
+          "name": "Workload",
+          "subCategory": {
+            "id": "Cat-7",
+            "name": "Resource management"
+          }
+        },
+        "complianceScore": 0,
+        "controlID": "C-0270",
+        "name": "Ensure CPU limits are set",
+        "resourceIDs": {},
+        "score": 100,
+        "scoreFactor": 8,
+        "severity": "High",
+        "status": "failed",
+        "statusInfo": {
+          "status": "failed"
+        },
+        "subStatusCounters": {
+          "ignoredResources": 0
+        }
+      },
+      "resource": {
+        "object": {
+          "apiVersion": "v1",
+          "kind": "Pod",
+          "metadata": {
+            "name": "insecure-pod"
+          },
+          "sourcePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml:0",
+          "spec": {
+            "containers": [
+              {
+                "image": "nginx:latest",
+                "name": "app",
+                "resources": {},
+                "securityContext": {
+                  "privileged": true,
+                  "runAsUser": 0
+                }
+              }
+            ]
+          }
+        },
+        "resourceID": "path=2871149968/api=/v1//Pod/insecure-pod",
+        "source": {
+          "fileType": "YAML",
+          "lastCommit": {
+            "date": "0001-01-01T00:00:00Z"
+          },
+          "path": "C:\\Users\\Jimmy",
+          "relativePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml"
+        }
+      }
+    },
+    "references": [],
+    "remediation": "Review Kubernetes resource configuration",
+    "risk": null,
+    "ruleId": "C-0270",
+    "schemaVersion": "1.2.0",
+    "severity": "HIGH",
+    "tags": [
+      "k8s-security",
+      "misconfiguration"
+    ],
+    "title": "Ensure CPU limits are set",
+    "tool": {
+      "name": "kubescape",
+      "version": "3.0.0"
+    }
+  },
+  {
+    "compliance": null,
+    "context": {
+      "control_id": "C-0271",
+      "control_name": "Ensure memory limits are set",
+      "framework": null,
+      "resource_kind": "Pod",
+      "resource_name": "insecure-pod",
+      "resource_namespace": null,
+      "score_factor": 8
+    },
+    "cvss": null,
+    "description": "Ensure memory limits are set",
+    "id": "3f2c7494af852633",
+    "location": {
+      "path": "Pod/insecure-pod",
+      "startLine": 0
+    },
+    "message": "Control failed: Ensure memory limits are set (Pod: insecure-pod)",
+    "raw": {
+      "control": {
+        "ResourceCounters": {
+          "excludedResources": 0,
+          "failedResources": 1,
+          "passedResources": 0,
+          "skippedResources": 0
+        },
+        "category": {
+          "id": "Cat-5",
+          "name": "Workload",
+          "subCategory": {
+            "id": "Cat-7",
+            "name": "Resource management"
+          }
+        },
+        "complianceScore": 0,
+        "controlID": "C-0271",
+        "name": "Ensure memory limits are set",
+        "resourceIDs": {},
+        "score": 100,
+        "scoreFactor": 8,
+        "severity": "High",
+        "status": "failed",
+        "statusInfo": {
+          "status": "failed"
+        },
+        "subStatusCounters": {
+          "ignoredResources": 0
+        }
+      },
+      "resource": {
+        "object": {
+          "apiVersion": "v1",
+          "kind": "Pod",
+          "metadata": {
+            "name": "insecure-pod"
+          },
+          "sourcePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml:0",
+          "spec": {
+            "containers": [
+              {
+                "image": "nginx:latest",
+                "name": "app",
+                "resources": {},
+                "securityContext": {
+                  "privileged": true,
+                  "runAsUser": 0
+                }
+              }
+            ]
+          }
+        },
+        "resourceID": "path=2871149968/api=/v1//Pod/insecure-pod",
+        "source": {
+          "fileType": "YAML",
+          "lastCommit": {
+            "date": "0001-01-01T00:00:00Z"
+          },
+          "path": "C:\\Users\\Jimmy",
+          "relativePath": "AppData\\Local\\Temp\\claude\\C--Projects-jmo-security-repo\\126f53de-9dba-4647-9f0a-1a27eecfb1e3\\scratchpad\\k8s\\pod.yaml"
+        }
+      }
+    },
+    "references": [],
+    "remediation": "Review Kubernetes resource configuration",
+    "risk": null,
+    "ruleId": "C-0271",
+    "schemaVersion": "1.2.0",
+    "severity": "HIGH",
+    "tags": [
+      "k8s-security",
+      "misconfiguration"
+    ],
+    "title": "Ensure memory limits are set",
+    "tool": {
+      "name": "kubescape",
+      "version": "3.0.0"
+    }
+  }
+]
