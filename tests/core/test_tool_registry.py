@@ -125,13 +125,18 @@ class TestGetToolsForProfileFiltered:
         assert "falco" in linux_tools
         assert "afl++" in linux_tools
 
-    def test_fast_profile_filters_platform_specific(self):
-        """Fast profile filters platform-specific tools like shellcheck on Windows."""
-        # Fast profile includes shellcheck which is linux/macos only
+    def test_fast_profile_keeps_shellcheck_on_windows(self):
+        """shellcheck ships a Windows zip and JMo installs it (#1091).
+
+        This test used to assert the opposite -- "shellcheck is excluded on
+        Windows (linux/macos only)" -- pinning a platform-table entry that was
+        measured false: `BINARY_URLS["shellcheck"]` has a `windows` template and
+        `jmo tools install shellcheck` leaves `~/.jmo/bin/shellcheck.exe`. The
+        entry made the wizard skip a tool that works.
+        """
         windows_tools = get_tools_for_profile_filtered("fast", "windows")
         linux_tools = get_tools_for_profile_filtered("fast", "linux")
-        # shellcheck is excluded on Windows (linux/macos only)
-        assert "shellcheck" not in windows_tools
+        assert "shellcheck" in windows_tools
         assert "shellcheck" in linux_tools
         # Universal tools should be in both
         assert "trivy" in windows_tools

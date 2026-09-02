@@ -55,6 +55,71 @@ def _is_windows() -> bool:
     return os.name == "nt"
 
 
+def find_scancode_launcher(scancode_dir: Path) -> Path | None:
+    """The scancode-toolkit launcher inside an extracted release directory.
+
+    Pre-built releases extract to the directory root or to a nested
+    `scancode-toolkit-vX.Y.Z/`, and some formats put the launcher under
+    `bin/`. The Windows entry point is `scancode.bat` (#1091): the registry
+    names the tool `scancode`, and looking only for that name and `.exe` left
+    a complete extraction reported as "Extraction succeeded but tool not
+    detected". Same class as the trufflehog `.exe` omission that once made a
+    scanner silently inert.
+
+    One helper for both resolvers. `tool_manager._find_binary` used to carry
+    this walk privately while `find_tool` only tried
+    `~/.jmo/bin/scancode/scancode`, so the check and the scanner could answer
+    differently for the nested layout.
+    """
+    if not scancode_dir.is_dir():
+        return None
+    if sys.platform == "win32":
+        names: tuple[str, ...] = ("scancode.bat", "scancode", "scancode.exe")
+    else:
+        names = ("scancode", "scancode.exe")
+    roots = [scancode_dir]
+    try:
+        roots += sorted(
+            p
+            for p in scancode_dir.iterdir()
+            if p.is_dir() and p.name.startswith("scancode")
+        )
+    except OSError:
+        pass
+    for root in roots:
+        for location in (root, root / "bin"):
+            for name in names:
+                candidate = location / name
+                if not candidate.is_file():
+                    continue
+                if name == "scancode.bat" and not _scancode_bootstrapped(location):
+                    continue
+                return candidate
+    return None
+
+
+def _scancode_bootstrapped(extraction_dir: Path) -> bool:
+    """Whether `scancode.bat`'s first-run bootstrap has produced the venv script.
+
+    The wrapper creates `venv\\` on first run and then delegates to
+    `venv\\Scripts\\scancode`; until that exists it is a bootstrap, not a tool.
+    Measured (#1091): on native Windows the bootstrap fails inside upstream's
+    own configure.bat and the wrapper exits 1 with "'...venv\\Scripts\\scancode'
+    is not recognized" -- and the version probe never runs it (it reads
+    SCANCODE_VERSION, "running the binary can be slow"), so accepting the
+    `.bat` on its own reported a broken extraction as OK 32.5.0. That is the
+    silently-inert shape this project already paid for once with trufflehog.
+    """
+    for venv_root in (extraction_dir, extraction_dir.parent):
+        scripts = venv_root / "venv" / "Scripts"
+        if any(
+            (scripts / name).is_file()
+            for name in ("scancode.exe", "scancode.cmd", "scancode")
+        ):
+            return True
+    return False
+
+
 def _platform_launcher(directory: Path, stem: str) -> Path | None:
     """Return the launcher for `stem` that this platform can actually execute.
 
@@ -194,6 +259,13 @@ def find_tool(tool_name: str) -> str | None:
     # under ~/.jmo/bin is still found by the generic checks below.
     if tool_name == "yara" and importlib.util.find_spec("yara") is not None:
         return sys.executable
+
+    # scancode is an extracted release directory with its own launcher names
+    # and layouts; see find_scancode_launcher.
+    if tool_name == "scancode":
+        scancode_launcher = find_scancode_launcher(jmo_bin / "scancode")
+        if scancode_launcher is not None:
+            return str(scancode_launcher)
 
     # Generic check for tools in ~/.jmo/bin/{tool}/
     tool_in_subdir = jmo_bin / tool_name / tool_name

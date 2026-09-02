@@ -283,18 +283,27 @@ TOOL_PLATFORM_REQUIREMENTS: dict[str, dict] = {
         "reason": "Requires Linux kernel features (ptrace, shared memory)",
         "workarounds": ["docker", "wsl2"],
     },
-    # Linux/macOS only (no Windows binaries)
-    "shellcheck": {
-        "platforms": ["linux", "macos"],
-        "docker_image": "koalaman/shellcheck",
-        "reason": "No Windows build available from upstream (koalaman/shellcheck)",
-        "workarounds": ["wsl2", "docker"],
-    },
+    # Linux/macOS only (no Windows binaries).
+    #
+    # shellcheck used to be listed here as "No Windows build available from
+    # upstream". Measured false (#1091): BINARY_URLS["shellcheck"] has a
+    # Windows zip and `jmo tools install shellcheck` leaves
+    # ~/.jmo/bin/shellcheck.exe. The entry only made the wizard skip a tool
+    # that works, and would have made the install gate refuse it.
     "noseyparker": {
         "platforms": ["linux", "macos"],
         "docker_image": "ghcr.io/praetorian-inc/noseyparker",
         "reason": "Rust binary not available for Windows",
         "workarounds": ["docker", "wsl2"],
+    },
+    "scancode": {
+        "platforms": ["linux", "macos"],
+        "reason": (
+            "Native Windows bootstrap fails inside scancode's own configure.bat "
+            "and upstream deprecates the platform in favour of WSL2 "
+            "(nexB/scancode-toolkit#2366); the deep Docker image carries it"
+        ),
+        "workarounds": ["wsl2", "docker"],
     },
     # All platforms but with requirements
     "lynis": {

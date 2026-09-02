@@ -31,7 +31,7 @@ from scripts.core.tool_registry import (
     get_skipped_tools_for_profile,
     get_tools_for_profile_filtered,
 )
-from scripts.core.tool_utils import find_tool, tool_exists
+from scripts.core.tool_utils import find_scancode_launcher, find_tool, tool_exists
 
 logger = logging.getLogger(__name__)
 
@@ -1201,40 +1201,15 @@ class ToolManager:
                 if dc_path.exists():
                     return str(dc_path)
 
-        # scancode is extracted to ~/.jmo/bin/scancode/
-        # Pre-built releases extract to scancode-toolkit-vX.Y.Z/ nested directory
+        # scancode is extracted to ~/.jmo/bin/scancode/, root or nested, with
+        # scancode.bat as the Windows entry point (#1091). One resolver shared
+        # with tool_utils.find_tool, so the check and the scanner agree.
         if binary_name == "scancode":
-            scancode_dir = home / ".jmo" / "bin" / "scancode"
-            if scancode_dir.exists():
-                # Check root directory first
-                for name in ("scancode", "scancode.exe"):
-                    scancode_path = scancode_dir / name
-                    if scancode_path.exists() and scancode_path.is_file():
-                        return str(scancode_path)
-
-                # Check nested directories (scancode-toolkit-vX.Y.Z/)
-                # Pre-built releases extract to versioned subdirectory
-                for subdir in scancode_dir.iterdir():
-                    if subdir.is_dir() and subdir.name.startswith("scancode"):
-                        for name in ("scancode", "scancode.exe"):
-                            nested_path = subdir / name
-                            if nested_path.is_file():
-                                return str(nested_path)
-                        # Also check bin/ inside nested directory
-                        nested_bin = subdir / "bin"
-                        if nested_bin.exists():
-                            for name in ("scancode", "scancode.exe"):
-                                nested_path = nested_bin / name
-                                if nested_path.is_file():
-                                    return str(nested_path)
-
-                # Also check in bin/ subdirectory (some release formats)
-                bin_dir = scancode_dir / "bin"
-                if bin_dir.exists():
-                    for name in ("scancode", "scancode.exe"):
-                        scancode_path = bin_dir / name
-                        if scancode_path.exists():
-                            return str(scancode_path)
+            scancode_launcher = find_scancode_launcher(
+                home / ".jmo" / "bin" / "scancode"
+            )
+            if scancode_launcher is not None:
+                return str(scancode_launcher)
 
         # yara-python is a Python library, not a CLI binary
         # Check if the module is importable instead of looking for a binary
