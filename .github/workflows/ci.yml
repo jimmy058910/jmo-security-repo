@@ -1308,7 +1308,7 @@ jobs:
       - name: Install opa
         env:
           # Pinned to versions.yaml (opa.version). Update both together.
-          OPA_VERSION: "1.18.2"
+          OPA_VERSION: "1.20.1"
         run: |
           # Hardened per release.rules.md "CI install hardening": --fail so an
           # HTML error page is never mistaken for a binary, retries for the CDN
@@ -1517,8 +1517,8 @@ jobs:
         if: steps.changes.outputs.versions == 'true'
         env:
           # Pinned to versions.yaml. Update both files together when bumping.
-          TRIVY_VERSION: "0.70.0"
-          TRUFFLEHOG_VERSION: "3.95.9"
+          TRIVY_VERSION: "0.74.0"
+          TRUFFLEHOG_VERSION: "3.97.1"
           HADOLINT_VERSION: "2.15.1"
         run: |
           # Same install block as scheduled.yml:tool-contract-tests — kept in
