@@ -89,7 +89,7 @@ Pre-Release Validation → PyPI Publish → Docker Build (8 parallel: 4 variants
 | Docker build cache stale | `gh cache delete --all --repo owner/repo` then re-tag |
 | scancode fails on arm64 | Expected — `extractcode-7z` has no arm64 wheel. Conditional install via `TARGETARCH` check |
 | Homebrew/WinGet fail on first release | Both have existence checks that skip gracefully. Submit initial manifests manually. |
-| `verify_badges.sh` fails on new branch types | Add branch prefix to allowlist at `scripts/dev/verify_badges.sh:100` (currently: dev, feature, refactor, hotfix, dependabot) |
+| `verify_badges.sh` fails on new branch types | Add the prefix to the allowlist regex in `scripts/dev/verify_badges.sh` (the `elif` that reads `current_branch`; currently dev, feature, refactor, hotfix, dependabot, chore, docs, release, release-prep). Bites whenever the repo version is ahead of PyPI: PR #1139 (a `docs/` branch) went red on `quick-checks` at "Verify PyPI badge version matches pyproject.toml" the day after the 1.1.0 bump |
 | `jmo validate` fails on Linux but passes locally | Platform-specific checks (e.g., `path-mixed-separators`) — guard with `sys.platform` |
 | Tool version 404 in Docker build | Run `python scripts/dev/update_versions.py --validate` to check all URLs, then `--sync` |
 | Scheduled e2e jobs fail with "no test results" | Likely missing the `uv sync --locked --group dev` install block (or its venv-on-PATH step) — compare against `e2e-tool-integration` job pattern |
