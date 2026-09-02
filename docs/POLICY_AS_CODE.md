@@ -745,4 +745,4 @@ Git's `core.autocrlf=false` in a `.gitattributes` entry for `*.rego` prevents th
 
 ---
 
-**Last Updated:** August 2026 | **JMo Security v1.0.8**
+**Last Updated:** August 2026 | **JMo Security v1.1.0**
