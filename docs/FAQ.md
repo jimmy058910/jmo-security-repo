@@ -23,7 +23,7 @@ You can mix — use `pip` locally for development and Docker in CI. See [docs/DO
 - **Docker:** 24.0+ recommended (for Docker variants)
 - **Disk:** ~200 MB for `pip install jmo-security`; ~1.5–3 GB for Docker images depending on variant
 - **OS:** Linux (primary), macOS, Windows 10/11 (tested)
-- **Tools (pip install only):** `jmo tools install` fetches the 28 scanners on demand
+- **Tools (pip install only):** `jmo tools install` fetches the 29 scanners on demand
 
 ### Is JMo Security available on Homebrew or WinGet?
 
@@ -41,15 +41,15 @@ The tool installer uses isolated virtualenvs for pip-based tools (avoids conflic
 
 Docker users skip this step — all scanners are pre-installed in the image.
 
-### Do I need all 28 scanners?
+### Do I need all 29 scanners?
 
 No. JMo Security ships 4 profiles with different tool subsets:
 
 | Profile | Tools | Use case | Runtime |
 |---------|-------|----------|---------|
 | `fast` | 9 | Pre-commit, PR validation | 5–10 min |
-| `slim` | 14 | Cloud/IaC (AWS, Azure, GCP, K8s) | 12–18 min |
-| `balanced` | 18 | Production scans, CI/CD | 18–25 min |
+| `slim` | 13 | Cloud/IaC (AWS, Azure, GCP, K8s) | 12–18 min |
+| `balanced` | 17 | Production scans, CI/CD | 18–25 min |
 | `deep` (default) | 29 | Compliance audits, pentests | 40–70 min |
 
 See [docs/PROFILES_AND_TOOLS.md](PROFILES_AND_TOOLS.md) for the full tool list per profile.
@@ -123,7 +123,7 @@ Pick the smallest variant that covers your needs:
 docker pull ghcr.io/jimmy058910/jmo-security:fast        # ~800 MB, 9 scanners
 docker pull ghcr.io/jimmy058910/jmo-security:slim        # ~1.4 GB, 13 scanners
 docker pull ghcr.io/jimmy058910/jmo-security:balanced    # ~1.6 GB, 17 scanners
-docker pull ghcr.io/jimmy058910/jmo-security:latest      # ~2.0 GB, 28 scanners (default)
+docker pull ghcr.io/jimmy058910/jmo-security:latest      # ~2.0 GB, 29 scanners (default)
 ```
 
 Pin to a version tag (e.g., `:v1.0.1-balanced`) in CI for reproducibility.

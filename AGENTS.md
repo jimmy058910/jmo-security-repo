@@ -4,7 +4,7 @@ AI tooling documentation for JMo Security. This file describes the agents, skill
 
 ## Project
 
-JMo Security is a terminal-first security audit toolkit orchestrating 28+ scanners with unified CLI, normalized outputs (CommonFinding schema v1.2.0), and HTML dashboard. Two-phase architecture: scan (invoke tools) → report (normalize, dedupe, output).
+JMo Security is a terminal-first security audit toolkit orchestrating 29 scanners with unified CLI, normalized outputs (CommonFinding schema v1.2.0), and HTML dashboard. Two-phase architecture: scan (invoke tools) → report (normalize, dedupe, output).
 
 ## Build / Test / Lint
 

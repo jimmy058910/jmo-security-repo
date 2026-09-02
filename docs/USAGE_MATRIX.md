@@ -245,7 +245,7 @@ This matrix shows the recommended execution mode for each use case.
    YES -> Docker (profile matching your needs)
    NO -> Continue to 3
 
-3. Do you need all 28 tools?
+3. Do you need all 29 tools?
    YES -> CLI (native) or Docker (deep)
    NO -> Continue to 4
 
@@ -331,7 +331,7 @@ This matrix shows the recommended execution mode for each use case.
 | **lynis** | System hardening audit | N/A | N/A |
 
 > **There is deliberately no false-positive-rate column.** One existed and gave a
-> figure for all 24 tools; nothing in this repository derived any of them
+> figure for every tool; nothing in this repository derived any of them
 > (`git grep -i "false positive rate" -- scripts/ tests/` is empty), and the only
 > commit ever to touch the column was a documentation reorganisation. A
 > false-positive rate is *advice*: a reader who sees a high one for a scanner
@@ -349,7 +349,7 @@ This matrix shows the recommended execution mode for each use case.
 **Key Takeaways:**
 
 1. **Start Small:** Use `fast` profile for pre-commit, `balanced` for PRs, `deep` for audits
-2. **Match Use Case to Profile:** Don't run all 28 tools on every commit
+2. **Match Use Case to Profile:** Don't run all 29 tools on every commit
 3. **Compliance First:** Define required frameworks and work backwards
 4. **Threshold Tuning:** CRITICAL for pre-commit, HIGH for PRs, MEDIUM for releases
 5. **Execution Mode:** Native CLI for speed, Docker for CI/CD isolation
@@ -392,7 +392,7 @@ profiles:
   deep:
     timeout: 1800
     fail_on: "MEDIUM"
-    # All 28 tools - see PROFILES_AND_TOOLS.md
+    # All 29 tools - see PROFILES_AND_TOOLS.md
 
 outputs: [json, md, html, sarif]
 ```

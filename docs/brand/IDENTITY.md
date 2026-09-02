@@ -20,7 +20,7 @@ JMo Security speaks **developer-to-developer**. The voice belongs to a SOC engin
 
 ### What we sound like
 
-- "Run 28 scanners, get one deduplicated report. No SaaS, no telemetry, no API keys to leak."
+- "Run 29 scanners, get one deduplicated report. No SaaS, no telemetry, no API keys to leak."
 - "v1.0.5 ships SQLite historical storage, machine-readable diffs, and a Mann-Kendall trend significance test. Local-first."
 - "Cross-tool dedup collapses the same issue from four scanners into one finding. Your eyes thank you."
 
@@ -35,7 +35,7 @@ JMo Security speaks **developer-to-developer**. The voice belongs to a SOC engin
 ### Specific copy rules
 
 - Use the **active voice and the imperative mood** in CLI/docs ("Run", "Install", "Open"), not "the user can".
-- Use **numbers, not adjectives** ("28 scanners", "4 scan profiles", "8,000+ tests"), never "many" or "lots of". **Every number has to be reproducible from the repository** — an unsourced figure is worse than an adjective, because it invites trust it has not earned.
+- Use **numbers, not adjectives** ("29 scanners", "4 scan profiles", "8,000+ tests"), never "many" or "lots of". **Every number has to be reproducible from the repository** — an unsourced figure is worse than an adjective, because it invites trust it has not earned.
 - **Name the tools.** When we orchestrate Trivy, Semgrep, Bandit, etc., name them. Hiding the wiring undermines trust.
 - **Severity is severity.** Don't soften "critical" to "important" or escalate "low" to "needs review". Match the underlying scanner's call.
 - **First person plural** in marketing ("we built this"), **second person** in docs ("you'll see"), **imperative** in CLI ("install the tools").

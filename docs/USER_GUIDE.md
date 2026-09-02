@@ -237,7 +237,7 @@ open results/summaries/dashboard.html   # macOS (use xdg-open on Linux)
 
 ## Tool Management
 
-JMo Security orchestrates 28+ security scanners. For native installations (non-Docker), use the `jmo tools` command to manage these tools.
+JMo Security orchestrates 29 security scanners. For native installations (non-Docker), use the `jmo tools` command to manage these tools.
 
 **Docker users:** Skip this section - Docker images include all tools pre-installed. Tool management is for native/pip installations only.
 
@@ -843,7 +843,7 @@ done
 
 **Note:**
 
-- **GitLab Repos** now run full repository scanner (10/28 tools) instead of TruffleHog-only
+- **GitLab Repos** now run full repository scanner instead of TruffleHog-only
 - **Web URLs** now include Nuclei (API security scanner) in addition to ZAP
 - GitLab repos also auto-discover and scan container images found in Dockerfiles, docker-compose.yml, and K8s manifests
 - Tool selection is automatic based on target type. Use `--tools` to override defaults.
@@ -1287,7 +1287,7 @@ Notes and precedence:
 
 ## Plugin System
 
-JMo Security uses a plugin-based architecture for all 28 security tool adapters, enabling hot-reload during development and community-contributed integrations.
+JMo Security uses a plugin-based architecture for all 27 adapters, enabling hot-reload during development and community-contributed integrations.
 
 **Key Benefits:**
 

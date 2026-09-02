@@ -146,7 +146,7 @@
 
 ## Tools Overview
 
-JMo Security orchestrates 28 security scanners across 11 categories:
+JMo Security orchestrates 29 security scanners across 13 categories:
 
 | Category | Tools |
 |----------|-------|
@@ -159,7 +159,9 @@ JMo Security orchestrates 28 security scanners across 11 categories:
 | DAST | OWASP ZAP, Nuclei |
 | Dockerfile | Hadolint |
 | Malware | YARA |
+| Mobile | MobSF |
 | System | Lynis |
+| Policy | OPA |
 | Runtime | Trivy-RBAC, Falco, AFL++ |
 
 **Tool details:** [Profiles and Tools Reference](PROFILES_AND_TOOLS.md) | [User Guide: Tool Overview](USER_GUIDE.md#tool-management)

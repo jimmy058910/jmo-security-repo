@@ -76,7 +76,7 @@ pip install -e .
 
 ## External Tool Installation
 
-JMo Security orchestrates 28+ external security tools. Use the built-in tool manager or install manually.
+JMo Security orchestrates 29 external security tools. Use the built-in tool manager or install manually.
 
 ### Automated Installation (Recommended)
 

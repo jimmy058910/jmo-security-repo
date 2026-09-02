@@ -11,9 +11,9 @@ A typical balanced profile scan (17 tools) takes 18-25 minutes. This guide cover
 | Profile | Tools | Default Time | Optimized Time | Reduction |
 |---------|-------|--------------|----------------|-----------|
 | fast | 9 | 5-10 min | 3-6 min | ~40% |
-| slim | 14 | 12-18 min | 8-12 min | ~35% |
-| balanced | 18 | 18-25 min | 12-18 min | ~30% |
-| deep | 28 | 40-70 min | 30-50 min | ~25% |
+| slim | 13 | 12-18 min | 8-12 min | ~35% |
+| balanced | 17 | 18-25 min | 12-18 min | ~30% |
+| deep | 29 | 40-70 min | 30-50 min | ~25% |
 
 ## Quick Wins (Immediate Impact)
 

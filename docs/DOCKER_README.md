@@ -1361,7 +1361,7 @@ docker run --rm --user $(id -u):$(id -g) \
 
 | Variant | Tools | Build Time | Use Case |
 |---------|-------|------------|----------|
-| Fast | 8 | 5-10 min | CI/CD gates, pre-commit |
+| Fast | 9 | 5-10 min | CI/CD gates, pre-commit |
 | Slim | 13 | 10-15 min | Cloud/IaC scanning |
 | Balanced | 17 | 18-25 min | Production audits |
 | Deep | 29 | 20-30 min | Comprehensive security |

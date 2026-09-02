@@ -16,7 +16,7 @@ JMo Security is a **security audit tool suite** that bundles multiple third-part
 
 ### Current Status (v1.0.0)
 
-JMo Security bundles 28 security tools across 4 Docker variants. Vulnerability counts vary by variant due to different tool sets and dependencies.
+JMo Security bundles 29 security tools across 4 Docker variants. Vulnerability counts vary by variant due to different tool sets and dependencies.
 
 **Important:** Vulnerabilities reported in our Docker images are **NOT in our Python code** — they exist in the bundled security tools we orchestrate.
 
@@ -112,7 +112,7 @@ We provide **four Docker image variants** matching our scan profiles:
 
 JMo Security uses a centralized version management system:
 
-- **versions.yaml:** Central registry for all 28 tool versions
+- **versions.yaml:** Central registry for all 29 tool versions
 - **Automated CI checks:** Detect outdated tools
 - **Update scripts:** `python scripts/dev/update_versions.py --sync`
 - **Critical tool updates:** Within 7 days of upstream releases

@@ -15,7 +15,7 @@ for one now ship in the next patch.
 
 v1.0 delivers the full production scanning platform:
 
-- 28 security scanners with unified CLI
+- 29 security scanners with unified CLI
 - SQLite historical storage with trend analysis
 - Machine-readable diffs for CI/CD integration
 - Policy-as-Code (OPA integration)
@@ -68,7 +68,7 @@ it is not duplicated here, so there is nothing to keep in sync.
 
 Highlights of the v1.0 line:
 
-- **28 security scanners** — Unified CLI orchestrating tools across 6 scan types
+- **29 security scanners** — Unified CLI orchestrating tools across 6 scan types
 - **Metadata wrapper** — Standardized `{"meta": {...}, "findings": [...]}` output
 - **CSV reporter** — Spreadsheet-friendly export for compliance workflows
 - **HTML dashboard dual-mode** — Inline (<=1000) or external JSON (>1000 findings)
