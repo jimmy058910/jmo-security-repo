@@ -83,6 +83,16 @@ ADAPTER_REGISTRY: dict[str, dict[str, str]] = {
         "module": "scripts.core.adapters.kubescape_adapter",
         "class": "KubescapeAdapter",
     },
+    # Added with the #1126 fix. horusec seeded every fingerprint from
+    # `vulnerabilityID`, a UUID it regenerates on each run, so no finding kept
+    # its identity between two scans of the same commit -- and horusec produced
+    # 584 of 831 findings in the measured run. A hand-written unit fixture
+    # cannot catch that, because the ids it asserts are the ids the adapter
+    # just made up. Real captured output can.
+    "horusec": {
+        "module": "scripts.core.adapters.horusec_adapter",
+        "class": "HorusecAdapter",
+    },
 }
 
 

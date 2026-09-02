@@ -112,6 +112,36 @@ class HorusecAdapter(AdapterPlugin):
         return findings
 
 
+def _title_from_details(details: str) -> str:
+    """Pull a human title out of horusec's `details` blob.
+
+    Every horusec record sets `type` to the literal string "Vulnerability" --
+    584 of 584 in the measured juice-shop run -- so the previous
+    `title = type or vulnerabilityID` rendered every finding in the report as
+    "Vulnerability", or as a raw UUID when type was absent.
+
+    `details` opens with a line of the form::
+
+        (1/1) * Possible vulnerability detected: Hard-coded password
+
+    which carries the only human-readable name horusec emits. The marker was
+    present on 584 of 584 records; when it is not, the caller falls back to
+    the rule id.
+
+    Args:
+        details: The record's `details` field.
+
+    Returns:
+        The extracted title, or "" if the marker is absent.
+    """
+    first_line = (details or "").split("\n", 1)[0]
+    marker = "vulnerability detected:"
+    _, sep, tail = first_line.partition(marker)
+    if not sep:
+        return ""
+    return tail.strip()
+
+
 def _load_horusec_internal(path: str | Path) -> list[dict[str, Any]]:
     """Internal function to parse Horusec JSON output.
 
@@ -157,17 +187,35 @@ def _load_horusec_internal(path: str | Path) -> list[dict[str, Any]]:
         vuln_type = str(vuln_data.get("type", ""))
         code_snippet = str(vuln_data.get("code", ""))
 
+        # horusec's stable rule identifier, e.g. "HS-JAVASCRIPT-2".
+        #
+        # `vulnerabilityID` is a UUID horusec regenerates on every run, and it
+        # used to be both the ruleId and the fingerprint seed. Measured across
+        # two scans of the same juice-shop commit: 584 findings and 493, of
+        # which 492 shared (rule_id, file, line) and **zero** shared a
+        # vulnerabilityID. `jmo diff` between them read 1,119 new / 769
+        # resolved / 2 modified for one unchanged commit, and the dashboard's
+        # RULE column showed raw UUIDs. horusec produced 584 of 831 total
+        # findings and 468 of 485 CRITICALs, so diff, history trends and
+        # cross-tool dedup were all meaningless for the dominant tool.
+        #
+        # rule_id was present and non-empty on 584/584 and 493/493 records.
+        rule_id = str(vuln_data.get("rule_id", "")).strip()
+
         # Normalize severity
         severity = normalize_severity(severity_raw)
 
         # Build message
         message = details or f"Security vulnerability detected: {vuln_type}"
 
-        # Build title
-        title = vuln_type or vuln_id
+        # Build title. `type` is the constant "Vulnerability" on every record,
+        # so it is the last resort, not the first.
+        title = _title_from_details(details) or rule_id or vuln_type
 
-        # Generate stable fingerprint
-        fid = fingerprint("horusec", vuln_id or vuln_type, file_path, line, message)
+        # Generate stable fingerprint. Seeded from rule_id so the same finding
+        # keeps its identity across runs; never from vulnerabilityID.
+        rule_key = rule_id or vuln_type
+        fid = fingerprint("horusec", rule_key, file_path, line, message)
 
         # Build references
         references = []
@@ -205,7 +253,7 @@ def _load_horusec_internal(path: str | Path) -> list[dict[str, Any]]:
         finding = {
             "schemaVersion": "1.2.0",
             "id": fid,
-            "ruleId": vuln_id or vuln_type,
+            "ruleId": rule_key,
             "title": title,
             "message": message,
             "description": details,
