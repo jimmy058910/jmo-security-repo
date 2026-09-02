@@ -257,6 +257,37 @@ image that resets `/var/spool/cron`.
 
 ---
 
+## Dashboard
+
+### A large scan's dashboard must be served over HTTP, not opened from disk
+
+Below 1,000 findings, `dashboard.html` embeds its data and opens fine by
+double-clicking. Above that, JMo writes the findings to `dashboard-data.json`
+beside it — otherwise the HTML would be tens of megabytes — and the page loads
+them with `fetch()`.
+
+**Browsers refuse `fetch()` against a `file://` URL.** Chromium reports
+`Fetch API cannot load file:///.../dashboard-data.json. URL scheme "file" is
+not supported.` So double-clicking the file shows *Loading Failed* and zero
+rows, for exactly the large scans where the dashboard is most useful. This is
+browser security policy, not a JMo setting: nothing the page can do from
+`file://` will make that request succeed.
+
+**What to do:** serve the directory over HTTP.
+
+```bash
+cd results/summaries
+python3 -m http.server 8000
+# then open http://localhost:8000/dashboard.html
+```
+
+The dashboard says this itself when it detects it was opened from disk. Until
+v1.1.0 it printed *"Make sure dashboard-data.json is in the same directory as
+this HTML file"* — advice that was both useless and false, since the file was
+already there ([#1129](https://github.com/jimmy058910/jmo-security-repo/issues/1129)).
+
+---
+
 ## Defects shipping in v1.1.0
 
 Everything above is behaviour we intend to keep documenting. **This section is
