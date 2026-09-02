@@ -14,7 +14,7 @@ We aim to respond to security reports within **48 hours** and provide a fix with
 
 JMo Security is a **security audit tool suite** that bundles multiple third-party security scanners. When you see vulnerability reports for our Docker images, it's critical to understand the **source and context** of these vulnerabilities.
 
-### Current Status (v1.0.8)
+### Current Status (v1.1.0)
 
 JMo Security bundles 29 security tools across 4 Docker variants. Vulnerability counts vary by variant due to different tool sets and dependencies.
 
@@ -280,4 +280,4 @@ jmo tools update
 
 ---
 
-**Last Updated:** August 2026 | **JMo Security v1.0.8**
+**Last Updated:** August 2026 | **JMo Security v1.1.0**

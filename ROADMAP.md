@@ -6,7 +6,7 @@
 
 ## Current Status
 
-**Latest Stable Release:** v1.0.8 (August 2026)
+**Latest Stable Release:** v1.1.0 (August 2026)
 
 The next release is **v1.1.0**. It is not a feature milestone: it is the
 outcome of a pre-release fix program (Phases 0-12, tracked in
@@ -102,5 +102,5 @@ Want to help? Check out:
 
 ---
 
-**Last Updated:** August 2026 (v1.0.8)
+**Last Updated:** August 2026 (v1.1.0)
 **Maintained By:** Jimmy ([@jimmy058910](https://github.com/jimmy058910))

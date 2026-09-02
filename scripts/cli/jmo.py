@@ -48,7 +48,7 @@ from scripts.core.unicode_utils import (
 logger = logging.getLogger(__name__)
 
 # Version (from pyproject.toml)
-__version__ = "1.0.8"
+__version__ = "1.1.0"
 
 
 def _merge_dict(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:

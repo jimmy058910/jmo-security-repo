@@ -11,7 +11,7 @@ Guidance for Claude Code when working with the JMo Security Audit Tool Suite rep
 
 JMo Security is a terminal-first security audit toolkit orchestrating 29 scanners with unified CLI, normalized outputs, and HTML dashboard.
 
-**Version:** v1.0.8 (latest released — see CHANGELOG.md for full history)
+**Version:** v1.1.0 (latest released — see CHANGELOG.md for full history)
 **Philosophy:** Two-phase architecture: scan (invoke tools) → report (normalize, dedupe, output)
 **Test Coverage:** 8,000+ tests, sharded across 4 parallel jobs. The **only enforced floor is 85%** (`coverage-aggregate`'s "Verify coverage threshold" step, on the marker-filtered suite — excludes slow/docker/requires_tools/smoke). Raised from 80% under #756 after measuring 86.87%. Nothing sets `--cov-fail-under`; measure current coverage rather than quoting a figure from this file
 
