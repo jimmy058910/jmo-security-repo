@@ -79,11 +79,6 @@ ALLOWED: dict[tuple[str, str], str] = {
         "slim",
     ): "states 'There is no `jmo slim` command' -- #870's correction",
     (
-        "docs/KNOWN_LIMITATIONS.md",
-        "config",
-    ): "records #790: first-run output named a command that does not exist",
-    ("docs/KNOWN_LIMITATIONS.md", "subscribe"): "records #790, same sentence",
-    (
         "ROADMAP.md",
         "fix",
     ): "'`jmo fix` CLI (AI remediation) | Deferred from v1.0.0' -- unshipped by design",
