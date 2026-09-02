@@ -14,27 +14,39 @@ from scripts.cli.scan_utils import TOOL_INSTALL_HINTS, tool_exists, write_stub
 
 
 def test_tool_exists_found():
-    """Test tool_exists returns True when tool found in PATH."""
-    with patch("shutil.which") as mock_which:
-        mock_which.return_value = "/usr/bin/trivy"
+    """Test tool_exists returns True when the resolver finds the tool."""
+    with patch("scripts.core.tool_utils.find_tool") as mock_find:
+        mock_find.return_value = "/usr/bin/trivy"
 
         result = tool_exists("trivy")
 
         assert result is True
-        mock_which.assert_called_once_with("trivy")
+        mock_find.assert_called_once_with("trivy")
 
 
 def test_tool_exists_not_found_with_hint():
-    """Test tool_exists returns False and logs hint when tool not found."""
-    with patch("shutil.which") as mock_which, patch("logging.getLogger") as mock_logger:
-        mock_which.return_value = None
+    """Test tool_exists returns False and logs hint when tool not found.
+
+    Patches `find_tool`, the seam `tool_exists` actually depends on (#1105).
+    This used to patch `shutil.which`, but `find_tool` also searches the
+    isolated venvs, `~/.jmo/bin/` and the interpreter's own `Scripts/`, so on
+    any machine with a semgrep isolated venv the test failed with
+    `assert True is False` while CI stayed green only because semgrep is
+    absent there. A test that inherits its precondition from the host is not
+    stating one.
+    """
+    with (
+        patch("scripts.core.tool_utils.find_tool") as mock_find,
+        patch("logging.getLogger") as mock_logger,
+    ):
+        mock_find.return_value = None
         mock_log = MagicMock()
         mock_logger.return_value = mock_log
 
         result = tool_exists("semgrep")
 
         assert result is False
-        mock_which.assert_called_once_with("semgrep")
+        mock_find.assert_called_once_with("semgrep")
 
         # Verify error logged with installation hint
         mock_log.error.assert_called_once()
