@@ -23,7 +23,7 @@
 
 JMo Security is an automated security audit framework for scanning code repositories, container images, infrastructure-as-code, web applications, GitLab repos, and Kubernetes clusters. It orchestrates multiple industry-standard security tools with unified reporting and cross-tool deduplication.
 
-> **Origin Story:** Built as my capstone project for **Institute of Data x Michigan Tech University's Cybersecurity Bootcamp** (graduated October 2025). Now a production-grade security platform. **Actively seeking cybersecurity/DevSecOps roles** - let's connect!
+> **Origin Story:** Built as my capstone project for **Institute of Data x Michigan Tech University's Cybersecurity Bootcamp** (graduated October 2025). Now a production-grade security platform.
 
 ---
 
@@ -365,4 +365,4 @@ Dual licensed under [MIT](LICENSE-MIT) OR [Apache 2.0](LICENSE-APACHE).
 
 **Author:** James Moceri
 **Project:** <https://jmotools.com> | [GitHub](https://github.com/jimmy058910/jmo-security-repo)
-**Last Updated:** March 2026
+**Last Updated:** September 2026 (v1.0.8)

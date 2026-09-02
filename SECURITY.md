@@ -14,7 +14,7 @@ We aim to respond to security reports within **48 hours** and provide a fix with
 
 JMo Security is a **security audit tool suite** that bundles multiple third-party security scanners. When you see vulnerability reports for our Docker images, it's critical to understand the **source and context** of these vulnerabilities.
 
-### Current Status (v1.0.0)
+### Current Status (v1.0.8)
 
 JMo Security bundles 29 security tools across 4 Docker variants. Vulnerability counts vary by variant due to different tool sets and dependencies.
 
@@ -149,7 +149,7 @@ jmo wizard  # Installs only the tools you need
 Use smaller profiles to reduce vulnerability surface:
 
 ```bash
-# Fast profile - only 8 essential tools
+# Fast profile - only 9 essential tools
 docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:fast \
   scan --repo /scan --results-dir /scan/results
 ```
