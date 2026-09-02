@@ -95,6 +95,58 @@ def get_isolated_tool_path(tool_name: str) -> Path | None:
     return None
 
 
+def get_isolated_venv_bin(executable: str | Path) -> Path | None:
+    """Return the isolated-venv bin directory ``executable`` lives in, if any.
+
+    A pip console script does not know which interpreter installed it. On
+    Windows, checkov ships `checkov.cmd`, a polyglot launcher that searches
+    **PATH** for `python.cmd/bat/exe` and then falls back to the `.py` file
+    association; it never looks at the venv it sits in. So the same absolute
+    path either works or raises ``ModuleNotFoundError: No module named
+    'checkov'`` depending only on what PATH the caller handed it.
+
+    Measured on Windows 11 with checkov 3.3.16 in `~/.jmo/tools/venvs/checkov`,
+    running the identical `checkov.cmd --version`:
+
+    | child PATH                     | rc | duration | output              |
+    |--------------------------------|----|----------|---------------------|
+    | `<venv>/Scripts` prepended     | 0  | 9.1s     | `3.3.16`            |
+    | `~/.jmo/bin` prepended only    | 1  | 0.5s     | ModuleNotFoundError |
+
+    This lives beside `get_isolated_tool_path` on purpose: it is the inverse of
+    that function, and re-spelling the `~/.jmo/tools/venvs` layout in a second
+    module is what let the version probe and the scan runner disagree for four
+    releases.
+
+    Args:
+        executable: Path to a resolved tool executable (argv[0]).
+
+    Returns:
+        The `<venv>/Scripts` (or `<venv>/bin`) directory, or None if
+        ``executable`` does not live in an isolated venv.
+    """
+    try:
+        bin_dir = Path(executable).parent
+    except (TypeError, ValueError):
+        return None
+
+    # Windows venvs use "Scripts", POSIX venvs use "bin".
+    if bin_dir.name.lower() not in ("scripts", "bin"):
+        return None
+
+    venvs_root = Path.home() / ".jmo" / "tools" / "venvs"
+    try:
+        relative = bin_dir.parent.relative_to(venvs_root)
+    except ValueError:
+        return None
+
+    # Exactly one component: `<venvs_root>/<tool_name>`, nothing deeper.
+    if len(relative.parts) != 1:
+        return None
+
+    return bin_dir
+
+
 def clean_isolated_venvs(dry_run: bool = True) -> list[str]:
     """Remove isolated venv directories.
 
@@ -130,5 +182,6 @@ __all__ = [
     "ISOLATED_TOOLS",
     "clean_isolated_venvs",
     "get_isolated_tool_path",
+    "get_isolated_venv_bin",
     "get_isolated_venv_path",
 ]

@@ -173,6 +173,15 @@ VERSION_TIMEOUTS: dict[str, int] = {
     "zap": 30,  # ZAP is Java-based, needs JVM startup time
     "dependency-check": 30,  # Java-based
     "mobsf": 30,  # Heavyweight
+    # checkov imports its whole rule set before printing --version. Measured on
+    # Windows 11 / checkov 3.3.16: 9.1s cold, 11s during a loaded scan session,
+    # 2.8-6.0s warm - straddling the 10s default. That is why one dogfood run
+    # showed `checkov  OK  -` and `checkov-cicd  OK  3.3.16` for the SAME
+    # binary in the SAME table: two probes, one over budget and one under.
+    # A version probe whose budget is near the tool's real startup cost reports
+    # a healthy tool as broken at random, which is what makes the
+    # "no version means not ready" rule in check_tool safe to enforce.
+    "checkov": 30,
 }
 
 # Remediation commands for tools with issues
@@ -742,6 +751,10 @@ class ToolManager:
         Returns:
             ToolStatus with installation and execution information
         """
+        # Lazy import, matching _find_binary and _get_tool_version below:
+        # install_config is imported at call time throughout this module.
+        from scripts.core.install_config import ISOLATED_TOOLS
+
         cached = self._status_cache.get(tool_name)
         if cached is not None:
             return cached
@@ -759,10 +772,10 @@ class ToolManager:
         # Get installed version if found (Phase 4: with crash detection)
         # For variants (e.g., semgrep-secrets), use base tool name for version lookup
         # since VERSION_COMMANDS only has entries for base tools
+        base_tool = TOOL_VARIANTS.get(tool_name, tool_name)
         installed_version = None
         version_error = None  # Phase 4: Track startup crash errors
         if binary_path:
-            base_tool = TOOL_VARIANTS.get(tool_name, tool_name)
             installed_version, version_error = self._get_tool_version(
                 base_tool, binary_path
             )
@@ -790,6 +803,23 @@ class ToolManager:
             if version_error:
                 execution_ready = False
                 execution_warning = version_error
+            elif installed_version is None and base_tool in ISOLATED_TOOLS:
+                # An isolated venv is built by pip from a pinned requirement,
+                # so its version is always knowable. Coming back with nothing
+                # means the probe did not get an answer out of the launcher --
+                # it crashed, timed out, or printed something unparseable --
+                # and "we could not confirm this tool runs" is not OK.
+                #
+                # Without this, checkov displayed:
+                #     checkov       OK       -       3.3.16
+                # while contributing zero findings to every Windows scan. The
+                # dash was the only evidence on screen, and OK overrode it.
+                execution_ready = False
+                execution_warning = (
+                    f"{base_tool} is installed in an isolated venv but did not "
+                    "report a version; it may not run. Try: "
+                    f"jmo tools clean --force && jmo tools install {base_tool}"
+                )
             else:
                 execution_ready, execution_warning, missing_deps = (
                     self._verify_execution(tool_name)
