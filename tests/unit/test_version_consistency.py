@@ -59,6 +59,13 @@ _CURRENT_VERSION_CLAIMS = (
     re.compile(r"^\*\*Version:\*\*\s+v?(\d+\.\d+\.\d+)(?!\+)"),
     re.compile(r"^\*\*v(\d+\.\d+\.\d+)\*\*\s*\|"),
     re.compile(r"\|\s*\*\*JMo Security v(\d+\.\d+\.\d+)\*\*"),
+    # Three more shapes that said "current release" and were never checked
+    # (#1102): SECURITY.md's status heading read "(v1.0.0)" for eight
+    # releases, and ROADMAP.md's two lines were correct only until the next
+    # bump, which nothing would have caught.
+    re.compile(r"^### Current Status \(v(\d+\.\d+\.\d+)\)"),
+    re.compile(r"^\*\*Latest Stable Release:\*\*\s+v(\d+\.\d+\.\d+)"),
+    re.compile(r"^\*\*Last Updated:\*\*.*\(v(\d+\.\d+\.\d+)\)"),
 )
 
 
@@ -147,7 +154,13 @@ def test_documentation_version_headers_match_pyproject() -> None:
     # Meta-guard: an extractor that matches nothing passes on everything. These
     # three files are the ones whose headers were verified by hand.
     covered = {rel for rel, _, _ in claims}
-    for expected in ("CLAUDE.md", "README.md", "docs/CLI_REFERENCE.md"):
+    for expected in (
+        "CLAUDE.md",
+        "README.md",
+        "docs/CLI_REFERENCE.md",
+        "SECURITY.md",
+        "ROADMAP.md",
+    ):
         assert expected in covered, f"no version header found in {expected}"
 
     stale = [

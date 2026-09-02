@@ -8,10 +8,12 @@
 
 **Latest Stable Release:** v1.0.8 (August 2026)
 
-The project ships on a **patch cadence** — each release hardens what is already
-there rather than accumulating toward a version milestone. The next release is
-v1.0.9. There is no v1.1.0 in flight; features that would once have been held
-for one now ship in the next patch.
+The next release is **v1.1.0**. It is not a feature milestone: it is the
+outcome of a pre-release fix program (Phases 0-12, tracked in
+[the plan](docs/superpowers/plans/2026-08-22-v1.1.0-pre-release-fix-program.md))
+that fixed every open defect before the tag rather than shipping with
+dispositions. After it, releases return to a **patch cadence** — each hardens
+what is already there rather than accumulating toward a version milestone.
 
 v1.0 delivers the full production scanning platform:
 
