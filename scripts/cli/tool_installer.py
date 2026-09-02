@@ -275,6 +275,14 @@ def get_manual_dependency_command(dep_name: str, platform: str) -> str:
     )
 
 
+# Install methods that pin an exact version from versions.yaml. When one of
+# these "succeeds" and the binary JMo then resolves still reports another
+# version, the install did not change what the scanner runs, and saying [OK]
+# beside the old number is the lie #1093 was filed on. brew/apt/install_script
+# install whatever they carry, so a mismatch there stays a warning.
+PINNED_INSTALL_METHODS: frozenset[str] = frozenset({"pip", "isolated_venv", "binary"})
+
+
 class ToolInstaller:
     """Cross-platform tool installation manager."""
 
@@ -387,6 +395,19 @@ class ToolInstaller:
                     f"Version mismatch for {result.tool_name}: "
                     f"installed={result.version_installed}, expected={expected_version}"
                 )
+                if result.method in PINNED_INSTALL_METHODS:
+                    # The version check decides the verdict, not the installer's
+                    # exit code (#1093). `jmo tools update` printed
+                    # `[OK] semgrep (v1.161.0)` two lines after this warning
+                    # said expected=1.175.0, then "All 6 tool(s) updated
+                    # successfully!" at exit 0.
+                    result.success = False
+                    result.message = (
+                        f"version mismatch after {result.method} install: JMo "
+                        f"resolves {result.tool_name} {result.version_installed}, "
+                        f"versions.yaml pins {expected_version} -- the binary the "
+                        "scanner runs did not change"
+                    )
 
         return result
 
@@ -470,6 +491,23 @@ class ToolInstaller:
         # Check for special installation requirements
         if tool_name in SPECIAL_INSTALL:
             result = self._install_special(tool_name, tool_info, start_time)
+            return self._post_install(
+                tool_name, self._validate_installed_version(result, tool_info.version)
+            )
+
+        # Isolated tools go to their own venv from EVERY entry point (#1101).
+        # The profile installers split these out before reaching `_install_pip`;
+        # this method -- behind `jmo tools install <names>`, `jmo tools update`
+        # and the scan-time auto-install -- did not, so `pip install prowler`
+        # ran against sys.executable and dragged cryptography 50 -> 46 and, via
+        # semgrep's mcp==1.29.0 pin, mcp 2.0 -> 1.29 off uv.lock. Measured twice.
+        if tool_name in ISOLATED_TOOLS:
+            if tool_info.pypi_package:
+                package_spec = f"{tool_info.pypi_package}=={tool_info.version}"
+            else:
+                pkg = ISOLATED_TOOLS[tool_name].get("package", tool_name)
+                package_spec = pkg if isinstance(pkg, str) else tool_name
+            result = self._isolated_pip_install(tool_name, package_spec)
             return self._post_install(
                 tool_name, self._validate_installed_version(result, tool_info.version)
             )

@@ -48,7 +48,7 @@ LinkedIn = "https://linkedin.com/in/jimmy-moceri"
 [project.optional-dependencies]
 reporting = ["jsonschema>=4.0"]  # PyYAML moved to main dependencies
 email = ["resend>=2.0"]
-mcp = ["mcp[cli]>=1.0.0"]  # MCP server for AI-powered remediation (Feature #2, v1.0.0)
+mcp = ["mcp[cli]>=2.0.0"]  # MCP server; 2.0 renamed FastMCP -> MCPServer with no shim, and jmo_server.py imports MCPServer
 # SLSA attestation (Feature #6, v1.0.0). The cryptography floor must track the
 # one in [dependency-groups] dev below: that one hardens contributors, this one
 # is what `pip install jmo-security[attestation]` actually resolves against.
