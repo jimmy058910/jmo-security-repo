@@ -781,7 +781,7 @@ requires-dist = [
     { name = "croniter", specifier = ">=1.0" },
     { name = "cryptography", marker = "extra == 'attestation'", specifier = ">=50.0.0" },
     { name = "jsonschema", marker = "extra == 'reporting'", specifier = ">=4.0" },
-    { name = "mcp", extras = ["cli"], marker = "extra == 'mcp'", specifier = ">=1.0.0" },
+    { name = "mcp", extras = ["cli"], marker = "extra == 'mcp'", specifier = ">=2.0.0" },
     { name = "pytest-playwright", marker = "extra == 'visual'", specifier = ">=0.5.2" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "rapidfuzz", specifier = ">=3.0.0" },

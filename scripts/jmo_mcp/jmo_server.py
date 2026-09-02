@@ -60,11 +60,32 @@ from pathlib import Path
 try:
     from mcp.server import MCPServer
 except ImportError:
+    # Say what is installed. With mcp 1.29.0 in the venv (semgrep pins it,
+    # #1101) this used to raise "MCP SDK not installed ... >=1.0.0", wrong
+    # twice: it was installed, and 1.29.0 already satisfies >=1.0.0, so the
+    # advice changed nothing.
+    import importlib.metadata
+
+    _installed_mcp: str | None
+    try:
+        _installed_mcp = importlib.metadata.version("mcp")
+    except importlib.metadata.PackageNotFoundError:
+        _installed_mcp = None
+    if _installed_mcp:
+        raise ImportError(
+            f"MCP SDK {_installed_mcp} is installed but JMo needs mcp>=2.0.0 "
+            "(2.0 renamed FastMCP to MCPServer with no shim). Upgrade with:\n"
+            "  pip install 'mcp[cli]>=2.0.0'\n"
+            "or:\n"
+            "  uv add 'mcp[cli]>=2.0.0'\n"
+            "If a scanner pinned it down (semgrep pins mcp==1.29.0), install "
+            "that scanner with `jmo tools install`, which isolates it."
+        )
     raise ImportError(
         "MCP SDK not installed. Install with:\n"
-        "  pip install 'mcp[cli]>=1.0.0'\n"
+        "  pip install 'mcp[cli]>=2.0.0'\n"
         "or:\n"
-        "  uv add 'mcp[cli]>=1.0.0'"
+        "  uv add 'mcp[cli]>=2.0.0'"
     )
 
 from scripts.core.exceptions import ConfigurationException

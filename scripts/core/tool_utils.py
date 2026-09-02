@@ -96,7 +96,30 @@ def find_tool(tool_name: str) -> str | None:
     Returns:
         Full path to the tool binary if found, None otherwise
     """
-    # First check standard PATH
+    # JMo-managed isolated venvs win over everything, PATH included (#1101).
+    #
+    # Delegate rather than reimplement. This function used to carry a narrower
+    # private copy that looked only for `bin/{tool}` and `Scripts/{tool}.exe`.
+    # checkov ships setuptools-style scripts, so its venv holds `checkov` and
+    # `checkov.cmd` but no `checkov.exe`: the copy returned None while
+    # `get_isolated_tool_path` -- which also tries `.cmd`, no-extension and
+    # alternate name forms -- found it. So `jmo tools check` printed
+    # "checkov OK 3.3.8" while the scanner resolved None and dropped checkov
+    # from every scan. Measured: 0 IaC findings on a repo with 47 .tf files.
+    #
+    # And it has to come FIRST. `tool_manager._find_binary` checks the isolated
+    # venv before PATH; this resolver checked it third, after `shutil.which`
+    # and the interpreter's Scripts/, so with a stale user-site semgrep 1.161.0
+    # on PATH `tools check` said OK 1.172.0 (the venv) while the scanner ran
+    # 1.161.0. Two resolvers for one question is the same defect as the four
+    # private copies of `_can_encode_unicode` (see
+    # tests/cross_platform/test_encoding_drift_guard.py). One implementation,
+    # one order.
+    isolated = get_isolated_tool_path(tool_name)
+    if isolated is not None:
+        return str(isolated)
+
+    # Then standard PATH
     path = shutil.which(tool_name)
     if path:
         return path
@@ -123,24 +146,6 @@ def find_tool(tool_name: str) -> str | None:
     # Check JMo special installation paths
     home = Path.home()
     jmo_bin = home / ".jmo" / "bin"
-
-    # Check isolated venv paths first (prowler, checkov, semgrep, bandit, scancode, etc.)
-    #
-    # Delegate rather than reimplement. This function used to carry a narrower
-    # private copy that looked only for `bin/{tool}` and `Scripts/{tool}.exe`.
-    # checkov ships setuptools-style scripts, so its venv holds `checkov` and
-    # `checkov.cmd` but no `checkov.exe`: the copy returned None while
-    # `get_isolated_tool_path` -- which also tries `.cmd`, no-extension and
-    # alternate name forms -- found it. So `jmo tools check` printed
-    # "checkov OK 3.3.8" while the scanner resolved None and dropped checkov
-    # from every scan. Measured: 0 IaC findings on a repo with 47 .tf files.
-    #
-    # Two resolvers for one question is the same defect as the four private
-    # copies of `_can_encode_unicode` (see
-    # tests/cross_platform/test_encoding_drift_guard.py). One implementation.
-    isolated = get_isolated_tool_path(tool_name)
-    if isolated is not None:
-        return str(isolated)
 
     # ZAP baseline script is inside the extracted ZAP directory
     if tool_name == "zap-baseline.py":
