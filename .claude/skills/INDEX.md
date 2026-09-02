@@ -30,6 +30,7 @@ The JMo Security MCP server provides programmatic access to security findings fo
 | `get_security_findings` | Query findings with filters | `severity`, `tool`, `path`, `rule_id`, `limit` |
 | `apply_fix` | **Preview** an AI patch; applying is not implemented | `finding_id`, `patch`, `confidence`, `explanation`, `dry_run` |
 | `mark_resolved` | Record a resolution as a `jmo.suppress.yml` entry | `finding_id`, `resolution`, `comment`, `expires_days` |
+| `query_findings_db` | Read-only SQL against the scan history database (`mode=ro` plus statement validation) | `query`, `params` |
 | `get_server_info` | Server metadata | (none) |
 
 ### Usage Examples
