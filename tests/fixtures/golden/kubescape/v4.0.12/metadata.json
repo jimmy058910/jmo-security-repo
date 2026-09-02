@@ -1,0 +1,8 @@
+{
+  "tool": "kubescape",
+  "version": "4.0.12",
+  "generated_at": "2026-09-01T00:48:26.703551+00:00",
+  "sample_dir": "k8s-insecure-pod",
+  "finding_count": 25,
+  "raw_output_hash": "e8687efa945f"
+}

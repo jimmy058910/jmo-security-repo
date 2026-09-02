@@ -75,6 +75,14 @@ ADAPTER_REGISTRY: dict[str, dict[str, str]] = {
         "module": "scripts.core.adapters.grype_adapter",
         "class": "GrypeAdapter",
     },
+    # Added with the #1094 fix. kubescape was absent from this registry, which is
+    # why its adapter could return [] for every real scan -- across BOTH v3 and
+    # v4 -- while its hand-written unit fixtures stayed green. This entry plus
+    # the captured golden output is the guard that makes that detectable.
+    "kubescape": {
+        "module": "scripts.core.adapters.kubescape_adapter",
+        "class": "KubescapeAdapter",
+    },
 }
 
 
