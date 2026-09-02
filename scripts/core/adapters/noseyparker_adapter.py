@@ -117,11 +117,107 @@ class NoseyParkerAdapter(AdapterPlugin):
         return findings
 
 
+def _finding_from_report_match(
+    np_finding: dict[str, Any], match: dict[str, Any]
+) -> dict[str, Any] | None:
+    """Map one match from `noseyparker report --format json` to CommonFinding.
+
+    Each entry in the report is a *finding* -- one rule, one or more matches --
+    and each match has its own file and line, so a match is the unit that maps
+    to a CommonFinding.
+
+    The matched text is deliberately NOT put in `message`. `snippet.matching`
+    is the secret itself; a report, a SARIF file and the history database are
+    all places it must not be copied to. That is the defect #1128 describes for
+    TruffleHog, and the shape this adapter previously had (`m.get("match")` as
+    the message) would have reproduced it here.
+    """
+    rule_id = str(np_finding.get("rule_text_id") or match.get("rule_text_id") or "")
+    rule_name = str(np_finding.get("rule_name") or match.get("rule_name") or "")
+    if not rule_id and not rule_name:
+        return None
+
+    # provenance[0].path is the scanned file. `location.source_span` is the
+    # line/column span *inside* the blob.
+    path_str = ""
+    provenance = match.get("provenance")
+    if isinstance(provenance, list):
+        for entry in provenance:
+            if isinstance(entry, dict) and entry.get("path"):
+                path_str = str(entry["path"])
+                break
+
+    line_no = 0
+    source_span = (match.get("location") or {}).get("source_span")
+    if isinstance(source_span, dict):
+        start = source_span.get("start")
+        if isinstance(start, dict) and isinstance(start.get("line"), int):
+            line_no = start["line"]
+
+    message = f"Potential secret detected: {rule_name or rule_id}"
+    return {
+        "schemaVersion": "1.2.0",
+        "id": fingerprint(
+            "noseyparker", rule_id or rule_name, path_str, line_no, message
+        ),
+        "ruleId": rule_id or rule_name,
+        "title": rule_name or rule_id,
+        "message": message,
+        "description": "Potential secret detected by Nosey Parker",
+        "severity": normalize_severity("HIGH"),
+        "tool": {"name": "noseyparker", "version": "unknown"},
+        "location": {"path": path_str, "startLine": line_no},
+        "remediation": "Rotate credentials and purge from history.",
+        "tags": ["secrets"],
+        "risk": {"cwe": ["CWE-798"]},
+        "context": {
+            "finding_id": np_finding.get("finding_id"),
+            "structural_id": match.get("structural_id"),
+            "num_matches": np_finding.get("num_matches"),
+        },
+        # `raw` deliberately omits the match: it carries `snippet.matching`,
+        # which is the secret.
+        "raw": {
+            "rule_name": rule_name,
+            "rule_text_id": rule_id,
+            "finding_id": np_finding.get("finding_id"),
+        },
+    }
+
+
 def _load_noseyparker_internal(path: str | Path) -> list[dict[str, Any]]:
     data = safe_load_json_file(path, default=None)
+
+    # `noseyparker report --format json` emits a TOP-LEVEL LIST of findings,
+    # each with its own `matches` array. The dict-with-"matches" shape this
+    # adapter used to require does not exist in any noseyparker release we
+    # ship: measured against 0.24.0, the real output parsed to 0 findings from
+    # 116 records (250 matches) on juice-shop.
+    #
+    # It went unnoticed because the tool could never run at all -- the scanner
+    # pre-created the datastore directory noseyparker insists on creating
+    # itself (#1127) -- so no real output ever reached this function. Same
+    # shape as #1094, where kubescape's adapter had never parsed a real scan.
+    if isinstance(data, list):
+        report_out: list[dict[str, Any]] = []
+        for np_finding in data:
+            if not isinstance(np_finding, dict):
+                continue
+            matches = np_finding.get("matches")
+            if not isinstance(matches, list):
+                continue
+            for match in matches:
+                if not isinstance(match, dict):
+                    continue
+                finding = _finding_from_report_match(np_finding, match)
+                if finding is not None:
+                    report_out.append(finding)
+        return report_out
+
     if not isinstance(data, dict):
         return []
 
+    # Legacy/alternate shape, retained for the Docker fallback path.
     matches = data.get("matches")
     if not isinstance(matches, list):
         return []

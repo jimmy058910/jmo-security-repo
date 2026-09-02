@@ -351,3 +351,144 @@ class TestNoseyParkerFingerprinting:
         findings1 = adapter.parse(path)
         findings2 = adapter.parse(path)
         assert findings1[0].id == findings2[0].id
+
+
+# --- Real `noseyparker report --format json` shape (0.24.0) -------------------
+#
+# The adapter previously required a dict with a top-level "matches" key. That
+# shape does not exist in any noseyparker release JMo ships. Measured against
+# 0.24.0 on juice-shop: the real 330 KB report parsed to **0** findings from
+# 116 records. It stayed invisible because the tool could never run -- the
+# scanner pre-created the datastore directory noseyparker insists on creating
+# itself (#1127) -- so no real output ever reached the adapter. Same shape as
+# #1094, where kubescape's adapter had never parsed a real scan.
+#
+# The snippet below is a byte-faithful reduction of a real record, with the
+# secret material replaced.
+
+REPORT_RECORD = {
+    "finding_id": "dec85501510891d385707a1db0fe09fa161f1d8e",
+    "rule_name": "Generic Password",
+    "rule_text_id": "np.generic.5",
+    "rule_structural_id": "4742a7e5266ce68dd5633ca6c2c634a4fa706673",
+    "num_matches": 1,
+    "num_redundant_matches": 0,
+    "matches": [
+        {
+            "blob_id": "8a022df2f580bf8fff7b4b009c071ff39e76dc10",
+            "rule_name": "Generic Password",
+            "rule_text_id": "np.generic.5",
+            "structural_id": "b468b5554f93bed04fd9c28fd047c7e2faa6a179",
+            "provenance": [
+                {"kind": "file", "path": "frontend/src/assets/i18n/bg_BG.json"}
+            ],
+            "location": {
+                "offset_span": {"start": 389, "end": 414},
+                "source_span": {
+                    "start": {"line": 10, "column": 10},
+                    "end": {"line": 10, "column": 34},
+                },
+            },
+            "snippet": {
+                "before": '"TITLE_LOGIN": "x",',
+                "matching": 'PASSWORD": "TOP-SECRET-VALUE"',
+                "after": '"SHOW_PASSWORD_ADVICE": "y"',
+            },
+        }
+    ],
+}
+
+
+def _report(tmp_path: Path, *records) -> Path:
+    return write_tmp(tmp_path, "noseyparker.json", json.dumps(list(records)))
+
+
+def test_parses_the_real_top_level_list_report(tmp_path: Path):
+    """A top-level list is what `report --format json` actually emits."""
+    findings = NoseyParkerAdapter().parse(_report(tmp_path, REPORT_RECORD))
+
+    assert len(findings) == 1, (
+        "the real noseyparker report shape parsed to nothing; the adapter is "
+        "still expecting a dict with a 'matches' key"
+    )
+    f = findings[0]
+    assert f.ruleId == "np.generic.5"
+    assert f.title == "Generic Password"
+    assert f.location["path"] == "frontend/src/assets/i18n/bg_BG.json"
+    assert f.location["startLine"] == 10
+
+
+def test_the_matched_secret_never_reaches_the_finding(tmp_path: Path):
+    """`snippet.matching` IS the secret.
+
+    The previous adapter used `m.get("match")` as the message, which is the
+    defect #1128 describes for TruffleHog: the report, the SARIF file and the
+    history database all end up carrying the credential. A secret scanner's
+    output must say *where* the secret is, not *what* it is.
+    """
+    findings = NoseyParkerAdapter().parse(_report(tmp_path, REPORT_RECORD))
+
+    # Without this, the test passes vacuously on any build that parses the
+    # real shape to nothing -- which is exactly the build it is guarding.
+    assert findings, "no findings parsed; the leak assertion below is vacuous"
+
+    blob = json.dumps(
+        [
+            {
+                "message": f.message,
+                "title": f.title,
+                "description": f.description,
+                "raw": f.raw,
+                "context": f.context,
+            }
+            for f in findings
+        ]
+    )
+    assert "TOP-SECRET-VALUE" not in blob, (
+        "the matched secret was copied into the finding; a report is not a "
+        "place to reproduce credentials"
+    )
+
+
+def test_one_finding_per_match(tmp_path: Path):
+    """Each match has its own file and line, so each is a finding."""
+    import copy
+
+    record = copy.deepcopy(REPORT_RECORD)
+    second = copy.deepcopy(record["matches"][0])
+    second["provenance"] = [{"kind": "file", "path": "other/file.json"}]
+    second["location"]["source_span"]["start"]["line"] = 99
+    record["matches"].append(second)
+    record["num_matches"] = 2
+
+    findings = NoseyParkerAdapter().parse(_report(tmp_path, record))
+
+    assert len(findings) == 2
+    assert {f.location["startLine"] for f in findings} == {10, 99}
+    assert len({f.id for f in findings}) == 2, "two locations collapsed to one id"
+
+
+def test_fingerprint_is_stable_across_runs(tmp_path: Path):
+    """Nothing per-run may feed the id."""
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    a = NoseyParkerAdapter().parse(_report(tmp_path / "a", REPORT_RECORD))
+    b = NoseyParkerAdapter().parse(_report(tmp_path / "b", REPORT_RECORD))
+
+    assert a, "no findings parsed; comparing two empty lists proves nothing"
+    assert [f.id for f in a] == [f.id for f in b]
+
+
+def test_the_legacy_dict_shape_still_parses(tmp_path: Path):
+    """Control: the Docker fallback path is untouched by this change."""
+    legacy = {
+        "matches": [
+            {"signature": "AWS", "path": "a.py", "line_number": 3, "match": "x"}
+        ]
+    }
+    findings = NoseyParkerAdapter().parse(
+        write_tmp(tmp_path, "np.json", json.dumps(legacy))
+    )
+
+    assert len(findings) == 1
+    assert findings[0].ruleId == "AWS"

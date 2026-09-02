@@ -165,6 +165,9 @@ def scan_repository(
     """
     statuses: dict[str, bool] = {}
     tool_defs = []
+    # Definitions that must not start until the main wave has drained, because
+    # they read an artifact another tool in that wave produces.
+    deferred_tool_defs: list[ToolDefinition] = []
 
     # Use provided functions or defaults
     _write_stub = write_stub_func or write_stub
@@ -534,19 +537,29 @@ def scan_repository(
         # Strategy 1: Try local noseyparker binary (two-phase: scan + report)
         noseyparker_path = _find_tool("noseyparker")
         if noseyparker_path:
-            # Nosey Parker requires a datastore directory
+            # noseyparker creates the datastore root itself and refuses to
+            # touch one that already exists. Creating it here is what made the
+            # local-binary path incapable of producing a finding. Measured with
+            # noseyparker 0.24.0:
+            #
+            # | parent | datastore root | command | rc |
+            # |---|---|---|---|
+            # | exists  | pre-created  | datastore init | 2 "File exists" |
+            # | MISSING | missing      | datastore init | 2 "No such file" |
+            # | exists  | missing      | datastore init | 0 |
+            # | exists  | initialised  | datastore init | 2 "File exists" |
+            # | exists  | pre-created  | scan | 2 "Unsupported schema version 0" |
+            # | exists  | missing      | scan | **0, matches found** |
+            #
+            # So the parent must exist and the root must not -- and `scan`
+            # creates the datastore on its own, which makes `datastore init`
+            # unnecessary as well as non-idempotent. Dropping it removes a
+            # phase that could only ever fail on the second run into a results
+            # directory, and removes one ordering hazard.
             datastore_dir = out_dir / ".noseyparker_datastore"
-            datastore_dir.mkdir(parents=True, exist_ok=True)
+            datastore_dir.parent.mkdir(parents=True, exist_ok=True)
 
-            # Phase 1: Initialize datastore (idempotent)
-            init_cmd = [
-                noseyparker_path,
-                "datastore",
-                "init",
-                "--datastore",
-                str(datastore_dir),
-            ]
-            # Phase 2: Scan repository
+            # Phase 1: Scan repository
             scan_cmd = [
                 noseyparker_path,
                 "scan",
@@ -555,7 +568,7 @@ def scan_repository(
                 str(repo),
                 *noseyparker_flags,
             ]
-            # Phase 3: Generate JSON report
+            # Phase 2: Generate JSON report
             report_cmd = [
                 noseyparker_path,
                 "report",
@@ -565,18 +578,6 @@ def scan_repository(
                 str(datastore_dir),
             ]
 
-            # Multi-phase execution using ToolRunner (3 sequential commands)
-            tool_defs.append(
-                ToolDefinition(
-                    name="noseyparker-init",
-                    command=init_cmd,
-                    output_file=None,  # No output file for init
-                    timeout=60,  # Quick init
-                    retries=0,
-                    ok_return_codes=(0,),
-                    capture_stdout=False,
-                )
-            )
             tool_defs.append(
                 ToolDefinition(
                     name="noseyparker-scan",
@@ -588,7 +589,14 @@ def scan_repository(
                     capture_stdout=False,
                 )
             )
-            tool_defs.append(
+            # `report` reads the datastore that `scan` writes, and
+            # run_all_parallel submits every definition at once with no
+            # ordering guarantee -- the "3 sequential commands" this block
+            # claimed to be were never sequenced. Measured: `report` against a
+            # datastore no scan has populated exits 2 with "unable to open
+            # database file". So it runs in a second wave, after the first has
+            # drained.
+            deferred_tool_defs.append(
                 ToolDefinition(
                     name="noseyparker-report",
                     command=report_cmd,
@@ -1416,6 +1424,15 @@ def scan_repository(
     tools_started = time.perf_counter()
     results = runner.run_all_parallel()
 
+    # Second wave: definitions that read what the first wave wrote. Kept as
+    # ToolDefinitions rather than a bare subprocess call so they keep the same
+    # timeout, retry and classification the rest of the scan gets.
+    if deferred_tool_defs:
+        results += ToolRunner(
+            tools=deferred_tool_defs,
+            progress_callback=progress_callback,  # type: ignore[arg-type]
+        ).run_all_parallel()
+
     # ToolRunner already timed and classified every invocation. Record that
     # before the loop below reduces the results to booleans, which is where it
     # used to be lost (#722).
@@ -1429,18 +1446,25 @@ def scan_repository(
 
     # Process results
     attempts_map: dict[str, int] = {}
-    noseyparker_phases = {"init": False, "scan": False, "report": False}
+    noseyparker_phases = {"scan": False, "report": False}
 
     for result in results:
         # Handle multi-phase noseyparker execution
         if result.tool.startswith("noseyparker-"):
-            phase = result.tool.split("-")[1]  # Extract "init", "scan", or "report"
+            phase = result.tool.split("-")[1]  # Extract "scan" or "report"
             if result.status == "success":
                 noseyparker_phases[phase] = True
                 if phase == "report" and result.output_file and result.capture_stdout:
                     result.output_file.write_text(result.stdout or "", encoding="utf-8")
             else:
                 noseyparker_phases[phase] = False
+                # This `continue` used to skip the failure reporting every
+                # other tool gets, so a failed phase left only
+                # "Return code 2 not in (0,)" in scan-timings and nothing at
+                # all in the log. That is why the datastore error was
+                # invisible for as long as it was: the phases were the one
+                # code path that could fail without saying why.
+                report_tool_failure(result, f"its {phase} phase failed")
             continue  # Don't set individual phase status in statuses dict
 
         # prowler names its own artifact. `--output-filename prowler` with
@@ -1540,11 +1564,7 @@ def scan_repository(
     # Aggregate noseyparker multi-phase status
     if any(noseyparker_phases.values()):
         # If any phase succeeded, check if all required phases succeeded
-        if (
-            noseyparker_phases["init"]
-            and noseyparker_phases["scan"]
-            and noseyparker_phases["report"]
-        ):
+        if noseyparker_phases["scan"] and noseyparker_phases["report"]:
             statuses["noseyparker"] = True
         elif allow_missing_tools:
             # Partial success - write stub

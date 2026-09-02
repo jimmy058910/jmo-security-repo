@@ -186,7 +186,15 @@ class TestRepositoryScanner:
             assert (tmp_path / "output-test").exists()
 
     def test_noseyparker_multi_phase_execution(self, tmp_path):
-        """Test noseyparker multi-phase execution (init, scan, report)"""
+        """noseyparker runs as scan-then-report, in that order.
+
+        This test previously asserted a `noseyparker-init` phase existed and
+        mocked all three phases to success. Both halves described something
+        that could not happen: `datastore init` fails with "File exists
+        (os error 17)" against the directory this scanner pre-created, so the
+        local-binary path had never produced a finding (#1127). Asserting the
+        phase list while mocking its outcome cannot see that.
+        """
         repo = tmp_path / "noseyparker-repo"
         repo.mkdir()
         (repo / ".git").mkdir()
@@ -197,24 +205,36 @@ class TestRepositoryScanner:
             return None
 
         with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-
             from scripts.core.tool_runner import ToolResult
 
-            # Simulate successful multi-phase execution
-            mock_runner.run_all_parallel.return_value = [
-                ToolResult(tool="noseyparker-init", status="success", attempts=1),
-                ToolResult(tool="noseyparker-scan", status="success", attempts=1),
-                ToolResult(
-                    tool="noseyparker-report",
-                    status="success",
-                    attempts=1,
-                    output_file=tmp_path / "noseyparker-repo" / "noseyparker.json",
-                    stdout='{"matches": []}',
-                    capture_stdout=True,
-                ),
-            ]
+            waves: list[list[str]] = []
+
+            def make_runner(*args, **kwargs):
+                defs = kwargs.get("tools") or (args[0] if args else [])
+                names = [t.name for t in defs]
+                waves.append(names)
+                runner = MagicMock()
+                if "noseyparker-report" in names:
+                    runner.run_all_parallel.return_value = [
+                        ToolResult(
+                            tool="noseyparker-report",
+                            status="success",
+                            attempts=1,
+                            output_file=repo_out / "noseyparker.json",
+                            stdout='{"matches": []}',
+                            capture_stdout=True,
+                        )
+                    ]
+                else:
+                    runner.run_all_parallel.return_value = [
+                        ToolResult(
+                            tool="noseyparker-scan", status="success", attempts=1
+                        )
+                    ]
+                return runner
+
+            repo_out = tmp_path / "noseyparker-repo"
+            MockRunner.side_effect = make_runner
 
             name, statuses = scan_repository(
                 repo=repo,
@@ -228,14 +248,110 @@ class TestRepositoryScanner:
             )
 
             assert statuses["noseyparker"] is True
-            # Verify all three phases were executed
-            MockRunner.assert_called_once()
-            args, kwargs = MockRunner.call_args
-            tool_defs = kwargs.get("tools") or (args[0] if args else [])
-            phase_names = [t.name for t in tool_defs]
-            assert "noseyparker-init" in phase_names
-            assert "noseyparker-scan" in phase_names
-            assert "noseyparker-report" in phase_names
+
+            # `datastore init` is gone: `scan` creates the datastore itself,
+            # and init cannot succeed twice against one results directory.
+            all_names = [n for wave in waves for n in wave]
+            assert "noseyparker-init" not in all_names
+
+            # report must not be submitted alongside scan. run_all_parallel
+            # gives no ordering, and `report` against an unpopulated datastore
+            # exits 2 with "unable to open database file".
+            assert len(waves) == 2, f"expected two waves, got {waves}"
+            assert "noseyparker-scan" in waves[0]
+            assert "noseyparker-report" not in waves[0]
+            assert waves[1] == ["noseyparker-report"]
+
+    def test_noseyparker_datastore_root_is_not_pre_created(self, tmp_path):
+        """noseyparker creates the datastore root and refuses an existing one.
+
+        Measured with noseyparker 0.24.0: `datastore init` against a directory
+        that already exists exits 2 with "Failed to create datastore root
+        directory ...: File exists (os error 17)", and `scan` against a
+        pre-created empty one exits 2 with "Unsupported schema version 0".
+        The parent must exist; the root must not.
+        """
+        repo = tmp_path / "np-repo"
+        repo.mkdir()
+        (repo / ".git").mkdir()
+
+        def mock_find_tool(tool_name):
+            return "/usr/bin/noseyparker" if tool_name == "noseyparker" else None
+
+        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+            MockRunner.return_value.run_all_parallel.return_value = []
+
+            scan_repository(
+                repo=repo,
+                results_dir=tmp_path,
+                tools=["noseyparker"],
+                timeout=900,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+                find_tool_func=mock_find_tool,
+            )
+
+        datastore = tmp_path / "np-repo" / ".noseyparker_datastore"
+        assert not datastore.exists(), (
+            "the datastore root was pre-created; noseyparker will refuse it "
+            "with 'File exists (os error 17)' and contribute no findings"
+        )
+        assert datastore.parent.exists(), (
+            "the datastore's parent must exist -- noseyparker does not create "
+            "parents and fails with 'No such file or directory (os error 2)'"
+        )
+
+    def test_a_failed_noseyparker_phase_says_why(self, tmp_path):
+        """A failing phase must report like every other tool.
+
+        The phase branch `continue`d before the failure reporting the rest of
+        the loop does, so a failed phase left only "Return code 2 not in
+        (0,)" in scan-timings and nothing in the log. That is why the
+        datastore error stayed invisible.
+        """
+        repo = tmp_path / "np-repo"
+        repo.mkdir()
+        (repo / ".git").mkdir()
+
+        def mock_find_tool(tool_name):
+            return "/usr/bin/noseyparker" if tool_name == "noseyparker" else None
+
+        from scripts.core.tool_runner import ToolResult
+
+        with (
+            patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner,
+            patch(
+                "scripts.cli.scan_jobs.repository_scanner.report_tool_failure"
+            ) as mock_report,
+        ):
+            MockRunner.return_value.run_all_parallel.return_value = [
+                ToolResult(
+                    tool="noseyparker-scan",
+                    status="error",
+                    returncode=2,
+                    attempts=1,
+                    error_message="Return code 2 not in (0, 1)",
+                )
+            ]
+
+            scan_repository(
+                repo=repo,
+                results_dir=tmp_path,
+                tools=["noseyparker"],
+                timeout=900,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+                find_tool_func=mock_find_tool,
+            )
+
+        assert mock_report.called, (
+            "a failed noseyparker phase was swallowed; nothing in the log or "
+            "the scan summary says the tool did not run"
+        )
+        reported = [c.args[0].tool for c in mock_report.call_args_list]
+        assert "noseyparker-scan" in reported
 
     def test_noseyparker_docker_fallback(self, tmp_path):
         """Test noseyparker Docker fallback when local binary missing"""
