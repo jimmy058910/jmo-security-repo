@@ -56,6 +56,11 @@ SKIP_DIR_NAMES: set[str] = {
     ".git",
     ".venv",
     "venv",
+    # An interrupted horusec scan leaves a full copy of the repo here (#1088):
+    # 3.6 GB / 12,081 files including a nested .venv with paths Windows
+    # reports as too long. This walk descended into it and the xdist worker
+    # running the test crashed (#1105).
+    ".horusec",
     "node_modules",
     "build",
     "dist",
