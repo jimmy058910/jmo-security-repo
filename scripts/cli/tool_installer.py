@@ -63,10 +63,12 @@ from scripts.core.paths import (
 )
 from scripts.core.secure_temp import secure_temp_dir
 from scripts.core.tool_registry import (
+    TOOL_PLATFORM_REQUIREMENTS,
     TOOL_VARIANTS,
     ToolInfo,
     ToolRegistry,
     detect_platform,
+    get_platform_status,
 )
 from scripts.core.tool_utils import find_tool, tool_exists
 from scripts.core.validation import (
@@ -452,6 +454,30 @@ class ToolInstaller:
                     message=f"Already installed (v{status.installed_version})",
                     version_installed=status.installed_version,
                 )
+
+        # A platform the table says has no native build gets the reason and
+        # the workarounds, not an install attempt that cannot succeed (#1091:
+        # scancode's Windows extraction bootstraps itself into a broken venv;
+        # noseyparker's download would 404). One choke point, so `tools
+        # install <names>`, `tools update`, the profile installers and the
+        # scan-time auto-install all say the same thing. `platforms: []`
+        # entries (mobsf, akto) are docker-only by design and keep their
+        # SPECIAL_INSTALL handling below.
+        platform_status = get_platform_status(tool_name, self.platform)
+        if not platform_status["supported"] and TOOL_PLATFORM_REQUIREMENTS.get(
+            tool_name, {}
+        ).get("platforms"):
+            workarounds = ", ".join(platform_status.get("workarounds") or [])
+            return InstallResult(
+                tool_name=tool_name,
+                success=False,
+                method="unsupported",
+                message=(
+                    f"not available on {self.platform}: {platform_status['reason']}"
+                    f" (workarounds: {workarounds or 'none listed'})"
+                ),
+                duration_seconds=time.time() - start_time,
+            )
 
         # Get tool info
         tool_info = self.registry.get_tool(tool_name)
