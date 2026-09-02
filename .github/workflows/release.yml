@@ -771,7 +771,17 @@ jobs:
           docker buildx imagetools inspect "$REF" --format '{{json .Provenance}}' | head -c 800
           echo
 
+      - name: Test image (amd64)
+        run: |
+          TEST_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1 | awk -F: '{print $NF}')
+          echo "Testing GHCR: ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${TEST_TAG}"
+          docker pull --platform linux/amd64 "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${TEST_TAG}"
+          docker run --rm --platform linux/amd64 "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${TEST_TAG}" --help
+          docker run --rm --platform linux/amd64 "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${TEST_TAG}" scan --help
+
       - name: Delete the dry-run tag from GHCR
+        # Last, after the image test above has pulled the tag (measured: the
+        # first placement deleted it first and the test pulled nothing).
         if: inputs.dry_run == true
         continue-on-error: true
         env:
@@ -787,14 +797,6 @@ jobs:
               echo "::warning::could not delete GHCR version $ID; remove tag $DRY_TAG by hand"
             fi
           done
-
-      - name: Test image (amd64)
-        run: |
-          TEST_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1 | awk -F: '{print $NF}')
-          echo "Testing GHCR: ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${TEST_TAG}"
-          docker pull --platform linux/amd64 "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${TEST_TAG}"
-          docker run --rm --platform linux/amd64 "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${TEST_TAG}" --help
-          docker run --rm --platform linux/amd64 "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${TEST_TAG}" scan --help
 
   # Benchmark image sizes (v0.6.1+ optimization tracking)
   docker-size-benchmark:
