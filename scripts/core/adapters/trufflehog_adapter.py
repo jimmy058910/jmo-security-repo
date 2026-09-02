@@ -86,6 +86,40 @@ from scripts.core.plugin_api import (
 LOB_KEY_PREFIX = "test_"
 
 
+# Every TruffleHog field that can carry the matched credential, in whole or in
+# part. `raw` is serialised into findings.json and stored in the history
+# database, so keeping the record verbatim leaks the secret just as surely as
+# putting it in the message did.
+#
+# `Redacted` is on this list deliberately: measured on juice-shop, TruffleHog's
+# Redacted value for the PrivateKey detector is the key's first 64 characters.
+# It is a display convenience, not a guarantee.
+SECRET_BEARING_FIELDS = frozenset(
+    {
+        "Raw",
+        "RawV2",
+        "Redacted",
+        "SecretParts",
+        "StructuredData",
+        "ExtraData",
+    }
+)
+
+
+def _scrub_secret_fields(record: dict) -> dict:
+    """Return `record` without any field that can carry credential material.
+
+    An allowlist would be safer still, but TruffleHog adds detector-specific
+    keys and a denylist keeps the useful provenance (SourceMetadata,
+    DetectorName, Verified, DecoderName) without needing to track them.
+
+    `ExtraData` is dropped because it is detector-defined and has carried
+    decoded JWT claims; there is no way to know in advance that a given
+    detector will not put secret-derived content there.
+    """
+    return {k: v for k, v in record.items() if k not in SECRET_BEARING_FIELDS}
+
+
 def _is_pytest_name_matched_as_lob_key(detector: str, secret: object) -> bool:
     """True when a Lob "secret" is really a pytest function name.
 
@@ -141,11 +175,13 @@ class TruffleHogAdapter(AdapterPlugin):
 
             # Try to extract file path from SourceMetadata.Data.Filesystem.file or similar
             file_path = ""
+            fs: dict = {}
             sm = f.get("SourceMetadata") or {}
             data = sm.get("Data") if isinstance(sm, dict) else {}
             if isinstance(data, dict):
-                fs = data.get("Filesystem") or {}
-                if isinstance(fs, dict):
+                candidate = data.get("Filesystem") or {}
+                if isinstance(candidate, dict):
+                    fs = candidate
                     file_path = fs.get("file") or fs.get("path") or ""
             # Some variants include Filename / Raw etc.
             file_path = file_path or f.get("Filename") or f.get("Path") or ""
@@ -155,8 +191,36 @@ class TruffleHogAdapter(AdapterPlugin):
                 start_line = f["StartLine"]
             elif isinstance(f.get("Line"), int):
                 start_line = f["Line"]
+            elif isinstance(fs.get("line"), int):
+                # Where TruffleHog actually puts it for a filesystem scan.
+                # Measured on juice-shop: `StartLine` present on 0 of 7
+                # records, `SourceMetadata.Data.Filesystem.line` on 7 of 7 --
+                # so every finding was reported at line 0 and the dashboard
+                # rendered `lib/insecurity.ts:?`.
+                start_line = fs["line"]
 
-            msg = f.get("Raw") or f.get("Redacted") or detector
+            # The message must describe the finding, never reproduce it.
+            #
+            # This used to be `f.get("Raw") or f.get("Redacted") or detector`,
+            # which put the secret itself into findings.json, findings.csv,
+            # findings.sarif, dashboard.html and the history database (stored
+            # unencrypted unless --encrypt-findings). juice-shop's planted
+            # 875-character RSA private key appeared verbatim in all of them.
+            #
+            # Falling back to `Redacted` is NOT sufficient, measured on the
+            # same seven records:
+            #
+            # | detector       | len(Raw) | len(Redacted) | Redacted is... |
+            # |----------------|---------:|--------------:|----------------|
+            # | PrivateKey     |      875 |            64 | the key's first 64 chars |
+            # | ProtocolsIO    |       64 |             0 | absent |
+            # | MaxMindLicense |       16 |             2 | masked |
+            # | JWT (x4)       |  696/363 |             0 | absent |
+            #
+            # `Redacted` is empty on 5 of 7, and on the one record the issue
+            # cites it is real key material. A secret scanner's finding says
+            # WHERE the secret is; the file and line are what the user needs.
+            msg = f"{detector} secret detected"
             sev = "HIGH" if verified else "MEDIUM"
             severity = normalize_severity(sev)
             rule_id = detector
@@ -183,7 +247,7 @@ class TruffleHogAdapter(AdapterPlugin):
                     "likelihood": "HIGH",
                     "impact": "HIGH",
                 },
-                raw=f,
+                raw=_scrub_secret_fields(f),
             )
 
             # Generate fingerprint
