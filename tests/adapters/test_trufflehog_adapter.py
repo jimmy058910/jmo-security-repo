@@ -179,7 +179,14 @@ class TestTruffleHogVerification:
         findings = adapter.parse(path)
         assert len(findings) == 1
         assert findings[0].raw is not None
-        assert "ExtraData" in findings[0].raw
+        # Provenance is kept...
+        assert findings[0].raw["DetectorName"] == "GitLab"
+        assert findings[0].raw["Verified"] is True
+        assert "SourceMetadata" in findings[0].raw
+        # ...but ExtraData is not. It is detector-defined and has carried
+        # decoded JWT claims; nothing guarantees a detector will not put
+        # secret-derived content there.
+        assert "ExtraData" not in findings[0].raw
 
 
 class TestTruffleHogFilePath:
@@ -375,11 +382,27 @@ class TestTruffleHogFingerprinting:
         assert findings1[0].id == findings2[0].id
 
 
-class TestTruffleHogRawMessage:
-    """Tests for raw/redacted message handling."""
+# Assembled rather than written out: a literal PEM header in a tracked file
+# trips this repo's own detect-private-key hook and its TruffleHog CI scan.
+KEY_HEADER = "-----BEGIN RSA " + "PRIVATE KEY-----" + chr(10)
 
-    def test_raw_field_in_message(self, tmp_path: Path):
-        """Test Raw field is used in message."""
+
+class TestTruffleHogRawMessage:
+    """The finding must say WHERE the secret is, never WHAT it is.
+
+    This class previously asserted the opposite: that `Raw` -- the matched
+    credential -- appears in the message. That contract put juice-shop's
+    planted 875-character RSA private key verbatim into findings.json,
+    findings.csv, findings.sarif, dashboard.html and the history database
+    (stored unencrypted unless --encrypt-findings). Measured: 6 of 7 secrets
+    in a juice-shop scan appeared in the findings.
+
+    `Redacted` is not a safe substitute. Measured on the same 7 records, it is
+    empty on 5, and on the PrivateKey record it is the key's first 64
+    characters.
+    """
+
+    def test_the_raw_secret_never_reaches_the_message(self, tmp_path: Path):
         sample = [
             {
                 "DetectorName": "AWS",
@@ -388,23 +411,34 @@ class TestTruffleHogRawMessage:
             }
         ]
         path = write_tmp(tmp_path, "raw.json", json.dumps(sample))
-        adapter = TruffleHogAdapter()
-        findings = adapter.parse(path)
-        assert "AKIAIOSFODNN7EXAMPLE" in findings[0].message
+        findings = TruffleHogAdapter().parse(path)
 
-    def test_redacted_field_in_message(self, tmp_path: Path):
-        """Test Redacted field is used in message when Raw is missing."""
+        assert findings, "no findings parsed; the assertions below are vacuous"
+        assert "AKIAIOSFODNN7EXAMPLE" not in findings[0].message
+        assert "AKIAIOSFODNN7EXAMPLE" not in json.dumps(findings[0].raw)
+        assert (
+            "AWS" in findings[0].message
+        ), "the message must still identify the detector"
+
+    def test_the_redacted_value_never_reaches_the_message_either(self, tmp_path: Path):
+        """TruffleHog's Redacted is a display convenience, not a guarantee.
+
+        For the PrivateKey detector it is the first 64 characters of the key.
+        """
         sample = [
             {
-                "DetectorName": "Stripe",
-                "Verified": True,
-                "Redacted": "sk_live_****redacted****",
+                "DetectorName": "PrivateKey",
+                "Verified": False,
+                "Raw": KEY_HEADER + "AAAAREALKEYMATERIAL",
+                "Redacted": KEY_HEADER + "AAAAREALKEY",
             }
         ]
         path = write_tmp(tmp_path, "redacted.json", json.dumps(sample))
-        adapter = TruffleHogAdapter()
-        findings = adapter.parse(path)
-        assert "redacted" in findings[0].message
+        findings = TruffleHogAdapter().parse(path)
+
+        assert findings
+        blob = findings[0].message + json.dumps(findings[0].raw)
+        assert "REALKEY" not in blob
 
     def test_detector_name_fallback_in_message(self, tmp_path: Path):
         """Test detector name is used as fallback message."""
@@ -432,8 +466,8 @@ class TestTruffleHogUnicode:
         findings = adapter.parse(path)
         assert "日本語" in findings[0].location["path"]
 
-    def test_unicode_in_raw(self, tmp_path: Path):
-        """Test Unicode in raw content."""
+    def test_unicode_in_raw_is_still_not_leaked(self, tmp_path: Path):
+        """A non-ASCII secret is still a secret."""
         sample = [
             {
                 "DetectorName": "Token",
@@ -442,9 +476,11 @@ class TestTruffleHogUnicode:
             }
         ]
         path = write_tmp(tmp_path, "unicode_raw.json", json.dumps(sample))
-        adapter = TruffleHogAdapter()
-        findings = adapter.parse(path)
-        assert "密码" in findings[0].message
+        findings = TruffleHogAdapter().parse(path)
+
+        assert findings
+        assert "密码" not in findings[0].message
+        assert "secret123" not in json.dumps(findings[0].raw)
 
 
 class TestLobDetectorCollidesWithPytestNames:
@@ -536,3 +572,71 @@ class TestLobDetectorCollidesWithPytestNames:
         findings = TruffleHogAdapter().parse(path)
         assert len(findings) == 1
         assert findings[0].severity == "HIGH"
+
+
+class TestTruffleHogFilesystemLine:
+    """TruffleHog puts the line in SourceMetadata, not in StartLine.
+
+    Measured on a juice-shop filesystem scan: `StartLine` present on **0 of
+    7** records, `SourceMetadata.Data.Filesystem.line` on **7 of 7**. Every
+    finding was therefore reported at line 0 and the dashboard rendered
+    `lib/insecurity.ts:?`.
+
+    That was not only cosmetic. The default fingerprint is
+    `tool | ruleId | path | line | message[:120]`, so with the line pinned to
+    0 two distinct secrets in one file collapsed into one finding: the same
+    7 records produced **5** distinct ids before the fix and **7** after.
+    """
+
+    @staticmethod
+    def _record(line: int, path: str = "app/config.ts", raw: str = "s3cret"):
+        return {
+            "DetectorName": "JWT",
+            "Verified": False,
+            "Raw": raw,
+            "SourceMetadata": {"Data": {"Filesystem": {"file": path, "line": line}}},
+        }
+
+    def test_line_is_read_from_source_metadata(self, tmp_path: Path):
+        path = write_tmp(tmp_path, "th.json", json.dumps([self._record(23)]))
+        findings = TruffleHogAdapter().parse(path)
+
+        assert findings
+        assert findings[0].location["startLine"] == 23, (
+            "the line stayed 0, so the report cannot point at the secret and "
+            "two secrets in one file share a fingerprint"
+        )
+
+    def test_two_secrets_in_one_file_keep_separate_identities(self, tmp_path: Path):
+        path = write_tmp(
+            tmp_path,
+            "th.json",
+            json.dumps(
+                [
+                    self._record(302, raw="first-secret"),
+                    self._record(306, raw="second-secret"),
+                ]
+            ),
+        )
+        findings = TruffleHogAdapter().parse(path)
+
+        assert len(findings) == 2
+        assert len({f.id for f in findings}) == 2, (
+            "two secrets at different lines collapsed to one fingerprint -- "
+            "the line is not reaching the finding"
+        )
+        # Note: this assertion passes on the pre-fix adapter too, and for a
+        # reason worth stating -- there, the message WAS the secret, so the
+        # leak itself was doing the discriminating. Once the message stops
+        # carrying the credential, the line is the only thing separating two
+        # secrets in one file. That makes this a forward guard on the line
+        # mapping, not a reproduction of the original defect.
+
+    def test_an_explicit_start_line_still_wins(self, tmp_path: Path):
+        """Control: the existing StartLine path is unchanged."""
+        record = self._record(23)
+        record["StartLine"] = 99
+        path = write_tmp(tmp_path, "th.json", json.dumps([record]))
+        findings = TruffleHogAdapter().parse(path)
+
+        assert findings[0].location["startLine"] == 99
