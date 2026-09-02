@@ -140,7 +140,14 @@ def test_writing_the_data_back_unchanged_is_byte_identical(versions_file):
 
 
 def test_the_real_versions_yaml_round_trips_byte_identical(tmp_path, monkeypatch):
-    """The repo's own file, comments and all: 12 comment lines today."""
+    """The repo's own file, comments and all: 12 comment lines today.
+
+    Compared LF-to-LF. The writer emits LF on every platform by design (#555),
+    and `read_text()` normalises CRLF on the way in, so on a checkout that
+    `core.autocrlf` has converted (GitHub's Windows runners) the round trip
+    is the LF form of the file, not its on-disk bytes. Measured on #1110's
+    `Windows native console encoding` job: `b'...0.58.1)\\n' == b'...0.58.1)\\r\\n'`.
+    """
     real = REPO_ROOT / "versions.yaml"
     copy = tmp_path / "versions.yaml"
     copy.write_bytes(real.read_bytes())
@@ -154,7 +161,9 @@ def test_the_real_versions_yaml_round_trips_byte_identical(tmp_path, monkeypatch
 
     update_versions.save_versions(update_versions.load_versions())
 
-    assert copy.read_bytes() == real.read_bytes()
+    written = copy.read_bytes()
+    assert b"\r\n" not in written, "versions.yaml is written LF-only (#555)"
+    assert written == real.read_bytes().replace(b"\r\n", b"\n")
 
 
 def test_a_structural_change_falls_back_to_a_full_dump_and_says_so(
