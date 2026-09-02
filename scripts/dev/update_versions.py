@@ -279,26 +279,150 @@ def load_versions() -> dict:
 
 
 def save_versions(data: dict) -> None:
-    """Save versions.yaml with updated timestamp."""
-    # Update version history
-    if "version_history" not in data:
-        data["version_history"] = []
+    """Write versions.yaml without losing its comments (#1052).
 
-    data["version_history"].insert(
-        0,
-        {
-            "date": datetime.now(UTC).strftime("%Y-%m-%d"),
-            "action": "Automated version update",
-            "tools_updated": [],
-            "updated_by": "update_versions.py",
-            "notes": "",
-        },
+    PyYAML has no comment model, so the old `yaml.dump` round-trip deleted
+    every comment on every run: 12 lines recording #935's fix and why yara
+    must not track `github_repo`, restored by hand three times across Phases
+    9 and 11. The file's own contract is "never hand-edit this", so the only
+    sanctioned write path was the one destroying the reasoning, invisibly, in
+    a diff that also carried the intended bump.
+
+    The updater changes two things -- `version:` values and the head of
+    `version_history` -- and both are patched into the existing text. The
+    patched text is parsed back and compared with `data`; if they differ,
+    the change is one this writer does not model, and it falls back to a full
+    dump and says how many comment lines that costs.
+
+    This used to prepend a content-free "Automated version update" row
+    (`tools_updated: []`) on top of the real row `update_tool_version` had
+    just written, one per call. The callers write their own rows; this does
+    not add one.
+    """
+    original = (
+        VERSIONS_YAML.read_text(encoding="utf-8") if VERSIONS_YAML.exists() else None
     )
+    text = _patch_versions_text(original, data) if original is not None else None
+    if text is None:
+        if original is not None:
+            lost = sum(
+                1 for line in original.splitlines() if line.lstrip().startswith("#")
+            )
+            if lost:
+                warn(
+                    "versions.yaml changed in a way the comment-preserving writer "
+                    f"does not model; rewriting it in full drops {lost} comment "
+                    "line(s). Restore them from git before committing."
+                )
+        text = yaml.dump(data, default_flow_style=False, sort_keys=False)
 
     # newline="\n" forces LF on all platforms; without it Windows text-mode
     # writes emit CRLF for every line, producing a full-file false diff (#555).
     with open(VERSIONS_YAML, "w", encoding="utf-8", newline="\n") as f:
-        yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+        f.write(text)
+
+
+_TOOL_SECTIONS = ("python_tools", "binary_tools", "special_tools")
+
+
+def _patch_versions_text(original: str, data: dict) -> str | None:
+    """`original` with `data`'s version bumps and new history rows patched in.
+
+    Returns None when `data` differs from the file in any other way (a tool
+    added or removed, a history row edited in place, any other key changed),
+    so the caller can fall back to a full dump rather than write something
+    that does not say what was asked.
+    """
+    try:
+        on_disk = yaml.safe_load(original) or {}
+    except yaml.YAMLError:
+        return None
+    lines = original.split("\n")
+
+    # 1. `version:` lines, one per tool whose version moved.
+    for section in _TOOL_SECTIONS:
+        for tool, entry in (data.get(section) or {}).items():
+            old = (on_disk.get(section) or {}).get(tool)
+            if old is None or not isinstance(entry, dict):
+                return None
+            if entry.get("version") == old.get("version"):
+                continue
+            idx = _version_line(lines, section, tool)
+            if idx is None:
+                return None
+            indent = lines[idx][: len(lines[idx]) - len(lines[idx].lstrip())]
+            rendered = yaml.dump(
+                {"version": entry["version"]}, default_flow_style=False
+            ).strip()
+            lines[idx] = f"{indent}{rendered}"
+
+    # 2. `version_history`: rows are prepended, never edited in place.
+    new_hist = list(data.get("version_history") or [])
+    old_hist = list(on_disk.get("version_history") or [])
+    added = len(new_hist) - len(old_hist)
+    if added < 0 or new_hist[added:] != old_hist:
+        return None
+    if added:
+        head = _top_level_line(lines, "version_history")
+        if head is None:
+            return None
+        rendered_rows = (
+            yaml.dump(
+                new_hist[:added],
+                default_flow_style=False,
+                sort_keys=False,
+                allow_unicode=True,
+            )
+            .rstrip("\n")
+            .split("\n")
+        )
+        lines[head] = "version_history:"  # it may have been `version_history: []`
+        lines[head + 1 : head + 1] = rendered_rows
+
+    patched = "\n".join(lines)
+    try:
+        if yaml.safe_load(patched) != data:
+            return None
+    except yaml.YAMLError:
+        return None
+    return patched
+
+
+def _top_level_line(lines: list[str], key: str) -> int | None:
+    for i, line in enumerate(lines):
+        if line.rstrip() == f"{key}:" or line.startswith(f"{key}: "):
+            return i
+    return None
+
+
+def _version_line(lines: list[str], section: str, tool: str) -> int | None:
+    """Index of the `version:` line inside `section` -> `tool`'s mapping.
+
+    Name matching is by string equality, not regex: tool names carry `+`
+    (`afl++`) and `-` (`dependency-check`).
+    """
+    start = _top_level_line(lines, section)
+    if start is None:
+        return None
+    tool_idx: int | None = None
+    for i in range(start + 1, len(lines)):
+        line = lines[i]
+        if line and not line.startswith(" ") and not line.startswith("#"):
+            break  # the next top-level key
+        if line.startswith("  ") and not line.startswith("   "):
+            if line.strip() == f"{tool}:":
+                tool_idx = i
+                break
+    if tool_idx is None:
+        return None
+    for i in range(tool_idx + 1, len(lines)):
+        line = lines[i]
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and not line.startswith("    "):
+            return None  # left the tool's mapping without finding `version:`
+        if line.startswith("    version:"):
+            return i
+    return None
 
 
 def get_latest_github_release(repo: str) -> str | None:
