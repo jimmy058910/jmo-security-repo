@@ -30,7 +30,7 @@ macOS users with Homebrew: install pipx via `brew install pipx`, then `pipx inst
 
 ### Option 2: Docker (60 seconds)
 
-**No tool installation required - all 28 scanners included.**
+**No tool installation required - all 29 scanners included.**
 
 ```bash
 # Pull image (one-time)
@@ -54,8 +54,8 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
 | Variant | Tools | Size | Use Case |
 |---------|-------|------|----------|
 | `fast` | 9 | 502 MB | CI/CD gates, pre-commit |
-| `slim` | 14 | 557 MB | Cloud/IaC, AWS/Azure/GCP/K8s |
-| `balanced` | 18 | 1.4 GB | Production pipelines |
+| `slim` | 13 | 557 MB | Cloud/IaC, AWS/Azure/GCP/K8s |
+| `balanced` | 17 | 1.4 GB | Production pipelines |
 | `deep` | 29 | 2.0 GB | Complete audits |
 
 **Complete guide:** [docs/DOCKER_README.md](docs/DOCKER_README.md)
@@ -138,8 +138,8 @@ jmo ci --repo . --fail-on HIGH --profile-name balanced
 | Profile | Tools | Time | Use Case |
 |---------|-------|------|----------|
 | `fast` | 9 | 5-10 min | Pre-commit, PR validation |
-| `slim` | 14 | 12-18 min | Cloud/IaC, AWS/Azure/GCP/K8s |
-| `balanced` | 18 | 18-25 min | CI/CD pipelines |
+| `slim` | 13 | 12-18 min | Cloud/IaC, AWS/Azure/GCP/K8s |
+| `balanced` | 17 | 18-25 min | CI/CD pipelines |
 | `deep` | 29 | 40-70 min | Full security audits |
 
 ---

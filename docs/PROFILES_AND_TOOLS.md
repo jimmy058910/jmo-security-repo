@@ -736,13 +736,13 @@ All sources MUST match. This table tracks current status:
 
 | Source | Fast | Slim | Balanced | Deep | Status |
 |--------|------|------|----------|------|--------|
-| **jmo.yml** | 9 | 14 | 18 | 28 | Canonical |
-| **tool_registry.py** | 9 | 14 | 18 | 28 | Must match |
-| **wizard_flows/profile_config.py** | 9 | 14 | 18 | 28 | Must match |
+| **jmo.yml** | 9 | 13 | 17 | 29 | Canonical |
+| **tool_registry.py** | 9 | 13 | 17 | 29 | Must match |
+| **wizard_flows/profile_config.py** | 9 | 13 | 17 | 29 | Must match |
 | **Dockerfile.fast** | 9 | - | - | - | Must match |
-| **Dockerfile.slim** | - | 14 | - | - | Must match |
-| **Dockerfile.balanced** | - | - | 18 | - | Must match |
-| **Dockerfile (deep)** | - | - | - | 25* | *3 manual tools |
+| **Dockerfile.slim** | - | 13 | - | - | Must match |
+| **Dockerfile.balanced** | - | - | 17 | - | Must match |
+| **Dockerfile (deep)** | - | - | - | 25* | *4 manual tools |
 
 ### Sync Check Commands
 

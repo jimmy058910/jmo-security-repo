@@ -116,7 +116,7 @@ extra:
       content: >-
         security scanner, SAST, DAST, SCA, secrets detection, compliance automation,
         OWASP, NIST CSF, CIS, PCI DSS, MITRE ATT&CK, open source,
-        DevSecOps, CI/CD, Python, jmo-security, 28 scanners
+        DevSecOps, CI/CD, Python, jmo-security, 29 scanners
     - name: author
       content: "JMo Gaming LLC"
   analytics:

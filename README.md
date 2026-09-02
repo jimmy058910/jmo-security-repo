@@ -10,7 +10,7 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/jmogaming/jmo-security)](https://hub.docker.com/r/jmogaming/jmo-security)
 [![GitHub Stars](https://img.shields.io/github/stars/jimmy058910/jmo-security-repo?style=social)](https://github.com/jimmy058910/jmo-security-repo)
 
-**v1.0.8** | A terminal-first security audit toolkit orchestrating 28 scanners with unified CLI, normalized outputs, and interactive HTML dashboard.
+**v1.0.8** | A terminal-first security audit toolkit orchestrating 29 scanners with unified CLI, normalized outputs, and interactive HTML dashboard.
 
 [![Newsletter](https://img.shields.io/badge/Newsletter-Subscribe-667eea)](https://jmotools.com/subscribe.html)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/jmogaming)
@@ -29,7 +29,7 @@ JMo Security is an automated security audit framework for scanning code reposito
 
 ## Key Features
 
-- **28 Security Scanners** - Secrets, SAST, SBOM, SCA, IaC, DAST, and more
+- **29 Security Scanners** - Secrets, SAST, SBOM, SCA, IaC, DAST, and more
 - **6 Target Types** - Repos, images, IaC files, URLs, GitLab, Kubernetes
 - **Unified Output** - JSON, SARIF, Markdown, CSV export, dual-mode HTML dashboard
 - **Cross-Tool Deduplication** - Findings several tools report for the same issue collapse into one consensus finding
@@ -80,7 +80,7 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
 
 ## Security Tools
 
-29 tools across 12 categories:
+29 tools across 13 categories:
 
 | Category | Tools |
 |----------|-------|
@@ -107,8 +107,8 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
 | Profile | Tools | Time | Use Case |
 |---------|-------|------|----------|
 | `fast` | 9 | 5-10 min | Pre-commit, PR validation |
-| `slim` | 14 | 12-18 min | Cloud/IaC, AWS/Azure/GCP/K8s |
-| `balanced` | 18 | 18-25 min | CI/CD pipelines |
+| `slim` | 13 | 12-18 min | Cloud/IaC, AWS/Azure/GCP/K8s |
+| `balanced` | 17 | 18-25 min | CI/CD pipelines |
 | `deep` | 29 | 40-70 min | Comprehensive audits |
 
 ---

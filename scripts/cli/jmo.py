@@ -531,10 +531,17 @@ def _add_wizard_args(subparsers: argparse._SubParsersAction) -> Any:
         "preset options",
         "Preset wizard choices for automation (use with --yes for fully non-interactive)",
     )
+    # Derived from the registry, not typed: this literal said slim=14 and
+    # balanced=18 while `jmo --help` said 13 and 17 -- one binary disagreeing
+    # with itself (#1003).
+    profile_sizes = ", ".join(
+        f"{name}={len(PROFILE_TOOLS[name])}"
+        for name in ("fast", "slim", "balanced", "deep")
+    )
     preset_group.add_argument(
         "--profile",
         choices=["fast", "slim", "balanced", "deep"],
-        help="Scan profile (fast=9 tools, slim=14, balanced=18, deep=29)",
+        help=f"Scan profile, tools per profile: {profile_sizes}",
     )
     preset_group.add_argument(
         "--target-type",

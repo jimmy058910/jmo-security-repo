@@ -15,7 +15,7 @@ packages — with JMo Security. This guide shows the two multi-target entry poin
 | `fast` | 9 | 5-10 min | Pre-commit / PR validation across changed apps |
 | `slim` | 13 | 12-18 min | Cloud / IaC-heavy monorepos (AWS/Azure/GCP/K8s) |
 | `balanced` | 17 | 18-25 min | CI/CD gate covering all apps |
-| `deep` | 28 | 40-70 min | Pre-release / compliance review of the whole repo |
+| `deep` | 29 | 40-70 min | Pre-release / compliance review of the whole repo |
 
 ## Approach 1 — `--repos-dir` (scan every subfolder)
 

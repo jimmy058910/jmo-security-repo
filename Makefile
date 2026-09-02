@@ -396,7 +396,7 @@ samples-scan: samples-clean
 	@echo ""
 	@echo "╔══════════════════════════════════════════════════════════════╗"
 	@echo "║  Scanning sample fixture: $(SAMPLES_FIXTURE)                 ║"
-	@echo "║  Profile: balanced (18 tools)                                ║"
+	@echo "║  Profile: balanced (17 tools)                                ║"
 	@echo "║  Estimated time: 5-15 minutes                                ║"
 	@echo "╚══════════════════════════════════════════════════════════════╝"
 	@echo ""

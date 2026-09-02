@@ -25,7 +25,7 @@ fail_on: ''
 default_profile: balanced
 profiles:
   fast:
-    # v1.0.0: 9 tools for fast pre-commit checks (5-10 min)
+    # 9 tools for fast pre-commit checks (5-10 min)
     # Tool list defined in scripts/core/tool_registry.py:PROFILE_TOOLS (single source of truth)
     threads: 8
     timeout: 300
@@ -53,7 +53,7 @@ profiles:
         flags:
         - --quiet
   slim:
-    # v1.0.0: 14 tools for cloud/IaC focused scans (12-18 min)
+    # 13 tools for cloud/IaC focused scans (12-18 min)
     # Optimized for AWS/Azure/GCP, Kubernetes, and infrastructure scanning
     # Tool list defined in scripts/core/tool_registry.py:PROFILE_TOOLS (single source of truth)
     threads: 4
@@ -89,7 +89,7 @@ profiles:
         flags:
         - --silent
   balanced:
-    # v1.0.0: 18 tools for production scans (18-25 min)
+    # 17 tools for production scans (18-25 min)
     # Tool list defined in scripts/core/tool_registry.py:PROFILE_TOOLS (single source of truth)
     threads: 4
     timeout: 600
@@ -126,7 +126,7 @@ profiles:
         flags:
         - --silent
   deep:
-    # v1.0.0: 29 tools for comprehensive audits (40-70 min)
+    # 29 tools for comprehensive audits (40-70 min)
     # Tool list defined in scripts/core/tool_registry.py:PROFILE_TOOLS (single source of truth)
     threads: 2
     timeout: 900

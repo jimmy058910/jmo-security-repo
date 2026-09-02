@@ -139,7 +139,7 @@ Clear profile comparison before selection:
 │ • fast: 9 tools, 5-10 minutes (pre-commit, quick checks)
 │ • slim: 13 tools, 12-18 minutes (cloud/IaC, AWS/Azure/GCP/K8s)
 │ • balanced: 17 tools, 18-25 minutes (CI/CD, regular audits)
-│ • deep: 28 tools, 40-70 minutes (security audits, compliance)
+│ • deep: 29 tools, 40-70 minutes (security audits, compliance)
 └────────────────────────────────────────────────────────────────────
 ```
 
@@ -521,7 +521,7 @@ Choose from four profiles based on your needs:
 - **fast** (5-10 min, 9 tools): Quick scan with core tools
 - **slim** (12-18 min, 13 tools): Cloud/IaC focused (AWS/Azure/GCP/K8s)
 - **balanced** (18-25 min, 17 tools): Comprehensive scan with all recommended tools
-- **deep** (40-70 min, 28 tools): Exhaustive scan with all tools
+- **deep** (40-70 min, 29 tools): Exhaustive scan with all tools
 
 #### Step 2: Select Execution Mode
 
@@ -765,7 +765,7 @@ newgrp docker
 
 ### Why WSL2 + Docker for Windows?
 
-- ✅ **Full compatibility:** All 28 tools work (many don't on native Windows)
+- ✅ **Full compatibility:** All 29 tools work (many don't on native Windows)
 - ✅ **Zero native installs:** No Python/git/tools on Windows required
 - ✅ **Linux performance:** Scans run at native Linux speed
 - ✅ **Easy file access:** Access Windows files via `/mnt/c/Users/...`
@@ -2164,7 +2164,7 @@ make -f Makefile.security security-scan
 - **fast**: Pre-commit hooks, quick validation (5-10 min, 9 tools)
 - **slim**: Cloud/IaC, AWS/Azure/GCP/K8s (12-18 min, 13 tools)
 - **balanced**: CI/CD pipelines, regular audits (18-25 min, 17 tools)
-- **deep**: Weekly/monthly deep audits, compliance (40-70 min, 28 tools)
+- **deep**: Weekly/monthly deep audits, compliance (40-70 min, 29 tools)
 
 ### 5. Severity Threshold for CI
 

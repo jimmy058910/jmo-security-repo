@@ -400,8 +400,8 @@ Docker tags now match CLI profiles:
 | Tag | Profile | Tools | Dockerfile |
 |-----|---------|-------|------------|
 | `fast` | fast | 9 | `Dockerfile.fast` |
-| `slim` | slim | 14 | `Dockerfile.slim` |
-| `balanced` | balanced | 18 | `Dockerfile.balanced` |
+| `slim` | slim | 13 | `Dockerfile.slim` |
+| `balanced` | balanced | 17 | `Dockerfile.balanced` |
 | `deep` / `latest` | deep | 29* | `Dockerfile` |
 
 *4 deep profile tools require manual installation (AFL++, Akto, Falco, MobSF)
@@ -1059,7 +1059,7 @@ gh pr create --title "Hotfix: bypass CI" --label "hotfix"
 
 ## Adding Tool Adapters (Plugin System)
 
-JMo Security uses a plugin-based architecture for all 28 security tool adapters. This enables hot-reload during development, independent updates, and community-contributed integrations.
+JMo Security uses a plugin-based architecture for all 27 adapters. This enables hot-reload during development, independent updates, and community-contributed integrations.
 
 ### Plugin Architecture Overview
 
@@ -1069,7 +1069,7 @@ JMo Security uses a plugin-based architecture for all 28 security tool adapters.
 - **Fast Development** - 4 hours → 1 hour per adapter (75% reduction)
 - **Independent Updates** - Ship adapter improvements without core releases
 - **Low-Risk Testing** - Test new tools in `~/.jmo/adapters/` without modifying core
-- **Performance** - <100ms plugin loading overhead for all 28 adapters
+- **Performance** - <100ms plugin loading overhead for all 27 adapters
 
 **Core Components:**
 
@@ -1452,7 +1452,7 @@ This project was built by **James (Jimmy) Moceri** as a capstone for the **Insti
 
 **v1.0.0 Highlights:**
 
-- 28 security scanners with plugin adapter architecture
+- 29 security scanners with plugin adapter architecture
 - SQLite historical storage for trend analysis
 - Machine-readable diffs for CI/CD integration
 - Cross-tool deduplication via similarity clustering
