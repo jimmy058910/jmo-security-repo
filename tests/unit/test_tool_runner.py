@@ -1777,3 +1777,143 @@ class TestTimedOutFlag:
             "crash path is not resetting the flag a previous timeout set"
         )
         assert "Return code 3" in result.error_message
+
+
+class TestIsolatedVenvOnTheChildPath:
+    """A pip console script resolves its interpreter through PATH.
+
+    checkov ships `checkov.cmd` on Windows: a polyglot launcher that searches
+    PATH for `python.cmd/bat/exe`, then falls back to the `.py` file
+    association. It never consults the venv it lives in. So the same absolute
+    path either works or raises `ModuleNotFoundError: No module named
+    'checkov'` depending only on the PATH its caller supplies.
+
+    `tool_manager._get_tool_version` prepends `<venv>/Scripts` before probing,
+    so `jmo tools check` printed `checkov  OK`. `run_tool` prepended only
+    `~/.jmo/bin`, so every Windows scan got rc 1 in half a second and wrote
+    nothing -- accepted as "exited with an accepted code but wrote no output".
+    checkov is in all four profiles; on Windows it had never produced a
+    finding.
+
+    Measured on Windows 11 / checkov 3.3.16, identical argv:
+
+    | child PATH                  | rc | duration | output              |
+    |-----------------------------|----|----------|---------------------|
+    | `<venv>/Scripts` prepended  | 0  | 9.1s     | `3.3.16`            |
+    | `~/.jmo/bin` prepended only | 1  | 0.5s     | ModuleNotFoundError |
+
+    Linux control (WSL, same commit): checkov ran 278s and produced 36
+    findings, which is why this class of bug is invisible off Windows.
+    """
+
+    @staticmethod
+    def _capture_child_env(monkeypatch, tmp_path, command):
+        """Run `run_tool` far enough to capture the env it would have used."""
+        captured: dict = {}
+
+        def fake_run(cmd, **kwargs):
+            captured["env"] = kwargs.get("env") or {}
+            raise FileNotFoundError("stop here - we only want the env")
+
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+        monkeypatch.setattr("scripts.core.tool_runner._run_bounded", fake_run)
+
+        ToolRunner(tools=[]).run_tool(
+            ToolDefinition(name="t", command=command, output_file=None)
+        )
+        return captured["env"]
+
+    def test_venv_bin_is_first_on_the_child_path(self, tmp_path, monkeypatch):
+        """The venv's bin directory must come before everything else."""
+        import os as _os
+
+        bin_name = "Scripts" if sys.platform == "win32" else "bin"
+        venv_bin = tmp_path / ".jmo" / "tools" / "venvs" / "checkov" / bin_name
+        venv_bin.mkdir(parents=True)
+        (tmp_path / ".jmo" / "bin").mkdir(parents=True)
+        launcher = venv_bin / "checkov.cmd"
+        launcher.write_bytes(b"")
+
+        env = self._capture_child_env(monkeypatch, tmp_path, [str(launcher)])
+        entries = env.get("PATH", "").split(_os.pathsep)
+
+        assert entries[0] == str(venv_bin), (
+            "the isolated venv's bin directory is not first on the child's "
+            "PATH, so the console script will resolve some other Python and "
+            f"fail to import its own package. entries[:2]={entries[:2]!r}"
+        )
+
+    def test_python_env_overrides_are_cleared_for_isolated_tools(
+        self, tmp_path, monkeypatch
+    ):
+        """An inherited PYTHONHOME/PYTHONPATH defeats the isolation."""
+        bin_name = "Scripts" if sys.platform == "win32" else "bin"
+        venv_bin = tmp_path / ".jmo" / "tools" / "venvs" / "checkov" / bin_name
+        venv_bin.mkdir(parents=True)
+        launcher = venv_bin / "checkov.cmd"
+        launcher.write_bytes(b"")
+
+        monkeypatch.setenv("PYTHONPATH", str(tmp_path / "elsewhere"))
+        monkeypatch.setenv("PYTHONHOME", str(tmp_path / "other-python"))
+
+        env = self._capture_child_env(monkeypatch, tmp_path, [str(launcher)])
+
+        assert "PYTHONPATH" not in env
+        assert "PYTHONHOME" not in env
+
+    def test_non_isolated_tools_keep_their_python_env(self, tmp_path, monkeypatch):
+        """Only isolated-venv tools get the scrub; nothing else changes.
+
+        Without this, the fix above would strip PYTHONPATH from every scanner
+        JMo runs, which is a far larger behaviour change than the bug it fixes.
+        """
+        (tmp_path / ".jmo" / "bin").mkdir(parents=True)
+        monkeypatch.setenv("PYTHONPATH", str(tmp_path / "elsewhere"))
+
+        env = self._capture_child_env(monkeypatch, tmp_path, ["trivy"])
+
+        assert env.get("PYTHONPATH") == str(tmp_path / "elsewhere")
+
+    @pytest.mark.requires_tools
+    @pytest.mark.skipif(
+        sys.platform != "win32",
+        reason="the launcher-resolves-through-PATH bug is Windows-only; "
+        "the POSIX console script hardcodes its interpreter in the shebang",
+    )
+    @pytest.mark.timeout(180)
+    def test_real_isolated_launcher_runs_under_the_child_env(self):
+        """Run the REAL launcher with the REAL child env `run_tool` builds.
+
+        Every other test in this file mocks subprocess, which is exactly how
+        this bug stayed invisible through four releases: no test ever executed
+        an isolated-venv console script. This one does, and it fails on `dev`
+        with a ModuleNotFoundError in under a second.
+
+        Skipped wherever the venv is absent -- including CI, which does not
+        install checkov. The merge gate for this fix is therefore a real local
+        scan, not this test's tick.
+        """
+        from scripts.core.paths import get_isolated_tool_path
+
+        launcher = get_isolated_tool_path("checkov")
+        if launcher is None or not launcher.exists():
+            pytest.skip("checkov is not installed in an isolated venv")
+
+        result = ToolRunner(tools=[]).run_tool(
+            ToolDefinition(
+                name="checkov",
+                command=[str(launcher), "--version"],
+                output_file=None,
+                capture_stdout=True,
+                timeout=150,
+            )
+        )
+
+        assert result.returncode == 0, (
+            "the real checkov launcher failed under the environment run_tool "
+            f"builds. status={result.status} stderr={result.stderr!r}"
+        )
+        assert "ModuleNotFoundError" not in (result.stderr or ""), (
+            "checkov could not import itself, so the child PATH is still not "
+            f"pointing at its venv. stderr={result.stderr!r}"
+        )

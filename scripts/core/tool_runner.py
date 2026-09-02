@@ -22,6 +22,7 @@ from typing import Any, Protocol
 
 from scripts.core.config import RetryConfig
 from scripts.core.exceptions import ToolExecutionException
+from scripts.core.paths import get_isolated_venv_bin
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -445,6 +446,34 @@ class ToolRunner:
             child_env["PATH"] = os.pathsep.join(
                 [str(jmo_bin), child_env.get("PATH", "")]
             )
+
+        # A tool installed into an isolated venv must be run with that venv's
+        # bin directory FIRST on PATH, because a pip console script resolves
+        # its interpreter through PATH rather than through the venv it lives
+        # in. `tool_manager._get_tool_version` already does this for the
+        # version probe -- and that divergence is precisely why checkov
+        # reported "OK" in `jmo tools check` while contributing zero findings
+        # to every Windows scan since the isolated-venv install path shipped.
+        #
+        # Measured on Windows 11, checkov 3.3.16, identical argv:
+        #   venv Scripts prepended -> rc 0, "3.3.16", 9.1s
+        #   ~/.jmo/bin only        -> rc 1, ModuleNotFoundError, 0.5s
+        # Linux control (WSL, same commit): 278s, 36 findings.
+        #
+        # Prepended AFTER jmo_bin so the venv wins: a tool's own venv is more
+        # specific than the shared bin directory, and only one of them can
+        # supply the interpreter the console script needs.
+        venv_bin = get_isolated_venv_bin(tool.command[0]) if tool.command else None
+        if venv_bin is not None:
+            child_env["PATH"] = os.pathsep.join(
+                [str(venv_bin), child_env.get("PATH", "")]
+            )
+            # The venv must supply its own interpreter and site-packages. An
+            # inherited PYTHONHOME/PYTHONPATH points the console script back at
+            # the environment JMo isolated it away from, which is the failure
+            # this whole code path exists to prevent.
+            child_env.pop("PYTHONPATH", None)
+            child_env.pop("PYTHONHOME", None)
 
         while True:
             attempt += 1

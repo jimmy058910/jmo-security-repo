@@ -1881,3 +1881,103 @@ class TestVariantExecutionReadiness:
         assert ready is False
         assert warning and "Missing" in warning
         assert missing == ["semgrep"], "should name the binary it actually probed"
+
+
+class TestIsolatedToolWithoutAVersionIsNotOK:
+    """A version the probe could not read is not evidence the tool works.
+
+    An isolated venv is built by pip from a pinned requirement, so its version
+    is always knowable. `_get_tool_version` nonetheless returns `(None, None)`
+    on timeout, on FileNotFoundError, on PermissionError and on an unparseable
+    output -- and `_derive_status_type` downgraded only on `version_error`, so
+    all four rendered as OK.
+
+    Measured in the 2026-09-02 dogfood, on a machine where checkov could not
+    run at all:
+
+        checkov           OK          -             3.3.16
+        checkov-cicd      OK          3.3.16        3.3.16
+
+    Same binary, same table, two probes. The dash was the only signal, and the
+    OK beside it overrode it.
+    """
+
+    @staticmethod
+    def _check(monkeypatch, tool, version, error=None):
+        from scripts.cli.tool_manager import ToolManager
+
+        manager = ToolManager()
+        monkeypatch.setattr(
+            manager, "_find_binary", lambda name: "/fake/path/" + str(name)
+        )
+        monkeypatch.setattr(
+            manager, "_get_tool_version", lambda *a, **k: (version, error)
+        )
+        monkeypatch.setattr(manager, "_verify_execution", lambda name: (True, None, []))
+        return manager.check_tool(tool)
+
+    def test_isolated_tool_with_no_version_is_not_ok(self, monkeypatch):
+        from scripts.cli.tool_manager import ToolStatusType
+
+        status = self._check(monkeypatch, "checkov", None)
+
+        assert status.status_type is not ToolStatusType.OK, (
+            "an isolated tool that could not report a version was rendered OK "
+            "-- the exact display that hid checkov contributing zero findings "
+            "to every Windows scan"
+        )
+        assert status.execution_ready is False
+        assert status.status_text == "NOT READY"
+        assert status.execution_warning and "checkov" in status.execution_warning
+
+    def test_isolated_tool_with_a_version_is_still_ok(self, monkeypatch):
+        """The guard must not condemn a healthy isolated install."""
+        from scripts.cli.tool_manager import ToolStatusType
+
+        status = self._check(monkeypatch, "checkov", "3.3.16")
+
+        assert status.status_type is ToolStatusType.OK
+        assert status.execution_ready is True
+
+    def test_a_variant_resolves_to_its_parent_for_the_isolated_check(self, monkeypatch):
+        """`checkov-cicd` is not itself in ISOLATED_TOOLS; its parent is.
+
+        Keying the check on the variant name would leave the variant rows OK
+        while only the base row was downgraded -- half a fix, and the more
+        confusing half, since the two rows describe one binary.
+        """
+        from scripts.cli.tool_manager import ToolStatusType
+
+        status = self._check(monkeypatch, "checkov-cicd", None)
+
+        assert status.status_type is not ToolStatusType.OK
+        assert status.execution_ready is False
+
+    def test_a_non_isolated_tool_with_no_version_is_unaffected(self, monkeypatch):
+        """Plenty of tools legitimately decline to print a version.
+
+        Scoping this to isolated venvs is deliberate: widening it to every
+        tool would turn a silent-failure guard into a wall of false NOT READY.
+        """
+        from scripts.cli.tool_manager import ToolStatusType
+
+        status = self._check(monkeypatch, "trivy", None)
+
+        assert status.status_type is ToolStatusType.OK
+        assert status.execution_ready is True
+
+
+def test_checkov_version_probe_budget_exceeds_its_measured_startup():
+    """checkov's --version straddles the 10s default, so it gets its own.
+
+    Measured on Windows 11 / checkov 3.3.16: 9.1s cold, 11s during a loaded
+    scan session, 2.8-6.0s warm. Under the default budget the probe times out
+    intermittently and returns `(None, None)`, which -- with the guard above
+    now enforcing it -- would flap a healthy install between OK and NOT READY.
+    """
+    from scripts.cli.tool_manager import VERSION_TIMEOUTS
+
+    assert VERSION_TIMEOUTS.get("checkov", 10) >= 20, (
+        "checkov's version probe budget is back at or near its measured "
+        "startup cost; the probe will time out at random"
+    )
