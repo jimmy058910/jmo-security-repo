@@ -183,9 +183,12 @@ no API cost. Git `post-commit` / `post-checkout` hooks rebuild it incrementally.
 | Path between two symbols | `graphify path "A" "B"` |
 | Upgrade (machine-global; affects every repo) | `uv tool upgrade graphifyy && graphify install --platform claude` |
 
-The MCP server is registered **project-scoped in `~/.claude.json`**, not in a repo
-`.mcp.json` — grepping the repo for its wiring finds nothing, and that absence is
-**not** evidence it is unwired. Confirm with `/mcp`.
+The MCP server is registered in the repo's **`.mcp.json`**, which is gitignored
+because it also carries a `${GH_TOKEN}` entry; `~/.claude.json` has no servers for
+this project. It is deliberately absent from the tracked `.mcp.json.example`, since
+the graph is maintainer-local. So a grep of the *tracked* tree finds nothing, and
+`cat .mcp.json` on the maintainer's machine finds it. Confirm with `/mcp`. (This
+paragraph said the reverse until 2026-09-02.)
 
 **Freshness is `built_at_commit` inside `graph.json`, not the file mtime** —
 clustering rewrites `graph.json` without re-extracting, so mtime reads fresher than

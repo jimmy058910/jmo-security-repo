@@ -1,7 +1,8 @@
 # JMo Security Audit Tool Suite
 
-![JMo Security Audit Tool Suite](assets/jmo-logo.png)
+![JMo Security Audit Tool Suite](https://raw.githubusercontent.com/jimmy058910/jmo-security-repo/main/assets/jmo-logo.png)
 
+[![Docs](https://img.shields.io/badge/docs-docs.jmotools.com-2b6cb0)](https://docs.jmotools.com)
 [![Tests](https://github.com/jimmy058910/jmo-security-repo/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jimmy058910/jmo-security-repo/actions/workflows/ci.yml?query=branch%3Amain)
 [![codecov](https://codecov.io/gh/jimmy058910/jmo-security-repo/branch/main/graph/badge.svg)](https://app.codecov.io/gh/jimmy058910/jmo-security-repo)
 [![PyPI version](https://img.shields.io/pypi/v/jmo-security.svg)](https://pypi.org/project/jmo-security/)
@@ -234,6 +235,7 @@ security_scan:
 
 | Document | Purpose |
 |----------|---------|
+| [docs.jmotools.com](https://docs.jmotools.com) | The documentation site: everything under `docs/`, rendered and searchable |
 | [QUICKSTART.md](QUICKSTART.md) | 5-minute installation guide |
 | [docs/DOCKER_README.md](docs/DOCKER_README.md) | Docker usage guide |
 | [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | Comprehensive reference |
