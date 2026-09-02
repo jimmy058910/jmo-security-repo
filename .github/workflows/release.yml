@@ -20,6 +20,18 @@ on:
         description: 'Changelog entry (brief summary of changes)'
         required: true
         type: string
+      dry_run:
+        # Exercises the tag path without publishing: builds ONE variant (fast)
+        # with provenance + SBOM attestations on, verifies they landed on the
+        # merged manifest, builds the wheel/sdist/SBOM/checksums and uploads
+        # them to a DRAFT pre-release named dryrun-<run_id>, then deletes it.
+        # prepare-release, PyPI, Docker Hub, ECR, the scan/benchmark jobs and
+        # the Discussions post are all skipped. Pass any value for the two
+        # inputs above; they are unread when dry_run is true.
+        description: 'Dry run: prove the release path publishes nothing (see the comment in release.yml)'
+        required: false
+        type: boolean
+        default: false
 
 env:
   REGISTRY_GHCR: ghcr.io
@@ -43,7 +55,7 @@ jobs:
   prepare-release:
     name: Prepare release
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && !inputs.dry_run
     timeout-minutes: 20
     permissions:
       contents: write
@@ -399,7 +411,9 @@ jobs:
     name: Build and publish to PyPI
     runs-on: ubuntu-latest
     needs: pre-release-check  # BLOCKS release if tools are outdated
-    if: startsWith(github.ref, 'refs/tags/v')
+    # A dry run skips pre-release-check (it installs every scanner and reads the
+    # tag from the ref); the real path still requires it to have succeeded.
+    if: always() && ((startsWith(github.ref, 'refs/tags/v') && needs.pre-release-check.result == 'success') || inputs.dry_run == true)
     concurrency:
       group: release-pypi-${{ github.ref }}
       cancel-in-progress: false
@@ -421,6 +435,7 @@ jobs:
           pip install build twine
 
       - name: Verify tag matches version
+        if: ${{ !inputs.dry_run }}
         run: |
           VERSION=$(python -c 'import tomllib,sys;print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])')
           TAG=${GITHUB_REF##*/}
@@ -451,7 +466,7 @@ jobs:
           path: dist/*
 
       - name: Publish to PyPI
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') && !inputs.dry_run
         uses: pypa/gh-action-pypi-publish@v1.14.2
         with:
           skip-existing: true  # Allow re-running releases if PyPI already has the version
@@ -464,11 +479,12 @@ jobs:
     name: Docker ${{ matrix.variant }} (amd64)
     runs-on: ubuntu-latest
     needs: pypi-publish
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.dry_run == true
     strategy:
       fail-fast: false
       matrix:
-        variant: [deep, balanced, slim, fast]
+        # A dry run builds one variant; a tag builds all four.
+        variant: ${{ fromJSON(inputs.dry_run == true && '["fast"]' || '["deep", "balanced", "slim", "fast"]') }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -500,8 +516,12 @@ jobs:
           outputs: type=image,name=${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=${{ matrix.variant }}-amd64
           cache-to: type=gha,mode=max,scope=${{ matrix.variant }}-amd64
-          provenance: false
-          sbom: false
+          # Decision 6 (2026-09-02): attach SLSA provenance and an SBOM to every
+          # per-arch image. Both were off since the multi-arch split; the merged
+          # manifest carries them through `imagetools create`, and the dry run
+          # asserts they are present before a tag ever relies on it.
+          provenance: mode=max
+          sbom: true
 
       - name: Export digest
         run: |
@@ -521,11 +541,12 @@ jobs:
     name: Docker ${{ matrix.variant }} (arm64)
     runs-on: ubuntu-24.04-arm
     needs: pypi-publish
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.dry_run == true
     strategy:
       fail-fast: false
       matrix:
-        variant: [deep, balanced, slim, fast]
+        # A dry run builds one variant; a tag builds all four.
+        variant: ${{ fromJSON(inputs.dry_run == true && '["fast"]' || '["deep", "balanced", "slim", "fast"]') }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -557,8 +578,12 @@ jobs:
           outputs: type=image,name=${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=${{ matrix.variant }}-arm64
           cache-to: type=gha,mode=max,scope=${{ matrix.variant }}-arm64
-          provenance: false
-          sbom: false
+          # Decision 6 (2026-09-02): attach SLSA provenance and an SBOM to every
+          # per-arch image. Both were off since the multi-arch split; the merged
+          # manifest carries them through `imagetools create`, and the dry run
+          # asserts they are present before a tag ever relies on it.
+          provenance: mode=max
+          sbom: true
 
       - name: Export digest
         run: |
@@ -583,7 +608,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [deep, balanced, slim, fast]
+        variant: ${{ fromJSON(inputs.dry_run == true && '["fast"]' || '["deep", "balanced", "slim", "fast"]') }}
     steps:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -596,7 +621,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Log in to Docker Hub
-        if: vars.DOCKERHUB_ENABLED == 'true'
+        if: vars.DOCKERHUB_ENABLED == 'true' && !inputs.dry_run
         uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY_DOCKERHUB }}
@@ -604,12 +629,14 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Configure AWS credentials for ECR Public
+        if: ${{ !inputs.dry_run }}
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: arn:aws:iam::786980363770:role/GitHubActionsECRPublicRole
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Log in to Amazon ECR Public
+        if: ${{ !inputs.dry_run }}
         uses: aws-actions/amazon-ecr-login@v2
         with:
           registry-type: public
@@ -640,6 +667,8 @@ jobs:
             # Bare :deep / :balanced / :slim / :fast — user-facing convenience tags
             # referenced in FAQ, USER_GUIDE, DOCKER_README.
             type=raw,value=${{ matrix.variant }},suffix=,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            # Dry run: the only tag, deleted at the end of this job.
+            type=raw,value=dryrun-${{ github.run_id }},enable=${{ inputs.dry_run == true }}
           flavor: |
             suffix=-${{ matrix.variant }},onlatest=${{ matrix.variant != 'deep' }}
             latest=false
@@ -692,7 +721,7 @@ jobs:
           crane version
 
       - name: Replicate to Docker Hub
-        if: vars.DOCKERHUB_ENABLED == 'true'
+        if: vars.DOCKERHUB_ENABLED == 'true' && !inputs.dry_run
         continue-on-error: true
         run: |
           GHCR_IMAGE="${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}"
@@ -704,6 +733,7 @@ jobs:
           done
 
       - name: Replicate to ECR Public
+        if: ${{ !inputs.dry_run }}
         continue-on-error: true
         run: |
           GHCR_IMAGE="${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}"
@@ -712,6 +742,42 @@ jobs:
             TAG="${FULL_TAG##*:}"
             echo "Copying $GHCR_IMAGE:$TAG -> $ECR_IMAGE:$TAG"
             crane copy "$GHCR_IMAGE:$TAG" "$ECR_IMAGE:$TAG" --platform all || true
+          done
+
+      - name: Verify provenance and SBOM attestations on the merged manifest
+        # Runs on every path. On a tag this is the guarantee the README's
+        # supply-chain claims rest on; on a dry run it is the whole point.
+        env:
+          GHCR_IMAGE: ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}
+        run: |
+          TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1 | awk -F: '{print $NF}')
+          REF="${GHCR_IMAGE}:${TAG}"
+          for kind in Provenance SBOM; do
+            present=$(docker buildx imagetools inspect "$REF" --format "{{if .$kind}}present{{end}}")
+            if [ "$present" != "present" ]; then
+              echo "::error::$kind attestation missing on $REF"
+              exit 1
+            fi
+            echo "$kind attestation present on $REF"
+          done
+          docker buildx imagetools inspect "$REF" --format '{{json .Provenance}}' | head -c 800
+          echo
+
+      - name: Delete the dry-run tag from GHCR
+        if: inputs.dry_run == true
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DRY_TAG: dryrun-${{ github.run_id }}-${{ matrix.variant }}
+        run: |
+          IDS=$(gh api --paginate "user/packages/container/jmo-security/versions" \
+            --jq ".[] | select((.metadata.container.tags // []) | index(\"$DRY_TAG\")) | .id")
+          for ID in $IDS; do
+            if gh api -X DELETE "user/packages/container/jmo-security/versions/$ID"; then
+              echo "deleted GHCR version $ID ($DRY_TAG)"
+            else
+              echo "::warning::could not delete GHCR version $ID; remove tag $DRY_TAG by hand"
+            fi
           done
 
       - name: Test image (amd64)
@@ -727,7 +793,7 @@ jobs:
     name: Benchmark Docker Image Sizes
     runs-on: ubuntu-latest
     needs: docker-merge
-    if: always() && needs.docker-merge.result == 'success'
+    if: always() && needs.docker-merge.result == 'success' && !inputs.dry_run
     steps:
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v4
@@ -811,7 +877,7 @@ jobs:
     name: Scan Docker ${{ matrix.variant }}
     runs-on: ubuntu-latest
     needs: docker-merge
-    if: always() && needs.docker-merge.result == 'success'
+    if: always() && needs.docker-merge.result == 'success' && !inputs.dry_run
     strategy:
       matrix:
         variant: [deep, balanced, slim, fast]
@@ -861,7 +927,8 @@ jobs:
     if: |
       always() &&
       (needs.docker-merge.result == 'success' || needs.docker-merge.result == 'skipped') &&
-      (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')
+      (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch') &&
+      !inputs.dry_run
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -895,7 +962,7 @@ jobs:
     name: Create GitHub Release
     runs-on: ubuntu-latest
     needs: [pypi-publish, docker-merge]
-    if: always() && startsWith(github.ref, 'refs/tags/v') && needs.pypi-publish.result == 'success'
+    if: always() && (startsWith(github.ref, 'refs/tags/v') || inputs.dry_run == true) && needs.pypi-publish.result == 'success'
     permissions:
       contents: write
     steps:
@@ -904,24 +971,89 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Generate release notes
+      - name: Resolve the tag and the version
+        id: rel
+        env:
+          DRY_RUN: ${{ inputs.dry_run == true }}
         run: |
-          TAG="${GITHUB_REF##*/}"
-          python3 scripts/dev/generate_release_notes.py "$TAG" > /tmp/raw-notes.txt
+          VERSION=$(python3 -c 'import tomllib;print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])')
+          if [ "$DRY_RUN" = "true" ]; then
+            TAG="dryrun-${{ github.run_id }}"
+          else
+            TAG="${GITHUB_REF##*/}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG version=$VERSION"
+
+      - name: Generate release notes
+        env:
+          VERSION: ${{ steps.rel.outputs.version }}
+        run: |
+          python3 scripts/dev/generate_release_notes.py "v$VERSION" > /tmp/raw-notes.txt
           # Extract from the "# Release" heading onwards (strips diagnostic print lines)
           sed -n '/^# Release/,$p' /tmp/raw-notes.txt > /tmp/release-notes.md
           echo "Preview (first 20 lines):"
           head -20 /tmp/release-notes.md
 
-      - name: Create GitHub Release
+      - name: Download the distribution pypi-publish built
+        uses: actions/download-artifact@v8
+        with:
+          name: dist-${{ github.ref_name }}
+          path: dist
+
+      - name: Install syft (pinned)
+        env:
+          SYFT_VERSION: "1.51.1"
+        run: |
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_amd64.tar.gz" \
+            -o /tmp/syft.tar.gz
+          gzip -t /tmp/syft.tar.gz
+          sudo tar -xzf /tmp/syft.tar.gz -C /usr/local/bin syft
+          syft version
+
+      - name: Build the release assets (SBOM of the installed wheel, checksums)
+        env:
+          VERSION: ${{ steps.rel.outputs.version }}
+        run: |
+          set -euo pipefail
+          ls -la dist
+          python3 -m venv /tmp/sbom-env
+          /tmp/sbom-env/bin/pip install --quiet dist/*.whl
+          syft scan "dir:/tmp/sbom-env/lib" -o "cyclonedx-json=dist/jmo_security-${VERSION}.cdx.json"
+          (cd dist && sha256sum -- * > SHA256SUMS)
+          echo "assets:"; ls -la dist; echo; cat dist/SHA256SUMS
+
+      - name: Create GitHub Release with assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DRY_RUN: ${{ inputs.dry_run == true }}
+          TAG: ${{ steps.rel.outputs.tag }}
         run: |
-          TAG="${GITHUB_REF##*/}"
-          gh release create "$TAG" \
-            --title "$TAG" \
-            --notes-file /tmp/release-notes.md \
-            --verify-tag
+          set -euo pipefail
+          if [ "$DRY_RUN" = "true" ]; then
+            # A draft needs no tag to exist and is deleted two steps down.
+            gh release create "$TAG" --draft --prerelease \
+              --title "dry run $TAG" \
+              --notes-file /tmp/release-notes.md \
+              dist/*
+          else
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --notes-file /tmp/release-notes.md \
+              --verify-tag \
+              dist/*
+          fi
+          echo "assets on the release:"
+          gh release view "$TAG" --json assets --jq '.assets[].name'
+
+      - name: Delete the dry-run draft
+        if: inputs.dry_run == true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.rel.outputs.tag }}
+        run: gh release delete "$TAG" --yes
 
       - name: Post release announcement to GitHub Discussions
         # Posts a thin announcement to the Discussions "Announcements" category
@@ -929,7 +1061,7 @@ jobs:
         # full release notes live on the Release page (linked from the post).
         # Non-blocking: a missing Announcements category or other API edge
         # case shouldn't fail the release.
-        if: success()
+        if: success() && !inputs.dry_run
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
