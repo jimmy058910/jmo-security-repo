@@ -1,16 +1,16 @@
 # JMo Security Audit Tool Suite
 
-A terminal-first, cross-platform security audit toolkit that orchestrates multiple scanners (secrets, SAST, SBOM, IaC, Dockerfile, DAST) with a unified Python CLI, normalized outputs, and an HTML dashboard.
+A terminal-first, cross-platform security audit toolkit that orchestrates 29 scanners (secrets, SAST, SBOM, SCA, IaC, Dockerfile, DAST, Kubernetes, cloud) with a unified Python CLI, normalized outputs, and an HTML dashboard.
 
 ## Quick Start
 
 ```bash
-# Run full security scan on current directory
-docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
+# Run a full security scan on the current directory
+docker run --rm -v "$(pwd):/scan" jmogaming/jmo-security:latest \
   scan --repo /scan --results-dir /scan/results
 
 # Interactive wizard (easiest for beginners)
-docker run --rm -it -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
+docker run --rm -it -v "$(pwd):/scan" jmogaming/jmo-security:latest \
   wizard
 
 # View results
@@ -26,23 +26,26 @@ open results/summaries/dashboard.html
 | `X.Y.Z-slim` | ~557 MB | 13 tools | Cloud-focused scanning (IaC, K8s, containers) |
 | `X.Y.Z-fast` | ~502 MB | 9 tools | CI/CD gate, pre-commit hooks (fast profile) |
 
+Docker Hub is a replica; the primary registry is GHCR (`ghcr.io/jimmy058910/jmo-security`), and the same tags are also on ECR Public (`public.ecr.aws/m2d8u2k1/jmo-security`).
+
 ## Features
 
 - 🎯 **Multi-Target Scanning**: Repos, containers, IaC, URLs, Kubernetes, GitLab
-- 🔐 **29 Security Tools** (25 Docker-ready + 4 manual): Secrets (TruffleHog, Nosey Parker, Semgrep-Secrets), SAST (Semgrep, Bandit, Gosec, Horusec), SBOM (Syft, CDXgen, ScanCode), SCA (Trivy, Grype, Dependency-Check), IaC (Checkov, Checkov-CICD), Cloud (Prowler, Kubescape), DAST (ZAP, Nuclei, Akto*), Dockerfile (Hadolint), OPA (Policy), Mobile (MobSF*), Malware (YARA), System (Lynis), Runtime (Trivy-RBAC, Falco*), Fuzzing (AFL++*) |*Manual install required
-- 📊 **Unified Reporting**: JSON, Markdown, HTML dashboard, SARIF, YAML, compliance reports
+- 🔐 **29 Security Tools** (25 Docker-ready + 4 manual): Secrets (TruffleHog, Nosey Parker, Semgrep-Secrets), SAST (Semgrep, Bandit, Gosec, Horusec), SBOM/SCA (Syft, CDXgen, ScanCode, Trivy, Grype, Dependency-Check), IaC/Cloud (Checkov, Prowler, Kubescape), DAST (OWASP ZAP, Nuclei), plus Hadolint, ShellCheck, YARA, Lynis, OPA and Trivy-RBAC. AFL++, MobSF, Akto and Falco need a manual install.
+- 📊 **Unified Reporting**: JSON, Markdown, HTML dashboard, SARIF, YAML, CSV, compliance reports
 - ⚡ **Parallel Execution**: Scan multiple targets simultaneously with auto-detected CPU threads
 - 🎨 **4 Docker Variants**: Fast (9 tools, 5-10 min), Balanced (17 tools, 18-25 min), Slim (13 tools, cloud-focused), Deep (29 tools, 40-70 min)
 - 📈 **Real-Time Progress**: Live scan progress with ETA estimation
 
-## What's New in v1.0.0 (February 2026)
+## What's New in v1.1.0 (September 2026)
 
-- **Unified Profile System**: 4 profiles (fast/slim/balanced/deep) with matching Docker variants
-- **SQLite Historical Storage**: Track findings over time with `jmo history` and `jmo trends`
-- **Machine-Readable Diffs**: Compare scans with `jmo diff` for CI/CD integration
-- **28 Security Tools**: Expanded from 11 to 28 tools across all profiles
-- **Tool Management**: `jmo tools install/check/update/outdated` commands
-- **Enhanced Deduplication**: Cross-tool similarity clustering collapses findings several tools report for the same issue into one consensus finding
+- **Every open defect fixed before the tag, not dispositioned.** A twelve-phase pre-release fix program exercised every command path, adapter and artifact against real repositories and closed what it found before tagging.
+- **Kubernetes findings now reach the report.** The kubescape adapter read a key no kubescape release emits, so every K8s scan silently yielded zero findings. Fixed and proven against real output from kubescape 3 and 4.
+- **Tool installs stay isolated.** `jmo tools install <names>` and `jmo tools update` keep prowler, semgrep and checkov in their own environments instead of the interpreter's, and an update that did not change the binary now fails instead of printing `[OK]`.
+- **Scanner pins current.** All 29 tools at their latest releases, including trivy 0.74 and kubescape 4.
+- **The numbers in the docs are derived, not typed.** Tool counts, profile sizes and version headers are checked against the registry in CI.
+
+Full list: [CHANGELOG.md](https://github.com/jimmy058910/jmo-security-repo/blob/main/CHANGELOG.md)
 
 ## Multi-Target Scanning
 
@@ -50,7 +53,7 @@ Scan repositories AND infrastructure in one unified workflow:
 
 ```bash
 # Comprehensive security audit in one command
-docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
+docker run --rm -v "$(pwd):/scan" jmogaming/jmo-security:latest \
   scan \
     --repo /scan/myapp \
     --image myapp:latest \
@@ -61,7 +64,7 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
 
 ## Documentation
 
-- 📚 **Full Documentation**: [GitHub Repository](https://github.com/jimmy058910/jmo-security-repo)
+- 📚 **Documentation site**: [docs.jmotools.com](https://docs.jmotools.com)
 - 🚀 **Quick Start Guide**: [QUICKSTART.md](https://github.com/jimmy058910/jmo-security-repo/blob/main/QUICKSTART.md)
 - 📖 **User Guide**: [USER_GUIDE.md](https://github.com/jimmy058910/jmo-security-repo/blob/main/docs/USER_GUIDE.md)
 - 🐳 **Docker Guide**: [DOCKER_README.md](https://github.com/jimmy058910/jmo-security-repo/blob/main/docs/DOCKER_README.md)
@@ -83,7 +86,7 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
 - name: Security Scan
   run: |
     docker run --rm -v "${{ github.workspace }}:/scan" \
-      ghcr.io/jimmy058910/jmo-security:slim \
+      jmogaming/jmo-security:slim \
       scan --repo /scan --fail-on HIGH --results-dir /scan/results
 ```
 

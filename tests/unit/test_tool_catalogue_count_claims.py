@@ -23,8 +23,8 @@ number is walked around by the next drift. Four shapes:
 Deliberately not scanned: CHANGELOG.md and the versioned winget manifest under
 packaging/winget/**/1.0.0/ (history that was true when written),
 docs/internal/ (dated measurement snapshots), docs/superpowers/ (plans),
-DOCKER_HUB_README.md (rewritten under #1103 -- add it here when that lands),
-and dev-only/, paperclip/, .claude/ (not shipped).
+and dev-only/, paperclip/, .claude/ (not shipped). DOCKER_HUB_README.md joined
+the list with #1103, which rewrote its v1.0.0 "What's New" section.
 """
 
 from __future__ import annotations
@@ -56,6 +56,7 @@ def _advertised_files() -> list[Path]:
         "Makefile",
         "samples/README.md",
         "docs/mkdocs.yml",
+        "DOCKER_HUB_README.md",
     ]
     globbed = [
         *sorted((REPO_ROOT / "docs").glob("*.md")),
