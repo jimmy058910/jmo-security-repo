@@ -657,6 +657,14 @@ class TestScanPreflightAtEOF:
         )
         monkeypatch.setattr("sys.stdin.isatty", lambda: isatty)
         monkeypatch.setattr("builtins.input", on_input)
+        # These cases are about what happens AT the prompt, so they have to
+        # establish an environment that reaches it. isatty is no longer the
+        # only gate: JMO_NON_INTERACTIVE/CI/DOCKER_CONTAINER now skip the
+        # prompt outright (#1131). GitHub Actions sets CI=true, so without
+        # this every case below took the non-interactive branch and the two
+        # cancel tests failed on CI while passing locally.
+        for name in ("JMO_NON_INTERACTIVE", "CI", "DOCKER_CONTAINER"):
+            monkeypatch.delenv(name, raising=False)
 
         args = argparse.Namespace(allow_missing_tools=False)
         return _check_scan_tools(args, ["trivy", "noseyparker"])
