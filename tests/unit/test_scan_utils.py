@@ -8,6 +8,8 @@ Tests cover:
 import json
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from scripts.cli.scan_utils import TOOL_INSTALL_HINTS, tool_exists, write_stub
 
 # ========== Category 1: tool_exists() Tests ==========
@@ -302,3 +304,118 @@ class TestFilterTrivyFlags:
         from scripts.cli.scan_utils import filter_trivy_flags
 
         assert filter_trivy_flags("rootfs", ["--no-progress"]) == ["--no-progress"]
+
+
+class TestToolExclusionFlags:
+    """`.horusec/` must not be walked by the tools that run beside horusec.
+
+    horusec stages a copy of the entire repository into `<repo>/.horusec/<uuid>`
+    and deletes it as it finishes, while every other scanner is still walking
+    the tree - so a concurrent scanner records an error, not a skip. Measured on
+    juice-shop (Windows, deep): 346 `No such file or directory` errors in
+    semgrep-secrets alone (#1132).
+    """
+
+    def test_semgrep_uses_a_repeated_exclude_equals(self):
+        from scripts.cli.scan_utils import tool_exclusion_flags
+
+        assert tool_exclusion_flags("semgrep") == ["--exclude=.horusec"]
+
+    def test_semgrep_secrets_is_covered_too(self):
+        """The 346 measured errors came from semgrep-secrets, not from semgrep.
+
+        They are separate entries in the profile and separate command builders,
+        so covering only the tool the flag is named after would leave the
+        measured defect in place.
+        """
+        from scripts.cli.scan_utils import tool_exclusion_flags
+
+        assert tool_exclusion_flags("semgrep-secrets") == ["--exclude=.horusec"]
+
+    def test_trivy_puts_the_value_in_its_own_token(self):
+        from scripts.cli.scan_utils import tool_exclusion_flags
+
+        assert tool_exclusion_flags("trivy") == ["--skip-dirs", ".horusec"]
+
+    def test_trivy_rbac_is_covered_too(self):
+        from scripts.cli.scan_utils import tool_exclusion_flags
+
+        assert tool_exclusion_flags("trivy-rbac") == ["--skip-dirs", ".horusec"]
+
+    def test_bandit_resends_upstreams_defaults(self):
+        """bandit's -x REPLACES its defaults rather than adding to them.
+
+        Measured on bandit 1.9.2 against a tree holding `.tox/vendored.py` and
+        `.horusec/staged.py`: with no -x, bandit reports the `.horusec` file and
+        skips the `.tox` one; with `-x .horusec` the two swap places. So
+        excluding one directory must not quietly start scanning nine others -
+        `.tox`, `.eggs` and `*.egg` hold vendored third-party code, and the
+        regression would surface as a flood of findings the user does not own.
+
+        The expected value is spelled out rather than read from
+        BANDIT_DEFAULT_EXCLUDED_PATHS: a guard that takes its expectation from
+        the constant it guards cannot fail when that constant empties (#1061).
+        """
+        from scripts.cli.scan_utils import tool_exclusion_flags
+
+        assert tool_exclusion_flags("bandit") == [
+            "-x",
+            ".svn,CVS,.bzr,.hg,.git,__pycache__,.tox,.eggs,*.egg,.horusec",
+        ]
+
+    def test_bandit_sends_exactly_one_value_token(self):
+        """`-x` takes a single comma-separated argument.
+
+        A second bare token after it would be parsed as a scan *target*, which
+        is the same shape as the trivy bug in filter_trivy_flags' docstring.
+        """
+        from scripts.cli.scan_utils import tool_exclusion_flags
+
+        assert len(tool_exclusion_flags("bandit")) == 2
+
+    def test_an_unmapped_tool_gets_nothing(self):
+        """An unlisted tool must not be handed a flag it would reject.
+
+        trivy and semgrep both fail fatally at argument parsing on an unknown
+        flag, so silence is the only safe default for a tool whose exclusion
+        spelling has not been measured against the real binary.
+        """
+        from scripts.cli.scan_utils import tool_exclusion_flags
+
+        assert tool_exclusion_flags("trufflehog") == []
+        assert tool_exclusion_flags("horusec") == []
+        assert tool_exclusion_flags("gosec") == []
+
+
+@pytest.mark.requires_tools
+def test_bandit_upstream_defaults_have_not_drifted():
+    """JMo copies bandit's default -x list; catch upstream changing it.
+
+    This is a property of the installed binary rather than of our source, so it
+    can only run where bandit exists - the nightly installs the real tools, and
+    that is the environment this guard is for.
+    """
+    import re
+    import subprocess
+
+    from scripts.cli.scan_utils import BANDIT_DEFAULT_EXCLUDED_PATHS
+    from scripts.core.tool_utils import find_tool
+
+    bandit = find_tool("bandit")
+    if not bandit:
+        pytest.skip("bandit is not installed")
+
+    help_text = subprocess.run(
+        [bandit, "--help"], capture_output=True, text=True, timeout=60
+    ).stdout
+    match = re.search(
+        r"-x EXCLUDED_PATHS.*?\(default:\s*([^)]+)\)", help_text, re.DOTALL
+    )
+    assert match, "could not find bandit's -x default in --help"
+
+    upstream = {p.strip() for p in match.group(1).split(",") if p.strip()}
+    missing = upstream - set(BANDIT_DEFAULT_EXCLUDED_PATHS)
+    assert not missing, (
+        "bandit's default excluded paths drifted; passing -x would stop "
+        f"excluding {sorted(missing)}"
+    )

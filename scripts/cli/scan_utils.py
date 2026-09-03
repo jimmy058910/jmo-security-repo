@@ -271,6 +271,56 @@ TRIVY_UNSUPPORTED_FLAGS: dict[str, frozenset[str]] = {
 }
 
 
+# Directories a JMo tool invocation creates *inside* the tree being scanned, and
+# that every other scanner therefore walks unless it is told not to.
+#
+# `.horusec/<uuid>` is horusec's staging copy of the whole repository. Measured
+# against `horusec start --help`: there is no flag to relocate it, so the only
+# tractable defence is to exclude it everywhere else. It is worse than a stable
+# directory because horusec creates and deletes it *while the other tools run* -
+# a scanner that opens a path after horusec removes it records an error, not a
+# skip. Measured on juice-shop (Windows, deep profile): semgrep-secrets recorded
+# 346 `Unix_error: No such file or directory` errors under `<repo>/.horusec/`,
+# and the report's "826 file(s) could not be analysed" warning was mostly those
+# paths (#1132).
+SCAN_EXCLUDED_DIRS: tuple[str, ...] = (".horusec",)
+
+
+# bandit's -x is an argparse `default=`, NOT an addition - supplying a value
+# replaces upstream's list outright. Its own help text points at the config file
+# ("in addition to the excluded paths provided in the config file"), which reads
+# like the flag accumulates; it does not. Measured on bandit 1.9.2: with no -x,
+# `.tox/vendored.py` is skipped and `.horusec/staged.py` scanned; with
+# `-x .horusec` the two swap places. So JMo has to re-supply the defaults
+# alongside its own, or excluding one directory silently starts scanning nine
+# others - `.tox`, `.eggs` and `*.egg` hold vendored third-party code, so the
+# regression would arrive as a flood of findings in code the user does not own.
+BANDIT_DEFAULT_EXCLUDED_PATHS: tuple[str, ...] = (
+    ".svn",
+    "CVS",
+    ".bzr",
+    ".hg",
+    ".git",
+    "__pycache__",
+    ".tox",
+    ".eggs",
+    "*.egg",
+)
+
+
+# How each tool spells "skip this directory". A tool appears here only once its
+# flag has been measured against the real binary; an unlisted tool gets nothing
+# rather than an argument it would reject at parse time, which for trivy and
+# semgrep is fatal at argument parsing (see TRIVY_UNSUPPORTED_FLAGS).
+TOOL_EXCLUSION_FLAG: dict[str, str] = {
+    "semgrep": "--exclude",
+    "semgrep-secrets": "--exclude",
+    "trivy": "--skip-dirs",
+    "trivy-rbac": "--skip-dirs",
+    "bandit": "-x",
+}
+
+
 # Per-tool minimum timeouts (seconds) for tools that typically run long. A
 # profile default may raise these but never lower them.
 #
@@ -413,6 +463,28 @@ def filter_trivy_flags(subcommand: str, flags: list[str]) -> list[str]:
             ", ".join(dropped),
         )
     return kept
+
+
+def tool_exclusion_flags(tool: str) -> list[str]:
+    """Flags that keep ``tool`` out of JMo's own in-tree scratch directories.
+
+    Three tools, three spellings, and the shapes are not interchangeable:
+    semgrep takes a repeated ``--exclude=PAT``, trivy a repeated
+    ``--skip-dirs PAT``, and bandit a single comma-separated ``-x`` whose value
+    *replaces* upstream's defaults rather than adding to them - which is why the
+    bandit branch re-sends BANDIT_DEFAULT_EXCLUDED_PATHS.
+
+    Returns an empty list for any tool not in TOOL_EXCLUSION_FLAG, so adding a
+    scanner never risks handing it an argument it would reject.
+    """
+    flag = TOOL_EXCLUSION_FLAG.get(tool)
+    if flag is None:
+        return []
+    if flag == "-x":
+        return [flag, ",".join((*BANDIT_DEFAULT_EXCLUDED_PATHS, *SCAN_EXCLUDED_DIRS))]
+    if flag == "--exclude":
+        return [f"{flag}={d}" for d in SCAN_EXCLUDED_DIRS]
+    return [arg for d in SCAN_EXCLUDED_DIRS for arg in (flag, d)]
 
 
 # The key a scanner's status map carries its not-attempted tools under.

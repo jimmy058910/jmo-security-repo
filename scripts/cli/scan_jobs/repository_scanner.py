@@ -64,10 +64,12 @@ from ..path_sanitizers import _sanitize_path_component, _validate_output_path
 from ..scan_utils import (
     NOT_ATTEMPTED_MISSING,
     NOT_ATTEMPTED_NOTHING_APPLICABLE,
+    SCAN_EXCLUDED_DIRS,
     TOOL_TIMEOUT_DEFAULTS,
     find_tool,
     record_not_attempted,
     report_tool_failure,
+    tool_exclusion_flags,
     tool_flags,
     tool_timeout,
     write_stub,
@@ -107,8 +109,22 @@ def _collect_files(repo: Path, patterns: tuple[str, ...], tool_name: str) -> lis
         for path in repo.glob(pattern):
             # Repositories vendor dependencies; scanning node_modules or a
             # bundled venv buries the repo's own findings in third-party noise.
+            # SCAN_EXCLUDED_DIRS joins them because JMo's own enumeration is a
+            # walk like any other: horusec's `.horusec/<uuid>` is a copy of the
+            # whole repository, so without it every Dockerfile and shell script
+            # is collected twice - once at its real path and once at a staged
+            # one that may be deleted before the tool opens it - and the
+            # duplicates count against MAX_FILE_ARGS, evicting real files
+            # (#1132).
             parts = set(path.parts)
-            if parts & {".git", "node_modules", "vendor", ".venv", "venv"}:
+            if parts & {
+                ".git",
+                "node_modules",
+                "vendor",
+                ".venv",
+                "venv",
+                *SCAN_EXCLUDED_DIRS,
+            }:
                 continue
             if path.is_file():
                 seen.add(path)
@@ -306,6 +322,10 @@ def scan_repository(
                 "--json",
                 "--output",
                 str(semgrep_out),
+                # JMo's exclusions go before the user's flags so an explicit
+                # per_tool entry still wins: bandit's -x is last-wins, and the
+                # repeatable forms accumulate either way (#1132).
+                *tool_exclusion_flags("semgrep"),
                 *semgrep_flags,
                 str(repo),
             ]
@@ -338,6 +358,7 @@ def scan_repository(
                 "json",
                 "--scanners",
                 "vuln,secret,misconfig",
+                *tool_exclusion_flags("trivy"),
                 *trivy_flags,
                 str(repo),
                 "-o",
@@ -512,6 +533,7 @@ def scan_repository(
                 "json",
                 "-o",
                 str(bandit_out),
+                *tool_exclusion_flags("bandit"),
                 *bandit_flags,
             ]
             tool_defs.append(
@@ -1230,6 +1252,7 @@ def scan_repository(
                 str(trivy_rbac_out),
                 "--scanners",
                 "config",
+                *tool_exclusion_flags("trivy-rbac"),
                 *trivy_rbac_flags,
                 str(repo),
             ]
@@ -1269,6 +1292,7 @@ def scan_repository(
                 "--json",
                 "--output",
                 str(semgrep_secrets_out),
+                *tool_exclusion_flags("semgrep-secrets"),
                 *semgrep_secrets_flags,
                 str(repo),
             ]
