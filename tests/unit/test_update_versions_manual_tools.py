@@ -172,3 +172,59 @@ def test_lingering_manual_issue_is_swept_closed():
         update_versions.check_outdated_and_create_issues(create_issues=True)
 
     assert "529" in closed_numbers
+
+
+def test_unpinned_sentinel_mirror_matches_registry_source_of_truth():
+    """The sentinel must equal scripts.core.tool_registry.UNPINNED_SENTINEL.
+
+    Same mirror, same reason as MANUAL_INSTALL_TOOLS above: this script runs in
+    CI without `pip install -e .`, so it cannot import scripts.core there, but
+    the test env can.
+
+    The sentinel gained a second consumer when `jmo tools check` started
+    rendering it as "unpinned" instead of printing a bare `0.0.0`. Two
+    definitions that disagree would put the validator and the CLI into
+    different opinions about what `versions.yaml` means -- the validator would
+    report falco unpinned while the table showed it as a version, or the
+    reverse.
+    """
+    from scripts.core.tool_registry import UNPINNED_SENTINEL as registry_sentinel
+
+    assert registry_sentinel == update_versions.UNPINNED_SENTINEL
+
+
+def test_the_sentinel_is_what_versions_yaml_actually_carries():
+    """A mirror test proves the two constants agree, not that either is right.
+
+    Both could say "9.9.9" and still match. This pins the constant to the data
+    it describes: at least one MANUAL_INSTALL entry in versions.yaml carries
+    it. falco is currently the only one.
+    """
+    import yaml
+
+    from scripts.core.tool_registry import (
+        MANUAL_INSTALL_TOOLS,
+        UNPINNED_SENTINEL,
+    )
+
+    root = Path(__file__).resolve().parents[2]
+    data = yaml.safe_load((root / "versions.yaml").read_text(encoding="utf-8"))
+
+    unpinned = []
+    for section in data.values():
+        if not isinstance(section, dict):
+            continue
+        for tool, info in section.items():
+            if isinstance(info, dict) and info.get("version") == UNPINNED_SENTINEL:
+                unpinned.append(tool)
+
+    assert unpinned, (
+        f"no versions.yaml entry carries {UNPINNED_SENTINEL!r}; the sentinel "
+        "no longer describes the data, so the CLI's 'unpinned' rendering and "
+        "the validator's unpinned bucket are both dead code"
+    )
+    assert set(unpinned) <= set(MANUAL_INSTALL_TOOLS), (
+        f"{sorted(set(unpinned) - set(MANUAL_INSTALL_TOOLS))} carry the "
+        "unpinned sentinel but are not manual-install tools -- that is a real "
+        "missing pin, not a deliberate one"
+    )

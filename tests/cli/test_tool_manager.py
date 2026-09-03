@@ -1981,3 +1981,64 @@ def test_checkov_version_probe_budget_exceeds_its_measured_startup():
         "checkov's version probe budget is back at or near its measured "
         "startup cost; the probe will time out at random"
     )
+
+
+class TestUnpinnedSentinelIsNotShownAsAVersion:
+    """`0.0.0` in versions.yaml means "nothing to pin", not release 0.0.0.
+
+    A MANUAL_INSTALL tool ships in no Docker image, so no release of it is
+    baked anywhere. `update_versions.py --validate` has read `0.0.0` that way
+    since #935 and prints `falco: unpinned (manual install, no image)` --
+    but the sentinel was defined only in that dev script, so the CLI printed
+    it verbatim:
+
+        falco             UNSUPPORTED    -             0.0.0
+
+    falco is the only entry carrying it (afl++, akto and mobsf all have real
+    versions), so it reads as a data error rather than a convention.
+    """
+
+    @staticmethod
+    def _status(name, expected):
+        from scripts.cli.tool_manager import ToolStatus
+
+        return ToolStatus(name=name, installed=False, expected_version=expected)
+
+    def test_a_manual_tool_carrying_the_sentinel_reads_unpinned(self):
+        from scripts.cli.tool_manager import UNPINNED_SENTINEL
+
+        status = self._status("falco", UNPINNED_SENTINEL)
+
+        assert status.expected_version_display == "unpinned"
+        assert UNPINNED_SENTINEL not in status.expected_version_display
+
+    def test_the_raw_value_survives_for_machine_readers(self):
+        """Display only -- `tools check --json` must not move."""
+        from scripts.cli.tool_manager import UNPINNED_SENTINEL
+
+        status = self._status("falco", UNPINNED_SENTINEL)
+
+        assert status.expected_version == UNPINNED_SENTINEL
+
+    def test_a_non_manual_tool_carrying_0_0_0_still_shows_it(self):
+        """The control that matters.
+
+        The sentinel is honoured only for MANUAL_INSTALL_TOOLS, exactly as
+        `_validate_one` honours it. A `0.0.0` on a tool that *does* ship in an
+        image is a genuinely missing pin, and rendering that as "unpinned"
+        would hide it behind the same word that means "deliberate" elsewhere.
+        """
+        from scripts.cli.tool_manager import UNPINNED_SENTINEL
+
+        status = self._status("trivy", UNPINNED_SENTINEL)
+
+        assert status.expected_version_display == UNPINNED_SENTINEL
+
+    def test_real_versions_are_untouched(self):
+        assert self._status("trivy", "0.74.0").expected_version_display == "0.74.0"
+        assert self._status("akto", "mini-testing-1.53.7").expected_version_display == (
+            "mini-testing-1.53.7"
+        )
+
+    def test_a_missing_expected_version_still_renders_a_dash(self):
+        assert self._status("trivy", None).expected_version_display == "-"

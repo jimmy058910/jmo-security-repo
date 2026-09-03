@@ -43,3 +43,26 @@ references:
 - **Fields include:** severity, tool_name, path, line, message, rule_id, compliance_mappings.
 
 See [CONTRIBUTING.md](../../CONTRIBUTING.md) for the detailed workflow.
+
+## Fingerprints: the report phase re-keys the path, but only if it recognises the id
+
+`normalize_and_report._normalize_paths_and_ids` normalises `location.path` and
+then **recomputes the id from the normalised path** — but only when it can prove
+the id came from the path, by recomputing
+`fingerprint(tool, ruleId, path, startLine, message)` and comparing. That check
+is what lets zap, cdxgen, nuclei and mobsf key on something else without being
+silently collapsed into one finding.
+
+**So an adapter that keys on the path with a *different* second component falls
+through the crack**: it wants re-keying and does not get it, and the host's raw
+path stays hashed into the id forever. `syft` is the measured case (#1135) — it
+sets `ruleId = "SBOM.PACKAGE"` (a constant) but fingerprints on the package
+name, so 41 paths are normalised and **0 ids are re-keyed**, and no finding
+matches across Windows and Linux. `horusec` had the same shape until #1141 gave
+it a real `rule_id`; it now re-keys 579 of 584.
+
+**When you add or change an adapter:** either fingerprint as
+`fingerprint(tool, <the ruleId you set>, path, line, message)`, or normalise the
+path yourself before hashing. Nothing enforces this — a guard over the golden
+fixtures would be vacuous, since the four adapters with fixtures all already
+pass and the broken one has none.
