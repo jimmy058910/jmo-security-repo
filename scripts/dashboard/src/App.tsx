@@ -13,6 +13,7 @@ import { useScanHistory } from './hooks/useScanHistory'
 import { useDiffMode } from './hooks/useDiffMode'
 import { GitCompare, Table, TrendingUp, Shield, BarChart3 } from 'lucide-react'
 import { CommonFinding } from './types/findings'
+import { loadErrorHint } from './utils/loadErrorHint'
 
 // Lazy load Recharts-dependent components (Phase 5.1)
 const TrendsPanel = lazy(() => import('./components/TrendsPanel'))
@@ -137,7 +138,7 @@ export default function App() {
           <h2 className="text-2xl font-bold text-red-600 mb-4">⚠️ Loading Failed</h2>
           <p className="text-gray-700 mb-4">{error}</p>
           <p className="text-gray-500 text-sm">
-            Make sure dashboard-data.json is in the same directory as this HTML file.
+            {loadErrorHint(window.location.protocol)}
           </p>
         </div>
       </div>
