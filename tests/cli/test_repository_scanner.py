@@ -1638,3 +1638,120 @@ class TestScancodeIsAskedToDetectSomething:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestHorusecStagingDirIsExcluded:
+    """#1132: horusec stages a copy of the whole repository at
+    `<repo>/.horusec/<uuid>` and deletes it while every other scanner is still
+    walking the tree. There is no horusec flag to relocate it - measured against
+    `horusec start --help` - so the defence is to exclude it everywhere else.
+    """
+
+    @staticmethod
+    def _built_commands(tmp_path, tools):
+        """Build the real argv for `tools` without needing a tool installed."""
+        repo = tmp_path / "repo"
+        (repo / "k8s").mkdir(parents=True)
+        # trivy-rbac only builds a command when the repo has K8s manifests.
+        (repo / "k8s" / "deployment.yaml").write_text("kind: Deployment\n")
+
+        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+            mock_runner.run_all_parallel.return_value = []
+
+            scan_repository(
+                repo=repo,
+                results_dir=tmp_path / "out",
+                tools=tools,
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+                find_tool_func=lambda name: "/usr/bin/" + name,
+            )
+
+            args, kwargs = MockRunner.call_args
+            tool_defs = kwargs.get("tools") or (args[0] if args else [])
+            return {t.name: t.command for t in tool_defs}
+
+    def test_semgrep_is_told_to_skip_it(self, tmp_path):
+        commands = self._built_commands(tmp_path, ["semgrep"])
+
+        assert "--exclude=.horusec" in commands["semgrep"]
+
+    def test_semgrep_secrets_is_told_to_skip_it(self, tmp_path):
+        """semgrep-secrets is where the 346 measured errors came from.
+
+        It is a separate profile entry with a separate command builder, so
+        covering only the tool the binary is named after would have left the
+        measured defect exactly where it was.
+        """
+        commands = self._built_commands(tmp_path, ["semgrep-secrets"])
+
+        assert "--exclude=.horusec" in commands["semgrep-secrets"]
+
+    def test_trivy_is_told_to_skip_it(self, tmp_path):
+        commands = self._built_commands(tmp_path, ["trivy"])
+        command = commands["trivy"]
+
+        assert "--skip-dirs" in command
+        assert command[command.index("--skip-dirs") + 1] == ".horusec"
+
+    def test_trivy_rbac_is_told_to_skip_it(self, tmp_path):
+        commands = self._built_commands(tmp_path, ["trivy-rbac"])
+        command = commands["trivy-rbac"]
+
+        assert "--skip-dirs" in command
+        assert command[command.index("--skip-dirs") + 1] == ".horusec"
+
+    def test_bandit_is_told_to_skip_it_without_losing_its_defaults(self, tmp_path):
+        """bandit's -x replaces upstream's list, so JMo has to re-send it.
+
+        The expected value is spelled out rather than derived from the source
+        constant: a guard that reads its expectation from the thing it guards
+        cannot fail when that thing empties (#1061).
+        """
+        commands = self._built_commands(tmp_path, ["bandit"])
+        command = commands["bandit"]
+
+        assert "-x" in command
+        assert (
+            command[command.index("-x") + 1]
+            == ".svn,CVS,.bzr,.hg,.git,__pycache__,.tox,.eggs,*.egg,.horusec"
+        )
+
+    def test_dependency_check_is_told_to_skip_it(self, tmp_path):
+        """ODC was the loudest casualty: 8499 non-fatal analysis exceptions on
+        jmoadaptivegolf, almost all naming a vanished `.horusec/<uuid>/` path.
+
+        It takes an Ant pattern, so a bare directory name would not match.
+        """
+        commands = self._built_commands(tmp_path, ["dependency-check"])
+        command = commands["dependency-check"]
+
+        assert "--exclude" in command
+        assert command[command.index("--exclude") + 1] == "**/.horusec/**"
+
+    def test_jmos_own_file_walk_skips_the_staging_copy(self, tmp_path):
+        """hadolint and shellcheck take explicit file arguments, so JMo's own
+        enumeration is a walk like any other.
+
+        Without this, every Dockerfile and shell script is collected twice -
+        once at its real path and once inside the staged copy, which may be
+        deleted before the tool opens it - and the duplicates count against
+        MAX_FILE_ARGS, evicting real files from a large repository.
+        """
+        from scripts.cli.scan_jobs.repository_scanner import _collect_files
+
+        repo = tmp_path / "repo"
+        (repo / "docker").mkdir(parents=True)
+        (repo / "docker" / "Dockerfile").write_text("FROM alpine:3.19\n")
+        staged = repo / ".horusec" / "8317cf15-dead-beef" / "docker"
+        staged.mkdir(parents=True)
+        (staged / "Dockerfile").write_text("FROM alpine:3.19\n")
+
+        found = _collect_files(repo, ("**/Dockerfile",), "hadolint")
+
+        assert len(found) == 1, f"staged copy was collected too: {found}"
+        assert ".horusec" not in found[0]
