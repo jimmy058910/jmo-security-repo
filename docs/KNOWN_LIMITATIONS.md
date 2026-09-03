@@ -147,6 +147,28 @@ are write-once, so the risk is low — but it is untested, not proven.
 
 **What to do:** on Windows, give concurrent scans separate `--results-dir` paths.
 
+### Secret scanning skips `.git/` and `.jmo/`
+
+TruffleHog runs over the working tree with `.git/` and `.jmo/` excluded, so a
+secret that exists **only** in git history — committed and later removed, or
+sitting in a dangling blob — is not reported.
+
+Both exclusions are deliberate. A finding at `.git/objects/03/f8eab...` or
+`.git/logs/HEAD` names no commit and no source file, so there is nothing to act
+on, and the reflog's 40-character commit ids trip detectors that look for 40
+characters of `[A-Za-z0-9_-]` — measured as 41 findings across five
+repositories, every one of them a false positive. `.jmo/` is JMo's own state
+directory: `history.db` stores raw findings, so scanning it re-reports every
+secret JMo has previously recorded, and each scan feeds the next. On this
+repository that was 394 of 773 findings.
+
+Secrets in files that are tracked but uncommitted, or committed and still
+present, are scanned normally. `.github/` is **not** excluded.
+
+**What to do:** to audit history, run TruffleHog's git mode directly —
+`trufflehog git file://<repo>` — which reports the commit and file for each
+finding. JMo does not run it for you.
+
 ---
 
 ## Deduplication

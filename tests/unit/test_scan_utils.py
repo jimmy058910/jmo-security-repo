@@ -450,3 +450,95 @@ def test_bandit_upstream_defaults_have_not_drifted():
         "bandit's default excluded paths drifted; passing -x would stop "
         f"excluding {sorted(missing)}"
     )
+
+
+class TestTruffleHogExcludePatterns:
+    """#1134: TruffleHog walked `.git/` and `.jmo/` in filesystem mode.
+
+    A secret reported at `.git/objects/03/f8eab...` names no commit and no
+    source file, and the reflog's 40-hex commit ids trip keyword-plus-40-char
+    detectors as Cloudflare tokens. `.jmo/history.db` stores the raw findings of
+    every previous scan, so scanning it re-reports all of them.
+
+    Measured across the 2026-09-02 dogfood: 41 findings under `.git/` and 394
+    under `.jmo/` - the latter 51% of jmo-security-repo's 773.
+    """
+
+    def test_git_and_jmo_are_both_excluded(self):
+        from scripts.cli.scan_utils import TRUFFLEHOG_EXCLUDE_PATTERNS
+
+        assert TRUFFLEHOG_EXCLUDE_PATTERNS == (
+            r"[\\/]\.git[\\/]",
+            r"[\\/]\.jmo[\\/]",
+        )
+
+    def test_the_patterns_do_not_match_dot_github(self):
+        """The separator class is load-bearing, not decoration.
+
+        A bare `\\.git` is a substring match, so TruffleHog also skips
+        `.github/workflows/*.yml` - measured against trufflehog 3.97.1 on a tree
+        with a secret in each - and that is exactly where real deployment
+        credentials live. This asserts the property (what the regex matches)
+        rather than the spelling, so it still bites if someone rewrites the
+        pattern a different way.
+        """
+        import re
+
+        from scripts.cli.scan_utils import TRUFFLEHOG_EXCLUDE_PATTERNS
+
+        keep = [
+            "/repo/.github/workflows/deploy.yml",
+            r"C:\repo\.github\workflows\deploy.yml",
+            "/repo/src/.gitignore",
+            "/repo/src/app.py",
+        ]
+        for path in keep:
+            for pattern in TRUFFLEHOG_EXCLUDE_PATTERNS:
+                assert not re.search(pattern, path), (
+                    f"{pattern!r} would exclude {path!r}, which is not a VCS "
+                    "internal or a JMo artifact"
+                )
+
+    def test_the_patterns_match_both_separators(self):
+        """POSIX and Windows paths both have to be caught: the scan runs on
+        whichever the host uses, and the dogfood measured these on Windows."""
+        import re
+
+        from scripts.cli.scan_utils import TRUFFLEHOG_EXCLUDE_PATTERNS
+
+        drop = [
+            "/repo/.git/logs/HEAD",
+            r"C:\repo\.git\objects\03\f8eab",
+            "/repo/.jmo/history.db",
+            r"C:\repo\.jmo\history.db.snapshot-20260808",
+        ]
+        for path in drop:
+            assert any(
+                re.search(p, path) for p in TRUFFLEHOG_EXCLUDE_PATTERNS
+            ), f"nothing excluded {path!r}"
+
+    def test_the_exclude_file_is_written_with_lf(self, tmp_path):
+        """TruffleHog splits the file on newlines, so a CRLF file would leave a
+        trailing `\\r` inside each regex. `Path.write_text` would produce
+        exactly that on Windows, which is why the writer uses `write_bytes`.
+        """
+        from scripts.cli.scan_utils import write_trufflehog_exclude_file
+
+        path = write_trufflehog_exclude_file(tmp_path)
+
+        raw = path.read_bytes()
+        assert b"\r" not in raw
+        assert raw.decode("utf-8").splitlines() == [
+            r"[\\/]\.git[\\/]",
+            r"[\\/]\.jmo[\\/]",
+        ]
+
+    def test_the_exclude_file_lands_beside_the_results(self, tmp_path):
+        """It must not be a `.json`, or the report phase would try to parse it:
+        `normalize_and_report` globs `*.json` in each target directory."""
+        from scripts.cli.scan_utils import write_trufflehog_exclude_file
+
+        path = write_trufflehog_exclude_file(tmp_path)
+
+        assert path.parent == tmp_path
+        assert path.suffix == ".txt"

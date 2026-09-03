@@ -455,6 +455,47 @@ def tool_flags(per_tool_config: Mapping[str, Any], tool: str) -> list[str]:
     return kept
 
 
+#: Paths TruffleHog must not walk in filesystem mode, as newline-separated Go
+#: regexes for its ``--exclude-paths`` file.
+#:
+#: ``.git/`` - a secret reported at ``.git/objects/03/f8eab...`` or
+#: ``.git/logs/HEAD`` names no commit and no source file, so nobody can act on
+#: it, and the reflog's 40-hex commit ids trip keyword-plus-40-character
+#: detectors as Cloudflare tokens. Measured across the 2026-09-02 dogfood: 41
+#: findings under ``.git/`` - 12 on jmoadaptivegolf (4 CloudflareApiToken, 8
+#: CloudflareGlobalApiKey), 22 on jmo-security-repo, 7 on BetHedgeSlider.
+#:
+#: ``.jmo/`` - JMo's own state directory. ``history.db`` stores raw findings, so
+#: scanning it re-reports every secret JMo has ever recorded, and each scan
+#: feeds the next. Measured on jmo-security-repo: **394 of 773 findings, 51% of
+#: the total** - against the 12 the issue estimated.
+#:
+#: The separator character class is load-bearing, not decoration. A bare
+#: ``\.git`` is a substring match, and TruffleHog then also skips
+#: ``.github/workflows/*.yml`` - measured on a tree holding a secret in each -
+#: which is exactly where real deployment credentials live (#1134).
+TRUFFLEHOG_EXCLUDE_PATTERNS: tuple[str, ...] = (
+    r"[\\/]\.git[\\/]",
+    r"[\\/]\.jmo[\\/]",
+)
+
+
+def write_trufflehog_exclude_file(out_dir: Path) -> Path:
+    """Write TruffleHog's ``--exclude-paths`` file and return its path.
+
+    ``write_bytes`` rather than ``write_text``: the latter opens with
+    ``newline=None`` and would emit CRLF on Windows. TruffleHog splits the file
+    on newlines, so a trailing carriage return would ride along inside each
+    regex.
+
+    The file lands in the scan's own output directory, which the report phase
+    globs for ``*.json`` only, so a ``.txt`` beside the results is inert.
+    """
+    path = out_dir / "trufflehog-exclude.txt"
+    path.write_bytes(("\n".join(TRUFFLEHOG_EXCLUDE_PATTERNS) + "\n").encode("utf-8"))
+    return path
+
+
 def filter_trivy_flags(subcommand: str, flags: list[str]) -> list[str]:
     """Drop configured trivy flags that ``subcommand`` does not accept.
 
