@@ -33,7 +33,6 @@ from scripts.cli.tool_installer import (  # noqa: E402
     get_isolated_venv_path,
 )
 from scripts.cli.tool_manager import (  # noqa: E402
-    PLATFORM_MANUAL_TOOLS,
     ToolManager,
 )
 from scripts.core.tool_registry import PROFILE_TOOLS, ToolRegistry  # noqa: E402
@@ -137,7 +136,21 @@ class WizardToolTester:
                     print(f"  [FAIL] {tool_name}: bin dir missing")
 
     def test_version_detection(self, profile: str) -> None:
-        """Test version detection for profile tools."""
+        """Report each profile tool's status, as the product reports it.
+
+        This used to probe `_find_binary` and `_get_tool_version` directly -
+        two private helpers that answer narrower questions than `check_tool()`
+        does - and so contradicted `jmo tools check` and, in one case, itself.
+        Measured on Windows with the balanced profile (#1138):
+
+            [MISS] zap: not installed      while tools check read zap OK 2.17.0
+            [OK]   zap: ready to execute   in the SAME run
+            cdxgen: version parse failed   while tools check read 12.8.2
+
+        `check_tool()` is the product's own verdict and is memoised per tool, so
+        asking it here and again in the readiness test costs a cache hit rather
+        than a second probe - and the two can no longer disagree.
+        """
         print("\n" + "=" * 60)
         print(f"TEST: Version Detection ({profile} profile)")
         print("=" * 60)
@@ -145,72 +158,68 @@ class WizardToolTester:
         tools = PROFILE_TOOLS.get(profile, [])
 
         for tool_name in sorted(tools):
-            # Skip platform-unavailable tools
-            platform = self.tm.platform
-            if tool_name in PLATFORM_MANUAL_TOOLS:
-                if platform in PLATFORM_MANUAL_TOOLS[tool_name]:
-                    reason, _ = PLATFORM_MANUAL_TOOLS[tool_name][platform]
-                    print(f"  [SKIP] {tool_name}: {reason}")
-                    self.add_result(
-                        f"version_{tool_name}",
-                        True,  # Not a failure, just skipped
-                        "Platform skip",
-                        reason,
-                    )
-                    continue
+            status = self.tm.check_tool(tool_name)
+            self.log(
+                f"{tool_name}: installed={status.installed} "
+                f"version={status.installed_version} "
+                f"ready={status.execution_ready} "
+                f"platform_supported={status.platform_supported}"
+            )
 
-            binary = self.tm._find_binary(tool_name)
-            self.log(f"{tool_name}: binary={binary}")
+            if not status.platform_supported:
+                reason = (
+                    status.platform_reason or f"not available on {self.tm.platform}"
+                )
+                print(f"  [SKIP] {tool_name}: {reason}")
+                self.add_result(
+                    f"version_{tool_name}",
+                    True,  # Not a failure, just skipped
+                    "Platform skip",
+                    reason,
+                )
+                continue
 
-            if not binary:
+            if not status.installed:
                 print(f"  [MISS] {tool_name}: not installed")
                 self.add_result(
                     f"version_{tool_name}",
                     False,
                     "Not installed",
-                    "Binary not found",
+                    status.execution_warning or "Binary not found",
                 )
                 continue
 
-            version, error = self.tm._get_tool_version(tool_name, binary)
-            self.log(f"{tool_name}: version={version}, error={error}")
-
-            if error:
-                print(f"  [CRASH] {tool_name}: {error[:50]}...")
+            expected = status.expected_version_display
+            if not status.installed_version:
+                # `check_tool` reaches this with the binary present and no
+                # version: the probe crashed, timed out, or printed something
+                # unparseable. Report the reason it gives rather than a bare
+                # "parse failed".
+                print(f"  [WARN] {tool_name}: no version reported")
                 self.add_result(
                     f"version_{tool_name}",
                     False,
-                    "Startup crash",
-                    error,
+                    "No version reported",
+                    status.execution_warning or f"Binary: {status.binary_path}",
                 )
-            elif version:
-                # Get expected version
-                tool_info = self.registry.get_tool(tool_name)
-                expected = tool_info.version if tool_info else "unknown"
-
-                if version == expected:
-                    print(f"  [OK] {tool_name}: {version}")
-                    self.add_result(
-                        f"version_{tool_name}",
-                        True,
-                        f"Version {version}",
-                        f"Expected: {expected}",
-                    )
-                else:
-                    print(f"  [DRIFT] {tool_name}: {version} (expected {expected})")
-                    self.add_result(
-                        f"version_{tool_name}",
-                        True,  # Still working, just different version
-                        "Version drift",
-                        f"Got {version}, expected {expected}",
-                    )
-            else:
-                print(f"  [WARN] {tool_name}: version parse failed")
+            elif status.is_outdated:
+                print(
+                    f"  [DRIFT] {tool_name}: {status.installed_version} "
+                    f"(expected {expected})"
+                )
                 self.add_result(
                     f"version_{tool_name}",
-                    False,
-                    "Version parse failed",
-                    f"Binary: {binary}",
+                    True,  # Still working, just a different version
+                    "Version drift",
+                    f"Got {status.installed_version}, expected {expected}",
+                )
+            else:
+                print(f"  [OK] {tool_name}: {status.installed_version}")
+                self.add_result(
+                    f"version_{tool_name}",
+                    True,
+                    f"Version {status.installed_version}",
+                    f"Expected: {expected}",
                 )
 
     def test_dependency_checks(self) -> None:
@@ -284,19 +293,31 @@ class WizardToolTester:
             if tool_name not in tools:
                 continue
 
-            ready, msg, missing = self.tm._verify_execution(tool_name)
-            self.log(f"{tool_name}: ready={ready}, msg={msg}, missing={missing}")
+            # `check_tool`, not `_verify_execution`. The private helper answers
+            # "would this run if it were installed"; the product's verdict also
+            # accounts for the tool being absent. Asking the narrower question
+            # is what let this script print `[MISS] zap: not installed` and
+            # `[OK] zap: ready to execute` in one run (#1138).
+            status = self.tm.check_tool(tool_name)
+            self.log(
+                f"{tool_name}: installed={status.installed} "
+                f"ready={status.execution_ready} warning={status.execution_warning}"
+            )
 
-            if ready:
+            if not status.platform_supported:
+                print(f"  [SKIP] {tool_name}: not available on {self.tm.platform}")
+                self.add_result(f"exec_{tool_name}", True, "Platform skip", "")
+            elif status.execution_ready:
                 print(f"  [OK] {tool_name}: ready to execute")
                 self.add_result(f"exec_{tool_name}", True, "Ready", "")
             else:
-                print(f"  [BLOCK] {tool_name}: {msg}")
+                reason = status.execution_warning or "not ready"
+                print(f"  [BLOCK] {tool_name}: {reason}")
                 self.add_result(
                     f"exec_{tool_name}",
                     False,
                     "Not ready",
-                    f"{msg} (missing: {missing})",
+                    f"{reason} (missing: {status.missing_deps})",
                 )
 
     def print_summary(self) -> dict:
@@ -370,9 +391,32 @@ def main() -> int:
     else:
         print(f"{stats['failed']} test(s) failed. Review issues above.")
         print("\nNext steps:")
-        print("  1. Install missing tools: jmo tools install --profile " + args.profile)
-        print("  2. Install Java 11+ for dependency-check")
-        print("  3. Re-run this test to verify fixes")
+        # Derived from what actually failed. This was three hardcoded lines
+        # printed whenever anything failed, so a run that had just reported
+        # `[OK] Java 21.0.12 found` went on to advise "Install Java 11+ for
+        # dependency-check" (#1138).
+        steps = []
+        failed = {r.name for r in tester.results if not r.passed}
+        if any(n.startswith("version_") for n in failed):
+            steps.append(
+                "Install missing tools: jmo tools install --profile " + args.profile
+            )
+        for dep, hint in (
+            ("dep_java", "Install Java 11+ (dependency-check and zap need it)"),
+            ("dep_nodejs", "Install Node.js 20+ (cdxgen needs it)"),
+            ("dep_bash", "Install Git Bash, WSL or Cygwin (lynis needs bash)"),
+        ):
+            if dep in failed:
+                steps.append(hint)
+        if any(n.startswith("venv_") for n in failed):
+            steps.append(
+                "Rebuild isolated venvs: jmo tools clean --force, "
+                "then jmo tools install --profile " + args.profile
+            )
+        steps.append("Re-run this test to verify fixes")
+
+        for i, step in enumerate(steps, 1):
+            print(f"  {i}. {step}")
         return 1
 
 
