@@ -2042,3 +2042,110 @@ class TestUnpinnedSentinelIsNotShownAsAVersion:
 
     def test_a_missing_expected_version_still_renders_a_dash(self):
         assert self._status("trivy", None).expected_version_display == "-"
+
+
+class TestNotReadyIsVisibleInTheTable:
+    """#1136: `check_tool` has always computed execution readiness and this
+    table threw it away.
+
+    `_verify_execution` checks Java for dependency-check and zap, Node for
+    cdxgen, bash for lynis on Windows, and rules for yara. With `java` hidden
+    from PATH, `jmo tools check --profile deep` printed
+    `dependency-check  OK  -  12.1.0` and exited 0, while every scan using it
+    exited 1 and wrote no output. The dash in the Installed column was the only
+    evidence on screen, and OK overrode it.
+    """
+
+    @staticmethod
+    def _status(name, **kw):
+        from scripts.cli.tool_manager import ToolStatus
+
+        return ToolStatus(name=name, **kw)
+
+    @staticmethod
+    def _render(status, show_hints=True):
+        import io
+        from contextlib import redirect_stdout
+
+        from scripts.cli.tool_manager import print_tool_status_table
+
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            print_tool_status_table({status.name: status}, show_hints=show_hints)
+        return buf.getvalue()
+
+    def test_an_installed_tool_that_cannot_run_is_not_ok(self):
+        status = self._status(
+            "dependency-check",
+            installed=True,
+            installed_version=None,
+            expected_version="12.1.0",
+            execution_ready=False,
+            execution_warning="Missing: java",
+        )
+
+        out = self._render(status)
+
+        assert "NOT READY" in out
+        assert "OK" not in out.replace("NOT READY", "")
+
+    def test_the_row_says_why(self):
+        """A row that says a tool is not ready and nothing about why sends the
+        reader to the installer, which will report it already installed."""
+        status = self._status(
+            "dependency-check",
+            installed=True,
+            execution_ready=False,
+            execution_warning="Java not found (dependency-check requires Java 11+)",
+        )
+
+        out = self._render(status)
+
+        assert "Java not found" in out
+
+    def test_not_ready_outranks_outdated(self):
+        """A tool that cannot run at all is a worse problem than an old one."""
+        status = self._status(
+            "cdxgen",
+            installed=True,
+            installed_version="10.0.0",
+            expected_version="12.8.2",
+            is_outdated=True,
+            execution_ready=False,
+            execution_warning="Node.js not found (required for cdxgen)",
+        )
+
+        out = self._render(status)
+
+        assert "NOT READY" in out
+        assert "OUTDATED" not in out
+
+    def test_a_ready_tool_is_still_ok(self):
+        """The regression guard: with its dependency present, nothing changes."""
+        status = self._status(
+            "dependency-check",
+            installed=True,
+            installed_version="12.1.0",
+            expected_version="12.1.0",
+            execution_ready=True,
+        )
+
+        out = self._render(status)
+
+        assert "OK" in out
+        assert "NOT READY" not in out
+
+    def test_a_missing_tool_is_still_missing_not_not_ready(self):
+        """`execution_ready` is False for an uninstalled tool too, so ordering
+        the branches wrongly would relabel every MISSING row."""
+        status = self._status(
+            "grype",
+            installed=False,
+            execution_ready=False,
+            execution_warning="Tool binary not found",
+        )
+
+        out = self._render(status)
+
+        assert "MISSING" in out
+        assert "NOT READY" not in out

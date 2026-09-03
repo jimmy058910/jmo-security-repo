@@ -236,6 +236,39 @@ def scan_repository(
                 missing_dependency[owner] = tool_name
         return resolved
 
+    def _find_any_tool(
+        candidates: tuple[str, ...], record_as: str
+    ) -> tuple[str | None, str | None]:
+        """Resolve the first of several interchangeable binaries.
+
+        Returns `(path, which_candidate)`, or `(None, None)` if none resolved.
+
+        `_find_tool` records an unresolved entry on *every* miss. That is right
+        for a tool with one dependency and wrong for one with a fallback. zap
+        probes `zap-baseline.py` and then `docker`, so a machine with only
+        docker recorded zap as unresolved **and** ran it through the docker
+        fallback, and the same scan reported both
+
+            zap requested but its dependency zap-baseline.py could not be found
+            - it did NOT run and its findings are MISSING
+
+        and, nine seconds later,
+
+            zap: it failed - it did NOT contribute findings to this scan
+            (Return code 3 not in (0, 1, 2))
+
+        for one tool. Only the second was true (#1136).
+        """
+        considered.add(record_as)
+        for candidate in candidates:
+            resolved = _resolve_tool(candidate)
+            if resolved is not None:
+                return resolved, candidate
+        unresolved.append(record_as)
+        # Name the candidate the user is most likely to install.
+        missing_dependency[record_as] = candidates[0]
+        return None, None
+
     name = _sanitize_path_component(repo.name)
     out_dir = results_dir / name
     _validate_output_path(results_dir, out_dir)
@@ -674,9 +707,15 @@ def scan_repository(
         zap_out = out_dir / "zap.json"
         # ZAP baseline scan can analyze HTML/JS files in repository
         # This is a limited use case; full DAST requires --url target
-        zap_baseline_path = _find_tool("zap-baseline.py", record_as="zap")
-        zap_docker_path = _find_tool("docker", record_as="zap")
-        if zap_baseline_path or zap_docker_path:
+        # Either binary can drive zap, so a miss on the first is only a failure
+        # if the second misses too. Note `zap-baseline.py` ships in the ZAP
+        # *Docker image*, not in the desktop package `jmo tools install zap`
+        # lays down, so on most machines the docker candidate is the one that
+        # resolves.
+        zap_path, zap_runner = _find_any_tool(
+            ("zap-baseline.py", "docker"), record_as="zap"
+        )
+        if zap_path:
             zap_flags = get_tool_flags("zap")
             # Check for web-related files (HTML, JS, PHP, etc.)
             web_files = (
@@ -688,9 +727,9 @@ def scan_repository(
                 # Use ZAP baseline scan on first web file found
                 # Note: This is a simplified approach; full ZAP requires live server
                 target_file = web_files[0]
-                if zap_baseline_path:
+                if zap_runner == "zap-baseline.py":
                     zap_cmd = [
-                        zap_baseline_path,  # Use full path from find_tool
+                        zap_path,  # Use full path from find_tool
                         "-t",
                         str(target_file),
                         "-J",
@@ -713,7 +752,10 @@ def scan_repository(
                         )
                     )
                 else:
-                    docker_path = _find_tool("docker")
+                    # `_find_any_tool` already resolved docker; re-probing here
+                    # through `_find_tool` also registered a phantom tool named
+                    # "docker" in `considered`.
+                    docker_path = zap_path
                     if docker_path:
                         # Fallback to Docker-based ZAP
                         zap_cmd = [
