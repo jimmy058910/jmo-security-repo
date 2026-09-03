@@ -51,7 +51,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from scripts.core.adapters.common import safe_load_json_file
+from scripts.core.adapters.common import normalize_finding_path, safe_load_json_file
 from scripts.core.common_finding import fingerprint, normalize_severity
 from scripts.core.plugin_api import (
     AdapterPlugin,
@@ -139,7 +139,28 @@ def _load_syft_internal(path: str | Path) -> list[dict[str, Any]]:
                     location = str(loc0.get("path") or "")
             title = f"{name} {version}".strip()
             msg = f"Package discovered: {title}"
-            fid = fingerprint("syft", name, location, 0, msg)
+            # Hash the NORMALIZED path, not the raw one syft emitted. syft
+            # reports the same file as `\.github\workflows\ci.yml` on Windows
+            # and `/.github/workflows/ci.yml` on Linux, so hashing it raw gives
+            # the same package two ids and nothing downstream can tell they are
+            # one finding. Measured on juice-shop: 22 packages common to a
+            # Windows and a WSL run, 0 shared ids.
+            #
+            # The report phase cannot repair this the way it does for other
+            # adapters. `_normalize_paths_and_ids` only re-keys an id it can
+            # PROVE came from the path, by recomputing
+            # `fingerprint(tool, ruleId, path, line, message)` and comparing -
+            # and this call passes `name` in the rule slot while the finding's
+            # `ruleId` is the constant "SBOM.PACKAGE". The recomputation never
+            # matches, so 41 paths were normalized and 0 ids re-keyed.
+            #
+            # Deliberately fixed here rather than by aligning the rule slot:
+            # `adapters.rules.md` sanctions either, and normalizing before the
+            # hash keeps the adapter correct on its own instead of depending on
+            # the report phase running with the right roots. The
+            # `vulnerabilities` branch below already passes `vid` in both slots,
+            # so the report phase re-keys it and it needs no change (#1135).
+            fid = fingerprint("syft", name, normalize_finding_path(location), 0, msg)
             finding = {
                 "schemaVersion": "1.2.0",
                 "id": fid,
