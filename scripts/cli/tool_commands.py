@@ -207,6 +207,11 @@ def cmd_tools_check(args: argparse.Namespace) -> int:
         if not s.installed and s.manual_install and s.platform_supported
     ]
     outdated = [s for s in statuses.values() if s.is_outdated]
+    # Installed and unable to run. For a scan this is the same outcome as
+    # missing - dependency-check without Java exits 1 and writes nothing - so
+    # it belongs in the summary and in the exit code, not only in the table
+    # (#1136).
+    not_ready = [s for s in statuses.values() if s.installed and not s.execution_ready]
 
     print()
     if unsupported:
@@ -219,6 +224,16 @@ def cmd_tools_check(args: argparse.Namespace) -> int:
         for s in unsupported:
             hows = ", ".join(s.platform_workarounds or []) or "none"
             print(f"  - {s.name}: {s.platform_reason or 'unsupported'} (try: {hows})")
+
+    if not_ready:
+        print(
+            colorize(
+                f"{len(not_ready)} tool(s) installed but not able to run",
+                "yellow",
+            )
+        )
+        for s in not_ready:
+            print(f"  - {s.name}: {s.execution_warning or 'cannot run'}")
 
     if real_missing:
         print(colorize(f"{len(real_missing)} tool(s) missing", "red"))
@@ -258,10 +273,14 @@ def cmd_tools_check(args: argparse.Namespace) -> int:
         print(colorize(msg, "yellow"))
         print("Run `jmo tools update` to update")
 
-    if not real_missing and not manual_missing and not outdated:
+    if not real_missing and not manual_missing and not outdated and not not_ready:
         print(colorize("All tools installed and up to date!", "green"))
 
-    return 0
+    # A tool that cannot run contributes nothing to a scan, so the exit code
+    # says so. This is the same reasoning that made an unsupported tool stop
+    # counting as missing in #1130: the code should describe whether the
+    # profile can actually run, not whether files are on disk.
+    return 1 if not_ready else 0
 
 
 def cmd_tools_debug(args: argparse.Namespace) -> int:

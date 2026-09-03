@@ -3330,3 +3330,87 @@ def test_the_installer_drops_unsupported_tools_before_the_prompt():
     # Nothing installable remained, so the installer must never have been asked
     # to install anything.
     assert not mock_installer.return_value.install_tool.called
+
+
+# ========== #1136: installed-but-unable-to-run reaches the summary ==========
+
+
+def _check_with(statuses):
+    """Run cmd_tools_check over real ToolStatus objects, capturing stdout.
+
+    Real objects, not MagicMocks: a MagicMock's `.execution_ready` is a Mock
+    and therefore truthy, so a mocked status can never exercise this path.
+    """
+    import io
+    from contextlib import redirect_stdout
+
+    from scripts.cli.tool_commands import cmd_tools_check
+
+    mock_manager = MagicMock()
+    mock_manager.check_tool.side_effect = lambda name: statuses[name]
+
+    args = argparse.Namespace(tools=list(statuses), profile=None, json=False)
+
+    buf = io.StringIO()
+    with patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager):
+        with redirect_stdout(buf):
+            result = cmd_tools_check(args)
+    return result, buf.getvalue()
+
+
+def _status(name, **kw):
+    from scripts.cli.tool_manager import ToolStatus
+
+    kw.setdefault("installed", True)
+    kw.setdefault("installed_version", "1.0.0")
+    kw.setdefault("expected_version", "1.0.0")
+    return ToolStatus(name=name, **kw)
+
+
+def test_tools_check_names_a_tool_that_cannot_run():
+    """Measured with `java` hidden from PATH: `jmo tools check --profile deep`
+    printed `dependency-check  OK  -  12.1.0`, then
+    `All tools installed and up to date!`, and exited 0 - while every scan
+    using it exited 1 and wrote no output."""
+    statuses = {
+        "dependency-check": _status(
+            "dependency-check",
+            installed_version=None,
+            expected_version="12.1.0",
+            execution_ready=False,
+            execution_warning="Missing: java",
+        )
+    }
+
+    result, out = _check_with(statuses)
+
+    assert "not able to run" in out
+    assert "Missing: java" in out
+    assert result == 1
+
+
+def test_tools_check_does_not_claim_all_is_well():
+    """The green all-clear must not print over a tool that cannot run."""
+    statuses = {
+        "dependency-check": _status(
+            "dependency-check",
+            execution_ready=False,
+            execution_warning="Missing: java",
+        )
+    }
+
+    _, out = _check_with(statuses)
+
+    assert "All tools installed and up to date!" not in out
+
+
+def test_tools_check_is_unchanged_when_everything_can_run():
+    """The regression guard: a fully working install still exits 0 and still
+    prints the all-clear."""
+    statuses = {"trivy": _status("trivy")}
+
+    result, out = _check_with(statuses)
+
+    assert result == 0
+    assert "All tools installed and up to date!" in out
+    assert "not able to run" not in out

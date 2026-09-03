@@ -1895,3 +1895,89 @@ class TestDependencyCheckExitCodes:
 
     def test_success_is_still_a_success(self, tmp_path):
         assert 0 in self._definition(tmp_path).ok_return_codes
+
+
+class TestZapIsNotReportedBothWays:
+    """#1136: one scan reported zap as never started AND as failed.
+
+    `_find_tool` records an unresolved entry on every miss. zap probes
+    `zap-baseline.py` and then `docker`, so a machine with only docker recorded
+    zap as unresolved *and* ran it through the docker fallback:
+
+        zap requested but its dependency zap-baseline.py could not be found
+        - it did NOT run and its findings are MISSING
+        ... 9 s later ...
+        zap: it failed - it did NOT contribute findings to this scan
+        (Return code 3 not in (0, 1, 2))
+
+    Only the second was true. `zap-baseline.py` ships in the ZAP *Docker
+    image*, not in the desktop package `jmo tools install zap` lays down, so
+    the first probe misses on essentially every machine.
+    """
+
+    @staticmethod
+    def _scan(tmp_path, resolvable, caplog):
+        import logging
+
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / "index.html").write_text("<html></html>", encoding="utf-8")
+
+        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+            mock_runner.run_all_parallel.return_value = []
+
+            with caplog.at_level(
+                logging.ERROR, logger="scripts.cli.scan_jobs.repository_scanner"
+            ):
+                scan_repository(
+                    repo=repo,
+                    results_dir=tmp_path / "out",
+                    tools=["zap"],
+                    timeout=600,
+                    retries=0,
+                    per_tool_config={},
+                    allow_missing_tools=False,
+                    find_tool_func=(
+                        lambda n: ("/usr/bin/" + n) if n in resolvable else None
+                    ),
+                )
+
+            args, kwargs = MockRunner.call_args
+            tool_defs = kwargs.get("tools") or (args[0] if args else [])
+            names = [t.name for t in tool_defs]
+        return names, caplog.text
+
+    def test_docker_only_runs_zap_and_does_not_report_it_missing(
+        self, tmp_path, caplog
+    ):
+        """The defect: docker present, zap-baseline.py absent."""
+        names, log = self._scan(tmp_path, {"docker"}, caplog)
+
+        assert "zap" in names, "zap should run through the docker fallback"
+        assert "did NOT run" not in log, (
+            "zap was reported as never started in the same scan that ran it: " + log
+        )
+
+    def test_the_native_launcher_still_wins_when_present(self, tmp_path, caplog):
+        """zap-baseline.py is preferred over docker when both resolve, and the
+        command is the native one rather than a `docker run`."""
+        names, log = self._scan(tmp_path, {"zap-baseline.py", "docker"}, caplog)
+
+        assert "zap" in names
+        assert "did NOT run" not in log
+
+    def test_neither_available_is_still_reported_once(self, tmp_path, caplog):
+        """Suppressing the false report must not suppress the true one.
+
+        Without this, the fix could 'pass' by never reporting zap at all, which
+        is the same silent-drop class the surrounding code was written against.
+        """
+        names, log = self._scan(tmp_path, set(), caplog)
+
+        assert "zap" not in names
+        assert (
+            "did NOT run" in log
+        ), "with neither binary available, zap's absence must still be reported"
+        assert log.count("did NOT run") == 1, "reported more than once"

@@ -2028,6 +2028,10 @@ def print_tool_status_table(
             return (0, name)
         if not status.installed and status.manual_install:
             return (1, name)
+        # Installed but unable to run sorts with the actionable rows: the
+        # reader can fix it (install Java, install Node, add yara rules).
+        if status.installed and not status.execution_ready:
+            return (0, name)
         if status.is_outdated:
             return (2, name)
         return (3, name)
@@ -2040,6 +2044,19 @@ def print_tool_status_table(
             status_str = colorize("MANUAL", "cyan")
         elif not status.installed:
             status_str = colorize("MISSING", "red")
+        elif not status.execution_ready:
+            # Installed, and still unable to run. `check_tool` has always
+            # computed this - `_verify_execution` checks Java for
+            # dependency-check and zap, Node for cdxgen, bash for lynis on
+            # Windows, and rules for yara - and this table threw the answer
+            # away, so a box with no `java` printed
+            # `dependency-check  OK  -  12.1.0` and exit 0 while every scan
+            # exited 1 with no output. The dash in the Installed column was the
+            # only evidence on screen, and OK overrode it (#1136).
+            #
+            # Ranked above OUTDATED: a tool that cannot run at all is a worse
+            # problem than one running an old version.
+            status_str = colorize("NOT READY", "yellow")
         elif status.is_outdated:
             critical = " [!]" if status.is_critical else ""
             status_str = colorize(f"OUTDATED{critical}", "yellow")
@@ -2052,6 +2069,11 @@ def print_tool_status_table(
         print(
             f"{name:<{name_width}}  {status_str:<13}  {installed_ver:<12}  {expected_ver:<12}"
         )
+
+        if show_hints and status.installed and not status.execution_ready:
+            # The warning names the missing dependency; without it the row says
+            # a tool is not ready and nothing about why.
+            print(f"  -> {status.execution_warning or 'cannot run'}")
 
         if show_hints and not status.installed:
             if not status.platform_supported:
