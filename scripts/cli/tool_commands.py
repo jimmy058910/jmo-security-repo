@@ -822,7 +822,12 @@ def cmd_tools_list(args: argparse.Namespace) -> int:
 
 def cmd_tools_outdated(args: argparse.Namespace) -> int:
     """
-    Show only outdated tools (shortcut for `jmo tools check --outdated`).
+    Show only outdated tools.
+
+    This used to call itself "a shortcut for `jmo tools check --outdated`",
+    a flag `jmo tools check` does not define - it exits 2 with
+    `unrecognized arguments: --outdated` (#1137). There is no shortcut; this
+    subcommand is the only way to ask the question.
 
     Usage:
         jmo tools outdated

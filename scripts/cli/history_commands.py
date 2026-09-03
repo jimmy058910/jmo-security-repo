@@ -187,7 +187,12 @@ def cmd_history_list(args) -> int:
     if not db_path.exists():
         sys.stderr.write(f"Error: History database not found: {db_path}\n")
         sys.stderr.write(
-            "Run a scan with --store-history first, or use 'jmo history store'\n"
+            # `jmo scan` has no --store-history: storage is on by default and
+            # the flag that exists is --no-store-history. Naming a flag the
+            # parser rejects sends the reader to `unrecognized arguments`
+            # (#1137).
+            "Run 'jmo scan' first (history is stored by default), "
+            "or use 'jmo history store'\n"
         )
         return 1
 
@@ -606,7 +611,12 @@ def cmd_history_stats(args) -> int:
     if not db_path.exists():
         sys.stderr.write(f"Error: History database not found: {db_path}\n")
         sys.stderr.write(
-            "Run a scan with --store-history first, or use 'jmo history store'\n"
+            # `jmo scan` has no --store-history: storage is on by default and
+            # the flag that exists is --no-store-history. Naming a flag the
+            # parser rejects sends the reader to `unrecognized arguments`
+            # (#1137).
+            "Run 'jmo scan' first (history is stored by default), "
+            "or use 'jmo history store'\n"
         )
         return 1
 
