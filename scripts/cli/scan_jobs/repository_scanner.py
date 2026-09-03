@@ -1381,7 +1381,21 @@ def scan_repository(
                     output_file=dependency_check_out,
                     timeout=get_tool_timeout("dependency-check", timeout),
                     retries=retries,
-                    ok_return_codes=(0, 1),
+                    # ODC's exit codes, from its own App.java:
+                    #   0  success
+                    #   1  a file named on the command line was not found
+                    #   13 FATAL exceptions during the scan
+                    #   14 NON-FATAL exceptions during the scan
+                    #   15 a vulnerability met the --failOnCVSS threshold
+                    # 14 and 15 both write a complete report; 1 and 13 do not.
+                    # The old (0, 1) had it exactly backwards: it accepted a
+                    # genuine failure and rejected the two codes that mean
+                    # "results are on disk". Measured on all three dogfood
+                    # repositories - every one returned 14, every one wrote
+                    # valid JSON, and jmoadaptivegolf's held 65 findings (4
+                    # CRITICAL) that the scan phase was calling a failure while
+                    # the report phase counted them (#1133).
+                    ok_return_codes=(0, 14, 15),
                     capture_stdout=False,
                 )
             )
