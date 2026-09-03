@@ -1832,3 +1832,66 @@ class TestTruffleHogSkipsVcsAndJmoInternals:
             command = next(t for t in tool_defs if t.name == "trufflehog").command
 
         assert command.index("--exclude-paths") < command.index("--results")
+
+
+class TestDependencyCheckExitCodes:
+    """#1133: the scan phase called dependency-check a failure while the report
+    phase counted its findings.
+
+    ODC's codes, from its own App.java: 0 success, 1 a named file was not
+    found, 13 fatal exceptions, 14 non-fatal exceptions, 15 the --failOnCVSS
+    threshold was met. 14 and 15 both write a complete report; 1 and 13 do not.
+    The old `(0, 1)` had it backwards - it accepted a genuine failure and
+    rejected the two codes that mean "results are on disk".
+
+    Measured on the 2026-09-02 dogfood: all three repositories returned 14, all
+    three wrote valid JSON, and jmoadaptivegolf's held 65 findings (4 CRITICAL)
+    that the scan phase reported as "did NOT contribute findings to this scan".
+    """
+
+    @staticmethod
+    def _definition(tmp_path):
+        repo = tmp_path / "repo"
+        repo.mkdir()
+
+        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+            mock_runner.run_all_parallel.return_value = []
+
+            scan_repository(
+                repo=repo,
+                results_dir=tmp_path / "out",
+                tools=["dependency-check"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+                find_tool_func=lambda name: "/usr/bin/" + name,
+            )
+
+            args, kwargs = MockRunner.call_args
+            tool_defs = kwargs.get("tools") or (args[0] if args else [])
+            return next(t for t in tool_defs if t.name == "dependency-check")
+
+    def test_non_fatal_analysis_exceptions_count_as_a_run(self, tmp_path):
+        """Exit 14 is the code every dogfood repository actually returned."""
+        assert 14 in self._definition(tmp_path).ok_return_codes
+
+    def test_the_cvss_threshold_code_counts_as_a_run(self, tmp_path):
+        """A user who sets --failOnCVSS via per_tool flags gets 15 on a
+        successful scan that found something. Rejecting it would recreate this
+        exact bug through a different code."""
+        assert 15 in self._definition(tmp_path).ok_return_codes
+
+    def test_fatal_exceptions_are_still_a_failure(self, tmp_path):
+        """13 means the scan aborted; its report is incomplete or absent."""
+        assert 13 not in self._definition(tmp_path).ok_return_codes
+
+    def test_file_not_found_is_still_a_failure(self, tmp_path):
+        """1 is ODC's 'a file named on the command line was not found', not
+        'vulnerabilities found' - the meaning the old tuple assumed."""
+        assert 1 not in self._definition(tmp_path).ok_return_codes
+
+    def test_success_is_still_a_success(self, tmp_path):
+        assert 0 in self._definition(tmp_path).ok_return_codes
