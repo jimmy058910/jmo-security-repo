@@ -73,6 +73,7 @@ from ..scan_utils import (
     tool_flags,
     tool_timeout,
     write_stub,
+    write_trufflehog_exclude_file,
 )
 
 logger = logging.getLogger(__name__)
@@ -277,6 +278,13 @@ def scan_repository(
                 str(repo),
                 "--json",
                 "--no-update",
+                # Keep VCS internals and JMo's own state out of the walk. A
+                # secret at `.git/objects/03/f8eab...` names no commit and no
+                # source file, and `.jmo/history.db` holds the raw findings of
+                # every previous scan, so scanning it re-reports them all
+                # (#1134).
+                "--exclude-paths",
+                str(write_trufflehog_exclude_file(out_dir)),
                 *trufflehog_flags,
             ]
             tool_defs.append(

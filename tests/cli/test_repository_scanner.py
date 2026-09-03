@@ -1755,3 +1755,80 @@ class TestHorusecStagingDirIsExcluded:
 
         assert len(found) == 1, f"staged copy was collected too: {found}"
         assert ".horusec" not in found[0]
+
+
+class TestTruffleHogSkipsVcsAndJmoInternals:
+    """#1134: the scan phase has to hand TruffleHog the exclude file."""
+
+    @staticmethod
+    def _run(tmp_path):
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        out_root = tmp_path / "out"
+
+        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+            mock_runner.run_all_parallel.return_value = []
+
+            scan_repository(
+                repo=repo,
+                results_dir=out_root,
+                tools=["trufflehog"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+                find_tool_func=lambda name: "/usr/bin/" + name,
+            )
+
+            args, kwargs = MockRunner.call_args
+            tool_defs = kwargs.get("tools") or (args[0] if args else [])
+            return next(t for t in tool_defs if t.name == "trufflehog")
+
+    def test_the_command_carries_an_exclude_paths_file(self, tmp_path):
+        definition = self._run(tmp_path)
+        command = definition.command
+
+        assert "--exclude-paths" in command
+        exclude_file = Path(command[command.index("--exclude-paths") + 1])
+        assert exclude_file.is_file(), "the flag names a file that was not written"
+
+    def test_the_written_file_excludes_git_and_jmo(self, tmp_path):
+        """The flag is worthless if the file it names is empty or wrong, so
+        assert the contents rather than only the flag's presence."""
+        definition = self._run(tmp_path)
+        command = definition.command
+        exclude_file = Path(command[command.index("--exclude-paths") + 1])
+
+        patterns = exclude_file.read_bytes().decode("utf-8").splitlines()
+
+        assert patterns == [r"[\\/]\.git[\\/]", r"[\\/]\.jmo[\\/]"]
+
+    def test_user_flags_still_come_last(self, tmp_path):
+        """JMo's exclusion precedes per_tool flags so an explicit user
+        --exclude-paths overrides it, matching the exclusion table's rule."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+
+        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+            mock_runner.run_all_parallel.return_value = []
+
+            scan_repository(
+                repo=repo,
+                results_dir=tmp_path / "out",
+                tools=["trufflehog"],
+                timeout=600,
+                retries=0,
+                per_tool_config={"trufflehog": {"flags": ["--results", "verified"]}},
+                allow_missing_tools=False,
+                find_tool_func=lambda name: "/usr/bin/" + name,
+            )
+
+            args, kwargs = MockRunner.call_args
+            tool_defs = kwargs.get("tools") or (args[0] if args else [])
+            command = next(t for t in tool_defs if t.name == "trufflehog").command
+
+        assert command.index("--exclude-paths") < command.index("--results")
