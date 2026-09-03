@@ -1363,6 +1363,7 @@ def scan_repository(
                 "JSON",
                 "--out",
                 str(dependency_check_out),
+                *tool_exclusion_flags("dependency-check"),
                 *dependency_check_flags,
             ]
             tool_defs.append(

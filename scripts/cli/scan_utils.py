@@ -283,6 +283,11 @@ TRIVY_UNSUPPORTED_FLAGS: dict[str, frozenset[str]] = {
 # 346 `Unix_error: No such file or directory` errors under `<repo>/.horusec/`,
 # and the report's "826 file(s) could not be analysed" warning was mostly those
 # paths (#1132).
+#
+# semgrep-secrets was not the worst of it. Re-parsing the same dogfood run's
+# dependency-check reports found 15,944 non-fatal analysis exceptions across
+# three repositories - 8499 on jmoadaptivegolf alone - and almost every one of
+# jmoadaptivegolf's names a vanished path under `.horusec/<uuid>/`.
 SCAN_EXCLUDED_DIRS: tuple[str, ...] = (".horusec",)
 
 
@@ -308,16 +313,28 @@ BANDIT_DEFAULT_EXCLUDED_PATHS: tuple[str, ...] = (
 )
 
 
-# How each tool spells "skip this directory". A tool appears here only once its
-# flag has been measured against the real binary; an unlisted tool gets nothing
-# rather than an argument it would reject at parse time, which for trivy and
-# semgrep is fatal at argument parsing (see TRIVY_UNSUPPORTED_FLAGS).
-TOOL_EXCLUSION_FLAG: dict[str, str] = {
-    "semgrep": "--exclude",
-    "semgrep-secrets": "--exclude",
-    "trivy": "--skip-dirs",
-    "trivy-rbac": "--skip-dirs",
-    "bandit": "-x",
+# How each tool spells "skip this directory", as (flag, style). A tool appears
+# here only once its flag has been measured against the real binary; an unlisted
+# tool gets nothing rather than an argument it would reject at parse time, which
+# for trivy and semgrep is fatal (see TRIVY_UNSUPPORTED_FLAGS).
+#
+# The style cannot be inferred from the flag name: semgrep and dependency-check
+# both spell it `--exclude` and want different things - a gitignore-style glob
+# where a bare directory name matches at any depth, versus an Ant pattern where
+# it does not and `**/<dir>/**` is required.
+#
+#   "inline"    one `--flag=VALUE` per directory      (semgrep)
+#   "separate"  one `--flag VALUE` pair per directory (trivy)
+#   "ant"       one `--flag **/VALUE/**` pair         (dependency-check)
+#   "csv"       a single flag with one comma-separated value that REPLACES the
+#               tool's own defaults                   (bandit)
+TOOL_EXCLUSION_FLAG: dict[str, tuple[str, str]] = {
+    "semgrep": ("--exclude", "inline"),
+    "semgrep-secrets": ("--exclude", "inline"),
+    "trivy": ("--skip-dirs", "separate"),
+    "trivy-rbac": ("--skip-dirs", "separate"),
+    "dependency-check": ("--exclude", "ant"),
+    "bandit": ("-x", "csv"),
 }
 
 
@@ -468,22 +485,24 @@ def filter_trivy_flags(subcommand: str, flags: list[str]) -> list[str]:
 def tool_exclusion_flags(tool: str) -> list[str]:
     """Flags that keep ``tool`` out of JMo's own in-tree scratch directories.
 
-    Three tools, three spellings, and the shapes are not interchangeable:
-    semgrep takes a repeated ``--exclude=PAT``, trivy a repeated
-    ``--skip-dirs PAT``, and bandit a single comma-separated ``-x`` whose value
-    *replaces* upstream's defaults rather than adding to them - which is why the
-    bandit branch re-sends BANDIT_DEFAULT_EXCLUDED_PATHS.
+    Four tools, four spellings, and they are not interchangeable - see
+    TOOL_EXCLUSION_FLAG for what each style means and why the style cannot be
+    read off the flag name.
 
     Returns an empty list for any tool not in TOOL_EXCLUSION_FLAG, so adding a
     scanner never risks handing it an argument it would reject.
     """
-    flag = TOOL_EXCLUSION_FLAG.get(tool)
-    if flag is None:
+    entry = TOOL_EXCLUSION_FLAG.get(tool)
+    if entry is None:
         return []
-    if flag == "-x":
+    flag, style = entry
+    if style == "csv":
+        # bandit's -x REPLACES its defaults, so they have to be re-sent.
         return [flag, ",".join((*BANDIT_DEFAULT_EXCLUDED_PATHS, *SCAN_EXCLUDED_DIRS))]
-    if flag == "--exclude":
+    if style == "inline":
         return [f"{flag}={d}" for d in SCAN_EXCLUDED_DIRS]
+    if style == "ant":
+        return [arg for d in SCAN_EXCLUDED_DIRS for arg in (flag, f"**/{d}/**")]
     return [arg for d in SCAN_EXCLUDED_DIRS for arg in (flag, d)]
 
 

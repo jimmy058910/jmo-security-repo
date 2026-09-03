@@ -1721,6 +1721,18 @@ class TestHorusecStagingDirIsExcluded:
             == ".svn,CVS,.bzr,.hg,.git,__pycache__,.tox,.eggs,*.egg,.horusec"
         )
 
+    def test_dependency_check_is_told_to_skip_it(self, tmp_path):
+        """ODC was the loudest casualty: 8499 non-fatal analysis exceptions on
+        jmoadaptivegolf, almost all naming a vanished `.horusec/<uuid>/` path.
+
+        It takes an Ant pattern, so a bare directory name would not match.
+        """
+        commands = self._built_commands(tmp_path, ["dependency-check"])
+        command = commands["dependency-check"]
+
+        assert "--exclude" in command
+        assert command[command.index("--exclude") + 1] == "**/.horusec/**"
+
     def test_jmos_own_file_walk_skips_the_staging_copy(self, tmp_path):
         """hadolint and shellcheck take explicit file arguments, so JMo's own
         enumeration is a walk like any other.

@@ -373,6 +373,37 @@ class TestToolExclusionFlags:
 
         assert len(tool_exclusion_flags("bandit")) == 2
 
+    def test_dependency_check_needs_an_ant_pattern(self):
+        """ODC spells it `--exclude` too, but wants an Ant pattern.
+
+        A bare `.horusec` is a gitignore-style glob that semgrep matches at any
+        depth; Ant does not, so ODC needs `**/.horusec/**`. Measured against
+        dependency-check 12.1.0 on a tree with a real and a staged
+        package.json: 2 dependencies without the flag, 1 with it, and the one
+        kept is the real one. This is why the table stores a style per tool
+        rather than deriving it from the flag name.
+        """
+        from scripts.cli.scan_utils import tool_exclusion_flags
+
+        assert tool_exclusion_flags("dependency-check") == [
+            "--exclude",
+            "**/.horusec/**",
+        ]
+
+    def test_the_two_exclude_spellings_do_not_collide(self):
+        """semgrep and dependency-check share a flag name and must not share a
+        pattern - the bug this guards is one tool silently getting the other's
+        form."""
+        from scripts.cli.scan_utils import tool_exclusion_flags
+
+        semgrep = tool_exclusion_flags("semgrep")
+        odc = tool_exclusion_flags("dependency-check")
+
+        # Both non-empty first: an absent table entry returns [], which would
+        # satisfy a bare `!=` and make this guard pass for the wrong reason.
+        assert semgrep and odc
+        assert semgrep != odc
+
     def test_an_unmapped_tool_gets_nothing(self):
         """An unlisted tool must not be handed a flag it would reject.
 
