@@ -562,6 +562,13 @@ def check_npm_version_exists(package: str, version: str) -> str:
 # A MANUAL_INSTALL tool ships in no image, so it has nothing to pin. `0.0.0` is
 # the placeholder those entries carry -- not a claim that release 0.0.0 exists,
 # which is how the validator read it, failing every `jmo build` (#935).
+#
+# Source of truth: scripts/core/tool_registry.py UNPINNED_SENTINEL. This is a
+# deliberate local mirror, for the same reason MANUAL_INSTALL_TOOLS above is one:
+# this script runs in CI (maintenance.yml check-versions) WITHOUT
+# `pip install -e .`, so importing the scripts.core package is not reliably
+# available there. The drift-guard unit test
+# (tests/unit/test_update_versions_manual_tools.py) asserts the two stay in sync.
 UNPINNED_SENTINEL = "0.0.0"
 
 

@@ -25,6 +25,7 @@ from scripts.core.tool_registry import (
     TOOL_EXECUTION_COMMANDS,
     TOOL_VARIANTS,
     TOOL_VERSION_REQUIREMENTS,
+    UNPINNED_SENTINEL,
     ToolRegistry,
     detect_platform,
     get_install_hint,
@@ -651,6 +652,34 @@ class ToolStatus:
             ToolStatusType.UNSUPPORTED: "UNSUPPORTED",
         }
         return status_text_map.get(self.status_type, "UNKNOWN")
+
+    @property
+    def expected_version_display(self) -> str:
+        """`expected_version` as a human should read it.
+
+        A MANUAL_INSTALL tool ships in no image and so has nothing to pin;
+        `versions.yaml` records that as `0.0.0`, the UNPINNED_SENTINEL.
+        `update_versions.py --validate` has understood it since #935 and prints
+        `falco: unpinned (manual install, no image)`, but the sentinel was
+        defined only in that dev script, so the CLI printed it verbatim:
+
+            falco             UNSUPPORTED    -             0.0.0
+
+        which reads as a claim that release 0.0.0 exists. falco is the only
+        entry carrying it -- the other three manual tools have real versions --
+        so it looks like a data error rather than a convention.
+
+        Display only. `expected_version` keeps the raw value, and the JSON
+        output is unchanged, so nothing machine-readable moves.
+        """
+        if not self.expected_version:
+            return "-"
+        if (
+            self.expected_version == UNPINNED_SENTINEL
+            and self.name in MANUAL_INSTALL_TOOLS
+        ):
+            return "unpinned"
+        return self.expected_version
 
 
 @dataclass
@@ -2018,7 +2047,7 @@ def print_tool_status_table(
             status_str = colorize("OK", "green")
 
         installed_ver = status.installed_version or "-"
-        expected_ver = status.expected_version or "-"
+        expected_ver = status.expected_version_display
 
         print(
             f"{name:<{name_width}}  {status_str:<13}  {installed_ver:<12}  {expected_ver:<12}"

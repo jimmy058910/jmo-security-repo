@@ -164,6 +164,27 @@ CONTENT_TRIGGERED_TOOLS: set[str] = {"mobsf", "akto"}
 # These cannot be auto-installed via jmo tools install
 MANUAL_INSTALL_TOOLS: set[str] = {"falco", "afl++", "mobsf", "akto"}
 
+#: The `version:` a `versions.yaml` entry carries when there is nothing to pin.
+#:
+#: A MANUAL_INSTALL tool ships in no Docker image, so no release of it is
+#: baked anywhere and pinning one would be a claim about nothing. `0.0.0` says
+#: "unpinned" -- it is NOT an assertion that release 0.0.0 exists.
+#: `update_versions.py --validate` reads it that way and reports
+#: `falco: unpinned (manual install, no image)`; falco is currently the only
+#: entry using it.
+#:
+#: It lives here, rather than only in `scripts/dev/update_versions.py` where it
+#: began, because the CLI has to render it too: `jmo tools check` printed a bare
+#: `0.0.0` in its Expected column, which reads as a version claim and is the one
+#: user-facing surface that showed the sentinel raw.
+#:
+#: `update_versions.py` keeps a local mirror of this value for the same reason it
+#: mirrors MANUAL_INSTALL_TOOLS -- it runs in CI (`maintenance.yml`
+#: check-versions) WITHOUT `pip install -e .`, so importing scripts.core is not
+#: reliable there. `tests/unit/test_update_versions_manual_tools.py` fails if the
+#: two drift apart.
+UNPINNED_SENTINEL: str = "0.0.0"
+
 # Scan type applicability - which tools apply to which target types
 # Based on docs/PROFILES_AND_TOOLS.md Scan Type Tool Matrix
 # This enables smarter tool selection: only run tools applicable to the target
