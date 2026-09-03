@@ -188,15 +188,38 @@ def cmd_tools_check(args: argparse.Namespace) -> int:
     print_tool_status_table(statuses, colorize, show_hints=True)
 
     # Summary — distinguish auto-installable missing from manual-install tools
+    # A tool with no build for this platform is neither missing nor
+    # manual-install: there is nothing to install and no manual route either.
+    # Counting it as missing is what produced "2 tool(s) missing / Run
+    # `jmo tools install --profile deep` to install" for noseyparker and
+    # scancode on Windows, followed by the installer refusing both.
+    unsupported = [
+        s for s in statuses.values() if not s.installed and not s.platform_supported
+    ]
     real_missing = [
-        s for s in statuses.values() if not s.installed and not s.manual_install
+        s
+        for s in statuses.values()
+        if not s.installed and not s.manual_install and s.platform_supported
     ]
     manual_missing = [
-        s for s in statuses.values() if not s.installed and s.manual_install
+        s
+        for s in statuses.values()
+        if not s.installed and s.manual_install and s.platform_supported
     ]
     outdated = [s for s in statuses.values() if s.is_outdated]
 
     print()
+    if unsupported:
+        print(
+            colorize(
+                f"{len(unsupported)} tool(s) not available on this platform",
+                "yellow",
+            )
+        )
+        for s in unsupported:
+            hows = ", ".join(s.platform_workarounds or []) or "none"
+            print(f"  - {s.name}: {s.platform_reason or 'unsupported'} (try: {hows})")
+
     if real_missing:
         print(colorize(f"{len(real_missing)} tool(s) missing", "red"))
         print(
@@ -484,6 +507,29 @@ def cmd_tools_install(args: argparse.Namespace) -> int:
     else:
         # Install missing for profile
         missing = manager.get_missing_tools(profile)
+
+    # Drop anything this platform cannot run BEFORE the confirmation prompt.
+    # The installer already refuses these, but only after listing them as
+    # "tool(s) to install", asking "Proceed with installation? [Y/n]", and then
+    # reporting `[FAIL] noseyparker - not available on windows` under a summary
+    # line calling it "manual installation" -- which it is not: there is no
+    # manual route either.
+    unsupported = [s for s in missing if not s.platform_supported]
+    if unsupported:
+        missing = [s for s in missing if s.platform_supported]
+        print(
+            colorize(
+                f"Skipping {len(unsupported)} tool(s) that cannot run on "
+                f"{manager.platform}:",
+                "yellow",
+            )
+        )
+        for status in unsupported:
+            hows = ", ".join(status.platform_workarounds or []) or "none"
+            print(
+                f"  - {status.name}: "
+                f"{status.platform_reason or 'not available'} (try: {hows})"
+            )
 
     if not missing:
         print(colorize("All tools are already installed!", "green"))
