@@ -2239,9 +2239,31 @@ def _check_scan_tools(args, requested_tools: list[str]) -> tuple[list[str], list
             print("\nRun 'jmo tools install' to install required tools.")
             return [], missing_names
 
-        # Interactive prompt (skip if not a TTY)
-        if not sys.stdin.isatty():
-            # Non-interactive: use available tools
+        # Interactive prompt -- skipped when nobody is there to answer.
+        #
+        # The TTY check alone is not that test. A scan launched by a scheduler,
+        # a wrapper script or `Start-Process` inherits a console, so
+        # `sys.stdin.isatty()` is True while no human will ever type into it.
+        # Measured on Windows with JMO_NON_INTERACTIVE=1 set: this printed
+        # "6 of 29 tool(s) not installed ... Choice [2]:" and waited
+        # indefinitely -- killed after 60s with no scanner started.
+        #
+        # JMO_NON_INTERACTIVE exists for exactly that case, and every other
+        # prompt in this file already honours it (`_collect_email_opt_in`, and
+        # the dependency-install prompt after #958). This site was the omission
+        # against the file's own convention. DOCKER_CONTAINER is included for
+        # the same reason `_collect_email_opt_in` includes it.
+        #
+        # The choice taken is [2] "continue with available tools" -- the
+        # default the prompt itself advertises, and the same one the EOF branch
+        # below settles on. A scheduled scan should produce the findings it
+        # can, not stop.
+        if (
+            not sys.stdin.isatty()
+            or os.environ.get("JMO_NON_INTERACTIVE")
+            or os.environ.get("CI")
+            or os.environ.get("DOCKER_CONTAINER") == "1"
+        ):
             return available, missing_names
 
         # Show what's missing

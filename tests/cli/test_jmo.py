@@ -657,6 +657,14 @@ class TestScanPreflightAtEOF:
         )
         monkeypatch.setattr("sys.stdin.isatty", lambda: isatty)
         monkeypatch.setattr("builtins.input", on_input)
+        # These cases are about what happens AT the prompt, so they have to
+        # establish an environment that reaches it. isatty is no longer the
+        # only gate: JMO_NON_INTERACTIVE/CI/DOCKER_CONTAINER now skip the
+        # prompt outright (#1131). GitHub Actions sets CI=true, so without
+        # this every case below took the non-interactive branch and the two
+        # cancel tests failed on CI while passing locally.
+        for name in ("JMO_NON_INTERACTIVE", "CI", "DOCKER_CONTAINER"):
+            monkeypatch.delenv(name, raising=False)
 
         args = argparse.Namespace(allow_missing_tools=False)
         return _check_scan_tools(args, ["trivy", "noseyparker"])
@@ -703,6 +711,107 @@ class TestScanPreflightAtEOF:
         available, missing = self._call(monkeypatch, isatty=True, on_input=_interrupt)
 
         assert available == []
+
+
+class TestScanPreflightHonoursNonInteractive:
+    """A console is not a person.
+
+    A scan launched by a scheduler, a wrapper script or `Start-Process`
+    inherits a console, so `sys.stdin.isatty()` is True while nobody will ever
+    type into it. `input()` then blocks forever rather than raising EOFError,
+    so the EOF guard above cannot help.
+
+    Measured on Windows with `JMO_NON_INTERACTIVE=1` set and stdin attached to
+    a hidden console: `jmo scan --profile-name deep` printed
+    `6 of 29 tool(s) not installed ... Choice [2]:` and waited indefinitely --
+    killed after 60s with no scanner started.
+
+    `JMO_NON_INTERACTIVE` exists for exactly that case, and every other prompt
+    in `jmo.py` already honours it (`_collect_email_opt_in`, and the
+    dependency-install prompt after #958). This site was the omission against
+    the file's own convention. Class of #958 and #789.
+    """
+
+    @staticmethod
+    def _missing(name: str):
+        status = MagicMock()
+        status.name = name
+        return status
+
+    def _call(self, monkeypatch, env_var: str | None, value: str = "1"):
+        import scripts.cli.tool_manager as tool_manager
+        from scripts.cli.jmo import _check_scan_tools
+
+        monkeypatch.setattr(
+            tool_manager,
+            "get_missing_tools_for_scan",
+            lambda tools, manager=None: (["trivy"], [self._missing("noseyparker")]),
+        )
+        # A real console: the TTY check passes, so only the env var can stop
+        # the prompt. If it does not, `input` fails the test rather than
+        # hanging the suite.
+        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+
+        def _never(_prompt=""):
+            raise AssertionError(
+                "the missing-tools prompt ran on a machine that declared "
+                "itself non-interactive; a scheduled scan blocks here forever"
+            )
+
+        monkeypatch.setattr("builtins.input", _never)
+        for name in ("JMO_NON_INTERACTIVE", "CI", "DOCKER_CONTAINER"):
+            monkeypatch.delenv(name, raising=False)
+        if env_var:
+            monkeypatch.setenv(env_var, value)
+
+        args = argparse.Namespace(allow_missing_tools=False)
+        return _check_scan_tools(args, ["trivy", "noseyparker"])
+
+    @pytest.mark.parametrize(
+        "env_var,value",
+        [
+            ("JMO_NON_INTERACTIVE", "1"),
+            ("CI", "true"),
+            ("DOCKER_CONTAINER", "1"),
+        ],
+    )
+    def test_declared_non_interactive_takes_the_advertised_default(
+        self, monkeypatch, env_var, value
+    ):
+        available, missing = self._call(monkeypatch, env_var, value)
+
+        # [2] "Continue with available tools" is the default the prompt itself
+        # advertises, and the same branch EOF settles on.
+        assert available == ["trivy"]
+        assert missing == ["noseyparker"]
+
+    def test_an_interactive_console_still_prompts(self, monkeypatch):
+        """Control: without the variable, a real user still gets the choice.
+
+        Without this, "never prompt" would pass the tests above just as well,
+        and would be a much larger behaviour change than the one asked for.
+        """
+        import scripts.cli.tool_manager as tool_manager
+        from scripts.cli.jmo import _check_scan_tools
+
+        monkeypatch.setattr(
+            tool_manager,
+            "get_missing_tools_for_scan",
+            lambda tools, manager=None: (["trivy"], [self._missing("noseyparker")]),
+        )
+        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+        for name in ("JMO_NON_INTERACTIVE", "CI", "DOCKER_CONTAINER"):
+            monkeypatch.delenv(name, raising=False)
+
+        asked = []
+        monkeypatch.setattr("builtins.input", lambda _p="": (asked.append(_p) or "3"))
+
+        available, _ = _check_scan_tools(
+            argparse.Namespace(allow_missing_tools=False), ["trivy", "noseyparker"]
+        )
+
+        assert asked, "an interactive user was silently denied the prompt"
+        assert available == [], "the user chose [3] Cancel and was overruled"
 
 
 class TestScanPathLoggingIsReachable:
