@@ -295,3 +295,124 @@ def test_syft_large_sbom(tmp_path: Path):
 
     assert len(findings) == 100
     assert all(f.severity == "INFO" for f in findings)
+
+
+# ---------------------------------------------------------------------------
+# #1135: syft reports the same file as `\.github\workflows\ci.yml` on Windows
+# and `/.github/workflows/ci.yml` on Linux. Hashing that raw gave one package
+# two ids. Measured on juice-shop: 22 packages common to a Windows and a WSL
+# run of the same commit, 0 shared ids.
+#
+# The report phase cannot repair it: `_normalize_paths_and_ids` re-keys only an
+# id it can prove came from the path, and this adapter passes the package name
+# in the rule slot while `ruleId` is the constant "SBOM.PACKAGE" - so the proof
+# fails and 41 paths were normalized against 0 ids re-keyed.
+# ---------------------------------------------------------------------------
+
+
+def _artifact(name: str, version: str, location: str | None):
+    a = {"name": name, "version": version}
+    if location is not None:
+        a["locations"] = [{"path": location}]
+    return a
+
+
+def _sbom(*artifacts) -> str:
+    return json.dumps({"artifacts": list(artifacts)})
+
+
+def test_the_same_package_gets_one_id_on_windows_and_linux(tmp_path: Path):
+    """The defect, stated as the property that matters.
+
+    Both spellings are taken verbatim from the 2026-09-02 dogfood's Windows and
+    WSL syft.json for juice-shop.
+    """
+    win_dir = tmp_path / "win"
+    lin_dir = tmp_path / "lin"
+    win_dir.mkdir()
+    lin_dir.mkdir()
+    win = write(
+        win_dir,
+        "syft.json",
+        _sbom(_artifact("actions/checkout", "v4.2.2", "\\.github\\workflows\\ci.yml")),
+    )
+    lin = write(
+        lin_dir,
+        "syft.json",
+        _sbom(_artifact("actions/checkout", "v4.2.2", "/.github/workflows/ci.yml")),
+    )
+
+    adapter = SyftAdapter()
+    win_items = adapter.parse(win)
+    lin_items = adapter.parse(lin)
+
+    assert len(win_items) == len(lin_items) == 1
+    assert win_items[0].id == lin_items[0].id
+
+
+def test_two_packages_in_one_file_still_get_distinct_ids(tmp_path: Path):
+    """Normalizing the path must not collapse packages that share a file.
+
+    A workflow or lockfile names many packages at one path, so if the path were
+    the only distinguishing input, deduplication would drop all but the first.
+    """
+    f = write(
+        tmp_path,
+        "syft.json",
+        _sbom(
+            _artifact("actions/checkout", "v4.2.2", "/.github/workflows/ci.yml"),
+            _artifact("actions/setup-node", "v4.1.0", "/.github/workflows/ci.yml"),
+        ),
+    )
+
+    items = SyftAdapter().parse(f)
+
+    assert len(items) == 2
+    assert items[0].id != items[1].id
+
+
+def test_two_versions_of_one_package_still_get_distinct_ids(tmp_path: Path):
+    """The version reaches the fingerprint only through the message, which is
+    truncated to 120 characters - short enough here, but worth pinning."""
+    f = write(
+        tmp_path,
+        "syft.json",
+        _sbom(
+            _artifact("actions/checkout", "v4.2.2", "/.github/workflows/ci.yml"),
+            _artifact("actions/checkout", "v3.6.0", "/.github/workflows/ci.yml"),
+        ),
+    )
+
+    items = SyftAdapter().parse(f)
+
+    assert len(items) == 2
+    assert items[0].id != items[1].id
+
+
+def test_the_reported_location_is_left_for_the_report_phase(tmp_path: Path):
+    """Only the fingerprint INPUT is normalized here.
+
+    `location.path` stays as syft emitted it so the report phase's
+    `normalize_finding_path` can still strip the scan root, which needs the
+    roots this adapter does not have.
+    """
+    f = write(
+        tmp_path,
+        "syft.json",
+        _sbom(_artifact("actions/checkout", "v4.2.2", "\\.github\\workflows\\ci.yml")),
+    )
+
+    items = SyftAdapter().parse(f)
+
+    assert items[0].location["path"] == "\\.github\\workflows\\ci.yml"
+
+
+def test_a_package_with_no_location_is_still_parsed(tmp_path: Path):
+    """syft omits `locations` for some artifacts; normalizing "" must not raise
+    and must not change the finding count."""
+    f = write(tmp_path, "syft.json", _sbom(_artifact("lodash", "4.17.21", None)))
+
+    items = SyftAdapter().parse(f)
+
+    assert len(items) == 1
+    assert items[0].location["path"] == ""

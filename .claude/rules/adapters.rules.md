@@ -55,11 +55,22 @@ silently collapsed into one finding.
 
 **So an adapter that keys on the path with a *different* second component falls
 through the crack**: it wants re-keying and does not get it, and the host's raw
-path stays hashed into the id forever. `syft` is the measured case (#1135) — it
+path stays hashed into the id forever. `syft` was the measured case (#1135) — it
 sets `ruleId = "SBOM.PACKAGE"` (a constant) but fingerprints on the package
-name, so 41 paths are normalised and **0 ids are re-keyed**, and no finding
-matches across Windows and Linux. `horusec` had the same shape until #1141 gave
-it a real `rule_id`; it now re-keys 579 of 584.
+name, so 23 paths were normalised and **0 ids re-keyed**, and **0 of 22**
+packages common to a Windows and a WSL run of juice-shop shared an id.
+`horusec` had the same shape until #1141 gave it a real `rule_id`; it now
+re-keys 579 of 584.
+
+**syft is fixed the other way, and the crack is still there.** Rather than
+align the rule slot, its artifacts branch now hashes
+`normalize_finding_path(location)` — 22 of 22 shared ids, and the report phase
+still re-keys 0 of 23, which is fine because the adapter no longer needs it to.
+Aligning the slot would have worked too; normalising first keeps the adapter
+correct on its own instead of depending on the report phase running with the
+right roots. **Any new adapter with a constant `ruleId` has the same choice to
+make, and nothing will tell it so** — `_normalize_paths_and_ids` fails silently
+by design, since the alternative is collapsing zap's and cdxgen's findings.
 
 **When you add or change an adapter:** either fingerprint as
 `fingerprint(tool, <the ruleId you set>, path, line, message)`, or normalise the
