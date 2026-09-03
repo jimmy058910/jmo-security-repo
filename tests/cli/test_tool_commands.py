@@ -3188,3 +3188,145 @@ class TestGetDirSizeEdgeCases:
 
         # Should return 0 due to exception handling
         assert result == 0
+
+
+# ========== A tool this platform cannot run is not "missing" ==========
+
+
+def _unsupported_status(name="noseyparker"):
+    """A ToolStatus for a tool with no build for this platform."""
+    from scripts.cli.tool_manager import ToolStatus
+
+    return ToolStatus(
+        name=name,
+        installed=False,
+        platform_supported=False,
+        platform_reason="Rust binary not available for Windows",
+        platform_workarounds=["docker", "wsl2"],
+    )
+
+
+def test_an_unsupported_tool_is_not_reported_as_missing():
+    """Measured on Windows, `jmo tools check --profile deep` printed:
+
+        noseyparker       MISSING     -             0.24.0
+        scancode          MISSING     -             32.5.0
+        2 tool(s) missing
+        Run `jmo tools install --profile deep` to install
+
+    Following that footer ran the installer, which asked
+    `Proceed with installation? [Y/n]` and then answered
+    `[FAIL] noseyparker - not available on windows`. The platform table is
+    known at check time; nothing was consulting it.
+    """
+    from scripts.cli.tool_commands import cmd_tools_check
+    from scripts.cli.tool_manager import ToolStatusType
+
+    status = _unsupported_status()
+    assert status.status_type is ToolStatusType.UNSUPPORTED
+    assert status.status_text == "UNSUPPORTED"
+
+    mock_manager = MagicMock()
+    mock_manager.check_tool.return_value = status
+    args = argparse.Namespace(tools=["noseyparker"], profile=None, json=False)
+
+    printed = []
+    with (
+        patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager),
+        patch("scripts.cli.tool_commands.print_tool_status_table"),
+        patch(
+            "builtins.print",
+            side_effect=lambda *a, **k: printed.append(" ".join(str(x) for x in a)),
+        ),
+    ):
+        result = cmd_tools_check(args)
+
+    text = chr(10).join(printed)
+    assert (
+        "tool(s) missing" not in text
+    ), "a tool with no build for this platform was counted as missing"
+    assert (
+        "jmo tools install" not in text
+    ), "the footer still points at an installer that refuses this tool"
+    assert "not available on this platform" in text
+    assert "Rust binary not available for Windows" in text
+    assert (
+        "docker" in text
+    ), "the workarounds must be shown; they are the only way forward"
+
+    # Nothing is actionable, so nothing failed. On Windows `--profile deep` can
+    # never have all 29 tools, so the old rc=1 made this a gate that could
+    # never pass.
+    assert result == 0
+
+
+def test_a_genuinely_missing_tool_still_reports_missing():
+    """Control: the fix must not silence real, installable gaps."""
+    from scripts.cli.tool_commands import cmd_tools_check
+    from scripts.cli.tool_manager import ToolStatus, ToolStatusType
+
+    status = ToolStatus(name="trivy", installed=False)
+    assert status.status_type is ToolStatusType.MISSING
+
+    mock_manager = MagicMock()
+    mock_manager.check_tool.return_value = status
+    args = argparse.Namespace(tools=["trivy"], profile=None, json=False)
+
+    printed = []
+    with (
+        patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager),
+        patch("scripts.cli.tool_commands.print_tool_status_table"),
+        patch(
+            "builtins.print",
+            side_effect=lambda *a, **k: printed.append(" ".join(str(x) for x in a)),
+        ),
+    ):
+        result = cmd_tools_check(args)
+
+    text = chr(10).join(printed)
+    assert "1 tool(s) missing" in text
+    assert "jmo tools install" in text
+    assert result == 1
+
+
+def test_the_installer_drops_unsupported_tools_before_the_prompt():
+    """The gate must come before `Proceed with installation? [Y/n]`.
+
+    It already existed, but downstream of the prompt: the user was asked to
+    confirm installing tools the installer was about to refuse, and the
+    summary then called them "manual installation" -- which they are not,
+    there is no manual route either.
+    """
+    from scripts.cli.tool_commands import cmd_tools_install
+
+    mock_manager = MagicMock()
+    mock_manager.platform = "windows"
+    mock_manager.get_missing_tools.return_value = [_unsupported_status()]
+
+    args = argparse.Namespace(
+        tools=None,
+        profile="deep",
+        yes=True,
+        dry_run=False,
+        print_script=False,
+        sequential=False,
+        jobs=4,
+    )
+
+    printed = []
+    with (
+        patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager),
+        patch("scripts.cli.tool_installer.ToolInstaller") as mock_installer,
+        patch(
+            "builtins.print",
+            side_effect=lambda *a, **k: printed.append(" ".join(str(x) for x in a)),
+        ),
+    ):
+        cmd_tools_install(args)
+
+    text = chr(10).join(printed)
+    assert "cannot run on windows" in text
+    assert "Rust binary not available for Windows" in text
+    # Nothing installable remained, so the installer must never have been asked
+    # to install anything.
+    assert not mock_installer.return_value.install_tool.called

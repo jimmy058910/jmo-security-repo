@@ -28,6 +28,7 @@ from scripts.core.tool_registry import (
     ToolRegistry,
     detect_platform,
     get_install_hint,
+    get_platform_status,
     get_skipped_tools_for_profile,
     get_tools_for_profile_filtered,
 )
@@ -51,6 +52,11 @@ class ToolStatusType(Enum):
     MANUAL = "manual"  # Cyan - requires manual installation (intentionally absent in containers)
     FAILED = "failed"  # Red - installed but broken
     CRASH = "crash"  # Red - startup crash detected
+    # Yellow - cannot run on this platform at all. Distinct from MISSING,
+    # which means "not installed but could be": telling a Windows user to
+    # install noseyparker sends them to an installer that then refuses,
+    # because there is no Windows build to install.
+    UNSUPPORTED = "unsupported"
 
 
 # Color mappings for Rich console output
@@ -62,6 +68,7 @@ STATUS_COLORS: dict[ToolStatusType, str] = {
     ToolStatusType.MANUAL: "cyan",
     ToolStatusType.FAILED: "red",
     ToolStatusType.CRASH: "bold red",
+    ToolStatusType.UNSUPPORTED: "yellow",
 }
 
 # Icon mappings for status display
@@ -74,6 +81,7 @@ STATUS_ICONS: dict[ToolStatusType, str] = {
     ToolStatusType.MANUAL: "M",  # Requires manual installation (intentional absence)
     ToolStatusType.FAILED: "!",  # Installed but can't execute
     ToolStatusType.CRASH: "!!",
+    ToolStatusType.UNSUPPORTED: "-",
 }
 
 # Version extraction patterns for different tools
@@ -578,11 +586,20 @@ class ToolStatus:
     status_type: ToolStatusType = ToolStatusType.OK
     # v1.0.5: tool requires manual installation (excluded from auto-install profiles)
     manual_install: bool = False
+    # Platform compatibility, from TOOL_PLATFORM_REQUIREMENTS. Known at check
+    # time and previously unused there, so `tools check` rendered noseyparker
+    # and scancode as MISSING on Windows and told the user to run
+    # `jmo tools install`, which then refused them: "not available on windows".
+    platform_supported: bool = True
+    platform_reason: str | None = None
+    platform_workarounds: list[str] | None = None
 
     def __post_init__(self) -> None:
         """Initialize mutable defaults and derive status_type if not set."""
         if self.missing_deps is None:
             self.missing_deps = []
+        if self.platform_workarounds is None:
+            self.platform_workarounds = []
 
         # Auto-derive status_type from other fields if still at default OK
         # This provides backward compatibility - existing code that creates
@@ -593,6 +610,12 @@ class ToolStatus:
     def _derive_status_type(self) -> ToolStatusType:
         """Derive status type from other fields."""
         if not self.installed:
+            # Order matters: UNSUPPORTED before MANUAL and MISSING. A tool with
+            # no build for this platform is not "missing" (nothing to install)
+            # and not "manual" (no manual route either) -- the honest answer is
+            # that it cannot run here, plus how to work around it.
+            if not self.platform_supported:
+                return ToolStatusType.UNSUPPORTED
             return (
                 ToolStatusType.MANUAL if self.manual_install else ToolStatusType.MISSING
             )
@@ -625,6 +648,7 @@ class ToolStatus:
             ToolStatusType.MANUAL: "MANUAL",
             ToolStatusType.FAILED: "NOT READY",
             ToolStatusType.CRASH: "STARTUP CRASH",
+            ToolStatusType.UNSUPPORTED: "UNSUPPORTED",
         }
         return status_text_map.get(self.status_type, "UNKNOWN")
 
@@ -773,6 +797,12 @@ class ToolManager:
         # For variants (e.g., semgrep-secrets), use base tool name for version lookup
         # since VERSION_COMMANDS only has entries for base tools
         base_tool = TOOL_VARIANTS.get(tool_name, tool_name)
+
+        # Platform support is known here, from the same table the installer
+        # gates on. Reading it at check time is what stops `tools check` from
+        # advertising an install that cannot succeed.
+        platform_status = get_platform_status(base_tool, self.platform)
+
         installed_version = None
         version_error = None  # Phase 4: Track startup crash errors
         if binary_path:
@@ -846,6 +876,9 @@ class ToolManager:
             missing_deps=missing_deps,
             version_error=version_error,  # Phase 4
             manual_install=tool_name in MANUAL_INSTALL_TOOLS,
+            platform_supported=platform_status.get("supported", True),
+            platform_reason=platform_status.get("reason"),
+            platform_workarounds=list(platform_status.get("workarounds") or []),
         )
         self._status_cache[tool_name] = status
         return status
@@ -1948,7 +1981,7 @@ def print_tool_status_table(
 
     # Header
     header = (
-        f"{'Tool':<{name_width}}  {'Status':<10}  {'Installed':<12}  {'Expected':<12}"
+        f"{'Tool':<{name_width}}  {'Status':<13}  {'Installed':<12}  {'Expected':<12}"
     )
     print(header)
     print("-" * len(header))
@@ -1957,6 +1990,11 @@ def print_tool_status_table(
     # then outdated, then OK.
     def sort_key(item):
         name, status = item
+        # UNSUPPORTED sorts last among the not-installed rows: it is the only
+        # one the reader can do nothing about, so it must not head a list the
+        # footer tells them to act on.
+        if not status.installed and not status.platform_supported:
+            return (2, name)
         if not status.installed and not status.manual_install:
             return (0, name)
         if not status.installed and status.manual_install:
@@ -1967,7 +2005,9 @@ def print_tool_status_table(
 
     for name, status in sorted(statuses.items(), key=sort_key):
         # Format status with color
-        if not status.installed and status.manual_install:
+        if not status.installed and not status.platform_supported:
+            status_str = colorize("UNSUPPORTED", "yellow")
+        elif not status.installed and status.manual_install:
             status_str = colorize("MANUAL", "cyan")
         elif not status.installed:
             status_str = colorize("MISSING", "red")
@@ -1981,11 +2021,19 @@ def print_tool_status_table(
         expected_ver = status.expected_version or "-"
 
         print(
-            f"{name:<{name_width}}  {status_str:<10}  {installed_ver:<12}  {expected_ver:<12}"
+            f"{name:<{name_width}}  {status_str:<13}  {installed_ver:<12}  {expected_ver:<12}"
         )
 
         if show_hints and not status.installed:
-            if status.manual_install:
+            if not status.platform_supported:
+                # Say why, and what actually works. noseyparker previously
+                # printed no hint line at all, so the row read as an ordinary
+                # missing tool with a missing hint.
+                reason = status.platform_reason or f"not available on {status.name}"
+                print(f"  -> Not available on this platform: {reason}")
+                if status.platform_workarounds:
+                    print("     Workarounds: " + ", ".join(status.platform_workarounds))
+            elif status.manual_install:
                 print("  -> Manual install required (see docs/MANUAL_INSTALLATION.md)")
             else:
                 print(f"  -> {status.install_hint}")
