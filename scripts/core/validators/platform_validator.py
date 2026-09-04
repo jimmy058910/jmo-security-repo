@@ -318,8 +318,35 @@ def _check_no_fstring_cmd() -> CheckResult | None:
     return None
 
 
+def _known_tool_names() -> set[str]:
+    """Every name the tool registry knows, as tool names and as binaries.
+
+    Derived from the registry rather than restated, so a new tool is covered
+    the day it lands and nothing here can drift out of step with it.
+    """
+    from scripts.core.tool_registry import TOOL_BINARY_NAMES, ToolRegistry
+
+    names = {t.name for t in ToolRegistry().get_all_tools()}
+    names |= set(TOOL_BINARY_NAMES) | set(TOOL_BINARY_NAMES.values())
+    return names
+
+
 def _check_tool_exists_consistency() -> CheckResult | None:
-    """tool_exists() used consistently (no raw shutil.which in scripts/)."""
+    """`tool_exists()` used consistently for TOOLS (no raw `shutil.which`).
+
+    `tool_exists()` is for tools in the registry: it also searches
+    `~/.jmo/bin` and the isolated venvs, and its miss path emits a
+    `jmo tools install` hint. Neither is meaningful for a host dependency, so
+    `shutil.which("uv")` in `pip_installer.py` - locating the *package
+    manager* used to build those venvs - was reported as an inconsistency it
+    is not. Pointing `tool_exists` at `uv` would search JMo's own bin
+    directory for it and offer to install it as a scanner.
+
+    A literal argument is therefore a violation only when the registry knows
+    it. A non-literal argument still counts, since nothing here can prove what
+    it holds.
+    """
+    known_tools = _known_tool_names()
     violations: list[str] = []
     if not _SCRIPTS_DIR.is_dir():
         return CheckResult(
@@ -342,8 +369,18 @@ def _check_tool_exists_consistency() -> CheckResult | None:
         for node in ast.walk(tree):
             if isinstance(node, ast.Call):
                 call_name = _get_call_name(node)
-                if call_name == "shutil.which":
-                    violations.append(f"{path}:{node.lineno} shutil.which()")
+                if call_name != "shutil.which":
+                    continue
+                arg = node.args[0] if node.args else None
+                if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                    if arg.value not in known_tools:
+                        # A host dependency (uv, node, java, bash, docker):
+                        # not something `tool_exists` is for.
+                        continue
+                    detail = f"shutil.which({arg.value!r})"
+                else:
+                    detail = "shutil.which() with a non-literal argument"
+                violations.append(f"{path}:{node.lineno} {detail}")
 
     if violations:
         return CheckResult(

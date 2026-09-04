@@ -1452,3 +1452,117 @@ class TestPathTraversalCheck:
             CheckStatus.WARN,
             CheckStatus.SKIP,
         )
+
+
+# ---------------------------------------------------------------------------
+# Real oracles for three checks that had only vacuous ones.
+#
+# `assert result is None or result.status in (PASS, WARN)` accepts every
+# possible outcome, so it could not fail whatever the check did. All three
+# checks were reporting false positives against the real tree while those
+# assertions stayed green:
+#
+#   no-path-traversal   flagged `path_sanitizers.py`'s own doctest
+#   no-sleep-in-tests   flagged two STRING LITERALS containing "time.sleep("
+#
+# Each pair below is a negative control and a positive one: the shape that used
+# to be a false positive must be clean, and a genuine violation must still WARN.
+# ---------------------------------------------------------------------------
+
+
+class TestPathTraversalCheckHasTeeth:
+    @staticmethod
+    def _run(tmp_path, source: str):
+        cli = tmp_path / "scripts" / "cli"
+        cli.mkdir(parents=True)
+        (cli / "sample.py").write_bytes(source.encode("utf-8"))
+        with patch("scripts.core.validators.release_validator._ROOT", tmp_path):
+            return _check_no_path_traversal()
+
+    def test_a_docstring_example_is_not_a_violation(self, tmp_path):
+        """The false positive: a sanitizer documenting what it defends against.
+
+        Verbatim from `scripts/cli/path_sanitizers.py`, which this check
+        flagged for months.
+        """
+        source = '''
+def _sanitize_path_component(value):
+    """Reject a traversal attempt.
+
+    Examples:
+        >>> _sanitize_path_component("../../../etc/passwd")
+        Traceback (most recent call last):
+        ValueError
+    """
+    return value
+'''
+        assert self._run(tmp_path, source) is None
+
+    def test_a_real_traversal_string_still_warns(self, tmp_path):
+        """The positive control. Without this, "the check never fires" and
+        "the check is fixed" are the same result."""
+        source = 'def build():\n    return "../../etc/passwd"\n'
+
+        result = self._run(tmp_path, source)
+
+        assert result is not None
+        assert result.status == CheckStatus.WARN
+        assert "sample.py" in (result.details or "")
+
+    def test_a_comment_is_still_not_a_violation(self, tmp_path):
+        """Line scanning already skipped `#` comments; keep that."""
+        source = 'def build():\n    # guards against ../ traversal\n    return "x"\n'
+
+        assert self._run(tmp_path, source) is None
+
+
+class TestSleepCheckHasTeeth:
+    @staticmethod
+    def _run(tmp_path, source: str):
+        tests = tmp_path / "tests"
+        tests.mkdir(parents=True)
+        (tests / "sample.py").write_bytes(source.encode("utf-8"))
+        with patch("scripts.core.validators.release_validator._ROOT", tmp_path):
+            return _check_no_sleep_in_tests()
+
+    def test_a_string_containing_the_text_is_not_a_sleep(self, tmp_path):
+        """The false positive, in the shape `test_tool_runner.py` has it:
+        fixture source built as a string."""
+        source = 'FIXTURE = "import time\\ntime.sleep(0.3)\\n"\nOTHER = "time.sleep(120)\\n"\n'
+
+        assert self._run(tmp_path, source) is None
+
+    def test_patching_it_is_not_calling_it(self, tmp_path):
+        """Line scanning needed a `"patch(" in line` special case for this, and
+        that only worked when both appeared on one line. Here they do not."""
+        source = (
+            "from unittest.mock import patch\n"
+            "TARGET = (\n"
+            '    "time.sleep"\n'
+            ")\n"
+            "def test_x():\n"
+            "    with patch(TARGET):\n"
+            "        pass\n"
+        )
+
+        assert self._run(tmp_path, source) is None
+
+    def test_a_real_sleep_call_still_warns(self, tmp_path):
+        """The positive control."""
+        source = "import time\n\ndef test_x():\n    time.sleep(1)\n"
+
+        result = self._run(tmp_path, source)
+
+        assert result is not None
+        assert result.status == CheckStatus.WARN
+        assert "sample.py" in (result.details or "")
+
+    def test_the_allowlist_is_still_honoured(self, tmp_path):
+        """A real sleep in an allowlisted file stays allowed."""
+        tests = tmp_path / "tests" / "unit"
+        tests.mkdir(parents=True)
+        (tests / "test_history_db.py").write_bytes(
+            b"import time\n\ndef test_x():\n    time.sleep(1)\n"
+        )
+        with patch("scripts.core.validators.release_validator._ROOT", tmp_path):
+            assert _check_no_sleep_in_tests() is None

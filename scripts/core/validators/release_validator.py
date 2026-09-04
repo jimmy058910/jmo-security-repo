@@ -7,6 +7,7 @@ security, code quality, test health, and schema/config integrity.
 
 from __future__ import annotations
 
+import ast
 import json
 import re
 import subprocess
@@ -871,10 +872,39 @@ def _check_no_artifact_dirs() -> CheckResult:
     return None  # type: ignore[return-value]
 
 
+def _docstring_line_numbers(tree: ast.AST) -> set[int]:
+    """Line numbers of module/class/function docstrings in one parsed file."""
+    lines: set[int] = set()
+    for node in ast.walk(tree):
+        if not isinstance(
+            node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+        ):
+            continue
+        body = getattr(node, "body", [])
+        if (
+            body
+            and isinstance(body[0], ast.Expr)
+            and isinstance(body[0].value, ast.Constant)
+            and isinstance(body[0].value.value, str)
+        ):
+            lines.add(body[0].value.lineno)
+    return lines
+
+
 def _check_no_path_traversal() -> CheckResult:
-    """No path traversal patterns in user-facing code."""
-    # Scan scripts/cli/ for unsanitized path usage
-    pattern = re.compile(r'["\']\.\./')
+    """No path traversal patterns in user-facing code.
+
+    Reads string literals via `ast` rather than scanning lines, and skips
+    docstrings. Line scanning could only skip `#` comments, so it flagged
+    `path_sanitizers.py`'s own doctest --
+
+        >>> _sanitize_path_component("../../../etc/passwd")
+
+    -- which is the sanitizer *documenting what it defends against*. A checker
+    that cannot tell prose from code puts pressure on the documentation rather
+    than on the defect, which is the wrong direction.
+    """
+    pattern = re.compile(r"\.\./")
     found: list[str] = []
     cli_dir = _ROOT / "scripts" / "cli"
     if not cli_dir.is_dir():
@@ -886,16 +916,18 @@ def _check_no_path_traversal() -> CheckResult:
 
     for py_file in cli_dir.rglob("*.py"):
         try:
-            content = py_file.read_text(encoding="utf-8", errors="replace")
-            for i, line in enumerate(content.split("\n"), 1):
-                stripped = line.lstrip()
-                if stripped.startswith("#"):
-                    continue
-                if pattern.search(line):
-                    rel = py_file.relative_to(_ROOT)
-                    found.append(f"{rel}:{i}")
-        except Exception:
+            tree = ast.parse(py_file.read_text(encoding="utf-8", errors="replace"))
+        except (SyntaxError, UnicodeDecodeError, OSError):
             continue
+        docstrings = _docstring_line_numbers(tree)
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Constant) and isinstance(node.value, str)):
+                continue
+            if node.lineno in docstrings:
+                continue
+            if pattern.search(node.value):
+                rel = py_file.relative_to(_ROOT)
+                found.append(f"{rel}:{node.lineno}")
 
     if found:
         return CheckResult(
@@ -1276,7 +1308,19 @@ _SLEEP_ALLOWED_FILES = {
 
 
 def _check_no_sleep_in_tests() -> CheckResult:
-    """No time.sleep() in test files (flaky pattern)."""
+    """No `time.sleep()` in test files (flaky pattern).
+
+    Finds real *calls* via `ast`. Scanning lines matched the text wherever it
+    appeared, including inside a string literal: `test_tool_runner.py` builds
+    fixture source as strings, two of which contain `"time.sleep(0.3)"` and
+    `"time.sleep(120)"`, and both were reported as sleeps the tests do not
+    perform.
+
+    Line scanning also needed a `"patch(" in line` special case to stop
+    `patch("time.sleep")` counting - a heuristic that only worked when the
+    patch and the name shared a line. Asking the AST for a Call removes the
+    need for it, because a mock target is a string, not a call.
+    """
     tests_dir = _ROOT / "tests"
     if not tests_dir.is_dir():
         return CheckResult(
@@ -1286,25 +1330,26 @@ def _check_no_sleep_in_tests() -> CheckResult:
         )
 
     sleeps: list[str] = []
-    sleep_pattern = re.compile(r"\btime\.sleep\s*\(")
 
     for py_file in tests_dir.rglob("*.py"):
         rel = py_file.relative_to(_ROOT).as_posix()
         if rel in _SLEEP_ALLOWED_FILES:
             continue
         try:
-            content = py_file.read_text(encoding="utf-8", errors="replace")
-            for i, line in enumerate(content.split("\n"), 1):
-                stripped = line.lstrip()
-                if stripped.startswith("#"):
-                    continue
-                # Skip mock/patch references (not actual sleep calls)
-                if "patch(" in line and "time.sleep" in line:
-                    continue
-                if sleep_pattern.search(line):
-                    sleeps.append(f"{rel}:{i}")
-        except Exception:
+            tree = ast.parse(py_file.read_text(encoding="utf-8", errors="replace"))
+        except (SyntaxError, UnicodeDecodeError, OSError):
             continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            if (
+                isinstance(func, ast.Attribute)
+                and func.attr == "sleep"
+                and isinstance(func.value, ast.Name)
+                and func.value.id == "time"
+            ):
+                sleeps.append(f"{rel}:{node.lineno}")
 
     if sleeps:
         return CheckResult(
