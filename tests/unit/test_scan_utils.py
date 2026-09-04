@@ -533,12 +533,19 @@ class TestTruffleHogExcludePatterns:
             r"[\\/]\.jmo[\\/]",
         ]
 
-    def test_the_exclude_file_lands_beside_the_results(self, tmp_path):
-        """It must not be a `.json`, or the report phase would try to parse it:
-        `normalize_and_report` globs `*.json` in each target directory."""
+    def test_the_exclude_file_is_dot_prefixed_scratch(self, tmp_path):
+        """`out_dir` holds tool outputs and scan-phase scratch, and they are
+        told apart by shape: an output is `<tool>.json`, scratch is
+        dot-prefixed (`.afl_corpus`, `.afl_output`, `.noseyparker_datastore`).
+
+        This shipped as `trufflehog-exclude.txt`, which is neither, so
+        `test_scan_profile_include_exclude_only_scans_included` read it as a
+        tool that ran despite being excluded and the 2026-09-04 nightly failed.
+        """
         from scripts.cli.scan_utils import write_trufflehog_exclude_file
 
         path = write_trufflehog_exclude_file(tmp_path)
 
         assert path.parent == tmp_path
-        assert path.suffix == ".txt"
+        assert path.name.startswith("."), "scan-phase scratch must be hidden"
+        assert path.suffix != ".json", "a .json here reads as a tool output"

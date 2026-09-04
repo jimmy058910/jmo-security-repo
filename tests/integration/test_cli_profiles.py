@@ -84,12 +84,24 @@ def test_scan_profile_include_exclude_only_scans_included(tmp_path: Path, monkey
     # also did.
     # `scan-timings.json` is the scan phase's own diagnostic, not a tool's
     # output -- every target gets one whatever ran.
+    #
+    # Only `.json` files are considered, which is a property rather than a
+    # list: every one of the 31 tool outputs in `repository_scanner.py` is
+    # written as `out_dir / "<tool>.json"`, and the scan phase's scratch is
+    # dot-prefixed -- `.afl_corpus`, `.afl_output`, `.noseyparker_datastore`,
+    # `.trufflehog-exclude`. Enumerating the scratch instead is what this used
+    # to do, and it broke the moment a fourth one appeared: #1134 added
+    # `trufflehog-exclude.txt`, which matched neither shape, and the 2026-09-04
+    # nightly failed with `['trufflehog-exclude.txt'] == []`.
+    #
+    # This is strictly stronger as well as more durable: a stray `.json` from
+    # any tool still fails, including one nobody has added yet.
     not_a_tool_output = {"trufflehog.json", "scan-timings.json"}
     for scanned in ("a", "b"):
         stray = sorted(
             p.name
             for p in (indiv / scanned).iterdir()
-            if p.name not in not_a_tool_output
+            if p.suffix == ".json" and p.name not in not_a_tool_output
         )
         assert stray == [], (
             f"`profiles.fast.tools: [trufflehog]` excluded these, and they ran "
