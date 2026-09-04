@@ -488,10 +488,21 @@ def write_trufflehog_exclude_file(out_dir: Path) -> Path:
     on newlines, so a trailing carriage return would ride along inside each
     regex.
 
-    The file lands in the scan's own output directory, which the report phase
-    globs for ``*.json`` only, so a ``.txt`` beside the results is inert.
+    **The leading dot is load-bearing.** ``out_dir`` holds two kinds of thing:
+    a tool's output, always ``<tool>.json``, and the scan phase's own scratch,
+    which is dot-prefixed - ``.afl_corpus``, ``.afl_output``,
+    ``.noseyparker_datastore``. This file shipped as ``trufflehog-exclude.txt``
+    and matched neither, so
+    ``test_scan_profile_include_exclude_only_scans_included`` read it as a tool
+    that ran despite being excluded, and the 2026-09-04 nightly failed with
+    ``['trufflehog-exclude.txt'] == []``.
+
+    That test only fails where trufflehog resolves through ``PATH``. It passes
+    on a machine whose trufflehog lives in ``~/.jmo/bin``, because the test
+    patches ``Path.home()`` to its tmp dir, which hides it and takes the stub
+    branch instead.
     """
-    path = out_dir / "trufflehog-exclude.txt"
+    path = out_dir / ".trufflehog-exclude"
     path.write_bytes(("\n".join(TRUFFLEHOG_EXCLUDE_PATTERNS) + "\n").encode("utf-8"))
     return path
 
