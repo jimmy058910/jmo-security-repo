@@ -863,3 +863,89 @@ class TestEdgeCases:
             result = _check_config_loading()
             assert result is not None
             assert result.status == CheckStatus.SKIP
+
+
+# ---------------------------------------------------------------------------
+# A real oracle for subprocess-tool-exists-consistency, which had only
+# `assert result is None or isinstance(result, CheckResult)` - an assertion
+# that accepts every outcome.
+#
+# `tool_exists()` is for tools in the REGISTRY: it also searches `~/.jmo/bin`
+# and the isolated venvs, and its miss path offers `jmo tools install`. Neither
+# is meaningful for a host dependency, so `shutil.which("uv")` - locating the
+# package manager that builds those venvs - is not the inconsistency this check
+# is looking for.
+# ---------------------------------------------------------------------------
+
+
+class TestToolExistsConsistencyHasTeeth:
+    @staticmethod
+    def _run(tmp_path, source: str):
+        scripts = tmp_path / "scripts"
+        scripts.mkdir(parents=True)
+        (scripts / "sample.py").write_bytes(source.encode("utf-8"))
+        with patch("scripts.core.validators.platform_validator._SCRIPTS_DIR", scripts):
+            return _check_tool_exists_consistency()
+
+    def test_a_host_dependency_is_not_a_violation(self, tmp_path):
+        """The false positive, verbatim from `pip_installer.py`."""
+        source = (
+            'import shutil\n\ndef cmd():\n    uv = shutil.which("uv")\n    return uv\n'
+        )
+
+        assert self._run(tmp_path, source) is None
+
+    def test_other_host_dependencies_are_allowed_too(self, tmp_path):
+        """node/java/bash/docker are looked up the same way and for the same
+        reason - none of them is installed by `jmo tools install`."""
+        source = (
+            "import shutil\n\n"
+            "def probe():\n"
+            "    return (\n"
+            '        shutil.which("node"),\n'
+            '        shutil.which("java"),\n'
+            '        shutil.which("bash"),\n'
+            '        shutil.which("docker"),\n'
+            "    )\n"
+        )
+
+        assert self._run(tmp_path, source) is None
+
+    def test_a_registered_tool_still_warns(self, tmp_path):
+        """The positive control: this is the inconsistency the check exists for.
+
+        `shutil.which("trivy")` misses a trivy in `~/.jmo/bin`, which is where
+        `jmo tools install` puts it - the exact bug class #1125 was.
+        """
+        source = 'import shutil\n\ndef probe():\n    return shutil.which("trivy")\n'
+
+        result = self._run(tmp_path, source)
+
+        assert result is not None
+        assert result.status == CheckStatus.WARN
+        assert "trivy" in (result.details or "")
+
+    def test_a_non_literal_argument_still_warns(self, tmp_path):
+        """Nothing here can prove what a variable holds, so it stays a
+        violation. Without this the fix would be an escape hatch: pass the name
+        through a local and the check goes quiet."""
+        source = "import shutil\n\ndef probe(name):\n    return shutil.which(name)\n"
+
+        result = self._run(tmp_path, source)
+
+        assert result is not None
+        assert result.status == CheckStatus.WARN
+        assert "non-literal" in (result.details or "")
+
+    def test_the_registry_lookup_actually_found_tools(self):
+        """Meta-guard: if `_known_tool_names()` returned an empty set, every
+        assertion above would still pass and the check would flag nothing."""
+        from scripts.core.validators.platform_validator import _known_tool_names
+
+        known = _known_tool_names()
+
+        assert len(known) >= 25, f"registry lookup looks wrong: {len(known)}"
+        for tool in ("trivy", "semgrep", "trufflehog", "syft"):
+            assert tool in known
+        for host_dep in ("uv", "node", "java", "bash", "docker"):
+            assert host_dep not in known
