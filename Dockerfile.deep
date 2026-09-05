@@ -266,9 +266,20 @@ RUN if [ "$TARGETARCH" = "amd64" ]; then \
         echo "scancode-toolkit skipped on $TARGETARCH (extractcode-7z unavailable)"; \
     fi
 
-RUN python3 -m pip install --no-cache-dir --break-system-packages prowler==5.40.0 && \
+# The otel pins here are load-bearing. prowler's microsoft-kiota-abstractions requires
+# opentelemetry-sdk>=1.27.0 with NO upper bound. Being a separate pip invocation it cannot
+# see semgrep's opentelemetry-*~=1.37.0 pins (installed above), so it resolved the SDK to
+# 1.44.0 -- which removed opentelemetry.sdk._logs.LogData. semgrep's 1.37.0 OTLP exporter
+# imports that name, so `semgrep --version` died with ImportError in the final verify RUN.
+# Note the shape: semgrep's own post-install check above PASSED; only the later verify
+# failed, because this pass is what breaks it. Measured on the v1.1.0 tag: slim, balanced
+# and deep failed on BOTH arches; fast (no prowler) passed, because a single pip pass can
+# backtrack. Do not drop these pins without rebuilding this image.
+RUN python3 -m pip install --no-cache-dir --break-system-packages prowler==5.40.0 \
+        "opentelemetry-sdk~=1.37.0" "opentelemetry-api~=1.37.0" && \
     prowler --version && \
-    echo "✓ prowler installed"
+    semgrep --version && \
+    echo "✓ prowler installed (semgrep re-verified against the resolved otel stack)"
 
 # Install Node.js tools (cdxgen) - MUST be before apt cleanup
 RUN npm install -g @cyclonedx/cdxgen@12.0.0 && \
