@@ -116,3 +116,51 @@ def test_legacy_codec_choice_is_not_vacuous() -> None:
     for codec in LEGACY_CODECS:
         with pytest.raises(UnicodeEncodeError):
             "\U0001f3c6".encode(codec)
+
+
+@pytest.mark.parametrize("codec", LEGACY_CODECS)
+def test_generate_release_notes_survives_legacy_console(codec: str) -> None:
+    """The release-notes generator must not truncate on a legacy console.
+
+    Its own template carries eight non-ASCII characters (an em dash, an arrow
+    and six emoji), and every caller redirects stdout -- `release.yml` runs
+    `... > /tmp/raw-notes.txt`. On Windows that makes stdout cp1252, so the
+    first emoji raised UnicodeEncodeError and the script exited 1 having
+    written a PARTIAL file.
+
+    Truncation is the reason this is asserted rather than left to the crash:
+    release.yml pipes the output through `sed -n '/^# Release/,$p'`, and sed
+    exits 0 on a truncated file. A failure here would therefore surface as a
+    published GitHub Release with an EMPTY body, not as an error -- so the
+    assertion is on the extracted body being non-empty, not merely on rc == 0.
+    """
+    result = subprocess.run(
+        [sys.executable, "scripts/dev/generate_release_notes.py", "v1.1.0"],
+        capture_output=True,
+        timeout=60,
+        cwd=str(REPO_ROOT),
+        env={**os.environ, "PYTHONIOENCODING": codec},
+        check=False,
+        encoding=codec,
+        errors="replace",
+    )
+
+    assert (
+        "UnicodeEncodeError" not in result.stderr
+    ), f"generate_release_notes crashed on {codec}:\n{result.stderr[-2000:]}"
+    assert result.returncode == 0, (
+        f"generate_release_notes exited {result.returncode} on {codec}:\n"
+        f"{result.stderr[-2000:]}"
+    )
+
+    # The half release.yml actually consumes. Asserting on the marker AND on
+    # trailing content catches a stream that died partway through the document,
+    # which a returncode check alone cannot see.
+    assert "# Release v1.1.0" in result.stdout, (
+        f"release-notes header missing on {codec} -- "
+        f"sed would extract an empty body:\n{result.stdout[-500:]}"
+    )
+    body = result.stdout.split("# Release v1.1.0", 1)[1]
+    assert "[Full Changelog]" in body, (
+        f"document truncated before its footer on {codec}; " f"tail was:\n{body[-500:]}"
+    )
