@@ -18,7 +18,7 @@ import os
 import re
 import sys
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -51,6 +51,74 @@ def _user_path(value: str) -> Path:
     it on, and a per-flag rule is how the next one of these gets filed.
     """
     return Path(value).expanduser()
+
+
+def _unreadable(exc: OSError) -> str:
+    """Rejection text for a target the process was not allowed to inspect.
+
+    The ownership sentence is attached only to ``PermissionError``: a user
+    reading "cannot be read" against a path they can see in their own shell has
+    no way to guess that the *container's* uid is what could not see it, and
+    re-types the path instead of fixing the mount. Anything else keeps the bare
+    errno text, because inventing a cause is worse than reporting one.
+    """
+    detail = exc.strerror or type(exc).__name__
+    if isinstance(exc, PermissionError):
+        return (
+            f"cannot be read: {detail}. If this is a container bind mount, the "
+            f"published images run as uid 1000 and cannot read a path owned by "
+            f"another uid"
+        )
+    return f"cannot be read: {detail}"
+
+
+def _probe(check: Callable[[], bool], missing: str) -> str | None:
+    """Run one filesystem predicate, answering why the target is unusable.
+
+    ``Path.exists()`` is not total. Through 3.11 it swallowed every ``OSError``
+    from the underlying ``stat`` and answered ``False``; 3.12 narrowed that to
+    ``ValueError``, so ``PermissionError`` propagates. Discovery called it
+    unguarded, so a path the process may not stat produced a traceback and exit
+    1 instead of a scan or a legible refusal -- which is what every user
+    bind-mounting a directory owned by another uid got from the shipped v1.1.0
+    image (#1163).
+
+    Returns ``None`` when the target is usable, else the reason to reject it.
+    Chaining with ``or`` therefore stops at the first real problem::
+
+        _probe(base.exists, "directory does not exist") or _probe(
+            base.is_dir, "is not a directory"
+        )
+    """
+    try:
+        return None if check() else missing
+    except OSError as exc:
+        return _unreadable(exc)
+
+
+def _probe_children(base: Path) -> tuple[list[Path], str | None]:
+    """Subdirectories of ``base``, or why they could not be listed.
+
+    ``iterdir()`` and the ``is_dir()`` on each entry are further syscalls that
+    fail independently of the ``exists()`` that got us here -- a directory can
+    be stattable and still not readable.
+    """
+    try:
+        return [p for p in base.iterdir() if p.is_dir()], None
+    except OSError as exc:
+        return [], _unreadable(exc)
+
+
+def _read_lines(path: Path) -> tuple[list[str], str | None]:
+    """Lines of a user-supplied list file, or why it could not be read.
+
+    ``exists()`` answering True does not promise ``open()`` will work: a
+    traversable directory holding a mode-000 file gives exactly that split.
+    """
+    try:
+        return path.read_text(encoding="utf-8").splitlines(), None
+    except OSError as exc:
+        return [], _unreadable(exc)
 
 
 def _detect_msys_path_mangling(path_str: str) -> bool:
@@ -404,10 +472,11 @@ class ScanOrchestrator:
                 return repos  # Return empty - path is invalid
 
             p = _user_path(repo_path)
-            if p.exists():
-                repos.append(p)
+            why = _probe(p.exists, "path does not exist")
+            if why:
+                self._reject("--repo", repo_path, why)
             else:
-                self._reject("--repo", repo_path, "path does not exist")
+                repos.append(p)
 
         # Directory of repositories
         elif getattr(args, "repos_dir", None):
@@ -420,14 +489,18 @@ class ScanOrchestrator:
                 return repos
 
             base = _user_path(repos_dir_path)
-            if not base.exists():
-                self._reject("--repos-dir", repos_dir_path, "directory does not exist")
-            elif not base.is_dir():
-                self._reject("--repos-dir", repos_dir_path, "is not a directory")
+            why = _probe(base.exists, "directory does not exist") or _probe(
+                base.is_dir, "is not a directory"
+            )
+            if why:
+                self._reject("--repos-dir", repos_dir_path, why)
             else:
                 # Find all subdirectories (assumed to be repos)
-                repos.extend([p for p in base.iterdir() if p.is_dir()])
-                if not repos:
+                found, listing_why = _probe_children(base)
+                repos.extend(found)
+                if listing_why:
+                    self._reject("--repos-dir", repos_dir_path, listing_why)
+                elif not repos:
                     self._reject(
                         "--repos-dir", repos_dir_path, "contains no subdirectories"
                     )
@@ -435,22 +508,28 @@ class ScanOrchestrator:
         # Targets file (list of repository paths)
         elif getattr(args, "targets", None):
             targets_file = _user_path(args.targets)
-            if not targets_file.exists():
-                self._reject("--targets", args.targets, "file does not exist")
+            why = _probe(targets_file.exists, "file does not exist")
+            if why:
+                self._reject("--targets", args.targets, why)
             else:
-                listed = 0
-                for line in targets_file.read_text(encoding="utf-8").splitlines():
-                    line = line.strip()
-                    if not line or line.startswith("#"):
-                        continue
-                    listed += 1
-                    p = _user_path(line)
-                    if p.exists():
-                        repos.append(p)
-                    else:
-                        self._reject("--targets", line, "listed path does not exist")
-                if listed == 0:
-                    self._reject("--targets", args.targets, "file lists no paths")
+                lines, read_why = _read_lines(targets_file)
+                if read_why:
+                    self._reject("--targets", args.targets, read_why)
+                else:
+                    listed = 0
+                    for line in lines:
+                        line = line.strip()
+                        if not line or line.startswith("#"):
+                            continue
+                        listed += 1
+                        p = _user_path(line)
+                        entry_why = _probe(p.exists, "listed path does not exist")
+                        if entry_why:
+                            self._reject("--targets", line, entry_why)
+                        else:
+                            repos.append(p)
+                    if listed == 0:
+                        self._reject("--targets", args.targets, "file lists no paths")
 
         return repos
 
@@ -477,10 +556,14 @@ class ScanOrchestrator:
         # Images file
         if getattr(args, "images_file", None):
             images_file = _user_path(args.images_file)
-            if not images_file.exists():
-                self._reject("--images-file", args.images_file, "file does not exist")
+            why = _probe(images_file.exists, "file does not exist")
+            if why:
+                self._reject("--images-file", args.images_file, why)
             else:
-                for line in images_file.read_text(encoding="utf-8").splitlines():
+                lines, read_why = _read_lines(images_file)
+                if read_why:
+                    self._reject("--images-file", args.images_file, read_why)
+                for line in lines:
                     line = line.strip()
                     if not line or line.startswith("#"):
                         continue
@@ -515,10 +598,11 @@ class ScanOrchestrator:
             if not value:
                 continue
             p = _user_path(value)
-            if p.exists():
-                iac_files.append((iac_type, p))
+            why = _probe(p.exists, "file does not exist")
+            if why:
+                self._reject(flag, value, why)
             else:
-                self._reject(flag, value, "file does not exist")
+                iac_files.append((iac_type, p))
 
         return iac_files
 
@@ -546,10 +630,14 @@ class ScanOrchestrator:
         # URLs file
         if getattr(args, "urls_file", None):
             urls_file = _user_path(args.urls_file)
-            if not urls_file.exists():
-                self._reject("--urls-file", args.urls_file, "file does not exist")
+            why = _probe(urls_file.exists, "file does not exist")
+            if why:
+                self._reject("--urls-file", args.urls_file, why)
             else:
-                for line in urls_file.read_text(encoding="utf-8").splitlines():
+                lines, read_why = _read_lines(urls_file)
+                if read_why:
+                    self._reject("--urls-file", args.urls_file, read_why)
+                for line in lines:
                     line = line.strip()
                     if not line or line.startswith("#"):
                         continue
@@ -570,10 +658,11 @@ class ScanOrchestrator:
                 urls.append(spec)
             else:
                 p = _user_path(spec)
-                if p.exists():
-                    urls.append(f"file://{p.absolute()}")
+                why = _probe(p.exists, "spec file does not exist")
+                if why:
+                    self._reject("--api-spec", spec, why)
                 else:
-                    self._reject("--api-spec", spec, "spec file does not exist")
+                    urls.append(f"file://{p.absolute()}")
 
         return urls
 
