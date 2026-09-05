@@ -1705,5 +1705,28 @@ class TestDockerCLIWorkflows:
             f"stderr: {result.stderr[:500]}"
         )
 
-        # Validate output files exist on host via volume mount
-        assert (results_dir / "findings.json").exists() or result.returncode == 0
+        # Validate output files exist on host via volume mount.
+        #
+        # This read `(results_dir / "findings.json").exists() or
+        # result.returncode == 0` until #1163 -- a path the product has never
+        # written. `report_orchestrator.py:161` resolves the output directory to
+        # `<results-dir>/summaries` whenever `--out` is absent, and no case here
+        # passes `--out`, so the left operand was False on every run this test
+        # has ever had. Measured against the published image:
+        #
+        #     results/findings.json           ABSENT
+        #     results/summaries/findings.json EXISTS (368 bytes)
+        #
+        # So it passed solely on the returncode clause -- and the assertion
+        # directly above already accepts 1 as normal, which leaves that clause
+        # accepting every outcome the test can produce. Correcting the path
+        # alone would not have been enough: an `or` whose left operand is
+        # permanently False is invisible to a passing run, so the escape hatch
+        # goes too. Phase 10 (#1077) could not have caught this one, because
+        # the assertion *can* fail -- it just never had.
+        findings = results_dir / "summaries" / "findings.json"
+        assert findings.is_file(), (
+            f"Docker test {test_id} (exit {result.returncode}) wrote no "
+            f"summaries/findings.json through the volume mount; results tree: "
+            f"{sorted(str(p.relative_to(results_dir)) for p in results_dir.rglob('*'))}"
+        )
