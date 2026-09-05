@@ -118,6 +118,63 @@ Found in a documented recipe that had never been run (#749). It fails loudly rat
 
 **Why this matters**: With ~50 binaries downloaded per release across 4 Dockerfile variants × 2 architectures, single-attempt downloads at even 0.5% CDN flake rate cause one transient failure most release cycles. The v1.0.3 cycle saw multiple Docker Smoke Test failures from this exact pattern (trufflehog, trivy, others — each different binary on different runs). Hardening landed in PR #349.
 
+## A Later `pip install` Pass Can Silently Downgrade an Earlier Tool
+
+`checkov` and `prowler` genuinely conflict on `boto3`, so `Dockerfile.{slim,balanced,deep}`
+install prowler in its **own** `pip install`. That split is deliberate and must stay — but
+it has a consequence that is not obvious: **a separate pip invocation cannot see the
+constraints of the previous one.** It re-resolves shared transitive dependencies from
+scratch, and whatever it picks wins.
+
+Measured on the first `v1.1.0` tag attempt (release run `33944824134`), which failed
+**6 of 8** Docker builds:
+
+```text
+ImportError: cannot import name 'LogData' from 'opentelemetry.sdk._logs'
+  -- raised by `semgrep --version` in the tool-verification RUN
+```
+
+`semgrep==1.175.0` pins `opentelemetry-{api,sdk,exporter-otlp-proto-http}~=1.37.0`.
+prowler's `microsoft-kiota-abstractions` requires `opentelemetry-sdk>=1.27.0` with **no
+upper bound**, so its pass resolved the SDK to **1.44.0**, which had removed
+`opentelemetry.sdk._logs.LogData`. semgrep's 1.37.0 exporter imports that name.
+
+| Variant | prowler | `pip install` passes | Result |
+|---|---|---|---|
+| `fast` | no | 2 | PASS both arches |
+| `slim` | yes | 3 | FAIL both |
+| `balanced` | yes | 5 | FAIL both |
+| `deep` | yes | 9 | FAIL both |
+
+**`fast` survived with the identical semgrep pin.** A single pip pass *backtracks* — its
+log shows it trying `opentelemetry-instrumentation-requests` 0.65b0, falling back to
+0.64b0, and landing consistent. Multi-pass installs cannot backtrack across invocations.
+
+### Rules
+
+1. **Pin the shared dependency on the later pass**, not the earlier one. The fix is
+   `pip install prowler==5.40.0 "opentelemetry-sdk~=1.37.0" "opentelemetry-api~=1.37.0"`.
+   Reordering the passes only changes which tool loses.
+2. **Verify the earlier tool again after the later pass.** All three Dockerfiles now run
+   `semgrep --version` immediately after the prowler install, so a future prowler bump
+   fails at the install site. `Dockerfile.deep` showed why this matters: its own
+   post-install `semgrep --version` at line ~247 **passed**, and only the final
+   verification RUN caught the breakage — a hundred lines from the cause.
+3. **Read the pip conflict block, not just the exit code.** `pip` prints
+   `ERROR: pip's dependency resolver does not currently take into account all the
+   packages that are installed` and then lists each conflict. Before the fix there were
+   **five** opentelemetry lines; after, **zero**, with the two pre-existing non-otel ones
+   (`checkov`/`boto3`, `semgrep`/`jsonschema`) unchanged. That delta is the check —
+   a passing `--version` alone only proves this image, not a consistent resolution.
+4. **Nothing that installs after prowler may pull opentelemetry.** Verified for the
+   current set: `scancode-toolkit` declares none, and `jmo-security`'s base deps and its
+   `[reporting]` extra declare none. **`mcp` 2.0.0 DOES require `opentelemetry-api`** —
+   it is an optional extra and no Dockerfile installs it. Adding `[mcp]` to an image
+   would reintroduce this bug.
+5. **This class is upstream drift, not a repo regression.** No JMo pin changed;
+   `opentelemetry-sdk` 1.44.0 simply became resolvable. It can recur at any time from a
+   new upstream release, which is what rule 2's guard is for.
+
 ## `.dockerignore` Patterns Are Root-Anchored (`.gitignore` Is Not)
 
 The two files look alike and match differently. Git treats a pattern with no
