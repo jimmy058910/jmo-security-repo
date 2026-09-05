@@ -1717,9 +1717,24 @@ jobs:
   # Sunday, beside validate-variants, which already pulls all four images -- so
   # the marginal cost is the test time, not the pull.
   #
-  # Measured 2026-08-25 against published v1.0.8, all four variants:
-  # 56 passed, 4 skipped, 0 failed in 14m49s. The 4 skips are the darwin/win32
-  # entries in the cross-platform matrix, correctly skipped on Linux.
+  # Measured 2026-09-05 against published v1.1.0, all four variants:
+  # 56 passed, 4 skipped, 0 failed in 15m03s (run 33980687151). The 4 skips are
+  # the darwin/win32 entries in the cross-platform matrix, correctly skipped on
+  # Linux.
+  #
+  # This replaces a 2026-08-25 baseline against v1.0.8 that read the SAME
+  # numbers -- 56 passed, 4 skipped, 0 failed -- and meant something weaker.
+  # It was taken while both of the assertions #1163 later fixed were vacuous:
+  # test_volume_mount_results_persist sat under `if results_dir.exists():`
+  # until Phase 10 (#1077) removed the guard, and test_docker_cli_workflow
+  # asserted `(results_dir / "findings.json").exists() or returncode == 0`
+  # against a path the product has never written, so its left operand was
+  # False on every run. `0 failed` therefore recorded that those assertions
+  # could not fail, not that nothing was broken -- and both DID fail once
+  # they could. The figure above is the first one measured with them live.
+  #
+  # So: when this job regresses, diff the failing-test ID SET against the
+  # previous run's job log, never the counts against this comment.
   docker-e2e-suite:
     name: Docker E2E Suite
     runs-on: ubuntu-latest
