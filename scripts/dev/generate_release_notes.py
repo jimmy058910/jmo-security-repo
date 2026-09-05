@@ -17,6 +17,41 @@ import subprocess
 import sys
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+# Run directly (`python scripts/dev/generate_release_notes.py`) and sys.path[0]
+# is scripts/dev, not the repo root - so scripts.core is not importable without
+# this. Same bootstrap as scripts/dev/check_doc_links.py.
+if __package__ in (None, ""):  # pragma: no cover - only on direct execution
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts.core.unicode_utils import (  # noqa: E402
+    UNICODE_FALLBACKS,
+    harden_console_streams,
+    safe_print,
+)
+
+# This script's own template emits 8 non-ASCII characters. UNICODE_FALLBACKS
+# already maps three of them ("->", "[X]", "[?]"); the rest fell through to the
+# stream's errors="replace" and rendered as a bare "?", which in a release-notes
+# document reads as mojibake rather than as a deliberate substitution.
+#
+# Kept LOCAL rather than added to UNICODE_FALLBACKS: that table is product code
+# governing every JMo console write, and these five are this template's decoration,
+# not characters the product emits. safe_print REPLACES the table when given one,
+# so merge rather than pass this alone.
+_LOCAL_FALLBACKS = {
+    **UNICODE_FALLBACKS,
+    "—": "--",  # em dash
+    "\U0001f680": "[*]",  # rocket - "What's New" heading
+    "\U0001f4dd": "[=]",  # memo - changelog link
+    # Not "[?]": UNICODE_FALLBACKS already maps the book emoji to that, and both
+    # icons sit in the same Resources list -- two entries rendering identically
+    # reads as a bug in the document rather than as a substitution.
+    "\U0001f4ac": "[>]",  # speech balloon - discussions link
+    "\U0001f41b": "[!]",  # bug - issue-report link
+}
+
 
 def get_version_from_tag(tag: str) -> str:
     """Extract version number from git tag (e.g., 'v1.0.0' → '1.0.0')."""
@@ -235,6 +270,18 @@ def format_release_notes(version: str, tag: str) -> str:
 
 def main() -> int:
     """Main entry point."""
+    # This script's own template carries 8 non-ASCII characters (em dash, an
+    # arrow and six emoji). Redirect stdout on Windows -- which every caller
+    # does, `... > /tmp/raw-notes.txt` -- and it is a cp1252 stream, so the
+    # first emoji raised UnicodeEncodeError and the script exited 1 having
+    # written a truncated file. CI never saw it: ubuntu is UTF-8 by default.
+    #
+    # The dangerous shape was not the crash. release.yml pipes this through
+    # `sed -n '/^# Release/,$p'`, and sed exits 0 on a truncated file, so a
+    # Windows-side failure would have surfaced as a published release with an
+    # EMPTY body rather than as an error.
+    harden_console_streams()
+
     if len(sys.argv) != 2:
         print("Usage: python3 scripts/dev/generate_release_notes.py <tag>")
         print("Example: python3 scripts/dev/generate_release_notes.py v1.0.0")
@@ -248,14 +295,22 @@ def main() -> int:
         print("\n" + "=" * 70)
         print("Release notes generated successfully!")
         print("=" * 70 + "\n")
-        print(release_notes)
+        # safe_print is a no-op on a UTF-8 stream -- _for_stream returns the
+        # text unchanged when the stream can encode it -- so the notes CI
+        # publishes are byte-identical. It only engages on a narrow console,
+        # where the fallback table gives "->" and "[X]" rather than "?".
+        safe_print(release_notes, fallbacks=_LOCAL_FALLBACKS)
         return 0
 
     except (FileNotFoundError, ValueError) as e:
-        print(f"\n❌ ERROR: {e}", file=sys.stderr)
+        safe_print(f"\n❌ ERROR: {e}", fallbacks=_LOCAL_FALLBACKS, stream=sys.stderr)
         return 1
     except Exception as e:
-        print(f"\n❌ UNEXPECTED ERROR: {e}", file=sys.stderr)
+        safe_print(
+            f"\n❌ UNEXPECTED ERROR: {e}",
+            fallbacks=_LOCAL_FALLBACKS,
+            stream=sys.stderr,
+        )
         import traceback
 
         traceback.print_exc()
