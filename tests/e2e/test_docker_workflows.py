@@ -541,6 +541,24 @@ class TestDockerVolumeMount:
         # Create sample code
         (tmp_path / "test.py").write_text("password = 'secret123'")
 
+        # UID mismatch fix (mirrors scheduled.yml:1083 pattern):
+        # GitHub runners are UID 1001, container `USER jmo` is UID 1000. Bind
+        # mounts preserve host UID, so without world-accessible bits the
+        # container can't even stat files in /scan — which on Python 3.12+
+        # propagates as PermissionError from Path.exists() (the 3.12+
+        # pathlib behavior change). 0o777 is intentional: the container runs
+        # as "other" relative to the host UID and needs rwx to traverse, read
+        # source files, and create the results subdir. Safe because tmp_path
+        # is a pytest-managed, run-scoped directory destroyed after the test.
+        #
+        # This test was the ONLY one in this file without it (#1163), so it was
+        # asserting the runner's uid rather than the mount. The product-side
+        # half of that fix is `_probe` in scan_orchestrator: without the chmod
+        # the scan now refuses the mount legibly instead of crashing, but it
+        # still scans nothing, so both halves are needed to make this green.
+        # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+        os.chmod(str(tmp_path), 0o777)
+
         # Run scan
         proc = subprocess.run(
             [
