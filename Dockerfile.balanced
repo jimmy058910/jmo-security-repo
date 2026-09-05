@@ -187,12 +187,22 @@ RUN rm -rf /usr/lib/jvm/java-17-openjdk-*/man \
 # Note: horusec binary is copied from builder stage, no pip package needed
 # Note: checkov and prowler have conflicting dependencies - install separately
 # Note: Ubuntu 24.04 ships pip 24.0/setuptools 68.1/wheel 0.42 (sufficient, skip upgrade)
+# Note: the otel pins on the prowler pass are load-bearing. prowler's
+# microsoft-kiota-abstractions requires opentelemetry-sdk>=1.27.0 with NO upper bound.
+# Being a separate pip invocation it cannot see semgrep's opentelemetry-*~=1.37.0 pins,
+# so it resolved the SDK to 1.44.0 -- which removed opentelemetry.sdk._logs.LogData.
+# semgrep's 1.37.0 OTLP exporter imports that name, so `semgrep --version` died with
+# ImportError and the verify RUN below failed. Measured on the v1.1.0 tag: slim, balanced
+# and deep failed on BOTH arches; fast (no prowler) passed, because a single pip pass can
+# backtrack. Do not drop these pins without rebuilding this image.
 RUN python3 -m pip install --no-cache-dir --break-system-packages \
     semgrep==1.175.0 \
     checkov==3.3.16 \
     ruff==0.16.5 \
     yara-python==4.5.4 && \
-    python3 -m pip install --no-cache-dir --break-system-packages prowler==5.40.0 && \
+    python3 -m pip install --no-cache-dir --break-system-packages prowler==5.40.0 \
+    "opentelemetry-sdk~=1.37.0" "opentelemetry-api~=1.37.0" && \
+    semgrep --version && \
     find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
