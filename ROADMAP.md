@@ -6,14 +6,15 @@
 
 ## Current Status
 
-**Latest Stable Release:** v1.1.0 (August 2026)
+**Latest Stable Release:** v1.1.0 (September 2026)
 
-The next release is **v1.1.0**. It is not a feature milestone: it is the
-outcome of a pre-release fix program (Phases 0-12, tracked in
+v1.1.0 **shipped on 2026-09-05** — PyPI, the GitHub Release and all four Docker
+variants. It is not a feature milestone: it is the outcome of a pre-release fix
+program (Phases 0-13, tracked in
 [the plan](docs/superpowers/plans/2026-08-22-v1.1.0-pre-release-fix-program.md))
 that fixed every open defect before the tag rather than shipping with
-dispositions. After it, releases return to a **patch cadence** — each hardens
-what is already there rather than accumulating toward a version milestone.
+dispositions. Releases now return to a **patch cadence** — each hardens what is
+already there rather than accumulating toward a version milestone.
 
 v1.0 delivers the full production scanning platform:
 
@@ -102,5 +103,5 @@ Want to help? Check out:
 
 ---
 
-**Last Updated:** August 2026 (v1.1.0)
+**Last Updated:** September 2026 (v1.1.0 shipped)
 **Maintained By:** Jimmy ([@jimmy058910](https://github.com/jimmy058910))
