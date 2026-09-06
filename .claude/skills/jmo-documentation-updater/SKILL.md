@@ -8,7 +8,7 @@ allowed-tools: Read, Write, Edit, Glob, Grep, Bash
 
 ## Purpose
 
-This skill ensures documentation stays synchronized with code changes by identifying which docs need updates and generating appropriate content following JMo Security's "Perfect Documentation Structure" principles.
+This skill ensures documentation stays synchronized with code changes by identifying which docs need updates and generating appropriate content following § Complete Documentation Structure below.
 
 **Approach:** Accuracy over completeness. Better to update 3 documents correctly than touch 10 with guesses.
 
@@ -48,29 +48,33 @@ Documentation is organized by **user persona and journey**, not by technical cat
 
 ## Complete Documentation Structure
 
-```text
-/
-├── README.md                          # First impression, value prop, quick nav (~400 lines)
-├── QUICKSTART.md                      # 5-minute guide for ALL user types (~300 lines)
-├── CONTRIBUTING.md                    # Contributor onboarding (~250 lines)
-├── CHANGELOG.md                       # Version history (Keep-a-Changelog format)
-├── ROADMAP.md                         # Future plans and milestones
-├── TEST.md                            # Testing guide for contributors
-├── DOCKER_HUB_README.md              # Docker Hub repository description (synced via release.yml)
-└── docs/
-    ├── index.md                       # Documentation hub (ALWAYS update when docs added/moved)
-    ├── USER_GUIDE.md                  # Comprehensive reference (~800 lines)
-    ├── RESULTS_GUIDE.md               # Example outputs from real scans
-    ├── DOCKER_README.md               # Docker deep-dive (~400 lines)
-    ├── CLI_REFERENCE.md               # CLI reference and wizard implementation details
-    ├── PLATFORM_SPECIFIC.md           # Platform troubleshooting (macOS, Windows, WSL, Linux)
-    ├── RELEASE.md                     # Release process for maintainers
-    ├── MCP_SETUP.md                   # MCP server setup
-    ├── examples/                      # Copy-paste ready examples
-    ├── screenshots/                   # Screenshot capture guide
-    └── schemas/
-        └── common_finding.v1.json     # CommonFinding data schema
-```
+**Complete Beginner**
+
+- [docs/DOCKER_README.md](../../../docs/DOCKER_README.md) - Docker deep-dive; its Quick Start is the beginner path and the DevOps/SRE entry point
+
+**Developer**
+
+- [README.md](../../../README.md) - project overview, value proposition, and the supported-tools table
+- [QUICKSTART.md](../../../QUICKSTART.md) - five-minute guide for every user type
+
+**DevOps/SRE**
+
+- [DOCKER_HUB_README.md](../../../DOCKER_HUB_README.md) - Docker Hub repository description, synced by release.yml
+- [docs/examples/](../../../docs/examples/) - copy-paste CI/CD workflows and scan scripts
+
+**Advanced User**
+
+- [docs/USER_GUIDE.md](../../../docs/USER_GUIDE.md) - comprehensive reference: configuration, advanced features, troubleshooting
+- [docs/PROFILES_AND_TOOLS.md](../../../docs/PROFILES_AND_TOOLS.md) - complete tool lists per profile and the selection philosophy
+- [docs/RESULTS_GUIDE.md](../../../docs/RESULTS_GUIDE.md) - example outputs from real scans
+
+**Contributor**
+
+- [CHANGELOG.md](../../../CHANGELOG.md) - version history in Keep-a-Changelog format; every user-facing change lands here
+- [docs/index.md](../../../docs/index.md) - documentation hub; update it when a doc is added, moved, or removed
+- [CLAUDE.md](../../../CLAUDE.md) - agent context: architecture overview, guardrails, scan profiles
+
+The full inventory is [docs/index.md](../../../docs/index.md).
 
 ## Update Triggers
 

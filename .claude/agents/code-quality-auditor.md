@@ -26,7 +26,7 @@ You have access to all code analysis tools:
 
 ## JMo Security Quality Standards
 
-### Architectural Principles (from CLAUDE.md)
+### Architectural Principles
 
 1. **Two-Phase Architecture:** Scan → Report (clean separation)
 2. **Unified Schema:** All findings normalized to CommonFinding

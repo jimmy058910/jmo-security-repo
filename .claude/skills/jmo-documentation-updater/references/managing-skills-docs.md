@@ -14,7 +14,7 @@ anything the allowlist leaves out.
 Skill documentation files (SKILL.md, README.md) should:
 
 1. **Pass markdownlint checks** -- Skills teach documentation best practices; they must be exemplary. This applies to tracked skills whether or not you remember they are tracked: markdownlint runs over `.claude/` in CI and pre-commit
-2. **Follow Perfect Documentation Structure** -- Same principles as main repo docs
+2. **Follow the documentation structure** -- [SKILL.md § Complete Documentation Structure](../SKILL.md); same principles as main repo docs
 3. **Include working examples** -- Test all commands before committing
 4. **Use relative links** -- Enable offline/fork compatibility. Count the depth from the file itself: a `SKILL.md` reaches the repo root with `../../../`, and a file under `references/` needs `../../../../`
 5. **Link only to tracked paths** -- A link to `dev-only/` or to an unpublished skill resolves on a maintainer's disk and nowhere else, which is worse than no link at all
@@ -25,7 +25,7 @@ Update skill files when:
 
 - **Skill behavior changes** -- New features, changed workflows, deprecated patterns
 - **Repository structure changes** -- New doc locations, renamed files, updated .gitignore paths
-- **Documentation policies change** -- New rules in CLAUDE.md, updated Perfect Documentation Structure
+- **Documentation policies change** -- New rules in CLAUDE.md, an updated § Complete Documentation Structure in SKILL.md
 - **Examples become outdated** -- Commands change, file paths move, tools update
 - **Linting issues found** -- Fix immediately to maintain exemplary status
 
