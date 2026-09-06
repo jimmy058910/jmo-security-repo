@@ -74,11 +74,13 @@ EXTRA_ALLOWED = frozenset({"docs/KNOWN_LIMITATIONS.md"})
 
 # Three separate conditions, because any two of them alone produce noise.
 #
-# `duplicat\w*` is deliberately absent from the vocabulary: it also spells the
-# code-quality sense, and `.claude/agents/code-quality-auditor.md` carries seven
-# percentages about duplicated *source lines* that have nothing to do with
-# findings.
-_DEDUP_WORD = re.compile(r"dedup\w*|cross-tool|cluster\w*|consensus", re.IGNORECASE)
+# `duplicat\w*` also spells the code-quality sense ("12% duplicate code"), but
+# the only file that used it that way did so inside a fenced example this guard
+# never scans. Excluding it protected nothing and would have let a user-facing
+# "duplicate findings reduced by N%" through. Widened 2026-09 (prompt audit).
+_DEDUP_WORD = re.compile(
+    r"dedup\w*|cross-tool|cluster\w*|consensus|duplicat\w*", re.IGNORECASE
+)
 # A claim that the percentage is an *effect*. Without this, the guard reddens on
 # `deduplication.similarity_threshold` and on "findings with >=65% similarity are
 # clustered" -- a sourced configuration value, not an advertised outcome.

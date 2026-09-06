@@ -1,9 +1,6 @@
 ---
 name: dependency-analyzer
 description: Analyze code dependencies and impact of changes across JMo Security codebase
-type: general-purpose
-thoroughness: very thorough
-
 ---
 
 # Dependency Analyzer Agent
@@ -592,19 +589,6 @@ common_finding.py
 
 ---
 
-## Example Prompts That Invoke This Agent
-
-- "I want to add a 'priority' field to CommonFinding. What will this affect?"
-- "Which files depend on compliance_mapper.py?"
-- "What happens if I change the signature of common_finding.fingerprint()?"
-- "Are there any circular dependencies in scripts/core/?"
-- "Which adapters call enrich_finding_with_compliance() directly instead of leaving it to the report phase?"
-- "What third-party packages are actually used vs. just declared?"
-- "If I remove PyYAML, what breaks?"
-- "Show me the dependency chain for HTML reporter"
-
----
-
 ## Success Criteria
 
 A successful dependency analysis includes:
@@ -616,11 +600,3 @@ A successful dependency analysis includes:
 - ✅ Validation checklist for testing
 - ✅ Dependency graph visualization (ASCII art)
 - ✅ Time estimates for making changes
-
----
-
-**Agent Type:** General-Purpose
-**Default Thoroughness:** Very Thorough
-**Tools Used:** Read, Glob, Grep, Bash
-**Created:** 2025-10-17
-**Project:** JMo Security v1.0.0+

@@ -18,10 +18,6 @@ Use when encountering any bug, test failure, or unexpected behavior in JMo Secur
 NO FIXES WITHOUT ROOT CAUSE INVESTIGATION FIRST
 ```
 
-If you haven't completed Phase 1, you cannot propose fixes. Random fixes waste time and create new bugs. Quick patches mask underlying issues.
-
-**Core principle:** ALWAYS find root cause before attempting fixes. Symptom fixes are failure.
-
 **JMo-Specific Focus:** This skill applies systematic debugging to JMo Security's two-phase architecture (scan -> report), multi-target scanning (6 target types), tool adapter patterns, and CI/CD workflows.
 
 ## When to Use
@@ -39,23 +35,14 @@ Use for ANY technical issue in JMo Security:
 - **Multi-target issues:** Specific target type failing (repos work, images fail)
 - **Configuration issues:** Profile not applying, per_tool overrides ignored
 
-**Use this ESPECIALLY when:**
+**Highest value when the shortcut looks obvious:**
 
-- Under time pressure (emergencies make guessing tempting)
 - "Just one quick fix" seems obvious (adapter change, tool flag adjustment)
 - You've already tried multiple fixes (changed exit codes 3 times)
-- Previous fix didn't work (still getting empty findings)
-- You don't fully understand the issue (why is trivy failing only for images?)
-- **JMo-specific:** Findings appear in raw tool JSON but not in `findings.json`
-- **JMo-specific:** Tool works locally but fails in Docker/CI
-- **JMo-specific:** One target type works but another doesn't
-
-**Don't skip when:**
-
-- Issue seems simple ("just add this exit code to OK list")
-- You're in a hurry (rushing guarantees rework)
-- User wants immediate fix (systematic is faster than thrashing)
-- **JMo-specific:** "Just regenerate the adapter" seems like the answer
+- Findings appear in raw tool JSON but not in `findings.json`
+- Tool works locally but fails in Docker/CI
+- One target type works but another doesn't
+- "Just regenerate the adapter" seems like the answer
 
 ## The Four Phases
 
@@ -125,19 +112,6 @@ If you catch yourself thinking:
 - "We're stuck?" (frustrated) -- Your approach isn't working
 
 **When you see these:** STOP. Return to Phase 1.
-
-## Common Rationalizations
-
-| Excuse | Reality |
-|--------|---------|
-| "Issue is simple, don't need process" | Simple issues have root causes too. Process is fast for simple bugs. |
-| "Emergency, no time for process" | Systematic debugging is FASTER than guess-and-check thrashing. |
-| "Just try this first, then investigate" | First fix sets the pattern. Do it right from the start. |
-| "I'll write test after confirming fix works" | Untested fixes don't stick. Test first proves it. |
-| "Multiple fixes at once saves time" | Can't isolate what worked. Causes new bugs. |
-| "Reference too long, I'll adapt the pattern" | Partial understanding guarantees bugs. Read it completely. |
-| "I see the problem, let me fix it" | Seeing symptoms != understanding root cause. |
-| "One more fix attempt" (after 2+ failures) | 3+ failures = architectural problem. Question pattern, don't fix again. |
 
 ## Quick Reference
 

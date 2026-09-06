@@ -72,6 +72,7 @@ The JMo Security MCP server provides programmatic access to security scan result
 | `get_security_findings` | Query findings with filters (severity, tool, path) |
 | `apply_fix` | **Preview** an AI-suggested patch. Applying is not implemented |
 | `mark_resolved` | Record a resolution as an expiring `jmo.suppress.yml` entry |
+| `query_findings_db` | Read-only SQL (SELECT / EXPLAIN / WITH) against the scan history database |
 | `get_server_info` | Server metadata and scan summary |
 
 Setup: [docs/MCP_SETUP.md](docs/MCP_SETUP.md)
