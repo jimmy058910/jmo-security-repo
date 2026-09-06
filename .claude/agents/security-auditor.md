@@ -1,9 +1,6 @@
 ---
 name: security-auditor
 description: Audit JMo Security codebase for security vulnerabilities, hardcoded secrets, unsafe patterns, and defensive security issues
-type: general-purpose
-thoroughness: very thorough
-
 ---
 
 # Security Audit Agent
@@ -344,19 +341,6 @@ cursor.execute("SELECT * FROM users WHERE id=?", (user_id,))
 
 ---
 
-## Example Prompts That Invoke This Agent
-
-- "Run a full security audit on the codebase"
-- "Check for hardcoded secrets in test files"
-- "Find all subprocess calls and check for injection risks"
-- "Are there any path traversal vulnerabilities?"
-- "Audit the Docker configurations for security issues"
-- "Check for vulnerable dependencies"
-- "Is the HTML dashboard safe from XSS?"
-- "Review the YAML config loading for injection risks"
-
----
-
 ## Success Criteria
 
 A successful security audit includes:
@@ -369,11 +353,3 @@ A successful security audit includes:
 - ✅ Compliance framework mappings
 - ✅ Prioritized action plan with timelines
 - ✅ Verification commands to test fixes
-
----
-
-**Agent Type:** General-Purpose
-**Default Thoroughness:** Very Thorough
-**Tools Used:** Read, Glob, Grep, Bash (bandit, semgrep, trivy, trufflehog)
-**Created:** 2025-10-17
-**Project:** JMo Security v1.0.0+

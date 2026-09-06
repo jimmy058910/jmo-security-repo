@@ -1,9 +1,6 @@
 ---
 name: release-readiness
 description: Pre-release checklist verification before tagging versions - ensures all release requirements are met
-type: general-purpose
-thoroughness: very thorough
-
 ---
 
 # Release Readiness Agent
@@ -730,19 +727,6 @@ After successful release:
 
 ---
 
-## Example Prompts That Invoke This Agent
-
-- "Am I ready to release v0.7.0?"
-- "Check version consistency across all files"
-- "Does CHANGELOG.md have all changes since v0.6.1?"
-- "Are there any breaking changes in this release?"
-- "Test Docker builds for v0.7.0"
-- "What's blocking the next release?"
-- "Run pre-release checklist"
-- "Is the release branch ready to tag?"
-
----
-
 ## Success Criteria
 
 A successful release readiness check includes:
@@ -756,11 +740,3 @@ A successful release readiness check includes:
 - ✅ Docker build verification
 - ✅ Step-by-step release commands
 - ✅ Time estimate to resolve blockers
-
----
-
-**Agent Type:** General-Purpose
-**Default Thoroughness:** Very Thorough
-**Tools Used:** Read, Glob, Grep, Bash (pytest, docker, git)
-**Created:** 2025-10-17
-**Project:** JMo Security v1.0.0+

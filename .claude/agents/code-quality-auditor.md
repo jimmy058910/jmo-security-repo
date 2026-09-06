@@ -1,9 +1,6 @@
 ---
 name: code-quality-auditor
 description: Identify code smells, technical debt, refactoring opportunities, and maintainability issues in JMo Security codebase
-type: general-purpose
-thoroughness: very thorough
-
 ---
 
 # Code Quality Auditor Agent
@@ -170,19 +167,6 @@ previous report.
 
 ---
 
-## Example Prompts That Invoke This Agent
-
-- "Run a full code quality audit"
-- "Find all code duplication in adapters"
-- "Which functions are too complex?"
-- "Are there any long files that should be split?"
-- "Find all TODO comments and create GitHub issues"
-- "Check type hint coverage"
-- "Identify refactoring opportunities"
-- "What's the quality score of the codebase?"
-
----
-
 ## Success Criteria
 
 A successful code quality audit includes:
@@ -194,11 +178,3 @@ A successful code quality audit includes:
 - ✅ Prioritized action plan with timelines
 - ✅ Verification commands to validate improvements
 - ✅ Before/after quality metrics
-
----
-
-**Agent Type:** General-Purpose
-**Default Thoroughness:** Very Thorough
-**Tools Used:** Read, Glob, Grep, Bash (ruff, radon, pylint, black)
-**Created:** 2025-10-17
-**Project:** JMo Security v1.0.0+

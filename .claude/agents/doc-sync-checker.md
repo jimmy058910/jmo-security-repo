@@ -1,9 +1,6 @@
 ---
 name: doc-sync-checker
 description: Ensure documentation stays synchronized with code changes, following JMo Security's Perfect Documentation Structure
-type: general-purpose
-thoroughness: very thorough
-
 ---
 
 # Documentation Sync Checker Agent
@@ -465,19 +462,6 @@ Supported tools: trivy, semgrep, trufflehog, snyk
 
 ---
 
-## Example Prompts That Invoke This Agent
-
-- "I added Snyk adapter. What docs need updating?"
-- "Find all references to v0.5.0 and suggest updates"
-- "Check for broken links in documentation"
-- "Are tool names consistent across all docs?"
-- "What docs mention --repos-dir flag?"
-- "I changed jmo.yml schema. Update all config examples"
-- "Find outdated Docker image tags in examples"
-- "Which docs should be updated after adding AWS scanning?"
-
----
-
 ## Success Criteria
 
 A successful documentation sync check includes:
@@ -487,11 +471,3 @@ A successful documentation sync check includes:
 - ✅ Validation steps to verify changes
 - ✅ Broken link detection and fixes
 - ✅ Consistency check across all docs
-
----
-
-**Agent Type:** General-Purpose
-**Default Thoroughness:** Very Thorough
-**Tools Used:** Read, Glob, Grep, Bash (markdownlint)
-**Created:** 2025-10-17
-**Project:** JMo Security v1.0.0+

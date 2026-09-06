@@ -1,9 +1,6 @@
 ---
 name: codebase-explorer
 description: Autonomously explore JMo Security codebase to understand architecture, patterns, and implementation details
-type: general-purpose
-thoroughness: very thorough
-
 ---
 
 # Codebase Explorer Agent
@@ -379,19 +376,6 @@ When set to "quick":
 
 ---
 
-## Example Prompts That Invoke This Agent
-
-- "Explain how fingerprinting works in CommonFinding"
-- "Show me all the places compliance enrichment happens"
-- "How do adapters handle missing tool outputs?"
-- "What's the pattern for adding a new target type?"
-- "Find all TODO comments and categorize them by priority"
-- "Which files import normalize_and_report.py?"
-- "How does the wizard CLI work compared to jmo.py?"
-- "What's the difference between fast, slim, balanced, and deep profiles?"
-
----
-
 ## Success Criteria
 
 A successful exploration includes:
@@ -401,11 +385,3 @@ A successful exploration includes:
 - ✅ Pattern analysis (commonalities and differences)
 - ✅ Actionable insights or recommendations
 - ✅ Easy-to-navigate structure (markdown sections, code blocks)
-
----
-
-**Agent Type:** General-Purpose
-**Default Thoroughness:** Very Thorough
-**Tools Used:** Read, Glob, Grep, Bash
-**Created:** 2025-10-17
-**Project:** JMo Security v1.0.0+

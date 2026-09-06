@@ -1,9 +1,6 @@
 ---
 name: coverage-gap-finder
 description: Identify testing coverage gaps, untested code paths, and missing test categories in JMo Security
-type: general-purpose
-thoroughness: very thorough
-
 ---
 
 # Testing Coverage Gap Finder Agent
@@ -747,19 +744,6 @@ def test_specific_edge_case(tmp_path: Path):
 
 ---
 
-## Example Prompts That Invoke This Agent
-
-- "Which adapters have test coverage below 85%?"
-- "What tests are missing from test_semgrep_adapter.py?"
-- "Are all 5 test categories present in adapter tests?"
-- "What functions in jmo.py aren't tested?"
-- "Find edge cases not covered in test_trivy_adapter.py"
-- "Will the current test suite pass CI?"
-- "Which integration tests are missing?"
-- "What code paths in compliance_mapper.py aren't tested?"
-
----
-
 ## Success Criteria
 
 A successful coverage analysis includes:
@@ -771,11 +755,3 @@ A successful coverage analysis includes:
 - ✅ Time estimates for fixing gaps
 - ✅ Priority ranking of gaps
 - ✅ Before/after coverage predictions
-
----
-
-**Agent Type:** General-Purpose
-**Default Thoroughness:** Very Thorough
-**Tools Used:** Read, Glob, Grep, Bash (pytest)
-**Created:** 2025-10-17
-**Project:** JMo Security v1.0.0+
