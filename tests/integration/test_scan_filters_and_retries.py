@@ -332,9 +332,9 @@ tools: [trufflehog]
     )
 
     # Should succeed (fall back to default threads=1)
-    assert (
-        result.returncode == 0
-    ), f"Scan failed to handle bad JMO_THREADS: {result.stderr}"
+    assert result.returncode == 0, (
+        f"Scan failed to handle bad JMO_THREADS: {result.stderr}"
+    )
 
     # Verify output was created
     assert (out_base / "individual-repos" / repo.name / "trufflehog.json").exists()

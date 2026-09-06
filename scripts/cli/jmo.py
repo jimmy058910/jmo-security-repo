@@ -990,8 +990,7 @@ def _add_adapters_args(
     # Validate command
     validate_parser = adapters_subparsers.add_parser(
         "validate",
-        help="Validate an adapter plugin file (imports it, so module-level "
-        "code runs)",
+        help="Validate an adapter plugin file (imports it, so module-level code runs)",
     )
     validate_parser.add_argument("file", help="Path to adapter plugin file")
 
@@ -3474,9 +3473,7 @@ def cmd_scan(args) -> int:
         except KeyboardInterrupt:
             _log(args, "WARN", "Scan interrupted by user")
             return 130
-        except (
-            Exception
-        ) as e:  # Acceptable: top-level scan error handler — re-raises unless allow_missing_tools
+        except Exception as e:  # Acceptable: top-level scan error handler — re-raises unless allow_missing_tools
             _log(args, "ERROR", f"Scan failed: {e}")
             if not scan_config.allow_missing_tools:
                 raise
@@ -3515,9 +3512,7 @@ def cmd_scan(args) -> int:
         except KeyboardInterrupt:
             _log(args, "WARN", "Scan interrupted by user")
             return 130
-        except (
-            Exception
-        ) as e:  # Acceptable: top-level scan error handler — re-raises unless allow_missing_tools
+        except Exception as e:  # Acceptable: top-level scan error handler — re-raises unless allow_missing_tools
             _log(args, "ERROR", f"Scan failed: {e}")
             if not scan_config.allow_missing_tools:
                 raise
@@ -4051,9 +4046,7 @@ def cmd_mcp_server(args):
     except KeyboardInterrupt:
         sys.stderr.write("\n\nMCP server stopped by user.\n")
         return 0
-    except (
-        Exception
-    ) as e:  # Acceptable: top-level MCP server error handler — must not crash parent process
+    except Exception as e:  # Acceptable: top-level MCP server error handler — must not crash parent process
         sys.stderr.write(f"ERROR: MCP server failed: {e}\n")
         import traceback
 

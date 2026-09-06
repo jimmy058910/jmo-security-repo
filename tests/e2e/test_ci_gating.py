@@ -66,9 +66,9 @@ class TestCIGating:
                 if f.get("severity", "").upper() in ("HIGH", "CRITICAL")
             ]
             if high_or_above:
-                assert (
-                    result.returncode == 1
-                ), f"Found {len(high_or_above)} HIGH+ findings but exit code was 0"
+                assert result.returncode == 1, (
+                    f"Found {len(high_or_above)} HIGH+ findings but exit code was 0"
+                )
 
     def test_fail_on_critical_passes_with_medium_only(self, tmp_path):
         """CI mode exits 0 when only MEDIUM findings and threshold is CRITICAL."""
@@ -108,6 +108,6 @@ class TestCIGating:
             critical = [
                 f for f in findings if f.get("severity", "").upper() == "CRITICAL"
             ]
-            assert (
-                critical
-            ), "Exit code 1 with --fail-on CRITICAL but no CRITICAL findings found"
+            assert critical, (
+                "Exit code 1 with --fail-on CRITICAL but no CRITICAL findings found"
+            )

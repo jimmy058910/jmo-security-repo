@@ -340,9 +340,7 @@ def recover_database(db_path: Path) -> dict[str, Any]:
             logger.warning(
                 f"Post-recovery verification issues: {verification['errors']}"
             )
-    except (
-        Exception
-    ) as e:  # Acceptable: post-recovery verification is best-effort — recovery still succeeded
+    except Exception as e:  # Acceptable: post-recovery verification is best-effort — recovery still succeeded
         logger.warning(f"Post-recovery verification error: {e}")
 
     rows_recovered = {

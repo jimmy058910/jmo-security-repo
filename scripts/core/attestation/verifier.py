@@ -249,9 +249,7 @@ class AttestationVerifier:
                         result.error_message += f": {sig_detail}"
                     return result
                 logger.info("✅ Signature verified")
-            except (
-                Exception
-            ) as e:  # Acceptable: sigstore may fail for many reasons — report as verification error
+            except Exception as e:  # Acceptable: sigstore may fail for many reasons — report as verification error
                 result.error_message = f"Signature verification error: {e}"
                 return result
 
@@ -451,8 +449,6 @@ class AttestationVerifier:
             logger.warning(f"Signature verification failed: {detail}")
             return False, detail
 
-        except (
-            Exception
-        ) as e:  # Acceptable: re-raises after logging — caller handles verification failure
+        except Exception as e:  # Acceptable: re-raises after logging — caller handles verification failure
             logger.error(f"Signature verification error: {e}")
             raise

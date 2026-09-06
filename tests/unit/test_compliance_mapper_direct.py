@@ -841,15 +841,15 @@ class TestCweIdNormalisation:
 
         assert map_cwe_to_owasp_top10_2021(realistic), "OWASP Top 10 table unreachable"
         assert map_cwe_to_top25_2024(realistic), "CWE Top 25 table unreachable"
-        assert map_to_nist_csf_2_0(
-            "__no_such_tool__", [], realistic
-        ), "NIST CSF CWE table unreachable"
-        assert map_to_pci_dss_4_0(
-            "__no_such_tool__", [], realistic
-        ), "PCI DSS CWE table unreachable"
-        assert map_to_mitre_attack(
-            "__no_such_tool__", [], realistic, ""
-        ), "MITRE ATT&CK CWE table unreachable"
+        assert map_to_nist_csf_2_0("__no_such_tool__", [], realistic), (
+            "NIST CSF CWE table unreachable"
+        )
+        assert map_to_pci_dss_4_0("__no_such_tool__", [], realistic), (
+            "PCI DSS CWE table unreachable"
+        )
+        assert map_to_mitre_attack("__no_such_tool__", [], realistic, ""), (
+            "MITRE ATT&CK CWE table unreachable"
+        )
 
     def test_enrichment_end_to_end_on_a_realistic_finding(self):
         from scripts.core.compliance_mapper import enrich_finding_with_compliance

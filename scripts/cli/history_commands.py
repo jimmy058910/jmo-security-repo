@@ -815,8 +815,7 @@ def cmd_history_trends(args) -> int:
                             "branch": branch,
                             "days": days,
                             "message": (
-                                f"No scans found for {branch_label} "
-                                f"in last {days} days"
+                                f"No scans found for {branch_label} in last {days} days"
                             ),
                         },
                         indent=2,

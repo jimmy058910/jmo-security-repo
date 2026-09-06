@@ -387,8 +387,7 @@ def _check_tool_exists_consistency() -> CheckResult | None:
             name="subprocess-tool-exists-consistency",
             status=CheckStatus.WARN,
             message=(
-                f"{len(violations)} raw shutil.which() call(s) "
-                "(prefer tool_exists())"
+                f"{len(violations)} raw shutil.which() call(s) (prefer tool_exists())"
             ),
             details="\n".join(violations[:10]),
         )

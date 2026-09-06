@@ -141,7 +141,10 @@ class TestAreRulesEquivalent:
     def test_different_issues_not_equivalent(self):
         """Test different issues are not marked as equivalent."""
         is_equiv, canonical = are_rules_equivalent(
-            "hadolint", "DL3006", "hadolint", "DL3055"  # :latest tag  # no healthcheck
+            "hadolint",
+            "DL3006",
+            "hadolint",
+            "DL3055",  # :latest tag  # no healthcheck
         )
         assert is_equiv is False
         assert canonical is None
@@ -275,9 +278,9 @@ class TestSubstringFallbackBoundaries:
             "CKV_K8S_17",
             "CKV_K8S_18",
         ):
-            assert (
-                get_canonical_rule_id("checkov", unrelated) is None
-            ), f"{unrelated} must not resolve to CKV_K8S_1's canonical id"
+            assert get_canonical_rule_id("checkov", unrelated) is None, (
+                f"{unrelated} must not resolve to CKV_K8S_1's canonical id"
+            )
 
     def test_shorter_id_is_not_captured_by_a_longer_mapped_one(self):
         """The reverse direction was broken too: CKV_AWS_1 inside CKV_AWS_19."""
@@ -297,9 +300,9 @@ class TestSubstringFallbackBoundaries:
             "CKV_AWS_355",
             "CKV_AWS_382",
         ):
-            assert (
-                get_canonical_rule_id("checkov", unrelated) is None
-            ), f"{unrelated} must not resolve to CKV_AWS_3's canonical id"
+            assert get_canonical_rule_id("checkov", unrelated) is None, (
+                f"{unrelated} must not resolve to CKV_AWS_3's canonical id"
+            )
 
     def test_unrelated_checkov_rules_are_not_equivalent(self):
         """The measured regression: two different k8s controls scored 1.0 metadata."""
@@ -333,9 +336,9 @@ class TestSubstringFallbackBoundaries:
         """Every (tool, rule) pair the table declares must still resolve."""
         for canonical, members in RULE_EQUIVALENCE.items():
             for tool, rule in members:
-                assert (
-                    get_canonical_rule_id(tool, rule) is not None
-                ), f"({tool}, {rule}) is in the table but no longer resolves"
+                assert get_canonical_rule_id(tool, rule) is not None, (
+                    f"({tool}, {rule}) is in the table but no longer resolves"
+                )
 
 
 if __name__ == "__main__":

@@ -218,9 +218,9 @@ class TestScanPipeline:
             # Validate each finding has required fields
             for finding in findings:
                 assert "severity" in finding, "Finding missing severity"
-                assert (
-                    "message" in finding or "title" in finding
-                ), "Finding missing message/title"
+                assert "message" in finding or "title" in finding, (
+                    "Finding missing message/title"
+                )
 
     def test_scan_with_different_profiles(
         self, sample_vulnerable_repo: Path, tmp_path: Path

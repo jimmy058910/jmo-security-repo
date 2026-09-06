@@ -114,9 +114,9 @@ class TestDashboardRendering:
     def test_page_title_contains_jmo(self, dashboard_page: Page):
         """Page title mentions JMo or Security (both React and fallback modes)."""
         title = dashboard_page.title().lower()
-        assert (
-            "jmo" in title or "security" in title
-        ), f"Unexpected page title: {dashboard_page.title()!r}"
+        assert "jmo" in title or "security" in title, (
+            f"Unexpected page title: {dashboard_page.title()!r}"
+        )
 
     def test_dashboard_body_is_nonempty(self, dashboard_page: Page):
         """Dashboard body has visible content."""
@@ -134,9 +134,9 @@ class TestDashboardRendering:
         page_text = dashboard_page.text_content("body") or ""
         page_text_upper = page_text.upper()
         for severity in ("CRITICAL", "HIGH", "MEDIUM", "LOW"):
-            assert (
-                severity in page_text_upper
-            ), f"Severity '{severity}' not visible in dashboard"
+            assert severity in page_text_upper, (
+                f"Severity '{severity}' not visible in dashboard"
+            )
 
     def test_findings_table_rows_present(self, dashboard_page: Page):
         """Findings table has at least one data row.
@@ -209,9 +209,9 @@ class TestDashboardResponsive:
         # Basic sanity: page loaded with a title and non-blank body
         assert page.title(), f"Dashboard has no title at {label} ({width}x{height})"
         body_text = page.text_content("body") or ""
-        assert (
-            len(body_text.strip()) > 0
-        ), f"Dashboard body is empty at {label} ({width}x{height})"
+        assert len(body_text.strip()) > 0, (
+            f"Dashboard body is empty at {label} ({width}x{height})"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -244,9 +244,9 @@ class TestDashboardInteraction:
 
         headers_text = (dashboard_page.text_content("table thead") or "").upper()
         for expected in ("SEVERITY", "RULE", "PATH"):
-            assert (
-                expected in headers_text
-            ), f"Column header '{expected}' not found in table thead"
+            assert expected in headers_text, (
+                f"Column header '{expected}' not found in table thead"
+            )
 
     def test_page_has_no_broken_root(self, dashboard_page: Page):
         """Dashboard does not display a bare empty #root (white-screen failure)."""
@@ -256,6 +256,6 @@ class TestDashboardInteraction:
 
         # A white-screen failure would leave #root with zero children
         child_count = root.evaluate("el => el.children.length")
-        assert (
-            child_count > 0
-        ), "Dashboard #root has no children — possible white-screen failure"
+        assert child_count > 0, (
+            "Dashboard #root has no children — possible white-screen failure"
+        )

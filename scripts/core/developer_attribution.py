@@ -282,9 +282,7 @@ class DeveloperAttribution:
 
         except subprocess.TimeoutExpired:
             logger.warning(f"git blame timeout for {file_path}:{line_num}")
-        except (
-            Exception
-        ) as e:  # Acceptable: git blame may fail for many reasons (deleted files, shallow clones)
+        except Exception as e:  # Acceptable: git blame may fail for many reasons (deleted files, shallow clones)
             logger.error(f"git blame error for {file_path}:{line_num}: {e}")
 
         return None

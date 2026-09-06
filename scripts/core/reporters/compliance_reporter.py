@@ -413,7 +413,7 @@ def write_compliance_summary(findings: list[dict[str, Any]], output_path: Path) 
         "# Compliance Framework Summary",
         "",
         f"**Total Findings:** {total_findings}",
-        f"**Findings with Compliance Mappings:** {findings_with_compliance} ({findings_with_compliance/total_findings*100 if total_findings else 0:.1f}%)",
+        f"**Findings with Compliance Mappings:** {findings_with_compliance} ({findings_with_compliance / total_findings * 100 if total_findings else 0:.1f}%)",
         "",
         "## Framework Coverage",
         "",

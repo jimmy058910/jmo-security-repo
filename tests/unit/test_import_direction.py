@@ -65,10 +65,12 @@ class TestImportDirectionLinter:
         core_dir = tmp_path / "scripts" / "core"
         core_dir.mkdir(parents=True)
         good_file = core_dir / "good_module.py"
-        good_file.write_text(textwrap.dedent("""\
+        good_file.write_text(
+            textwrap.dedent("""\
             from scripts.core.config import Config
             import scripts.core.common_finding
-            """))
+            """)
+        )
 
         mod = _load_check_import_direction()
         violations = mod.check_file(good_file)
@@ -95,9 +97,9 @@ class TestDocLinks:
             timeout=120,
             cwd=str(REPO_ROOT),
         )
-        assert (
-            result.returncode == 0
-        ), f"Dead references found:\nstdout: {result.stdout}\nstderr: {result.stderr}"
+        assert result.returncode == 0, (
+            f"Dead references found:\nstdout: {result.stdout}\nstderr: {result.stderr}"
+        )
 
         # Assert it actually checked something. The previous assertion looked for
         # the word "valid" in the output, which a checker that examined zero
@@ -177,9 +179,9 @@ class TestDocLinks:
         for ticks in ("`", "``", "```"):
             line = f"see {ticks}[sample](does/not/exist.md){ticks} above"
             kept = "\n".join(mod.navigable_lines(line))
-            assert (
-                "does/not/exist.md" not in kept
-            ), f"leaked from a {len(ticks)}-backtick span"
+            assert "does/not/exist.md" not in kept, (
+                f"leaked from a {len(ticks)}-backtick span"
+            )
 
         # A genuine link on an ordinary line must still be seen.
         kept = "\n".join(mod.navigable_lines("see [real](docs/index.md)"))

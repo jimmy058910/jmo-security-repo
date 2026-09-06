@@ -37,9 +37,9 @@ class TestDependencyConstants:
         platforms = ["windows", "linux", "macos"]
         for dep in ["java", "node"]:
             for platform in platforms:
-                assert (
-                    platform in DEPENDENCY_INSTALL_COMMANDS[dep]
-                ), f"{dep} missing {platform} platform configuration"
+                assert platform in DEPENDENCY_INSTALL_COMMANDS[dep], (
+                    f"{dep} missing {platform} platform configuration"
+                )
 
     def test_dependency_verify_commands_structure(self):
         """Verify verify commands exist for all dependencies."""

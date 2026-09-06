@@ -414,7 +414,6 @@ class PluginLoader:
                 and issubclass(attr, AdapterPlugin)
                 and attr is not AdapterPlugin
             ):
-
                 # Get metadata
                 if hasattr(attr, "_plugin_metadata"):
                     metadata = attr._plugin_metadata
@@ -469,9 +468,7 @@ class PluginLoader:
                     self._load_plugin(plugin_file)
                     logger.info(f"Reloaded plugin: {name}")
                     return True
-                except (
-                    Exception
-                ) as e:  # Acceptable: plugin reload is best-effort — keep old version loaded
+                except Exception as e:  # Acceptable: plugin reload is best-effort — keep old version loaded
                     logger.error(f"Failed to reload plugin {name}: {e}")
                     return False
 

@@ -139,9 +139,9 @@ def test_actionlint_validation():
         )
 
         # Should pass without errors
-        assert (
-            result.returncode == 0
-        ), f"actionlint failed:\n{result.stdout}\n{result.stderr}"
+        assert result.returncode == 0, (
+            f"actionlint failed:\n{result.stdout}\n{result.stderr}"
+        )
     finally:
         temp_file.unlink()
 

@@ -172,9 +172,9 @@ def test_ci_command_with_profile_generates_timings(tmp_path):
 
     # Verify timings.json created
     timings_file = tmp_path / "results" / "summaries" / "timings.json"
-    assert (
-        timings_file.exists()
-    ), "ci command with --profile should generate timings.json"
+    assert timings_file.exists(), (
+        "ci command with --profile should generate timings.json"
+    )
 
     # Same vacuous-pair fix as test_profile_flag_generates_timings above --
     # {"a": 1} passed this check before. In scope because this is still one of
@@ -434,14 +434,14 @@ def test_timings_jobs_is_a_flat_list_of_per_file_entries(tmp_path):
     timings = _run_report_with_profile(_fabricate_results(tmp_path), tmp_path)
 
     assert isinstance(timings["jobs"], list), "jobs must be a list, not a mapping"
-    assert (
-        len(timings["jobs"]) == 2
-    ), f"expected one job per fabricated tool output, got {len(timings['jobs'])}"
+    assert len(timings["jobs"]) == 2, (
+        f"expected one job per fabricated tool output, got {len(timings['jobs'])}"
+    )
 
     for job in timings["jobs"]:
-        assert (
-            set(job) == EXPECTED_JOB_KEYS
-        ), f"job entry keys drifted: {sorted(set(job) ^ EXPECTED_JOB_KEYS)}"
+        assert set(job) == EXPECTED_JOB_KEYS, (
+            f"job entry keys drifted: {sorted(set(job) ^ EXPECTED_JOB_KEYS)}"
+        )
         assert isinstance(job["tool"], str) and job["tool"]
         assert isinstance(job["path"], str) and job["path"]
         assert isinstance(job["seconds"], (int, float)) and job["seconds"] >= 0

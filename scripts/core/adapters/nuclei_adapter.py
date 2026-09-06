@@ -147,7 +147,6 @@ def _load_nuclei_internal(path: str | Path) -> list[dict[str, Any]]:
 
     # Nuclei outputs NDJSON (one JSON object per line)
     for item in safe_load_ndjson_file(path):
-
         # Extract required fields
         # Nuclei structure:
         # {

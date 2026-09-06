@@ -180,7 +180,9 @@ def test_rejects_missing_roster() -> None:
         parse_plan(mutate("**3 issues:** #200 #201 #202\n\n", ""))
     assert "no `**N issues:**` roster found in the section starting at line" in str(
         err.value
-    ), "a phase with no roster must fail as a missing roster, not absorb the next section's"
+    ), (
+        "a phase with no roster must fail as a missing roster, not absorb the next section's"
+    )
 
 
 def test_rejects_summary_row_for_a_phase_that_does_not_exist() -> None:

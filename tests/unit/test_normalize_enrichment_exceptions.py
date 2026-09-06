@@ -844,9 +844,9 @@ class TestEnrichmentFailuresAreReported:
         assert len(warnings) == 1, f"expected one WARNING, got {warnings}"
         text = warnings[0].getMessage()
         assert "riorit" in text, "the warning must name the enrichment that failed"
-        assert (
-            "database disk image is malformed" in text
-        ), "the warning must carry the underlying cause"
+        assert "database disk image is malformed" in text, (
+            "the warning must carry the underlying cause"
+        )
 
     def test_compliance_failure_is_reported_at_warning(
         self, tmp_path, monkeypatch, caplog
@@ -884,9 +884,9 @@ class TestEnrichmentFailuresAreReported:
 
         warnings = self._warnings(caplog)
         assert len(warnings) == 1
-        assert (
-            "owasp_top10.json" in warnings[0].getMessage()
-        ), "FileNotFoundError.filename must survive into the warning"
+        assert "owasp_top10.json" in warnings[0].getMessage(), (
+            "FileNotFoundError.filename must survive into the warning"
+        )
 
     def test_syft_failure_is_reported_at_warning(self, tmp_path, monkeypatch, caplog):
         root, finding = self._one_repo(tmp_path)
@@ -928,6 +928,6 @@ class TestEnrichmentFailuresAreReported:
             out = nr.gather_results(root)
 
         assert out
-        assert (
-            self._warnings(caplog) == []
-        ), "a healthy run must not emit an enrichment warning"
+        assert self._warnings(caplog) == [], (
+            "a healthy run must not emit an enrichment warning"
+        )

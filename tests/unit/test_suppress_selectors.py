@@ -106,9 +106,9 @@ class TestMalformedConfigDoesNotRaise:
         with caplog.at_level(logging.WARNING, logger="scripts.core.suppress"):
             load_suppressions(_write(tmp_path, body))
 
-        assert [
-            r for r in caplog.records if r.levelno >= logging.WARNING
-        ], f"{label} was accepted silently"
+        assert [r for r in caplog.records if r.levelno >= logging.WARNING], (
+            f"{label} was accepted silently"
+        )
 
     def test_a_healthy_config_emits_no_warning(self, tmp_path: Path, caplog):
         """Control: the guards above must not fire on a valid file."""
@@ -148,9 +148,9 @@ class TestNoOpKeysAreReported:
             result = load_suppressions(_write(tmp_path, body))
 
         assert result == {}, "a selectorless entry must not match everything"
-        assert any(
-            "no selector" in r.getMessage().lower() for r in caplog.records
-        ), "a selectorless entry was dropped silently"
+        assert any("no selector" in r.getMessage().lower() for r in caplog.records), (
+            "a selectorless entry was dropped silently"
+        )
 
     def test_unknown_key_is_named_in_the_warning(self, tmp_path: Path, caplog):
         body = 'suppressions:\n  - idd: "typo"\n    reason: "r"\n'
@@ -158,9 +158,9 @@ class TestNoOpKeysAreReported:
         with caplog.at_level(logging.WARNING, logger="scripts.core.suppress"):
             load_suppressions(_write(tmp_path, body))
 
-        assert any(
-            "idd" in r.getMessage() for r in caplog.records
-        ), "an unrecognised key must be named, not silently ignored"
+        assert any("idd" in r.getMessage() for r in caplog.records), (
+            "an unrecognised key must be named, not silently ignored"
+        )
 
     def test_known_selector_keys_do_not_warn(self, tmp_path: Path, caplog):
         body = (
@@ -333,7 +333,7 @@ class TestOtherSelectors:
 
     def test_line_list(self, tmp_path: Path):
         sups = load_suppressions(
-            _write(tmp_path, "suppressions:\n  - line: [74, 86]\n" '    reason: "r"\n')
+            _write(tmp_path, 'suppressions:\n  - line: [74, 86]\n    reason: "r"\n')
         )
 
         kept = filter_suppressed(
@@ -531,9 +531,9 @@ class TestUnparseableExpiry:
             active = rule.is_active()
 
         assert active is True, "an unreadable expiry still fails open, deliberately"
-        assert any(
-            "not-a-date" in r.getMessage() for r in caplog.records
-        ), "an unreadable expiry silently became a permanent suppression"
+        assert any("not-a-date" in r.getMessage() for r in caplog.records), (
+            "an unreadable expiry silently became a permanent suppression"
+        )
 
     def test_an_unquoted_numeric_expires_is_reported(self, caplog):
         """`expires: 20251231` is an int in YAML, not a date.

@@ -110,9 +110,9 @@ def test_guard_detects_a_planted_violation(tmp_path):
     )
 
     violations = find_partial_profile_enumerations(scripts_dir)
-    assert any(
-        "planted.py" in v for v in violations
-    ), f"guard failed to detect a planted partial enumeration {partial}"
+    assert any("planted.py" in v for v in violations), (
+        f"guard failed to detect a planted partial enumeration {partial}"
+    )
 
 
 def test_guard_allows_the_full_registry(tmp_path):

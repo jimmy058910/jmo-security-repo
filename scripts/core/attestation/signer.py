@@ -237,8 +237,6 @@ class SigstoreSigner:
             else:
                 logger.warning(f"⚠️ Unexpected Rekor response: {response.status_code}")
                 return False
-        except (
-            Exception
-        ) as e:  # Acceptable: re-raises after logging — Rekor failure is fatal for verification
+        except Exception as e:  # Acceptable: re-raises after logging — Rekor failure is fatal for verification
             logger.error(f"Rekor verification failed: {e}")
             raise

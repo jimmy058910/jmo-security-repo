@@ -148,9 +148,9 @@ def test_every_consumer_carries_every_target(
     argv = ARGV_BUILDERS[consumer](_maximal_schedule())
 
     assert flag in argv, f"{consumer} never emits {flag}"
-    assert (
-        argv[argv.index(flag) + 1] == value
-    ), f"{consumer} emits {flag} with the wrong value"
+    assert argv[argv.index(flag) + 1] == value, (
+        f"{consumer} emits {flag} with the wrong value"
+    )
 
 
 def _scan_option_strings() -> set[str]:
@@ -363,9 +363,9 @@ def test_a_handled_target_key_produces_no_warning(
     with caplog.at_level("WARNING", logger=logger_name):
         _gitlab_script(dict(MAXIMAL_TARGETS))
 
-    assert (
-        caplog.text == ""
-    ), f"unexpected warning on a fully handled schedule:\n{caplog.text}"
+    assert caplog.text == "", (
+        f"unexpected warning on a fully handled schedule:\n{caplog.text}"
+    )
 
 
 def test_the_gitlab_token_is_a_variable_reference_not_a_literal() -> None:

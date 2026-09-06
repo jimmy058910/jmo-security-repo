@@ -112,14 +112,14 @@ def test_store_scan_1000_findings_fast(
             "SELECT COUNT(*) FROM findings WHERE scan_id = ?", (scan_id,)
         ).fetchone()
     )
-    assert (
-        stored_findings[0] == 1000
-    ), f"Expected 1000 findings, got {stored_findings[0]}"
+    assert stored_findings[0] == 1000, (
+        f"Expected 1000 findings, got {stored_findings[0]}"
+    )
 
     # Performance assertion
-    assert (
-        elapsed < 2.0
-    ), f"Took {elapsed:.2f}s, expected <2s (PERFORMANCE TARGET MISSED)"
+    assert elapsed < 2.0, (
+        f"Took {elapsed:.2f}s, expected <2s (PERFORMANCE TARGET MISSED)"
+    )
 
     print(
         f"\n✅ Performance Test 1 PASSED: Stored 1000 findings in {elapsed:.3f}s (target: <2s)"
@@ -146,9 +146,9 @@ def test_query_10k_scans_fast(large_database: Path):
     assert len(scans) == 10000, f"Expected 10000 scans, got {len(scans)}"
 
     # Performance assertion (relaxed to 0.6s to account for slower CI runners)
-    assert (
-        elapsed < 0.6
-    ), f"Took {elapsed:.3f}s, expected <0.6s (PERFORMANCE TARGET MISSED)"
+    assert elapsed < 0.6, (
+        f"Took {elapsed:.3f}s, expected <0.6s (PERFORMANCE TARGET MISSED)"
+    )
 
     print(
         f"\n✅ Performance Test 2 PASSED: Queried 10k scans in {elapsed:.3f}s (target: <0.5s)"
@@ -214,9 +214,9 @@ def test_batch_insert_10k_findings(tmp_path: Path, large_database: Path):
     assert count == 10000, f"Expected 10000 findings, got {count}"
 
     # Performance assertion
-    assert (
-        elapsed < 5.0
-    ), f"Took {elapsed:.2f}s, expected <5s (PERFORMANCE TARGET MISSED)"
+    assert elapsed < 5.0, (
+        f"Took {elapsed:.2f}s, expected <5s (PERFORMANCE TARGET MISSED)"
+    )
 
     print(
         f"\n✅ Performance Test 3 PASSED: Batch inserted 10k findings in {elapsed:.3f}s (target: <5s)"
@@ -300,25 +300,25 @@ def test_index_usage_verified(large_database: Path):
             )
 
     # Print results
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print("Index Usage Verification Results")
-    print(f"{'='*80}")
+    print(f"{'=' * 80}")
     print(f"✅ Passed: {len(passed)}/{len(test_cases)}")
     print(f"❌ Failed: {len(failed)}/{len(test_cases)}")
 
     if passed:
-        print(f"\n{'='*80}")
+        print(f"\n{'=' * 80}")
         print("✅ PASSED QUERIES (Using Indices):")
-        print(f"{'='*80}")
+        print(f"{'=' * 80}")
         for result in passed:
             print(f"\n{result['name']}:")
             print(f"Query: {result['query']}")
             print(f"Plan: {result['plan']}")
 
     if failed:
-        print(f"\n{'='*80}")
+        print(f"\n{'=' * 80}")
         print("❌ FAILED QUERIES (Not Using Indices):")
-        print(f"{'='*80}")
+        print(f"{'=' * 80}")
         for result in failed:
             print(f"\n{result['name']}:")
             print(f"Query: {result['query']}")
@@ -326,9 +326,9 @@ def test_index_usage_verified(large_database: Path):
             print(f"Plan: {result['plan']}")
 
     # Assertion: All queries should use indices
-    assert (
-        len(failed) == 0
-    ), f"{len(failed)} queries not using indices (see output above)"
+    assert len(failed) == 0, (
+        f"{len(failed)} queries not using indices (see output above)"
+    )
 
     print("\n✅ Performance Test 4 PASSED: All queries use indices correctly")
 
@@ -423,9 +423,9 @@ def test_benchmark_suite(tmp_path: Path, benchmark_findings: list[dict[str, Any]
     results["get_scan_by_id"] = time.time() - start
 
     # Print benchmark results
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print("Benchmark Results:")
-    print(f"{'='*80}")
+    print(f"{'=' * 80}")
     for name, duration in results.items():
         print(f"{name:30s}: {duration:.4f}s")
 

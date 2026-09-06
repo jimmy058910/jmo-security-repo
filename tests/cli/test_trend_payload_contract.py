@@ -292,14 +292,14 @@ def test_improvement_metrics_carry_real_values(payload: dict[str, Any]) -> None:
         assert key in im, f"improvement_metrics is missing {key!r}"
 
     assert im["net_change"] == im["total_change"]
-    assert (
-        im["total_change"] != 0
-    ), "fixture must produce a real change to be meaningful"
+    assert im["total_change"] != 0, (
+        "fixture must produce a real change to be meaningful"
+    )
     assert im["resolved"] > 0, "findings present in the first scan and not the last"
     assert im["introduced"] > 0, "findings present in the last scan and not the first"
-    assert (
-        im["resolved"] != im["introduced"]
-    ), "fixture must be asymmetric, or swapping the two counts is undetectable"
+    assert im["resolved"] != im["introduced"], (
+        "fixture must be asymmetric, or swapping the two counts is undetectable"
+    )
 
     # NOT asserted: resolved - introduced == -total_change. It looks like an
     # identity and is not one. `total_change` comes from the scans table's

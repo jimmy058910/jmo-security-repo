@@ -273,9 +273,9 @@ class TestDestructiveCommandsHonourJsonInTheirExitCode:
         rc = getattr(hc, self.COMMAND[command])(self._Args(db, as_json))
         capsys.readouterr()
 
-        assert rc == (
-            0 if outcome == "ok" else 1
-        ), f"{command} --json={as_json} returned {rc} for a {outcome} result"
+        assert rc == (0 if outcome == "ok" else 1), (
+            f"{command} --json={as_json} returned {rc} for a {outcome} result"
+        )
 
     @pytest.mark.parametrize("command", ["migrate", "repair", "verify"])
     def test_json_output_is_parseable_on_the_failure_path(
@@ -546,9 +546,9 @@ class TestOneBadFindingDoesNotDiscardTheScan:
         )
         store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
 
-        assert (
-            _stored_row(tmp_path / "h.db") is not None
-        ), "the scan row itself was discarded because two findings collided"
+        assert _stored_row(tmp_path / "h.db") is not None, (
+            "the scan row itself was discarded because two findings collided"
+        )
         assert _stored_fingerprints(tmp_path / "h.db") == []
 
     def test_two_findings_sharing_an_id_no_longer_discard_the_scan(self, tmp_path):
@@ -562,9 +562,9 @@ class TestOneBadFindingDoesNotDiscardTheScan:
         store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
 
         assert _stored_row(tmp_path / "h.db") is not None
-        assert _stored_fingerprints(tmp_path / "h.db") == [
-            "same"
-        ], "the first of a colliding pair must survive"
+        assert _stored_fingerprints(tmp_path / "h.db") == ["same"], (
+            "the first of a colliding pair must survive"
+        )
 
     def test_good_findings_survive_alongside_bad_ones(self, tmp_path):
         """The point of the fix: losing one finding must not lose the rest."""
@@ -637,9 +637,9 @@ class TestOneBadFindingDoesNotDiscardTheScan:
         with caplog.at_level(logging.WARNING, logger="scripts.core.history_db"):
             store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
 
-        assert not [
-            r for r in caplog.records if "NOT recorded" in r.getMessage()
-        ], "a clean scan produced a data-loss warning"
+        assert not [r for r in caplog.records if "NOT recorded" in r.getMessage()], (
+            "a clean scan produced a data-loss warning"
+        )
 
 
 def _results_with_duration(root: Path, duration: object) -> Path:

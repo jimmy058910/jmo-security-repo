@@ -43,9 +43,9 @@ class TestProfiles:
             ("balanced", "deep"),
         ):
             omitted = set(PROFILES[lighter]["tools"]) - set(PROFILES[heavier]["tools"])
-            assert (
-                not omitted
-            ), f"{heavier} omits {sorted(omitted)} present in {lighter}"
+            assert not omitted, (
+                f"{heavier} omits {sorted(omitted)} present in {lighter}"
+            )
 
     def test_fast_is_smallest_profile(self):
         assert len(PROFILES["fast"]["tools"]) <= len(PROFILES["slim"]["tools"])

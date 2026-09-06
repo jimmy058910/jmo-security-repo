@@ -122,7 +122,7 @@ def _validate_versions(repo_root: Path) -> bool:
     validate_script = repo_root / "scripts" / "dev" / "update_versions.py"
     if not validate_script.exists():
         print(
-            "Version validation script not found: " f"{validate_script}",
+            f"Version validation script not found: {validate_script}",
             file=sys.stderr,
         )
         print(
@@ -338,9 +338,9 @@ def cmd_build(args: argparse.Namespace) -> int:
     # Build each variant
     failed = []
     for variant in variants:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"Building variant: {variant}")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
         build_result = _build_image(
             variant=variant,
@@ -359,9 +359,9 @@ def cmd_build(args: argparse.Namespace) -> int:
             failed.append(variant)
 
     # Summary
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Build Summary")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     if failed:
         print(f"Failed: {', '.join(failed)}")

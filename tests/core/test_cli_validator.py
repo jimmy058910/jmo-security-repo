@@ -369,9 +369,9 @@ class TestValidateCli:
             result = validate_cli("quick")
             help_checks = [c for c in result.checks if c.name.startswith("help:")]
             for check in help_checks:
-                assert (
-                    check.status == CheckStatus.PASS
-                ), f"{check.name}: {check.message}"
+                assert check.status == CheckStatus.PASS, (
+                    f"{check.name}: {check.message}"
+                )
 
     def test_help_check_fails_with_nonzero(self):
         """Help checks fail when subprocess returns non-zero."""
@@ -386,9 +386,9 @@ class TestValidateCli:
             help_checks = [c for c in result.checks if c.name.startswith("help:")]
             # All help checks should FAIL
             for check in help_checks:
-                assert (
-                    check.status == CheckStatus.FAIL
-                ), f"{check.name}: expected FAIL, got {check.status}"
+                assert check.status == CheckStatus.FAIL, (
+                    f"{check.name}: expected FAIL, got {check.status}"
+                )
 
     def test_required_arg_checks_pass_with_rc_two(self):
         """Required-arg checks pass when subprocess returns exit code 2."""
@@ -403,9 +403,9 @@ class TestValidateCli:
             ]
             assert len(req_checks) == _REQUIRED_ARG_COUNT
             for check in req_checks:
-                assert (
-                    check.status == CheckStatus.PASS
-                ), f"{check.name}: {check.message}"
+                assert check.status == CheckStatus.PASS, (
+                    f"{check.name}: {check.message}"
+                )
 
     def test_invalid_flag_checks_pass_with_rc_two(self):
         """Invalid-flag checks pass when subprocess returns exit code 2."""
@@ -420,9 +420,9 @@ class TestValidateCli:
             ]
             assert len(flag_checks) == _INVALID_FLAG_COUNT
             for check in flag_checks:
-                assert (
-                    check.status == CheckStatus.PASS
-                ), f"{check.name}: {check.message}"
+                assert check.status == CheckStatus.PASS, (
+                    f"{check.name}: {check.message}"
+                )
 
     def test_mutex_checks_pass_with_rc_two(self):
         """Mutually-exclusive checks pass when subprocess returns exit code 2."""
@@ -435,9 +435,9 @@ class TestValidateCli:
             mutex_checks = [c for c in result.checks if c.name.startswith("mutex:")]
             assert len(mutex_checks) == _MUTEX_COUNT
             for check in mutex_checks:
-                assert (
-                    check.status == CheckStatus.PASS
-                ), f"{check.name}: {check.message}"
+                assert check.status == CheckStatus.PASS, (
+                    f"{check.name}: {check.message}"
+                )
 
     def test_type_checks_pass_with_rc_two(self):
         """Type-check validations pass when subprocess returns exit code 2."""
@@ -450,9 +450,9 @@ class TestValidateCli:
             type_checks = [c for c in result.checks if c.name.startswith("type-check:")]
             assert len(type_checks) == _TYPE_CHECK_COUNT
             for check in type_checks:
-                assert (
-                    check.status == CheckStatus.PASS
-                ), f"{check.name}: {check.message}"
+                assert check.status == CheckStatus.PASS, (
+                    f"{check.name}: {check.message}"
+                )
 
     def test_version_checks_pass(self):
         """Version checks pass with valid version output."""
@@ -541,9 +541,9 @@ class TestFullTier:
             result = validate_cli("full")
             full_checks = [c for c in result.checks if c.name.startswith("full:")]
             for check in full_checks:
-                assert (
-                    check.status == CheckStatus.PASS
-                ), f"{check.name}: {check.message}"
+                assert check.status == CheckStatus.PASS, (
+                    f"{check.name}: {check.message}"
+                )
 
     def test_full_checks_pass_on_rc_one(self):
         """Some full-tier checks accept exit code 1 as acceptable."""
@@ -597,9 +597,9 @@ class TestErrorHandling:
             result = validate_cli("quick")
             # All checks should be ERROR (since all subprocess calls timeout)
             for check in result.checks:
-                assert (
-                    check.status == CheckStatus.ERROR
-                ), f"{check.name}: expected ERROR, got {check.status}"
+                assert check.status == CheckStatus.ERROR, (
+                    f"{check.name}: expected ERROR, got {check.status}"
+                )
 
     def test_mixed_timeout_and_success(self):
         """Some checks timeout while others succeed."""
@@ -999,9 +999,9 @@ class TestCheckTiming:
             mock_subprocess.TimeoutExpired = subprocess.TimeoutExpired
             result = validate_cli("quick")
             for check in result.checks:
-                assert (
-                    check.duration_ms >= 0
-                ), f"{check.name}: duration_ms should be non-negative"
+                assert check.duration_ms >= 0, (
+                    f"{check.name}: duration_ms should be non-negative"
+                )
 
 
 # ---------------------------------------------------------------------------
@@ -1037,9 +1037,9 @@ class TestCheckMessages:
             help_checks = [c for c in result.checks if c.name.startswith("help:")]
             for check in help_checks:
                 if check.status == CheckStatus.FAIL:
-                    assert (
-                        "42" in check.message
-                    ), f"{check.name}: failure message should include exit code"
+                    assert "42" in check.message, (
+                        f"{check.name}: failure message should include exit code"
+                    )
 
 
 # ---------------------------------------------------------------------------

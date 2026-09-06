@@ -579,9 +579,9 @@ class TestErrorHandling:
         assert result.attempts == 1  # No retries for FileNotFoundError
 
         # Should return quickly (no retries)
-        assert (
-            duration < 2.0
-        ), f"FileNotFoundError should return quickly, got {duration}s"
+        assert duration < 2.0, (
+            f"FileNotFoundError should return quickly, got {duration}s"
+        )
 
     @pytest.mark.skipif(
         sys.platform == "win32", reason="Unix permissions not supported on Windows"
@@ -1437,9 +1437,9 @@ class TestSubprocessDecoding:
 
         result = ToolRunner([tool]).run_tool(tool)
 
-        assert (
-            result.status == "success"
-        ), f"decode failure surfaced as {result.status!r}: {result.error_message!r}"
+        assert result.status == "success", (
+            f"decode failure surfaced as {result.status!r}: {result.error_message!r}"
+        )
         # The bug's signature is empty stdout despite the tool having written
         # ~25 bytes. Assert on content, not just truthiness -- an empty string
         # is exactly what the broken path produced.
@@ -1462,15 +1462,15 @@ class TestSubprocessDecoding:
             ToolRunner([tool]).run_tool(tool)
 
         kwargs = mock_run.call_args.kwargs
-        assert (
-            kwargs.get("encoding") == "utf-8"
-        ), "tool output must be decoded as UTF-8, not the host locale codec"
-        assert (
-            kwargs.get("errors") == "replace"
-        ), "a single undecodable byte must not discard the whole capture"
-        assert not kwargs.get(
-            "text"
-        ), "text=True re-enables locale decoding and overrides the intent"
+        assert kwargs.get("encoding") == "utf-8", (
+            "tool output must be decoded as UTF-8, not the host locale codec"
+        )
+        assert kwargs.get("errors") == "replace", (
+            "a single undecodable byte must not discard the whole capture"
+        )
+        assert not kwargs.get("text"), (
+            "text=True re-enables locale decoding and overrides the intent"
+        )
 
 
 if __name__ == "__main__":

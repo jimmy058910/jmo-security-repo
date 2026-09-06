@@ -351,9 +351,9 @@ class TestV1WorkflowIntegration:
             timeout=30,
         )
 
-        assert (
-            result_export.returncode == 0
-        ), f"JSON export failed: {result_export.stderr}"
+        assert result_export.returncode == 0, (
+            f"JSON export failed: {result_export.stderr}"
+        )
         assert json_export.exists(), "JSON export file should exist"
 
         # Validate JSON format
@@ -514,9 +514,9 @@ class TestV1WorkflowIntegration:
             timeout=30,
         )
 
-        assert (
-            result_trends.returncode == 0
-        ), f"Trend analysis failed: {result_trends.stderr}"
+        assert result_trends.returncode == 0, (
+            f"Trend analysis failed: {result_trends.stderr}"
+        )
 
 
 if __name__ == "__main__":

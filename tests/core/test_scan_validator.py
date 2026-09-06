@@ -114,9 +114,9 @@ class TestValidateScans:
         quick_names = {c.name for c in quick.checks}
         full_names = {c.name for c in full.checks}
         # All quick checks should be in full
-        assert quick_names.issubset(
-            full_names
-        ), f"Quick checks not in full: {quick_names - full_names}"
+        assert quick_names.issubset(full_names), (
+            f"Quick checks not in full: {quick_names - full_names}"
+        )
 
     def test_all_checks_have_status(self):
         result = validate_scans("quick")
@@ -635,16 +635,16 @@ class TestCheckNameUniqueness:
     def test_quick_check_names_unique(self):
         result = validate_scans("quick")
         names = [c.name for c in result.checks]
-        assert len(names) == len(
-            set(names)
-        ), f"Duplicate check names: {[n for n in names if names.count(n) > 1]}"
+        assert len(names) == len(set(names)), (
+            f"Duplicate check names: {[n for n in names if names.count(n) > 1]}"
+        )
 
     def test_full_check_names_unique(self):
         result = validate_scans("full")
         names = [c.name for c in result.checks]
-        assert len(names) == len(
-            set(names)
-        ), f"Duplicate check names: {[n for n in names if names.count(n) > 1]}"
+        assert len(names) == len(set(names)), (
+            f"Duplicate check names: {[n for n in names if names.count(n) > 1]}"
+        )
 
 
 # ============================================================================

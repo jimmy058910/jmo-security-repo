@@ -139,9 +139,9 @@ def test_scan_job_persists_its_tool_durations(
     entries = {t["tool"]: t for t in doc["tools"]}
 
     assert tool in entries, f"{module}: {tool} ran but is absent from the timings"
-    assert (
-        entries[tool]["duration"] == 12.5
-    ), f"{module}: the measured duration did not survive to disk"
+    assert entries[tool]["duration"] == 12.5, (
+        f"{module}: the measured duration did not survive to disk"
+    )
     assert entries[tool]["status"] == "success"
 
 

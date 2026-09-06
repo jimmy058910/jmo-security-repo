@@ -434,6 +434,5 @@ def test_fingerprint_still_separates_two_different_rules(tmp_path: Path):
     second = HorusecAdapter().parse(f)[0]
 
     assert first.id != second.id, (
-        "two different horusec rules at the same location collapsed to one "
-        "fingerprint"
+        "two different horusec rules at the same location collapsed to one fingerprint"
     )

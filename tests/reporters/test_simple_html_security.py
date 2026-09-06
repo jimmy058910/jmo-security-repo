@@ -79,9 +79,9 @@ def test_finding_text_cannot_introduce_live_markup(tmp_path, payload):
     collector = _LiveMarkupCollector()
     collector.feed(html)
 
-    assert (
-        collector.found == []
-    ), f"payload {payload!r} produced live markup: {collector.found}"
+    assert collector.found == [], (
+        f"payload {payload!r} produced live markup: {collector.found}"
+    )
     # belt and braces: the tokenizer above is the oracle, but a raw <script>
     # anywhere in a document with no script blocks is unambiguous
     assert not re.search(r"<script", html, re.IGNORECASE)

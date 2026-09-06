@@ -364,6 +364,6 @@ class TestMultiCodepointFallbacks:
         longest-first ordering holding.
         """
         for key, expected in UNICODE_FALLBACKS.items():
-            assert (
-                _substitute(key, UNICODE_FALLBACKS) == expected
-            ), f"{[hex(ord(c)) for c in key]} did not substitute cleanly"
+            assert _substitute(key, UNICODE_FALLBACKS) == expected, (
+                f"{[hex(ord(c)) for c in key]} did not substitute cleanly"
+            )

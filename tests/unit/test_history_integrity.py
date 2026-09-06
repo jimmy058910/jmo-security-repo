@@ -299,12 +299,12 @@ def test_recover_database_preserves_data(tmp_path: Path):
     scans_after = conn2.execute("SELECT COUNT(*) FROM scans").fetchone()[0]
     findings_after = conn2.execute("SELECT COUNT(*) FROM findings").fetchone()[0]
 
-    assert (
-        scans_after == scans_before
-    ), f"Scans count mismatch: {scans_after} != {scans_before}"
-    assert (
-        findings_after == findings_before
-    ), f"Findings count mismatch: {findings_after} != {findings_before}"
+    assert scans_after == scans_before, (
+        f"Scans count mismatch: {scans_after} != {scans_before}"
+    )
+    assert findings_after == findings_before, (
+        f"Findings count mismatch: {findings_after} != {findings_before}"
+    )
 
     # Verify specific scan exists
     scan = conn2.execute(

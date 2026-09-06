@@ -682,9 +682,9 @@ def test_dashboard_data_consumption(sample_analysis, tmp_path):
     # Every series is plotted against that shared axis, so a series of a
     # different length renders misaligned rather than failing loudly.
     for severity, series in by_severity.items():
-        assert len(series) == len(
-            timestamps
-        ), f"{severity} has {len(series)} points for {len(timestamps)} timestamps"
+        assert len(series) == len(timestamps), (
+            f"{severity} has {len(series)} points for {len(timestamps)} timestamps"
+        )
 
 
 def test_all_exports_handle_empty_data(empty_analysis, tmp_path):

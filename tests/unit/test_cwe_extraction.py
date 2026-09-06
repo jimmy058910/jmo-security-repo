@@ -214,9 +214,9 @@ def test_backfill_runs_before_compliance_enrichment():
     lifted = _finding()
     backfill_risk_cwe([lifted])
     with_cwe = enrich_finding_with_compliance(lifted)
-    assert (with_cwe.get("compliance") or {}).get(
-        "cweTop25_2024"
-    ), "CWE-502 is in the CWE Top 25; lifting it must reach the framework"
+    assert (with_cwe.get("compliance") or {}).get("cweTop25_2024"), (
+        "CWE-502 is in the CWE Top 25; lifting it must reach the framework"
+    )
 
 
 def test_the_pipeline_actually_calls_the_backfill(tmp_path):
@@ -257,6 +257,6 @@ def test_the_pipeline_actually_calls_the_backfill(tmp_path):
 
     assert findings, "the bandit adapter produced nothing to assert on"
     assert [(f.get("risk") or {}).get("cwe") for f in findings] == [["CWE-502"]]
-    assert (findings[0].get("compliance") or {}).get(
-        "cweTop25_2024"
-    ), "the lift must happen before compliance enrichment, or it reaches nothing"
+    assert (findings[0].get("compliance") or {}).get("cweTop25_2024"), (
+        "the lift must happen before compliance enrichment, or it reaches nothing"
+    )

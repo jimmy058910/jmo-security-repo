@@ -91,9 +91,7 @@ class KEVClient:
         # Download fresh catalog
         try:
             self._download_catalog()
-        except (
-            Exception
-        ) as e:  # Acceptable: KEV catalog download is optional enrichment — operate offline
+        except Exception as e:  # Acceptable: KEV catalog download is optional enrichment — operate offline
             logger.warning("Failed to download KEV catalog: %s", e)
 
     def _download_catalog(self):
@@ -194,9 +192,7 @@ class KEVClient:
         """
         try:
             self._download_catalog()
-        except (
-            Exception
-        ) as e:  # Acceptable: KEV catalog refresh is optional — use stale cache on failure
+        except Exception as e:  # Acceptable: KEV catalog refresh is optional — use stale cache on failure
             logger.warning("Failed to refresh KEV catalog: %s", e)
 
     def _is_cache_valid(self) -> bool:

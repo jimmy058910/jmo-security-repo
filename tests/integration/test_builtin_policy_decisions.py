@@ -278,9 +278,9 @@ def test_policy_report_artifact_agrees_with_the_verdict(
         assert set(results) == set(POLICIES), f"{label}: evaluated {sorted(results)}"
 
         for name, result in results.items():
-            assert (
-                result.passed is want_pass
-            ), f"{label}: {name} passed={result.passed}, expected {want_pass}"
+            assert result.passed is want_pass, (
+                f"{label}: {name} passed={result.passed}, expected {want_pass}"
+            )
             if not want_pass:
                 assert result.violations, f"{label}: {name} failed with no violations"
 
@@ -308,12 +308,12 @@ def test_one_finding_yields_one_violation_per_policy(violating_findings, tmp_pat
     )
     violations = results["production-hardening"].violations
     fingerprints = [v["fingerprint"] for v in violations]
-    assert len(fingerprints) == len(
-        set(fingerprints)
-    ), f"the same finding appears more than once: {sorted(fingerprints)}"
-    assert len(violations) == len(
-        violating_findings
-    ), f"{len(violations)} violations for {len(violating_findings)} findings"
+    assert len(fingerprints) == len(set(fingerprints)), (
+        f"the same finding appears more than once: {sorted(fingerprints)}"
+    )
+    assert len(violations) == len(violating_findings), (
+        f"{len(violations)} violations for {len(violating_findings)} findings"
+    )
 
 
 def test_metadata_matches_opa_reading_of_the_policys_own_package():
@@ -385,7 +385,7 @@ def test_each_verification_signal_blocks_on_its_own(violating_findings):
         results = evaluate_policies([finding], ["zero-secrets"], BUILTIN_DIR, USER_DIR)
         result = results["zero-secrets"]
         assert not result.passed, (
-            f"zero-secrets PASSED on a verified secret carrying the " f"{label} signal"
+            f"zero-secrets PASSED on a verified secret carrying the {label} signal"
         )
         assert len(result.violations) == 1, result.violations
 

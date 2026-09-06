@@ -307,9 +307,9 @@ class TestCSPDirectiveValidation:
         ]
 
         for directive in required_directives:
-            assert (
-                directive in csp_content
-            ), f"Missing required CSP directive: {directive}"
+            assert directive in csp_content, (
+                f"Missing required CSP directive: {directive}"
+            )
 
     def test_csp_no_wildcard_sources(self, csp_content):
         """CSP should not use wildcard (*) sources (too permissive)."""

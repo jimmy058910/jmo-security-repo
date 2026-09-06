@@ -804,7 +804,7 @@ class TestScanPreflightHonoursNonInteractive:
             monkeypatch.delenv(name, raising=False)
 
         asked = []
-        monkeypatch.setattr("builtins.input", lambda _p="": (asked.append(_p) or "3"))
+        monkeypatch.setattr("builtins.input", lambda _p="": asked.append(_p) or "3")
 
         available, _ = _check_scan_tools(
             argparse.Namespace(allow_missing_tools=False), ["trivy", "noseyparker"]
@@ -872,9 +872,9 @@ class TestScanPathLoggingIsReachable:
                 "findings are MISSING"
             )
             err = capsys.readouterr().err
-            assert (
-                '"level"' in err and '"msg"' in err
-            ), f"scan diagnostics are not machine-readable like _log()'s:\n{err}"
+            assert '"level"' in err and '"msg"' in err, (
+                f"scan diagnostics are not machine-readable like _log()'s:\n{err}"
+            )
         finally:
             configure_scan_logging(argparse.Namespace(log_level=None, human_logs=False))
 
@@ -909,9 +909,9 @@ class TestScanPathLoggingIsReachable:
         # WARN is configure_scan_logging's default, i.e. the ordinary case -
         # every `jmo` subcommand configures logging, not just `scan`.
         configure_scan_logging(argparse.Namespace(log_level=None, human_logs=False))
-        assert not child.isEnabledFor(
-            logging.INFO
-        ), "precondition: the scan's level does suppress INFO on scripts.* children"
+        assert not child.isEnabledFor(logging.INFO), (
+            "precondition: the scan's level does suppress INFO on scripts.* children"
+        )
 
         reset_scan_logging()
 

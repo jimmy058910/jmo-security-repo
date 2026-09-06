@@ -315,7 +315,7 @@ class TestSubprocessSecurityChecks:
     def test_ast_scan_clean_code(self):
         """AST scanner returns empty list for clean code."""
         clean_code = (
-            "import subprocess\n" "subprocess.run(['ls', '-la'], capture_output=True)\n"
+            "import subprocess\nsubprocess.run(['ls', '-la'], capture_output=True)\n"
         )
         tree = ast.parse(clean_code)
         violations = _scan_ast_tree(tree)

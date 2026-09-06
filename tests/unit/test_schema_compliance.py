@@ -303,9 +303,9 @@ class TestFixtureCompliance:
             pytest.skip(f"Fixture not found: {fixture_path}")
 
         errors = validate_findings_file(fixture_path)
-        assert (
-            errors == []
-        ), "sample-findings.json has schema violations:\n" + "\n".join(errors)
+        assert errors == [], (
+            "sample-findings.json has schema violations:\n" + "\n".join(errors)
+        )
 
     def test_mcp_fixtures_findings(self, project_root: Path) -> None:
         """tests/jmo_mcp/fixtures/findings.json should be schema-compliant."""

@@ -298,9 +298,9 @@ class TestStubbedToolIsNotASuccess:
                     ):
                         offenders.append(f"{path.name}:{second.lineno}")
 
-        assert (
-            stub_calls >= 30
-        ), f"AST scan found only {stub_calls} stub calls; extractor is broken"
+        assert stub_calls >= 30, (
+            f"AST scan found only {stub_calls} stub calls; extractor is broken"
+        )
         assert not offenders, (
             "a stub is written and the tool recorded as a successful run at:\n"
             + "\n".join(f"  {o}" for o in offenders)
@@ -426,9 +426,9 @@ class TestProfileShortcutsStoreHistory:
         db = tmp_path / "history.db"
         args = self._profile_args(scan_env, tmp_path, db)
 
-        assert (
-            args.store_history is True
-        ), "the shortcut parser still does not define store_history"
+        assert args.store_history is True, (
+            "the shortcut parser still does not define store_history"
+        )
 
         with (
             patch("scripts.cli.scan_jobs.scan_repository") as mock_scan,
@@ -525,9 +525,9 @@ class TestProfileShortcutsStoreHistory:
             args = parse_args()
 
         assert jmo.cmd_profile(args, "fast") == 2
-        assert not (
-            tmp_path / "history.db"
-        ).exists(), "the refusal happened after a scan, not before it"
+        assert not (tmp_path / "history.db").exists(), (
+            "the refusal happened after a scan, not before it"
+        )
 
     @pytest.mark.parametrize(
         ("extra", "expected"),
@@ -955,6 +955,6 @@ class TestToolApplicableToNoTargetType:
         visible = [
             r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING
         ]
-        assert any(
-            "applicable to no target type" in m for m in visible
-        ), f"expected the unrouted-tool warning; got {visible}"
+        assert any("applicable to no target type" in m for m in visible), (
+            f"expected the unrouted-tool warning; got {visible}"
+        )

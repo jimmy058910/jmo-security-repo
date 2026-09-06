@@ -416,9 +416,9 @@ class TestTruffleHogRawMessage:
         assert findings, "no findings parsed; the assertions below are vacuous"
         assert "AKIAIOSFODNN7EXAMPLE" not in findings[0].message
         assert "AKIAIOSFODNN7EXAMPLE" not in json.dumps(findings[0].raw)
-        assert (
-            "AWS" in findings[0].message
-        ), "the message must still identify the detector"
+        assert "AWS" in findings[0].message, (
+            "the message must still identify the detector"
+        )
 
     def test_the_redacted_value_never_reaches_the_message_either(self, tmp_path: Path):
         """TruffleHog's Redacted is a display convenience, not a guarantee.

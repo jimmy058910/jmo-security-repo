@@ -217,9 +217,9 @@ class TestIntegration:
                 assert filtered.isdisjoint(skipped), f"Overlap in {profile}/{platform}"
 
                 # Union should equal all tools
-                assert (
-                    filtered | skipped == all_tools
-                ), f"Mismatch in {profile}/{platform}"
+                assert filtered | skipped == all_tools, (
+                    f"Mismatch in {profile}/{platform}"
+                )
 
     def test_windows_deep_profile_count(self):
         """Deep profile on Windows should have fewer tools than Linux."""

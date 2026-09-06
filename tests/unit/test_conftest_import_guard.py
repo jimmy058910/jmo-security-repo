@@ -138,16 +138,14 @@ def test_guard_detects_a_planted_indented_bare_import(tmp_path):
     scratch = tmp_path / "tests_scratch_indented"
     scratch.mkdir()
     (scratch / "test_planted_indented.py").write_text(
-        "def helper():\n"
-        "    from conftest import IS_WINDOWS\n"
-        "    return IS_WINDOWS\n",
+        "def helper():\n    from conftest import IS_WINDOWS\n    return IS_WINDOWS\n",
         encoding="utf-8",
     )
 
     violations = find_bare_conftest_imports(scratch)
-    assert any(
-        "test_planted_indented.py" in v for v in violations
-    ), f"guard failed to detect an indented bare import -- got: {violations}"
+    assert any("test_planted_indented.py" in v for v in violations), (
+        f"guard failed to detect an indented bare import -- got: {violations}"
+    )
 
 
 def test_guard_allows_the_qualified_form(tmp_path):

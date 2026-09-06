@@ -104,10 +104,9 @@ class TestSecretsManagement:
                             )
 
         # Should find no hardcoded secrets
-        assert (
-            len(findings) == 0
-        ), f"Found {len(findings)} potential hardcoded secrets:\n" + "\n".join(
-            findings[:5]
+        assert len(findings) == 0, (
+            f"Found {len(findings)} potential hardcoded secrets:\n"
+            + "\n".join(findings[:5])
         )  # Show first 5 findings
 
     def test_environment_variable_usage_for_tokens(self):
@@ -135,9 +134,9 @@ class TestSecretsManagement:
                 or "${" in content  # Shell-style env var
             )
 
-            assert (
-                uses_env_vars
-            ), f"{module} should use environment variables for sensitive data"
+            assert uses_env_vars, (
+                f"{module} should use environment variables for sensitive data"
+            )
 
     def test_gitignore_covers_sensitive_files(self):
         """Test that .gitignore covers common sensitive file patterns.
@@ -175,9 +174,9 @@ class TestSecretsManagement:
         config_content = pre_commit_config.read_text(encoding="utf-8")
 
         # Should include detect-private-key hook
-        assert (
-            "detect-private-key" in config_content
-        ), "pre-commit config must include detect-private-key hook"
+        assert "detect-private-key" in config_content, (
+            "pre-commit config must include detect-private-key hook"
+        )
 
     def test_trufflehog_scan_no_verified_secrets(self):
         """Test that TruffleHog doesn't find verified secrets in production code.
@@ -302,10 +301,9 @@ class TestSecretsManagement:
                             findings.append(f"{file}:{line_num} | {line.strip()[:80]}")
 
         # Should find no AWS credentials
-        assert (
-            len(findings) == 0
-        ), f"Found {len(findings)} potential AWS credentials:\n" + "\n".join(
-            findings[:5]
+        assert len(findings) == 0, (
+            f"Found {len(findings)} potential AWS credentials:\n"
+            + "\n".join(findings[:5])
         )
 
     def test_no_github_tokens_in_code(self):
@@ -352,9 +350,10 @@ class TestSecretsManagement:
                             findings.append(f"{file}:{line_num} | {line.strip()[:80]}")
 
         # Should find no GitHub tokens
-        assert (
-            len(findings) == 0
-        ), f"Found {len(findings)} potential GitHub tokens:\n" + "\n".join(findings[:5])
+        assert len(findings) == 0, (
+            f"Found {len(findings)} potential GitHub tokens:\n"
+            + "\n".join(findings[:5])
+        )
 
     def test_no_database_connection_strings_in_code(self):
         """Test that database connection strings don't include credentials.

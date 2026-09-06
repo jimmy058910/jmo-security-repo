@@ -235,10 +235,7 @@ class TestScanOrchestrator:
         # Create targets file
         targets_file = tmp_path / "targets.txt"
         targets_file.write_text(
-            f"{repo1}\n"
-            f"# Comment line\n"
-            f"{repo2}\n"
-            f"\n"  # Empty line
+            f"{repo1}\n# Comment line\n{repo2}\n\n"  # Empty line
         )
 
         # Mock args with targets file
@@ -280,9 +277,7 @@ class TestScanOrchestrator:
 
         # Create images file
         images_file = tmp_path / "images.txt"
-        images_file.write_text(
-            "nginx:latest\n" "# Comment\n" "redis:alpine\n" "postgres:14\n"
-        )
+        images_file.write_text("nginx:latest\n# Comment\nredis:alpine\npostgres:14\n")
 
         args = MagicMock()
         args.image = None
@@ -1003,12 +998,12 @@ class TestUnroutedToolsAreReported:
         ):
             orch.scan_all(targets, per_tool_config={})
 
-        assert (
-            "nuclei" in caplog.text
-        ), f"nuclei was dropped from a repo scan without a word:\n{caplog.text}"
-        assert (
-            "lynis" in caplog.text
-        ), f"lynis was dropped from a repo scan without a word:\n{caplog.text}"
+        assert "nuclei" in caplog.text, (
+            f"nuclei was dropped from a repo scan without a word:\n{caplog.text}"
+        )
+        assert "lynis" in caplog.text, (
+            f"lynis was dropped from a repo scan without a word:\n{caplog.text}"
+        )
 
     def test_routed_tool_is_not_reported_as_unrouted(self, tmp_path, caplog):
         """trufflehog does apply to repositories; it must not be named."""

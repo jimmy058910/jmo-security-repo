@@ -196,10 +196,9 @@ def test_no_user_facing_string_names_a_nonexistent_flag():
             snippet = " ".join(text.split())[:90]
             offenders.append(f"{rel}:{line}: {flag}\n      in: {snippet!r}")
 
-    assert (
-        not offenders
-    ), "user-facing text names flags jmo's parser does not accept:\n" + "\n".join(
-        offenders
+    assert not offenders, (
+        "user-facing text names flags jmo's parser does not accept:\n"
+        + "\n".join(offenders)
     )
 
 

@@ -217,8 +217,7 @@ def test_scan_workflow(test_id, desc, args_fn, validator, platform, jmo_scan_run
     # Exit code 0 (no findings) or 1 (findings found) are success
     # Exit code 2+ means error
     assert rc in (0, 1), (
-        f"Test {test_id} ({desc}) failed with exit code {rc}.\n"
-        f"stderr: {stderr[:500]}"
+        f"Test {test_id} ({desc}) failed with exit code {rc}.\nstderr: {stderr[:500]}"
     )
 
     validator(results_dir)
@@ -234,7 +233,7 @@ def test_batch_images_file(jmo_scan_runner, tmp_path):
         pytest.skip("U6 is for linux")
 
     images_file = tmp_path / "batch-images.txt"
-    images_file.write_text(f"{_get_test_image()}\n" "nginx:alpine\n" "redis:alpine\n")
+    images_file.write_text(f"{_get_test_image()}\nnginx:alpine\nredis:alpine\n")
 
     rc, stdout, stderr, results_dir = jmo_scan_runner(
         [
@@ -248,6 +247,6 @@ def test_batch_images_file(jmo_scan_runner, tmp_path):
     )
 
     assert rc in (0, 1), (
-        f"U6 batch images failed with exit code {rc}.\n" f"stderr: {stderr[:500]}"
+        f"U6 batch images failed with exit code {rc}.\nstderr: {stderr[:500]}"
     )
     validate_basic_scan(results_dir)

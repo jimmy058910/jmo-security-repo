@@ -1680,9 +1680,9 @@ def test_distinct_rules_from_one_tool_are_never_clustered():
         f"got {len(clusters)}"
     )
     surviving_rules = {c.representative["ruleId"] for c in clusters}
-    assert (
-        "CKV_K8S_16" in surviving_rules
-    ), "the privileged-container finding must not be absorbed into another rule"
+    assert "CKV_K8S_16" in surviving_rules, (
+        "the privileged-container finding must not be absorbed into another rule"
+    )
 
 
 def test_cross_tool_duplicates_still_cluster():
@@ -1742,15 +1742,15 @@ def test_one_finding_per_tool_holds_under_the_lsh_algorithm():
                 )
 
     clusterer = FindingClusterer(similarity_threshold=0.65)
-    assert clusterer._should_use_lsh(
-        len(findings)
-    ), "fixture must exercise the LSH path"
+    assert clusterer._should_use_lsh(len(findings)), (
+        "fixture must exercise the LSH path"
+    )
 
     clusters = clusterer.cluster(findings)
     _assert_one_finding_per_tool(clusters)
-    assert sum(len(c.findings) for c in clusters) == len(
-        findings
-    ), "clustering must not lose or duplicate findings"
+    assert sum(len(c.findings) for c in clusters) == len(findings), (
+        "clustering must not lose or duplicate findings"
+    )
 
 
 def test_same_tool_findings_survive_into_the_consensus_output():
@@ -1794,9 +1794,9 @@ def test_confidence_tool_count_counts_tools_not_findings():
     consensus = cluster.to_consensus_finding()
     assert consensus["confidence"]["tool_count"] == 1
     assert len(consensus["detected_by"]) == 1
-    assert consensus["confidence"]["tool_count"] == len(
-        consensus["detected_by"]
-    ), "tool_count must agree with the detected_by array it is rendered beside"
+    assert consensus["confidence"]["tool_count"] == len(consensus["detected_by"]), (
+        "tool_count must agree with the detected_by array it is rendered beside"
+    )
 
 
 def test_clustered_members_are_actually_similar_to_their_representative():
@@ -1860,9 +1860,9 @@ def test_clustered_members_are_actually_similar_to_their_representative():
         findings.extend(triple(group))
 
     clusterer = FindingClusterer(similarity_threshold=threshold)
-    assert clusterer._should_use_lsh(
-        len(findings)
-    ), "fixture must exercise the LSH path"
+    assert clusterer._should_use_lsh(len(findings)), (
+        "fixture must exercise the LSH path"
+    )
 
     clusters = clusterer.cluster(findings)
 

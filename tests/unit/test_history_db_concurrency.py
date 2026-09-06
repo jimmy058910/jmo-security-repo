@@ -133,9 +133,9 @@ def test_concurrent_writes_thread_safety(concurrency_db, sample_findings, tmp_pa
         for fail in failed_scans[:3]:
             print(f"Thread {fail['thread_id']}: {fail['error']}")
 
-    assert (
-        len(successful_scans) == 50
-    ), f"Expected 50 successful scans, got {len(successful_scans)}"
+    assert len(successful_scans) == 50, (
+        f"Expected 50 successful scans, got {len(successful_scans)}"
+    )
     assert len(failed_scans) == 0, f"Unexpected failures: {failed_scans[:3]}"
 
     # Verify all scans stored in database
@@ -244,9 +244,9 @@ def test_concurrent_reads_during_writes(concurrency_db, sample_findings, tmp_pat
     scans = list(list_scans(conn, limit=100))
     conn.close()
 
-    assert (
-        len(scans) == 30
-    ), f"Expected 30 scans (10 initial + 20 concurrent), got {len(scans)}"
+    assert len(scans) == 30, (
+        f"Expected 30 scans (10 initial + 20 concurrent), got {len(scans)}"
+    )
 
 
 def test_sqlite_locking_under_contention(concurrency_db, sample_findings, tmp_path):
@@ -481,9 +481,9 @@ def test_partial_write_recovery(concurrency_db, sample_findings, tmp_path):
     scans = list(list_scans(conn, limit=10))
     conn.close()
 
-    assert (
-        len(scans) == 3
-    ), f"Expected 3 scans after additional writes, got {len(scans)}"
+    assert len(scans) == 3, (
+        f"Expected 3 scans after additional writes, got {len(scans)}"
+    )
 
     # Verify all scans have unique IDs
     scan_ids = [s["id"] for s in scans]

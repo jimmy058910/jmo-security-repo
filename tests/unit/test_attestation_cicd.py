@@ -625,9 +625,9 @@ class TestCICDPerformance:
         elapsed = time.time() - start
 
         # Should be fast (<500ms for typical scan)
-        assert (
-            elapsed < 0.5
-        ), f"Attestation generation took {elapsed:.3f}s (expected <0.5s)"
+        assert elapsed < 0.5, (
+            f"Attestation generation took {elapsed:.3f}s (expected <0.5s)"
+        )
 
     def test_ci_mode_overhead_minimal(self, tmp_path):
         """Test CI mode with attestation adds minimal overhead."""

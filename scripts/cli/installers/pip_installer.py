@@ -630,8 +630,7 @@ class IsolatedPipInstaller(BaseInstaller):
         # would additionally translate the \n we did write into os.linesep.
         launcher = bin_dir / f"{tool_name}.cmd"
         launcher.write_bytes(
-            b"@echo off\r\n"
-            b'"%~dp0python.exe" "%~dp0' + tool_name.encode() + b'" %*\r\n'
+            b'@echo off\r\n"%~dp0python.exe" "%~dp0' + tool_name.encode() + b'" %*\r\n'
         )
         logger.info(
             "Wrote venv launcher %s (pip produced no .exe shim for %s)",

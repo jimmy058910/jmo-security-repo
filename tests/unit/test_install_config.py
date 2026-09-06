@@ -75,18 +75,18 @@ class TestBinaryUrls:
         value = BINARY_URLS[tool]
         if isinstance(value, str):
             assert len(value) > 0, f"{tool} URL is empty"
-            assert value.startswith(
-                "https://"
-            ), f"{tool} URL doesn't start with https://"
+            assert value.startswith("https://"), (
+                f"{tool} URL doesn't start with https://"
+            )
         elif isinstance(value, dict):
             assert len(value) > 0, f"{tool} has empty platform dict"
             for platform, url in value.items():
-                assert (
-                    isinstance(url, str) and len(url) > 0
-                ), f"{tool}/{platform} URL is empty"
-                assert url.startswith(
-                    "https://"
-                ), f"{tool}/{platform} URL doesn't start with https://"
+                assert isinstance(url, str) and len(url) > 0, (
+                    f"{tool}/{platform} URL is empty"
+                )
+                assert url.startswith("https://"), (
+                    f"{tool}/{platform} URL doesn't start with https://"
+                )
         else:
             pytest.fail(f"{tool}: unexpected type {type(value)}")
 
@@ -118,17 +118,17 @@ class TestExtractAppUrls:
             assert value.startswith("https://")
         elif isinstance(value, dict):
             for platform, url in value.items():
-                assert isinstance(url, str) and url.startswith(
-                    "https://"
-                ), f"{tool}/{platform} bad URL"
+                assert isinstance(url, str) and url.startswith("https://"), (
+                    f"{tool}/{platform} bad URL"
+                )
 
     def test_extract_app_tools_are_in_special_install(self) -> None:
         """Every tool in EXTRACT_APP_URLS should be in SPECIAL_INSTALL with 'extract_app'."""
         for tool in EXTRACT_APP_URLS:
             assert tool in SPECIAL_INSTALL, f"{tool} not in SPECIAL_INSTALL"
-            assert (
-                SPECIAL_INSTALL[tool] == "extract_app"
-            ), f"{tool} should have 'extract_app' method"
+            assert SPECIAL_INSTALL[tool] == "extract_app", (
+                f"{tool} should have 'extract_app' method"
+            )
 
 
 class TestInstallScripts:
@@ -215,9 +215,9 @@ class TestIsolatedTools:
         for tool, config in ISOLATED_TOOLS.items():
             for conflict in config["conflicts_with"]:
                 if conflict in ISOLATED_TOOLS:
-                    assert (
-                        tool in ISOLATED_TOOLS[conflict]["conflicts_with"]
-                    ), f"{tool} conflicts with {conflict} but not vice versa"
+                    assert tool in ISOLATED_TOOLS[conflict]["conflicts_with"], (
+                        f"{tool} conflicts with {conflict} but not vice versa"
+                    )
 
 
 class TestSpecialInstall:
@@ -246,9 +246,9 @@ class TestSpecialInstall:
     @pytest.mark.parametrize("tool", list(SPECIAL_INSTALL.keys()))
     def test_values_are_known_methods(self, tool: str) -> None:
         known_methods = {"extract_app", "manual", "docker", "clone"}
-        assert (
-            SPECIAL_INSTALL[tool] in known_methods
-        ), f"{tool} has unknown install method: {SPECIAL_INSTALL[tool]}"
+        assert SPECIAL_INSTALL[tool] in known_methods, (
+            f"{tool} has unknown install method: {SPECIAL_INSTALL[tool]}"
+        )
 
 
 class TestDependencyConfig:

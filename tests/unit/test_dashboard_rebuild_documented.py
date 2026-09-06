@@ -104,9 +104,9 @@ def test_the_documented_remedy_names_the_bundle_it_repairs() -> None:
     this file in the step that fails, so the docs must too.
     """
     bundle = "scripts/dashboard/dist/index.html"
-    assert bundle in CI_WORKFLOW.read_text(
-        encoding="utf-8"
-    ), "ci.yml no longer names the tracked bundle; this guard's premise moved"
+    assert bundle in CI_WORKFLOW.read_text(encoding="utf-8"), (
+        "ci.yml no longer names the tracked bundle; this guard's premise moved"
+    )
     assert bundle in RELEASE_RULES.read_text(encoding="utf-8")
 
 

@@ -117,9 +117,9 @@ def test_unknown_cves_produce_no_per_finding_requests(tmp_path: Path):
         result = calc.calculate_priorities_bulk(_findings(_cves(500)))
 
     assert len(result) == 500, "every finding must still get a priority"
-    assert (
-        spy.individual_urls == []
-    ), f"{len(spy.individual_urls)} per-finding requests were made"
+    assert spy.individual_urls == [], (
+        f"{len(spy.individual_urls)} per-finding requests were made"
+    )
 
 
 def test_a_repeat_run_asks_nothing_at_all(tmp_path: Path):
@@ -155,9 +155,9 @@ def test_get_score_remembers_a_miss_on_its_own(tmp_path: Path):
         assert client.get_score(cve) is None
 
     assert first == 1, f"the first lookup made {first} requests"
-    assert (
-        len(spy.urls) == 1
-    ), f"asking about the same unknown CVE 3 times made {len(spy.urls)} requests"
+    assert len(spy.urls) == 1, (
+        f"asking about the same unknown CVE 3 times made {len(spy.urls)} requests"
+    )
 
 
 def test_bulk_uses_the_prewarmed_result_instead_of_re_querying(tmp_path: Path):

@@ -30,9 +30,9 @@ def test_real_workflows_are_clean() -> None:
         for line_num, key, val in find_env_tilde_violations(path):
             all_violations.append((path, line_num, key, val))
 
-    assert (
-        not all_violations
-    ), f"Found literal `~/` in env: blocks across workflows: {all_violations}"
+    assert not all_violations, (
+        f"Found literal `~/` in env: blocks across workflows: {all_violations}"
+    )
 
 
 def test_violation_caught_workflow_level_env(tmp_path: Path) -> None:

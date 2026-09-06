@@ -239,9 +239,9 @@ def test_checkov_various_cicd_frameworks(tmp_path: Path):
         findings = adapter.parse(p)
 
         assert len(findings) == 1, f"Failed for {framework}"
-        assert (
-            "cicd-security" in findings[0].tags
-        ), f"Missing cicd-security tag for {framework}"
+        assert "cicd-security" in findings[0].tags, (
+            f"Missing cicd-security tag for {framework}"
+        )
 
 
 def test_checkov_metadata(tmp_path: Path):

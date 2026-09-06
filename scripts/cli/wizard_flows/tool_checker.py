@@ -174,7 +174,7 @@ def _print_platform_summary(
             )
         )
         print(
-            f"     ({len(platform_skipped)}/{profile_total} = {unavailable_ratio*100:.0f}% tools unavailable)"
+            f"     ({len(platform_skipped)}/{profile_total} = {unavailable_ratio * 100:.0f}% tools unavailable)"
         )
         print()
         print("     Command: jmo wizard --docker")
@@ -1023,9 +1023,7 @@ def _auto_fix_tools(
                         )
                         success = False
                         break
-                    except (
-                        Exception
-                    ) as e:  # Acceptable: individual tool install failure — continue with others
+                    except Exception as e:  # Acceptable: individual tool install failure — continue with others
                         print(
                             colorize(
                                 f"   {FALLBACKS.get('❌', '[X]')} Error: {e}",
@@ -1354,9 +1352,7 @@ def _install_opa_tool() -> tuple[bool, bool]:
             "Install OPA manually: https://www.openpolicyagent.org/docs/latest/#running-opa"
         )
         return True, False
-    except (
-        Exception
-    ) as e:  # Acceptable: OPA install is optional — policy evaluation gracefully skipped
+    except Exception as e:  # Acceptable: OPA install is optional — policy evaluation gracefully skipped
         logger.warning(f"OPA installation failed: {e}")
         print(colorize(f"\nInstallation failed: {e}", "red"))
         print("Continuing without policy evaluation")

@@ -330,8 +330,8 @@ def test_actionlint_validation(basic_schedule):
         )
 
         # Should pass without errors
-        assert (
-            result.returncode == 0
-        ), f"actionlint failed: {result.stdout}\n{result.stderr}"
+        assert result.returncode == 0, (
+            f"actionlint failed: {result.stdout}\n{result.stderr}"
+        )
     finally:
         temp_file.unlink()
