@@ -990,13 +990,12 @@ def get_server_info() -> dict:
 
     Returns:
         Dictionary with:
-        - version: installed jmo-security version (was hardcoded "1.0.0")
+        - version: installed jmo-security version
         - results_dir: Path to results directory
         - repo_root: Path to repository root
         - total_findings: Total findings in current scan
         - severity_distribution: Findings breakdown by severity
-        - available_tools: List of security tools used in scan. This key was
-          promised here and absent from the return value until it was checked.
+        - available_tools: List of security tools used in scan
         - authentication_enforced: always False. There is no request context on
           stdio transport, so JMO_MCP_API_KEYS cannot be checked against a
           caller. Ask this rather than inferring auth from the key list.
