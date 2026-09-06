@@ -256,7 +256,7 @@ See [memory-integration.md](./memory-integration.md) for full details on storing
 - [ ] Integration test passes: `pytest tests/integration/test_{tool}_integration.py -v`
 - [ ] Plugin discovery works: Verify adapter auto-loaded
 - [ ] Linting clean: `ruff check scripts/core/adapters/{tool}_adapter.py`
-- [ ] Formatting clean: `black scripts/core/adapters/{tool}_adapter.py`
+- [ ] Formatting clean: `ruff format scripts/core/adapters/{tool}_adapter.py`
 - [ ] Type checking: `mypy scripts/core/adapters/{tool}_adapter.py` (if enabled)
 - [ ] Documentation lint: `markdownlint README.md QUICKSTART.md docs/USER_GUIDE.md`
 - [ ] Memory stored: Verify `.jmo/memory/adapters/{tool}.json` exists
@@ -334,7 +334,7 @@ cat results/summaries/findings.json | jq '.[] | select(.tool.name == "{tool}")'
 ## Checklist
 
 - [x] Tests pass (>=85% coverage)
-- [x] Linting clean (ruff, black, mypy)
+- [x] Linting clean (ruff, mypy)
 - [x] Plugin auto-discovery works
 - [x] Documentation updated
 - [x] Memory stored for reuse

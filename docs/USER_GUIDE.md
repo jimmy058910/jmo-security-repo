@@ -2861,8 +2861,8 @@ Common failure modes in `.github/workflows/tests.yml` and how to fix them:
   - Fix locally: run `pre-commit run actionlint --all-files`. See the action: <https://github.com/rhysd/actionlint> and our workflow at `.github/workflows/tests.yml`.
 
 - Pre-commit hooks (YAML/format/lint)
-  - Symptom: pre-commit step fails on YAML (`yamllint`), markdownlint, ruff/black, or shell checks.
-  - Fix locally: `make pre-commit-run` or run individual hooks. Config lives in `.pre-commit-config.yaml`; YAML rules in `.yamllint.yaml`; ruff/black use defaults in this repo. Docs: <https://pre-commit.com/>
+  - Symptom: pre-commit step fails on YAML (`yamllint`), markdownlint, ruff, or shell checks.
+  - Fix locally: `make pre-commit-run` or run individual hooks. Config lives in `.pre-commit-config.yaml`; YAML rules in `.yamllint.yaml`; ruff use defaults in this repo. Docs: <https://pre-commit.com/>
 
 - Test coverage threshold not met
   - Symptom: Tests pass, but the coverage job fails with `Coverage N% is below 85% CI threshold` (`coverage-aggregate`'s "Verify coverage threshold" step — the only enforced floor).

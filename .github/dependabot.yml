@@ -134,7 +134,7 @@ updates:
   # for 0.16.5 without noticing the 0.16.3/0.16.4 disagreement. The guard in
   # tests/unit/test_toolchain_version_agreement.py is the part that does.
   #
-  # Bot PRs from this ecosystem must NOT be admin-merged: a ruff or black bump
+  # Bot PRs from this ecosystem must NOT be admin-merged: a ruff bump
   # can reflow the codebase, and the reflow is the thing to review.
   - package-ecosystem: "pre-commit"
     directory: "/"

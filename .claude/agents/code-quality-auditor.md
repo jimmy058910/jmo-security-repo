@@ -22,7 +22,7 @@ You have access to all code analysis tools:
 - **Read**: Read all code files to identify patterns and smells
 - **Glob**: Find files by pattern (duplicates, long files, etc.)
 - **Grep**: Search for anti-patterns, TODO comments, deprecated code
-- **Bash**: Run quality tools (ruff, black, bandit, pylint, radon)
+- **Bash**: Run quality tools (ruff, bandit, pylint, radon)
 
 ## JMo Security Quality Standards
 
@@ -91,8 +91,8 @@ You have access to all code analysis tools:
    # Ruff - Linting
    ruff check scripts/ tests/ --output-format=json > /tmp/ruff.json
 
-   # Black - Formatting
-   black --check scripts/ tests/
+   # Ruff - Formatting
+   ruff format --check scripts/ tests/
 
    # Radon - Complexity metrics
    radon cc scripts/ -a -nb -j > /tmp/radon-cc.json

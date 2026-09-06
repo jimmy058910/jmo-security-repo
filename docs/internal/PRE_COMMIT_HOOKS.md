@@ -54,7 +54,7 @@ Once installed, hooks run automatically:
 #### Code Quality - Python
 
 1. **ruff** — Fast Python linter (auto-fix enabled)
-2. **black** — Python formatter (opinionated)
+2. **ruff-format** — Python formatter (ruff's, Black-compatible style; the only formatter since #1179)
 3. **mypy** — Type checker (scripts/ only)
 
 #### Code Quality - Shell
@@ -183,7 +183,7 @@ git add scripts/cli/jmo.py
 
 # 3. Commit (hooks run automatically)
 git commit -m "feat: add new CLI flag"
-# Output: ruff, black, mypy, bandit run automatically
+# Output: ruff, ruff-format, mypy, bandit run automatically
 
 # 4. Push (pre-push hooks run)
 git push
@@ -415,7 +415,7 @@ repos:
 |------|-------|------|----------|
 | trailing-whitespace | All | <1s | Yes |
 | ruff | *.py | 2-5s | Yes |
-| black | *.py | 3-8s | Yes |
+| ruff-format | *.py | <1s | Yes |
 | mypy | scripts/*.py | 10-30s | No |
 | bandit | scripts/*.py | 5-15s | No |
 | shellcheck | *.sh | 2-5s | Yes |

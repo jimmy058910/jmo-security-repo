@@ -19,7 +19,7 @@ JMo Security is a terminal-first security audit toolkit orchestrating 29 scanner
 
 ## Mandatory Guardrails
 
-1. **Pre-commit Order:** Black MUST run before Ruff (see `.pre-commit-config.yaml`)
+1. **One formatter:** `ruff format` (Black left with #1179). The `ruff` lint hook runs before `ruff-format` in `.pre-commit-config.yaml`; never add a second formatter
 2. **Test Coverage:** CI's only enforced floor is **85%** (`coverage-aggregate`'s "Verify coverage threshold" step, on the marker-filtered suite). Nothing sets `--cov-fail-under` — not `make test`, not `pyproject.toml`, so there is still no *local* gate. Cite the step, never a line number: it has moved three times (#756)
 3. **Conventional Commits:** `feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`, `perf:`, `ci:`
 4. **Git Configuration:** Refines the Bash-tool default ("NEVER update the git config"). **Never** modify identity (`user.*`), signing (`commit.gpgsign`, `gpg.*`), commit templates (`commit.template`), or merge/rebase behavior (`pull.rebase`, `merge.*`, `rebase.*`) without explicit user authorization. **Permitted to unblock standard tooling**: routine repo-local unsets that restore values already equal to their default (e.g. `git config --unset core.hooksPath` when it points to `.git/hooks`, which lets `pre-commit install --install-hooks` proceed). When in doubt, ask first.
@@ -137,7 +137,7 @@ make test-fast                         # Fast parallel tests (recommended for de
 | `jmo history list` | View scan history |
 | `jmo validate` / `jmo validate --tier full` | Pre-release validation scorecard (quick / with real tools) |
 | `make deps-sync` / `make deps-lock` | Install from `uv.lock` / regenerate after a `pyproject.toml` change |
-| `make fmt` / `make lint` / `make typecheck` | Format (Black + Ruff) / lint / mypy |
+| `make fmt` / `make lint` / `make typecheck` | Format (ruff format + shfmt) / lint / mypy |
 | `make test-fast` | Parallel tests, no coverage (fastest dev loop) |
 | `make test-parallel` / `make test` | Parallel with coverage (CI-like) / sequential with coverage |
 | `make test-e2e` / `-visual` / `-report` | E2E (pytest-native) / Playwright dashboard / JSON report |
@@ -275,7 +275,7 @@ files, so scope a rule to the code it actually governs.
 | `pyproject.toml` | Single declaration of all deps — runtime, extras, and `[dependency-groups] dev` (PEP 735) |
 | `uv.lock` | The only lockfile. Universal, tracked, generated (NEVER hand-edit; use `make deps-lock`) |
 | `versions.yaml` | Tool versions (NEVER edit manually; use `update_versions.py`) |
-| `.pre-commit-config.yaml` | Pre-commit hooks (Black before Ruff) |
+| `.pre-commit-config.yaml` | Pre-commit hooks (ruff lint before ruff-format) |
 
 ### jmo.yml Key Settings
 

@@ -9,7 +9,7 @@ JMo Security is a terminal-first security audit toolkit orchestrating 29 scanner
 ## Build / Test / Lint
 
 ```bash
-make fmt          # Format (Black + Ruff)
+make fmt          # Format (ruff format + shfmt)
 make lint         # Lint checks
 make test-fast    # Parallel tests, no coverage (fastest)
 make test         # Sequential tests with coverage

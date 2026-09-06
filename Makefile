@@ -17,7 +17,7 @@ help:
 	@echo "Targets:"
 	@echo "  tools    - Install required CLI tools (Linux/WSL/macOS)"
 	@echo "  tools-upgrade - Upgrade/refresh CLI tools"
-	@echo "  fmt      - Run formatters (shfmt, black, ruff-format)"
+	@echo "  fmt      - Run formatters (shfmt, ruff format)"
 	@echo "  lint     - Run linters (shellcheck, ruff, bandit)"
 	@echo "  typecheck - Run mypy type checking on scripts/"
 	@echo "  test     - Run tests sequentially with coverage"
@@ -98,7 +98,6 @@ fmt:
 	@if command -v shfmt >/dev/null 2>&1; then \
 		find scripts -type f -name '*.sh' -print0 | xargs -0 shfmt -w -i 2 -ci -bn ; \
 	else echo 'shfmt not found'; fi
-	@if command -v black >/dev/null 2>&1; then black . ; else echo 'black not found'; fi
 	@if command -v ruff >/dev/null 2>&1; then ruff format . ; else echo 'ruff not found'; fi
 
 # Cite CI by JOB and STEP name, never by line number: the coverage gate's
@@ -113,7 +112,7 @@ fmt:
 #     explicitly: trailing-whitespace, end-of-file-fixer, check-yaml/json/toml,
 #     mixed-line-ending, detect-private-key, check-added-large-files,
 #     doc-links, and (since #960) shfmt.
-#   - black, actionlint, yamllint, import-direction, yaml-env-tilde, uv-lock:
+#   - ruff-format, actionlint, yamllint, import-direction, yaml-env-tilde, uv-lock:
 #     each has its own unconditional, blocking step in the quick-checks job.
 #   - markdownlint-cli2 and mypy: blocking since #960, in quick-checks'
 #     "Lint (markdownlint, mypy, ruff)" step.
@@ -149,10 +148,10 @@ fmt:
 #     CI's own scoped gate would never see, the "wider tree than the gate"
 #     shape of #890 by a different route.
 #
-# black stays blocking despite ci.yml's SKIP including it: it is the only
-# black signal this target has (ci.yml checks black via a separate `black
-# --check` step instead, which this target has no equivalent of), so
-# skipping it here would reopen #890 for black specifically.
+# ruff-format stays blocking despite ci.yml's SKIP including it: it is the only
+# formatting signal this target has (ci.yml checks formatting via a separate
+# `ruff format --check` step instead, which this target has no equivalent of),
+# so skipping it here would reopen #890 for the formatter specifically.
 lint:
 	@if command -v shellcheck >/dev/null 2>&1; then \
 		find scripts -type f -name '*.sh' -print0 | xargs -0 -I{} shellcheck {} || true; \

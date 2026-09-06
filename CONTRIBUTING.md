@@ -212,7 +212,6 @@ The repository includes a `.pre-commit-config.yaml` file that configures the fol
   - detect-private-key
   - check-added-large-files (10 MB limit)
 - **Ruff**: Python linting and formatting
-- **Black**: Python code formatting
 - **shfmt**: Shell script formatting
 - **shellcheck**: Shell script static analysis
 - **yamllint**: YAML linting
@@ -1052,7 +1051,7 @@ gh pr create --title "Hotfix: bypass CI" --label "hotfix"
 
 ## Coding standards
 
-- Python: Ruff for linting (`ruff check`) and `ruff format`/`black` for formatting.
+- Python: Ruff for linting (`ruff check`) and formatting (`ruff format`); it is the only formatter.
 - Shell: `shellcheck` and `shfmt -i 2 -ci -bn`.
 - YAML: `yamllint` via pre-commit; GitHub Actions validated by `actionlint` (also enforced in CI).
 - Keep public CLI flags and outputs stable; update docs/tests when behavior changes.

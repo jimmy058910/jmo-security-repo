@@ -329,7 +329,7 @@ cat jmo.yml | grep -A 10 "balanced:"  # Profile config
 cat jmo.yml | grep -A 5 "per_tool:"    # Per-tool overrides
 
 # Python dependencies
-pip list | grep -E "(pytest|black|ruff)"  # Dev deps
+pip list | grep -E "(pytest|ruff)"  # Dev deps
 python3 -c "import yaml; print('PyYAML OK')"  # Optional dep
 
 # Environment assumptions
@@ -648,7 +648,7 @@ pytest --cov=scripts/core/adapters/tool_adapter --cov-fail-under=85
 
 # 5. Run pre-commit hooks
 pre-commit run --all-files
-# MUST pass (no ruff, black, markdownlint failures)
+# MUST pass (no ruff, markdownlint failures)
 
 # 6. Test end-to-end
 python3 scripts/cli/jmo.py scan --repo ./test-repo --tools trivy

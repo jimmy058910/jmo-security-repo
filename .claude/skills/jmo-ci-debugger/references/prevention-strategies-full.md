@@ -78,27 +78,24 @@ jobs:
 
 ## Pre-commit Hook Order (Critical)
 
-Black MUST run before Ruff. This is enforced in `.pre-commit-config.yaml`:
+The `ruff` lint hook (with `--fix`) MUST run before `ruff-format`, and ruff is the only formatter (Black left with #1179). This is enforced in `.pre-commit-config.yaml`:
 
 ```yaml
 repos:
-  # Step 1: Format code (Black)
-  - repo: https://github.com/psf/black
-    hooks:
-      - id: black
-
-  # Step 2: Lint code (Ruff) -- RUNS AFTER BLACK
   - repo: https://github.com/astral-sh/ruff-pre-commit
     hooks:
+      # Step 1: Lint with fixes
       - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
+        args: [--fix]
+      # Step 2: Format -- RUNS AFTER THE LINT FIXES
+      - id: ruff-format
 ```
 
 **Why this order matters:**
 
-- **Black first**: Establishes formatting baseline
-- **Ruff with --fix**: Auto-removes unused imports, optimizes f-strings
-- **Ruff check-only**: Ensures all fixes applied (fail if manual intervention needed)
+- **Lint fixes first**: removing an unused import or de-f-stringing a literal changes the code the formatter sees
+- **Formatter last**: whatever the fixes left behind is laid out once, and nothing rewrites it afterwards
+- **`jmo validate`'s `precommit-lint-before-format` check** fails the release gate if the order flips
 
 ---
 
