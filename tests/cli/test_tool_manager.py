@@ -53,16 +53,16 @@ def test_version_commands_structure():
     for tool, cmd_config in VERSION_COMMANDS.items():
         if isinstance(cmd_config, dict):
             # Platform-specific commands - validate each variant
-            assert (
-                "default" in cmd_config or "linux" in cmd_config
-            ), f"Platform-specific {tool} must have 'default' or 'linux' key"
+            assert "default" in cmd_config or "linux" in cmd_config, (
+                f"Platform-specific {tool} must have 'default' or 'linux' key"
+            )
             for platform_key, cmd_list in cmd_config.items():
-                assert isinstance(
-                    cmd_list, list
-                ), f"{tool}[{platform_key}] must be a list"
-                assert (
-                    len(cmd_list) >= 2
-                ), f"{tool}[{platform_key}] must have at least 2 elements"
+                assert isinstance(cmd_list, list), (
+                    f"{tool}[{platform_key}] must be a list"
+                )
+                assert len(cmd_list) >= 2, (
+                    f"{tool}[{platform_key}] must have at least 2 elements"
+                )
         else:
             # Universal command
             assert isinstance(cmd_config, list), f"{tool} must be a list"
@@ -1819,9 +1819,9 @@ class TestCleanEnvPathSeparator:
 
         entries = ToolManager()._get_clean_env()["PATH"].split(os.pathsep)
 
-        assert (
-            sentinel in entries
-        ), f"the pre-existing first PATH entry was swallowed. entries[0]={entries[0]!r}"
+        assert sentinel in entries, (
+            f"the pre-existing first PATH entry was swallowed. entries[0]={entries[0]!r}"
+        )
 
 
 class TestVariantExecutionReadiness:

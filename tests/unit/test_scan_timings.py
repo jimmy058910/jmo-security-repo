@@ -279,6 +279,6 @@ def test_an_unwritable_directory_does_not_abort_the_scan(
         )
 
     assert path is None, "an unwritable destination must report no file written"
-    assert (
-        SCAN_TIMINGS_FILENAME in caplog.text
-    ), f"the write failed on no stream. caplog was: {caplog.text!r}"
+    assert SCAN_TIMINGS_FILENAME in caplog.text, (
+        f"the write failed on no stream. caplog was: {caplog.text!r}"
+    )

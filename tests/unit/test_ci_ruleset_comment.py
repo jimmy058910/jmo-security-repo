@@ -122,9 +122,9 @@ def test_the_true_half_of_the_claim_survived() -> None:
     live one.
     """
     block = _header_comment()
-    assert not RULESETS["dev"][
-        1
-    ], "recorded state says dev requires checks; update this test"
+    assert not RULESETS["dev"][1], (
+        "recorded state says dev requires checks; update this test"
+    )
     assert re.search(
         r"`dev`[\s\S]{0,400}?NO REQUIRED\s*\n?\s*#\s*STATUS CHECKS", block
     ) or re.search(r"NO REQUIRED STATUS CHECKS", block), (

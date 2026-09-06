@@ -82,7 +82,7 @@ The skill performs refactoring in 6 phases:
 ### Phase 5: Validation
 
 - Run full test suite (pytest), check coverage (must be >= current)
-- Verify no lint/type errors (ruff + black)
+- Verify no lint/type errors (ruff check, ruff format, mypy)
 - Fix unused imports (common after extraction)
 
 ### Phase 6: Documentation
@@ -287,7 +287,7 @@ After using this skill, you should see:
 - **Test Coverage:** >= before refactoring
 - **All Tests Passing:** Green test suite
 - **Zero Circular Imports:** TYPE_CHECKING pattern used
-- **Clean Linting:** Ruff + black pass
+- **Clean Linting:** Ruff lint and format pass
 
 **Real Results from Tasks 3.5 & 3.6:**
 

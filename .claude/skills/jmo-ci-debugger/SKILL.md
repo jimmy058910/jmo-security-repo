@@ -77,14 +77,14 @@ jobs:
 | 5 | Docker Hub README Sync | `Authentication failed` / `401` | Use v4 action, PAT token, `DOCKERHUB_ENABLED` gate | Medium |
 | 6 | Dependabot Cascading | `ModuleNotFoundError` (13+ PRs) | `@dependabot rebase` via `gh pr comment` | Easy |
 | 7 | Markdownlint | `MD036/no-emphasis-as-heading` | Fix ALL violations: headings, blank lines, code fence langs | Easy |
-| 8 | Pre-commit Hooks | `ruff...Failed` / `black...Failed` | Run `make fmt` then `pre-commit run --all-files` | Easy-Med |
+| 8 | Pre-commit Hooks | `ruff...Failed` / `ruff-format...Failed` | Run `make fmt` then `pre-commit run --all-files` | Easy-Med |
 | 9 | Test Coverage | `is below 85% CI threshold` (coverage-aggregate job, not pytest) | Add missing tests for uncovered lines | Medium |
 | 10 | Lockfile Drift | `uv.lock needs to be updated` | Run `make deps-lock`, commit uv.lock | Easy |
 | 11 | YAML Syntax | `syntax error: expected <block` | Fix indentation, quote special chars, use 2-space indent | Easy-Med |
 | 12 | Branch Protection | `GH013: Repository rule violations` | Use feature branches + PRs (never push directly to main) | Easy |
 | 13 | Ruleset check never reported | `waiting for status to be reported` | Match the ruleset context to a job name; only add `createCommitStatus` if the ruleset really wants a commit status | Medium |
 | 14 | Nightly Cascading | `lint-full: 4+ tool failures` | Fix in order: uv-lock, actionlint, mypy, markdownlint | Medium |
-| 15 | Ruff After Black | `F401`/`F541` after formatting | Run `ruff check --fix` after Black, review auto-fixes | Easy |
+| 15 | Lint After Formatting | `F401`/`F541` after formatting | Run `ruff check --fix`, then `ruff format`; review auto-fixes | Easy |
 | 16 | Platform Float Precision | `assert 0.X <= Y.YYY` across platforms | Find min/max across ALL platforms, add 5-20% buffer | Medium |
 | 17 | Dashboard test covers a different template in CI | Passes both places but rendered different documents; `dist/` is gitignored so CI gets the vendored fixture | Pin the template by patching `html_reporter.__file__`; check the `jmo-dashboard-template` meta tag before asserting | Easy |
 | 18 | Bare `pip install` outside the uv venv | `collected 0 items / 1 skipped` then `make: *** Error 5` (pytest exit 5) | Install importable packages through the lock: `uv sync --locked --group dev --extra <name>`, then `uv run --no-sync <cli>` | Medium |
@@ -108,14 +108,14 @@ Use the [error pattern matching reference](references/error-pattern-matching.md)
 - `Authentication failed` -> #5 Docker Hub
 - `ModuleNotFoundError` (multiple PRs) -> #6 Dependabot
 - `MD036/no-emphasis-as-heading` -> #7 Markdownlint
-- `ruff...Failed` -> #8 Pre-commit / #15 Ruff After Black
+- `ruff...Failed` -> #8 Pre-commit / #15 Lint After Formatting
 - `Coverage of X% is below` -> #9 Test Coverage
 - `uv.lock needs to be updated` -> #10 Lockfile Drift
 - `syntax error: expected <block` -> #11 YAML Syntax
 - `GH013: Repository rule violations` -> #12 Branch Protection
 - `waiting for status to be reported` -> #13 Ruleset check never reported
 - `lint-full: 4+ tool failures` -> #14 Nightly Cascading
-- `F401 imported but unused` / `F541 f-string` -> #15 Ruff After Black
+- `F401 imported but unused` / `F541 f-string` -> #15 Lint After Formatting
 - `assert 0.X <= Y.YYY` (cross-platform) -> #16 Platform Float Precision
 - `FileNotFoundError: React dashboard` -> #17 React Build Check
 - `collected 0 items / 1 skipped` then `make: *** Error 5` -> #18 Bare `pip install` outside the uv venv
@@ -156,7 +156,7 @@ make fmt && make lint && make test   # Pre-push checks
 
 Key prevention rules:
 
-1. **Black before Ruff** - enforced in `.pre-commit-config.yaml` hook order
+1. **Lint before format** - the `ruff` (--fix) hook precedes `ruff-format` in `.pre-commit-config.yaml`; ruff is the only formatter
 2. **Coverage** - CI fails below **85%** (coverage-aggregate's "Verify coverage threshold" step).
    Raised from 80% under #756 after measuring 86.87%, so the long-quoted 85%
    figure is now an actual build gate rather than a review aspiration
@@ -175,7 +175,7 @@ gh run view <run-id> --log-failed          # Failed job logs
 gh pr checks <pr-number> --watch           # PR check status
 
 # Fix common issues
-make fmt                                    # Auto-format (Black + Ruff)
+make fmt                                    # Auto-format (ruff format + shfmt)
 make deps-lock                           # Regenerate uv.lock from pyproject.toml
 pre-commit run --all-files                  # Run all hooks
 ruff check scripts/ tests/ --fix           # Auto-fix Ruff violations

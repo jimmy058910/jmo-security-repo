@@ -105,8 +105,7 @@ def cmd_trends_analyze(args) -> int:
             ]
             if ignored:
                 sys.stderr.write(
-                    f"Error: --scan-ids cannot be combined with "
-                    f"{', '.join(ignored)}.\n"
+                    f"Error: --scan-ids cannot be combined with {', '.join(ignored)}.\n"
                 )
                 sys.stderr.write(
                     "--scan-ids names the scans to analyse; the others select "

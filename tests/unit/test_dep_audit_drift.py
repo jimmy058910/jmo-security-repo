@@ -107,9 +107,9 @@ def test_both_call_sites_use_the_shared_script() -> None:
             f"{path.name} does not call scripts/dev/audit_deps.sh. Do not "
             "re-inline the pip-audit invocation -- the ignores drift."
         )
-        assert (
-            "requirements-dev.txt" not in text
-        ), f"{path.name} still references the deleted requirements-dev.txt."
+        assert "requirements-dev.txt" not in text, (
+            f"{path.name} still references the deleted requirements-dev.txt."
+        )
 
 
 def test_single_pinned_uv_version_across_all_sites() -> None:

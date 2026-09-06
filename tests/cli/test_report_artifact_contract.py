@@ -103,9 +103,9 @@ class TestUnknownOutputFormats:
 
         # meta-guard: an extractor that finds nothing passes every assertion
         assert len(gated) >= 5, f"AST scan found only {gated}; extractor is broken"
-        assert gated == set(
-            KNOWN_OUTPUTS
-        ), f"gates {sorted(gated)} != KNOWN_OUTPUTS {sorted(KNOWN_OUTPUTS)}"
+        assert gated == set(KNOWN_OUTPUTS), (
+            f"gates {sorted(gated)} != KNOWN_OUTPUTS {sorted(KNOWN_OUTPUTS)}"
+        )
 
 
 def _args(tmp_path: Path, out: Path):
@@ -287,9 +287,9 @@ class TestUnrequestedArtifactsAreNotWritten:
     def test_empty_outputs_writes_nothing(self, tmp_path):
         out = self._run(tmp_path, [])
         written = sorted(p.name for p in out.iterdir()) if out.exists() else []
-        assert (
-            written == []
-        ), f"`outputs: []` asked for no output formats and produced: {written}"
+        assert written == [], (
+            f"`outputs: []` asked for no output formats and produced: {written}"
+        )
 
     def test_compliance_gates_all_three_of_its_artifacts(self, tmp_path):
         """One name, three files -- so the gate must cover all three.
@@ -315,9 +315,9 @@ class TestUnrequestedArtifactsAreNotWritten:
         wants compliance output cannot decline the suppression report.
         """
         out = self._run(tmp_path, ["compliance"])
-        assert not (
-            out / "SUPPRESSIONS.md"
-        ).exists(), "SUPPRESSIONS.md is riding on the `compliance` switch"
+        assert not (out / "SUPPRESSIONS.md").exists(), (
+            "SUPPRESSIONS.md is riding on the `compliance` switch"
+        )
 
     def test_the_shipped_default_still_writes_all_four(self, tmp_path):
         """The behaviour change must be confined to configs that opt out.

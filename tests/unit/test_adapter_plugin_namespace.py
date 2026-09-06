@@ -154,9 +154,9 @@ class TestBuiltinAdapterModuleNames:
         registry = PluginRegistry()
         PluginLoader(registry)._load_plugin(builtin_path)
 
-        assert (
-            sys.modules["scripts.core.adapters.prowler_adapter"] is module
-        ), "loading a built-in adapter replaced the already-imported module"
+        assert sys.modules["scripts.core.adapters.prowler_adapter"] is module, (
+            "loading a built-in adapter replaced the already-imported module"
+        )
         assert registry.get("prowler") is original_class
 
 
@@ -193,9 +193,9 @@ class TestLogLevelReachesAdapterLoggers:
 
         logger = self._adapter_logger()
         configure_scan_logging(argparse.Namespace(log_level="DEBUG", human_logs=False))
-        assert logger.isEnabledFor(
-            logging.DEBUG
-        ), "--log-level DEBUG did not reach an adapter logger"
+        assert logger.isEnabledFor(logging.DEBUG), (
+            "--log-level DEBUG did not reach an adapter logger"
+        )
 
 
 class TestLoadPluginContract:

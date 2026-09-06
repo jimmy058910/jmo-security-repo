@@ -1963,9 +1963,9 @@ class TestCmdToolsDebugComprehensive:
         out = capsys.readouterr().out
         assert result == 0
         assert "NOT FOUND" not in out, "took the not-found path while claiming found"
-        assert (
-            "PERMISSION" in out.upper()
-        ), "the permission branch never reported itself"
+        assert "PERMISSION" in out.upper(), (
+            "the permission branch never reported itself"
+        )
 
 
 class TestCmdToolsUpdateWithInstaller:
@@ -3077,9 +3077,7 @@ class TestUninstallToolsExecution:
             with patch("scripts.cli.tool_commands.Path") as mock_path:
                 mock_bin = MagicMock()
                 mock_bin.exists.return_value = True
-                mock_path.home.return_value.__truediv__.return_value.__truediv__.return_value = (
-                    mock_bin
-                )
+                mock_path.home.return_value.__truediv__.return_value.__truediv__.return_value = mock_bin
 
                 with patch("shutil.rmtree"):
                     _uninstall_tools([("trivy", "binary")], errors)
@@ -3104,9 +3102,7 @@ class TestUninstallToolsExecution:
             with patch("scripts.cli.tool_commands.Path") as mock_path:
                 mock_bin = MagicMock()
                 mock_bin.exists.return_value = True
-                mock_path.home.return_value.__truediv__.return_value.__truediv__.return_value = (
-                    mock_bin
-                )
+                mock_path.home.return_value.__truediv__.return_value.__truediv__.return_value = mock_bin
 
                 with patch(
                     "shutil.rmtree", side_effect=PermissionError("Access denied")
@@ -3134,9 +3130,7 @@ class TestUninstallToolsExecution:
             with patch("scripts.cli.tool_commands.Path") as mock_path:
                 mock_bin = MagicMock()
                 mock_bin.exists.return_value = False
-                mock_path.home.return_value.__truediv__.return_value.__truediv__.return_value = (
-                    mock_bin
-                )
+                mock_path.home.return_value.__truediv__.return_value.__truediv__.return_value = mock_bin
 
                 _uninstall_tools([("trivy", "brew")], errors)
 
@@ -3242,17 +3236,17 @@ def test_an_unsupported_tool_is_not_reported_as_missing():
         result = cmd_tools_check(args)
 
     text = chr(10).join(printed)
-    assert (
-        "tool(s) missing" not in text
-    ), "a tool with no build for this platform was counted as missing"
-    assert (
-        "jmo tools install" not in text
-    ), "the footer still points at an installer that refuses this tool"
+    assert "tool(s) missing" not in text, (
+        "a tool with no build for this platform was counted as missing"
+    )
+    assert "jmo tools install" not in text, (
+        "the footer still points at an installer that refuses this tool"
+    )
     assert "not available on this platform" in text
     assert "Rust binary not available for Windows" in text
-    assert (
-        "docker" in text
-    ), "the workarounds must be shown; they are the only way forward"
+    assert "docker" in text, (
+        "the workarounds must be shown; they are the only way forward"
+    )
 
     # Nothing is actionable, so nothing failed. On Windows `--profile deep` can
     # never have all 29 tools, so the old rc=1 made this a gate that could

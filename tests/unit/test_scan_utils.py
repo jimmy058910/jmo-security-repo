@@ -513,9 +513,9 @@ class TestTruffleHogExcludePatterns:
             r"C:\repo\.jmo\history.db.snapshot-20260808",
         ]
         for path in drop:
-            assert any(
-                re.search(p, path) for p in TRUFFLEHOG_EXCLUDE_PATTERNS
-            ), f"nothing excluded {path!r}"
+            assert any(re.search(p, path) for p in TRUFFLEHOG_EXCLUDE_PATTERNS), (
+                f"nothing excluded {path!r}"
+            )
 
     def test_the_exclude_file_is_written_with_lf(self, tmp_path):
         """TruffleHog splits the file on newlines, so a CRLF file would leave a

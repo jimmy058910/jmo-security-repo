@@ -49,7 +49,7 @@ pytest tests/ -m "slow"      # Only slow tests
 ## Linting & Security Checks
 
 ```bash
-make fmt     # format (shfmt, black if installed, ruff-format)
+make fmt     # format (shfmt, ruff format)
 make lint    # lint (shellcheck, ruff, bandit)
 ```
 

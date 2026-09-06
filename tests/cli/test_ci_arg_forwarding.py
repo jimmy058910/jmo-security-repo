@@ -111,13 +111,13 @@ def test_ci_parser_dest_extractor_finds_a_real_parser():
     set would make each of those assertions vacuously true.
     """
     dests = ci_parser_dests()
-    assert (
-        len(dests) >= 35
-    ), f"expected the full ci surface, got {len(dests)}: {sorted(dests)}"
+    assert len(dests) >= 35, (
+        f"expected the full ci surface, got {len(dests)}: {sorted(dests)}"
+    )
     missing = KNOWN_DRIFTED_DESTS - dests
-    assert (
-        not missing
-    ), f"extractor lost dests that are known to exist: {sorted(missing)}"
+    assert not missing, (
+        f"extractor lost dests that are known to exist: {sorted(missing)}"
+    )
     # Spot-check the three shared helpers `_add_ci_args` composes, so a change
     # that drops one of them entirely is caught rather than shrinking silently.
     assert "repo" in dests, "target args missing (_add_target_args)"
@@ -137,16 +137,16 @@ def test_scan_phase_receives_every_ci_parser_dest():
     scan_args, _report_args, _rc = run_ci(args)
 
     dropped = sorted(d for d in ci_parser_dests() if not hasattr(scan_args, d))
-    assert (
-        not dropped
-    ), f"`jmo ci` accepts these flags and never hands them to the scan phase: {dropped}"
+    assert not dropped, (
+        f"`jmo ci` accepts these flags and never hands them to the scan phase: {dropped}"
+    )
 
     altered = sorted(
         d for d in ci_parser_dests() if getattr(scan_args, d) != f"<sentinel:{d}>"
     )
-    assert (
-        not altered
-    ), f"scan phase received a value the user did not supply: {altered}"
+    assert not altered, (
+        f"scan phase received a value the user did not supply: {altered}"
+    )
 
 
 def test_report_phase_receives_every_ci_parser_dest():
@@ -154,18 +154,18 @@ def test_report_phase_receives_every_ci_parser_dest():
     _scan_args, report_args, _rc = run_ci(args)
 
     dropped = sorted(d for d in ci_parser_dests() if not hasattr(report_args, d))
-    assert (
-        not dropped
-    ), f"`jmo ci` accepts these flags and never hands them to the report phase: {dropped}"
+    assert not dropped, (
+        f"`jmo ci` accepts these flags and never hands them to the report phase: {dropped}"
+    )
 
     altered = sorted(
         d
         for d in ci_parser_dests() - REPORT_PHASE_OVERRIDES
         if getattr(report_args, d) != f"<sentinel:{d}>"
     )
-    assert (
-        not altered
-    ), f"report phase received a value the user did not supply: {altered}"
+    assert not altered, (
+        f"report phase received a value the user did not supply: {altered}"
+    )
 
 
 @pytest.mark.parametrize("dest", sorted(KNOWN_DRIFTED_DESTS))
@@ -323,9 +323,9 @@ def test_phase_required_lists_match_what_the_consumers_demand():
 
     # meta-guard: an extractor that finds nothing satisfies every subset check
     assert scan_needs, "AST scan found no unguarded reads in cmd_scan; extractor broken"
-    assert (
-        len(report_needs) >= 5
-    ), f"AST scan found only {report_needs} in cmd_report; extractor broken"
+    assert len(report_needs) >= 5, (
+        f"AST scan found only {report_needs} in cmd_report; extractor broken"
+    )
     assert "config" in scan_needs and "config" in report_needs
 
     missing_scan = scan_needs - set(_SCAN_REQUIRED)
@@ -442,7 +442,7 @@ def test_shared_dests_carry_the_same_default(name):
         if d != "cmd" and prof[d] != ci[d]
     }
     assert not disagree, (
-        f"`jmo {name}` and `jmo ci` disagree on defaults " f"(shortcut, ci): {disagree}"
+        f"`jmo {name}` and `jmo ci` disagree on defaults (shortcut, ci): {disagree}"
     )
 
 

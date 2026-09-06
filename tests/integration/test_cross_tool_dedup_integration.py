@@ -69,13 +69,13 @@ def test_cluster_cross_tool_duplicates_function(sql_injection_cluster):
             xss_standalone = finding
 
     # Verify SQL injection consensus
-    assert (
-        sql_injection_consensus is not None
-    ), "Expected SQL injection consensus finding"
+    assert sql_injection_consensus is not None, (
+        "Expected SQL injection consensus finding"
+    )
     assert "detected_by" in sql_injection_consensus
-    assert (
-        len(sql_injection_consensus["detected_by"]) == 3
-    ), "Expected SQL injection detected by 3 tools"
+    assert len(sql_injection_consensus["detected_by"]) == 3, (
+        "Expected SQL injection detected by 3 tools"
+    )
     tool_names = [t["name"] for t in sql_injection_consensus["detected_by"]]
     assert set(tool_names) == {"trivy", "semgrep", "bandit"}
 

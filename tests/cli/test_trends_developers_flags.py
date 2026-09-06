@@ -94,9 +94,9 @@ def test_repo_is_what_decides_the_not_a_git_repository_error(tmp_path, capsys):
     assert rc == 1
     err = capsys.readouterr().err
     assert "Not a git repository" in err
-    assert (
-        str(not_a_repo) in err
-    ), f"--repo did not reach the git check; the error names something else: {err!r}"
+    assert str(not_a_repo) in err, (
+        f"--repo did not reach the git check; the error names something else: {err!r}"
+    )
 
 
 def test_without_repo_the_check_still_uses_the_working_directory(

@@ -60,9 +60,9 @@ class TestCommandInjectionPrevention:
             if not line.strip().startswith("#") and "nosec" not in line
         ]
 
-        assert (
-            len(code_lines) == 0
-        ), f"shell=True should not be used in wizard.py (except nosec-annotated). Found: {code_lines}"
+        assert len(code_lines) == 0, (
+            f"shell=True should not be used in wizard.py (except nosec-annotated). Found: {code_lines}"
+        )
 
     def test_malicious_repo_path_sanitized(self):
         """Test that malicious repo paths are sanitized"""

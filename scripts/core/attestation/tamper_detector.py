@@ -447,9 +447,7 @@ class TamperDetector:
                             },
                         )
                     )
-            except (
-                Exception
-            ) as e:  # Acceptable: skip unreadable historical attestations — continue checking others
+            except Exception as e:  # Acceptable: skip unreadable historical attestations — continue checking others
                 logger.warning(
                     f"Failed to read historical attestation {historical_path}: {e}"
                 )
@@ -536,9 +534,7 @@ class TamperDetector:
                                     },
                                 )
                             )
-            except (
-                Exception
-            ) as e:  # Acceptable: skip unreadable historical attestations — continue checking others
+            except Exception as e:  # Acceptable: skip unreadable historical attestations — continue checking others
                 logger.warning(
                     f"Failed to read historical attestation {historical_path}: {e}"
                 )
@@ -661,9 +657,7 @@ class TamperDetector:
                                 },
                             )
                         )
-            except (
-                Exception
-            ) as e:  # Acceptable: findings count check is optional — continue with other checks
+            except Exception as e:  # Acceptable: findings count check is optional — continue with other checks
                 logger.warning(f"Failed to check findings count: {e}")
 
         # Check for unusual subject names (path traversal)

@@ -270,7 +270,6 @@ def _load_prowler_internal(path: str | Path) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
 
     for finding_data in _iter_prowler_records(path):
-
         # Extract core finding fields
         check_id = str(finding_data.get("CheckID", ""))
         if not check_id:

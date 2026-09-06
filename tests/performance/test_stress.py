@@ -226,9 +226,9 @@ class TestExtremeLoad:
 
         # CI shared runners vary; local Linux 30-45s, local macOS 40-60s,
         # GitHub-hosted ubuntu-latest 55-90s under load.
-        assert (
-            elapsed < 120
-        ), f"Processing 100k findings took {elapsed:.1f}s (target: <120s on CI)"
+        assert elapsed < 120, (
+            f"Processing 100k findings took {elapsed:.1f}s (target: <120s on CI)"
+        )
         assert isinstance(findings, list)
         # A partial parse -- one adapter silently yielding nothing -- makes a
         # fifth of the corpus vanish while `len(findings) > 0` stays true.
@@ -434,9 +434,9 @@ class TestConcurrentOperations:
                     errors.append(("executor", str(e)))
 
         # All should succeed (SQLite WAL mode should handle this)
-        assert (
-            success_count == 10
-        ), f"Only {success_count}/10 succeeded. Errors: {errors}"
+        assert success_count == 10, (
+            f"Only {success_count}/10 succeeded. Errors: {errors}"
+        )
 
     @pytest.mark.timeout(120)
     def test_concurrent_file_writes(self, tmp_path: Path):
@@ -488,9 +488,9 @@ class TestConcurrentOperations:
                 except Exception as e:
                     errors.append(("executor", str(e)))
 
-        assert (
-            success_count == 20
-        ), f"Only {success_count}/20 succeeded. Errors: {errors}"
+        assert success_count == 20, (
+            f"Only {success_count}/20 succeeded. Errors: {errors}"
+        )
 
 
 class TestDatabaseStress:
@@ -578,12 +578,12 @@ class TestDatabaseStress:
         # Performance assertions
         assert count == 10000, f"Expected 10000 scans, got {count}"
         assert count_time < 0.1, f"Count query took {count_time:.3f}s (target: <0.1s)"
-        assert (
-            recent_time < 0.5
-        ), f"Recent query took {recent_time:.3f}s (target: <0.5s)"
-        assert (
-            severity_time < 1.0
-        ), f"Severity query took {severity_time:.3f}s (target: <1s)"
+        assert recent_time < 0.5, (
+            f"Recent query took {recent_time:.3f}s (target: <0.5s)"
+        )
+        assert severity_time < 1.0, (
+            f"Severity query took {severity_time:.3f}s (target: <1s)"
+        )
 
     @pytest.mark.timeout(120)
     def test_database_vacuum_under_load(self, tmp_path: Path):

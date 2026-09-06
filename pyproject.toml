@@ -82,7 +82,6 @@ dev = [
     # Linting & formatting
     "ruff",
     "bandit",
-    "black",
     "pre-commit",
     "mypy>=2.2.0",                  # mypy 2.x -- sandbox-verified 0 errors on scripts/ (supersedes #634, #487)
     # Required for tests
@@ -111,7 +110,7 @@ dev = [
     #   python-multipart>=0.0.31: CVE-2026-53538/53539/53540
     "starlette>=1.3.1",
     "python-multipart>=0.0.31",
-    # Security floor for click (transitive via black + mcp[cli]'s typer):
+    # Security floor for click (transitive via mcp[cli]'s typer):
     #   click>=8.3.3: PYSEC-2026-2132
     "click>=8.3.3",
     # Policy-as-Code (Feature #5). OPA binary installs separately via scripts/dev/install_tools.sh.
@@ -281,18 +280,15 @@ omit = [
     "scripts/dev/*",
 ]
 
-[tool.black]
-# Skill templates under .claude/ are scaffolding with {Tool} placeholders, not
-# valid Python — black cannot parse them. pre-commit already carries
-# `exclude: ^\.claude/` on black and ruff; this keeps the repo-wide paths
-# (`make fmt`, `black .`) behaving the same way, since CLAUDE.md tells every
-# contributor to run `make fmt` before every commit.
-extend-exclude = '^/\.claude/'
-
 [tool.ruff]
-# Exclude test fixtures that are intentionally vulnerable, and the .claude/
-# skill templates (see [tool.black] above — same reason).
-extend-exclude = ["tests/e2e/fixtures/python/vulnerable_app.py", ".claude"]
+# ruff is both the linter and the formatter (Black left with #1179: two
+# formatters disagreed on 179 files). Excluded from both:
+#   - the deliberately vulnerable e2e fixture;
+#   - .claude/ skill templates, which carry {Tool} placeholders and do not parse;
+#   - Markdown. ruff 0.16 formats Python fences inside .md files by default and
+#     has no separate switch; the docs' examples are illustrative and several
+#     do not parse, so they stay out of the formatter's reach.
+extend-exclude = ["tests/e2e/fixtures/python/vulnerable_app.py", ".claude", "*.md"]
 
 [tool.ruff.lint]
 # Rule set is pinned EXPLICITLY. Without this, ruff runs its *default* rules,

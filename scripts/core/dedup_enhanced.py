@@ -320,9 +320,9 @@ class SimilarityCalculator:
                 With rule equivalence mapping, false positives are still prevented.
 
         """
-        assert (
-            abs(location_weight + message_weight + metadata_weight - 1.0) < 0.01
-        ), "Weights must sum to 1.0"
+        assert abs(location_weight + message_weight + metadata_weight - 1.0) < 0.01, (
+            "Weights must sum to 1.0"
+        )
         self.location_weight = location_weight
         self.message_weight = message_weight
         self.metadata_weight = metadata_weight
@@ -830,7 +830,7 @@ class FindingClusterer:
         for idx, finding in enumerate(sorted_findings):
             # Progress callback
             if progress_callback and idx % 10 == 0:
-                progress_callback(idx, total, f"Clustering finding {idx+1}/{total}")
+                progress_callback(idx, total, f"Clustering finding {idx + 1}/{total}")
 
             # Find best matching cluster, considering only clusters that do not
             # already contain this finding's tool (see FindingCluster.can_accept).
@@ -1143,7 +1143,7 @@ class LSHSignatureGenerator:
         if len(keywords) >= 2:
             kw_list = sorted(keywords)[:4]
             for i in range(len(kw_list) - 1):
-                sig = f"kwpair:{kw_list[i]}:{kw_list[i+1]}"
+                sig = f"kwpair:{kw_list[i]}:{kw_list[i + 1]}"
                 signatures.append(self._hash(sig, 6))
 
         # Band 8: Path alone (for same-file findings)
@@ -1347,7 +1347,7 @@ class LSHClusterer:
             if progress_callback and idx % 100 == 0:
                 progress = n // 2 + (idx * n // 4 // max(len(candidates), 1))
                 progress_callback(
-                    progress, n, f"Comparing pair {idx+1}/{len(candidates)}"
+                    progress, n, f"Comparing pair {idx + 1}/{len(candidates)}"
                 )
 
             # Never union two findings from the same tool -- Phase 1 already

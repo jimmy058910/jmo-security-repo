@@ -121,12 +121,11 @@ def test_cdxgen_is_checked_against_npm_not_pypi(
     validate_all_versions()
 
     assert "@cyclonedx/cdxgen" in stub_registries["npm"], (
-        "cdxgen was never checked against npm; "
-        f"npm calls were {stub_registries['npm']}"
+        f"cdxgen was never checked against npm; npm calls were {stub_registries['npm']}"
     )
-    assert (
-        "@cyclonedx/cdxgen" not in stub_registries["pypi"]
-    ), "cdxgen is still being checked against PyPI"
+    assert "@cyclonedx/cdxgen" not in stub_registries["pypi"], (
+        "cdxgen is still being checked against PyPI"
+    )
 
 
 def test_no_scoped_npm_name_is_filed_as_a_pypi_package() -> None:
@@ -170,9 +169,9 @@ def test_a_manual_install_tool_at_the_sentinel_is_reported_as_unpinned(
 
     assert "falco" not in failed
     assert "falco" in unpinned
-    assert (
-        "falcosecurity/falco" not in stub_registries["github"]
-    ), "an unpinned tool should not be looked up upstream at all"
+    assert "falcosecurity/falco" not in stub_registries["github"], (
+        "an unpinned tool should not be looked up upstream at all"
+    )
 
 
 def test_the_sentinel_is_only_honoured_for_manual_install_tools(
@@ -218,9 +217,9 @@ def test_a_manual_install_tool_with_a_real_version_is_still_validated(
     _passed, failed, unpinned = validate_all_versions()
 
     assert "falco" not in unpinned
-    assert (
-        "falco" in failed
-    ), "a MANUAL_INSTALL tool carrying a real version must still be checked"
+    assert "falco" in failed, (
+        "a MANUAL_INSTALL tool carrying a real version must still be checked"
+    )
 
 
 def test_every_tool_is_accounted_for_exactly_once(
@@ -248,9 +247,9 @@ def test_every_tool_is_accounted_for_exactly_once(
         f"missing={sorted(declared - set(reported))} "
         f"extra={sorted(set(reported) - declared)}"
     )
-    assert len(reported) == len(
-        set(reported)
-    ), f"a tool was counted twice: {sorted({t for t in reported if reported.count(t) > 1})}"
+    assert len(reported) == len(set(reported)), (
+        f"a tool was counted twice: {sorted({t for t in reported if reported.count(t) > 1})}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -473,14 +472,14 @@ def test_registry_json_distinguishes_a_404_from_a_network_failure(
         raise urllib.error.URLError("no route to host")
 
     monkeypatch.setattr(uv.urllib.request, "urlopen", raise_http)
-    assert (
-        uv._registry_json("https://example.test/x") == {}
-    ), "a 404 is an answer -- the package or version is genuinely absent"
+    assert uv._registry_json("https://example.test/x") == {}, (
+        "a 404 is an answer -- the package or version is genuinely absent"
+    )
 
     monkeypatch.setattr(uv.urllib.request, "urlopen", raise_url)
-    assert (
-        uv._registry_json("https://example.test/x") is None
-    ), "a transport failure is NOT an answer -- it must surface as unknown"
+    assert uv._registry_json("https://example.test/x") is None, (
+        "a transport failure is NOT an answer -- it must surface as unknown"
+    )
 
 
 def test_registry_json_reports_a_non_404_http_error_as_unknown(
@@ -501,6 +500,6 @@ def test_registry_json_reports_a_non_404_http_error_as_unknown(
             raise urllib.error.HTTPError("u", _code, "err", {}, None)  # type: ignore[arg-type]
 
         monkeypatch.setattr(uv.urllib.request, "urlopen", raise_http)
-        assert (
-            uv._registry_json("https://example.test/x") is None
-        ), f"HTTP {code} was read as a definitive answer"
+        assert uv._registry_json("https://example.test/x") is None, (
+            f"HTTP {code} was read as a definitive answer"
+        )

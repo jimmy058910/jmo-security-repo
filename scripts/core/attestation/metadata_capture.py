@@ -134,9 +134,7 @@ class MetadataCapture:
 
         except subprocess.TimeoutExpired:
             logger.warning(f"Git context capture timed out for {repo_path}")
-        except (
-            Exception
-        ) as e:  # Acceptable: git context capture is optional metadata — safe default on failure
+        except Exception as e:  # Acceptable: git context capture is optional metadata — safe default on failure
             logger.warning(f"Could not capture Git context for {repo_path}: {e}")
 
         return git_context

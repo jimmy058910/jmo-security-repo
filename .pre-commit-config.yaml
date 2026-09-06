@@ -64,21 +64,22 @@ repos:
     hooks:
       - id: markdownlint-cli2
 
-  # Python format/lint (Black MUST run before Ruff per jmo-ci-debugger #15)
-  - repo: https://github.com/psf/black
-    rev: 26.5.1
-    hooks:
-      - id: black
-        exclude: ^\.claude/
-  # Must match uv.lock's ruff. This hook runs `--fix`, so a version split means
-  # the hook REWRITES code at one version while `make lint` and CI CHECK it at
-  # another -- and ci.yml skips this hook by design, so CI cannot see it.
-  # Pinned by tests/unit/test_toolchain_version_agreement.py (#1015).
+  # Python lint + format, both ruff (Black left with #1179). Lint with --fix
+  # runs BEFORE the formatter, per ruff's own pre-commit guidance: a lint fix
+  # can change what the formatter would emit; the reverse cannot.
+  # Must match uv.lock's ruff. The lint hook runs `--fix`, so a version split
+  # means the hook REWRITES code at one version while `make lint` and CI CHECK
+  # it at another -- and ci.yml skips these hooks by design, so CI cannot see
+  # it. Pinned by tests/unit/test_toolchain_version_agreement.py (#1015), which
+  # keys on the hook id `ruff` (the distribution name): keep that id, not the
+  # newer `ruff-check` alias.
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.5
     hooks:
       - id: ruff
         args: ["--fix"]
+        exclude: ^\.claude/
+      - id: ruff-format
         exclude: ^\.claude/
 
   # Type checking (optimized for incremental mode)

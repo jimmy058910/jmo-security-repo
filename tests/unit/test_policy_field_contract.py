@@ -275,9 +275,9 @@ def test_extractor_rejects_the_field_that_was_broken():
     assert "raw.verified" in paths
 
     findings = _real_findings()
-    assert not any(
-        _has_path(f, "raw.verified") for f in findings
-    ), "raw.verified is produced by something now -- update this control"
+    assert not any(_has_path(f, "raw.verified") for f in findings), (
+        "raw.verified is produced by something now -- update this control"
+    )
 
 
 def test_every_policy_field_exists_in_real_findings(real_findings):
@@ -356,8 +356,9 @@ def test_optional_fields_are_read_defensively():
             )
             guarded = f'object.get(finding, "{dotted}"' in code or (
                 "." in dotted
-                and f'object.get(finding.{dotted.rsplit(".", 1)[0]}, '
-                f'"{dotted.rsplit(".", 1)[1]}"' in code
+                and f"object.get(finding.{dotted.rsplit('.', 1)[0]}, "
+                f'"{dotted.rsplit(".", 1)[1]}"'
+                in code
             )
             if bare and not guarded:
                 offenders.setdefault(p.name, []).append(dotted)
@@ -404,6 +405,6 @@ def test_every_policy_emoji_has_an_ascii_fallback():
     placeholder = {
         f"U+{ord(ch):04X}" for ch in used if UNICODE_FALLBACKS.get(ch) == "[?]"
     }
-    assert (
-        not placeholder
-    ), f"policy emoji mapped to the ambiguous '[?]' token: {placeholder}"
+    assert not placeholder, (
+        f"policy emoji mapped to the ambiguous '[?]' token: {placeholder}"
+    )

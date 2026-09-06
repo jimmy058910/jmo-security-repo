@@ -207,10 +207,9 @@ def test_data_path_subprocesses_decode_explicitly() -> None:
                     "(strict discards the whole capture on one bad byte)"
                 )
 
-    assert (
-        not offenders
-    ), "Locale-decoded subprocess output on the scan data path:\n" + "\n".join(
-        f"  {o}" for o in offenders
+    assert not offenders, (
+        "Locale-decoded subprocess output on the scan data path:\n"
+        + "\n".join(f"  {o}" for o in offenders)
     )
 
 

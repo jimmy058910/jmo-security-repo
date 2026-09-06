@@ -90,7 +90,7 @@ def _check_version_match() -> CheckResult:
         return CheckResult(
             name="version-match",
             status=CheckStatus.FAIL,
-            message=(f"pyproject.toml ({pyproject_ver}) != " f"jmo.py ({jmo_ver})"),
+            message=(f"pyproject.toml ({pyproject_ver}) != jmo.py ({jmo_ver})"),
         )
     return None  # type: ignore[return-value]
 
@@ -955,31 +955,31 @@ def _check_suppression_file() -> CheckResult:
 # ---------------------------------------------------------------------------
 
 
-def _check_black_clean() -> CheckResult:
-    """Black formatting is clean."""
+def _check_format_clean() -> CheckResult:
+    """ruff format leaves scripts/ unchanged (the only formatter since #1179)."""
     try:
         result = _run_cmd(
-            [sys.executable, "-m", "black", "--check", "--quiet", "scripts/"],
+            [sys.executable, "-m", "ruff", "format", "--check", "scripts/"],
             timeout=120,
         )
         if result.returncode != 0:
             return CheckResult(
-                name="black-clean",
+                name="ruff-format-clean",
                 status=CheckStatus.FAIL,
-                message="Black formatting check failed",
+                message="ruff format --check failed",
                 details=result.stdout[:500] if result.stdout else "",
             )
     except FileNotFoundError:
         return CheckResult(
-            name="black-clean",
+            name="ruff-format-clean",
             status=CheckStatus.SKIP,
-            message="Black not installed",
+            message="ruff not installed",
         )
     except subprocess.TimeoutExpired:
         return CheckResult(
-            name="black-clean",
+            name="ruff-format-clean",
             status=CheckStatus.SKIP,
-            message="Black check timed out",
+            message="ruff format check timed out",
         )
     return None  # type: ignore[return-value]
 
@@ -1088,27 +1088,27 @@ def _check_no_circular_imports() -> CheckResult:
 
 
 def _check_precommit_order() -> CheckResult:
-    """Pre-commit config has Black before Ruff."""
+    """Pre-commit runs the ruff lint hook (--fix) before ruff-format."""
     if not _path_exists(".pre-commit-config.yaml"):
         return CheckResult(
-            name="precommit-black-before-ruff",
+            name="precommit-lint-before-format",
             status=CheckStatus.FAIL,
             message=".pre-commit-config.yaml not found",
         )
     text = _read_text(".pre-commit-config.yaml")
-    black_pos = text.find("psf/black")
-    ruff_pos = text.find("ruff-pre-commit")
-    if black_pos < 0 or ruff_pos < 0:
+    lint = re.search(r"^\s*-\s*id:\s*ruff\s*$", text, re.MULTILINE)
+    fmt = re.search(r"^\s*-\s*id:\s*ruff-format\s*$", text, re.MULTILINE)
+    if lint is None or fmt is None:
         return CheckResult(
-            name="precommit-black-before-ruff",
+            name="precommit-lint-before-format",
             status=CheckStatus.WARN,
-            message="Cannot find Black or Ruff in pre-commit config",
+            message="Cannot find the ruff and ruff-format hooks in pre-commit config",
         )
-    if black_pos > ruff_pos:
+    if lint.start() > fmt.start():
         return CheckResult(
-            name="precommit-black-before-ruff",
+            name="precommit-lint-before-format",
             status=CheckStatus.FAIL,
-            message="Black must run BEFORE Ruff in pre-commit config",
+            message="The ruff lint hook must run BEFORE ruff-format in pre-commit config",
         )
     return None  # type: ignore[return-value]
 
@@ -1730,11 +1730,11 @@ _QUICK_CHECKS: list[tuple[str, _CheckFn]] = [
     ("no-path-traversal", _check_no_path_traversal),
     ("suppression-file", _check_suppression_file),
     # 7. Code quality (6)
-    ("black-clean", _check_black_clean),
+    ("ruff-format-clean", _check_format_clean),
     ("ruff-clean", _check_ruff_clean),
     ("import-direction", _check_import_direction),
     ("no-circular-imports", _check_no_circular_imports),
-    ("precommit-black-before-ruff", _check_precommit_order),
+    ("precommit-lint-before-format", _check_precommit_order),
     ("type-annotations", _check_type_annotations),
     # 8. Test health (6)
     ("test-count", _check_test_count),

@@ -303,9 +303,9 @@ def test_extractors_actually_found_something():
     assert not missing_routes, f"router lost subcommands: {sorted(missing_routes)}"
 
     analyze_reads = _args_read_by(routing["analyze"])
-    assert (
-        len(analyze_reads) >= 12
-    ), f"handler-read extractor looks wrong: {analyze_reads}"
+    assert len(analyze_reads) >= 12, (
+        f"handler-read extractor looks wrong: {analyze_reads}"
+    )
     # "export_json" only exists in the read-set if the bare-Attribute branch
     # fired; "branch" only exists if the getattr-Call branch fired.
     assert {"branch", "last", "db", "export_json"} <= analyze_reads

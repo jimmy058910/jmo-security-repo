@@ -109,8 +109,8 @@ def test_the_guard_actually_found_examples_to_check():
     assert labels == {
         Path(s).name for s in DOCUMENTED_SOURCES
     }, f"no suppression example was parsed out of {
-            {Path(s).name for s in DOCUMENTED_SOURCES} - labels
-        }"
+        {Path(s).name for s in DOCUMENTED_SOURCES} - labels
+    }"
 
 
 @pytest.mark.parametrize(
@@ -149,9 +149,9 @@ def test_the_repos_own_suppression_config_loads_every_entry():
 
     loaded = load_suppressions(str(ROOT / "jmo.suppress.yml"))
 
-    assert (
-        len(loaded) == declared
-    ), f"jmo.suppress.yml declares {declared} entries but {len(loaded)} load"
+    assert len(loaded) == declared, (
+        f"jmo.suppress.yml declares {declared} entries but {len(loaded)} load"
+    )
 
 
 def test_shipped_rule_ids_match_what_the_tools_actually_emit():

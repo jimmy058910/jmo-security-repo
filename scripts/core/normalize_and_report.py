@@ -578,9 +578,7 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
         deduped = _cluster_cross_tool_duplicates(
             deduped, similarity_threshold=dedup_threshold
         )
-    except (
-        Exception
-    ) as e:  # Acceptable: dedup clustering is best-effort — continue with unfiltered results
+    except Exception as e:  # Acceptable: dedup clustering is best-effort — continue with unfiltered results
         logger.warning(
             f"Cross-tool clustering failed, continuing with Phase 1 deduplication: {e}"
         )

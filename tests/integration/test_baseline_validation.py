@@ -281,12 +281,12 @@ class TestBaselineValidation:
 
         # Assert within tolerance
         tolerance = baseline["tolerance"]
-        assert result.missing_critical <= tolerance.get(
-            "missing_critical", 0
-        ), f"Too many missing CRITICAL findings: {result.missing_critical}"
-        assert result.missing_high <= tolerance.get(
-            "missing_high", 2
-        ), f"Too many missing HIGH findings: {result.missing_high}"
+        assert result.missing_critical <= tolerance.get("missing_critical", 0), (
+            f"Too many missing CRITICAL findings: {result.missing_critical}"
+        )
+        assert result.missing_high <= tolerance.get("missing_high", 2), (
+            f"Too many missing HIGH findings: {result.missing_high}"
+        )
 
 
 @pytest.mark.integration
@@ -309,9 +309,9 @@ class TestBaselineSchemaValidation:
 
             # Check required top-level keys
             assert "metadata" in data, f"{baseline_file.name} missing metadata"
-            assert (
-                "expected_findings" in data
-            ), f"{baseline_file.name} missing expected_findings"
+            assert "expected_findings" in data, (
+                f"{baseline_file.name} missing expected_findings"
+            )
             assert "tolerance" in data, f"{baseline_file.name} missing tolerance"
 
     def test_baseline_metadata_complete(self):
@@ -321,12 +321,12 @@ class TestBaselineSchemaValidation:
             metadata = baseline["metadata"]
 
             assert "target" in metadata, f"{baseline_file.name} metadata missing target"
-            assert (
-                "version" in metadata
-            ), f"{baseline_file.name} metadata missing version"
-            assert (
-                "profile" in metadata
-            ), f"{baseline_file.name} metadata missing profile"
+            assert "version" in metadata, (
+                f"{baseline_file.name} metadata missing version"
+            )
+            assert "profile" in metadata, (
+                f"{baseline_file.name} metadata missing profile"
+            )
 
     def test_expected_findings_have_required_fields(self):
         """Each expected finding should have required fields."""
@@ -334,15 +334,15 @@ class TestBaselineSchemaValidation:
             baseline = load_baseline(baseline_file)
 
             for i, finding in enumerate(baseline["expected_findings"]):
-                assert (
-                    "rule_id" in finding
-                ), f"{baseline_file.name} finding {i} missing rule_id"
-                assert (
-                    "severity" in finding
-                ), f"{baseline_file.name} finding {i} missing severity"
-                assert (
-                    "category" in finding
-                ), f"{baseline_file.name} finding {i} missing category"
+                assert "rule_id" in finding, (
+                    f"{baseline_file.name} finding {i} missing rule_id"
+                )
+                assert "severity" in finding, (
+                    f"{baseline_file.name} finding {i} missing severity"
+                )
+                assert "category" in finding, (
+                    f"{baseline_file.name} finding {i} missing category"
+                )
 
 
 class TestExtractRuleIds:

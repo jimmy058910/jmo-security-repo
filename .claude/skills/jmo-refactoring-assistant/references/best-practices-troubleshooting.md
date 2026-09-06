@@ -44,7 +44,7 @@
    mock aimed at the wrong namespace (see test-migration-patterns.md Pattern 2).
    Diff the number yourself: neither `make test` nor CI applies a
    `--cov-fail-under` floor that would catch this for you
-3. **Run linters:** `make lint` or `ruff check && black --check`
+3. **Run linters:** `make lint` or `ruff check && ruff format --check`
 4. **Manual smoke test:** Verify key workflows still work
 5. **Update docstrings:** Note refactoring and cross-references
 6. **Commit with descriptive message:**

@@ -152,9 +152,9 @@ def test_cvss_is_an_object_carrying_its_vector(
     assert cvss_values, f"{label} produced no cvss for a payload that carries one"
 
     for cvss in cvss_values:
-        assert isinstance(
-            cvss, dict
-        ), f"{label} emitted {type(cvss).__name__}, not dict"
+        assert isinstance(cvss, dict), (
+            f"{label} emitted {type(cvss).__name__}, not dict"
+        )
         assert isinstance(cvss["score"], (int, float))
         assert 0 <= cvss["score"] <= 10
         assert cvss.get("vector"), "vector dropped -- the score is no longer auditable"

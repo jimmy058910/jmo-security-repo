@@ -50,7 +50,7 @@ These guidelines help AI coding agents work effectively in this repository. Focu
   - `jmo tools check --profile balanced` to see tool status
   - `jmo tools install --profile balanced` to install missing tools
 - Make targets:
-  - `make dev-deps` (pytest, ruff, bandit, black, pyyaml, jsonschema)
+  - `make dev-deps` (pytest, ruff, bandit, pyyaml, jsonschema)
   - `make fmt` / `make lint` / `make test`
   - `make report RESULTS_DIR=/path/to/results [OUT=...] [CONFIG=jmo.yml] [FAIL_ON=]`
 

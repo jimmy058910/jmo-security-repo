@@ -213,6 +213,6 @@ def test_scan_fails_when_only_requested_tool_missing(tmp_path: Path, monkeypatch
         assert rc == 1, f"Expected exit code 1 when tool missing, got {rc}"
         # No stub files should be created
         noseyparker_out = out_base / "individual-repos" / repo.name / "noseyparker.json"
-        assert (
-            not noseyparker_out.exists()
-        ), "Stub should NOT be created in v1.0.0 architecture"
+        assert not noseyparker_out.exists(), (
+            "Stub should NOT be created in v1.0.0 architecture"
+        )

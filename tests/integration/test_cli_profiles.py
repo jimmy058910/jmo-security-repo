@@ -342,9 +342,9 @@ profiles:
     )
 
     # Either semgrep logged (tool installed) OR stub file exists (tool missing)
-    assert (
-        "semgrep" in output.lower() or semgrep_stub.exists()
-    ), "semgrep should be logged in tool execution OR stub file created"
+    assert "semgrep" in output.lower() or semgrep_stub.exists(), (
+        "semgrep should be logged in tool execution OR stub file created"
+    )
 
 
 def test_per_tool_flags_override(tmp_path: Path):
@@ -539,9 +539,9 @@ def test_profile_tool_selection_fast(tmp_path: Path):
     for tool in expected_tools:
         # Tool invoked if logged OR stub file exists
         stub_file = tool_output_dir / f"{tool}.json"
-        assert (
-            tool in output.lower() or stub_file.exists()
-        ), f"Fast profile should invoke {tool} (log or stub)"
+        assert tool in output.lower() or stub_file.exists(), (
+            f"Fast profile should invoke {tool} (log or stub)"
+        )
 
 
 @pytest.mark.requires_tools
@@ -607,16 +607,16 @@ def test_profile_tool_selection_balanced(tmp_path: Path):
     ]
     for tool in core_tools:
         stub_file = tool_output_dir / f"{tool}.json"
-        assert (
-            tool in output.lower() or stub_file.exists()
-        ), f"Balanced profile should invoke {tool} (log or stub)"
+        assert tool in output.lower() or stub_file.exists(), (
+            f"Balanced profile should invoke {tool} (log or stub)"
+        )
 
     # Verify conditional tools run when applicable
     for tool in ["hadolint", "zap"]:
         stub_file = tool_output_dir / f"{tool}.json"
-        assert (
-            tool in output.lower() or stub_file.exists()
-        ), f"{tool} should run when applicable files exist (log or stub)"
+        assert tool in output.lower() or stub_file.exists(), (
+            f"{tool} should run when applicable files exist (log or stub)"
+        )
 
 
 @pytest.mark.requires_tools
@@ -683,16 +683,16 @@ def test_profile_tool_selection_deep(tmp_path: Path):
     ]
     for tool in core_tools:
         stub_file = tool_output_dir / f"{tool}.json"
-        assert (
-            tool in output.lower() or stub_file.exists()
-        ), f"Deep profile should invoke {tool} (log or stub)"
+        assert tool in output.lower() or stub_file.exists(), (
+            f"Deep profile should invoke {tool} (log or stub)"
+        )
 
     # Verify conditional tools run when applicable
     for tool in ["hadolint", "zap"]:
         stub_file = tool_output_dir / f"{tool}.json"
-        assert (
-            tool in output.lower() or stub_file.exists()
-        ), f"{tool} should run when applicable files exist (log or stub)"
+        assert tool in output.lower() or stub_file.exists(), (
+            f"{tool} should run when applicable files exist (log or stub)"
+        )
 
 
 @pytest.mark.requires_tools
@@ -766,9 +766,9 @@ profiles:
 
     for tool in ["trivy", "semgrep"]:
         stub_file = tool_output_dir / f"{tool}.json"
-        assert (
-            tool in output.lower() or stub_file.exists()
-        ), f"{tool} should run (log or stub)"
+        assert tool in output.lower() or stub_file.exists(), (
+            f"{tool} should run (log or stub)"
+        )
 
 
 @pytest.mark.requires_tools

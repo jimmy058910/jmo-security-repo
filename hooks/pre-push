@@ -2,7 +2,7 @@
 # Pre-push hook: checks that pre-commit doesn't cover
 # Install: cp hooks/pre-push .git/hooks/pre-push && chmod +x .git/hooks/pre-push
 #
-# Checks run here are UNIQUE to pre-push. Black, Ruff, mypy, markdownlint,
+# Checks run here are UNIQUE to pre-push. Ruff (lint and format), mypy, markdownlint,
 # and other code quality checks are handled by pre-commit hooks at commit time.
 # See .pre-commit-config.yaml for the full list.
 

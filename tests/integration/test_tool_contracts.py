@@ -385,9 +385,9 @@ class TestContractInfrastructure:
 
         for tool_name, contract in TOOL_CONTRACTS.items():
             for field in required_fields:
-                assert (
-                    field in contract
-                ), f"Contract for {tool_name} missing required field '{field}'"
+                assert field in contract, (
+                    f"Contract for {tool_name} missing required field '{field}'"
+                )
 
     def test_sample_targets_exist(self):
         """Verify all sample targets referenced by contracts exist."""

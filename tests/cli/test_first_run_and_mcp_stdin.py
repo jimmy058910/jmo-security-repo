@@ -235,12 +235,12 @@ def test_no_first_run_branch_claims_success_without_sending(tmp_path, monkeypatc
     jmo._collect_email_opt_in(_Args())
 
     out = " ".join(printed)
-    assert (
-        "You're all set" not in out
-    ), f"a path that sent nothing told the user they were all set: {out!r}"
-    assert (
-        "subscribe.html" in out
-    ), "a failed signup must point somewhere the user can actually finish"
+    assert "You're all set" not in out, (
+        f"a path that sent nothing told the user they were all set: {out!r}"
+    )
+    assert "subscribe.html" in out, (
+        "a failed signup must point somewhere the user can actually finish"
+    )
 
 
 # ==========================================================================
@@ -281,7 +281,9 @@ def test_no_other_cli_module_declares_a_rival_version():
             targets = (
                 node.targets
                 if isinstance(node, ast.Assign)
-                else [node.target] if isinstance(node, ast.AnnAssign) else []
+                else [node.target]
+                if isinstance(node, ast.AnnAssign)
+                else []
             )
             for t in targets:
                 if isinstance(t, ast.Name) and t.id == "__version__":

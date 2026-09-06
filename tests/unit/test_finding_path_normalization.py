@@ -221,9 +221,9 @@ def test_legacy_plugin_fingerprint_formula_is_also_recognised():
         "location": {"path": path},
         "message": "boom",
     }
-    assert finding["id"] != fingerprint(
-        "trivy", "CVE-1", path, None, "boom"
-    ), "precondition: this id must be reachable only by the legacy formula"
+    assert finding["id"] != fingerprint("trivy", "CVE-1", path, None, "boom"), (
+        "precondition: this id must be reachable only by the legacy formula"
+    )
 
     changed, rekeyed = nr._normalize_paths_and_ids([finding], (ROOT,))
 

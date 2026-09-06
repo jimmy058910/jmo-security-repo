@@ -182,12 +182,12 @@ def test_jmo_yml_all_profiles_have_policy(jmo_yml_path):
     profiles = ["fast", "balanced", "deep"]
     for profile in profiles:
         assert profile in jmo_data["profiles"], f"Profile {profile} missing"
-        assert (
-            "policy" in jmo_data["profiles"][profile]
-        ), f"Policy missing in {profile} profile"
-        assert (
-            "default_policies" in jmo_data["profiles"][profile]["policy"]
-        ), f"default_policies missing in {profile} profile"
+        assert "policy" in jmo_data["profiles"][profile], (
+            f"Policy missing in {profile} profile"
+        )
+        assert "default_policies" in jmo_data["profiles"][profile]["policy"], (
+            f"default_policies missing in {profile} profile"
+        )
 
 
 # ========== COVERAGE TARGET: ≥90% ====================

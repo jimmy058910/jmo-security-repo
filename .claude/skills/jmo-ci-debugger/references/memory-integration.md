@@ -32,9 +32,9 @@ cat .jmo/memory/ci-fixes/actionlint-fail-level.json | jq '.fix'
 cat .jmo/memory/ci-fixes/sarif-upload-permissions.json | jq '.frequency'
 # Returns: 8 (encountered 8 times)
 
-# Check Ruff-after-Black pattern
-cat .jmo/memory/ci-fixes/ruff-after-black.json | jq '.solution'
-# Returns: "Run ruff check --fix after Black, review auto-fixes, commit both"
+# Check the lint-after-formatting pattern
+cat .jmo/memory/ci-fixes/lint-after-format.json | jq '.solution'
+# Returns: "Run ruff check --fix, then ruff format; review auto-fixes, commit both"
 ```
 
 ---
@@ -60,15 +60,15 @@ cat .jmo/memory/ci-fixes/ruff-after-black.json | jq '.solution'
 
 ### Additional Pattern Examples
 
-**Ruff After Black:**
+**Lint After Formatting:**
 
 ```json
 {
-  "pattern": "ruff-after-black-cascade",
+  "pattern": "lint-after-format-cascade",
   "error_message": "F401 imported but unused / F541 f-string without placeholders",
-  "section": "#15 Ruff Linting Failures After Black Formatting",
-  "root_cause": "Black formats code, Ruff enforces quality (unused imports, f-strings)",
-  "solution": "Run ruff check --fix after Black, review auto-removals, commit",
+  "section": "#15 Ruff Linting Failures After Formatting",
+  "root_cause": "ruff format lays code out, ruff check enforces quality (unused imports, f-strings)",
+  "solution": "Run ruff check --fix, then ruff format; review auto-removals, commit",
   "code_fix": "ruff check scripts/ tests/ --fix && git add . && git commit",
   "frequency": 1,
   "success_rate": 1.0,
@@ -76,7 +76,7 @@ cat .jmo/memory/ci-fixes/ruff-after-black.json | jq '.solution'
   "related_patterns": ["pre-commit-order", "nightly-lint-failures"],
   "time_to_fix": "5-10 min",
   "difficulty": "easy",
-  "prevention": "pre-commit config: black -> ruff --fix -> ruff --no-fix"
+  "prevention": "pre-commit config: ruff --fix -> ruff-format"
 }
 ```
 
@@ -107,7 +107,7 @@ cat .jmo/memory/ci-fixes/ruff-after-black.json | jq '.solution'
 ```bash
 # Increment frequency after next occurrence
 jq '.frequency += 1 | .last_encountered = "2025-11-15"' \
-  .jmo/memory/ci-fixes/ruff-after-black.json > tmp.json && mv tmp.json .jmo/memory/ci-fixes/ruff-after-black.json
+  .jmo/memory/ci-fixes/lint-after-format.json > tmp.json && mv tmp.json .jmo/memory/ci-fixes/lint-after-format.json
 ```
 
 ---

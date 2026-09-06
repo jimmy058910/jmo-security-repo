@@ -145,9 +145,9 @@ class RepositoryAnalyzer:
                 # Special: Extract CLI commands from jmo.py
                 if py_file.name == "jmo.py":
                     cli_commands = self._extract_cli_commands(content)
-                    apis[str(py_file.relative_to(self.repo_root))][
-                        "cli_commands"
-                    ] = cli_commands
+                    apis[str(py_file.relative_to(self.repo_root))]["cli_commands"] = (
+                        cli_commands
+                    )
 
             except Exception as e:
                 print(f"  ⚠️  Error parsing {py_file}: {e}")

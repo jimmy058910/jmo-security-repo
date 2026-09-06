@@ -115,7 +115,7 @@ def _extract_row(
             priority_data = finding.get("priority", {})
             if isinstance(priority_data, dict):
                 epss = priority_data.get("epss")
-                row.append(f"{epss*100:.2f}%" if epss else "")
+                row.append(f"{epss * 100:.2f}%" if epss else "")
             else:
                 row.append("")
         elif col == "severity":

@@ -61,7 +61,7 @@ OWASP ZAP is included in `balanced` and `deep` profiles. ZAP's Java dependencies
 Our Python code:
 
 - Uses **minimal runtime dependencies**
-- CI enforces **Bandit** (Python security linter), **Ruff**, and **Black**
+- CI enforces **Bandit** (Python security linter) and **Ruff** (lint and format)
 - Test coverage 87%+ enforced by CI (minimum 85%)
 
 ---
@@ -246,7 +246,7 @@ jmo tools update
 
 **A:** Inspect our CI pipeline:
 
-1. View [.github/workflows/ci.yml](.github/workflows/ci.yml) - Bandit/Ruff/Black checks
+1. View [.github/workflows/ci.yml](.github/workflows/ci.yml) - Bandit/Ruff checks
 2. Check test coverage (87%+)
 3. Review our minimal dependency footprint in `pyproject.toml`
 4. Audit our source code (100% Python, no compiled binaries)

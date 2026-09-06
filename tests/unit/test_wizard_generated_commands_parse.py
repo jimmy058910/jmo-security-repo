@@ -266,7 +266,7 @@ def test_a_known_bad_command_is_actually_rejected():
     ok, err = parse_ok(
         ["ci", "--repos-dir", ".", "--profile", "fast", "--fail-on", "HIGH"]
     )
-    assert (
-        not ok
-    ), "the parser accepted `ci --profile fast`, so the guard proves nothing"
+    assert not ok, (
+        "the parser accepted `ci --profile fast`, so the guard proves nothing"
+    )
     assert "unrecognized arguments" in err.lower(), err

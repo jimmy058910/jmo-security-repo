@@ -867,9 +867,9 @@ class TestMissingRequiredEdgeCases:
             fingerprints.add(fp)
 
         # All 1000 should be unique (no collisions)
-        assert (
-            len(fingerprints) == 1000
-        ), f"Found {1000 - len(fingerprints)} collisions!"
+        assert len(fingerprints) == 1000, (
+            f"Found {1000 - len(fingerprints)} collisions!"
+        )
 
     def test_similarity_calculator_edge_cases(self) -> None:
         """Test SimilarityCalculator with edge case inputs.

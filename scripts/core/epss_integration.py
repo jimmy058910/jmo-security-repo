@@ -225,9 +225,7 @@ class EPSSClient:
                 self._cache_misses(
                     [cve for cve in uncached_cves if cve not in bulk_scores]
                 )
-            except (
-                Exception
-            ) as e:  # Acceptable: bulk EPSS fetch is optional enrichment — graceful degradation
+            except Exception as e:  # Acceptable: bulk EPSS fetch is optional enrichment — graceful degradation
                 logger.warning("Failed to fetch bulk EPSS scores: %s", e)
 
         return scores

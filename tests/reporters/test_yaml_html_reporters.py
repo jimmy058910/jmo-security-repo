@@ -160,6 +160,6 @@ def test_html_script_tag_escaping(tmp_path: Path):
 
     # 6. Verify the dashboard data is loadable by checking structure
     # React implementation: uses window.__FINDINGS__ = []
-    assert (
-        "window.__FINDINGS__ = [" in script_content
-    ), "Data initialization not found (expected 'window.__FINDINGS__ = [')"
+    assert "window.__FINDINGS__ = [" in script_content, (
+        "Data initialization not found (expected 'window.__FINDINGS__ = [')"
+    )

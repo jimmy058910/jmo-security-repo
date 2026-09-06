@@ -34,7 +34,7 @@ it splits the cell in half and drops the last column off the row.
 | `GH013: Repository rule violations` | Branch Protection | #12 |
 | `waiting for status to be reported` | Ruleset check never reported | #13 |
 | `lint-full.*Failed` (4+ tools) | Nightly Cascading Failures | #14 |
-| `F401 imported but unused\|F541 f-string` | Ruff After Black | #15 |
+| `F401 imported but unused\|F541 f-string` | Lint After Formatting | #15 |
 | `assert 0\.[0-9]+ [<>=]+ 0\.[0-9]+` (across platforms) | Platform Float Precision | #16 |
 | `FileNotFoundError.*React dashboard` | React Build Check | #17 |
 | `collected 0 items` (then `Error 5`) | Bare `pip install` outside the uv venv | #18 |
@@ -160,8 +160,8 @@ Error:.*docker\s+(build|push|pull)\s+failed
 # Ruff violations
 F[0-9]{3}\s+\[\*\]\s+.+
 
-# Black formatting
-would reformat\s+\S+\.py
+# ruff format
+Would reformat:\s+\S+\.py
 ```
 
 ---
@@ -195,7 +195,7 @@ CI Failure
     +-- lint-full (nightly)
     |   |-- 4+ tool failures -> #14 Nightly Cascading
     |   |-- markdownlint only -> #7 Markdownlint
-    |   |-- ruff only -> #8 Pre-commit / #15 Ruff After Black
+    |   |-- ruff only -> #8 Pre-commit / #15 Lint After Formatting
     |   +-- mypy only -> Check type annotations
     |
     +-- docker-build (release)

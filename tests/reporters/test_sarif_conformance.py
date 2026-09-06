@@ -153,9 +153,9 @@ class TestSarifRegressions:
         clustered = by_rule["CKV_K8S_16"]
         assert "correlationGuid" not in clustered
         # ...but the id is not lost
-        assert (
-            clustered["properties"]["jmoFindingId"] == "cluster-c9e24f6485fabed0"
-        ), clustered.get("properties")
+        assert clustered["properties"]["jmoFindingId"] == "cluster-c9e24f6485fabed0", (
+            clustered.get("properties")
+        )
 
     def test_a_real_guid_is_still_emitted_as_correlation_guid(self):
         """Negative control: the field is not simply disabled."""

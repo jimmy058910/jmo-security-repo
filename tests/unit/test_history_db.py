@@ -7158,9 +7158,10 @@ class TestProfileAcceptedByHistory:
                 rejected.append(f"{profile}: {exc}")
         conn.commit()
 
-        assert (
-            not rejected
-        ), "history rejected profiles the tool can actually run: " + "; ".join(rejected)
+        assert not rejected, (
+            "history rejected profiles the tool can actually run: "
+            + "; ".join(rejected)
+        )
 
     @staticmethod
     def _results_dir(tmp_path):

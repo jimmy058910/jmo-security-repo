@@ -23,16 +23,12 @@ Tool installation configuration, version pinning patterns, and Dockerfile patter
 ```yaml
 # .pre-commit-config.yaml
 repos:
-  - repo: https://github.com/psf/black
-    rev: 24.10.0     # Pin to exact version
-    hooks:
-      - id: black
-
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.7.4      # Pin to exact version
+    rev: v0.16.5     # Pin to exact version; must equal uv.lock's ruff
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
 ```
 
 ### Python Dependencies
@@ -41,7 +37,6 @@ repos:
 # pyproject.toml [dependency-groups] dev - specify minimum versions
 pytest>=8.0.0
 pytest-cov>=4.1.0
-black>=24.0.0
 ruff>=0.7.0
 
 # Compile to lock file (deterministic)

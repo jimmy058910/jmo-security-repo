@@ -2235,9 +2235,7 @@ def get_query_plan(conn: sqlite3.Connection, query: str) -> str:
     _validate_readonly_query(query)
 
     cursor = conn.cursor()
-    cursor.execute(
-        f"EXPLAIN QUERY PLAN {query}"
-    )  # nosec B608 - validated by _validate_readonly_query()
+    cursor.execute(f"EXPLAIN QUERY PLAN {query}")  # nosec B608 - validated by _validate_readonly_query()
     rows = cursor.fetchall()
     # Convert rows to strings (handle both Row objects and tuples)
     lines = []

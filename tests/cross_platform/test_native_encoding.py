@@ -101,9 +101,9 @@ def test_help_survives_legacy_console(codec: str) -> None:
     """--help is the most-run path of all; it must survive a legacy console."""
     result = _run("--help", codec=codec)
 
-    assert (
-        "UnicodeEncodeError" not in result.stderr
-    ), f"jmo --help crashed on {codec}:\n{result.stderr[-2000:]}"
+    assert "UnicodeEncodeError" not in result.stderr, (
+        f"jmo --help crashed on {codec}:\n{result.stderr[-2000:]}"
+    )
     assert result.returncode == 0, f"jmo --help exited {result.returncode} on {codec}"
 
 
@@ -145,9 +145,9 @@ def test_generate_release_notes_survives_legacy_console(codec: str) -> None:
         errors="replace",
     )
 
-    assert (
-        "UnicodeEncodeError" not in result.stderr
-    ), f"generate_release_notes crashed on {codec}:\n{result.stderr[-2000:]}"
+    assert "UnicodeEncodeError" not in result.stderr, (
+        f"generate_release_notes crashed on {codec}:\n{result.stderr[-2000:]}"
+    )
     assert result.returncode == 0, (
         f"generate_release_notes exited {result.returncode} on {codec}:\n"
         f"{result.stderr[-2000:]}"
@@ -162,5 +162,5 @@ def test_generate_release_notes_survives_legacy_console(codec: str) -> None:
     )
     body = result.stdout.split("# Release v1.1.0", 1)[1]
     assert "[Full Changelog]" in body, (
-        f"document truncated before its footer on {codec}; " f"tail was:\n{body[-500:]}"
+        f"document truncated before its footer on {codec}; tail was:\n{body[-500:]}"
     )

@@ -268,9 +268,7 @@ def run_migrations(db_path: Path, target_version: str | None = None) -> dict[str
             applied.append(migration.version)
             logger.info(f"✅ Migration {migration.version} applied successfully")
 
-        except (
-            Exception
-        ) as e:  # Acceptable: migration failure triggers rollback — must catch all errors
+        except Exception as e:  # Acceptable: migration failure triggers rollback — must catch all errors
             logger.error(f"❌ Migration {migration.version} failed: {e}")
 
             # One failed migration is one error entry. Appending inside the
@@ -291,9 +289,7 @@ def run_migrations(db_path: Path, target_version: str | None = None) -> dict[str
                     migration.migrate_down(conn)
                 rollback_performed = True
                 logger.info(f"✅ Rollback of {migration.version} successful")
-            except (
-                Exception
-            ) as rollback_error:  # Acceptable: rollback is best-effort — log and continue
+            except Exception as rollback_error:  # Acceptable: rollback is best-effort — log and continue
                 logger.error(
                     f"❌ Rollback of {migration.version} failed: {rollback_error}"
                 )

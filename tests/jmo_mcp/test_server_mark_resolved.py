@@ -643,9 +643,9 @@ def test_mark_resolved_preserves_the_configs_comments(mock_env_with_config):
     )
 
     after = config.read_bytes()
-    assert after.startswith(
-        before
-    ), "the write rewrote bytes it should have appended to"
+    assert after.startswith(before), (
+        "the write rewrote bytes it should have appended to"
+    )
     assert len(after) > len(before)
 
 

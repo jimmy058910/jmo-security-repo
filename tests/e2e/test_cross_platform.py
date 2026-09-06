@@ -328,9 +328,9 @@ class TestCrossPlatformCompatibility:
             if "/mnt/c/" in repo_path_str:
                 # This is a Windows filesystem accessed from WSL
                 # Verify SQLite database works across filesystem boundary
-                assert (
-                    db_path.exists()
-                ), "SQLite should work on Windows filesystem from WSL"
+                assert db_path.exists(), (
+                    "SQLite should work on Windows filesystem from WSL"
+                )
 
         # Step 6: Verify line ending handling
         # Read file and check line endings preserved

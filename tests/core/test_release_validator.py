@@ -11,7 +11,6 @@ from scripts.core.validators import CategoryResult, CheckStatus
 from scripts.core.validators.release_validator import (
     _QUICK_CHECKS,
     _check_anchor_links,
-    _check_black_clean,
     _check_branch,
     _check_changelog_date,
     _check_changelog_entry,
@@ -22,6 +21,7 @@ from scripts.core.validators.release_validator import (
     _check_dev_install,
     _check_dockerfile_build,
     _check_docs_key_files,
+    _check_format_clean,
     _check_git_clean,
     _check_gitignore,
     _check_import_direction,
@@ -189,9 +189,9 @@ class TestValidateRelease:
         """Every check has a valid CheckStatus."""
         result = validate_release("quick")
         for check in result.checks:
-            assert isinstance(
-                check.status, CheckStatus
-            ), f"Check '{check.name}' has invalid status type: {type(check.status)}"
+            assert isinstance(check.status, CheckStatus), (
+                f"Check '{check.name}' has invalid status type: {type(check.status)}"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -502,7 +502,7 @@ class TestToolVersionChecks:
     def test_version_format_prefixed(self, mock_read):
         """Accepts prefixed versions like akto's mini-testing-1.53.7."""
         mock_read.return_value = (
-            "java_tools:\n" "  akto:\n    version: mini-testing-1.53.7\n"
+            "java_tools:\n  akto:\n    version: mini-testing-1.53.7\n"
         )
         result = _check_version_format()
         assert result is None
@@ -510,7 +510,7 @@ class TestToolVersionChecks:
     @patch("scripts.core.validators.release_validator._read_text")
     def test_version_format_invalid(self, mock_read):
         mock_read.return_value = (
-            "python_tools:\n" "  bandit:\n    version: abc-not-a-version\n"
+            "python_tools:\n  bandit:\n    version: abc-not-a-version\n"
         )
         result = _check_version_format()
         assert result is not None
@@ -724,9 +724,9 @@ class TestSecurityChecks:
         passed while the real repository failed the check.
         """
         result = _check_no_secrets()
-        assert (
-            result is None or result.status != CheckStatus.FAIL
-        ), f"{getattr(result, 'message', '')}: {getattr(result, 'details', '')}"
+        assert result is None or result.status != CheckStatus.FAIL, (
+            f"{getattr(result, 'message', '')}: {getattr(result, 'details', '')}"
+        )
 
     @patch("scripts.core.validators.release_validator._run_cmd")
     def test_no_secrets_found(self, mock_cmd):
@@ -820,25 +820,25 @@ class TestSecurityChecks:
 
 class TestCodeQualityChecks:
     @patch("scripts.core.validators.release_validator._run_cmd")
-    def test_black_clean_pass(self, mock_cmd):
+    def test_format_clean_pass(self, mock_cmd):
         mock_cmd.return_value = MagicMock(returncode=0, stdout="", stderr="")
-        result = _check_black_clean()
+        result = _check_format_clean()
         assert result is None
 
     @patch("scripts.core.validators.release_validator._run_cmd")
-    def test_black_clean_fail(self, mock_cmd):
+    def test_format_clean_fail(self, mock_cmd):
         mock_cmd.return_value = MagicMock(
-            returncode=1, stdout="would reformat scripts/cli/jmo.py", stderr=""
+            returncode=1, stdout="Would reformat: scripts/cli/jmo.py", stderr=""
         )
-        result = _check_black_clean()
+        result = _check_format_clean()
         assert result.status == CheckStatus.FAIL
 
     @patch(
         "scripts.core.validators.release_validator._run_cmd",
         side_effect=FileNotFoundError,
     )
-    def test_black_not_installed(self, mock_cmd):
-        result = _check_black_clean()
+    def test_format_not_installed(self, mock_cmd):
+        result = _check_format_clean()
         assert result.status == CheckStatus.SKIP
 
     @patch("scripts.core.validators.release_validator._run_cmd")
@@ -868,10 +868,10 @@ class TestCodeQualityChecks:
     def test_precommit_order_pass(self, mock_read, mock_exists):
         mock_read.return_value = (
             "repos:\n"
-            "  - repo: https://github.com/psf/black\n"
-            "    hooks:\n      - id: black\n"
             "  - repo: https://github.com/astral-sh/ruff-pre-commit\n"
-            "    hooks:\n      - id: ruff\n"
+            "    hooks:\n"
+            "      - id: ruff\n        args: [--fix]\n"
+            "      - id: ruff-format\n"
         )
         result = _check_precommit_order()
         assert result is None
@@ -882,9 +882,9 @@ class TestCodeQualityChecks:
         mock_read.return_value = (
             "repos:\n"
             "  - repo: https://github.com/astral-sh/ruff-pre-commit\n"
-            "    hooks:\n      - id: ruff\n"
-            "  - repo: https://github.com/psf/black\n"
-            "    hooks:\n      - id: black\n"
+            "    hooks:\n"
+            "      - id: ruff-format\n"
+            "      - id: ruff\n        args: [--fix]\n"
         )
         result = _check_precommit_order()
         assert result.status == CheckStatus.FAIL
@@ -1333,8 +1333,8 @@ class TestEdgeCases:
     @patch("scripts.core.validators.release_validator._run_cmd")
     def test_subprocess_timeout_handled(self, mock_cmd):
         """Subprocess timeouts should be handled gracefully."""
-        mock_cmd.side_effect = subprocess.TimeoutExpired(cmd="black", timeout=60)
-        result = _check_black_clean()
+        mock_cmd.side_effect = subprocess.TimeoutExpired(cmd="ruff", timeout=60)
+        result = _check_format_clean()
         assert result.status == CheckStatus.SKIP
 
     @patch(

@@ -505,11 +505,11 @@ This ensures scans use exactly the versions specified in `versions.yaml`.
     day: "monday"
   groups:
     development-dependencies:
-      patterns: ["pytest*", "black*", "ruff*"]
+      patterns: ["pytest*", "ruff*"]
       update-types: ["minor", "patch"]
 ```
 
-**Tracks:** `pyproject.toml` + `uv.lock` (pytest, coverage, black, etc.)
+**Tracks:** `pyproject.toml` + `uv.lock` (pytest, coverage, ruff, etc.)
 **Does NOT track:** Security tools in Dockerfiles (use update_versions.py)
 
 ### Docker Base Images

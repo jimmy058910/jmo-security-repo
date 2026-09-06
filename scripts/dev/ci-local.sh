@@ -50,9 +50,9 @@ if command -v ruff >/dev/null 2>&1; then
   log "ruff check"
   ruff check || true
 fi
-if command -v black >/dev/null 2>&1; then
-  log "black --check"
-  black --check . || true
+if command -v ruff >/dev/null 2>&1; then
+  log "ruff format --check"
+  ruff format --check . || true
 fi
 
 # 4) Unit + snapshot tests (Python)

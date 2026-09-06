@@ -22,7 +22,7 @@ You have access to all code analysis tools:
 - **Read**: Read all code files to identify patterns and smells
 - **Glob**: Find files by pattern (duplicates, long files, etc.)
 - **Grep**: Search for anti-patterns, TODO comments, deprecated code
-- **Bash**: Run quality tools (ruff, black, bandit, pylint, radon)
+- **Bash**: Run quality tools (ruff, bandit, pylint, radon)
 
 ## JMo Security Quality Standards
 
@@ -30,9 +30,9 @@ You have access to all code analysis tools:
 
 1. **Two-Phase Architecture:** Scan → Report (clean separation)
 2. **Unified Schema:** All findings normalized to CommonFinding
-3. **Profile-Based Config:** Fast/Balanced/Deep with clear boundaries
+3. **Profile-Based Config:** fast/slim/balanced/deep with clear boundaries
 4. **Resilient Tool Execution:** Graceful degradation when tools missing
-5. **Zero Runtime Dependencies:** Python stdlib only (minimal attack surface)
+5. **Minimal runtime dependencies:** five packages in `pyproject.toml`, each with its reason on the same line; adding one is a deliberate decision, not a convenience
 
 ### Code Quality Metrics
 
@@ -91,8 +91,8 @@ You have access to all code analysis tools:
    # Ruff - Linting
    ruff check scripts/ tests/ --output-format=json > /tmp/ruff.json
 
-   # Black - Formatting
-   black --check scripts/ tests/
+   # Ruff - Formatting
+   ruff format --check scripts/ tests/
 
    # Radon - Complexity metrics
    radon cc scripts/ -a -nb -j > /tmp/radon-cc.json

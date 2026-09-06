@@ -378,9 +378,9 @@ class TestPathTraversalFuzzing:
         # SECURITY: Result must NOT start with absolute path
         assert not result.startswith("/"), f"Absolute path in result: {result}"
         assert not result.startswith("\\"), f"Absolute path in result: {result}"
-        assert (
-            ":" not in result or result.count(":") == 0 or "_" in result
-        ), f"Colon in result (Windows drive?): {result}"
+        assert ":" not in result or result.count(":") == 0 or "_" in result, (
+            f"Colon in result (Windows drive?): {result}"
+        )
 
         # SECURITY: Result must NOT be empty
         assert result, "Sanitization produced empty result"

@@ -219,9 +219,9 @@ def test_every_allowlist_entry_names_a_test_that_exists() -> None:
         if func not in names:
             broken.append(f"{node_id} -- {rel} defines no {func}")
 
-    assert (
-        not broken
-    ), "stale _ALLOWED_OFFLINE_SCANNER_SPAWNS entries:\n  " + "\n  ".join(broken)
+    assert not broken, (
+        "stale _ALLOWED_OFFLINE_SCANNER_SPAWNS entries:\n  " + "\n  ".join(broken)
+    )
 
 
 def test_the_allowlist_is_not_empty() -> None:

@@ -634,9 +634,7 @@ class ToolRunner:
                     continue
                 break
 
-            except (
-                Exception
-            ) as e:  # Acceptable: tool invocation may fail unexpectedly — retry with budget
+            except Exception as e:  # Acceptable: tool invocation may fail unexpectedly — retry with budget
                 last_error = str(e)
                 last_failure_was_timeout = False
                 attempts_by_type["unknown"] = attempts_by_type.get("unknown", 0) + 1
@@ -728,9 +726,7 @@ class ToolRunner:
                         ):  # Acceptable: callback protection — must not crash scan flow
                             pass
 
-                except (
-                    Exception
-                ) as e:  # Acceptable: future may raise any exception — graceful error handling
+                except Exception as e:  # Acceptable: future may raise any exception — graceful error handling
                     tool = future_to_tool[future]
                     logger.error(
                         f"Unexpected exception from future for {tool.name}: {e}",

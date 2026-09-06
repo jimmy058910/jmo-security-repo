@@ -1231,9 +1231,9 @@ class TestDockerToolExclusion:
             if result.returncode == 0:
                 found.append(tool)
 
-        assert (
-            not found
-        ), f"Balanced image should not include deep-only tools, but found: {found}"
+        assert not found, (
+            f"Balanced image should not include deep-only tools, but found: {found}"
+        )
 
     def test_fast_excludes_deep_only_tools(self):
         """Fast variant should NOT include deep-profile-only tools."""
@@ -1261,9 +1261,9 @@ class TestDockerToolExclusion:
             if result.returncode == 0:
                 found.append(tool)
 
-        assert (
-            not found
-        ), f"Fast image should not include deep-only tools, but found: {found}"
+        assert not found, (
+            f"Fast image should not include deep-only tools, but found: {found}"
+        )
 
     def test_deep_includes_deep_only_tools(self):
         """Deep variant SHOULD include the deep-profile-only tools."""
@@ -1291,9 +1291,9 @@ class TestDockerToolExclusion:
             if result.returncode != 0:
                 missing.append(tool)
 
-        assert (
-            not missing
-        ), f"Deep image should include deep-only tools, but missing: {missing}"
+        assert not missing, (
+            f"Deep image should include deep-only tools, but missing: {missing}"
+        )
 
 
 @pytest.mark.docker
@@ -1321,9 +1321,9 @@ class TestDockerCLIConsistency:
             timeout=30,
         )
 
-        assert (
-            result.returncode == 0
-        ), f"scan --help failed for {image}: {result.stderr}"
+        assert result.returncode == 0, (
+            f"scan --help failed for {image}: {result.stderr}"
+        )
         assert "scan" in result.stdout.lower()
         assert "--repo" in result.stdout
 
@@ -1387,9 +1387,9 @@ class TestDockerCLIConsistency:
             )
 
         unique_versions = set(versions.values())
-        assert (
-            len(unique_versions) == 1
-        ), f"Version mismatch across variants: {versions}"
+        assert len(unique_versions) == 1, (
+            f"Version mismatch across variants: {versions}"
+        )
 
 
 @pytest.mark.docker
@@ -1440,9 +1440,9 @@ class TestDockerNamedToolPresence:
             if result.returncode != 0:
                 missing_tools.append(tool)
 
-        assert (
-            not missing_tools
-        ), f"{image} ({profile} profile) missing tools: {missing_tools}"
+        assert not missing_tools, (
+            f"{image} ({profile} profile) missing tools: {missing_tools}"
+        )
 
     def test_deep_has_all_expected_tools(self):
         """Deep variant should have all expected tools (comprehensive check)."""

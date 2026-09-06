@@ -122,9 +122,9 @@ def validate_multi_target(results_dir: Path) -> None:
         fingerprints = [
             f.get("fingerprint_id") for f in findings if f.get("fingerprint_id")
         ]
-        assert len(fingerprints) == len(
-            set(fingerprints)
-        ), "Duplicate fingerprint IDs found"
+        assert len(fingerprints) == len(set(fingerprints)), (
+            "Duplicate fingerprint IDs found"
+        )
 
 
 def current_platform() -> str:

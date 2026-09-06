@@ -941,7 +941,7 @@ If markdownlint shows 10 violations (3 new + 7 old), fix all 10. See [jmo-docume
 
 ```text
 ruff....................................Failed
-black...................................Failed
+ruff-format.............................Failed
 shellcheck..............................Failed
 detect-private-key......................Failed
 ```
@@ -974,7 +974,7 @@ If CI fails but you need to push a hotfix:
 pre-commit run --all-files
 
 # 2. Auto-fix formatting
-make fmt  # Runs black, ruff format, shfmt
+make fmt  # Runs ruff format, shfmt
 
 # 3. Fix remaining issues manually
 vim scripts/cli/jmo.py
@@ -993,7 +993,7 @@ git push
 | Hook | Error | Fix |
 |------|-------|-----|
 | **ruff** | `F401: imported but unused` | Remove unused imports |
-| **black** | `would reformat file.py` | Run `black file.py` |
+| **ruff-format** | `Would reformat: file.py` | Run `ruff format file.py` |
 | **shellcheck** | `SC2086: Quote variables` | Add quotes: `"$var"` |
 | **detect-private-key** | `Potential private key` | Move to env var or .gitignore |
 | **check-yaml** | `Invalid YAML syntax` | Fix indentation, quotes |
@@ -1765,13 +1765,13 @@ make deps-lock && git diff uv.lock  # Should be clean
 
 ---
 
-## 15. Ruff Linting Failures After Black Formatting (Cascading Cleanup)
+## 15. Ruff Linting Failures After Formatting (Cascading Cleanup)
 
 **Symptoms:**
 
-1. **Black formatting passes** - `pre-commit run black --all-files` returns "Passed"
+1. **Formatting passes** - `pre-commit run ruff-format --all-files` returns "Passed"
 2. **Ruff linting fails immediately after** - CI "Lint (quick checks)" job fails with F401/F541/F403 violations
-3. **Errors appear in files you just formatted** - Black created "clean" formatting that exposed underlying issues
+3. **Errors appear in files you just formatted** - the formatter created "clean" formatting that exposed underlying issues
 4. **Multiple files affected** - Not isolated to one file
 
 **Error Pattern:**
@@ -1791,21 +1791,21 @@ Found 7 errors (7 fixable with --fix).
 
 **Root Cause:**
 
-**Black and Ruff have different scopes:**
+**The formatter and the linter have different scopes:**
 
-- **Black**: Auto-formatter that handles line length, indentation, quotes, trailing commas. Does NOT remove unused imports or optimize f-strings.
-- **Ruff**: Comprehensive linter that checks code quality beyond formatting (F401: Unused imports, F541: f-strings without placeholders, F403: Star imports, F811: Redefined imports).
+- **ruff format**: Auto-formatter that handles line length, indentation, quotes, trailing commas. Does NOT remove unused imports or optimize f-strings.
+- **ruff check**: Comprehensive linter that checks code quality beyond formatting (F401: Unused imports, F541: f-strings without placeholders, F403: Star imports, F811: Redefined imports).
 
-**This is NOT a Black bug** - it's working as designed. Black formats, Ruff enforces quality.
+**This is NOT a formatter bug** - it's working as designed. The formatter lays code out, the linter enforces quality.
 
 **Correct Approach:**
 
 ```bash
-# Step 1: Run Black first (formatting baseline)
-pre-commit run black --all-files
-
-# Step 2: Run Ruff immediately after (catch quality issues)
+# Step 1: Lint with fixes first (ruff's documented order: fixes change what the formatter sees)
 ruff check scripts/ tests/ --fix
+
+# Step 2: Format last
+ruff format scripts/ tests/
 
 # Step 3: Review auto-fixes (Ruff applies most fixes automatically)
 git diff
@@ -1817,10 +1817,10 @@ pre-commit run --all-files
 
 # Step 6: Commit with comprehensive message
 git add .
-git commit -m "style: format with Black and fix ruff violations"
+git commit -m "style: format with ruff and fix lint violations"
 ```
 
-**Common Violations After Black Formatting:**
+**Common Violations After Formatting:**
 
 1. **F401: Unused imports (most common)** - Remove unused import lines
 2. **F541: f-string without placeholders** - Remove f-prefix from strings
@@ -1829,20 +1829,17 @@ git commit -m "style: format with Black and fix ruff violations"
 
 **Prevention: Pre-Commit Hook Order**
 
-Edit `.pre-commit-config.yaml` to enforce Black -> Ruff order:
+Edit `.pre-commit-config.yaml` to enforce lint -> format order:
 
 ```yaml
 repos:
-  # Step 1: Format code (Black)
-  - repo: https://github.com/psf/black
-    hooks:
-      - id: black
-
-  # Step 2: Lint code (Ruff) -- RUNS AFTER BLACK
   - repo: https://github.com/astral-sh/ruff-pre-commit
     hooks:
+      # Step 1: Lint with fixes
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
+      # Step 2: Format -- RUNS AFTER THE LINT FIXES
+      - id: ruff-format
 ```
 
 **Time Investment:** 5-10 minutes (diagnosis + auto-fix + review)

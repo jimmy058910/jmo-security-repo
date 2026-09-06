@@ -65,9 +65,9 @@ def test_accepted(expr: str):
 
 @pytest.mark.parametrize("expr", REJECT)
 def test_rejected(expr: str):
-    assert (
-        validate_cron_expression(expr) is False
-    ), f"accepted an invalid cron: {expr!r}"
+    assert validate_cron_expression(expr) is False, (
+        f"accepted an invalid cron: {expr!r}"
+    )
 
 
 def test_named_weekdays_are_the_specific_regression():

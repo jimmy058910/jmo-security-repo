@@ -280,9 +280,9 @@ def test_timeout_handling_does_not_depend_on_the_message_wording(tmp_path, caplo
         "no stub was written for a timed-out tool, so the report phase will "
         f"have no file for it at all. stubbed={stubbed}"
     )
-    assert (
-        "timed out" in caplog.text
-    ), f"the timeout was not announced as a timeout. caplog was: {caplog.text!r}"
+    assert "timed out" in caplog.text, (
+        f"the timeout was not announced as a timeout. caplog was: {caplog.text!r}"
+    )
 
 
 def _run_timeout(

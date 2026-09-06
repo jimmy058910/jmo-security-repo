@@ -412,17 +412,17 @@ def test_repo_plus_image_deduplication(tmp_path: Path):
     data = json.loads(findings_json.read_text())
 
     # v1.0.0: findings.json uses metadata wrapper structure
-    assert isinstance(
-        data, dict
-    ), "findings.json should be a dict with metadata wrapper"
+    assert isinstance(data, dict), (
+        "findings.json should be a dict with metadata wrapper"
+    )
     assert "findings" in data, "findings.json should have 'findings' key"
     findings = data["findings"]
 
     # Count findings by fingerprint ID
     fingerprints = [f["id"] for f in findings]
-    assert len(fingerprints) == len(
-        set(fingerprints)
-    ), "Duplicate fingerprints found (deduplication failed)"
+    assert len(fingerprints) == len(set(fingerprints)), (
+        "Duplicate fingerprints found (deduplication failed)"
+    )
 
 
 def test_multi_target_compliance_aggregation(tmp_path: Path):

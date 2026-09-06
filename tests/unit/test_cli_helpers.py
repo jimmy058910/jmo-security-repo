@@ -105,9 +105,9 @@ def test_skip_tools_notice_is_visible_at_the_DEFAULT_log_level(tmp_path, capsys)
 
     assert eff["tools"] == ["bandit"], "the skipped tool must actually be dropped"
     err = capsys.readouterr().err
-    assert (
-        "semgrep" in err
-    ), f"nothing named the skipped tool at the default level: {err!r}"
+    assert "semgrep" in err, (
+        f"nothing named the skipped tool at the default level: {err!r}"
+    )
     assert "--skip-tools" in err
 
 

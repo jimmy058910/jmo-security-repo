@@ -565,13 +565,15 @@ class TestToolSmoke:
         assert result.returncode in (
             0,
             1,
-        ), f"{tool_name} failed with returncode {result.returncode}: {result.stderr[:500]}"
+        ), (
+            f"{tool_name} failed with returncode {result.returncode}: {result.stderr[:500]}"
+        )
 
         # Verify output exists for tools that write files
         if config.output_format != "ndjson" and output_file:
-            assert (
-                output_file.exists()
-            ), f"{tool_name} did not produce output file at {output_file}"
+            assert output_file.exists(), (
+                f"{tool_name} did not produce output file at {output_file}"
+            )
 
     @pytest.mark.timeout(300)
     @pytest.mark.parametrize(
@@ -622,9 +624,9 @@ class TestToolSmoke:
             pytest.fail(f"{tool_name} adapter failed to parse output: {e}")
 
         # Verify findings structure
-        assert isinstance(
-            findings, list
-        ), f"{tool_name} adapter returned {type(findings)}, expected list"
+        assert isinstance(findings, list), (
+            f"{tool_name} adapter returned {type(findings)}, expected list"
+        )
 
         # Check minimum findings if configured
         if config.min_findings > 0:
@@ -640,9 +642,9 @@ class TestToolSmoke:
                 # Should have at least some identifying information
                 has_id = "ruleId" in finding or "id" in finding or "check_id" in finding
                 has_severity = "severity" in finding or "level" in finding
-                assert (
-                    has_id or has_severity
-                ), f"Finding missing identification: {finding.keys()}"
+                assert has_id or has_severity, (
+                    f"Finding missing identification: {finding.keys()}"
+                )
 
 
 @pytest.mark.requires_tools
@@ -695,8 +697,7 @@ class TestSmokeTestInfrastructure:
         for name, config in SMOKE_TEST_CONFIGS.items():
             # Minimum 30s, maximum 5 minutes
             assert 30 <= config.timeout <= 300, (
-                f"{name} has unreasonable timeout: {config.timeout}s. "
-                f"Expected 30-300s."
+                f"{name} has unreasonable timeout: {config.timeout}s. Expected 30-300s."
             )
 
 

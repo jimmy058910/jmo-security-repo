@@ -272,9 +272,9 @@ def test_a_missing_path_is_still_reported_as_missing(tmp_path, orch):
 
     joined = "\n".join(targets.rejected)
     assert "does not exist" in joined, joined
-    assert (
-        "uid 1000" not in joined
-    ), f"a merely absent path was blamed on ownership: {joined!r}"
+    assert "uid 1000" not in joined, (
+        f"a merely absent path was blamed on ownership: {joined!r}"
+    )
 
 
 def test_no_discovery_method_probes_the_filesystem_directly():

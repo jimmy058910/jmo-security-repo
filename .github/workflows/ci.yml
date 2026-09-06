@@ -162,7 +162,7 @@ jobs:
 
       - name: Put the project venv on PATH
         shell: bash
-        # Keeps every existing bare `pytest` / `black` / `ruff` invocation working
+        # Keeps every existing bare `pytest` / `ruff` invocation working
         # unchanged. Windows runners put scripts in .venv/Scripts, POSIX in
         # .venv/bin; the conditional means a job that later gains a Windows matrix
         # entry does not silently break.
@@ -945,7 +945,7 @@ jobs:
 
       - name: Put the project venv on PATH
         shell: bash
-        # pre-commit, black, ruff and shfmt are invoked bare in later steps.
+        # pre-commit, ruff and shfmt are invoked bare in later steps.
         run: |
           if [ -d .venv/Scripts ]; then
             cygpath -w "$PWD/.venv/Scripts" >> "$GITHUB_PATH"
@@ -967,10 +967,10 @@ jobs:
           # so `~/.cache/pre-commit` becomes a literal directory under $PWD which defeats
           # the cache action and litters the repo root. Pre-commit's default
           # ($HOME/.cache/pre-commit on Linux) matches the cache action's path.
-          # Skip formatters that have a dedicated check-only step below
-          # (black --check, ruff check). shfmt was in this list until #960 --
+          # Skip the ruff hooks that have a dedicated check-only step below
+          # (ruff format --check, ruff check). shfmt was in this list until #960 --
           # see the shfmt hook invocation below for why it had to come out.
-          SKIP: black,ruff,bandit,mypy
+          SKIP: ruff,ruff-format,bandit,mypy
         run: |
           # Run core linting hooks
           pre-commit run --all-files trailing-whitespace
@@ -999,9 +999,9 @@ jobs:
           # this hook" and fails the run -- which is the check we wanted.
           pre-commit run --all-files shfmt
 
-      - name: Check Python formatting (black --check)
+      - name: Check Python formatting (ruff format --check)
         run: |
-          black --check scripts/ tests/
+          ruff format --check scripts/ tests/
 
       - name: Check Python linting (ruff check)
         run: |

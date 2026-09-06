@@ -146,9 +146,9 @@ def test_large_scan_storage_performance(perf_db, large_findings_set, tmp_path):
     assert scan_id is not None
     # Threshold: 8s accommodates Windows disk I/O variance (observed: 4-5s)
     # while still catching major regressions. Linux/macOS: 400-700ms typical.
-    assert (
-        elapsed < 8.0
-    ), f"Large scan storage took {elapsed:.2f}s (target: <8s, ideal: <2s)"
+    assert elapsed < 8.0, (
+        f"Large scan storage took {elapsed:.2f}s (target: <8s, ideal: <2s)"
+    )
 
     # Verify retrieval performance
     start = time.time()
@@ -795,14 +795,14 @@ def test_batch_insert_findings_optimized_performance(perf_db, tmp_path):
 
     # Every sample must have done the same work; a run that inserted fewer rows
     # measured something else.
-    assert inserted and set(inserted) == {
-        10000
-    }, f"samples inserted differing row counts: {sorted(set(inserted))}"
+    assert inserted and set(inserted) == {10000}, (
+        f"samples inserted differing row counts: {sorted(set(inserted))}"
+    )
 
     # Verify performance target: <1 second for 10k findings
-    assert (
-        elapsed < 1.0
-    ), f"Optimized batch insert took {elapsed:.2f}s (median), expected <1s"
+    assert elapsed < 1.0, (
+        f"Optimized batch insert took {elapsed:.2f}s (median), expected <1s"
+    )
 
     count = batch_insert_findings_optimized(conn, scan_id, findings)
     assert count == 10000
@@ -896,9 +896,9 @@ def test_upsert_findings_batch_performance(perf_db, tmp_path):
         fresh.close()
 
     elapsed1 = median_seconds_with_setup(_db_with_scan, _measure_insert)
-    assert first_counts and set(first_counts) == {
-        5000
-    }, f"insert samples differed: {sorted(set(first_counts))}"
+    assert first_counts and set(first_counts) == {5000}, (
+        f"insert samples differed: {sorted(set(first_counts))}"
+    )
     assert elapsed1 < 0.5, f"First upsert took {elapsed1:.2f}s (median), expected <0.5s"
 
     # Modify some findings so the second region is genuinely an update.
@@ -912,12 +912,12 @@ def test_upsert_findings_batch_performance(perf_db, tmp_path):
         fresh.close()
 
     elapsed2 = median_seconds_with_setup(_db_with_findings_already_in, _measure_update)
-    assert second_counts and set(second_counts) == {
-        5000
-    }, f"update samples differed: {sorted(set(second_counts))}"
-    assert (
-        elapsed2 < 0.5
-    ), f"Second upsert took {elapsed2:.2f}s (median), expected <0.5s"
+    assert second_counts and set(second_counts) == {5000}, (
+        f"update samples differed: {sorted(set(second_counts))}"
+    )
+    assert elapsed2 < 0.5, (
+        f"Second upsert took {elapsed2:.2f}s (median), expected <0.5s"
+    )
 
     # Leave the fixture connection in the state the assertions below expect.
     upsert_findings_batch(conn, scan_id, findings)

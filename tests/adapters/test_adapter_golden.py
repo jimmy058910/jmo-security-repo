@@ -312,18 +312,18 @@ class TestAdapterGolden:
         findings = adapter.parse(raw_output)
 
         # Basic sanity checks
-        assert isinstance(
-            findings, list
-        ), f"Adapter should return list, got {type(findings)}"
+        assert isinstance(findings, list), (
+            f"Adapter should return list, got {type(findings)}"
+        )
 
         for finding in findings:
             # Each finding should have required fields
             f_dict = (
                 asdict(finding) if hasattr(finding, "__dataclass_fields__") else finding
             )
-            assert (
-                "ruleId" in f_dict or "id" in f_dict
-            ), f"Finding missing ruleId/id: {f_dict}"
+            assert "ruleId" in f_dict or "id" in f_dict, (
+                f"Finding missing ruleId/id: {f_dict}"
+            )
             assert "severity" in f_dict, f"Finding missing severity: {f_dict}"
 
     @pytest.mark.parametrize(
@@ -401,9 +401,9 @@ class TestGoldenInfrastructure:
         for tool_name, adapter_info in ADAPTER_REGISTRY.items():
             try:
                 module = importlib.import_module(adapter_info["module"])
-                assert hasattr(
-                    module, adapter_info["class"]
-                ), f"Module {adapter_info['module']} missing class {adapter_info['class']}"
+                assert hasattr(module, adapter_info["class"]), (
+                    f"Module {adapter_info['module']} missing class {adapter_info['class']}"
+                )
             except ImportError as e:
                 pytest.fail(f"Cannot import adapter for {tool_name}: {e}")
 

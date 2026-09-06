@@ -135,9 +135,9 @@ def test_severity_to_level_all_levels():
         findings = [create_finding(severity=severity)]
         sarif = to_sarif(findings)
         result = sarif["runs"][0]["results"][0]
-        assert (
-            result["level"] == expected_level
-        ), f"Severity {severity} should map to {expected_level}"
+        assert result["level"] == expected_level, (
+            f"Severity {severity} should map to {expected_level}"
+        )
 
 
 def test_severity_to_level_none():

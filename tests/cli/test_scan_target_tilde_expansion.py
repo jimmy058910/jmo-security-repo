@@ -92,9 +92,9 @@ def test_a_literal_tilde_directory_is_no_longer_what_gets_scanned(fake_home):
     Before the fix this path was `Path("~/repos")`, whose first part is "~".
     """
     resolved = _user_path("~/repos")
-    assert (
-        resolved.parts[0] != "~"
-    ), f"a tilde survived into the path that gets scanned: {resolved}"
+    assert resolved.parts[0] != "~", (
+        f"a tilde survived into the path that gets scanned: {resolved}"
+    )
 
 
 # --------------------------------------------------------------------------
@@ -178,8 +178,7 @@ def test_every_path_valued_target_flag_goes_through_the_helper():
         if reads_args:
             offenders.append(f"line {node.lineno}: Path(args.{arg.attr})")
 
-    assert (
-        not offenders
-    ), "user-supplied paths must go through _user_path() so `~` expands: " + "; ".join(
-        offenders
+    assert not offenders, (
+        "user-supplied paths must go through _user_path() so `~` expands: "
+        + "; ".join(offenders)
     )

@@ -851,14 +851,14 @@ class TestRepositoryScanner:
             assert len(stub_calls) == 11
             for tool in all_tools:
                 assert statuses[tool] is False, f"{tool} was stubbed, not run"
-                assert tool in not_attempted_tools(
-                    statuses
-                ), f"{tool} was stubbed but not recorded as not-attempted"
+                assert tool in not_attempted_tools(statuses), (
+                    f"{tool} was stubbed but not recorded as not-attempted"
+                )
                 # For afl++, check for "aflplusplus" in path (++ is sanitized)
                 search_term = "aflplusplus" if tool == "afl++" else tool
-                assert any(
-                    search_term in path for _, path in stub_calls
-                ), f"Stub should be written for {tool} (searched for '{search_term}')"
+                assert any(search_term in path for _, path in stub_calls), (
+                    f"Stub should be written for {tool} (searched for '{search_term}')"
+                )
 
     def test_per_tool_flags_applied(self, tmp_path):
         """Test that per_tool_config flags are correctly applied"""
@@ -1305,7 +1305,7 @@ class TestAccountingNamesProfileToolsOnly:
                 retries=0,
                 per_tool_config={},
                 allow_missing_tools=False,
-                find_tool_func=lambda t: (f"/usr/bin/{t}" if t in resolvable else None),
+                find_tool_func=lambda t: f"/usr/bin/{t}" if t in resolvable else None,
             )
         return caplog.text
 
@@ -1569,9 +1569,9 @@ class TestScancodeIsAskedToDetectSomething:
             tool_defs = kwargs.get("tools") or (args[0] if args else [])
 
         scancode_defs = [d for d in tool_defs if d.name == "scancode"]
-        assert (
-            len(scancode_defs) == 1
-        ), f"expected exactly one scancode invocation, got {len(scancode_defs)}"
+        assert len(scancode_defs) == 1, (
+            f"expected exactly one scancode invocation, got {len(scancode_defs)}"
+        )
         return list(scancode_defs[0].command)
 
     def test_the_detectors_the_adapter_reads_are_requested(self, tmp_path):
@@ -1977,7 +1977,7 @@ class TestZapIsNotReportedBothWays:
         names, log = self._scan(tmp_path, set(), caplog)
 
         assert "zap" not in names
-        assert (
-            "did NOT run" in log
-        ), "with neither binary available, zap's absence must still be reported"
+        assert "did NOT run" in log, (
+            "with neither binary available, zap's absence must still be reported"
+        )
         assert log.count("did NOT run") == 1, "reported more than once"

@@ -632,9 +632,9 @@ def test_leaf_parser_extractor_finds_the_real_tree():
     leaves = dict(_leaf_parsers())
     assert len(leaves) >= 40, f"expected the full command tree, got {sorted(leaves)}"
     for expected in ("scan", "diff", "history list", "trends show", "policy list"):
-        assert (
-            expected in leaves
-        ), f"extractor missed `jmo {expected}`: {sorted(leaves)}"
+        assert expected in leaves, (
+            f"extractor missed `jmo {expected}`: {sorted(leaves)}"
+        )
 
 
 def test_log_level_and_human_logs_travel_together():
@@ -742,9 +742,9 @@ def test_diff_log_level_actually_changes_what_is_emitted(tmp_path: Path):
         "--log-level DEBUG emitted no more than WARN, so the flag parses but "
         f"does nothing: {len(verbose)} vs {len(quiet)} lines"
     )
-    assert any(
-        '"level": "DEBUG"' in ln for ln in verbose
-    ), f"no DEBUG record reached stderr: {verbose[:3]}"
+    assert any('"level": "DEBUG"' in ln for ln in verbose), (
+        f"no DEBUG record reached stderr: {verbose[:3]}"
+    )
     assert not any('"level": "DEBUG"' in ln for ln in quiet), (
         "WARN already emitted DEBUG records, so the comparison above is not "
         "measuring the flag"
@@ -783,6 +783,6 @@ def test_no_user_facing_string_names_a_nonexistent_subcommand():
                 if name not in real:
                     offenders.append(f"{path.as_posix()}:{node.lineno}: jmo {name}")
 
-    assert (
-        not offenders
-    ), "user-facing text names commands that do not exist:\n" + "\n".join(offenders)
+    assert not offenders, (
+        "user-facing text names commands that do not exist:\n" + "\n".join(offenders)
+    )

@@ -289,9 +289,9 @@ class TestPerformanceBenchmarks:
 
         # Verify: every sample must have stored a scan, or the median timed a
         # failure path rather than an insert.
-        assert stored and all(
-            s is not None for s in stored
-        ), "Scan ID should be returned"
+        assert stored and all(s is not None for s in stored), (
+            "Scan ID should be returned"
+        )
 
         # The samples wrote to throwaway databases. The retrieval assertions
         # below read the FIXTURE connection, so the row they look up has to be

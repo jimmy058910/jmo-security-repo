@@ -447,7 +447,7 @@ def to_markdown_summary(findings: list[dict[str, Any]]) -> str:
 
                 emoji = _get_severity_emoji(severity)
                 lines.append(
-                    f"- {emoji} **{rule_id}** (EPSS: {epss*100:.1f}%, {percentile*100:.0f}th percentile)"
+                    f"- {emoji} **{rule_id}** (EPSS: {epss * 100:.1f}%, {percentile * 100:.0f}th percentile)"
                 )
                 lines.append(f"  - File: `{_truncate_path(path)}`")
 

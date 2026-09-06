@@ -74,9 +74,9 @@ class TestEPSSPerformance:
         elapsed_ms = (time.perf_counter() - start) * 1000
 
         assert cached_score is not None
-        assert (
-            elapsed_ms < 50
-        ), f"Cached retrieval took {elapsed_ms:.2f}ms (expected <50ms)"
+        assert elapsed_ms < 50, (
+            f"Cached retrieval took {elapsed_ms:.2f}ms (expected <50ms)"
+        )
 
     @patch("requests.get")
     def test_api_call_latency(self, mock_get, temp_cache_dir):
@@ -225,9 +225,9 @@ class TestKEVPerformance:
         elapsed_ms = (time.perf_counter() - start) * 1000
 
         assert len(client.catalog) == 1000
-        assert (
-            elapsed_ms < 5000
-        ), f"Catalog download took {elapsed_ms:.2f}ms (expected <5000ms)"
+        assert elapsed_ms < 5000, (
+            f"Catalog download took {elapsed_ms:.2f}ms (expected <5000ms)"
+        )
 
     def test_cached_catalog_load_latency(self, temp_cache_dir):
         """Test that cached KEV catalog loads in <200ms.
@@ -269,9 +269,9 @@ class TestKEVPerformance:
 
         assert len(client.catalog) == 1000
         # Threshold: 200ms accommodates Windows disk I/O variance (observed: 100-150ms)
-        assert (
-            elapsed_ms < 200
-        ), f"Cached load took {elapsed_ms:.2f}ms (expected <200ms)"
+        assert elapsed_ms < 200, (
+            f"Cached load took {elapsed_ms:.2f}ms (expected <200ms)"
+        )
 
     def test_kev_lookup_latency(self, temp_cache_dir):
         """Test that KEV lookups are instant (<1ms)."""
@@ -418,9 +418,9 @@ class TestPriorityCalculatorPerformance:
         elapsed_ms = (time.perf_counter() - start) * 1000
 
         assert len(priorities) == 1000
-        assert (
-            elapsed_ms < 1000
-        ), f"Bulk calculation took {elapsed_ms:.2f}ms (expected <1000ms)"
+        assert elapsed_ms < 1000, (
+            f"Bulk calculation took {elapsed_ms:.2f}ms (expected <1000ms)"
+        )
 
     @patch("scripts.core.priority_calculator.EPSSClient")
     @patch("scripts.core.priority_calculator.KEVClient")

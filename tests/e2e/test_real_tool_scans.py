@@ -408,12 +408,12 @@ def main():
             # Verify secret structure
             for secret in secrets_found:
                 # TruffleHog v3 format
-                assert (
-                    "DetectorName" in secret or "detector_name" in secret
-                ), "Should have detector name"
-                assert (
-                    "Verified" in secret or "verified" in secret
-                ), "Should have verification status"
+                assert "DetectorName" in secret or "detector_name" in secret, (
+                    "Should have detector name"
+                )
+                assert "Verified" in secret or "verified" in secret, (
+                    "Should have verification status"
+                )
 
                 # Check if it's GitHub or AWS secret
                 detector = (

@@ -100,9 +100,9 @@ def test_every_recognised_key_is_accepted_without_warning(tmp_path, caplog):
     unrecognised = [
         r.getMessage() for r in caplog.records if "unrecognised" in r.getMessage()
     ]
-    assert (
-        not unrecognised
-    ), f"a key the loader reads was reported as unrecognised: {unrecognised}"
+    assert not unrecognised, (
+        f"a key the loader reads was reported as unrecognised: {unrecognised}"
+    )
 
 
 def test_a_config_that_is_not_a_mapping_is_reported_not_crashed(tmp_path, caplog):
@@ -186,9 +186,9 @@ def test_recognised_key_is_actually_read_by_the_loader(key: str):
     Such a key would be accepted in silence -- exactly the defect #859 fixes,
     reintroduced through the allowlist instead of through the reader.
     """
-    assert (
-        key in _keys_load_config_reads()
-    ), f"{key!r} is in RECOGNISED_CONFIG_KEYS but load_config never reads it"
+    assert key in _keys_load_config_reads(), (
+        f"{key!r} is in RECOGNISED_CONFIG_KEYS but load_config never reads it"
+    )
 
 
 def test_no_key_the_loader_reads_is_missing_from_the_allowlist():

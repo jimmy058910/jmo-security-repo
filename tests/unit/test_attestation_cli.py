@@ -566,7 +566,8 @@ class TestVerifierClass:
 
         # Wrong digest should fail verification (multi-hash format)
         ok, error = verifier._verify_subject_digest(
-            str(test_file), expected_digests={"sha256": "0" * 64}  # Wrong digest
+            str(test_file),
+            expected_digests={"sha256": "0" * 64},  # Wrong digest
         )
         assert ok is False
         assert error == "Subject digest mismatch"

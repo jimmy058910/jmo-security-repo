@@ -219,9 +219,9 @@ def test_the_scanned_commit_reaches_the_attestation(
         d["digest"]["gitCommit"] for d in deps if "gitCommit" in (d.get("digest") or {})
     ]
 
-    assert commits == [
-        _head(git_repo)
-    ], f"expected the scanned repo's HEAD in resolvedDependencies, got {deps}"
+    assert commits == [_head(git_repo)], (
+        f"expected the scanned repo's HEAD in resolvedDependencies, got {deps}"
+    )
 
 
 def test_the_branch_is_recorded_too(findings: Path, git_repo: Path) -> None:

@@ -132,9 +132,9 @@ def test_mann_kendall_decreasing_trend():
 
     assert trend == "decreasing", f"Expected decreasing trend, got {trend}"
     assert tau < 0, f"Tau should be negative for decreasing trend, got {tau}"
-    assert (
-        p_value < 0.05
-    ), f"P-value should be < 0.05 for significant trend, got {p_value}"
+    assert p_value < 0.05, (
+        f"P-value should be < 0.05 for significant trend, got {p_value}"
+    )
 
 
 def test_mann_kendall_increasing_trend():
@@ -144,9 +144,9 @@ def test_mann_kendall_increasing_trend():
 
     assert trend == "increasing", f"Expected increasing trend, got {trend}"
     assert tau > 0, f"Tau should be positive for increasing trend, got {tau}"
-    assert (
-        p_value < 0.05
-    ), f"P-value should be < 0.05 for significant trend, got {p_value}"
+    assert p_value < 0.05, (
+        f"P-value should be < 0.05 for significant trend, got {p_value}"
+    )
 
 
 def test_mann_kendall_no_trend():
@@ -345,9 +345,9 @@ def test_trend_analyzer_degrading_trend(trend_temp_db, degrading_scans_data):
 
     # Verify degrading trend detected
     metrics = analysis["improvement_metrics"]
-    assert (
-        metrics["trend"] == "degrading"
-    ), f"Expected degrading, got {metrics['trend']}"
+    assert metrics["trend"] == "degrading", (
+        f"Expected degrading, got {metrics['trend']}"
+    )
     assert metrics["total_change"] > 0, "Total findings should increase"
     assert metrics["critical_change"] > 0, "CRITICAL should increase"
 
@@ -505,12 +505,12 @@ def test_security_score_grades():
         scan_data.update({"low_count": 0, "info_count": 0})
         score_data = analyzer._calculate_security_score([scan_data])
 
-        assert (
-            score_data["current_score"] == expected_score
-        ), f"Expected score {expected_score}, got {score_data['current_score']}"
-        assert (
-            score_data["grade"] == expected_grade
-        ), f"Expected grade {expected_grade}, got {score_data['grade']}"
+        assert score_data["current_score"] == expected_score, (
+            f"Expected score {expected_score}, got {score_data['current_score']}"
+        )
+        assert score_data["grade"] == expected_grade, (
+            f"Expected grade {expected_grade}, got {score_data['grade']}"
+        )
 
 
 def test_insight_generation(sample_scans_data):
@@ -1017,10 +1017,10 @@ def test_generate_insights_low_scan_frequency(trend_temp_db, seed_conn):
             ts_iso = datetime.fromtimestamp(ts, tz=UTC).isoformat()
             scans_data.append(
                 (
-                    f"scan{i+1}",
+                    f"scan{i + 1}",
                     ts,
                     ts_iso,
-                    f"commit{i+1}",
+                    f"commit{i + 1}",
                     "main",
                     "balanced",
                     '["trivy"]',
@@ -1117,9 +1117,9 @@ def test_calculate_security_score_all_grades(trend_temp_db, seed_conn):
             )
             result = analyzer._calculate_security_score(scans)
 
-            assert (
-                result["grade"] == expected_grade
-            ), f"Expected grade {expected_grade} for counts C={critical} H={high} M={medium}"
+            assert result["grade"] == expected_grade, (
+                f"Expected grade {expected_grade} for counts C={critical} H={high} M={medium}"
+            )
 
 
 def test_validate_trend_significance_skip_timestamps():

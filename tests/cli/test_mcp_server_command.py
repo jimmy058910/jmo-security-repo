@@ -328,9 +328,9 @@ def test_help_text_names_no_path_that_does_not_exist():
     referenced = re.findall(r"scripts/[\w/]+\.py", text)
     assert referenced, "help text no longer references the server module at all"
     for path in referenced:
-        assert (
-            REPO_ROOT / path
-        ).exists(), f"--help names a path that does not exist: {path}"
+        assert (REPO_ROOT / path).exists(), (
+            f"--help names a path that does not exist: {path}"
+        )
 
 
 def test_help_text_does_not_claim_authentication(run_cmd):

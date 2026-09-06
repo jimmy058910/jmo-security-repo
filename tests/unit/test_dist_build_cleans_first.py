@@ -104,9 +104,9 @@ def test_the_makefile_parser_found_the_build_targets() -> None:
 
     building = _building_targets()
     assert building, "no Makefile target appears to build a distribution"
-    assert (
-        "dist" in building
-    ), f"`dist` is not among the building targets: {sorted(building)}"
+    assert "dist" in building, (
+        f"`dist` is not among the building targets: {sorted(building)}"
+    )
 
 
 def test_every_build_target_invalidates_the_setuptools_caches() -> None:

@@ -249,9 +249,9 @@ class TestCollectMetadataFlag:
             "SELECT hostname, username FROM scans WHERE id = ?", (scan_id_2,)
         )
         row2 = cursor.fetchone()
-        assert (
-            row2[0] is not None and row2[1] is not None
-        ), "Scan 2 should have metadata"
+        assert row2[0] is not None and row2[1] is not None, (
+            "Scan 2 should have metadata"
+        )
 
         # Scan 3: Privacy mode (NULL metadata)
         cursor.execute(

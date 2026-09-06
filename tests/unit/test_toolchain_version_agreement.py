@@ -17,7 +17,7 @@ Measured 2026-08-27, after #990 bumped ruff in `uv.lock`:
 with the versions actually different rather than merely the environments.
 
 CI cannot see it by design: `ci.yml` runs pre-commit with
-`SKIP: black,ruff,bandit,mypy` and lints from the uv-synced venv instead, so it
+`SKIP: ruff,ruff-format,bandit,mypy` and lints from the uv-synced venv instead, so it
 never runs the hook version at all.
 
 Dependabot alone does not close this. It would have opened a PR for v0.16.5
@@ -80,8 +80,8 @@ def _shared() -> dict[str, tuple[str, str]]:
 def test_a_tool_pinned_in_both_places_is_pinned_to_the_same_version() -> None:
     """The split the issue is about, stated as a property.
 
-    Applies to every tool the two files share, not just ruff -- black, bandit
-    and mypy are pinned in both today and would drift the same way.
+    Applies to every tool the two files share, not just ruff -- bandit and
+    mypy are pinned in both today and would drift the same way.
     """
     disagreements = {
         name: versions
@@ -116,12 +116,12 @@ def test_the_extractors_found_the_tools_they_must_find() -> None:
     hooks, lock, shared = _hook_revs(), _lock_versions(), _shared()
 
     assert len(hooks) >= 8, f"hook extractor found only {sorted(hooks)}"
-    assert {"ruff", "black", "mypy", "bandit"} <= set(hooks), sorted(hooks)
+    assert {"ruff", "mypy", "bandit"} <= set(hooks), sorted(hooks)
 
     assert len(lock) >= 50, f"lock extractor found only {len(lock)} packages"
-    assert {"ruff", "black", "mypy", "bandit"} <= set(lock)
+    assert {"ruff", "mypy", "bandit"} <= set(lock)
 
-    assert {"ruff", "black", "mypy", "bandit"} <= set(shared), (
+    assert {"ruff", "mypy", "bandit"} <= set(shared), (
         f"the intersection is {sorted(shared)}; if a tool dropped out of it "
         f"the agreement check silently stopped covering that tool"
     )
@@ -175,9 +175,9 @@ def test_the_pre_commit_entry_targets_dev_like_its_five_siblings() -> None:
     targets = {u["package-ecosystem"]: u.get("target-branch") for u in updates}
 
     assert targets.get("pre-commit") == "dev", targets
-    assert set(targets.values()) == {
-        "dev"
-    }, f"ecosystems disagree on target-branch: {targets}"
+    assert set(targets.values()) == {"dev"}, (
+        f"ecosystems disagree on target-branch: {targets}"
+    )
 
 
 @pytest.mark.parametrize("key", ["directory", "schedule"])

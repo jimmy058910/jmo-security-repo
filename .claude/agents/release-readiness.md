@@ -206,10 +206,10 @@ ruff check scripts/ tests/
 
 **Status:** ✅ PASS (no violations)
 
-### Black
+### Ruff format
 
 ```bash
-black --check scripts/ tests/
+ruff format --check scripts/ tests/
 ```
 
 **Status:** ✅ PASS (all formatted)

@@ -247,9 +247,9 @@ class TestDockerImages:
                 check=False,
             )
 
-            assert (
-                result.returncode == 0
-            ), f"Tool '{tool}' not found in {variant} image: {result.stderr}"
+            assert result.returncode == 0, (
+                f"Tool '{tool}' not found in {variant} image: {result.stderr}"
+            )
 
     @pytest.mark.parametrize("variant", VARIANTS)
     def test_basic_scan(self, docker_check, variant: str, test_repo: Path):
@@ -309,9 +309,9 @@ class TestDockerImages:
             check=False,
         )
 
-        assert (
-            result.returncode == 0
-        ), f"docker-compose.yml validation failed: {result.stderr}"
+        assert result.returncode == 0, (
+            f"docker-compose.yml validation failed: {result.stderr}"
+        )
 
 
 @pytest.mark.skipif(
