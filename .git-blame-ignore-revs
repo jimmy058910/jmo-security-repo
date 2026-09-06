@@ -1,0 +1,6 @@
+# Commits git blame should skip: mechanical reformats with no semantic change.
+# GitHub applies this file automatically. Locally, run once:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# ruff format replaces Black; 157 files reformatted in the same squash (#1183)
+5105e09c0a431b512aa28075127332b5233f40b7

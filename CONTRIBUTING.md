@@ -1052,6 +1052,7 @@ gh pr create --title "Hotfix: bypass CI" --label "hotfix"
 ## Coding standards
 
 - Python: Ruff for linting (`ruff check`) and formatting (`ruff format`); it is the only formatter.
+- Mechanical reformats are listed in `.git-blame-ignore-revs`. Run `git config blame.ignoreRevsFile .git-blame-ignore-revs` once so `git blame` skips them locally; GitHub applies the file on its own.
 - Shell: `shellcheck` and `shfmt -i 2 -ci -bn`.
 - YAML: `yamllint` via pre-commit; GitHub Actions validated by `actionlint` (also enforced in CI).
 - Keep public CLI flags and outputs stable; update docs/tests when behavior changes.
