@@ -30,9 +30,9 @@ You have access to all code analysis tools:
 
 1. **Two-Phase Architecture:** Scan → Report (clean separation)
 2. **Unified Schema:** All findings normalized to CommonFinding
-3. **Profile-Based Config:** Fast/Balanced/Deep with clear boundaries
+3. **Profile-Based Config:** fast/slim/balanced/deep with clear boundaries
 4. **Resilient Tool Execution:** Graceful degradation when tools missing
-5. **Zero Runtime Dependencies:** Python stdlib only (minimal attack surface)
+5. **Minimal runtime dependencies:** five packages in `pyproject.toml`, each with its reason on the same line; adding one is a deliberate decision, not a convenience
 
 ### Code Quality Metrics
 
