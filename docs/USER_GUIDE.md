@@ -2119,6 +2119,7 @@ jmo mcp-server --results-dir ./results
 | `get_security_findings` | Query findings with filters |
 | `apply_fix` | **Preview** AI-suggested remediation (applying is not implemented) |
 | `mark_resolved` | Record a resolution as an expiring `jmo.suppress.yml` entry |
+| `query_findings_db` | Read-only SQL (SELECT / EXPLAIN / WITH) against the scan history database |
 | `get_server_info` | Server status and metadata |
 
 **Complete Guide:** [MCP_SETUP.md](MCP_SETUP.md)

@@ -25,7 +25,7 @@ def load_user_data(data_bytes):
     return pickle.loads(data_bytes)
 
 
-# B303: md5 - Weak cryptographic hash
+# B324: md5 - Weak cryptographic hash
 def hash_password(password):
     return hashlib.md5(password.encode()).hexdigest()
 
