@@ -940,7 +940,6 @@ def cmd_tools_uninstall(args: argparse.Namespace) -> int:
         0 on success, 1 on failure
     """
     import shutil
-    from pathlib import Path
 
     uninstall_all = getattr(args, "all", False)
     dry_run = getattr(args, "dry_run", False)
@@ -964,15 +963,28 @@ def cmd_tools_uninstall(args: argparse.Namespace) -> int:
 
     jmo_items = []
     if jmo_dir.exists():
-        # List contents
+        # Directories are listed by name, files with their size.
+        #
+        # A directory size meant `rglob("*")` plus a `stat()` per file across
+        # the whole of `~/.jmo`, before this command printed anything or asked
+        # anything. Measured on a machine with the `balanced` toolchain
+        # installed, `~/.jmo/tools` alone holds 165,419 files: the command sat
+        # silent for **89 seconds** to produce two numbers, and `--dry-run` did
+        # not escape it because the listing runs first. Nothing else ever read
+        # the sizes - removal is a single `shutil.rmtree` of the whole tree
+        # (#1207).
+        #
+        # A capped walk was considered and rejected: a few thousand files out
+        # of 165,419 yields a lower bound two orders of magnitude under the
+        # truth, and a wrong number in front of an irreversible delete is worse
+        # than no number. A file's size stays, because that is one `stat()` and
+        # it is exact.
         for item in jmo_dir.iterdir():
-            size = _get_dir_size(item) if item.is_dir() else item.stat().st_size
-            jmo_items.append((item, size))
-            print(
-                f"  - {item.name}/ ({_format_size(size)})"
-                if item.is_dir()
-                else f"  - {item.name} ({_format_size(size)})"
-            )
+            jmo_items.append(item)
+            if item.is_dir():
+                print(f"  - {item.name}/")
+            else:
+                print(f"  - {item.name} ({_format_size(item.stat().st_size)})")
 
         if not jmo_items:
             print("  (empty)")
@@ -1009,9 +1021,7 @@ def cmd_tools_uninstall(args: argparse.Namespace) -> int:
 
             # Kubescape special dir
             if kubescape_dir.exists():
-                print(
-                    f"  - ~/.kubescape/ ({_format_size(_get_dir_size(kubescape_dir))})"
-                )
+                print("  - ~/.kubescape/")
         else:
             print("  No JMo-managed tools found")
 
@@ -1233,18 +1243,6 @@ def _uninstall_tools(tools: list[tuple[str, str]], errors: list[str]) -> None:
     if brew_tools:
         print(colorize("\n  NOTE: Homebrew tools must be removed manually:", "yellow"))
         print(f"    brew uninstall {' '.join(brew_tools)}")
-
-
-def _get_dir_size(path: Path) -> int:
-    """Get total size of a directory in bytes."""
-    total = 0
-    try:
-        for item in path.rglob("*"):
-            if item.is_file():
-                total += item.stat().st_size
-    except (OSError, PermissionError):
-        pass
-    return total
 
 
 def _format_size(size_bytes: int) -> str:
