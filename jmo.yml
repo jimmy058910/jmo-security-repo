@@ -86,8 +86,12 @@ profiles:
         # --no-banner, which is the flag that actually suppresses the chatter.
       kubescape:
         timeout: 500
-        flags:
-        - --silent
+        # No --silent: kubescape does not have it (`kubescape scan --help`
+        # matches it 0 times), and an unknown flag makes it exit 1 having
+        # written no output file -- so JMo reported `findings are MISSING`
+        # and the tool contributed nothing on every profile it is in. Same
+        # shape as the prowler --quiet note above and as #1206's --scanners
+        # on trivy-rbac. kubescape is already quiet with --format json.
   balanced:
     # 17 tools for production scans (18-25 min)
     # Tool list defined in scripts/core/tool_registry.py:PROFILE_TOOLS (single source of truth)
@@ -123,8 +127,12 @@ profiles:
         # See the `fast` profile: --quiet does not exist in prowler 5.x.
       kubescape:
         timeout: 600
-        flags:
-        - --silent
+        # No --silent: kubescape does not have it (`kubescape scan --help`
+        # matches it 0 times), and an unknown flag makes it exit 1 having
+        # written no output file -- so JMo reported `findings are MISSING`
+        # and the tool contributed nothing on every profile it is in. Same
+        # shape as the prowler --quiet note above and as #1206's --scanners
+        # on trivy-rbac. kubescape is already quiet with --format json.
   deep:
     # 29 tools for comprehensive audits (40-70 min)
     # Tool list defined in scripts/core/tool_registry.py:PROFILE_TOOLS (single source of truth)
@@ -181,8 +189,12 @@ profiles:
         # See the `fast` profile: --quiet does not exist in prowler 5.x.
       kubescape:
         timeout: 900
-        flags:
-        - --silent
+        # No --silent: kubescape does not have it (`kubescape scan --help`
+        # matches it 0 times), and an unknown flag makes it exit 1 having
+        # written no output file -- so JMo reported `findings are MISSING`
+        # and the tool contributed nothing on every profile it is in. Same
+        # shape as the prowler --quiet note above and as #1206's --scanners
+        # on trivy-rbac. kubescape is already quiet with --format json.
       mobsf:
         timeout: 1800
       lynis:
