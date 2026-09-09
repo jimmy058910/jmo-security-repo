@@ -291,6 +291,47 @@ TRIVY_UNSUPPORTED_FLAGS: dict[str, frozenset[str]] = {
 SCAN_EXCLUDED_DIRS: tuple[str, ...] = (".horusec",)
 
 
+# Directories holding code the scanned repository does not own: an installed
+# virtualenv, a fetched `node_modules`, a vendored third-party tree. Scanning
+# them buries the repo's own findings in dependency noise and costs most of the
+# scan's budget. Measured on this repo at 3ffc73a8: 36,705 files on disk to
+# analyse 985 tracked ones, and trivy, semgrep and checkov each hitting the
+# 300s cap and contributing nothing at all (#1080).
+#
+# **This is not a new policy.** `_collect_files` has skipped exactly these names
+# since #1132, for the two tools that take file arguments. What #1080 measured
+# is that the tools taking a *directory* never got the same treatment. Naming
+# the list once is what makes the two agree; `_collect_files` reads it from here
+# rather than repeating it.
+#
+# Deliberately absent: `dist`, `build`, `target`, and any tool's output
+# directory. Those hold the repository's *own* build output, and a user who
+# points JMo at a release tree means it. The general case - honouring
+# `.gitignore` - is a larger change than this one and is not what this list is.
+VENDORED_DIRS: tuple[str, ...] = (
+    ".git",
+    "node_modules",
+    "vendor",
+    ".venv",
+    "venv",
+)
+
+
+# Tools for which VENDORED_DIRS is noise. **Not every tool**, which is the whole
+# reason this is a set rather than a global: dependency-check and syft exist to
+# inventory exactly those trees. #1080 measured 282 of syft's 878 artifacts
+# inside `.venv/` and called them "arguably correct for an SBOM" - handing an
+# SCA or SBOM tool this list would gut it while reporting success, which is the
+# failure shape this project has been bitten by before.
+#
+# SCAN_EXCLUDED_DIRS has no such carve-out and goes to every tool in
+# TOOL_EXCLUSION_FLAG: `.horusec/<uuid>` is JMo's own staging copy of the tree
+# being scanned, so it is nobody's subject matter.
+VENDOR_NOISE_TOOLS: frozenset[str] = frozenset(
+    {"semgrep", "semgrep-secrets", "trivy", "trivy-rbac", "bandit", "checkov"}
+)
+
+
 # bandit's -x is an argparse `default=`, NOT an addition - supplying a value
 # replaces upstream's list outright. Its own help text points at the config file
 # ("in addition to the excluded paths provided in the config file"), which reads
@@ -324,15 +365,45 @@ BANDIT_DEFAULT_EXCLUDED_PATHS: tuple[str, ...] = (
 # it does not and `**/<dir>/**` is required.
 #
 #   "inline"    one `--flag=VALUE` per directory      (semgrep)
-#   "separate"  one `--flag VALUE` pair per directory (trivy)
+#   "separate"  one `--flag **/VALUE` pair per directory (trivy)
+#   "regex"     one `--flag VALUE` pair per directory   (checkov)
 #   "ant"       one `--flag **/VALUE/**` pair         (dependency-check)
 #   "csv"       a single flag with one comma-separated value that REPLACES the
 #               tool's own defaults                   (bandit)
+#
+# **trivy and checkov are the sharpest case of the warning above.** Both spell
+# it as a repeatable `--flag VALUE` pair, and the value that works is opposite.
+#
+# trivy 0.74.0, `--skip-dirs`, glob, anchored at the scan root:
+#     `node_modules`      skips a root `node_modules`, WALKS `deep/sub/node_modules`
+#     `**/node_modules`   skips both
+# The `**/` was missing until #1080 and the bug was invisible, because the only
+# entry was `.horusec` and horusec stages it at the root of the scanned repo -
+# which is trivy's scan root. This repo's own `node_modules` lives at
+# `scripts/dashboard/node_modules`, where the bare form is inert.
+#
+# checkov 3.3.16, `--skip-path`, *regex*, matched against the whole path:
+#     `vendor`            skips a root `vendor` AND `a/b/vendor`
+#     `**/vendor`         skips NEITHER - and says nothing
+# `**` is not a valid regex ("nothing to repeat"), and checkov's
+# `filter_ignored_paths` wraps `re.compile` in `except re.error: continue`, so
+# an unparseable pattern is dropped with no error and no warning. Its only
+# fallback is a plain substring test, which `**/vendor` also fails. Handing
+# checkov the trivy spelling produces a flag that looks right, parses, exits 0,
+# and excludes nothing - so it gets its own style rather than sharing one.
+#
+# checkov also ignores `node_modules`, `.terraform`, `.serverless` and every
+# dotted directory on its own (IGNORE_HIDDEN_DIRECTORY), so most of what JMo
+# sends it is already covered; `vendor` and `venv` are the ones that are not.
+# Worth sending anyway - those defaults are checkov's to change, not ours. And
+# `filter_ignored_paths` mutates os.walk's `dirs` list in place, so a skip
+# prunes the walk rather than filtering results afterwards.
 TOOL_EXCLUSION_FLAG: dict[str, tuple[str, str]] = {
     "semgrep": ("--exclude", "inline"),
     "semgrep-secrets": ("--exclude", "inline"),
     "trivy": ("--skip-dirs", "separate"),
     "trivy-rbac": ("--skip-dirs", "separate"),
+    "checkov": ("--skip-path", "regex"),
     "dependency-check": ("--exclude", "ant"),
     "bandit": ("-x", "csv"),
 }
@@ -534,10 +605,26 @@ def filter_trivy_flags(subcommand: str, flags: list[str]) -> list[str]:
     return kept
 
 
-def tool_exclusion_flags(tool: str) -> list[str]:
-    """Flags that keep ``tool`` out of JMo's own in-tree scratch directories.
+def excluded_dirs_for(tool: str) -> tuple[str, ...]:
+    """Directory names ``tool`` should be told to skip.
 
-    Four tools, four spellings, and they are not interchangeable - see
+    Always JMo's own in-tree scratch (SCAN_EXCLUDED_DIRS), which is nobody's
+    subject matter; plus VENDORED_DIRS for the tools that read the repository's
+    own code rather than inventory its dependencies (VENDOR_NOISE_TOOLS).
+
+    Order is stable and duplicates are dropped, so a name appearing in both
+    lists is passed once.
+    """
+    names = list(SCAN_EXCLUDED_DIRS)
+    if tool in VENDOR_NOISE_TOOLS:
+        names.extend(d for d in VENDORED_DIRS if d not in names)
+    return tuple(names)
+
+
+def tool_exclusion_flags(tool: str) -> list[str]:
+    """Flags that keep ``tool`` out of directories it should not be reading.
+
+    Five tools, four spellings, and they are not interchangeable - see
     TOOL_EXCLUSION_FLAG for what each style means and why the style cannot be
     read off the flag name.
 
@@ -548,14 +635,24 @@ def tool_exclusion_flags(tool: str) -> list[str]:
     if entry is None:
         return []
     flag, style = entry
+    dirs = excluded_dirs_for(tool)
     if style == "csv":
-        # bandit's -x REPLACES its defaults, so they have to be re-sent.
-        return [flag, ",".join((*BANDIT_DEFAULT_EXCLUDED_PATHS, *SCAN_EXCLUDED_DIRS))]
+        # bandit's -x REPLACES its defaults, so they have to be re-sent. Its
+        # defaults are bare names and bandit matches them itself, so the `**/`
+        # the other styles need is not applied here.
+        merged = list(BANDIT_DEFAULT_EXCLUDED_PATHS)
+        merged.extend(d for d in dirs if d not in merged)
+        return [flag, ",".join(merged)]
     if style == "inline":
-        return [f"{flag}={d}" for d in SCAN_EXCLUDED_DIRS]
+        return [f"{flag}={d}" for d in dirs]
     if style == "ant":
-        return [arg for d in SCAN_EXCLUDED_DIRS for arg in (flag, f"**/{d}/**")]
-    return [arg for d in SCAN_EXCLUDED_DIRS for arg in (flag, d)]
+        return [arg for d in dirs for arg in (flag, f"**/{d}/**")]
+    if style == "regex":
+        # checkov: a bare name already matches at any depth, and `**/` would
+        # not compile as a regex - it is dropped silently. See above.
+        return [arg for d in dirs for arg in (flag, d)]
+    # "separate" - the `**/` is what makes a nested directory match at all.
+    return [arg for d in dirs for arg in (flag, f"**/{d}")]
 
 
 # The key a scanner's status map carries its not-attempted tools under.

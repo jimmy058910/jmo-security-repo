@@ -319,7 +319,14 @@ class TestToolExclusionFlags:
     def test_semgrep_uses_a_repeated_exclude_equals(self):
         from scripts.cli.scan_utils import tool_exclusion_flags
 
-        assert tool_exclusion_flags("semgrep") == ["--exclude=.horusec"]
+        assert tool_exclusion_flags("semgrep") == [
+            "--exclude=.horusec",
+            "--exclude=.git",
+            "--exclude=node_modules",
+            "--exclude=vendor",
+            "--exclude=.venv",
+            "--exclude=venv",
+        ]
 
     def test_semgrep_secrets_is_covered_too(self):
         """The 346 measured errors came from semgrep-secrets, not from semgrep.
@@ -330,17 +337,50 @@ class TestToolExclusionFlags:
         """
         from scripts.cli.scan_utils import tool_exclusion_flags
 
-        assert tool_exclusion_flags("semgrep-secrets") == ["--exclude=.horusec"]
+        assert tool_exclusion_flags("semgrep-secrets") == [
+            "--exclude=.horusec",
+            "--exclude=.git",
+            "--exclude=node_modules",
+            "--exclude=vendor",
+            "--exclude=.venv",
+            "--exclude=venv",
+        ]
 
     def test_trivy_puts_the_value_in_its_own_token(self):
         from scripts.cli.scan_utils import tool_exclusion_flags
 
-        assert tool_exclusion_flags("trivy") == ["--skip-dirs", ".horusec"]
+        assert tool_exclusion_flags("trivy") == [
+            "--skip-dirs",
+            "**/.horusec",
+            "--skip-dirs",
+            "**/.git",
+            "--skip-dirs",
+            "**/node_modules",
+            "--skip-dirs",
+            "**/vendor",
+            "--skip-dirs",
+            "**/.venv",
+            "--skip-dirs",
+            "**/venv",
+        ]
 
     def test_trivy_rbac_is_covered_too(self):
         from scripts.cli.scan_utils import tool_exclusion_flags
 
-        assert tool_exclusion_flags("trivy-rbac") == ["--skip-dirs", ".horusec"]
+        assert tool_exclusion_flags("trivy-rbac") == [
+            "--skip-dirs",
+            "**/.horusec",
+            "--skip-dirs",
+            "**/.git",
+            "--skip-dirs",
+            "**/node_modules",
+            "--skip-dirs",
+            "**/vendor",
+            "--skip-dirs",
+            "**/.venv",
+            "--skip-dirs",
+            "**/venv",
+        ]
 
     def test_bandit_resends_upstreams_defaults(self):
         """bandit's -x REPLACES its defaults rather than adding to them.
@@ -360,7 +400,8 @@ class TestToolExclusionFlags:
 
         assert tool_exclusion_flags("bandit") == [
             "-x",
-            ".svn,CVS,.bzr,.hg,.git,__pycache__,.tox,.eggs,*.egg,.horusec",
+            ".svn,CVS,.bzr,.hg,.git,__pycache__,.tox,.eggs,*.egg,"
+            ".horusec,node_modules,vendor,.venv,venv",
         ]
 
     def test_bandit_sends_exactly_one_value_token(self):
@@ -416,6 +457,128 @@ class TestToolExclusionFlags:
         assert tool_exclusion_flags("trufflehog") == []
         assert tool_exclusion_flags("horusec") == []
         assert tool_exclusion_flags("gosec") == []
+
+    def test_checkov_must_not_be_given_the_trivy_spelling(self):
+        """`--skip-path` is a REGEX. `**/x` is not one, and fails in silence.
+
+        checkov's `filter_ignored_paths` wraps `re.compile` in
+        `except re.error: continue`, and `**` raises "nothing to repeat" - so a
+        `**/`-prefixed value is dropped with no error, no warning and exit 0.
+        Its only fallback is a plain substring test against the full path,
+        which `**/node_modules` also fails. The result is a flag that looks
+        correct on the command line and excludes nothing.
+
+        Measured on checkov 3.3.16 against a tree holding `vendor/rootpkg` and
+        `a/b/vendor/pkg`, dockerfile framework: baseline reports 3 files,
+        `--skip-path '**/vendor'` reports the same 3, `--skip-path vendor`
+        reports 1. trivy is the exact inverse - see the trivy test - which is
+        why these two share a flag shape and not a style.
+        """
+        from scripts.cli.scan_utils import tool_exclusion_flags
+
+        flags = tool_exclusion_flags("checkov")
+
+        assert flags, "checkov is in TOOL_EXCLUSION_FLAG and must get flags"
+        assert not any(value.startswith("**") for value in flags), (
+            f"checkov got a globstar value, which it silently ignores: {flags}"
+        )
+        assert flags == [
+            "--skip-path",
+            ".horusec",
+            "--skip-path",
+            ".git",
+            "--skip-path",
+            "node_modules",
+            "--skip-path",
+            "vendor",
+            "--skip-path",
+            ".venv",
+            "--skip-path",
+            "venv",
+        ]
+
+    def test_trivy_needs_a_globstar_or_a_nested_directory_is_walked(self):
+        """A bare name only matches at trivy's scan root.
+
+        Measured on trivy 0.74.0, misconfig scanner, against a tree holding
+        `node_modules/rootpkg/Dockerfile` and
+        `deep/sub/node_modules/pkg/Dockerfile`: `--skip-dirs node_modules`
+        leaves the nested one in the report, `--skip-dirs '**/node_modules'`
+        removes both.
+
+        This was invisible while `.horusec` was the only entry, because horusec
+        stages it at the root of the scanned repo - which *is* trivy's scan
+        root. This repository's own `node_modules` is at
+        `scripts/dashboard/node_modules`, where the bare form is inert (#1080).
+        """
+        from scripts.cli.scan_utils import tool_exclusion_flags
+
+        values = [v for v in tool_exclusion_flags("trivy") if not v.startswith("--")]
+
+        assert values, "trivy is in TOOL_EXCLUSION_FLAG and must get values"
+        assert all(v.startswith("**/") for v in values), (
+            f"a bare value only matches at trivy's scan root: {values}"
+        )
+
+    def test_an_sca_tool_is_not_told_to_skip_its_own_subject_matter(self):
+        """dependency-check inventories vendored trees; that IS its job.
+
+        #1080 measured 282 of syft's 878 artifacts inside `.venv/` and called
+        them "arguably correct for an SBOM", which is why the vendored-directory
+        list is per-tool rather than global. Handing an SCA tool
+        `--exclude **/node_modules/**` would gut it while still exiting 0 - the
+        silently-inert-scanner shape this project has been bitten by before.
+
+        So dependency-check keeps exactly the JMo-scratch exclusion it had, and
+        gains none of the vendored ones.
+        """
+        from scripts.cli.scan_utils import tool_exclusion_flags
+
+        assert tool_exclusion_flags("dependency-check") == [
+            "--exclude",
+            "**/.horusec/**",
+        ]
+
+    def test_the_vendored_list_reaches_a_sast_tool_but_not_an_sca_one(self):
+        """The carve-out is the point, so assert the difference directly.
+
+        Spelled as a concrete directory rather than by iterating
+        VENDORED_DIRS: a guard that reads the constant it guards cannot fail
+        when that constant empties (#1061).
+        """
+        from scripts.cli.scan_utils import tool_exclusion_flags
+
+        sast = " ".join(tool_exclusion_flags("semgrep"))
+        sca = " ".join(tool_exclusion_flags("dependency-check"))
+
+        assert "node_modules" in sast
+        assert "node_modules" not in sca
+        assert ".venv" in sast
+        assert ".venv" not in sca
+
+    def test_syft_is_left_alone_entirely(self):
+        """syft is an SBOM tool and is deliberately absent from the table.
+
+        Pinned because the tempting "fix" for #1080 is a global exclusion list,
+        and syft is the measured counter-example: 282 of its 878 artifacts on
+        the repo scan came from `.venv/`.
+        """
+        from scripts.cli.scan_utils import tool_exclusion_flags
+
+        assert tool_exclusion_flags("syft") == []
+
+    def test_a_name_in_both_lists_is_sent_once(self):
+        """`.git` is in VENDORED_DIRS and in bandit's re-sent defaults.
+
+        A duplicate is not fatal for the repeatable styles, but bandit's `-x`
+        takes one comma-separated value and a doubled entry there is a visible
+        wart in the command line the user is shown on failure.
+        """
+        from scripts.cli.scan_utils import tool_exclusion_flags
+
+        bandit_value = tool_exclusion_flags("bandit")[1]
+
+        assert bandit_value.split(",").count(".git") == 1
 
 
 @pytest.mark.requires_tools
