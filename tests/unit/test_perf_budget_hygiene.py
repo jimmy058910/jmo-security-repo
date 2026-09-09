@@ -72,6 +72,43 @@ two ways it is not: `get_scores_bulk` consults a cache before calling the API
 measured region writes to a database cannot be repeated in place at all. Check
 the measured region for statefulness before converting; a conversion that
 silently changes which code path is measured is worse than the flake.
+
+## 3. A median does not fix a budget set on the wrong machine (#1120)
+
+Added 2026-09-08, because the first two sections were read as the whole
+problem and they are not. **Converting a budget to a median removes sampling
+noise. It cannot move a threshold that was calibrated on hardware faster than
+the one that has to meet it**, and three measured failures say that is the
+larger half:
+
+===========================  ========  ===================  =====================
+test                          budget    fastest seen         slowest seen
+===========================  ========  ===================  =====================
+benchmark_1 sqlite insert     200 ms    21.8 ms  (local)     **200.86 ms** (CI)
+attestation generation        0.5 s     0.129 s  (local)     **0.683 s**   (CI)
+upsert second region          0.5 s     0.52 s   (local)     **0.68 s**    (local)
+===========================  ========  ===================  =====================
+
+The first two **failed on the project's own nightly**; the third fails five
+runs out of five on a developer Windows box while passing on both CI platforms.
+The sqlite insert had been a median over fresh databases since #1053, *four
+days before* the nightly that failed it -- so #1120's own diagnosis ("one
+wall-clock sample") was measurably not what broke, and taking more samples
+would not have helped.
+
+**The spread is operation-dependent and that is the trap.** Local-to-CI on the
+sqlite insert is **8.8x** because it is fsync-bound and shared-runner disks are
+where that hurts. On the CPU-bound benchmarks beside it (diff engine, trend
+analysis, dashboard render) it is nearer 2-3x -- which is why those budgets are
+still green and why a blanket ratio applied to all of them would have been
+speculation, not a fix. Widen what has been measured to fail; leave the rest.
+
+**The bar: at least 3x the slowest observed value**, taken from the headroom
+table in section 2 -- under ~3x is a flake waiting for a busy runner. State the
+ideal in the failure message rather than in the threshold, and rename any test
+whose *name* asserts a budget the assertion no longer enforces. Record where
+each number was measured, because "observed 70-150ms" with no machine attached
+is how the 200ms budget came to be trusted for four releases.
 """
 
 from __future__ import annotations
@@ -116,7 +153,6 @@ SINGLE_SAMPLE_BUDGETS: dict[str, int] = {
     "tests/performance/test_load.py": 5,
     "tests/performance/test_prioritization_performance.py": 6,
     "tests/performance/test_stress.py": 4,
-    "tests/unit/test_attestation_cicd.py": 1,
     "tests/unit/test_dedup_enhanced.py": 3,
     "tests/unit/test_diff_engine.py": 2,
     "tests/unit/test_history_db.py": 1,
