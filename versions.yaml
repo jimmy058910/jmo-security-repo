@@ -158,7 +158,7 @@ binary_tools:
     brew_package: nuclei
     notes: 'Requires templates update: nuclei -update-templates'
   kubescape:
-    version: 4.0.12
+    version: 4.0.13
     github_repo: kubescape/kubescape
     description: Kubernetes security scanner (NSA/CISA hardening)
     release_pattern: kubescape_{version}_linux_{arch}
@@ -365,6 +365,14 @@ update_policies:
   automated_check_schedule: Weekly (Sunday 00:00 UTC)
   manual_review_schedule: First Monday of each month
 version_history:
+- date: '2026-09-09'
+  action: Updated kubescape
+  tools_updated:
+  - tool: kubescape
+    old_version: 4.0.12
+    new_version: 4.0.13
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
 - date: '2026-09-01'
   action: Automated version update
   tools_updated: []
