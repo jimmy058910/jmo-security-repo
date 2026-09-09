@@ -21,6 +21,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from scripts.cli.tool_commands import cmd_tools_uninstall
+
 # ========== Category 1: Colors Class ==========
 
 
@@ -973,43 +975,6 @@ def test_cmd_tools_install_dry_run():
 
 
 # ========== Category: Helper Functions ==========
-
-
-class TestGetDirSize:
-    """Tests for _get_dir_size function."""
-
-    def test_empty_dir(self, tmp_path):
-        """Test size of empty directory."""
-        from scripts.cli.tool_commands import _get_dir_size
-
-        empty_dir = tmp_path / "empty"
-        empty_dir.mkdir()
-
-        assert _get_dir_size(empty_dir) == 0
-
-    def test_dir_with_files(self, tmp_path):
-        """Test size of directory with files."""
-        from scripts.cli.tool_commands import _get_dir_size
-
-        test_dir = tmp_path / "test"
-        test_dir.mkdir()
-        (test_dir / "file1.txt").write_text("hello")
-        (test_dir / "file2.txt").write_text("world")
-
-        # Each file is 5 bytes
-        assert _get_dir_size(test_dir) == 10
-
-    def test_nested_dirs(self, tmp_path):
-        """Test size of nested directories."""
-        from scripts.cli.tool_commands import _get_dir_size
-
-        test_dir = tmp_path / "test"
-        test_dir.mkdir()
-        (test_dir / "sub").mkdir()
-        (test_dir / "file.txt").write_text("abc")
-        (test_dir / "sub" / "nested.txt").write_text("xyz")
-
-        assert _get_dir_size(test_dir) == 6
 
 
 class TestFormatSize:
@@ -2728,186 +2693,159 @@ class TestGenerateInstallScriptEdgeCases:
 
 
 class TestCmdToolsUninstallToolTypes:
-    """Test cmd_tools_uninstall with different tool types."""
+    """`jmo tools uninstall`'s listing, exercised against a real tree.
 
-    def test_uninstall_all_with_npm_tools(self, capsys, tmp_path, monkeypatch):
-        """Test uninstall --all with npm tools present."""
-        from scripts.cli.tool_commands import cmd_tools_uninstall
+    These four used to patch `scripts.cli.tool_commands.Path` and assert only
+    the return code. **The patch never applied.** `cmd_tools_uninstall` carried
+    its own `from pathlib import Path`, which makes `Path` a *local* of the
+    function (`"Path" in cmd_tools_uninstall.__code__.co_varnames` is True), so
+    the module attribute the patch replaced was never read.
 
-        # Create mock .jmo directory
-        jmo_dir = tmp_path / ".jmo"
-        jmo_dir.mkdir()
-        (jmo_dir / "config.yml").write_text("test: true")
+    They passed in CI for the wrong reason: a runner has no `~/.jmo`, so
+    `jmo_dir.exists()` was False and the loop under test never ran. On a machine
+    that has actually run `jmo tools install`, they walked the real 165,419-file
+    tree and tripped `--timeout=60` - and pytest-timeout's `thread` method kills
+    the session on Windows, so they took the other 2,153 `tests/cli` tests with
+    them (#1207).
 
-        mock_tool_info = MagicMock()
-        mock_tool_info.pypi_package = None
-        mock_tool_info.npm_package = "eslint"
-        mock_tool_info.brew_package = None
+    The redundant local import is gone and these now point `Path.home()` at
+    `tmp_path` and assert on what is printed.
+    """
 
-        mock_manager = MagicMock()
-        mock_manager.registry.get_tool.return_value = mock_tool_info
-        # Return npm tool
-        mock_manager.registry.list_tools.return_value = ["eslint"]
+    @staticmethod
+    def _home(tmp_path, monkeypatch):
+        """Point `Path.home()` at `tmp_path` and keep the pip probe off the wire."""
+        monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+        monkeypatch.setattr(
+            "scripts.cli.tool_commands._check_pip_package", lambda _pkg: False
+        )
 
-        args = MagicMock()
-        args.all = True
-        args.dry_run = True
-        args.yes = True
+    @staticmethod
+    def _args(**kw):
+        args = argparse.Namespace(all=False, dry_run=True, yes=True)
+        for k, v in kw.items():
+            setattr(args, k, v)
+        return args
 
-        with patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager):
-            with patch(
-                "scripts.cli.tool_commands.colorize", side_effect=lambda x, _: x
-            ):
-                with patch("scripts.cli.tool_commands.Path") as mock_path:
-                    mock_jmo = MagicMock()
-                    mock_jmo.exists.return_value = True
-                    mock_kubescape = MagicMock()
-                    mock_kubescape.exists.return_value = False
-                    mock_path.home.return_value.__truediv__.side_effect = [
-                        mock_jmo,
-                        mock_kubescape,
-                    ]
-                    with patch(
-                        "scripts.cli.tool_commands._get_installed_tools"
-                    ) as mock_get_tools:
-                        mock_get_tools.return_value = [("eslint", "npm")]
-                        result = cmd_tools_uninstall(args)
+    def test_a_directory_is_listed_without_a_size_and_a_file_with_one(
+        self, capsys, tmp_path, monkeypatch
+    ):
+        """The size is what cost 89 s, and only for directories.
 
-        assert result == 0
+        A file's size is one `stat()` and exact, so it stays. A directory's
+        meant `rglob("*")` over everything beneath it.
+        """
+        jmo = tmp_path / ".jmo"
+        (jmo / "tools").mkdir(parents=True)
+        (jmo / "tools" / "vendored.py").write_text("x" * 100)
+        (jmo / "config.yml").write_text("a: 1")
+        self._home(tmp_path, monkeypatch)
 
-    def test_uninstall_all_with_binary_tools(self, capsys, tmp_path):
-        """Test uninstall --all with binary tools."""
-        from scripts.cli.tool_commands import cmd_tools_uninstall
+        assert cmd_tools_uninstall(self._args()) == 0
 
-        mock_tool_info = MagicMock()
-        mock_tool_info.pypi_package = None
-        mock_tool_info.npm_package = None
-        mock_tool_info.brew_package = None
+        out = capsys.readouterr().out
+        assert "  - tools/" in out, out
+        assert "  - config.yml (4 B)" in out, out
+        # The directory's own contents must not be summed into a size.
+        assert "tools/ (" not in out, out
 
-        mock_manager = MagicMock()
-        mock_manager.registry.get_tool.return_value = mock_tool_info
+    def test_the_listing_never_walks_into_a_directory(
+        self, capsys, tmp_path, monkeypatch
+    ):
+        """Make recursion fatal rather than timing it.
 
-        args = MagicMock()
-        args.all = True
-        args.dry_run = True
-        args.yes = True
+        Asserting on wall-clock would be a benchmark, and a benchmark taken on
+        one machine is the mistake #1120 was about - it would pass on a CI
+        runner with an empty `~/.jmo` no matter what the code did. This asserts
+        the *mechanism*: if the listing ever recurses again, `rglob` raises and
+        this fails in milliseconds, on any machine.
+        """
+        jmo = tmp_path / ".jmo"
+        (jmo / "tools" / "venvs" / "checkov").mkdir(parents=True)
+        (jmo / "tools" / "venvs" / "checkov" / "pkg.py").write_text("x")
+        self._home(tmp_path, monkeypatch)
 
-        with patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager):
-            with patch(
-                "scripts.cli.tool_commands.colorize", side_effect=lambda x, _: x
-            ):
-                with patch("scripts.cli.tool_commands.Path") as mock_path:
-                    mock_jmo = MagicMock()
-                    mock_jmo.exists.return_value = True
-                    mock_kubescape = MagicMock()
-                    mock_kubescape.exists.return_value = True
-                    mock_path.home.return_value.__truediv__.side_effect = [
-                        mock_jmo,
-                        mock_kubescape,
-                        mock_jmo,
-                        mock_kubescape,
-                    ]
-                    with patch(
-                        "scripts.cli.tool_commands._get_installed_tools"
-                    ) as mock_get_tools:
-                        mock_get_tools.return_value = [("trivy", "binary")]
-                        with (
-                            patch(
-                                "scripts.cli.tool_commands._get_dir_size",
-                                return_value=1024,
-                            ),
-                            patch(
-                                "scripts.cli.tool_commands._format_size",
-                                return_value="1.0 KB",
-                            ),
-                        ):
-                            result = cmd_tools_uninstall(args)
+        def _no_recursion(*_a, **_k):
+            raise AssertionError(
+                "the uninstall listing must not walk directory contents (#1207)"
+            )
 
-        assert result == 0
+        monkeypatch.setattr(Path, "rglob", _no_recursion)
 
-    def test_uninstall_with_kubescape_dir(self, capsys, tmp_path):
-        """Test uninstall --all removes kubescape directory."""
-        from scripts.cli.tool_commands import cmd_tools_uninstall
+        assert cmd_tools_uninstall(self._args()) == 0
+        assert "  - tools/" in capsys.readouterr().out
 
-        # Create mock directories
-        jmo_dir = tmp_path / ".jmo"
-        jmo_dir.mkdir()
-        kubescape_dir = tmp_path / ".kubescape"
-        kubescape_dir.mkdir()
-        (kubescape_dir / "config").write_text("test")
+    def test_uninstall_all_groups_installed_tools_by_install_method(
+        self, capsys, tmp_path, monkeypatch
+    ):
+        """--all lists what would go, grouped by how it was installed."""
+        (tmp_path / ".jmo").mkdir()
+        self._home(tmp_path, monkeypatch)
+        monkeypatch.setattr(
+            "scripts.cli.tool_commands._get_installed_tools",
+            lambda: [("eslint", "npm"), ("trivy", "binary"), ("bandit", "pip")],
+        )
 
-        args = MagicMock()
-        args.all = True
-        args.dry_run = False
-        args.yes = True
+        assert cmd_tools_uninstall(self._args(all=True)) == 0
 
-        mock_manager = MagicMock()
+        out = capsys.readouterr().out
+        assert "npm: eslint" in out, out
+        assert "binary: trivy" in out, out
+        assert "pip: bandit" in out, out
 
-        with patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager):
-            with patch(
-                "scripts.cli.tool_commands.colorize", side_effect=lambda x, _: x
-            ):
-                with patch("scripts.cli.tool_commands.Path") as mock_path:
-                    mock_jmo = MagicMock()
-                    mock_jmo.exists.return_value = True
-                    mock_kubescape = MagicMock()
-                    mock_kubescape.exists.return_value = True
-                    mock_path.home.return_value.__truediv__.side_effect = lambda x: (
-                        mock_jmo if x == ".jmo" else mock_kubescape
-                    )
-                    with patch(
-                        "scripts.cli.tool_commands._get_installed_tools"
-                    ) as mock_get_tools:
-                        mock_get_tools.return_value = []
-                        with (
-                            patch(
-                                "scripts.cli.tool_commands._get_dir_size",
-                                return_value=512,
-                            ),
-                            patch(
-                                "scripts.cli.tool_commands._format_size",
-                                return_value="512 B",
-                            ),
-                            patch("shutil.rmtree"),
-                        ):
-                            result = cmd_tools_uninstall(args)
+    def test_uninstall_all_reports_the_kubescape_directory(
+        self, capsys, tmp_path, monkeypatch
+    ):
+        """`~/.kubescape` is listed by name for the same reason `~/.jmo`'s
+        subdirectories are: it is a cache that can grow without bound, and
+        special-casing which directories are 'cheap enough' to walk is a
+        judgement the code cannot make."""
+        (tmp_path / ".jmo").mkdir()
+        (tmp_path / ".kubescape").mkdir()
+        (tmp_path / ".kubescape" / "config").write_text("x")
+        self._home(tmp_path, monkeypatch)
+        monkeypatch.setattr(
+            "scripts.cli.tool_commands._get_installed_tools",
+            lambda: [("kubescape", "binary")],
+        )
 
-        # Result depends on whether rmtree succeeded
-        assert result in [0, 1]
+        assert cmd_tools_uninstall(self._args(all=True)) == 0
 
-    def test_uninstall_no_tools_found(self, capsys):
-        """Test uninstall --all when no tools are found."""
-        from scripts.cli.tool_commands import cmd_tools_uninstall
+        out = capsys.readouterr().out
+        assert "- ~/.kubescape/" in out, out
+        assert "~/.kubescape/ (" not in out, out
 
-        mock_manager = MagicMock()
+    def test_the_function_does_not_shadow_the_module_level_Path(self):
+        """A local `from pathlib import Path` silently disables patching.
 
-        args = MagicMock()
-        args.all = True
-        args.dry_run = True
-        args.yes = True
+        This is not style. `cmd_tools_uninstall` used to re-import `Path`
+        inside its own body, which makes `Path` a *local* of the function, so
+        `patch("scripts.cli.tool_commands.Path")` replaced a module attribute
+        the function never read. Four tests in this class were written against
+        that patch and asserted only a return code, so they passed everywhere
+        while exercising nothing - and on a machine that had actually run
+        `jmo tools install` they walked the real 165,419-file `~/.jmo` and
+        tripped the 60 s timeout, taking the whole session with them (#1207).
 
-        with patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager):
-            with patch(
-                "scripts.cli.tool_commands.colorize", side_effect=lambda x, _: x
-            ):
-                with patch("scripts.cli.tool_commands.Path") as mock_path:
-                    mock_jmo = MagicMock()
-                    mock_jmo.exists.return_value = True
-                    mock_kubescape = MagicMock()
-                    mock_kubescape.exists.return_value = False
-                    mock_path.home.return_value.__truediv__.side_effect = [
-                        mock_jmo,
-                        mock_kubescape,
-                    ]
-                    with patch(
-                        "scripts.cli.tool_commands._get_installed_tools"
-                    ) as mock_get_tools:
-                        mock_get_tools.return_value = []
-                        result = cmd_tools_uninstall(args)
+        The tests above are immune because they patch `Path.home` on the class
+        rather than the module attribute, which is why a mutation restoring the
+        local import survived them. This asserts the shape directly, so the
+        next person who adds one is told why not.
+        """
+        assert "Path" not in cmd_tools_uninstall.__code__.co_varnames, (
+            "cmd_tools_uninstall re-imports Path into its own scope; that makes "
+            "patch('scripts.cli.tool_commands.Path') a no-op (#1207)"
+        )
 
-        assert result == 0
-        captured = capsys.readouterr()
-        assert "No JMo-managed tools found" in captured.out
+    def test_uninstall_all_says_so_when_no_tools_are_found(
+        self, capsys, tmp_path, monkeypatch
+    ):
+        (tmp_path / ".jmo").mkdir()
+        self._home(tmp_path, monkeypatch)
+        monkeypatch.setattr("scripts.cli.tool_commands._get_installed_tools", list)
+
+        assert cmd_tools_uninstall(self._args(all=True)) == 0
+        assert "No JMo-managed tools found" in capsys.readouterr().out
 
 
 # ========== Category: _get_installed_tools Tool Types ==========
@@ -3136,55 +3074,6 @@ class TestUninstallToolsExecution:
 
         captured = capsys.readouterr()
         assert "Homebrew" in captured.out or "brew uninstall" in captured.out
-
-
-# ========== Category: _get_dir_size Edge Cases ==========
-
-
-class TestGetDirSizeEdgeCases:
-    """Test _get_dir_size edge cases."""
-
-    def test_get_dir_size_permission_error(self, tmp_path):
-        """Test _get_dir_size handles permission errors."""
-        from scripts.cli.tool_commands import _get_dir_size
-
-        # Create a mock path that raises permission error
-        mock_path = MagicMock()
-        mock_path.rglob.side_effect = PermissionError("Access denied")
-
-        result = _get_dir_size(mock_path)
-
-        assert result == 0
-
-    def test_get_dir_size_os_error(self, tmp_path):
-        """Test _get_dir_size handles OS errors."""
-        from scripts.cli.tool_commands import _get_dir_size
-
-        mock_path = MagicMock()
-        mock_path.rglob.side_effect = OSError("Disk error")
-
-        result = _get_dir_size(mock_path)
-
-        assert result == 0
-
-    def test_get_dir_size_stat_error(self, tmp_path):
-        """Test _get_dir_size handles stat errors on individual files."""
-        from scripts.cli.tool_commands import _get_dir_size
-
-        mock_file = MagicMock()
-        mock_file.is_file.return_value = True
-        mock_file.stat.side_effect = OSError("Cannot stat")
-
-        mock_path = MagicMock()
-        mock_path.rglob.return_value = [mock_file]
-
-        result = _get_dir_size(mock_path)
-
-        # Should return 0 due to exception handling
-        assert result == 0
-
-
-# ========== A tool this platform cannot run is not "missing" ==========
 
 
 def _unsupported_status(name="noseyparker"):
