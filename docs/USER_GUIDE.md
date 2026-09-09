@@ -1674,6 +1674,18 @@ profiles:
         flags: ["--exclude", "node_modules", "--exclude", ".git"]
 ```
 
+Default directory exclusions:
+
+- JMo already excludes `.git`, `node_modules`, `vendor`, `.venv` and `venv` from
+  the tools that read your source (semgrep, trivy, bandit, checkov), so the
+  `--exclude` entries above are no longer needed to get that effect. Your own
+  `flags` are appended after JMo's, so anything you add still applies.
+- The tools that *inventory* dependencies are deliberately exempt:
+  `dependency-check` and `syft` still read those directories, because a vendored
+  tree is what they exist to look at.
+- To scan a vendored directory with a SAST tool anyway, point JMo at it
+  directly: `jmo scan --repo ./vendor/some-library`.
+
 Retries:
 
 - Set `retries: N` at the root or inside a profile to automatically retry failing tool commands up to N times.
