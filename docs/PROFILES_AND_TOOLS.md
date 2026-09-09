@@ -336,8 +336,8 @@ Some tools only execute when specific content is detected in the target reposito
 |------|-------------------|----------------------------|
 | **MobSF** | `*.apk` or `*.ipa` files detected | Writes empty stub |
 | **Prowler** | `*.tf`, `*.tfvars`, or `cloudformation.yaml` detected | Writes empty stub |
-| **ZAP** (repo mode) | HTML, JS, or PHP files detected | Writes empty stub |
-| **Trivy-RBAC** | Kubernetes manifests (`*deployment*.yaml`, `*service*.yaml`, `k8s/**/*.yaml`) | Writes empty stub |
+| **ZAP** | URL targets only (not applicable to repositories) | Always writes stub |
+| **Trivy-RBAC** | Kubernetes manifests, detected by `apiVersion:` in any `.yaml`/`.yml` | Writes empty stub |
 | **Falco** | Falco rule files (`*falco*.yaml`, `*falco*.yml`) detected | Writes empty stub |
 | **AFL++** | Instrumented binaries (`*-afl`, `*-fuzzer`, `bin/*`, `build/*`) detected | Writes empty stub |
 | **Hadolint** | `Dockerfile*` files detected | Writes empty stub |
@@ -365,16 +365,15 @@ cloud_files = (
 )
 ```
 
-**ZAP (Web Scanning in repo mode):**
+**ZAP:** URL targets only. There is no repository mode.
 
-```python
-# Scans static web files when present
-web_files = (
-    list(repo.glob("**/*.html")) +
-    list(repo.glob("**/*.js")) +
-    list(repo.glob("**/*.php"))
-)
-```
+ZAP is a DAST scanner: it finds vulnerabilities by exercising a **running
+application** over HTTP. It used to be handed the first `.html`, `.js` or `.php`
+file in the repository, which could not work in any configuration --
+`zap-baseline.py -t` takes a URL, not a path, and exits 3 on a filesystem
+argument. The script is also absent from the package `jmo tools install zap`
+lays down; it ships in the ZAP Docker image. Removed in #1159. Use
+`jmo scan --url https://...`, where ZAP works.
 
 **Trivy-RBAC (Kubernetes):**
 
@@ -444,8 +443,7 @@ Different target types invoke different subsets of tools. This matrix shows the 
 | Tool | Requires |
 |------|----------|
 | prowler | `*.tf`, `cloudformation.yaml` |
-| zap | HTML/JS/PHP files |
-| trivy-rbac | K8s manifests |
+| trivy-rbac | K8s manifests (`apiVersion:` in any `.yaml`/`.yml`) |
 | falco | Falco rule files |
 | mobsf | APK/IPA files |
 | afl++ | Instrumented binaries |
@@ -523,7 +521,7 @@ Different target types invoke different subsets of tools. This matrix shows the 
 | yara | ✅ | - | - | - | ✅ | - |
 | falco | ✅* | - | - | - | ✅* | - |
 | nuclei | - | - | - | ✅ | - | - |
-| zap | ✅* | - | - | ✅ | ✅* | - |
+| zap | - | - | - | ✅ | - | - |
 | akto | - | - | - | ✅ | - | - |
 | mobsf | ✅* | - | - | - | ✅* | - |
 | afl++ | ✅* | - | - | - | ✅* | - |

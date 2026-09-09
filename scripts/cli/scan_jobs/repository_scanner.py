@@ -377,38 +377,13 @@ def scan_repository(
                 missing_dependency[owner] = tool_name
         return resolved
 
-    def _find_any_tool(
-        candidates: tuple[str, ...], record_as: str
-    ) -> tuple[str | None, str | None]:
-        """Resolve the first of several interchangeable binaries.
-
-        Returns `(path, which_candidate)`, or `(None, None)` if none resolved.
-
-        `_find_tool` records an unresolved entry on *every* miss. That is right
-        for a tool with one dependency and wrong for one with a fallback. zap
-        probes `zap-baseline.py` and then `docker`, so a machine with only
-        docker recorded zap as unresolved **and** ran it through the docker
-        fallback, and the same scan reported both
-
-            zap requested but its dependency zap-baseline.py could not be found
-            - it did NOT run and its findings are MISSING
-
-        and, nine seconds later,
-
-            zap: it failed - it did NOT contribute findings to this scan
-            (Return code 3 not in (0, 1, 2))
-
-        for one tool. Only the second was true (#1136).
-        """
-        considered.add(record_as)
-        for candidate in candidates:
-            resolved = _resolve_tool(candidate)
-            if resolved is not None:
-                return resolved, candidate
-        unresolved.append(record_as)
-        # Name the candidate the user is most likely to install.
-        missing_dependency[record_as] = candidates[0]
-        return None, None
+    # `_find_any_tool` lived here, resolving the first of several
+    # interchangeable binaries. zap was its only caller -- it probed
+    # `zap-baseline.py` and then `docker` -- and #1159 removed that probe, so it
+    # went with it. The defect it was written for (#1136: one scan reporting zap
+    # as never started AND as failed) is now unreachable by construction rather
+    # than by careful bookkeeping: nothing resolves a binary for zap on a
+    # repository target at all.
 
     name = _sanitize_path_component(repo.name)
     out_dir = results_dir / name
@@ -888,96 +863,45 @@ def scan_repository(
                 _write_stub("noseyparker", noseyparker_out)
                 record_not_attempted(statuses, "noseyparker")
 
-    # ZAP: Web vulnerability scanning (limited to repositories with web servers)
-    # Note: ZAP is best suited for live URLs (see url_scanner.py).
-    # For repositories, we scan for common web vulnerabilities in static files.
+    # ZAP: DAST, and a repository is not a running application.
+    #
+    # This block used to build a command. It could not work in any
+    # configuration, and never had (#1159):
+    #
+    #   - `zap-baseline.py -t` takes a URL ("target URL including the
+    #     protocol"). JMo passed it `web_files[0]` -- the first `.html`, `.js`
+    #     or `.php` file in the tree, a filesystem path. Its exit codes are 0
+    #     success, 1 FAIL, 2 WARN, **3 any other failure**, and the dogfood
+    #     measured exactly that: `Return code 3 not in (0, 1, 2)`,
+    #     `retry_exhausted`, no `zap.json` written.
+    #   - `zap-baseline.py` is not in the package `jmo tools install zap` lays
+    #     down. That package is the ZAP desktop distribution -- `zap.bat` /
+    #     `zap.sh` and `zap-2.17.0.jar`. The baseline script ships in the ZAP
+    #     *Docker image*. So without Docker the tool never started, and with it
+    #     the tool started and exited 3.
+    #
+    # Scanning one arbitrary file out of a repository was never DAST anyway:
+    # ZAP finds vulnerabilities by exercising a live application over HTTP.
+    # Serving the tree and pointing `-t` at a local URL would make it real, and
+    # turns a file scan into a network service with a lifecycle to manage --
+    # deliberately not built here.
+    #
+    # zap is untouched on **url** targets, where it works: see
+    # `url_scanner.py`, which resolves `zap.sh` and matches
+    # `TOOL_EXECUTION_COMMANDS["zap"]`. That entry is `["zap.sh", "java"]`, and
+    # `jmo tools check` has always verified it -- which is why `tools check`
+    # could read `zap OK 2.17.0` on a box where the repository scan could not
+    # run it. The two now agree.
+    #
+    # `NOTHING_APPLICABLE` rather than a new reason: it is the honest one for a
+    # DAST tool handed a directory, and it is one of exactly two reasons
+    # `not_attempted_tools` is ever queried with, so a third would be recorded
+    # and never printed -- a silent skip.
     if "zap" in tools:
         zap_out = out_dir / "zap.json"
-        # ZAP baseline scan can analyze HTML/JS files in repository
-        # This is a limited use case; full DAST requires --url target
-        # Either binary can drive zap, so a miss on the first is only a failure
-        # if the second misses too. Note `zap-baseline.py` ships in the ZAP
-        # *Docker image*, not in the desktop package `jmo tools install zap`
-        # lays down, so on most machines the docker candidate is the one that
-        # resolves.
-        zap_path, zap_runner = _find_any_tool(
-            ("zap-baseline.py", "docker"), record_as="zap"
-        )
-        if zap_path:
-            zap_flags = get_tool_flags("zap")
-            # Check for web-related files (HTML, JS, PHP, etc.)
-            web_files = (
-                list(repo.glob("**/*.html"))
-                + list(repo.glob("**/*.js"))
-                + list(repo.glob("**/*.php"))
-            )
-            if web_files:
-                # Use ZAP baseline scan on first web file found
-                # Note: This is a simplified approach; full ZAP requires live server
-                target_file = web_files[0]
-                if zap_runner == "zap-baseline.py":
-                    zap_cmd = [
-                        zap_path,  # Use full path from find_tool
-                        "-t",
-                        str(target_file),
-                        "-J",
-                        str(zap_out),
-                        *zap_flags,
-                    ]
-                    tool_defs.append(
-                        ToolDefinition(
-                            name="zap",
-                            command=zap_cmd,
-                            output_file=zap_out,
-                            timeout=get_tool_timeout("zap", timeout),
-                            retries=retries,
-                            ok_return_codes=(
-                                0,
-                                1,
-                                2,
-                            ),  # ZAP returns non-zero on findings
-                            capture_stdout=False,
-                        )
-                    )
-                else:
-                    # `_find_any_tool` already resolved docker; re-probing here
-                    # through `_find_tool` also registered a phantom tool named
-                    # "docker" in `considered`.
-                    docker_path = zap_path
-                    if docker_path:
-                        # Fallback to Docker-based ZAP
-                        zap_cmd = [
-                            docker_path,
-                            "run",
-                            "--rm",
-                            "-v",
-                            f"{repo}:/zap/wrk:ro",
-                            "ghcr.io/zaproxy/zaproxy:stable",
-                            "zap-baseline.py",
-                            "-t",
-                            f"/zap/wrk/{target_file.relative_to(repo)}",
-                            "-J",
-                            "/zap/wrk/zap-output.json",
-                            *zap_flags,
-                        ]
-                        tool_defs.append(
-                            ToolDefinition(
-                                name="zap",
-                                command=zap_cmd,
-                                output_file=zap_out,
-                                timeout=get_tool_timeout("zap", timeout),
-                                retries=retries,
-                                ok_return_codes=(0, 1, 2),
-                                capture_stdout=False,
-                            )
-                        )
-            else:
-                # No web files found - write empty stub
-                _write_stub("zap", zap_out)
-                record_not_attempted(statuses, "zap", NOT_ATTEMPTED_NOTHING_APPLICABLE)
-        elif allow_missing_tools:
-            _write_stub("zap", zap_out)
-            record_not_attempted(statuses, "zap")
+        considered.add("zap")
+        _write_stub("zap", zap_out)
+        record_not_attempted(statuses, "zap", NOT_ATTEMPTED_NOTHING_APPLICABLE)
 
     # Falco: Runtime security monitoring (repository rules analysis)
     # Note: Falco is best suited for live containers/K8s (see k8s_scanner.py).

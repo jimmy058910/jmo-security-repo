@@ -435,6 +435,23 @@ TOOL_TIMEOUT_DEFAULTS: dict[str, int] = {
     "dependency-check": 1200,  # 20 min - NVD database sync can take a while
     "scancode": 1200,  # 20 min - license scanning large codebases
     "horusec": 900,  # 15 min - multi-language SAST
+    # semgrep's cost is its RULE COUNT, not the tree it walks: it restricts
+    # itself to git-tracked files by default, so the vendored-directory
+    # exclusions #1080 added cannot move its number. Measured on this
+    # repository -- 541 tracked files, `--config auto` resolving 2,930 rules
+    # and running 1,870 -- it took **409.8 s** with the flags JMo passes, on a
+    # run that produced 241 findings.
+    #
+    # 900 rather than something nearer that figure, matching horusec, the other
+    # multi-language SAST tool. #1204 measured the identical work on the same
+    # machine at **583 s**: same 541 files, 42% apart. A budget two samples
+    # cannot reproduce within 173 s is not a budget, and a floor is a *ceiling
+    # on wasted time* rather than an assertion about how long the tool should
+    # take -- so headroom costs nothing and a tight fit costs the findings.
+    #
+    # Without a floor semgrep took the profile default and lost `fast` (300 s)
+    # outright, with `slim` (500 s) inside 90 s of its cap.
+    "semgrep": 900,  # 15 min - multi-language SAST, cost is rule count (#1204)
     "zap": 900,  # 15 min - DAST scanning
     "prowler": 600,  # 10 min - cloud config scanning
 }
