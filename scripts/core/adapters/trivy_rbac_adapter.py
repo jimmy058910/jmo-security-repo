@@ -9,26 +9,43 @@ Plugin Architecture (v0.9.0):
 - Auto-loaded by plugin registry
 
 v1.0.0 Feature #1:
-- Kubernetes RBAC security assessment
+- Kubernetes workload and RBAC misconfiguration assessment
 - Role and ClusterRole privilege analysis
 - Overly permissive RBAC detection
 - CIS Kubernetes Benchmark compliance
 
-Tool Version: 0.50.0+
-Output Format: JSON with checks array
+Tool Version: 0.74.0
+Output Format: `trivy config` JSON -- ``Results[].Misconfigurations[]``
 Exit Codes: 0 (clean), 1 (findings)
 
-Supported Checks:
-- KSV041: Managing secrets access
-- KSV042: Managing ConfigMaps access
-- KSV043: Managing host network namespaces
-- KSV044: Managing host IPC namespaces
-- KSV045: Managing host PID namespaces
-- KSV046: Managing wildcard verbs
-- KSV047: Managing cluster-admin role
-- KSV048: Managing exec/attach privileges
-- KSV049: Managing wildcard resources
-- KSV050: Managing privilege escalation
+THE SCHEMA THIS PARSES, AND THE ONE IT USED TO
+----------------------------------------------
+Until #1215 this module read a top-level ``checks`` array of
+``{"checkID", "success", ...}``. **No version of trivy has ever emitted that.**
+``trivy config`` writes::
+
+    {"SchemaVersion": 2,
+     "Trivy": {"Version": "0.74.0"},
+     "Results": [{"Target": "manifests/pod.yaml",
+                  "Class": "config", "Type": "kubernetes",
+                  "Misconfigurations": [{"ID": "KSV-0001", "Status": "FAIL", ...}]}]}
+
+so ``data.get("checks", [])`` returned ``[]`` and the adapter produced **zero
+findings from real output, always**. Every unit test passed because every unit
+test hand-built the imagined shape -- a fixture encoding an assumption about the
+caller rather than a measurement of it. The guard against a repeat is the golden
+fixture under ``tests/fixtures/golden/trivy_rbac/``, which is real captured
+output rather than a hand-written dict.
+
+Two things the real schema gives that the invented one could not: ``Target`` is
+a **path on disk**, so findings group by file and dedup has a real key, and
+``CauseMetadata.StartLine`` is a **real line number**. The old code synthesised
+``"Kind/name"`` and line 0.
+
+``Status`` is ``FAIL`` for everything trivy puts in this array -- it does not
+report passes here -- but it is filtered explicitly anyway, because
+``--include-non-failures`` adds ``PASS`` entries and a user can reach that flag
+through ``per_tool`` config.
 """
 
 from __future__ import annotations
@@ -119,7 +136,7 @@ class TrivyRbacAdapter(AdapterPlugin):
 
 
 def _load_trivy_rbac_internal(path: str | Path) -> list[dict[str, Any]]:
-    """Internal function to parse Trivy RBAC JSON output.
+    """Internal function to parse `trivy config` JSON output.
 
     Args:
         path: Path to trivy-rbac.json output file
@@ -131,109 +148,123 @@ def _load_trivy_rbac_internal(path: str | Path) -> list[dict[str, Any]]:
 
     out: list[dict[str, Any]] = []
 
-    # Trivy RBAC JSON structure: {"checks": [...], "summary": {...}}
     if not isinstance(data, dict):
         return []
 
-    # Extract Trivy version for tool metadata
-    trivy_version = str(data.get("version", "0.50.0"))
+    trivy_meta = data.get("Trivy")
+    trivy_version = str(
+        trivy_meta.get("Version", "unknown")
+        if isinstance(trivy_meta, dict)
+        else "unknown"
+    )
 
-    # Process checks array
-    checks = data.get("checks", [])
-    if not isinstance(checks, list):
+    results = data.get("Results", [])
+    if not isinstance(results, list):
         return []
 
-    for check in checks:
-        if not isinstance(check, dict):
+    for result in results:
+        if not isinstance(result, dict):
             continue
 
-        # Extract check metadata
-        check_id = str(check.get("checkID", check.get("id", "")))
-        success = check.get("success", True)
+        # `Target` is the path trivy scanned, relative to the scan root.
+        target = str(result.get("Target", ""))
 
-        # Only process failed checks (success=False)
-        if success:
+        misconfigurations = result.get("Misconfigurations", [])
+        if not isinstance(misconfigurations, list):
             continue
 
-        title = str(check.get("title", check_id))
-        description = str(check.get("description", ""))
-        severity_raw = str(check.get("severity", "MEDIUM"))
-        category = str(check.get("category", "Kubernetes Security Check"))
+        for misconf in misconfigurations:
+            if not isinstance(misconf, dict):
+                continue
 
-        # Extract resource information
-        resource_namespace = str(check.get("namespace", ""))
-        resource_kind = str(check.get("kind", ""))
-        resource_name = str(check.get("name", ""))
+            # Only failures are findings -- see the module docstring for why
+            # this is filtered rather than assumed.
+            if str(misconf.get("Status", "FAIL")).upper() != "FAIL":
+                continue
 
-        # Normalize severity
-        severity = normalize_severity(severity_raw)
+            check_id = str(misconf.get("ID", ""))
+            # ONE value in both the fingerprint and the ruleId slot. The report
+            # phase re-keys ids from the normalised path only when it can
+            # recompute fingerprint(tool, ruleId, path, line, message) and get
+            # the same answer; an adapter that hashes a different rule slot
+            # than it reports falls through that check silently (#1135, syft).
+            rule_id = check_id or "trivy-rbac-check"
+            title = str(misconf.get("Title", check_id))
+            description = str(misconf.get("Description", ""))
+            severity = normalize_severity(str(misconf.get("Severity", "MEDIUM")))
+            category = str(misconf.get("Type", "Kubernetes Security Check"))
+            resolution = str(misconf.get("Resolution", ""))
 
-        # Build message
-        message = description or title
+            cause = misconf.get("CauseMetadata")
+            if not isinstance(cause, dict):
+                cause = {}
+            # A file-level check carries no StartLine at all: measured, 1 of 56
+            # on the golden sample (KSV-0109, "ConfigMap with secrets").
+            raw_line = cause.get("StartLine", 0)
+            start_line = raw_line if isinstance(raw_line, int) else 0
 
-        # Build location path
-        if resource_namespace and resource_kind and resource_name:
-            location_path = f"{resource_namespace}/{resource_kind}/{resource_name}"
-        elif resource_kind and resource_name:
-            location_path = f"{resource_kind}/{resource_name}"
-        elif resource_name:
-            location_path = resource_name
-        else:
-            location_path = f"rbac-check:{check_id}"
+            # `Message` is the instance-specific sentence ("ConfigMap 'x' ...
+            # stores secrets in key(s) ..."); `Description` is the generic rule
+            # text. Prefer the specific one, and never emit an empty message.
+            message = str(misconf.get("Message", "")) or description or title
 
-        # Generate stable fingerprint
-        fid = fingerprint("trivy-rbac", check_id, location_path, 0, message)
+            location_path = target or f"trivy-rbac-check:{check_id}"
 
-        # Build references
-        references = []
-        if check_id:
-            # Link to Trivy RBAC check documentation
-            references.append(
-                f"https://avd.aquasec.com/misconfig/kubernetes/{check_id.lower()}/"
-            )
+            fid = fingerprint("trivy-rbac", rule_id, location_path, start_line, message)
 
-        # Build tags
-        tags = ["rbac", "kubernetes", "k8s-security", "access-control"]
-        if "cluster-admin" in title.lower() or "cluster-admin" in description.lower():
-            tags.append("cluster-admin")
-        if "wildcard" in title.lower() or "wildcard" in description.lower():
-            tags.append("wildcard-permissions")
-        if "secret" in title.lower() or "secret" in description.lower():
-            tags.append("secret-access")
-        if resource_kind:
-            tags.append(resource_kind.lower())
+            references: list[str] = []
+            primary_url = str(misconf.get("PrimaryURL", ""))
+            if primary_url:
+                references.append(primary_url)
+            extra_refs = misconf.get("References", [])
+            if isinstance(extra_refs, list):
+                references.extend(
+                    str(ref) for ref in extra_refs if ref and str(ref) not in references
+                )
 
-        # Build finding dict
-        finding = {
-            "schemaVersion": "1.2.0",
-            "id": fid,
-            "ruleId": check_id or "trivy-rbac-check",
-            "title": title,
-            "message": message,
-            "description": description,
-            "severity": severity,
-            "tool": {
-                "name": "trivy-rbac",
-                "version": trivy_version,
-            },
-            "location": {
-                "path": location_path,
-                "startLine": 0,  # RBAC checks don't have line numbers
-            },
-            "remediation": f"Review and restrict RBAC permissions for {location_path}. Follow principle of least privilege.",
-            "references": references,
-            "tags": tags,
-            "context": {
-                "check_id": check_id or None,
-                "category": category,
-                "resource_namespace": (resource_namespace or None),
-                "resource_kind": resource_kind or None,
-                "resource_name": resource_name or None,
-                "success": success,
-            },
-            "raw": check,
-        }
+            haystack = f"{title} {description}".lower()
+            tags = ["rbac", "kubernetes", "k8s-security", "access-control"]
+            if "cluster-admin" in haystack:
+                tags.append("cluster-admin")
+            if "wildcard" in haystack:
+                tags.append("wildcard-permissions")
+            if "secret" in haystack:
+                tags.append("secret-access")
 
-        out.append(finding)
+            finding = {
+                "schemaVersion": "1.2.0",
+                "id": fid,
+                "ruleId": rule_id,
+                "title": title,
+                "message": message,
+                "description": description,
+                "severity": severity,
+                "tool": {
+                    "name": "trivy-rbac",
+                    "version": trivy_version,
+                },
+                "location": {
+                    "path": location_path,
+                    "startLine": start_line,
+                },
+                "remediation": resolution
+                or (
+                    f"Review and restrict Kubernetes permissions for {location_path}. "
+                    "Follow principle of least privilege."
+                ),
+                "references": references,
+                "tags": tags,
+                "context": {
+                    "check_id": check_id or None,
+                    "category": category,
+                    "target": target or None,
+                    "provider": str(cause.get("Provider", "")) or None,
+                    "service": str(cause.get("Service", "")) or None,
+                    "resource": str(cause.get("Resource", "")) or None,
+                },
+                "raw": misconf,
+            }
+
+            out.append(finding)
 
     return out

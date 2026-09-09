@@ -93,6 +93,17 @@ ADAPTER_REGISTRY: dict[str, dict[str, str]] = {
         "module": "scripts.core.adapters.horusec_adapter",
         "class": "HorusecAdapter",
     },
+    # Added with the #1215 fix. The adapter read a top-level `checks` array of
+    # `{"checkID", "success"}` -- a shape NO version of trivy has emitted -- so
+    # `data.get("checks", [])` returned [] and real output produced zero
+    # findings, always. All 14 of its unit tests passed because all 14
+    # hand-built that imagined document. Real captured output is the only thing
+    # that can fail: 19 findings from `k8s-insecure-pod`, where the adapter
+    # scored 0 before the fix.
+    "trivy_rbac": {
+        "module": "scripts.core.adapters.trivy_rbac_adapter",
+        "class": "TrivyRbacAdapter",
+    },
 }
 
 
