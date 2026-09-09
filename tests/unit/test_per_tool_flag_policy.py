@@ -238,3 +238,108 @@ def test_no_scanner_reimplements_the_helpers() -> None:
         "these re-derive per-tool config instead of delegating to "
         "scan_utils.tool_flags / scan_utils.tool_timeout:\n  " + "\n  ".join(offenders)
     )
+
+
+class TestShippedFlagsAreFlagsTheToolActuallyHas:
+    """#1223: `jmo.yml` shipped kubescape `--silent`, which kubescape rejects.
+
+    `per_tool.<tool>.flags` is spliced straight into argv. An **unknown** flag
+    is a different failure from #822's wrong-value one and just as total: the
+    tool exits before scanning, writes no output file, and JMo reports
+    `findings are MISSING` -- which reads identically to a tool that ran and
+    found nothing.
+
+    Measured end to end, same command and same 4.0.13 binary, only the flag
+    differing: `kubescape.json` **not written / 0 findings** with `--silent`,
+    **179,810 bytes / 51 findings** without.
+
+    **This is the third instance of the shape in this repository**, which is
+    why the guard is a table rather than one assertion:
+
+    - `trivy-rbac` passed `--scanners config` to `trivy config`, which has no
+      such flag (#1206) -- dead since the v1.0.0 sixteen-tool commit.
+    - `prowler` was passed `--quiet`, which prowler 5.x does not have. That fix
+      left a comment **three lines above** the first kubescape `--silent`, in
+      this same file, and nobody connected them.
+    - `kubescape` was passed `--silent` (#1223) -- dead since 2025-12-14.
+
+    What this guard is NOT: proof that a flag is valid. Only running the binary
+    shows that, and the suite mocks `subprocess`. It is a memory of the three
+    the project has already paid for, so a fourth cannot be the *same* one.
+    """
+
+    # (tool, flag) -> why the tool rejects it. Spelled out rather than derived:
+    # a guard that reads its expectation from the file it guards cannot fail
+    # when that file changes (#1061).
+    REJECTED_FLAGS: dict[tuple[str, str], str] = {
+        ("kubescape", "--silent"): (
+            "kubescape has no --silent at 4.0.13 (`kubescape scan --help` "
+            "matches it 0 times); it exits 1 having written nothing (#1223)"
+        ),
+        ("prowler", "--quiet"): (
+            "prowler 5.x has no --quiet; argparse exits 2 before the scan "
+            "starts. --no-banner is what suppresses its chatter, and the "
+            "scanner passes that itself"
+        ),
+        ("trivy-rbac", "--scanners"): (
+            "`trivy config` has no --scanners at 0.74.0: FATAL unknown flag, "
+            "exit 1, no output file (#1206). It is also redundant -- "
+            "`trivy config` IS the misconfiguration scanner"
+        ),
+    }
+
+    @staticmethod
+    def _shipped_per_tool_flags() -> dict[tuple[str, str], list[str]]:
+        """{(profile, tool): flags} for every profile in the shipped jmo.yml."""
+        import yaml
+
+        config = Path(__file__).resolve().parents[2] / "jmo.yml"
+        data = yaml.safe_load(config.read_text(encoding="utf-8"))
+        out: dict[tuple[str, str], list[str]] = {}
+        for profile, body in (data.get("profiles") or {}).items():
+            for tool, entry in ((body or {}).get("per_tool") or {}).items():
+                flags = (entry or {}).get("flags")
+                if isinstance(flags, list):
+                    out[(str(profile), str(tool))] = [str(f) for f in flags]
+        for tool, entry in (data.get("per_tool") or {}).items():
+            flags = (entry or {}).get("flags")
+            if isinstance(flags, list):
+                out[("<top-level>", str(tool))] = [str(f) for f in flags]
+        return out
+
+    def test_the_extractor_actually_finds_the_shipped_flags(self):
+        """Meta-guard: an extractor that silently finds nothing passes every
+        assertion built on it."""
+        shipped = self._shipped_per_tool_flags()
+
+        assert len(shipped) >= 8, f"only found {len(shipped)} per_tool flag lists"
+        assert any(t == "trivy" for _p, t in shipped), "trivy carries flags in jmo.yml"
+        assert any(p == "fast" for p, _t in shipped), "the fast profile sets flags"
+
+    def test_no_profile_ships_a_flag_its_tool_rejects(self):
+        shipped = self._shipped_per_tool_flags()
+
+        offences = [
+            f"profile {profile!r} passes {tool} {flag!r} -- {why}"
+            for (profile, tool), flags in sorted(shipped.items())
+            for (bad_tool, flag), why in self.REJECTED_FLAGS.items()
+            if tool == bad_tool and flag in flags
+        ]
+
+        assert not offences, "jmo.yml ships flags the tool rejects:\n  " + "\n  ".join(
+            offences
+        )
+
+    def test_kubescape_carries_no_flags_at_all(self):
+        """The narrow regression, stated separately from the table.
+
+        `--silent` was kubescape's ONLY flag in every profile that set one, so
+        the honest post-fix state is that it takes none -- and a table entry
+        alone would still pass if someone re-added it under a different
+        spelling.
+        """
+        shipped = self._shipped_per_tool_flags()
+
+        kubescape = {p: f for (p, t), f in shipped.items() if t == "kubescape"}
+
+        assert kubescape == {}, f"kubescape should ship no flags, got {kubescape}"
