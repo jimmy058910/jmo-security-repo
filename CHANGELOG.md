@@ -6,6 +6,12 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **semgrep no longer times out on the `fast` profile, and has margin on the rest.** It carried no entry in `TOOL_TIMEOUT_DEFAULTS`, so it took whatever the profile handed it — and unlike the other long-running scanners, semgrep's cost is its **rule count**, not the tree it walks. It restricts itself to git-tracked files by default, so the vendored-directory exclusions added for [#1080](https://github.com/jimmy058910/jmo-security-repo/issues/1080) cannot move its number: measured on this repository it scans **541 tracked files** (not the 36,705 on disk) with `--config auto` resolving **2,930 rules**, and takes **409.8 s** to produce 241 findings.
+
+  It now carries a **900 s floor**, matching horusec — the other multi-language SAST tool. A floor is a ceiling on wasted time rather than an assertion about how long the tool should take, which is why it is set generously: the same work on the same machine was measured at 409.8 s here and **583 s** in #1204, **42% apart**. A budget two samples cannot reproduce within 173 s is not a budget. Before this, `fast` (300 s) lost semgrep outright and `slim` (500 s) cleared it by 90 s.
+
+  Profile timeouts are `fast` 300, `slim` 500, `balanced` 600, `deep` 900. #1204's own table said `balanced` 500 and `deep` 600, which is shifted by a row and measured false; the correction matters because it is the difference between "three of four profiles lose semgrep" and "one does". ([#1204](https://github.com/jimmy058910/jmo-security-repo/issues/1204))
+
 - **kubescape produces findings again.** It contributed **zero to every scan**, exiting 1 and writing a 0-byte output file on every repository with Kubernetes manifests — and **the binary never changed**. `versions.yaml` pinned 4.0.12 throughout, and `tests/fixtures/golden/kubescape/v4.0.12/` holds 141,803 bytes of real output from that same version, captured 2026-09-01, which still parses to 25 findings today.
 
   What changed is fetched at scan time. kubescape downloads its policy bundle into `~/.kubescape/` on every run, and the bundle now served carries controls whose rego the pinned evaluator cannot run: `no ValidatingAdmissionPolicy for control "C-0207" in embedded bundle`, and the same for `C-0275`, `C-0276` and `C-0295` — **four controls, not one**. Not a corrupt cache: deleting `allcontrols.json` re-downloads it and fails identically. The pin is now **4.0.13**, which kubescape's own startup warning names, and which scans the same manifest cleanly — exit 0, 157,481 bytes, compliance score 74, and the same 25 findings through the same adapter, so the output schema is unchanged.
@@ -43,6 +49,14 @@ All notable changes to JMo Security will be documented in this file.
   Two spellings had to be measured rather than assumed, and they are opposites. trivy 0.74.0's `--skip-dirs` is a glob anchored at the scan root, so a bare `node_modules` skips one at the root and walks `scripts/dashboard/node_modules` anyway; it needs `**/node_modules`. checkov 3.3.16's `--skip-path` is a *regex*, matches at any depth already, and drops an unparseable pattern inside `except re.error: continue` — so the trivy spelling would have produced a command that parses, exits 0 and excludes nothing.
 
   **This is a behaviour change a script may notice.** Findings located inside those five directories are no longer reported by semgrep, trivy, bandit or checkov. It does not apply to the tools that inventory dependencies: dependency-check and syft are deliberately untouched, since a vendored tree is their subject matter rather than noise. ([#1080](https://github.com/jimmy058910/jmo-security-repo/issues/1080))
+
+### Removed
+
+- **ZAP is no longer attempted on repository targets. It never worked there.** It is a DAST scanner — it finds vulnerabilities by exercising a **running application** over HTTP — and JMo handed it the first `.html`, `.js` or `.php` file in the tree. `zap-baseline.py -t` takes a URL, not a path, so the invocation could not succeed in any configuration: the dogfood measured `Return code 3 not in (0, 1, 2)`, status `retry_exhausted`, and no `zap.json` written.
+
+  Compounding it, **`zap-baseline.py` is not in the package `jmo tools install zap` lays down** — that is the ZAP desktop distribution (`zap.sh` / `zap.bat` and `zap-2.17.0.jar`); the baseline script ships only in the ZAP Docker image. So on a machine without Docker the tool never started, and on one with Docker it started and exited 3. There was no configuration in which repository-mode ZAP produced a finding.
+
+  ZAP now records `nothing for it to scan` on repository and GitLab targets and writes its stub, the way `lynis` and `akto` already do. **ZAP is untouched on URL targets, where it works** — `jmo scan --url https://...` is unchanged. This also makes `jmo tools check` and the scanner agree: `TOOL_EXECUTION_COMMANDS["zap"]` is `["zap.sh", "java"]`, which is what `tools check` has always verified, while the repository scanner probed `zap-baseline.py` and `docker` — which is how `tools check` could report `zap OK 2.17.0` on a box where the scan could not run it. `docs/PROFILES_AND_TOOLS.md` no longer promises static web-file scanning. ([#1159](https://github.com/jimmy058910/jmo-security-repo/issues/1159))
 
 ## [1.1.0] - 2026-09-02
 

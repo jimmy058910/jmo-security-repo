@@ -120,6 +120,34 @@ class TestTimeoutFloorReachesEveryTargetType:
         assert TOOL_TIMEOUT_DEFAULTS["zap"] == 900
         assert tool_timeout({}, "zap", 600) == 900
 
+    def test_semgrep_carries_a_floor_above_every_profile_default(self):
+        """#1204: semgrep had no floor, so it took the profile default.
+
+        Its cost is its RULE COUNT, not the tree it walks -- it restricts itself
+        to git-tracked files, so the vendored-directory exclusions #1080 added
+        cannot move its number. Measured on this repository twice, same 541
+        tracked files and the same 2,930 rules resolved from `--config auto`:
+        **409.8 s** and, in #1204, **583 s**. 42% apart on one machine.
+
+        The values are spelled out rather than read from PROFILES: a guard that
+        derives its expectation from the thing it guards cannot fail when that
+        thing changes (#1061). fast=300, slim=500, balanced=600, deep=900 are
+        `jmo.yml`'s. #1204's own table said balanced=500 and deep=600, which is
+        measured false and shifted by a row -- so the honest statement is that
+        `fast` lost semgrep outright and `slim` cleared it by 90 s.
+        """
+        assert TOOL_TIMEOUT_DEFAULTS["semgrep"] == 900
+        for profile_default in (300, 500, 600, 900):
+            assert tool_timeout({}, "semgrep", profile_default) == 900
+
+    def test_semgrep_secrets_is_a_separate_entry_and_has_no_floor(self):
+        """`semgrep-secrets` runs `--config p/secrets`, a curated set rather
+        than the 2,930 rules `auto` resolves, and it is a separate profile tool
+        with its own command builder. Giving the binary's name a floor must not
+        silently give the variant one -- the lookup is by tool name."""
+        assert "semgrep-secrets" not in TOOL_TIMEOUT_DEFAULTS
+        assert tool_timeout({}, "semgrep-secrets", 300) == 300
+
     def test_a_generous_profile_default_is_not_lowered(self):
         assert tool_timeout({}, "zap", 1800) == 1800
 

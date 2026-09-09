@@ -399,8 +399,15 @@ class TestRepositoryScanner:
             # Docker command should include bash and run_noseyparker_docker.sh
             assert "bash" in np_def.command
 
-    def test_zap_repository_scanning_with_web_files(self, tmp_path):
-        """Test ZAP scanning when repository contains web files"""
+    def test_zap_builds_no_command_even_with_web_files_and_its_helper(self, tmp_path):
+        """ZAP takes no repository target, however inviting the tree looks.
+
+        This asserted the opposite until #1159. The invocation it verified --
+        `zap-baseline.py -t <a file path>` -- exits 3 on every real run, because
+        `-t` takes a URL. Kept rather than deleted, and inverted, because this
+        is the exact input that used to build the broken command: web files
+        present AND `zap-baseline.py` resolvable.
+        """
         repo = tmp_path / "web-app-repo"
         repo.mkdir()
         (repo / "index.html").write_text("<html><body>Test</body></html>")
@@ -420,11 +427,11 @@ class TestRepositoryScanner:
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
 
-            from scripts.core.tool_runner import ToolResult
-
-            mock_runner.run_all_parallel.return_value = [
-                ToolResult(tool="zap", status="success", attempts=1),
-            ]
+            # No ToolResult for zap: it is not scheduled on a repository
+            # target, so a runner that returns one is asserting something the
+            # scanner cannot produce -- and it would write statuses["zap"] =
+            # True over the False record_not_attempted just made.
+            mock_runner.run_all_parallel.return_value = []
 
             name, statuses = scan_repository(
                 repo=repo,
@@ -437,15 +444,18 @@ class TestRepositoryScanner:
                 find_tool_func=mock_find_tool,
             )
 
-            assert statuses["zap"] is True
-            # Verify ZAP was invoked with web file
             MockRunner.assert_called_once()
             args, kwargs = MockRunner.call_args
             tool_defs = kwargs.get("tools") or (args[0] if args else [])
             zap_def = next((t for t in tool_defs if t.name == "zap"), None)
-            assert zap_def is not None
-            # command is a list, check if zap-baseline.py is in any element
-            assert any("zap-baseline.py" in str(c) for c in zap_def.command)
+
+            assert zap_def is None, "zap must not be given a repository target"
+            assert statuses.get("zap") is not True, (
+                "a tool that never ran must not be recorded as a success (#825)"
+            )
+            assert (statuses.get(NOT_ATTEMPTED_KEY) or {}).get("zap") == (
+                NOT_ATTEMPTED_NOTHING_APPLICABLE
+            )
 
     def test_zap_stub_when_no_web_files(self, tmp_path):
         """Test ZAP writes stub when no web files found"""
@@ -1331,18 +1341,28 @@ class TestAccountingNamesProfileToolsOnly:
     def test_missing_dependency_is_reported_against_its_own_tool(
         self, tmp_path, caplog
     ):
-        """zap's missing helper must be reported as zap, not as `docker`."""
+        """noseyparker's missing helper must be reported as noseyparker.
+
+        This used to be spelled with zap, whose repository mode was removed in
+        #1159 -- so it no longer resolves any binary here and cannot exercise
+        the mechanism. noseyparker is the same shape and the reason the
+        assertion is worth keeping: it shells out to `docker`, which is a
+        dependency and not a profile tool, so reporting it by that name accuses
+        a tool nobody asked for.
+        """
         text = self._scan(
             tmp_path,
-            tools=["zap"],
-            resolvable=set(),  # neither zap-baseline.py nor docker resolve
+            tools=["noseyparker"],
+            resolvable=set(),  # neither noseyparker nor docker resolve
             caplog=caplog,
         )
         assert "docker: requested but" not in text, (
             f"`docker` is a dependency, not a profile tool, and was reported as "
             f"a tool whose findings are missing:\n{text}"
         )
-        assert "zap" in text, f"zap's own failure went unreported:\n{text}"
+        assert "noseyparker" in text, (
+            f"noseyparker's own failure went unreported:\n{text}"
+        )
 
 
 class TestFailedToolsAreReported:
@@ -1965,31 +1985,31 @@ class TestDependencyCheckExitCodes:
         assert 0 in self._definition(tmp_path).ok_return_codes
 
 
-class TestZapIsNotReportedBothWays:
-    """#1136: one scan reported zap as never started AND as failed.
+class TestZapDoesNotTakeARepositoryTarget:
+    """#1159: zap's repository mode could not work, in any configuration.
 
-    `_find_tool` records an unresolved entry on every miss. zap probes
-    `zap-baseline.py` and then `docker`, so a machine with only docker recorded
-    zap as unresolved *and* ran it through the docker fallback:
+    `zap-baseline.py -t` takes a URL. JMo passed it `web_files[0]` -- the first
+    `.html`, `.js` or `.php` file in the tree -- and the dogfood measured the
+    result: `Return code 3 not in (0, 1, 2)`, `retry_exhausted`, no `zap.json`.
+    Compounding it, `zap-baseline.py` is not in the package `jmo tools install
+    zap` lays down at all; it ships in the ZAP Docker image. So without Docker
+    the tool never started, and with it the tool started and exited 3.
 
-        zap requested but its dependency zap-baseline.py could not be found
-        - it did NOT run and its findings are MISSING
-        ... 9 s later ...
-        zap: it failed - it did NOT contribute findings to this scan
-        (Return code 3 not in (0, 1, 2))
+    **This supersedes TestZapIsNotReportedBothWays (#1136).** That class guarded
+    a scan reporting zap as never started AND as failed, which came from probing
+    two binaries and recording an unresolved entry on the first miss. Nothing
+    probes a binary for zap on a repository target now, so the defect is
+    unreachable by construction rather than by bookkeeping -- and
+    `test_the_1136_defect_is_unreachable` below is the negative control saying
+    so, because "we deleted the code that reported it" and "we deleted the
+    report" look identical from the outside.
 
-    Only the second was true. `zap-baseline.py` ships in the ZAP *Docker
-    image*, not in the desktop package `jmo tools install zap` lays down, so
-    the first probe misses on essentially every machine.
+    zap is untouched on **url** targets, where it works.
     """
 
     @staticmethod
-    def _scan(tmp_path, resolvable, caplog):
+    def _scan(tmp_path, repo, resolvable, caplog):
         import logging
-
-        repo = tmp_path / "repo"
-        repo.mkdir()
-        (repo / "index.html").write_text("<html></html>", encoding="utf-8")
 
         with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
@@ -1997,9 +2017,9 @@ class TestZapIsNotReportedBothWays:
             mock_runner.run_all_parallel.return_value = []
 
             with caplog.at_level(
-                logging.ERROR, logger="scripts.cli.scan_jobs.repository_scanner"
+                logging.INFO, logger="scripts.cli.scan_jobs.repository_scanner"
             ):
-                scan_repository(
+                _name, statuses = scan_repository(
                     repo=repo,
                     results_dir=tmp_path / "out",
                     tools=["zap"],
@@ -2014,41 +2034,106 @@ class TestZapIsNotReportedBothWays:
 
             args, kwargs = MockRunner.call_args
             tool_defs = kwargs.get("tools") or (args[0] if args else [])
-            names = [t.name for t in tool_defs]
-        return names, caplog.text
+            return [t.name for t in tool_defs], statuses, caplog.text
 
-    def test_docker_only_runs_zap_and_does_not_report_it_missing(
-        self, tmp_path, caplog
-    ):
-        """The defect: docker present, zap-baseline.py absent."""
-        names, log = self._scan(tmp_path, {"docker"}, caplog)
+    @staticmethod
+    def _web_repo(tmp_path):
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / "index.html").write_text("<html></html>", encoding="utf-8")
+        (repo / "app.js").write_text("const x = 1;\n", encoding="utf-8")
+        return repo
 
-        assert "zap" in names, "zap should run through the docker fallback"
-        assert "did NOT run" not in log, (
-            "zap was reported as never started in the same scan that ran it: " + log
+    # ---- the new contract --------------------------------------------------
+
+    def test_zap_builds_no_command_for_a_repository(self, tmp_path, caplog):
+        """Even with both binaries resolvable, which is the case that used to
+        exit 3."""
+        names, _statuses, _log = self._scan(
+            tmp_path, self._web_repo(tmp_path), {"zap-baseline.py", "docker"}, caplog
         )
-
-    def test_the_native_launcher_still_wins_when_present(self, tmp_path, caplog):
-        """zap-baseline.py is preferred over docker when both resolve, and the
-        command is the native one rather than a `docker run`."""
-        names, log = self._scan(tmp_path, {"zap-baseline.py", "docker"}, caplog)
-
-        assert "zap" in names
-        assert "did NOT run" not in log
-
-    def test_neither_available_is_still_reported_once(self, tmp_path, caplog):
-        """Suppressing the false report must not suppress the true one.
-
-        Without this, the fix could 'pass' by never reporting zap at all, which
-        is the same silent-drop class the surrounding code was written against.
-        """
-        names, log = self._scan(tmp_path, set(), caplog)
 
         assert "zap" not in names
-        assert "did NOT run" in log, (
-            "with neither binary available, zap's absence must still be reported"
+
+    def test_the_reason_is_nothing_to_scan_not_missing(self, tmp_path, caplog):
+        """The distinction #1081 exists to preserve.
+
+        Asserting only that zap did not run would read identically for "the
+        binary is absent", which is a gap the user can close and this is not.
+        """
+        _names, statuses, _log = self._scan(
+            tmp_path, self._web_repo(tmp_path), {"zap-baseline.py", "docker"}, caplog
         )
-        assert log.count("did NOT run") == 1, "reported more than once"
+
+        assert (statuses.get(NOT_ATTEMPTED_KEY) or {}).get("zap") == (
+            NOT_ATTEMPTED_NOTHING_APPLICABLE
+        )
+
+    def test_a_stub_is_still_written(self, tmp_path, caplog):
+        """The report phase globs for one output file per requested tool."""
+        self._scan(
+            tmp_path, self._web_repo(tmp_path), {"zap-baseline.py", "docker"}, caplog
+        )
+
+        assert (tmp_path / "out" / "repo" / "zap.json").exists()
+
+    def test_html_in_the_tree_changes_nothing(self, tmp_path):
+        """The old gate was `web_files[0]`, so a repository with no `.html`,
+        `.js` or `.php` took a different branch. Both are the same branch now,
+        and a guard that only ever saw one of them could not tell."""
+        bare = tmp_path / "bare"
+        bare.mkdir()
+        (bare / "main.py").write_text("x = 1\n", encoding="utf-8")
+
+        import logging
+
+        from _pytest.logging import LogCaptureFixture  # noqa: F401
+
+        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+            mock_runner.run_all_parallel.return_value = []
+            _name, statuses = scan_repository(
+                repo=bare,
+                results_dir=tmp_path / "out2",
+                tools=["zap"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+                find_tool_func=lambda n: "/usr/bin/" + n,
+            )
+            args, kwargs = MockRunner.call_args
+            tool_defs = kwargs.get("tools") or (args[0] if args else [])
+
+        assert "zap" not in [t.name for t in tool_defs]
+        assert (statuses.get(NOT_ATTEMPTED_KEY) or {}).get("zap") == (
+            NOT_ATTEMPTED_NOTHING_APPLICABLE
+        )
+        assert logging  # keep the import meaningful under lint
+
+    # ---- the superseded defect stays gone ----------------------------------
+
+    def test_the_1136_defect_is_unreachable(self, tmp_path, caplog):
+        """zap must never be reported as a missing dependency on a repository.
+
+        #1136 was one scan saying `zap requested but its dependency
+        zap-baseline.py could not be found - it did NOT run` AND, nine seconds
+        later, that it had failed. With nothing resolvable at all -- the harshest
+        input for that message -- neither half may appear, because zap is not
+        attempted here for reasons that have nothing to do with what is
+        installed.
+        """
+        names, statuses, log = self._scan(
+            tmp_path, self._web_repo(tmp_path), set(), caplog
+        )
+
+        assert "zap" not in names
+        assert "did NOT run" not in log, log
+        assert "zap-baseline.py" not in log, log
+        assert (statuses.get(NOT_ATTEMPTED_KEY) or {}).get("zap") == (
+            NOT_ATTEMPTED_NOTHING_APPLICABLE
+        ), "an absent binary must not change the reason: zap is not attempted here"
 
 
 class TestGosecAndKubescapeOnlyRunWhenThereIsSomethingToScan:
