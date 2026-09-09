@@ -102,7 +102,7 @@ jobs:
           python-version: '3.12'
 
       - name: Validate GitHub workflows (actionlint)
-        uses: reviewdog/action-actionlint@v1.73.2
+        uses: reviewdog/action-actionlint@v1.73.4
         with:
           actionlint_flags: -color
           level: error
@@ -114,25 +114,25 @@ jobs:
           yamllint -c .yamllint.yaml .
 
       - name: Lint Dockerfile.fast
-        uses: hadolint/hadolint-action@v3.4.0
+        uses: hadolint/hadolint-action@v3.5.0
         with:
           dockerfile: Dockerfile.fast
           failure-threshold: warning
 
       - name: Lint Dockerfile.slim
-        uses: hadolint/hadolint-action@v3.4.0
+        uses: hadolint/hadolint-action@v3.5.0
         with:
           dockerfile: Dockerfile.slim
           failure-threshold: warning
 
       - name: Lint Dockerfile.balanced
-        uses: hadolint/hadolint-action@v3.4.0
+        uses: hadolint/hadolint-action@v3.5.0
         with:
           dockerfile: Dockerfile.balanced
           failure-threshold: warning
 
       - name: Lint Dockerfile.deep
-        uses: hadolint/hadolint-action@v3.4.0
+        uses: hadolint/hadolint-action@v3.5.0
         with:
           dockerfile: Dockerfile.deep
           failure-threshold: warning
