@@ -21,6 +21,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from tests.conftest import LATENCY_SAMPLES, median_seconds_with_setup
+
 # ============================================================================
 # Test Class 1: CI Environment Detection (7 tests)
 # ============================================================================
@@ -604,29 +606,83 @@ class TestCICDPerformance:
         "skip pattern as test_history_db_performance.py::test_single_scan_insert_performance. "
         "Test runs reliably on Linux/macOS CI to catch regressions.",
     )
-    def test_attestation_generation_under_500ms(self, tmp_path):
-        """Test attestation generation completes in <500ms."""
-        import time
+    def test_attestation_generation_stays_within_budget(self, tmp_path):
+        """Attestation generation does not become pathologically slow (#1120).
 
+        **A median over fresh generators, not one sample, and the budget is the
+        runner's number rather than a workstation's.** The 2026-09-07 nightly
+        failed this at **0.683s against a hard 0.5s**, and four nightlies at the
+        identical SHA passed on either side of it -- so nothing regressed; the
+        budget simply had no headroom on hardware the project does not control.
+
+        Measured locally (Windows, idle, skip bypassed): single samples
+        **0.129 / 0.190 / 0.227s**, median of 21 **0.079s**. The same
+        operation cost 0.683s as a single sample on a GitHub Linux runner --
+        a spread wide enough that any budget near the fast machine's number is
+        a tripwire for the slow one, which is the whole of #1120.
+
+        **2.0s is deliberately loose, and the reason is worth stating rather
+        than hiding.** It is 3x the slowest value ever *observed* (0.683s), but
+        that observation is of a **cold single sample**, and this assertion now
+        measures a **median**, which is a different and smaller quantity -- the
+        local median is 0.079s against a 0.190s local cold sample. No median
+        for this operation has been measured on a GitHub runner yet, so
+        calibrating tightly would mean projecting one, which is the move that
+        put the 200ms budget in `test_benchmarks.py` four releases ago. Once
+        the nightly has run this, the real median is in its log and the budget
+        can be tightened against a number instead of a guess.
+
+        `test_perf_budget_hygiene.py` records why 3x is the bar: under it, a
+        budget is a flake waiting for a busy runner. The 500ms ideal is kept in
+        the failure message, where it informs without gating -- the test no
+        longer carries it in its name, because a name that states a budget the
+        assertion does not enforce is the shape #1069 exists to complain about.
+
+        **A fresh `ProvenanceGenerator` per sample is load-bearing, not
+        tidiness.** `generate()` reaches `_get_tool_versions`, which constructs
+        `ToolRegistry()` lazily and caches it on the instance. Sharing one
+        generator across samples would time the *warm* path from sample 2
+        onward -- a different code path than the single sample measured, which
+        `median_seconds_with_setup`'s docstring warns is worse than the flake.
+
+        The win32 skip is left exactly as it was. Removing it is plausible now
+        that this is a median -- the 1.371s in CHANGELOG.md was a single sample
+        on a variable runner -- but that is unmeasured on a GitHub Windows
+        runner, and this test's whole history is budgets set from numbers
+        nobody measured on the machine that had to meet them.
+        """
         from scripts.core.attestation import ProvenanceGenerator
 
         findings_path = tmp_path / "findings.json"
         findings_path.write_text(json.dumps({"findings": [{"id": "TEST-001"}] * 100}))
 
-        generator = ProvenanceGenerator()
+        generated = []
 
-        start = time.time()
-        generator.generate(
-            findings_path=findings_path,
-            profile="fast",
-            tools=["trivy"],
-            targets=["repo1"],
+        def _fresh_generator():
+            return ProvenanceGenerator()
+
+        def _generate(generator):
+            generated.append(
+                generator.generate(
+                    findings_path=findings_path,
+                    profile="fast",
+                    tools=["trivy"],
+                    targets=["repo1"],
+                )
+            )
+
+        elapsed = median_seconds_with_setup(_fresh_generator, _generate)
+
+        # Every sample must have produced a real statement, or the median timed
+        # a failure path rather than a generation.
+        assert generated and all(s.get("predicate") is not None for s in generated), (
+            "samples did not all produce a provenance statement"
         )
-        elapsed = time.time() - start
 
-        # Should be fast (<500ms for typical scan)
-        assert elapsed < 0.5, (
-            f"Attestation generation took {elapsed:.3f}s (expected <0.5s)"
+        assert elapsed < 2.0, (
+            f"Attestation generation took {elapsed:.3f}s (median of "
+            f"{LATENCY_SAMPLES}, expected <2.0s; ideal <0.5s, "
+            f"0.683s observed on a GitHub Linux runner)"
         )
 
     def test_ci_mode_overhead_minimal(self, tmp_path):

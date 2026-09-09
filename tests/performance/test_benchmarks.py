@@ -304,11 +304,24 @@ class TestPerformanceBenchmarks:
             commit_hash=scan_data["git_commit"],
             branch=scan_data["git_branch"],
         )
-        # Threshold: 200ms accommodates Windows I/O variance (observed: 70-150ms)
-        # while still catching major regressions (10x+ slowdown)
-        assert duration_ms < 200, (
-            f"SQLite scan insert took {duration_ms:.2f}ms (expected <200ms). "
-            f"Target: <50ms ideal, <200ms acceptable for cross-platform"
+        # Threshold: 600ms, and the number is the RUNNER's, not a workstation's
+        # (#1120). The 2026-09-02 nightly failed the old 200ms budget at
+        # **200.86ms** -- a 0.4% miss, on a median of LATENCY_SAMPLES over fresh
+        # databases, with no commit on `main` since six green nightlies. The
+        # median was already in place (#1053, four days earlier), so sampling
+        # was not the defect and taking more samples would not have helped: the
+        # budget was set from fast local hardware.
+        #
+        # Measured on this insert, same tree: **21.8 / 22.8 / 21.8ms** locally
+        # against **200.86ms** on a GitHub runner -- an 8.8x spread, because
+        # this region is fsync-bound SQLite I/O and shared-runner disks are
+        # where that hurts most. 600ms is 3x the slowest observed value, the
+        # bar `test_perf_budget_hygiene.py` records for "not a flake waiting
+        # for a busy runner". The <50ms ideal stays in the message.
+        assert duration_ms < 600, (
+            f"SQLite scan insert took {duration_ms:.2f}ms (median of "
+            f"{LATENCY_SAMPLES}, expected <600ms). Target: <50ms ideal, "
+            f"~22ms local, 201ms observed on a GitHub runner"
         )
 
         # Additional verification: scan retrievable

@@ -899,7 +899,19 @@ def test_upsert_findings_batch_performance(perf_db, tmp_path):
     assert first_counts and set(first_counts) == {5000}, (
         f"insert samples differed: {sorted(set(first_counts))}"
     )
-    assert elapsed1 < 0.5, f"First upsert took {elapsed1:.2f}s (median), expected <0.5s"
+    # 2.0s, not 0.5s (#1120). Both regions here are fsync-bound SQLite writes,
+    # the class where hardware spread is widest. Measured on this tree, idle:
+    # first region 0.13-0.14s, second region 0.52 / 0.56 / 0.58 / 0.68 / 0.68s
+    # over five runs -- so the SECOND one failed its 0.5s budget 5 times out of
+    # 5 on a developer Windows box while passing on both CI platforms. Under
+    # 20-way parallel load the first region reached 0.53s and failed too.
+    #
+    # A median was already in place here (#742); it removes sampling noise and
+    # cannot move a budget that was set from faster hardware. 2.0s is 3x the
+    # slowest observed value, the bar `test_perf_budget_hygiene.py` records.
+    assert elapsed1 < 2.0, (
+        f"First upsert took {elapsed1:.2f}s (median), expected <2.0s (ideal <0.5s)"
+    )
 
     # Modify some findings so the second region is genuinely an update.
     for f in findings[:1000]:
@@ -915,8 +927,8 @@ def test_upsert_findings_batch_performance(perf_db, tmp_path):
     assert second_counts and set(second_counts) == {5000}, (
         f"update samples differed: {sorted(set(second_counts))}"
     )
-    assert elapsed2 < 0.5, (
-        f"Second upsert took {elapsed2:.2f}s (median), expected <0.5s"
+    assert elapsed2 < 2.0, (
+        f"Second upsert took {elapsed2:.2f}s (median), expected <2.0s (ideal <0.5s)"
     )
 
     # Leave the fixture connection in the state the assertions below expect.
