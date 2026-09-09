@@ -292,12 +292,19 @@ class RichScanProgressTracker:
         because the parameter was never read. The target bar therefore advanced
         identically whether a target found everything or nothing (#809).
         """
-        from scripts.cli.scan_utils import not_attempted_tools
+        from scripts.cli.scan_utils import (
+            NOT_ATTEMPTED_MISSING,
+            not_attempted_tools,
+        )
 
         outcome = classify_target_outcome(statuses)
         # Excluded for the same reason as in `ScanProgressReporter`: a stubbed
         # tool is False now, and accusing it of failing would be wrong (#825).
+        # The UNION of both not-attempted reasons, deliberately.
         skipped_tools = set(not_attempted_tools(statuses))
+        # The subset that is an environment gap. A tool with nothing to scan is
+        # reported once at the end of the run instead of once per target (#1081).
+        missing_tools = set(not_attempted_tools(statuses, reason=NOT_ATTEMPTED_MISSING))
         failed_tools = sorted(
             name
             for name, ok in (statuses or {}).items()
@@ -330,11 +337,11 @@ class RichScanProgressTracker:
                 f"{target_type}: {target_name} - findings MISSING from "
                 f"{len(failed_tools)} failed tool(s): {', '.join(failed_tools)}",
             )
-        elif skipped_tools:
+        elif missing_tools:
             self.log(
                 "WARN",
-                f"{target_type}: {target_name} - {len(skipped_tools)} tool(s) "
-                f"were stubbed and did NOT run: {', '.join(sorted(skipped_tools))}",
+                f"{target_type}: {target_name} - {len(missing_tools)} tool(s) "
+                f"were stubbed and did NOT run: {', '.join(sorted(missing_tools))}",
             )
 
         with self._lock:

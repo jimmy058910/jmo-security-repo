@@ -13,7 +13,12 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 
 from scripts.cli.scan_jobs.repository_scanner import scan_repository
-from scripts.cli.scan_utils import not_attempted_tools
+from scripts.cli.scan_utils import (
+    NOT_ATTEMPTED_KEY,
+    NOT_ATTEMPTED_MISSING,
+    NOT_ATTEMPTED_NOTHING_APPLICABLE,
+    not_attempted_tools,
+)
 
 
 class TestRepositoryScanner:
@@ -2038,3 +2043,214 @@ class TestZapIsNotReportedBothWays:
             "with neither binary available, zap's absence must still be reported"
         )
         assert log.count("did NOT run") == 1, "reported more than once"
+
+
+class TestGosecAndKubescapeOnlyRunWhenThereIsSomethingToScan:
+    """#1081: both reported ERROR "findings are MISSING" on every repo.
+
+    gosec and kubescape exit in ~100 ms with no output file when a repository
+    has no Go and no Kubernetes -- which is most repositories. `tool_runner`
+    grades an accepted return code with no output as `no_output` and logs
+
+        [ERROR] gosec: exited with an accepted code but wrote no output file
+        - its findings are MISSING from this scan
+
+    That is the line that catches a genuinely broken scanner (a Windows `.exe`
+    omission once made trufflehog scan nothing, exit 0, and pass the
+    `zero-secrets` policy). Firing it on every Node, Python, Java, Ruby or PHP
+    repository trains the reader to ignore it.
+
+    The fix is not to suppress the message: it is to never build the
+    `ToolDefinition`, so the tool never runs and `no_output` is unreachable --
+    the same shape zap, falco and afl++ already use.
+    """
+
+    @staticmethod
+    def _scan(tmp_path, repo, tools):
+        """Run `scan_repository` with every requested tool resolvable.
+
+        Returns (tool_def_names, statuses). `allow_missing_tools=False` so a
+        stub can only come from the content predicate, never from the
+        missing-binary branch.
+        """
+        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+            mock_runner.run_all_parallel.return_value = []
+
+            _name, statuses = scan_repository(
+                repo=repo,
+                results_dir=tmp_path / "out",
+                tools=tools,
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+                find_tool_func=lambda n: "/usr/bin/" + n,
+            )
+
+            args, kwargs = MockRunner.call_args
+            tool_defs = kwargs.get("tools") or (args[0] if args else [])
+            return [t.name for t in tool_defs], statuses
+
+    @staticmethod
+    def _reason(statuses, tool):
+        """The recorded reason, or None.
+
+        Reached through NOT_ATTEMPTED_KEY rather than `not_attempted_tools`,
+        which returns only the tool NAMES and so reads identically whether the
+        reason is "not installed" or "nothing for it to scan" -- the exact
+        distinction #1081 is about. Asserting on membership alone would pass
+        against the unfixed code.
+        """
+        return (statuses.get(NOT_ATTEMPTED_KEY) or {}).get(tool)
+
+    # ---- gosec -------------------------------------------------------------
+
+    def test_gosec_is_skipped_on_a_repo_with_no_go(self, tmp_path):
+        repo = tmp_path / "node-app"
+        (repo / "src").mkdir(parents=True)
+        (repo / "src" / "index.js").write_text("console.log(1)", encoding="utf-8")
+        (repo / "README.md").write_text("# no go here", encoding="utf-8")
+
+        names, statuses = self._scan(tmp_path, repo, ["gosec"])
+
+        assert "gosec" not in names, "gosec must not be run with nothing to load"
+        assert statuses["gosec"] is False
+        assert self._reason(statuses, "gosec") == NOT_ATTEMPTED_NOTHING_APPLICABLE
+
+    def test_gosec_runs_when_a_go_file_is_present(self, tmp_path):
+        repo = tmp_path / "go-app"
+        (repo / "cmd").mkdir(parents=True)
+        (repo / "cmd" / "main.go").write_text("package main", encoding="utf-8")
+
+        names, statuses = self._scan(tmp_path, repo, ["gosec"])
+
+        assert "gosec" in names
+        assert self._reason(statuses, "gosec") is None
+
+    def test_gosec_runs_on_a_go_mod_with_no_checked_in_sources(self, tmp_path):
+        """`go.mod` alone is enough. A module whose sources are generated at
+        build time still has one, and skipping it would drop the scanner on a
+        real Go repository -- the failure direction that matters."""
+        repo = tmp_path / "go-mod-only"
+        repo.mkdir()
+        (repo / "go.mod").write_text("module example.com/m\n", encoding="utf-8")
+
+        names, _statuses = self._scan(tmp_path, repo, ["gosec"])
+
+        assert "gosec" in names
+
+    def test_go_inside_a_vendored_tree_does_not_trigger_gosec(self, tmp_path):
+        """The predicate reads the same directory list the scan flags are built
+        from, so a `.go` under `node_modules/` is not the repo's own code.
+
+        Measurable on jmo-security-repo itself: its only `.go` outside the test
+        fixtures is `.venv/.../pre_commit/resources/empty_template_main.go`,
+        shipped by pre-commit. Counting that would trigger gosec on every
+        Python repository with a virtualenv in the tree.
+        """
+        repo = tmp_path / "js-app"
+        vendored = repo / "node_modules" / "some-pkg"
+        vendored.mkdir(parents=True)
+        (vendored / "helper.go").write_text("package main", encoding="utf-8")
+        (repo / "index.js").write_text("console.log(1)", encoding="utf-8")
+
+        names, statuses = self._scan(tmp_path, repo, ["gosec"])
+
+        assert "gosec" not in names
+        assert self._reason(statuses, "gosec") == NOT_ATTEMPTED_NOTHING_APPLICABLE
+
+    # ---- kubescape ---------------------------------------------------------
+
+    def test_kubescape_is_skipped_when_yaml_holds_no_manifest(self, tmp_path):
+        """Having YAML is not having Kubernetes.
+
+        Measured on OWASP Juice Shop, the repository #1081 was found against:
+        90 `.yaml`/`.yml` files, none containing `apiVersion:`. An
+        extension-only predicate would run kubescape on all 90 and produce the
+        ERROR the issue is about.
+        """
+        repo = tmp_path / "ci-only"
+        (repo / ".github" / "workflows").mkdir(parents=True)
+        (repo / ".github" / "workflows" / "ci.yml").write_text(
+            "name: CI\non: [push]\njobs:\n  build:\n    runs-on: ubuntu-latest\n",
+            encoding="utf-8",
+        )
+        (repo / "docker-compose.yml").write_text(
+            "services:\n  web:\n    image: nginx\n", encoding="utf-8"
+        )
+
+        names, statuses = self._scan(tmp_path, repo, ["kubescape"])
+
+        assert "kubescape" not in names
+        assert statuses["kubescape"] is False
+        assert self._reason(statuses, "kubescape") == NOT_ATTEMPTED_NOTHING_APPLICABLE
+
+    def test_kubescape_runs_when_a_manifest_is_present(self, tmp_path):
+        repo = tmp_path / "k8s-app"
+        (repo / "deploy").mkdir(parents=True)
+        (repo / "deploy" / "pod.yaml").write_text(
+            "apiVersion: v1\nkind: Pod\nmetadata:\n  name: p\n", encoding="utf-8"
+        )
+
+        names, statuses = self._scan(tmp_path, repo, ["kubescape"])
+
+        assert "kubescape" in names
+        assert self._reason(statuses, "kubescape") is None
+
+    def test_kubescape_detects_a_manifest_by_content_not_by_filename(self, tmp_path):
+        """`pod.yaml`, `ingress.yaml` and `configmap.yaml` are all manifests and
+        none of them matches the `*deployment*` / `*service*` / `k8s/**` globs
+        this module uses for trivy-rbac."""
+        repo = tmp_path / "odd-names"
+        (repo / "manifests").mkdir(parents=True)
+        (repo / "manifests" / "ingress.yml").write_text(
+            "apiVersion: networking.k8s.io/v1\nkind: Ingress\n", encoding="utf-8"
+        )
+
+        names, _statuses = self._scan(tmp_path, repo, ["kubescape"])
+
+        assert "kubescape" in names
+
+    def test_an_undecodable_yaml_does_not_abort_the_predicate(self, tmp_path):
+        """A file that is not valid UTF-8 must not take the scan down, and must
+        not hide a manifest sitting beside it."""
+        repo = tmp_path / "mixed"
+        repo.mkdir()
+        (repo / "binary.yaml").write_bytes(b"\xff\xfe\x00garbage\x80\x81")
+        (repo / "svc.yaml").write_text(
+            "apiVersion: v1\nkind: Service\n", encoding="utf-8"
+        )
+
+        names, _statuses = self._scan(tmp_path, repo, ["kubescape"])
+
+        assert "kubescape" in names
+
+    # ---- the two reasons stay distinct -------------------------------------
+
+    def test_a_missing_binary_still_reports_not_installed(self, tmp_path):
+        """Suppressing the false ERROR must not suppress the true one. A repo
+        that DOES have Go, with gosec absent, is an environment gap the user can
+        close -- a different outcome, and it must keep saying so."""
+        repo = tmp_path / "go-app"
+        repo.mkdir()
+        (repo / "main.go").write_text("package main", encoding="utf-8")
+
+        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+            mock_runner.run_all_parallel.return_value = []
+
+            _name, statuses = scan_repository(
+                repo=repo,
+                results_dir=tmp_path / "out",
+                tools=["gosec"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=True,
+                find_tool_func=lambda _n: None,
+            )
+
+        assert self._reason(statuses, "gosec") == NOT_ATTEMPTED_MISSING

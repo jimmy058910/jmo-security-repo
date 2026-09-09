@@ -2913,13 +2913,20 @@ class ProgressTracker:
         """
         import time
 
-        from scripts.cli.scan_utils import not_attempted_tools
+        from scripts.cli.scan_utils import (
+            NOT_ATTEMPTED_MISSING,
+            not_attempted_tools,
+        )
 
         outcome = classify_target_outcome(statuses)
         # A stubbed tool is False now, so it must be excluded here or every
         # "findings MISSING from N failed tool(s)" line would accuse tools that
-        # were never installed of failing (#825).
+        # were never installed of failing (#825). This stays the UNION of both
+        # reasons -- narrowing it would put skipped tools back into the vote.
         skipped_tools = set(not_attempted_tools(statuses))
+        # The subset that is a gap in the environment rather than a correct
+        # decision about this target. Only these earn a WARN (#1081).
+        missing_tools = set(not_attempted_tools(statuses, reason=NOT_ATTEMPTED_MISSING))
         failed_tools = sorted(
             name
             for name, ok in (statuses or {}).items()
@@ -2990,15 +2997,22 @@ class ProgressTracker:
                     f"{len(failed_tools)} failed tool(s): "
                     f"{', '.join(failed_tools)}",
                 )
-            elif skipped_tools:
+            elif missing_tools:
                 # The tools that ran all succeeded, so this is not a warning
                 # about the scan -- but which tools were stubbed is still the
                 # difference between "clean" and "not looked at".
+                #
+                # `missing_tools`, not `skipped_tools`: only a tool that is not
+                # installed is a gap in the environment. One that had nothing to
+                # scan is reported once at the end of the run, at INFO -- gating
+                # gosec and kubescape on content (#1081) would otherwise have put
+                # this WARN on every target of every Node, Python, Java, Ruby and
+                # PHP scan, which is how a line stops being read.
                 _log(
                     self.args,
                     "WARN",
-                    f"{message} - {len(skipped_tools)} tool(s) were stubbed and "
-                    f"did NOT run: {', '.join(sorted(skipped_tools))}",
+                    f"{message} - {len(missing_tools)} tool(s) were stubbed and "
+                    f"did NOT run: {', '.join(sorted(missing_tools))}",
                 )
             else:
                 _log(self.args, "INFO", message)
@@ -3140,7 +3154,12 @@ def cmd_scan(args) -> int:
     import time
 
     # Clear tool warning deduplication tracker at scan start (Fix 1.3 - Issue #3)
-    from scripts.cli.scan_utils import clear_tool_warnings, not_attempted_tools
+    from scripts.cli.scan_utils import (
+        NOT_ATTEMPTED_MISSING,
+        NOT_ATTEMPTED_NOTHING_APPLICABLE,
+        clear_tool_warnings,
+        not_attempted_tools,
+    )
 
     clear_tool_warnings()
 
@@ -3548,10 +3567,21 @@ def cmd_scan(args) -> int:
     # policy passes on a run where no secret scanner executed. The run still
     # exits on findings alone: `--allow-missing-tools` bought that, and taking
     # it back here would invert what the flag is for.
+    # Split by REASON, because the two mean opposite things to a reader. A tool
+    # that is not installed produced an empty file without looking - the
+    # `zero-secrets` shape above. A tool the target had nothing for produced an
+    # empty file that is simply CORRECT: gosec on a repository with no Go has
+    # not missed anything.
+    #
+    # Reason-blind, this warned about both in the words of the first, and #1081
+    # made that load-bearing: gating gosec and kubescape on content moved them
+    # out of an ERROR and into this WARN, which would have fired on every Node,
+    # Python, Java, Ruby and PHP repository saying "nothing looked, which is not
+    # the same as finding nothing" - the same false alarm in a quieter voice.
     stubbed_by_target = {
-        str(name): not_attempted_tools(statuses)
+        str(name): missing
         for name, statuses in scan_results
-        if not_attempted_tools(statuses)
+        if (missing := not_attempted_tools(statuses, reason=NOT_ATTEMPTED_MISSING))
     }
     if stubbed_by_target:
         total_stubbed = sum(len(v) for v in stubbed_by_target.values())
@@ -3565,6 +3595,30 @@ def cmd_scan(args) -> int:
             + "; ".join(
                 f"{target}: {', '.join(tools_)}"
                 for target, tools_ in sorted(stubbed_by_target.items())
+            ),
+        )
+
+    # Benign, so INFO rather than WARN - but still said out loud, because "why
+    # is there no gosec output?" is a question a user will ask and the answer
+    # should not require reading scan-timings.json.
+    inapplicable_by_target = {
+        str(name): idle
+        for name, statuses in scan_results
+        if (
+            idle := not_attempted_tools(
+                statuses, reason=NOT_ATTEMPTED_NOTHING_APPLICABLE
+            )
+        )
+    }
+    if inapplicable_by_target:
+        total_inapplicable = sum(len(v) for v in inapplicable_by_target.values())
+        _log(
+            args,
+            "INFO",
+            f"{total_inapplicable} tool(s) were SKIPPED with nothing to scan: "
+            + "; ".join(
+                f"{target}: {', '.join(tools_)}"
+                for target, tools_ in sorted(inapplicable_by_target.items())
             ),
         )
 

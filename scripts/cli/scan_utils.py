@@ -697,17 +697,31 @@ def record_not_attempted(
     statuses.setdefault(NOT_ATTEMPTED_KEY, {})[tool] = reason
 
 
-def not_attempted_tools(statuses: Mapping[str, Any] | None) -> list[str]:
+def not_attempted_tools(
+    statuses: Mapping[str, Any] | None, *, reason: str | None = None
+) -> list[str]:
     """The tools a target never ran, sorted. Empty when everything was tried.
 
     Takes a `Mapping` rather than a `dict` because every caller reads a status
     map it does not own -- `classify_target_outcome` and both progress
     reporters annotate theirs as `Mapping`.
+
+    `reason` narrows to one of NOT_ATTEMPTED_MISSING / _NOTHING_APPLICABLE.
+    Without it the two are indistinguishable here, which is how the distinction
+    `record_not_attempted` records got lost on the way to the screen: three of
+    the four callers only need membership -- to keep a skipped tool out of the
+    failed-tools vote -- so nothing noticed that the fourth, the STUBBED
+    warning, was telling users "nothing looked, which is not the same as
+    finding nothing" about tools that correctly had nothing to look at (#1081).
     """
     if not statuses:
         return []
     recorded = statuses.get(NOT_ATTEMPTED_KEY) or {}
-    return sorted(recorded) if isinstance(recorded, dict) else []
+    if not isinstance(recorded, dict):
+        return []
+    if reason is None:
+        return sorted(recorded)
+    return sorted(tool for tool, why in recorded.items() if why == reason)
 
 
 def write_stub(tool: str, out_path: Path) -> None:

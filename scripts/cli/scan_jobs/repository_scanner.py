@@ -52,8 +52,9 @@ Integrates with ToolRunner for parallel execution and resilient error handling.
 from __future__ import annotations
 
 import logging
+import os
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 from ...core.config import RetryConfig
@@ -147,6 +148,102 @@ def _collect_files(repo: Path, patterns: tuple[str, ...], tool_name: str) -> lis
         files = files[:MAX_FILE_ARGS]
 
     return [str(f) for f in files]
+
+
+def _iter_repo_files(repo: Path) -> Iterator[Path]:
+    """Yield every file under ``repo``, never descending into a skipped tree.
+
+    ``os.walk`` rather than ``Path.glob`` because pruning is done by assigning
+    into ``dirnames`` in place, so a vendored tree is never *entered*.
+    ``repo.glob("**/*.go")`` walks ``node_modules`` in full and discards the
+    result afterwards, which is the expensive half of the work -- and these
+    predicates run on every scan, including the repositories that have nothing
+    for the tool and get no value from the walk.
+
+    A generator, so a caller that only needs "is there one?" stops at the first
+    match instead of materialising a list the way the older content checks in
+    this module (``zap``, ``mobsf``, ``trivy-rbac``) do.
+    """
+    for dirpath, dirnames, filenames in os.walk(repo):
+        dirnames[:] = [d for d in dirnames if d not in _SKIPPED_DIR_NAMES]
+        base = Path(dirpath)
+        for filename in filenames:
+            yield base / filename
+
+
+def _repo_has_go_sources(repo: Path) -> bool:
+    """True when gosec has something to load: a ``.go`` file or a ``go.mod``.
+
+    ``go.mod`` alone counts. A module whose sources are generated at build time
+    still carries one, and the failure directions here are not symmetric: over-
+    triggering costs one fast tool run that reports nothing, while under-
+    triggering silently drops a scanner from a real Go repository -- the class
+    of bug that let a Windows ``.exe`` omission make trufflehog scan nothing,
+    exit 0, and pass the ``zero-secrets`` policy.
+
+    Vendored trees are excluded by ``_iter_repo_files``, which matters more than
+    it looks: pre-commit ships ``resources/empty_template_main.go`` inside its
+    own package, so counting ``.venv`` would trigger gosec on every Python
+    repository with a virtualenv in the tree. gosec's ``./...`` target excludes
+    ``vendor/`` in module mode for the same reason.
+    """
+    for path in _iter_repo_files(repo):
+        if path.suffix == ".go" or path.name == "go.mod":
+            return True
+    return False
+
+
+#: What a Kubernetes manifest has that other YAML does not. Every manifest
+#: carries a top-level ``apiVersion:`` -- Helm templates, kustomizations and
+#: CRDs included -- and nothing else in a normal repository does.
+#:
+#: Content rather than filename, because the filenames are not diagnostic in
+#: either direction. Measured on OWASP Juice Shop, the repository #1081 was
+#: found against: **90 `.yaml`/`.yml` files, none holding `apiVersion:`** -- CI
+#: workflows, a docker-compose file and config. An extension-only predicate
+#: would hand kubescape all 90 and reproduce the ERROR. And a name-based one
+#: misses the other way: ``pod.yaml``, ``ingress.yaml`` and ``configmap.yaml``
+#: are manifests that match none of the ``*deployment*`` / ``*service*`` /
+#: ``k8s/**`` globs this module still uses for trivy-rbac, which also globs no
+#: ``.yml`` at all -- 1 of 5 real manifest filenames. See #1212; left alone here
+#: to keep #1081 to the two tools its issue names.
+_K8S_MANIFEST_MARKER = "apiVersion:"
+_K8S_MANIFEST_SUFFIXES: frozenset[str] = frozenset({".yaml", ".yml"})
+
+
+def _repo_has_k8s_manifests(repo: Path) -> bool:
+    """True when at least one YAML under ``repo`` looks like a K8s manifest.
+
+    ``encoding="utf-8", errors="replace"`` is deliberate on both halves. Without
+    an explicit encoding, ``read_text`` opens with the locale codec and a UTF-8
+    YAML raises ``UnicodeDecodeError`` on a cp1252 console -- a crash CI cannot
+    see, because it sets ``PYTHONUTF8=1``. ``replace`` then keeps one
+    undecodable file from hiding a manifest sitting beside it; the marker is
+    pure ASCII, so a replacement character elsewhere cannot mask it.
+
+    Whole file rather than a capped prefix: a multi-document manifest can carry
+    its first ``apiVersion:`` after a long leading document, and skipping a real
+    Kubernetes repository is the expensive error. Only ``.yaml``/``.yml`` are
+    opened, which on every repository measured is a double-digit file count.
+
+    Known limitation: JSON manifests are not detected. kubescape accepts them,
+    but they are rare enough in checked-in trees that reading every ``.json``
+    (SBOMs, lockfiles, tool output) to find one is not a trade worth making.
+    """
+    for path in _iter_repo_files(repo):
+        if path.suffix.lower() not in _K8S_MANIFEST_SUFFIXES:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            # Unreadable is not "absent" -- but it is also not something this
+            # predicate can resolve, and a permission error on one file must
+            # not take the scan down. Python 3.12 propagates PermissionError
+            # from path probes rather than returning False (#1163).
+            continue
+        if _K8S_MANIFEST_MARKER in text:
+            return True
+    return False
 
 
 def scan_repository(
@@ -942,10 +1039,16 @@ def scan_repository(
             record_not_attempted(statuses, "checkov-cicd")
 
     # Gosec: Go security analyzer
+    # Content-triggered: gosec loads Go packages, so a tree with no Go gives it
+    # nothing to do. It exits in ~100 ms with an accepted return code and no
+    # output file, which `tool_runner` grades as `no_output` and reports as
+    # "its findings are MISSING from this scan" -- on every Node, Python, Java,
+    # Ruby or PHP repository, i.e. most of them (#1081).
     if "gosec" in tools:
         gosec_out = out_dir / "gosec.json"
         gosec_path = _find_tool("gosec")
-        if gosec_path:
+        has_go = _repo_has_go_sources(repo) if gosec_path else False
+        if gosec_path and has_go:
             gosec_flags = get_tool_flags("gosec")
             gosec_cmd = [
                 gosec_path,
@@ -965,9 +1068,17 @@ def scan_repository(
                     capture_stdout=False,
                 )
             )
-        elif allow_missing_tools:
+        elif allow_missing_tools or not has_go:
             _write_stub("gosec", gosec_out)
-            record_not_attempted(statuses, "gosec")
+            record_not_attempted(
+                statuses,
+                "gosec",
+                (
+                    NOT_ATTEMPTED_MISSING
+                    if not gosec_path
+                    else NOT_ATTEMPTED_NOTHING_APPLICABLE
+                ),
+            )
 
     # cdxgen: SBOM and dependency analysis
     # Performance optimizations (v1.0.1):
@@ -1048,10 +1159,27 @@ def scan_repository(
             record_not_attempted(statuses, "scancode")
 
     # Kubescape: Kubernetes security scanner
+    # Content-triggered, and its failure is NOT the fast exit #1081 describes:
+    # measured at 4.0.12 on juice-shop, kubescape spends ~4 s loading policies
+    # and then dies parsing files that are not manifests at all
+    # (`failed to parse .../frontend/tsconfig.json`), leaving a 0-byte output
+    # that `tool_runner` grades `no_output`. Not running it on a tree with no
+    # manifests avoids that path entirely.
+    #
+    # It does NOT make kubescape work where manifests exist: kubescape fetches
+    # its policy bundle at scan time, and the bundle now served carries a
+    # control the pinned 4.0.12 binary cannot evaluate, so every scan exits 1
+    # with 0 bytes (#1211). The same binary worked on 2026-09-01 -- the golden
+    # fixture proves it -- so the version pin did not hold the behaviour. That
+    # ERROR is correct and is deliberately left firing.
+    #
+    # `apiVersion:` rather than a filename glob -- see `_repo_has_k8s_manifests`
+    # for what that was measured against.
     if "kubescape" in tools:
         kubescape_out = out_dir / "kubescape.json"
         kubescape_path = _find_tool("kubescape")
-        if kubescape_path:
+        has_manifests = _repo_has_k8s_manifests(repo) if kubescape_path else False
+        if kubescape_path and has_manifests:
             kubescape_flags = get_tool_flags("kubescape")
             kubescape_cmd = [
                 kubescape_path,
@@ -1074,9 +1202,17 @@ def scan_repository(
                     capture_stdout=False,
                 )
             )
-        elif allow_missing_tools:
+        elif allow_missing_tools or not has_manifests:
             _write_stub("kubescape", kubescape_out)
-            record_not_attempted(statuses, "kubescape")
+            record_not_attempted(
+                statuses,
+                "kubescape",
+                (
+                    NOT_ATTEMPTED_MISSING
+                    if not kubescape_path
+                    else NOT_ATTEMPTED_NOTHING_APPLICABLE
+                ),
+            )
 
     # Prowler: Multi-cloud CSPM (AWS/Azure/GCP/K8s)
     # Note: Prowler scans cloud infrastructure, not code repositories

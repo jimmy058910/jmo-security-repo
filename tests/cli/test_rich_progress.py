@@ -452,3 +452,94 @@ class TestUpdateToolDoesNotDeadlock:
             "that calls self.log() from inside update_tool()'s "
             "`with self._lock:` block requires RLock to avoid a self-deadlock."
         )
+
+
+class TestUpdateOnlyWarnsAboutRealGaps:
+    """#1081, in the wizard's reporter.
+
+    `RichScanProgressTracker.update` is a parallel implementation of
+    `ScanProgressReporter._log_target` in jmo.py and carried the same
+    reason-blind wording. Tested separately for the reason that file's own
+    guards record: both lines name the tool and say "stubbed", so a test that
+    only reads the whole stream passes with either one deleted.
+    """
+
+    @staticmethod
+    def _logged(monkeypatch, statuses):
+        """The (level, message) pairs `update` emits for one target."""
+        tracker = make_tracker()
+        seen: list[tuple[str, str]] = []
+        monkeypatch.setattr(
+            tracker, "log", lambda level, msg: seen.append((level, msg))
+        )
+        tracker.update("repo", "proj", statuses)
+        return seen
+
+    def test_a_tool_with_nothing_to_scan_is_not_warned_about(self, monkeypatch):
+        from scripts.cli.scan_utils import (
+            NOT_ATTEMPTED_NOTHING_APPLICABLE,
+            record_not_attempted,
+        )
+
+        statuses: dict = {"trufflehog": True}
+        record_not_attempted(statuses, "gosec", NOT_ATTEMPTED_NOTHING_APPLICABLE)
+
+        assert self._logged(monkeypatch, statuses) == [], (
+            "a correct skip produced a warning on the target line"
+        )
+
+    def test_a_missing_tool_is_still_warned_about(self, monkeypatch):
+        """Narrowed, not deleted: an empty stub from a scanner that never ran
+        still satisfies a `zero-secrets` policy (#825)."""
+        from scripts.cli.scan_utils import NOT_ATTEMPTED_MISSING, record_not_attempted
+
+        statuses: dict = {"trufflehog": True}
+        record_not_attempted(statuses, "gosec", NOT_ATTEMPTED_MISSING)
+
+        logged = self._logged(monkeypatch, statuses)
+
+        assert len(logged) == 1, f"expected exactly one line: {logged}"
+        level, msg = logged[0]
+        assert level == "WARN"
+        assert "1 tool(s) were stubbed and did NOT run" in msg
+        assert "gosec" in msg
+
+    def test_a_mixed_target_names_only_the_missing_tool(self, monkeypatch):
+        """The discriminating case. With one of each reason, a reason-blind
+        implementation names both and reports the count as 2."""
+        from scripts.cli.scan_utils import (
+            NOT_ATTEMPTED_MISSING,
+            NOT_ATTEMPTED_NOTHING_APPLICABLE,
+            record_not_attempted,
+        )
+
+        statuses: dict = {"trufflehog": True}
+        record_not_attempted(statuses, "semgrep", NOT_ATTEMPTED_MISSING)
+        record_not_attempted(statuses, "gosec", NOT_ATTEMPTED_NOTHING_APPLICABLE)
+
+        logged = self._logged(monkeypatch, statuses)
+
+        assert len(logged) == 1, f"expected exactly one line: {logged}"
+        _level, msg = logged[0]
+        assert "1 tool(s)" in msg, "counted the skipped tool as a gap: " + msg
+        assert "semgrep" in msg
+        assert "gosec" not in msg, "named a tool that had nothing to scan: " + msg
+
+    def test_a_failed_tool_is_unaffected(self, monkeypatch):
+        """The narrowing must not reach the failure path: a tool that ran and
+        failed is neither reason and still has to be reported."""
+        from scripts.cli.scan_utils import (
+            NOT_ATTEMPTED_NOTHING_APPLICABLE,
+            record_not_attempted,
+        )
+
+        statuses: dict = {"trufflehog": True, "semgrep": False}
+        record_not_attempted(statuses, "gosec", NOT_ATTEMPTED_NOTHING_APPLICABLE)
+
+        logged = self._logged(monkeypatch, statuses)
+
+        assert len(logged) == 1, f"expected exactly one line: {logged}"
+        level, msg = logged[0]
+        assert level == "WARN"
+        assert "findings MISSING from 1 failed tool(s)" in msg
+        assert "semgrep" in msg
