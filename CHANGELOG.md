@@ -4,6 +4,14 @@ All notable changes to JMo Security will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Scans no longer walk vendored dependency trees.** checkov received no exclusion flags at all, and trivy's were inert for any directory below the scan root, so a repository with its dependencies installed was scanned in full: measured on this repository, 36,705 files on disk to analyse 985 tracked ones, with checkov and trivy each hitting the 300 s cap and contributing no findings whatsoever. `.git`, `node_modules`, `vendor`, `.venv` and `venv` are now excluded for the tools that read the repository's own code. trivy's own scan of this repository goes from 301 s and an error exit to 75 s and a clean one.
+
+  Two spellings had to be measured rather than assumed, and they are opposites. trivy 0.74.0's `--skip-dirs` is a glob anchored at the scan root, so a bare `node_modules` skips one at the root and walks `scripts/dashboard/node_modules` anyway; it needs `**/node_modules`. checkov 3.3.16's `--skip-path` is a *regex*, matches at any depth already, and drops an unparseable pattern inside `except re.error: continue` — so the trivy spelling would have produced a command that parses, exits 0 and excludes nothing.
+
+  **This is a behaviour change a script may notice.** Findings located inside those five directories are no longer reported by semgrep, trivy, bandit or checkov. It does not apply to the tools that inventory dependencies: dependency-check and syft are deliberately untouched, since a vendored tree is their subject matter rather than noise. ([#1080](https://github.com/jimmy058910/jmo-security-repo/issues/1080))
+
 ## [1.1.0] - 2026-09-02
 
 This release is the outcome of a pre-release fix program rather than a feature milestone. Every command path, adapter and artifact was exercised against real repositories, and every defect that surfaced was fixed before tagging instead of shipped with a disposition: 123 issues across twelve phases, closed by the commits that fixed them. The theme running through all of it is the one 1.0.7 and 1.0.8 started on: a scan must not report success for work it did not do. Several of the entries below are behaviour changes a script may notice; they are marked.

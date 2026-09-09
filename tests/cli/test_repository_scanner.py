@@ -1696,14 +1696,14 @@ class TestHorusecStagingDirIsExcluded:
         command = commands["trivy"]
 
         assert "--skip-dirs" in command
-        assert command[command.index("--skip-dirs") + 1] == ".horusec"
+        assert command[command.index("--skip-dirs") + 1] == "**/.horusec"
 
     def test_trivy_rbac_is_told_to_skip_it(self, tmp_path):
         commands = self._built_commands(tmp_path, ["trivy-rbac"])
         command = commands["trivy-rbac"]
 
         assert "--skip-dirs" in command
-        assert command[command.index("--skip-dirs") + 1] == ".horusec"
+        assert command[command.index("--skip-dirs") + 1] == "**/.horusec"
 
     def test_bandit_is_told_to_skip_it_without_losing_its_defaults(self, tmp_path):
         """bandit's -x replaces upstream's list, so JMo has to re-send it.
@@ -1716,9 +1716,9 @@ class TestHorusecStagingDirIsExcluded:
         command = commands["bandit"]
 
         assert "-x" in command
-        assert (
-            command[command.index("-x") + 1]
-            == ".svn,CVS,.bzr,.hg,.git,__pycache__,.tox,.eggs,*.egg,.horusec"
+        assert command[command.index("-x") + 1] == (
+            ".svn,CVS,.bzr,.hg,.git,__pycache__,.tox,.eggs,*.egg,"
+            ".horusec,node_modules,vendor,.venv,venv"
         )
 
     def test_dependency_check_is_told_to_skip_it(self, tmp_path):
@@ -1732,6 +1732,63 @@ class TestHorusecStagingDirIsExcluded:
 
         assert "--exclude" in command
         assert command[command.index("--exclude") + 1] == "**/.horusec/**"
+
+    def test_checkov_is_told_to_skip_the_vendored_trees(self, tmp_path):
+        """#1080: checkov got no exclusion flags at all, and timed out.
+
+        Measured on this repository at 3ffc73a8, `--profile-name` unset,
+        300 s cap: checkov, trivy and semgrep each hit the cap and contributed
+        nothing, against 36,705 files on disk for 985 tracked ones.
+
+        The value must be bare. `--skip-path` is a regex and checkov drops an
+        unparseable one in silence, so `**/node_modules` would leave the
+        command looking correct and excluding nothing - see
+        test_checkov_must_not_be_given_the_trivy_spelling in
+        tests/unit/test_scan_utils.py for the measurement.
+        """
+        commands = self._built_commands(tmp_path, ["checkov"])
+        command = commands["checkov"]
+
+        assert "--skip-path" in command
+        values = [
+            command[i + 1] for i, tok in enumerate(command) if tok == "--skip-path"
+        ]
+        assert "node_modules" in values
+        assert ".venv" in values
+        assert not any(v.startswith("**") for v in values), values
+
+    def test_checkovs_exclusions_precede_the_users_flags(self, tmp_path):
+        """An explicit per_tool entry has to be able to win.
+
+        `--skip-path` accumulates, so ordering does not change the result
+        today; it is asserted because the ordering convention is what makes
+        bandit's last-wins `-x` behave, and a later tool copying this call site
+        would inherit whichever order it finds (#1132).
+        """
+        repo = tmp_path / "repo"
+        repo.mkdir()
+
+        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+            mock_runner.run_all_parallel.return_value = []
+
+            scan_repository(
+                repo=repo,
+                results_dir=tmp_path / "out",
+                tools=["checkov"],
+                timeout=600,
+                retries=0,
+                per_tool_config={"checkov": {"flags": ["--compact"]}},
+                allow_missing_tools=False,
+                find_tool_func=lambda name: "/usr/bin/" + name,
+            )
+            args, kwargs = MockRunner.call_args
+            tool_defs = kwargs.get("tools") or (args[0] if args else [])
+            command = {t.name: t.command for t in tool_defs}["checkov"]
+
+        assert "--compact" in command
+        assert command.index("--skip-path") < command.index("--compact")
 
     def test_jmos_own_file_walk_skips_the_staging_copy(self, tmp_path):
         """hadolint and shellcheck take explicit file arguments, so JMo's own

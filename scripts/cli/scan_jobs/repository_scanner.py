@@ -66,6 +66,7 @@ from ..scan_utils import (
     NOT_ATTEMPTED_NOTHING_APPLICABLE,
     SCAN_EXCLUDED_DIRS,
     TOOL_TIMEOUT_DEFAULTS,
+    VENDORED_DIRS,
     find_tool,
     record_not_attempted,
     report_tool_failure,
@@ -95,6 +96,11 @@ __all__ = ["TOOL_TIMEOUT_DEFAULTS", "scan_repository"]
 # does not announce itself reads as "everything was scanned" when it was not.
 MAX_FILE_ARGS = 300
 
+# Every directory name this module's own file enumeration skips. JMo's in-tree
+# scratch plus the vendored dependency trees - the same two lists the per-tool
+# `--exclude` flags are built from, so the walk and the flags cannot drift.
+_SKIPPED_DIR_NAMES: frozenset[str] = frozenset((*SCAN_EXCLUDED_DIRS, *VENDORED_DIRS))
+
 
 def _collect_files(repo: Path, patterns: tuple[str, ...], tool_name: str) -> list[str]:
     """Collect matching files for a tool that takes file arguments.
@@ -117,15 +123,12 @@ def _collect_files(repo: Path, patterns: tuple[str, ...], tool_name: str) -> lis
             # one that may be deleted before the tool opens it - and the
             # duplicates count against MAX_FILE_ARGS, evicting real files
             # (#1132).
-            parts = set(path.parts)
-            if parts & {
-                ".git",
-                "node_modules",
-                "vendor",
-                ".venv",
-                "venv",
-                *SCAN_EXCLUDED_DIRS,
-            }:
+            #
+            # The names come from scan_utils rather than a literal here: this
+            # walk and the per-tool `--exclude` flags are two answers to the
+            # same question, and #1080 was the two disagreeing (this list had
+            # the dependency directories since #1132; the flags never did).
+            if set(path.parts) & _SKIPPED_DIR_NAMES:
                 continue
             if path.is_file():
                 seen.add(path)
@@ -460,6 +463,9 @@ def scan_repository(
                 str(repo),
                 "-o",
                 "json",
+                # Before the user's flags, so an explicit per_tool entry still
+                # wins - --skip-path is repeatable and accumulates (#1080).
+                *tool_exclusion_flags("checkov"),
                 *checkov_flags,
             ]
             tool_defs.append(
