@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -370,6 +371,16 @@ BANDIT_DEFAULT_EXCLUDED_PATHS: tuple[str, ...] = (
 #   "ant"       one `--flag **/VALUE/**` pair         (dependency-check)
 #   "csv"       a single flag with one comma-separated value that REPLACES the
 #               tool's own defaults                   (bandit)
+#   "glob-csv"  a single flag with one comma-separated value of **/VALUE/**
+#               globs, ADDED to the tool's own defaults  (horusec)
+#
+# **`csv` and `glob-csv` differ on the thing that matters and look identical.**
+# bandit's `-x` replaces its defaults, so JMo re-sends them; horusec's `-i`
+# accumulates, so re-sending would be noise. Measured on horusec by planting a
+# finding under `.vscode/` -- one of its defaults -- and confirming it stayed
+# excluded with `-i` supplied. A bare name is also not enough for horusec:
+# `-i results` excludes nothing, `-i '**/results/**'` works. That is the
+# opposite of checkov, where the bare name is the only form that works.
 #
 # **trivy and checkov are the sharpest case of the warning above.** Both spell
 # it as a repeatable `--flag VALUE` pair, and the value that works is opposite.
@@ -406,6 +417,7 @@ TOOL_EXCLUSION_FLAG: dict[str, tuple[str, str]] = {
     "checkov": ("--skip-path", "regex"),
     "dependency-check": ("--exclude", "ant"),
     "bandit": ("-x", "csv"),
+    "horusec": ("-i", "glob-csv"),
 }
 
 
@@ -551,8 +563,25 @@ TRUFFLEHOG_EXCLUDE_PATTERNS: tuple[str, ...] = (
 )
 
 
-def write_trufflehog_exclude_file(out_dir: Path) -> Path:
+def write_trufflehog_exclude_file(
+    out_dir: Path, *, results_dir_name: str | None = None
+) -> Path:
     """Write TruffleHog's ``--exclude-paths`` file and return its path.
+
+    ``results_dir_name`` adds JMo's own output directory when it sits inside
+    the tree being scanned (#1156). trufflehog was one of the two tools measured
+    reporting findings out of a previous scan's ``results/`` -- a "secret" in a
+    `syft.json` it wrote itself. Spelled with the same separator class as the
+    entries below, for the same reason: a bare name would also match a file
+    whose name merely contains it.
+
+    ``re.escape`` is **Python's** escaping and these are **Go** (RE2) regexes.
+    They agree on what matters here: RE2 accepts an escaped ASCII punctuation
+    character, which is all `re.escape` emits. Confirmed in practice on a
+    directory name containing a hyphen -- `individual\\-repos` excluded as
+    intended. A name holding something RE2 rejects would make trufflehog reject
+    the file outright rather than silently ignore it, which is the failure
+    direction to prefer.
 
     ``write_bytes`` rather than ``write_text``: the latter opens with
     ``newline=None`` and would emit CRLF on Windows. TruffleHog splits the file
@@ -573,8 +602,11 @@ def write_trufflehog_exclude_file(out_dir: Path) -> Path:
     patches ``Path.home()`` to its tmp dir, which hides it and takes the stub
     branch instead.
     """
+    patterns = list(TRUFFLEHOG_EXCLUDE_PATTERNS)
+    if results_dir_name:
+        patterns.append(rf"[\\/]{re.escape(results_dir_name)}[\\/]")
     path = out_dir / ".trufflehog-exclude"
-    path.write_bytes(("\n".join(TRUFFLEHOG_EXCLUDE_PATTERNS) + "\n").encode("utf-8"))
+    path.write_bytes(("\n".join(patterns) + "\n").encode("utf-8"))
     return path
 
 
@@ -605,12 +637,67 @@ def filter_trivy_flags(subcommand: str, flags: list[str]) -> list[str]:
     return kept
 
 
-def excluded_dirs_for(tool: str) -> tuple[str, ...]:
+def in_tree_results_name(repo: Path, results_dir: Path) -> str | None:
+    """The directory NAME to exclude when ``results_dir`` sits inside ``repo``.
+
+    ``None`` when the results directory is elsewhere -- the CI shape, where
+    nothing needs excluding and excluding something would only risk hiding the
+    user's own code.
+
+    **A name rather than the path, and that is the measured choice, not the lazy
+    one.** Every style in TOOL_EXCLUSION_FLAG already turns a bare directory
+    name into its own spelling; that is how one list reaches five grammars. A
+    *path* is not portable across them, measured at the pinned versions:
+
+        trivy   --skip-dirs 'out/results'      works
+        checkov --skip-path 'out/results'      excludes NOTHING -- it matches a
+                                               path built with os.sep, and
+                                               upstream's own TODO says so
+        checkov --skip-path 'out\\results'      CRASHES (`\\r` is not a valid
+                                               escape, and one of the two call
+                                               sites compiles unguarded)
+        horusec -i 'results'                   excludes NOTHING; it wants a glob
+
+    The price is over-breadth: a repository whose own source lives in a second
+    directory of the same name loses it too. Bounded deliberately -- this
+    returns a name only when JMo's output really is inside the tree being
+    scanned, so `--results-dir` outside the repo (the usual CI setup) adds
+    nothing at all. The precise skip is applied on the Python side instead,
+    where there is no pattern language to get wrong; see `_iter_repo_files`.
+
+    The LAST segment, not the first: for `<repo>/out/results` the directory that
+    holds JMo's output is `results`, and every style matches a name at any
+    depth. Excluding `out` would take the user's whole `out/` tree with it.
+    """
+    try:
+        rel = results_dir.resolve().relative_to(repo.resolve())
+    except (ValueError, OSError):
+        # ValueError: not inside the tree. OSError: an unresolvable path -- a
+        # broken symlink or a permission error on a parent. Neither is a reason
+        # to start excluding directories.
+        return None
+    if not rel.parts:
+        # results_dir IS the repository. Excluding it would exclude everything;
+        # a pathological configuration, but silently scanning nothing is the
+        # failure mode this project has been bitten by most.
+        return None
+    return rel.parts[-1]
+
+
+def excluded_dirs_for(
+    tool: str, *, results_dir_name: str | None = None
+) -> tuple[str, ...]:
     """Directory names ``tool`` should be told to skip.
 
     Always JMo's own in-tree scratch (SCAN_EXCLUDED_DIRS), which is nobody's
     subject matter; plus VENDORED_DIRS for the tools that read the repository's
-    own code rather than inventory its dependencies (VENDOR_NOISE_TOOLS).
+    own code rather than inventory its dependencies (VENDOR_NOISE_TOOLS); plus
+    the results directory when it resolves inside the tree being scanned, which
+    is JMo's own output and belongs to no tool (#1156).
+
+    The results directory goes to **every** tool with a flag, not just
+    VENDOR_NOISE_TOOLS. The carve-out below exists because a vendored tree is
+    dependency-check's and syft's subject matter; JMo's own output is nobody's.
 
     Order is stable and duplicates are dropped, so a name appearing in both
     lists is passed once.
@@ -618,13 +705,17 @@ def excluded_dirs_for(tool: str) -> tuple[str, ...]:
     names = list(SCAN_EXCLUDED_DIRS)
     if tool in VENDOR_NOISE_TOOLS:
         names.extend(d for d in VENDORED_DIRS if d not in names)
+    if results_dir_name and results_dir_name not in names:
+        names.append(results_dir_name)
     return tuple(names)
 
 
-def tool_exclusion_flags(tool: str) -> list[str]:
+def tool_exclusion_flags(
+    tool: str, *, results_dir_name: str | None = None
+) -> list[str]:
     """Flags that keep ``tool`` out of directories it should not be reading.
 
-    Five tools, four spellings, and they are not interchangeable - see
+    Six tools, five spellings, and they are not interchangeable - see
     TOOL_EXCLUSION_FLAG for what each style means and why the style cannot be
     read off the flag name.
 
@@ -635,7 +726,7 @@ def tool_exclusion_flags(tool: str) -> list[str]:
     if entry is None:
         return []
     flag, style = entry
-    dirs = excluded_dirs_for(tool)
+    dirs = excluded_dirs_for(tool, results_dir_name=results_dir_name)
     if style == "csv":
         # bandit's -x REPLACES its defaults, so they have to be re-sent. Its
         # defaults are bare names and bandit matches them itself, so the `**/`
@@ -647,6 +738,22 @@ def tool_exclusion_flags(tool: str) -> list[str]:
         return [f"{flag}={d}" for d in dirs]
     if style == "ant":
         return [arg for d in dirs for arg in (flag, f"**/{d}/**")]
+    if style == "glob-csv":
+        # horusec: ONE flag, comma-separated, and the values must be globs --
+        # a bare `results` excludes nothing (measured). Unlike bandit's `-x`
+        # this ADDS to horusec's own defaults rather than replacing them:
+        # verified by planting a finding under `.vscode/` (one of the defaults)
+        # and watching it stay excluded with `-i` supplied. So the defaults are
+        # deliberately NOT re-sent here.
+        #
+        # This hands horusec `**/.horusec/**` -- its OWN staging copy of the
+        # tree. Measured safe: a repository with one planted secret reports it
+        # identically with and without that flag (n=1, same file). horusec
+        # analyses the staging copy internally and reports paths in the real
+        # tree, so excluding the directory does not make it inert. Worth having
+        # measured rather than assumed: an exclusion that silences the tool
+        # sending it is the silent-zero shape this project keeps meeting.
+        return [flag, ",".join(f"**/{d}/**" for d in dirs)]
     if style == "regex":
         # checkov: a bare name already matches at any depth, and `**/` would
         # not compile as a regex - it is dropped silently. See above.

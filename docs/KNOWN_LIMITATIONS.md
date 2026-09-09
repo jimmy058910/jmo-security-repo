@@ -327,6 +327,17 @@ remains is the after-tag set. Regenerate it rather than trust it:
 gh issue list --repo jimmy058910/jmo-security-repo --state open --label user-reachable
 ```
 
+- **Excluding an in-tree results directory is by NAME, so it can exclude one
+  directory too many.** When `--results-dir` resolves inside the repository
+  being scanned, JMo tells every tool to skip that directory so it does not
+  read its own output back as findings — but the per-tool `--exclude` grammars
+  only agree on a bare directory *name*, not a path. So if your results
+  directory is `./results` and your source also has, say, `src/results/`, that
+  second directory is skipped too. Point `--results-dir` outside the repository
+  (the usual CI setup) and nothing is excluded at all. JMo's own file
+  enumeration is exact and skips only the real results directory, so the tools
+  that take file arguments — hadolint, shellcheck — are unaffected.
+  [#1156](https://github.com/jimmy058910/jmo-security-repo/issues/1156)
 - **`kubescape` currently produces no findings on any scan**, and upgrading or
   downgrading JMo will not change that. kubescape fetches its policy bundle at
   scan time rather than shipping it, and the bundle now served contains a

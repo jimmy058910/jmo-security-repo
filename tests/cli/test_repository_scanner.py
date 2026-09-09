@@ -2254,3 +2254,144 @@ class TestGosecAndKubescapeOnlyRunWhenThereIsSomethingToScan:
             )
 
         assert self._reason(statuses, "gosec") == NOT_ATTEMPTED_MISSING
+
+
+class TestTheInTreeResultsDirectoryIsKeptOutOfTheScan:
+    """#1156, at the scanner. `jmo scan . --out ./results` puts JMo's output
+    inside the tree the next scan walks.
+
+    Measured end to end, scanning a two-file repository twice with the results
+    directory in the tree: **11 findings, 8 of them inside `results/`** plus 2
+    inside horusec's staging copy of it. After: 2 findings, both the real ones.
+
+    The scanners are handed `<results_root>/individual-<type>`, NOT the root.
+    Excluding what this function receives is the bug that made a first pass
+    look right and leave 5 of 8 findings behind: `summaries/findings.json`,
+    `findings.yaml` and `dashboard.html` sit beside `individual-repos/` and
+    each embeds every finding verbatim, so they are the richest source of the
+    re-reporting rather than the raw tool output.
+    """
+
+    @staticmethod
+    def _flags_for(tmp_path, tool, results_dir):
+        """The command `scan_repository` builds for `tool`, as a string."""
+        repo = tmp_path / "repo"
+        (repo / "src").mkdir(parents=True, exist_ok=True)
+        (repo / "src" / "a.py").write_text("x = 1\n", encoding="utf-8")
+
+        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+            mock_runner.run_all_parallel.return_value = []
+
+            scan_repository(
+                repo=repo,
+                results_dir=results_dir,
+                tools=[tool],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+                find_tool_func=lambda n: "/usr/bin/" + n,
+            )
+            args, kwargs = MockRunner.call_args
+            defs = kwargs.get("tools") or (args[0] if args else [])
+            td = next((t for t in defs if t.name == tool), None)
+            return " ".join(str(c) for c in td.command) if td else ""
+
+    def test_the_results_ROOT_is_excluded_not_the_per_type_subdirectory(self, tmp_path):
+        """The scanner receives `<root>/individual-repos`. It must exclude
+        `results`, which also covers `summaries/`."""
+        repo_results = tmp_path / "repo" / "results"
+
+        cmd = self._flags_for(tmp_path, "checkov", repo_results / "individual-repos")
+
+        assert "--skip-path results" in cmd, cmd
+        assert "individual-repos" not in cmd.split("--skip-path")[-1], (
+            "excluded the per-type subdirectory, leaving summaries/ in the walk"
+        )
+
+    def test_a_results_dir_outside_the_repo_adds_no_exclusion(self, tmp_path):
+        """The usual CI shape. Nothing to exclude, and excluding a directory
+        named `results` anyway could hide the user's own code."""
+        cmd = self._flags_for(
+            tmp_path, "checkov", tmp_path / "outside" / "individual-repos"
+        )
+
+        # On the flag values, not the whole command line: pytest's own tmp_path
+        # is named after this test and therefore contains "results" itself -- a
+        # substring check on `cmd` fails for a reason that has nothing to do
+        # with the code under test.
+        skipped = [
+            cmd.split()[i + 1]
+            for i, tok in enumerate(cmd.split())
+            if tok == "--skip-path"
+        ]
+        assert "results" not in skipped, skipped
+
+    def test_horusec_now_receives_exclusions_at_all(self, tmp_path):
+        """horusec had no `--exclude` wiring before #1156 and was **88 of the
+        90 findings** the issue measured. The issue's own Fix section says it
+        "cannot be covered this way"; measured false -- `-i` takes globs."""
+        cmd = self._flags_for(
+            tmp_path, "horusec", tmp_path / "repo" / "results" / "individual-repos"
+        )
+
+        assert "-i " in cmd
+        assert "**/results/**" in cmd
+
+    def test_the_go_predicate_ignores_a_previous_scans_output(self, tmp_path):
+        """#1081's predicates walk the tree too, so JMo's own output can
+        satisfy them. A `.go` file inside `results/` is not the repo's code."""
+        from scripts.cli.scan_jobs.repository_scanner import _repo_has_go_sources
+
+        repo = tmp_path / "repo"
+        (repo / "results" / "individual-repos").mkdir(parents=True)
+        (repo / "results" / "individual-repos" / "vendored.go").write_text(
+            "package main", encoding="utf-8"
+        )
+        (repo / "app.js").write_text("1", encoding="utf-8")
+
+        assert _repo_has_go_sources(repo) is True, "control: found without the skip"
+        assert _repo_has_go_sources(repo, (repo / "results").resolve()) is False
+
+    def test_the_k8s_predicate_ignores_a_previous_scans_output(self, tmp_path):
+        """Not hypothetical: JMo writes `summaries/findings.yaml`, and a scan of
+        a Kubernetes repository embeds the manifests' own `apiVersion:` in it."""
+        from scripts.cli.scan_jobs.repository_scanner import _repo_has_k8s_manifests
+
+        repo = tmp_path / "repo"
+        (repo / "results" / "summaries").mkdir(parents=True)
+        (repo / "results" / "summaries" / "findings.yaml").write_text(
+            "findings:\n  - raw: 'apiVersion: v1'\n", encoding="utf-8"
+        )
+        (repo / "app.js").write_text("1", encoding="utf-8")
+
+        assert _repo_has_k8s_manifests(repo) is True, "control"
+        assert _repo_has_k8s_manifests(repo, (repo / "results").resolve()) is False
+
+    def test_the_file_walk_skips_by_PATH_not_by_name(self, tmp_path):
+        """The flags can only take a name; this side can be exact.
+
+        A user directory that merely shares the results directory's name must
+        still be scanned here, which is what makes the Python-side skip worth
+        having separately.
+        """
+        from scripts.cli.scan_jobs.repository_scanner import _collect_files
+
+        repo = tmp_path / "repo"
+        (repo / "results").mkdir(parents=True)
+        (repo / "src" / "results").mkdir(parents=True)
+        (repo / "results" / "own.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+        (repo / "src" / "results" / "theirs.sh").write_text(
+            "#!/bin/sh\n", encoding="utf-8"
+        )
+
+        found = _collect_files(
+            repo, ("**/*.sh",), "shellcheck", (repo / "results").resolve()
+        )
+
+        assert any("theirs.sh" in f for f in found), (
+            "the user's own src/results/ was skipped by name"
+        )
+        assert not any("own.sh" in f for f in found), "JMo's output was scanned"
