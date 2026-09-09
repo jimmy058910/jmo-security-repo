@@ -1685,6 +1685,18 @@ Default directory exclusions:
   tree is what they exist to look at.
 - To scan a vendored directory with a SAST tool anyway, point JMo at it
   directly: `jmo scan --repo ./vendor/some-library`.
+- **Your results directory is excluded too, when it is inside the repository
+  being scanned.** `jmo scan . --out ./results` is the ordinary layout, and
+  without this every tool reads JMo's own output back as findings — a "secret"
+  inside a `syft.json` JMo wrote itself, a finding quoted verbatim in
+  `summaries/findings.json`. They grow every time you scan. This applies to
+  every tool that takes an exclusion, `horusec` included.
+
+  It is excluded by **name**, because that is the only spelling the tools'
+  exclusion flags agree on — so a second directory of the same name elsewhere in
+  your source is skipped as well. If that matters, put your results somewhere
+  outside the repository (`--results-dir ../scan-results`), which is also the
+  usual CI setup and excludes nothing at all.
 
 Retries:
 

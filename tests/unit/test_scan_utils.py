@@ -451,11 +451,16 @@ class TestToolExclusionFlags:
         trivy and semgrep both fail fatally at argument parsing on an unknown
         flag, so silence is the only safe default for a tool whose exclusion
         spelling has not been measured against the real binary.
+
+        `horusec` was named here until #1156. It is mapped now because its flag
+        WAS measured -- `-i '**/results/**'` excludes, `-i 'results'` does not --
+        which is the bar this test describes rather than an exception to it.
+        `trufflehog` stays: it has no flag at all and takes an exclude *file*.
         """
         from scripts.cli.scan_utils import tool_exclusion_flags
 
         assert tool_exclusion_flags("trufflehog") == []
-        assert tool_exclusion_flags("horusec") == []
+        assert tool_exclusion_flags("kubescape") == []
         assert tool_exclusion_flags("gosec") == []
 
     def test_checkov_must_not_be_given_the_trivy_spelling(self):
@@ -463,10 +468,16 @@ class TestToolExclusionFlags:
 
         checkov's `filter_ignored_paths` wraps `re.compile` in
         `except re.error: continue`, and `**` raises "nothing to repeat" - so a
-        `**/`-prefixed value is dropped with no error, no warning and exit 0.
-        Its only fallback is a plain substring test against the full path,
-        which `**/node_modules` also fails. The result is a flag that looks
-        correct on the command line and excludes nothing.
+        `**/`-prefixed value is dropped there with no error, no warning and
+        exit 0. Its only fallback is a plain substring test against the full
+        path, which `**/node_modules` also fails.
+
+        **And that is the mild outcome.** Measured at 3.3.16 for #1156: a second
+        call site compiles the same pattern with NO guard
+        (`checkov/bicep/utils.py:35 get_scannable_file_paths`), so `--skip-path
+        '**/results'` takes the whole process down with `re.error: nothing to
+        repeat` and checkov contributes nothing at all. Either way the value is
+        wrong; this one is just louder about it.
 
         Measured on checkov 3.3.16 against a tree holding `vendor/rootpkg` and
         `a/b/vendor/pkg`, dockerfile framework: baseline reports 3 files,
@@ -712,3 +723,175 @@ class TestTruffleHogExcludePatterns:
         assert path.parent == tmp_path
         assert path.name.startswith("."), "scan-phase scratch must be hidden"
         assert path.suffix != ".json", "a .json here reads as a tool output"
+
+
+class TestTheResultsDirectoryIsExcludedWhenItIsInsideTheTree:
+    """#1156: `jmo scan . --out ./results` makes JMo scan its own output.
+
+    Measured on juice-shop: **90 of 831 findings (10.8%)** were horusec and
+    trufflehog reporting a previous scan's `results/`. They are not wrong -- a
+    `syft.json` really does contain a "secret" -- but they describe JMo's
+    output rather than the user's code, and they grow every time the user
+    scans.
+
+    Reproduced end to end on a two-file repository, scanning twice with the
+    results directory inside the tree: **11 findings, 8 of them inside
+    `results/`** and 2 more inside horusec's staging copy of it. After: 2
+    findings, both the real ones in `src/app.js`.
+    """
+
+    # ---- which directory, and only when it is really inside ----------------
+
+    def test_the_name_is_returned_only_for_a_results_dir_inside_the_repo(
+        self, tmp_path
+    ):
+        from scripts.cli.scan_utils import in_tree_results_name
+
+        repo = tmp_path / "repo"
+        (repo / "results").mkdir(parents=True)
+        (tmp_path / "elsewhere").mkdir()
+
+        assert in_tree_results_name(repo, repo / "results") == "results"
+        # The usual CI shape: `--results-dir` outside the checkout. Nothing to
+        # exclude, and excluding something would only risk hiding real code.
+        assert in_tree_results_name(repo, tmp_path / "elsewhere") is None
+
+    def test_a_nested_results_dir_yields_its_own_name_not_its_parent(self, tmp_path):
+        """`<repo>/out/results` must exclude `results`, never `out`.
+
+        Every style matches a bare name at any depth, so the last segment is
+        both correct and precise here; the first would take the user's whole
+        `out/` tree with it.
+        """
+        from scripts.cli.scan_utils import in_tree_results_name
+
+        repo = tmp_path / "repo"
+        (repo / "out" / "results").mkdir(parents=True)
+
+        assert in_tree_results_name(repo, repo / "out" / "results") == "results"
+
+    def test_a_results_dir_equal_to_the_repo_excludes_nothing(self, tmp_path):
+        """Pathological, and the failure mode is total: excluding the repo
+        would scan nothing while still exiting 0."""
+        from scripts.cli.scan_utils import in_tree_results_name
+
+        repo = tmp_path / "repo"
+        repo.mkdir()
+
+        assert in_tree_results_name(repo, repo) is None
+
+    def test_an_unresolvable_path_is_not_a_reason_to_exclude(self, tmp_path):
+        from scripts.cli.scan_utils import in_tree_results_name
+
+        repo = tmp_path / "repo"
+        repo.mkdir()
+
+        assert in_tree_results_name(repo, tmp_path / "no" / "such" / "dir") is None
+
+    # ---- each grammar gets the spelling measured against its binary --------
+
+    def test_every_mapped_tool_receives_the_results_directory(self):
+        """It goes to ALL of them, not just VENDOR_NOISE_TOOLS.
+
+        That carve-out exists because a vendored tree is dependency-check's and
+        syft's subject matter. JMo's own output is nobody's.
+        """
+        from scripts.cli.scan_utils import TOOL_EXCLUSION_FLAG, tool_exclusion_flags
+
+        for tool in TOOL_EXCLUSION_FLAG:
+            flags = " ".join(tool_exclusion_flags(tool, results_dir_name="results"))
+            assert "results" in flags, f"{tool} was not told to skip the results dir"
+
+    def test_nothing_changes_when_the_results_dir_is_outside_the_tree(self):
+        from scripts.cli.scan_utils import TOOL_EXCLUSION_FLAG, tool_exclusion_flags
+
+        for tool in TOOL_EXCLUSION_FLAG:
+            assert tool_exclusion_flags(tool) == tool_exclusion_flags(
+                tool, results_dir_name=None
+            )
+
+    def test_each_style_spells_the_results_dir_its_own_way(self):
+        """The four spellings that matter, each measured against its binary.
+
+        trivy needs the `**/` or it only matches at the scan root; checkov must
+        NOT have it (`**` is not a regex, and one of its two call sites
+        compiles unguarded, so it crashes); horusec needs a glob and rejects a
+        bare name. Asserted together because the whole hazard is that they look
+        interchangeable.
+        """
+        from scripts.cli.scan_utils import tool_exclusion_flags
+
+        trivy = tool_exclusion_flags("trivy", results_dir_name="results")
+        checkov = tool_exclusion_flags("checkov", results_dir_name="results")
+        horusec = tool_exclusion_flags("horusec", results_dir_name="results")
+        odc = tool_exclusion_flags("dependency-check", results_dir_name="results")
+
+        assert trivy[-2:] == ["--skip-dirs", "**/results"]
+        assert checkov[-2:] == ["--skip-path", "results"]
+        assert "**" not in " ".join(checkov)
+        assert horusec[0] == "-i" and "**/results/**" in horusec[1]
+        assert odc[-2:] == ["--exclude", "**/results/**"]
+
+    def test_horusec_gets_one_flag_and_keeps_its_own_defaults(self):
+        """`-i` is comma-separated, and ADDS to horusec's defaults rather than
+        replacing them -- the opposite of bandit's `-x`.
+
+        Measured by planting a finding under `.vscode/` (one of horusec's
+        defaults) and confirming it stayed excluded with `-i` supplied. So the
+        defaults are deliberately not re-sent, and re-sending bandit's would be
+        the same mistake in reverse.
+        """
+        from scripts.cli.scan_utils import (
+            BANDIT_DEFAULT_EXCLUDED_PATHS,
+            tool_exclusion_flags,
+        )
+
+        horusec = tool_exclusion_flags("horusec", results_dir_name="results")
+
+        assert horusec.count("-i") == 1, "one flag, not one per directory"
+        assert len(horusec) == 2
+        for default in BANDIT_DEFAULT_EXCLUDED_PATHS:
+            assert default not in horusec[1], (
+                "horusec was handed bandit's defaults; its -i accumulates"
+            )
+
+    def test_the_trufflehog_exclude_file_gains_the_results_dir(self, tmp_path):
+        """trufflehog has no exclusion flag -- it takes a file of Go regexes.
+
+        It is one of the two tools #1156 measured reporting a previous scan's
+        output, so it cannot be left out just because it is spelled differently.
+        """
+        from scripts.cli.scan_utils import write_trufflehog_exclude_file
+
+        path = write_trufflehog_exclude_file(tmp_path, results_dir_name="results")
+        body = path.read_bytes().decode("utf-8")
+
+        assert r"[\\/]results[\\/]" in body
+        # The separator class is load-bearing here exactly as it is for `.git`:
+        # a bare `results` would also match `my-results.json`.
+        assert "\nresults\n" not in body
+        # The existing entries survive.
+        assert r"[\\/]\.git[\\/]" in body
+        assert r"[\\/]\.jmo[\\/]" in body
+
+    def test_a_regex_metacharacter_in_the_directory_name_is_escaped(self, tmp_path):
+        """`--out ./results.d` must not compile as "any character"."""
+        from scripts.cli.scan_utils import write_trufflehog_exclude_file
+
+        body = (
+            write_trufflehog_exclude_file(tmp_path, results_dir_name="results.d")
+            .read_bytes()
+            .decode("utf-8")
+        )
+
+        assert r"results\.d" in body
+
+    def test_the_default_file_is_unchanged_without_a_results_dir(self, tmp_path):
+        from scripts.cli.scan_utils import (
+            TRUFFLEHOG_EXCLUDE_PATTERNS,
+            write_trufflehog_exclude_file,
+        )
+
+        body = write_trufflehog_exclude_file(tmp_path).read_bytes().decode("utf-8")
+
+        assert body == "\n".join(TRUFFLEHOG_EXCLUDE_PATTERNS) + "\n"

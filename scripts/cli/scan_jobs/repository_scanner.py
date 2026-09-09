@@ -69,6 +69,7 @@ from ..scan_utils import (
     TOOL_TIMEOUT_DEFAULTS,
     VENDORED_DIRS,
     find_tool,
+    in_tree_results_name,
     record_not_attempted,
     report_tool_failure,
     tool_exclusion_flags,
@@ -103,7 +104,30 @@ MAX_FILE_ARGS = 300
 _SKIPPED_DIR_NAMES: frozenset[str] = frozenset((*SCAN_EXCLUDED_DIRS, *VENDORED_DIRS))
 
 
-def _collect_files(repo: Path, patterns: tuple[str, ...], tool_name: str) -> list[str]:
+def _same_tree(candidate: Path, target: Path) -> bool:
+    """True when ``candidate`` is ``target``, resolving both.
+
+    ``resolve()`` on each side rather than a string compare: the walk yields
+    paths built from the caller's ``repo``, which may be relative, contain a
+    ``..``, or reach the results directory through a symlink or a different
+    drive-letter case. Any of those makes an equal directory compare unequal.
+
+    Returns False on OSError instead of raising -- an unresolvable directory is
+    not a reason to abort a scan, and Python 3.12 propagates PermissionError
+    from path operations rather than returning False (#1163).
+    """
+    try:
+        return candidate.resolve() == target
+    except OSError:
+        return False
+
+
+def _collect_files(
+    repo: Path,
+    patterns: tuple[str, ...],
+    tool_name: str,
+    skip_tree: Path | None = None,
+) -> list[str]:
     """Collect matching files for a tool that takes file arguments.
 
     Both shellcheck and hadolint accept many paths per invocation; scanning one
@@ -131,6 +155,12 @@ def _collect_files(repo: Path, patterns: tuple[str, ...], tool_name: str) -> lis
             # the dependency directories since #1132; the flags never did).
             if set(path.parts) & _SKIPPED_DIR_NAMES:
                 continue
+            if skip_tree is not None and any(
+                _same_tree(parent, skip_tree) for parent in path.parents
+            ):
+                # JMo's own output: a Dockerfile or shell script copied into a
+                # previous scan's results directory is not the user's code.
+                continue
             if path.is_file():
                 seen.add(path)
 
@@ -150,8 +180,14 @@ def _collect_files(repo: Path, patterns: tuple[str, ...], tool_name: str) -> lis
     return [str(f) for f in files]
 
 
-def _iter_repo_files(repo: Path) -> Iterator[Path]:
+def _iter_repo_files(repo: Path, skip_tree: Path | None = None) -> Iterator[Path]:
     """Yield every file under ``repo``, never descending into a skipped tree.
+
+    ``skip_tree`` is an absolute directory pruned by PATH rather than by name --
+    JMo's own results directory when it sits inside the repository (#1156). The
+    per-tool `--exclude` flags can only take a name, because that is the one
+    spelling all six grammars share; here there is no pattern language, so the
+    exact directory is skipped and a same-named directory elsewhere is not.
 
     ``os.walk`` rather than ``Path.glob`` because pruning is done by assigning
     into ``dirnames`` in place, so a vendored tree is never *entered*.
@@ -165,13 +201,18 @@ def _iter_repo_files(repo: Path) -> Iterator[Path]:
     this module (``zap``, ``mobsf``, ``trivy-rbac``) do.
     """
     for dirpath, dirnames, filenames in os.walk(repo):
-        dirnames[:] = [d for d in dirnames if d not in _SKIPPED_DIR_NAMES]
         base = Path(dirpath)
+        dirnames[:] = [
+            d
+            for d in dirnames
+            if d not in _SKIPPED_DIR_NAMES
+            and not (skip_tree is not None and _same_tree(base / d, skip_tree))
+        ]
         for filename in filenames:
             yield base / filename
 
 
-def _repo_has_go_sources(repo: Path) -> bool:
+def _repo_has_go_sources(repo: Path, skip_tree: Path | None = None) -> bool:
     """True when gosec has something to load: a ``.go`` file or a ``go.mod``.
 
     ``go.mod`` alone counts. A module whose sources are generated at build time
@@ -187,7 +228,7 @@ def _repo_has_go_sources(repo: Path) -> bool:
     repository with a virtualenv in the tree. gosec's ``./...`` target excludes
     ``vendor/`` in module mode for the same reason.
     """
-    for path in _iter_repo_files(repo):
+    for path in _iter_repo_files(repo, skip_tree):
         if path.suffix == ".go" or path.name == "go.mod":
             return True
     return False
@@ -211,7 +252,7 @@ _K8S_MANIFEST_MARKER = "apiVersion:"
 _K8S_MANIFEST_SUFFIXES: frozenset[str] = frozenset({".yaml", ".yml"})
 
 
-def _repo_has_k8s_manifests(repo: Path) -> bool:
+def _repo_has_k8s_manifests(repo: Path, skip_tree: Path | None = None) -> bool:
     """True when at least one YAML under ``repo`` looks like a K8s manifest.
 
     ``encoding="utf-8", errors="replace"`` is deliberate on both halves. Without
@@ -230,7 +271,7 @@ def _repo_has_k8s_manifests(repo: Path) -> bool:
     but they are rare enough in checked-in trees that reading every ``.json``
     (SBOMs, lockfiles, tool output) to find one is not a trade worth making.
     """
-    for path in _iter_repo_files(repo):
+    for path in _iter_repo_files(repo, skip_tree):
         if path.suffix.lower() not in _K8S_MANIFEST_SUFFIXES:
             continue
         try:
@@ -374,6 +415,45 @@ def scan_repository(
     _validate_output_path(results_dir, out_dir)
     out_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
 
+    # `jmo scan . --out ./results` is the ordinary layout, and it puts JMo's
+    # output inside the tree the next scan walks -- so every tool reads JMo's
+    # own artifacts back. Measured on juice-shop: 90 of 831 findings (10.8%)
+    # were horusec and trufflehog reporting a previous scan's `results/`, and
+    # they scale with how many times the user has scanned (#1156).
+    #
+    # Resolved once, here, because it is the same answer for all 26 blocks and
+    # `results_dir` is only in scope in this function. `None` when the results
+    # directory lives elsewhere, which is the usual CI shape and needs nothing.
+    # `results_dir` is NOT the results root: every scanner is handed
+    # `<root>/individual-<type>` (scan_orchestrator.py passes
+    # `self.config.results_dir / "individual-repos"`). Excluding that would
+    # leave `summaries/` beside it in the walk -- and `summaries/findings.json`,
+    # `findings.yaml` and `dashboard.html` each embed every finding verbatim, so
+    # they are the richest source of the re-reporting, not the raw tool output.
+    # Measured: excluding only `individual-repos` left 5 of 8 findings inside
+    # the results tree.
+    #
+    # Guarded rather than assumed. A scanner that is one day handed the root
+    # itself keeps working instead of silently excluding the wrong directory.
+    results_root = (
+        results_dir.parent
+        if results_dir.name.startswith("individual-")
+        else results_dir
+    )
+    results_name = in_tree_results_name(repo, results_root)
+    if results_name:
+        logger.debug(
+            "Results directory %s is inside %s; excluding '%s' from the scan",
+            results_root,
+            repo.name,
+            results_name,
+        )
+    # The precise form, for this module's own file enumeration. The flags take
+    # a NAME because that is the only spelling every tool's grammar shares;
+    # here there is no pattern language, so the exact directory is skipped and
+    # a same-named directory elsewhere in the tree is not.
+    results_tree = results_root.resolve() if results_name else None
+
     def get_tool_timeout(tool: str, default: int) -> int:
         """Timeout for this tool, honouring the slow-tool floor.
 
@@ -417,7 +497,11 @@ def scan_repository(
                 # every previous scan, so scanning it re-reports them all
                 # (#1134).
                 "--exclude-paths",
-                str(write_trufflehog_exclude_file(out_dir)),
+                str(
+                    write_trufflehog_exclude_file(
+                        out_dir, results_dir_name=results_name
+                    )
+                ),
                 *trufflehog_flags,
             ]
             tool_defs.append(
@@ -466,7 +550,7 @@ def scan_repository(
                 # JMo's exclusions go before the user's flags so an explicit
                 # per_tool entry still wins: bandit's -x is last-wins, and the
                 # repeatable forms accumulate either way (#1132).
-                *tool_exclusion_flags("semgrep"),
+                *tool_exclusion_flags("semgrep", results_dir_name=results_name),
                 *semgrep_flags,
                 str(repo),
             ]
@@ -499,7 +583,7 @@ def scan_repository(
                 "json",
                 "--scanners",
                 "vuln,secret,misconfig",
-                *tool_exclusion_flags("trivy"),
+                *tool_exclusion_flags("trivy", results_dir_name=results_name),
                 *trivy_flags,
                 str(repo),
                 "-o",
@@ -562,7 +646,7 @@ def scan_repository(
                 "json",
                 # Before the user's flags, so an explicit per_tool entry still
                 # wins - --skip-path is repeatable and accumulates (#1080).
-                *tool_exclusion_flags("checkov"),
+                *tool_exclusion_flags("checkov", results_dir_name=results_name),
                 *checkov_flags,
             ]
             tool_defs.append(
@@ -595,6 +679,7 @@ def scan_repository(
                 repo,
                 ("**/Dockerfile", "**/Dockerfile.*", "**/*.Dockerfile"),
                 "hadolint",
+                results_tree,
             )
             if dockerfiles:
                 hadolint_cmd = [
@@ -637,7 +722,7 @@ def scan_repository(
         if shellcheck_path:
             shellcheck_flags = get_tool_flags("shellcheck")
             shell_scripts = _collect_files(
-                repo, ("**/*.sh", "**/*.bash", "**/*.ksh"), "shellcheck"
+                repo, ("**/*.sh", "**/*.bash", "**/*.ksh"), "shellcheck", results_tree
             )
             if shell_scripts:
                 shellcheck_cmd = [
@@ -677,7 +762,7 @@ def scan_repository(
                 "json",
                 "-o",
                 str(bandit_out),
-                *tool_exclusion_flags("bandit"),
+                *tool_exclusion_flags("bandit", results_dir_name=results_name),
                 *bandit_flags,
             ]
             tool_defs.append(
@@ -1047,7 +1132,7 @@ def scan_repository(
     if "gosec" in tools:
         gosec_out = out_dir / "gosec.json"
         gosec_path = _find_tool("gosec")
-        has_go = _repo_has_go_sources(repo) if gosec_path else False
+        has_go = _repo_has_go_sources(repo, results_tree) if gosec_path else False
         if gosec_path and has_go:
             gosec_flags = get_tool_flags("gosec")
             gosec_cmd = [
@@ -1178,7 +1263,9 @@ def scan_repository(
     if "kubescape" in tools:
         kubescape_out = out_dir / "kubescape.json"
         kubescape_path = _find_tool("kubescape")
-        has_manifests = _repo_has_k8s_manifests(repo) if kubescape_path else False
+        has_manifests = (
+            _repo_has_k8s_manifests(repo, results_tree) if kubescape_path else False
+        )
         if kubescape_path and has_manifests:
             kubescape_flags = get_tool_flags("kubescape")
             kubescape_cmd = [
@@ -1444,7 +1531,7 @@ def scan_repository(
                 str(trivy_rbac_out),
                 "--scanners",
                 "config",
-                *tool_exclusion_flags("trivy-rbac"),
+                *tool_exclusion_flags("trivy-rbac", results_dir_name=results_name),
                 *trivy_rbac_flags,
                 str(repo),
             ]
@@ -1484,7 +1571,7 @@ def scan_repository(
                 "--json",
                 "--output",
                 str(semgrep_secrets_out),
-                *tool_exclusion_flags("semgrep-secrets"),
+                *tool_exclusion_flags("semgrep-secrets", results_dir_name=results_name),
                 *semgrep_secrets_flags,
                 str(repo),
             ]
@@ -1521,6 +1608,7 @@ def scan_repository(
                 "-O",
                 str(horusec_out),
                 "-D",  # Disable Docker - run native engines only
+                *tool_exclusion_flags("horusec", results_dir_name=results_name),
                 *horusec_flags,
             ]
             tool_defs.append(
@@ -1555,7 +1643,9 @@ def scan_repository(
                 "JSON",
                 "--out",
                 str(dependency_check_out),
-                *tool_exclusion_flags("dependency-check"),
+                *tool_exclusion_flags(
+                    "dependency-check", results_dir_name=results_name
+                ),
                 *dependency_check_flags,
             ]
             tool_defs.append(
