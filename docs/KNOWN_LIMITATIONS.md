@@ -327,15 +327,22 @@ remains is the after-tag set. Regenerate it rather than trust it:
 gh issue list --repo jimmy058910/jmo-security-repo --state open --label user-reachable
 ```
 
-- **Scans traverse gitignored dependency and build directories** (`.venv`,
-  `node_modules`, a local `graphify-out/`), so a repository with installed
-  dependencies can run three tools to their timeout for no findings. Scan a
-  clean checkout, or exclude the directories per tool in `jmo.yml`.
-  [#1080](https://github.com/jimmy058910/jmo-security-repo/issues/1080)
-- **`gosec` and `kubescape` report `ERROR ... findings are MISSING`** on every
-  repository with no Go and no Kubernetes manifests. The scan completes; the
-  message is wrong, not the result.
-  [#1081](https://github.com/jimmy058910/jmo-security-repo/issues/1081)
+- **`kubescape` currently produces no findings on any scan**, and upgrading or
+  downgrading JMo will not change that. kubescape fetches its policy bundle at
+  scan time rather than shipping it, and the bundle now served contains a
+  control the pinned 4.0.12 binary cannot evaluate — so it exits 1 and writes an
+  empty file (`rego eval failed ... no ValidatingAdmissionPolicy for control
+  "C-0207"`), on a directory holding one valid Pod manifest and across four
+  invocation shapes. The same binary worked on 2026-09-01. JMo reports it
+  (`exited with an accepted code but wrote no output`), so no scan claims
+  Kubernetes coverage it does not have. Use `trivy config` for manifest scanning
+  meanwhile.
+  [#1211](https://github.com/jimmy058910/jmo-security-repo/issues/1211)
+- **`trivy-rbac` is skipped on most repositories that do have manifests.** Its
+  detection is three filename globs that match 1 of 5 real manifest names and
+  never look at `.yml` at all, so it reports "nothing for it to scan" on a tree
+  full of Kubernetes. It also cannot currently start (#1206).
+  [#1212](https://github.com/jimmy058910/jmo-security-repo/issues/1212)
 - **Three output rough edges:** the scan progress line is written even when
   stderr is redirected, so a captured log carries `\r` frames; the history
   database flag is `--history-db` on `scan` and `ci` but `--db` on `diff` and

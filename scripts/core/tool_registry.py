@@ -155,9 +155,25 @@ TOOL_VERSION_REQUIREMENTS: dict[str, dict[str, str]] = {
     "cdxgen": {"node": "20.0.0"},  # Requires Node.js 20+
 }
 
-# Content-triggered tools: Only run when applicable content is detected
-# These are skipped in standard scans but activated when relevant files found
-# (e.g., mobsf for Android APKs, akto for API specs)
+# Tools `jmo tools check` must not report as a gap in the environment.
+#
+# **This is not "the list of content-triggered tools", despite the name.** Its
+# one consumer is `ToolManager.get_status_summary`, which buckets these under
+# `content_triggered` instead of `not_installed` so a user is not told to
+# install a tool that would only run on an APK or a live API endpoint.
+#
+# Which tools are *actually* gated on repository content is decided per tool, by
+# a predicate in the scanner that runs it -- `_repo_has_go_sources` and
+# `_repo_has_k8s_manifests` in `scan_jobs/repository_scanner.py`, and the
+# equivalent checks for zap, falco, afl++, prowler, mobsf and trivy-rbac. That
+# set is larger than this one and changes when a scanner changes.
+#
+# A second, hand-maintained copy of it used to sit inside TOOL_SCAN_TYPES["repo"]
+# below, listing `zap`/`falco`/`mobsf`/`afl++`. By #1081 it disagreed with this
+# constant in both directions and was wrong about four tools, and a reader had
+# no way to tell which of the two to believe. It is gone rather than corrected:
+# the enumeration was the defect, so matching them up today would only reset the
+# clock on the same drift.
 CONTENT_TRIGGERED_TOOLS: set[str] = {"mobsf", "akto"}
 
 # Manual install tools: Require manual installation due to platform limitations
@@ -213,11 +229,16 @@ TOOL_SCAN_TYPES: dict[str, set[str]] = {
         "dependency-check",
         "shellcheck",
         "opa",
-        # Content-triggered (only run when applicable files found)
         "zap",
         "falco",
         "mobsf",
         "afl++",
+        # Membership here means "valid for a repository target", NOT "runs on
+        # every repository". 8 of these 26 are gated on the tree actually
+        # holding something for them (zap, falco, afl++, prowler, mobsf,
+        # trivy-rbac, gosec, kubescape), and hadolint and shellcheck simply
+        # produce no invocation when they collect no files. See
+        # CONTENT_TRIGGERED_TOOLS above for where that decision lives.
         # Note: nuclei is a DAST URL scanner, only valid for "url" scan type
     },
     # Tools that work on container images

@@ -383,6 +383,31 @@ exactly what it is for — it is not evidence that *this* test wrote. And do not
 run two suites against this repo at once when either can touch `~/.jmo/` or
 `.jmo/`; the guards cannot tell the processes apart.
 
+**The other process does not have to be pytest.** Measured again 2026-09-09, and
+this shape is easier to walk into, because the merge gate asks for it: a
+`tests/unit` run in the background reported **2 errors** naming two unrelated
+tests, while `tests/unit`'s only `cmd_scan` caller is
+`test_signal_handling.py`, which is skipped on Windows. The culprit was two
+plain `jmo scan` invocations — the real-binary verification for the change under
+review — run in another shell inside the suite's window:
+
+| event | local time |
+|---|---|
+| `tests/unit` window | 14:13:29 → 14:18:21 |
+| `jmo scan` (before/after A/B) | 14:15:05 |
+| `jmo scan` (positive control) | 14:15:31 |
+| `~/.jmo/config.yml` mtime | 14:15:32 |
+
+`_show_kofi_reminder()` bumps `scan_count:` in `~/.jmo/config.yml` on **every**
+scan, so any dogfood run mutates the exact file the guard watches. Two scans,
+two accusations, both wrong; the same suite had reported 0 errors an hour
+earlier with no scan running.
+
+**Sequence the two.** Verifying against real binaries and running the suite are
+both required here and they cannot share a window. If a run comes back with
+errors whose named tests cannot reach the guarded state, check what else on the
+machine touched `~/.jmo/` before touching the tests.
+
 ## Counting tests: compare like with like
 
 A terminal summary's `skipped` count includes **collection-level** skips, which

@@ -958,3 +958,196 @@ class TestToolApplicableToNoTargetType:
         assert any("applicable to no target type" in m for m in visible), (
             f"expected the unrouted-tool warning; got {visible}"
         )
+
+
+class TestTheTwoNotAttemptedReasonsReadDifferently:
+    """#1081: the reason `record_not_attempted` stores was dropped on the way
+    to the screen.
+
+    `not_attempted_tools` returned the dict's KEYS, discarding the reason. Three
+    of its four callers only need membership -- to keep a skipped tool out of
+    the failed-tools vote -- so nothing noticed that the fourth, the end-of-scan
+    STUBBED warning, described both reasons in the words of one:
+
+        N tool run(s) ... were STUBBED, not executed. Their output files are
+        empty because nothing looked, which is not the same as finding nothing
+
+    True of a tool that is not installed. Backwards for a tool the target had
+    nothing for: gosec on a repository with no Go has not missed anything, and
+    an empty result is the correct answer rather than a gap.
+
+    Gating gosec and kubescape on content is what made this load-bearing. Both
+    were an ERROR before; without the split they would have become this WARN on
+    every Node, Python, Java, Ruby and PHP repository -- the same false alarm in
+    a quieter voice.
+    """
+
+    def test_the_filter_separates_the_two_reasons(self):
+        from scripts.cli.scan_utils import (
+            NOT_ATTEMPTED_MISSING,
+            NOT_ATTEMPTED_NOTHING_APPLICABLE,
+            not_attempted_tools,
+            record_not_attempted,
+        )
+
+        statuses: dict = {"semgrep": True}
+        record_not_attempted(statuses, "trivy", NOT_ATTEMPTED_MISSING)
+        record_not_attempted(statuses, "gosec", NOT_ATTEMPTED_NOTHING_APPLICABLE)
+        record_not_attempted(statuses, "kubescape", NOT_ATTEMPTED_NOTHING_APPLICABLE)
+
+        assert not_attempted_tools(statuses, reason=NOT_ATTEMPTED_MISSING) == ["trivy"]
+        assert not_attempted_tools(
+            statuses, reason=NOT_ATTEMPTED_NOTHING_APPLICABLE
+        ) == ["gosec", "kubescape"]
+        # Unfiltered is unchanged -- three callers depend on it meaning
+        # "everything that did not run", and narrowing it would put skipped
+        # tools back into the failed-tools vote (#825).
+        assert not_attempted_tools(statuses) == ["gosec", "kubescape", "trivy"]
+
+    def test_an_unknown_reason_matches_nothing_rather_than_everything(self):
+        """A filter that silently degrades to 'no filter' is how a guard stops
+        guarding without failing."""
+        from scripts.cli.scan_utils import not_attempted_tools, record_not_attempted
+
+        statuses: dict = {}
+        record_not_attempted(statuses, "trivy")
+
+        assert not_attempted_tools(statuses, reason="something else") == []
+
+    @staticmethod
+    def _scan_with(scan_env, tmp_path, monkeypatch, capsys, tool, resolves):
+        """Run a one-repo scan for `tool` against an empty repository."""
+        cfg = tmp_path / "jmo.yml"
+        cfg.write_text(
+            yaml.safe_dump({"tools": [tool], "outputs": ["json"]}), encoding="utf-8"
+        )
+        scan_env.config = str(cfg)
+        scan_env.tools = [tool]
+        monkeypatch.setattr(
+            "scripts.cli.scan_jobs.repository_scanner.find_tool",
+            (lambda *a, **k: "/usr/bin/" + tool)
+            if resolves
+            else (lambda *a, **k: None),
+        )
+        monkeypatch.setattr(
+            "scripts.cli.scan_jobs.repository_scanner.ToolRunner",
+            lambda **kw: types.SimpleNamespace(run_all_parallel=list),
+        )
+        jmo.cmd_scan(scan_env)
+        return capsys.readouterr().err
+
+    def test_nothing_to_scan_is_not_reported_as_a_stub(
+        self, scan_env, tmp_path, monkeypatch, capsys
+    ):
+        """gosec installed, repository has no Go: benign, and must say so."""
+        err = self._scan_with(
+            scan_env, tmp_path, monkeypatch, capsys, "gosec", resolves=True
+        )
+
+        assert "were STUBBED, not executed" not in err, (
+            "a tool with nothing to scan was reported as an unexamined gap: " + err
+        )
+        skipped = [
+            ln for ln in err.splitlines() if "SKIPPED with nothing to scan" in ln
+        ]
+        assert len(skipped) == 1, f"expected one skipped line: {err}"
+        assert "gosec" in skipped[0]
+        assert '"level": "INFO"' in skipped[0], "a benign outcome was raised to WARN"
+
+    def test_a_missing_binary_is_still_reported_as_a_stub(
+        self, scan_env, tmp_path, monkeypatch, capsys
+    ):
+        """The other half. Splitting the message must not delete either branch:
+        a fix that simply stopped warning would pass the test above."""
+        err = self._scan_with(
+            scan_env, tmp_path, monkeypatch, capsys, "gosec", resolves=False
+        )
+
+        stubbed = [ln for ln in err.splitlines() if "were STUBBED, not executed" in ln]
+        assert len(stubbed) == 1, f"the true warning was lost with the false one: {err}"
+        assert "gosec" in stubbed[0]
+        assert '"level": "WARN"' in stubbed[0]
+        assert "SKIPPED with nothing to scan" not in err
+
+
+class TestThePerTargetLineOnlyWarnsAboutRealGaps:
+    """The same reason-blind wording as the end-of-scan summary, one line up.
+
+    `ScanProgressReporter` warned "N tool(s) were stubbed and did NOT run" for
+    every not-attempted tool regardless of why. That branch fires when the scan
+    otherwise SUCCEEDED, so after #1081 gated gosec and kubescape on content it
+    would have carried a WARN on every target of every Node, Python, Java, Ruby
+    and PHP scan -- for two tools that correctly had nothing to do.
+
+    The union is still what keeps a skipped tool out of the failed-tools vote
+    (#825); only the WARN narrows.
+    """
+
+    @staticmethod
+    def _scan(scan_env, tmp_path, monkeypatch, capsys, *, gosec_resolves):
+        """One tool that succeeds plus gosec, on a repository with no Go.
+
+        `gosec_resolves` picks which not-attempted reason gosec gets: installed
+        with nothing to scan, or simply absent.
+        """
+        from scripts.core.tool_runner import ToolResult
+
+        cfg = tmp_path / "jmo.yml"
+        cfg.write_text(
+            yaml.safe_dump({"tools": ["trufflehog", "gosec"], "outputs": ["json"]}),
+            encoding="utf-8",
+        )
+        scan_env.config = str(cfg)
+        scan_env.tools = ["trufflehog", "gosec"]
+        scan_env.allow_missing_tools = True
+
+        resolvable = {"trufflehog", "gosec"} if gosec_resolves else {"trufflehog"}
+        monkeypatch.setattr(
+            "scripts.cli.scan_jobs.repository_scanner.find_tool",
+            lambda name, *a, **k: ("/usr/bin/" + name) if name in resolvable else None,
+        )
+        monkeypatch.setattr(
+            "scripts.cli.scan_jobs.repository_scanner.ToolRunner",
+            lambda **kw: types.SimpleNamespace(
+                run_all_parallel=lambda: [
+                    ToolResult(tool="trufflehog", status="success", attempts=1)
+                ]
+            ),
+        )
+        jmo.cmd_scan(scan_env)
+        return capsys.readouterr().err
+
+    @staticmethod
+    def _progress_line(err: str) -> str:
+        lines = [ln for ln in err.splitlines() if "[1/1]" in ln]
+        assert len(lines) == 1, f"expected one progress line: {lines}"
+        return lines[0]
+
+    def test_a_tool_with_nothing_to_scan_does_not_warn_on_the_target_line(
+        self, scan_env, tmp_path, monkeypatch, capsys
+    ):
+        err = self._scan(scan_env, tmp_path, monkeypatch, capsys, gosec_resolves=True)
+        line = self._progress_line(err)
+
+        assert "were stubbed and did NOT run" not in line, (
+            "a correct skip was reported as an unexamined gap: " + line
+        )
+        assert '"level": "INFO"' in line, "a clean target was raised to WARN: " + line
+        # Still said once, at the end of the run, so the information is not lost.
+        assert "SKIPPED with nothing to scan" in err
+        assert "gosec" in err
+
+    def test_a_missing_tool_still_warns_on_the_target_line(
+        self, scan_env, tmp_path, monkeypatch, capsys
+    ):
+        """The branch must not be deleted, only narrowed. An empty stub from a
+        scanner that was never installed still satisfies a `zero-secrets`
+        policy, which is what #825 put this warning here for."""
+        err = self._scan(scan_env, tmp_path, monkeypatch, capsys, gosec_resolves=False)
+        line = self._progress_line(err)
+
+        assert "1 tool(s) were stubbed and did NOT run" in line, (
+            "the true warning was lost with the false one: " + line
+        )
+        assert "gosec" in line
+        assert '"level": "WARN"' in line
