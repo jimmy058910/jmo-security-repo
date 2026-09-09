@@ -1,0 +1,8 @@
+{
+  "tool": "trivy-rbac",
+  "version": "0.74.0",
+  "generated_at": "2026-09-09T20:23:31.175242+00:00",
+  "sample_dir": "k8s-insecure-pod",
+  "finding_count": 19,
+  "raw_output_hash": "f11f31e25493"
+}

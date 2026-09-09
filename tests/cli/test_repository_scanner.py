@@ -1657,8 +1657,14 @@ class TestHorusecStagingDirIsExcluded:
         """Build the real argv for `tools` without needing a tool installed."""
         repo = tmp_path / "repo"
         (repo / "k8s").mkdir(parents=True)
-        # trivy-rbac only builds a command when the repo has K8s manifests.
-        (repo / "k8s" / "deployment.yaml").write_text("kind: Deployment\n")
+        # trivy-rbac only builds a command when the repo has K8s manifests, and
+        # since #1212 that is decided by `apiVersion:` in the file's CONTENT
+        # rather than by its name. `kind: Deployment` alone satisfied the old
+        # three globs and satisfies nothing now -- the helper planted a file
+        # shaped by the assumption it was testing.
+        (repo / "k8s" / "deployment.yaml").write_text(
+            "apiVersion: apps/v1\nkind: Deployment\n", encoding="utf-8"
+        )
 
         with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
@@ -2201,8 +2207,8 @@ class TestGosecAndKubescapeOnlyRunWhenThereIsSomethingToScan:
 
     def test_kubescape_detects_a_manifest_by_content_not_by_filename(self, tmp_path):
         """`pod.yaml`, `ingress.yaml` and `configmap.yaml` are all manifests and
-        none of them matches the `*deployment*` / `*service*` / `k8s/**` globs
-        this module uses for trivy-rbac."""
+        none of them matched the `*deployment*` / `*service*` / `k8s/**` globs
+        trivy-rbac used until #1212. Both tools share this predicate now."""
         repo = tmp_path / "odd-names"
         (repo / "manifests").mkdir(parents=True)
         (repo / "manifests" / "ingress.yml").write_text(
@@ -2395,3 +2401,158 @@ class TestTheInTreeResultsDirectoryIsKeptOutOfTheScan:
             "the user's own src/results/ was skipped by name"
         )
         assert not any("own.sh" in f for f in found), "JMo's output was scanned"
+
+
+class TestTrivyRbacCanActuallyRun:
+    """#1206 and #1212: trivy-rbac contributed nothing on every K8s repository.
+
+    Two independent defects in one block, and a third (#1215) one layer down.
+
+    `--scanners config` is not a flag `trivy config` has at the pinned 0.74.0.
+    The real binary answers `FATAL Fatal error unknown flag: --scanners`, exit
+    1, no output file -- measured, not inferred. It was redundant even where it
+    parsed, because `trivy config` IS the misconfiguration scanner; the flag
+    that does exist there is `--misconfig-scanners`, which selects config
+    FORMATS (terraform, kubernetes, helm), not scanner classes.
+
+    And the gate deciding whether to build the command at all was three
+    filename globs matching **1 of 5** real manifest names, with no `.yml`
+    pattern anywhere in any of them.
+
+    Both are argv-and-gating defects, so both are reachable from a mocked
+    runner. What is NOT reachable here is whether the binary accepts the argv
+    -- the suite mocks subprocess, which is exactly why the flag survived from
+    `b434eee1` through every test run since. That half is measured against the
+    real binary at review time, and the parse half is guarded by the captured
+    output under `tests/fixtures/golden/trivy_rbac/`.
+    """
+
+    @staticmethod
+    def _scan(tmp_path, repo, allow_missing_tools=False, resolvable=True):
+        """Return ({name: ToolDefinition}, statuses) for a trivy-rbac scan."""
+        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+            mock_runner.run_all_parallel.return_value = []
+
+            _name, statuses = scan_repository(
+                repo=repo,
+                results_dir=tmp_path / "out",
+                tools=["trivy-rbac"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=allow_missing_tools,
+                find_tool_func=(lambda n: "/usr/bin/" + n)
+                if resolvable
+                else (lambda n: None),
+            )
+
+            args, kwargs = MockRunner.call_args
+            tool_defs = kwargs.get("tools") or (args[0] if args else [])
+            return {t.name: t for t in tool_defs}, statuses
+
+    @staticmethod
+    def _manifest(repo, relative, body="apiVersion: v1\nkind: Pod\n"):
+        path = repo / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(body, encoding="utf-8")
+        return path
+
+    # ---- #1206: the flag the real binary rejects ---------------------------
+
+    def test_the_command_omits_the_flag_trivy_config_rejects(self, tmp_path):
+        """Spelled out literally rather than read from the source constant.
+
+        A guard that derives its expectation from the thing it guards cannot
+        fail when that thing empties (#1061).
+        """
+        repo = tmp_path / "repo"
+        self._manifest(repo, "manifests/pod.yaml")
+
+        defs, _ = self._scan(tmp_path, repo)
+
+        assert "--scanners" not in defs["trivy-rbac"].command
+
+    def test_the_command_still_runs_the_config_subcommand_against_the_repo(
+        self, tmp_path
+    ):
+        """Removing the flag must not remove the scan.
+
+        `config` and the target are what make the invocation do anything; a
+        regression that dropped either would leave `--scanners` absent and the
+        test above green.
+        """
+        repo = tmp_path / "repo"
+        self._manifest(repo, "manifests/pod.yaml")
+
+        command = self._scan(tmp_path, repo)[0]["trivy-rbac"].command
+
+        assert command[1] == "config"
+        assert command[-1] == str(repo)
+
+    # ---- #1212: detection by content, at both spellings --------------------
+
+    def test_a_manifest_whose_filename_says_nothing_still_runs_it(self, tmp_path):
+        """`pod.yaml` matches none of the three globs this used to gate on."""
+        repo = tmp_path / "repo"
+        self._manifest(repo, "manifests/pod.yaml")
+
+        defs, statuses = self._scan(tmp_path, repo)
+
+        assert "trivy-rbac" in defs
+        assert (statuses.get(NOT_ATTEMPTED_KEY) or {}).get("trivy-rbac") is None
+
+    def test_a_dot_yml_manifest_runs_it(self, tmp_path):
+        """`.yml` was not globbed once, in any of the three patterns.
+
+        The spelling is a coin flip in real repositories and half of them lost.
+        """
+        repo = tmp_path / "repo"
+        self._manifest(
+            repo, "manifests/deployment.yml", "apiVersion: apps/v1\nkind: Deployment\n"
+        )
+
+        assert "trivy-rbac" in self._scan(tmp_path, repo)[0]
+
+    def test_yaml_that_is_not_a_manifest_does_not_trigger_it(self, tmp_path):
+        """The predicate must not over-trigger, or it reproduces the #1081 ERROR.
+
+        Measured on OWASP Juice Shop: 90 `.yaml`/`.yml` files, none holding
+        `apiVersion:`.
+        """
+        repo = tmp_path / "repo"
+        (repo / ".github" / "workflows").mkdir(parents=True)
+        (repo / ".github" / "workflows" / "ci.yaml").write_text(
+            "name: build\non: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n",
+            encoding="utf-8",
+        )
+        (repo / "docker-compose.yml").write_text(
+            "services:\n  web:\n    image: nginx\n", encoding="utf-8"
+        )
+
+        defs, statuses = self._scan(tmp_path, repo)
+
+        assert "trivy-rbac" not in defs
+        assert (statuses.get(NOT_ATTEMPTED_KEY) or {}).get("trivy-rbac") == (
+            NOT_ATTEMPTED_NOTHING_APPLICABLE
+        )
+
+    # ---- the two skip reasons stay distinct --------------------------------
+
+    def test_a_missing_binary_reports_not_installed_not_nothing_to_scan(self, tmp_path):
+        """A repo that HAS manifests with trivy absent is an environment gap.
+
+        Asserting on membership alone would read identically for both reasons,
+        which is the distinction #1081 exists to preserve.
+        """
+        repo = tmp_path / "repo"
+        self._manifest(repo, "manifests/pod.yaml")
+
+        _defs, statuses = self._scan(
+            tmp_path, repo, allow_missing_tools=True, resolvable=False
+        )
+
+        assert (statuses.get(NOT_ATTEMPTED_KEY) or {}).get("trivy-rbac") == (
+            NOT_ATTEMPTED_MISSING
+        )

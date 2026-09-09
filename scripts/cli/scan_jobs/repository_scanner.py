@@ -245,9 +245,9 @@ def _repo_has_go_sources(repo: Path, skip_tree: Path | None = None) -> bool:
 #: would hand kubescape all 90 and reproduce the ERROR. And a name-based one
 #: misses the other way: ``pod.yaml``, ``ingress.yaml`` and ``configmap.yaml``
 #: are manifests that match none of the ``*deployment*`` / ``*service*`` /
-#: ``k8s/**`` globs this module still uses for trivy-rbac, which also globs no
-#: ``.yml`` at all -- 1 of 5 real manifest filenames. See #1212; left alone here
-#: to keep #1081 to the two tools its issue names.
+#: ``k8s/**`` globs trivy-rbac used until #1212, which also globbed no ``.yml``
+#: at all -- 1 of 5 real manifest filenames, measured. Both tools now share
+#: this predicate.
 _K8S_MANIFEST_MARKER = "apiVersion:"
 _K8S_MANIFEST_SUFFIXES: frozenset[str] = frozenset({".yaml", ".yml"})
 
@@ -1509,18 +1509,19 @@ def scan_repository(
             _write_stub("lynis", lynis_out)
             record_not_attempted(statuses, "lynis", NOT_ATTEMPTED_NOTHING_APPLICABLE)
 
-    # Trivy RBAC: Kubernetes RBAC security assessment
-    # Note: Requires K8s manifests in repository
+    # Trivy RBAC: Kubernetes workload and RBAC misconfiguration assessment
+    # Note: Requires K8s manifests in repository, detected by `apiVersion:` in
+    # file *content* -- three filename globs matched 1 of 5 real manifest names
+    # and no `.yml` at any depth, so this reported "nothing to scan" on
+    # repositories full of manifests (#1212). `_find_tool` runs first so a
+    # missing binary does not pay for a whole-tree read.
     if "trivy-rbac" in tools:
         trivy_rbac_out = out_dir / "trivy-rbac.json"
-        # Check for K8s manifests
-        k8s_manifests = (
-            list(repo.glob("**/*deployment*.yaml"))
-            + list(repo.glob("**/*service*.yaml"))
-            + list(repo.glob("**/k8s/**/*.yaml"))
-        )
         trivy_rbac_path = _find_tool("trivy", record_as="trivy-rbac")
-        if k8s_manifests and trivy_rbac_path:
+        has_manifests = (
+            _repo_has_k8s_manifests(repo, results_tree) if trivy_rbac_path else False
+        )
+        if trivy_rbac_path and has_manifests:
             trivy_rbac_flags = get_tool_flags("trivy-rbac")
             trivy_rbac_cmd = [
                 trivy_rbac_path,
@@ -1529,8 +1530,13 @@ def scan_repository(
                 "json",
                 "--output",
                 str(trivy_rbac_out),
-                "--scanners",
-                "config",
+                # No `--scanners`: `trivy config` has no such flag at the pinned
+                # 0.74.0 and exits 1 with `unknown flag` and no output file, so
+                # trivy-rbac contributed nothing on every K8s repository (#1206).
+                # It was redundant anyway -- `trivy config` IS the misconfig
+                # scanner. The flag that does exist here is `--misconfig-scanners`,
+                # which selects config *formats* (terraform, kubernetes, helm),
+                # not scanner classes.
                 *tool_exclusion_flags("trivy-rbac", results_dir_name=results_name),
                 *trivy_rbac_flags,
                 str(repo),
@@ -1546,7 +1552,7 @@ def scan_repository(
                     capture_stdout=False,
                 )
             )
-        elif allow_missing_tools or not k8s_manifests:
+        elif allow_missing_tools or not has_manifests:
             _write_stub("trivy-rbac", trivy_rbac_out)
             record_not_attempted(
                 statuses,
