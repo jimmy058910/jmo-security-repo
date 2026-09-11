@@ -1033,6 +1033,18 @@ class TestTheTwoNotAttemptedReasonsReadDifferently:
             "scripts.cli.scan_jobs.repository_scanner.ToolRunner",
             lambda **kw: types.SimpleNamespace(run_all_parallel=list),
         )
+        # Two resolvers, and only `find_tool` above decides what this test
+        # sees. cmd_scan consults the other one first: `_warn_critical_updates`
+        # version-checks every requested tool through
+        # `ToolManager._find_binary`, which reads the real PATH, so on a runner
+        # with the binary installed it spawned `<tool> --version` and failed
+        # the real-binary guard at teardown (#1234). The nightly caught it in
+        # the class below, which asks for trufflehog; this one is exposed the
+        # same way wherever gosec is on PATH. Resolving nothing there is the
+        # state every PR shard is already in.
+        monkeypatch.setattr(
+            "scripts.cli.tool_manager.ToolManager._find_binary", lambda *a, **k: None
+        )
         jmo.cmd_scan(scan_env)
         return capsys.readouterr().err
 
@@ -1113,6 +1125,12 @@ class TestThePerTargetLineOnlyWarnsAboutRealGaps:
                     ToolResult(tool="trufflehog", status="success", attempts=1)
                 ]
             ),
+        )
+        # The startup version check's resolver, pinned for the reason given in
+        # `_scan_with` above. Without it the nightly's real trufflehog was
+        # spawned for `--version` here (#1234).
+        monkeypatch.setattr(
+            "scripts.cli.tool_manager.ToolManager._find_binary", lambda *a, **k: None
         )
         jmo.cmd_scan(scan_env)
         return capsys.readouterr().err
