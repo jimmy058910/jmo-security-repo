@@ -191,4 +191,4 @@ JMo Security orchestrates 29 security scanners across 13 categories:
 
 ---
 
-**Last Updated:** August 2026 | **JMo Security v1.1.0**
+**Last Updated:** August 2026 | **JMo Security v1.1.1**

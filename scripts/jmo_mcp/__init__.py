@@ -18,5 +18,5 @@ Architecture:
 - Transport: stdio, HTTP, SSE
 """
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 __all__ = ["jmo_server"]
