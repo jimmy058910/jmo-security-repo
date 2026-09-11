@@ -20,11 +20,6 @@
       },
       "description": "GitHub API integration for repos, issues, PRs, and more"
     },
-    "serena": {
-      "command": "npx",
-      "args": ["-y", "@oraios/serena-mcp"],
-      "description": "Semantic code analysis and editing via LSP"
-    },
     "chrome-devtools": {
       "command": "npx",
       "args": ["-y", "chrome-devtools-mcp@latest"],
