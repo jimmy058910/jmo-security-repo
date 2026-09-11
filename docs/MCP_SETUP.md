@@ -900,150 +900,11 @@ For Chrome DevTools with a specific user profile:
 }
 ```
 
-## Should You Add Serena MCP Server?
-
-### What is Serena?
-
-Serena is a **semantic code analysis and editing toolkit** that transforms AI assistants into fully-featured coding agents. It provides:
-
-- 🔍 **Semantic code search** via Language Server Protocol (LSP)
-- 📝 **Intelligent code editing** with symbol understanding
-- 🧠 **Codebase memory** through persistent onboarding
-- 🔧 **Multi-language support:** Python, TypeScript/JavaScript, PHP, Go, Rust, C/C++, Java
-
-### Recommendation: YES, for Heavy Development
-
-**TL;DR:** Add Serena if you do frequent refactoring or cross-file analysis. Skip if you're comfortable with current Read/Glob/Grep tools.
-
-### ✅ Benefits for This Project
-
-1. **Python LSP Integration**
-   - Navigate symbol definitions across `scripts/core/` and `scripts/cli/`
-   - Find all references to CommonFinding schema
-   - Rename functions/classes with semantic awareness
-
-2. **Better Refactoring**
-   - Intelligent code transformations
-   - Symbol-aware search and replace
-   - Understands Python imports and scopes
-
-3. **Faster Navigation**
-   - Jump to adapter definitions by tool name
-   - Find all usages of a reporter function
-   - Trace data flow through the two-phase architecture
-
-4. **No Cost**
-   - Runs locally, no API keys needed
-   - Works with Claude's free tier
-   - Privacy-preserving (stays on your machine)
-
-### ⚠️ Considerations
-
-1. **Setup Complexity**
-   - Requires Python language server (Pyright or Pylance)
-   - Needs initial codebase indexing/onboarding
-   - More moving parts than simple MCP servers
-
-2. **Resource Usage**
-   - Language server runs in background
-   - Indexes entire codebase (may take 1-2 minutes initially)
-   - Uses memory for persistent index
-
-3. **Overlap with Existing Tools**
-   - Claude Code already has Read/Glob/Grep tools
-   - Your IDE (VS Code) already provides LSP features
-   - May be redundant if comfortable with current workflow
-
-### When to Use Serena
-
-**High Value Scenarios:**
-
-1. **Large Refactoring Tasks**
-   - "Rename `gather_results` to `aggregate_findings` across all files"
-   - "Find all adapter functions that parse 'severity' and standardize them"
-   - "Trace how fingerprint IDs flow from adapters → normalize → reporters"
-
-2. **Cross-File Analysis**
-   - "Show me all places where CommonFinding schema is constructed"
-   - "Find inconsistent error handling patterns across adapters"
-   - "List all CLI flags and their usage in subcommands"
-
-3. **Code Understanding**
-   - "Explain the data flow from scan → normalize → report"
-   - "Show me the call graph for the report command"
-   - "Which adapters use CVSS scoring?"
-
-**Lower Value Scenarios:**
-
-- ❌ Simple file edits (regular Read/Write tools work fine)
-- ❌ Documentation updates (not code analysis)
-- ❌ Configuration changes (jmo.yml, Dockerfiles, etc.)
-
-### Installation
-
-To add Serena to your MCP configuration, edit `.claude/mcp.json`:
-
-```json
-{
-  "mcpServers": {
-    "context7": {
-      "command": "npx",
-      "args": ["-y", "@upstash/context7-mcp"],
-      "description": "Up-to-date code documentation for libraries and frameworks"
-    },
-    "github": {
-      "command": "docker",
-      "args": [
-        "run", "-i", "--rm",
-        "-e", "GITHUB_PERSONAL_ACCESS_TOKEN",
-        "ghcr.io/github/github-mcp-server"
-      ],
-      "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GH_TOKEN}"
-      }
-    },
-    "serena": {
-      "command": "npx",
-      "args": ["-y", "@oraios/serena-mcp"],
-      "description": "Semantic code analysis and editing via LSP"
-    },
-    "chrome-devtools": {
-      "command": "npx",
-      "args": ["-y", "chrome-devtools-mcp@latest"],
-      "description": "Browser automation and debugging capabilities"
-    }
-  }
-}
-```
-
-**Initial Setup Steps:**
-
-1. Install Serena: `npx -y @oraios/serena-mcp`
-2. Ensure Python language server is available:
-
-   ```bash
-   # Option 1: Install Pyright
-   pip install pyright
-
-   # Option 2: Use Pylance (VS Code extension)
-   # Serena auto-detects which LSP is available
-   ```
-
-3. First use triggers codebase onboarding (1-2 minutes indexing)
-4. Subsequent queries use cached index (fast)
-
-**Resources:**
-
-- [Serena GitHub](https://github.com/oraios/serena)
-- [Serena Documentation](https://github.com/oraios/serena/blob/main/README.md)
-
-### Comparison: When to Use Each MCP
+## Comparison: When to Use Each MCP
 
 | Task | Best Tool | Example |
 |------|-----------|---------|
 | External library docs | Context7 | "Show me latest pytest fixtures API use context7" |
-| Semantic refactoring | Serena | "Rename all occurrences of `load_gitleaks` to `parse_gitleaks`" |
-| Symbol navigation | Serena | "Find all functions that construct CommonFinding objects" |
 | Project documentation | Read tool | "Read CLAUDE.md to understand architecture" |
 | GitHub operations | GitHub MCP | "Create an issue for adding a new tool adapter" |
 | Dashboard testing | Chrome DevTools | "Screenshot dashboard with mobile viewport" |
@@ -1073,7 +934,6 @@ To add Serena to your MCP configuration, edit `.claude/mcp.json`:
 
 ✅ Context7 for external library docs
 ✅ GitHub for repo operations
-⏩ Skip Serena unless doing heavy refactoring
 ⏩ Skip Chrome DevTools unless testing dashboard
 
 **Full Setup (Heavy Development):**
@@ -1083,14 +943,12 @@ To add Serena to your MCP configuration, edit `.claude/mcp.json`:
   "mcpServers": {
     "context7": { /* ... */ },
     "github": { /* ... */ },
-    "serena": { /* ... */ },
     "chrome-devtools": { /* ... */ }
   }
 }
 ```
 
-✅ All four MCP servers enabled
-✅ Best for frequent codebase refactoring
+✅ All three MCP servers enabled
 ✅ Useful for automated testing workflows
 
 ### Key Takeaways
@@ -1101,16 +959,8 @@ To add Serena to your MCP configuration, edit `.claude/mcp.json`:
    - ✅ Your project docs are already provided via CLAUDE.md and file reads!
    - ✅ Use only for external libraries (pytest, semgrep, trivy, etc.)
 
-2. **Serena Benefits:**
-   - ✅ Semantic code search and refactoring
-   - ✅ LSP-powered navigation (Python, JS, Go, etc.)
-   - ✅ Free and local (no API keys)
-   - ⚠️ Setup overhead and resource usage
-   - ⚠️ Most valuable for cross-file analysis and large refactoring
-
-3. **When to Use Each:**
+2. **When to Use Each:**
    - **Context7** → "How does pytest parametrize work? use context7"
-   - **Serena** → "Rename all `load_*` functions to `parse_*` across adapters"
    - **Read tool** → "Show me the CommonFinding schema" (project docs)
    - **GitHub MCP** → "Create an issue for adding support for a new scanner"
 
@@ -1120,11 +970,7 @@ To add Serena to your MCP configuration, edit `.claude/mcp.json`:
    - ✅ "How does semgrep SARIF work? use context7"
    - ❌ "How does our adapter pattern work?" (use Read instead)
 
-2. **Serena:** Let it index once, reuse cached results
-   - First query may be slow (indexing)
-   - Subsequent queries are fast (cached)
-
-3. **Combine Tools:** Use Read for project docs + Context7 for external
+2. **Combine Tools:** Use Read for project docs + Context7 for external
    - "Read CLAUDE.md for adapter pattern, then use context7 for pytest best practices"
 
 ## Support
