@@ -1,9 +1,4 @@
-"""gitleaks (secret detection) -- SARIF binding.
-
-One SarifToolSpec against sarif_common.parse_sarif; nothing else. gitleaks has
-no severity concept, so its findings resolve to SARIF's default (MEDIUM); the
-PR that puts it in a profile decides whether a secret should outrank that.
-"""
+"""gitleaks (secret detection): a SARIF binding over sarif_common."""
 
 from __future__ import annotations
 
@@ -26,7 +21,6 @@ _SPEC = SarifToolSpec(tool="gitleaks", tags=("secrets", "sarif"))
         version="1.0.0",
         description="Adapter for gitleaks secret detection (SARIF)",
         tool_name="gitleaks",
-        schema_version="1.2.0",
         output_format="sarif",
         exit_codes={0: "clean", 1: "findings"},
     )

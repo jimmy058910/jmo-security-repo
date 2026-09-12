@@ -1,9 +1,4 @@
-"""osv-scanner (dependency vulnerabilities) -- SARIF binding.
-
-One SarifToolSpec against sarif_common.parse_sarif; nothing else. Severity
-comes from each rule's `security-severity` (a CVSS base score), which is why
-the importer reads that before `level`: `level` is `warning` on every result.
-"""
+"""osv-scanner (dependency vulnerabilities): a SARIF binding over sarif_common."""
 
 from __future__ import annotations
 
@@ -26,7 +21,6 @@ _SPEC = SarifToolSpec(tool="osv-scanner", tags=("sca", "vulnerability", "sarif")
         version="1.0.0",
         description="Adapter for osv-scanner dependency vulnerabilities (SARIF)",
         tool_name="osv-scanner",
-        schema_version="1.2.0",
         output_format="sarif",
         exit_codes={0: "clean", 1: "findings"},
     )

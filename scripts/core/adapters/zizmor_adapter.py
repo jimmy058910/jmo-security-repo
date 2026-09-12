@@ -1,8 +1,4 @@
-"""zizmor (GitHub Actions auditor) -- SARIF binding.
-
-One SarifToolSpec against sarif_common.parse_sarif; nothing else. Adding a
-fourth SARIF tool is another file of this shape.
-"""
+"""zizmor (GitHub Actions auditor): a SARIF binding over sarif_common."""
 
 from __future__ import annotations
 
@@ -25,7 +21,6 @@ _SPEC = SarifToolSpec(tool="zizmor", tags=("github-actions", "workflow", "sarif"
         version="1.0.0",
         description="Adapter for zizmor GitHub Actions auditor (SARIF)",
         tool_name="zizmor",
-        schema_version="1.2.0",
         output_format="sarif",
         exit_codes={0: "clean", 14: "findings"},
     )
