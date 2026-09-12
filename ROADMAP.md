@@ -8,6 +8,9 @@
 
 **Latest Stable Release:** v1.1.1 (September 2026)
 
+v1.1.1 **shipped on 2026-09-11** — seven fixes and one removal across eleven
+issues. It is the first release on the patch cadence described below.
+
 v1.1.0 **shipped on 2026-09-05** — PyPI, the GitHub Release and all four Docker
 variants. It is not a feature milestone: it is the outcome of a pre-release fix
 program (Phases 0-13, tracked in
