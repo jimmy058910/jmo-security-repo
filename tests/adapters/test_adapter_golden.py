@@ -104,6 +104,22 @@ ADAPTER_REGISTRY: dict[str, dict[str, str]] = {
         "module": "scripts.core.adapters.trivy_rbac_adapter",
         "class": "TrivyRbacAdapter",
     },
+    # Phase 1 of the v2.0.0 program: the three SARIF bindings. Each is ~25
+    # lines over `sarif_common.parse_sarif`, so a regression here is the
+    # importer's, and these three real documents are the only place its
+    # severity chain and `file://` decoding meet a tool's actual output.
+    "zizmor": {
+        "module": "scripts.core.adapters.zizmor_adapter",
+        "class": "ZizmorAdapter",
+    },
+    "gitleaks": {
+        "module": "scripts.core.adapters.gitleaks_adapter",
+        "class": "GitleaksAdapter",
+    },
+    "osv_scanner": {
+        "module": "scripts.core.adapters.osv_scanner_adapter",
+        "class": "OsvScannerAdapter",
+    },
 }
 
 
