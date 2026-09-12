@@ -76,6 +76,27 @@ Nothing enforces this. `tests/unit/test_version_consistency.py` checks that the 
 made while writing the CHANGELOG entry, which is the only moment anyone is looking at the section
 headings anyway.
 
+### The version guard updates one ROADMAP line and leaves the prose stale
+
+`tests/unit/test_version_consistency.py:67` matches ROADMAP.md with
+`^\*\*Latest Stable Release:\*\*\s+v(\d+\.\d+\.\d+)` — **exactly that line, and nothing else in
+the file**. So a release bumps the header and leaves every surrounding sentence describing the
+*previous* version, and the guard is green either way.
+
+Measured on v1.1.1: `51a9dcb4` changed a single line of ROADMAP.md, `v1.1.0` -> `v1.1.1`. The
+paragraph directly beneath it still opened "v1.1.0 **shipped on 2026-09-05**" and never said
+v1.1.1 shipped, what it contained, or when — so `Current Status` claimed a version it never
+described. Fixed a day later by `d37d9f78`. `45de70ee` had already fixed the same class once
+after v1.1.0, which is the point: **it recurs at every tag, and nothing looks for it.**
+
+Neither `phase_audit derive`, `check_doc_links` nor markdownlint can see it; all three read a
+well-formed document. **After any tag, re-read `## Current Status` as prose** and ask whether a
+stranger could tell what the newest release was:
+
+```bash
+sed -n '/## Current Status/,/^---/p' ROADMAP.md
+```
+
 ## Release Workflow Architecture (v1.0.0+)
 
 The release pipeline has 3 phases triggered by a `v*` tag push:
