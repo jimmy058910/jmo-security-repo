@@ -6,7 +6,7 @@
 
 ## Current Status
 
-**Latest Stable Release:** v1.1.0 (September 2026)
+**Latest Stable Release:** v1.1.1 (September 2026)
 
 v1.1.0 **shipped on 2026-09-05** — PyPI, the GitHub Release and all four Docker
 variants. It is not a feature milestone: it is the outcome of a pre-release fix

@@ -4,6 +4,14 @@ All notable changes to JMo Security will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-09-11
+
+A patch release continuing v1.1.0's theme: a scan must not report success for work it did not do. Three tools in the default profiles were contributing nothing while reading as healthy — kubescape and trivy-rbac produced zero findings on every Kubernetes repository, each for more than one independent reason, and ZAP could not run against a repository target in any configuration. Two others were wrong in the opposite direction, reporting an ERROR on every repository that merely had nothing for them to scan. Separately, scans no longer walk vendored dependency trees or JMo's own results directory, both of which were being read back as findings.
+
+The lesson this release keeps teaching is that a pinned version is not pinned behaviour, and a working binary is not a working invocation: kubescape fetches its rules at scan time, and `jmo.yml` passed it a flag it does not have. Each fix below is measured end to end through `jmo scan` rather than against the binary standalone — the one path that does not apply profile flags.
+
+One entry is a behaviour change a script may notice, and is marked.
+
 ### Fixed
 
 - **semgrep no longer times out on the `fast` profile, and has margin on the rest.** It carried no entry in `TOOL_TIMEOUT_DEFAULTS`, so it took whatever the profile handed it — and unlike the other long-running scanners, semgrep's cost is its **rule count**, not the tree it walks. It restricts itself to git-tracked files by default, so the vendored-directory exclusions added for [#1080](https://github.com/jimmy058910/jmo-security-repo/issues/1080) cannot move its number: measured on this repository it scans **541 tracked files** (not the 36,705 on disk) with `--config auto` resolving **2,930 rules**, and takes **409.8 s** to produce 241 findings.
