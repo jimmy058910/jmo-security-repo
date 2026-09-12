@@ -24,12 +24,16 @@ repos:
       - id: check-toml
       - id: mixed-line-ending
       - id: detect-private-key
-        # Exclude test files with mock private keys (used to test redaction/parsing)
+        # Exclude test files with mock private keys (used to test redaction/parsing).
+        # The gitleaks golden fixture is raw SARIF from a scan of juice-shop, whose
+        # lib/insecurity.ts carries an intentionally leaked RSA key; the snippet
+        # is the finding, so it cannot be redacted without changing the fixture.
         exclude: |
           (?x)^(
             tests/unit/test_validation\.py|
             tests/adapters/test_noseyparker_adapter\.py|
-            tests/fixtures/samples/credential-patterns/config\.py
+            tests/fixtures/samples/credential-patterns/config\.py|
+            tests/fixtures/golden/gitleaks/.*\.json
           )$
       # Prevent committing very large files by mistake (limit also enforced by guardrails in CI)
       - id: check-added-large-files
