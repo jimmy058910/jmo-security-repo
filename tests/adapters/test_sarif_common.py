@@ -324,3 +324,42 @@ def test_non_dict_results_and_runs_are_skipped(tmp_path):
     doc["runs"].append("not a run")
     p = write(tmp_path, doc)
     assert len(parse_sarif(p, SPEC)) == 1
+
+
+# --- a fourth tool ----------------------------------------------------------
+
+FOURTH_TOOL = """
+from pathlib import Path
+from scripts.core.adapters.sarif_common import SarifToolSpec, parse_sarif
+from scripts.core.plugin_api import AdapterPlugin, Finding, PluginMetadata, adapter_plugin
+
+_SPEC = SarifToolSpec(tool="fourth", tags=("fourth",))
+
+@adapter_plugin(PluginMetadata(name="fourth", version="1.0.0", tool_name="fourth", output_format="sarif"))
+class FourthAdapter(AdapterPlugin):
+    @property
+    def metadata(self) -> PluginMetadata:
+        return self.__class__._plugin_metadata
+
+    def parse(self, output_path: Path) -> list[Finding]:
+        return parse_sarif(output_path, _SPEC)
+"""
+
+
+def test_a_fourth_sarif_tool_is_one_small_file(tmp_path):
+    """Spec section 6.4: a new SARIF tool is one binding file and no change to
+    sarif_common. Loaded through the real plugin loader, not imported."""
+    from scripts.core.plugin_loader import PluginLoader, PluginRegistry
+
+    plugin = tmp_path / "fourth_adapter.py"
+    plugin.write_text(FOURTH_TOOL, encoding="utf-8")
+    assert len(FOURTH_TOOL.strip().splitlines()) <= 25
+
+    loader = PluginLoader(PluginRegistry())
+    assert loader._load_plugin(plugin) == "fourth"
+    adapter = loader.registry.get("fourth")()
+    doc = write(tmp_path, sarif([result(level="error")]))
+    findings = adapter.parse(doc)
+    assert [(f.tool["name"], f.severity, f.tags) for f in findings] == [
+        ("fourth", "HIGH", ["fourth"])
+    ]
