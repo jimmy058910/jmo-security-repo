@@ -16,7 +16,8 @@ Four commands:
 
   derive     parse the plan, print the phase -> issue mapping, assert its
              internal checksums. No network.
-  labels     create `phase:0`..`phase:N` and apply them to the plan's issues.
+  labels     create `phase:0`..`phase:N`, apply them to the plan's issues, and
+             remove them from issues the plan schedules nowhere.
   unclaimed  open issues the plan does not mention at all. Exit 1 if any.
   verify     unclaimed + label drift, in both directions. Exit 1 if either.
 
@@ -62,11 +63,7 @@ if __package__ in (None, ""):  # pragma: no cover - only on direct execution
     sys.path.insert(0, str(REPO_ROOT))
 
 DEFAULT_PLAN = (
-    REPO_ROOT
-    / "docs"
-    / "superpowers"
-    / "plans"
-    / "2026-08-22-v1.1.0-pre-release-fix-program.md"
+    REPO_ROOT / "docs" / "superpowers" / "plans" / "2026-09-12-v2.0.0-program.md"
 )
 
 LABEL_PREFIX = "phase:"
@@ -588,7 +585,7 @@ def cmd_labels(plan: PlanIndex, apply: bool) -> int:
                 "--color",
                 LABEL_COLOR,
                 "--description",
-                f"v1.1.0 fix program, phase {number_part}",
+                f"phase {number_part} of the program plan phase_audit.py reads",
             )
 
     # Iterate the phases rather than `plan.scheduled` so `want` is a plain str.
@@ -614,6 +611,23 @@ def cmd_labels(plan: PlanIndex, apply: bool) -> int:
                 print(f"  {'-' if apply else '~'} #{number} drop {name}")
                 if apply:
                     _gh("issue", "edit", str(number), "--remove-label", name)
+
+    # The other direction. `verify` flags a `phase:N` label on any issue the
+    # plan schedules nowhere and ends by saying to re-run this command, so
+    # this command has to remove those too, or a plan switch leaves every
+    # label of the previous program in place with nothing that can clear it.
+    # Measured 2026-09-12 while seating the v2.0.0 plan: 137 such labels, all
+    # on closed v1.1.0 issues, and the loop above proposed 0 removals.
+    for number, issue in sorted(issues.items()):
+        if number in plan.scheduled:
+            continue
+        for name in sorted(_phase_labels(issue)):
+            removes += 1
+            print(
+                f"  {'-' if apply else '~'} #{number} drop {name} (scheduled nowhere)"
+            )
+            if apply:
+                _gh("issue", "edit", str(number), "--remove-label", name)
     verb = "applied" if apply else "would apply"
     print(
         f"\n{verb}: {adds} label(s) added, {removes} removed, {len(to_create)} created"

@@ -20,14 +20,19 @@ from its declared count, its summary-table row, or the total reddens CI.
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 
+from scripts.dev import phase_audit
 from scripts.dev.phase_audit import (
     DEFAULT_PLAN,
     Issue,
     MergedPR,
     PlanParseError,
     closing_keywords,
+    cmd_labels,
     inert_closers,
     load_plan,
     parse_plan,
@@ -476,3 +481,78 @@ def test_a_fully_linked_pr_is_not_flagged() -> None:
         linked={10, 11},
     )
     assert inert_closers([pr], _issue_map({10: "OPEN", 11: "OPEN"})) == []
+
+
+# --------------------------------------------------------------------------
+# `labels --apply` must be the inverse of `verify`
+#
+# `verify` flags drift in both directions and ends with "Re-run `labels
+# --apply`". That is only true if `labels` also removes a `phase:N` label from
+# an issue the plan schedules NOWHERE. Measured 2026-09-12 while seating the
+# v2.0.0 plan: `verify` reported 137 such labels - every one on a closed
+# v1.1.0 issue - and `labels --apply` proposed 0 removals, because it walked
+# only the plan's own rosters. A plan switch left the previous program's
+# labels in place and the gate red, with no command that could green it.
+# --------------------------------------------------------------------------
+
+
+def _labels_world(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, ...]]:
+    """One plan, five issues, and a `gh` that records instead of writing."""
+    issues = {
+        # scheduled in Phase 0, unlabelled: the add the command always did
+        100: Issue(number=100, state="OPEN", labels=set()),
+        # scheduled in Phase 0 with a stale extra: the removal it always did
+        101: Issue(number=101, state="OPEN", labels={"phase:0", "phase:7"}),
+        # after the tag, still carrying a label from the previous program
+        900: Issue(number=900, state="OPEN", labels={"phase:9"}),
+        # closed under the previous program: the 137-issue population
+        555: Issue(number=555, state="CLOSED", labels={"phase:3", "bug"}),
+        # nothing to do, and a control that the sweep touches only phase labels
+        777: Issue(number=777, state="CLOSED", labels={"bug"}),
+    }
+    calls: list[tuple[str, ...]] = []
+
+    def fake_gh(*args: str) -> str:
+        calls.append(args)
+        if args[:2] == ("label", "list"):
+            return json.dumps([{"name": f"phase:{n}"} for n in range(11)])
+        return ""
+
+    monkeypatch.setattr(phase_audit, "fetch_issues", lambda *a, **k: issues)
+    monkeypatch.setattr(phase_audit, "_gh", fake_gh)
+    return calls
+
+
+def test_labels_apply_removes_labels_the_plan_schedules_nowhere(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    calls = _labels_world(monkeypatch)
+    plan = parse_plan(BASE, Path("plan.md"))
+
+    assert cmd_labels(plan, apply=True) == 0
+
+    edits = {c for c in calls if c[:2] == ("issue", "edit")}
+    assert ("issue", "edit", "100", "--add-label", "phase:0") in edits
+    assert ("issue", "edit", "101", "--remove-label", "phase:7") in edits
+    # The two the old loop could not reach: unscheduled, open and closed.
+    assert ("issue", "edit", "900", "--remove-label", "phase:9") in edits
+    assert ("issue", "edit", "555", "--remove-label", "phase:3") in edits
+    # Only `phase:` labels are the plan's to remove.
+    assert not any("bug" in c for c in edits)
+    assert not any(c[2] == "777" for c in edits)
+    assert "applied: 1 label(s) added, 3 removed, 0 created" in capsys.readouterr().out
+
+
+def test_labels_dry_run_reports_the_sweep_and_writes_nothing(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    calls = _labels_world(monkeypatch)
+    plan = parse_plan(BASE, Path("plan.md"))
+
+    assert cmd_labels(plan, apply=False) == 0
+
+    assert not any(c[:2] == ("issue", "edit") for c in calls)
+    out = capsys.readouterr().out
+    assert "~ #555 drop phase:3" in out
+    assert "~ #900 drop phase:9" in out
+    assert "would apply: 1 label(s) added, 3 removed, 0 created" in out
