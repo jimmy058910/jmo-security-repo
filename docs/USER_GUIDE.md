@@ -1287,7 +1287,7 @@ Notes and precedence:
 
 ## Plugin System
 
-JMo Security uses a plugin-based architecture for all 27 adapters, enabling hot-reload during development and community-contributed integrations.
+JMo Security uses a plugin-based architecture for all 30 adapters, enabling hot-reload during development and community-contributed integrations.
 
 **Key Benefits:**
 

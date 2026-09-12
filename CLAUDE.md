@@ -226,7 +226,7 @@ skill keeps its old `.graphify_version` stamp while the binary moves on.
 | `scripts/core/common_finding.py` | CommonFinding schema v1.2.0 |
 | `scripts/core/schema_validator.py` | JSON schema validation for findings |
 | `scripts/core/install_config.py` | Installation URLs, timeouts, isolated tools config |
-| `scripts/core/adapters/*.py` | Tool output parsers (27 adapters) |
+| `scripts/core/adapters/*.py` | Tool output parsers (30 adapters; three are SARIF bindings over `sarif_common.py`) |
 | `scripts/core/reporters/` | Output formatters |
 | `scripts/jmo_mcp/jmo_server.py` | MCP server (see [mcp.rules.md](.claude/rules/mcp.rules.md)) |
 | `docs/schemas/common_finding.v1.json` | CommonFinding JSON Schema (Draft 2020-12) |

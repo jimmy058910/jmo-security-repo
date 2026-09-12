@@ -1059,7 +1059,7 @@ gh pr create --title "Hotfix: bypass CI" --label "hotfix"
 
 ## Adding Tool Adapters (Plugin System)
 
-JMo Security uses a plugin-based architecture for all 27 adapters. This enables hot-reload during development, independent updates, and community-contributed integrations.
+JMo Security uses a plugin-based architecture for all 30 adapters. This enables hot-reload during development, independent updates, and community-contributed integrations.
 
 ### Plugin Architecture Overview
 
@@ -1069,7 +1069,7 @@ JMo Security uses a plugin-based architecture for all 27 adapters. This enables 
 - **Fast Development** - 4 hours → 1 hour per adapter (75% reduction)
 - **Independent Updates** - Ship adapter improvements without core releases
 - **Low-Risk Testing** - Test new tools in `~/.jmo/adapters/` without modifying core
-- **Performance** - <100ms plugin loading overhead for all 27 adapters
+- **Performance** - <100ms plugin loading overhead for all 30 adapters
 
 **Core Components:**
 
@@ -1218,6 +1218,65 @@ pytest tests/adapters/test_snyk_adapter.py -v
 jmo scan --repo ./myapp --tools snyk --results-dir results
 jmo report results --human-logs
 ```
+
+### Adding a tool that emits SARIF
+
+Many scanners emit SARIF 2.1.0 (trivy, gitleaks, trufflehog, osv-scanner, zizmor,
+opengrep, semgrep, checkov, kube-linter, hadolint, gosec, bandit, CodeQL). For any of
+them the adapter is **one binding file** over the shared importer in
+`scripts/core/adapters/sarif_common.py`. `zizmor_adapter.py`, `gitleaks_adapter.py` and
+`osv_scanner_adapter.py` are the three shipped examples, 34 lines each:
+
+```python
+# scripts/core/adapters/<tool>_adapter.py
+from __future__ import annotations
+
+from pathlib import Path
+
+from scripts.core.adapters.sarif_common import SarifToolSpec, parse_sarif
+from scripts.core.plugin_api import AdapterPlugin, Finding, PluginMetadata, adapter_plugin
+
+# `tool` is both Finding.tool["name"] and the versions.yaml key: the binary name.
+_SPEC = SarifToolSpec(tool="<binary-name>", tags=("<category>", "sarif"))
+
+
+@adapter_plugin(
+    PluginMetadata(
+        name="<tool>",  # underscores, matching the filename
+        version="1.0.0",
+        description="Adapter for <tool> (SARIF)",
+        tool_name="<binary-name>",
+        output_format="sarif",
+        exit_codes={0: "clean", 1: "findings"},
+    )
+)
+class <Tool>Adapter(AdapterPlugin):
+    @property
+    def metadata(self) -> PluginMetadata:
+        return self.__class__._plugin_metadata
+
+    def parse(self, output_path: Path) -> list[Finding]:
+        return parse_sarif(output_path, _SPEC)
+```
+
+The importer does the rest: severity from `security-severity`, then a `severity` or
+`*/severity` property, then `result.level`, then the rule's `defaultConfiguration.level`,
+then SARIF's `warning` default; `file:` URIs decoded to plain paths so the report phase
+can root-strip them; rule metadata by `ruleIndex` or `ruleId`; the canonical fingerprint.
+Add `tests/adapters/test_<tool>_adapter.py` asserting the file registers under its stem
+through `PluginLoader`, and, when you have a real document, a golden fixture under
+`tests/fixtures/golden/<tool>/v<version>/`.
+
+Two things the shape depends on:
+
+- `sarif_common.py` defines no `AdapterPlugin` subclass, and a binding must not import
+  one either. The loader registers the **first** subclass it meets in
+  `sorted(dir(module))`, so a shared base class would beat some bindings and lose to
+  others by the first letter of the class name.
+- A binding raises `AdapterParseException` on valid JSON that is not SARIF, and the
+  report phase then warns that the tool's findings are MISSING. So it does not belong in
+  `tests/adapters/test_adapter_malformed.py`'s `ALL_ADAPTERS`, which asserts every
+  adapter returns a list; `tests/adapters/test_sarif_common.py` covers those inputs.
 
 ### CLI Commands for Adapters
 

@@ -77,3 +77,32 @@ by design, since the alternative is collapsing zap's and cdxgen's findings.
 path yourself before hashing. Nothing enforces this — a guard over the golden
 fixtures would be vacuous, since the four adapters with fixtures all already
 pass and the broken one has none.
+
+## SARIF tools: one binding file over `sarif_common.py`
+
+zizmor, gitleaks and osv-scanner are each a ~34-line `<tool>_adapter.py` holding one
+`SarifToolSpec` and delegating `parse()` to `sarif_common.parse_sarif`. A fourth SARIF
+tool is another file of that shape and **no change to `sarif_common.py`**;
+`tests/adapters/test_sarif_common.py::test_a_fourth_sarif_tool_is_one_small_file` proves
+it through the real loader. `CONTRIBUTING.md` has the template.
+
+- **`sarif_common.py` must never define an `AdapterPlugin` subclass, and a binding must
+  never import one.** `PluginLoader._load_plugin` registers the first subclass in
+  `sorted(dir(module))`: a shared `SarifAdapter` base would beat `ZizmorAdapter` and lose
+  to `GitleaksAdapter`, breaking one tool in three by its class name's first letter.
+- **The bindings are deliberately absent from `test_adapter_malformed.py::ALL_ADAPTERS`.**
+  They raise `AdapterParseException` on valid JSON that is not SARIF (spec 3.6, the #822
+  class), and that suite asserts every adapter returns a list. Their malformed-input
+  coverage is `test_sarif_common.py`.
+- **`SarifToolSpec.tool` is both `Finding.tool["name"]` and the `versions.yaml` key**, so
+  it is the binary name with hyphens (`osv-scanner`), like `dependency-check` and
+  `trivy-rbac`; `PluginMetadata.name` stays the underscored file stem.
+- **Severity never comes from `level` alone.** osv-scanner writes `warning` on every
+  result and its real score is the rule's `security-severity`; zizmor's `Low` and
+  `Informational` both map to `note`. Rank order: `security-severity`, a `severity` or
+  `*/severity` property, `level`, `defaultConfiguration.level`, then MEDIUM. gitleaks has
+  no severity anywhere and resolves to MEDIUM by that default, on purpose: whether a
+  secret should outrank that is decided by the PR that puts it in a profile.
+- **`file:` URIs are decoded in the adapter** (`file:///C:/x` -> `C:/x`) because
+  `normalize_finding_path` passes anything containing `://` through unchanged, and an
+  undecoded URI would ship the scanning machine's path into `findings.sarif` (#861).

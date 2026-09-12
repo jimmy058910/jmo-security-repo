@@ -1,7 +1,8 @@
 # Generic SARIF 2.1.0 importer — design
 
 **Date:** 2026-09-12
-**Status:** approved, not yet implemented
+**Status:** implemented in PR 1244 (Phase 1 of the v2.0.0 program); section 4.3
+measured 2026-09-12 through `jmo report`
 **Source:** the 2026-09-11 coverage review, section 8 step 3″ ("Generic SARIF adapter
 first, then zizmor, gitleaks, osv-scanner through it")
 
@@ -74,6 +75,10 @@ it.
 | gitleaks | absolute native path | `C:/Users/Jimmy/.../juice-shop/data/static/users.yml` |
 | osv-scanner | `file://` URI | `file:///C:/Users/Jimmy/.../NodeGoat/package-lock.json` |
 
+The committed gitleaks fixture (`tests/fixtures/golden/gitleaks/v8.30.1/`) carries
+repository-relative URIs, because Phase 0 ran the tool from inside its target; the
+absolute shape above is what `gitleaks dir <absolute path>` produces. Same 69 results.
+
 `normalize_finding_path()` returns **unchanged** any value containing `://` — a guard
 that exists so zap's URLs and lynis's hostnames survive. An undecoded `file://` URI
 matches that guard, so the scanning user's home directory would be written into
@@ -90,7 +95,9 @@ range, and by matching `rules[].id == result.ruleId` otherwise.
 
 gitleaks 8.30.1 reports `"semanticVersion": "v8.0.0"`. Tool version must come from
 `ToolRegistry` (that is, `versions.yaml`) first, as `hadolint_adapter._get_hadolint_version()`
-already does, with the document only as a fallback.
+already does, with the document only as a fallback. Measured on the fixture: the
+gitleaks driver carries no `version` at all, so until `versions.yaml` has a row (Phase 4)
+its findings report `v8.0.0`.
 
 ### 2.5 Fingerprint collisions, and which ones are real
 
@@ -224,9 +231,10 @@ Root-stripping is **not** done here. The existing `_normalize_paths_and_ids()` p
 the adapter does not have. Decoding in the adapter exists solely so that pass can see a
 path instead of a URI.
 
-`region.startLine` and `region.endLine` are carried when present; osv-scanner supplies
-neither, and `location.startLine` is simply absent for those findings rather than being
-invented as 0.
+`region.startLine`, `endLine`, `startColumn` and `endColumn` are carried when present;
+osv-scanner supplies none of them, and `location.startLine` is simply absent for those
+findings rather than being invented as 0. The columns feed nothing yet; the column-aware
+fingerprint (#1242) reads them.
 
 ### 3.4 Fingerprints
 
@@ -358,6 +366,23 @@ The osv severity split is the load-bearing number: reading `level` alone yields 
 MEDIUM, so that row alone proves the chain is wired and not bypassed. The path assertion
 is the #861 regression guard.
 
+**Measured 2026-09-12 (PR 1244):** every row above reproduced exactly. The combined run
+yielded **575** findings (216 + 68 + 291; cross-tool clustering merged none), all three
+tool names present, 0 paths containing `://` or `Users`, and osv-scanner's path
+root-stripped to `package-lock.json`. The procedure, for the next re-run:
+
+```text
+<gate>/<tool>/individual-repos/target/<tool>.json   copy of the raw fixture
+                                                      (zizmor.json, gitleaks.json, osv-scanner.json)
+<gate>/<tool>/.scan_metadata.json                    {"repo_paths": ["<absolute target dir>"]}
+                                                      (the archived NodeGoat dir for osv-scanner)
+
+.venv/Scripts/python.exe -m scripts.cli.jmo report <gate>/<tool> --out <gate>/<tool>/summaries
+```
+
+Then count the `findings` list in `findings.json` and its `severity` values. A fourth
+directory holding all three files gives the combined run.
+
 ---
 
 ## 5. Out of scope, and where it goes instead
@@ -369,6 +394,8 @@ is the #861 regression guard.
 | gitleaks' severity being MEDIUM rather than HIGH | the PR that puts gitleaks in a profile |
 | `diff_engine` reading `cvss.baseScore` where adapters write `cvss.score` | pre-existing; noted here, not touched |
 | Dependabot alerts import | review section 6, separate workstream |
+| `scan_validator.EXPECTED_ADAPTER_COUNT` is 27, so `jmo validate` reports one `adapter-count` FAIL at 30 | Phase 2, whose acceptance is that no tool-count literal survives; the file is outside `adapters/` (6.2). Not run by `ci.yml` |
+| The three bindings in `test_adapter_malformed.py`'s `ALL_ADAPTERS` | nowhere: they raise on non-SARIF by design (3.6), which that suite's `isinstance(result, list)` forbids. `test_sarif_common.py` covers the same inputs |
 
 ---
 
