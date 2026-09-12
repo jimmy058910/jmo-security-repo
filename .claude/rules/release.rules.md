@@ -58,6 +58,24 @@ python3 scripts/dev/update_versions.py --sync          # Sync Dockerfiles
 
 See [docs/RELEASE.md](../../docs/RELEASE.md) for the detailed release guide.
 
+### Choosing the bump level
+
+**Read the CHANGELOG's section headings, not the commit subjects.** A `### Removed`, or an entry
+flagged as "a behaviour change a script may notice", is a **minor** bump under semver — even when
+every commit beneath it is spelled `fix:`. The subjects cannot carry this: removing a capability
+is a fix from the maintainer's side and a break from the caller's, so they read identically.
+
+v1.1.1 shipped a `### Removed` (ZAP repository-mode, [#1159](https://github.com/jimmy058910/jmo-security-repo/issues/1159))
+as a **patch**, deliberately: `ROADMAP.md` commits releases to a patch cadence and the project has
+no users, so the blast radius was zero. **That exemption expires the day it has users** — from
+then on a removal forces a minor, and "every commit said `fix:`" is not evidence that none
+happened.
+
+Nothing enforces this. `tests/unit/test_version_consistency.py` checks that the version sites
+*agree with each other*, never that the number moved by the right amount — so this is a judgement
+made while writing the CHANGELOG entry, which is the only moment anyone is looking at the section
+headings anyway.
+
 ## Release Workflow Architecture (v1.0.0+)
 
 The release pipeline has 3 phases triggered by a `v*` tag push:
