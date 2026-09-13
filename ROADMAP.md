@@ -11,7 +11,8 @@
 v1.1.0 **shipped on 2026-09-05** — PyPI, the GitHub Release and all four Docker
 variants — as the outcome of a pre-release fix program (Phases 0-13, tracked in
 [its plan](docs/superpowers/plans/2026-08-22-v1.1.0-pre-release-fix-program.md))
-that fixed every open defect before the tag. v1.1.1 was the first patch after it.
+that fixed every open defect before the tag. v1.1.1 **shipped on 2026-09-11** as
+the first patch after it: seven fixes and one removal across eleven issues.
 
 **Next: v2.0.0.** Two measured reviews (2026-09-09, 2026-09-11) found that 19 of the
 29 advertised tools execute on Windows, that the SAST rules cannot legally ship, and

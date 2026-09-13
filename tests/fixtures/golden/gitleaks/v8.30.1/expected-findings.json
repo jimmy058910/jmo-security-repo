@@ -1,0 +1,4421 @@
+[
+  {
+    "schemaVersion": "1.2.0",
+    "id": "db9025be732d01e5",
+    "ruleId": "jwt",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "frontend/src/app/app.guard.spec.ts",
+      "startLine": 46,
+      "endLine": 46,
+      "startColumn": 41,
+      "endColumn": 196
+    },
+    "message": "jwt has detected secret for file frontend/src/app/app.guard.spec.ts.",
+    "title": "Uncovered a JSON Web Token, which may lead to unauthorized access to web applications and sensitive user data.",
+    "description": "Uncovered a JSON Web Token, which may lead to unauthorized access to web applications and sensitive user data.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "jwt has detected secret for file frontend/src/app/app.guard.spec.ts."
+      },
+      "ruleId": "jwt",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "frontend/src/app/app.guard.spec.ts"
+            },
+            "region": {
+              "startLine": 46,
+              "startColumn": 41,
+              "endLine": 46,
+              "endColumn": 196,
+              "snippet": {
+                "text": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "a451e23536ca87a9",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "data/static/users.yml",
+      "startLine": 88,
+      "endLine": 88,
+      "startColumn": 4,
+      "endColumn": 51
+    },
+    "message": "generic-api-key has detected secret for file data/static/users.yml.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file data/static/users.yml."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "data/static/users.yml"
+            },
+            "region": {
+              "startLine": 88,
+              "startColumn": 4,
+              "endLine": 88,
+              "endColumn": 51,
+              "snippet": {
+                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "6a44de71706edb99",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "data/static/users.yml",
+      "startLine": 151,
+      "endLine": 151,
+      "startColumn": 4,
+      "endColumn": 48
+    },
+    "message": "generic-api-key has detected secret for file data/static/users.yml.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file data/static/users.yml."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "data/static/users.yml"
+            },
+            "region": {
+              "startLine": 151,
+              "startColumn": 4,
+              "endLine": 151,
+              "endColumn": 48,
+              "snippet": {
+                "text": "IFTXE3SPOEYVURT2MRYGI52TKJ4HC3KH"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "981f8b2c4664bf3f",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "frontend/src/app/oauth/oauth.component.spec.ts",
+      "startLine": 91,
+      "endLine": 91,
+      "startColumn": 82,
+      "endColumn": 113
+    },
+    "message": "generic-api-key has detected secret for file frontend/src/app/oauth/oauth.component.spec.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file frontend/src/app/oauth/oauth.component.spec.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "frontend/src/app/oauth/oauth.component.spec.ts"
+            },
+            "region": {
+              "startLine": 91,
+              "startColumn": 82,
+              "endLine": 91,
+              "endColumn": 113,
+              "snippet": {
+                "text": "bW9jLnRzZXRAdHNldA=="
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "981f8b2c4664bf3f",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "frontend/src/app/oauth/oauth.component.spec.ts",
+      "startLine": 91,
+      "endLine": 91,
+      "startColumn": 116,
+      "endColumn": 153
+    },
+    "message": "generic-api-key has detected secret for file frontend/src/app/oauth/oauth.component.spec.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file frontend/src/app/oauth/oauth.component.spec.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "frontend/src/app/oauth/oauth.component.spec.ts"
+            },
+            "region": {
+              "startLine": 91,
+              "startColumn": 116,
+              "endLine": 91,
+              "endColumn": 153,
+              "snippet": {
+                "text": "bW9jLnRzZXRAdHNldA=="
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "6863ecee8a3d05df",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "frontend/src/app/oauth/oauth.component.spec.ts",
+      "startLine": 98,
+      "endLine": 98,
+      "startColumn": 83,
+      "endColumn": 114
+    },
+    "message": "generic-api-key has detected secret for file frontend/src/app/oauth/oauth.component.spec.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file frontend/src/app/oauth/oauth.component.spec.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "frontend/src/app/oauth/oauth.component.spec.ts"
+            },
+            "region": {
+              "startLine": 98,
+              "startColumn": 83,
+              "endLine": 98,
+              "endColumn": 114,
+              "snippet": {
+                "text": "bW9jLnRzZXRAdHNldA=="
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "d51b398fddd48406",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "frontend/src/app/faucet/faucet.component.ts",
+      "startLine": 34,
+      "endLine": 34,
+      "startColumn": 8,
+      "endColumn": 69
+    },
+    "message": "generic-api-key has detected secret for file frontend/src/app/faucet/faucet.component.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file frontend/src/app/faucet/faucet.component.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "frontend/src/app/faucet/faucet.component.ts"
+            },
+            "region": {
+              "startLine": 34,
+              "startColumn": 8,
+              "endLine": 34,
+              "endColumn": 69,
+              "snippet": {
+                "text": "0x36435796Ca9be2bf150CE0dECc2D8Fab5C4d6E13"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "b94d8972bd5bb0c7",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "frontend/src/app/last-login-ip/last-login-ip.component.spec.ts",
+      "startLine": 78,
+      "endLine": 78,
+      "startColumn": 32,
+      "endColumn": 137
+    },
+    "message": "generic-api-key has detected secret for file frontend/src/app/last-login-ip/last-login-ip.component.spec.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file frontend/src/app/last-login-ip/last-login-ip.component.spec.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "frontend/src/app/last-login-ip/last-login-ip.component.spec.ts"
+            },
+            "region": {
+              "startLine": 78,
+              "startColumn": 32,
+              "endLine": 78,
+              "endColumn": 137,
+              "snippet": {
+                "text": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkYXRhIjp7fX0.bVBhvll6IaeR3aUdoOeyR8YZe2S2DfhGAxTGfd9enLw"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "f6fe185a7be14ef3",
+    "ruleId": "jwt",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "frontend/src/app/last-login-ip/last-login-ip.component.spec.ts",
+      "startLine": 72,
+      "endLine": 72,
+      "startColumn": 41,
+      "endColumn": 168
+    },
+    "message": "jwt has detected secret for file frontend/src/app/last-login-ip/last-login-ip.component.spec.ts.",
+    "title": "Uncovered a JSON Web Token, which may lead to unauthorized access to web applications and sensitive user data.",
+    "description": "Uncovered a JSON Web Token, which may lead to unauthorized access to web applications and sensitive user data.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "jwt has detected secret for file frontend/src/app/last-login-ip/last-login-ip.component.spec.ts."
+      },
+      "ruleId": "jwt",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "frontend/src/app/last-login-ip/last-login-ip.component.spec.ts"
+            },
+            "region": {
+              "startLine": 72,
+              "startColumn": 41,
+              "endLine": 72,
+              "endColumn": 168,
+              "snippet": {
+                "text": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkYXRhIjp7Imxhc3RMb2dpbklwIjoiMS4yLjMuNCJ9fQ.RAkmdqwNypuOxv3SDjPO4xMKvd1CddKvDFYDBfUt3bg"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "18f26c2029b8002d",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/basket.test.ts",
+      "startLine": 114,
+      "endLine": 114,
+      "startColumn": 8,
+      "endColumn": 55
+    },
+    "message": "generic-api-key has detected secret for file test/api/basket.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/basket.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/basket.test.ts"
+            },
+            "region": {
+              "startLine": 114,
+              "startColumn": 8,
+              "endLine": 114,
+              "endColumn": 55,
+              "snippet": {
+                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "d15c7aa5d68b3790",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/basket.test.ts",
+      "startLine": 170,
+      "endLine": 170,
+      "startColumn": 82,
+      "endColumn": 129
+    },
+    "message": "generic-api-key has detected secret for file test/api/basket.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/basket.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/basket.test.ts"
+            },
+            "region": {
+              "startLine": 170,
+              "startColumn": 82,
+              "endLine": 170,
+              "endColumn": 129,
+              "snippet": {
+                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "35777f9db09c95a2",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/erasure-request.test.ts",
+      "startLine": 36,
+      "endLine": 36,
+      "startColumn": 80,
+      "endColumn": 127
+    },
+    "message": "generic-api-key has detected secret for file test/api/erasure-request.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/erasure-request.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/erasure-request.test.ts"
+            },
+            "region": {
+              "startLine": 36,
+              "startColumn": 80,
+              "endLine": 36,
+              "endColumn": 127,
+              "snippet": {
+                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "d93849f92398e5ef",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/erasure-request.test.ts",
+      "startLine": 55,
+      "endLine": 55,
+      "startColumn": 80,
+      "endColumn": 127
+    },
+    "message": "generic-api-key has detected secret for file test/api/erasure-request.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/erasure-request.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/erasure-request.test.ts"
+            },
+            "region": {
+              "startLine": 55,
+              "startColumn": 80,
+              "endLine": 55,
+              "endColumn": 127,
+              "snippet": {
+                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "bcd337db5fa18e0a",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/erasure-request.test.ts",
+      "startLine": 68,
+      "endLine": 68,
+      "startColumn": 53,
+      "endColumn": 100
+    },
+    "message": "generic-api-key has detected secret for file test/api/erasure-request.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/erasure-request.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/erasure-request.test.ts"
+            },
+            "region": {
+              "startLine": 68,
+              "startColumn": 53,
+              "endLine": 68,
+              "endColumn": 100,
+              "snippet": {
+                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "886404b63f5f2667",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/erasure-request.test.ts",
+      "startLine": 82,
+      "endLine": 82,
+      "startColumn": 80,
+      "endColumn": 127
+    },
+    "message": "generic-api-key has detected secret for file test/api/erasure-request.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/erasure-request.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/erasure-request.test.ts"
+            },
+            "region": {
+              "startLine": 82,
+              "startColumn": 80,
+              "endLine": 82,
+              "endColumn": 127,
+              "snippet": {
+                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "de51f94ec2cc7531",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/erasure-request.test.ts",
+      "startLine": 94,
+      "endLine": 94,
+      "startColumn": 82,
+      "endColumn": 129
+    },
+    "message": "generic-api-key has detected secret for file test/api/erasure-request.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/erasure-request.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/erasure-request.test.ts"
+            },
+            "region": {
+              "startLine": 94,
+              "startColumn": 82,
+              "endLine": 94,
+              "endColumn": 129,
+              "snippet": {
+                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "9fbda0315b8bc6aa",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/erasure-request.test.ts",
+      "startLine": 106,
+      "endLine": 106,
+      "startColumn": 82,
+      "endColumn": 129
+    },
+    "message": "generic-api-key has detected secret for file test/api/erasure-request.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/erasure-request.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/erasure-request.test.ts"
+            },
+            "region": {
+              "startLine": 106,
+              "startColumn": 82,
+              "endLine": 106,
+              "endColumn": 129,
+              "snippet": {
+                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "b0d0f7f9871a18a7",
+    "ruleId": "private-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "terraform/networking.tf",
+      "startLine": 171,
+      "endLine": 171,
+      "startColumn": 24,
+      "endColumn": 923
+    },
+    "message": "private-key has detected secret for file terraform/networking.tf.",
+    "title": "Identified a Private Key, which may compromise cryptographic security and sensitive data encryption.",
+    "description": "Identified a Private Key, which may compromise cryptographic security and sensitive data encryption.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "private-key has detected secret for file terraform/networking.tf."
+      },
+      "ruleId": "private-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "terraform/networking.tf"
+            },
+            "region": {
+              "startLine": 171,
+              "startColumn": 24,
+              "endLine": 171,
+              "endColumn": 923,
+              "snippet": {
+                "text": "-----BEGIN RSA PRIVATE KEY-----\\nMIICXAIBAAKBgQDNwqLEe9wgTXCbC7+RPdDbBbeqjdbs4kOPOIGzqLpXvJXlxxW8\\niMz0EaM4BKUqYsIa+ndv3NAn2RxCd5ubVdJJcX43zO6Ko0TFEZx/65gY3BE0O6sy\\nCEmUP4qbSd6exou/F+WTISzbQ5FBVPVmhnYhG/kpwt/cIxK5iUn5hm+4tQIDAQAB\\nAoGBAI+8xiPoOrA+KMnG/T4jJsG6TsHQcDHvJi7o1IKC/hnIXha0atTX5AUkRRce\\n95qSfvKFweXdJXSQ0JMGJyfuXgU6dI0TcseFRfewXAa/ssxAC+iUVR6KUMh1PE2w\\nXLitfeI6JLvVtrBYswm2I7CtY0q8n5AGimHWVXJPLfGV7m0BAkEA+fqFt2LXbLty\\ng6wZyxMA/cnmt5Nt3U2dAu77MzFJvibANUNHE4HPLZxjGNXN+a6m0K6TD4kDdh5H\\nfUYLWWRBYQJBANK3carmulBwqzcDBjsJ0YrIONBpCAsXxk8idXb8jL9aNIg15Wum\\nm2enqqObahDHB5jnGOLmbasizvSVqypfM9UCQCQl8xIqy+YgURXzXCN+kwUgHinr\\nutZms87Jyi+D8Br8NY0+Nlf+zHvXAomD2W5CsEK7C+8SLBr3k/TsnRWHJuECQHFE\\n9RA2OP8WoaLPuGCyFXaxzICThSRZYluVnWkZtxsBhW2W8z1b8PvWUE7kMy7Tnkze\\nJS2LSnaNHoyxi7IaPQUCQCwWU4U+v4lD7uYBw00Ga/xt+7+UqFPlPVdz1yyr4q24\\nZxaw0LgmuEvgU5dycq8N7JxjTubX0MIRR+G9fmDBBl8=\\n-----END RSA PRIVATE KEY-----"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "f828bb119613c123",
+    "ruleId": "private-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "infrastructure/terraform/networking.tf",
+      "startLine": 171,
+      "endLine": 171,
+      "startColumn": 24,
+      "endColumn": 923
+    },
+    "message": "private-key has detected secret for file infrastructure/terraform/networking.tf.",
+    "title": "Identified a Private Key, which may compromise cryptographic security and sensitive data encryption.",
+    "description": "Identified a Private Key, which may compromise cryptographic security and sensitive data encryption.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "private-key has detected secret for file infrastructure/terraform/networking.tf."
+      },
+      "ruleId": "private-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "infrastructure/terraform/networking.tf"
+            },
+            "region": {
+              "startLine": 171,
+              "startColumn": 24,
+              "endLine": 171,
+              "endColumn": 923,
+              "snippet": {
+                "text": "-----BEGIN RSA PRIVATE KEY-----\\nMIICXAIBAAKBgQDNwqLEe9wgTXCbC7+RPdDbBbeqjdbs4kOPOIGzqLpXvJXlxxW8\\niMz0EaM4BKUqYsIa+ndv3NAn2RxCd5ubVdJJcX43zO6Ko0TFEZx/65gY3BE0O6sy\\nCEmUP4qbSd6exou/F+WTISzbQ5FBVPVmhnYhG/kpwt/cIxK5iUn5hm+4tQIDAQAB\\nAoGBAI+8xiPoOrA+KMnG/T4jJsG6TsHQcDHvJi7o1IKC/hnIXha0atTX5AUkRRce\\n95qSfvKFweXdJXSQ0JMGJyfuXgU6dI0TcseFRfewXAa/ssxAC+iUVR6KUMh1PE2w\\nXLitfeI6JLvVtrBYswm2I7CtY0q8n5AGimHWVXJPLfGV7m0BAkEA+fqFt2LXbLty\\ng6wZyxMA/cnmt5Nt3U2dAu77MzFJvibANUNHE4HPLZxjGNXN+a6m0K6TD4kDdh5H\\nfUYLWWRBYQJBANK3carmulBwqzcDBjsJ0YrIONBpCAsXxk8idXb8jL9aNIg15Wum\\nm2enqqObahDHB5jnGOLmbasizvSVqypfM9UCQCQl8xIqy+YgURXzXCN+kwUgHinr\\nutZms87Jyi+D8Br8NY0+Nlf+zHvXAomD2W5CsEK7C+8SLBr3k/TsnRWHJuECQHFE\\n9RA2OP8WoaLPuGCyFXaxzICThSRZYluVnWkZtxsBhW2W8z1b8PvWUE7kMy7Tnkze\\nJS2LSnaNHoyxi7IaPQUCQCwWU4U+v4lD7uYBw00Ga/xt+7+UqFPlPVdz1yyr4q24\\nZxaw0LgmuEvgU5dycq8N7JxjTubX0MIRR+G9fmDBBl8=\\n-----END RSA PRIVATE KEY-----"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "2abc8ba2c27973be",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "routes/login.ts",
+      "startLine": 64,
+      "endLine": 64,
+      "startColumn": 134,
+      "endColumn": 193
+    },
+    "message": "generic-api-key has detected secret for file routes/login.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file routes/login.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "routes/login.ts"
+            },
+            "region": {
+              "startLine": 64,
+              "startColumn": 134,
+              "endLine": 64,
+              "endColumn": 193,
+              "snippet": {
+                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "0029c6314fcfb1ee",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/checkKeys.test.ts",
+      "startLine": 46,
+      "endLine": 46,
+      "startColumn": 18,
+      "endColumn": 99
+    },
+    "message": "generic-api-key has detected secret for file test/api/checkKeys.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/checkKeys.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/checkKeys.test.ts"
+            },
+            "region": {
+              "startLine": 46,
+              "startColumn": 18,
+              "endLine": 46,
+              "endColumn": 99,
+              "snippet": {
+                "text": "0x02c7a2a93289c9fbda5990bac6596993e9bb0a8d3f178175a80b7cfd983983f506"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "990c720d3b115e11",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/checkKeys.test.ts",
+      "startLine": 57,
+      "endLine": 57,
+      "startColumn": 18,
+      "endColumn": 73
+    },
+    "message": "generic-api-key has detected secret for file test/api/checkKeys.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/checkKeys.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/checkKeys.test.ts"
+            },
+            "region": {
+              "startLine": 57,
+              "startColumn": 18,
+              "endLine": 57,
+              "endColumn": 73,
+              "snippet": {
+                "text": "0x8343d2eb2B13A2495De435a1b15e85b98115Ce05"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "4e3f68fac2acd757",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/checkKeys.test.ts",
+      "startLine": 68,
+      "endLine": 68,
+      "startColumn": 18,
+      "endColumn": 97
+    },
+    "message": "generic-api-key has detected secret for file test/api/checkKeys.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/checkKeys.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/checkKeys.test.ts"
+            },
+            "region": {
+              "startLine": 68,
+              "startColumn": 18,
+              "endLine": 68,
+              "endColumn": 97,
+              "snippet": {
+                "text": "0x5bcc3e9d38baa06e7bfaab80ae5957bbe8ef059e640311d7d6d465e6bc948e3e"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "e56cb62885a4b7be",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/feedback.test.ts",
+      "startLine": 117,
+      "endLine": 117,
+      "startColumn": 8,
+      "endColumn": 55
+    },
+    "message": "generic-api-key has detected secret for file test/api/feedback.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/feedback.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/feedback.test.ts"
+            },
+            "region": {
+              "startLine": 117,
+              "startColumn": 8,
+              "endLine": 117,
+              "endColumn": 55,
+              "snippet": {
+                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "d4be6fbf9c6d69aa",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/feedback.test.ts",
+      "startLine": 143,
+      "endLine": 143,
+      "startColumn": 8,
+      "endColumn": 55
+    },
+    "message": "generic-api-key has detected secret for file test/api/feedback.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/feedback.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/feedback.test.ts"
+            },
+            "region": {
+              "startLine": 143,
+              "startColumn": 8,
+              "endLine": 143,
+              "endColumn": 55,
+              "snippet": {
+                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "f645c96c255d6f3a",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/chat.test.ts",
+      "startLine": 261,
+      "endLine": 261,
+      "startColumn": 80,
+      "endColumn": 127
+    },
+    "message": "generic-api-key has detected secret for file test/api/chat.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/chat.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/chat.test.ts"
+            },
+            "region": {
+              "startLine": 261,
+              "startColumn": 80,
+              "endLine": 261,
+              "endColumn": 127,
+              "snippet": {
+                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "91560a1b05eebf13",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/cypress/e2e/totpSetup.spec.ts",
+      "startLine": 7,
+      "endLine": 7,
+      "startColumn": 10,
+      "endColumn": 55
+    },
+    "message": "generic-api-key has detected secret for file test/cypress/e2e/totpSetup.spec.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/cypress/e2e/totpSetup.spec.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/cypress/e2e/totpSetup.spec.ts"
+            },
+            "region": {
+              "startLine": 7,
+              "startColumn": 10,
+              "endLine": 7,
+              "endColumn": 55,
+              "snippet": {
+                "text": "IFTXE3SPOEYVURT2MRYGI52TKJ4HC3KH"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "2314366d9cbedfdf",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/data-export.test.ts",
+      "startLine": 53,
+      "endLine": 53,
+      "startColumn": 80,
+      "endColumn": 127
+    },
+    "message": "generic-api-key has detected secret for file test/api/data-export.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/data-export.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/data-export.test.ts"
+            },
+            "region": {
+              "startLine": 53,
+              "startColumn": 80,
+              "endLine": 53,
+              "endColumn": 127,
+              "snippet": {
+                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "c870454f02a47890",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/data-export.test.ts",
+      "startLine": 73,
+      "endLine": 73,
+      "startColumn": 80,
+      "endColumn": 127
+    },
+    "message": "generic-api-key has detected secret for file test/api/data-export.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/data-export.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/data-export.test.ts"
+            },
+            "region": {
+              "startLine": 73,
+              "startColumn": 80,
+              "endLine": 73,
+              "endColumn": 127,
+              "snippet": {
+                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "fd36c1658caf7ec3",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/data-export.test.ts",
+      "startLine": 90,
+      "endLine": 90,
+      "startColumn": 80,
+      "endColumn": 127
+    },
+    "message": "generic-api-key has detected secret for file test/api/data-export.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/data-export.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/data-export.test.ts"
+            },
+            "region": {
+              "startLine": 90,
+              "startColumn": 80,
+              "endLine": 90,
+              "endColumn": 127,
+              "snippet": {
+                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "15e89a6ace6c0c31",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/data-export.test.ts",
+      "startLine": 110,
+      "endLine": 110,
+      "startColumn": 80,
+      "endColumn": 127
+    },
+    "message": "generic-api-key has detected secret for file test/api/data-export.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/data-export.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/data-export.test.ts"
+            },
+            "region": {
+              "startLine": 110,
+              "startColumn": 80,
+              "endLine": 110,
+              "endColumn": 127,
+              "snippet": {
+                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "3fb3884977d452ef",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/product-review.test.ts",
+      "startLine": 101,
+      "endLine": 101,
+      "startColumn": 8,
+      "endColumn": 55
+    },
+    "message": "generic-api-key has detected secret for file test/api/product-review.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/product-review.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/product-review.test.ts"
+            },
+            "region": {
+              "startLine": 101,
+              "startColumn": 8,
+              "endLine": 101,
+              "endColumn": 55,
+              "snippet": {
+                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "99ff16171d293eef",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/product-review.test.ts",
+      "startLine": 115,
+      "endLine": 115,
+      "startColumn": 8,
+      "endColumn": 55
+    },
+    "message": "generic-api-key has detected secret for file test/api/product-review.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/product-review.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/product-review.test.ts"
+            },
+            "region": {
+              "startLine": 115,
+              "startColumn": 8,
+              "endLine": 115,
+              "endColumn": 55,
+              "snippet": {
+                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "bc105a6e25ed12cd",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/cypress/e2e/login.spec.ts",
+      "startLine": 126,
+      "endLine": 126,
+      "startColumn": 25,
+      "endColumn": 82
+    },
+    "message": "generic-api-key has detected secret for file test/cypress/e2e/login.spec.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/cypress/e2e/login.spec.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/cypress/e2e/login.spec.ts"
+            },
+            "region": {
+              "startLine": 126,
+              "startColumn": 25,
+              "endLine": 126,
+              "endColumn": 82,
+              "snippet": {
+                "text": "IFTXE3SPOEYVURT2MRYGI52TKJ4HC3KH"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "c014c919229ad8dc",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/login.test.ts",
+      "startLine": 147,
+      "endLine": 147,
+      "startColumn": 10,
+      "endColumn": 57
+    },
+    "message": "generic-api-key has detected secret for file test/api/login.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/login.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/login.test.ts"
+            },
+            "region": {
+              "startLine": 147,
+              "startColumn": 10,
+              "endLine": 147,
+              "endColumn": 57,
+              "snippet": {
+                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "6ea9c47ce56d151b",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/login.test.ts",
+      "startLine": 245,
+      "endLine": 245,
+      "startColumn": 10,
+      "endColumn": 57
+    },
+    "message": "generic-api-key has detected secret for file test/api/login.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/login.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/login.test.ts"
+            },
+            "region": {
+              "startLine": 245,
+              "startColumn": 10,
+              "endLine": 245,
+              "endColumn": 57,
+              "snippet": {
+                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "cdcf944f8f54171a",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/login.test.ts",
+      "startLine": 267,
+      "endLine": 267,
+      "startColumn": 10,
+      "endColumn": 57
+    },
+    "message": "generic-api-key has detected secret for file test/api/login.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/login.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/login.test.ts"
+            },
+            "region": {
+              "startLine": 267,
+              "startColumn": 10,
+              "endLine": 267,
+              "endColumn": 57,
+              "snippet": {
+                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "2ee50aa880abf75d",
+    "ruleId": "private-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "lib/insecurity.ts",
+      "startLine": 21,
+      "endLine": 21,
+      "startColumn": 22,
+      "endColumn": 901
+    },
+    "message": "private-key has detected secret for file lib/insecurity.ts.",
+    "title": "Identified a Private Key, which may compromise cryptographic security and sensitive data encryption.",
+    "description": "Identified a Private Key, which may compromise cryptographic security and sensitive data encryption.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "private-key has detected secret for file lib/insecurity.ts."
+      },
+      "ruleId": "private-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "lib/insecurity.ts"
+            },
+            "region": {
+              "startLine": 21,
+              "startColumn": 22,
+              "endLine": 21,
+              "endColumn": 901,
+              "snippet": {
+                "text": "-----BEGIN RSA PRIVATE KEY-----\\r\\nMIICXAIBAAKBgQDNwqLEe9wgTXCbC7+RPdDbBbeqjdbs4kOPOIGzqLpXvJXlxxW8iMz0EaM4BKUqYsIa+ndv3NAn2RxCd5ubVdJJcX43zO6Ko0TFEZx/65gY3BE0O6syCEmUP4qbSd6exou/F+WTISzbQ5FBVPVmhnYhG/kpwt/cIxK5iUn5hm+4tQIDAQABAoGBAI+8xiPoOrA+KMnG/T4jJsG6TsHQcDHvJi7o1IKC/hnIXha0atTX5AUkRRce95qSfvKFweXdJXSQ0JMGJyfuXgU6dI0TcseFRfewXAa/ssxAC+iUVR6KUMh1PE2wXLitfeI6JLvVtrBYswm2I7CtY0q8n5AGimHWVXJPLfGV7m0BAkEA+fqFt2LXbLtyg6wZyxMA/cnmt5Nt3U2dAu77MzFJvibANUNHE4HPLZxjGNXN+a6m0K6TD4kDdh5HfUYLWWRBYQJBANK3carmulBwqzcDBjsJ0YrIONBpCAsXxk8idXb8jL9aNIg15Wumm2enqqObahDHB5jnGOLmbasizvSVqypfM9UCQCQl8xIqy+YgURXzXCN+kwUgHinrutZms87Jyi+D8Br8NY0+Nlf+zHvXAomD2W5CsEK7C+8SLBr3k/TsnRWHJuECQHFE9RA2OP8WoaLPuGCyFXaxzICThSRZYluVnWkZtxsBhW2W8z1b8PvWUE7kMy7TnkzeJS2LSnaNHoyxi7IaPQUCQCwWU4U+v4lD7uYBw00Ga/xt+7+UqFPlPVdz1yyr4q24Zxaw0LgmuEvgU5dycq8N7JxjTubX0MIRR+G9fmDBBl8=\\r\\n-----END RSA PRIVATE KEY-----"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "cd4a7efa5d2015e8",
+    "ruleId": "jwt",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/server/currentUser.unit.test.ts",
+      "startLine": 31,
+      "endLine": 31,
+      "startColumn": 27,
+      "endColumn": 390
+    },
+    "message": "jwt has detected secret for file test/server/currentUser.unit.test.ts.",
+    "title": "Uncovered a JSON Web Token, which may lead to unauthorized access to web applications and sensitive user data.",
+    "description": "Uncovered a JSON Web Token, which may lead to unauthorized access to web applications and sensitive user data.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "jwt has detected secret for file test/server/currentUser.unit.test.ts."
+      },
+      "ruleId": "jwt",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/server/currentUser.unit.test.ts"
+            },
+            "region": {
+              "startLine": 31,
+              "startColumn": 27,
+              "endLine": 31,
+              "endColumn": 390,
+              "snippet": {
+                "text": "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJkYXRhIjp7ImlkIjoxLCJlbWFpbCI6ImFkbWluQGp1aWNlLXNoLm9wIiwibGFzdExvZ2luSXAiOiIwLjAuMC4wIiwicHJvZmlsZUltYWdlIjoiZGVmYXVsdC5zdmcifSwiaWF0IjoxNTgyMjIyMzY0fQ.CHiFQieZudYlrd1o8Ih-Izv7XY_WZupt8Our-CP9HqsczyEKqrWC7wWguOgVuSGDN_S3mP4FyuEFN8l60aAhVsUbqzFetvJkFwe5nKVhc9dHuen6cujQLMcTlHLKassOSDP41Q-MkKWcUOQu0xUkTMfEq2hPMHpMosDb4benzH0"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "bf66d333b75e2374",
+    "ruleId": "jwt",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/server/currentUser.unit.test.ts",
+      "startLine": 34,
+      "endLine": 34,
+      "startColumn": 9,
+      "endColumn": 372
+    },
+    "message": "jwt has detected secret for file test/server/currentUser.unit.test.ts.",
+    "title": "Uncovered a JSON Web Token, which may lead to unauthorized access to web applications and sensitive user data.",
+    "description": "Uncovered a JSON Web Token, which may lead to unauthorized access to web applications and sensitive user data.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "jwt has detected secret for file test/server/currentUser.unit.test.ts."
+      },
+      "ruleId": "jwt",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/server/currentUser.unit.test.ts"
+            },
+            "region": {
+              "startLine": 34,
+              "startColumn": 9,
+              "endLine": 34,
+              "endColumn": 372,
+              "snippet": {
+                "text": "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJkYXRhIjp7ImlkIjoxLCJlbWFpbCI6ImFkbWluQGp1aWNlLXNoLm9wIiwibGFzdExvZ2luSXAiOiIwLjAuMC4wIiwicHJvZmlsZUltYWdlIjoiZGVmYXVsdC5zdmcifSwiaWF0IjoxNTgyMjIyMzY0fQ.CHiFQieZudYlrd1o8Ih-Izv7XY_WZupt8Our-CP9HqsczyEKqrWC7wWguOgVuSGDN_S3mP4FyuEFN8l60aAhVsUbqzFetvJkFwe5nKVhc9dHuen6cujQLMcTlHLKassOSDP41Q-MkKWcUOQu0xUkTMfEq2hPMHpMosDb4benzH0"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "7f65236816c26adf",
+    "ruleId": "jwt",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/cypress/e2e/forgedJwt.spec.ts",
+      "startLine": 7,
+      "endLine": 7,
+      "startColumn": 13,
+      "endColumn": 148
+    },
+    "message": "jwt has detected secret for file test/cypress/e2e/forgedJwt.spec.ts.",
+    "title": "Uncovered a JSON Web Token, which may lead to unauthorized access to web applications and sensitive user data.",
+    "description": "Uncovered a JSON Web Token, which may lead to unauthorized access to web applications and sensitive user data.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "jwt has detected secret for file test/cypress/e2e/forgedJwt.spec.ts."
+      },
+      "ruleId": "jwt",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/cypress/e2e/forgedJwt.spec.ts"
+            },
+            "region": {
+              "startLine": 7,
+              "startColumn": 13,
+              "endLine": 7,
+              "endColumn": 148,
+              "snippet": {
+                "text": "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJkYXRhIjp7ImVtYWlsIjoiand0bjNkQGp1aWNlLXNoLm9wIn0sImlhdCI6MTUwODYzOTYxMiwiZXhwIjo5OTk5OTk5OTk5fQ."
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "ff23752e4cf93940",
+    "ruleId": "jwt",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/cypress/e2e/forgedJwt.spec.ts",
+      "startLine": 22,
+      "endLine": 22,
+      "startColumn": 17,
+      "endColumn": 176
+    },
+    "message": "jwt has detected secret for file test/cypress/e2e/forgedJwt.spec.ts.",
+    "title": "Uncovered a JSON Web Token, which may lead to unauthorized access to web applications and sensitive user data.",
+    "description": "Uncovered a JSON Web Token, which may lead to unauthorized access to web applications and sensitive user data.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "jwt has detected secret for file test/cypress/e2e/forgedJwt.spec.ts."
+      },
+      "ruleId": "jwt",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/cypress/e2e/forgedJwt.spec.ts"
+            },
+            "region": {
+              "startLine": 22,
+              "startColumn": 17,
+              "endLine": 22,
+              "endColumn": 176,
+              "snippet": {
+                "text": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkYXRhIjp7ImVtYWlsIjoicnNhX2xvcmRAanVpY2Utc2gub3AifSwiaWF0IjoxNTgzMDM3NzExfQ.gShXDT5TrE5736mpIbfVDEcQbLfteJaQUG7Z0PH8Xc8"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "ac820c55ca1b6030",
+    "ruleId": "jwt",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/cypress/e2e/forgedJwt.spec.ts",
+      "startLine": 38,
+      "endLine": 38,
+      "startColumn": 13,
+      "endColumn": 304
+    },
+    "message": "jwt has detected secret for file test/cypress/e2e/forgedJwt.spec.ts.",
+    "title": "Uncovered a JSON Web Token, which may lead to unauthorized access to web applications and sensitive user data.",
+    "description": "Uncovered a JSON Web Token, which may lead to unauthorized access to web applications and sensitive user data.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "jwt has detected secret for file test/cypress/e2e/forgedJwt.spec.ts."
+      },
+      "ruleId": "jwt",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/cypress/e2e/forgedJwt.spec.ts"
+            },
+            "region": {
+              "startLine": 38,
+              "startColumn": 13,
+              "endLine": 38,
+              "endColumn": 304,
+              "snippet": {
+                "text": "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJkYXRhIjp7ImVtYWlsIjoiY2xvdWQtYWRtaW5AanVpY2Utc2gub3AifSwiaWF0IjoxNzgzNTg3MDc1fQ.o1ghEUyLemmv982A2CW_w_RLh9FDYOx1GxU-_GeyEwfO8vBKIa-Ubh1bmdmP_WmySrekzy_0zfII-wjmj_e_6hKvZz0IDR_EyfDjCmYVzu8YdgQSNNZXu3_kLdXEKjJirXU5bPUdUIiR2GoMcOAXQouna3RAn4rkR90rDJeNblU"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "d6de5518cc6925ef",
+    "ruleId": "jwt",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/server/verify.unit.test.ts",
+      "startLine": 283,
+      "endLine": 283,
+      "startColumn": 47,
+      "endColumn": 182
+    },
+    "message": "jwt has detected secret for file test/server/verify.unit.test.ts.",
+    "title": "Uncovered a JSON Web Token, which may lead to unauthorized access to web applications and sensitive user data.",
+    "description": "Uncovered a JSON Web Token, which may lead to unauthorized access to web applications and sensitive user data.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "jwt has detected secret for file test/server/verify.unit.test.ts."
+      },
+      "ruleId": "jwt",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/server/verify.unit.test.ts"
+            },
+            "region": {
+              "startLine": 283,
+              "startColumn": 47,
+              "endLine": 283,
+              "endColumn": 182,
+              "snippet": {
+                "text": "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJkYXRhIjp7ImVtYWlsIjoiand0bjNkQGp1aWNlLXNoLm9wIn0sImlhdCI6MTUwODYzOTYxMiwiZXhwIjo5OTk5OTk5OTk5fQ."
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "f66446406bc75ca7",
+    "ruleId": "jwt",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/server/verify.unit.test.ts",
+      "startLine": 291,
+      "endLine": 291,
+      "startColumn": 47,
+      "endColumn": 167
+    },
+    "message": "jwt has detected secret for file test/server/verify.unit.test.ts.",
+    "title": "Uncovered a JSON Web Token, which may lead to unauthorized access to web applications and sensitive user data.",
+    "description": "Uncovered a JSON Web Token, which may lead to unauthorized access to web applications and sensitive user data.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "jwt has detected secret for file test/server/verify.unit.test.ts."
+      },
+      "ruleId": "jwt",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/server/verify.unit.test.ts"
+            },
+            "region": {
+              "startLine": 291,
+              "startColumn": 47,
+              "endLine": 291,
+              "endColumn": 167,
+              "snippet": {
+                "text": "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJkYXRhIjp7ImVtYWlsIjoiand0bjNkQCJ9LCJpYXQiOjE1MDg2Mzk2MTIsImV4cCI6OTk5OTk5OTk5OX0."
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "9d94ff146e28021d",
+    "ruleId": "jwt",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/server/verify.unit.test.ts",
+      "startLine": 308,
+      "endLine": 308,
+      "startColumn": 47,
+      "endColumn": 206
+    },
+    "message": "jwt has detected secret for file test/server/verify.unit.test.ts.",
+    "title": "Uncovered a JSON Web Token, which may lead to unauthorized access to web applications and sensitive user data.",
+    "description": "Uncovered a JSON Web Token, which may lead to unauthorized access to web applications and sensitive user data.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "jwt has detected secret for file test/server/verify.unit.test.ts."
+      },
+      "ruleId": "jwt",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/server/verify.unit.test.ts"
+            },
+            "region": {
+              "startLine": 308,
+              "startColumn": 47,
+              "endLine": 308,
+              "endColumn": 206,
+              "snippet": {
+                "text": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkYXRhIjp7ImVtYWlsIjoicnNhX2xvcmRAanVpY2Utc2gub3AifSwiaWF0IjoxNTgyMjIxNTc1fQ.ycFwtqh4ht4Pq9K5rhiPPY256F9YCTIecd4FHFuSEAg"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "f88a9ddd0763583c",
+    "ruleId": "jwt",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/server/verify.unit.test.ts",
+      "startLine": 316,
+      "endLine": 316,
+      "startColumn": 47,
+      "endColumn": 191
+    },
+    "message": "jwt has detected secret for file test/server/verify.unit.test.ts.",
+    "title": "Uncovered a JSON Web Token, which may lead to unauthorized access to web applications and sensitive user data.",
+    "description": "Uncovered a JSON Web Token, which may lead to unauthorized access to web applications and sensitive user data.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "jwt has detected secret for file test/server/verify.unit.test.ts."
+      },
+      "ruleId": "jwt",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/server/verify.unit.test.ts"
+            },
+            "region": {
+              "startLine": 316,
+              "startColumn": 47,
+              "endLine": 316,
+              "endColumn": 191,
+              "snippet": {
+                "text": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkYXRhIjp7ImVtYWlsIjoicnNhX2xvcmRAIn0sImlhdCI6MTU4MjIyMTY3NX0.50f6VAIQk2Uzpf3sgH-1JVrrTuwudonm2DKn2ec7Tg8"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "94208e567a7087b9",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/2fa.test.ts",
+      "startLine": 42,
+      "endLine": 42,
+      "startColumn": 39,
+      "endColumn": 80
+    },
+    "message": "generic-api-key has detected secret for file test/api/2fa.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/2fa.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/2fa.test.ts"
+            },
+            "region": {
+              "startLine": 42,
+              "startColumn": 39,
+              "endLine": 42,
+              "endColumn": 80,
+              "snippet": {
+                "text": "IFTXE3SPOEYVURT2MRYGI52TKJ4HC3KH"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "b02b3e2e8abfe082",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/2fa.test.ts",
+      "startLine": 66,
+      "endLine": 66,
+      "startColumn": 39,
+      "endColumn": 80
+    },
+    "message": "generic-api-key has detected secret for file test/api/2fa.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/2fa.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/2fa.test.ts"
+            },
+            "region": {
+              "startLine": 66,
+              "startColumn": 39,
+              "endLine": 66,
+              "endColumn": 80,
+              "snippet": {
+                "text": "BI6KJAURX3LL5VQI2ZBFVLUWSBYBDX4H"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "226161c20ae6229a",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/2fa.test.ts",
+      "startLine": 85,
+      "endLine": 85,
+      "startColumn": 39,
+      "endColumn": 80
+    },
+    "message": "generic-api-key has detected secret for file test/api/2fa.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/2fa.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/2fa.test.ts"
+            },
+            "region": {
+              "startLine": 85,
+              "startColumn": 39,
+              "endLine": 85,
+              "endColumn": 80,
+              "snippet": {
+                "text": "IFTXE3SPOEYVURT2MRYGI52TKJ4HC3KH"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "0c011693f40b653f",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/2fa.test.ts",
+      "startLine": 104,
+      "endLine": 104,
+      "startColumn": 39,
+      "endColumn": 80
+    },
+    "message": "generic-api-key has detected secret for file test/api/2fa.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/2fa.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/2fa.test.ts"
+            },
+            "region": {
+              "startLine": 104,
+              "startColumn": 39,
+              "endLine": 104,
+              "endColumn": 80,
+              "snippet": {
+                "text": "IFTXE3SPOEYVURT2MRYGI52TKJ4HC3KH"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "2cf6a92dff242293",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/2fa.test.ts",
+      "startLine": 123,
+      "endLine": 123,
+      "startColumn": 39,
+      "endColumn": 80
+    },
+    "message": "generic-api-key has detected secret for file test/api/2fa.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/2fa.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/2fa.test.ts"
+            },
+            "region": {
+              "startLine": 123,
+              "startColumn": 39,
+              "endLine": 123,
+              "endColumn": 80,
+              "snippet": {
+                "text": "IFTXE3SPOEYVURT2MRYGI52TKJ4HC3KH"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "95bf111834f03a40",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/2fa.test.ts",
+      "startLine": 142,
+      "endLine": 142,
+      "startColumn": 8,
+      "endColumn": 53
+    },
+    "message": "generic-api-key has detected secret for file test/api/2fa.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/2fa.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/2fa.test.ts"
+            },
+            "region": {
+              "startLine": 142,
+              "startColumn": 8,
+              "endLine": 142,
+              "endColumn": 53,
+              "snippet": {
+                "text": "IFTXE3SPOEYVURT2MRYGI52TKJ4HC3KH"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "3adada4c0aad4a40",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/2fa.test.ts",
+      "startLine": 182,
+      "endLine": 182,
+      "startColumn": 12,
+      "endColumn": 54
+    },
+    "message": "generic-api-key has detected secret for file test/api/2fa.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/2fa.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/2fa.test.ts"
+            },
+            "region": {
+              "startLine": 182,
+              "startColumn": 12,
+              "endLine": 182,
+              "endColumn": 54,
+              "snippet": {
+                "text": "KDR5FXSOLNV6A5UAQYCKROSJZF7SVML7"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "2dacdda3b02aea31",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/2fa.test.ts",
+      "startLine": 214,
+      "endLine": 214,
+      "startColumn": 12,
+      "endColumn": 54
+    },
+    "message": "generic-api-key has detected secret for file test/api/2fa.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/2fa.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/2fa.test.ts"
+            },
+            "region": {
+              "startLine": 214,
+              "startColumn": 12,
+              "endLine": 214,
+              "endColumn": 54,
+              "snippet": {
+                "text": "KDR5FXSOLNV6A5UAQYCKROSJZF7SVML7"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "893b2cf6c4032ffa",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/2fa.test.ts",
+      "startLine": 240,
+      "endLine": 240,
+      "startColumn": 12,
+      "endColumn": 54
+    },
+    "message": "generic-api-key has detected secret for file test/api/2fa.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/2fa.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/2fa.test.ts"
+            },
+            "region": {
+              "startLine": 240,
+              "startColumn": 12,
+              "endLine": 240,
+              "endColumn": 54,
+              "snippet": {
+                "text": "KDR5FXSOLNV6A5UAQYCKROSJZF7SVML7"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "fe44047f0add85d2",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/2fa.test.ts",
+      "startLine": 257,
+      "endLine": 257,
+      "startColumn": 39,
+      "endColumn": 80
+    },
+    "message": "generic-api-key has detected secret for file test/api/2fa.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/2fa.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/2fa.test.ts"
+            },
+            "region": {
+              "startLine": 257,
+              "startColumn": 39,
+              "endLine": 257,
+              "endColumn": 80,
+              "snippet": {
+                "text": "OJQOJNTB46VLWUO4TVKXIULU2WLPFQOJ"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "ee573ef3170ecfb8",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/2fa.test.ts",
+      "startLine": 266,
+      "endLine": 266,
+      "startColumn": 12,
+      "endColumn": 54
+    },
+    "message": "generic-api-key has detected secret for file test/api/2fa.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/2fa.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/2fa.test.ts"
+            },
+            "region": {
+              "startLine": 266,
+              "startColumn": 12,
+              "endLine": 266,
+              "endColumn": 54,
+              "snippet": {
+                "text": "KDR5FXSOLNV6A5UAQYCKROSJZF7SVML7"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "8541e435b72b0695",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/2fa.test.ts",
+      "startLine": 292,
+      "endLine": 292,
+      "startColumn": 12,
+      "endColumn": 58
+    },
+    "message": "generic-api-key has detected secret for file test/api/2fa.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/2fa.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/2fa.test.ts"
+            },
+            "region": {
+              "startLine": 292,
+              "startColumn": 12,
+              "endLine": 292,
+              "endColumn": 58,
+              "snippet": {
+                "text": "IFTXE3SPOEYVURT2MRYGI52TKJ4HC3KH"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "457c780d0441b538",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/2fa.test.ts",
+      "startLine": 317,
+      "endLine": 317,
+      "startColumn": 12,
+      "endColumn": 54
+    },
+    "message": "generic-api-key has detected secret for file test/api/2fa.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/2fa.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/2fa.test.ts"
+            },
+            "region": {
+              "startLine": 317,
+              "startColumn": 12,
+              "endLine": 317,
+              "endColumn": 54,
+              "snippet": {
+                "text": "KDR5FXSOLNV6A5UAQYCKROSJZF7SVML7"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "f88dccbd588a7a8a",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/2fa.test.ts",
+      "startLine": 352,
+      "endLine": 352,
+      "startColumn": 12,
+      "endColumn": 58
+    },
+    "message": "generic-api-key has detected secret for file test/api/2fa.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/2fa.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/2fa.test.ts"
+            },
+            "region": {
+              "startLine": 352,
+              "startColumn": 12,
+              "endLine": 352,
+              "endColumn": 58,
+              "snippet": {
+                "text": "KDR5FXSOLNV6A5UAQYCKROSJZF7SVML7"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "5a36606e8015a642",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/2fa.test.ts",
+      "startLine": 379,
+      "endLine": 379,
+      "startColumn": 12,
+      "endColumn": 58
+    },
+    "message": "generic-api-key has detected secret for file test/api/2fa.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/2fa.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/2fa.test.ts"
+            },
+            "region": {
+              "startLine": 379,
+              "startColumn": 12,
+              "endLine": 379,
+              "endColumn": 58,
+              "snippet": {
+                "text": "KDR5FXSOLNV6A5UAQYCKROSJZF7SVML7"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "95316b1d8cb689fa",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/2fa.test.ts",
+      "startLine": 412,
+      "endLine": 412,
+      "startColumn": 10,
+      "endColumn": 55
+    },
+    "message": "generic-api-key has detected secret for file test/api/2fa.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/2fa.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/2fa.test.ts"
+            },
+            "region": {
+              "startLine": 412,
+              "startColumn": 10,
+              "endLine": 412,
+              "endColumn": 55,
+              "snippet": {
+                "text": "KDR5FXSOLNV6A5UAQYCKROSJZF7SVML7"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "b47de19655103717",
+    "ruleId": "jwt",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/user.test.ts",
+      "startLine": 280,
+      "endLine": 280,
+      "startColumn": 31,
+      "endColumn": 727
+    },
+    "message": "jwt has detected secret for file test/api/user.test.ts.",
+    "title": "Uncovered a JSON Web Token, which may lead to unauthorized access to web applications and sensitive user data.",
+    "description": "Uncovered a JSON Web Token, which may lead to unauthorized access to web applications and sensitive user data.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "jwt has detected secret for file test/api/user.test.ts."
+      },
+      "ruleId": "jwt",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/user.test.ts"
+            },
+            "region": {
+              "startLine": 280,
+              "startColumn": 31,
+              "endLine": 280,
+              "endColumn": 727,
+              "snippet": {
+                "text": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdGF0dXMiOiJzdWNjZXNzIiwiZGF0YSI6eyJpZCI6MSwidXNlcm5hbWUiOiIiLCJlbWFpbCI6ImFkbWluQGp1aWNlLXNoLm9wIiwicGFzc3dvcmQiOiIwMTkyMDIzYTdiYmQ3MzI1MDUxNmYwNjlkZjE4YjUwMCIsInJvbGUiOiJhZG1pbiIsImxhc3RMb2dpbklwIjoiMC4wLjAuMCIsInByb2ZpbGVJbWFnZSI6ImRlZmF1bHQuc3ZnIiwidG90cFNlY3JldCI6IiIsImlzQWN0aXZlIjp0cnVlLCJjcmVhdGVkQXQiOiIyMDE5LTA4LTE5IDE1OjU2OjE1LjYyOSArMDA6MDAiLCJ1cGRhdGVkQXQiOiIyMDE5LTA4LTE5IDE1OjU2OjE1LjYyOSArMDA6MDAiLCJkZWxldGVkQXQiOm51bGx9LCJpYXQiOjE1NjYyMzAyMjQsImV4cCI6MTU2NjI0ODIyNH0.FL0kkcInY5sDMGKeLHfEOYDTQd3BjR6_mK7Tcm_RH6iCLotTSRRoRxHpLkbtIQKqBFIt14J4BpLapkzG7ppRWcEley5nego-4iFOmXQvCBz5ISS3HdtM0saJnOe0agyVUen3huFp4F2UCth_y2ScjMn_4AgW66cz8NSFPRVpC8g"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "fe4b4801a77413f8",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/user.test.ts",
+      "startLine": 240,
+      "endLine": 240,
+      "startColumn": 8,
+      "endColumn": 55
+    },
+    "message": "generic-api-key has detected secret for file test/api/user.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/user.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/user.test.ts"
+            },
+            "region": {
+              "startLine": 240,
+              "startColumn": 8,
+              "endLine": 240,
+              "endColumn": 55,
+              "snippet": {
+                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "0dc085a2d55225b9",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/user.test.ts",
+      "startLine": 289,
+      "endLine": 289,
+      "startColumn": 8,
+      "endColumn": 55
+    },
+    "message": "generic-api-key has detected secret for file test/api/user.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/user.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/user.test.ts"
+            },
+            "region": {
+              "startLine": 289,
+              "startColumn": 8,
+              "endLine": 289,
+              "endColumn": 55,
+              "snippet": {
+                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "2346fa9b72b11927",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/user.test.ts",
+      "startLine": 304,
+      "endLine": 304,
+      "startColumn": 8,
+      "endColumn": 55
+    },
+    "message": "generic-api-key has detected secret for file test/api/user.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/user.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/user.test.ts"
+            },
+            "region": {
+              "startLine": 304,
+              "startColumn": 8,
+              "endLine": 304,
+              "endColumn": 55,
+              "snippet": {
+                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "8769b41508a827a8",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/user.test.ts",
+      "startLine": 318,
+      "endLine": 318,
+      "startColumn": 8,
+      "endColumn": 55
+    },
+    "message": "generic-api-key has detected secret for file test/api/user.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/user.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/user.test.ts"
+            },
+            "region": {
+              "startLine": 318,
+              "startColumn": 8,
+              "endLine": 318,
+              "endColumn": 55,
+              "snippet": {
+                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "60b303cc92c7adc4",
+    "ruleId": "generic-api-key",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "gitleaks",
+      "version": "v8.0.0"
+    },
+    "location": {
+      "path": "test/api/user.test.ts",
+      "startLine": 280,
+      "endLine": 280,
+      "startColumn": 68,
+      "endColumn": 554
+    },
+    "message": "generic-api-key has detected secret for file test/api/user.test.ts.",
+    "title": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "remediation": "See rule documentation",
+    "references": [],
+    "tags": [
+      "secrets",
+      "sarif"
+    ],
+    "cvss": null,
+    "risk": null,
+    "compliance": null,
+    "context": null,
+    "raw": {
+      "message": {
+        "text": "generic-api-key has detected secret for file test/api/user.test.ts."
+      },
+      "ruleId": "generic-api-key",
+      "locations": [
+        {
+          "physicalLocation": {
+            "artifactLocation": {
+              "uri": "test/api/user.test.ts"
+            },
+            "region": {
+              "startLine": 280,
+              "startColumn": 68,
+              "endLine": 280,
+              "endColumn": 554,
+              "snippet": {
+                "text": "0192023a7bbd73250516f069df18b500"
+              }
+            }
+          }
+        }
+      ],
+      "partialFingerprints": {
+        "commitSha": "",
+        "email": "",
+        "author": "",
+        "date": "",
+        "commitMessage": ""
+      },
+      "properties": {
+        "tags": [
+          "decoded:base64",
+          "decode-depth:1"
+        ]
+      }
+    }
+  }
+]

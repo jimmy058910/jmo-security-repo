@@ -4,6 +4,14 @@ All notable changes to JMo Security will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- A generic SARIF 2.1.0 importer (`scripts/core/adapters/sarif_common.py`) and three
+  adapters bound through it: `zizmor`, `gitleaks` and `osv_scanner`. A `zizmor.json`,
+  `gitleaks.json` or `osv-scanner.json` written in SARIF form into a results directory is
+  parsed, normalised, deduplicated and reported like any other tool output. None of the
+  three is in a scan profile yet; that is Phase 4 of the v2.0.0 program.
+
 ## [1.1.1] - 2026-09-11
 
 A patch release continuing v1.1.0's theme: a scan must not report success for work it did not do. Three tools in the default profiles were contributing nothing while reading as healthy — kubescape and trivy-rbac produced zero findings on every Kubernetes repository, each for more than one independent reason, and ZAP could not run against a repository target in any configuration. Two others were wrong in the opposite direction, reporting an ERROR on every repository that merely had nothing for them to scan. Separately, scans no longer walk vendored dependency trees or JMo's own results directory, both of which were being read back as findings.
