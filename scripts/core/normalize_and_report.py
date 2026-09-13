@@ -18,7 +18,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import logging
 import os
@@ -28,11 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from scripts.core.adapters.common import normalize_finding_path
-from scripts.core.common_finding import (
-    FINGERPRINT_LENGTH,
-    MESSAGE_SNIPPET_LENGTH,
-    fingerprint,
-)
+from scripts.core.common_finding import fingerprint
 from scripts.core.compliance_mapper import enrich_findings_with_compliance
 from scripts.core.cwe_extraction import backfill_risk_cwe
 from scripts.core.exceptions import AdapterParseException
@@ -211,23 +206,6 @@ def scan_roots(results_dir: Path) -> tuple[str, ...]:
     return tuple(entry for entry in raw if isinstance(entry, str) and entry)
 
 
-def _legacy_plugin_fingerprint(
-    tool: str, rule_id: str, path: str, start_line: Any, message: str
-) -> str:
-    """The formula in ``AdapterPlugin.get_fingerprint``.
-
-    There are **two** fingerprint formulas in this codebase and they disagree:
-    :func:`~scripts.core.common_finding.fingerprint` coerces a missing line to
-    ``0`` and strips the message, while ``get_fingerprint`` renders a missing
-    line as ``""`` and does not strip. trivy, trufflehog and semgrep use the
-    second. Reproducing both is what lets
-    :func:`_normalize_paths_and_ids` *prove* an id was path-derived instead of
-    assuming it.
-    """
-    parts = [tool, rule_id, path, str(start_line), message[:MESSAGE_SNIPPET_LENGTH]]
-    return hashlib.sha256("|".join(parts).encode()).hexdigest()[:FINGERPRINT_LENGTH]
-
-
 def _normalize_paths_and_ids(
     findings: list[dict[str, Any]], roots: tuple[str, ...]
 ) -> tuple[int, int]:
@@ -283,21 +261,6 @@ def _normalize_paths_and_ids(
 
         if current == fingerprint(tool, rule_id, original, start_line, message):
             finding["id"] = fingerprint(tool, rule_id, normalized, start_line, message)
-            ids_rekeyed += 1
-        elif current == _legacy_plugin_fingerprint(
-            tool,
-            rule_id,
-            original,
-            start_line if start_line is not None else "",
-            message,
-        ):
-            finding["id"] = _legacy_plugin_fingerprint(
-                tool,
-                rule_id,
-                normalized,
-                start_line if start_line is not None else "",
-                message,
-            )
             ids_rekeyed += 1
 
     return paths_changed, ids_rekeyed
