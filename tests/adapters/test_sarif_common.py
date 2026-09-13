@@ -257,12 +257,34 @@ def test_no_locations_gives_empty_path(tmp_path):
 # --- fingerprint, fields, tool version --------------------------------------
 
 
-def test_fingerprint_is_the_canonical_five_components(tmp_path):
+def test_fingerprint_is_the_canonical_formula_with_the_column(tmp_path):
     """The exact shape `_normalize_paths_and_ids` recomputes, over the decoded
-    path, so ids survive root-stripping in the report phase."""
+    path, so ids survive root-stripping in the report phase. The column is in
+    the key (#1242): gitleaks reports two different secrets on one line of
+    juice-shop at columns 82 and 116, and without it one of them is dropped."""
     p = write(tmp_path, sarif([result(uri="file:///C:/r/a.py", line=3)]))
     f = parse_sarif(p, SPEC)[0]
-    assert f.id == fingerprint("sarifdemo", "R1", "C:/r/a.py", 3, "boom")
+    assert f.id == fingerprint(
+        "sarifdemo", "R1", "C:/r/a.py", 3, "boom", start_column=7
+    )
+
+
+def test_two_results_on_one_line_at_different_columns_are_two_findings(tmp_path):
+    a = result()
+    b = result()
+    b["locations"][0]["physicalLocation"]["region"]["startColumn"] = 42
+    p = write(tmp_path, sarif([a, b]))
+    ids = {f.id for f in parse_sarif(p, SPEC)}
+    assert len(ids) == 2
+
+
+def test_no_region_means_no_column_in_the_key(tmp_path):
+    """osv-scanner has no region at all; its ids stay five-component."""
+    r = result()
+    del r["locations"][0]["physicalLocation"]["region"]
+    p = write(tmp_path, sarif([r]))
+    f = parse_sarif(p, SPEC)[0]
+    assert f.id == fingerprint("sarifdemo", "R1", "src/a.py", None, "boom")
 
 
 def test_field_mapping_from_rule(tmp_path):

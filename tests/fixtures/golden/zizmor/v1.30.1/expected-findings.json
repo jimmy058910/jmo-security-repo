@@ -1,7 +1,7 @@
 [
   {
     "schemaVersion": "1.2.0",
-    "id": "83db2ec0bdac7ec6",
+    "id": "fa1222858e97d56e",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -181,7 +181,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "02ce81d3b345cd18",
+    "id": "b74585d8c85c4a8a",
     "ruleId": "zizmor/github-env",
     "severity": "HIGH",
     "tool": {
@@ -347,7 +347,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "02ce81d3b345cd18",
+    "id": "b74585d8c85c4a8a",
     "ruleId": "zizmor/github-env",
     "severity": "HIGH",
     "tool": {
@@ -513,7 +513,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "2a0400d1a9b131f4",
+    "id": "81e02217796de05e",
     "ruleId": "zizmor/dependabot-cooldown",
     "severity": "MEDIUM",
     "tool": {
@@ -673,7 +673,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "f081f1884fed62c9",
+    "id": "579250b41d0929a3",
     "ruleId": "zizmor/dependabot-cooldown",
     "severity": "MEDIUM",
     "tool": {
@@ -833,7 +833,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "307cd5a0e56b8385",
+    "id": "bbb56a0336f006d6",
     "ruleId": "zizmor/dependabot-cooldown",
     "severity": "MEDIUM",
     "tool": {
@@ -993,7 +993,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "0e20d14254ae4b75",
+    "id": "baa77386b041f2a1",
     "ruleId": "zizmor/dependabot-cooldown",
     "severity": "MEDIUM",
     "tool": {
@@ -1153,7 +1153,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "514fffdf736812d5",
+    "id": "5086d4b054f4203f",
     "ruleId": "zizmor/dependabot-cooldown",
     "severity": "MEDIUM",
     "tool": {
@@ -1313,7 +1313,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "5cea2e73c79f64b1",
+    "id": "0fd0ad40b232276e",
     "ruleId": "zizmor/dependabot-cooldown",
     "severity": "MEDIUM",
     "tool": {
@@ -1473,7 +1473,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "f2e8f91d497d6e4c",
+    "id": "a5ccde2ce194d4f3",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -1639,7 +1639,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "6b4b5ca65d724e46",
+    "id": "30bc841d72ec1d18",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -1825,7 +1825,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "a9311f53fc809d07",
+    "id": "7cb1a546ecd4018d",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -1991,7 +1991,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "b154ac0cb3173e16",
+    "id": "73f3059babf20247",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -2157,7 +2157,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "9cdb5e70f09d18cf",
+    "id": "9162382e9981ddda",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -2323,7 +2323,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "b3a7b7bcfb0d8dbb",
+    "id": "b6b5fcc79c7ad051",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -2489,7 +2489,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "0b48d69ae4ef1b77",
+    "id": "ac38b9e032d4f1c9",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -2655,7 +2655,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "177602e376972a59",
+    "id": "523b51802c8d48b5",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -2821,7 +2821,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "752c3299d1efe917",
+    "id": "be923fe6cb621335",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -2987,7 +2987,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "7e9159ba788329e8",
+    "id": "f594e4ce60f4e201",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -3153,7 +3153,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "d05d0501a33aa595",
+    "id": "70d3329cf12a2a31",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -3319,7 +3319,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "ab75218de86b97c0",
+    "id": "1a3aa3e164513a07",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -3485,7 +3485,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "7988168f683a8975",
+    "id": "bc5bd325c2536fa1",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -3651,7 +3651,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "60e96979a240046a",
+    "id": "6702473ed26935b1",
     "ruleId": "zizmor/excessive-permissions",
     "severity": "MEDIUM",
     "tool": {
@@ -3791,7 +3791,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "313a4e8a592733b7",
+    "id": "dc48522e9afaa829",
     "ruleId": "zizmor/excessive-permissions",
     "severity": "MEDIUM",
     "tool": {
@@ -3994,7 +3994,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "5f54309cc072614d",
+    "id": "8ab94536df8a42ca",
     "ruleId": "zizmor/excessive-permissions",
     "severity": "MEDIUM",
     "tool": {
@@ -4197,7 +4197,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "4acec2aebb290dbd",
+    "id": "0630c1311f286cc0",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -4383,7 +4383,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "383c55ab9a3c38dc",
+    "id": "83f16348ab7d3bca",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -4569,7 +4569,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "c3d7054f8046ea78",
+    "id": "7ad546eb9172fd70",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -4755,7 +4755,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "43d3f78c137655d9",
+    "id": "215a22524eb9a5f4",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -4941,7 +4941,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "fa83aefc4db5adbd",
+    "id": "c7f46de416c82433",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -5127,7 +5127,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "4970bc209ce45058",
+    "id": "f8935ddeb68795a2",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -5313,7 +5313,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "e59ac01e2e429499",
+    "id": "666ad7c282248b97",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -5499,7 +5499,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "84f48c0d55d68156",
+    "id": "6e04990cfa654a0c",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -5685,7 +5685,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "fa022c66fd13a34d",
+    "id": "9aaf6fa1f739aa17",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -5871,7 +5871,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "71393d76de9a9742",
+    "id": "f57e9779c9d04de8",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -6057,7 +6057,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "ed1b69abfcfdec3c",
+    "id": "f6b67584e1d5f08f",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -6243,7 +6243,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "1e24473e5a4c9961",
+    "id": "0ae5afb94d90311c",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -6429,7 +6429,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "62bf097a2569539e",
+    "id": "64fb5190a329e0b5",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -6615,7 +6615,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "5a46b9b428dad5e7",
+    "id": "ae7699c5029b163d",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -6801,7 +6801,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "b547c31df34ec6b0",
+    "id": "ec3e0c80ba3cdb16",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -6987,7 +6987,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "85db9ca134353ac8",
+    "id": "2e6017b230de7807",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -7173,7 +7173,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "f814773381a400b5",
+    "id": "1192f63d36cf5a63",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -7359,7 +7359,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "57b9645bf2ccb430",
+    "id": "f2e2e5a86488357f",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -7545,7 +7545,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "1d92edae53b94f06",
+    "id": "ac985ad198168b87",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -7731,7 +7731,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "db49b877b90c7198",
+    "id": "d807ab7df3e8b0da",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -7917,7 +7917,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "6d9ff73b83ffdd0a",
+    "id": "8efcab87f5d25ac0",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -8103,7 +8103,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "cf555bf2c87b983c",
+    "id": "44fe9a780d3aa1ba",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -8289,7 +8289,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "7b5aa36bc095ed37",
+    "id": "389f1a7eb7ecdbfe",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -8475,7 +8475,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "e2cdd81f80c258ce",
+    "id": "df115a6c16d05d26",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -8661,7 +8661,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "f4d190783d510689",
+    "id": "5f7c3ea702b00d2b",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -8847,7 +8847,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "46cdd1b380d63e23",
+    "id": "0ac5b056f08441f6",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -9033,7 +9033,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "ea29ac09ccd97935",
+    "id": "6a446bf191ceeb69",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -9219,7 +9219,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "b7f955c18372127c",
+    "id": "ffc1b699ae8fcd4d",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -9405,7 +9405,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "9ed72780e06d12ef",
+    "id": "56205e5c0992a0af",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -9591,7 +9591,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "a2db1ca5aeb8fe24",
+    "id": "5b3e8b9ad3edf6f8",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -9777,7 +9777,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "17f685734d46d5c4",
+    "id": "308a727bbee4d2ab",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -9963,7 +9963,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "719d3fd098b28ca6",
+    "id": "6d5e1a0943e71e54",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -10149,7 +10149,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "b4eda634ba90cf71",
+    "id": "5e1744a6f9dc68f1",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -10335,7 +10335,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "46cad24bef3feefe",
+    "id": "c07255b1eb096781",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -10521,7 +10521,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "29b65552d956e9ef",
+    "id": "4e4fc0792c127895",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -10707,7 +10707,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "78864d61ff385ec8",
+    "id": "5b94398e6e8f9e73",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -10893,7 +10893,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "e820d09b891f8638",
+    "id": "545588bf92122e0b",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -11059,7 +11059,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "0a3fc1deba180627",
+    "id": "447693751223ee3b",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -11225,7 +11225,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "92f22114ab37844f",
+    "id": "d19e664ac14e174f",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -11391,7 +11391,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "a7ef2250e6f94bae",
+    "id": "d5210983925c3406",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -11557,7 +11557,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "2480d7ea8ce24708",
+    "id": "ffcfe261fc5a0af6",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -11723,7 +11723,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "ec2200718fca7f27",
+    "id": "9614cbbd89aa034b",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -11889,7 +11889,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "73233795d78060e9",
+    "id": "b890f8afe411e9f0",
     "ruleId": "zizmor/excessive-permissions",
     "severity": "HIGH",
     "tool": {
@@ -12043,7 +12043,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "426c3886b43d6056",
+    "id": "8ee102c9c2261294",
     "ruleId": "zizmor/excessive-permissions",
     "severity": "HIGH",
     "tool": {
@@ -12197,7 +12197,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "1df1d4097bd57bd5",
+    "id": "f3b88091ca80a39f",
     "ruleId": "zizmor/excessive-permissions",
     "severity": "HIGH",
     "tool": {
@@ -12351,7 +12351,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "71182579aa44eac5",
+    "id": "519110c75fb4640f",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -12537,7 +12537,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "100378da0ad9d0a7",
+    "id": "d14515ddaca93973",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -12723,7 +12723,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "248b8b8acd2b8e49",
+    "id": "2fe5efc778bbd5c4",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -12909,7 +12909,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "6f7e39bf841c4408",
+    "id": "b1687ded0c6290b9",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -13095,7 +13095,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "c07237d49f2857e7",
+    "id": "320a7358348023c2",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -13281,7 +13281,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "ac8638da5d2b3773",
+    "id": "34efb25a34027e90",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -13467,7 +13467,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "eb88c7b5b6fdb632",
+    "id": "8cf6a972923e2c61",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -13653,7 +13653,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "94dda69dcea1ca1e",
+    "id": "9997c1ea44cc1221",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -13839,7 +13839,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "0ea87f0a27c9a58f",
+    "id": "b0c21a5c79620d50",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -14025,7 +14025,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "aa2a3a907589c7b9",
+    "id": "8d1b09add8befa35",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -14211,7 +14211,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "e7fa741fa48f37ca",
+    "id": "2f8da29d74dead79",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -14397,7 +14397,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "92c642553d086ddd",
+    "id": "bf923836bcd16c39",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -14583,7 +14583,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "f7880b2a2256de66",
+    "id": "71a3d8ae13a5653a",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -14769,7 +14769,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "bfa65812b87828ae",
+    "id": "583ff01dc1b9081e",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -14935,7 +14935,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "11ae56e23f0a5d76",
+    "id": "3ff9c54ba8a3d198",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -15101,7 +15101,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "d031487f1a4b70dc",
+    "id": "fc7c21d083f0026e",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -15267,7 +15267,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "04ea5dcffc22888a",
+    "id": "0a569836aa3d00db",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -15433,7 +15433,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "53c1aa763223510f",
+    "id": "393d9cc85a48f560",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -15599,7 +15599,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "f580a9b9b21142b1",
+    "id": "b947a582b10c51fc",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -15765,7 +15765,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "5467537c844dae7b",
+    "id": "4ce932a6c1935d47",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -15931,7 +15931,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "8b72b907fe0e4b3c",
+    "id": "1cf3ab098118ad11",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -16097,7 +16097,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "a79f8e6f2e58a6cf",
+    "id": "7acc1b19776f9a0d",
     "ruleId": "zizmor/excessive-permissions",
     "severity": "HIGH",
     "tool": {
@@ -16251,7 +16251,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "4247099242ae26ba",
+    "id": "bb81b8bfb095693c",
     "ruleId": "zizmor/excessive-permissions",
     "severity": "HIGH",
     "tool": {
@@ -16405,7 +16405,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "8176d3e9ec88d2d8",
+    "id": "a68b595aa53e6a48",
     "ruleId": "zizmor/excessive-permissions",
     "severity": "MEDIUM",
     "tool": {
@@ -16559,7 +16559,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "b5721d273bcedd97",
+    "id": "de4639c9ff24ebd7",
     "ruleId": "zizmor/template-injection",
     "severity": "INFO",
     "tool": {
@@ -16803,7 +16803,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "7417d0227a296069",
+    "id": "02f541e8890e0853",
     "ruleId": "zizmor/template-injection",
     "severity": "INFO",
     "tool": {
@@ -17047,7 +17047,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "d3f2b1c6e3790fdc",
+    "id": "0aebba6de4eff2fd",
     "ruleId": "zizmor/template-injection",
     "severity": "INFO",
     "tool": {
@@ -17291,7 +17291,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "d3ea9d2a75398e48",
+    "id": "a12c2bb2fef3d397",
     "ruleId": "zizmor/template-injection",
     "severity": "INFO",
     "tool": {
@@ -17535,7 +17535,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "4813c82879941cc6",
+    "id": "c08e4591cb0d1a7b",
     "ruleId": "zizmor/template-injection",
     "severity": "INFO",
     "tool": {
@@ -17779,7 +17779,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "07ba99adb4cf5df5",
+    "id": "d8ef8cb4a6cfa779",
     "ruleId": "zizmor/template-injection",
     "severity": "INFO",
     "tool": {
@@ -18023,7 +18023,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "6336f7b52d5dc7b9",
+    "id": "598cc90472001b8e",
     "ruleId": "zizmor/template-injection",
     "severity": "MEDIUM",
     "tool": {
@@ -18267,7 +18267,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "dd0e484d4bf0d8e9",
+    "id": "a0125251b2257a4c",
     "ruleId": "zizmor/template-injection",
     "severity": "INFO",
     "tool": {
@@ -18511,7 +18511,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "a9ce5d526f0109d7",
+    "id": "dee282396a750624",
     "ruleId": "zizmor/template-injection",
     "severity": "MEDIUM",
     "tool": {
@@ -18755,7 +18755,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "69db3861b8f1c821",
+    "id": "7546da7d0edbb215",
     "ruleId": "zizmor/template-injection",
     "severity": "INFO",
     "tool": {
@@ -18999,7 +18999,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "93f92072222a8757",
+    "id": "81daa15500e363c0",
     "ruleId": "zizmor/template-injection",
     "severity": "LOW",
     "tool": {
@@ -19243,7 +19243,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "aee61644c4eddad2",
+    "id": "eaf0bf224554870d",
     "ruleId": "zizmor/template-injection",
     "severity": "INFO",
     "tool": {
@@ -19487,7 +19487,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "05cb78fb23c7997e",
+    "id": "f6eb0b79ace8705e",
     "ruleId": "zizmor/template-injection",
     "severity": "LOW",
     "tool": {
@@ -19731,7 +19731,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "8458e30e0bb7224f",
+    "id": "169027cd8f46e647",
     "ruleId": "zizmor/template-injection",
     "severity": "INFO",
     "tool": {
@@ -19975,7 +19975,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "2ccf01f133e8fb67",
+    "id": "cbbbc7e43c27be46",
     "ruleId": "zizmor/template-injection",
     "severity": "INFO",
     "tool": {
@@ -20219,7 +20219,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "d59d1447c757ae89",
+    "id": "a423aa031e59ff57",
     "ruleId": "zizmor/template-injection",
     "severity": "INFO",
     "tool": {
@@ -20463,7 +20463,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "19db8358d12f487f",
+    "id": "dd1e43420ec11a12",
     "ruleId": "zizmor/template-injection",
     "severity": "LOW",
     "tool": {
@@ -20707,7 +20707,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "a332c6b0775cfdb4",
+    "id": "78fda0a0d13e1c4c",
     "ruleId": "zizmor/template-injection",
     "severity": "LOW",
     "tool": {
@@ -20951,7 +20951,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "dea6ed5e0a63a311",
+    "id": "bbf63606d3e10222",
     "ruleId": "zizmor/template-injection",
     "severity": "LOW",
     "tool": {
@@ -21195,7 +21195,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "10e200a73dc5116b",
+    "id": "f7b38aac317a4500",
     "ruleId": "zizmor/template-injection",
     "severity": "LOW",
     "tool": {
@@ -21439,7 +21439,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "1eeb637eba872a6a",
+    "id": "0fdb5a902b72a912",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -21625,7 +21625,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "227010795e2557fa",
+    "id": "58fe2a54b65e88e7",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -21811,7 +21811,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "a59866ed44f65816",
+    "id": "26e14a9720f36afa",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -21997,7 +21997,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "b7cb643d622e09b2",
+    "id": "2a94cf259cb8a559",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -22183,7 +22183,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "72d73c56ef8e5132",
+    "id": "176d5bf70bb8c151",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -22369,7 +22369,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "a63756bd7a706e2e",
+    "id": "1c925d7edbe0ee3e",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -22555,7 +22555,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "a38dfd51d06e3e5d",
+    "id": "a1370688b15727c3",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -22741,7 +22741,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "db8f6643604b8b41",
+    "id": "abaaaa5ed9fc4a69",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -22927,7 +22927,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "6e67fa0230136167",
+    "id": "5b8582f6ffef69e0",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -23113,7 +23113,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "d40c2864e92a4456",
+    "id": "d020bbd735591e20",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -23299,7 +23299,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "37780dfe18c1a3fb",
+    "id": "9e441f49cddaf87b",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -23485,7 +23485,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "446681f647430e2c",
+    "id": "f73d64bea0e072fd",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -23671,7 +23671,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "bda9cab697aa72d7",
+    "id": "b7dc94539dccab57",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -23857,7 +23857,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "5ecba18a5a98af21",
+    "id": "27252d63ba5c6f3c",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -24043,7 +24043,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "b8e6be2ebc11beb0",
+    "id": "3d66e16b416e490c",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -24229,7 +24229,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "7c472dc48f6f64b5",
+    "id": "b8f5f6821921cbfa",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -24415,7 +24415,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "56c9cf2d4757a028",
+    "id": "9de1efd406fd0588",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -24601,7 +24601,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "5bf6ebe79d5427cb",
+    "id": "df9f6028c54ef752",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -24787,7 +24787,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "4a53d51947dbfd77",
+    "id": "09def9e38e5a6fc0",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -24973,7 +24973,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "6918169494943ac5",
+    "id": "607648b961391376",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -25159,7 +25159,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "fcc2e074d5966d8f",
+    "id": "0ba99f735d5ff820",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -25345,7 +25345,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "b565bf14a5ce9a4d",
+    "id": "83652a95c4a95c39",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -25531,7 +25531,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "769c1886de7c2119",
+    "id": "cc736fffaeea6009",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -25717,7 +25717,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "a083dd1698fa3ac5",
+    "id": "af5dfd98dba0d895",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -25903,7 +25903,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "4b70cc5263291ee7",
+    "id": "b5bc078b6fdc443e",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -26089,7 +26089,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "9120d82606342ad3",
+    "id": "761612eeba27a5e1",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -26275,7 +26275,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "1530a7b083775e39",
+    "id": "2429d177de1c1f5e",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -26461,7 +26461,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "942c4aeb894bc618",
+    "id": "476518bef760bd48",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -26647,7 +26647,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "d1b5519ebd4f4188",
+    "id": "b9f2c6908a3bb8eb",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -26833,7 +26833,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "3b6111da0f15e172",
+    "id": "38952f990bb4690f",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -27019,7 +27019,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "236afd99b4738532",
+    "id": "4adf83c05c7a17a6",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -27205,7 +27205,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "ca879521ef21ec3c",
+    "id": "c792c10453450abf",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -27391,7 +27391,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "ab745f4f78269515",
+    "id": "de7ea33bfa07d21b",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -27577,7 +27577,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "917d79046f4a2e21",
+    "id": "79b7d76229fd58a5",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -27763,7 +27763,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "f6afaa7ba8431584",
+    "id": "6b7c50cabc9ccb41",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -27949,7 +27949,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "448334189ee9b9fb",
+    "id": "ffcf98bc27744101",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -28135,7 +28135,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "706185c8345ece2e",
+    "id": "be3c713c91a82745",
     "ruleId": "zizmor/cache-poisoning",
     "severity": "HIGH",
     "tool": {
@@ -28414,7 +28414,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "5836d7fc035cf1c5",
+    "id": "2be83211cbe02e98",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -28580,7 +28580,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "390d4670570e3825",
+    "id": "9b920640a2f9806e",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -28746,7 +28746,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "2c0d6fede3e6ec94",
+    "id": "f9d6059856d97233",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -28912,7 +28912,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "3cb5b4e1712834f0",
+    "id": "400d3a74b3c60919",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -29078,7 +29078,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "61f657857618be23",
+    "id": "689bb760e93a2ac0",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -29244,7 +29244,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "8cbfad29aeea38db",
+    "id": "f072d13dbd66ab09",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -29410,7 +29410,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "591c1cabd37d435b",
+    "id": "1a70a9c805a4bda9",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -29576,7 +29576,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "f60457eb546a9b07",
+    "id": "c26e1ee78007d835",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -29742,7 +29742,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "672738e64510b4be",
+    "id": "c877b4405e6e115e",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -29908,7 +29908,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "69c9ff4f73c10a7b",
+    "id": "b962d842c8be9d1b",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -30074,7 +30074,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "58b9fd6ea3ecbdc1",
+    "id": "ca2c4e6816493982",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -30240,7 +30240,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "d7f09b337e756451",
+    "id": "ee71f4f78ac4783d",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -30406,7 +30406,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "29977c5cd7bdbe7f",
+    "id": "324e752ccf4dd70f",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -30572,7 +30572,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "e8fa7a893550261a",
+    "id": "292c6f04bfc39d6c",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -30738,7 +30738,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "8822a2a04a9480c5",
+    "id": "633fd0652cb2c4ac",
     "ruleId": "zizmor/artipacked",
     "severity": "LOW",
     "tool": {
@@ -30904,7 +30904,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "6c677d6e9549953f",
+    "id": "bc4a53573255b4d7",
     "ruleId": "zizmor/excessive-permissions",
     "severity": "HIGH",
     "tool": {
@@ -31058,7 +31058,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "99956436e1e41b24",
+    "id": "997b241bf8cd893d",
     "ruleId": "zizmor/excessive-permissions",
     "severity": "HIGH",
     "tool": {
@@ -31212,7 +31212,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "8e412b47326a1385",
+    "id": "7c2eaa10e103cb1f",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -31398,7 +31398,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "7a599e45b7cb5740",
+    "id": "d8db05c07b9c5990",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -31584,7 +31584,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "3d63ac0b0ac9c50d",
+    "id": "313b6ffb82b038c7",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -31770,7 +31770,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "26e92f6ad474a6d4",
+    "id": "d9e5e016dc6b4202",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -31956,7 +31956,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "8f9349f1b2008a6f",
+    "id": "7090d8947c9712ad",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -32142,7 +32142,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "afbee39edee45a93",
+    "id": "b345c84036c08c1d",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -32328,7 +32328,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "5080ce82f280a85e",
+    "id": "2f36e5bb14b7c301",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -32514,7 +32514,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "29b2e70d9b9fc920",
+    "id": "a6cbbc7e51144e8a",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -32700,7 +32700,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "df187016d2a59e50",
+    "id": "3b531bf9f8b9b081",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -32886,7 +32886,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "ea1b61ea9269421f",
+    "id": "c8825814e80a882c",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -33072,7 +33072,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "37a03b032b4ef66c",
+    "id": "b67689324e0bac4c",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -33258,7 +33258,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "297259f45f410b01",
+    "id": "7dc2a99d085e22d5",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -33444,7 +33444,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "b7c1d2d271c96d1c",
+    "id": "415399b295068d67",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -33630,7 +33630,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "32b519f0c7ba98f9",
+    "id": "2472e801796ddce6",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -33816,7 +33816,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "2168acf8c42dd4eb",
+    "id": "ea166f52c405c820",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -34002,7 +34002,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "46b3a5848ba23762",
+    "id": "a7ee1f1e4744bb9b",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -34188,7 +34188,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "0f5456d2eec25976",
+    "id": "a268b12f900eaefa",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -34374,7 +34374,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "da0076c308f14fc8",
+    "id": "b8da3b5586a899c9",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -34560,7 +34560,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "016e978273409c5f",
+    "id": "3c9e003c988dae59",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -34746,7 +34746,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "0404ce06e23106e9",
+    "id": "db9e275fc68e70d4",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -34932,7 +34932,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "0c50d5988921f636",
+    "id": "4493ab1e7a8ff598",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -35118,7 +35118,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "76d1b69d4d508851",
+    "id": "34cba2e30e6bb77e",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -35304,7 +35304,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "19cd7698da7e091e",
+    "id": "bcfb6ed084e176e1",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -35490,7 +35490,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "b8ed6a5714da5c38",
+    "id": "293f76182c767aa2",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -35676,7 +35676,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "4fe0157468fb600f",
+    "id": "2495470504336488",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -35862,7 +35862,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "c19d06c688a0501c",
+    "id": "116882b0a1b43b6f",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -36048,7 +36048,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "2b9186779a9502e0",
+    "id": "9c6ff84249eaf6b5",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -36234,7 +36234,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "8e6b9b46c7ce768a",
+    "id": "16f9cdbf5c200fbe",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -36420,7 +36420,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "28f72af7c71f60dc",
+    "id": "3da1fb5b01c73d5c",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -36606,7 +36606,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "82547f24324345f5",
+    "id": "7079ff218fc8791f",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -36792,7 +36792,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "cd0d2dd1bd0cd411",
+    "id": "188a11aab05bd039",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -36978,7 +36978,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "8f9555bc94ea63db",
+    "id": "f3130bd019024d88",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -37164,7 +37164,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "505eb59fd9dd9fc9",
+    "id": "a6c42d9a342d34ae",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -37350,7 +37350,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "1e29a926e8f2d1ad",
+    "id": "c7c6d3a83194e30c",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -37536,7 +37536,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "dfc6c96825d85dc9",
+    "id": "c8baaaf74f3d1628",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -37722,7 +37722,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "cc3a3c41c513ead2",
+    "id": "5c84d2506b4bcf80",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -37908,7 +37908,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "5c26ebfbcb55de33",
+    "id": "3988d10fa64439f4",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -38094,7 +38094,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "1760cf921ded84e1",
+    "id": "78e207ba0e06bacd",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -38280,7 +38280,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "47c95b5fdcc1575b",
+    "id": "818728d292839919",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -38466,7 +38466,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "00dddead4b123fba",
+    "id": "431dbdeea2d49e66",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -38652,7 +38652,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "675fcb145362f0af",
+    "id": "2a850ca79f02857b",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -38838,7 +38838,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "02db700ac46de79b",
+    "id": "ed1c7d86909a4de6",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -39024,7 +39024,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "0b7cbd99257022c2",
+    "id": "2bbb429fccd5473a",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -39210,7 +39210,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "e4acbdae91bed8ad",
+    "id": "51de548c32ed95d4",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -39396,7 +39396,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "e5a1663c1c15a8bf",
+    "id": "9c9e472a15f1bb18",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -39582,7 +39582,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "945ea544a14a58ad",
+    "id": "38a28fa03c8bafba",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -39768,7 +39768,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "3d275d946d750cb4",
+    "id": "00bdc900d99db08f",
     "ruleId": "zizmor/unpinned-uses",
     "severity": "HIGH",
     "tool": {
@@ -39954,7 +39954,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "cd7c7f2cefdc8f34",
+    "id": "03b185bf645c0d45",
     "ruleId": "zizmor/adhoc-packages",
     "severity": "LOW",
     "tool": {
@@ -40198,7 +40198,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "18cb107492b87e4a",
+    "id": "ff5500e56307d854",
     "ruleId": "zizmor/self-repository",
     "severity": "LOW",
     "tool": {
