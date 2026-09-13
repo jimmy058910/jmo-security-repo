@@ -484,6 +484,26 @@ class TestFingerprint:
 
         assert actual == expected
 
+    def test_five_argument_calls_hash_as_they_always_have(self):
+        """#1242 adds an optional column. Every existing 5-argument call must
+        hash byte-identically: this hex was computed on 2026-09-12 before the
+        parameter existed, so any change to the 5-component form fails here."""
+        assert fingerprint("t", "r", "p", 3, "m") == "c195e281b9d65b61"
+        assert fingerprint("t", "r", "p", 3, "m", start_column=None) == (
+            "c195e281b9d65b61"
+        )
+
+    def test_column_is_a_sixth_component_only_when_supplied(self):
+        """Two findings on one line at different columns are two findings
+        (gitleaks/juice-shop, columns 82 and 116). Column 0 is a column, not an
+        absence: shellcheck writes 0 when the tool omitted it, and the id must
+        stay deterministic either way."""
+        base = fingerprint("t", "r", "p", 3, "m")
+        col5 = fingerprint("t", "r", "p", 3, "m", start_column=5)
+        col20 = fingerprint("t", "r", "p", 3, "m", start_column=20)
+        assert len({base, col5, col20}) == 3
+        assert fingerprint("t", "r", "p", 3, "m", start_column=0) != base
+
 
 # ============================================================================
 # 4. extract_code_snippet() Tests
