@@ -259,9 +259,22 @@ def _normalize_paths_and_ids(
         message = finding.get("message", "") or ""
         start_line = location.get("startLine")
 
-        if current == fingerprint(tool, rule_id, original, start_line, message):
-            finding["id"] = fingerprint(tool, rule_id, normalized, start_line, message)
-            ids_rekeyed += 1
+        # Two shapes of the one formula: five components, or six when the
+        # adapter keyed on its column (shellcheck, the SARIF bindings; #1242).
+        # Try five first and recompute under whichever shape matched, so a
+        # finding that carries a column but was keyed without one keeps its
+        # shape rather than being silently promoted.
+        column = location.get("startColumn")
+        shapes = (None, column) if column is not None else (None,)
+        for col in shapes:
+            if current == fingerprint(
+                tool, rule_id, original, start_line, message, start_column=col
+            ):
+                finding["id"] = fingerprint(
+                    tool, rule_id, normalized, start_line, message, start_column=col
+                )
+                ids_rekeyed += 1
+                break
 
     return paths_changed, ids_rekeyed
 

@@ -225,6 +225,53 @@ def test_get_fingerprint_is_the_canonical_fingerprint():
     )
 
 
+def test_column_keyed_id_is_rekeyed_under_the_column_shape():
+    """#1242: an adapter that fingerprints with its column (shellcheck, the
+    SARIF importer) must still be re-keyed when its path is normalised, and
+    under the same six-component shape it was built with. Without this branch
+    the pass computes the five-component hash, fails to match, and silently
+    stops re-keying every such finding -- the regression the issue warned
+    about."""
+    path = ROOT + BS + "scripts" + BS + "deploy.sh"
+    finding = {
+        "id": fingerprint("shellcheck", "SC2086", path, 7, "quote", start_column=20),
+        "ruleId": "SC2086",
+        "tool": {"name": "shellcheck"},
+        "location": {"path": path, "startLine": 7, "startColumn": 20},
+        "message": "quote",
+    }
+    assert finding["id"] != fingerprint("shellcheck", "SC2086", path, 7, "quote"), (
+        "precondition: this id is reachable only with the column"
+    )
+
+    changed, rekeyed = nr._normalize_paths_and_ids([finding], (ROOT,))
+
+    assert (changed, rekeyed) == (1, 1)
+    assert finding["id"] == fingerprint(
+        "shellcheck", "SC2086", "scripts/deploy.sh", 7, "quote", start_column=20
+    )
+
+
+def test_five_component_id_on_a_finding_that_carries_a_column_keeps_its_shape():
+    """The control for the test above: a finding whose location carries a
+    column but whose id was built without one (every adapter before #1242, and
+    any that still chooses not to pass it) is re-keyed under the five-component
+    shape, not silently promoted to six."""
+    path = ROOT + BS + "a" + BS + "b.py"
+    finding = {
+        "id": fingerprint("t", "R1", path, 3, "m"),
+        "ruleId": "R1",
+        "tool": {"name": "t"},
+        "location": {"path": path, "startLine": 3, "startColumn": 9},
+        "message": "m",
+    }
+
+    changed, rekeyed = nr._normalize_paths_and_ids([finding], (ROOT,))
+
+    assert (changed, rekeyed) == (1, 1)
+    assert finding["id"] == fingerprint("t", "R1", "a/b.py", 3, "m")
+
+
 def test_findings_without_a_usable_path_are_left_alone():
     findings = [
         {"id": "a", "location": {}},
