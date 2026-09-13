@@ -196,11 +196,17 @@ def fingerprint(
     path: str | None,
     start_line: int | None,
     message: str | None,
+    start_column: int | None = None,
 ) -> str:
     """Generate stable fingerprint ID for deduplication.
 
-    Uses SHA256 hash of: tool|ruleId|path|line|message_snippet
-    Truncated to FINGERPRINT_LENGTH hex chars for readability.
+    Uses SHA256 hash of: tool|ruleId|path|line|message_snippet, with
+    ``|column`` appended **only** when ``start_column`` is supplied. So every
+    five-argument call hashes exactly as it did before the column existed, and
+    an adapter that knows its columns (shellcheck, the SARIF importer) opts in
+    to keep two findings on one line apart -- #1242 measured two different
+    secrets at columns 82 and 116 collapsing to one id, and deduplication
+    dropping the second.
 
     Args:
         tool: Tool name (e.g., "trufflehog", "semgrep")
@@ -208,12 +214,17 @@ def fingerprint(
         path: File path where finding occurred
         start_line: Line number (0 if not applicable)
         message: Finding message or description
+        start_column: Column number when the tool reports one; ``None`` (the
+            default) leaves the five-component form untouched. ``0`` is a
+            column, not an absence.
 
     Returns:
         Hex string of length FINGERPRINT_LENGTH for stable deduplication
     """
     snippet = (message or "").strip()[:MESSAGE_SNIPPET_LENGTH]
     base = f"{tool}|{rule_id or ''}|{path or ''}|{start_line or 0}|{snippet}"
+    if start_column is not None:
+        base = f"{base}|{start_column}"
     return hashlib.sha256(base.encode("utf-8")).hexdigest()[:FINGERPRINT_LENGTH]
 
 

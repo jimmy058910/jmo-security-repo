@@ -206,8 +206,16 @@ def _load_shellcheck_internal(path: str | Path) -> list[dict[str, Any]]:
             code_str, map_tool_severity("shellcheck", level)
         )
 
-        # Create fingerprint
-        fid = fingerprint("shellcheck", code_str, file_path, start_line, message)
+        # Create fingerprint. The column is part of the key (#1242): shellcheck
+        # reports it, and two hits of one rule on one line are two findings.
+        fid = fingerprint(
+            "shellcheck",
+            code_str,
+            file_path,
+            start_line,
+            message,
+            start_column=start_column,
+        )
 
         # Build tags
         tags = ["shell", "lint", "shellcheck"]

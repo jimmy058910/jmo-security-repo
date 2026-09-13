@@ -181,56 +181,95 @@ def test_an_id_built_from_a_custom_key_is_never_rekeyed():
     assert findings[0]["id"] == custom
 
 
-def test_the_two_fingerprint_formulas_agree_except_on_line_and_whitespace():
-    """Pins *why* the legacy branch exists, so its test cannot go vacuous.
-
-    Measured: the formulas are byte-identical for an integer line and an
-    unpadded message, and differ only when the line is missing (`0` vs `""`)
-    or the message needs stripping. A legacy-branch test written with
-    `startLine=3, message="boom"` therefore exercises the **first** branch and
-    passes with the legacy branch deleted - which is what the mutation run
-    caught here.
+def test_get_fingerprint_is_the_canonical_fingerprint():
+    """#1010: `AdapterPlugin.get_fingerprint` and `common_finding.fingerprint`
+    were two formulas that agreed on the common case and differed on a missing
+    line (`""` vs `0`) and on a padded message (unstripped vs stripped). A test
+    with an integer line and a clean message could not tell them apart; these
+    two inputs are exactly the ones that did, so an empty difference cannot be
+    confused with the reads being gone. The legacy copy this module carried to
+    re-key those ids is gone with it.
     """
-    path = "a/b.py"
-    same = fingerprint("trivy", "CVE-1", path, 3, "boom") == (
-        nr._legacy_plugin_fingerprint("trivy", "CVE-1", path, 3, "boom")
+    from scripts.core.plugin_api import AdapterPlugin, Finding, PluginMetadata
+
+    class Probe(AdapterPlugin):
+        @property
+        def metadata(self):
+            return PluginMetadata(name="probe", version="1.0.0")
+
+        def parse(self, output_path):
+            return []
+
+    probe = Probe()
+    no_line = Finding(
+        ruleId="CVE-1",
+        tool={"name": "trivy"},
+        location={"path": "a/b.py"},
+        message="boom",
     )
-    assert same, "formulas must agree on the common case, or the guard is untested"
+    padded = Finding(
+        ruleId="CVE-1",
+        tool={"name": "trivy"},
+        location={"path": "a/b.py", "startLine": 3},
+        message="  boom  ",
+    )
 
-    assert fingerprint("trivy", "CVE-1", path, None, "boom") != (
-        nr._legacy_plugin_fingerprint("trivy", "CVE-1", path, "", "boom")
-    ), "a missing line is what distinguishes them"
+    assert probe.get_fingerprint(no_line) == fingerprint(
+        "trivy", "CVE-1", "a/b.py", None, "boom"
+    )
+    assert probe.get_fingerprint(padded) == fingerprint(
+        "trivy", "CVE-1", "a/b.py", 3, "  boom  "
+    )
+    assert not hasattr(nr, "_legacy_plugin_fingerprint"), (
+        "one formula: the legacy copy is gone"
+    )
 
 
-def test_legacy_plugin_fingerprint_formula_is_also_recognised():
-    """trivy, trufflehog and semgrep use `AdapterPlugin.get_fingerprint`.
-
-    It renders a missing line as `""` where `fingerprint()` uses `0`. An id
-    built by that second formula must be re-keyed too, or those three tools
-    keep stale ids while every other tool's move.
-
-    `startLine` is deliberately absent: with it present as an int the two
-    formulas coincide and this test would pass even with the legacy branch
-    removed.
-    """
-    path = ROOT + BS + "a" + BS + "b.py"
+def test_column_keyed_id_is_rekeyed_under_the_column_shape():
+    """#1242: an adapter that fingerprints with its column (shellcheck, the
+    SARIF importer) must still be re-keyed when its path is normalised, and
+    under the same six-component shape it was built with. Without this branch
+    the pass computes the five-component hash, fails to match, and silently
+    stops re-keying every such finding -- the regression the issue warned
+    about."""
+    path = ROOT + BS + "scripts" + BS + "deploy.sh"
     finding = {
-        "id": nr._legacy_plugin_fingerprint("trivy", "CVE-1", path, "", "boom"),
-        "ruleId": "CVE-1",
-        "tool": {"name": "trivy"},
-        "location": {"path": path},
-        "message": "boom",
+        "id": fingerprint("shellcheck", "SC2086", path, 7, "quote", start_column=20),
+        "ruleId": "SC2086",
+        "tool": {"name": "shellcheck"},
+        "location": {"path": path, "startLine": 7, "startColumn": 20},
+        "message": "quote",
     }
-    assert finding["id"] != fingerprint("trivy", "CVE-1", path, None, "boom"), (
-        "precondition: this id must be reachable only by the legacy formula"
+    assert finding["id"] != fingerprint("shellcheck", "SC2086", path, 7, "quote"), (
+        "precondition: this id is reachable only with the column"
     )
 
     changed, rekeyed = nr._normalize_paths_and_ids([finding], (ROOT,))
 
     assert (changed, rekeyed) == (1, 1)
-    assert finding["id"] == nr._legacy_plugin_fingerprint(
-        "trivy", "CVE-1", "a/b.py", "", "boom"
+    assert finding["id"] == fingerprint(
+        "shellcheck", "SC2086", "scripts/deploy.sh", 7, "quote", start_column=20
     )
+
+
+def test_five_component_id_on_a_finding_that_carries_a_column_keeps_its_shape():
+    """The control for the test above: a finding whose location carries a
+    column but whose id was built without one (every adapter before #1242, and
+    any that still chooses not to pass it) is re-keyed under the five-component
+    shape, not silently promoted to six."""
+    path = ROOT + BS + "a" + BS + "b.py"
+    finding = {
+        "id": fingerprint("t", "R1", path, 3, "m"),
+        "ruleId": "R1",
+        "tool": {"name": "t"},
+        "location": {"path": path, "startLine": 3, "startColumn": 9},
+        "message": "m",
+    }
+
+    changed, rekeyed = nr._normalize_paths_and_ids([finding], (ROOT,))
+
+    assert (changed, rekeyed) == (1, 1)
+    assert finding["id"] == fingerprint("t", "R1", "a/b.py", 3, "m")
 
 
 def test_findings_without_a_usable_path_are_left_alone():

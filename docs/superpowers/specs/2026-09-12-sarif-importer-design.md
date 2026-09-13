@@ -233,25 +233,28 @@ path instead of a URI.
 
 `region.startLine`, `endLine`, `startColumn` and `endColumn` are carried when present;
 osv-scanner supplies none of them, and `location.startLine` is simply absent for those
-findings rather than being invented as 0. The columns feed nothing yet; the column-aware
-fingerprint (#1242) reads them.
+findings rather than being invented as 0. The columns join the fingerprint (3.4).
 
 ### 3.4 Fingerprints
 
-Canonical: `fingerprint(spec.tool, ruleId, path, startLine, message)` — the exact five
-components `_normalize_paths_and_ids()` recomputes when it decides whether an id came
-from the path. That keeps all three tools in the re-keyable lane described in
-`adapters.rules.md`, so ids survive path normalisation and stay identical across machines
-and across Windows/WSL runs.
+Canonical: `fingerprint(spec.tool, ruleId, path, startLine, message,
+start_column=startColumn)` — the five components `_normalize_paths_and_ids()` recomputes
+when it decides whether an id came from the path, plus the column when the region has one.
+That keeps all three tools in the re-keyable lane described in `adapters.rules.md`, so ids
+survive path normalisation and stay identical across machines and across Windows/WSL runs.
 
-The known cost is the gitleaks column collision from 2.5: one finding in 69 on juice-shop.
-It is **not** fixed here. Making `fingerprint()` column-aware also requires
-`_normalize_paths_and_ids()` to pass the column, and `shellcheck_adapter.py` already
-writes `location.startColumn` while fingerprinting without it — so the pass would compute
-a six-component hash, fail to match shellcheck's five-component ids, and silently stop
-re-keying every shellcheck finding. The real fix is a multi-shape key chain in that
-function, which is its own change with its own regression evidence. An issue covering the
-class (shellcheck today, SARIF once these tools ship) is filed and rostered by this PR.
+The column joined the key in Phase 1's second PR (#1242). The first draft of this section
+left it out, because `_normalize_paths_and_ids()` recomputed only the five-component
+shape and `shellcheck_adapter.py` already wrote `location.startColumn` while
+fingerprinting without it — passing the column there would have silently stopped
+re-keying every shellcheck finding. The pass now tries the five-component shape first and
+the six-component shape second, and recomputes under whichever matched, so shellcheck
+(which keys on its column since the same PR) and every five-component adapter re-key as
+before; a finding that carries a column but was keyed without one is never promoted.
+Measured on shellcheck: two hits of one rule on one line went from 2 findings → 1 id →
+1 after dedup, to 2 → 2 → 2. The gitleaks collision from 2.5 is therefore no longer a
+cost: both secrets at columns 82 and 116 keep their own id. osv-scanner has no region, so
+its ids stay five-component.
 
 ### 3.5 Field mapping
 
@@ -343,8 +346,8 @@ real SARIF document, asserting:
 |---|---|
 | zizmor findings | 216 (217 results, 1 identical duplicate collapsed) |
 | zizmor severities | HIGH 143, MEDIUM 12, LOW 49, INFO 12 |
-| gitleaks findings | 68 (69 results, 1 column collision — the known cost of 3.4) |
-| gitleaks severities | MEDIUM 68 |
+| gitleaks findings | 69 (69 results; the column is in the key, 3.4) |
+| gitleaks severities | MEDIUM 69 |
 | osv-scanner findings | 291 (303 results, 12 identical duplicates collapsed) |
 | osv-scanner severities | CRITICAL 30, HIGH 147, MEDIUM 102, LOW 12 |
 
@@ -366,8 +369,9 @@ The osv severity split is the load-bearing number: reading `level` alone yields 
 MEDIUM, so that row alone proves the chain is wired and not bypassed. The path assertion
 is the #861 regression guard.
 
-**Measured 2026-09-12 (PR 1244):** every row above reproduced exactly. The combined run
-yielded **575** findings (216 + 68 + 291; cross-tool clustering merged none), all three
+**Measured 2026-09-12:** PR 1244 reproduced every row exactly with gitleaks at 68 (before
+the column joined the key); the second PR reproduces the table as it stands. The combined
+run yields **576** findings (216 + 69 + 291; cross-tool clustering merged none), all three
 tool names present, 0 paths containing `://` or `Users`, and osv-scanner's path
 root-stripped to `package-lock.json`. The procedure, for the next re-run:
 

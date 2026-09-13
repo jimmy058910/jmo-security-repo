@@ -284,8 +284,15 @@ def _finding(
 
     return Finding(
         schemaVersion="1.2.0",
+        # The column is part of the key (#1242): two results on one line at
+        # different columns are two findings, and gitleaks reports exactly that.
         id=fingerprint(
-            spec.tool, rule_id, location["path"], location.get("startLine"), message
+            spec.tool,
+            rule_id,
+            location["path"],
+            location.get("startLine"),
+            message,
+            start_column=location.get("startColumn"),
         ),
         ruleId=rule_id,
         severity=severity,

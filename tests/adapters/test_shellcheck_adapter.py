@@ -503,3 +503,47 @@ def test_shellcheck_non_dict_items_skipped(tmp_path: Path):
     assert len(findings) == 2
     codes = {f.ruleId for f in findings}
     assert codes == {"SC2086", "SC1091"}
+
+
+def test_two_findings_on_one_line_at_different_columns_keep_two_ids(tmp_path: Path):
+    """#1242: shellcheck writes `location.startColumn` and used to fingerprint
+    without it, so two hits of one rule on one line collapsed to one id and
+    deduplication dropped the second. Measured before the fix: 2 findings,
+    1 distinct id, 1 after dedup."""
+    from scripts.core import normalize_and_report as nr
+
+    root = tmp_path.resolve()
+    absolute = str(root / "scripts" / "deploy.sh")
+    message = "Double quote to prevent globbing and word splitting."
+    sample = [
+        {
+            "file": absolute,
+            "line": 7,
+            "endLine": 7,
+            "column": 5,
+            "endColumn": 9,
+            "level": "warning",
+            "code": 2086,
+            "message": message,
+        },
+        {
+            "file": absolute,
+            "line": 7,
+            "endLine": 7,
+            "column": 20,
+            "endColumn": 24,
+            "level": "warning",
+            "code": 2086,
+            "message": message,
+        },
+    ]
+    p = write(tmp_path, "shellcheck.json", json.dumps(sample))
+
+    findings = [f.to_dict() for f in ShellCheckAdapter().parse(p)]
+    assert len({f["id"] for f in findings}) == 2
+
+    changed, rekeyed = nr._normalize_paths_and_ids(findings, (str(root),))
+    assert (changed, rekeyed) == (2, 2), "both ids re-keyed under the column shape"
+    assert {f["location"]["path"] for f in findings} == {"scripts/deploy.sh"}
+    assert len({f["id"] for f in findings}) == 2
+    assert len(nr.deduplicate_findings_memory_efficient(findings)) == 2

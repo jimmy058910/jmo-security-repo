@@ -12,6 +12,17 @@ All notable changes to JMo Security will be documented in this file.
   parsed, normalised, deduplicated and reported like any other tool output. None of the
   three is in a scan profile yet; that is Phase 4 of the v2.0.0 program.
 
+### Fixed
+
+- Two findings of one rule on one line at different columns no longer collapse to one
+  id, so deduplication no longer drops the second. shellcheck and the SARIF adapters key
+  on the column; measured on gitleaks against juice-shop, two different secrets at
+  columns 82 and 116 both survive where one used to be lost (#1242).
+- One fingerprint formula. `AdapterPlugin.get_fingerprint` (trivy, trufflehog, semgrep)
+  delegates to `common_finding.fingerprint` instead of carrying a copy that rendered a
+  missing line and a padded message differently. **Behaviour change:** ids for those three
+  tools' findings with no line number or a padded message differ from v1.1.1 (#1010).
+
 ## [1.1.1] - 2026-09-11
 
 A patch release continuing v1.1.0's theme: a scan must not report success for work it did not do. Three tools in the default profiles were contributing nothing while reading as healthy — kubescape and trivy-rbac produced zero findings on every Kubernetes repository, each for more than one independent reason, and ZAP could not run against a repository target in any configuration. Two others were wrong in the opposite direction, reporting an ERROR on every repository that merely had nothing for them to scan. Separately, scans no longer walk vendored dependency trees or JMo's own results directory, both of which were being read back as findings.

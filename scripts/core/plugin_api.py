@@ -14,12 +14,13 @@ NOT for community plugin development.
 
 from __future__ import annotations
 
-import hashlib
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+from scripts.core.common_finding import fingerprint
 
 
 @dataclass
@@ -144,7 +145,11 @@ class AdapterPlugin(ABC):
     def get_fingerprint(self, finding: Finding) -> str:
         """Generate stable fingerprint for deduplication.
 
-        Default implementation uses: tool | ruleId | path | line | message[:120]
+        Delegates to :func:`scripts.core.common_finding.fingerprint`, the one
+        formula (#1010). This method used to carry a second copy that rendered
+        a missing line as ``""`` where the canonical one uses ``0`` and did not
+        strip the message; trivy, trufflehog and semgrep ids built from a
+        finding with no line or a padded message differ from before.
         Override for tool-specific fingerprinting logic.
 
         Args:
@@ -153,15 +158,13 @@ class AdapterPlugin(ABC):
         Returns:
             16-character hex fingerprint
         """
-        parts = [
+        return fingerprint(
             finding.tool.get("name", ""),
             finding.ruleId,
             finding.location.get("path", ""),
-            str(finding.location.get("startLine", "")),
-            finding.message[:120],
-        ]
-        fingerprint_input = "|".join(parts)
-        return hashlib.sha256(fingerprint_input.encode()).hexdigest()[:16]
+            finding.location.get("startLine"),
+            finding.message,
+        )
 
 
 def adapter_plugin(metadata: PluginMetadata) -> Callable[[type], type]:
