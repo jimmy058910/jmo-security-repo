@@ -14,9 +14,9 @@
   },
   "dependencies": {
     "@radix-ui/react-tooltip": "^1.2.16",
-    "lucide-react": "^1.41.0",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
+    "lucide-react": "^1.44.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "recharts": "^3.8.1"
   },
   "_overrides_comment": "FLOORS ONLY -- never an exact version. An exact pin clears one advisory and becomes the reason the NEXT one in that package cannot be fixed: `npm update` is a no-op against it, and Dependabot never edits an overrides block, so no PR is ever opened. Use ^ to hold a major where one would break the requirer (js-yaml 3 -> 5 breaks @istanbuljs/load-nyc-config, which calls yaml.safeLoad). See #900.",
@@ -34,10 +34,10 @@
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",
     "@types/jest": "^30.0.0",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.7",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react-swc": "^4.3.3",
-    "autoprefixer": "^10.5.5",
+    "autoprefixer": "^10.5.6",
     "jest": "^30.5.1",
     "jest-environment-jsdom": "^30.5.1",
     "postcss": "^8.5.28",
@@ -45,7 +45,7 @@
     "tailwindcss": "^4.3.3",
     "ts-jest": "^29.4.12",
     "typescript": "^6.0.3",
-    "vite": "^8.2.2",
+    "vite": "^8.3.0",
     "vite-plugin-singlefile": "^2.3.3"
   }
 }
