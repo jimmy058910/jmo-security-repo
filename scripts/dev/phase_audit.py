@@ -41,6 +41,20 @@ A roster that soft-wraps differently, a phase that loses its list, or an issue
 silently dropped from a roster breaks at least one of these. A parse that
 merely "found some numbers" cannot pass all four by accident.
 
+THE ONE KIND OF ISSUE THAT NEEDS NO HOME
+----------------------------------------
+`update_versions.py --create-issues` files `Update <tool> to v<x>` weekly and
+closes its own predecessor when it files the next. Such an issue already has a
+close mechanism, so `unclaimed` and `verify` report it as exempt rather than
+unclaimed. Before this, every checker run turned `phase-audit` red on every open
+PR until someone placed the new numbers: 4 of 5 unclaimed on 2026-09-23, and
+the weekly maintenance routine could auto-merge nothing from 2026-08-31 on.
+
+The exemption lasts only while `versions.yaml` still lists the tool, since that
+is the only condition under which the checker looks at it again. So a PR that
+removes a tool un-exempts that tool's open issue and cannot go green until it
+closes it. Nightly-failure issues are never exempt: nothing closes them.
+
 Exit codes: 0 = agreement, 1 = a real disagreement, 2 = the plan could not be
 parsed (which is itself a failure, never a skip).
 """
@@ -68,6 +82,23 @@ DEFAULT_PLAN = (
 
 LABEL_PREFIX = "phase:"
 LABEL_COLOR = "0e8a16"
+
+# The sections of versions.yaml that `update_versions.check_latest_versions`
+# walks. A tool listed in one of them is a tool the checker will look at again.
+VERSIONS_YAML = REPO_ROOT / "versions.yaml"
+CHECKED_SECTIONS = ("python_tools", "binary_tools", "special_tools")
+
+# What the checker's own closer matches on (`_close_superseded_version_issues`):
+# its author, `--label dependencies`, and a title in either priority, e.g.
+# `Update ruff to v0.16.8` and `[CRITICAL] Update semgrep to v1.176.0`.
+_VERSION_ISSUE_AUTHOR = "app/github-actions"
+_VERSION_ISSUE_LABEL = "dependencies"
+_VERSION_ISSUE_TITLE = re.compile(r"^(?:\[CRITICAL\] )?Update (\S+) to v\S+$")
+
+# versions.yaml's top-level keys, and a tool key two spaces under one. The
+# `-` exclusion skips list items such as `  - tool: kubescape`.
+_TOP_LEVEL_KEY = re.compile(r"^([A-Za-z_][\w-]*):")
+_TOOL_KEY = re.compile(r"^  ([^\s:#-][^\s:]*):\s*$")
 
 # `## Phase 3 — One-liners and single-site fixes`
 _PHASE_HEADING = re.compile(r"^## Phase (\d+)\b", re.MULTILINE)
@@ -323,6 +354,8 @@ class Issue:
     number: int
     state: str
     labels: set[str] = field(default_factory=set)
+    author: str = ""
+    title: str = ""
 
 
 def _gh(*args: str) -> str:
@@ -355,7 +388,7 @@ def fetch_issues(state: str = "all", limit: int = 1000) -> dict[int, Issue]:
         "--limit",
         str(limit),
         "--json",
-        "number,state,labels",
+        "number,state,labels,author,title",
     )
     out: dict[int, Issue] = {}
     for row in json.loads(raw):
@@ -363,6 +396,9 @@ def fetch_issues(state: str = "all", limit: int = 1000) -> dict[int, Issue]:
             number=row["number"],
             state=row["state"].upper(),
             labels={lbl["name"] for lbl in row["labels"]},
+            # `author` is null for an issue whose account was deleted.
+            author=(row.get("author") or {}).get("login", ""),
+            title=row.get("title") or "",
         )
     return out
 
@@ -439,6 +475,60 @@ def inert_closers(
 
 def _phase_labels(issue: Issue) -> set[str]:
     return {name for name in issue.labels if name.startswith(LABEL_PREFIX)}
+
+
+def tracked_tools(versions_yaml: str) -> set[str]:
+    """The tool names listed under `CHECKED_SECTIONS` of versions.yaml.
+
+    A line scan, not `yaml.safe_load`: this module is stdlib-only so its CI
+    job needs no `uv sync`. A test holds the scan equal to a real yaml parse
+    of the real file, which is what catches a reformat it would misread.
+    """
+    tools: set[str] = set()
+    section = ""
+    for line in versions_yaml.splitlines():
+        top = _TOP_LEVEL_KEY.match(line)
+        if top:
+            section = top.group(1)
+            continue
+        key = _TOOL_KEY.match(line)
+        if key and section in CHECKED_SECTIONS:
+            tools.add(key.group(1))
+    return tools
+
+
+def self_closing(issue: Issue, tracked: set[str]) -> bool:
+    """True for a version-checker issue the checker will close by itself.
+
+    Every condition is one the closer relies on. Without any one of them the
+    issue has no close mechanism and must be placed like any other.
+    """
+    if issue.author != _VERSION_ISSUE_AUTHOR:
+        return False
+    if _VERSION_ISSUE_LABEL not in issue.labels:
+        return False
+    title = _VERSION_ISSUE_TITLE.match(issue.title)
+    return title is not None and title.group(1) in tracked
+
+
+def _unclaimed(
+    plan: PlanIndex, issues: dict[int, Issue]
+) -> tuple[list[int], list[int]]:
+    """Open issues the plan does not mention, split into (unclaimed, exempt)."""
+    tracked = tracked_tools(VERSIONS_YAML.read_text(encoding="utf-8"))
+    absent = sorted(
+        n for n, i in issues.items() if i.state == "OPEN" and n not in plan.all_known
+    )
+    exempt = [n for n in absent if self_closing(issues[n], tracked)]
+    return [n for n in absent if n not in exempt], exempt
+
+
+def _report_exempt(exempt: list[int]) -> None:
+    if exempt:
+        print(
+            f"exempt: {len(exempt)} version-checker issue(s) the checker closes "
+            f"itself: {_fmt(exempt)}"
+        )
 
 
 def _git(*args: str) -> str:
@@ -639,7 +729,8 @@ def cmd_labels(plan: PlanIndex, apply: bool) -> int:
 
 def cmd_unclaimed(plan: PlanIndex) -> int:
     issues = fetch_issues(state="open")
-    survivors = sorted(set(issues) - plan.all_known)
+    survivors, exempt = _unclaimed(plan, issues)
+    _report_exempt(exempt)
     if not survivors:
         print(f"unclaimed: 0 of {len(issues)} open issues are absent from the plan")
         return 0
@@ -663,7 +754,8 @@ def cmd_verify(plan: PlanIndex) -> int:
     rc = 0
 
     open_numbers = {n for n, i in issues.items() if i.state == "OPEN"}
-    survivors = sorted(open_numbers - plan.all_known)
+    survivors, exempt = _unclaimed(plan, issues)
+    _report_exempt(exempt)
     if survivors:
         rc = 1
         print(f"::error::unclaimed open issues ({len(survivors)}):")
