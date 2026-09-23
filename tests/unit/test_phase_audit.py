@@ -33,10 +33,13 @@ from scripts.dev.phase_audit import (
     PlanParseError,
     closing_keywords,
     cmd_labels,
+    cmd_unclaimed,
+    cmd_verify,
     inert_closers,
     load_plan,
     parse_plan,
     phases_in_subjects,
+    tracked_tools,
 )
 
 # The plan separates a summary row's phase number from its name with an EM DASH
@@ -556,3 +559,156 @@ def test_labels_dry_run_reports_the_sweep_and_writes_nothing(
     assert "~ #555 drop phase:3" in out
     assert "~ #900 drop phase:9" in out
     assert "would apply: 1 label(s) added, 3 removed, 0 created" in out
+
+
+# --------------------------------------------------------------------------
+# Version-checker issues are exempt only while something will close them
+#
+# `update_versions.py --create-issues` (weekly, maintenance.yml) files
+# `Update <tool> to v<x>` and closes its predecessor when it files the next.
+# Counting those as unclaimed kept `verify` red on every open PR: measured
+# 2026-09-23, 4 of the 5 unclaimed issues were these, and the weekly
+# maintenance routine had auto-merged nothing since 2026-08-31 because no PR
+# could reach CLEAN. The exemption holds only while `versions.yaml` still
+# lists the tool, because that is the only condition under which the checker
+# will ever close the issue. A tool the program removes loses the exemption,
+# which is what makes its removal PR close the issue instead of orphaning it.
+# --------------------------------------------------------------------------
+
+BOT = "app/github-actions"
+
+# The real file's shapes, including the two that defeat a naive scan: a list
+# of dicts under `version_history` and a bare `  critical_tools:` key under
+# `update_policies`, both indented exactly like a tool name.
+VERSIONS_YAML = """\
+schema_version: '1.0'
+python_tools:
+  ruff:
+    version: 0.16.5
+    pypi_package: ruff
+binary_tools:
+  grype:
+    version: 0.118.0
+    update_check: docker inspect x | jq -r
+      '.[0].Created'
+special_tools:
+  semgrep:
+    version: 1.175.0
+docker_images:
+  ubuntu:
+    version: '24.04'
+update_policies:
+  critical_tools:
+    tools:
+    - trivy
+version_history:
+- date: '2026-09-09'
+  action: Updated falcoctl
+  tools_updated:
+  - tool: falcoctl
+    old_version: 0.13.0
+"""
+
+
+def test_tracked_tools_reads_only_the_sections_the_checker_walks() -> None:
+    assert tracked_tools(VERSIONS_YAML) == {"ruff", "grype", "semgrep"}
+
+
+def test_tracked_tools_agrees_with_a_real_yaml_parse_of_the_real_file() -> None:
+    """The stdlib scan is a guess about formatting; yaml is the authority.
+
+    `phase_audit.py` is stdlib-only so its CI job needs no `uv sync`, which is
+    why it cannot just call `yaml.safe_load`. This test can, so it is what
+    catches a `versions.yaml` reformat that the scan would silently misread.
+    """
+    yaml = pytest.importorskip("yaml")
+    path = phase_audit.VERSIONS_YAML
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    expected = {
+        tool
+        for section in phase_audit.CHECKED_SECTIONS
+        for tool in (data.get(section) or {})
+    }
+
+    found = tracked_tools(path.read_text(encoding="utf-8"))
+
+    assert found == expected
+    # An extractor that finds nothing agrees with an empty parse; the floor
+    # and a named member are what stop that from passing.
+    assert len(found) >= 10
+    assert "ruff" in found
+
+
+def _unclaimed_world(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, extra: Issue
+) -> None:
+    """BASE's plan with every scheduled issue correctly labelled, plus one."""
+    versions = tmp_path / "versions.yaml"
+    versions.write_bytes(VERSIONS_YAML.encode("utf-8"))
+    monkeypatch.setattr(phase_audit, "VERSIONS_YAML", versions)
+    issues = {n: Issue(number=n, state="OPEN", labels={"phase:0"}) for n in (100, 101)}
+    issues.update(
+        {n: Issue(number=n, state="OPEN", labels={"phase:1"}) for n in (200, 201, 202)}
+    )
+    issues.update({n: Issue(number=n, state="OPEN") for n in (900, 901)})
+    issues[extra.number] = extra
+    monkeypatch.setattr(phase_audit, "fetch_issues", lambda *a, **k: issues)
+
+
+@pytest.mark.parametrize(
+    "title",
+    ["Update ruff to v0.16.8", "[CRITICAL] Update semgrep to v1.176.0"],
+    ids=["normal", "critical"],
+)
+def test_a_version_issue_for_a_tracked_tool_is_exempt_and_says_so(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    title: str,
+) -> None:
+    issue = Issue(
+        number=300, state="OPEN", labels={"dependencies"}, author=BOT, title=title
+    )
+    _unclaimed_world(monkeypatch, tmp_path, issue)
+    # Under the repo root: the unclaimed message prints the plan path relative to it.
+    plan = parse_plan(BASE, phase_audit.REPO_ROOT / "plan.md")
+
+    assert cmd_unclaimed(plan) == 0
+    assert cmd_verify(plan) == 0
+    # Exempt is not invisible: both commands name what they let through.
+    out = capsys.readouterr().out
+    assert out.count("exempt") >= 2
+    assert "#300" in out
+
+
+@pytest.mark.parametrize(
+    ("author", "labels", "title"),
+    [
+        # Removed from versions.yaml: the checker never looks at it again.
+        (BOT, {"dependencies"}, "Update falcoctl to v0.14.2"),
+        # Same bot, no close mechanism at all.
+        (BOT, {"bug", "ci", "nightly-test-failure"}, "Nightly test suite failed"),
+        # A person asking for the bump is a decision, not churn.
+        ("jimmy058910", {"dependencies"}, "Update ruff to v0.16.8"),
+        # The checker's sweep queries `--label dependencies`; without it, the
+        # issue is invisible to the thing that would close it.
+        (BOT, set(), "Update ruff to v0.16.8"),
+    ],
+    ids=["removed-tool", "nightly-failure", "human-filed", "unlabelled"],
+)
+def test_an_issue_nothing_will_close_stays_unclaimed(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    author: str,
+    labels: set[str],
+    title: str,
+) -> None:
+    issue = Issue(number=301, state="OPEN", labels=labels, author=author, title=title)
+    _unclaimed_world(monkeypatch, tmp_path, issue)
+    # Under the repo root: the unclaimed message prints the plan path relative to it.
+    plan = parse_plan(BASE, phase_audit.REPO_ROOT / "plan.md")
+
+    assert cmd_unclaimed(plan) == 1
+    assert cmd_verify(plan) == 1
+    assert "#301" in capsys.readouterr().out
