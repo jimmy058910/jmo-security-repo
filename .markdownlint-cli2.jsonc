@@ -39,7 +39,6 @@
   "ignores": [
     "results-*/**",
     ".playwright-mcp/**",
-    "**/node_modules/**",
-    "paperclip/**"
+    "**/node_modules/**"
   ]
 }

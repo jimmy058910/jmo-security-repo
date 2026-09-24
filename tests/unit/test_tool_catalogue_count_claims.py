@@ -24,7 +24,7 @@ one number.
 Deliberately not scanned: CHANGELOG.md and the versioned winget manifest under
 packaging/winget/**/1.0.0/ (history that was true when written),
 docs/internal/ (dated measurement snapshots), docs/superpowers/ (plans),
-and dev-only/, paperclip/, .claude/ (not shipped). DOCKER_HUB_README.md joined
+and dev-only/, .claude/ (not shipped). DOCKER_HUB_README.md joined
 the list with #1103, which rewrote its v1.0.0 "What's New" section.
 """
 

@@ -175,7 +175,8 @@ graphify-out/
 # Impeccable design-skill local working artifacts (maintainer's personal tooling)
 .impeccable/
 
-# Paperclip local artifacts
+# paperclip/ was retired on 2026-09-24 (moved out of the repo, never tracked). Still
+# ignored so nothing restored here can be committed to this public repository.
 paperclip/
 
 # Hypothesis property-based testing cache (test artifacts, not source)
