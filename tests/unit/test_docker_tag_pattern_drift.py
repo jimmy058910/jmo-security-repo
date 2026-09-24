@@ -22,7 +22,6 @@ doc-only approach didn't catch the actual regressions in `TEST.md`,
 Allowlist: certain files legitimately reference forbidden patterns as
 documentation or historical record:
 - `CHANGELOG.md` — frozen historical entries
-- Two v1.1.0 announcements under `paperclip/content/social/`
 - This test file itself — names the patterns it tests for
 """
 
@@ -43,9 +42,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 ALLOWLISTED_PATHS: set[str] = {
     "CHANGELOG.md",
     "tests/unit/test_docker_tag_pattern_drift.py",
-    # Announcements of v1.1.0, which published the variant tags they name.
-    "paperclip/content/social/reddit_cybersecurity_v110_announcement.md",
-    "paperclip/content/social/reddit_devops_v110_announcement.md",
 }
 
 # File extensions to scan. Matches what user-facing docs and CI surfaces use.
@@ -70,6 +66,11 @@ SKIP_DIR_NAMES: set[str] = {
     # maintainer's machine, each a frozen copy of the Hub description. Not
     # repository content, and absent from a clone.
     "metrics",
+    # Gitignored (`paperclip/`): the maintainer's ops and marketing directory.
+    # Absent from a clone, so an allowlist entry for a file in it passes on the
+    # maintainer's machine and fails on every CI runner, which is what two v1.1.0
+    # announcements did on #1292.
+    "paperclip",
     # A nested git worktree is a *second checkout*, not repository content.
     # `.claude/worktrees/release-v107` held a pre-squash copy of CHANGELOG.md
     # whose historical `:latest-full` / `:latest-slim` references tripped this
