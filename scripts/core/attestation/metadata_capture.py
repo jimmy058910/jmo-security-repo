@@ -2,7 +2,7 @@
 Scan Metadata Capture for Attestations.
 
 This module captures metadata about scans for inclusion in attestations:
-- Scan parameters (profile, tools, targets, threads, timeout)
+- Scan parameters (tools, targets, threads, timeout)
 - Git context (commit, branch, tag)
 - CI-specific metadata (GitHub Actions, GitLab CI)
 
@@ -26,7 +26,6 @@ class MetadataCapture:
 
     def from_scan_args(
         self,
-        profile: str | None = None,
         tools: list[str] | None = None,
         repos: list[str] | None = None,
         images: list[str] | None = None,
@@ -39,7 +38,6 @@ class MetadataCapture:
         Capture scan parameters from command-line arguments.
 
         Args:
-            profile: Profile name (fast/balanced/deep)
             tools: List of tools used
             repos: List of repositories scanned
             images: List of container images scanned
@@ -52,10 +50,6 @@ class MetadataCapture:
             Dict of scan metadata
         """
         metadata: dict[str, Any] = {}
-
-        if profile is not None:
-            metadata["profile"] = profile
-            metadata["profile_name"] = profile
 
         if tools is not None:
             metadata["tools"] = tools

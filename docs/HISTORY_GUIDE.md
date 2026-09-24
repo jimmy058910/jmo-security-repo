@@ -46,23 +46,23 @@ The Historical Storage feature stores scan results in a local SQLite database, e
 
 ```bash
 # Store scan results automatically after completion
-jmo scan --repo ./myapp --profile balanced --store-history
+jmo scan --repo ./myapp --store-history
 
 # Custom database location
-jmo scan --repo ./myapp --profile balanced --store-history --history-db ./scans.db
+jmo scan --repo ./myapp --store-history --history-db ./scans.db
 ```
 
 **Manual storage after scanning:**
 
 ```bash
 # Run scan first
-jmo scan --repo ./myapp --profile balanced --results-dir ./results
+jmo scan --repo ./myapp --results-dir ./results
 
 # Store results manually
-jmo history store --results-dir ./results --profile balanced
+jmo history store --results-dir ./results
 
 # Specify database path
-jmo history store --results-dir ./results --profile balanced --db ./scans.db
+jmo history store --results-dir ./results --db ./scans.db
 ```
 
 ---
@@ -116,8 +116,8 @@ CI metadata is always collected because it's non-PII and critical for tracking b
 
 **How it works:**
 
-- Secret scanners (trufflehog, noseyparker, semgrep-secrets) automatically redact sensitive fields
-- Redacted fields: `Raw`, `RawV2`, `snippet`, `lines`
+- The secret scanner (trufflehog) automatically redacts sensitive fields
+- Redacted fields: `Raw`, `RawV2`
 - Non-secret scanners (trivy, semgrep, checkov) retain full raw data
 - Redaction is **automatic and always enabled** for secret scanners
 
@@ -361,7 +361,6 @@ jmo history store --results-dir RESULTS_DIR [OPTIONS]
 **Options:**
 
 - `--results-dir DIR` - Results directory containing `summaries/findings.json` (REQUIRED)
-- `--profile PROFILE` - Profile name (fast/slim/balanced/deep, default: balanced)
 - `--commit HASH` - Git commit hash (auto-detected if in Git repo)
 - `--branch NAME` - Git branch name (auto-detected if in Git repo)
 - `--tag TAG` - Git tag (auto-detected if in Git repo)
@@ -370,7 +369,7 @@ jmo history store --results-dir RESULTS_DIR [OPTIONS]
 **Example:**
 
 ```bash
-jmo history store --results-dir ./results --profile balanced --branch main
+jmo history store --results-dir ./results --branch main
 ```
 
 ### `jmo history list`
@@ -384,7 +383,6 @@ jmo history list [OPTIONS]
 **Options:**
 
 - `--branch NAME` - Filter by Git branch
-- `--profile PROFILE` - Filter by profile (fast/slim/balanced/deep)
 - `--since TIMESTAMP` - Filter by timestamp (Unix epoch or ISO 8601 format)
 - `--limit N` - Limit results (default: 50)
 - `--json` - Output as JSON instead of table
@@ -409,13 +407,13 @@ jmo history list --since 1730592000
 **Sample Output:**
 
 ```text
-+-------------+---------------------+----------+-----------+------------+------------+--------+----------------+
-| Scan ID     | Timestamp           | Branch   | Profile   |   Findings |   Critical |   High | Duration (s)   |
-+=============+=====================+==========+===========+============+============+========+================+
-| a1b2c3d4... | 2025-11-02 14:30:15 | main     | balanced  |         42 |          3 |     12 | 245.2          |
-| e5f6g7h8... | 2025-11-01 09:15:42 | main     | balanced  |         38 |          2 |     10 | 238.7          |
-| i9j0k1l2... | 2025-10-31 16:20:03 | dev      | fast      |         15 |          0 |      5 | 89.3           |
-+-------------+---------------------+----------+-----------+------------+------------+--------+----------------+
++-------------+---------------------+----------+------------+------------+--------+----------------+
+| Scan ID     | Timestamp           | Branch   |   Findings |   Critical |   High | Duration (s)   |
++=============+=====================+==========+============+============+========+================+
+| a1b2c3d4... | 2025-11-02 14:30:15 | main     |         42 |          3 |     12 | 245.2          |
+| e5f6g7h8... | 2025-11-01 09:15:42 | main     |         38 |          2 |     10 | 238.7          |
+| i9j0k1l2... | 2025-10-31 16:20:03 | dev      |         15 |          0 |      5 | 89.3           |
++-------------+---------------------+----------+------------+------------+--------+----------------+
 ```
 
 ### `jmo history show`
@@ -450,7 +448,6 @@ jmo history show a1b2c3d4-5e6f-7890-abcd-1234567890ab --json
 ```text
 Scan ID:       a1b2c3d4-5e6f-7890-abcd-1234567890ab
 Timestamp:     2025-11-02 14:30:15 (1730559015)
-Profile:       balanced
 Branch:        main
 Commit:        abc1234567890def
 Tag:           v1.2.3
@@ -657,11 +654,6 @@ Scans:            127
 Findings:         3,842
 Date Range:       2024-08-15 to 2025-11-02
 
-Scans by Profile:
-  balanced      89 scans
-  fast          28 scans
-  deep          10 scans
-
 Findings by Severity:
   CRITICAL        42  (1.1%)
   HIGH           385  (10.0%)
@@ -789,7 +781,7 @@ The history database uses SQLite with the following schema:
 
 **Tables:**
 
-- `scans` - Scan metadata (timestamp, profile, branch, tools, severity counts, CI metadata)
+- `scans` - Scan metadata (timestamp, branch, tools, severity counts, CI metadata)
 - `findings` - Individual findings (fingerprint, severity, rule, location, message, full CommonFinding JSON)
 - `compliance_mappings` - Framework mappings (OWASP, CWE, CIS, NIST, PCI-DSS, MITRE ATT&CK)
 - `schema_version` - Database schema version for migrations
@@ -810,6 +802,18 @@ The history database uses SQLite with the following schema:
 - **Encryption support**: `raw_finding` column can store encrypted data (Fernet format) when `--encrypt-findings` used
 - **File permissions**: Database file automatically set to `0o600` (owner-only) on Unix systems
 
+**Upgrading a pre-v2.0.0 database:**
+
+v2.0.0 removed scan profiles, so `scans` no longer has a `profile` column. `jmo history migrate`
+drops that column and its `idx_scans_profile` index from an older database in place, without
+rebuilding the table, so every stored scan and finding is kept. You do not have to run it by
+hand: the next scan stored with `--store-history` (or `jmo history store`) performs the same
+drop before it inserts.
+
+```bash
+jmo history migrate
+```
+
 **Database Location:**
 
 - Default: `.jmo/history.db` (relative to working directory)
@@ -825,10 +829,10 @@ The history database uses SQLite with the following schema:
 
 ```bash
 # Morning: Baseline scan
-jmo scan --repo ./myapp --profile balanced --store-history --branch dev
+jmo scan --repo ./myapp --store-history --branch dev
 
 # Afternoon: After changes
-jmo scan --repo ./myapp --profile balanced --store-history --branch dev
+jmo scan --repo ./myapp --store-history --branch dev
 
 # Compare with previous scan
 jmo history list --branch dev --limit 2
@@ -837,8 +841,8 @@ jmo history list --branch dev --limit 2
 ### Pre-Release Compliance Workflow
 
 ```bash
-# Run comprehensive scan before release
-jmo scan --repo ./myapp --profile deep --store-history --tag v1.2.3
+# Run a full scan before release
+jmo scan --repo ./myapp --store-history --tag v1.2.3
 
 # Generate compliance report
 jmo history query --severity CRITICAL --json > critical-findings.json
@@ -854,10 +858,10 @@ fi
 
 ```bash
 # Scan production branch
-jmo scan --repo ./myapp --profile balanced --store-history --branch main
+jmo scan --repo ./myapp --store-history --branch main
 
 # Scan staging branch
-jmo scan --repo ./myapp --profile balanced --store-history --branch staging
+jmo scan --repo ./myapp --store-history --branch staging
 
 # Compare results
 jmo history list --branch main --limit 1
@@ -868,7 +872,7 @@ jmo history list --branch staging --limit 1
 
 ```bash
 # Weekly scans stored over 3 months
-jmo scan --repo ./myapp --profile balanced --store-history
+jmo scan --repo ./myapp --store-history
 
 # View trends
 jmo history list --branch main --limit 12  # Last 12 scans
@@ -886,7 +890,7 @@ jmo history export --include-findings monthly-report.json
 ```yaml
 - name: Run security scan with history
   run: |
-    jmo scan --repo . --profile balanced --store-history
+    jmo scan --repo . --store-history
 
     # Upload database as artifact for trend tracking
     tar -czf history-db.tar.gz .jmo/history.db
@@ -904,7 +908,7 @@ jmo history export --include-findings monthly-report.json
 ```yaml
 security_scan:
   script:
-    - jmo scan --repo . --profile balanced --store-history --db scans.db
+    - jmo scan --repo . --store-history --db scans.db
     - jmo history stats --db scans.db
   artifacts:
     paths:
@@ -917,7 +921,7 @@ security_scan:
 ## Best Practices
 
 1. **Use `--store-history` flag** for automatic storage (no manual `history store` needed)
-2. **Consistent profiles** - Use same profile for trend comparisons (balanced vs balanced)
+2. **Consistent tool sets** - Compare scans run with the same tools (the same `--tools` or `jmo.yml` `tools:` list)
 3. **Regular pruning** - Run `jmo history prune` monthly to limit database size
 4. **Git integration** - Run scans in Git repos for automatic branch/commit tracking
 5. **CI artifact storage** - Upload `.jmo/history.db` as CI artifact for persistence
@@ -1478,7 +1482,7 @@ See [scripts/core/history_db.py](../scripts/core/history_db.py) for complete fun
 
 **For Developers:** The history database API (`scripts/core/history_db.py`) is designed for extensibility. Future features can use:
 
-- `list_scans(branch, since, profile)` - Time-series data for trend analysis
+- `list_scans(branch, since)` - Time-series data for trend analysis
 - `get_findings_for_scan(scan_id, severity)` - Finding details for comparisons
 - `get_database_stats()` - Aggregate statistics for dashboards
 

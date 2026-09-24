@@ -20,7 +20,7 @@ JMo Security supports 6 target types. This directory provides safe, ethical test
 ### Goals
 
 1. **No public app exposure** - All tests use public/local resources
-2. **Comprehensive coverage** - Test all 6 target types and all 29 tools
+2. **Comprehensive coverage** - Test all 6 target types and all 12 scanners
 3. **Reproducible** - Anyone can run the same benchmarks
 4. **Ethical** - Only scan resources we own or have permission to test
 
@@ -34,24 +34,24 @@ git clone https://github.com/OWASP/NodeGoat.git
 git clone https://github.com/OWASP/juice-shop.git
 
 # 2. Scan repositories
-jmo balanced --repos-dir /tmp/test-repos --results-dir results-repos
+jmo scan --repos-dir /tmp/test-repos --results-dir results-repos
 
 # 3. Scan container images
-jmo balanced --images-file samples/images.txt --results-dir results-images
+jmo scan --images-file samples/images.txt --results-dir results-images
 
 # 4. Scan IaC files
-jmo balanced --terraform-state samples/iac-files/terraform-aws-ec2.tf --results-dir results-iac
-jmo balanced --cloudformation samples/iac-files/cloudformation-s3.yaml --results-dir results-iac-cf
-jmo balanced --k8s-manifest samples/iac-files/kubernetes-deployment.yaml --results-dir results-iac-k8s
+jmo scan --terraform-state samples/iac-files/terraform-aws-ec2.tf --results-dir results-iac
+jmo scan --cloudformation samples/iac-files/cloudformation-s3.yaml --results-dir results-iac-cf
+jmo scan --k8s-manifest samples/iac-files/kubernetes-deployment.yaml --results-dir results-iac-k8s
 
 # 5. Scan web URLs (requires running local apps first)
 docker run -d -p 3000:3000 bkimminich/juice-shop
-jmo balanced --url http://localhost:3000 --results-dir results-web
+jmo scan --url http://localhost:3000 --results-dir results-web
 
 # 6. Scan Kubernetes cluster (requires local cluster)
 minikube start
 kubectl apply -f samples/iac-files/kubernetes-deployment.yaml
-jmo balanced --k8s-context minikube --k8s-namespace test-namespace --results-dir results-k8s
+jmo scan --k8s-context minikube --k8s-namespace test-namespace --results-dir results-k8s
 ```
 
 ## Target Type Details
@@ -80,7 +80,7 @@ echo 'eval(user_input)' > app.py
 git add . && git commit -m "Initial commit"
 
 # Scan
-jmo fast --repo ./dev-only/test-repos/fake-vulnerable-app
+jmo scan --repo ./dev-only/test-repos/fake-vulnerable-app
 ```
 
 **Your Own Repos:**
@@ -107,10 +107,10 @@ jmo fast --repo ./dev-only/test-repos/fake-vulnerable-app
 
 ```bash
 # Scan single image
-jmo balanced --image nginx:latest --results-dir results-nginx
+jmo scan --image nginx:latest --results-dir results-nginx
 
 # Scan batch from file
-jmo balanced --images-file samples/images.txt --results-dir results-images
+jmo scan --images-file samples/images.txt --results-dir results-images
 
 # Tools used: trivy (vulnerabilities), syft (SBOM)
 ```
@@ -137,13 +137,13 @@ jmo balanced --images-file samples/images.txt --results-dir results-images
 
 ```bash
 # Terraform
-jmo balanced --terraform-state samples/iac-files/terraform-aws-ec2.tf
+jmo scan --terraform-state samples/iac-files/terraform-aws-ec2.tf
 
 # CloudFormation
-jmo balanced --cloudformation samples/iac-files/cloudformation-s3.yaml
+jmo scan --cloudformation samples/iac-files/cloudformation-s3.yaml
 
 # Kubernetes manifest
-jmo balanced --k8s-manifest samples/iac-files/kubernetes-deployment.yaml
+jmo scan --k8s-manifest samples/iac-files/kubernetes-deployment.yaml
 
 # Tools used: checkov (policy-as-code), trivy (misconfigurations)
 ```
@@ -161,11 +161,11 @@ jmo balanced --k8s-manifest samples/iac-files/kubernetes-deployment.yaml
 ```bash
 # OWASP Juice Shop
 docker run -d -p 3000:3000 bkimminich/juice-shop
-# Then scan: jmo balanced --url http://localhost:3000
+# Then scan: jmo scan --url http://localhost:3000
 
 # DVWA
 docker run -d -p 80:80 vulnerables/web-dvwa
-# Then scan: jmo balanced --url http://localhost
+# Then scan: jmo scan --url http://localhost
 ```
 
 **IMPORTANT:**
@@ -178,10 +178,10 @@ docker run -d -p 80:80 vulnerables/web-dvwa
 
 ```bash
 # Single URL
-jmo balanced --url http://testphp.vulnweb.com --results-dir results-web
+jmo scan --url http://testphp.vulnweb.com --results-dir results-web
 
 # Batch from file
-jmo balanced --urls-file samples/web-urls.txt --results-dir results-web-batch
+jmo scan --urls-file samples/web-urls.txt --results-dir results-web-batch
 
 # Tools used: OWASP ZAP (DAST), Nuclei (API security)
 ```
@@ -198,7 +198,7 @@ jmo balanced --urls-file samples/web-urls.txt --results-dir results-web-batch
 
 ```bash
 # Use your own GitLab repos
-jmo balanced \
+jmo scan \
   --gitlab-repo mygroup/myrepo \
   --gitlab-token YOUR_TOKEN \
   --gitlab-url https://gitlab.com
@@ -226,7 +226,7 @@ minikube start
 kubectl apply -f samples/iac-files/kubernetes-deployment.yaml
 
 # Scan cluster
-jmo balanced \
+jmo scan \
   --k8s-context minikube \
   --k8s-namespace test-namespace \
   --results-dir results-k8s
@@ -242,7 +242,7 @@ Scan multiple target types in one command:
 
 ```bash
 # Comprehensive scan across all types
-jmo balanced \
+jmo scan \
   --repos-dir /tmp/test-repos \
   --images-file samples/images.txt \
   --terraform-state samples/iac-files/terraform-aws-ec2.tf \
@@ -257,21 +257,17 @@ open results-comprehensive/summaries/dashboard.html
 
 ## Performance Benchmarking
 
-Use `--profile` flag to capture timing data:
+Every scan writes per-tool run times to `scan-timings.json` in each target's
+`individual-*/<target>/` directory. Add `--profile` to `jmo report` to capture the
+report phase's per-adapter parse timings as well:
 
 ```bash
-jmo balanced --repos-dir /tmp/test-repos --profile --results-dir results
+jmo scan --repos-dir /tmp/test-repos --results-dir results
+jmo report results --profile
 
 # View timings
 cat results/summaries/timings.json
 ```
-
-**Typical Scan Times:**
-
-- **fast** profile: 5-10 minutes (9 tools)
-- **slim** profile: 12-18 minutes (13 tools)
-- **balanced** profile: 18-25 minutes (17 tools)
-- **deep** profile: 40-70 minutes (29 tools)
 
 ## Ethical Guidelines
 
@@ -295,7 +291,7 @@ cat results/summaries/timings.json
 
 | Target Type | Tools Used | Expected Findings |
 |-------------|------------|-------------------|
-| Repositories | trufflehog, semgrep, trivy, bandit, syft, checkov, hadolint, noseyparker, falco, afl++ | Secrets, SAST issues, dependencies |
+| Repositories | trufflehog, semgrep, syft, trivy, checkov, yara, grype; hadolint, shellcheck and gosec when Dockerfiles, shell scripts or Go sources are present | Secrets, SAST issues, dependencies |
 | Container Images | trivy, syft | CVEs, outdated packages, SBOM |
 | IaC Files | checkov, trivy | Misconfigurations, hardcoded secrets |
 | Web URLs | zap, nuclei | XSS, SQLi, CSRF, API issues |
@@ -323,22 +319,6 @@ cat results/summaries/timings.json
    open results/summaries/dashboard.html
    ```
 
-4. **Compare Profiles:**
-
-   ```bash
-   # Fast
-   jmo fast --repos-dir /tmp/test-repos --profile --results-dir results-fast
-
-   # Balanced
-   jmo balanced --repos-dir /tmp/test-repos --profile --results-dir results-balanced
-
-   # Deep
-   jmo full --repos-dir /tmp/test-repos --profile --results-dir results-deep
-
-   # Compare timings
-   diff results-fast/summaries/timings.json results-balanced/summaries/timings.json
-   ```
-
 ## Future Enhancements
 
 ### Future Enhancements
@@ -349,7 +329,7 @@ The following areas are planned for future development. See [docs/USER_GUIDE.md]
 - **Documentation improvements** -- Benchmarking examples in main docs, performance baseline documentation, CI/CD integration examples
 - **Testing improvements** -- Integration tests using samples/, regression testing with before/after comparisons
 - **Community contributions** -- Language-specific examples, framework-specific IaC, industry-specific compliance test cases
-- **Metrics and analytics** -- Scan time tracking per tool/profile, finding count trends, tool reliability metrics
+- **Metrics and analytics** -- Scan time tracking per tool, finding count trends, tool reliability metrics
 
 ## Contributing Improvements
 
@@ -366,8 +346,8 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for development setup.
 **"Tool not found" errors:**
 
 ```bash
-jmo tools check --profile balanced    # Check which tools are installed
-jmo tools install --profile balanced  # Install missing tools
+jmo tools check    # Check which tools are installed
+jmo tools install  # Install missing tools
 ```
 
 **Docker image pull failures:**

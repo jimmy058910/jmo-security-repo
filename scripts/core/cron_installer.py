@@ -3,7 +3,7 @@
 Installs ScanSchedule objects to system crontab on Linux/macOS.
 Windows is not supported (use GitHub Actions or GitLab CI instead).
 
-Security: All user inputs (schedule names, profiles, paths) are validated
+Security: All user inputs (schedule names, paths, URLs) are validated
 before inclusion in crontab entries to prevent command injection.
 """
 
@@ -19,7 +19,6 @@ from scripts.core.validation import (
     validate_cron_expression,
     validate_path_safe,
     validate_positive_int,
-    validate_profile,
     validate_schedule_name,
     validate_url,
 )
@@ -250,8 +249,8 @@ class CronInstaller:
         """Generate cron entry for schedule.
 
         Format:
-            # JMo Security Schedule: nightly-deep
-            0 2 * * * jmo scan --profile-name deep --repos-dir ~/repos --results-dir ~/jmo-results/$(date +%Y-%m-%d)
+            # JMo Security Schedule: nightly
+            0 2 * * * jmo scan --repos-dir ~/repos --results-dir ~/jmo-results/$(date +%Y-%m-%d)
             # End JMo Schedule
 
         Args:
@@ -277,15 +276,8 @@ class CronInstaller:
                 f"Expected 5-field cron format (e.g., '0 2 * * *')."
             )
 
-        # Security: Validate profile name
-        if not validate_profile(spec.profile):
-            raise CronValidationError(
-                f"Invalid profile: '{spec.profile}'. "
-                f"Valid profiles: fast, slim, balanced, deep."
-            )
-
         # Build jmo command with validated inputs
-        jmo_cmd = f"jmo scan --profile-name {spec.profile}"
+        jmo_cmd = "jmo scan"
 
         # Add targets with validation
         targets = spec.targets

@@ -4,11 +4,10 @@
 This test suite provides ≥85% coverage for scripts/core/config.py, testing:
 1. Config dataclass defaults and initialization
 2. load_config() function with various file states
-3. Profile loading (fast/balanced/deep)
-4. Per-tool overrides
-5. PolicyConfig and policy loading
-6. Environment variable overrides (load_config_with_env_overrides)
-7. Edge cases and error handling
+3. Per-tool overrides
+4. PolicyConfig and policy loading
+5. Environment variable overrides (load_config_with_env_overrides)
+6. Edge cases and error handling
 
 Target Coverage: ≥85%
 """
@@ -16,6 +15,8 @@ Target Coverage: ≥85%
 from pathlib import Path
 
 import pytest
+
+from scripts.core.tool_registry import TOOL_MATRIX
 
 
 def write_yaml_file(tmp_path: Path, filename: str, content: str) -> Path:
@@ -34,19 +35,9 @@ def test_config_default_values():
 
     cfg = Config()
 
-    # Verify default tools list
+    # The default is the whole matrix, read from the registry (no profiles)
     assert isinstance(cfg.tools, list)
-    assert len(cfg.tools) == 7
-    expected_tools = [
-        "trufflehog",
-        "semgrep",
-        "syft",
-        "trivy",
-        "checkov",
-        "hadolint",
-        "zap",
-    ]
-    assert cfg.tools == expected_tools
+    assert cfg.tools == list(TOOL_MATRIX)
 
     # Verify default outputs
     assert isinstance(cfg.outputs, list)
@@ -66,8 +57,6 @@ def test_config_default_values():
     assert cfg.exclude == []
     assert cfg.timeout is None
     assert cfg.log_level == "INFO"
-    assert cfg.default_profile is None
-    assert cfg.profiles == {}
     assert cfg.per_tool == {}
     assert cfg.retries == 0
     assert cfg.profiling_min_threads == 2
@@ -112,7 +101,7 @@ def test_load_config_none_path():
     cfg = load_config(None)
 
     assert isinstance(cfg.tools, list)
-    assert len(cfg.tools) == 7
+    assert cfg.tools == list(TOOL_MATRIX)
     assert cfg.log_level == "INFO"
 
 
@@ -123,7 +112,7 @@ def test_load_config_nonexistent_file(tmp_path: Path):
     cfg = load_config(str(tmp_path / "nonexistent.yml"))
 
     assert isinstance(cfg.tools, list)
-    assert len(cfg.tools) == 7
+    assert cfg.tools == list(TOOL_MATRIX)
 
 
 def test_load_config_empty_file(tmp_path: Path):
@@ -134,7 +123,7 @@ def test_load_config_empty_file(tmp_path: Path):
     cfg = load_config(str(yaml_file))
 
     # Should return defaults
-    assert len(cfg.tools) == 7
+    assert cfg.tools == list(TOOL_MATRIX)
     assert cfg.outputs == [
         "json",
         "md",
@@ -194,7 +183,7 @@ tools: "not-a-list"
     cfg = load_config(str(yaml_file))
 
     # Should use defaults
-    assert len(cfg.tools) == 7
+    assert cfg.tools == list(TOOL_MATRIX)
 
 
 def test_load_config_outputs_list(tmp_path: Path):
@@ -471,105 +460,6 @@ log_level: INVALID
     cfg = load_config(str(yaml_file))
 
     assert cfg.log_level == "INFO"  # Should use default
-
-
-# ========== Category 9: Default Profile Configuration ==========
-
-
-def test_load_config_default_profile(tmp_path: Path):
-    """Test default_profile setting."""
-    from scripts.core.config import load_config
-
-    yaml_content = """
-default_profile: fast
-"""
-    yaml_file = write_yaml_file(tmp_path, "profile.yml", yaml_content)
-    cfg = load_config(str(yaml_file))
-
-    assert cfg.default_profile == "fast"
-
-
-def test_load_config_default_profile_strips_whitespace(tmp_path: Path):
-    """Test default_profile strips whitespace."""
-    from scripts.core.config import load_config
-
-    yaml_content = """
-default_profile: "  balanced  "
-"""
-    yaml_file = write_yaml_file(tmp_path, "profile_spaces.yml", yaml_content)
-    cfg = load_config(str(yaml_file))
-
-    assert cfg.default_profile == "balanced"
-
-
-def test_load_config_default_profile_empty_string(tmp_path: Path):
-    """Test empty default_profile becomes None."""
-    from scripts.core.config import load_config
-
-    yaml_content = """
-default_profile: ""
-"""
-    yaml_file = write_yaml_file(tmp_path, "profile_empty.yml", yaml_content)
-    cfg = load_config(str(yaml_file))
-
-    assert cfg.default_profile is None
-
-
-# ========== Category 10: Profiles Configuration ==========
-
-
-def test_load_config_profiles_dict(tmp_path: Path):
-    """Test profiles as dictionary."""
-    from scripts.core.config import load_config
-
-    yaml_content = """
-profiles:
-  fast:
-    tools: [trufflehog, semgrep]
-    timeout: 300
-  balanced:
-    tools: [trufflehog, semgrep, trivy]
-    timeout: 600
-  deep:
-    tools: [trufflehog, semgrep, bandit, trivy]
-    timeout: 900
-"""
-    yaml_file = write_yaml_file(tmp_path, "profiles.yml", yaml_content)
-    cfg = load_config(str(yaml_file))
-
-    assert isinstance(cfg.profiles, dict)
-    assert "fast" in cfg.profiles
-    assert "balanced" in cfg.profiles
-    assert "deep" in cfg.profiles
-    assert cfg.profiles["fast"]["timeout"] == 300
-    assert cfg.profiles["balanced"]["timeout"] == 600
-    assert cfg.profiles["deep"]["timeout"] == 900
-
-
-def test_load_config_profiles_empty(tmp_path: Path):
-    """Test empty profiles dict."""
-    from scripts.core.config import load_config
-
-    yaml_content = """
-profiles: {}
-"""
-    yaml_file = write_yaml_file(tmp_path, "profiles_empty.yml", yaml_content)
-    cfg = load_config(str(yaml_file))
-
-    assert cfg.profiles == {}
-
-
-def test_load_config_profiles_not_dict(tmp_path: Path):
-    """Test profiles ignored if not a dict."""
-    from scripts.core.config import load_config
-
-    yaml_content = """
-profiles: "invalid"
-"""
-    yaml_file = write_yaml_file(tmp_path, "profiles_invalid.yml", yaml_content)
-    cfg = load_config(str(yaml_file))
-
-    assert cfg.profiles == {}
 
 
 # ========== Category 11: Per-Tool Configuration ==========
@@ -981,37 +871,6 @@ tools:
     assert config.policy.fail_on_violation is False
 
 
-def test_load_config_policy_profile_override(tmp_path: Path):
-    """Test profile-specific policy overrides work correctly."""
-    from scripts.core.config import load_config
-
-    config_file = write_yaml_file(
-        tmp_path,
-        "jmo.yml",
-        """
-default_profile: balanced
-
-policy:
-  default_policies:
-    - zero-secrets
-
-profiles:
-  balanced:
-    policy:
-      default_policies:
-        - owasp-top-10
-        - zero-secrets
-      fail_on_violation: false
-""",
-    )
-
-    config = load_config(str(config_file))
-
-    # Default profile is balanced, should use balanced policies
-    assert config.policy.default_policies == ["owasp-top-10", "zero-secrets"]
-    assert config.policy.fail_on_violation is False
-
-
 # ========== Category 16: Environment Variable Overrides ==========
 
 
@@ -1112,17 +971,6 @@ exclude:
   - "tests/**"
 timeout: 600
 log_level: DEBUG
-default_profile: balanced
-profiles:
-  fast:
-    tools: [trufflehog, semgrep]
-    timeout: 300
-  balanced:
-    tools: [trufflehog, semgrep, trivy]
-    timeout: 600
-  deep:
-    tools: [trufflehog, semgrep, bandit, trivy]
-    timeout: 900
 per_tool:
   semgrep:
     timeout: 1200
@@ -1151,10 +999,6 @@ policy:
     assert cfg.exclude == ["tests/**"]
     assert cfg.timeout == 600
     assert cfg.log_level == "DEBUG"
-    assert cfg.default_profile == "balanced"
-    assert "fast" in cfg.profiles
-    assert "balanced" in cfg.profiles
-    assert "deep" in cfg.profiles
     assert "semgrep" in cfg.per_tool
     assert "trivy" in cfg.per_tool
     assert cfg.retries == 1
@@ -1195,7 +1039,7 @@ def test_load_config_null_values(tmp_path: Path):
     yaml_content = """
 threads: null
 timeout: null
-default_profile: null
+per_tool: null
 """
     yaml_file = write_yaml_file(tmp_path, "nulls.yml", yaml_content)
     cfg = load_config(str(yaml_file))
@@ -1203,7 +1047,7 @@ default_profile: null
     # Nulls should be treated as missing (use defaults)
     assert cfg.threads is None
     assert cfg.timeout is None
-    assert cfg.default_profile is None
+    assert cfg.per_tool == {}
 
 
 def test_load_config_mixed_types_in_lists(tmp_path: Path):

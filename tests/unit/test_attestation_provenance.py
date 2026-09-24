@@ -51,7 +51,6 @@ class TestProvenanceModels:
         build_def = BuildDefinition(
             buildType="https://jmotools.com/jmo-scan/v1",
             externalParameters={
-                "profile": "balanced",
                 "targets": ["repo1"],
                 "tools": ["trivy", "semgrep"],
             },
@@ -60,7 +59,7 @@ class TestProvenanceModels:
         )
 
         assert build_def.buildType == "https://jmotools.com/jmo-scan/v1"
-        assert build_def.externalParameters["profile"] == "balanced"
+        assert build_def.externalParameters["targets"] == ["repo1"]
         assert "trivy" in build_def.externalParameters["tools"]
 
     def test_run_details_model(self):
@@ -205,7 +204,6 @@ class TestProvenanceGeneration:
         findings = {
             "meta": {
                 "jmo_version": "1.0.0",
-                "profile": "balanced",
                 "tools": ["trivy", "semgrep"],
                 "target_count": 1,
             },
@@ -225,7 +223,6 @@ class TestProvenanceGeneration:
         generator = ProvenanceGenerator()
         provenance = generator.generate(
             findings_path=sample_findings_file,
-            profile="balanced",
             tools=["trivy", "semgrep"],
             targets=["repo1"],
         )
@@ -243,7 +240,6 @@ class TestProvenanceGeneration:
         generator = ProvenanceGenerator()
         provenance = generator.generate(
             findings_path=sample_findings_file,
-            profile="balanced",
             tools=["trivy"],
             targets=["repo1"],
         )
@@ -260,7 +256,6 @@ class TestProvenanceGeneration:
         generator = ProvenanceGenerator()
         provenance = generator.generate(
             findings_path=sample_findings_file,
-            profile="balanced",
             tools=["trivy", "semgrep"],
             targets=["repo1", "image1"],
         )
@@ -268,7 +263,6 @@ class TestProvenanceGeneration:
         build_def = provenance["predicate"]["buildDefinition"]
 
         # External parameters (user-provided)
-        assert build_def["externalParameters"]["profile"] == "balanced"
         assert "trivy" in build_def["externalParameters"]["tools"]
         assert "semgrep" in build_def["externalParameters"]["tools"]
         assert "repo1" in build_def["externalParameters"]["targets"]
@@ -287,7 +281,6 @@ class TestProvenanceGeneration:
 
         provenance = ProvenanceGenerator().generate(
             findings_path=sample_findings_file,
-            profile="balanced",
             tools=["trivy"],
             targets=["repo1"],
             threads=8,
@@ -305,7 +298,6 @@ class TestProvenanceGeneration:
         generator = ProvenanceGenerator()
         provenance = generator.generate(
             findings_path=sample_findings_file,
-            profile="balanced",
             tools=["trivy"],
             targets=["repo1"],
         )
@@ -331,7 +323,6 @@ class TestProvenanceGeneration:
         generator = ProvenanceGenerator()
         provenance = generator.generate(
             findings_path=sample_findings_file,
-            profile="balanced",
             tools=["trivy"],
             targets=["repo1"],
         )

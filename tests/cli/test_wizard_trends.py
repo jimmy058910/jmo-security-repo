@@ -34,7 +34,6 @@ def mock_db(tmp_path):
         CREATE TABLE scans (
             id TEXT PRIMARY KEY,
             timestamp_iso TEXT,
-            profile TEXT,
             branch TEXT,
             total_findings INTEGER
         )
@@ -60,12 +59,12 @@ def mock_db(tmp_path):
 
     # Insert test scans
     test_scans = [
-        ("scan1", "2025-11-01T10:00:00", "balanced", "main", 10),
-        ("scan2", "2025-11-02T10:00:00", "balanced", "main", 8),
-        ("scan3", "2025-11-03T10:00:00", "balanced", "main", 5),
+        ("scan1", "2025-11-01T10:00:00", "main", 10),
+        ("scan2", "2025-11-02T10:00:00", "main", 8),
+        ("scan3", "2025-11-03T10:00:00", "main", 5),
     ]
 
-    cursor.executemany("INSERT INTO scans VALUES (?, ?, ?, ?, ?)", test_scans)
+    cursor.executemany("INSERT INTO scans VALUES (?, ?, ?, ?)", test_scans)
 
     # Insert test findings
     test_findings = [
@@ -709,14 +708,12 @@ def test_compare_scans_nonzero_result(tmp_path, mock_db, capsys):
         {
             "id": "scan1",
             "timestamp_iso": "2025-11-01",
-            "profile": "balanced",
             "branch": "main",
             "total_findings": 10,
         },
         {
             "id": "scan2",
             "timestamp_iso": "2025-11-02",
-            "profile": "balanced",
             "branch": "main",
             "total_findings": 8,
         },

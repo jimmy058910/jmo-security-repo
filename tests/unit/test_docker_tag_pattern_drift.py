@@ -1,30 +1,28 @@
 #!/usr/bin/env python3
-"""Drift guard for invalid Docker tag references in docs, scripts, and tests.
+"""Drift guard for Docker tag references GHCR does not publish.
 
-GHCR publishes a specific set of tag patterns per `docker/metadata-action`
-config in `.github/workflows/release.yml`. The canonical schema is:
+Since v2.0.0 there is one image, and the `docker/metadata-action` config in
+`.github/workflows/release.yml` tags it two ways only:
 
-    :latest                       (deep only — bare, no variant suffix)
-    :<variant>                    (deep, balanced, slim, fast)
-    :<X>.<Y>.<Z>                  (deep only — bare semver)
-    :<X>.<Y>.<Z>-<variant>        (deep, balanced, slim, fast)
-    :full                         (legacy alias for deep, one-cycle backward-compat)
+    :latest
+    :<X>.<Y>.<Z>
 
-There is intentionally NO `:latest-deep`, `:latest-balanced`, `:latest-slim`,
-`:latest-fast`, or `:latest-full`. Pulls of those will fail with "manifest
-unknown".
+v1.x published four variants as `:deep`, `:balanced`, `:slim` and `:fast` (with
+`:full` a legacy alias for deep), plus `:<X>.<Y>.<Z>-<variant>`. Those tags
+still exist on GHCR, frozen, so a reference to one does not fail: it pulls a
+v1.x image and runs old code without a word. `:latest-<variant>` never existed
+at all, and pulls of it fail with "manifest unknown".
 
-This test catches references to forbidden tag patterns BEFORE they ship
-to user-facing docs. Three such bugs slipped through despite documentation
-in `.claude/rules/docker.rules.md` saying "DON'T use these" — that doc-only
-approach didn't catch the actual regressions in `TEST.md`, `tests/e2e/README.md`,
-and `docs/SCHEDULE_GUIDE.md` (all fixed in this PR).
+This test catches references to any of those forms BEFORE they ship. It began
+with `:latest-<variant>`, after three such bugs slipped through despite
+documentation in `.claude/rules/docker.rules.md` saying "DON'T use these" — that
+doc-only approach didn't catch the actual regressions in `TEST.md`,
+`tests/e2e/README.md`, and `docs/SCHEDULE_GUIDE.md`.
 
 Allowlist: certain files legitimately reference forbidden patterns as
 documentation or historical record:
 - `CHANGELOG.md` — frozen historical entries
-- `.claude/rules/*.md` — explicit "DON'T use these" warnings
-- `.github/workflows/release.yml` — comments explaining the workaround
+- Two v1.1.0 announcements under `paperclip/content/social/`
 - This test file itself — names the patterns it tests for
 """
 
@@ -45,6 +43,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 ALLOWLISTED_PATHS: set[str] = {
     "CHANGELOG.md",
     "tests/unit/test_docker_tag_pattern_drift.py",
+    # Announcements of v1.1.0, which published the variant tags they name.
+    "paperclip/content/social/reddit_cybersecurity_v110_announcement.md",
+    "paperclip/content/social/reddit_devops_v110_announcement.md",
 }
 
 # File extensions to scan. Matches what user-facing docs and CI surfaces use.
@@ -56,11 +57,6 @@ SKIP_DIR_NAMES: set[str] = {
     ".git",
     ".venv",
     "venv",
-    # An interrupted horusec scan leaves a full copy of the repo here (#1088):
-    # 3.6 GB / 12,081 files including a nested .venv with paths Windows
-    # reports as too long. This walk descended into it and the xdist worker
-    # running the test crashed (#1105).
-    ".horusec",
     "node_modules",
     "build",
     "dist",
@@ -70,6 +66,10 @@ SKIP_DIR_NAMES: set[str] = {
     ".mypy_cache",
     "htmlcov",
     "dev-only",  # Internal archive, explicitly not published per CLAUDE.md
+    # Gitignored (`/metrics/`): dated Docker Hub API snapshots on the
+    # maintainer's machine, each a frozen copy of the Hub description. Not
+    # repository content, and absent from a clone.
+    "metrics",
     # A nested git worktree is a *second checkout*, not repository content.
     # `.claude/worktrees/release-v107` held a pre-squash copy of CHANGELOG.md
     # whose historical `:latest-full` / `:latest-slim` references tripped this
@@ -78,11 +78,14 @@ SKIP_DIR_NAMES: set[str] = {
     "worktrees",
 }
 
-# The forbidden pattern: any GHCR jmo-security image with a `:latest-<suffix>` tag.
-# Matches `ghcr.io/<owner>/jmo-security:latest-<anything>` where suffix is one of
-# the variant names. The `\b` ensures we don't match `:latest-special-foo` etc.
+# The forbidden pattern: any GHCR jmo-security image tagged with a variant name,
+# bare (`:slim`), after `latest-` (`:latest-slim`) or after a semver
+# (`:1.1.1-slim`). The two published forms, `:latest` and a bare semver, carry
+# no variant name and never match. The `\b` ensures we don't match
+# `:latest-special-foo` etc.
 FORBIDDEN_TAG_PATTERN = re.compile(
-    r"ghcr\.io/[^/\s]+/jmo-security:latest-(deep|balanced|slim|fast|full)\b"
+    r"ghcr\.io/[^/\s]+/jmo-security:"
+    r"(?:latest-|v?\d+\.\d+\.\d+-)?(deep|balanced|slim|fast|full)\b"
 )
 
 
@@ -106,12 +109,13 @@ def _relative_posix(path: Path) -> str:
     return str(path.relative_to(REPO_ROOT)).replace("\\", "/")
 
 
-def test_no_forbidden_latest_variant_tags_outside_allowlist() -> None:
-    """No file outside the documentation allowlist may reference a `:latest-<variant>` tag.
+def test_no_variant_tags_outside_allowlist() -> None:
+    """No file outside the documentation allowlist may reference a variant tag.
 
-    GHCR doesn't publish `:latest-deep`, `:latest-balanced`, `:latest-slim`,
-    `:latest-fast`, or `:latest-full`. Any such reference in user-facing docs
-    or CI scripts will fail at `docker pull` time with "manifest unknown".
+    GHCR publishes `:latest` and `:<X>.<Y>.<Z>` only. A `:latest-<variant>`
+    reference fails at `docker pull` time with "manifest unknown"; a
+    `:<variant>` or `:<X>.<Y>.<Z>-<variant>` reference pulls a frozen v1.x
+    image and fails nowhere, which is worse.
 
     See `.claude/rules/docker.rules.md` "Published Tag Schema" for the
     canonical list of supported tags.
@@ -130,11 +134,11 @@ def test_no_forbidden_latest_variant_tags_outside_allowlist() -> None:
             violations.append(f"{rel}:{line_num} - {match.group(0)}")
 
     assert not violations, (
-        "Found references to forbidden Docker tag patterns. GHCR does not "
-        "publish `:latest-<variant>` tags — `:latest` is bare (deep only) "
-        "and bare variants are `:deep`, `:balanced`, `:slim`, `:fast`. "
-        "Replace `:latest-deep` / `:latest-full` → `:latest`, and "
-        "`:latest-<other>` → `:<other>`.\n"
+        "Found references to Docker tags GHCR does not publish. Since v2.0.0 "
+        "there is one image, tagged `:latest` and `:<X>.<Y>.<Z>` only; the "
+        "v1.x variant tags still exist, frozen, so pinning one runs a v1.x "
+        "image without any error. Replace `:<variant>`, `:latest-<variant>` "
+        "and `:<X>.<Y>.<Z>-<variant>` with `:latest` or the bare semver.\n"
         "Violations:\n  " + "\n  ".join(violations) + "\n\n"
         "See .claude/rules/docker.rules.md 'Published Tag Schema' for the "
         "canonical tag list. If a NEW file legitimately needs to mention "
@@ -172,3 +176,28 @@ def test_allowlist_paths_actually_contain_forbidden_pattern(allowed_path: str) -
         f"{allowed_path} is in ALLOWLISTED_PATHS but contains no forbidden "
         f"tag pattern. Remove it from the allowlist."
     )
+
+
+@pytest.mark.parametrize(
+    ("reference", "forbidden"),
+    [
+        ("ghcr.io/o/jmo-security:latest", False),
+        ("ghcr.io/o/jmo-security:2.0.0", False),
+        ("ghcr.io/o/jmo-security:latest-special-foo", False),
+        ("ghcr.io/o/jmo-security:deep", True),
+        ("ghcr.io/o/jmo-security:slim", True),
+        ("ghcr.io/o/jmo-security:full", True),
+        ("ghcr.io/o/jmo-security:1.1.1-balanced", True),
+        ("ghcr.io/o/jmo-security:latest-fast", True),
+    ],
+)
+def test_pattern_separates_published_tags_from_variant_tags(
+    reference: str, forbidden: bool
+) -> None:
+    """The pattern rejects every variant form and accepts both published tags.
+
+    The scan above passes whenever the pattern matches nothing, so a pattern
+    that matched nothing at all would pass it too. These fix what it must match
+    and what it must leave alone.
+    """
+    assert (FORBIDDEN_TAG_PATTERN.search(reference) is not None) is forbidden

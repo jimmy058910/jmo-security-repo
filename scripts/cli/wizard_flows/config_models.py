@@ -14,6 +14,32 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+# What a scan uses when neither the wizard nor jmo.yml sets threads/timeout.
+# The same values as the shipped jmo.yml's top level.
+DEFAULT_THREADS = 4
+DEFAULT_TIMEOUT = 600
+
+
+def scan_defaults(config_path: str = "jmo.yml") -> tuple[int, int]:
+    """Threads and per-tool timeout a scan gets when the wizard sets neither.
+
+    Read from the top level of jmo.yml (what `jmo scan` itself falls back to),
+    else DEFAULT_THREADS / DEFAULT_TIMEOUT. `threads: auto` has no number to
+    show, so it reads as the default too.
+
+    Args:
+        config_path: jmo.yml to read; a missing file means the defaults.
+
+    Returns:
+        (threads, timeout_seconds)
+    """
+    from scripts.core.config import load_config
+
+    cfg = load_config(config_path)
+    threads = cfg.threads if isinstance(cfg.threads, int) else DEFAULT_THREADS
+    timeout = cfg.timeout or DEFAULT_TIMEOUT
+    return threads, timeout
+
 
 class TargetConfig:
     """Target-specific configuration for a single scan target."""
@@ -80,12 +106,11 @@ class WizardConfig:
     """Configuration collected by the wizard.
 
     Attributes:
-        profile: Scanning profile (fast/slim/balanced/deep)
         use_docker: Whether to use Docker execution mode
         target: Target-specific configuration
         results_dir: Directory for scan results
-        threads: Number of parallel threads (None = use profile default)
-        timeout: Per-tool timeout in seconds (None = use profile default)
+        threads: Number of parallel threads (None = jmo.yml / scan default)
+        timeout: Per-tool timeout in seconds (None = jmo.yml / scan default)
         fail_on: Severity threshold for CI failures (empty = don't fail)
         allow_missing_tools: Whether to continue if some tools are missing
         human_logs: Whether to use human-readable log format
@@ -100,7 +125,6 @@ class WizardConfig:
     _custom_db_path: str | None = None
 
     def __init__(self) -> None:
-        self.profile: str = "balanced"
         self.use_docker: bool = False
         self.target: TargetConfig = TargetConfig()
         self.results_dir: str = "results"
@@ -139,7 +163,6 @@ class WizardConfig:
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
-            "profile": self.profile,
             "use_docker": self.use_docker,
             "target": self.target.to_dict(),
             "results_dir": self.results_dir,

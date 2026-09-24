@@ -16,11 +16,10 @@ from typing import TYPE_CHECKING
 from scripts.cli.tool_manager import (
     ToolManager,
     ToolStatus,
-    print_profile_summary,
     print_tool_status_table,
 )
 from scripts.core.paths import clean_isolated_venvs
-from scripts.core.tool_registry import PROFILE_TOOLS, ToolRegistry
+from scripts.core.tool_registry import POLICY_ENGINE, TOOL_MATRIX, ToolRegistry
 
 if TYPE_CHECKING:
     pass
@@ -108,123 +107,91 @@ def cmd_tools(args: argparse.Namespace) -> int:
     return cmd_tools_check(args)
 
 
+def _status_json(status: ToolStatus) -> dict:
+    """The machine-readable fields of one tool's status."""
+    return {
+        "installed": status.installed,
+        "installed_version": status.installed_version,
+        "expected_version": status.expected_version,
+        "is_outdated": status.is_outdated,
+        "is_critical": status.is_critical,
+        "execution_ready": status.execution_ready,
+        "binary_path": status.binary_path,
+    }
+
+
 def cmd_tools_check(args: argparse.Namespace) -> int:
     """
     Check tool installation status.
 
     Usage:
-        jmo tools check                    # Check all tools
-        jmo tools check --profile balanced # Check tools for profile
+        jmo tools check                    # Every scanner, plus the policy engine
         jmo tools check trivy semgrep      # Check specific tools
 
+    With no tool names the table is the scan matrix (TOOL_MATRIX) and the
+    policy engine gets a line of its own below it: opa evaluates policies in
+    the report phase and scans nothing, so it is not one of the scanners.
+
     Returns:
-        0 if all tools present, 1 if missing tools
+        0 when every checked tool is installed and able to run, 1 otherwise
     """
     manager = ToolManager()
-    profile = getattr(args, "profile", None)
     tools = getattr(args, "tools", None) or []
     output_json = getattr(args, "json", False)
 
-    # Determine what to check
+    policy_engine: ToolStatus | None = None
     if tools:
         statuses = {t: manager.check_tool(t) for t in tools}
         title = f"Tool Status ({len(tools)} tools)"
-    elif profile:
-        statuses = manager.check_profile(profile)
-        title = f"Tool Status for '{profile}' profile ({len(statuses)} tools)"
     else:
-        # Default: show profile summary across every profile.
-        #
-        # The exit code follows the same contract as the --profile path: a
-        # missing tool is a missing tool, and manual-install tools count exactly
-        # as they do there. Readiness used to be computed and then discarded --
-        # this branch returned 0 unconditionally while the JSON it printed said
-        # "ready": false for all four profiles -- so `jmo tools check` used as a
-        # CI gate passed with scanners missing (#788).
-        #
-        # ToolManager memoises per-tool status, so asking for the summaries here
-        # and again inside print_profile_summary costs cache hits, not probes.
-        summaries = {p: manager.get_profile_summary(p) for p in PROFILE_TOOLS}
-        missing_rc = 1 if any(s.get("missing", 0) for s in summaries.values()) else 0
+        statuses = manager.check_matrix()
+        policy_engine = manager.check_tool(POLICY_ENGINE)
+        title = f"Tool Status ({len(statuses)} scanners)"
 
-        if output_json:
-            print(json.dumps(summaries, indent=2))
-            return missing_rc
+    everything = list(statuses.values()) + ([policy_engine] if policy_engine else [])
+    # A tool that cannot run contributes nothing to a scan, the same as a
+    # missing one, so both fail the check (#788, #1136).
+    rc = 0 if all(s.installed and s.execution_ready for s in everything) else 1
 
-        print_profile_summary(manager, colorize)
-
-        # Also check critical outdated
-        critical = manager.get_critical_outdated()
-        if critical:
-            print(
-                colorize(f"\n{len(critical)} critical tool(s) need updates:", "yellow")
-            )
-            for s in critical:
-                print(f"  - {s.name}: {s.installed_version} -> {s.expected_version}")
-            print("\nRun `jmo tools update --critical-only` to update")
-
-        return missing_rc
-
-    # JSON output
     if output_json:
-        data = {
-            name: {
-                "installed": s.installed,
-                "installed_version": s.installed_version,
-                "expected_version": s.expected_version,
-                "is_outdated": s.is_outdated,
-                "is_critical": s.is_critical,
-                "binary_path": s.binary_path,
-                "manual_install": s.manual_install,
+        data: dict = {"tools": {name: _status_json(s) for name, s in statuses.items()}}
+        if policy_engine is not None:
+            data["policy_engine"] = {
+                "name": POLICY_ENGINE,
+                **_status_json(policy_engine),
             }
-            for name, s in statuses.items()
-        }
         print(json.dumps(data, indent=2))
-        missing = [s for s in statuses.values() if not s.installed]
-        return 1 if missing else 0
+        return rc
 
     # Print table
     print(f"\n{title}\n")
     print_tool_status_table(statuses, colorize, show_hints=True)
 
-    # Summary — distinguish auto-installable missing from manual-install tools
-    # A tool with no build for this platform is neither missing nor
-    # manual-install: there is nothing to install and no manual route either.
-    # Counting it as missing is what produced "2 tool(s) missing / Run
-    # `jmo tools install --profile deep` to install" for noseyparker and
-    # scancode on Windows, followed by the installer refusing both.
-    unsupported = [
-        s for s in statuses.values() if not s.installed and not s.platform_supported
-    ]
-    real_missing = [
-        s
-        for s in statuses.values()
-        if not s.installed and not s.manual_install and s.platform_supported
-    ]
-    manual_missing = [
-        s
-        for s in statuses.values()
-        if not s.installed and s.manual_install and s.platform_supported
-    ]
+    if policy_engine is not None:
+        if not policy_engine.installed:
+            engine = (
+                colorize("MISSING", "red") + f" -> jmo tools install {POLICY_ENGINE}"
+            )
+        elif not policy_engine.execution_ready:
+            engine = colorize("NOT READY", "yellow") + (
+                f" - {policy_engine.execution_warning}"
+                if policy_engine.execution_warning
+                else ""
+            )
+        else:
+            engine = (
+                colorize("OK", "green") + f" {policy_engine.installed_version or '-'}"
+            )
+        print(f"\nPolicy engine: {POLICY_ENGINE}  {engine}")
+
+    missing = [s for s in everything if not s.installed]
     outdated = [s for s in statuses.values() if s.is_outdated]
     # Installed and unable to run. For a scan this is the same outcome as
-    # missing - dependency-check without Java exits 1 and writes nothing - so
-    # it belongs in the summary and in the exit code, not only in the table
-    # (#1136).
-    not_ready = [s for s in statuses.values() if s.installed and not s.execution_ready]
+    # missing - zap without Java exits 1 and writes nothing - so it belongs in
+    # the summary and in the exit code, not only in the table (#1136).
+    not_ready = [s for s in everything if s.installed and not s.execution_ready]
 
     print()
-    if unsupported:
-        print(
-            colorize(
-                f"{len(unsupported)} tool(s) not available on this platform",
-                "yellow",
-            )
-        )
-        for s in unsupported:
-            hows = ", ".join(s.platform_workarounds or []) or "none"
-            print(f"  - {s.name}: {s.platform_reason or 'unsupported'} (try: {hows})")
-
     if not_ready:
         print(
             colorize(
@@ -235,35 +202,9 @@ def cmd_tools_check(args: argparse.Namespace) -> int:
         for s in not_ready:
             print(f"  - {s.name}: {s.execution_warning or 'cannot run'}")
 
-    if real_missing:
-        print(colorize(f"{len(real_missing)} tool(s) missing", "red"))
-        print(
-            "Run `jmo tools install"
-            + (f" --profile {profile}" if profile else "")
-            + "` to install"
-        )
-        if manual_missing:
-            print(
-                colorize(
-                    f"{len(manual_missing)} tool(s) require manual install",
-                    "cyan",
-                )
-            )
-            print("  See: docs/MANUAL_INSTALLATION.md")
-        return 1
-
-    if manual_missing:
-        print(
-            colorize(
-                f"{len(manual_missing)} tool(s) require manual install",
-                "cyan",
-            )
-        )
-        print("  See: docs/MANUAL_INSTALLATION.md")
-        # rc=1 retained for parity with prior behavior — manual-install tools count
-        # as "not all profile tools available". Tests that need to distinguish should
-        # parse JSON output where `manual_install: true` is now exposed per-tool.
-        return 1
+    if missing:
+        print(colorize(f"{len(missing)} tool(s) missing", "red"))
+        print("Run `jmo tools install` to install")
 
     if outdated:
         critical = [s for s in outdated if s.is_critical]
@@ -273,14 +214,10 @@ def cmd_tools_check(args: argparse.Namespace) -> int:
         print(colorize(msg, "yellow"))
         print("Run `jmo tools update` to update")
 
-    if not real_missing and not manual_missing and not outdated and not not_ready:
+    if not missing and not outdated and not not_ready:
         print(colorize("All tools installed and up to date!", "green"))
 
-    # A tool that cannot run contributes nothing to a scan, so the exit code
-    # says so. This is the same reasoning that made an unsupported tool stop
-    # counting as missing in #1130: the code should describe whether the
-    # profile can actually run, not whether files are on disk.
-    return 1 if not_ready else 0
+    return rc
 
 
 def cmd_tools_debug(args: argparse.Namespace) -> int:
@@ -312,9 +249,7 @@ def cmd_tools_debug(args: argparse.Namespace) -> int:
 
     tools = getattr(args, "tools", None) or []
     if getattr(args, "all", False) is True:
-        from scripts.core.tool_registry import PROFILE_TOOLS
-
-        tools = list(PROFILE_TOOLS.get("balanced", []))
+        tools = list(TOOL_MATRIX)
     if not tools:
         print("Usage: jmo tools debug <tool_name>")
         print("Example: jmo tools debug shellcheck")
@@ -474,7 +409,6 @@ def cmd_tools_install(args: argparse.Namespace) -> int:
 
     Usage:
         jmo tools install                     # Install all missing (parallel)
-        jmo tools install --profile balanced  # Install for profile
         jmo tools install trivy semgrep       # Install specific tools
         jmo tools install --dry-run           # Show what would be installed
         jmo tools install --print-script      # Print install script
@@ -485,7 +419,6 @@ def cmd_tools_install(args: argparse.Namespace) -> int:
         0 on success, 1 on failure
     """
     manager = ToolManager()
-    profile = getattr(args, "profile", None) or "balanced"
     tools_arg = getattr(args, "tools", None) or []
     dry_run = getattr(args, "dry_run", False)
     print_script = getattr(args, "print_script", False)
@@ -524,31 +457,10 @@ def cmd_tools_install(args: argparse.Namespace) -> int:
             else:
                 print(f"{t}: already installed ({status.installed_version})")
     else:
-        # Install missing for profile
-        missing = manager.get_missing_tools(profile)
-
-    # Drop anything this platform cannot run BEFORE the confirmation prompt.
-    # The installer already refuses these, but only after listing them as
-    # "tool(s) to install", asking "Proceed with installation? [Y/n]", and then
-    # reporting `[FAIL] noseyparker - not available on windows` under a summary
-    # line calling it "manual installation" -- which it is not: there is no
-    # manual route either.
-    unsupported = [s for s in missing if not s.platform_supported]
-    if unsupported:
-        missing = [s for s in missing if s.platform_supported]
-        print(
-            colorize(
-                f"Skipping {len(unsupported)} tool(s) that cannot run on "
-                f"{manager.platform}:",
-                "yellow",
-            )
-        )
-        for status in unsupported:
-            hows = ", ".join(status.platform_workarounds or []) or "none"
-            print(
-                f"  - {status.name}: "
-                f"{status.platform_reason or 'not available'} (try: {hows})"
-            )
+        # Every scanner, plus the policy engine: policy evaluation is on by
+        # default (jmo.yml policy.auto_evaluate), so a default install that
+        # left opa out would leave that step with nothing to run.
+        missing = manager.get_missing_tools([*TOOL_MATRIX, POLICY_ENGINE])
 
     if not missing:
         print(colorize("All tools are already installed!", "green"))
@@ -619,14 +531,14 @@ def cmd_tools_install(args: argparse.Namespace) -> int:
             print(f"[{current}/{total}] Installing {tool_name}...")
 
         installer.set_progress_callback(progress_callback)
-        progress = installer.install_missing(profile)
+        progress = installer.install_tools([s.name for s in missing])
     else:
         # Default: Parallel installation mode
         print(
             colorize(f"\n[Parallel] Installing with {max_workers} workers...\n", "cyan")
         )
-        progress = installer.install_profile_parallel(
-            profile=profile,
+        progress = installer.install_tools_parallel(
+            [s.name for s in missing],
             skip_installed=True,
             max_workers=max_workers,
             show_progress=sys.stdout.isatty(),
@@ -639,9 +551,7 @@ def cmd_tools_install(args: argparse.Namespace) -> int:
     if progress.failed == 0:
         return 0
     else:
-        print(
-            "\nSome tools require manual installation. Run with --print-script for hints."
-        )
+        print("\nSome tools failed to install. Run with --print-script for hints.")
         return 1
 
 
@@ -746,54 +656,16 @@ def cmd_tools_update(args: argparse.Namespace) -> int:
 
 def cmd_tools_list(args: argparse.Namespace) -> int:
     """
-    List available tools and profiles.
+    List available tools.
 
     Usage:
-        jmo tools list                    # List all tools
-        jmo tools list --profile balanced # List tools in profile
-        jmo tools list --profiles         # List available profiles
+        jmo tools list                    # List all registered tools
     """
-    show_profiles = getattr(args, "profiles", False)
-    profile = getattr(args, "profile", None)
     output_json = getattr(args, "json", False)
 
     registry = ToolRegistry()
-
-    if show_profiles:
-        # List profiles
-        if output_json:
-            data = {
-                p: {"tools": PROFILE_TOOLS[p], "count": len(PROFILE_TOOLS[p])}
-                for p in PROFILE_TOOLS
-            }
-            print(json.dumps(data, indent=2))
-            return 0
-
-        print("\nAvailable Profiles:\n")
-        print(f"{'Profile':<12}  {'Tools':<6}  {'Description'}")
-        print("-" * 60)
-
-        profile_desc = {
-            "fast": "Pre-commit checks, quick validation (5-10 min)",
-            "slim": "Cloud/IaC focused, AWS/Azure/GCP/K8s (12-18 min)",
-            "balanced": "Production CI/CD, recommended (18-25 min)",
-            "deep": "Comprehensive audits, compliance (40-70 min)",
-        }
-
-        for name in ["fast", "slim", "balanced", "deep"]:
-            count = len(PROFILE_TOOLS[name])
-            desc = profile_desc.get(name, "")
-            print(f"{name:<12}  {count:<6}  {desc}")
-
-        return 0
-
-    # List tools
-    if profile:
-        tools = registry.get_tools_for_profile(profile)
-        title = f"Tools in '{profile}' profile ({len(tools)} tools)"
-    else:
-        tools = registry.get_all_tools()
-        title = f"All registered tools ({len(tools)} tools)"
+    tools = registry.get_all_tools()
+    title = f"All registered tools ({len(tools)} tools)"
 
     if output_json:
         tools_data = [
@@ -911,16 +783,12 @@ def _generate_install_script(missing: list[ToolStatus], platform: str) -> str:
         lines.append(f"# Install {status.name}")
 
         # Generate platform-specific command
-        if platform == "macos" and tool.brew_package:
-            lines.append(f"brew install {tool.brew_package}")
-        elif platform == "linux" and tool.apt_package:
+        if platform == "linux" and tool.apt_package:
             lines.append(f"sudo apt-get install -y {tool.apt_package}")
         elif tool.pypi_package:
             lines.append(f"pip install {tool.pypi_package}")
-        elif tool.npm_package:
-            lines.append(f"npm install -g {tool.npm_package}")
         else:
-            lines.append(f"# Manual install required: {status.install_hint}")
+            lines.append(f"jmo tools install {status.name}")
 
         lines.append("")
 
@@ -947,7 +815,6 @@ def cmd_tools_uninstall(args: argparse.Namespace) -> int:
 
     # Collect items to remove
     jmo_dir = Path.home() / ".jmo"
-    kubescape_dir = Path.home() / ".kubescape"
 
     print("\n" + "=" * 60)
     if uninstall_all:
@@ -1006,22 +873,12 @@ def cmd_tools_uninstall(args: argparse.Namespace) -> int:
         if tools_to_remove:
             # Group by install method
             pip_tools = [t for t in tools_to_remove if t[1] == "pip"]
-            npm_tools = [t for t in tools_to_remove if t[1] == "npm"]
             binary_tools = [t for t in tools_to_remove if t[1] == "binary"]
-            brew_tools = [t for t in tools_to_remove if t[1] == "brew"]
 
             if pip_tools:
                 print(f"  pip: {', '.join(t[0] for t in pip_tools)}")
-            if npm_tools:
-                print(f"  npm: {', '.join(t[0] for t in npm_tools)}")
             if binary_tools:
                 print(f"  binary: {', '.join(t[0] for t in binary_tools)}")
-            if brew_tools:
-                print(f"  brew: {', '.join(t[0] for t in brew_tools)} (manual removal)")
-
-            # Kubescape special dir
-            if kubescape_dir.exists():
-                print("  - ~/.kubescape/")
         else:
             print("  No JMo-managed tools found")
 
@@ -1087,16 +944,6 @@ def cmd_tools_uninstall(args: argparse.Namespace) -> int:
         print("\nRemoving security tools...")
         _uninstall_tools(tools_to_remove, errors)
 
-        # Remove kubescape dir
-        if kubescape_dir.exists():
-            try:
-                print(f"Removing {kubescape_dir}...", end=" ", flush=True)
-                shutil.rmtree(kubescape_dir)
-                print(colorize("done", "green"))
-            except Exception as e:
-                print(colorize(f"failed: {e}", "red"))
-                errors.append(str(e))
-
     # === Summary ===
     print("\n" + "=" * 60)
     if errors:
@@ -1153,10 +1000,6 @@ def _get_installed_tools() -> list[tuple[str, str]]:
             if tool_info:
                 if tool_info.pypi_package:
                     tools.append((name, "pip"))
-                elif tool_info.npm_package:
-                    tools.append((name, "npm"))
-                elif tool_info.brew_package:
-                    tools.append((name, "brew"))
                 else:
                     tools.append((name, "binary"))
 
@@ -1171,9 +1014,7 @@ def _uninstall_tools(tools: list[tuple[str, str]], errors: list[str]) -> None:
 
     registry = ToolRegistry()
 
-    # Group by method
     pip_tools = []
-    npm_tools = []
 
     for name, method in tools:
         tool_info = registry.get_tool(name)
@@ -1182,8 +1023,6 @@ def _uninstall_tools(tools: list[tuple[str, str]], errors: list[str]) -> None:
 
         if method == "pip" and tool_info.pypi_package:
             pip_tools.append(tool_info.pypi_package)
-        elif method == "npm" and tool_info.npm_package:
-            npm_tools.append(tool_info.npm_package)
 
     # Uninstall pip tools in batch
     if pip_tools:
@@ -1207,24 +1046,6 @@ def _uninstall_tools(tools: list[tuple[str, str]], errors: list[str]) -> None:
             print(colorize(f"    failed: {e}", "red"))
             errors.append(f"pip uninstall: {e}")
 
-    # Uninstall npm tools
-    if npm_tools:
-        try:
-            print(f"  Uninstalling npm packages: {', '.join(npm_tools)}")
-            for pkg in npm_tools:
-                result = subprocess.run(
-                    ["npm", "uninstall", "-g", pkg],
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    timeout=60,
-                )
-            print(colorize("    done", "green"))
-        except Exception as e:
-            print(colorize(f"    failed: {e}", "red"))
-            errors.append(f"npm uninstall: {e}")
-
     # Binary tools - remove from ~/.jmo/bin
     jmo_bin = Path.home() / ".jmo" / "bin"
     if jmo_bin.exists():
@@ -1237,12 +1058,6 @@ def _uninstall_tools(tools: list[tuple[str, str]], errors: list[str]) -> None:
         except Exception as e:
             print(colorize(f"    failed: {e}", "red"))
             errors.append(f"binary removal: {e}")
-
-    # Brew tools need manual removal
-    brew_tools = [name for name, method in tools if method == "brew"]
-    if brew_tools:
-        print(colorize("\n  NOTE: Homebrew tools must be removed manually:", "yellow"))
-        print(f"    brew uninstall {' '.join(brew_tools)}")
 
 
 def _format_size(size_bytes: int) -> str:
@@ -1261,7 +1076,7 @@ def cmd_tools_clean(args: argparse.Namespace) -> int:
     """
     Clean isolated virtual environments (Phase 5).
 
-    Removes isolated venvs used for tools with pip conflicts (prowler, scancode).
+    Removes the isolated venvs of the Python tools (semgrep, checkov).
     Useful when you need to fix a corrupted installation or reclaim disk space.
 
     Usage:
@@ -1301,7 +1116,7 @@ def cmd_tools_clean(args: argparse.Namespace) -> int:
     if force:
         print(colorize(f"Cleaned {len(removed)} isolated venv(s).", "green"))
         print("\nTo reinstall tools in isolated venvs, run:")
-        print("  jmo tools install prowler scancode")
+        print("  jmo tools install semgrep checkov")
     else:
         print("To actually remove these, run:")
         print(colorize("  jmo tools clean --force", "cyan"))

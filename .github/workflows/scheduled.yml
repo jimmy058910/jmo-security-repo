@@ -8,7 +8,7 @@ name: Scheduled Tests
 # Schedule:
 #   - 2AM UTC daily: Nightly extended tests
 #   - 4AM UTC weekdays: E2E comprehensive tests
-#   - 3AM UTC Sunday: Docker variant validation
+#   - 3AM UTC Sunday: Docker image validation
 #   - 1PM UTC Monday: Weekly backlog summary (after weekend Dependabot batch)
 #
 # Manual dispatch allows running any test suite on demand
@@ -78,7 +78,7 @@ jobs:
         # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
         # but the Python process inherits the raw PATH string, and shutil.which()
         # on Windows cannot interpret a POSIX path. Every external tool lookup
-        # (bandit, semgrep, trivy...) then silently returns None. cygpath -w fixes
+        # (semgrep, checkov, trivy...) then silently returns None. cygpath -w fixes
         # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then
@@ -214,7 +214,7 @@ jobs:
           echo ""
           echo "Scanning for secrets..."
           set -euo pipefail
-          # Same `if ! cmd; then rc=$?` defect as validate-variants below: bash's
+          # Same `if ! cmd; then rc=$?` defect the image validation below once had: bash's
           # `!` replaces $? with the negated status, so EXIT_CODE was always 0 and
           # `exit 0` reported SUCCESS on a crashed scanner -- and terminated the
           # step before the verified-secrets check ran. A fail-open on a secret
@@ -288,7 +288,7 @@ jobs:
         # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
         # but the Python process inherits the raw PATH string, and shutil.which()
         # on Windows cannot interpret a POSIX path. Every external tool lookup
-        # (bandit, semgrep, trivy...) then silently returns None. cygpath -w fixes
+        # (semgrep, checkov, trivy...) then silently returns None. cygpath -w fixes
         # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then
@@ -346,7 +346,7 @@ jobs:
         # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
         # but the Python process inherits the raw PATH string, and shutil.which()
         # on Windows cannot interpret a POSIX path. Every external tool lookup
-        # (bandit, semgrep, trivy...) then silently returns None. cygpath -w fixes
+        # (semgrep, checkov, trivy...) then silently returns None. cygpath -w fixes
         # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then
@@ -397,9 +397,9 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Build Docker image (balanced variant)
+      - name: Build Docker image
         run: |
-          docker build -t jmo-security:nightly-test -f Dockerfile.balanced .
+          docker build -t jmo-security:nightly-test -f Dockerfile .
 
       - name: Test Docker image --help
         run: |
@@ -426,7 +426,7 @@ jobs:
               --allow-missing-tools
 
   # Tool smoke tests: verify each tool completes within timeout and produces valid output
-  # Catches hangs (like cdxgen 9+ min) and tool regressions before they affect users
+  # Catches hangs and tool regressions before they affect users
   tool-smoke-tests:
     name: Tool Smoke Tests (Juice-Shop Fixture)
     runs-on: ubuntu-22.04
@@ -456,7 +456,7 @@ jobs:
         # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
         # but the Python process inherits the raw PATH string, and shutil.which()
         # on Windows cannot interpret a POSIX path. Every external tool lookup
-        # (bandit, semgrep, trivy...) then silently returns None. cygpath -w fixes
+        # (semgrep, checkov, trivy...) then silently returns None. cygpath -w fixes
         # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then
@@ -465,7 +465,7 @@ jobs:
             echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           fi
 
-      - name: Install balanced profile tools
+      - name: Install smoke-test tools
         env:
           # Pinned to versions.yaml. Update both files together when bumping.
           # Avoids upstream install.sh GitHub-API "latest" lookups that have
@@ -520,9 +520,6 @@ jobs:
           # ShellCheck - shell linter
           sudo apt-get update && sudo apt-get install -y shellcheck
 
-          # cdxgen - SBOM generator (test for hangs)
-          npm install -g @cyclonedx/cdxgen
-
           # Verify installations
           echo "Installed tools:"
           semgrep --version || echo "semgrep not available"
@@ -532,7 +529,6 @@ jobs:
           trufflehog --version || echo "trufflehog not available"
           hadolint --version || echo "hadolint not available"
           shellcheck --version || echo "shellcheck not available"
-          cdxgen --version || echo "cdxgen not available"
           checkov --version || echo "checkov not available"
 
       - name: Run tool smoke tests
@@ -593,7 +589,7 @@ jobs:
         # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
         # but the Python process inherits the raw PATH string, and shutil.which()
         # on Windows cannot interpret a POSIX path. Every external tool lookup
-        # (bandit, semgrep, trivy...) then silently returns None. cygpath -w fixes
+        # (semgrep, checkov, trivy...) then silently returns None. cygpath -w fixes
         # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then
@@ -667,7 +663,7 @@ jobs:
         # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
         # but the Python process inherits the raw PATH string, and shutil.which()
         # on Windows cannot interpret a POSIX path. Every external tool lookup
-        # (bandit, semgrep, trivy...) then silently returns None. cygpath -w fixes
+        # (semgrep, checkov, trivy...) then silently returns None. cygpath -w fixes
         # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then
@@ -807,7 +803,7 @@ jobs:
         # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
         # but the Python process inherits the raw PATH string, and shutil.which()
         # on Windows cannot interpret a POSIX path. Every external tool lookup
-        # (bandit, semgrep, trivy...) then silently returns None. cygpath -w fixes
+        # (semgrep, checkov, trivy...) then silently returns None. cygpath -w fixes
         # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then
@@ -924,7 +920,7 @@ jobs:
         # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
         # but the Python process inherits the raw PATH string, and shutil.which()
         # on Windows cannot interpret a POSIX path. Every external tool lookup
-        # (bandit, semgrep, trivy...) then silently returns None. cygpath -w fixes
+        # (semgrep, checkov, trivy...) then silently returns None. cygpath -w fixes
         # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then
@@ -1028,7 +1024,7 @@ jobs:
         # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
         # but the Python process inherits the raw PATH string, and shutil.which()
         # on Windows cannot interpret a POSIX path. Every external tool lookup
-        # (bandit, semgrep, trivy...) then silently returns None. cygpath -w fixes
+        # (semgrep, checkov, trivy...) then silently returns None. cygpath -w fixes
         # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then
@@ -1125,7 +1121,7 @@ jobs:
         # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
         # but the Python process inherits the raw PATH string, and shutil.which()
         # on Windows cannot interpret a POSIX path. Every external tool lookup
-        # (bandit, semgrep, trivy...) then silently returns None. cygpath -w fixes
+        # (semgrep, checkov, trivy...) then silently returns None. cygpath -w fixes
         # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then
@@ -1154,9 +1150,6 @@ jobs:
           # Semgrep - SAST scanner
           pip install semgrep
 
-          # Bandit - Python security linter
-          pip install bandit
-
           # Hadolint - Dockerfile linter
           curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-Linux-x86_64" \
@@ -1182,7 +1175,6 @@ jobs:
           echo "Installed tools:"
           trivy --version || echo "trivy not available"
           semgrep --version || echo "semgrep not available"
-          bandit --version || echo "bandit not available"
           hadolint --version || echo "hadolint not available"
           trufflehog --version || echo "trufflehog not available"
           checkov --version || echo "checkov not available"
@@ -1427,7 +1419,7 @@ jobs:
         # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
         # but the Python process inherits the raw PATH string, and shutil.which()
         # on Windows cannot interpret a POSIX path. Every external tool lookup
-        # (bandit, semgrep, trivy...) then silently returns None. cygpath -w fixes
+        # (semgrep, checkov, trivy...) then silently returns None. cygpath -w fixes
         # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then
@@ -1491,44 +1483,13 @@ jobs:
           exit 1
 
 # ==============================================================================
-# DOCKER VALIDATION - Validates JMo Security Docker image variants
+# DOCKER VALIDATION - Validates the published JMo Security Docker image
 # Runs weekly Sunday at 3AM UTC or on manual dispatch (task=docker or task=all)
 # ==============================================================================
-  validate-variants:
-    name: Validate ${{ matrix.variant }}
+  validate-image:
+    name: Validate image
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # expected_tools is the number of tools ACTUALLY in the Docker image
-          # (on amd64). For fast/slim/balanced, that equals PROFILE_TOOLS in
-          # scripts/core/tool_registry.py. For deep, subtract the 4 tools in
-          # MANUAL_INSTALL_TOOLS (akto, afl++, mobsf, falco) which are listed
-          # in PROFILE_TOOLS["deep"] but intentionally not in the image —
-          # users install them manually (see docs/MANUAL_INSTALLATION.md).
-          # Counts post-v1.0.3 (bearer removed from PROFILE_TOOLS in PR #339):
-          #   deep:     28 profile - 4 manual = 24 in image
-          #   balanced: 17 in profile (no manual tools)
-          #   slim:     13 in profile (no manual tools)
-          #   fast:      9 (unchanged)
-          # Then #795 added shellcheck to deep (it was in the other three and
-          # not the most comprehensive one); Dockerfile.deep already built and
-          # verified the binary, so only the profile count moves:
-          #   deep:     29 profile - 4 manual = 25 in image
-          - variant: deep
-            expected_tools: 25   # 29 profile - 4 manual-only = 25
-            profile: deep
-          - variant: balanced
-            expected_tools: 17
-            profile: balanced
-          - variant: slim
-            expected_tools: 13
-            profile: slim
-          - variant: fast
-            expected_tools: 9
-            profile: fast
     # Run on Sunday 3AM schedule OR manual docker/all dispatch
     if: |
       github.event_name == 'schedule' && github.event.schedule == '0 3 * * 0' ||
@@ -1547,49 +1508,54 @@ jobs:
 
       - name: Pull Docker image
         run: |
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.variant }}
+          docker pull "$REGISTRY/$IMAGE_NAME:latest"
 
       - name: Verify tool installation
         id: tools
-        env:
-          # Route matrix values through env vars so shellcheck can statically
-          # analyze the script (actionlint replaces ${{ }} with opaque
-          # placeholders before invoking shellcheck, which triggers SC2170 on
-          # `-lt <placeholder>` regardless of quoting — prior PR #300's unquote
-          # hack never took effect for this reason).
-          # Also hardens against CWE-78 shell injection per release.rules.md.
-          VARIANT: ${{ matrix.variant }}
-          PROFILE: ${{ matrix.profile }}
-          EXPECTED_TOOLS: ${{ matrix.expected_tools }}
-          IMAGE_REF: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.variant }}
         run: |
-          echo "Checking tools in $VARIANT variant..."
-          # --profile is required: without it, `tools check --json` emits a dict of
-          # profile summaries where `installed` is an integer count, not a per-tool
-          # boolean — the jq filter below would then match zero entries (jq is
-          # strictly typed: `7 == true` is false).
-          # Capture stderr separately so a silent-exit bug (zero stdout, non-zero rc)
-          # emits a diagnosable error to the job log instead of just "exit code 1".
+          # The expected tool set comes from the IMAGE, never from this checkout
+          # and never from a literal. The image ships whatever the last `v*` tag
+          # built, and the checkout is a different program between tags, so a
+          # checkout-derived count fails a correct image for release skew alone
+          # (measured under #1039, when a checkout-side count was one ahead of
+          # the tag). Asking the image what TOOL_MATRIX it was built with is
+          # the one expectation that cannot skew.
+          set +e
+          docker run --rm --entrypoint python3 "$REGISTRY/$IMAGE_NAME:latest" -c \
+              "from scripts.core.tool_registry import TOOL_MATRIX; print(' '.join(TOOL_MATRIX))" \
+              > tool-matrix.txt 2>tool-matrix.stderr.log
+          rc=$?
+          set -e
+          read -r -a EXPECTED < tool-matrix.txt || true
+          if [ "$rc" -ne 0 ] || [ "${#EXPECTED[@]}" -eq 0 ]; then
+            echo "::error::could not read TOOL_MATRIX from the image (rc=$rc)"
+            cat tool-matrix.stderr.log
+            exit 1
+          fi
+          echo "The image's TOOL_MATRIX: ${EXPECTED[*]} (${#EXPECTED[@]} tools)"
+
+          # Capture stderr separately so a silent-exit bug (zero stdout, non-zero
+          # rc) emits a diagnosable error instead of just "exit code 1".
           # Capture the exit code WITHOUT `if !`. Bash's `!` replaces $? with the
           # NEGATED status, so `if ! cmd; then rc=$?` yields 0 for every failure,
-          # and the `exit "$rc"` below then exited 0 -- the step passed and the
-          # count assertion never ran. Not hypothetical: run 31925247675
-          # (2026-08-16) logged `tools check --profile deep exited with rc=0` and
-          # reported SUCCESS, while balanced/slim/fast each printed their real
-          # count. `Validate deep` had never verified anything. Measured chunk 21.
-          # `set -e` is on (Actions runs `bash -e`), which is why the original
-          # needed `if !` at all; `set +e` around the call is the fix that keeps
-          # both the guard and the true exit code.
+          # and an `exit "$rc"` after it exits 0 -- the step passes and the
+          # assertions below never run. Not hypothetical: run 31925247675
+          # (2026-08-16) reported SUCCESS on an image check that had never
+          # verified anything. `set -e` is on (Actions runs `bash -e`), which is
+          # why the original needed `if !` at all; `set +e` around the call is
+          # the fix that keeps both the guard and the true exit code.
           set +e
-          docker run --rm "$IMAGE_REF" \
-              tools check --profile "$PROFILE" --json \
+          docker run --rm "$REGISTRY/$IMAGE_NAME:latest" tools check --json \
               > tools-check.json 2>tools-check.stderr.log
           rc=$?
           set -e
 
-          # Unparseable output is catastrophic regardless of rc.
-          if ! jq -e 'type == "object" and length > 0' tools-check.json > /dev/null 2>&1; then
-            echo "::error::tools check --profile $PROFILE produced no parseable JSON (rc=$rc)"
+          # Unparseable output is catastrophic regardless of rc. Expected shape:
+          # {"tools": {<name>: {installed, execution_ready, ...}},
+          #  "policy_engine": {"name": "opa", "installed", ...}}
+          if ! jq -e '(.tools | type) == "object" and (.policy_engine | type) == "object"' \
+              tools-check.json > /dev/null 2>&1; then
+            echo "::error::tools check --json produced no parseable JSON of the expected shape (rc=$rc)"
             echo "--- stderr ---"
             cat tools-check.stderr.log
             echo "--- stdout (tools-check.json) ---"
@@ -1597,54 +1563,43 @@ jobs:
             exit "${rc:-1}"
           fi
 
-          # rc alone cannot judge this image. `tools check` documents rc=1 as "some
-          # tool is unavailable for ANY reason" -- including the MANUAL_INSTALL_TOOLS
-          # (akto, afl++, mobsf, falco) deliberately not baked into the deep image.
-          # So a correct deep image and a broken one both return 1. The CLI ships the
-          # discriminator for exactly this case: `manual_install` per tool
-          # (CHANGELOG v1.0.5, docs/CLI_REFERENCE.md:455). Judge on that, not on rc.
-          NON_MANUAL_MISSING=$(jq -r \
-            '[.[] | select(.installed == false and .manual_install != true)] | length' \
-            tools-check.json)
-          if [ "$rc" -ne 0 ] && [ "$NON_MANUAL_MISSING" -gt 0 ]; then
-            echo "::error::tools check --profile $PROFILE exited rc=$rc with $NON_MANUAL_MISSING non-manual tool(s) missing"
-            jq -r 'to_entries[]
-                   | select(.value.installed == false and .value.manual_install != true)
-                   | "  missing: \(.key)"' tools-check.json
+          # Judge the image on the per-tool JSON, which names each offender, not
+          # on rc alone: rc=1 means "some tool is unavailable" and says nothing
+          # about which.
+          LISTED=$(jq '.tools | length' tools-check.json)
+          if [ "$LISTED" -ne "${#EXPECTED[@]}" ]; then
+            echo "::error::tools check lists $LISTED tools; the image's TOOL_MATRIX has ${#EXPECTED[@]}"
+            jq -r '.tools | keys[]' tools-check.json
+            exit 1
+          fi
+          NOT_READY=()
+          for tool in "${EXPECTED[@]}"; do
+            if ! jq -e --arg t "$tool" '.tools[$t].installed == true and .tools[$t].execution_ready == true' \
+                tools-check.json > /dev/null; then
+              NOT_READY+=("$tool")
+            fi
+          done
+          READY=$(( ${#EXPECTED[@]} - ${#NOT_READY[@]} ))
+          echo "installed_count=$READY" >> "$GITHUB_OUTPUT"
+          echo "Ready tools: $READY of ${#EXPECTED[@]} (tools check rc=$rc)"
+          if [ "${#NOT_READY[@]}" -gt 0 ]; then
+            echo "::error::${#NOT_READY[@]} TOOL_MATRIX tool(s) not installed or not execution-ready: ${NOT_READY[*]}"
             echo "--- stderr ---"
             cat tools-check.stderr.log
-            exit "$rc"
-          fi
-          if [ "$rc" -ne 0 ]; then
-            echo "rc=$rc, and every missing tool is manual_install -- expected for $VARIANT."
-          fi
-
-          # Count installed tools (expected JSON shape: {tool_name: {installed: bool, ...}})
-          INSTALLED=$(jq '[.[] | select(.installed == true)] | length' tools-check.json)
-          PROFILE_SIZE=$(jq 'length' tools-check.json)
-          echo "installed_count=$INSTALLED" >> "$GITHUB_OUTPUT"
-
-          echo "Installed tools: $INSTALLED of $PROFILE_SIZE in the image's own profile (checkout expects ~$EXPECTED_TOOLS)"
-
-          # `$EXPECTED_TOOLS` is NOT the pass condition. It cannot be: it is
-          # computed from the checkout's PROFILE_TOOLS, while the image ships
-          # whatever the last `v*` tag built, and the two are different programs.
-          # Measured (#1039): PROFILE_TOOLS["deep"] holds 28 entries at v1.0.8
-          # and 29 on main -- `shellcheck` joined the profile after the tag -- so
-          # a perfectly good deep image reports 28 - 4 manual = 24 against an
-          # expectation of 25 and fails for no defect at all.
-          #
-          # The real pass condition is NON_MANUAL_MISSING above, which is
-          # derived from the image's own output and names the offender. This
-          # stays only as a META-GUARD: it catches an image whose profile
-          # collapsed or whose output shape changed, where "0 non-manual
-          # missing" would otherwise be vacuously true. One tool of slack
-          # absorbs exactly the release skew described above.
-          if [ "$PROFILE_SIZE" -lt "$((EXPECTED_TOOLS - 1))" ]; then
-            echo "::error::the image's own $PROFILE profile lists only $PROFILE_SIZE tools; the checkout expects around $EXPECTED_TOOLS."
-            echo "A shortfall of more than one is image drift, not release skew."
-            jq -r 'to_entries[] | select(.value.installed == false) | "  installed=false: \(.key)"' tools-check.json
             exit 1
+          fi
+          # opa is not a scanner, so it is not in TOOL_MATRIX, but policy
+          # evaluation defaults on and the image must carry it.
+          if ! jq -e '.policy_engine.installed == true' tools-check.json > /dev/null; then
+            echo "::error::the policy engine ($(jq -r '.policy_engine.name' tools-check.json)) is not installed in the image"
+            exit 1
+          fi
+          # rc=0 is the contract once every tool and the policy engine are ready;
+          # anything else means the exit code and the JSON disagree.
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::tools check exited rc=$rc although its JSON reports every tool ready"
+            cat tools-check.stderr.log
+            exit "$rc"
           fi
 
       - name: Test scan capability
@@ -1668,13 +1623,13 @@ jobs:
           docker run --rm \
             -v /tmp/test-repo:/scan \
             -w /scan \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.variant }} \
-            scan --repo . --profile ${{ matrix.profile }} --results-dir /scan/results
+            "$REGISTRY/$IMAGE_NAME:latest" \
+            scan --repo . --results-dir /scan/results
 
       - name: Verify scan results
         run: |
           if [ "${{ steps.docker-scan.outcome }}" == "failure" ]; then
-            echo "::error::Docker scan for ${{ matrix.variant }} failed"
+            echo "::error::Docker scan failed"
             exit 1
           fi
           if [ ! -d /tmp/test-repo/results ]; then
@@ -1686,17 +1641,19 @@ jobs:
 
       - name: Test help command
         run: |
-          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.variant }} --help
+          docker run --rm "$REGISTRY/$IMAGE_NAME:latest" --help
 
       - name: Test version command
         run: |
-          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.variant }} --version
+          docker run --rm "$REGISTRY/$IMAGE_NAME:latest" --version
 
       - name: Upload tools check results
         uses: actions/upload-artifact@v7
         with:
-          name: tools-check-${{ matrix.variant }}
-          path: tools-check.json
+          name: tools-check
+          path: |
+            tools-check.json
+            tool-matrix.txt
           retention-days: 30
 
   # ==============================================================================
@@ -1705,36 +1662,22 @@ jobs:
   # tests/e2e/test_docker_workflows.py holds 60 tests that, before #962, were run
   # by NO automation at all: every marker filter in ci.yml and scheduled.yml
   # carries `not docker`, and nothing invoked them by path either.
-  # validate-variants above is the closest thing that existed, and it runs
-  # `docker run <image> tools check` directly -- it never invokes pytest.
+  # validate-image above runs `docker run <image> tools check` directly -- it
+  # never invokes pytest.
   #
-  # This job runs the FULL four-variant set against the PUBLISHED images, which
-  # is the artifact users actually pull. ci.yml's docker-smoke is the PR-time
-  # half: it is path-gated and builds only the fast variant, because between
-  # release tags the published images do not change, so running the whole suite
-  # per-PR would re-measure a constant.
+  # This job runs the suite against the PUBLISHED image, which is the artifact
+  # users actually pull. ci.yml's docker-smoke is the PR-time half: it is
+  # path-gated and builds the image from the PR, because between release tags
+  # the published image does not change, so running the suite per-PR would
+  # re-measure a constant.
   #
-  # Sunday, beside validate-variants, which already pulls all four images -- so
-  # the marginal cost is the test time, not the pull.
+  # Sunday, beside validate-image, which already pulls the image -- so the
+  # marginal cost is the test time, not the pull.
   #
-  # Measured 2026-09-05 against published v1.1.0, all four variants:
-  # 56 passed, 4 skipped, 0 failed in 15m03s (run 33980687151). The 4 skips are
-  # the darwin/win32 entries in the cross-platform matrix, correctly skipped on
-  # Linux.
-  #
-  # This replaces a 2026-08-25 baseline against v1.0.8 that read the SAME
-  # numbers -- 56 passed, 4 skipped, 0 failed -- and meant something weaker.
-  # It was taken while both of the assertions #1163 later fixed were vacuous:
-  # test_volume_mount_results_persist sat under `if results_dir.exists():`
-  # until Phase 10 (#1077) removed the guard, and test_docker_cli_workflow
-  # asserted `(results_dir / "findings.json").exists() or returncode == 0`
-  # against a path the product has never written, so its left operand was
-  # False on every run. `0 failed` therefore recorded that those assertions
-  # could not fail, not that nothing was broken -- and both DID fail once
-  # they could. The figure above is the first one measured with them live.
-  #
-  # So: when this job regresses, diff the failing-test ID SET against the
-  # previous run's job log, never the counts against this comment.
+  # A green run proves only what its assertions can fail on: v1.x baselines of
+  # this suite were recorded while two of its assertions (#1163) could not
+  # fail at all. So when this job regresses, diff the failing-test ID SET
+  # against the previous run's job log, never a count.
   docker-e2e-suite:
     name: Docker E2E Suite
     runs-on: ubuntu-latest
@@ -1779,19 +1722,20 @@ jobs:
         # GHCR repo, and auditing what users pull is the point of this job. Set it
         # only to test a locally built image, as ci.yml's docker-smoke does.
         #
-        # -rs so skips print their reason. Four are expected (darwin/win32
-        # entries in the cross-platform matrix); anything beyond that means a
-        # prerequisite went missing, and a skip must not be mistaken for a pass.
+        # -rs so skips print their reason. The darwin/win32 entries of the
+        # cross-platform matrix are expected to skip on Linux; anything beyond
+        # that means a prerequisite went missing, and a skip must not be
+        # mistaken for a pass.
         run: pytest tests/e2e/test_docker_workflows.py -m docker -q -rs --timeout=1800
 
   # ==============================================================================
   # DOCKER VALIDATION SUMMARY
-  # Reports overall Docker variant validation status
+  # Reports overall Docker image validation status
   # ==============================================================================
   validation-summary:
     name: Validation Summary
     runs-on: ubuntu-latest
-    needs: validate-variants
+    needs: validate-image
     if: |
       always() && (
         github.event_name == 'schedule' && github.event.schedule == '0 3 * * 0' ||
@@ -1800,16 +1744,16 @@ jobs:
     steps:
       - name: Check validation results
         run: |
-          if [ "${{ needs.validate-variants.result }}" == "failure" ]; then
-            echo "::error::One or more Docker variants failed validation"
+          if [ "${{ needs.validate-image.result }}" == "failure" ]; then
+            echo "::error::The Docker image failed validation"
             exit 1
           fi
-          echo "All Docker variants validated successfully"
+          echo "The Docker image validated successfully"
 
       - name: Download all artifacts
         uses: actions/download-artifact@v8
         with:
-          pattern: tools-check-*
+          pattern: tools-check
           path: artifacts
 
       - name: Generate summary
@@ -1817,17 +1761,17 @@ jobs:
           {
             echo "# Docker Validation Summary"
             echo ""
-            echo "| Variant | Status | Tools |"
-            echo "|---------|--------|-------|"
+            echo "| Image | Status | Tools ready |"
+            echo "|-------|--------|-------------|"
 
-            for variant in deep balanced slim fast; do
-              if [ -f "artifacts/tools-check-$variant/tools-check.json" ]; then
-                TOOLS=$(jq '[.[] | select(.installed == true)] | length' "artifacts/tools-check-$variant/tools-check.json")
-                echo "| $variant | :white_check_mark: | $TOOLS |"
-              else
-                echo "| $variant | :x: | N/A |"
-              fi
-            done
+            if [ -f artifacts/tools-check/tools-check.json ]; then
+              TOOLS=$(jq '[.tools[] | select(.installed == true and .execution_ready == true)] | length' \
+                artifacts/tools-check/tools-check.json)
+              TOTAL=$(jq '.tools | length' artifacts/tools-check/tools-check.json)
+              echo "| latest | :white_check_mark: | $TOOLS of $TOTAL |"
+            else
+              echo "| latest | :x: | N/A |"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
   # ==============================================================================

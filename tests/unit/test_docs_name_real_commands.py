@@ -75,10 +75,6 @@ _EXTRA_GLOBS = ("Dockerfile*",)
 # Each is a true statement that a regex would have to be taught to recognise.
 ALLOWED: dict[tuple[str, str], str] = {
     (
-        "docs/CLI_REFERENCE.md",
-        "slim",
-    ): "states 'There is no `jmo slim` command' -- #870's correction",
-    (
         "ROADMAP.md",
         "fix",
     ): "'`jmo fix` CLI (AI remediation) | Deferred from v1.0.0' -- unshipped by design",

@@ -67,7 +67,6 @@ class TestCommandInjectionPrevention:
     def test_malicious_repo_path_sanitized(self):
         """Test that malicious repo paths are sanitized"""
         config = create_test_config(
-            profile="fast",
             target_mode="repo",
             target_path="/tmp/repo; rm -rf /",  # Injection attempt
             use_docker=False,
@@ -82,26 +81,9 @@ class TestCommandInjectionPrevention:
         # When passed as a list element, subprocess won't interpret it as a shell operator
         assert any("; rm -rf /" in str(arg) for arg in cmd_list)
 
-    def test_command_injection_in_profile(self):
-        """Test that profile names are from hardcoded set"""
-        config = create_test_config(
-            profile="fast",
-            target_mode="repo",
-            target_path="/tmp/repo",
-            use_docker=False,
-        )
-
-        cmd_list = generate_command_list(config)
-        assert "fast" in cmd_list
-
-        # Profile is hardcoded to fast/balanced/deep in wizard
-        # No user input goes directly into profile field
-        # This test documents that behavior
-
     def test_path_traversal_attempt(self):
         """Test that path traversal attempts are handled"""
         config = create_test_config(
-            profile="fast",
             target_mode="repo",
             target_path="../../etc/passwd",  # Path traversal attempt
             use_docker=False,
@@ -117,7 +99,6 @@ class TestCommandInjectionPrevention:
     def test_command_substitution_blocked(self):
         """Test that command substitution $(whoami) is not executed"""
         config = create_test_config(
-            profile="fast",
             target_mode="repo",
             target_path="/tmp/$(whoami)",  # Command substitution attempt
             use_docker=False,
@@ -136,7 +117,6 @@ class TestCommandInjectionPrevention:
     def test_backtick_injection_blocked(self):
         """Test that backtick injection `whoami` is not executed"""
         config = create_test_config(
-            profile="fast",
             target_mode="repo",
             target_path="/tmp/`whoami`",  # Backtick injection attempt
             use_docker=False,
@@ -158,7 +138,6 @@ class TestCommandListStructure:
     def test_docker_command_is_list(self):
         """Test that Docker commands are built as lists"""
         config = create_test_config(
-            profile="fast",
             target_mode="repo",
             target_path="/tmp/test-repo",
             use_docker=True,
@@ -179,9 +158,12 @@ class TestCommandListStructure:
         assert len(v_indices) == 2, "Should have 2 volume mounts"
 
     def test_native_command_is_list(self):
-        """Test that native commands are built as lists"""
+        """Test that native commands are built as lists
+
+        With a severity threshold the command is `jmo ci` (`jmo scan` defines
+        no --fail-on and rejected `--fail-on HIGH` with exit 2).
+        """
         config = create_test_config(
-            profile="balanced",
             target_mode="repos-dir",
             target_path="/tmp/repos",
             use_docker=False,
@@ -196,21 +178,18 @@ class TestCommandListStructure:
 
         # Verify jmo command structure
         assert cmd_list[0] == "jmo"
-        assert cmd_list[1] == "scan"
+        assert cmd_list[1] == "ci"
 
-        # Verify profile and arguments are properly separated
-        assert "--profile-name" in cmd_list
-        assert "balanced" in cmd_list
-        assert "--repos-dir" in cmd_list
+        # Verify flags and their values are separate list elements
+        assert "--profile-name" not in cmd_list
+        assert cmd_list[cmd_list.index("--repos-dir") + 1] == "/tmp/repos"
         assert "--results-dir" in cmd_list
-        assert "--fail-on" in cmd_list
-        assert "HIGH" in cmd_list
+        assert cmd_list[cmd_list.index("--fail-on") + 1] == "HIGH"
         assert "--human-logs" in cmd_list
 
     def test_absolute_paths_used(self):
         """Test that relative paths are resolved to absolute"""
         config = create_test_config(
-            profile="fast",
             target_mode="repo",
             target_path="./relative/path",  # Relative path
             results_dir="./results",  # Relative results
@@ -263,7 +242,7 @@ class TestInputSanitization:
 
         for path in special_chars_paths:
             config = create_test_config(
-                profile="fast", target_mode="repo", target_path=path, use_docker=False
+                target_mode="repo", target_path=path, use_docker=False
             )
 
             cmd_list = generate_command_list(config)

@@ -10,7 +10,7 @@
 #
 # Generated with: jmo schedule create + jmo schedule export
 
-name: "JMo Security Scan: nightly-deep"
+name: "JMo Security Scan: nightly"
 
 on:
   schedule:
@@ -32,12 +32,12 @@ jobs:
       - name: Run JMo Security Scan
         run: >
           docker run --rm -v $(pwd):/workspace ghcr.io/jimmy058910/jmo-security:latest
-          scan --profile deep --repos-dir /workspace --results-dir /workspace/results --human-logs
+          scan --repos-dir /workspace --results-dir /workspace/results --human-logs
 
       - name: Upload scan results
         uses: actions/upload-artifact@v4
         with:
-          name: jmo-results-nightly-deep-${{ github.run_number }}
+          name: jmo-results-nightly-${{ github.run_number }}
           path: results/summaries/
           retention-days: 90
         if: always()
@@ -64,7 +64,7 @@ jobs:
 #                  "type": "section",
 #                  "text": {
 #                    "type": "mrkdwn",
-#                    "text": "🚨 Security scan *nightly-deep* failed"
+#                    "text": "🚨 Security scan *nightly* failed"
 #                  }
 #                }
 #              ]

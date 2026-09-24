@@ -47,10 +47,6 @@ ADAPTER_REGISTRY: dict[str, dict[str, str]] = {
         "module": "scripts.core.adapters.trivy_adapter",
         "class": "TrivyAdapter",
     },
-    "bandit": {
-        "module": "scripts.core.adapters.bandit_adapter",
-        "class": "BanditAdapter",
-    },
     "semgrep": {
         "module": "scripts.core.adapters.semgrep_adapter",
         "class": "SemgrepAdapter",
@@ -74,35 +70,6 @@ ADAPTER_REGISTRY: dict[str, dict[str, str]] = {
     "grype": {
         "module": "scripts.core.adapters.grype_adapter",
         "class": "GrypeAdapter",
-    },
-    # Added with the #1094 fix. kubescape was absent from this registry, which is
-    # why its adapter could return [] for every real scan -- across BOTH v3 and
-    # v4 -- while its hand-written unit fixtures stayed green. This entry plus
-    # the captured golden output is the guard that makes that detectable.
-    "kubescape": {
-        "module": "scripts.core.adapters.kubescape_adapter",
-        "class": "KubescapeAdapter",
-    },
-    # Added with the #1126 fix. horusec seeded every fingerprint from
-    # `vulnerabilityID`, a UUID it regenerates on each run, so no finding kept
-    # its identity between two scans of the same commit -- and horusec produced
-    # 584 of 831 findings in the measured run. A hand-written unit fixture
-    # cannot catch that, because the ids it asserts are the ids the adapter
-    # just made up. Real captured output can.
-    "horusec": {
-        "module": "scripts.core.adapters.horusec_adapter",
-        "class": "HorusecAdapter",
-    },
-    # Added with the #1215 fix. The adapter read a top-level `checks` array of
-    # `{"checkID", "success"}` -- a shape NO version of trivy has emitted -- so
-    # `data.get("checks", [])` returned [] and real output produced zero
-    # findings, always. All 14 of its unit tests passed because all 14
-    # hand-built that imagined document. Real captured output is the only thing
-    # that can fail: 19 findings from `k8s-insecure-pod`, where the adapter
-    # scored 0 before the fix.
-    "trivy_rbac": {
-        "module": "scripts.core.adapters.trivy_rbac_adapter",
-        "class": "TrivyRbacAdapter",
     },
     # Phase 1 of the v2.0.0 program: the three SARIF bindings. Each is ~25
     # lines over `sarif_common.parse_sarif`, so a regression here is the

@@ -96,7 +96,6 @@ class ScanSession:
     """Checkpoint state for a scan session."""
 
     session_id: str
-    profile: str
     config_hash: str
     started_at: float
     pid: int
@@ -152,7 +151,6 @@ class ScanSession:
         return {
             "version": self.version,
             "session_id": self.session_id,
-            "profile": self.profile,
             "config_hash": self.config_hash,
             "started_at": self.started_at,
             "pid": self.pid,
@@ -166,7 +164,6 @@ class ScanSession:
             targets[tid] = TargetRecord.from_dict(target_data)
         return cls(
             session_id=data["session_id"],
-            profile=data.get("profile", ""),
             config_hash=data["config_hash"],
             started_at=data.get("started_at", 0.0),
             pid=data.get("pid", 0),
@@ -335,7 +332,7 @@ def format_session_summary(session: ScanSession) -> str:
         session: Session to summarize
 
     Returns:
-        Summary string like "Previous scan (started 45min ago, 18/29 targets, deep profile)"
+        Summary string like "Previous scan (started 45min ago, 18/30 targets)"
     """
     elapsed = time.time() - session.started_at
 
@@ -352,10 +349,5 @@ def format_session_summary(session: ScanSession) -> str:
 
     completed = session.completed_count
     total = session.total_targets
-    profile = session.profile or "custom"
 
-    return (
-        f"Previous scan (started {time_str}, "
-        f"{completed}/{total} targets, "
-        f"{profile} profile)"
-    )
+    return f"Previous scan (started {time_str}, {completed}/{total} targets)"

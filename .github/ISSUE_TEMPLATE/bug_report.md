@@ -23,16 +23,14 @@ A clear and concise description of what the bug is.
 ### Exact command
 
 ```bash
-# paste the full command, e.g. `jmo scan --profile balanced --repo .`
+# paste the full command, e.g. `jmo scan --repo .`
 ```
 
-### Scan profile (if applicable)
+### Tool selection (if applicable)
 
-- [ ] `fast`
-- [ ] `slim`
-- [ ] `balanced`
-- [ ] `deep`
-- [ ] Custom profile (paste relevant `jmo.yml` snippet below)
+- [ ] Default (every scanner that applies to the target)
+- [ ] Narrowed with `--tools` / `--skip-tools` (included in the command above)
+- [ ] Top-level `tools:` list in `jmo.yml` (paste the relevant snippet below)
 - [ ] Not applicable
 
 ### What was scanned?

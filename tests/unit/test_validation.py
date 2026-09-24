@@ -5,7 +5,6 @@ Comprehensive tests for the centralized validation module.
 Tests cover:
 - Version string validation (URL injection prevention)
 - Path validation (path traversal prevention)
-- Profile name validation
 - Tool name validation
 - Cron expression validation
 - URL validation (protocol injection prevention)
@@ -28,8 +27,6 @@ import pytest
 from scripts.core.validation import (
     DANGEROUS_VERSION_CHARS,
     OUTPUT_SANITIZATION_PATTERNS,
-    VALID_PROFILES,
-    get_valid_profiles,
     sanitize_error_message,
     sanitize_path_component,
     # Output sanitization
@@ -44,8 +41,6 @@ from scripts.core.validation import (
     validate_path_within_base,
     # Integer validation
     validate_positive_int,
-    # Profile validation
-    validate_profile,
     # Schedule name validation
     validate_schedule_name,
     # Tool name validation
@@ -208,42 +203,6 @@ class TestSanitizePathComponent:
         assert sanitize_path_component(".") == "unknown"
 
 
-class TestProfileValidation:
-    """Test scan profile validation."""
-
-    @pytest.mark.parametrize(
-        "profile",
-        ["fast", "slim", "balanced", "deep"],
-    )
-    def test_valid_profiles(self, profile):
-        """Valid profiles should pass."""
-        assert validate_profile(profile) is True
-
-    @pytest.mark.parametrize(
-        "profile",
-        [
-            "",
-            "invalid",
-            "FAST",  # Case sensitive
-            "fast; rm -rf /",
-            "../etc",
-            "slow",
-        ],
-    )
-    def test_invalid_profiles(self, profile):
-        """Invalid profiles should fail."""
-        assert validate_profile(profile) is False
-
-    def test_get_valid_profiles(self):
-        """Should return sorted list of valid profiles."""
-        profiles = get_valid_profiles()
-        assert "fast" in profiles
-        assert "balanced" in profiles
-        assert "deep" in profiles
-        assert "slim" in profiles
-        assert len(profiles) == len(VALID_PROFILES)
-
-
 class TestToolNameValidation:
     """Test tool name validation."""
 
@@ -252,7 +211,7 @@ class TestToolNameValidation:
         [
             "trivy",
             "semgrep",
-            "afl++",
+            "tool+plus",
             "grype",
             "tool-name",
             "tool_name",

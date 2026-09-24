@@ -6,7 +6,7 @@ catch: on a deliberately-vulnerable repository, a run once reported
 ``Policy evaluation complete: 2/2 passed`` and exit 0 while three tools had
 failed and written nothing at all.
 
-Each of the profile's declared tools must be in exactly one of:
+Each declared tool must be in exactly one of:
 
 ===============  ==========================================================
 ``output``       produced a parseable output file
@@ -22,9 +22,10 @@ Anything in zero states is UNACCOUNTED (a silent omission).
 Anything in two or more states is CONTRADICTORY (the diagnostics disagree).
 Both are bugs.
 
-``manual`` (a MANUAL_INSTALL_TOOLS member) is a property of the *tool*, not an
-account of what happened to it, so it never satisfies the invariant on its own
-and never counts toward a contradiction.
+``manual`` (a tool that must be installed by hand) is a property of the
+*tool*, not an account of what happened to it, so it never satisfies the
+invariant on its own and never counts toward a contradiction. No tool in the
+v2.0.0 matrix is manual-install; the state stays for a future one.
 
 The invariant is environment-independent: it holds with zero tools installed
 (everything ``unresolved``), with a full local install (mixed), and inside a
@@ -35,7 +36,7 @@ with ``HOME`` and ``PATH`` stripped. Assert the invariant, never a distribution.
 Usage::
 
     python scripts/dev/reconcile_scan_accounting.py <results-dir> <stderr-log> \\
-        [--label NAME] [--profile deep]
+        [--label NAME] [--tools trivy semgrep ...]
 
 Exits non-zero if any declared tool is in zero or two states.
 """
@@ -56,10 +57,7 @@ from pathlib import Path
 if __package__ in (None, ""):  # pragma: no cover - only on direct execution
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from scripts.core.tool_registry import (
-    MANUAL_INSTALL_TOOLS,
-    PROFILE_TOOLS,
-)
+from scripts.core.tool_registry import TOOL_MATRIX
 
 # Ways a tool can be accounted for. "manual" is deliberately absent: see module
 # docstring. Order is presentation only.
@@ -330,7 +328,7 @@ def reconcile(
             states.append("manual")
         result.states[tool] = states
 
-    # Names the scanner reported on that are not profile tools at all. `docker`
+    # Names the scanner reported on that are not declared tools at all. `docker`
     # and `zap-baseline.py` were once reported as tools with missing findings;
     # both are implementation details of zap.
     reported = (
@@ -381,7 +379,7 @@ def render(result: Reconciliation, declared: list[str], label: str) -> None:
         print(
             f"FAIL  NEVER MENTIONED ({len(result.never_mentioned)}): "
             f"{result.never_mentioned}"
-            "\n      (declared in the profile and absent from every stream and artifact)"
+            "\n      (declared and absent from every stream and artifact)"
         )
     if result.contradictory:
         print(
@@ -389,11 +387,11 @@ def render(result: Reconciliation, declared: list[str], label: str) -> None:
         )
     if result.stray_reported:
         print(
-            f"FAIL  reported as tools but not in profile "
+            f"FAIL  reported as tools but not declared "
             f"({len(result.stray_reported)}): {result.stray_reported}"
         )
     if result.stray_output:
-        print(f"FAIL  output files for non-profile names: {result.stray_output}")
+        print(f"FAIL  output files for undeclared names: {result.stray_output}")
     if result.unparseable:
         print(f"FAIL  unparseable output: {result.unparseable}")
 
@@ -408,14 +406,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("log", type=Path, help="Captured stderr log from the scan")
     parser.add_argument("--label", default=None, help="Name for the report header")
     parser.add_argument(
-        "--profile",
-        default="deep",
-        choices=sorted(PROFILE_TOOLS),
-        help="Profile whose declared tools must be accounted for (default: deep)",
+        "--tools",
+        nargs="+",
+        default=None,
+        help="Tools the scan declared (default: the whole TOOL_MATRIX)",
     )
     args = parser.parse_args(argv)
 
-    declared = list(PROFILE_TOOLS[args.profile])
+    declared = list(args.tools or TOOL_MATRIX)
     diags = parse_log(args.log.read_text(encoding="utf-8", errors="replace"))
     counts, unparseable = parse_outputs(args.results_dir)
     result = reconcile(
@@ -423,7 +421,7 @@ def main(argv: list[str] | None = None) -> int:
         diags=diags,
         output_counts=counts,
         unparseable=unparseable,
-        manual=frozenset(MANUAL_INSTALL_TOOLS),
+        manual=frozenset(),
     )
     render(result, declared, args.label or args.results_dir.name)
     return 0 if result.ok else 1

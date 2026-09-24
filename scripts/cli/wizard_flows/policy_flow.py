@@ -67,24 +67,39 @@ def _normalize_policy_name(name: str) -> str:
     )
 
 
+def _configured_default_policies() -> list[str]:
+    """`policy.default_policies` from jmo.yml, with the JMO_POLICY_* env overrides.
+
+    The same source `jmo report` evaluates by default, so the wizard recommends
+    what a plain scan would have run.
+    """
+    from scripts.core.config import load_config_with_env_overrides
+
+    return list(load_config_with_env_overrides("jmo.yml").policy.default_policies)
+
+
 def policy_evaluation_menu(
     results_dir: Path,
-    profile: str,
     findings: list[dict[str, Any]],
     non_interactive: bool = False,
+    default_policies: list[str] | None = None,
 ) -> dict[str, PolicyResult]:
     """
     Present policy evaluation menu and evaluate selected policies.
 
     Args:
         results_dir: Path to scan results directory
-        profile: Scan profile name (fast/balanced/deep)
         findings: List of CommonFinding dictionaries
-        non_interactive: Skip prompts and use profile defaults
+        non_interactive: Skip prompts and use the recommended policies
+        default_policies: Policies recommended regardless of findings; None
+            reads `policy.default_policies` from jmo.yml
 
     Returns:
         Dictionary mapping policy names to PolicyResult objects
     """
+    if default_policies is None:
+        default_policies = _configured_default_policies()
+
     print("\n" + "═" * 60)
     print("  📋 Security Policy Evaluation")
     print("═" * 60)
@@ -124,14 +139,14 @@ def policy_evaluation_menu(
 
     # Auto-detect recommended policies
     recommended = _detect_recommended_policies(
-        findings, profile, policies_with_metadata
+        findings, policies_with_metadata, default_policies
     )
 
     # Display scan summary
     _display_scan_summary(findings)
 
     # Display policy menu
-    print(f"\nRecommended policies for '{profile}' profile:")
+    print("\nRecommended policies:")
     for i, (policy_path, metadata) in enumerate(policies_with_metadata, 1):
         is_recommended = policy_path in recommended
         marker = "✨" if is_recommended else "  "
@@ -197,23 +212,22 @@ def policy_evaluation_menu(
 
 def _detect_recommended_policies(
     findings: list[dict[str, Any]],
-    profile: str,
     policies_with_metadata: list[tuple[Path, dict[str, Any]]],
+    default_policies: list[str],
 ) -> list[Path]:
     """
-    Auto-detect recommended policies based on scan findings and profile.
+    Recommend policies from the configured defaults plus the scan's findings.
 
     Detection Logic:
-    - If verified secrets found → recommend zero-secrets
-    - If OWASP violations found → recommend owasp-top-10
-    - If profile=deep → recommend all policies
-    - If profile=balanced → recommend owasp-top-10 + zero-secrets
-    - If profile=fast → recommend zero-secrets only
+    - Every configured default policy (jmo.yml `policy.default_policies`)
+    - If verified secrets found → add zero-secrets
+    - If OWASP violations found → add owasp-top-10
+    - If PCI DSS violations found → add pci-dss
 
     Args:
         findings: List of CommonFinding dictionaries
-        profile: Scan profile name
         policies_with_metadata: List of (policy_path, metadata) tuples
+        default_policies: Policy names recommended regardless of findings
 
     Returns:
         List of recommended policy paths
@@ -230,15 +244,9 @@ def _detect_recommended_policies(
         # Also add file stem (normalized) for direct matching
         policy_map[_normalize_policy_name(path.stem)] = path
 
-    # Profile-based defaults (using canonical short names)
-    profile_defaults = {
-        "fast": ["zero-secrets"],
-        "slim": ["zero-secrets", "owasp-top-10"],
-        "balanced": ["owasp-top-10", "zero-secrets"],
-        "deep": [path.stem for path, _ in policies_with_metadata],  # All policies
-    }
-
-    default_policies = profile_defaults.get(profile, ["zero-secrets"])
+    # A copy: the findings-based additions below must not leak into the caller's
+    # list (which may be the loaded config's own).
+    default_policies = list(default_policies)
 
     # Scan findings-based recommendations
     has_verified_secrets = any(

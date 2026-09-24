@@ -5,7 +5,6 @@ This module provides security-focused validation helpers for:
 - File paths (path traversal prevention)
 - Tool names (valid scanner names only)
 - Version strings (URL injection prevention)
-- Profile names (valid profile validation)
 - CLI arguments (general input sanitization)
 
 Security Philosophy:
@@ -266,55 +265,6 @@ def sanitize_path_component(component: str) -> str:
 
 
 # =============================================================================
-# Profile Validation
-# =============================================================================
-
-# Valid scan profile names
-VALID_PROFILES = frozenset(["fast", "slim", "balanced", "deep"])
-
-
-def validate_profile(profile: str) -> bool:
-    """
-    Validate that profile name is a known scan profile.
-
-    Args:
-        profile: Profile name to validate
-
-    Returns:
-        True if profile is valid, False otherwise
-
-    Examples:
-        >>> validate_profile("balanced")
-        True
-        >>> validate_profile("fast")
-        True
-        >>> validate_profile("evil; rm -rf /")
-        False
-    """
-    if not profile:
-        logger.error("Empty profile name")
-        return False
-
-    if profile not in VALID_PROFILES:
-        logger.error(
-            f"Invalid profile: '{profile}'. Valid profiles: {', '.join(sorted(VALID_PROFILES))}"
-        )
-        return False
-
-    return True
-
-
-def get_valid_profiles() -> list[str]:
-    """
-    Get list of valid profile names.
-
-    Returns:
-        List of valid profile names
-    """
-    return sorted(VALID_PROFILES)
-
-
-# =============================================================================
 # Tool Name Validation
 # =============================================================================
 
@@ -336,7 +286,7 @@ def validate_tool_name(tool_name: str, registry: ToolRegistry | None = None) -> 
     Examples:
         >>> validate_tool_name("trivy")
         True
-        >>> validate_tool_name("afl++")
+        >>> validate_tool_name("osv-scanner")
         True
         >>> validate_tool_name("; rm -rf /")
         False

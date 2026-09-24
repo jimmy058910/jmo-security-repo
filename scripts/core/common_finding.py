@@ -118,16 +118,6 @@ TOOL_SEVERITY_MAPPINGS: dict[str, dict[str, str]] = {
         "critical": "CRITICAL",
         "unknown": "INFO",
     },
-    "falco": {
-        "emergency": "CRITICAL",
-        "alert": "CRITICAL",
-        "critical": "CRITICAL",
-        "error": "HIGH",
-        "warning": "MEDIUM",
-        "notice": "LOW",
-        "informational": "INFO",
-        "debug": "INFO",
-    },
     "shellcheck": {
         "error": "HIGH",
         "warning": "MEDIUM",

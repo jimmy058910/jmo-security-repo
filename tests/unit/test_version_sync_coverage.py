@@ -25,7 +25,11 @@ from pathlib import Path
 import pytest
 import yaml
 
-from scripts.dev.update_versions import UNPINNED_BY_DESIGN, VERSION_VAR_ALIASES
+from scripts.dev.update_versions import (
+    DOCKERFILE,
+    UNPINNED_BY_DESIGN,
+    VERSION_VAR_ALIASES,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PINNED_SECTIONS = ("python_tools", "binary_tools", "special_tools")
@@ -42,7 +46,12 @@ def _registry() -> dict[str, dict]:
 
 def _searchable_text() -> str:
     """Every file `--sync` rewrites, concatenated."""
-    parts = [p.read_text(encoding="utf-8") for p in REPO_ROOT.glob("Dockerfile.*")]
+    dockerfiles = sorted(REPO_ROOT.glob("Dockerfile*"))
+    # One image since v2.0.0, and it is the file --sync rewrites. An empty glob
+    # would search nothing and fail every entry for the wrong reason; a second
+    # Dockerfile would be one --sync never touches.
+    assert dockerfiles == [DOCKERFILE], [p.name for p in dockerfiles]
+    parts = [p.read_text(encoding="utf-8") for p in dockerfiles]
     workflows = REPO_ROOT / ".github" / "workflows"
     if workflows.exists():
         parts += [p.read_text(encoding="utf-8") for p in workflows.glob("*.yml")]
@@ -56,21 +65,9 @@ def _pin_patterns(tool: str, info: dict) -> list[str]:
         rf'{re.escape(var_stem)}_VERSION="[0-9.]+"',  # Dockerfile shell var
         rf'{re.escape(var_stem)}_VERSION:\s+"[0-9.]+"',  # workflow env: block
     ]
-    # Read whichever package field the entry carries, not just `pypi_package`.
-    #
-    # cdxgen's scoped npm name lived under `pypi_package` until #935 -- which is
-    # why the branch below had to sniff a leading `@` to guess the separator.
-    # Now that `npm_package:` is declared, reading only `pypi_package` made this
-    # test report cdxgen as unreachable by `--sync` when its Dockerfile pin had
-    # not moved at all. Same conflation the validator had: the registry to ask
-    # is a property of the package, not of the field it happens to sit in.
-    for key, sep in (("npm_package", "@"), ("pypi_package", "==")):
-        pkg = info.get(key)
-        if isinstance(pkg, str) and pkg:
-            # A scoped npm name under the legacy `pypi_package` key still pins
-            # as `@scope/name@X.Y.Z`.
-            actual = "@" if pkg.startswith("@") else sep
-            patterns.append(rf"{re.escape(pkg)}{re.escape(actual)}[0-9][0-9.]*")
+    pkg = info.get("pypi_package")
+    if isinstance(pkg, str) and pkg:
+        patterns.append(rf"{re.escape(pkg)}==[0-9][0-9.]*")  # pip install line
     return patterns
 
 
@@ -115,20 +112,4 @@ def test_unpinned_by_design_entries_really_are_absent():
     assert not wrongly_exempt, (
         f"{wrongly_exempt} are listed UNPINNED_BY_DESIGN but do have a pin. "
         "Remove them from the exemption so --sync keeps them current."
-    )
-
-
-def test_prowler_pin_matches_the_registry():
-    """Named explicitly: this is the drift that was actually shipping (#797).
-
-    Verified before bumping that `prowler==5.36.0` installs on `ubuntu:24.04`
-    with `--break-system-packages` and that its CLI runs, which is the exact
-    context the Dockerfiles use.
-    """
-    declared = _registry()["prowler"]["version"]
-    pinned = set(re.findall(r"prowler==([0-9][0-9.]*)", _searchable_text()))
-    assert pinned, "no prowler pin found at all -- did the install line move?"
-    assert pinned == {declared}, (
-        f"prowler pinned at {sorted(pinned)} but versions.yaml declares "
-        f"{declared}. Run `python scripts/dev/update_versions.py --sync`."
     )

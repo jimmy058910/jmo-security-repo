@@ -597,46 +597,6 @@ class TestClusterCrossToolDuplicates:
             assert len(result) <= 2
 
 
-class TestAflPlusPlusHandling:
-    """Tests for afl++ special case handling (line 182)."""
-
-    def test_afl_plus_plus_json_normalization(self, tmp_path, monkeypatch):
-        """Test afl++.json gets normalized to aflplusplus adapter (line 182)."""
-        root = tmp_path / "results"
-        repo = root / "individual-repos" / "r1"
-        repo.mkdir(parents=True, exist_ok=True)
-
-        # Create afl++.json (note the special filename)
-        finding = {
-            "schemaVersion": "1.0.0",
-            "id": "afl1",
-            "ruleId": "CRASH",
-            "message": "Crash found",
-            "severity": "HIGH",
-            "tool": {"name": "aflplusplus", "version": "1"},
-            "location": {"path": "test.c", "startLine": 1},
-        }
-        (repo / "afl++.json").write_text(json.dumps([finding]), encoding="utf-8")
-
-        # Track what adapter name is requested
-        adapter_requested = []
-
-        def mock_get(name):
-            adapter_requested.append(name)
-            return None  # No adapter found (will be logged as warning)
-
-        # Mock registry.get
-        nr.get_plugin_registry()  # Verify accessible before mocking
-        mock_registry = MagicMock()
-        mock_registry.get = mock_get
-        monkeypatch.setattr(nr, "get_plugin_registry", lambda: mock_registry)
-
-        nr.gather_results(root)
-
-        # Verify aflplusplus was requested (normalized from afl++)
-        assert "aflplusplus" in adapter_requested
-
-
 class TestSyftIndexPathBranch:
     """Tests for SBOM index path/name branch (line 413->417)."""
 

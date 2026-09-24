@@ -6,13 +6,10 @@ pipeline {
     agent any
 
     environment {
-        // Docker image variants
-        JMO_IMAGE_FULL = 'jmogaming/jmo-security:latest'
-        JMO_IMAGE_SLIM = 'jmogaming/jmo-security:slim'
-        JMO_IMAGE_ALPINE = 'jmogaming/jmo-security:alpine'
+        // One image carries every scanner (pin a version tag for reproducible runs)
+        JMO_IMAGE = 'jmogaming/jmo-security:latest'
 
         // Scan configuration
-        JMO_PROFILE = 'balanced'
         JMO_FAIL_ON = 'HIGH'
         RESULTS_DIR = 'results'
     }
@@ -21,18 +18,18 @@ pipeline {
         stage('Security Scan') {
             agent {
                 docker {
-                    image "${JMO_IMAGE_SLIM}"
+                    image "${JMO_IMAGE}"
                     args '-v $WORKSPACE:/workspace -w /workspace'
                 }
             }
             steps {
                 script {
-                    // Run scan based on branch
-                    def profile = env.BRANCH_NAME == 'main' ? 'balanced' : 'fast'
+                    // main scans with every scanner; other branches narrow the list
+                    def toolsArg = env.BRANCH_NAME == 'main' ? '' : '--tools trufflehog semgrep trivy'
                     sh """
                         jmo scan \
                             --repo . \
-                            --profile-name ${profile} \
+                            ${toolsArg} \
                             --results-dir ${RESULTS_DIR} \
                             --human-logs
                     """
@@ -43,7 +40,7 @@ pipeline {
         stage('Generate Reports') {
             agent {
                 docker {
-                    image "${JMO_IMAGE_SLIM}"
+                    image "${JMO_IMAGE}"
                     args '-v $WORKSPACE:/workspace -w /workspace'
                 }
             }
@@ -66,7 +63,7 @@ pipeline {
             }
             agent {
                 docker {
-                    image "${JMO_IMAGE_SLIM}"
+                    image "${JMO_IMAGE}"
                     args '-v $WORKSPACE:/workspace -w /workspace'
                 }
             }
@@ -85,7 +82,7 @@ pipeline {
             }
             agent {
                 docker {
-                    image "${JMO_IMAGE_SLIM}"
+                    image "${JMO_IMAGE}"
                     args '-v $WORKSPACE:/workspace -w /workspace'
                 }
             }
@@ -107,11 +104,10 @@ pipeline {
                         return
                     }
 
-                    // Run current scan
+                    // Run current scan with the same tool list as the main baseline
                     sh """
                         jmo scan \
                             --repo . \
-                            --profile-name fast \
                             --results-dir current-results \
                             --human-logs
                     """

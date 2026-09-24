@@ -92,7 +92,6 @@ def test_cmd_scan_signal_stop(tmp_path: Path, monkeypatch):
         timeout=None,
         threads=1,
         allow_missing_tools=True,
-        profile_name=None,
         log_level=None,
         human_logs=False,
     )

@@ -6,7 +6,6 @@ import { ScanMetadata } from '../../src/types/findings'
 const createScanMetadata = (overrides: Partial<ScanMetadata>): ScanMetadata => ({
   scan_id: `scan-${Math.random()}`,
   timestamp: '2025-11-06T12:00:00Z',
-  profile: 'balanced',
   tools: ['trivy', 'semgrep'],
   target_count: 5,
   summary: {
@@ -59,12 +58,10 @@ describe('HistoryPanel', () => {
         createScanMetadata({
           scan_id: 'scan1',
           timestamp: '2025-11-06T12:00:00Z',
-          profile: 'fast',
         }),
         createScanMetadata({
           scan_id: 'scan2',
           timestamp: '2025-11-06T14:00:00Z',
-          profile: 'balanced',
         }),
       ]
       render(<HistoryPanel {...defaultProps} scans={scans} />)
@@ -75,18 +72,18 @@ describe('HistoryPanel', () => {
       expect((select as HTMLSelectElement).options).toHaveLength(3) // Current Scan + 2 scans
     })
 
-    it('should format scan option with timestamp and profile', () => {
+    it('should format scan option with timestamp', () => {
       const scans = [
         createScanMetadata({
           scan_id: 'scan1',
           timestamp: '2025-11-06T12:00:00Z',
-          profile: 'fast',
         }),
       ]
       render(<HistoryPanel {...defaultProps} scans={scans} />)
 
-      // The formatted text appears in the option
-      expect(screen.getByText(/fast/)).toBeInTheDocument()
+      // The formatted timestamp is the option text; scans record no profile
+      const select = screen.getByRole('combobox') as HTMLSelectElement
+      expect(select.options[1].text).toMatch(/Nov 6/)
     })
 
     it('should include branch name in scan option when available', () => {
@@ -94,7 +91,6 @@ describe('HistoryPanel', () => {
         createScanMetadata({
           scan_id: 'scan1',
           timestamp: '2025-11-06T12:00:00Z',
-          profile: 'fast',
           git_context: { branch: 'main', commit: 'abc123' },
         }),
       ]
@@ -214,7 +210,6 @@ describe('HistoryPanel', () => {
   describe('Scan Metadata Display', () => {
     const scanWithMetadata = createScanMetadata({
       scan_id: 'scan1',
-      profile: 'balanced',
       tools: ['trivy', 'semgrep', 'checkov'],
       target_count: 10,
       summary: {
@@ -241,8 +236,7 @@ describe('HistoryPanel', () => {
         />
       )
 
-      expect(screen.getByText('Profile:')).toBeInTheDocument()
-      expect(screen.getByText('balanced')).toBeInTheDocument()
+      expect(screen.queryByText('Profile:')).not.toBeInTheDocument()
       expect(screen.getByText('Tools:')).toBeInTheDocument()
       // Find "3" by looking for the Tools label's sibling
       const toolsLabel = screen.getByText('Tools:')
@@ -299,13 +293,12 @@ describe('HistoryPanel', () => {
       )
 
       expect(screen.getByText('Viewing current scan (not saved to history)')).toBeInTheDocument()
-      expect(screen.queryByText('Profile:')).not.toBeInTheDocument()
+      expect(screen.queryByText('Tools:')).not.toBeInTheDocument()
     })
 
     it('should handle scan without git context', () => {
       const scanNoGit = createScanMetadata({
         scan_id: 'scan1',
-        profile: 'fast',
         git_context: undefined,
       })
       render(
@@ -317,7 +310,7 @@ describe('HistoryPanel', () => {
       )
 
       expect(screen.queryByText('Git Context')).not.toBeInTheDocument()
-      expect(screen.getByText('Profile:')).toBeInTheDocument() // Other metadata still shown
+      expect(screen.getByText('Tools:')).toBeInTheDocument() // Other metadata still shown
     })
 
     it('should handle partial git context', () => {
@@ -349,7 +342,6 @@ describe('HistoryPanel', () => {
       const scan = createScanMetadata({
         scan_id: 'scan1',
         timestamp: '2025-11-06T14:30:00Z',
-        profile: 'fast',
       })
       render(<HistoryPanel {...defaultProps} scans={[scan]} />)
 
@@ -361,17 +353,16 @@ describe('HistoryPanel', () => {
       const scan = createScanMetadata({
         scan_id: 'scan1',
         timestamp: 'invalid-timestamp',
-        profile: 'fast',
       })
       render(<HistoryPanel {...defaultProps} scans={[scan]} />)
 
-      // Should still render the option (timestamp formatting catches error and returns raw string)
-      // The formatTimestamp function returns the raw string on error
+      // Should still render the option. toLocaleString() does not throw on an
+      // invalid Date, so formatTimestamp's catch never runs: the option reads
+      // "Invalid Date" rather than the raw string.
       const select = screen.getByRole('combobox') as HTMLSelectElement
-      // Option will be "invalid-timestamp - fast"
       const options = Array.from(select.options)
       expect(options.length).toBe(2) // "Current Scan" + 1 scan
-      expect(options[1].text).toContain('fast')
+      expect(options[1].text).toBe('Invalid Date')
     })
   })
 
@@ -445,21 +436,23 @@ describe('HistoryPanel', () => {
 
     it('should update when selectedScanId changes', () => {
       const scans = [
-        createScanMetadata({ scan_id: 'scan1', profile: 'fast' }),
-        createScanMetadata({ scan_id: 'scan2', profile: 'balanced' }),
+        createScanMetadata({ scan_id: 'scan1', target_count: 11 }),
+        createScanMetadata({ scan_id: 'scan2', target_count: 22 }),
       ]
       const { rerender } = render(
         <HistoryPanel {...defaultProps} scans={scans} selectedScanId="scan1" />
       )
 
-      expect(screen.getByText('fast')).toBeInTheDocument()
+      const targetsValue = () =>
+        screen.getByText('Targets:').nextElementSibling?.textContent
+      expect(targetsValue()).toBe('11')
 
       // Change selection
       rerender(
         <HistoryPanel {...defaultProps} scans={scans} selectedScanId="scan2" />
       )
 
-      expect(screen.getByText('balanced')).toBeInTheDocument()
+      expect(targetsValue()).toBe('22')
     })
   })
 

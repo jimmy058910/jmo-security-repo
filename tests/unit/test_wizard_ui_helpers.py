@@ -6,6 +6,8 @@ Covers:
 - prompt_text(): Text input with defaults
 - prompt_choice(): Numbered choice selection (numeric + key input)
 - select_mode(): Mode selection wrapper
+- TOOL_TIME_ESTIMATES, calculate_time_estimate(), format_time_range()
+  (moved here when the wizard's profile module was deleted)
 """
 
 from __future__ import annotations
@@ -13,12 +15,16 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from scripts.cli.wizard_flows.ui_helpers import (
+    TOOL_TIME_ESTIMATES,
     UNICODE_FALLBACKS,
+    calculate_time_estimate,
+    format_time_range,
     prompt_choice,
     prompt_text,
     safe_print,
     select_mode,
 )
+from scripts.core.tool_registry import TOOL_MATRIX
 
 # ========== Category 1: UNICODE_FALLBACKS ==========
 
@@ -164,38 +170,38 @@ class TestPromptChoice:
 
     def test_numeric_selection(self):
         """Test selecting by number."""
-        choices = [("fast", "Fast scan"), ("balanced", "Balanced scan")]
+        choices = [("repo", "Repositories"), ("image", "Container images")]
         with patch("builtins.input", return_value="1"):
-            result = prompt_choice("Choose profile:", choices)
-            assert result == "fast"
+            result = prompt_choice("Choose target:", choices)
+            assert result == "repo"
 
     def test_numeric_selection_second_item(self):
         """Test selecting second item by number."""
-        choices = [("fast", "Fast scan"), ("balanced", "Balanced scan")]
+        choices = [("repo", "Repositories"), ("image", "Container images")]
         with patch("builtins.input", return_value="2"):
-            result = prompt_choice("Choose profile:", choices)
-            assert result == "balanced"
+            result = prompt_choice("Choose target:", choices)
+            assert result == "image"
 
     def test_key_input(self):
         """Test selecting by key name."""
-        choices = [("fast", "Fast scan"), ("balanced", "Balanced scan")]
-        with patch("builtins.input", return_value="balanced"):
+        choices = [("repo", "Repositories"), ("image", "Container images")]
+        with patch("builtins.input", return_value="image"):
             result = prompt_choice("Choose:", choices)
-            assert result == "balanced"
+            assert result == "image"
 
     def test_key_input_case_insensitive(self):
         """Test key input is case-insensitive."""
-        choices = [("fast", "Fast scan"), ("DEEP", "Deep scan")]
-        with patch("builtins.input", return_value="deep"):
+        choices = [("repo", "Repositories"), ("IAC", "Infrastructure as Code")]
+        with patch("builtins.input", return_value="iac"):
             result = prompt_choice("Choose:", choices)
-            assert result == "DEEP"
+            assert result == "IAC"
 
     def test_default_on_empty(self):
         """Test default selection on empty input."""
-        choices = [("fast", "Fast"), ("balanced", "Balanced")]
+        choices = [("repo", "Repositories"), ("image", "Container images")]
         with patch("builtins.input", return_value=""):
-            result = prompt_choice("Choose:", choices, default="balanced")
-            assert result == "balanced"
+            result = prompt_choice("Choose:", choices, default="image")
+            assert result == "image"
 
     def test_invalid_then_valid(self):
         """Test recovery from invalid input."""
@@ -233,17 +239,17 @@ class TestSelectMode:
 
     def test_delegates_to_prompt_choice(self):
         """Test select_mode calls prompt_choice."""
-        modes = [("fast", "Quick scan"), ("deep", "Full scan")]
+        modes = [("repo", "Repositories"), ("iac", "Infrastructure as Code")]
         with patch(
             "scripts.cli.wizard_flows.ui_helpers.prompt_choice",
-            return_value="deep",
+            return_value="iac",
         ) as mock_choice:
-            result = select_mode("Scan modes", modes, default="fast")
-            assert result == "deep"
+            result = select_mode("Target types", modes, default="repo")
+            assert result == "iac"
             mock_choice.assert_called_once()
             # First arg should include the title
             call_args = mock_choice.call_args
-            assert "Scan modes" in call_args[0][0]
+            assert "Target types" in call_args[0][0]
 
     def test_passes_default(self):
         """Test default is forwarded to prompt_choice."""
@@ -257,3 +263,76 @@ class TestSelectMode:
                 mock_choice.call_args[1]["default"] == "b"
                 or mock_choice.call_args[0][2] == "b"
             )
+
+
+# ========== Category 6: time estimates ==========
+
+
+class TestToolTimeEstimates:
+    """TOOL_TIME_ESTIMATES has one entry per matrix tool, and nothing else.
+
+    It used to carry an estimate for every tool any profile had ever named, so
+    it outlived the tools it described. A tool added to TOOL_MATRIX without an
+    estimate silently gets `_default`; a tool removed from it leaves a dead row.
+    Both directions fail here.
+    """
+
+    def test_keys_are_exactly_the_matrix(self):
+        assert set(TOOL_TIME_ESTIMATES) - {"_default"} == set(TOOL_MATRIX)
+
+    def test_default_is_present_and_positive(self):
+        assert TOOL_TIME_ESTIMATES["_default"] > 0
+
+
+class TestCalculateTimeEstimate:
+    """Tests for calculate_time_estimate()."""
+
+    def test_empty_tools(self):
+        min_t, max_t = calculate_time_estimate([])
+        assert min_t == 0
+        assert max_t == 0
+
+    def test_single_known_tool(self):
+        min_t, max_t = calculate_time_estimate(["trufflehog"])
+        expected = TOOL_TIME_ESTIMATES["trufflehog"]
+        assert min_t == int(expected * 0.6)
+        assert max_t == int(expected * 1.2)
+
+    def test_unknown_tool_uses_default(self):
+        min_t, max_t = calculate_time_estimate(["unknown_tool"])
+        default = TOOL_TIME_ESTIMATES["_default"]
+        assert min_t == int(default * 0.6)
+        assert max_t == int(default * 1.2)
+
+    def test_min_less_than_max(self):
+        min_t, max_t = calculate_time_estimate(["semgrep", "trivy", "checkov"])
+        assert min_t < max_t
+
+    def test_more_tools_longer_time(self):
+        _, max_1 = calculate_time_estimate(["semgrep"])
+        _, max_3 = calculate_time_estimate(["semgrep", "trivy", "checkov"])
+        assert max_3 > max_1
+
+
+class TestFormatTimeRange:
+    """Tests for format_time_range()."""
+
+    def test_seconds_format(self):
+        result = format_time_range(30, 50)
+        assert "30s" in result
+        assert "50s" in result
+
+    def test_minutes_format(self):
+        result = format_time_range(120, 300)
+        assert "2 min" in result
+        assert "5 min" in result
+
+    def test_hours_format(self):
+        result = format_time_range(3600, 7200)
+        assert "1h" in result
+        assert "2h" in result
+
+    def test_mixed_format(self):
+        result = format_time_range(45, 120)
+        assert "45s" in result
+        assert "2 min" in result

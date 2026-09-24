@@ -2,7 +2,7 @@
 # JMo Security Docker Wrapper
 # Cross-platform script that handles Git Bash MSYS path conversion issues on Windows
 #
-# Usage: jmo-docker scan --repo /scan --profile fast
+# Usage: jmo-docker scan --repo /scan
 #        jmo-docker wizard
 #        jmo-docker --help
 #

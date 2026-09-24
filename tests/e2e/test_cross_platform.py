@@ -23,12 +23,37 @@ from scripts.cli.jmo import cmd_report, cmd_scan
 from scripts.core.history_db import get_connection, list_scans
 
 
+@pytest.fixture
+def no_real_scanners(monkeypatch):
+    """Resolve no scanner binary for this test's in-process scan.
+
+    The full-scan tests are about platform behaviour (paths, case sensitivity,
+    SQLite), not any scanner. With nothing resolved, every requested tool is
+    stubbed, as on a CI runner with no scanners installed, so a developer machine
+    with semgrep or trufflehog on PATH behaves the same: otherwise it spawns the
+    real binary (semgrep with the network-fetching `--config auto`) and trips
+    `_guard_no_unmarked_scanner_spawn`. Returns the names asked for, so a test can
+    prove the stub was reached: a patch on a name the scanner stopped reading
+    would pass silently.
+    """
+    asked: list[str] = []
+
+    def _resolve_nothing(tool_name: str) -> None:
+        asked.append(tool_name)
+        return None
+
+    monkeypatch.setattr(
+        "scripts.cli.scan_jobs.repository_scanner.find_tool", _resolve_nothing
+    )
+    return asked
+
+
 @pytest.mark.slow
 class TestCrossPlatformCompatibility:
     """Test JMo works on Linux, macOS, Windows (WSL)."""
 
     @pytest.mark.skipif(sys.platform != "linux", reason="Linux only")
-    def test_linux_full_scan(self, tmp_path, monkeypatch):
+    def test_linux_full_scan(self, tmp_path, monkeypatch, no_real_scanners):
         """
         Test full scan on Linux.
 
@@ -54,12 +79,11 @@ class TestCrossPlatformCompatibility:
                 self.targets = None
                 self.results_dir = str(results_dir)
                 self.config = str(tmp_path / "jmo.yml")
-                self.tools = ["trufflehog", "semgrep", "bandit"]
+                self.tools = ["trufflehog", "semgrep"]
                 self.timeout = 300
                 self.threads = 2
                 self.allow_missing_tools = True
                 self.profile = False
-                self.profile_name = "fast"
                 # Multi-target args
                 self.image = None
                 self.images_file = None
@@ -82,7 +106,14 @@ class TestCrossPlatformCompatibility:
         # which resolves `Path.home()` with no injection point -- redirect
         # it so this in-process call can't write the real ~/.jmo/config.yml.
         monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+        # No matrix scanner is a dev dependency in v2. bandit was, and it kept
+        # this scan's pre-flight satisfied on every runner; without it the
+        # pre-flight finds nothing and the scan exits 1 before any platform
+        # behaviour is exercised. Container mode skips the host pre-flight, so
+        # each missing tool reaches the scan core and is stubbed, as in Docker.
+        monkeypatch.setenv("DOCKER_CONTAINER", "1")
         scan_rc = cmd_scan(ScanArgs())
+        assert {"trufflehog", "semgrep"} <= set(no_real_scanners), no_real_scanners
         assert scan_rc == 0, "Scan should succeed on Linux"
 
         # Step 2: Report with history storage
@@ -124,7 +155,7 @@ class TestCrossPlatformCompatibility:
         assert (repo / "app.py") != (repo / "App.py")
 
     @pytest.mark.skipif(sys.platform != "darwin", reason="macOS only")
-    def test_macos_full_scan(self, tmp_path, monkeypatch):
+    def test_macos_full_scan(self, tmp_path, monkeypatch, no_real_scanners):
         """
         Test full scan on macOS.
 
@@ -150,12 +181,11 @@ class TestCrossPlatformCompatibility:
                 self.targets = None
                 self.results_dir = str(results_dir)
                 self.config = str(tmp_path / "jmo.yml")
-                self.tools = ["trufflehog", "semgrep", "bandit"]
+                self.tools = ["trufflehog", "semgrep"]
                 self.timeout = 300
                 self.threads = 2
                 self.allow_missing_tools = True
                 self.profile = False
-                self.profile_name = "fast"
                 # Multi-target args
                 self.image = None
                 self.images_file = None
@@ -178,7 +208,14 @@ class TestCrossPlatformCompatibility:
         # which resolves `Path.home()` with no injection point -- redirect
         # it so this in-process call can't write the real ~/.jmo/config.yml.
         monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+        # No matrix scanner is a dev dependency in v2. bandit was, and it kept
+        # this scan's pre-flight satisfied on every runner; without it the
+        # pre-flight finds nothing and the scan exits 1 before any platform
+        # behaviour is exercised. Container mode skips the host pre-flight, so
+        # each missing tool reaches the scan core and is stubbed, as in Docker.
+        monkeypatch.setenv("DOCKER_CONTAINER", "1")
         scan_rc = cmd_scan(ScanArgs())
+        assert {"trufflehog", "semgrep"} <= set(no_real_scanners), no_real_scanners
         assert scan_rc == 0, "Scan should succeed on macOS"
 
         # Step 2: Report with history storage
@@ -229,7 +266,7 @@ class TestCrossPlatformCompatibility:
         sys.platform != "linux" or not os.path.exists("/mnt/c"),
         reason="WSL only (Linux kernel with Windows drives mounted at /mnt)",
     )
-    def test_windows_wsl_full_scan(self, tmp_path, monkeypatch):
+    def test_windows_wsl_full_scan(self, tmp_path, monkeypatch, no_real_scanners):
         """
         Test full scan on Windows/WSL.
 
@@ -258,12 +295,11 @@ class TestCrossPlatformCompatibility:
                 self.targets = None
                 self.results_dir = str(results_dir)
                 self.config = str(tmp_path / "jmo.yml")
-                self.tools = ["trufflehog", "semgrep", "bandit"]
+                self.tools = ["trufflehog", "semgrep"]
                 self.timeout = 300
                 self.threads = 2
                 self.allow_missing_tools = True
                 self.profile = False
-                self.profile_name = "fast"
                 # Multi-target args
                 self.image = None
                 self.images_file = None
@@ -286,7 +322,14 @@ class TestCrossPlatformCompatibility:
         # which resolves `Path.home()` with no injection point -- redirect
         # it so this in-process call can't write the real ~/.jmo/config.yml.
         monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+        # No matrix scanner is a dev dependency in v2. bandit was, and it kept
+        # this scan's pre-flight satisfied on every runner; without it the
+        # pre-flight finds nothing and the scan exits 1 before any platform
+        # behaviour is exercised. Container mode skips the host pre-flight, so
+        # each missing tool reaches the scan core and is stubbed, as in Docker.
+        monkeypatch.setenv("DOCKER_CONTAINER", "1")
         scan_rc = cmd_scan(ScanArgs())
+        assert {"trufflehog", "semgrep"} <= set(no_real_scanners), no_real_scanners
         assert scan_rc == 0, "Scan should succeed on Windows/WSL"
 
         # Step 2: Report with history storage
@@ -351,7 +394,7 @@ class TestCrossPlatformCompatibility:
         - Path separators normalized (/ vs \\)
         - Symlinks handled correctly
 
-        Note: Requires at least one tool (bandit) installed.
+        Note: Requires at least one tool (semgrep) installed.
         """
         # Create test structure
         repo = tmp_path / "path-test-repo"
@@ -369,12 +412,11 @@ class TestCrossPlatformCompatibility:
                 self.targets = None
                 self.results_dir = str(results_dir)
                 self.config = str(tmp_path / "jmo.yml")
-                self.tools = ["bandit"]
+                self.tools = ["semgrep"]
                 self.timeout = 60
                 self.threads = 1
                 self.allow_missing_tools = True
                 self.profile = False
-                self.profile_name = "fast"
                 # Multi-target args
                 self.image = None
                 self.images_file = None

@@ -28,8 +28,8 @@ Directory Structure Created:
     │       ├── raw-output.json       # Raw tool output
     │       ├── expected-findings.json # Parsed adapter output
     │       └── metadata.json          # Tool version, timestamp, sample used
-    ├── bandit/
-    │   └── v1.9.2/
+    ├── semgrep/
+    │   └── v1.175.0/
     │       └── ...
     └── ...
 
@@ -100,21 +100,6 @@ TOOL_CONFIGS: dict[str, dict[str, Any]] = {
         ],
         "adapter_module": "scripts.core.adapters.trivy_adapter",
         "adapter_class": "TrivyAdapter",
-    },
-    "bandit": {
-        "sample_dir": "python-vulnerable",
-        "output_file": "bandit.json",
-        "command": [
-            "bandit",
-            "-r",
-            "-f",
-            "json",
-            "-o",
-            "{output}",
-            "{sample}",
-        ],
-        "adapter_module": "scripts.core.adapters.bandit_adapter",
-        "adapter_class": "BanditAdapter",
     },
     "semgrep": {
         "sample_dir": "python-vulnerable",
@@ -212,7 +197,6 @@ def get_installed_version(tool_name: str) -> str | None:
     """Get the installed version of a tool by running it."""
     version_commands = {
         "trivy": ["trivy", "--version"],
-        "bandit": ["bandit", "--version"],
         "semgrep": ["semgrep", "--version"],
         "hadolint": ["hadolint", "--version"],
         "checkov": ["checkov", "--version"],

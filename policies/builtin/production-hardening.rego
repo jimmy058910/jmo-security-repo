@@ -41,7 +41,7 @@ dockerfile_issues contains finding if {
 # Any secrets (verified or not)
 secret_findings contains finding if {
 	finding := input.findings[_]
-	finding.tool.name in ["trufflehog", "noseyparker", "semgrep-secrets"]
+	finding.tool.name in ["trufflehog"]
 	finding.severity in ["CRITICAL", "HIGH"]
 }
 

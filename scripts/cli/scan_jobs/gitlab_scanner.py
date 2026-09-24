@@ -12,17 +12,7 @@ Architecture (v0.6.1+):
 6. Clean up temporary clone
 
 This provides GitLab repos with the same tool coverage as local repositories:
-- TruffleHog: Verified secrets scanning
-- Nosey Parker: Deep secrets detection
-- Semgrep: Static analysis (SAST)
-- Bandit: Python security analysis
-- Syft: SBOM generation
-- Trivy: Vulnerability and secrets scanning
-- Checkov: IaC policy checks
-- Hadolint: Dockerfile linting
-- ZAP: Web vulnerability scanning
-- Falco: Runtime security monitoring
-- AFL++: Coverage-guided fuzzing
+every repository-applicable tool in the matrix (see repository_scanner).
 
 Plus container image discovery and scanning:
 - Scans Dockerfile, docker-compose.yml, *.k8s.yaml for image references

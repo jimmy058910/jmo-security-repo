@@ -302,7 +302,6 @@ class TestProvenanceToolVersions:
         generator = ProvenanceGenerator()
         provenance = generator.generate(
             findings_path=findings_file,
-            profile="balanced",
             tools=["trivy", "semgrep"],
             targets=["test-repo"],
         )
@@ -357,7 +356,6 @@ class TestProvenanceToolVersions:
         tool_info = MagicMock()
         tool_info.github_repo = "aquasecurity/trivy"
         tool_info.pypi_package = None
-        tool_info.npm_package = None
         tool_info.name = "trivy"
 
         uri = generator._get_tool_uri(tool_info)
@@ -376,7 +374,6 @@ class TestProvenanceToolVersions:
         tool_info = MagicMock()
         tool_info.github_repo = None
         tool_info.pypi_package = "semgrep"
-        tool_info.npm_package = None
         tool_info.name = "semgrep"
 
         uri = generator._get_tool_uri(tool_info)
@@ -384,19 +381,25 @@ class TestProvenanceToolVersions:
         assert uri == "https://pypi.org/project/semgrep/"
 
     def test_get_tool_uri_fallback(self):
-        """Test _get_tool_uri generates URN fallback."""
-        from unittest.mock import MagicMock
+        """Test _get_tool_uri generates URN fallback.
 
+        A real ToolInfo, not a MagicMock: a mock answers any attribute, so it
+        hid `_get_tool_uri` reading `npm_package` after v2.0.0 removed that
+        field (and npm installs) from ToolInfo -- an AttributeError for any
+        tool with neither a GitHub repo nor a PyPI package.
+        """
         from scripts.core.attestation.provenance import ProvenanceGenerator
+        from scripts.core.tool_registry import ToolInfo
 
         generator = ProvenanceGenerator()
 
-        # Mock ToolInfo with no package info
-        tool_info = MagicMock()
-        tool_info.github_repo = None
-        tool_info.pypi_package = None
-        tool_info.npm_package = None
-        tool_info.name = "custom-tool"
+        # ToolInfo with no package info
+        tool_info = ToolInfo(
+            name="custom-tool",
+            version="1.0.0",
+            description="a tool with no install source",
+            category="binary_tools",
+        )
 
         uri = generator._get_tool_uri(tool_info)
 
@@ -412,7 +415,6 @@ class TestProvenanceToolVersions:
         generator = ProvenanceGenerator()
         provenance = generator.generate(
             findings_path=findings_file,
-            profile="fast",
             tools=["trivy", "semgrep", "hadolint"],
             targets=["test"],
         )

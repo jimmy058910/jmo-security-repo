@@ -16,7 +16,7 @@ This skill ensures documentation stays synchronized with code changes by identif
 
 Use this skill when:
 
-- Adding a new feature (adapter, target type, CLI flag, profile, output format)
+- Adding a new feature (adapter, target type, CLI flag, output format)
 - Making breaking changes to APIs or behavior
 - Refactoring that affects user-facing workflows
 - Asked "what docs need updating?"
@@ -42,7 +42,7 @@ Documentation is organized by **user persona and journey**, not by technical cat
 |---------|-------------|----------------|
 | Complete Beginner | [DOCKER_README.md — Quick Start](../../../docs/DOCKER_README.md#quick-start-absolute-beginners) or `jmo wizard` | Wizard, Docker, beginner workflows |
 | Developer | [QUICKSTART.md](../../../QUICKSTART.md) | Installation, basic commands, defaults |
-| DevOps/SRE | [DOCKER_README.md](../../../docs/DOCKER_README.md) | Docker variants, CI examples, env vars |
+| DevOps/SRE | [DOCKER_README.md](../../../docs/DOCKER_README.md) | Docker image, CI examples, env vars |
 | Advanced User | [USER_GUIDE.md](../../../docs/USER_GUIDE.md) | Config options, advanced features |
 | Contributor | [CONTRIBUTING.md](../../../CONTRIBUTING.md) | Dev tooling, testing, pre-commit, CI |
 
@@ -65,14 +65,14 @@ Documentation is organized by **user persona and journey**, not by technical cat
 **Advanced User**
 
 - [docs/USER_GUIDE.md](../../../docs/USER_GUIDE.md) - comprehensive reference: configuration, advanced features, troubleshooting
-- [docs/PROFILES_AND_TOOLS.md](../../../docs/PROFILES_AND_TOOLS.md) - complete tool lists per profile and the selection philosophy
+- [docs/TOOLS.md](../../../docs/TOOLS.md) - the tool matrix, when each tool runs, target types, and what was removed in v2.0.0
 - [docs/RESULTS_GUIDE.md](../../../docs/RESULTS_GUIDE.md) - example outputs from real scans
 
 **Contributor**
 
 - [CHANGELOG.md](../../../CHANGELOG.md) - version history in Keep-a-Changelog format; every user-facing change lands here
 - [docs/index.md](../../../docs/index.md) - documentation hub; update it when a doc is added, moved, or removed
-- [CLAUDE.md](../../../CLAUDE.md) - agent context: architecture overview, guardrails, scan profiles
+- [CLAUDE.md](../../../CLAUDE.md) - agent context: architecture overview, guardrails, key files
 
 The full inventory is [docs/index.md](../../../docs/index.md).
 
@@ -88,9 +88,8 @@ Each trigger type has a checklist of files to update and example content. For de
 | Breaking Change | CHANGELOG (migration guide), all affected docs, USER_GUIDE | Section 4 |
 | New Output Format | README, QUICKSTART, USER_GUIDE, CHANGELOG, docs/RESULTS_GUIDE | Section 5 |
 | Bug Fix | CHANGELOG, USER_GUIDE troubleshooting (if common issue) | Section 6 |
-| Profile Change | README, QUICKSTART, USER_GUIDE, CHANGELOG | Section 7 |
-| Docker Image Change | DOCKER_README, README, CHANGELOG, CI examples | Section 8 |
-| Tool Count Change | DOCKER_HUB_README (2 locations), release.yml, README, CLAUDE.md | Section 9 |
+| Docker Image Change | DOCKER_README, README, CHANGELOG, CI examples | Section 7 |
+| Tool Count Change | docs/TOOLS.md, DOCKER_HUB_README (2 locations), release.yml, README, CLAUDE.md | Section 8 |
 
 ## Technical Debt and Linting
 
@@ -213,7 +212,7 @@ When making documentation changes:
 
 **Scenario:** User adds Snyk adapter for dependency scanning.
 
-1. **Identify trigger:** New tool adapter, balanced + deep profiles, requires auth token
+1. **Identify trigger:** New tool adapter, joins the default tool matrix, requires auth token
 2. **Determine files:** README.md (tool table), QUICKSTART.md (example), CHANGELOG.md, docs/index.md (tool count), docs/USER_GUIDE.md (auth config)
 3. **Generate content:** Use templates from [templates/doc-update-templates.md](templates/doc-update-templates.md) Section 1
 4. **Run linting:** `pre-commit run markdownlint --files README.md QUICKSTART.md CHANGELOG.md docs/index.md docs/USER_GUIDE.md`

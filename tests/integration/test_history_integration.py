@@ -54,7 +54,6 @@ class TestHistoryWorkflow:
 
         scan_id = store_scan(
             results_dir=results_dir,
-            profile="balanced",
             tools=["trivy"],
             db_path=db_path,
         )
@@ -67,7 +66,7 @@ class TestHistoryWorkflow:
         scans = list_scans(conn, limit=10)
         assert len(scans) == 1
         assert scans[0]["id"] == scan_id
-        assert scans[0]["profile"] == "balanced"
+        assert json.loads(scans[0]["tools"]) == ["trivy"]
         assert scans[0]["total_findings"] == 1
 
         # Retrieve findings
@@ -110,7 +109,6 @@ class TestHistoryWorkflow:
 
             scan_id = store_scan(
                 results_dir=results_dir,
-                profile="fast",
                 tools=["trivy"],
                 db_path=db_path,
                 branch="main",
@@ -148,9 +146,9 @@ class TestHistoryWorkflow:
         )
 
         # Store 2 scans
-        store_scan(results_dir, profile="fast", tools=["trivy"], db_path=db_path)
+        store_scan(results_dir, tools=["trivy"], db_path=db_path)
         time.sleep(2)
-        store_scan(results_dir, profile="fast", tools=["trivy"], db_path=db_path)
+        store_scan(results_dir, tools=["trivy"], db_path=db_path)
 
         # Verify 2 scans exist
         conn = get_connection(db_path)
@@ -205,8 +203,6 @@ class TestHistoryCLI:
                 "store",
                 "--results-dir",
                 str(results_dir),
-                "--profile",
-                "balanced",
                 "--db",
                 str(db_path),
             ],
@@ -233,7 +229,7 @@ class TestHistoryCLI:
         # Store a scan first
         from scripts.core.history_db import store_scan
 
-        store_scan(results_dir, profile="fast", tools=["trivy"], db_path=db_path)
+        scan_id = store_scan(results_dir, tools=["trivy"], db_path=db_path)
 
         # Run history list command
         result = subprocess.run(
@@ -252,7 +248,7 @@ class TestHistoryCLI:
         )
 
         assert result.returncode == 0, f"Command failed: {result.stderr}"
-        assert "fast" in result.stdout  # Profile name
+        assert scan_id[:8] in result.stdout  # The row, by its truncated id
         # Note: Output format depends on whether tabulate is installed
         # Both formats show findings summary (case-insensitive check)
         assert "findings" in result.stdout.lower()
@@ -284,7 +280,7 @@ class TestHistoryCLI:
         # Store a scan
         from scripts.core.history_db import store_scan
 
-        store_scan(results_dir, profile="balanced", tools=["semgrep"], db_path=db_path)
+        store_scan(results_dir, tools=["semgrep"], db_path=db_path)
 
         # Run history stats command
         result = subprocess.run(
@@ -306,7 +302,8 @@ class TestHistoryCLI:
         # Actual output format uses "Scans:" not "Total scans"
         assert "Scans:" in result.stdout
         assert "Findings:" in result.stdout
-        assert "balanced" in result.stdout  # Profile name
+        assert "semgrep" in result.stdout  # Top Tools
+        assert "Scans by Profile" not in result.stdout
 
 
 class TestAutoStorage:

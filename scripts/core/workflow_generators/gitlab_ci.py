@@ -33,6 +33,12 @@ _CONFIG_ONLY_REPOSITORY_KEYS = {
     "exclude": "exclude",
 }
 
+# GitLab job timeout when the schedule sets no startingDeadlineSeconds. One value
+# since v2.0.0 dropped scan profiles (it was fast=10 / balanced=30 / deep=60,
+# with 30 for anything else). 30 kept: TOOL_MATRIX is smaller than balanced
+# was, and jmo.yml's top level inherits balanced's threads and timeout.
+_DEFAULT_JOB_TIMEOUT_MINUTES = 30
+
 
 class GitLabCIGenerator:
     """Generate .gitlab-ci.yml from ScanSchedule."""
@@ -116,14 +122,11 @@ class GitLabCIGenerator:
         Returns:
             Timeout string in GitLab CI format (e.g., "1h 30m")
         """
-        # Use startingDeadlineSeconds if set, otherwise profile-based defaults
+        # Use startingDeadlineSeconds if set, otherwise one default for the matrix
         if schedule.spec.startingDeadlineSeconds:
             minutes = schedule.spec.startingDeadlineSeconds // 60
         else:
-            # Profile-based defaults
-            profile_timeouts = {"fast": 10, "balanced": 30, "deep": 60}
-            profile = schedule.spec.jobTemplate.profile
-            minutes = profile_timeouts.get(profile, 30)
+            minutes = _DEFAULT_JOB_TIMEOUT_MINUTES
 
         # Convert to GitLab CI format (hours and minutes)
         if minutes >= 60:
@@ -151,7 +154,6 @@ class GitLabCIGenerator:
 
         # Build jmo scan command
         cmd_parts = ["jmo scan"]
-        cmd_parts.append(f"--profile-name {shlex.quote(spec.profile)}")
 
         # Targets
         #
@@ -478,7 +480,6 @@ class GitLabCIGenerator:
             [
                 f"# Cron: {schedule.spec.schedule}",
                 f"# Timezone: {schedule.spec.timezone}",
-                f"# Profile: {schedule.spec.jobTemplate.profile}",
                 f"# Generated: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}",
                 "#",
                 "# IMPORTANT: Configure schedule via GitLab UI:",

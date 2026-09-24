@@ -4,8 +4,8 @@ Exercises every CLI subcommand, sub-subcommand, argument, and exit-code
 contract to verify the CLI surface area is intact.
 
 Check counts are derived, not fixed: the --help groups come from the parser, so
-adding a subcommand adds checks. Measured on the current surface (20 top-level
-subcommands, 47 nested): 101 quick-tier, 109 with --tier full.
+adding a subcommand adds checks. Measured on the current surface (17 top-level
+subcommands, 47 nested): 98 quick-tier, 106 with --tier full.
 
 `tests/core/test_cli_validator.py` recomputes these from the parser rather than
 restating them, so the numbers above cannot drift silently the way the previous
@@ -92,7 +92,7 @@ REQUIRED_ARG_COMMANDS: list[tuple[list[str], str]] = [
     (["policy", "test"], "policy test needs policy name"),
     (["policy", "show"], "policy show needs policy name"),
     (["policy", "install"], "policy install needs policy name"),
-    (["schedule", "create"], "schedule create needs --name/--cron/--profile"),
+    (["schedule", "create"], "schedule create needs --name/--cron"),
     (["schedule", "get"], "schedule get needs name"),
     (["schedule", "delete"], "schedule delete needs name"),
     (["schedule", "export"], "schedule export needs name"),
@@ -519,8 +519,9 @@ def _check_scan_help_mentions_repo() -> CheckResult | None:
 # ---------------------------------------------------------------------------
 
 
-# `jmo tools check` probes all 29 registry entries. Measured standalone on a
-# Windows box with the tools actually installed: 49s cold, 33s warm. The bound
+# `jmo tools check` probes every tool it knows. Measured standalone, against
+# the larger v1.x registry, on a Windows box with the tools actually installed:
+# 49s cold, 33s warm. The bound
 # here was 60s -- 1.22x the cold run -- and this validator is itself the load,
 # spawning subprocess checks throughout, so the check ERRORed and `--tier full`
 # reported NO-GO (#773). Same shape as #748, where a bound with 1.03-1.36x
@@ -563,24 +564,27 @@ def _full_tools_check() -> CheckResult | None:
     )
 
 
-def _full_tools_list_profiles() -> CheckResult | None:
-    """Run 'jmo tools list --profiles' and verify output."""
+def _full_tools_list() -> CheckResult | None:
+    """Run 'jmo tools list' and verify output.
+
+    This ran `tools list --profiles` until scan profiles were removed in v2.0.0.
+    """
     try:
-        result = _run_jmo("tools", "list", "--profiles", timeout=30)
+        result = _run_jmo("tools", "list", timeout=30)
     except subprocess.TimeoutExpired:
         return CheckResult(
-            name="full: tools list --profiles",
+            name="full: tools list",
             status=CheckStatus.ERROR,
             message="Timed out",
         )
     if result.returncode == 0 and len(result.stdout) > 0:
         return CheckResult(
-            name="full: tools list --profiles",
+            name="full: tools list",
             status=CheckStatus.PASS,
             message=f"Output len={len(result.stdout)}",
         )
     return CheckResult(
-        name="full: tools list --profiles",
+        name="full: tools list",
         status=CheckStatus.FAIL,
         message=f"Exit {result.returncode}, stdout len={len(result.stdout)}",
     )
@@ -645,7 +649,7 @@ def _full_build_validate() -> CheckResult | None:
 
     This check accepted `returncode in (0, 1)` and reported PASS. `jmo build`
     had been unable to locate the repository root since #303 renamed
-    `Dockerfile` to `Dockerfile.deep` -- every invocation exited 1 -- and this
+    `Dockerfile` to a per-variant name -- every invocation exited 1 -- and this
     check reported PASS on every one of them, across seven releases.
 
     Exit 1 is still legitimate here (version validation can fail without a
@@ -890,9 +894,7 @@ def validate_cli(tier: str) -> CategoryResult:
     # ---- Full tier: live tool invocations (8 additional checks) ----
     if tier == "full":
         checks.append(timed_check("full: tools check", _full_tools_check))
-        checks.append(
-            timed_check("full: tools list --profiles", _full_tools_list_profiles)
-        )
+        checks.append(timed_check("full: tools list", _full_tools_list))
         checks.append(timed_check("full: adapters list", _full_adapters_list))
         checks.append(timed_check("full: history stats", _full_history_stats))
         checks.append(timed_check("full: build validate", _full_build_validate))

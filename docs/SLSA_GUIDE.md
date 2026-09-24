@@ -33,7 +33,7 @@
 | Benefit | Description |
 |---------|-------------|
 | **Tamper Evidence** | Detect if scan results were modified after generation |
-| **Audit Trail** | Full provenance (commit, tools, profile, CI environment) |
+| **Audit Trail** | Full provenance (commit, tools, CI environment) |
 | **Compliance** | Meet SOC 2, ISO 27001, PCI DSS supply chain requirements |
 | **Keyless Signing** | Sigstore OIDC - no key management, uses GitHub/GitLab identity |
 | **Public Transparency** | Rekor transparency log provides independent verification |
@@ -46,7 +46,7 @@
 
 ```bash
 # Scan and attest (creates findings.json.att.json)
-jmo scan --repo ./myapp --profile balanced
+jmo scan --repo ./myapp
 jmo attest results/summaries/findings.json
 
 # Sign with Sigstore (requires GitHub Actions or GitLab CI)
@@ -75,7 +75,7 @@ jobs:
 
       - name: Run JMo scan with auto-attestation
         run: |
-          jmo scan --repo . --profile balanced --attest --sign
+          jmo scan --repo . --attest --sign
 
       - name: Upload attestations
         uses: actions/upload-artifact@v4
@@ -196,7 +196,6 @@ attestation:
     "buildDefinition": {
       "buildType": "https://jmotools.com/jmo-scan/v1@slsa/v1",
       "externalParameters": {
-        "profile": "balanced",
         "tools": ["trivy", "semgrep", "trufflehog"],
         "targets": ["repo1"]
       },
@@ -414,7 +413,7 @@ Attestation configured in jmo.yml
 ### Post-Scan Attestation Prompt
 
 ```bash
-$ jmo scan --repo ./myapp --profile balanced
+$ jmo scan --repo ./myapp
 
 Scan complete! 42 findings detected.
 Results: /home/user/myapp/results/summaries/
@@ -437,7 +436,7 @@ Next steps:
 
 ```bash
 # Generate attestation with full provenance
-jmo scan --repo . --profile deep --attest --sign
+jmo scan --repo . --attest --sign
 
 # Provide attestations to auditors
 tar czf attestations-q4-2025.tar.gz results/summaries/*.att.json results/summaries/*.sigstore.json
@@ -450,7 +449,7 @@ jmo verify findings.json findings.json.att.json --signature findings.json.att.si
 
 ```bash
 # Scan with syft + trivy
-jmo scan --image myapp:latest --profile balanced --attest --sign
+jmo scan --image myapp:latest --attest --sign
 
 # Attestation proves:
 #   - Who scanned (CI identity via Sigstore)

@@ -8,7 +8,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from scripts.cli.wizard import (
-    PROFILES,
     WizardConfig,
     generate_command,
     run_wizard,
@@ -20,6 +19,7 @@ from scripts.cli.wizard_generators import (
     generate_makefile_target,
     generate_shell_script,
 )
+from scripts.core.tool_registry import TOOL_MATRIX
 
 
 def _fake_tool_manager() -> MagicMock:
@@ -33,78 +33,32 @@ def _fake_tool_manager() -> MagicMock:
     resolves and shells out to whatever scanner binaries actually happen to
     be on the machine's PATH (#907: on a dev box with a `--user` semgrep
     install, that is a real, unmarked `semgrep --version` spawn on every one
-    of these tests). `check_profile()` is deliberately left unconfigured:
-    unconfigured on a MagicMock it iterates as empty, which
+    of these tests). `check_matrix()` returns no statuses, which
     `review_and_confirm()`'s dynamic time-estimate path already handles.
     """
     tm = MagicMock()
     tm.get_tool_summary.return_value = MagicMock(
         execution_ready=10,
-        platform_skipped=[],
-        content_triggered=[],
-        profile_total=18,
-        platform_applicable=18,
-        profile_name="balanced",
+        total=len(TOOL_MATRIX),
     )
+    tm.check_matrix.return_value = {}
     tm.check_tool.return_value = MagicMock(
         installed=True, version="1.0.0", startup_ok=True
     )
     return tm
 
 
-def test_profiles_complete():
-    """Test that all profiles are defined with required fields."""
-    required_fields = {
-        "name",
-        "description",
-        "tools",
-        "timeout",
-        "threads",
-        "est_time",
-        "use_case",
-    }
-    # Optional fields that may be present in some profiles
-    optional_fields = {"warning"}
-
-    for profile_name, profile in PROFILES.items():
-        assert isinstance(profile_name, str)
-        profile_keys = set(profile.keys())
-        # All required fields must be present
-        assert required_fields <= profile_keys, (
-            f"Missing required fields in {profile_name}"
-        )
-        # Only required or optional fields are allowed
-        extra_fields = profile_keys - required_fields - optional_fields
-        assert not extra_fields, f"Unexpected fields {extra_fields} in {profile_name}"
-        tools = profile["tools"]
-        assert isinstance(tools, list)
-        assert tools, f"{profile_name} lists no tools"
-        # Counting says nothing about what is in the list. A blank entry is
-        # dispatched as an empty tool name and a repeated one runs the tool
-        # twice -- neither changes the count's verdict.
-        assert all(isinstance(t, str) and t.strip() for t in tools), (
-            f"blank tool name in {profile_name}: {tools}"
-        )
-        assert len(tools) == len(set(tools)), (
-            f"duplicate tools in {profile_name}: {tools}"
-        )
-        assert isinstance(profile["timeout"], int)
-        assert profile["timeout"] > 0
-        assert isinstance(profile["threads"], int)
-        assert profile["threads"] > 0
-
-
 def test_wizard_config_to_dict():
     """Test WizardConfig serialization."""
     config = WizardConfig()
-    config.profile = "balanced"
     # v0.6.0+ uses nested TargetConfig instead of flat target_mode/target_path
     config.target.type = "repo"
     config.target.repo_mode = "repos-dir"
     config.target.repo_path = "/path/to/repos"
 
     data = config.to_dict()
-    assert data["profile"] == "balanced"
+    # v2.0.0: there are no scan profiles, so the config carries none
+    assert "profile" not in data
     assert "target" in data
     assert data["target"]["type"] == "repo"
     assert data["target"]["repo_mode"] == "repos-dir"
@@ -116,7 +70,6 @@ def test_wizard_config_to_dict():
 def test_generate_command_native_repos_dir():
     """Test command generation for native mode with repos-dir."""
     config = WizardConfig()
-    config.profile = "balanced"
     config.use_docker = False
     # v0.6.0+ uses nested TargetConfig
     config.target.type = "repo"
@@ -131,8 +84,8 @@ def test_generate_command_native_repos_dir():
 
     cmd = generate_command(config)
 
-    assert "jmo scan" in cmd
-    assert "--profile-name balanced" in cmd
+    assert cmd.startswith("jmo scan ")
+    assert "--profile-name" not in cmd
     assert "--repos-dir /home/user/repos" in cmd
     assert "--results-dir results" in cmd
     assert "--threads 4" in cmd
@@ -141,9 +94,13 @@ def test_generate_command_native_repos_dir():
 
 
 def test_generate_command_native_with_fail_on():
-    """Test command generation with fail-on severity."""
+    """A severity threshold makes the native command `jmo ci`, not `jmo scan`.
+
+    `jmo scan` defines no --fail-on: argparse resolved `--fail-on HIGH` as the
+    prefix of --fail-on-store-error and rejected HIGH, so every wizard run with
+    a threshold exited 2. `jmo ci` is scan + report + the threshold.
+    """
     config = WizardConfig()
-    config.profile = "fast"
     config.use_docker = False
     config.target.type = "repo"
     config.target.repo_mode = "repo"
@@ -153,8 +110,9 @@ def test_generate_command_native_with_fail_on():
 
     cmd = generate_command(config)
 
-    assert "jmo scan" in cmd
-    assert "--profile-name fast" in cmd
+    assert cmd.startswith("jmo ci ")
+    assert "jmo scan" not in cmd
+    assert "--profile-name" not in cmd
     assert "--repo /home/user/myrepo" in cmd
     assert "--fail-on HIGH" in cmd
 
@@ -162,7 +120,6 @@ def test_generate_command_native_with_fail_on():
 def test_generate_command_docker_mode():
     """Test command generation for Docker mode."""
     config = WizardConfig()
-    config.profile = "deep"
     config.use_docker = True
     config.target.type = "repo"
     config.target.repo_mode = "repos-dir"
@@ -175,7 +132,7 @@ def test_generate_command_docker_mode():
 
     assert "docker run" in cmd
     assert JMO_DOCKER_IMAGE_FULL in cmd
-    assert "--profile-name deep" in cmd
+    assert "--profile-name" not in cmd
     assert "/scan" in cmd
     assert "/results" in cmd
 
@@ -198,7 +155,6 @@ def test_docker_tag_tracks_the_shipped_version():
 def test_generate_command_tsv_mode():
     """Test command generation for TSV clone mode."""
     config = WizardConfig()
-    config.profile = "balanced"
     config.use_docker = False
     config.target.type = "repo"
     config.target.repo_mode = "tsv"
@@ -209,7 +165,7 @@ def test_generate_command_tsv_mode():
     cmd = generate_command(config)
 
     assert "jmo scan" in cmd
-    assert "--profile-name balanced" in cmd
+    assert "--profile-name" not in cmd
     assert "--tsv ./repos.tsv" in cmd
     assert "--dest repos-tsv" in cmd
 
@@ -217,7 +173,6 @@ def test_generate_command_tsv_mode():
 def test_generate_makefile_target():
     """Test Makefile target generation."""
     config = WizardConfig()
-    config.profile = "balanced"
     config.target.type = "repo"
     config.target.repo_mode = "repos-dir"
     config.target.repo_path = "/home/user/repos"
@@ -228,14 +183,13 @@ def test_generate_makefile_target():
     assert ".PHONY: security-scan" in makefile
     assert "security-scan:" in makefile
     assert "jmo scan" in makefile
-    assert "--profile-name balanced" in makefile
+    assert "--profile-name" not in makefile
     assert "/home/user/repos" in makefile
 
 
 def test_generate_shell_script():
     """Test shell script generation."""
     config = WizardConfig()
-    config.profile = "fast"
     config.target.type = "repo"
     config.target.repo_mode = "repo"
     config.target.repo_path = "/home/user/myrepo"
@@ -246,14 +200,17 @@ def test_generate_shell_script():
     assert "#!/usr/bin/env bash" in script
     assert "set -euo pipefail" in script
     assert "jmo scan" in script
-    assert "--profile-name fast" in script
+    assert "--profile-name" not in script
     assert "/home/user/myrepo" in script
 
 
 def test_generate_github_actions_native():
-    """Test GitHub Actions workflow generation for native mode."""
+    """Test GitHub Actions workflow generation for native mode.
+
+    With a threshold the step runs `jmo ci`, the subcommand that defines
+    --fail-on; `jmo scan --fail-on HIGH` is rejected by the parser.
+    """
     config = WizardConfig()
-    config.profile = "balanced"
     config.use_docker = False
     config.target.type = "repo"
     config.target.repo_mode = "repos-dir"
@@ -262,15 +219,18 @@ def test_generate_github_actions_native():
     config.timeout = 600
     config.fail_on = "HIGH"
 
-    workflow = generate_github_actions(config, PROFILES)
+    workflow = generate_github_actions(config)
 
     assert "name: Security Scan" in workflow
     assert "on:" in workflow
     assert "runs-on: ubuntu-latest" in workflow
     assert "actions/checkout@v4" in workflow
     assert "actions/setup-python@v5" in workflow
-    assert "jmo scan" in workflow
-    assert "--profile-name balanced" in workflow
+    assert "jmo ci" in workflow
+    assert "jmo scan" not in workflow
+    assert "--profile-name" not in workflow
+    assert "--threads 4" in workflow
+    assert "--timeout 600" in workflow
     assert "--fail-on HIGH" in workflow
     assert "upload-artifact@v4" in workflow
     assert "upload-sarif@v3" in workflow
@@ -279,7 +239,6 @@ def test_generate_github_actions_native():
 def test_generate_github_actions_docker():
     """Test GitHub Actions workflow generation for Docker mode."""
     config = WizardConfig()
-    config.profile = "deep"
     config.use_docker = True
     config.target.type = "repo"
     config.target.repo_mode = "repo"
@@ -287,13 +246,16 @@ def test_generate_github_actions_docker():
     config.threads = 2
     config.timeout = 900
 
-    workflow = generate_github_actions(config, PROFILES)
+    workflow = generate_github_actions(config)
 
     assert "name: Security Scan" in workflow
     assert "container:" in workflow
     assert JMO_DOCKER_IMAGE_FULL in workflow
     assert "jmo scan" in workflow
-    assert "--profile-name deep" in workflow
+    assert "--profile-name" not in workflow
+    # The config's own values win over the jmo.yml / built-in defaults
+    assert "--threads 2" in workflow
+    assert "--timeout 900" in workflow
     assert "actions/checkout@v4" in workflow
     assert "upload-artifact@v4" in workflow
     assert "upload-sarif@v3" in workflow
@@ -326,24 +288,12 @@ def test_run_wizard_non_interactive(
     mock_subprocess_run.return_value = MagicMock(returncode=0)
 
     # Mock ToolManager to prevent real tool checks during scan execution
-    mock_tm_instance = MagicMock()
-    mock_tm_instance.get_tool_summary.return_value = MagicMock(
-        execution_ready=10,
-        platform_skipped=[],
-        content_triggered=[],
-        profile_total=18,
-        platform_applicable=18,
-        profile_name="balanced",
-    )
-    mock_tm_instance.check_tool.return_value = MagicMock(
-        installed=True, version="1.0.0", startup_ok=True
-    )
-    mock_tool_manager_class.return_value = mock_tm_instance
+    mock_tool_manager_class.return_value = _fake_tool_manager()
 
     with patch("scripts.cli.wizard.Path.cwd", return_value=Path("/home/user/repos")):
         rc = run_wizard(yes=True)
 
-    # Should not have prompted for profile/target selection
+    # Should not have prompted for target selection
     mock_choice.assert_not_called()
     # Note: _prompt_text is no longer mocked since it's only used by configure_advanced
     # which is skipped in --yes mode
@@ -399,37 +349,23 @@ def test_run_wizard_emit_gha(mock_tool_manager_class, mock_mkdir, mock_write):
 def test_run_wizard_emit_gha_docker():
     """Test wizard generating Docker-based GHA workflow."""
     config = WizardConfig()
-    config.profile = "balanced"
     config.use_docker = True
     config.threads = 4
     config.timeout = 600
     config.fail_on = "HIGH"
 
-    workflow = generate_github_actions(config, PROFILES)
+    workflow = generate_github_actions(config)
 
     # Docker-specific assertions
     assert "container:" in workflow
     assert f"image: {JMO_DOCKER_IMAGE_FULL}" in workflow
-    assert "jmo scan" in workflow  # Docker uses `jmo` directly
-    assert "--profile-name balanced" in workflow
+    # Docker uses `jmo` directly; a threshold makes it `jmo ci`
+    assert "jmo ci --results-dir results" in workflow
+    assert "--profile-name" not in workflow
     assert "--fail-on HIGH" in workflow
 
     # Should NOT have Python setup
     assert "setup-python" not in workflow
-
-
-def test_profile_resource_estimates():
-    """Test that profiles have reasonable resource estimates."""
-    assert PROFILES["fast"]["timeout"] < PROFILES["balanced"]["timeout"]
-    assert PROFILES["balanced"]["timeout"] < PROFILES["deep"]["timeout"]
-
-    # Fast should have more threads (parallel)
-    assert PROFILES["fast"]["threads"] >= PROFILES["balanced"]["threads"]
-    assert PROFILES["balanced"]["threads"] >= PROFILES["deep"]["threads"]
-
-    # Deep should have most tools
-    assert len(PROFILES["deep"]["tools"]) >= len(PROFILES["balanced"]["tools"])
-    assert len(PROFILES["balanced"]["tools"]) >= len(PROFILES["fast"]["tools"])
 
 
 # test_select_target_repos_dir_with_validation removed - see line 638 comment
@@ -488,14 +424,14 @@ def test_print_step(capsys):
     assert "Test Step" in captured.out
 
 
-@patch("builtins.input", side_effect=["invalid", "fast"])
+@patch("builtins.input", side_effect=["invalid", "repo"])
 def test_prompt_choice_with_retry(mock_input):
     """Test prompt_choice with invalid then valid input."""
     from scripts.cli.wizard import _prompt_choice
 
-    choices = [("fast", "Fast scan"), ("balanced", "Balanced scan")]
-    result = _prompt_choice("Choose profile:", choices, default="balanced")
-    assert result == "fast"
+    choices = [("repo", "Repositories"), ("image", "Container images")]
+    result = _prompt_choice("Choose target:", choices, default="image")
+    assert result == "repo"
     assert mock_input.call_count == 2
 
 
@@ -504,9 +440,9 @@ def test_prompt_choice_default(mock_input):
     """Test prompt_choice with default."""
     from scripts.cli.wizard import _prompt_choice
 
-    choices = [("fast", "Fast"), ("balanced", "Balanced")]
-    result = _prompt_choice("Choose:", choices, default="balanced")
-    assert result == "balanced"
+    choices = [("repo", "Repositories"), ("image", "Container images")]
+    result = _prompt_choice("Choose:", choices, default="image")
+    assert result == "image"
 
 
 @patch("builtins.input", return_value="custom text")
@@ -699,16 +635,6 @@ def test_select_execution_mode_interactive_docker(
     mock_input.assert_called_once()
 
 
-@patch("scripts.cli.wizard_flows.ui_helpers.prompt_choice", return_value="balanced")
-def test_select_profile(mock_choice):
-    """Test profile selection."""
-    from scripts.cli.wizard import select_profile
-
-    profile = select_profile()
-    assert profile == "balanced"
-    mock_choice.assert_called_once()
-
-
 # NOTE: Tests for select_target() removed (v0.6.0 refactoring - commit 0e86d08)
 # The function was split into select_target_type() + configure_*_target() functions.
 # These tests tested internal implementation details that no longer exist after
@@ -724,7 +650,7 @@ def test_configure_advanced_no_customize(mock_tool_manager_class, mock_yes_no):
     from scripts.cli.wizard import configure_advanced
 
     mock_tool_manager_class.return_value = _fake_tool_manager()
-    threads, timeout, fail_on = configure_advanced("balanced")
+    threads, timeout, fail_on = configure_advanced()
     assert threads is None
     assert timeout is None
     assert fail_on == ""
@@ -742,7 +668,7 @@ def test_configure_advanced_customize(
     from scripts.cli.wizard import configure_advanced
 
     mock_tool_manager_class.return_value = _fake_tool_manager()
-    threads, timeout, fail_on = configure_advanced("balanced")
+    threads, timeout, fail_on = configure_advanced()
     assert threads == 8
     assert timeout == 1200
     assert fail_on == "HIGH"
@@ -752,19 +678,92 @@ def test_configure_advanced_customize(
 @patch("builtins.input", side_effect=["invalid", "30"])
 @patch("scripts.cli.wizard._prompt_choice", return_value="")
 @patch("scripts.cli.wizard.get_cpu_count", return_value=4)
+@patch("scripts.cli.wizard.scan_defaults", return_value=(3, 777))
 @patch("scripts.cli.tool_manager.ToolManager")
 def test_configure_advanced_invalid_inputs(
-    mock_tool_manager_class, mock_cpu, mock_choice, mock_input, mock_yes_no
+    mock_tool_manager_class,
+    mock_defaults,
+    mock_cpu,
+    mock_choice,
+    mock_input,
+    mock_yes_no,
 ):
     """Test configure_advanced with invalid numeric inputs."""
     from scripts.cli.wizard import configure_advanced
 
     mock_tool_manager_class.return_value = _fake_tool_manager()
-    threads, timeout, fail_on = configure_advanced("balanced")
-    # Invalid thread count should fall back to profile default
-    assert threads == 4  # balanced profile default
+    threads, timeout, fail_on = configure_advanced()
+    # Invalid thread count falls back to the scan default (jmo.yml top level,
+    # else 4) -- a distinctive stub value proves it is read, not hardcoded
+    assert threads == 3
     # Invalid timeout 30 should be clamped to minimum 60
     assert timeout == 60  # max(60, 30)
+
+
+@patch("scripts.cli.wizard._prompt_yes_no", return_value=True)
+@patch("builtins.input", side_effect=["not-a-number", "also-not"])
+@patch("scripts.cli.wizard._prompt_choice", return_value="")
+@patch("scripts.cli.wizard.get_cpu_count", return_value=4)
+@patch("scripts.cli.wizard.scan_defaults", return_value=(7, 1234))
+@patch("scripts.cli.tool_manager.ToolManager")
+def test_configure_advanced_prompts_and_falls_back_to_scan_defaults(
+    mock_tool_manager_class,
+    mock_defaults,
+    mock_cpu,
+    mock_choice,
+    mock_input,
+    mock_yes_no,
+):
+    """scan_defaults() is both the offered default and the fallback.
+
+    The Threads/Timeout prompts show it as their default, and an unparseable
+    answer for either falls back to it -- not to a profile's numbers, which
+    no longer exist.
+    """
+    from scripts.cli.wizard import configure_advanced
+
+    mock_tool_manager_class.return_value = _fake_tool_manager()
+    threads, timeout, _fail_on = configure_advanced()
+
+    prompts = [c.args[0] for c in mock_input.call_args_list]
+    assert any(p.startswith("Threads [7]") for p in prompts), prompts
+    assert any(p.startswith("Timeout [1234]") for p in prompts), prompts
+    assert threads == 7
+    assert timeout == 1234
+
+
+def test_scan_defaults_reads_the_top_level_of_jmo_yml(tmp_path):
+    """A jmo.yml's top-level threads/timeout are the wizard's defaults."""
+    from scripts.cli.wizard_flows.config_models import scan_defaults
+
+    cfg = tmp_path / "jmo.yml"
+    cfg.write_bytes(b"threads: 6\ntimeout: 900\n")
+
+    assert scan_defaults(str(cfg)) == (6, 900)
+
+
+def test_scan_defaults_threads_auto_is_the_default_thread_count(tmp_path):
+    """`threads: auto` has no number to show, so it reads as DEFAULT_THREADS."""
+    from scripts.cli.wizard_flows.config_models import DEFAULT_THREADS, scan_defaults
+
+    cfg = tmp_path / "jmo.yml"
+    cfg.write_bytes(b"threads: auto\ntimeout: 900\n")
+
+    assert scan_defaults(str(cfg)) == (DEFAULT_THREADS, 900)
+
+
+def test_scan_defaults_without_a_config_file(tmp_path):
+    """No jmo.yml means the built-in constants, which are 4 threads / 600 s."""
+    from scripts.cli.wizard_flows.config_models import (
+        DEFAULT_THREADS,
+        DEFAULT_TIMEOUT,
+        scan_defaults,
+    )
+
+    missing = tmp_path / "no-such-jmo.yml"
+
+    assert scan_defaults(str(missing)) == (DEFAULT_THREADS, DEFAULT_TIMEOUT)
+    assert (DEFAULT_THREADS, DEFAULT_TIMEOUT) == (4, 600)
 
 
 @patch("scripts.cli.wizard._prompt_yes_no", return_value=True)
@@ -779,11 +778,39 @@ def test_configure_advanced_boundary_clamping(
     from scripts.cli.wizard import configure_advanced
 
     mock_tool_manager_class.return_value = _fake_tool_manager()
-    threads, timeout, fail_on = configure_advanced("balanced")
+    threads, timeout, fail_on = configure_advanced()
     # Threads should be clamped to cpu_count * 2
     assert threads == 8  # max(1, min(1000, 4*2))
     # Timeout should be clamped to minimum 60
     assert timeout == 60  # max(60, 30)
+
+
+@patch("scripts.cli.wizard._prompt_yes_no", return_value=False)
+@patch("scripts.cli.wizard.scan_defaults", return_value=(3, 777))
+@patch("scripts.cli.tool_manager.ToolManager")
+def test_configure_advanced_shows_scan_defaults(
+    mock_tool_manager_class, mock_defaults, mock_yes_no, capsys
+):
+    """The defaults shown are the scan's own, not a profile's.
+
+    With profiles gone, threads/timeout come from jmo.yml's top level (or
+    4/600); configure_advanced must show those and nothing profile-shaped.
+    """
+    from scripts.cli.wizard import configure_advanced
+
+    tm = _fake_tool_manager()
+    tm.get_tool_summary.return_value = MagicMock(execution_ready=9, total=12)
+    mock_tool_manager_class.return_value = tm
+
+    configure_advanced()
+
+    out = capsys.readouterr().out
+    assert "Threads: 3" in out
+    assert "Timeout: 777s" in out
+    assert "Tools: 12 (9 ready)" in out
+    assert "Profile" not in out
+    # The matrix summary is asked for, not a per-profile one
+    tm.get_tool_summary.assert_called_once_with()
 
 
 @patch("scripts.cli.wizard._prompt_yes_no", return_value=False)
@@ -794,7 +821,6 @@ def test_review_and_confirm_decline(mock_tool_manager_class, mock_yes_no):
 
     mock_tool_manager_class.return_value = _fake_tool_manager()
     config = WizardConfig()
-    config.profile = "balanced"
     config.target.type = "repo"
     config.target.repo_mode = "repos-dir"
     config.target.repo_path = "/path/to/repos"
@@ -811,7 +837,6 @@ def test_review_and_confirm_accept(mock_tool_manager_class, mock_yes_no):
 
     mock_tool_manager_class.return_value = _fake_tool_manager()
     config = WizardConfig()
-    config.profile = "balanced"
     config.target.type = "repo"
     config.target.repo_mode = "repos-dir"
     config.target.repo_path = "/path/to/repos"
@@ -831,7 +856,6 @@ def test_review_and_confirm_tsv_mode(mock_tool_manager_class, mock_yes_no):
 
     mock_tool_manager_class.return_value = _fake_tool_manager()
     config = WizardConfig()
-    config.profile = "fast"
     config.target.type = "repo"
     config.target.repo_mode = "tsv"
     config.target.tsv_path = "repos.tsv"
@@ -841,10 +865,48 @@ def test_review_and_confirm_tsv_mode(mock_tool_manager_class, mock_yes_no):
     assert result is True
 
 
+@patch("scripts.cli.wizard._prompt_yes_no", return_value=True)
+@patch("scripts.cli.wizard.scan_defaults", return_value=(3, 777))
+@patch("scripts.cli.tool_manager.ToolManager")
+def test_review_and_confirm_summary_uses_matrix_and_scan_defaults(
+    mock_tool_manager_class, mock_defaults, mock_yes_no, capsys
+):
+    """Review shows the scan defaults and ready/total over the tool matrix.
+
+    It used to print the chosen profile and profile-sized counts; now the
+    denominator is the matrix summary's `total`, and unset threads/timeout
+    show what the scan will actually use.
+    """
+    from scripts.cli.wizard import review_and_confirm
+
+    tm = _fake_tool_manager()
+    tm.get_tool_summary.return_value = MagicMock(execution_ready=9, total=12)
+    tm.check_matrix.return_value = {
+        "trivy": MagicMock(execution_ready=True),
+        "zap": MagicMock(execution_ready=False),
+    }
+    mock_tool_manager_class.return_value = tm
+
+    config = WizardConfig()
+    config.target.type = "repo"
+    config.target.repo_mode = "repo"
+    config.target.repo_path = "."
+
+    assert review_and_confirm(config) is True
+
+    out = capsys.readouterr().out
+    assert "Threads: 3" in out
+    assert "Timeout: 777s" in out
+    assert "9/12" in out
+    assert "Profile" not in out
+    # Only execution-ready tools feed the preview and the time estimate
+    assert "trivy" in out
+    assert "zap" not in out
+
+
 def test_generate_command_targets_mode():
     """Test command generation for targets file mode."""
     config = WizardConfig()
-    config.profile = "balanced"
     config.use_docker = False
     config.target.type = "repo"
     config.target.repo_mode = "targets"
@@ -853,14 +915,13 @@ def test_generate_command_targets_mode():
 
     cmd = generate_command(config)
     assert "jmo scan" in cmd
-    assert "--profile-name balanced" in cmd
+    assert "--profile-name" not in cmd
     assert "--targets /path/to/targets.txt" in cmd
 
 
 def test_generate_command_docker_no_mount():
     """Test Docker command with unsupported target mode."""
     config = WizardConfig()
-    config.profile = "balanced"
     config.use_docker = True
     config.target.type = "repo"
     config.target.repo_mode = "targets"  # Not repo or repos-dir
@@ -878,7 +939,6 @@ def test_execute_scan_decline(mock_yes_no):
     from scripts.cli.wizard import execute_scan
 
     config = WizardConfig()
-    config.profile = "balanced"
     config.target.type = "repo"
     config.target.repo_mode = "repos-dir"
     config.target.repo_path = "."
@@ -897,19 +957,9 @@ def test_execute_scan_docker_mode(mock_tool_manager_class, mock_run, mock_yes_no
     mock_run.return_value = MagicMock(returncode=0)
 
     # Mock ToolManager to prevent real tool checks
-    mock_tm_instance = MagicMock()
-    mock_tm_instance.get_tool_summary.return_value = MagicMock(
-        execution_ready=10,
-        platform_skipped=[],
-        content_triggered=[],
-        platform_applicable=18,
-        profile_name="balanced",
-        profile_total=18,
-    )
-    mock_tool_manager_class.return_value = mock_tm_instance
+    mock_tool_manager_class.return_value = _fake_tool_manager()
 
     config = WizardConfig()
-    config.profile = "balanced"
     config.use_docker = True
     config.target.type = "repo"
     config.target.repo_mode = "repos-dir"
@@ -937,19 +987,9 @@ def test_execute_scan_native_mode(mock_tool_manager_class, mock_yes_no, mock_run
     mock_run.return_value = MagicMock(returncode=0)
 
     # Mock ToolManager to prevent real tool checks
-    mock_tm_instance = MagicMock()
-    mock_tm_instance.get_tool_summary.return_value = MagicMock(
-        execution_ready=10,
-        platform_skipped=[],
-        content_triggered=[],
-        platform_applicable=18,
-        profile_name="balanced",
-        profile_total=18,
-    )
-    mock_tool_manager_class.return_value = mock_tm_instance
+    mock_tool_manager_class.return_value = _fake_tool_manager()
 
     config = WizardConfig()
-    config.profile = "balanced"
     config.use_docker = False
     config.target.type = "repo"
     config.target.repo_mode = "repos-dir"
@@ -1004,7 +1044,9 @@ def test_run_wizard_keyboard_interrupt():
     """Test run_wizard with keyboard interrupt."""
     from scripts.cli.wizard import run_wizard
 
-    with patch("scripts.cli.wizard.select_profile", side_effect=KeyboardInterrupt()):
+    with patch(
+        "scripts.cli.wizard.select_execution_mode", side_effect=KeyboardInterrupt()
+    ):
         exit_code = run_wizard(yes=False)
 
     assert exit_code == 130
@@ -1015,7 +1057,8 @@ def test_run_wizard_exception():
     from scripts.cli.wizard import run_wizard
 
     with patch(
-        "scripts.cli.wizard.select_profile", side_effect=Exception("Test error")
+        "scripts.cli.wizard.select_execution_mode",
+        side_effect=Exception("Test error"),
     ):
         exit_code = run_wizard(yes=False)
 
@@ -1036,6 +1079,28 @@ def test_run_wizard_yes_with_docker(mock_yes_no, mock_running, mock_detect, tmp_
 
     # Should complete successfully without errors
     assert exit_code == 0
+
+
+def test_scan_completion_summary_reports_against_the_matrix(capsys):
+    """The completion summary counts executed tools out of TOOL_MATRIX.
+
+    It used to print the profile and platform/content-skipped lists; none of
+    those exist now, and the denominator must be the matrix size.
+    """
+    from scripts.cli.wizard import _print_scan_completion_summary
+
+    config = WizardConfig()
+    config.target.type = "repo"
+    config.target.repo_path = "/some/repo"
+    config.results_dir = "no-such-results-dir"
+
+    _print_scan_completion_summary(config, 0, tools_executed=7)
+
+    out = capsys.readouterr().out
+    assert f"Tools executed: 7/{len(TOOL_MATRIX)}" in out
+    assert "Profile" not in out
+    assert "Skipped" not in out
+    assert "/some/repo" in out
 
 
 # ===== Issue #1 Fix: --emit-script default filename tests =====

@@ -144,8 +144,8 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from scripts.cli.wizard import WizardConfig  # Only used by type checkers
 
-def generate_github_actions(config: Any, profiles: Dict[str, Any]) -> str:
-    profile_info = profiles[config.profile]
+def generate_github_actions(config: Any, tools: tuple[str, ...]) -> str:
+    selected = [t for t in tools if t in config.tools]
     ...
 ```
 
@@ -155,12 +155,12 @@ Pass dependencies as parameters instead of importing them:
 
 ```python
 # scripts/cli/wizard_generators.py
-def generate_github_actions(config: Any, profiles: Dict[str, Any]) -> str:
-    ...  # No import needed - caller passes PROFILES dict
+def generate_github_actions(config: Any, tools: tuple[str, ...]) -> str:
+    ...  # No import needed - caller passes the tool tuple
 
 # scripts/cli/wizard.py
 from scripts.cli.wizard_generators import generate_github_actions
-workflow = generate_github_actions(config, PROFILES)  # Inject dependency
+workflow = generate_github_actions(config, TOOL_MATRIX)  # Inject dependency
 ```
 
 ### Solution 3: Move Shared Data (Use Sparingly)

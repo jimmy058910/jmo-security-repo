@@ -69,7 +69,6 @@ CODE_OF_CONDUCT.md
 .ruff.toml
 .ruff_cache/
 .mypy_cache/
-.bandit
 codecov.yml
 .readthedocs.yaml
 .markdownlint-cli2.jsonc
@@ -120,7 +119,7 @@ Thumbs.db
 .DS_Store
 
 # =============================================================================
-# PACKAGING (Docker variants handled by specific Dockerfiles)
+# PACKAGING, SAMPLES AND ASSETS (not needed in the image)
 # =============================================================================
 packaging/
 samples/

@@ -21,7 +21,6 @@ class TestFromScanArgs:
         capture = MetadataCapture()
 
         metadata = capture.from_scan_args(
-            profile="balanced",
             tools=["trivy", "semgrep"],
             repos=["repo1", "repo2"],
             images=["nginx:latest"],
@@ -30,14 +29,16 @@ class TestFromScanArgs:
             timeout=600,
         )
 
-        assert metadata["profile"] == "balanced"
-        assert metadata["profile_name"] == "balanced"  # Duplicate for compatibility
         assert metadata["tools"] == ["trivy", "semgrep"]
         assert metadata["repos"] == ["repo1", "repo2"]
         assert metadata["images"] == ["nginx:latest"]
         assert metadata["urls"] == ["https://example.com"]
         assert metadata["threads"] == 4
         assert metadata["timeout"] == 600
+        # Scan profiles are gone (v2.0.0): the captured parameters must not
+        # carry one, under either of the two names this used to write.
+        assert "profile" not in metadata
+        assert "profile_name" not in metadata
 
     def test_capture_minimal_args(self):
         """Test capturing with no arguments (all None)."""
@@ -46,14 +47,6 @@ class TestFromScanArgs:
         metadata = capture.from_scan_args()
 
         assert metadata == {}
-
-    def test_capture_only_profile(self):
-        """Test capturing only profile argument."""
-        capture = MetadataCapture()
-
-        metadata = capture.from_scan_args(profile="fast")
-
-        assert metadata == {"profile": "fast", "profile_name": "fast"}
 
     def test_capture_only_tools(self):
         """Test capturing only tools argument."""
@@ -68,14 +61,11 @@ class TestFromScanArgs:
         capture = MetadataCapture()
 
         metadata = capture.from_scan_args(
-            profile="balanced",
             custom_field="value",
             another_field=123,
         )
 
-        assert metadata["profile"] == "balanced"
-        assert metadata["custom_field"] == "value"
-        assert metadata["another_field"] == 123
+        assert metadata == {"custom_field": "value", "another_field": 123}
 
     def test_capture_empty_lists(self):
         """Test capturing empty lists."""
@@ -387,7 +377,6 @@ class TestMetadataCaptureIntegration:
 
         # Capture scan args
         scan_metadata = capture.from_scan_args(
-            profile="balanced",
             tools=["trivy"],
         )
 
@@ -400,6 +389,5 @@ class TestMetadataCaptureIntegration:
         # Combine all metadata
         combined = {**scan_metadata, **git_context, **ci_metadata}
 
-        assert combined["profile"] == "balanced"
         assert combined["tools"] == ["trivy"]
         assert "commit" in combined  # From git context

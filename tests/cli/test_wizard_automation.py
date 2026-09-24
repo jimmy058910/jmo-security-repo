@@ -1,7 +1,8 @@
 """Tests for wizard automation via CLI flags.
 
-Tests the new --profile, --target-type, --target, --auto-fix, and related
-flags that enable fully non-interactive wizard runs.
+Tests the --target-type, --target, --auto-fix, and related flags that enable
+fully non-interactive wizard runs. There is no --profile preset any more
+(v2.0.0 removed scan profiles): a target type plus a target is a full preset.
 """
 
 from __future__ import annotations
@@ -147,32 +148,32 @@ class TestWizardWithPresets:
 
     @patch("scripts.cli.wizard.execute_scan")
     @patch("scripts.cli.wizard._check_policy_tools")
-    @patch("scripts.cli.wizard.check_tools_for_profile")
-    def test_wizard_with_profile_preset(
+    @patch("scripts.cli.wizard.check_tools_for_matrix")
+    def test_wizard_yes_mode_checks_the_tool_matrix(
         self,
         mock_tools: MagicMock,
         mock_policy: MagicMock,
         mock_scan: MagicMock,
     ) -> None:
-        """Test wizard with --profile preset."""
+        """--yes runs the matrix pre-flight with the automation flags passed through.
+
+        The pre-flight used to take a profile as its first argument; it now
+        checks the whole matrix and takes none.
+        """
         mock_tools.return_value = (True, ["semgrep", "trivy"])
         mock_policy.return_value = (True, False)
         mock_scan.return_value = 0
 
-        result = run_wizard(
-            yes=True,
-            profile="fast",
-        )
+        result = run_wizard(yes=True, auto_fix=True, install_deps=True)
 
         assert result == 0
-        # Profile should be "fast" instead of default "balanced"
-        mock_tools.assert_called_once()
-        call_args = mock_tools.call_args
-        assert call_args[0][0] == "fast"
+        mock_tools.assert_called_once_with(
+            yes=True, use_docker=False, auto_fix=True, install_deps=True
+        )
 
     @patch("scripts.cli.wizard.execute_scan")
     @patch("scripts.cli.wizard._check_policy_tools")
-    @patch("scripts.cli.wizard.check_tools_for_profile")
+    @patch("scripts.cli.wizard.check_tools_for_matrix")
     def test_wizard_with_target_preset(
         self,
         mock_tools: MagicMock,
@@ -190,23 +191,25 @@ class TestWizardWithPresets:
         repo_path.mkdir()
         (repo_path / ".git").mkdir()
 
+        # No `yes=True`: target type + target alone fully specify the wizard
         result = run_wizard(
-            profile="balanced",
             target_type="repo",
             target=str(repo_path),
         )
 
         assert result == 0
-        # execute_scan should be called with the config
+        # execute_scan should be called with the config, without prompting
         mock_scan.assert_called_once()
+        assert mock_scan.call_args.kwargs["yes"] is True
         config = mock_scan.call_args[0][0]
+        assert "profile" not in config.to_dict()
         assert config.target.type == "repo"
         assert config.target.repo_mode == "repo"
         assert config.target.repo_path == str(repo_path)
 
     @patch("scripts.cli.wizard.execute_scan")
     @patch("scripts.cli.wizard._check_policy_tools")
-    @patch("scripts.cli.wizard.check_tools_for_profile")
+    @patch("scripts.cli.wizard.check_tools_for_matrix")
     def test_wizard_with_image_target(
         self,
         mock_tools: MagicMock,
@@ -219,7 +222,6 @@ class TestWizardWithPresets:
         mock_scan.return_value = 0
 
         result = run_wizard(
-            profile="balanced",
             target_type="image",
             target="bkimminich/juice-shop:latest",
         )
@@ -231,7 +233,7 @@ class TestWizardWithPresets:
 
     @patch("scripts.cli.wizard.execute_scan")
     @patch("scripts.cli.wizard._check_policy_tools")
-    @patch("scripts.cli.wizard.check_tools_for_profile")
+    @patch("scripts.cli.wizard.check_tools_for_matrix")
     def test_wizard_with_advanced_options(
         self,
         mock_tools: MagicMock,
@@ -244,7 +246,6 @@ class TestWizardWithPresets:
         mock_scan.return_value = 0
 
         result = run_wizard(
-            profile="fast",
             target_type="repo",
             target=".",
             threads=8,
@@ -262,7 +263,7 @@ class TestWizardWithPresets:
 
     @patch("scripts.cli.wizard.execute_scan")
     @patch("scripts.cli.wizard._check_policy_tools")
-    @patch("scripts.cli.wizard.check_tools_for_profile")
+    @patch("scripts.cli.wizard.check_tools_for_matrix")
     def test_wizard_native_mode_preset(
         self,
         mock_tools: MagicMock,
@@ -275,7 +276,6 @@ class TestWizardWithPresets:
         mock_scan.return_value = 0
 
         result = run_wizard(
-            profile="fast",
             target_type="repo",
             target=".",
             use_docker=False,
@@ -287,7 +287,7 @@ class TestWizardWithPresets:
 
     @patch("scripts.cli.wizard.execute_scan")
     @patch("scripts.cli.wizard._check_policy_tools")
-    @patch("scripts.cli.wizard.check_tools_for_profile")
+    @patch("scripts.cli.wizard.check_tools_for_matrix")
     @patch("scripts.cli.wizard._check_docker_running", return_value=True)
     @patch("scripts.cli.wizard._detect_docker", return_value=True)
     def test_wizard_docker_mode_preset(
@@ -304,7 +304,6 @@ class TestWizardWithPresets:
         mock_scan.return_value = 0
 
         result = run_wizard(
-            profile="fast",
             target_type="repo",
             target=".",
             use_docker=True,
@@ -315,8 +314,8 @@ class TestWizardWithPresets:
         assert config.use_docker is True
 
 
-class TestCheckToolsForProfileAutoFix:
-    """Tests for check_tools_for_profile with auto_fix flag.
+class TestCheckToolsForMatrixAutoFix:
+    """Tests for check_tools_for_matrix with auto_fix flag.
 
     Note: These tests verify the auto_fix parameter flow through the tool checker.
     The complex mocking makes these integration tests fragile - we test the key
@@ -324,12 +323,11 @@ class TestCheckToolsForProfileAutoFix:
     """
 
     def test_auto_fix_parameter_accepted(self) -> None:
-        """Test that auto_fix parameter is accepted by check_tools_for_profile."""
-        from scripts.cli.wizard_flows.tool_checker import check_tools_for_profile
+        """Test that auto_fix parameter is accepted by check_tools_for_matrix."""
+        from scripts.cli.wizard_flows.tool_checker import check_tools_for_matrix
 
         # Test in docker mode (simplest path - skips all tool checking)
-        should_continue, available = check_tools_for_profile(
-            profile="balanced",
+        should_continue, available = check_tools_for_matrix(
             yes=True,
             use_docker=True,  # Docker mode skips tool check
             auto_fix=True,
@@ -340,12 +338,11 @@ class TestCheckToolsForProfileAutoFix:
         assert should_continue is True
 
     def test_install_deps_parameter_accepted(self) -> None:
-        """Test that install_deps parameter is accepted by check_tools_for_profile."""
-        from scripts.cli.wizard_flows.tool_checker import check_tools_for_profile
+        """Test that install_deps parameter is accepted by check_tools_for_matrix."""
+        from scripts.cli.wizard_flows.tool_checker import check_tools_for_matrix
 
         # Test in docker mode (simplest path)
-        should_continue, available = check_tools_for_profile(
-            profile="balanced",
+        should_continue, available = check_tools_for_matrix(
             yes=True,
             use_docker=True,  # Docker mode skips tool check
             auto_fix=True,
@@ -371,8 +368,8 @@ class TestWizardCLIArgs:
         # Get the argument names
         arg_names = [a.dest for a in wizard_parser._actions]
 
-        # Check all preset options are present
-        assert "profile" in arg_names
+        # Check all preset options are present, and the profile preset is gone
+        assert "profile" not in arg_names
         assert "target_type" in arg_names
         assert "target" in arg_names
         assert "auto_fix" in arg_names
@@ -382,20 +379,31 @@ class TestWizardCLIArgs:
         assert "fail_on" in arg_names
         assert "results_dir" in arg_names
 
-    def test_wizard_profile_choices(self) -> None:
-        """Verify --profile accepts only valid choices."""
-        import argparse
+    @pytest.mark.parametrize("profile", ["fast", "slim", "balanced", "deep"])
+    def test_wizard_profile_flag_is_gone(self, profile: str) -> None:
+        """`jmo wizard --profile <x>` is an argparse error: exit 2, no traceback.
 
-        from scripts.cli.jmo import _add_wizard_args
+        Asked of the real `jmo` parser, not a copy of the wizard's arguments,
+        so a --profile that came back anywhere in `jmo wizard` fails here.
+        """
+        import io
+        import sys
+        from contextlib import redirect_stderr
 
-        parser = argparse.ArgumentParser()
-        subparsers = parser.add_subparsers()
-        _add_wizard_args(subparsers)
+        from scripts.cli import jmo
 
-        # Valid profiles should parse
-        for profile in ["fast", "slim", "balanced", "deep"]:
-            args = parser.parse_args(["wizard", "--profile", profile])
-            assert args.profile == profile
+        stderr = io.StringIO()
+        with (
+            patch.object(sys, "argv", ["jmo", "wizard", "--profile", profile]),
+            redirect_stderr(stderr),
+            pytest.raises(SystemExit) as exc,
+        ):
+            jmo.parse_args()
+
+        assert exc.value.code == 2
+        err = stderr.getvalue()
+        assert "--profile" in err
+        assert "Traceback" not in err
 
     def test_wizard_target_type_choices(self) -> None:
         """Verify --target-type accepts only valid choices."""

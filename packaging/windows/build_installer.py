@@ -637,7 +637,7 @@ Section "Install" SecInstall
     SendMessage ${{HWND_BROADCAST}} ${{WM_SETTINGCHANGE}} 0 "STR:Environment" /TIMEOUT=5000
 
     ; Success message with Windows compatibility notice
-    MessageBox MB_OK "JMo Security ${{APP_VERSION}} installed successfully!$\\r$\\n$\\r$\\n7/12 security tools work natively on Windows$\\r$\\n5/12 tools require WSL2 or Docker$\\r$\\n$\\r$\\nRecommended Windows Setup:$\\r$\\n  1. Install WSL2 + Docker Desktop (for all 12 tools)$\\r$\\n  2. Run: jmo wizard --docker$\\r$\\n$\\r$\\nNative Windows (limited to 7 tools):$\\r$\\n  - Run: jmo wizard$\\r$\\n  - Use --profile fast or --profile balanced$\\r$\\n  - Tools: TruffleHog, Trivy, Syft, Checkov, Hadolint, Nuclei, Bandit$\\r$\\n$\\r$\\nDocumentation: ${{APP_README}}"
+    MessageBox MB_OK "JMo Security ${{APP_VERSION}} installed successfully!$\\r$\\n$\\r$\\nSome security tools need Linux and run only under WSL2 or Docker.$\\r$\\n$\\r$\\nRecommended Windows Setup:$\\r$\\n  1. Install WSL2 + Docker Desktop (for every tool)$\\r$\\n  2. Run: jmo wizard --docker$\\r$\\n$\\r$\\nNative Windows:$\\r$\\n  - Run: jmo wizard$\\r$\\n  - See which tools are ready: jmo tools check$\\r$\\n$\\r$\\nDocumentation: ${{APP_README}}"
 
 SectionEnd
 

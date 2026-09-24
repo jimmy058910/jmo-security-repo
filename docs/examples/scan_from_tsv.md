@@ -2,9 +2,9 @@
 
 ## Scan a list of repositories from a TSV
 
-This guide shows how to clone a set of repositories listed in a TSV file, ensure they are unshallowed, and run the full JMO security scan with all tools, including a Nosey Parker Docker fallback.
+This guide shows how to clone a set of repositories listed in a TSV file, ensure they are unshallowed, and run the full JMO security scan with all tools.
 
-Works on Linux/macOS with Git, Python 3.12+, and optional container runtime for Nosey Parker fallback.
+Works on Linux/macOS with Git and Python 3.12+.
 
 ### What you'll get
 
@@ -21,12 +21,12 @@ Optional but recommended to install dev tools and Python deps:
 make dev-deps
 ```
 
-Install external scanners as needed (Semgrep, Trivy, Checkov, Bandit, Syft, TruffleHog, Hadolint, Nosey Parker, ZAP, Falco, AFL++):
+Install external scanners as needed (TruffleHog, Semgrep, Syft, Trivy, Checkov, Hadolint, ShellCheck, Gosec, YARA, Grype, ZAP, Nuclei):
 
 ```bash
 # Check tool status and install missing tools
-jmo tools check --profile balanced
-jmo tools install --profile balanced
+jmo tools check
+jmo tools install
 ```
 
 Tip: You can still proceed with `--allow-missing-tools` to create stubs for missing tools.
@@ -66,7 +66,7 @@ This will:
 
 ### 3) Run the full scan with all tools
 
-Pick the profile that covers all tools. The repository ships with `deep` including: trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, falco, afl++.
+With no `--tools` and no `tools:` list in `jmo.yml`, JMo considers the whole tool matrix (see [TOOLS.md](../TOOLS.md#when-each-tool-runs)); each repository's content decides which tools run against it.
 
 Run a CI-like end-to-end flow (scan + report) with human-readable logs:
 
@@ -74,7 +74,6 @@ Run a CI-like end-to-end flow (scan + report) with human-readable logs:
 python3 scripts/cli/jmo.py ci \
   --targets results/targets.tsv.txt \
   --results-dir results \
-  --profile-name deep \
   --threads 4 \
   --timeout 900 \
   --allow-missing-tools \
@@ -83,7 +82,6 @@ python3 scripts/cli/jmo.py ci \
 
 Notes:
 
-- Nosey Parker uses the local binary if installed; otherwise it will attempt a Docker fallback via `scripts/core/run_noseyparker_docker.sh`. Ensure Docker is available for fallback.
 - Increase `--threads` if your machine has more cores.
 - If you want the command to fail on HIGH/CRITICAL findings, add `--fail-on HIGH`.
 
@@ -107,7 +105,7 @@ xdg-open results/summaries/dashboard.html 2>/dev/null || open results/summaries/
 
 ### Advanced tips
 
-- Customize per-tool flags via `jmo.yml` under `profiles.deep.per_tool` (e.g., add `--no-progress` to Trivy or excludes to Semgrep).
+- Customize per-tool flags via the top-level `per_tool` key in `jmo.yml` (e.g., add `--no-progress` to Trivy or excludes to Semgrep).
 - To rerun only reporting (faster iteration):
 
   ```bash
@@ -119,5 +117,4 @@ xdg-open results/summaries/dashboard.html 2>/dev/null || open results/summaries/
 ### Troubleshooting
 
 - Tool not found: run `jmo tools check` to see status, then `jmo tools install` to install, or add `--allow-missing-tools` to create stubs and continue.
-- Nosey Parker fails locally: the CLI will try Docker automatically if available; ensure Docker daemon is running.
-- Slow scans: reduce `--threads`, set a lower `--timeout`, or use the `balanced` profile.
+- Slow scans: reduce `--threads`, set a lower `--timeout`, or narrow the tool list with `--tools` (e.g. `--tools trufflehog semgrep trivy`).

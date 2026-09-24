@@ -30,7 +30,7 @@ macOS users with Homebrew: install pipx via `brew install pipx`, then `pipx inst
 
 ### Option 2: Docker (60 seconds)
 
-**No tool installation required - all 29 scanners included.**
+**No tool installation required - all 12 scanners included.**
 
 ```bash
 # Pull image (one-time)
@@ -38,7 +38,7 @@ docker pull ghcr.io/jimmy058910/jmo-security:latest
 
 # Scan current directory
 docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
-  scan --repo /scan --results-dir /scan/results --profile balanced --human-logs
+  scan --repo /scan --results-dir /scan/results --human-logs
 ```
 
 **Platform-specific volume syntax:**
@@ -49,14 +49,7 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
 | Windows PowerShell | `"${PWD}:/scan"` |
 | Windows CMD | `"%CD%:/scan"` |
 
-**Image variants:**
-
-| Variant | Tools | Size | Use Case |
-|---------|-------|------|----------|
-| `fast` | 9 | 502 MB | CI/CD gates, pre-commit |
-| `slim` | 13 | 557 MB | Cloud/IaC, AWS/Azure/GCP/K8s |
-| `balanced` | 17 | 1.4 GB | Production pipelines |
-| `deep` | 29 | 2.0 GB | Complete audits |
+There is one image: use `:latest`, or pin a version tag.
 
 **Complete guide:** [docs/DOCKER_README.md](docs/DOCKER_README.md)
 
@@ -72,13 +65,13 @@ pip install jmo-security
 jmo --help
 
 # Check which tools are installed
-jmo tools check --profile balanced
+jmo tools check
 
 # Install missing tools (cross-platform)
-jmo tools install --profile balanced
+jmo tools install
 
 # Verify tools are ready
-jmo tools check --profile balanced
+jmo tools check
 ```
 
 **For contributing/development:** [CONTRIBUTING.md](CONTRIBUTING.md)
@@ -95,7 +88,6 @@ jmo wizard
 
 The wizard guides you through:
 
-- Profile selection (fast/slim/balanced/deep)
 - **Tool pre-flight check** (detects missing/outdated tools, offers to install)
 - Target discovery (repos, images, URLs)
 - Docker vs native mode
@@ -110,13 +102,13 @@ The wizard guides you through:
 **Scan a repository:**
 
 ```bash
-jmo scan --repo /path/to/repo --profile balanced --human-logs
+jmo scan --repo /path/to/repo --human-logs
 ```
 
 **Scan a directory of repos:**
 
 ```bash
-jmo scan --repos-dir ~/repos --profile balanced --human-logs
+jmo scan --repos-dir ~/repos --human-logs
 ```
 
 **Scan a container image:**
@@ -128,19 +120,10 @@ jmo scan --image nginx:latest --results-dir ./image-scan
 **CI mode (scan + gate on severity):**
 
 ```bash
-jmo ci --repo . --fail-on HIGH --profile-name balanced
+jmo ci --repo . --fail-on HIGH
 ```
 
----
-
-### Scan Profiles
-
-| Profile | Tools | Time | Use Case |
-|---------|-------|------|----------|
-| `fast` | 9 | 5-10 min | Pre-commit, PR validation |
-| `slim` | 13 | 12-18 min | Cloud/IaC, AWS/Azure/GCP/K8s |
-| `balanced` | 17 | 18-25 min | CI/CD pipelines |
-| `deep` | 29 | 40-70 min | Full security audits |
+**Narrow the tool list:** `jmo scan` considers all 12 scanners and the target's content decides which run. Use `--tools trivy semgrep` or `--skip-tools zap` to narrow it. See [docs/TOOLS.md](docs/TOOLS.md).
 
 ---
 
@@ -248,11 +231,11 @@ jmo scan --repo . --image myapp:latest --url https://myapp.com
 ### Tools not found
 
 ```bash
-# Check tool status for your profile
-jmo tools check --profile balanced
+# Check tool status
+jmo tools check
 
 # Install missing tools (cross-platform)
-jmo tools install --profile balanced
+jmo tools install
 
 # Or generate install script to review
 jmo tools install --print-script > install-tools.sh

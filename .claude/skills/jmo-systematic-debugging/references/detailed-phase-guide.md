@@ -71,7 +71,7 @@ print(load_trivy('/tmp/trivy-debug.json'))"
 
 - **Adapter changes:** Modified field mappings, exit code handling
 - **Tool version changes:** Tool output format changed (check `versions.yaml`)
-- **Profile changes:** New tools added, timeout adjustments
+- **Config changes:** `tools:` list narrowed, per_tool timeout adjustments
 - **Multi-target changes:** New target type added, directory structure changed
 - **Compliance changes:** New framework mappings, CWE updates
 
@@ -265,7 +265,7 @@ grep -A 10 "individual-images" scripts/core/normalize_and_report.py
 
 - **Adapter pattern:** `scripts/core/adapters/trivy_adapter.py` (most comprehensive)
 - **Test pattern:** `tests/adapters/test_trivy_adapter.py` (5 categories)
-- **Scan job pattern:** `scripts/cli/scan_jobs/repository_scanner.py` (28 tools)
+- **Scan job pattern:** `scripts/cli/scan_jobs/repository_scanner.py` (one block per repository tool)
 - **Exit code handling:** Check CLAUDE.md "Tool Invocation" section
 - **CommonFinding schema:** `docs/schemas/common_finding.v1.json`
 
@@ -325,7 +325,7 @@ cat versions.yaml | grep -A 2 "trivy:"
 trivy --version  # Does local version match versions.yaml?
 
 # Configuration dependencies
-cat jmo.yml | grep -A 10 "balanced:"  # Profile config
+grep -nE "^(threads|timeout|tools):" jmo.yml  # Top-level scan settings
 cat jmo.yml | grep -A 5 "per_tool:"    # Per-tool overrides
 
 # Python dependencies
@@ -675,7 +675,7 @@ Example: Adding new tool adapter requires 5+ files changed
 - jmo.py: Add tool invocation
 - scan_jobs/repository_scanner.py: Add tool to job_repository
 - normalize_and_report.py: Import adapter, add to loader loop
-- jmo.yml: Add tool to profiles
+- tool_registry.py: Add tool to TOOL_MATRIX
 - Multiple test files
 
 -> This suggests: Plugin architecture needed

@@ -9,7 +9,7 @@ These tests validate the complete scan workflow:
 - Deduplication effectiveness
 
 Requires: Real security tools installed (semgrep, trivy at minimum)
-Runtime: ~5-15 minutes depending on profile
+Runtime: ~5-15 minutes depending on which tools are installed
 """
 
 from __future__ import annotations
@@ -80,10 +80,9 @@ SCHEMA_FILE = PROJECT_ROOT / "docs" / "schemas" / "common_finding.v1.json"
 def run_scan(
     target: Path,
     results_dir: Path,
-    profile: str = "fast",
     extra_args: list[str] | None = None,
 ) -> subprocess.CompletedProcess:
-    """Run JMo scan on a target directory."""
+    """Run JMo scan on a target directory with the default tool matrix."""
     cmd = [
         sys.executable,
         "-m",
@@ -93,8 +92,6 @@ def run_scan(
         str(target),
         "--results-dir",
         str(results_dir),
-        "--profile",
-        profile,
         "--allow-missing-tools",
     ]
     if extra_args:
@@ -207,7 +204,7 @@ class TestScanPipeline:
         """Scan should produce valid JSON output with findings."""
         results_dir = tmp_path / "results"
 
-        run_scan(sample_vulnerable_repo, results_dir, profile="fast")
+        run_scan(sample_vulnerable_repo, results_dir)
 
         # Scan should complete (may have non-zero exit for findings)
         assert results_dir.exists(), "Results directory not created"
@@ -222,23 +219,11 @@ class TestScanPipeline:
                     "Finding missing message/title"
                 )
 
-    def test_scan_with_different_profiles(
-        self, sample_vulnerable_repo: Path, tmp_path: Path
-    ):
-        """Different profiles should work correctly."""
-        for profile in ["fast"]:  # Only test fast for speed
-            results_dir = tmp_path / f"results-{profile}"
-
-            run_scan(sample_vulnerable_repo, results_dir, profile=profile)
-
-            # Should complete without crashing (results_dir created)
-            assert results_dir.exists()
-
     def test_scan_output_formats(self, sample_vulnerable_repo: Path, tmp_path: Path):
         """Scan should produce all expected output files."""
         results_dir = tmp_path / "results"
 
-        run_scan(sample_vulnerable_repo, results_dir, profile="fast")
+        run_scan(sample_vulnerable_repo, results_dir)
 
         # Check for expected output files (some may not exist if no findings)
         possible_outputs = [
@@ -263,7 +248,7 @@ class TestDeduplicationEffectiveness:
         """Deduplication should reduce total findings by 20-50%."""
         results_dir = tmp_path / "results"
 
-        run_scan(sample_vulnerable_repo, results_dir, profile="balanced")
+        run_scan(sample_vulnerable_repo, results_dir)
 
         # Load deduplicated findings
         findings = load_findings(results_dir)
@@ -289,7 +274,7 @@ class TestScanReporting:
         """JSON output should be valid and parseable."""
         results_dir = tmp_path / "results"
 
-        run_scan(sample_vulnerable_repo, results_dir, profile="fast")
+        run_scan(sample_vulnerable_repo, results_dir)
 
         findings_file = results_dir / "findings.json"
         if findings_file.exists():
@@ -306,7 +291,7 @@ class TestScanReporting:
         """Markdown summary should be generated."""
         results_dir = tmp_path / "results"
 
-        run_scan(sample_vulnerable_repo, results_dir, profile="fast")
+        run_scan(sample_vulnerable_repo, results_dir)
 
         summary_file = results_dir / "summary.md"
         if summary_file.exists():

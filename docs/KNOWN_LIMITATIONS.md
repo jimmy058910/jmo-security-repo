@@ -195,7 +195,7 @@ No findings are lost — anything not clustered is reported separately.
 **What to do:** lower `deduplication.similarity_threshold` toward `0.5` if you
 would rather over-cluster than under-cluster, or raise it toward `1.0` for the
 opposite. Values outside `0.5`–`1.0` are rejected at config load. How much
-clustering you see depends heavily on how much your profile's tools overlap: a
+clustering you see depends heavily on how much the tools that ran overlap: a
 scan whose tools examine different things (SBOM, secrets, SAST) will cluster
 very little, because there is nothing for them to agree on.
 
@@ -338,32 +338,11 @@ gh issue list --repo jimmy058910/jmo-security-repo --state open --label user-rea
   enumeration is exact and skips only the real results directory, so the tools
   that take file arguments — hadolint, shellcheck — are unaffected.
   [#1156](https://github.com/jimmy058910/jmo-security-repo/issues/1156)
-- **`kubescape` currently produces no findings on any scan**, and upgrading or
-  downgrading JMo will not change that. kubescape fetches its policy bundle at
-  scan time rather than shipping it, and the bundle now served contains a
-  control the pinned 4.0.12 binary cannot evaluate — so it exits 1 and writes an
-  empty file (`rego eval failed ... no ValidatingAdmissionPolicy for control
-  "C-0207"`), on a directory holding one valid Pod manifest and across four
-  invocation shapes. The same binary worked on 2026-09-01. JMo reports it
-  (`exited with an accepted code but wrote no output`), so no scan claims
-  Kubernetes coverage it does not have. Use `trivy config` for manifest scanning
-  meanwhile.
-  [#1211](https://github.com/jimmy058910/jmo-security-repo/issues/1211)
-- **`trivy-rbac` is skipped on most repositories that do have manifests.** Its
-  detection is three filename globs that match 1 of 5 real manifest names and
-  never look at `.yml` at all, so it reports "nothing for it to scan" on a tree
-  full of Kubernetes. It also cannot currently start (#1206).
-  [#1212](https://github.com/jimmy058910/jmo-security-repo/issues/1212)
 - **Three output rough edges:** the scan progress line is written even when
   stderr is redirected, so a captured log carries `\r` frames; the history
   database flag is `--history-db` on `scan` and `ci` but `--db` on `diff` and
   `history list`; bulk tool warnings arrive as one long JSON line.
   [#1082](https://github.com/jimmy058910/jmo-security-repo/issues/1082)
-- **An interrupted scan leaves horusec's staging copy** of the scanned tree in
-  `<repo>/.horusec/<uuid>/`, gigabytes on a large repository and not cleaned
-  up on Ctrl-C or a CI timeout. Delete it by hand and add `.horusec/` to your
-  `.gitignore`.
-  [#1088](https://github.com/jimmy058910/jmo-security-repo/issues/1088)
 - **`dashboard.html` embeds the scanning user's home directory** inside each
   finding's `raw` field, which is the tool's verbatim output. Review a
   dashboard produced on a personal machine before publishing it.

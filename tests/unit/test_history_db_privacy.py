@@ -62,7 +62,6 @@ class TestPrivacyAwareDefaults:
         # Act: Store scan with default (collect_metadata=False)
         scan_id = store_scan(
             results_dir=results_dir,
-            profile="balanced",
             tools=["trivy"],
             db_path=db_path,
             collect_metadata=False,  # ← DEFAULT BEHAVIOR
@@ -125,7 +124,6 @@ class TestPrivacyAwareDefaults:
         # Act: Store scan with collect_metadata=True
         scan_id = store_scan(
             results_dir=results_dir,
-            profile="fast",
             tools=["semgrep"],
             db_path=db_path,
             collect_metadata=True,  # ← OPT-IN METADATA COLLECTION
@@ -189,7 +187,6 @@ class TestPrivacyAwareDefaults:
         # Act: Store scan with collect_metadata=False (privacy mode)
         scan_id = store_scan(
             results_dir=results_dir,
-            profile="fast",
             tools=["trivy"],
             db_path=db_path,
             collect_metadata=False,  # Privacy mode
@@ -240,7 +237,6 @@ class TestPrivacyAwareDefaults:
         # Act: Call store_scan WITHOUT collect_metadata parameter (old code)
         scan_id = store_scan(
             results_dir=results_dir,
-            profile="fast",
             tools=["trivy"],
             db_path=db_path,
             # collect_metadata parameter omitted (defaults to False)

@@ -222,7 +222,6 @@ class TestStoreScan:
         # Store scan
         scan_id = store_scan(
             results_dir=results_dir,
-            profile="balanced",
             tools=["trivy"],
             db_path=db_path,
         )
@@ -239,7 +238,9 @@ class TestStoreScan:
         scan_row = cursor.fetchone()
 
         assert scan_row is not None
-        assert scan_row["profile"] == "balanced"
+        # v2.0.0 stores no scan profile; the row records the tools that ran.
+        assert "profile" not in scan_row.keys()
+        assert json.loads(scan_row["tools"]) == ["trivy"]
         assert scan_row["total_findings"] == 1
         assert scan_row["high_count"] == 1
 
@@ -270,7 +271,6 @@ class TestStoreScan:
         # Store scan with explicit Git context
         scan_id = store_scan(
             results_dir=results_dir,
-            profile="fast",
             tools=["semgrep"],
             db_path=db_path,
             commit_hash="abc123def456",
@@ -351,7 +351,6 @@ class TestStoreScan:
         # Store scan
         scan_id = store_scan(
             results_dir=results_dir,
-            profile="deep",
             tools=["trivy", "semgrep", "checkov", "hadolint", "syft"],
             db_path=db_path,
         )
@@ -381,32 +380,6 @@ class TestStoreScan:
         with pytest.raises(FileNotFoundError, match="findings.json not found"):
             store_scan(
                 results_dir=results_dir,
-                profile="balanced",
-                tools=["trivy"],
-                db_path=db_path,
-            )
-
-    def test_store_scan_invalid_profile(self, tmp_path):
-        """Test that store_scan raises ValueError for an unknown profile.
-
-        The message changed in #721 from "Invalid profile: X" to
-        "Unknown profile: 'X'. Known profiles: ..." -- the old wording gave the
-        user no way to discover which values were valid, which is what let the
-        missing `slim` profile go unnoticed.
-        """
-        db_path = tmp_path / "test.db"
-
-        results_dir = tmp_path / "results"
-        summaries_dir = results_dir / "summaries"
-        summaries_dir.mkdir(parents=True)
-
-        findings_json = summaries_dir / "findings.json"
-        findings_json.write_text(json.dumps({"findings": []}))
-
-        with pytest.raises(ValueError, match="Unknown profile"):
-            store_scan(
-                results_dir=results_dir,
-                profile="invalid_profile",
                 tools=["trivy"],
                 db_path=db_path,
             )
@@ -429,7 +402,6 @@ class TestScanRetrieval:
 
         scan_id = store_scan(
             results_dir=results_dir,
-            profile="fast",
             tools=["trivy"],
             db_path=db_path,
         )
@@ -441,7 +413,7 @@ class TestScanRetrieval:
 
         assert scan is not None
         assert scan["id"] == scan_id
-        assert scan["profile"] == "fast"
+        assert json.loads(scan["tools"]) == ["trivy"]
 
     def test_get_scan_by_id_prefix_match(self, tmp_path):
         """Test retrieving scan by UUID prefix."""
@@ -457,7 +429,6 @@ class TestScanRetrieval:
 
         scan_id = store_scan(
             results_dir=results_dir,
-            profile="fast",
             tools=["trivy"],
             db_path=db_path,
         )
@@ -497,7 +468,6 @@ class TestScanRetrieval:
         for i in range(3):
             scan_id = store_scan(
                 results_dir=results_dir,
-                profile="fast",
                 tools=["trivy"],
                 db_path=db_path,
                 branch=f"branch-{i}",
@@ -530,21 +500,18 @@ class TestScanRetrieval:
 
         store_scan(
             results_dir=results_dir,
-            profile="fast",
             tools=["trivy"],
             db_path=db_path,
             branch="main",
         )
         store_scan(
             results_dir=results_dir,
-            profile="fast",
             tools=["trivy"],
             db_path=db_path,
             branch="main",
         )
         store_scan(
             results_dir=results_dir,
-            profile="fast",
             tools=["trivy"],
             db_path=db_path,
             branch="dev",
@@ -596,7 +563,6 @@ class TestFindingRetrieval:
 
         scan_id = store_scan(
             results_dir=results_dir,
-            profile="balanced",
             tools=["trivy", "semgrep"],
             db_path=db_path,
         )
@@ -643,14 +609,12 @@ class TestDatabaseStats:
 
         store_scan(
             results_dir=results_dir,
-            profile="fast",
             tools=["trivy"],
             db_path=db_path,
             branch="main",
         )
         store_scan(
             results_dir=results_dir,
-            profile="balanced",
             tools=["trivy"],
             db_path=db_path,
             branch="dev",
@@ -665,7 +629,7 @@ class TestDatabaseStats:
         assert stats["total_findings"] == 2
         assert stats["db_size_mb"] >= 0
         assert len(stats["scans_by_branch"]) == 2
-        assert len(stats["scans_by_profile"]) == 2
+        assert "scans_by_profile" not in stats
         assert len(stats["findings_by_severity"]) >= 1
 
 
@@ -686,7 +650,6 @@ class TestScanDeletion:
 
         scan_id = store_scan(
             results_dir=results_dir,
-            profile="fast",
             tools=["trivy"],
             db_path=db_path,
         )
@@ -720,7 +683,6 @@ class TestScanDeletion:
 
         scan_id = store_scan(
             results_dir=results_dir,
-            profile="fast",
             tools=["trivy"],
             db_path=db_path,
         )
@@ -852,7 +814,6 @@ class TestEdgeCases:
 
         scan_id = store_scan(
             results_dir=results_dir,
-            profile="balanced",
             tools=["trivy"],
             db_path=db_path,
         )
@@ -883,7 +844,6 @@ class TestEdgeCases:
         # Store first scan
         store_scan(
             results_dir=results_dir,
-            profile="fast",
             tools=["trivy"],
             db_path=db_path,
         )
@@ -895,7 +855,6 @@ class TestEdgeCases:
 
         scan_id_2 = store_scan(
             results_dir=results_dir,
-            profile="fast",
             tools=["trivy"],
             db_path=db_path,
         )
@@ -907,32 +866,6 @@ class TestEdgeCases:
 
         assert len(recent_scans) == 1
         assert recent_scans[0]["id"] == scan_id_2
-
-    def test_list_scans_with_profile_filter(self, tmp_path):
-        """Test listing scans filtered by profile."""
-        db_path = tmp_path / "test.db"
-
-        results_dir = tmp_path / "results"
-        summaries_dir = results_dir / "summaries"
-        summaries_dir.mkdir(parents=True)
-
-        findings_json = summaries_dir / "findings.json"
-        findings_json.write_text(json.dumps({"findings": []}))
-
-        # Store scans with different profiles
-        store_scan(results_dir, profile="fast", tools=["trivy"], db_path=db_path)
-        deep_scan_id = store_scan(
-            results_dir, profile="deep", tools=["trivy"], db_path=db_path
-        )
-
-        # Filter by deep profile
-        conn = get_connection(db_path)
-        deep_scans = list_scans(conn, profile="deep", limit=50)
-        conn.close()
-
-        assert len(deep_scans) == 1
-        assert deep_scans[0]["id"] == deep_scan_id
-        assert deep_scans[0]["profile"] == "deep"
 
     def test_collect_targets_multiple_types(self, tmp_path):
         """Test collecting targets from multiple target type directories."""
@@ -973,9 +906,7 @@ class TestEdgeCases:
         }
         findings_json.write_text(json.dumps(findings_data))
 
-        scan_id = store_scan(
-            results_dir, profile="balanced", tools=["trivy"], db_path=db_path
-        )
+        scan_id = store_scan(results_dir, tools=["trivy"], db_path=db_path)
 
         # Retrieve scan and verify
         conn = get_connection(db_path)
@@ -1006,9 +937,7 @@ class TestEdgeCases:
         findings_json = summaries_dir / "findings.json"
         findings_json.write_text(json.dumps({"findings": []}))
 
-        scan_id = store_scan(
-            results_dir, profile="fast", tools=["trivy"], db_path=db_path
-        )
+        scan_id = store_scan(results_dir, tools=["trivy"], db_path=db_path)
 
         # Verify GitLab CI metadata
         conn = get_connection(db_path)
@@ -1041,9 +970,7 @@ class TestEdgeCases:
         findings_json = summaries_dir / "findings.json"
         findings_json.write_text(json.dumps({"findings": []}))
 
-        scan_id = store_scan(
-            results_dir, profile="deep", tools=["trivy"], db_path=db_path
-        )
+        scan_id = store_scan(results_dir, tools=["trivy"], db_path=db_path)
 
         # Verify Jenkins CI metadata
         conn = get_connection(db_path)
@@ -1139,9 +1066,7 @@ class TestEdgeCases:
         }
         findings_json.write_text(json.dumps(findings_data))
 
-        scan_id = store_scan(
-            results_dir, profile="balanced", tools=["trivy", "semgrep"], db_path=db_path
-        )
+        scan_id = store_scan(results_dir, tools=["trivy", "semgrep"], db_path=db_path)
 
         # Retrieve only CRITICAL findings
         conn = get_connection(db_path)
@@ -1158,9 +1083,7 @@ class TestEdgeCases:
         nonexistent_dir = tmp_path / "does_not_exist"
 
         with pytest.raises(FileNotFoundError, match="Results directory not found"):
-            store_scan(
-                nonexistent_dir, profile="balanced", tools=["trivy"], db_path=db_path
-            )
+            store_scan(nonexistent_dir, tools=["trivy"], db_path=db_path)
 
 
 class TestComputeDiff:
@@ -1225,7 +1148,6 @@ class TestComputeDiff:
         # Store scan 1
         scan_id_1 = store_scan(
             results_dir_1,
-            profile="balanced",
             tools=["trivy", "semgrep"],
             db_path=db_path,
         )
@@ -1288,7 +1210,6 @@ class TestComputeDiff:
         # Store scan 2
         scan_id_2 = store_scan(
             results_dir_2,
-            profile="balanced",
             tools=["trivy", "semgrep"],
             db_path=db_path,
         )
@@ -1353,9 +1274,7 @@ class TestComputeDiff:
         }
         (summaries_dir_1 / "findings.json").write_text(json.dumps(findings))
 
-        scan_id_1 = store_scan(
-            results_dir_1, profile="balanced", tools=["trivy"], db_path=db_path
-        )
+        scan_id_1 = store_scan(results_dir_1, tools=["trivy"], db_path=db_path)
 
         # Create identical scan 2
         results_dir_2 = tmp_path / "results2"
@@ -1363,9 +1282,7 @@ class TestComputeDiff:
         summaries_dir_2.mkdir(parents=True)
         (summaries_dir_2 / "findings.json").write_text(json.dumps(findings))
 
-        scan_id_2 = store_scan(
-            results_dir_2, profile="balanced", tools=["trivy"], db_path=db_path
-        )
+        scan_id_2 = store_scan(results_dir_2, tools=["trivy"], db_path=db_path)
 
         # Import compute_diff
         from scripts.core.history_db import compute_diff
@@ -1390,9 +1307,7 @@ class TestComputeDiff:
         summaries_dir_1.mkdir(parents=True)
         (summaries_dir_1 / "findings.json").write_text(json.dumps({"findings": []}))
 
-        scan_id_1 = store_scan(
-            results_dir_1, profile="fast", tools=["trivy"], db_path=db_path
-        )
+        scan_id_1 = store_scan(results_dir_1, tools=["trivy"], db_path=db_path)
 
         # Scan 2: 5 findings
         results_dir_2 = tmp_path / "results2"
@@ -1414,9 +1329,7 @@ class TestComputeDiff:
         }
         (summaries_dir_2 / "findings.json").write_text(json.dumps(findings_2))
 
-        scan_id_2 = store_scan(
-            results_dir_2, profile="fast", tools=["trivy"], db_path=db_path
-        )
+        scan_id_2 = store_scan(results_dir_2, tools=["trivy"], db_path=db_path)
 
         # Import compute_diff
         from scripts.core.history_db import compute_diff
@@ -1455,9 +1368,7 @@ class TestComputeDiff:
         }
         (summaries_dir_1 / "findings.json").write_text(json.dumps(findings_1))
 
-        scan_id_1 = store_scan(
-            results_dir_1, profile="fast", tools=["trivy"], db_path=db_path
-        )
+        scan_id_1 = store_scan(results_dir_1, tools=["trivy"], db_path=db_path)
 
         # Scan 2: 0 findings
         results_dir_2 = tmp_path / "results2"
@@ -1465,9 +1376,7 @@ class TestComputeDiff:
         summaries_dir_2.mkdir(parents=True)
         (summaries_dir_2 / "findings.json").write_text(json.dumps({"findings": []}))
 
-        scan_id_2 = store_scan(
-            results_dir_2, profile="fast", tools=["trivy"], db_path=db_path
-        )
+        scan_id_2 = store_scan(results_dir_2, tools=["trivy"], db_path=db_path)
 
         # Import compute_diff
         from scripts.core.history_db import compute_diff
@@ -1515,7 +1424,6 @@ class TestComputeDiff:
 
         scan_id_1 = store_scan(
             results_dir_1,
-            profile="balanced",
             tools=["trivy", "semgrep"],
             db_path=db_path,
         )
@@ -1549,7 +1457,6 @@ class TestComputeDiff:
 
         scan_id_2 = store_scan(
             results_dir_2,
-            profile="balanced",
             tools=["trivy", "semgrep"],
             db_path=db_path,
         )
@@ -1642,7 +1549,6 @@ class TestGetTrendSummary:
             with patch("time.time", return_value=scan_time):
                 scan_id = store_scan(
                     results_dir,
-                    profile="balanced",
                     tools=["trivy"],
                     db_path=db_path,
                     branch="main",
@@ -1724,7 +1630,6 @@ class TestGetTrendSummary:
 
         store_scan(
             results_dir,
-            profile="balanced",
             tools=["trivy"],
             db_path=db_path,
             branch="main",
@@ -1772,7 +1677,6 @@ class TestGetTrendSummary:
         with patch("time.time", return_value=current_time - (30 * 86400)):
             store_scan(
                 results_dir_1,
-                profile="balanced",
                 tools=["trivy"],
                 db_path=db_path,
                 branch="main",
@@ -1801,7 +1705,6 @@ class TestGetTrendSummary:
         with patch("time.time", return_value=current_time - (20 * 86400)):
             store_scan(
                 results_dir_2,
-                profile="balanced",
                 tools=["trivy"],
                 db_path=db_path,
                 branch="main",
@@ -1830,7 +1733,6 @@ class TestGetTrendSummary:
         with patch("time.time", return_value=current_time - (10 * 86400)):
             store_scan(
                 results_dir_3,
-                profile="balanced",
                 tools=["trivy"],
                 db_path=db_path,
                 branch="main",
@@ -1884,7 +1786,6 @@ class TestGetTrendSummary:
         with patch("time.time", return_value=current_time - (30 * 86400)):
             store_scan(
                 results_dir_1,
-                profile="balanced",
                 tools=["trivy"],
                 db_path=db_path,
                 branch="main",
@@ -1913,7 +1814,6 @@ class TestGetTrendSummary:
         with patch("time.time", return_value=current_time):
             store_scan(
                 results_dir_2,
-                profile="balanced",
                 tools=["trivy"],
                 db_path=db_path,
                 branch="main",
@@ -1980,7 +1880,6 @@ class TestGetTrendSummary:
             ):
                 store_scan(
                     results_dir,
-                    profile="balanced",
                     tools=["trivy", "semgrep"],
                     db_path=db_path,
                     branch="main",
@@ -2209,66 +2108,6 @@ class TestSecretRedaction:
         assert raw_data["matches"][1]["Raw"] == "[REDACTED]"
         assert raw_data["matches"][0]["context"]["file"] == "config.yml"
 
-    def test_redact_noseyparker_secrets(self):
-        """Test NoseyParker secret redaction."""
-        from scripts.core.history_db import redact_secrets
-
-        finding = {
-            "id": "fp1",
-            "severity": "MEDIUM",
-            "tool": {"name": "noseyparker", "version": "0.19.0"},
-            "raw": {
-                "rule_name": "Generic API Key",
-                "match": {
-                    "snippet": "api_key=abc123def456",
-                    "capture_groups": {
-                        "secret_value": "abc123def456",
-                        "context": "config.py:15",
-                    },
-                },
-            },
-        }
-
-        result = redact_secrets(finding, store_raw=True)
-
-        raw_data = json.loads(result["raw_finding"])
-        assert raw_data["rule_name"] == "Generic API Key"
-        assert raw_data["match"]["snippet"] == "[REDACTED]"
-        assert raw_data["match"]["capture_groups"]["secret_value"] == "[REDACTED]"
-        assert raw_data["match"]["capture_groups"]["context"] == "config.py:15"
-
-    def test_redact_semgrep_secrets(self):
-        """Test Semgrep-secrets redaction."""
-        from scripts.core.history_db import redact_secrets
-
-        finding = {
-            "id": "fp1",
-            "severity": "HIGH",
-            "tool": {"name": "semgrep-secrets", "version": "1.50.0"},
-            "raw": {
-                "check_id": "secrets.api-key",
-                "extra": {
-                    "lines": "api_key = 'sk-abc123'",
-                    "message": "Hardcoded API key",
-                    "metadata": {
-                        "secret_type": "api_key",
-                        "secret_confidence": "high",
-                        "other_field": "keep",
-                    },
-                },
-            },
-        }
-
-        result = redact_secrets(finding, store_raw=True)
-
-        raw_data = json.loads(result["raw_finding"])
-        assert raw_data["check_id"] == "secrets.api-key"
-        assert raw_data["extra"]["lines"] == "[REDACTED]"
-        assert raw_data["extra"]["message"] == "Hardcoded API key"
-        assert raw_data["extra"]["metadata"]["secret_type"] == "[REDACTED]"
-        assert raw_data["extra"]["metadata"]["secret_confidence"] == "[REDACTED]"
-        assert raw_data["extra"]["metadata"]["other_field"] == "keep"
-
 
 class TestDatabaseOptimization:
     """Test database optimization and query performance functions."""
@@ -2301,7 +2140,6 @@ class TestDatabaseOptimization:
 
         store_scan(
             results_dir,
-            profile="balanced",
             tools=["semgrep"],
             db_path=db_path,
             branch="main",
@@ -2393,7 +2231,6 @@ class TestDatabaseOptimization:
             )
             store_scan(
                 results_dir,
-                profile="balanced",
                 tools=["trivy"],
                 db_path=db_path,
                 branch="main",
@@ -2456,7 +2293,6 @@ class TestDatabaseOptimization:
             with patch("time.time", return_value=1000000 + i):
                 store_scan(
                     results_dir,
-                    profile="deep",
                     tools=["semgrep"],
                     db_path=db_path,
                     branch="main",
@@ -2537,7 +2373,6 @@ class TestDashboardFunctions:
 
         scan_id = store_scan(
             results_dir,
-            profile="balanced",
             tools=["trivy", "semgrep"],
             db_path=db_path,
             branch="main",
@@ -2809,7 +2644,6 @@ class TestAttestationFunctions:
 
         scan_id = store_scan(
             results_dir,
-            profile="balanced",
             tools=["semgrep"],
             # Don't pass db_path - use monkeypatched DEFAULT_DB_PATH
             branch="main",
@@ -2891,7 +2725,6 @@ class TestAttestationFunctions:
 
         scan_id = store_scan(
             results_dir,
-            profile="balanced",
             tools=["semgrep"],
             # Don't pass db_path - use monkeypatched DEFAULT_DB_PATH
             branch="main",
@@ -2999,7 +2832,6 @@ class TestAttestationFunctions:
 
             scan_id = store_scan(
                 results_dir,
-                profile="balanced",
                 tools=["semgrep"],
                 # Don't pass db_path - use monkeypatched DEFAULT_DB_PATH
                 branch="main",
@@ -3105,7 +2937,6 @@ class TestAttestationFunctions:
 
         scan_id = store_scan(
             results_dir,
-            profile="balanced",
             tools=["semgrep"],
             # Don't pass db_path - use monkeypatched DEFAULT_DB_PATH
             branch="main",
@@ -3252,9 +3083,7 @@ class TestSearchFindings:
             )
         )
 
-        store_scan(
-            results_dir, profile="balanced", tools=["semgrep", "bandit"], branch="main"
-        )
+        store_scan(results_dir, tools=["semgrep", "bandit"], branch="main")
 
         # Search for "SQL" - should match message
         conn = get_connection()
@@ -3304,7 +3133,7 @@ class TestSearchFindings:
             )
         )
 
-        store_scan(results_dir, profile="balanced", tools=["semgrep"], branch="main")
+        store_scan(results_dir, tools=["semgrep"], branch="main")
 
         # Search for "auth" - should match path
         conn = get_connection()
@@ -3353,9 +3182,7 @@ class TestSearchFindings:
             )
         )
 
-        store_scan(
-            results_dir, profile="balanced", tools=["semgrep", "bandit"], branch="main"
-        )
+        store_scan(results_dir, tools=["semgrep", "bandit"], branch="main")
 
         # Search for "CWE-89" - should match rule_id
         conn = get_connection()
@@ -3412,9 +3239,7 @@ class TestSearchFindings:
             )
         )
 
-        store_scan(
-            results_dir, profile="balanced", tools=["semgrep", "bandit"], branch="main"
-        )
+        store_scan(results_dir, tools=["semgrep", "bandit"], branch="main")
 
         # Filter for HIGH severity only
         conn = get_connection()
@@ -3471,9 +3296,7 @@ class TestSearchFindings:
             )
         )
 
-        store_scan(
-            results_dir, profile="balanced", tools=["semgrep", "bandit"], branch="main"
-        )
+        store_scan(results_dir, tools=["semgrep", "bandit"], branch="main")
 
         # Filter for HIGH and CRITICAL severity
         conn = get_connection()
@@ -3523,9 +3346,7 @@ class TestSearchFindings:
             )
         )
 
-        store_scan(
-            results_dir, profile="balanced", tools=["semgrep", "bandit"], branch="main"
-        )
+        store_scan(results_dir, tools=["semgrep", "bandit"], branch="main")
 
         # Filter for semgrep only
         conn = get_connection()
@@ -3584,7 +3405,6 @@ class TestSearchFindings:
 
         store_scan(
             results_dir,
-            profile="balanced",
             tools=["semgrep", "bandit", "trivy"],
             branch="main",
         )
@@ -3628,9 +3448,7 @@ class TestSearchFindings:
                 ]
             )
         )
-        scan_id1 = store_scan(
-            results_dir1, profile="balanced", tools=["semgrep"], branch="main"
-        )
+        scan_id1 = store_scan(results_dir1, tools=["semgrep"], branch="main")
 
         # Create second scan
         results_dir2 = tmp_path / "results2"
@@ -3650,9 +3468,7 @@ class TestSearchFindings:
                 ]
             )
         )
-        _ = store_scan(
-            results_dir2, profile="balanced", tools=["bandit"], branch="main"
-        )
+        _ = store_scan(results_dir2, tools=["bandit"], branch="main")
 
         # Filter for scan_id1 only
         conn = get_connection()
@@ -3693,7 +3509,7 @@ class TestSearchFindings:
                 ]
             )
         )
-        store_scan(results_dir1, profile="balanced", tools=["semgrep"], branch="main")
+        store_scan(results_dir1, tools=["semgrep"], branch="main")
 
         # Create dev branch scan
         results_dir2 = tmp_path / "results2"
@@ -3713,7 +3529,7 @@ class TestSearchFindings:
                 ]
             )
         )
-        store_scan(results_dir2, profile="balanced", tools=["bandit"], branch="dev")
+        store_scan(results_dir2, tools=["bandit"], branch="dev")
 
         # Filter for main branch only
         conn = get_connection()
@@ -3758,7 +3574,7 @@ class TestSearchFindings:
                 ]
             )
         )
-        store_scan(results_dir1, profile="balanced", tools=["semgrep"], branch="main")
+        store_scan(results_dir1, tools=["semgrep"], branch="main")
 
         # Create new scan (timestamp: 2000000000)
         mock_time_new = 2000000000
@@ -3781,7 +3597,7 @@ class TestSearchFindings:
                 ]
             )
         )
-        store_scan(results_dir2, profile="balanced", tools=["bandit"], branch="main")
+        store_scan(results_dir2, tools=["bandit"], branch="main")
 
         # Filter for scans between 1500000000 and 2500000000 (should get new scan only)
         conn = get_connection()
@@ -3838,9 +3654,7 @@ class TestSearchFindings:
             )
         )
 
-        store_scan(
-            results_dir, profile="balanced", tools=["semgrep", "bandit"], branch="main"
-        )
+        store_scan(results_dir, tools=["semgrep", "bandit"], branch="main")
 
         # Search for "vulnerability" with HIGH severity and semgrep tool
         conn = get_connection()
@@ -3883,7 +3697,7 @@ class TestSearchFindings:
         summaries_dir.mkdir(parents=True)
         (summaries_dir / "findings.json").write_text(json.dumps(findings))
 
-        store_scan(results_dir, profile="balanced", tools=["semgrep"], branch="main")
+        store_scan(results_dir, tools=["semgrep"], branch="main")
 
         # Limit to 5 results
         conn = get_connection()
@@ -3922,7 +3736,7 @@ class TestSearchFindings:
         summaries_dir.mkdir(parents=True)
         (summaries_dir / "findings.json").write_text(json.dumps(findings))
 
-        store_scan(results_dir, profile="balanced", tools=["semgrep"], branch="main")
+        store_scan(results_dir, tools=["semgrep"], branch="main")
 
         # No limit specified - should default to 100
         conn = get_connection()
@@ -3986,7 +3800,7 @@ class TestSearchFindings:
             )
         )
 
-        store_scan(results_dir, profile="balanced", tools=["semgrep"], branch="main")
+        store_scan(results_dir, tools=["semgrep"], branch="main")
 
         # Get all findings - should be ordered by severity
         conn = get_connection()
@@ -4035,9 +3849,7 @@ class TestSearchFindings:
             )
         )
 
-        store_scan(
-            results_dir, profile="balanced", tools=["semgrep", "bandit"], branch="main"
-        )
+        store_scan(results_dir, tools=["semgrep", "bandit"], branch="main")
 
         # Empty query - should return all findings
         conn = get_connection()
@@ -4077,7 +3889,7 @@ class TestSearchFindings:
             )
         )
 
-        store_scan(results_dir, profile="balanced", tools=["semgrep"], branch="main")
+        store_scan(results_dir, tools=["semgrep"], branch="main")
 
         # Search for something that doesn't exist
         conn = get_connection()
@@ -4168,9 +3980,7 @@ class TestRecurringFindings:
                     ]
                 )
             )
-            store_scan(
-                results_dir, profile="balanced", tools=["semgrep"], branch="main"
-            )
+            store_scan(results_dir, tools=["semgrep"], branch="main")
 
         # Get recurring findings (min_occurrences=3)
         conn = get_connection()
@@ -4220,9 +4030,7 @@ class TestRecurringFindings:
                     ]
                 )
             )
-            store_scan(
-                results_dir, profile="balanced", tools=["semgrep"], branch="main"
-            )
+            store_scan(results_dir, tools=["semgrep"], branch="main")
 
         # Finding 2: appears 2 times (below threshold of 3)
         for i in range(2):
@@ -4246,7 +4054,7 @@ class TestRecurringFindings:
                     ]
                 )
             )
-            store_scan(results_dir, profile="balanced", tools=["bandit"], branch="main")
+            store_scan(results_dir, tools=["bandit"], branch="main")
 
         # Get recurring findings with min_occurrences=3 (default)
         conn = get_connection()
@@ -4294,9 +4102,7 @@ class TestRecurringFindings:
                     ]
                 )
             )
-            store_scan(
-                results_dir, profile="balanced", tools=["semgrep"], branch="main"
-            )
+            store_scan(results_dir, tools=["semgrep"], branch="main")
 
         # Create 3 scans on dev branch with different recurring finding
         for i in range(3):
@@ -4320,7 +4126,7 @@ class TestRecurringFindings:
                     ]
                 )
             )
-            store_scan(results_dir, profile="balanced", tools=["bandit"], branch="dev")
+            store_scan(results_dir, tools=["bandit"], branch="dev")
 
         # Get recurring findings for main branch only
         conn = get_connection()
@@ -4375,9 +4181,7 @@ class TestRecurringFindings:
                     ]
                 )
             )
-            store_scan(
-                results_dir, profile="balanced", tools=["semgrep"], branch="main"
-            )
+            store_scan(results_dir, tools=["semgrep"], branch="main")
 
         # Get recurring findings
         conn = get_connection()
@@ -4424,9 +4228,7 @@ class TestRecurringFindings:
                     ]
                 )
             )
-            store_scan(
-                results_dir, profile="balanced", tools=["semgrep"], branch="main"
-            )
+            store_scan(results_dir, tools=["semgrep"], branch="main")
 
         # Create finding 2: CRITICAL severity, 5 occurrences (should be first)
         for i in range(5):
@@ -4450,7 +4252,7 @@ class TestRecurringFindings:
                     ]
                 )
             )
-            store_scan(results_dir, profile="balanced", tools=["bandit"], branch="main")
+            store_scan(results_dir, tools=["bandit"], branch="main")
 
         # Get recurring findings
         conn = get_connection()
@@ -4502,9 +4304,7 @@ class TestRecurringFindings:
                     ]
                 )
             )
-            store_scan(
-                results_dir, profile="balanced", tools=["semgrep"], branch="main"
-            )
+            store_scan(results_dir, tools=["semgrep"], branch="main")
 
         # Get recurring findings
         conn = get_connection()
@@ -4554,9 +4354,7 @@ class TestRecurringFindings:
                     ]
                 )
             )
-            store_scan(
-                results_dir, profile="balanced", tools=["semgrep"], branch="main"
-            )
+            store_scan(results_dir, tools=["semgrep"], branch="main")
 
         # Get recurring findings (min_occurrences=3)
         conn = get_connection()
@@ -4600,7 +4398,7 @@ class TestRecurringFindings:
                 ]
             )
         )
-        store_scan(results_dir, profile="balanced", tools=["semgrep"], branch="main")
+        store_scan(results_dir, tools=["semgrep"], branch="main")
 
         # Get recurring findings with min_occurrences=1
         conn = get_connection()
@@ -4684,9 +4482,7 @@ class TestScanDiffForAI:
                 ]
             )
         )
-        scan_id1 = store_scan(
-            results_dir1, profile="balanced", tools=["semgrep"], branch="main"
-        )
+        scan_id1 = store_scan(results_dir1, tools=["semgrep"], branch="main")
 
         # Create comparison scan with new finding
         mock_time_2 = 1000000000 + 86400  # 1 day later
@@ -4709,9 +4505,7 @@ class TestScanDiffForAI:
                 ]
             )
         )
-        scan_id2 = store_scan(
-            results_dir2, profile="balanced", tools=["bandit"], branch="main"
-        )
+        scan_id2 = store_scan(results_dir2, tools=["bandit"], branch="main")
 
         # Get AI-friendly diff
         conn = get_connection()
@@ -4758,9 +4552,7 @@ class TestScanDiffForAI:
         summaries_dir1 = results_dir1 / "summaries"
         summaries_dir1.mkdir(parents=True)
         (summaries_dir1 / "findings.json").write_text(json.dumps([]))
-        scan_id1 = store_scan(
-            results_dir1, profile="balanced", tools=["semgrep"], branch="main"
-        )
+        scan_id1 = store_scan(results_dir1, tools=["semgrep"], branch="main")
 
         # Create comparison scan with findings of different severities
         mock_time_2 = 1000000000 + 86400
@@ -4815,9 +4607,7 @@ class TestScanDiffForAI:
                 ]
             )
         )
-        scan_id2 = store_scan(
-            results_dir2, profile="balanced", tools=["semgrep", "bandit"], branch="main"
-        )
+        scan_id2 = store_scan(results_dir2, tools=["semgrep", "bandit"], branch="main")
 
         # Get AI-friendly diff
         conn = get_connection()
@@ -4856,9 +4646,7 @@ class TestScanDiffForAI:
         summaries_dir1 = results_dir1 / "summaries"
         summaries_dir1.mkdir(parents=True)
         (summaries_dir1 / "findings.json").write_text(json.dumps([]))
-        scan_id1 = store_scan(
-            results_dir1, profile="balanced", tools=["semgrep"], branch="main"
-        )
+        scan_id1 = store_scan(results_dir1, tools=["semgrep"], branch="main")
 
         # Create comparison scan with compliance-tagged finding
         mock_time_2 = 1000000000 + 86400
@@ -4884,9 +4672,7 @@ class TestScanDiffForAI:
                 ]
             )
         )
-        scan_id2 = store_scan(
-            results_dir2, profile="balanced", tools=["semgrep"], branch="main"
-        )
+        scan_id2 = store_scan(results_dir2, tools=["semgrep"], branch="main")
 
         # Get AI-friendly diff
         conn = get_connection()
@@ -4919,9 +4705,7 @@ class TestScanDiffForAI:
         summaries_dir1 = results_dir1 / "summaries"
         summaries_dir1.mkdir(parents=True)
         (summaries_dir1 / "findings.json").write_text(json.dumps([]))
-        scan_id1 = store_scan(
-            results_dir1, profile="balanced", tools=["semgrep"], branch="main"
-        )
+        scan_id1 = store_scan(results_dir1, tools=["semgrep"], branch="main")
 
         # Create comparison scan with mixed priority findings
         mock_time_2 = 1000000000 + 86400
@@ -4960,9 +4744,7 @@ class TestScanDiffForAI:
                 ]
             )
         )
-        scan_id2 = store_scan(
-            results_dir2, profile="balanced", tools=["semgrep", "bandit"], branch="main"
-        )
+        scan_id2 = store_scan(results_dir2, tools=["semgrep", "bandit"], branch="main")
 
         # Get AI-friendly diff
         conn = get_connection()
@@ -4997,7 +4779,6 @@ class TestScanDiffForAI:
         (summaries_dir1 / "findings.json").write_text(json.dumps([]))
         scan_id1 = store_scan(
             results_dir1,
-            profile="balanced",
             tools=["semgrep"],
             branch="main",
             commit_hash="abc123",
@@ -5013,7 +4794,6 @@ class TestScanDiffForAI:
         (summaries_dir2 / "findings.json").write_text(json.dumps([]))
         scan_id2 = store_scan(
             results_dir2,
-            profile="balanced",
             tools=["semgrep"],
             branch="main",
             commit_hash="def456",
@@ -5069,9 +4849,7 @@ class TestScanDiffForAI:
                 ]
             )
         )
-        scan_id1 = store_scan(
-            results_dir1, profile="balanced", tools=["semgrep"], branch="main"
-        )
+        scan_id1 = store_scan(results_dir1, tools=["semgrep"], branch="main")
 
         # Create comparison scan (finding resolved)
         mock_time_2 = 1000000000 + 86400
@@ -5081,9 +4859,7 @@ class TestScanDiffForAI:
         summaries_dir2 = results_dir2 / "summaries"
         summaries_dir2.mkdir(parents=True)
         (summaries_dir2 / "findings.json").write_text(json.dumps([]))
-        scan_id2 = store_scan(
-            results_dir2, profile="balanced", tools=["semgrep"], branch="main"
-        )
+        scan_id2 = store_scan(results_dir2, tools=["semgrep"], branch="main")
 
         # Get AI-friendly diff
         conn = get_connection()
@@ -5134,12 +4910,8 @@ class TestScanDiffForAI:
                 )
             )
 
-        scan_id1 = store_scan(
-            tmp_path / "results0", profile="balanced", tools=["semgrep"], branch="main"
-        )
-        scan_id2 = store_scan(
-            tmp_path / "results1", profile="balanced", tools=["semgrep"], branch="main"
-        )
+        scan_id1 = store_scan(tmp_path / "results0", tools=["semgrep"], branch="main")
+        scan_id2 = store_scan(tmp_path / "results1", tools=["semgrep"], branch="main")
 
         # Get AI-friendly diff
         conn = get_connection()
@@ -5172,9 +4944,7 @@ class TestScanDiffForAI:
         summaries_dir1 = results_dir1 / "summaries"
         summaries_dir1.mkdir(parents=True)
         (summaries_dir1 / "findings.json").write_text(json.dumps([]))
-        scan_id1 = store_scan(
-            results_dir1, profile="balanced", tools=["semgrep"], branch="main"
-        )
+        scan_id1 = store_scan(results_dir1, tools=["semgrep"], branch="main")
 
         # Create comparison scan with CRITICAL + compliance (10 + 2 = 12, capped to 10)
         mock_time_2 = 1000000000 + 86400
@@ -5198,9 +4968,7 @@ class TestScanDiffForAI:
                 ]
             )
         )
-        scan_id2 = store_scan(
-            results_dir2, profile="balanced", tools=["bandit"], branch="main"
-        )
+        scan_id2 = store_scan(results_dir2, tools=["bandit"], branch="main")
 
         # Get AI-friendly diff
         conn = get_connection()
@@ -5296,9 +5064,7 @@ class TestComplianceSummary:
                 ]
             )
         )
-        scan_id = store_scan(
-            results_dir, profile="balanced", tools=["semgrep"], branch="main"
-        )
+        scan_id = store_scan(results_dir, tools=["semgrep"], branch="main")
 
         # Get compliance summary
         conn = get_connection()
@@ -5363,9 +5129,7 @@ class TestComplianceSummary:
                 ]
             )
         )
-        scan_id = store_scan(
-            results_dir, profile="fast", tools=["semgrep"], branch="main"
-        )
+        scan_id = store_scan(results_dir, tools=["semgrep"], branch="main")
 
         # Get OWASP-only summary
         conn = get_connection()
@@ -5429,9 +5193,7 @@ class TestComplianceSummary:
                 ]
             )
         )
-        scan_id = store_scan(
-            results_dir, profile="fast", tools=["semgrep", "bandit"], branch="main"
-        )
+        scan_id = store_scan(results_dir, tools=["semgrep", "bandit"], branch="main")
 
         conn = get_connection()
         summary = get_compliance_summary(conn, scan_id, framework="owasp")
@@ -5487,9 +5249,7 @@ class TestComplianceSummary:
                 ]
             )
         )
-        scan_id = store_scan(
-            results_dir, profile="fast", tools=["semgrep", "custom"], branch="main"
-        )
+        scan_id = store_scan(results_dir, tools=["semgrep", "custom"], branch="main")
 
         conn = get_connection()
         summary = get_compliance_summary(conn, scan_id, framework="all")
@@ -5533,9 +5293,7 @@ class TestComplianceSummary:
                 ]
             )
         )
-        scan_id = store_scan(
-            results_dir, profile="fast", tools=["custom"], branch="main"
-        )
+        scan_id = store_scan(results_dir, tools=["custom"], branch="main")
 
         conn = get_connection()
         summary = get_compliance_summary(conn, scan_id, framework="all")
@@ -5638,7 +5396,7 @@ class TestFindingContext:
                 ]
             )
         )
-        _ = store_scan(results_dir, profile="fast", tools=["semgrep"], branch="main")
+        _ = store_scan(results_dir, tools=["semgrep"], branch="main")
 
         conn = get_connection()
         context = get_finding_context(conn, "fp-test")
@@ -5708,7 +5466,7 @@ class TestFindingContext:
                     ]
                 )
             )
-            store_scan(results_dir, profile="fast", tools=["semgrep"], branch="main")
+            store_scan(results_dir, tools=["semgrep"], branch="main")
 
         conn = get_connection()
         context = get_finding_context(conn, "fp-recurring")
@@ -5767,7 +5525,7 @@ class TestFindingContext:
                 ]
             )
         )
-        store_scan(results_dir, profile="fast", tools=["semgrep"], branch="main")
+        store_scan(results_dir, tools=["semgrep"], branch="main")
 
         conn = get_connection()
         context = get_finding_context(conn, "fp-primary")
@@ -5816,7 +5574,7 @@ class TestFindingContext:
                 ]
             )
         )
-        store_scan(results_dir, profile="fast", tools=["semgrep"], branch="main")
+        store_scan(results_dir, tools=["semgrep"], branch="main")
 
         conn = get_connection()
         context = get_finding_context(conn, "fp-compliance")
@@ -5919,9 +5677,7 @@ class TestTimelineData:
 
         monkeypatch.setattr(history_db_module.time, "time", mock_time_for_store)
 
-        _ = store_scan(
-            results_dir, branch="main", profile="balanced", tools=["semgrep"]
-        )
+        _ = store_scan(results_dir, branch="main", tools=["semgrep"])
 
         # Restore current time
         monkeypatch.setattr(history_db_module.time, "time", lambda: current_time)
@@ -5998,9 +5754,7 @@ class TestTimelineData:
                 return timestamp
 
             monkeypatch.setattr(history_db_module.time, "time", mock_time_for_scan)
-            store_scan(
-                results_dir, branch="main", profile="balanced", tools=["semgrep"]
-            )
+            store_scan(results_dir, branch="main", tools=["semgrep"])
 
         # Restore current time
         import scripts.core.history_db as history_db_module
@@ -6084,9 +5838,7 @@ class TestTimelineData:
                 return timestamp
 
             monkeypatch.setattr(history_db_module.time, "time", mock_time_for_scan)
-            store_scan(
-                results_dir, branch="main", profile="balanced", tools=["semgrep"]
-            )
+            store_scan(results_dir, branch="main", tools=["semgrep"])
 
         # Restore current time
         import scripts.core.history_db as history_db_module
@@ -6155,7 +5907,7 @@ class TestTimelineData:
             return timestamp1
 
         monkeypatch.setattr(history_db_module.time, "time", mock_time1)
-        store_scan(results_dir1, branch="main", profile="balanced", tools=["semgrep"])
+        store_scan(results_dir1, branch="main", tools=["semgrep"])
 
         # Create scan on dev branch
         timestamp2 = current_time - (3 * 86400)
@@ -6189,7 +5941,7 @@ class TestTimelineData:
             return timestamp2
 
         monkeypatch.setattr(history_db_module.time, "time", mock_time2)
-        store_scan(results_dir2, branch="dev", profile="balanced", tools=["semgrep"])
+        store_scan(results_dir2, branch="dev", tools=["semgrep"])
 
         # Restore current time
         monkeypatch.setattr(history_db_module.time, "time", lambda: current_time)
@@ -6264,9 +6016,7 @@ class TestTimelineData:
                 return timestamp
 
             monkeypatch.setattr(history_db_module.time, "time", mock_time)
-            store_scan(
-                results_dir, branch="main", profile="balanced", tools=["semgrep"]
-            )
+            store_scan(results_dir, branch="main", tools=["semgrep"])
 
         # Restore current time
         import scripts.core.history_db as history_db_module
@@ -6383,7 +6133,7 @@ class TestFindingDetailsBatch:
         ]
 
         findings_file.write_text(json.dumps({"findings": findings}))
-        store_scan(results_dir, branch="main", profile="balanced", tools=["semgrep"])
+        store_scan(results_dir, branch="main", tools=["semgrep"])
 
         # Fetch all 3 findings by fingerprint
         conn = get_connection()
@@ -6453,7 +6203,7 @@ class TestFindingDetailsBatch:
                 }
             )
         )
-        store_scan(results_dir, branch="main", profile="balanced", tools=["semgrep"])
+        store_scan(results_dir, branch="main", tools=["semgrep"])
 
         # Try to fetch nonexistent fingerprints
         conn = get_connection()
@@ -6511,7 +6261,7 @@ class TestFindingDetailsBatch:
         ]
 
         findings_file.write_text(json.dumps({"findings": findings}))
-        store_scan(results_dir, branch="main", profile="balanced", tools=["semgrep"])
+        store_scan(results_dir, branch="main", tools=["semgrep"])
 
         # Fetch mix of existing and nonexistent
         conn = get_connection()
@@ -6560,7 +6310,7 @@ class TestFindingDetailsBatch:
         ]
 
         findings_file.write_text(json.dumps({"findings": findings}))
-        store_scan(results_dir, branch="main", profile="balanced", tools=["semgrep"])
+        store_scan(results_dir, branch="main", tools=["semgrep"])
 
         # Fetch all findings
         conn = get_connection()
@@ -6666,9 +6416,7 @@ class TestComplianceTrend:
                 return timestamp
 
             monkeypatch.setattr(history_db_module.time, "time", mock_time)
-            store_scan(
-                results_dir, branch="main", profile="balanced", tools=["semgrep"]
-            )
+            store_scan(results_dir, branch="main", tools=["semgrep"])
 
         # Restore current time
         import scripts.core.history_db as history_db_module
@@ -6746,9 +6494,7 @@ class TestComplianceTrend:
                 return timestamp
 
             monkeypatch.setattr(history_db_module.time, "time", mock_time)
-            store_scan(
-                results_dir, branch="main", profile="balanced", tools=["semgrep"]
-            )
+            store_scan(results_dir, branch="main", tools=["semgrep"])
 
         # Restore current time
         import scripts.core.history_db as history_db_module
@@ -6821,9 +6567,7 @@ class TestComplianceTrend:
                 return timestamp
 
             monkeypatch.setattr(history_db_module.time, "time", mock_time)
-            store_scan(
-                results_dir, branch="main", profile="balanced", tools=["semgrep"]
-            )
+            store_scan(results_dir, branch="main", tools=["semgrep"])
 
         # Restore current time
         import scripts.core.history_db as history_db_module
@@ -6902,7 +6646,7 @@ class TestComplianceTrend:
             return timestamp
 
         monkeypatch.setattr(history_db_module.time, "time", mock_time)
-        store_scan(results_dir, branch="main", profile="balanced", tools=["semgrep"])
+        store_scan(results_dir, branch="main", tools=["semgrep"])
 
         # Restore current time
         monkeypatch.setattr(history_db_module.time, "time", lambda: current_time)
@@ -6988,9 +6732,7 @@ class TestComplianceTrend:
                 return timestamp
 
             monkeypatch.setattr(history_db_module.time, "time", mock_time)
-            store_scan(
-                results_dir, branch="main", profile="balanced", tools=["semgrep"]
-            )
+            store_scan(results_dir, branch="main", tools=["semgrep"])
 
         # Restore current time
         import scripts.core.history_db as history_db_module
@@ -7019,13 +6761,13 @@ class TestExecuteReadonlyQuery:
         conn = sqlite3.connect(str(db_path))
         cursor = conn.cursor()
         cursor.execute(
-            "CREATE TABLE scans (id TEXT PRIMARY KEY, profile TEXT, total INTEGER)"
+            "CREATE TABLE scans (id TEXT PRIMARY KEY, branch TEXT, total INTEGER)"
         )
         cursor.execute("CREATE TABLE findings (scan_id TEXT, severity TEXT, tool TEXT)")
         for i in range(10):
             cursor.execute(
                 "INSERT INTO scans VALUES (?, ?, ?)",
-                (f"s-{i}", "balanced", i * 10),
+                (f"s-{i}", "main", i * 10),
             )
             cursor.execute(
                 "INSERT INTO findings VALUES (?, ?, ?)",
@@ -7038,9 +6780,9 @@ class TestExecuteReadonlyQuery:
     def test_execute_readonly_query_basic(self, readonly_db):
         """Basic SELECT query returns expected structure."""
         result = execute_readonly_query(
-            readonly_db, "SELECT id, profile FROM scans LIMIT 3"
+            readonly_db, "SELECT id, branch FROM scans LIMIT 3"
         )
-        assert result["columns"] == ["id", "profile"]
+        assert result["columns"] == ["id", "branch"]
         assert result["row_count"] == 3
         assert result["truncated"] is False
         assert isinstance(result["rows"], list)
@@ -7098,8 +6840,8 @@ class TestExecuteReadonlyQuery:
         """Parameterized queries bind correctly."""
         result = execute_readonly_query(
             readonly_db,
-            "SELECT id FROM scans WHERE profile = ? AND total >= ?",
-            params=["balanced", 50],
+            "SELECT id FROM scans WHERE branch = ? AND total >= ?",
+            params=["main", 50],
         )
         assert result["row_count"] == 5  # s-5 through s-9
         for row in result["rows"]:
@@ -7114,109 +6856,6 @@ class TestExecuteReadonlyQuery:
         """Empty query raises ValueError."""
         with pytest.raises(ValueError, match="must not be empty"):
             execute_readonly_query(readonly_db, "")
-
-
-class TestProfileAcceptedByHistory:
-    """The set of storable profiles must track the tool registry.
-
-    Regression guard for #721: the `scans.profile` CHECK constraint enumerated
-    fast/balanced/deep and predated the `slim` profile, so every slim scan was
-    rejected at insert time while `jmo report` logged a WARN and still exited 0
-    -- the scan silently never entered history.
-
-    These tests fail if a profile is added to PROFILE_TOOLS (or defined in
-    jmo.yml) without history being able to store it.
-    """
-
-    @staticmethod
-    def _insert_scan(conn, scan_id: str, profile: str) -> None:
-        """Insert a minimal scan row, exercising only the profile constraint."""
-        conn.execute(
-            """
-            INSERT INTO scans (
-                id, timestamp, timestamp_iso, profile, tools, targets,
-                target_type, total_findings, critical_count, high_count,
-                medium_count, low_count, info_count, jmo_version
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
-            """,
-            (scan_id, 0, "1970-01-01T00:00:00", profile, "[]", "[]", "repo", "test"),
-        )
-
-    def test_every_registry_profile_is_storable(self, tmp_path):
-        """Every profile in PROFILE_TOOLS can be stored in history."""
-        from scripts.core.tool_registry import PROFILE_TOOLS
-
-        db_path = tmp_path / "test.db"
-        init_database(db_path)
-        conn = get_connection(db_path)
-
-        rejected = []
-        for profile in sorted(PROFILE_TOOLS):
-            try:
-                self._insert_scan(conn, f"scan-{profile}", profile)
-            except sqlite3.IntegrityError as exc:
-                rejected.append(f"{profile}: {exc}")
-        conn.commit()
-
-        assert not rejected, (
-            "history rejected profiles the tool can actually run: "
-            + "; ".join(rejected)
-        )
-
-    @staticmethod
-    def _results_dir(tmp_path):
-        """Minimal results directory that store_scan will accept."""
-        summaries = tmp_path / "results" / "summaries"
-        summaries.mkdir(parents=True)
-        (summaries / "findings.json").write_text(json.dumps({"findings": []}))
-        return tmp_path / "results"
-
-    def test_store_scan_rejects_unknown_profile(self, tmp_path):
-        """Removing the CHECK must not let garbage profiles into history.
-
-        The constraint previously rejected unknown values as a side effect of
-        enumerating them. Validation now lives here instead, against the
-        registry, so it covers slim and user-defined profiles too.
-        """
-        with pytest.raises(ValueError, match="[Uu]nknown profile"):
-            store_scan(
-                results_dir=self._results_dir(tmp_path),
-                profile="definitely-not-a-profile",
-                tools=[],
-                db_path=tmp_path / "test.db",
-            )
-
-    def test_store_scan_accepts_slim(self, tmp_path):
-        """#721 end-to-end: a slim scan reaches the database via store_scan."""
-        scan_id = store_scan(
-            results_dir=self._results_dir(tmp_path),
-            profile="slim",
-            tools=["trivy"],
-            db_path=tmp_path / "test.db",
-        )
-        conn = get_connection(tmp_path / "test.db")
-        row = conn.execute(
-            "SELECT profile FROM scans WHERE id = ?", (scan_id,)
-        ).fetchone()
-        assert row[0] == "slim"
-
-    def test_user_defined_profile_is_storable(self, tmp_path):
-        """A custom profile from jmo.yml `profiles:` can be stored.
-
-        `Config.profiles` is a free-form dict, so users may define profiles the
-        registry has never heard of. History must not silently discard them.
-        """
-        db_path = tmp_path / "test.db"
-        init_database(db_path)
-        conn = get_connection(db_path)
-
-        self._insert_scan(conn, "scan-custom", "nightly-compliance")
-        conn.commit()
-
-        row = conn.execute(
-            "SELECT profile FROM scans WHERE id = ?", ("scan-custom",)
-        ).fetchone()
-        assert row[0] == "nightly-compliance"
 
 
 if __name__ == "__main__":

@@ -36,17 +36,6 @@ def test_parse_args_scan_basic(tmp_path: Path):
         assert args.repo == str(tmp_path)
 
 
-def test_parse_args_scan_with_profile(tmp_path: Path):
-    """Test scan with profile argument."""
-    with patch(
-        "sys.argv", ["jmo", "scan", "--repo", str(tmp_path), "--profile-name", "fast"]
-    ):
-        args = parse_args()
-        assert args.cmd == "scan"
-        assert args.profile_name == "fast"
-        assert args.repo == str(tmp_path)
-
-
 def test_parse_args_scan_with_tools(tmp_path: Path):
     """Test scan with explicit tools list."""
     with patch(
@@ -200,25 +189,118 @@ def test_parse_args_adapters_list():
         assert args.adapters_command == "list"
 
 
-def test_parse_args_fast_profile(tmp_path: Path):
-    """Test fast profile command."""
-    with patch("sys.argv", ["jmo", "fast", "--repo", str(tmp_path)]):
-        args = parse_args()
-        assert args.cmd == "fast"
+# ========== Profile selection is gone (v2.0.0) ==========
+
+# Every spelling that selected a scan profile before v2.0.0, each with the
+# token argparse must name in its error. Removed with no alias (no users), so
+# each must fail at the parser -- exit 2, a usage error, no traceback -- rather
+# than being accepted and ignored, which would run the whole matrix while the
+# user believed they had narrowed it.
+_REMOVED_PROFILE_SELECTION = [
+    (["scan", "--repo", ".", "--profile-name", "fast"], "--profile-name"),
+    (["ci", "--repo", ".", "--profile-name", "fast"], "--profile-name"),
+    (["fast", "--repo", "."], "'fast'"),
+    (["balanced", "--repo", "."], "'balanced'"),
+    (["full", "--repo", "."], "'full'"),
+    (["tools", "check", "--profile", "deep"], "--profile"),
+    (["tools", "install", "--profile", "balanced"], "--profile"),
+    (["tools", "list", "--profile", "fast"], "--profile"),
+    (["tools", "list", "--profiles"], "--profiles"),
+    (["wizard", "--profile", "fast"], "--profile"),
+    (
+        [
+            "schedule",
+            "create",
+            "--name",
+            "n",
+            "--cron",
+            "0 2 * * *",
+            "--profile",
+            "deep",
+        ],
+        "--profile",
+    ),
+    (["schedule", "update", "nightly", "--profile", "deep"], "--profile"),
+    (["history", "store", "--results-dir", "r", "--profile", "fast"], "--profile"),
+    (["history", "list", "--profile", "fast"], "--profile"),
+]
 
 
-def test_parse_args_balanced_profile(tmp_path: Path):
-    """Test balanced profile command."""
-    with patch("sys.argv", ["jmo", "balanced", "--repo", str(tmp_path)]):
-        args = parse_args()
-        assert args.cmd == "balanced"
+@pytest.mark.parametrize(
+    ("argv", "offending"),
+    _REMOVED_PROFILE_SELECTION,
+    ids=[" ".join(a) for a, _ in _REMOVED_PROFILE_SELECTION],
+)
+def test_profile_selection_is_gone(argv, offending, capsys):
+    """Review Focus 4: argparse error, exit 2, no traceback."""
+    with patch("sys.argv", ["jmo", *argv]), pytest.raises(SystemExit) as exc:
+        parse_args()
+    assert exc.value.code == 2
+    err = capsys.readouterr().err
+    assert "Traceback" not in err
+    # Exit 2 for a different reason (a missing required argument) would pass
+    # the check above while the profile token was silently accepted.
+    assert "error:" in err and offending in err, err
 
 
-def test_parse_args_full_profile(tmp_path: Path):
-    """Test full profile command."""
-    with patch("sys.argv", ["jmo", "full", "--repo", str(tmp_path)]):
-        args = parse_args()
-        assert args.cmd == "full"
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["scan", "--repo", ".", "--profile-name", "fast"],
+        ["fast", "--repo", "."],
+        ["tools", "check", "--profile", "deep"],
+    ],
+    ids=lambda a: " ".join(a),
+)
+def test_profile_selection_fails_cleanly_through_the_real_entry_point(argv, tmp_path):
+    """The same three, through `python -m scripts.cli.jmo`.
+
+    `parse_args()` above is only the parser. A user runs `main()`, which does
+    work before parsing (console hardening, logging), so a traceback there
+    would reach them without any in-process parser test seeing it.
+
+    Run from `tmp_path` with home redirected there: if a regression let one of
+    these parse, the scan it started would store its history under
+    `./.jmo/history.db` and bump `~/.jmo/config.yml` -- the repository's and
+    the developer's real ones, had it run from the repo root.
+    """
+    import os
+    import subprocess
+    import sys
+
+    repo_root = Path(__file__).resolve().parents[2]
+    env = {
+        **os.environ,
+        "PYTHONPATH": str(repo_root),
+        "USERPROFILE": str(tmp_path),
+        "HOME": str(tmp_path),
+    }
+    proc = subprocess.run(
+        [sys.executable, "-m", "scripts.cli.jmo", *argv],
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=120,
+        cwd=str(tmp_path),
+        env=env,
+    )
+    assert proc.returncode == 2, (proc.returncode, proc.stderr)
+    assert "Traceback" not in proc.stderr, proc.stderr
+    assert "error:" in proc.stderr, proc.stderr
+
+
+@pytest.mark.parametrize(
+    "argv", [["report", "results"], ["ci", "--repo", "."]], ids=["report", "ci"]
+)
+def test_profile_is_still_the_timing_flag_on_report_and_ci(argv):
+    """`--profile` on `jmo report` / `jmo ci` is parse timing, not selection.
+
+    It stays: with scan profiles gone the name no longer collides.
+    """
+    with patch("sys.argv", ["jmo", *argv, "--profile"]):
+        assert parse_args().profile is True
+    with patch("sys.argv", ["jmo", *argv]):
+        assert parse_args().profile is False
 
 
 def test_parse_args_multi_target_scanning(tmp_path: Path):
@@ -497,8 +579,8 @@ def test_parse_args_schedule_create():
             "nightly-scan",
             "--cron",
             "0 2 * * *",
-            "--profile",
-            "balanced",
+            "--repos-dir",
+            "/srv/repos",
         ],
     ):
         args = parse_args()
@@ -506,7 +588,7 @@ def test_parse_args_schedule_create():
         assert args.schedule_action == "create"
         assert args.name == "nightly-scan"
         assert args.cron == "0 2 * * *"
-        assert args.profile == "balanced"
+        assert args.repos_dir == "/srv/repos"
 
 
 def test_parse_args_schedule_list():

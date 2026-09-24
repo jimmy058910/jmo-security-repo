@@ -15,7 +15,7 @@ metadata := {
 default allow := false
 
 # Secret detection tools
-secret_tools := ["trufflehog", "noseyparker", "semgrep-secrets", "trivy"]
+secret_tools := ["trufflehog", "trivy"]
 
 # Allow only if zero verified secrets
 allow if {

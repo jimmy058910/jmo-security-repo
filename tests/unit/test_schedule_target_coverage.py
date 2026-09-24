@@ -95,7 +95,6 @@ def _maximal_schedule() -> ScanSchedule:
         spec=ScheduleSpec(
             schedule="0 2 * * *",
             jobTemplate=JobTemplateSpec(
-                profile="balanced",
                 targets=dict(MAXIMAL_TARGETS),
                 results={},
                 options={},
@@ -158,6 +157,15 @@ def _scan_option_strings() -> set[str]:
     return {opt for action in scan_parser._actions for opt in action.option_strings}
 
 
+def _scan_option_dests() -> dict[str, str]:
+    scan_parser = build_parser()._subparsers._group_actions[0].choices["scan"]  # type: ignore[union-attr]
+    return {
+        opt: action.dest
+        for action in scan_parser._actions
+        for opt in action.option_strings
+    }
+
+
 @pytest.mark.parametrize("consumer", sorted(ARGV_BUILDERS))
 def test_every_flag_a_consumer_emits_resolves_to_a_real_jmo_scan_flag(
     consumer: str,
@@ -170,18 +178,11 @@ def test_every_flag_a_consumer_emits_resolves_to_a_real_jmo_scan_flag(
     peer comparison would have called GitLab the *complete* one. `jmo scan`
     defines neither flag, so that export produced a command that exits 2.
 
-    Resolution now requires an EXACT option name. It used to accept argparse's
-    own rule -- an exact name, or an unambiguous prefix of exactly one --
-    because both generators emitted `--profile`, which `jmo scan` does not
-    define, and which worked solely because `--profile-name` was the only option
-    starting with that prefix. #1019 fixed the generators, so the looser rule no
-    longer has anything to protect, and keeping it would leave the fragility it
-    documented available to the next emitter.
-
-    The fragility was concrete: a second `--profile*` option on `jmo scan` --
-    `--profile-config`, `--profile-timings`, `--profiles` are all plausible --
-    turns every previously exported workflow into `ambiguous option: --profile`
-    at once, and does so without failing the tests of the change that added it.
+    Resolution requires an EXACT option name, not argparse's own rule (an exact
+    name, or an unambiguous prefix of exactly one). A flag that resolves only by
+    prefix works only while no second option shares that prefix: adding one
+    turns every previously exported workflow into `ambiguous option` at once,
+    and does so without failing the tests of the change that added it (#1019).
     """
     defined = _scan_option_strings()
     # NOT `_maximal_schedule()`. MAXIMAL_TARGETS deliberately omits
@@ -221,7 +222,6 @@ def test_the_repo_form_is_carried_too() -> None:
         spec=ScheduleSpec(
             schedule="0 2 * * *",
             jobTemplate=JobTemplateSpec(
-                profile="fast",
                 targets={"repositories": {"repo": "https://example.test/r.git"}},
                 results={},
                 options={},
@@ -249,11 +249,15 @@ def test_the_generated_command_actually_parses(consumer: str) -> None:
 
     parsed = build_parser().parse_args(["scan", *tail])
 
-    # `profile_name`, not `profile`: the generators emit `--profile`, which
-    # `jmo scan` does not define -- it lands on `--profile-name` through
-    # argparse's prefix matching. Asserting the resolved dest is what proves the
-    # command really parsed, rather than that a Namespace came back at all.
-    assert parsed.profile_name == "balanced"
+    # Every target value must land on its own flag's dest. Asserting resolved
+    # values is what proves the command really parsed, rather than that a
+    # Namespace came back at all: a flag emitted with the wrong arity shifts the
+    # values after it onto the wrong dests, which parse_args accepts silently.
+    dests = _scan_option_dests()
+    for flag, value in EXPECTED:
+        got = getattr(parsed, dests[flag])
+        resolved = value in got if isinstance(got, list) else got == value
+        assert resolved, f"{consumer}: {flag} parsed to {got!r}, not {value!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -287,7 +291,7 @@ def test_the_argv_extractors_actually_found_something() -> None:
     for consumer, builder in ARGV_BUILDERS.items():
         argv = builder(_maximal_schedule())
         assert len(argv) >= 10, f"{consumer} extractor produced only {argv}"
-        assert "--profile-name" in argv, f"{consumer} extractor missed --profile-name"
+        assert "--repos-dir" in argv, f"{consumer} extractor missed --repos-dir"
 
 
 # ---------------------------------------------------------------------------
@@ -300,9 +304,7 @@ def _gitlab_script(targets: dict[str, object]) -> str:
         metadata=ScheduleMetadata(name="talkative"),
         spec=ScheduleSpec(
             schedule="0 2 * * *",
-            jobTemplate=JobTemplateSpec(
-                profile="fast", targets=targets, results={}, options={}
-            ),
+            jobTemplate=JobTemplateSpec(targets=targets, results={}, options={}),
         ),
     )
     job = yaml.safe_load(GitLabCIGenerator().generate(schedule))["security-scan"]

@@ -4,7 +4,6 @@ Web URL Scanner (DAST)
 Scans live web applications and APIs using:
 - OWASP ZAP: Dynamic Application Security Testing (DAST)
 - Nuclei: Fast vulnerability scanner with 4000+ templates (CVEs, misconfigs, exposures)
-- Akto: API Security testing for OWASP Top 10 API vulnerabilities (v1.0.0)
 
 Integrates with ToolRunner for execution management.
 """
@@ -86,9 +85,9 @@ def scan_url(
         """Timeout for this tool, honouring the slow-tool floor.
 
         Delegates to the shared implementation. This copy had no floor, so a
-        tool with a `TOOL_TIMEOUT_DEFAULTS` minimum got only the profile default
+        tool with a `TOOL_TIMEOUT_DEFAULTS` minimum got only the configured default
         here while the same tool got its floor on a repository target -- `zap`
-        runs on both and is 300 s short on a `balanced` URL scan.
+        runs on both and was 300 s short on a URL scan.
         """
         return tool_timeout(per_tool_config, tool, default)
 
@@ -169,42 +168,6 @@ def scan_url(
         elif allow_missing_tools:
             _write_stub("nuclei", nuclei_out)
             record_not_attempted(statuses, "nuclei")
-
-    # Akto: API Security testing (OWASP Top 10 API vulnerabilities)
-    # v1.0.0 addition
-    if "akto" in tools:
-        akto_out = out_dir / "akto.json"
-        akto_path = _find_tool("akto")
-        if akto_path:
-            akto_flags = get_tool_flags("akto")
-
-            # Akto requires API endpoint testing
-            # Assumes Akto is running as a service and accessible via CLI
-            akto_cmd_list = [
-                akto_path,
-                "test",
-                "--url",
-                url,
-                "--output",
-                str(akto_out),
-                "--format",
-                "json",
-                *akto_flags,
-            ]
-            tool_defs.append(
-                ToolDefinition(
-                    name="akto",
-                    command=akto_cmd_list,
-                    output_file=akto_out,
-                    timeout=get_tool_timeout("akto", timeout),
-                    retries=retries,
-                    ok_return_codes=(0, 1),  # 0=clean, 1=vulnerabilities found
-                    capture_stdout=False,
-                )
-            )
-        elif allow_missing_tools:
-            _write_stub("akto", akto_out)
-            record_not_attempted(statuses, "akto")
 
     # Execute all tools with ToolRunner
     runner = ToolRunner(

@@ -225,15 +225,15 @@ class TestBuildDefinition:
         """Test BuildDefinition with all fields."""
         build_def = BuildDefinition(
             buildType="https://jmotools.com/jmo-scan/v1",
-            externalParameters={"profile": "balanced", "tools": ["trivy"]},
+            externalParameters={"tools": ["trivy"], "targets": ["repo1"]},
             internalParameters={"version": "1.0.0", "threads": 4},
             resolvedDependencies=[{"name": "trivy", "version": "0.50.0"}],
         )
 
         assert build_def.buildType == "https://jmotools.com/jmo-scan/v1"
         assert build_def.externalParameters == {
-            "profile": "balanced",
             "tools": ["trivy"],
+            "targets": ["repo1"],
         }
         assert build_def.internalParameters == {"version": "1.0.0", "threads": 4}
         assert build_def.resolvedDependencies == [
@@ -254,7 +254,7 @@ class TestBuildDefinition:
         """Test BuildDefinition to_dict() serialization."""
         build_def = BuildDefinition(
             buildType="https://jmotools.com/jmo-scan/v1",
-            externalParameters={"profile": "fast"},
+            externalParameters={"tools": ["semgrep"]},
             internalParameters={"threads": 8},
             resolvedDependencies=[],
         )
@@ -263,7 +263,7 @@ class TestBuildDefinition:
 
         assert result == {
             "buildType": "https://jmotools.com/jmo-scan/v1",
-            "externalParameters": {"profile": "fast"},
+            "externalParameters": {"tools": ["semgrep"]},
             "internalParameters": {"threads": 8},
             "resolvedDependencies": [],
         }
@@ -295,7 +295,7 @@ class TestSLSAProvenance:
         """Test SLSAProvenance to_dict() serialization."""
         build_def = BuildDefinition(
             buildType="https://jmotools.com/jmo-scan/v1",
-            externalParameters={"profile": "balanced"},
+            externalParameters={"tools": ["trivy"]},
             internalParameters={"version": "1.0.0"},
         )
         builder = Builder(
@@ -315,7 +315,7 @@ class TestSLSAProvenance:
         assert result == {
             "buildDefinition": {
                 "buildType": "https://jmotools.com/jmo-scan/v1",
-                "externalParameters": {"profile": "balanced"},
+                "externalParameters": {"tools": ["trivy"]},
                 "internalParameters": {"version": "1.0.0"},
                 "resolvedDependencies": [],
             },

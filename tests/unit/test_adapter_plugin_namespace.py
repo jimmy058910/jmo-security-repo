@@ -123,10 +123,10 @@ class TestBuiltinAdapterModuleNames:
 
     def test_loader_returns_the_same_class_object_a_normal_import_yields(self):
         """The double-import hazard, stated as an identity."""
-        loaded = get_plugin_registry().get("prowler")
+        loaded = get_plugin_registry().get("checkov")
         imported = importlib.import_module(
-            "scripts.core.adapters.prowler_adapter"
-        ).ProwlerAdapter
+            "scripts.core.adapters.checkov_adapter"
+        ).CheckovAdapter
 
         assert loaded is imported, (
             "the plugin loader built a second copy of the adapter class; module "
@@ -147,24 +147,24 @@ class TestBuiltinAdapterModuleNames:
         test exists because the identity assertion above survived exactly that
         mutation.)
         """
-        module = importlib.import_module("scripts.core.adapters.prowler_adapter")
-        original_class = module.ProwlerAdapter
+        module = importlib.import_module("scripts.core.adapters.checkov_adapter")
+        original_class = module.CheckovAdapter
         builtin_path = Path(module.__file__)
 
         registry = PluginRegistry()
         PluginLoader(registry)._load_plugin(builtin_path)
 
-        assert sys.modules["scripts.core.adapters.prowler_adapter"] is module, (
+        assert sys.modules["scripts.core.adapters.checkov_adapter"] is module, (
             "loading a built-in adapter replaced the already-imported module"
         )
-        assert registry.get("prowler") is original_class
+        assert registry.get("checkov") is original_class
 
 
 class TestLogLevelReachesAdapterLoggers:
     """The user-visible property #838 was actually about."""
 
     def _adapter_logger(self) -> logging.Logger:
-        cls = get_plugin_registry().get("prowler")
+        cls = get_plugin_registry().get("checkov")
         module = sys.modules[cls.__module__]
         return module.logger
 
@@ -181,9 +181,8 @@ class TestLogLevelReachesAdapterLoggers:
         logger = self._adapter_logger()
         configure_scan_logging(argparse.Namespace(log_level="ERROR", human_logs=False))
         assert not logger.isEnabledFor(logging.WARNING), (
-            "--log-level ERROR did not suppress an adapter WARNING; on "
-            "origin/dev prowler's 'matched neither format' warning printed at "
-            "every level because its logger was outside `scripts`"
+            "--log-level ERROR did not suppress an adapter WARNING; an adapter "
+            "logger outside `scripts` prints its warnings at every level"
         )
 
     def test_log_level_debug_reaches_an_adapter_debug_record(
@@ -267,14 +266,14 @@ class TestExternalAdapterNames:
         Reusing the real dotted path would swap the built-in out from under
         every other importer in the process.
         """
-        plugin_file = tmp_path / "prowler_adapter.py"
-        plugin_file.write_text(MINIMAL_ADAPTER.format(name="prowler_user"))
+        plugin_file = tmp_path / "checkov_adapter.py"
+        plugin_file.write_text(MINIMAL_ADAPTER.format(name="checkov_user"))
 
         loader = PluginLoader(PluginRegistry())
         external_name = loader._module_name_for(plugin_file)
         builtin_name = loader._module_name_for(
-            Path("scripts/core/adapters/prowler_adapter.py").resolve()
+            Path("scripts/core/adapters/checkov_adapter.py").resolve()
         )
 
         assert external_name != builtin_name
-        assert builtin_name == "scripts.core.adapters.prowler_adapter"
+        assert builtin_name == "scripts.core.adapters.checkov_adapter"

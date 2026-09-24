@@ -191,7 +191,7 @@ Total findings: 8058 | 🔴 3 CRITICAL | 🔴 91 HIGH | 🟡 280 MEDIUM | ⚪ 73
 
 - **TruffleHog MEDIUM = unverified secrets** - May be false positives (test keys, examples)
 - **Trivy CRITICAL = CVE** - Likely real vulnerability with CVSS ≥9.0
-- **Bandit LOW = assert statements** - Code quality, not security risk
+- **ShellCheck/Hadolint LOW = style warnings** - Code quality, not security risk
 
 ### Section 4: Remediation Priorities
 
@@ -215,7 +215,7 @@ Total findings: 8058 | 🔴 3 CRITICAL | 🔴 91 HIGH | 🟡 280 MEDIUM | ⚪ 73
 ```
 **What this means:**
 
-- **95% Code Quality** - Bandit flagging `assert` statements, missing type hints, etc. (LOW priority)
+- **95% Code Quality** - ShellCheck and Hadolint style warnings, Semgrep audit rules, etc. (LOW priority)
 - **1% Vulnerabilities** - CVEs in dependencies (CRITICAL/HIGH priority)
 - **0% Secrets** - Good! But verify the 9 findings aren't real credentials
 
@@ -428,25 +428,25 @@ Is it in production code?
 
 | Tool | Rule | False Positive Pattern | How to Verify |
 |------|------|------------------------|---------------|
-| Bandit | B101 | `assert` statements in test files | Check file path contains `tests/` or `test_` |
-| Bandit | B411 | XML parsing in PyPI packages | Check path is `.venv/lib/python3.X/site-packages/` |
+| Semgrep | `insecure-file-permissions` | `os.chmod(tmp_path, 0o777)` in test setup | Check file path contains `tests/` or `test_` |
+| Semgrep, Trivy | Any rule | Findings inside installed PyPI packages | Check path is `.venv/lib/python3.X/site-packages/` |
 | Semgrep | `run-shell-injection` | GitHub Actions `${{ github.* }}` in echo statements | Check it's not used in script execution |
 | TruffleHog | Generic secrets | Example credentials in docs/README | Check for comments like `# Example (not real)` |
 | Trivy | CVEs in test dependencies | Vulnerable packages only imported in tests | Check if imported in production code |
 
-### Example: Bandit B101 in test files
+### Example: Semgrep file-permission findings in test files
 
 ```bash
 
-# Find all B101 findings in test files
+# Find all insecure-file-permissions findings in test files
 
-jq '.[] | select(.ruleId == "B101" and (.location.path | contains("test")))' \
+jq '.[] | select((.ruleId | contains("insecure-file-permissions")) and (.location.path | contains("test")))' \
   critical-high.json | jq -s 'length'
 
 # Output: 62
 
 ```
-**Decision:** Suppress B101 for test files (pytest uses `assert` extensively)
+**Decision:** Suppress the rule for test files (test setup chmods its own temporary directories)
 
 ### Step 4: Identify Systemic Issues (5 minutes)
 
@@ -462,14 +462,14 @@ jq '[.[] | .ruleId] | group_by(.) | map({rule: .[0], count: length}) | sort_by(.
 **Example output:**
 ```json
 [
-  {"rule": "B101", "count": 62},
+  {"rule": "python.lang.security.audit.insecure-file-permissions.insecure-file-permissions", "count": 62},
   {"rule": "CVE-2023-12345", "count": 15},
   {"rule": "root-user", "count": 5}
 ]
 ```
 **What this means:**
 
-1. **B101 (62 occurrences)** - Systemic pattern (likely test files) → One suppression rule fixes all 62
+1. **insecure-file-permissions (62 occurrences)** - Systemic pattern (likely test files) → One suppression rule fixes all 62
 2. **CVE-2023-12345 (15 occurrences)** - Same vulnerable dependency in 15 places → One `pip install --upgrade` fixes all 15
 3. **root-user (5 occurrences)** - 5 Dockerfiles missing `USER` statement → One template fix
 
@@ -627,9 +627,9 @@ suppressions:
 
   # Suppress by rule + path pattern
 
-  - ruleId: "B101"
-
-    reason: "pytest uses assert statements extensively"
+  - ruleId: "*insecure-file-permissions*"
+    path: "tests/*"
+    reason: "Test setup chmods its own temporary directories"
 
   # Suppress by path only (all findings in directory)
 
@@ -664,14 +664,6 @@ exclude:
 # Per-tool configuration
 
 per_tool:
-  bandit:
-    flags:
-
-      - "--exclude"
-      - ".venv,.venv-pypi,.post-release-venv"
-      - "--skip"
-      - "B101,B404"  # Skip assert and import-related checks
-
   semgrep:
     flags:
 
@@ -685,19 +677,6 @@ per_tool:
 
 Some tools have their own config files:
 
-**Bandit** (`.bandit`):
-```yaml
-exclude_dirs:
-
-  - .venv
-  - tests/fixtures
-  - samples/
-
-skips:
-
-  - B101  # assert_used
-  - B404  # import_subprocess
-```
 **Semgrep** (`.semgrepignore`):
 ```text
 .venv/
@@ -710,7 +689,7 @@ docs/archive/
 After adding suppressions, re-run the scan:
 
 ```bash
-jmo balanced --repos-dir .
+jmo ci --repos-dir .
 cat results/summaries/SUPPRESSIONS.md
 ```
 **Example output:**
@@ -744,7 +723,7 @@ cat results/summaries/SUPPRESSIONS.md
 
     - id: jmo-security-scan
 
-      entry: bash -c 'jmo fast --repos-dir . && [ $(jq "[.[] | select(.severity == \"HIGH\" or .severity == \"CRITICAL\")] | length" results/summaries/findings.json) -eq 0 ]'
+      entry: bash -c 'jmo ci --repos-dir . --tools trufflehog semgrep trivy && [ $(jq "[.[] | select(.severity == \"HIGH\" or .severity == \"CRITICAL\")] | length" results/summaries/findings.json) -eq 0 ]'
       language: system
       pass_filenames: false
       always_run: true
@@ -780,7 +759,7 @@ jobs:
       - name: Run JMo Security Scan
 
           docker run --rm -v "$(pwd):/scan" jmo-security:latest \
-            scan --repo /scan --profile-name balanced --human-logs
+            scan --repo /scan --human-logs
 
       - name: Check for HIGH/CRITICAL findings
 
@@ -830,10 +809,10 @@ jobs:
 
       - uses: actions/checkout@v4
 
-      - name: Run Deep Scan
+      - name: Run Full Scan
 
           docker run --rm -v "$(pwd):/scan" jmo-security:latest \
-            scan --repo /scan --profile-name deep --human-logs --profile
+            scan --repo /scan --human-logs
 
       - name: Generate Trend Report
 
@@ -1282,7 +1261,7 @@ priority = (severity_score * epss_multiplier * kev_multiplier * reachability_mul
 
 ## Cross-Tool Deduplication
 
-JMo Security automatically clusters duplicate findings detected by multiple tools into a single consensus finding. How much this shrinks a report depends entirely on how much the profile's tools overlap; see [Known limitations](KNOWN_LIMITATIONS.md#deduplication) for what it measures on the corpora this repository can reproduce.
+JMo Security automatically clusters duplicate findings detected by multiple tools into a single consensus finding. How much this shrinks a report depends entirely on how much the tools that ran overlap; see [Known limitations](KNOWN_LIMITATIONS.md#deduplication) for what it measures on the corpora this repository can reproduce.
 
 ### How It Works
 
@@ -1290,16 +1269,16 @@ When multiple tools detect the same underlying issue, JMo clusters them into a s
 
 **Before (3 separate findings):**
 
-- Trivy: HIGH - SQL Injection in app.py:42
-- Semgrep: HIGH - SQL injection detected in app.py:42
-- Bandit: MEDIUM - Possible SQL injection in app.py:43
+- Trivy: HIGH - Image user should not be 'root' in Dockerfile:12
+- Checkov: HIGH - Ensure that a user for the container has been created in Dockerfile:12
+- Hadolint: MEDIUM - Last USER should not be root in Dockerfile:12
 
 **After (1 consensus finding):**
 
 - Detected by 3 tools | HIGH CONFIDENCE
-- Tools: trivy, semgrep, bandit
-- SQL Injection vulnerability in query construction
-- app.py:42-43
+- Tools: trivy, checkov, hadolint
+- Container runs as root
+- Dockerfile:12
 
 ### Confidence Levels
 
@@ -1339,11 +1318,11 @@ Findings with >=65% similarity are clustered together. The highest-severity find
 {
   "id": "cluster-abc123",
   "severity": "HIGH",
-  "message": "SQL Injection vulnerability in query construction",
+  "message": "Container runs as root",
   "detected_by": [
     {"name": "trivy", "version": "0.50.0"},
-    {"name": "semgrep", "version": "1.60.0"},
-    {"name": "bandit", "version": "1.7.0"}
+    {"name": "checkov", "version": "3.2.0"},
+    {"name": "hadolint", "version": "2.12.0"}
   ],
   "confidence": {
     "level": "HIGH",
@@ -1354,12 +1333,12 @@ Findings with >=65% similarity are clustered together. The highest-severity find
     "duplicates": [
       {
         "id": "fp2",
-        "tool": {"name": "semgrep"},
+        "tool": {"name": "checkov"},
         "similarity_score": 0.90
       },
       {
         "id": "fp3",
-        "tool": {"name": "bandit"},
+        "tool": {"name": "hadolint"},
         "similarity_score": 0.85
       }
     ]
@@ -1385,7 +1364,7 @@ This reverts to Phase 1 deduplication only (same tool, same location).
 |--------|-------|
 | Time | <2 seconds for 1000 findings, <10 seconds for 10000 findings |
 | Scalability | LSH algorithm enables O(n log n) clustering for large scans |
-| Reduction | Depends on how much the profile's tools overlap — see [Known limitations](KNOWN_LIMITATIONS.md#deduplication) |
+| Reduction | Depends on how much the tools that ran overlap — see [Known limitations](KNOWN_LIMITATIONS.md#deduplication) |
 
 ### Best Practices
 
@@ -1412,7 +1391,6 @@ All formats include consistent metadata:
     "schema_version": "1.2.0",
     "timestamp": "2025-11-04T12:34:56Z",
     "scan_id": "scan-abc123",
-    "profile": "balanced",
     "tools": ["trivy", "semgrep", "trufflehog"],
     "target_count": 5,
     "finding_count": 42,
@@ -1531,7 +1509,7 @@ outputs:
 
 - [User Guide](USER_GUIDE.md) - Complete reference documentation
 - [Quick Start](../QUICKSTART.md) - 5-minute setup
-- [Profiles and Tools](PROFILES_AND_TOOLS.md) - Tool lists and dependencies
+- [Tools](TOOLS.md) - The tool matrix, when each tool runs, and dependencies
 
 **Historical and Comparison:**
 

@@ -22,16 +22,15 @@ from typing import Any, cast
 logger = logging.getLogger(__name__)
 
 # A `location.path` that is not a filesystem path at all. Measured in #861:
-# `location.path` is polymorphic across the 29 adapters, and three of the four
-# shapes must survive normalization untouched --
+# `location.path` is polymorphic across the adapters, and a URL must survive
+# normalization untouched --
 #
 #   zap    -> a full URL (`uri.split("?")[0]`, zap_adapter.py:110)
-#   lynis  -> a bare hostname, and `f"{hostname}:{package}"`
 #   others -> a filesystem path, in four different spellings
 #
-# Only the last shape is what #861 is about. Rewriting a URL's separators or
-# stripping a hostname would corrupt data that was already correct, so the
-# normalizer refuses anything carrying a URL scheme.
+# Only the last shape is what #861 is about. Rewriting a URL's separators
+# would corrupt data that was already correct, so the normalizer refuses
+# anything carrying a URL scheme.
 _URL_SCHEME_SEPARATOR = "://"
 
 
@@ -107,12 +106,12 @@ def safe_load_json_file(
             # took a target from 2 findings to 0, rc=0, nothing on any stream.
             #
             # This is the layer that matters, because **no adapter raises
-            # `AdapterParseException`** (0 of 27) -- they all route through here
-            # and turn "unparseable" into "empty". One shared helper, so one fix
-            # covers all 25 adapters that use it.
+            # `AdapterParseException`** (none did when this was written) -- they
+            # all route through here and turn "unparseable" into "empty". One
+            # shared helper, so one fix covers every adapter that uses it.
             #
             # Speculative callers -- ones that probe a format and expect to fail
-            # -- must pass `log_errors=False`; see `prowler_adapter._load`.
+            # -- must pass `log_errors=False`.
             logger.warning(
                 "Could not parse %s as JSON (%s at position %d) - any findings "
                 "it contained are MISSING from this report",
@@ -128,7 +127,7 @@ def safe_load_json_file(
     # dict)` guard and returns `[]`, which is indistinguishable from "the tool
     # found nothing". Measured in the chunk-5 sweep: `null`, `"a string"` and
     # `[]`-shaped junk produced 0 findings and **0 log records at any level**
-    # across all 27 adapters.
+    # across every adapter.
     #
     # `{}` and `[]` are deliberately NOT flagged -- those are how a tool says
     # "no findings", which is the single most common healthy outcome.
@@ -167,10 +166,10 @@ def safe_load_ndjson_file(
     empty file is a WARNING, and so is losing lines to malformed JSON. This
     function used to log **every** one of those at DEBUG while its sibling
     warned -- and `configure_scan_logging` sets the `scripts` logger to
-    WARNING, so for the four NDJSON adapters (`falco`, `nuclei`, `prowler`,
-    `trufflehog`) every failure mode was invisible in a normal run. That is the
-    same inconsistency #830 fixed inside `safe_load_json_file`, which reached
-    only the 23 adapters using it.
+    WARNING, so for the NDJSON adapters (`nuclei` and `trufflehog` among them)
+    every failure mode was invisible in a normal run. That is the same
+    inconsistency #830 fixed inside `safe_load_json_file`, which reached only
+    the adapters using it.
 
     The line-loss case is the worst of them, because it is **partial**:
     measured on a 10-line trufflehog stream with 4 truncated lines, the adapter
@@ -182,7 +181,7 @@ def safe_load_ndjson_file(
         path: Path to the NDJSON file to load.
         log_errors: If True, report load failures. Defaults to True. Pass
             False from **speculative** callers probing one of several possible
-            formats; see `prowler_adapter._iter_prowler_records`.
+            formats.
 
     Yields:
         Dictionary objects from each line/item in the file.
@@ -342,9 +341,9 @@ def normalize_finding_path(path: str, roots: Sequence[str] = ()) -> str:
     if not path:
         return path
 
-    # URLs (zap) and bare hostnames (lynis) are not filesystem paths. Returning
-    # them untouched is the whole reason this is one shared function rather than
-    # a `.replace()` at 29 call sites: the guard has to exist exactly once.
+    # URLs (zap) are not filesystem paths. Returning them untouched is the whole
+    # reason this is one shared function rather than a `.replace()` at every
+    # call site: the guard has to exist exactly once.
     if _URL_SCHEME_SEPARATOR in path:
         return path
 

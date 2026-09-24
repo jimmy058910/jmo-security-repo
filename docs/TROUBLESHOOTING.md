@@ -6,18 +6,18 @@ For questions that aren't problems (e.g., "should I use pip or Docker?"), see [F
 
 ## Installation
 
-### "Tool not found" or "command not found: gitleaks"
+### "Tool not found" or "command not found: trivy"
 
 **Symptom:** A scan reports a specific tool isn't installed, even though `pip install jmo-security` succeeded.
 
-**Cause:** `jmo-security` the CLI is separate from the 28 underlying scanners. pip doesn't install them automatically.
+**Cause:** `jmo-security` the CLI is separate from the underlying scanners. pip doesn't install them automatically.
 
 **Fix:**
 
 ```bash
 jmo tools check                         # list missing tools
-jmo tools install --profile balanced    # install all tools for your profile
-jmo tools install gitleaks              # install one specific tool
+jmo tools install                       # install every missing tool
+jmo tools install trivy                 # install one specific tool
 ```
 
 Docker users don't hit this — all scanners are pre-installed in the image.
@@ -26,7 +26,7 @@ Docker users don't hit this — all scanners are pre-installed in the image.
 
 **Symptom:** Installing a pip-based tool fails because its dependencies conflict with another installed Python package.
 
-**Cause:** Some tools (e.g., `scancode-toolkit`) pin old versions of packages you may have installed elsewhere. JMo isolates these in dedicated venvs, but a previous install may have leaked.
+**Cause:** Some tools (e.g., `semgrep` and `checkov`) pin versions of packages you may have installed elsewhere. JMo isolates these in dedicated venvs, but a previous install may have leaked.
 
 **Fix:**
 
@@ -87,7 +87,7 @@ If the problem persists, rename `.jmo/history.db` to `.jmo/history.db.old` and r
 
 **Causes:**
 
-1. **Wrong profile:** `--profile-name fast` excludes SAST scanners. Try `--profile-name balanced` or `--profile-name deep`.
+1. **Narrowed tool list:** `--tools`, `--skip-tools` or a `tools:` list in `jmo.yml` may leave out the scanner that covers your code. Drop the narrowing and re-run. Some tools also run only when their content is present (gosec needs Go sources, hadolint needs a Dockerfile); see [When each tool runs](TOOLS.md#when-each-tool-runs).
 2. **Target misidentified:** If JMo treats your directory as non-scannable, check `jmo scan --repo . --human-logs` for detection output.
 3. **Suppression rules:** Check `jmo.suppress.yml` at your repo root for accidental over-suppression.
 
@@ -133,7 +133,7 @@ docker run --rm \
 
 **Symptom:** On Apple Silicon or ARM servers, `jmo tools check` shows a tool as missing that exists on amd64.
 
-**Cause:** A handful of tools don't publish arm64 binaries upstream. Notably, `scancode-toolkit` skips arm64 because `extractcode-7z` has no `linux/aarch64` wheel.
+**Cause:** A tool whose upstream does not publish an arm64 build. Before v2.0.0 that was `scancode-toolkit` (`extractcode-7z` has no `linux/aarch64` wheel); it was removed in v2.0.0, and every scanner the image installs now has an arm64 build step in the `Dockerfile`, so a tool missing on arm64 is worth reporting as a bug.
 
 **Fix:** Accept the gap or fall back to amd64 emulation via `--platform linux/amd64` (slower). See [docs/PLATFORM_NOTES.md](PLATFORM_NOTES.md) for per-tool arm64 status.
 

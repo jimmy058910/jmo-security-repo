@@ -112,11 +112,10 @@ RUN SHELLCHECK_VERSION="<from versions.yaml>" && \
     chmod +x /usr/local/bin/shellcheck
 ```
 
-**All four** `Dockerfile.*` variants install `xz-utils` explicitly in that base
-layer (`Dockerfile.fast:18`, `.slim:18`, `.balanced:18`, `.deep:19`) — including
-`deep`, which does **not** get it transitively from `build-essential`. Read the
-real files rather than copying this snippet; they are the source of truth for
-the pinned versions and the arch handling.
+The one `Dockerfile` installs `xz-utils` explicitly in its base `apt-get`
+layer; do not rely on another package pulling it in transitively. Read the real
+file rather than copying this snippet; it is the source of truth for the pinned
+versions and the arch handling.
 
 ---
 

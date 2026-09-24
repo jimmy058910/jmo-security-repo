@@ -8,8 +8,6 @@ Tests cover:
 import json
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from scripts.cli.scan_utils import TOOL_INSTALL_HINTS, tool_exists, write_stub
 
 # ========== Category 1: tool_exists() Tests ==========
@@ -134,17 +132,6 @@ def test_write_stub_syft(tmp_path):
     assert content == {"artifacts": []}
 
 
-def test_write_stub_bandit(tmp_path):
-    """Test write_stub creates correct empty stub for bandit."""
-    out_path = tmp_path / "bandit.json"
-
-    write_stub("bandit", out_path)
-
-    assert out_path.exists()
-    content = json.loads(out_path.read_text())
-    assert content == {"results": []}
-
-
 def test_write_stub_zap(tmp_path):
     """Test write_stub creates correct empty stub for ZAP."""
     out_path = tmp_path / "zap.json"
@@ -154,28 +141,6 @@ def test_write_stub_zap(tmp_path):
     assert out_path.exists()
     content = json.loads(out_path.read_text())
     assert content == {"site": []}
-
-
-def test_write_stub_aflplusplus(tmp_path):
-    """Test write_stub creates correct empty stub for AFL++."""
-    out_path = tmp_path / "afl++.json"
-
-    write_stub("afl++", out_path)
-
-    assert out_path.exists()
-    content = json.loads(out_path.read_text())
-    assert content == {"crashes": []}
-
-
-def test_write_stub_noseyparker(tmp_path):
-    """Test write_stub creates correct empty stub for noseyparker."""
-    out_path = tmp_path / "noseyparker.json"
-
-    write_stub("noseyparker", out_path)
-
-    assert out_path.exists()
-    content = json.loads(out_path.read_text())
-    assert content == {"matches": []}
 
 
 def test_write_stub_grype(tmp_path):
@@ -236,6 +201,8 @@ def test_write_stub_creates_parent_directories(tmp_path):
 
 def test_tool_install_hints_complete():
     """Test TOOL_INSTALL_HINTS contains all supported tools."""
+    from scripts.core.tool_registry import TOOL_MATRIX
+
     expected_tools = [
         "trufflehog",
         "semgrep",
@@ -244,17 +211,18 @@ def test_tool_install_hints_complete():
         "checkov",
         "hadolint",
         "nuclei",
-        "bandit",
-        "noseyparker",
         "zap",
-        "falco",
-        "afl++",
     ]
 
     for tool in expected_tools:
         assert tool in TOOL_INSTALL_HINTS
         hint = TOOL_INSTALL_HINTS[tool]
         assert "Install" in hint or "see" in hint
+
+    # A hint for a tool outside the matrix points the user at installing a
+    # scanner JMo no longer runs.
+    stale = sorted(set(TOOL_INSTALL_HINTS) - set(TOOL_MATRIX))
+    assert not stale, f"install hints for tools outside TOOL_MATRIX: {stale}"
 
 
 class TestFilterTrivyFlags:
@@ -307,38 +275,18 @@ class TestFilterTrivyFlags:
 
 
 class TestToolExclusionFlags:
-    """`.horusec/` must not be walked by the tools that run beside horusec.
+    """Vendored trees must not be walked by the tools that read the repo's code.
 
-    horusec stages a copy of the entire repository into `<repo>/.horusec/<uuid>`
-    and deletes it as it finishes, while every other scanner is still walking
-    the tree - so a concurrent scanner records an error, not a skip. Measured on
-    juice-shop (Windows, deep): 346 `No such file or directory` errors in
-    semgrep-secrets alone (#1132).
+    Measured on this repo at 3ffc73a8: 36,705 files on disk to analyse 985
+    tracked ones, and trivy, semgrep and checkov each hitting the 300 s cap and
+    contributing nothing (#1080). Each tool spells "skip this directory" its
+    own way, so each spelling is pinned against what its binary accepts.
     """
 
     def test_semgrep_uses_a_repeated_exclude_equals(self):
         from scripts.cli.scan_utils import tool_exclusion_flags
 
         assert tool_exclusion_flags("semgrep") == [
-            "--exclude=.horusec",
-            "--exclude=.git",
-            "--exclude=node_modules",
-            "--exclude=vendor",
-            "--exclude=.venv",
-            "--exclude=venv",
-        ]
-
-    def test_semgrep_secrets_is_covered_too(self):
-        """The 346 measured errors came from semgrep-secrets, not from semgrep.
-
-        They are separate entries in the profile and separate command builders,
-        so covering only the tool the flag is named after would leave the
-        measured defect in place.
-        """
-        from scripts.cli.scan_utils import tool_exclusion_flags
-
-        assert tool_exclusion_flags("semgrep-secrets") == [
-            "--exclude=.horusec",
             "--exclude=.git",
             "--exclude=node_modules",
             "--exclude=vendor",
@@ -351,8 +299,6 @@ class TestToolExclusionFlags:
 
         assert tool_exclusion_flags("trivy") == [
             "--skip-dirs",
-            "**/.horusec",
-            "--skip-dirs",
             "**/.git",
             "--skip-dirs",
             "**/node_modules",
@@ -363,87 +309,6 @@ class TestToolExclusionFlags:
             "--skip-dirs",
             "**/venv",
         ]
-
-    def test_trivy_rbac_is_covered_too(self):
-        from scripts.cli.scan_utils import tool_exclusion_flags
-
-        assert tool_exclusion_flags("trivy-rbac") == [
-            "--skip-dirs",
-            "**/.horusec",
-            "--skip-dirs",
-            "**/.git",
-            "--skip-dirs",
-            "**/node_modules",
-            "--skip-dirs",
-            "**/vendor",
-            "--skip-dirs",
-            "**/.venv",
-            "--skip-dirs",
-            "**/venv",
-        ]
-
-    def test_bandit_resends_upstreams_defaults(self):
-        """bandit's -x REPLACES its defaults rather than adding to them.
-
-        Measured on bandit 1.9.2 against a tree holding `.tox/vendored.py` and
-        `.horusec/staged.py`: with no -x, bandit reports the `.horusec` file and
-        skips the `.tox` one; with `-x .horusec` the two swap places. So
-        excluding one directory must not quietly start scanning nine others -
-        `.tox`, `.eggs` and `*.egg` hold vendored third-party code, and the
-        regression would surface as a flood of findings the user does not own.
-
-        The expected value is spelled out rather than read from
-        BANDIT_DEFAULT_EXCLUDED_PATHS: a guard that takes its expectation from
-        the constant it guards cannot fail when that constant empties (#1061).
-        """
-        from scripts.cli.scan_utils import tool_exclusion_flags
-
-        assert tool_exclusion_flags("bandit") == [
-            "-x",
-            ".svn,CVS,.bzr,.hg,.git,__pycache__,.tox,.eggs,*.egg,"
-            ".horusec,node_modules,vendor,.venv,venv",
-        ]
-
-    def test_bandit_sends_exactly_one_value_token(self):
-        """`-x` takes a single comma-separated argument.
-
-        A second bare token after it would be parsed as a scan *target*, which
-        is the same shape as the trivy bug in filter_trivy_flags' docstring.
-        """
-        from scripts.cli.scan_utils import tool_exclusion_flags
-
-        assert len(tool_exclusion_flags("bandit")) == 2
-
-    def test_dependency_check_needs_an_ant_pattern(self):
-        """ODC spells it `--exclude` too, but wants an Ant pattern.
-
-        A bare `.horusec` is a gitignore-style glob that semgrep matches at any
-        depth; Ant does not, so ODC needs `**/.horusec/**`. Measured against
-        dependency-check 12.1.0 on a tree with a real and a staged
-        package.json: 2 dependencies without the flag, 1 with it, and the one
-        kept is the real one. This is why the table stores a style per tool
-        rather than deriving it from the flag name.
-        """
-        from scripts.cli.scan_utils import tool_exclusion_flags
-
-        assert tool_exclusion_flags("dependency-check") == [
-            "--exclude",
-            "**/.horusec/**",
-        ]
-
-    def test_the_two_exclude_spellings_do_not_collide(self):
-        """semgrep and dependency-check share a flag name and must not share a
-        pattern - the bug this guards is one tool silently getting the other's
-        form."""
-        from scripts.cli.scan_utils import tool_exclusion_flags
-
-        semgrep = tool_exclusion_flags("semgrep")
-        odc = tool_exclusion_flags("dependency-check")
-
-        # Both non-empty first: an absent table entry returns [], which would
-        # satisfy a bare `!=` and make this guard pass for the wrong reason.
-        assert semgrep and odc
-        assert semgrep != odc
 
     def test_an_unmapped_tool_gets_nothing(self):
         """An unlisted tool must not be handed a flag it would reject.
@@ -452,15 +317,13 @@ class TestToolExclusionFlags:
         flag, so silence is the only safe default for a tool whose exclusion
         spelling has not been measured against the real binary.
 
-        `horusec` was named here until #1156. It is mapped now because its flag
-        WAS measured -- `-i '**/results/**'` excludes, `-i 'results'` does not --
-        which is the bar this test describes rather than an exception to it.
-        `trufflehog` stays: it has no flag at all and takes an exclude *file*.
+        `trufflehog` has no flag at all and takes an exclude *file*; hadolint
+        is handed its Dockerfiles as arguments and never walks the tree.
         """
         from scripts.cli.scan_utils import tool_exclusion_flags
 
         assert tool_exclusion_flags("trufflehog") == []
-        assert tool_exclusion_flags("kubescape") == []
+        assert tool_exclusion_flags("hadolint") == []
         assert tool_exclusion_flags("gosec") == []
 
     def test_checkov_must_not_be_given_the_trivy_spelling(self):
@@ -494,8 +357,6 @@ class TestToolExclusionFlags:
             f"checkov got a globstar value, which it silently ignores: {flags}"
         )
         assert flags == [
-            "--skip-path",
-            ".horusec",
             "--skip-path",
             ".git",
             "--skip-path",
@@ -532,23 +393,23 @@ class TestToolExclusionFlags:
         )
 
     def test_an_sca_tool_is_not_told_to_skip_its_own_subject_matter(self):
-        """dependency-check inventories vendored trees; that IS its job.
+        """grype inventories vendored trees; that IS its job.
 
         #1080 measured 282 of syft's 878 artifacts inside `.venv/` and called
         them "arguably correct for an SBOM", which is why the vendored-directory
         list is per-tool rather than global. Handing an SCA tool
-        `--exclude **/node_modules/**` would gut it while still exiting 0 - the
+        `node_modules` to skip would gut it while still exiting 0 - the
         silently-inert-scanner shape this project has been bitten by before.
 
-        So dependency-check keeps exactly the JMo-scratch exclusion it had, and
-        gains none of the vendored ones.
+        Asserted on `excluded_dirs_for`, where the carve-out lives: grype has no
+        exclusion flag, so `tool_exclusion_flags` returns [] for it whatever
+        the carve-out does. The results directory is still JMo's own output,
+        and reaches it.
         """
-        from scripts.cli.scan_utils import tool_exclusion_flags
+        from scripts.cli.scan_utils import excluded_dirs_for
 
-        assert tool_exclusion_flags("dependency-check") == [
-            "--exclude",
-            "**/.horusec/**",
-        ]
+        assert excluded_dirs_for("grype") == ()
+        assert excluded_dirs_for("grype", results_dir_name="results") == ("results",)
 
     def test_the_vendored_list_reaches_a_sast_tool_but_not_an_sca_one(self):
         """The carve-out is the point, so assert the difference directly.
@@ -557,10 +418,10 @@ class TestToolExclusionFlags:
         VENDORED_DIRS: a guard that reads the constant it guards cannot fail
         when that constant empties (#1061).
         """
-        from scripts.cli.scan_utils import tool_exclusion_flags
+        from scripts.cli.scan_utils import excluded_dirs_for
 
-        sast = " ".join(tool_exclusion_flags("semgrep"))
-        sca = " ".join(tool_exclusion_flags("dependency-check"))
+        sast = excluded_dirs_for("semgrep")
+        sca = excluded_dirs_for("grype")
 
         assert "node_modules" in sast
         assert "node_modules" not in sca
@@ -579,51 +440,17 @@ class TestToolExclusionFlags:
         assert tool_exclusion_flags("syft") == []
 
     def test_a_name_in_both_lists_is_sent_once(self):
-        """`.git` is in VENDORED_DIRS and in bandit's re-sent defaults.
+        """A results directory named like a vendored one is excluded once.
 
-        A duplicate is not fatal for the repeatable styles, but bandit's `-x`
-        takes one comma-separated value and a doubled entry there is a visible
-        wart in the command line the user is shown on failure.
+        `excluded_dirs_for` merges VENDORED_DIRS with the in-tree results
+        directory. A duplicate is not fatal for the repeatable styles, but it
+        is a visible wart in the command line the user is shown on failure.
         """
         from scripts.cli.scan_utils import tool_exclusion_flags
 
-        bandit_value = tool_exclusion_flags("bandit")[1]
+        flags = tool_exclusion_flags("semgrep", results_dir_name="vendor")
 
-        assert bandit_value.split(",").count(".git") == 1
-
-
-@pytest.mark.requires_tools
-def test_bandit_upstream_defaults_have_not_drifted():
-    """JMo copies bandit's default -x list; catch upstream changing it.
-
-    This is a property of the installed binary rather than of our source, so it
-    can only run where bandit exists - the nightly installs the real tools, and
-    that is the environment this guard is for.
-    """
-    import re
-    import subprocess
-
-    from scripts.cli.scan_utils import BANDIT_DEFAULT_EXCLUDED_PATHS
-    from scripts.core.tool_utils import find_tool
-
-    bandit = find_tool("bandit")
-    if not bandit:
-        pytest.skip("bandit is not installed")
-
-    help_text = subprocess.run(
-        [bandit, "--help"], capture_output=True, text=True, timeout=60
-    ).stdout
-    match = re.search(
-        r"-x EXCLUDED_PATHS.*?\(default:\s*([^)]+)\)", help_text, re.DOTALL
-    )
-    assert match, "could not find bandit's -x default in --help"
-
-    upstream = {p.strip() for p in match.group(1).split(",") if p.strip()}
-    missing = upstream - set(BANDIT_DEFAULT_EXCLUDED_PATHS)
-    assert not missing, (
-        "bandit's default excluded paths drifted; passing -x would stop "
-        f"excluding {sorted(missing)}"
-    )
+        assert flags.count("--exclude=vendor") == 1
 
 
 class TestTruffleHogExcludePatterns:
@@ -811,49 +638,24 @@ class TestTheResultsDirectoryIsExcludedWhenItIsInsideTheTree:
             )
 
     def test_each_style_spells_the_results_dir_its_own_way(self):
-        """The four spellings that matter, each measured against its binary.
+        """The three spellings that matter, each measured against its binary.
 
-        trivy needs the `**/` or it only matches at the scan root; checkov must
-        NOT have it (`**` is not a regex, and one of its two call sites
-        compiles unguarded, so it crashes); horusec needs a glob and rejects a
-        bare name. Asserted together because the whole hazard is that they look
+        semgrep takes one `--exclude=NAME` token; trivy needs the `**/` or it
+        only matches at the scan root; checkov must NOT have it (`**` is not a
+        regex, and one of its two call sites compiles unguarded, so it
+        crashes). Asserted together because the whole hazard is that they look
         interchangeable.
         """
         from scripts.cli.scan_utils import tool_exclusion_flags
 
+        semgrep = tool_exclusion_flags("semgrep", results_dir_name="results")
         trivy = tool_exclusion_flags("trivy", results_dir_name="results")
         checkov = tool_exclusion_flags("checkov", results_dir_name="results")
-        horusec = tool_exclusion_flags("horusec", results_dir_name="results")
-        odc = tool_exclusion_flags("dependency-check", results_dir_name="results")
 
+        assert semgrep[-1] == "--exclude=results"
         assert trivy[-2:] == ["--skip-dirs", "**/results"]
         assert checkov[-2:] == ["--skip-path", "results"]
         assert "**" not in " ".join(checkov)
-        assert horusec[0] == "-i" and "**/results/**" in horusec[1]
-        assert odc[-2:] == ["--exclude", "**/results/**"]
-
-    def test_horusec_gets_one_flag_and_keeps_its_own_defaults(self):
-        """`-i` is comma-separated, and ADDS to horusec's defaults rather than
-        replacing them -- the opposite of bandit's `-x`.
-
-        Measured by planting a finding under `.vscode/` (one of horusec's
-        defaults) and confirming it stayed excluded with `-i` supplied. So the
-        defaults are deliberately not re-sent, and re-sending bandit's would be
-        the same mistake in reverse.
-        """
-        from scripts.cli.scan_utils import (
-            BANDIT_DEFAULT_EXCLUDED_PATHS,
-            tool_exclusion_flags,
-        )
-
-        horusec = tool_exclusion_flags("horusec", results_dir_name="results")
-
-        assert horusec.count("-i") == 1, "one flag, not one per directory"
-        assert len(horusec) == 2
-        for default in BANDIT_DEFAULT_EXCLUDED_PATHS:
-            assert default not in horusec[1], (
-                "horusec was handed bandit's defaults; its -i accumulates"
-            )
 
     def test_the_trufflehog_exclude_file_gains_the_results_dir(self, tmp_path):
         """trufflehog has no exclusion flag -- it takes a file of Go regexes.

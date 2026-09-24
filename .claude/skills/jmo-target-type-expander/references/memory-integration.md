@@ -80,8 +80,8 @@ exists but lacks the key is reported as a miss too, rather than printing a bare
     "pagination": "NextContinuationToken"
   },
   "tools": {
-    "recommended": ["prowler", "cloudsplaining"],
-    "tested": ["prowler", "cloudsplaining", "cs-suite"],
+    "recommended": ["scoutsuite", "cloudsplaining"],
+    "tested": ["scoutsuite", "cloudsplaining", "cs-suite"],
     "incompatible": ["trivy"]
   },
   "authentication": {

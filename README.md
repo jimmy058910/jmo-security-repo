@@ -11,7 +11,7 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/jmogaming/jmo-security)](https://hub.docker.com/r/jmogaming/jmo-security)
 [![GitHub Stars](https://img.shields.io/github/stars/jimmy058910/jmo-security-repo?style=social)](https://github.com/jimmy058910/jmo-security-repo)
 
-**v1.1.1** | A terminal-first security audit toolkit orchestrating 29 scanners with unified CLI, normalized outputs, and interactive HTML dashboard.
+**v1.1.1** | A terminal-first security audit toolkit orchestrating 12 scanners with unified CLI, normalized outputs, and interactive HTML dashboard.
 
 [![Newsletter](https://img.shields.io/badge/Newsletter-Subscribe-667eea)](https://jmotools.com/subscribe.html)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/jmogaming)
@@ -30,7 +30,7 @@ JMo Security is an automated security audit framework for scanning code reposito
 
 ## Key Features
 
-- **29 Security Scanners** - Secrets, SAST, SBOM, SCA, IaC, DAST, and more
+- **12 Security Scanners** - Secrets, SAST, SBOM, SCA, IaC, DAST, and more
 - **6 Target Types** - Repos, images, IaC files, URLs, GitLab, Kubernetes
 - **Unified Output** - JSON, SARIF, Markdown, CSV export, dual-mode HTML dashboard
 - **Cross-Tool Deduplication** - Findings several tools report for the same issue collapse into one consensus finding
@@ -60,7 +60,7 @@ JMo Security is an automated security audit framework for scanning code reposito
 pip install jmo-security
 
 # Scan a repository
-jmo scan --repo ./myapp --profile balanced --human-logs
+jmo scan --repo ./myapp --human-logs
 
 # View results
 cat results/summaries/SUMMARY.md
@@ -72,7 +72,7 @@ open results/summaries/dashboard.html
 ```bash
 docker pull ghcr.io/jimmy058910/jmo-security:latest
 docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
-  scan --repo /scan --results-dir /scan/results --profile balanced --human-logs
+  scan --repo /scan --results-dir /scan/results --human-logs
 ```
 
 > **Registries:** GHCR (primary — `ghcr.io/jimmy058910/jmo-security`), Docker Hub (replicated — `jmogaming/jmo-security`), and ECR Public (replicated — `public.ecr.aws/m2d8u2k1/jmo-security`). See [docs/DOCKER_README.md](docs/DOCKER_README.md) for registry selection guidance.
@@ -81,36 +81,25 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
 
 ## Security Tools
 
-29 tools across 13 categories:
+12 scanners, one list. `jmo scan` considers all of them, and the target's content decides which run:
 
 | Category | Tools |
 |----------|-------|
-| **Secrets** | TruffleHog (verified), Nosey Parker, Semgrep-Secrets |
-| **SAST** | Semgrep, Bandit, Gosec, Horusec |
-| **SBOM** | Syft, CDXgen, ScanCode |
-| **SCA** | Trivy, Grype, Dependency-Check |
-| **IaC** | Checkov, Checkov-CICD |
-| **Cloud/CSPM** | Prowler, Kubescape |
-| **DAST** | OWASP ZAP, Nuclei, Akto |
+| **Secrets** | TruffleHog (verified) |
+| **SAST** | Semgrep, Gosec |
+| **SBOM** | Syft |
+| **SCA** | Trivy, Grype |
+| **IaC** | Checkov, Trivy |
+| **Kubernetes** | Trivy |
+| **DAST** | OWASP ZAP, Nuclei |
 | **Dockerfile/Shell** | Hadolint, ShellCheck |
 | **Malware** | YARA |
-| **Mobile** | MobSF |
-| **System** | Lynis |
-| **Policy** | OPA |
-| **Runtime** | Trivy-RBAC, Falco, AFL++ |
 
-**Tool details:** [docs/PROFILES_AND_TOOLS.md](docs/PROFILES_AND_TOOLS.md)
+Hadolint runs only when Dockerfiles are present, ShellCheck only with shell scripts, Gosec only with Go sources, and ZAP and Nuclei only on `--url` targets. Narrow the list with `--tools`, `--skip-tools`, or a top-level `tools:` list in `jmo.yml`.
 
----
+> **Policy engine:** OPA evaluates policy-as-code in the report phase. `jmo tools install` installs it and the Docker image carries it, but it is not a scanner.
 
-## Scan Profiles
-
-| Profile | Tools | Time | Use Case |
-|---------|-------|------|----------|
-| `fast` | 9 | 5-10 min | Pre-commit, PR validation |
-| `slim` | 13 | 12-18 min | Cloud/IaC, AWS/Azure/GCP/K8s |
-| `balanced` | 17 | 18-25 min | CI/CD pipelines |
-| `deep` | 29 | 40-70 min | Comprehensive audits |
+**Tool details:** [docs/TOOLS.md](docs/TOOLS.md)
 
 ---
 
@@ -167,15 +156,15 @@ jmo scan --repo . --image myapp:latest --url https://myapp.com
 # Interactive wizard
 jmo wizard
 
-# Scan with profile
-jmo scan --repos-dir ~/repos --profile balanced
+# Scan a directory of repositories
+jmo scan --repos-dir ~/repos
 
 # CI mode (scan + gate)
 jmo ci --repo . --fail-on HIGH
 
 # Tool management (native installs)
-jmo tools check --profile balanced  # Check tool status
-jmo tools install --profile balanced  # Install missing tools
+jmo tools check  # Check tool status
+jmo tools install  # Install missing tools
 jmo tools update --critical-only  # Update critical tools
 jmo tools outdated  # Show outdated tools
 
@@ -205,7 +194,7 @@ jmo report ./results
   run: |
     docker run --rm -v ${{ github.workspace }}:/scan \
       ghcr.io/jimmy058910/jmo-security:latest \
-      ci --repo /scan --fail-on HIGH --profile-name balanced
+      ci --repo /scan --fail-on HIGH
 
 - name: Upload SARIF
   uses: github/codeql-action/upload-sarif@v2
@@ -219,7 +208,7 @@ jmo report ./results
 security_scan:
   image: ghcr.io/jimmy058910/jmo-security:latest
   script:
-    - jmo ci --repo . --fail-on HIGH --profile-name balanced
+    - jmo ci --repo . --fail-on HIGH
   artifacts:
     reports:
       sast: results/summaries/findings.sarif

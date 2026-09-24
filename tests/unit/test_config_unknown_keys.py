@@ -18,6 +18,7 @@ Two guards live here, and they check different things:
 
 from __future__ import annotations
 
+import argparse
 import ast
 import inspect
 import logging
@@ -27,6 +28,7 @@ from pathlib import Path
 import pytest
 
 from scripts.core.config import RECOGNISED_CONFIG_KEYS, load_config
+from scripts.core.tool_registry import TOOL_MATRIX
 
 
 def _write(tmp_path: Path, body: str) -> str:
@@ -45,7 +47,7 @@ def test_unrecognised_key_is_named_in_a_warning(tmp_path, caplog):
     path = _write(
         tmp_path,
         """
-        default_profile: fast
+        fail_on: HIGH
         exclude_paths:
           - vendor/
         """,
@@ -69,7 +71,7 @@ def test_warning_lists_the_recognised_keys(tmp_path, caplog):
         load_config(path)
 
     messages = " ".join(r.getMessage() for r in caplog.records)
-    assert "exclude" in messages and "default_profile" in messages
+    assert "exclude" in messages and "per_tool" in messages
 
 
 def test_every_recognised_key_is_accepted_without_warning(tmp_path, caplog):
@@ -82,14 +84,12 @@ def test_every_recognised_key_is_accepted_without_warning(tmp_path, caplog):
     for key in sorted(RECOGNISED_CONFIG_KEYS):
         if key in ("tools", "outputs", "include", "exclude"):
             lines.append(f"{key}: []")
-        elif key in ("profiles", "per_tool", "policy", "deduplication", "profiling"):
+        elif key in ("per_tool", "policy", "deduplication", "profiling"):
             lines.append(f"{key}: {{}}")
         elif key == "fail_on":
             lines.append("fail_on: HIGH")
         elif key == "log_level":
             lines.append("log_level: INFO")
-        elif key == "default_profile":
-            lines.append("default_profile: fast")
         else:  # threads, timeout, retries
             lines.append(f"{key}: 1")
     path = _write(tmp_path, "\n".join(lines) + "\n")
@@ -116,9 +116,109 @@ def test_a_config_that_is_not_a_mapping_is_reported_not_crashed(tmp_path, caplog
     with caplog.at_level(logging.WARNING, logger="scripts.core.config"):
         cfg = load_config(path)
 
-    assert cfg.default_profile is None or isinstance(cfg.default_profile, str)
+    assert cfg.tools == list(TOOL_MATRIX)  # the defaults, not a crash
     messages = " ".join(r.getMessage() for r in caplog.records)
     assert "mapping" in messages.lower()
+
+
+# --------------------------------------------------------------------------
+# A pre-v2 jmo.yml: profiles are gone, and must neither crash nor apply
+# --------------------------------------------------------------------------
+
+# `default_profile` selects a profile whose every setting differs from the v2
+# defaults and from the top level, so applying any part of it would show.
+_PRE_V2_PROFILE_CONFIG = """
+default_profile: fast
+policy:
+  default_policies:
+    - zero-secrets
+profiles:
+  fast:
+    tools: [trivy]
+    threads: 2
+    timeout: 60
+    per_tool:
+      trivy:
+        flags: ["--skip-dirs", "vendor"]
+    policy:
+      default_policies: [owasp-top-10]
+      fail_on_violation: true
+"""
+
+
+@pytest.mark.parametrize(
+    ("key", "body"),
+    [
+        ("profiles", "profiles:\n  fast:\n    tools: [trivy]\n"),
+        ("default_profile", "default_profile: fast\n"),
+    ],
+)
+def test_removed_profile_key_alone_is_named_as_unrecognised(
+    tmp_path, caplog, key, body
+):
+    """v2.0.0 removed scan profiles with no alias (no users to migrate).
+
+    A config written for v1 must be told its profile keys do nothing, each on
+    its own: `default_profile` without `profiles` is the common case, since
+    the built-in profiles never needed a `profiles:` block.
+    """
+    path = _write(tmp_path, body)
+    with caplog.at_level(logging.WARNING, logger="scripts.core.config"):
+        cfg = load_config(path)
+
+    warnings = [
+        r.getMessage() for r in caplog.records if "unrecognised" in r.getMessage()
+    ]
+    # The loader names keys with repr(), so the quotes keep 'profiles' from
+    # matching inside 'default_profile' and vice versa.
+    assert any(repr(key) in w for w in warnings), (
+        f"{key!r} is not a v2 key and must be reported as unrecognised. "
+        f"Got: {warnings!r}"
+    )
+    assert cfg.tools == list(TOOL_MATRIX)
+
+
+def test_a_pre_v2_profile_config_loads_and_applies_nothing_from_the_profile(
+    tmp_path, caplog
+):
+    """Review Focus 2: warn, do not crash, and do not SILENTLY apply the profile.
+
+    The last is the dangerous one. A loader that still honoured
+    `default_profile` would narrow a scan to one tool while the user believed
+    the whole matrix ran -- and the warning above would be a lie. So the
+    profile's tools, threads, timeout, per-tool flags and policy are each
+    checked, first on the loaded Config and then where a scan resolves them.
+    """
+    from scripts.cli.jmo import _effective_scan_settings
+
+    path = _write(tmp_path, _PRE_V2_PROFILE_CONFIG)
+    with caplog.at_level(logging.WARNING, logger="scripts.core.config"):
+        cfg = load_config(path)
+
+    warnings = [
+        r.getMessage() for r in caplog.records if "unrecognised" in r.getMessage()
+    ]
+    assert len(warnings) == 1, warnings
+    assert "'profiles'" in warnings[0] and "'default_profile'" in warnings[0]
+
+    assert not hasattr(cfg, "profiles") and not hasattr(cfg, "default_profile")
+    assert cfg.tools == list(TOOL_MATRIX)
+    assert cfg.threads is None
+    assert cfg.timeout is None
+    assert cfg.per_tool == {}
+    # The top-level policy stands; the profile's override is not applied.
+    assert cfg.policy.default_policies == ["zero-secrets"]
+    assert cfg.policy.fail_on_violation is False
+
+    settings = _effective_scan_settings(
+        argparse.Namespace(
+            config=path, tools=None, threads=None, timeout=None, skip_tools=None
+        )
+    )
+    assert settings["tools"] == list(TOOL_MATRIX)
+    assert settings["threads"] is None
+    assert settings["timeout"] == 600  # the built-in default, not the profile's 60
+    assert settings["per_tool"] == {}
 
 
 # --------------------------------------------------------------------------

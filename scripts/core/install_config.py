@@ -17,7 +17,6 @@ from scripts.core.tool_registry import Platform
 
 DOWNLOAD_TIMEOUT_SECONDS = 300
 PIP_INSTALL_TIMEOUT_SECONDS = 600
-NPM_INSTALL_TIMEOUT_SECONDS = 600
 SUBPROCESS_DEFAULT_TIMEOUT = 120
 DOWNLOAD_CHUNK_SIZE = 8192
 MAX_PARALLEL_WORKERS = 8
@@ -31,11 +30,15 @@ MAX_CLEANUP_RETRIES = 3
 # Installation method priorities per platform
 # "install_script" uses official install scripts from tool maintainers (most reliable)
 # "binary" downloads pre-built binaries from GitHub releases
+#
+# npm and brew are gone (v2.0.0). npm served only cdxgen; brew was the first
+# macOS choice and never honoured the pinned version (PINNED_INSTALL_METHODS
+# excludes it), so macOS now installs the same pinned binary as everyone else.
 
 INSTALL_PRIORITIES: dict[Platform, list[str]] = {
-    "linux": ["apt", "pip", "npm", "install_script", "binary", "brew"],
-    "macos": ["brew", "pip", "npm", "install_script", "binary"],
-    "windows": ["pip", "npm", "binary", "manual"],
+    "linux": ["apt", "pip", "install_script", "binary"],
+    "macos": ["pip", "install_script", "binary"],
+    "windows": ["pip", "binary", "manual"],
 }
 
 
@@ -43,17 +46,9 @@ INSTALL_PRIORITIES: dict[Platform, list[str]] = {
 # SPECIAL INSTALLATION HANDLING
 # ============================================================================
 # Tools that require special installation handling
-# NOTE: kubescape moved to BINARY_URLS (v1.0.0) - direct binary download is more reliable
 
 SPECIAL_INSTALL: dict[str, str] = {
     "zap": "extract_app",  # Extract zip to directory (cross-platform)
-    "dependency-check": "extract_app",  # Extract zip to directory (Java CLI)
-    "scancode": "extract_app",  # Platform-specific pre-built releases (bypasses pip bug)
-    "falco": "manual",  # Kernel module
-    "afl++": "manual",  # Build from source
-    "mobsf": "docker",  # Docker-only
-    "akto": "docker",  # Docker-only
-    "lynis": "clone",  # Git clone
 }
 
 
@@ -68,22 +63,11 @@ SPECIAL_INSTALL: dict[str, str] = {
 #
 # Available placeholders:
 #   {version}    - Tool version from versions.yaml
-#   {py_version} - Python version (e.g., "3.11") for tools requiring specific Python builds
 
 EXTRACT_APP_URLS: dict[str, str | dict[str, str]] = {
     # ZAP: Use cross-platform release that works on all platforms
     # Changed from Linux-only tarball to universal Crossplatform.zip
     "zap": "https://github.com/zaproxy/zaproxy/releases/download/v{version}/ZAP_{version}_Crossplatform.zip",
-    # Dependency-check: Universal zip works on all platforms (Java-based)
-    "dependency-check": "https://github.com/jeremylong/DependencyCheck/releases/download/v{version}/dependency-check-{version}-release.zip",
-    # ScanCode: Platform-specific pre-built releases (bypasses pip upstream bug)
-    # The pip install fails due to invalid PEP 440 specifier in extractcode dependency
-    # See: https://github.com/aboutcode-org/scancode-toolkit/issues/3944
-    "scancode": {
-        "windows": "https://github.com/nexB/scancode-toolkit/releases/download/v{version}/scancode-toolkit-v{version}_py{py_version}-windows.zip",
-        "linux": "https://github.com/nexB/scancode-toolkit/releases/download/v{version}/scancode-toolkit-v{version}_py{py_version}-linux.tar.gz",
-        "macos": "https://github.com/nexB/scancode-toolkit/releases/download/v{version}/scancode-toolkit-v{version}_py{py_version}-macos.tar.gz",
-    },
 }
 
 
@@ -104,8 +88,8 @@ EXTRACT_APP_URLS: dict[str, str | dict[str, str]] = {
 #   - 615 KB across 310 rule files, organised by category (backdoor,
 #     ransomware, trojan, exploit, ...). Those directory names become the
 #     namespace, and the adapter infers severity from exactly such tags.
-#   - Fetched at install time into ~/.jmo/yara-rules/, matching how lynis, zap
-#     and dependency-check already live under ~/.jmo/. Nothing is vendored.
+#   - Fetched at install time into ~/.jmo/yara-rules/, matching how zap
+#     already lives under ~/.jmo/. Nothing is vendored.
 #
 # Pinned to a commit because the repository publishes no releases or tags. Bump
 # deliberately - a rule set that changes under you changes your findings.
@@ -145,7 +129,6 @@ YARA_RULES_BUNDLE: dict[str, str] = {
 #   {arch}       - "x86_64", "arm64"
 #   {arch_amd}   - "amd64", "arm64" (for Go tools)
 #   {arch_aarch} - "x86_64", "aarch64" (for shellcheck)
-#   {rust_arch}  - "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc", etc.
 #   {trivy_arch} - "64bit", "ARM64" (trivy's unique format)
 
 BINARY_URLS: dict[str, str | dict[str, str]] = {
@@ -185,21 +168,6 @@ BINARY_URLS: dict[str, str | dict[str, str]] = {
     },
     "nuclei": "https://github.com/projectdiscovery/nuclei/releases/download/v{version}/nuclei_{version}_{os_lower}_{arch_amd}.zip",
     "gosec": "https://github.com/securego/gosec/releases/download/v{version}/gosec_{version}_{os_lower}_{arch_amd}.tar.gz",
-    # horusec: lowercase "linux_amd64" (no version in filename)
-    # Windows provides .exe directly, Linux/macOS provide binary without extension
-    # Note: Windows uses "win" not "windows" in asset name (horusec_win_amd64.exe)
-    "horusec": {
-        "windows": "https://github.com/ZupIT/horusec/releases/download/v{version}/horusec_win_{arch_amd}.exe",
-        "default": "https://github.com/ZupIT/horusec/releases/download/v{version}/horusec_{os_lower}_{arch_amd}",
-    },
-    # noseyparker: Rust target triple format with 'v' prefix
-    "noseyparker": "https://github.com/praetorian-inc/noseyparker/releases/download/v{version}/noseyparker-v{version}-{rust_arch}.tar.gz",
-    # kubescape: "kubescape_{version}_linux_amd64" (underscores, version in filename)
-    # Windows provides .exe directly, Linux/macOS provide binary without extension
-    "kubescape": {
-        "windows": "https://github.com/kubescape/kubescape/releases/download/v{version}/kubescape_{version}_windows_{arch_amd}.exe",
-        "default": "https://github.com/kubescape/kubescape/releases/download/v{version}/kubescape_{version}_{os_lower}_{arch_amd}",
-    },
     # OPA (Open Policy Agent): "opa_linux_amd64" (no version in filename)
     # Windows provides .exe directly, Linux/macOS provide binary without extension
     "opa": {
@@ -219,59 +187,44 @@ INSTALL_SCRIPTS: dict[str, str] = {
     "trivy": "https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh",
     "grype": "https://raw.githubusercontent.com/anchore/grype/main/install.sh",
     "syft": "https://raw.githubusercontent.com/anchore/syft/main/install.sh",
-    "kubescape": "https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh",
 }
 
 
 # ============================================================================
 # ISOLATED VENV CONFIGURATION
 # ============================================================================
-# Known pip package conflicts - these tools need isolated virtual environments
-# to avoid dependency conflicts (e.g., pydantic version incompatibilities).
+# Python-packaged scanners that install into their own virtualenv under
+# ~/.jmo/tools/venvs/<tool_name>/ instead of JMo's own Python environment.
 #
-# Tools in this dict will be installed in ~/.jmo/tools/venvs/<tool_name>/
-# instead of the system Python environment.
+# Isolation began as a pydantic conflict: prowler pinned pydantic<2 while
+# semgrep and checkov need pydantic>=2, so no single environment could hold all
+# three. prowler left in v2.0.0 and took its venv with it. The two that remain
+# still pin heavily enough that sharing JMo's environment would let either one
+# downgrade a package JMo itself depends on (semgrep pins mcp, see
+# tool_installer), so each keeps its own.
 #
-# Pydantic version matrix:
-#   - prowler: requires pydantic<2 (v1.x)
-#   - semgrep: requires pydantic>=2 (TypeAdapter)
-#   - checkov: requires pydantic>=2 (model_serializer)
-#
-# These tools CANNOT coexist in the same Python environment!
-#
-# Format: {tool_name: {package, conflicts_with, reason}}
+# Format: {tool_name: {package, reason}}
 
 ISOLATED_TOOLS: dict[str, dict[str, str | list[str]]] = {
-    "prowler": {
-        "package": "prowler",
-        "conflicts_with": ["semgrep", "checkov"],
-        "reason": "Requires pydantic<2 (v1.x), conflicts with semgrep/checkov which need pydantic>=2",
-    },
     "semgrep": {
         "package": "semgrep",
-        "conflicts_with": ["prowler"],
-        "reason": "Requires pydantic>=2 (TypeAdapter), conflicts with prowler which needs pydantic<2",
+        "reason": "Pins its own dependency set (including mcp) that must not reach JMo's environment",
     },
     "checkov": {
         "package": "checkov",
-        "conflicts_with": ["prowler"],
-        "reason": "Requires pydantic>=2 (model_serializer), conflicts with prowler which needs pydantic<2",
+        "reason": "Pins its own dependency set (pydantic>=2 among it) that must not reach JMo's environment",
     },
-    # NOTE: scancode removed from ISOLATED_TOOLS (v1.0.1) - now uses pre-built
-    # binary download via SPECIAL_INSTALL["scancode"] = "extract_app" due to
-    # upstream extractcode dependency bug (invalid PEP 440 specifier).
-    # See: https://github.com/aboutcode-org/scancode-toolkit/issues/3944
 }
 
 
 # ============================================================================
 # DEPENDENCY AUTO-INSTALL CONFIGURATION
 # ============================================================================
-# Runtime dependencies (Java, Node.js) can be auto-installed via package managers.
+# Runtime dependencies (Java, for zap) can be auto-installed via package managers.
 # The wizard will detect missing deps and offer to install them automatically.
 #
 # Structure: {dep_name: {platform: {package_manager: [command_args]}}}
-# - Deps: "java", "node"
+# - Deps: "java"
 # - Platforms: "windows", "linux", "macos"
 # - Package managers: chocolatey, winget, apt, dnf, brew
 
@@ -299,42 +252,16 @@ DEPENDENCY_INSTALL_COMMANDS: dict[str, dict[str, dict[str, list[str] | str]]] = 
             "brew": ["brew", "install", "openjdk@17"],
         },
     },
-    "node": {
-        "windows": {
-            "chocolatey": ["choco", "install", "nodejs-lts", "-y"],
-            "winget": [
-                "winget",
-                "install",
-                "--id",
-                "OpenJS.NodeJS.LTS",
-                "-e",
-                "--accept-source-agreements",
-                "--accept-package-agreements",
-            ],
-        },
-        "linux": {
-            # NodeSource provides Node.js 20+ (apt's default nodejs is often v12-18)
-            # Install order: try nodesource first, fallback to apt/dnf
-            "nodesource": "curl_script",  # Special marker - handled in install_dependency()
-            "apt": ["sudo", "apt-get", "install", "-y", "nodejs", "npm"],
-            "dnf": ["sudo", "dnf", "install", "-y", "nodejs", "npm"],
-        },
-        "macos": {
-            "brew": ["brew", "install", "node@20"],
-        },
-    },
 }
 
 # Commands to verify dependency installation succeeded
 DEPENDENCY_VERIFY_COMMANDS: dict[str, list[str]] = {
     "java": ["java", "-version"],
-    "node": ["node", "--version"],
 }
 
 # Human-readable display names for dependencies
 DEPENDENCY_DISPLAY_NAMES: dict[str, str] = {
     "java": "Java 17+",
-    "node": "Node.js 20+",
 }
 
 # Manual installation commands (fallback if auto-install fails)
@@ -343,10 +270,5 @@ DEPENDENCY_MANUAL_COMMANDS: dict[str, dict[str, str]] = {
         "windows": "choco install openjdk17 -y  OR  winget install Microsoft.OpenJDK.17",
         "linux": "sudo apt-get install default-jre-headless -y  OR  sudo dnf install java-17-openjdk-headless -y",
         "macos": "brew install openjdk@17",
-    },
-    "node": {
-        "windows": "choco install nodejs-lts -y  OR  winget install OpenJS.NodeJS.LTS",
-        "linux": "curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash - && sudo apt-get install nodejs -y",
-        "macos": "brew install node@20",
     },
 }

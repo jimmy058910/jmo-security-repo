@@ -1,8 +1,6 @@
-# JMo Security Suite - All-in-One Docker Image (Deep)
-# Base: Ubuntu 24.04 with 25 Docker-ready security tools pre-installed
-# Tools: 29 in PROFILE_TOOLS["deep"], 25 baked in image, 4 manual-only | Multi-arch: amd64, arm64
-# Note: 4 tools require manual install outside Docker (PROFILE_TOOLS but not in image):
-# MobSF, Akto, AFL++, Falco (see docs/MANUAL_INSTALLATION.md and scripts/core/tool_registry.py MANUAL_INSTALL_TOOLS)
+# JMo Security Suite - Docker Image
+# Base: Ubuntu 24.04 with every scanner in scripts/core/tool_registry.py TOOL_MATRIX
+# pre-installed, plus the OPA policy engine | Multi-arch: amd64, arm64
 
 #
 # Stage 1: Builder - Download and extract tools
@@ -11,16 +9,12 @@ FROM ubuntu:24.04 AS builder
 
 ARG TARGETARCH
 
-# Install build dependencies (curl, tar, wget for downloads + build tools for AFL++)
+# Install download dependencies (curl for downloads, unzip for nuclei, xz for shellcheck)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
-    wget \
     unzip \
     xz-utils \
     ca-certificates \
-    build-essential \
-    clang \
-    llvm \
     && rm -rf /var/lib/apt/lists/*
 
 # Download TruffleHog (Secrets - Verified)
@@ -63,25 +57,6 @@ RUN SHFMT_VERSION="3.14.0" && \
     -o /usr/local/bin/shfmt && \
     chmod +x /usr/local/bin/shfmt
 
-# Download Falcoctl (Runtime Security)
-RUN FALCOCTL_VERSION="0.13.0" && \
-    FALCOCTL_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
-    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/falcosecurity/falcoctl/releases/download/v${FALCOCTL_VERSION}/falcoctl_${FALCOCTL_VERSION}_linux_${FALCOCTL_ARCH}.tar.gz" \
-    -o /tmp/falcoctl.tar.gz && \
-    gzip -t /tmp/falcoctl.tar.gz && \
-    tar -xzf /tmp/falcoctl.tar.gz -C /usr/local/bin falcoctl && \
-    chmod +x /usr/local/bin/falcoctl
-
-# Download Nosey Parker (Secrets - Backup)
-RUN NP_VERSION="0.24.0" && \
-    NP_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "aarch64" || echo "x86_64") && \
-    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/praetorian-inc/noseyparker/releases/download/v${NP_VERSION}/noseyparker-v${NP_VERSION}-${NP_ARCH}-unknown-linux-musl.tar.gz" \
-    -o /tmp/noseyparker.tar.gz && \
-    gzip -t /tmp/noseyparker.tar.gz && \
-    tar -xzf /tmp/noseyparker.tar.gz -C /tmp && \
-    mv /tmp/bin/noseyparker /usr/local/bin/noseyparker && \
-    chmod +x /usr/local/bin/noseyparker
-
 # Download OWASP ZAP (DAST)
 RUN ZAP_VERSION="2.17.0" && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/zaproxy/zaproxy/releases/download/v${ZAP_VERSION}/ZAP_${ZAP_VERSION}_Linux.tar.gz" \
@@ -102,17 +77,6 @@ RUN NUCLEI_VERSION="3.11.1" && \
     rm /tmp/nuclei.zip && \
     nuclei -update-templates -tl cves,misconfigurations,exposures,vulnerabilities,apis -silent
 
-# NOTE: Prowler 5.x is Python-based (pip install), no binary download needed
-# Prowler is installed via pip in the runtime stage
-
-# Download Kubescape (Kubernetes Security)
-# Note: Release naming changed from kubescape-ubuntu-{arch} to kubescape_{version}_linux_{arch}
-RUN KUBESCAPE_VERSION="4.0.13" && \
-    KUBESCAPE_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
-    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/kubescape/kubescape/releases/download/v${KUBESCAPE_VERSION}/kubescape_${KUBESCAPE_VERSION}_linux_${KUBESCAPE_ARCH}" \
-    -o /usr/local/bin/kubescape && \
-    chmod +x /usr/local/bin/kubescape
-
 # Download Gosec (Go SAST)
 RUN GOSEC_VERSION="2.29.0" && \
     GOSEC_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
@@ -131,30 +95,6 @@ RUN GRYPE_VERSION="0.118.0" && \
     tar -xzf /tmp/grype.tar.gz -C /usr/local/bin grype && \
     chmod +x /usr/local/bin/grype
 
-# Download Lynis (System Hardening)
-RUN LYNIS_VERSION="3.1.3" && \
-    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/CISOfy/lynis/archive/refs/tags/${LYNIS_VERSION}.tar.gz" \
-    -o /tmp/lynis.tar.gz && \
-    gzip -t /tmp/lynis.tar.gz && \
-    tar -xzf /tmp/lynis.tar.gz -C /opt && \
-    mv /opt/lynis-${LYNIS_VERSION} /opt/lynis
-
-# Download OWASP Dependency-Check (SCA + License)
-RUN DC_VERSION="12.1.0" && \
-    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/jeremylong/DependencyCheck/releases/download/v${DC_VERSION}/dependency-check-${DC_VERSION}-release.zip" \
-    -o /tmp/dependency-check.zip && \
-    unzip -t /tmp/dependency-check.zip > /dev/null && \
-    unzip -q /tmp/dependency-check.zip -d /opt && \
-    mv /opt/dependency-check /opt/dependency-check-cli && \
-    rm /tmp/dependency-check.zip
-
-# Download Horusec (Multi-language SAST)
-RUN HORUSEC_VERSION="2.8.0" && \
-    HORUSEC_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
-    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/ZupIT/horusec/releases/download/v${HORUSEC_VERSION}/horusec_linux_${HORUSEC_ARCH}" \
-    -o /usr/local/bin/horusec && \
-    chmod +x /usr/local/bin/horusec
-
 # Download OPA (Policy-as-Code engine)
 RUN OPA_VERSION="1.20.1" && \
     OPA_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
@@ -172,17 +112,13 @@ RUN SHELLCHECK_VERSION="0.11.0" && \
     mv /tmp/shellcheck-v${SHELLCHECK_VERSION}/shellcheck /usr/local/bin/shellcheck && \
     chmod +x /usr/local/bin/shellcheck
 
-# NOTE: AFL++ removed from Docker image - requires LLVM/GCC dev headers for full build
-# AFL++ is a specialized fuzzing tool; install manually if needed: https://github.com/AFLplusplus/AFLplusplus
-
 #
 # Stage 2: Runtime - Complete runtime environment with ALL tools
 #
 FROM ubuntu:24.04 AS runtime
-ARG TARGETARCH
 
-LABEL org.opencontainers.image.title="JMo Security Suite (Deep)"
-LABEL org.opencontainers.image.description="Terminal-first security audit toolkit with 29 tools (26 Docker-ready + OPA policy engine) (v1.0.2)"
+LABEL org.opencontainers.image.title="JMo Security Suite"
+LABEL org.opencontainers.image.description="Terminal-first security audit toolkit: every TOOL_MATRIX scanner plus the OPA policy engine"
 LABEL org.opencontainers.image.version="1.0.2"
 LABEL org.opencontainers.image.authors="James Moceri <general@jmogaming.com>"
 LABEL org.opencontainers.image.url="https://jmotools.com"
@@ -195,9 +131,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PATH="/root/.local/bin:${PATH}" \
     DOCKER_CONTAINER=1
 
-# Install ONLY runtime dependencies (no curl, wget, tar, build-essential)
+# Install ONLY runtime dependencies (no wget, tar, build-essential)
 # Combined in single RUN to reduce layers, with aggressive cache cleanup
-# Note: nodejs/npm installed separately below (need Node 18+ for cdxgen)
+# Java is for ZAP.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
@@ -210,13 +146,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# Install Node.js 20 LTS from NodeSource (Ubuntu 22.04 default is v12, too old for cdxgen)
-# cdxgen 12.x requires Node.js 18+ for optional chaining (?.) syntax
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
-    apt-get install -y --no-install-recommends nodejs && \
-    rm -rf /var/lib/apt/lists/* && \
-    node --version && npm --version
-
 # Clean Java runtime (Phase 1 optimization: 30 MB savings)
 RUN rm -rf /usr/lib/jvm/java-17-openjdk-*/man \
     /usr/lib/jvm/java-17-openjdk-*/legal \
@@ -225,24 +154,17 @@ RUN rm -rf /usr/lib/jvm/java-17-openjdk-*/man \
     /usr/share/locale
 
 # Install Python security tools (pip)
-# Note: horusec is a Go binary (from builder stage), not a pip package
 # Install build deps temporarily for packages that may need compilation
-# pkg-config + libicu-dev needed for pyicu (scancode-toolkit dependency)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     python3-dev \
     libffi-dev \
     libssl-dev \
-    pkg-config \
-    libicu-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python security tools one by one for better error visibility
 # Note: Ubuntu 24.04 ships pip 24.0/setuptools 68.1/wheel 0.42 (sufficient, skip upgrade)
-RUN python3 -m pip install --no-cache-dir --break-system-packages bandit==1.9.4 && \
-    echo "✓ bandit installed"
-
 RUN python3 -m pip install --no-cache-dir --break-system-packages semgrep==1.175.0 && \
     semgrep --version && \
     echo "✓ semgrep installed"
@@ -257,39 +179,8 @@ RUN python3 -m pip install --no-cache-dir --break-system-packages ruff==0.16.5 &
 RUN python3 -m pip install --no-cache-dir --break-system-packages yara-python==4.5.4 && \
     echo "✓ yara-python installed"
 
-# scancode-toolkit: extractcode-7z has no arm64 Linux wheel on PyPI
-RUN if [ "$TARGETARCH" = "amd64" ]; then \
-        python3 -m pip install --no-cache-dir --break-system-packages scancode-toolkit==32.5.0 && \
-        scancode --version && \
-        echo "✓ scancode-toolkit installed"; \
-    else \
-        echo "scancode-toolkit skipped on $TARGETARCH (extractcode-7z unavailable)"; \
-    fi
-
-# The otel pins here are load-bearing. prowler's microsoft-kiota-abstractions requires
-# opentelemetry-sdk>=1.27.0 with NO upper bound. Being a separate pip invocation it cannot
-# see semgrep's opentelemetry-*~=1.37.0 pins (installed above), so it resolved the SDK to
-# 1.44.0 -- which removed opentelemetry.sdk._logs.LogData. semgrep's 1.37.0 OTLP exporter
-# imports that name, so `semgrep --version` died with ImportError in the final verify RUN.
-# Note the shape: semgrep's own post-install check above PASSED; only the later verify
-# failed, because this pass is what breaks it. Measured on the v1.1.0 tag: slim, balanced
-# and deep failed on BOTH arches; fast (no prowler) passed, because a single pip pass can
-# backtrack. Do not drop these pins without rebuilding this image.
-RUN python3 -m pip install --no-cache-dir --break-system-packages prowler==5.40.0 \
-        "opentelemetry-sdk~=1.37.0" "opentelemetry-api~=1.37.0" && \
-    prowler --version && \
-    semgrep --version && \
-    echo "✓ prowler installed (semgrep re-verified against the resolved otel stack)"
-
-# Install Node.js tools (cdxgen) - MUST be before apt cleanup
-RUN npm install -g @cyclonedx/cdxgen@12.0.0 && \
-    npm cache clean --force && \
-    echo "✓ cdxgen installed"
-
 # Clean up build dependencies to reduce image size
-# Note: keep libicu70 runtime lib, only remove dev packages
-# Don't use autoremove as it may remove nodejs/npm
-RUN apt-get update && apt-get purge -y gcc g++ python3-dev libffi-dev libssl-dev pkg-config libicu-dev \
+RUN apt-get update && apt-get purge -y gcc g++ python3-dev libffi-dev libssl-dev \
     && rm -rf /var/lib/apt/lists/* \
     && find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true \
     && find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
@@ -301,20 +192,11 @@ COPY --from=builder /usr/local/bin/trivy /usr/local/bin/trivy
 COPY --from=builder /usr/local/bin/hadolint /usr/local/bin/hadolint
 COPY --from=builder /usr/local/bin/nuclei /usr/local/bin/nuclei
 COPY --from=builder /usr/local/bin/shfmt /usr/local/bin/shfmt
-COPY --from=builder /usr/local/bin/falcoctl /usr/local/bin/falcoctl
-COPY --from=builder /usr/local/bin/noseyparker /usr/local/bin/noseyparker
-# NOTE: Prowler 5.x is installed via pip, no binary to copy
-COPY --from=builder /usr/local/bin/kubescape /usr/local/bin/kubescape
 COPY --from=builder /usr/local/bin/gosec /usr/local/bin/gosec
 COPY --from=builder /usr/local/bin/grype /usr/local/bin/grype
-COPY --from=builder /usr/local/bin/horusec /usr/local/bin/horusec
 COPY --from=builder /usr/local/bin/opa /usr/local/bin/opa
 COPY --from=builder /usr/local/bin/shellcheck /usr/local/bin/shellcheck
 COPY --from=builder /opt/zaproxy /opt/zaproxy
-COPY --from=builder /opt/lynis /opt/lynis
-COPY --from=builder /opt/dependency-check-cli /opt/dependency-check-cli
-
-# NOTE: AFL++ removed - see comment in builder stage
 
 # Binary stripping (Phase 1 optimization: 15 MB savings)
 RUN strip /usr/local/bin/trufflehog \
@@ -324,31 +206,12 @@ RUN strip /usr/local/bin/trufflehog \
     /usr/local/bin/nuclei \
     /usr/local/bin/gosec \
     /usr/local/bin/grype \
-    /usr/local/bin/horusec \
     /usr/local/bin/opa \
     2>/dev/null || true
 
-# Create symlinks and wrapper scripts for easier invocation
-# ZAP and Dependency-Check work fine as symlinks.
-# Dual-symlink dependency-check with both names: `dependency-check` (the common
-# user-facing name matching brew/apt packaging) AND `dependency-check.sh` (the
-# canonical upstream binary name that tool_registry.py:116 probes for). Without
-# the .sh alias, jmo's installation-status check looks for `dependency-check.sh`
-# on PATH, misses the bare symlink, and reports installed=false — which trips
-# test_docker_variant_tools[deep]'s count assertion.
+# Create a symlink for easier invocation
 RUN ln -s /opt/zaproxy/zap.sh /usr/local/bin/zap && \
-    chmod +x /usr/local/bin/zap && \
-    ln -s /opt/dependency-check-cli/bin/dependency-check.sh /usr/local/bin/dependency-check && \
-    ln -s /opt/dependency-check-cli/bin/dependency-check.sh /usr/local/bin/dependency-check.sh && \
-    chmod +x /usr/local/bin/dependency-check /usr/local/bin/dependency-check.sh
-
-# Lynis requires its include/db/plugins directories in specific locations.
-# It searches: /usr/local/include/lynis, /usr/local/lynis/include, /usr/share/lynis/include
-# We install to /usr/local/lynis (one of the expected paths) and symlink the binary.
-RUN mkdir -p /usr/local/lynis && \
-    cp -r /opt/lynis/* /usr/local/lynis/ && \
-    ln -sf /usr/local/lynis/lynis /usr/local/bin/lynis && \
-    chmod +x /usr/local/bin/lynis /usr/local/lynis/lynis
+    chmod +x /usr/local/bin/zap
 
 # Mark cache directories as volumes for persistence
 VOLUME ["/root/.cache/trivy", "/root/.cache/grype"]
@@ -363,7 +226,7 @@ WORKDIR /scan
 # =============================================================================
 COPY . /opt/jmo-security/
 
-# Copy default config to WORKDIR for profile loading
+# Copy default config to WORKDIR
 RUN cp /opt/jmo-security/jmo.yml /scan/jmo.yml
 
 # Install JMo Security Suite with optional reporting dependencies
@@ -372,15 +235,13 @@ RUN python3 -m pip install --no-cache-dir --break-system-packages -e "/opt/jmo-s
     find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
-# Verify Docker-ready tools are installed and accessible
-RUN echo "=== Verifying Docker-ready tools ===" && \
+# Verify every scanner and the policy engine are installed and accessible
+RUN echo "=== Verifying tools ===" && \
     python3 --version && \
     jmo --help > /dev/null && \
     jmo tools --help > /dev/null && \
     trufflehog --version && \
-    noseyparker --version && \
     semgrep --version && \
-    bandit --version && \
     syft version && \
     trivy --version && \
     checkov --version && \
@@ -388,20 +249,12 @@ RUN echo "=== Verifying Docker-ready tools ===" && \
     zap -version && \
     nuclei -version && \
     yara --version && \
-    falcoctl version && \
     shellcheck --version && \
     shfmt --version && \
-    prowler --version && \
-    kubescape version && \
     gosec --version && \
     grype version && \
-    lynis --version && \
-    dependency-check --version && \
-    horusec version && \
-    ([ "$TARGETARCH" = "amd64" ] && scancode --version || echo "scancode skipped on $TARGETARCH") && \
-    cdxgen --version && \
     opa version && \
-    echo "=== All Docker-ready tools verified ==="
+    echo "=== All tools verified ==="
 
 # Create non-root user and set ownership (Security best practice)
 # Note: Ubuntu 24.04 pre-creates 'ubuntu' user with UID 1000, must remove first
@@ -434,19 +287,18 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD ["/bin/sh", "-c", "jmo --help > /dev/null || exit 1"]
 
 # Usage examples (documented in metadata):
-# Basic scan (deep profile, all 27 tools):
-# docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:1.0.2-deep scan --repo /scan --results /scan/results --profile deep
+# Basic scan:
+# docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest scan --repo /scan --results-dir /scan/results
 #
 # Usage: docker run --rm -v "$(pwd)/.jmo:/scan/.jmo" -v "$(pwd):/scan" \
-#   ghcr.io/jimmy058910/jmo-security:deep scan --repo /scan --profile deep --fail-on HIGH
+#   ghcr.io/jimmy058910/jmo-security:latest scan --repo /scan --fail-on HIGH
 # The .jmo mount persists the SQLite history DB between runs so `jmo history`, `jmo diff`, and `jmo trends` work.
 #
 # CI mode with caching (30s faster on subsequent runs):
 # docker run --rm -v $(pwd):/scan -v trivy-cache:/root/.cache/trivy -v grype-cache:/root/.cache/grype \
-#   ghcr.io/jimmy058910/jmo-security:deep ci --repo /scan --fail-on HIGH --profile
+#   ghcr.io/jimmy058910/jmo-security:latest ci --repo /scan --fail-on HIGH
 #
-# v1.0.0 Optimizations:
-# - Multi-stage builds: Reduced image size by 21% (2.49 GB → 1.97 GB)
-# - Phase 1 optimizations: Nuclei template filtering (65 MB), Python bytecode cleanup (40 MB), binary stripping (15 MB), Java cleanup (30 MB), Git metadata exclusion (5 MB)
+# Size optimizations:
+# - Multi-stage builds: download tooling stays in the builder stage
+# - Nuclei template filtering, Python bytecode cleanup, binary stripping, Java cleanup, Git metadata exclusion
 # - Volume mounting: Use -v trivy-cache:/root/.cache/trivy for persistent caching
-# - Tool count: 12 → 27 tools (26 Docker-ready, 2 manual install)

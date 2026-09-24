@@ -97,7 +97,7 @@ def _head(repo: Path) -> str:
 def test_the_statement_version_matches_the_predicate_version(findings: Path) -> None:
     """A SLSA Provenance v1 predicate travels in an in-toto Statement v1."""
     statement = ProvenanceGenerator().generate(
-        findings_path=findings, profile="fast", tools=[], targets=[]
+        findings_path=findings, tools=[], targets=[]
     )
 
     assert statement["predicateType"] == SLSA_VERSION
@@ -139,7 +139,7 @@ def test_a_freshly_generated_attestation_verifies(
 ) -> None:
     """End to end: what JMo writes, JMo must accept."""
     statement = ProvenanceGenerator().generate(
-        findings_path=findings, profile="fast", tools=[], targets=[]
+        findings_path=findings, tools=[], targets=[]
     )
     att = tmp_path / "att.json"
     att.write_text(json.dumps(statement), encoding="utf-8")
@@ -160,7 +160,7 @@ def test_an_attestation_written_before_the_migration_still_verifies(
     accepted set is explicit and lives beside the emitted version.
     """
     statement = ProvenanceGenerator().generate(
-        findings_path=findings, profile="fast", tools=[], targets=[]
+        findings_path=findings, tools=[], targets=[]
     )
     statement["_type"] = V0_1
     att = tmp_path / "old.json"
@@ -180,7 +180,7 @@ def test_a_genuinely_unknown_statement_type_is_still_rejected(
     check is the first gate the verifier applies.
     """
     statement = ProvenanceGenerator().generate(
-        findings_path=findings, profile="fast", tools=[], targets=[]
+        findings_path=findings, tools=[], targets=[]
     )
     statement["_type"] = "https://example.test/NotAStatement/v9"
     att = tmp_path / "bogus.json"
@@ -209,7 +209,6 @@ def test_the_scanned_commit_reaches_the_attestation(
     """
     statement = ProvenanceGenerator().generate(
         findings_path=findings,
-        profile="fast",
         tools=[],
         targets=[str(git_repo)],
     )
@@ -228,7 +227,6 @@ def test_the_branch_is_recorded_too(findings: Path, git_repo: Path) -> None:
     """Branch and tag are not digests, so they belong in externalParameters."""
     statement = ProvenanceGenerator().generate(
         findings_path=findings,
-        profile="fast",
         tools=[],
         targets=[str(git_repo)],
     )
@@ -251,7 +249,7 @@ def test_a_target_that_is_not_a_repository_degrades_cleanly(
     plain.mkdir()
 
     statement = ProvenanceGenerator().generate(
-        findings_path=findings, profile="fast", tools=[], targets=[str(plain)]
+        findings_path=findings, tools=[], targets=[str(plain)]
     )
 
     deps = statement["predicate"]["buildDefinition"]["resolvedDependencies"]
@@ -275,7 +273,6 @@ def test_a_multi_repo_scan_claims_no_single_commit(
 
     statement = ProvenanceGenerator().generate(
         findings_path=findings,
-        profile="fast",
         tools=[],
         targets=[str(git_repo), str(other)],
     )

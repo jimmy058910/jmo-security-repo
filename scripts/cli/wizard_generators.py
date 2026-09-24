@@ -12,9 +12,10 @@ Functions:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from scripts.cli.jmo import __version__
+from scripts.core.tool_registry import TOOL_MATRIX
 
 if TYPE_CHECKING:
     pass
@@ -75,23 +76,15 @@ security-scan-all:
 
 .PHONY: security-scan-repos
 security-scan-repos:
-\tjmo scan --repos-dir . --profile-name balanced
+\tjmo scan --repos-dir .
 
 .PHONY: security-scan-images
 security-scan-images:
-\tjmo scan --images-file detected-images.txt --profile-name balanced
+\tjmo scan --images-file detected-images.txt
 
 .PHONY: security-scan-iac
 security-scan-iac:
-\tjmo scan --terraform-state terraform/*.tfstate --profile-name balanced
-
-.PHONY: security-scan-fast
-security-scan-fast:
-\tjmo scan --repos-dir . --profile-name fast
-
-.PHONY: security-scan-deep
-security-scan-deep:
-\tjmo scan --repos-dir . --profile-name deep
+\tjmo scan --terraform-state terraform/*.tfstate
 
 .PHONY: security-report
 security-report:
@@ -108,8 +101,6 @@ help:
 \t@echo "  security-scan-repos  - Scan repositories only"
 \t@echo "  security-scan-images - Scan container images only"
 \t@echo "  security-scan-iac    - Scan IaC files only"
-\t@echo "  security-scan-fast   - Quick scan (5-8 minutes)"
-\t@echo "  security-scan-deep   - Comprehensive scan (30-60 minutes)"
 \t@echo "  security-report      - Generate report from results"
 \t@echo "  security-clean       - Remove results directory"
 """
@@ -125,7 +116,7 @@ security-audit-ci:
 
 .PHONY: security-audit-fast
 security-audit-fast:
-\tjmo ci --repos-dir . --profile-name fast --fail-on HIGH
+\tjmo ci --repos-dir . --tools trufflehog semgrep --fail-on HIGH
 
 .PHONY: security-check-pipelines
 security-check-pipelines:
@@ -147,7 +138,7 @@ security-clean:
 help:
 \t@echo "JMo Security - CI/CD Audit Targets:"
 \t@echo "  security-audit-ci        - Full CI/CD security audit"
-\t@echo "  security-audit-fast      - Fast CI/CD check (for pipelines)"
+\t@echo "  security-audit-fast      - Quick secrets + SAST check (for PR pipelines)"
 \t@echo "  security-check-pipelines - Scan pipeline files for secrets"
 \t@echo "  security-check-images    - Scan container images from pipelines"
 \t@echo "  security-report          - Generate report from results"
@@ -161,15 +152,15 @@ help:
 
 .PHONY: security-check-staging
 security-check-staging:
-\tjmo ci --profile-name balanced --fail-on HIGH --image myapp:staging
+\tjmo ci --fail-on HIGH --image myapp:staging
 
 .PHONY: security-check-production
 security-check-production:
-\tjmo ci --profile-name deep --fail-on CRITICAL --image myapp:production
+\tjmo ci --fail-on CRITICAL --image myapp:production
 
 .PHONY: security-sbom
 security-sbom:
-\tjmo scan --tools syft --profile-name fast --image myapp:latest
+\tjmo scan --tools syft --image myapp:latest
 
 .PHONY: security-full-check
 security-full-check:
@@ -217,7 +208,7 @@ set -euo pipefail
 """
 
 
-def generate_github_actions(config: Any, profiles: dict[str, Any]) -> str:
+def generate_github_actions(config: Any) -> str:
     """
     Generate a GitHub Actions workflow for security scanning.
 
@@ -226,16 +217,21 @@ def generate_github_actions(config: Any, profiles: dict[str, Any]) -> str:
 
     Args:
         config: Wizard configuration object
-        profiles: PROFILES dictionary from wizard module
 
     Returns:
         GitHub Actions YAML workflow content
     """
-    profile_info = profiles[config.profile]
-    profile_threads = cast(int, profile_info["threads"])
-    profile_timeout = cast(int, profile_info["timeout"])
-    threads = config.threads or profile_threads
-    timeout = config.timeout or profile_timeout
+    # Lazy: wizard_flows imports this module (command_builder), so a top-level
+    # import of the package from here would be circular.
+    from scripts.cli.wizard_flows.config_models import scan_defaults
+
+    default_threads, default_timeout = scan_defaults()
+    threads = config.threads or default_threads
+    timeout = config.timeout or default_timeout
+    # `jmo scan` defines no --fail-on (it abbreviates to --fail-on-store-error
+    # and the severity is then an unrecognised argument); a threshold is what
+    # `jmo ci` is for. Same rule as command_builder.build_command_parts.
+    subcommand = "ci" if config.fail_on else "scan"
 
     # Detect required secrets based on target type
     setup_steps = []
@@ -269,7 +265,7 @@ def generate_github_actions(config: Any, profiles: dict[str, Any]) -> str:
     if config.use_docker:
         # Docker-based workflow
         scan_cmd_lines = [
-            f"jmo scan --results-dir results --profile-name {config.profile}",
+            f"jmo {subcommand} --results-dir results",
             f"--threads {threads}",
             f"--timeout {timeout}",
         ]
@@ -322,8 +318,7 @@ jobs:
     else:
         # Native workflow
         scan_cmd_lines = [
-            "jmo scan",
-            f"--profile-name {config.profile}",
+            f"jmo {subcommand}",
             f"--threads {threads}",
             f"--timeout {timeout}",
         ]
@@ -363,8 +358,7 @@ jobs:
             scan_cmd_lines.append(f"--fail-on {config.fail_on}")
         scan_cmd = " \\\n            ".join(scan_cmd_lines)
 
-        profile_tools = cast(list[str], profile_info["tools"])
-        tools_list = ", ".join(profile_tools)
+        tools_list = ", ".join(TOOL_MATRIX)
 
         # Add secrets note if needed
         secrets_note = ""
@@ -399,7 +393,7 @@ jobs:
 
       - name: Install Security Tools
         run: |
-          # Install based on profile: {config.profile}
+          # Install the tool matrix: jmo tools install
           # Tools: {tools_list}
           # See: https://github.com/jimmy058910/jmo-security-repo#tool-installation
 {setup_steps_str}
@@ -422,13 +416,12 @@ jobs:
 """
 
 
-def generate_gitlab_ci(workflow_type: str = "repo", profile: str = "balanced") -> str:
+def generate_gitlab_ci(workflow_type: str = "repo") -> str:
     """
     Generate a GitLab CI configuration for security scanning.
 
     Args:
         workflow_type: Type of workflow (repo, stack, cicd, deployment, dependency)
-        profile: Scan profile (fast, balanced, deep)
 
     Returns:
         GitLab CI YAML content
@@ -445,7 +438,7 @@ security-scan-all:
   stage: security-scan
   image: {JMO_DOCKER_IMAGE_FULL}
   script:
-    - jmo scan --repos-dir . --profile-name {profile}
+    - jmo scan --repos-dir .
   artifacts:
     paths:
       - results/
@@ -482,7 +475,7 @@ ci-security-audit:
   stage: security-audit
   image: {JMO_DOCKER_IMAGE_FULL}
   script:
-    - jmo ci --repos-dir . --profile-name {profile} --fail-on HIGH
+    - jmo ci --repos-dir . --fail-on HIGH
   artifacts:
     paths:
       - results/
@@ -504,7 +497,7 @@ deployment-security-check:
   stage: pre-deployment
   image: {JMO_DOCKER_IMAGE_FULL}
   script:
-    - jmo ci --profile-name {profile} --fail-on CRITICAL --image $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+    - jmo ci --fail-on CRITICAL --image $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
   artifacts:
     paths:
       - results/
@@ -524,7 +517,7 @@ security-scan:
   stage: security-scan
   image: {JMO_DOCKER_IMAGE_FULL}
   script:
-    - jmo scan --repo . --profile-name {profile}
+    - jmo scan --repo .
   artifacts:
     paths:
       - results/
@@ -537,15 +530,12 @@ security-scan:
 """
 
 
-def generate_docker_compose(
-    workflow_type: str = "repo", profile: str = "balanced"
-) -> str:
+def generate_docker_compose(workflow_type: str = "repo") -> str:
     """
     Generate a docker-compose.yml for security scanning.
 
     Args:
         workflow_type: Type of workflow (repo, stack, cicd, deployment, dependency)
-        profile: Scan profile (fast, balanced, deep)
 
     Returns:
         docker-compose YAML content
@@ -566,7 +556,6 @@ services:
     command: >
       scan
       --repos-dir /scan
-      --profile-name {profile}
       --human-logs
     environment:
       - JMO_THREADS=auto
@@ -596,7 +585,6 @@ services:
     command: >
       ci
       --repos-dir /scan
-      --profile-name {profile}
       --fail-on HIGH
       --human-logs
     environment:
@@ -619,7 +607,6 @@ services:
     command: >
       ci
       --image myapp:latest
-      --profile-name {profile}
       --fail-on CRITICAL
       --human-logs
     environment:
@@ -642,7 +629,6 @@ services:
     command: >
       scan
       --repo /scan
-      --profile-name {profile}
       --human-logs
     environment:
       - JMO_THREADS=auto

@@ -515,12 +515,16 @@ def test_get_category_summary_with_eslint():
     )
 
 
-def test_get_category_summary_with_bandit():
-    """Test category summary with bandit (Python security) findings."""
+def test_get_category_summary_with_semgrep():
+    """A tagless semgrep finding falls back to Code Quality by tool name.
+
+    The ruleId avoids every word the fallback also matches on, so the tool
+    name is the only thing that can produce the category.
+    """
     findings = [
         {
-            "tool": {"name": "bandit"},
-            "ruleId": "B101",
+            "tool": {"name": "semgrep"},
+            "ruleId": "python.lang.correctness.useless-eqeq",
             "severity": "LOW",
             "location": {"path": "test.py"},
         }
@@ -528,8 +532,7 @@ def test_get_category_summary_with_bandit():
 
     categories = _get_category_summary(findings)
 
-    # Bandit should be categorized as Code Quality
-    assert categories.get("🔧 Code Quality", 0) == 1
+    assert categories == {"🔧 Code Quality": 1}
 
 
 # Tests for Priority Analysis (EPSS/KEV) and Cross-Tool Consensus
@@ -751,7 +754,6 @@ def test_write_json_with_custom_metadata(tmp_path):
         "schema_version": "1.2.0",
         "timestamp": "2024-01-15T12:00:00Z",
         "scan_id": "test-scan-123",
-        "profile": "balanced",
         "tools": ["trivy", "semgrep"],
         "target_count": 5,
         "finding_count": 1,
@@ -764,7 +766,6 @@ def test_write_json_with_custom_metadata(tmp_path):
 
     data = json.loads(out.read_text())
     assert data["meta"]["scan_id"] == "test-scan-123"
-    assert data["meta"]["profile"] == "balanced"
     assert data["meta"]["tools"] == ["trivy", "semgrep"]
 
 

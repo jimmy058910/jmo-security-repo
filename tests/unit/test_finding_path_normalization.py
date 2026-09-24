@@ -95,7 +95,7 @@ def test_values_that_are_not_repo_paths_are_returned_unchanged(raw: str, why: st
 
 
 def _path_derived_finding() -> dict:
-    """A finding whose id came from `location.path`, as 25 of 29 adapters build."""
+    """A finding whose id came from `location.path`, as most adapters build it."""
     path = ROOT + BS + "python" + BS + "app.py"
     return {
         "id": fingerprint("bandit", "B403", path, 5, "pickle import"),
@@ -154,7 +154,7 @@ def test_two_spellings_of_one_location_become_one_id():
 
 
 def test_an_id_built_from_a_custom_key_is_never_rekeyed():
-    """zap, cdxgen, nuclei and mobsf do not fingerprint on `location.path`.
+    """zap and nuclei do not fingerprint on `location.path`.
 
     zap keys on `f"{uri}:{method}:{param}:{idx}"` so that several instances of
     one alert on one URI stay distinct. Re-keying those from `location.path`
@@ -304,7 +304,9 @@ def test_scan_roots_survives_a_results_dir_jmo_did_not_write(tmp_path: Path, met
     assert nr.scan_roots(tmp_path) == ()
 
 
-def test_gather_results_strips_the_scan_root_from_a_real_bandit_output(tmp_path: Path):
+def test_gather_results_strips_the_scan_root_from_a_real_semgrep_output(
+    tmp_path: Path,
+):
     """The user-visible half of #861, through `gather_results`.
 
     Before the fix this produced
@@ -319,20 +321,21 @@ def test_gather_results_strips_the_scan_root_from_a_real_bandit_output(tmp_path:
     (results / ".scan_metadata.json").write_text(
         json.dumps({"repo_paths": [str(root)]}), encoding="utf-8"
     )
-    (results / "individual-repos" / "repo" / "bandit.json").write_text(
+    (results / "individual-repos" / "repo" / "semgrep.json").write_text(
         json.dumps(
             {
                 "errors": [],
                 "results": [
                     {
-                        "filename": str(scanned),
-                        "issue_confidence": "HIGH",
-                        "issue_severity": "LOW",
-                        "issue_text": "Consider possible security implications.",
-                        "issue_cwe": {"id": 502},
-                        "line_number": 5,
-                        "test_id": "B403",
-                        "test_name": "blacklist",
+                        "check_id": "python.lang.security.audit.eval-detected",
+                        "path": str(scanned),
+                        "start": {"line": 5, "col": 1},
+                        "end": {"line": 5, "col": 20},
+                        "extra": {
+                            "message": "Detected the use of eval().",
+                            "severity": "WARNING",
+                            "metadata": {},
+                        },
                     }
                 ],
             }
@@ -342,7 +345,7 @@ def test_gather_results_strips_the_scan_root_from_a_real_bandit_output(tmp_path:
 
     findings = nr.gather_results(results)
 
-    assert findings, "the bandit adapter produced nothing to assert on"
+    assert findings, "the semgrep adapter produced nothing to assert on"
     paths = [(f.get("location") or {}).get("path") for f in findings]
     assert paths == ["python/vulnerable_app.py"]
     # The property, not the spelling: no stored path may contain the scan root.

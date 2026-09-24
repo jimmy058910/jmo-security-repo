@@ -56,7 +56,6 @@ def _make(manager: ScheduleManager, *names: str) -> None:
             ScanSchedule.from_simple_args(
                 name=name,
                 cron="0 2 * * *",
-                profile="balanced",
                 repos_dir="/srv/repos",
             )
         )
@@ -134,7 +133,7 @@ def test_the_known_fields_of_a_forward_compatible_schedule_still_load(
 
     assert loaded is not None
     assert loaded.spec.schedule == "0 2 * * *"
-    assert loaded.spec.jobTemplate.profile == "balanced"
+    assert loaded.spec.jobTemplate.results == {"dir": "./results"}
     assert loaded.spec.jobTemplate.targets["repositories"]["repos_dir"] == "/srv/repos"
     assert loaded.spec.backend.type == "github-actions"
 
@@ -187,6 +186,115 @@ def test_filtering_is_derived_from_the_dataclass_not_a_hardcoded_list() -> None:
 
     assert "concurrencyPolicy" in known
     assert "retryPolicy" not in known
+
+
+# ---------------------------------------------------------------------------
+# The other direction: a schedules.json written BEFORE v2.0.0.
+# ---------------------------------------------------------------------------
+
+# What `jmo schedule create --name nightly --cron "0 2 * * *" --profile balanced
+# --repos-dir /srv/repos --backend local-cron` stored before v2.0.0, verbatim in
+# shape: the pre-v2 JobTemplateSpec declared `profile` as its first, required
+# field, and the CLI derived the description from it. Kept as the literal file
+# text rather than built with today's dataclasses, which can no longer express it.
+PRE_V2_SCHEDULES_JSON = """{
+  "apiVersion": "jmo.security/v2",
+  "kind": "ScheduleManifest",
+  "metadata": {"version": "2.0.0", "created_at": "2026-06-01T00:00:00+00:00"},
+  "schedules": [
+    {
+      "apiVersion": "jmo.security/v1alpha1",
+      "kind": "ScanSchedule",
+      "metadata": {
+        "name": "nightly",
+        "uid": "4f7c2d9e-0b1a-4c3d-9e8f-7a6b5c4d3e2f",
+        "labels": {},
+        "annotations": {"description": "Balanced scan"},
+        "creationTimestamp": "2026-06-01T00:00:00+00:00",
+        "generation": 1
+      },
+      "spec": {
+        "schedule": "0 2 * * *",
+        "timezone": "UTC",
+        "suspend": false,
+        "concurrencyPolicy": "Forbid",
+        "startingDeadlineSeconds": null,
+        "successfulJobsHistoryLimit": 30,
+        "failedJobsHistoryLimit": 10,
+        "backend": {"type": "local-cron", "config": {}},
+        "jobTemplate": {
+          "profile": "balanced",
+          "targets": {"repositories": {"repos_dir": "/srv/repos"}},
+          "results": {"retention_days": 90},
+          "options": {},
+          "notifications": {}
+        }
+      },
+      "status": {
+        "conditions": [],
+        "lastScheduleTime": null,
+        "lastSuccessfulTime": null,
+        "nextScheduleTime": "2026-06-02T02:00:00+00:00",
+        "active": 0,
+        "succeeded": 0,
+        "failed": 0
+      }
+    }
+  ]
+}
+"""
+
+
+def _scan_profile_flags(cron_line: str) -> list[str]:
+    """Every `--profile*` token in a cron line: `--profile`, `--profile-name`, ..."""
+    return [tok for tok in cron_line.split() if tok.startswith("--profile")]
+
+
+def test_a_schedule_stored_before_v2_loads_and_installs_without_a_profile(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A pre-v2 `~/.jmo/schedules.json` must survive the upgrade (Review Focus 3).
+
+    Every schedule a v1 user created carries `jobTemplate.profile`. Scan
+    profiles are gone, so the key must be dropped on load, and the crontab line
+    installed from that schedule must not pass a profile flag `jmo scan` no
+    longer defines -- `--profile-name` would exit 2 every time the cron fired,
+    long after the upgrade that caused it.
+
+    The file is written to disk before the manager exists, the way an upgrade
+    finds it, rather than poked into one today's writer produced.
+    """
+    from scripts.core.cron_installer import CronInstaller
+
+    config_dir = tmp_path / "jmo"
+    config_dir.mkdir()
+    (config_dir / "schedules.json").write_text(PRE_V2_SCHEDULES_JSON, encoding="utf-8")
+    manager = ScheduleManager(config_dir=config_dir)
+
+    with caplog.at_level(logging.WARNING, logger="scripts.core.schedule_manager"):
+        loaded = manager.get("nightly")
+
+    assert loaded is not None, "a pre-v2 schedule no longer loads"
+    assert not hasattr(loaded.spec.jobTemplate, "profile")
+    assert loaded.spec.jobTemplate.targets == {
+        "repositories": {"repos_dir": "/srv/repos"}
+    }
+    # Dropped deliberately, not tolerated as an unknown key: `_rehydrate` would
+    # tell the user this schedule came from a NEWER jmo, which it did not.
+    assert not caplog.records, caplog.text
+
+    # CronInstaller refuses to construct off Linux/macOS; generating the entry
+    # is pure string building, so the platform gate is the only thing patched.
+    monkeypatch.setattr("scripts.core.cron_installer.platform.system", lambda: "Linux")
+    entry = CronInstaller()._generate_cron_entry(loaded)
+    line = next(ln for ln in entry.splitlines() if "jmo scan" in ln)
+
+    # The positive control: a line that rendered nothing would pass the check
+    # below for the wrong reason.
+    assert "jmo scan --repos-dir /srv/repos" in line, line
+    assert _scan_profile_flags(line) == [], line
 
 
 # ---------------------------------------------------------------------------

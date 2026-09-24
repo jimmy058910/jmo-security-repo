@@ -35,7 +35,7 @@ allow if {
 
 # `risk.cwe` is an ARRAY of strings in CommonFinding v1.2.0
 # (docs/schemas/common_finding.v1.json). Adapters store either the bare id
-# ("CWE-798", semgrep-secrets) or the id with its description appended
+# ("CWE-798", as cwe_extraction backfills it) or the id with its description appended
 # ("CWE-78: Improper Neutralization ...", most others), so canonicalise to the
 # bare id -- which is what `hipaa_cwes` and `safeguard_map` are keyed on.
 #
@@ -58,7 +58,7 @@ cwe_ids(finding) := ids if {
 
 # Mirrors compliance_mapper.normalise_cwe_ids, which is the Python side's
 # answer to the same problem: accept "CWE-79", "CWE-79: description", "cwe_79"
-# and the bare integer 79 (bandit stores `issue_cwe.id` as an int). Anything
+# and the bare integer 79 (a numeric id straight from a tool). Anything
 # else is undefined here, so the comprehension above drops it rather than
 # failing the rule.
 canonical_cwe(raw) := id if {

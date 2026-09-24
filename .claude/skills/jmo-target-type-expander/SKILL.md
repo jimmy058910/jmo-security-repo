@@ -1,6 +1,6 @@
 ---
 name: jmo-target-type-expander
-description: Add new target types to JMo Security multi-target scanning architecture (cloud accounts, mobile apps, host audits, etc.). Use when extending scanning to new infrastructure types.
+description: Add new target types to JMo Security multi-target scanning architecture (package registries, API endpoints, cloud accounts, etc.). Use when extending scanning to new infrastructure types.
 argument-hint: <target-type>
 user-invocable: true
 context: fork
@@ -24,11 +24,11 @@ the multi-target scanning pattern.
 
 ## Current Target Types
 
-JMo Security **implements 6** target types. The last three rows below are
+JMo Security **implements 6** target types. The last two rows below are
 **not implemented** — they are the worked examples this skill uses to show what
 adding a target type involves, and none of their CLI flags exists yet
-(`jmo scan --help` lists no `--aws-account`, `--apk`, `--ipa`, `--mobile-src`
-or `--host-audit`).
+(`jmo scan --help` lists no `--npm-package`, `--npm-packages-file`,
+`--graphql-api` or `--graphql-apis-file`).
 
 The authoritative list is `target_dirs` in
 [scripts/core/normalize_and_report.py](../../../scripts/core/normalize_and_report.py)
@@ -37,15 +37,14 @@ there is silently discarded at report time.
 
 | Target Type | CLI Flags | Directory | Tools | Example |
 |-------------|-----------|-----------|-------|---------|
-| **Repositories** | `--repo`, `--repos-dir`, `--targets` | `individual-repos/` | trufflehog, semgrep, bandit | `--repo ./myapp` |
+| **Repositories** | `--repo`, `--repos-dir`, `--targets` | `individual-repos/` | trufflehog, semgrep, syft, trivy, checkov, yara, grype | `--repo ./myapp` |
 | **Container Images** | `--image`, `--images-file` | `individual-images/` | trivy, syft | `--image nginx:latest` |
 | **IaC Files** | `--terraform-state`, `--cloudformation`, `--k8s-manifest` | `individual-iac/` | checkov, trivy | `--terraform-state infra.tfstate` |
 | **Web URLs** | `--url`, `--urls-file`, `--api-spec` | `individual-web/` | zap, nuclei | `--url https://example.com` |
 | **GitLab Repos** | `--gitlab-repo`, `--gitlab-group`, `--gitlab-token` | `individual-gitlab/` | trufflehog | `--gitlab-repo mygroup/repo` |
 | **Kubernetes Clusters** | `--k8s-context`, `--k8s-namespace`, `--k8s-all-namespaces` | `individual-k8s/` | trivy | `--k8s-context prod` |
-| *(not implemented)* **Cloud Accounts** | `--aws-account`, `--azure-subscription`, `--gcp-project` | `individual-cloud/` | prowler, kubescape, scoutsuite | `--aws-account 123456789012` |
-| *(not implemented)* **Mobile Apps** | `--mobile-src`, `--apk`, `--ipa` | `individual-mobile/` | mobsf | `--apk app-release.apk` |
-| *(not implemented)* **Host Audits** | `--host-audit` | `individual-hosts/` | lynis | `--host-audit` |
+| *(not implemented)* **npm Packages** | `--npm-package`, `--npm-packages-file` | `individual-npm-packages/` | npm-audit, snyk | `--npm-package lodash` |
+| *(not implemented)* **GraphQL APIs** | `--graphql-api`, `--graphql-apis-file`, `--graphql-token` | `individual-graphql-apis/` | graphql-cop | `--graphql-api https://api.example.com/graphql` |
 
 ## Architecture Overview
 
@@ -81,7 +80,7 @@ jmo scan --repo ./app --image nginx --url https://api.com
 ### Scan Types
 
 Each target type maps to specific security scanning categories. The scan orchestrator
-selects tools based on target type and profile. See [scripts/cli/jmo.py](../../../scripts/cli/jmo.py)
+selects tools based on target type and the target's content. See [scripts/cli/jmo.py](../../../scripts/cli/jmo.py)
 for the `cmd_scan()` function that coordinates all target types.
 
 ### Results Directory Structure
@@ -243,8 +242,8 @@ ci_parser.add_argument("--<type>s-file", type=str, help="Batch file")
 
 | Pattern | Example | Description |
 |---------|---------|-------------|
-| `--<type>` | `--aws-account` | Single target identifier |
-| `--<type>s-file` | `--aws-accounts-file` | Batch file with multiple targets |
+| `--<type>` | `--image` | Single target identifier |
+| `--<type>s-file` | `--images-file` | Batch file with multiple targets |
 | `--<type>-token` | `--gitlab-token` | Authentication token |
 | `--<type>-url` | `--gitlab-url` | Base URL for API |
 | `--<type>-context` | `--k8s-context` | Context/environment selector |
@@ -289,7 +288,7 @@ domains, CI/CD speed, JSON output), and configuration examples.
 
 **[references/authentication-patterns.md](references/authentication-patterns.md)** --
 Three authentication patterns: environment variables (recommended), CLI arguments,
-and credential files. Includes examples for AWS, GitLab, and npm.
+and credential files. Includes examples for GitLab and npm (Snyk).
 
 **[references/common-pitfalls.md](references/common-pitfalls.md)** --
 Six common mistakes: unsafe directory names, missing CI args, forgetting
@@ -297,9 +296,8 @@ normalize_and_report.py, thread-unsafe operations, hardcoded credentials,
 unsanitized batch input.
 
 **[examples/real-world-examples.md](examples/real-world-examples.md)** --
-Five complete end-to-end implementations: AWS account scanning (Prowler),
-npm package scanning (npm audit + Snyk), GraphQL API scanning (GraphQL Cop),
-mobile app scanning (MobSF), and host audit scanning (Lynis).
+Two complete end-to-end implementations: npm package scanning (npm audit +
+Snyk) and GraphQL API scanning (GraphQL Cop).
 
 **[references/memory-integration.md](references/memory-integration.md)** --
 Memory caching for learned patterns, tool compatibility, and API structures.
@@ -327,7 +325,7 @@ When adding a new target type, verify all items:
 
 ### Configuration
 
-- [ ] Tools added to appropriate profiles (fast/balanced/deep)
+- [ ] Tools added to `TOOL_MATRIX` in `scripts/core/tool_registry.py` (if they should run by default)
 - [ ] Timeout and flags configured for new tools
 - [ ] Authentication pattern implemented (env vars/CLI/files)
 

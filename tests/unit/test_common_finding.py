@@ -771,7 +771,6 @@ class TestConstants:
         assert "zap" in TOOL_SEVERITY_MAPPINGS
         assert "semgrep" in TOOL_SEVERITY_MAPPINGS
         assert "nuclei" in TOOL_SEVERITY_MAPPINGS
-        assert "falco" in TOOL_SEVERITY_MAPPINGS
 
     def test_tool_severity_mappings_values_are_valid(self):
         """Test all mapped severity values are valid CommonFinding severities."""
@@ -863,41 +862,6 @@ class TestMapToolSeverity:
     def test_nuclei_unknown(self):
         """Test Nuclei unknown maps to INFO."""
         assert map_tool_severity("nuclei", "unknown") == "INFO"
-
-    # ------------------------------------
-    # Falco priority mapping tests
-    # ------------------------------------
-    def test_falco_emergency(self):
-        """Test Falco emergency maps to CRITICAL."""
-        assert map_tool_severity("falco", "emergency") == "CRITICAL"
-
-    def test_falco_alert(self):
-        """Test Falco alert maps to CRITICAL."""
-        assert map_tool_severity("falco", "alert") == "CRITICAL"
-
-    def test_falco_critical(self):
-        """Test Falco critical maps to CRITICAL."""
-        assert map_tool_severity("falco", "critical") == "CRITICAL"
-
-    def test_falco_error(self):
-        """Test Falco error maps to HIGH."""
-        assert map_tool_severity("falco", "error") == "HIGH"
-
-    def test_falco_warning(self):
-        """Test Falco warning maps to MEDIUM."""
-        assert map_tool_severity("falco", "warning") == "MEDIUM"
-
-    def test_falco_notice(self):
-        """Test Falco notice maps to LOW."""
-        assert map_tool_severity("falco", "notice") == "LOW"
-
-    def test_falco_informational(self):
-        """Test Falco informational maps to INFO."""
-        assert map_tool_severity("falco", "informational") == "INFO"
-
-    def test_falco_debug(self):
-        """Test Falco debug maps to INFO."""
-        assert map_tool_severity("falco", "debug") == "INFO"
 
     # ------------------------------------
     # ShellCheck tests

@@ -218,8 +218,8 @@ Manage test performance to keep CI fast and developer-friendly.
 | Unit test (adapter) | <0.1s per test | 0.5s | Pure Python, no I/O |
 | Integration test (subprocess) | 5-10s per test | 30s | Tool invocation overhead |
 | Multi-target test | 10-20s per test | 60s | Parallel tool execution |
-| Docker variant test | 20-40s per test | 120s | Docker build/pull time |
-| Performance profiling test | 30-60s per test | 180s | Multiple profile runs |
+| Docker image test | 20-40s per test | 120s | Docker build/pull time |
+| Performance profiling test | 30-60s per test | 180s | Multiple timed runs |
 
 ### Timeout Configuration
 
@@ -247,8 +247,8 @@ def test_scan_integration(tmp_path):
 # Slow tests (marked explicitly)
 @pytest.mark.slow
 @pytest.mark.timeout(180)  # 3-minute timeout
-def test_deep_profile(tmp_path):
-    result = subprocess.run(["jmo", "scan", "--profile-name", "deep", ...], timeout=150)
+def test_full_matrix_scan(tmp_path):
+    result = subprocess.run(["jmo", "scan", "--repo", str(tmp_path), ...], timeout=150)
     assert result.returncode in [0, 1]
 ```
 

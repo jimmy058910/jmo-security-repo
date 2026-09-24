@@ -35,7 +35,6 @@ from scripts.core.config import load_config
 from scripts.core.exceptions import (
     ConfigurationException,
 )
-from scripts.core.tool_registry import PROFILE_TOOLS
 from scripts.core.unicode_utils import (
     harden_console_streams,
     safe_write,
@@ -58,79 +57,33 @@ def _merge_dict(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def _merge_per_tool(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
-    """Merge per-tool overrides one level deeper than ``dict.update()``.
-
-    USER_GUIDE.md:1652 promises root and per-profile ``per_tool`` blocks are
-    "merged", with profile values winning. A flat update replaces a tool's whole
-    entry, so a profile that set only ``semgrep.timeout`` silently discarded a
-    root-level ``semgrep.flags`` (#791). Merge per tool, then per key.
-    """
-    out: dict[str, Any] = {
+def _copy_per_tool(per_tool: dict[str, Any]) -> dict[str, Any]:
+    """Copy ``per_tool`` one level deep, so a caller mutating one tool's entry
+    cannot reach back into the loaded config."""
+    return {
         tool: dict(opts) if isinstance(opts, dict) else opts
-        for tool, opts in (a or {}).items()
+        for tool, opts in (per_tool or {}).items()
     }
-    for tool, opts in (b or {}).items():
-        existing = out.get(tool)
-        if isinstance(existing, dict) and isinstance(opts, dict):
-            existing.update(opts)
-        else:
-            out[tool] = dict(opts) if isinstance(opts, dict) else opts
-    return out
 
 
 def _effective_scan_settings(args) -> dict[str, Any]:
-    """Compute effective scan settings from CLI, config, and optional profile.
+    """Compute effective scan settings from the CLI and the config.
 
     Returns dict with keys: tools, threads, timeout, include, exclude, retries, per_tool, skip_tools
 
-    Note: `PROFILE_TOOLS` in tool_registry.py is the single source of truth for
-    the **built-in** profiles. A `jmo.yml` profile that declares its own
-    `tools:` overrides it for that profile -- `profiles:` is a documented
-    user-facing key, and ignoring half of it silently is what #975 was.
-
-    This note used to say jmo.yml profiles configure "threads, timeout,
-    per_tool settings - not tool lists", which described the defect rather than
-    the intent.
+    Two layers, CLI over `jmo.yml`. There are no profiles (v2.0.0): the tool
+    list is `--tools`, else `jmo.yml` `tools:`, else `Config.tools`, which
+    defaults to `tool_registry.TOOL_MATRIX`.
     """
     cfg = load_config(getattr(args, "config", None))
-    profile_name = getattr(args, "profile_name", None) or cfg.default_profile
-    profile = {}
-    if profile_name and isinstance(cfg.profiles, dict):
-        profile = cfg.profiles.get(profile_name, {}) or {}
 
-    # Tool list priority:
-    #   CLI --tools > the profile's own tools: > PROFILE_TOOLS registry > cfg.tools
-    #
-    # The profile's own list used to be skipped entirely (#975). `profiles:` is
-    # a documented, user-facing key -- CLAUDE.md's config table calls it "custom
-    # profile definitions with tool lists" -- and a user who wrote
-    # `profiles: {fast: {tools: [trufflehog]}}` got the full built-in `fast`
-    # profile instead: measured, one configured tool resolving to nine, semgrep
-    # among them and fetching its ruleset over the network.
-    #
-    # Silently ignoring configuration is worse than rejecting it: there is no
-    # signal to debug against, and the only reason this was ever noticed was
-    # semgrep processes appearing in a run that could not have invoked it.
-    tools = getattr(args, "tools", None)
-    if not tools:
-        configured_tools = profile.get("tools")
-        if isinstance(configured_tools, list) and configured_tools:
-            tools = [str(t) for t in configured_tools]
-        elif profile_name and profile_name in PROFILE_TOOLS:
-            tools = PROFILE_TOOLS[profile_name]
-        else:
-            tools = cfg.tools  # Fallback to top-level config tools
-    threads = getattr(args, "threads", None) or profile.get("threads") or cfg.threads
-    timeout = (
-        getattr(args, "timeout", None) or profile.get("timeout") or cfg.timeout or 600
-    )
-    include = profile.get("include", cfg.include) or cfg.include
-    exclude = profile.get("exclude", cfg.exclude) or cfg.exclude
+    tools = getattr(args, "tools", None) or list(cfg.tools)
+    threads = getattr(args, "threads", None) or cfg.threads
+    timeout = getattr(args, "timeout", None) or cfg.timeout or 600
+    include = cfg.include
+    exclude = cfg.exclude
     retries = cfg.retries  # May be int or RetryConfig
-    if isinstance(profile.get("retries"), (int, dict)):
-        retries = profile["retries"]
-    per_tool = _merge_per_tool(cfg.per_tool, profile.get("per_tool", {}))
+    per_tool = _copy_per_tool(cfg.per_tool)
 
     # Handle --skip-tools flag to exclude specific tools
     skip_tools = getattr(args, "skip_tools", None) or []
@@ -138,10 +91,10 @@ def _effective_scan_settings(args) -> dict[str, Any]:
         dropped = [t for t in tools if t in skip_tools]
         tools = [t for t in tools if t not in skip_tools]
         if dropped:
-            # Say which tools were dropped. Filtering silently is how `nuclei`
-            # and `lynis` came to appear in no stream and no artifact at all -
-            # a tool declared by the profile and then absent everywhere reads
-            # as "it ran and found nothing" to anyone reading the results.
+            # Say which tools were dropped. Filtering silently is how tools
+            # came to appear in no stream and no artifact at all - a tool
+            # requested and then absent everywhere reads as "it ran and found
+            # nothing" to anyone reading the results.
             # Verified with the accounting reconciler: skipping a tool without
             # this line produces `NEVER MENTIONED` and a FAIL verdict.
             #
@@ -252,7 +205,7 @@ def _add_scan_config_args(parser: argparse.ArgumentParser) -> None:
         "--skip-tools",
         nargs="*",
         default=[],
-        help="Tools to skip (e.g., --skip-tools dependency-check cdxgen)",
+        help="Tools to skip (e.g., --skip-tools zap nuclei)",
     )
     parser.add_argument(
         "--timeout",
@@ -270,11 +223,6 @@ def _add_scan_config_args(parser: argparse.ArgumentParser) -> None:
         "--allow-missing-tools",
         action="store_true",
         help="If a tool is missing, create empty JSON instead of failing",
-    )
-    parser.add_argument(
-        "--profile-name",
-        default=None,
-        help="Optional profile name from config.profiles to apply for scanning",
     )
     parser.add_argument(
         "--no-store-history",
@@ -385,7 +333,7 @@ def _add_report_args(subparsers: argparse._SubParsersAction) -> Any:
     rp.add_argument(
         "--profile",
         action="store_true",
-        help="Write timings.json: per-adapter PARSE timing for the report phase (tool run times live in scan-timings.json, written by scan). For profile SELECTION use --profile-name on scan/ci",
+        help="Write timings.json: per-adapter PARSE timing for the report phase (tool run times live in scan-timings.json, written by scan). ",
     )
     rp.add_argument(
         "--threads",
@@ -425,7 +373,7 @@ def _add_ci_args(subparsers: argparse._SubParsersAction) -> Any:
     cp.add_argument(
         "--profile",
         action="store_true",
-        help="Write timings.json: per-adapter PARSE timing for the report phase (tool run times live in scan-timings.json, written by scan). For profile SELECTION use --profile-name",
+        help="Write timings.json: per-adapter PARSE timing for the report phase (tool run times live in scan-timings.json, written by scan). ",
     )
     cp.add_argument(
         "--policy",
@@ -445,52 +393,6 @@ def _add_ci_args(subparsers: argparse._SubParsersAction) -> Any:
     )
     _add_logging_args(cp)
     return cp
-
-
-def _add_profile_args(
-    subparsers: argparse._SubParsersAction, profile_name: str, description: str
-) -> Any:
-    """Add profile-based scan command (fast/balanced/full).
-
-    Built from the same helpers `jmo ci` uses, because `cmd_profile` routes
-    through `cmd_ci` by copying this namespace. A hand-written subset drifted
-    from what the destination reads: the profile parser defined 12 dests to
-    `ci`'s 42, and `store_history` was one of the 30 missing. The report phase
-    gates storage on `getattr(args, "store_history", False)`, so an absent
-    attribute meant OFF while the parser that defines it defaults it ON --
-    `jmo fast` silently stored nothing, and had no flag to turn it on either
-    (#870).
-
-    Sharing the helpers is what makes that unrepeatable for the next flag,
-    rather than fixing this one. The three arguments below are genuinely
-    profile-only: `jmo ci` has no `--no-open` or `--strict`, and `--fail-on`
-    it declares itself.
-    """
-    profile_parser = subparsers.add_parser(profile_name, help=description)
-
-    target_group = profile_parser.add_mutually_exclusive_group(required=False)
-    _add_target_args(profile_parser, target_group=target_group)
-    _add_scan_config_args(profile_parser)
-    _add_logging_args(profile_parser)
-
-    profile_parser.add_argument(
-        "--fail-on",
-        default=None,
-        help="Optional severity threshold to fail the run (CRITICAL/HIGH/MEDIUM/LOW/INFO)",
-    )
-    profile_parser.add_argument(
-        "--no-open", action="store_true", help="Do not open results after run"
-    )
-    profile_parser.add_argument(
-        "--strict",
-        action="store_true",
-        help=(
-            "Fail if tools are missing (disable stubs). Overrides "
-            "--allow-missing-tools, which the shortcuts default to ON"
-        ),
-    )
-
-    return profile_parser
 
 
 def _add_wizard_args(subparsers: argparse._SubParsersAction) -> Any:
@@ -531,18 +433,6 @@ def _add_wizard_args(subparsers: argparse._SubParsersAction) -> Any:
         "preset options",
         "Preset wizard choices for automation (use with --yes for fully non-interactive)",
     )
-    # Derived from the registry, not typed: this literal said slim=14 and
-    # balanced=18 while `jmo --help` said 13 and 17 -- one binary disagreeing
-    # with itself (#1003).
-    profile_sizes = ", ".join(
-        f"{name}={len(PROFILE_TOOLS[name])}"
-        for name in ("fast", "slim", "balanced", "deep")
-    )
-    preset_group.add_argument(
-        "--profile",
-        choices=["fast", "slim", "balanced", "deep"],
-        help=f"Scan profile, tools per profile: {profile_sizes}",
-    )
     preset_group.add_argument(
         "--target-type",
         choices=["repo", "image", "iac", "url"],
@@ -580,7 +470,7 @@ def _add_wizard_args(subparsers: argparse._SubParsersAction) -> Any:
     install_group.add_argument(
         "--install-deps",
         action="store_true",
-        help="Automatically install missing dependencies (Java, Node.js)",
+        help="Automatically install missing dependencies (Java)",
     )
 
     # Advanced configuration
@@ -726,8 +616,8 @@ Two tiers:
   full       Real tools, real scans, Docker builds
 
 Examples:
-  jmo validate                     # Quick validation (259 checks)
-  jmo validate --tier full         # Full validation (290 checks)
+  jmo validate                     # Quick validation (244 checks)
+  jmo validate --tier full         # Full validation (272 checks)
   jmo validate --category cli      # CLI checks only
   jmo validate -v                  # Verbose per-check details
   jmo validate --json              # Machine-readable output
@@ -771,16 +661,15 @@ Commands:
   check      Verify tool installation status
   install    Install missing tools
   update     Update outdated tools
-  list       List available tools and profiles
+  list       List available tools
   outdated   Show outdated tools
 
 Examples:
-  jmo tools check                     # Check all tool status
-  jmo tools check --profile balanced  # Check profile tools
+  jmo tools check                     # Check every scanner and the policy engine
+  jmo tools check trivy semgrep       # Check specific tools
   jmo tools install                   # Install missing (interactive)
   jmo tools install --yes             # Install without prompts
   jmo tools update --critical-only    # Update critical tools
-  jmo tools list --profiles           # Show available profiles
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -792,11 +681,6 @@ Examples:
         "check", help="Check tool installation status"
     )
     check_parser.add_argument("tools", nargs="*", help="Specific tools to check")
-    check_parser.add_argument(
-        "--profile",
-        choices=["fast", "slim", "balanced", "deep"],
-        help="Check tools for specific profile",
-    )
     check_parser.add_argument("--json", action="store_true", help="Output as JSON")
 
     # INSTALL
@@ -804,12 +688,6 @@ Examples:
         "install", help="Install missing tools"
     )
     install_parser.add_argument("tools", nargs="*", help="Specific tools to install")
-    install_parser.add_argument(
-        "--profile",
-        choices=["fast", "slim", "balanced", "deep"],
-        default="balanced",
-        help="Install tools for profile (default: balanced)",
-    )
     install_parser.add_argument(
         "--yes", "-y", action="store_true", help="Non-interactive mode"
     )
@@ -851,14 +729,6 @@ Examples:
 
     # LIST
     list_parser = tools_subparsers.add_parser("list", help="List available tools")
-    list_parser.add_argument(
-        "--profile",
-        choices=["fast", "slim", "balanced", "deep"],
-        help="List tools in profile",
-    )
-    list_parser.add_argument(
-        "--profiles", action="store_true", help="List available profiles"
-    )
     list_parser.add_argument("--json", action="store_true", help="Output as JSON")
 
     # OUTDATED
@@ -884,10 +754,8 @@ Options:
 What gets removed with --all:
   - ~/.jmo/ directory (config, cache, history, bins)
   - jmo-security pip package (if installed)
-  - pip-installed tools (semgrep, checkov, bandit, etc.)
-  - npm-installed tools (retire.js, etc.)
+  - pip-installed tools (semgrep, checkov, etc.)
   - Binary tools in ~/.jmo/bin/
-  - ~/.kubescape/ directory
 
 Examples:
   jmo tools uninstall              # Remove JMo only
@@ -924,7 +792,7 @@ Shows detailed information about:
 
 Examples:
   jmo tools debug shellcheck        # Debug one tool
-  jmo tools debug zap dependency-check  # Debug multiple tools
+  jmo tools debug zap nuclei        # Debug multiple tools
   jmo tools debug --all             # Debug all tools
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -933,7 +801,7 @@ Examples:
         "tools", nargs="*", help="Tools to debug version detection"
     )
     debug_parser.add_argument(
-        "--all", "-a", action="store_true", help="Debug all tools in balanced profile"
+        "--all", "-a", action="store_true", help="Debug every scanner in the matrix"
     )
 
     # CLEAN - Phase 5: Clean isolated virtual environments
@@ -943,8 +811,9 @@ Examples:
         description="""
 Clean isolated virtual environments used for tools with pip conflicts.
 
-Some tools (prowler, scancode) have conflicting dependencies (e.g., pydantic
-version conflicts) and are installed in isolated venvs at ~/.jmo/tools/venvs/.
+Some Python tools (semgrep, checkov) pin dependencies that must not reach
+JMo's own environment, so they are installed in isolated venvs at
+~/.jmo/tools/venvs/.
 
 Use this command to:
   - Reclaim disk space
@@ -956,7 +825,7 @@ Examples:
   jmo tools clean --force   # Actually remove the isolated venvs
 
 After cleaning, reinstall tools with:
-  jmo tools install prowler scancode
+  jmo tools install semgrep checkov
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -1016,12 +885,6 @@ def _add_schedule_args(
     create_parser.add_argument(
         "--cron", required=True, help="Cron expression (e.g., '0 2 * * *')"
     )
-    create_parser.add_argument(
-        "--profile",
-        required=True,
-        choices=list(PROFILE_TOOLS),
-        help="Scan profile",
-    )
     create_parser.add_argument("--repos-dir", help="Repository directory to scan")
     create_parser.add_argument(
         "--image",
@@ -1071,9 +934,6 @@ def _add_schedule_args(
     update_parser = schedule_subparsers.add_parser("update", help="Update schedule")
     update_parser.add_argument("name", help="Schedule name")
     update_parser.add_argument("--cron", help="New cron expression")
-    update_parser.add_argument(
-        "--profile", choices=list(PROFILE_TOOLS), help="New scan profile"
-    )
     # Mutually exclusive: the handler resolved `--suspend --resume` with an
     # if/elif, so suspend won and resume was discarded without a word. argparse
     # can say so properly, and does it before anything is written.
@@ -1196,7 +1056,7 @@ Database Location: .jmo/history.db (default)
 
 Usage Examples:
     # Manually store a completed scan
-    jmo history store --results-dir ./results --profile balanced
+    jmo history store --results-dir ./results
 
     # List recent scans
     jmo history list --limit 10
@@ -1263,20 +1123,6 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
         help="Path to results directory (must contain summaries/findings.json)",
     )
     store_parser.add_argument(
-        "--profile",
-        default="balanced",
-        # Deliberately no `choices=`. It was `list(PROFILE_TOOLS)`, which is the
-        # registry only -- but `store_scan()` validates against
-        # `get_known_profiles()`, the registry PLUS any profile defined under
-        # `profiles:` in jmo.yml. argparse was therefore the narrower gate, and
-        # a user-defined profile could never reach the validator that accepts
-        # it. That is the #721 enumeration class one layer above the SQL CHECK
-        # #725 removed; `get_known_profiles()`'s own docstring says not to
-        # hardcode the list. Invalid names are rejected by store_scan() with a
-        # message naming every known profile.
-        help="Scan profile that was used (default: balanced)",
-    )
-    store_parser.add_argument(
         "--commit", help="Git commit hash (optional, auto-detected if not provided)"
     )
     store_parser.add_argument(
@@ -1291,11 +1137,6 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     list_parser = history_subparsers.add_parser("list", help="List all scans")
     _add_logging_args(list_parser)
     list_parser.add_argument("--branch", help="Filter by branch name")
-    list_parser.add_argument(
-        "--profile",
-        choices=list(PROFILE_TOOLS),
-        help="Filter by profile",
-    )
     list_parser.add_argument(
         "--since", help="Filter by time delta (e.g., 7d, 30d, 90d)"
     )
@@ -1890,7 +1731,7 @@ Generate cryptographic attestation for findings using SLSA provenance v1.0.
 
 The attestation proves:
 - What was scanned (subject with multi-hash digests)
-- How it was scanned (tools, profile, parameters)
+- How it was scanned (tools, parameters)
 - When it was scanned (timestamps)
 - Where it was scanned (builder ID, CI context)
 
@@ -2109,14 +1950,11 @@ def build_parser() -> argparse.ArgumentParser:
     """
     ap = argparse.ArgumentParser(
         prog="jmo",
-        description="JMo Security Audit Suite - Unified security scanning with 29 tools",
+        description="JMo Security Audit Suite - Unified security scanning",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 BEGINNER-FRIENDLY COMMANDS:
   wizard              Interactive wizard for guided security scanning
-  fast                Quick scan with 9 best-in-class tools (5-10 min)
-  balanced            Balanced scan with 17 production-ready tools (18-25 min)
-  full                Comprehensive scan with all 29 tools (40-70 min)
   setup               Verify and install security tools
 
 ADVANCED COMMANDS:
@@ -2130,8 +1968,8 @@ ADVANCED COMMANDS:
 
 QUICK START:
   jmo wizard                         # Interactive guided scanning
-  jmo fast --repo ./myapp            # Fast scan of single repository
-  jmo balanced --repos-dir ~/repos   # Scan all repositories in directory
+  jmo ci --repo ./myapp              # Scan + report one repository
+  jmo ci --repos-dir ~/repos         # Scan all repositories in directory
   jmo scan --help                    # Show advanced options
 
 Documentation: https://docs.jmotools.com
@@ -2146,11 +1984,6 @@ Documentation: https://docs.jmotools.com
 
     # Beginner-friendly commands
     _add_wizard_args(sub)
-    _add_profile_args(sub, "fast", "Quick scan with 9 best-in-class tools (5-10 min)")
-    _add_profile_args(
-        sub, "balanced", "Balanced scan with 17 production-ready tools (18-25 min)"
-    )
-    _add_profile_args(sub, "full", "Comprehensive scan with all 29 tools (40-70 min)")
     _add_setup_args(sub)
 
     # Advanced commands
@@ -2673,17 +2506,16 @@ def _get_max_workers(args, eff: dict, cfg) -> int | None:
     """Determine max_workers from CLI args, effective settings, env var, or config.
 
     Priority order:
-    1. --threads CLI flag
+    1. --threads CLI flag, else the config file's threads (both via `eff`)
     2. JMO_THREADS environment variable
-    3. Profile threads setting
-    4. Config file threads
+    3. Config file threads
     5. Auto-detect (75% of CPU cores, min 2, max 16)
 
     Returns:
         int: Number of worker threads, or None to let ThreadPoolExecutor decide
 
     """
-    # Check effective settings (from CLI or profile)
+    # Check effective settings (from CLI or config)
     threads_val = eff.get("threads")
     if threads_val is not None:
         # Support 'auto' keyword
@@ -2738,10 +2570,6 @@ class ProgressTracker:
     - Background refresh thread for smooth animation
     """
 
-    # Suffixes for multi-phase tools (e.g., noseyparker-init, noseyparker-scan)
-    # These phases should be counted as a single logical tool
-    _PHASE_SUFFIXES = ("-init", "-scan", "-report")
-
     # Braille spinner frames for smooth animation
     _SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
@@ -2771,7 +2599,7 @@ class ProgressTracker:
         self.total_tools = total_tools
         self.tools_completed = 0
         self.tools_in_progress: set[str] = set()
-        # Track completed logical tools (base names, not phases)
+        # Tools already counted as completed, so a tool reporting twice counts once
         self._completed_base_tools: set[str] = set()
         # Elapsed time tracking for running tools
         self._tool_start_times: dict[str, float] = {}
@@ -2780,27 +2608,6 @@ class ProgressTracker:
         # Background refresh thread control
         self._stop_refresh = False
         self._refresh_thread: threading.Thread | None = None
-
-    def _get_base_tool_name(self, tool_name: str) -> str:
-        """Extract base tool name from a potentially phased tool name.
-
-        Multi-phase tools like noseyparker run as:
-        - noseyparker-init
-        - noseyparker-scan
-        - noseyparker-report
-
-        All should be counted as one logical tool "noseyparker".
-
-        Args:
-            tool_name: The tool name (may include phase suffix)
-
-        Returns:
-            Base tool name without phase suffix
-        """
-        for suffix in self._PHASE_SUFFIXES:
-            if tool_name.endswith(suffix):
-                return tool_name[: -len(suffix)]
-        return tool_name
 
     def start(self):
         """Start progress tracking timer and background refresh thread."""
@@ -2875,7 +2682,6 @@ class ProgressTracker:
             self.tools_in_progress,
             key=lambda t: self._tool_start_times.get(t, time.time()),
         )
-        base_name = self._get_base_tool_name(oldest_tool)
         elapsed = time.time() - self._tool_start_times.get(oldest_tool, time.time())
         elapsed_str = self._format_elapsed(elapsed)
 
@@ -2885,7 +2691,7 @@ class ProgressTracker:
         percentage = int((self.tools_completed / self.total_tools) * 100)
         progress_line = (
             f"\r[{self.tools_completed}/{self.total_tools}] "
-            f"{spinner} {base_name} ({elapsed_str}) [{percentage}%]"
+            f"{spinner} {oldest_tool} ({elapsed_str}) [{percentage}%]"
         )
         self._write_progress_line(progress_line)
 
@@ -3055,12 +2861,8 @@ class ProgressTracker:
     ) -> None:
         """Update progress when a tool starts or completes.
 
-        Multi-phase tools (e.g., noseyparker-init, noseyparker-scan, noseyparker-report)
-        are counted as a single logical tool for progress display. This ensures the
-        progress shows "12/12 tools" not "15/12 tools" when phases are involved.
-
         Args:
-            tool_name: Name of the tool (may include phase suffix)
+            tool_name: Name of the tool
             status: "start"/"success"/"no_output"/"error"/"retrying"/"timeout"
             findings_count: Number of findings (unused for now)
             message: Optional message (e.g., timeout reason)
@@ -3068,29 +2870,26 @@ class ProgressTracker:
             max_attempts: Maximum attempts configured
             **kwargs: Forward compatibility for future parameters
         """
-        # Get the base tool name (strip phase suffixes like -init, -scan, -report)
-        base_tool_name = self._get_base_tool_name(tool_name)
-
         with self._lock:
             # Handle intermediate statuses (retrying/timeout)
             if status == "retrying":
                 self.log(
                     "WARN",
-                    f"{base_tool_name}: Retry {attempt}/{max_attempts} - {message}",
+                    f"{tool_name}: Retry {attempt}/{max_attempts} - {message}",
                 )
                 return  # Don't update completion count
 
             if status == "timeout":
                 self.log(
                     "ERROR",
-                    f"{base_tool_name}: Timed out after {max_attempts} attempts",
+                    f"{tool_name}: Timed out after {max_attempts} attempts",
                 )
                 # Fall through to mark as failed
 
             if status == "no_output":
                 self.log(
                     "ERROR",
-                    f"{base_tool_name}: exited with an accepted code but wrote no "
+                    f"{tool_name}: exited with an accepted code but wrote no "
                     f"output file - its findings are MISSING from this scan",
                 )
                 # Fall through to mark as failed
@@ -3110,7 +2909,7 @@ class ProgressTracker:
                     self._spinner_idx += 1
                     progress_line = (
                         f"\r[{self.tools_completed}/{self.total_tools}] "
-                        f"{spinner} {base_tool_name} (0s) [{percentage}%]"
+                        f"{spinner} {tool_name} (0s) [{percentage}%]"
                     )
                     self._write_progress_line(progress_line)
             else:
@@ -3119,10 +2918,9 @@ class ProgressTracker:
                 # Clean up start time
                 self._tool_start_times.pop(tool_name, None)
 
-                # Only count this as a completed tool if the base tool hasn't been
-                # counted yet. This handles multi-phase tools correctly.
-                if base_tool_name not in self._completed_base_tools:
-                    self._completed_base_tools.add(base_tool_name)
+                # Only count this as a completed tool if it hasn't been counted yet.
+                if tool_name not in self._completed_base_tools:
+                    self._completed_base_tools.add(tool_name)
                     self.tools_completed += 1
 
                 if self.total_tools > 0:
@@ -3134,7 +2932,7 @@ class ProgressTracker:
                     # Display the base tool name for consistency
                     progress_line = (
                         f"\r[{self.tools_completed}/{self.total_tools}] "
-                        f"{status_icon} {base_tool_name} [{percentage}%]"
+                        f"{status_icon} {tool_name} [{percentage}%]"
                     )
                     # Pad to clear leftover characters
                     self._write_progress_line(progress_line)
@@ -3174,7 +2972,7 @@ def cmd_scan(args) -> int:
     # than `monotonic` because monotonic is the coarser of the two on Windows.
     scan_started = time.perf_counter()
 
-    # Load effective settings with profile/per-tool overrides
+    # Load effective settings (CLI over jmo.yml, per-tool overrides included)
     eff = _effective_scan_settings(args)
     cfg = load_config(args.config)
     tools = eff["tools"]
@@ -3295,9 +3093,6 @@ def cmd_scan(args) -> int:
     # Log scan targets summary
     _log(args, "INFO", f"Scan targets: {targets.summary()}")
 
-    profile_name = (
-        getattr(args, "profile_name", None) or cfg.default_profile or "custom"
-    )
     total_targets = (
         len(targets.repos)
         + len(targets.images)
@@ -3382,7 +3177,6 @@ def cmd_scan(args) -> int:
 
         scan_session = ScanSession(
             session_id=str(uuid.uuid4()),
-            profile=profile_name or "custom",
             config_hash=config_hash,
             started_at=time.time(),
             pid=os.getpid(),
@@ -3440,8 +3234,8 @@ def cmd_scan(args) -> int:
     # `will run` + `skipped` == `requested`. It previously reported
     # `platform_applicable`, producing lines like "22/23 tools ... (6 skipped)"
     # on deep - where 22 + 6 = 28, not 23 - which no reader could reconcile.
-    # Using the profile's declared count instead would be equally wrong whenever
-    # `--tools` narrows the run.
+    # Using the matrix's size instead would be equally wrong whenever `--tools`
+    # narrows the run.
     skipped_count = len(missing_tools) if missing_tools else 0
     requested_total = total_tools + skipped_count
     if skipped_count > 0:
@@ -3544,8 +3338,8 @@ def cmd_scan(args) -> int:
     # authenticate to and a k8s target that died in argument parsing (#809).
     #
     # Deliberately scoped to targets where *nothing* ran, not to any tool
-    # failure: individual tool failures are already reported per tool, and a
-    # deep profile legitimately has tools that do not apply everywhere. The line
+    # failure: individual tool failures are already reported per tool, and the
+    # matrix legitimately has tools that do not apply everywhere. The line
     # this draws is "did this target produce anything at all".
     failed_targets = [
         str(name)
@@ -3630,10 +3424,9 @@ def cmd_scan(args) -> int:
     # Clean exit: delete session file (no crash recovery needed)
     delete_session(session_path)
 
-    # Write scan metadata for report phase (Bug #3 fix: preserve profile name)
+    # Write scan metadata for the report phase
     scan_metadata_path = results_dir / ".scan_metadata.json"
     scan_metadata = {
-        "profile": profile_name,
         "tools": tools,
         "timestamp": datetime.now(UTC).isoformat(),
         "target_count": total_targets,
@@ -3815,7 +3608,6 @@ def cmd_wizard(args):
         skip_policies=getattr(args, "skip_policies", False),
         db_path=getattr(args, "db", None),
         # Preset options for automation
-        profile=getattr(args, "profile", None),
         target_type=getattr(args, "target_type", None),
         target=getattr(args, "target", None),
         use_docker=use_docker,
@@ -3840,7 +3632,6 @@ def cmd_setup(args):
     if args.print_commands:
         # Create args for tools install --dry-run --print-script
         tools_args = argparse.Namespace(
-            profile="balanced",
             tools=[],
             dry_run=False,
             print_script=True,
@@ -3853,7 +3644,6 @@ def cmd_setup(args):
     # --auto-install: Install missing tools
     if args.auto_install:
         tools_args = argparse.Namespace(
-            profile="balanced",
             tools=[],
             dry_run=False,
             print_script=False,
@@ -3869,7 +3659,6 @@ def cmd_setup(args):
 
     # Default: Check tool status
     tools_args = argparse.Namespace(
-        profile="balanced",
         tools=[],
         json=False,
     )
@@ -3881,53 +3670,6 @@ def cmd_setup(args):
         return 1
 
     return rc
-
-
-def cmd_profile(args, profile_name: str):
-    """Run scan with specific profile (fast/balanced/full)."""
-    # Map profile names
-    profile_map = {
-        "fast": "fast",
-        "balanced": "balanced",
-        "full": "deep",
-    }
-
-    actual_profile = profile_map.get(profile_name, "balanced")
-
-    # Since #870 these parsers carry the full `jmo ci` flag surface, so two
-    # dests now exist that this function also sets. Neither may be overridden
-    # in silence -- that is the class this campaign keeps finding.
-    requested_profile = getattr(args, "profile_name", None)
-    if requested_profile and requested_profile != actual_profile:
-        sys.stderr.write(
-            f"Error: `jmo {profile_name}` IS the {actual_profile} profile; "
-            f"--profile-name {requested_profile} contradicts it.\n"
-            f"Use `jmo ci --profile-name {requested_profile}` instead.\n"
-        )
-        return 2
-
-    # Create a modified args object for cmd_ci
-    # Copy all attributes from args
-    ci_args = argparse.Namespace(**vars(args))
-
-    # Set profile-specific attributes
-    ci_args.cmd = "ci"  # Route through CI command for scan + report
-    ci_args.profile_name = actual_profile
-    # `--strict` is the shortcuts' control. They allow missing tools by
-    # default -- the opposite of `jmo ci`, preserved deliberately rather than
-    # quietly aligned, because that is a UX decision and not this issue's. So
-    # `--allow-missing-tools` now exists here but asks for what already holds;
-    # `--strict` is the only one of the pair that changes anything.
-    ci_args.allow_missing_tools = not args.strict
-
-    # Run CI command (scan + report + threshold check)
-    exit_code = cmd_ci(ci_args)
-
-    # Open results if not disabled
-    if not args.no_open and exit_code == 0:
-        _open_results(args)
-
-    return exit_code
 
 
 def _check_mcp_dependencies() -> tuple[bool, str | None]:
@@ -4108,52 +3850,6 @@ def cmd_mcp_server(args):
         return 1
 
 
-def _open_results(args):
-    """Open scan results in browser/editor."""
-    import subprocess  # nosec B404
-
-    from scripts.core.tool_utils import find_tool
-
-    results_dir = Path(args.results_dir) / "summaries"
-    if not results_dir.exists():
-        return
-
-    html = results_dir / "dashboard.html"
-    md = results_dir / "SUMMARY.md"
-
-    opener = None
-    if sys.platform.startswith("linux"):
-        opener = find_tool("xdg-open")
-    elif sys.platform == "darwin":
-        opener = find_tool("open")
-    elif os.name == "nt":
-        opener = "start"
-
-    paths = [p for p in [html, md] if p.exists()]
-    if not paths:
-        return
-
-    # Allowlist for safety
-    allowed_openers = {"xdg-open", "open", "start"}
-    opener_name = (
-        os.path.basename(opener) if opener and os.path.isabs(opener) else opener
-    )
-
-    if opener and opener_name in allowed_openers:
-        for p in paths:
-            try:
-                if opener == "start":
-                    os.startfile(str(p))  # type: ignore[attr-defined,unused-ignore]  # nosec B606
-                else:
-                    subprocess.Popen(  # nosec B603
-                        [opener, str(p)],
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                    )
-            except OSError:
-                pass
-
-
 def cmd_attest(args) -> int:
     """Generate attestation for scan results.
 
@@ -4200,7 +3896,6 @@ def cmd_attest(args) -> int:
     generator = ProvenanceGenerator()
     statement = generator.generate(
         findings_path=subject_path,
-        profile=scan_args.get("profile_name", "default"),
         tools=tools,
         targets=scan_args.get("repos", []),
         # Only claim these when the scan actually reported them. They were
@@ -4424,8 +4119,6 @@ def main():
         return cmd_wizard(args)
     elif args.cmd == "setup":
         return cmd_setup(args)
-    elif args.cmd in ("fast", "balanced", "full"):
-        return cmd_profile(args, args.cmd)
     elif args.cmd == "report":
         return cmd_report(args)
     elif args.cmd == "scan":

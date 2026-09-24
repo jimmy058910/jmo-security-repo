@@ -110,8 +110,6 @@ def test_schedule_create_list_delete(tmp_path):
             "test-nightly",
             "--cron",
             "0 2 * * *",
-            "--profile",
-            "balanced",
             "--repos-dir",
             "~/repos",
             "--backend",
@@ -137,7 +135,7 @@ def test_schedule_create_list_delete(tmp_path):
     assert [s["metadata"]["name"] for s in persisted["schedules"]] == ["test-nightly"]
     stored = persisted["schedules"][0]
     assert stored["spec"]["schedule"] == "0 2 * * *"
-    assert stored["spec"]["jobTemplate"]["profile"] == "balanced"
+    assert "profile" not in stored["spec"]["jobTemplate"]
     assert stored["spec"]["jobTemplate"]["targets"]["repositories"]["repos_dir"] == (
         "~/repos"
     )
@@ -185,7 +183,9 @@ def test_schedule_create_list_delete(tmp_path):
     assert result.returncode == 0
     schedule = json.loads(result.stdout)
     assert schedule["spec"]["schedule"] == "0 2 * * *"
-    assert schedule["spec"]["jobTemplate"]["profile"] == "balanced"
+    assert schedule["spec"]["jobTemplate"]["targets"]["repositories"]["repos_dir"] == (
+        "~/repos"
+    )
 
     # 4. DELETE schedule
     result = subprocess.run(
@@ -245,8 +245,6 @@ def test_schedule_export_github_actions(tmp_path):
             "gha-export",
             "--cron",
             "0 3 * * *",
-            "--profile",
-            "deep",
             "--repos-dir",
             "~/repos",
             "--backend",
@@ -292,7 +290,7 @@ def test_schedule_export_github_actions(tmp_path):
     # Verify scan command
     job = workflow["jobs"]["security-scan"]
     scan_step = [s for s in job["steps"] if "Run JMo Security Scan" in s["name"]][0]
-    assert "--profile-name deep" in scan_step["run"]
+    assert "--profile" not in scan_step["run"]
     # Quoted, because every value interpolated into the `run:` shell line is now
     # shlex.quote()d -- the same treatment cron_installer.py:298 has always given
     # this exact field. Quoting does suppress shell tilde expansion, which is a
@@ -322,8 +320,6 @@ def test_schedule_export_gitlab_ci(tmp_path):
             "gitlab-export",
             "--cron",
             "0 4 * * *",
-            "--profile",
-            "balanced",
             "--repos-dir",
             "~/repos",
             "--backend",
@@ -389,8 +385,6 @@ def test_schedule_install_local_cron(tmp_path):
             "cron-test",
             "--cron",
             "0 5 * * *",
-            "--profile",
-            "fast",
             "--repos-dir",
             "~/repos",
             "--backend",
@@ -467,8 +461,6 @@ def test_schedule_label_filtering(tmp_path):
             "prod-scan",
             "--cron",
             "0 2 * * *",
-            "--profile",
-            "balanced",
             "--repos-dir",
             "~/repos",
             "--label",
@@ -492,8 +484,6 @@ def test_schedule_label_filtering(tmp_path):
             "dev-scan",
             "--cron",
             "0 3 * * *",
-            "--profile",
-            "fast",
             "--repos-dir",
             "~/repos",
             "--label",

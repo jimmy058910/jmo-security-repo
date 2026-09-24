@@ -37,40 +37,11 @@ class TestAutoFixTools:
         should_continue, available = _auto_fix_tools(
             fix_info=[],
             platform="linux",
-            profile="balanced",
             available=["trivy", "semgrep"],
         )
 
         assert should_continue is True
         assert available == ["trivy", "semgrep"]
-
-    def test_auto_fix_manual_only_tools(self):
-        """Test auto fix with only manual tools (no install attempt)."""
-        from scripts.cli.wizard import _auto_fix_tools
-
-        fix_info = [
-            {
-                "name": "mobsf",
-                "issue": "Not installed",
-                "remediation": {
-                    "is_manual": True,
-                    "manual_reason": "Requires Docker Compose setup",
-                    "manual_url": "https://mobsf.github.io",
-                },
-            }
-        ]
-
-        with patch("builtins.print"):  # Suppress output
-            should_continue, available = _auto_fix_tools(
-                fix_info=fix_info,
-                platform="linux",
-                profile="balanced",
-                available=["trivy"],
-            )
-
-        # Should continue without error (manual tools are just displayed)
-        assert should_continue is True
-        assert "trivy" in available
 
     @patch("scripts.cli.tool_installer.ToolInstaller")
     def test_auto_fix_installable_tool_success(self, mock_installer_class):
@@ -87,7 +58,6 @@ class TestAutoFixTools:
                 "name": "semgrep",
                 "issue": "Not installed",
                 "remediation": {
-                    "is_manual": False,
                     "command": "pip install semgrep",
                     "method": "pip",
                 },
@@ -96,17 +66,16 @@ class TestAutoFixTools:
 
         # Mock ToolManager's post-install re-check (#907: unmocked, it
         # shells out to whatever scanner binaries are actually on PATH).
-        mock_summary = MagicMock(execution_ready=1, platform_applicable=1)
+        mock_summary = MagicMock(execution_ready=1, total=1)
         with (
             patch("builtins.print"),  # Suppress output
             patch("scripts.cli.tool_manager.ToolManager") as mock_manager_cls,
         ):
-            mock_manager_cls.return_value.check_profile.return_value = {}
+            mock_manager_cls.return_value.check_matrix.return_value = {}
             mock_manager_cls.return_value.get_tool_summary.return_value = mock_summary
             should_continue, available = _auto_fix_tools(
                 fix_info=fix_info,
                 platform="linux",
-                profile="balanced",
                 available=["trivy"],
             )
 
@@ -129,7 +98,6 @@ class TestAutoFixTools:
                 "name": "semgrep",
                 "issue": "Not installed",
                 "remediation": {
-                    "is_manual": False,
                     "command": "pip install semgrep",
                     "method": "pip",
                 },
@@ -138,22 +106,78 @@ class TestAutoFixTools:
 
         # Mock ToolManager's post-install re-check (#907: unmocked, it
         # shells out to whatever scanner binaries are actually on PATH).
-        mock_summary = MagicMock(execution_ready=1, platform_applicable=1)
+        mock_summary = MagicMock(execution_ready=1, total=1)
         with (
             patch("builtins.print"),  # Suppress output
             patch("scripts.cli.tool_manager.ToolManager") as mock_manager_cls,
         ):
-            mock_manager_cls.return_value.check_profile.return_value = {}
+            mock_manager_cls.return_value.check_matrix.return_value = {}
             mock_manager_cls.return_value.get_tool_summary.return_value = mock_summary
             should_continue, available = _auto_fix_tools(
                 fix_info=fix_info,
                 platform="linux",
-                profile="balanced",
                 available=["trivy"],
             )
 
         # Should still continue (with warning shown)
         assert should_continue is True
+
+    @patch("scripts.cli.tool_installer.ToolInstaller")
+    def test_auto_fix_failed_install_is_a_failure_whatever_its_method(
+        self, mock_installer_class
+    ):
+        """A failed install is reported as failed, never as an expected skip.
+
+        `_auto_fix_tools` used to print a failed result whose method was
+        "manual" or "docker" as a yellow skip and leave it out of the failure
+        count, for tools that could not be installed on some platforms. Every
+        matrix tool installs everywhere, so a failure is a failure: it must be
+        counted, named, and kept out of `available`.
+        """
+        from scripts.cli.wizard import _auto_fix_tools
+
+        failed = MagicMock(
+            tool_name="zap", success=False, method="manual", message="download failed"
+        )
+        mock_installer_class.return_value.install_tools_parallel.return_value = (
+            MagicMock(results=[failed])
+        )
+
+        fix_info = [
+            {
+                "name": "zap",
+                "issue": "NOT INSTALLED",
+                "missing_deps": [],
+                "remediation": {
+                    "commands": [],
+                    "manual": None,
+                    "jmo_install": "jmo tools install zap",
+                },
+            }
+        ]
+
+        # Mock ToolManager's post-install re-check (#907).
+        mock_summary = MagicMock(execution_ready=1, total=2, version_issues=[])
+        with (
+            patch("builtins.print") as mock_print,
+            patch("scripts.cli.tool_manager.ToolManager") as mock_manager_cls,
+        ):
+            mock_manager_cls.return_value.check_matrix.return_value = {
+                "trivy": MagicMock(execution_ready=True),
+                "zap": MagicMock(execution_ready=False),
+            }
+            mock_manager_cls.return_value.get_tool_summary.return_value = mock_summary
+            should_continue, available = _auto_fix_tools(
+                fix_info=fix_info,
+                platform="linux",
+                available=["trivy"],
+            )
+
+        printed = " ".join(str(c) for c in mock_print.call_args_list)
+        assert should_continue is True
+        assert "0 fixed, 1 failed" in printed
+        assert "Failed tools: zap" in printed
+        assert available == ["trivy"]
 
 
 class TestInstallMissingToolsInteractive:
@@ -167,7 +191,6 @@ class TestInstallMissingToolsInteractive:
         with patch("builtins.print"):
             should_continue, available = _install_missing_tools_interactive(
                 missing=[],
-                profile="balanced",
                 available=["trivy"],
             )
 
@@ -198,7 +221,6 @@ class TestInstallMissingToolsInteractive:
         with patch("builtins.print"):
             should_continue, available = _install_missing_tools_interactive(
                 missing=missing,
-                profile="balanced",
                 available=["trivy"],
             )
 
@@ -231,7 +253,6 @@ class TestInstallMissingToolsInteractive:
         with patch("builtins.print"):
             should_continue, available = _install_missing_tools_interactive(
                 missing=missing,
-                profile="balanced",
                 available=["trivy"],
             )
 
@@ -272,7 +293,6 @@ class TestInstallMissingToolsInteractive:
         with patch("builtins.print"):
             should_continue, available = _install_missing_tools_interactive(
                 missing=missing,
-                profile="balanced",
                 available=[],
             )
 
@@ -296,7 +316,6 @@ class TestInstallMissingToolsInteractive:
         ):  # User chooses to continue
             should_continue, available = _install_missing_tools_interactive(
                 missing=[MockToolStatus("semgrep")],
-                profile="balanced",
                 available=[],
             )
 
@@ -331,7 +350,6 @@ class TestToolInstallationProgress:
         with patch("builtins.print"):
             _install_missing_tools_interactive(
                 missing=missing,
-                profile="balanced",
                 available=[],
             )
 

@@ -22,9 +22,8 @@ jmo-security-scan:
     - schedules
 
   script:
-    # Run scan with balanced profile
+    # Run scan (every scanner is considered; the content decides which run)
     - jmo scan
-        --profile balanced
         --repos-dir /builds/$CI_PROJECT_PATH
         --results-dir ./results
         --human-logs

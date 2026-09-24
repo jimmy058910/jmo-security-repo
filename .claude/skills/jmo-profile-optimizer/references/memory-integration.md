@@ -6,15 +6,15 @@ How this skill persists performance baselines between sessions, using the
 > **There is no memory module to import.** `.jmo/memory/` is a plain-file
 > convention that each skill implements itself with Read and Write — see
 > [`../../references/memory-integration-pattern.md`](../../references/memory-integration-pattern.md).
-> This skill owns the `profiles/` namespace. `.jmo/` is gitignored
+> This skill owns the `timings/` namespace. `.jmo/` is gitignored
 > (`.gitignore:179`), so the directory is absent from a fresh clone and is
 > created on first store. A cache miss is normal operation, not an error.
 
 ---
 
-## Profile name validation (required before any memory path)
+## Baseline label validation (required before any memory path)
 
-The profile name reaches this skill as `$ARGUMENTS` — untrusted input that is
+The baseline label reaches this skill as `$ARGUMENTS` — untrusted input that is
 interpolated into a file path. Validate it **before** constructing any path, or
 a value like `../../outside` redirects reads and writes outside the namespace.
 
@@ -22,42 +22,31 @@ a value like `../../outside` redirects reads and writes outside the namespace.
 import re
 from pathlib import Path
 
-from scripts.core.config import load_config
-from scripts.core.tool_registry import PROFILE_TOOLS
-
-MEMORY_ROOT = Path(".jmo/memory/profiles")
+MEMORY_ROOT = Path(".jmo/memory/timings")
 
 # Deliberately no separators, no dots, no leading dash.
-_SAFE_PROFILE = re.compile(r"[a-z][a-z0-9_-]*")
+_SAFE_LABEL = re.compile(r"[a-z0-9][a-z0-9_-]*")
 
 
-def memory_path(profile: str) -> Path:
-    """Resolve a profile's memory file, rejecting anything unsafe or unknown.
+def memory_path(label: str) -> Path:
+    """Resolve a baseline label's memory file, rejecting anything unsafe.
 
-    Two checks, because either alone is insufficient: the pattern rejects
-    traversal and separators, and the membership check rejects well-formed names
-    that are not real profiles.
+    The pattern is the whole check. A label is a free-form name for the target
+    set being measured (a repository, a group of them), so there is no list to
+    check membership against -- which is why the pattern must reject every
+    separator and dot on its own.
     """
-    if not _SAFE_PROFILE.fullmatch(profile):
+    if not _SAFE_LABEL.fullmatch(label):
         raise ValueError(
-            f"Invalid profile name {profile!r}: expected lowercase alphanumerics, "
+            f"Invalid baseline label {label!r}: expected lowercase alphanumerics, "
             "'-' or '_' only."
         )
-
-    # Built-in profiles plus any the user defined under `profiles:` in jmo.yml,
-    # which is a free-form dict -- do not hardcode the built-in list.
-    known = set(PROFILE_TOOLS) | set(load_config("jmo.yml").profiles)
-    if profile not in known:
-        raise ValueError(
-            f"Unknown profile {profile!r}. Known profiles: {', '.join(sorted(known))}"
-        )
-
-    return MEMORY_ROOT / f"{profile}.json"
+    return MEMORY_ROOT / f"{label}.json"
 ```
 
-At the time of writing, `PROFILE_TOOLS` defines `fast`, `slim`, `balanced`, and
-`deep`. The list is read at runtime rather than reproduced, so a new profile
-needs no change here.
+Use one label per target set and keep it stable. Timings from different
+repositories are not comparable, so a baseline recorded for one and compared
+against another reports a "regression" that is only a different codebase.
 
 ---
 
@@ -82,16 +71,16 @@ raw `timings.json` keys.
 import json
 
 
-def load_performance_baseline(profile: str) -> dict | None:
-    """Load the stored baseline for a profile, or None on a cache miss."""
-    path = memory_path(profile)
+def load_performance_baseline(label: str) -> dict | None:
+    """Load the stored baseline for a label, or None on a cache miss."""
+    path = memory_path(label)
     if not path.exists():
-        print(f"[memory] No baseline for {profile}, establishing a new one")
+        print(f"[memory] No baseline for {label}, establishing a new one")
         return None
 
     baseline = json.loads(path.read_text(encoding="utf-8"))
     meta = baseline.get("metadata", {})
-    print(f"[memory] Found baseline for {profile}")
+    print(f"[memory] Found baseline for {label}")
     print(f"[memory] Last updated: {meta.get('last_updated')}")
     print(f"[memory] Cumulative parse time: {baseline.get('cumulative_parse_seconds')}s")
 
@@ -105,7 +94,7 @@ def load_performance_baseline(profile: str) -> dict | None:
 
 ```json
 {
-  "profile": "balanced",
+  "label": "juice-shop",
   "aggregate_seconds": 3.402,
   "cumulative_parse_seconds": 12.1,
   "max_workers": 8,
@@ -246,17 +235,17 @@ more findings, not a slower scan -- check the findings counts first.
 from datetime import datetime
 
 
-def store_optimization_memory(profile: str, analysis: dict) -> None:
-    """Persist the analysed timings as the profile's new baseline."""
-    path = memory_path(profile)
+def store_optimization_memory(label: str, analysis: dict) -> None:
+    """Persist the analysed timings as the label's new baseline."""
+    path = memory_path(label)
 
     # Load the existing record FIRST, into its own variable. Reading the record
     # being built is an UnboundLocalError on every call.
-    previous = load_performance_baseline(profile)
+    previous = load_performance_baseline(label)
     previous_count = (previous or {}).get("metadata", {}).get("optimization_count", 0)
 
     memory_data = {
-        "profile": profile,
+        "label": label,
         "aggregate_seconds": analysis["aggregate_seconds"],
         "cumulative_parse_seconds": analysis["cumulative_parse_seconds"],
         "max_workers": analysis["max_workers"],
@@ -271,7 +260,7 @@ def store_optimization_memory(profile: str, analysis: dict) -> None:
 
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(memory_data, indent=2), encoding="utf-8")
-    print(f"[memory] Stored baseline for {profile} at {path}")
+    print(f"[memory] Stored baseline for {label} at {path}")
 ```
 
 `analysis["tools"]` is stored as-is, so the memory schema and the analysed schema
@@ -283,17 +272,19 @@ never drift apart — there is one shape, written once and read back unchanged.
 
 ```bash
 # 1. Run a scan, then a report with profiling enabled.
-jmo scan --repos-dir ~/repos --profile-name balanced --results-dir ./results
+jmo scan --repos-dir ~/repos --results-dir ./results
 jmo report ./results --profile
 
-# 2. Confirm the timings file exists.
+# 2. Confirm the timing files exist.
 cat results/summaries/timings.json
+cat results/individual-repos/*/scan-timings.json
 
 # 3. Run this skill against it -- Phase 6 writes the baseline automatically.
 ```
 
-`jmo scan --profile-name` selects the profile; `jmo report --profile` is the
-timing flag. They are different options with similar names.
+`jmo report --profile` is the report-phase timing flag. It selects nothing:
+there are no scan profiles, and the tools a scan runs come from `TOOL_MATRIX`,
+narrowed by `--tools`, `--skip-tools` or a `jmo.yml` `tools:` list.
 
 Whole-scan wall-clock durations, which `timings.json` does not contain, come
 from the history database instead:

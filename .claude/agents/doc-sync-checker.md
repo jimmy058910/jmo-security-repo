@@ -67,11 +67,12 @@ Read it there; do not duplicate it here.
 1. **Check current tool lists in all docs:**
 
    ```bash
-   Grep: "trivy|semgrep|trufflehog|syft|checkov|hadolint|zap|bandit|noseyparker|falco|afl\+\+"
+   Grep: "trivy|semgrep|trufflehog|syft|checkov|hadolint|shellcheck|gosec|yara|grype|zap|nuclei"
    ```
 
 2. **Identify docs that list tools:**
    - README.md (features overview, tool count)
+   - docs/TOOLS.md (the tool matrix, when each tool runs, target types)
    - QUICKSTART.md (example commands)
    - docs/USER_GUIDE.md (tool reference section)
    - docs/DOCKER_README.md (tool installation)
@@ -79,7 +80,7 @@ Read it there; do not duplicate it here.
    - jmo.yml (example configs)
 
 3. **For each doc, check:**
-   - Is tool count correct? (was 27, now 28)
+   - Does any tool count agree with `len(TOOL_MATRIX)`? (Better: no count at all; `tests/unit/test_tool_catalogue_count_claims.py` checks the ones that remain)
    - Are tools listed alphabetically?
    - Do examples include the new tool?
    - Are installation instructions provided?
@@ -193,8 +194,8 @@ completion time.
 2. **docs/examples/github-actions-docker.yml:25** - Docker image tag
 
    ```diff
-   - uses: docker://ghcr.io/jimmy058910/jmo-security:0.5.0-full
-   + uses: docker://ghcr.io/jimmy058910/jmo-security:0.6.1-full
+   - uses: docker://ghcr.io/jimmy058910/jmo-security:0.5.0
+   + uses: docker://ghcr.io/jimmy058910/jmo-security:0.6.1
    ```
 
 ### Keep (Historical References)
@@ -220,7 +221,7 @@ completion time.
 3. **For each adapter, search docs for variations:**
    - "trivy" vs "Trivy" vs "TRIVY"
    - "trufflehog" vs "TruffleHog" vs "Truffle Hog"
-   - "aflplusplus" vs "AFL++" vs "AFL++"
+   - "osv_scanner" vs "osv-scanner" vs "OSV-Scanner"
 
 4. **Identify inconsistencies**
 

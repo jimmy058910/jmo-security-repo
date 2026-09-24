@@ -41,7 +41,6 @@ class TestProvenanceExistence:
         generator = ProvenanceGenerator()
         statement = generator.generate(
             findings_path=findings_path,
-            profile="fast",
             tools=["trivy"],
             targets=["repo1"],
         )
@@ -62,7 +61,6 @@ class TestProvenanceExistence:
         generator = ProvenanceGenerator()
         statement = generator.generate(
             findings_path=findings_path,
-            profile="fast",
             tools=["trivy"],
             targets=["repo1"],
         )
@@ -85,7 +83,6 @@ class TestProvenanceExistence:
         generator = ProvenanceGenerator()
         statement = generator.generate(
             findings_path=findings_path,
-            profile="fast",
             tools=["trivy"],
             targets=["repo1"],
         )
@@ -116,7 +113,6 @@ class TestProvenanceExistence:
         generator = ProvenanceGenerator()
         statement = generator.generate(
             findings_path=findings_path,
-            profile="fast",
             tools=["trivy"],
             targets=["repo1"],
         )
@@ -137,7 +133,6 @@ class TestProvenanceExistence:
         generator = ProvenanceGenerator()
         statement = generator.generate(
             findings_path=findings_path,
-            profile="fast",
             tools=["trivy"],
             targets=["repo1"],
         )
@@ -169,7 +164,6 @@ class TestBuildServiceRequirements:
         generator = ProvenanceGenerator()
         statement = generator.generate(
             findings_path=findings_path,
-            profile="fast",
             tools=["trivy"],
             targets=["repo1"],
         )
@@ -202,7 +196,6 @@ class TestBuildServiceRequirements:
             generator = ProvenanceGenerator()
             statement = generator.generate(
                 findings_path=findings_path,
-                profile="fast",
                 tools=["trivy"],
                 targets=["repo1"],
             )
@@ -226,7 +219,6 @@ class TestBuildServiceRequirements:
             generator = ProvenanceGenerator()
             statement = generator.generate(
                 findings_path=findings_path,
-                profile="fast",
                 tools=["trivy"],
                 targets=["repo1"],
             )
@@ -249,7 +241,6 @@ class TestBuildServiceRequirements:
         generator = ProvenanceGenerator()
         statement = generator.generate(
             findings_path=findings_path,
-            profile="fast",
             tools=["trivy"],
             targets=["repo1"],
         )
@@ -271,7 +262,6 @@ class TestBuildServiceRequirements:
         generator = ProvenanceGenerator()
         statement = generator.generate(
             findings_path=findings_path,
-            profile="fast",
             tools=["trivy"],
             targets=["repo1"],
         )
@@ -304,7 +294,6 @@ class TestNonFalsifiableProvenance:
         generator = ProvenanceGenerator()
         statement = generator.generate(
             findings_path=findings_path,
-            profile="fast",
             tools=["trivy"],
             targets=["repo1"],
         )
@@ -482,8 +471,12 @@ class TestNonFalsifiableProvenance:
 class TestBuildParametersCaptured:
     """Test build parameters are captured in provenance."""
 
-    def test_scan_profile_captured(self, tmp_path):
-        """Test scan profile is captured."""
+    def test_no_scan_profile_in_external_parameters(self, tmp_path):
+        """Scan profiles are gone (v2.0.0): the provenance must not claim one.
+
+        An attestation is a statement of how the scan ran, so a `profile` key
+        here would assert a parameter the scan no longer has.
+        """
         from scripts.core.attestation import ProvenanceGenerator
 
         findings_path = tmp_path / "findings.json"
@@ -492,19 +485,20 @@ class TestBuildParametersCaptured:
         generator = ProvenanceGenerator()
         statement = generator.generate(
             findings_path=findings_path,
-            profile="balanced",
             tools=["trivy"],
             targets=["repo1"],
         )
 
-        # SLSA Level 2: Build parameters MUST be captured
-        predicate = statement.get("predicate", {})
-        build_def = predicate.get("buildDefinition", {})
-        external_params = build_def.get("externalParameters", {})
+        external_params = statement["predicate"]["buildDefinition"][
+            "externalParameters"
+        ]
 
-        assert "profile" in external_params or "profile_name" in external_params
-        profile = external_params.get("profile") or external_params.get("profile_name")
-        assert profile == "balanced"
+        # Anchor: the parameters that ARE captured are there, so the negative
+        # checks below cannot pass on an empty or missing block.
+        assert external_params["tools"] == ["trivy"]
+        assert external_params["targets"] == ["repo1"]
+        assert "profile" not in external_params
+        assert "profile_name" not in external_params
 
     def test_tools_list_captured(self, tmp_path):
         """Test tools list is captured."""
@@ -516,7 +510,6 @@ class TestBuildParametersCaptured:
         generator = ProvenanceGenerator()
         statement = generator.generate(
             findings_path=findings_path,
-            profile="fast",
             tools=["trivy", "semgrep", "trufflehog"],
             targets=["repo1"],
         )
@@ -541,7 +534,6 @@ class TestBuildParametersCaptured:
         generator = ProvenanceGenerator()
         statement = generator.generate(
             findings_path=findings_path,
-            profile="fast",
             tools=["trivy"],
             targets=["repo1", "repo2", "repo3"],
         )
@@ -613,7 +605,6 @@ class TestSLSAComplianceChecker:
         generator = ProvenanceGenerator()
         statement = generator.generate(
             findings_path=findings_path,
-            profile="fast",
             tools=["trivy"],
             targets=["repo1"],
         )
@@ -634,7 +625,6 @@ class TestSLSAComplianceChecker:
         generator = ProvenanceGenerator()
         statement = generator.generate(
             findings_path=findings_path,
-            profile="fast",
             tools=["trivy"],
             targets=["repo1"],
         )
@@ -655,7 +645,6 @@ class TestSLSAComplianceChecker:
         generator = ProvenanceGenerator()
         statement = generator.generate(
             findings_path=findings_path,
-            profile="fast",
             tools=["trivy"],
             targets=["repo1"],
         )
@@ -681,7 +670,6 @@ class TestSLSAComplianceChecker:
         generator = ProvenanceGenerator()
         statement = generator.generate(
             findings_path=findings_path,
-            profile="fast",
             tools=["trivy"],
             targets=["repo1"],
         )
@@ -711,7 +699,6 @@ class TestSLSAComplianceChecker:
         generator = ProvenanceGenerator()
         statement = generator.generate(
             findings_path=findings_path,
-            profile="balanced",
             tools=["trivy", "semgrep"],
             targets=["repo1"],
         )

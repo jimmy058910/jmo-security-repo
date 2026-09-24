@@ -77,9 +77,9 @@ def scan_iac_file(
         """Timeout for this tool, honouring the slow-tool floor.
 
         Delegates to the shared implementation. This copy had no floor, so a
-        tool with a `TOOL_TIMEOUT_DEFAULTS` minimum got only the profile default
+        tool with a `TOOL_TIMEOUT_DEFAULTS` minimum got only the configured default
         here while the same tool got its floor on a repository target -- `zap`
-        runs on both and is 300 s short on a `balanced` URL scan.
+        runs on both and was 300 s short on a URL scan.
         """
         return tool_timeout(per_tool_config, tool, default)
 

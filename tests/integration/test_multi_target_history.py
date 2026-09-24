@@ -66,7 +66,6 @@ class TestMultiTargetHistoryIntegration:
                 self.threads = 1
                 self.allow_missing_tools = True
                 self.profile = False
-                self.profile_name = "fast"
                 # v0.6.0+ multi-target args
                 self.image = None
                 self.images_file = None
@@ -124,8 +123,7 @@ class TestMultiTargetHistoryIntegration:
 
             assert len(scans) == 1, "Should have exactly one scan entry"
             scan = scans[0]
-            # Profile comes from config default_profile, may be empty or balanced
-            assert "profile" in scan
+            assert "profile" not in scan, "v2.0.0 stores no scan profile"
 
             # Verify metadata includes target information
             # Note: Exact target counts depend on tool availability
@@ -257,7 +255,6 @@ class TestMultiTargetHistoryIntegration:
                 self.threads = 1
                 self.allow_missing_tools = True
                 self.profile = False
-                self.profile_name = "balanced"
                 # v0.6.0+ multi-target args
                 self.image = None
                 self.images_file = None
@@ -303,7 +300,7 @@ class TestMultiTargetHistoryIntegration:
 
             if len(scans) > 0:
                 scan = scans[0]
-                assert scan["profile"] == "balanced"
+                assert "profile" not in scan, "v2.0.0 stores no scan profile"
                 assert "trufflehog" in scan["tools"]
 
     @pytest.mark.requires_tools
@@ -338,7 +335,6 @@ resource "aws_s3_bucket" "test" {
                 self.threads = 1
                 self.allow_missing_tools = True
                 self.profile = False
-                self.profile_name = "fast"
                 # v0.6.0+ multi-target args
                 self.image = None
                 self.images_file = None

@@ -38,16 +38,15 @@ def test_verify_integrity_clean_database(tmp_path: Path):
     conn.execute(
         """
         INSERT INTO scans (
-            id, timestamp, timestamp_iso, profile, tools, targets, target_type,
+            id, timestamp, timestamp_iso, tools, targets, target_type,
             total_findings, critical_count, high_count, medium_count, low_count, info_count,
             jmo_version
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             "scan-001",
             1234567890,
             "2024-01-01T00:00:00Z",
-            "balanced",
             '["trivy"]',
             '["/test"]',
             "repo",
@@ -161,16 +160,15 @@ def test_recover_database_creates_backup(tmp_path: Path):
     conn.execute(
         """
         INSERT INTO scans (
-            id, timestamp, timestamp_iso, profile, tools, targets, target_type,
+            id, timestamp, timestamp_iso, tools, targets, target_type,
             total_findings, critical_count, high_count, medium_count, low_count, info_count,
             jmo_version
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             "scan-backup-test",
             1234567890,
             "2024-01-01T00:00:00Z",
-            "balanced",
             '["trivy"]',
             '["/test"]',
             "repo",
@@ -215,16 +213,15 @@ def test_recover_database_preserves_data(tmp_path: Path):
     conn.execute(
         """
         INSERT INTO scans (
-            id, timestamp, timestamp_iso, profile, tools, targets, target_type,
+            id, timestamp, timestamp_iso, tools, targets, target_type,
             total_findings, critical_count, high_count, medium_count, low_count, info_count,
             jmo_version
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             scan_id,
             1234567890,
             "2024-01-01T00:00:00Z",
-            "balanced",
             '["trivy"]',
             '["/test"]',
             "repo",
@@ -308,11 +305,11 @@ def test_recover_database_preserves_data(tmp_path: Path):
 
     # Verify specific scan exists
     scan = conn2.execute(
-        "SELECT id, profile FROM scans WHERE id = ?", (scan_id,)
+        "SELECT id, tools FROM scans WHERE id = ?", (scan_id,)
     ).fetchone()
     assert scan is not None, "Scan should exist after recovery"
     assert scan[0] == scan_id, "Scan ID should match"
-    assert scan[1] == "balanced", "Scan profile should match"
+    assert scan[1] == '["trivy"]', "Scan tools should match"
 
     # Verify findings exist
     findings = conn2.execute(

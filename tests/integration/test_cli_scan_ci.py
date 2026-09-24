@@ -1,7 +1,4 @@
-import os
 from pathlib import Path
-
-import pytest
 
 from scripts.cli.jmo import cmd_ci, cmd_scan
 
@@ -11,15 +8,48 @@ def test_scan_skips_missing_tools_and_runs_available(tmp_path: Path, monkeypatch
 
     v1.0.0 Architecture: Missing tools are skipped entirely (no stubs).
     Only available/installed tools produce output files.
+
+    Availability is arranged, not found. This used to request real tools and
+    lean on bandit, a dev dependency on CI's PATH, as the one guaranteed to
+    run -- skipping on a box where nothing resolved. bandit stopped being a
+    scanner in v2.0.0 and no matrix tool is a dev dependency, so trufflehog
+    now resolves to a stub binary with its execution mocked, and every other
+    requested tool resolves to nothing, on every machine.
     """
-    # Read the REAL CI flag before the monkeypatch below sets it for the scan.
-    in_ci = os.environ.get("CI") == "true" or os.environ.get("GITHUB_ACTIONS") == "true"
+    import subprocess
+
+    from scripts.cli.scan_jobs import repository_scanner
+    from scripts.cli.tool_manager import ToolManager
+    from scripts.core import tool_runner
 
     # Set CI=true to skip interactive prompts
     monkeypatch.setenv("CI", "true")
     # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
     # resolves `Path.home()` with no injection point.
     monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+
+    available = "trufflehog"
+    stub = tmp_path / "bin" / available
+    stub.parent.mkdir()
+    stub.write_bytes(b"")
+
+    def resolve(name: str) -> str | None:
+        return str(stub) if Path(name).name.removesuffix(".exe") == available else None
+
+    # Both resolvers: the pre-flight check and the scanner's own lookup.
+    monkeypatch.setattr(ToolManager, "_find_binary", lambda self, name: resolve(name))
+    monkeypatch.setattr(repository_scanner, "find_tool", resolve)
+
+    ran: list[str] = []
+
+    def fake_run(cmd, *args, **kwargs):
+        # Only the available tool can have been launched.
+        assert Path(cmd[0]) == stub, f"launched an unavailable tool: {cmd}"
+        ran.append(cmd[0])
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(tool_runner, "_run_bounded", fake_run)
 
     # Create two dummy repos
     rbase = tmp_path / "repos"
@@ -28,69 +58,34 @@ def test_scan_skips_missing_tools_and_runs_available(tmp_path: Path, monkeypatch
     r1.mkdir(parents=True)
     r2.mkdir(parents=True)
 
+    missing = ["syft", "trivy", "checkov"]
+
     class Args:
         repo = None
         repos_dir = str(rbase)
         targets = None
         results_dir = str(tmp_path / "results")
         config = str(tmp_path / "no.yml")
-        # Request multiple tools - some may be missing. semgrep excluded
-        # (#907): its production default (`--config auto`) fetches its
-        # ruleset from semgrep.dev, and on this machine (semgrep genuinely
-        # on PATH) that meant a real, unmarked 30s network timeout here
-        # instead of the ~5-10s local run this test's budget assumed. The
-        # mixed-availability behaviour this test actually verifies -- some
-        # requested tools missing, bandit as the CI-guaranteed anchor -- is
-        # unaffected by dropping one more optional tool from the list.
-        tools = [
-            "trufflehog",
-            "syft",
-            "trivy",
-            "checkov",
-            "bandit",
-        ]
+        tools = [available, *missing]
         timeout = 30
         threads = 2
         allow_missing_tools = True
 
     rc = cmd_scan(Args())
     assert rc == 0, "Scan should succeed even with missing tools"
+    assert ran, "the available tool never ran"
 
-    # The contract that holds on every machine: a per-repo output directory is
-    # created for each discovered repo whether or not any tool ran.
-    outputs = {}
     for repo in (r1, r2):
         outdir = Path(Args.results_dir) / "individual-repos" / repo.name
         assert outdir.exists(), f"Expected results directory {outdir}"
-        outputs[repo.name] = list(outdir.glob("*.json"))
-
-    # Output files require a requested tool that both RESOLVES and SUCCEEDS, so
-    # this half is environment-dependent.
-    #
-    # On CI, `.venv/Scripts` is on PATH and supplies bandit (a dev dependency),
-    # so output is always produced -- never skip there, or the coverage rots
-    # silently the way #683/#693 did.
-    #
-    # On a developer box the set can legitimately come up empty -- any of
-    # the remaining optional tools can be absent, or (formerly, when semgrep
-    # was still requested here) crash on its own downloaded ruleset under a
-    # non-UTF-8 console. It exits 2, which jmo accepts as an OK return code,
-    # and writes no file.
-    if not any(outputs.values()):
-        if in_ci:
-            pytest.fail(
-                "No tool produced output on CI. `.venv/Scripts` should supply "
-                f"bandit; check the PATH step. Requested: {Args.tools}"
-            )
-        pytest.skip(
-            "None of the requested tools both resolved and succeeded on this "
-            f"machine (requested: {Args.tools}); nothing to assert about output."
+        # The available tool ran for EVERY repo -- this catches a scan that
+        # silently processes only the first target.
+        assert (outdir / f"{available}.json").exists(), (
+            f"Repo {repo.name!r} got no {available} output"
         )
-
-    # Some tool worked, so it must have worked for EVERY repo -- this catches a
-    # scan that silently processes only the first target.
-    for name, json_files in outputs.items():
-        assert json_files, f"Repo {name!r} got no output while others did"
+        # And a missing tool leaves nothing behind: no stubs.
+        stubs = sorted(t for t in missing if (outdir / f"{t}.json").exists())
+        assert not stubs, f"missing tools wrote output for {repo.name}: {stubs}"
 
 
 def test_ci_composes_scan_and_report(tmp_path: Path, monkeypatch):

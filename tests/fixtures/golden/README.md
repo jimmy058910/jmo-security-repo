@@ -13,7 +13,7 @@ golden/
 │       ├── raw-output.json       # Raw tool output
 │       ├── expected-findings.json # Parsed adapter output
 │       └── metadata.json          # Tool version, timestamp, sample used
-├── bandit/
+├── semgrep/
 │   └── ...
 └── ...
 ```

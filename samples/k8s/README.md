@@ -44,19 +44,19 @@ Enable Kubernetes in Docker Desktop settings.
 ### Scan Current Context (Default Namespace)
 
 ```bash
-jmo balanced --k8s-context $(kubectl config current-context)
+jmo scan --k8s-context $(kubectl config current-context)
 ```
 
 ### Scan All Namespaces
 
 ```bash
-jmo balanced --k8s-context $(kubectl config current-context) --k8s-all-namespaces
+jmo scan --k8s-context $(kubectl config current-context) --k8s-all-namespaces
 ```
 
 ### Scan Specific Namespace
 
 ```bash
-jmo balanced --k8s-context minikube --k8s-namespace kube-system
+jmo scan --k8s-context minikube --k8s-namespace kube-system
 ```
 
 ### List Available Contexts
@@ -86,7 +86,7 @@ minikube start
 kubectl apply -f ../iac-files/kubernetes-deployment.yaml
 
 # 3. Scan the cluster
-jmo balanced \
+jmo scan \
   --k8s-context minikube \
   --k8s-namespace test-namespace \
   --results-dir ./k8s-scan-results

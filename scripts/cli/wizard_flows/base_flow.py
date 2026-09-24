@@ -578,7 +578,7 @@ class ArtifactGenerator:
         """
         from scripts.cli.wizard_generators import generate_github_actions
 
-        generate_github_actions(command, output_path)  # type: ignore[arg-type]  # Path coerces to str for generator
+        generate_github_actions(command)
 
     def generate_shell_script(self, command: list[str], output_path: Path) -> None:
         """Generate shell script.
@@ -669,9 +669,8 @@ class BaseWizardFlow(ABC):
         # Step 4: Preflight summary
         self.prompter.print_step(4, total_steps, "Preparing preflight summary...")
         preflight_items = [
-            f"Profile: {options.get('profile', 'default')}",
             f"Command: {' '.join(command)}",
-            f"Estimated time: {self._estimate_time(options.get('profile', 'balanced'))}",
+            f"Estimated time: {self._estimate_time(command)}",
         ]
         self.prompter.print_summary_box("🚀 Preflight Check", preflight_items)
 
@@ -697,18 +696,31 @@ class BaseWizardFlow(ABC):
             self.prompter.print_error(f"Scan failed: {e}")
             return 1
 
-    def _estimate_time(self, profile: str) -> str:
-        """Estimate scan time based on profile.
+    def _estimate_time(self, command: list[str]) -> str:
+        """Estimate scan time from the tools the command will consider.
+
+        `--tools a b` narrows the set; without it the scan considers the whole
+        TOOL_MATRIX, so that is what the estimate sums.
 
         Args:
-            profile: Scan profile name
+            command: The jmo command the flow built
 
         Returns:
-            Time estimate string
+            Time estimate string, e.g. "7 min - 15 min"
         """
-        estimates = {
-            "fast": "5-8 minutes",
-            "balanced": "15-20 minutes",
-            "deep": "30-60 minutes",
-        }
-        return estimates.get(profile, "15-20 minutes")
+        from scripts.cli.wizard_flows.ui_helpers import (
+            calculate_time_estimate,
+            format_time_range,
+        )
+        from scripts.core.tool_registry import TOOL_MATRIX
+
+        tools: list[str] = list(TOOL_MATRIX)
+        if "--tools" in command:
+            named: list[str] = []
+            for arg in command[command.index("--tools") + 1 :]:
+                if arg.startswith("-"):
+                    break
+                named.append(arg)
+            if named:
+                tools = named
+        return format_time_range(*calculate_time_estimate(tools))

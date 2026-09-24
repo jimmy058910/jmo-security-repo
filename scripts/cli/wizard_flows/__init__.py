@@ -4,7 +4,7 @@ This module provides the building blocks for JMo Security's interactive
 wizard system, including:
 
 - Configuration models (TargetConfig, WizardConfig)
-- Profile definitions and time estimation
+- Scan-time estimation
 - UI helpers for cross-platform terminal output
 - Tool checking and installation
 - Trend analysis workflows
@@ -18,7 +18,6 @@ Public API:
     Configuration:
         - TargetConfig: Scan target configuration dataclass
         - WizardConfig: Wizard session configuration dataclass
-        - PROFILES: Profile definitions dict
         - TOOL_TIME_ESTIMATES: Per-tool time estimates
 
     UI Helpers:
@@ -28,7 +27,7 @@ Public API:
         - select_mode: Mode selection with numbered display
 
     Tool Management:
-        - check_tools_for_profile: Pre-flight tool checking
+        - check_tools_for_matrix: Pre-flight tool checking
         - check_policy_tools: OPA availability check
         - install_opa_tool: OPA installation helper
 
@@ -99,17 +98,6 @@ from .policy_flow import (
     display_policy_violations_interactive as display_policy_violations_interactive,
 )
 from .policy_flow import policy_evaluation_menu as policy_evaluation_menu
-
-# ==============================================================================
-# Phase 1: Profile Configuration
-# ==============================================================================
-from .profile_config import DIFF_WIZARD_TOTAL_STEPS as DIFF_WIZARD_TOTAL_STEPS
-from .profile_config import PROFILES as PROFILES
-from .profile_config import TOOL_TIME_ESTIMATES as TOOL_TIME_ESTIMATES
-from .profile_config import WIZARD_TOTAL_STEPS as WIZARD_TOTAL_STEPS
-from .profile_config import calculate_time_estimate as calculate_time_estimate
-from .profile_config import format_time_range as format_time_range
-from .profile_config import get_profile_warning as get_profile_warning
 from .repo_flow import RepoFlow as RepoFlow
 from .stack_flow import EntireStackFlow as EntireStackFlow
 
@@ -124,7 +112,7 @@ from .target_configurators import configure_repo_target as configure_repo_target
 from .target_configurators import configure_url_target as configure_url_target
 
 # Private exports for backward compatibility (underscore-prefixed)
-# These should be accessed via check_tools_for_profile() in new code
+# These should be accessed via check_tools_for_matrix() in new code
 from .tool_checker import _auto_fix_tools as _auto_fix_tools
 from .tool_checker import _check_policy_tools as _check_policy_tools
 from .tool_checker import (
@@ -139,7 +127,7 @@ from .tool_checker import _show_all_fix_commands as _show_all_fix_commands
 # ==============================================================================
 # Phase 2: Tool Checker
 # ==============================================================================
-from .tool_checker import check_tools_for_profile as check_tools_for_profile
+from .tool_checker import check_tools_for_matrix as check_tools_for_matrix
 
 # ==============================================================================
 # Phase 3: Trend Flow
@@ -162,9 +150,14 @@ from .trend_flow import (
 )
 
 # ==============================================================================
-# Phase 1: UI Helpers
+# Phase 1: UI Helpers (step counts and time estimates live here too)
 # ==============================================================================
+from .ui_helpers import DIFF_WIZARD_TOTAL_STEPS as DIFF_WIZARD_TOTAL_STEPS
+from .ui_helpers import TOOL_TIME_ESTIMATES as TOOL_TIME_ESTIMATES
 from .ui_helpers import UNICODE_FALLBACKS as UNICODE_FALLBACKS
+from .ui_helpers import WIZARD_TOTAL_STEPS as WIZARD_TOTAL_STEPS
+from .ui_helpers import calculate_time_estimate as calculate_time_estimate
+from .ui_helpers import format_time_range as format_time_range
 from .ui_helpers import prompt_choice as prompt_choice
 from .ui_helpers import prompt_text as prompt_text
 from .ui_helpers import safe_print as safe_print
@@ -216,7 +209,6 @@ __all__ = [
     # Configuration (Phase 1)
     "TargetConfig",
     "WizardConfig",
-    "PROFILES",
     "WIZARD_TOTAL_STEPS",
     "DIFF_WIZARD_TOTAL_STEPS",
     "TOOL_TIME_ESTIMATES",
@@ -229,7 +221,7 @@ __all__ = [
     "prompt_choice",
     "select_mode",
     # Tool Checker (Phase 2)
-    "check_tools_for_profile",
+    "check_tools_for_matrix",
     # Trend Flow (Phase 3)
     "offer_trend_analysis_after_scan",
     "explore_trends_interactive",

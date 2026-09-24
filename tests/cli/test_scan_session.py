@@ -114,13 +114,11 @@ class TestScanSession:
     def test_creation(self):
         session = ScanSession(
             session_id="test-123",
-            profile="balanced",
             config_hash="abc123",
             started_at=time.time(),
             pid=os.getpid(),
         )
         assert session.session_id == "test-123"
-        assert session.profile == "balanced"
         assert session.total_targets == 0
         assert session.completed_count == 0
         assert session.version == SESSION_VERSION
@@ -128,7 +126,6 @@ class TestScanSession:
     def test_register_target(self):
         session = ScanSession(
             session_id="test",
-            profile="fast",
             config_hash="hash",
             started_at=0.0,
             pid=1,
@@ -142,7 +139,6 @@ class TestScanSession:
     def test_mark_target_complete(self):
         session = ScanSession(
             session_id="test",
-            profile="fast",
             config_hash="hash",
             started_at=0.0,
             pid=1,
@@ -156,7 +152,6 @@ class TestScanSession:
     def test_mark_target_complete_skips_metadata_keys(self):
         session = ScanSession(
             session_id="test",
-            profile="fast",
             config_hash="hash",
             started_at=0.0,
             pid=1,
@@ -171,7 +166,6 @@ class TestScanSession:
     def test_mark_nonexistent_target(self):
         session = ScanSession(
             session_id="test",
-            profile="fast",
             config_hash="hash",
             started_at=0.0,
             pid=1,
@@ -182,7 +176,6 @@ class TestScanSession:
     def test_completed_and_pending_targets(self):
         session = ScanSession(
             session_id="test",
-            profile="fast",
             config_hash="hash",
             started_at=0.0,
             pid=1,
@@ -202,7 +195,6 @@ class TestScanSession:
     def test_is_target_completed(self):
         session = ScanSession(
             session_id="test",
-            profile="fast",
             config_hash="hash",
             started_at=0.0,
             pid=1,
@@ -216,7 +208,6 @@ class TestScanSession:
     def test_roundtrip_serialization(self):
         session = ScanSession(
             session_id="test-456",
-            profile="deep",
             config_hash="deadbeef",
             started_at=1234567890.0,
             pid=42,
@@ -229,7 +220,6 @@ class TestScanSession:
         session2 = ScanSession.from_dict(data)
 
         assert session2.session_id == "test-456"
-        assert session2.profile == "deep"
         assert session2.config_hash == "deadbeef"
         assert session2.started_at == 1234567890.0
         assert session2.pid == 42
@@ -272,7 +262,6 @@ class TestLoadSaveSession:
         session_path = tmp_path / "session.json"
         session = ScanSession(
             session_id="roundtrip",
-            profile="balanced",
             config_hash="abc",
             started_at=time.time(),
             pid=os.getpid(),
@@ -352,7 +341,7 @@ class TestDeleteSession:
 class TestConfigHash:
     def test_deterministic(self, tmp_path):
         config = tmp_path / "jmo.yml"
-        config.write_text("default_profile: fast\n", encoding="utf-8")
+        config.write_text("threads: 4\n", encoding="utf-8")
         h1 = compute_config_hash(config)
         h2 = compute_config_hash(config)
         assert h1 == h2
@@ -360,9 +349,9 @@ class TestConfigHash:
 
     def test_change_detection(self, tmp_path):
         config = tmp_path / "jmo.yml"
-        config.write_text("default_profile: fast\n", encoding="utf-8")
+        config.write_text("threads: 4\n", encoding="utf-8")
         h1 = compute_config_hash(config)
-        config.write_text("default_profile: deep\n", encoding="utf-8")
+        config.write_text("threads: 8\n", encoding="utf-8")
         h2 = compute_config_hash(config)
         assert h1 != h2
 
@@ -389,7 +378,6 @@ class TestValidateSessionResults:
 
         session = ScanSession(
             session_id="test",
-            profile="fast",
             config_hash="hash",
             started_at=0.0,
             pid=1,
@@ -405,7 +393,6 @@ class TestValidateSessionResults:
 
         session = ScanSession(
             session_id="test",
-            profile="fast",
             config_hash="hash",
             started_at=0.0,
             pid=1,
@@ -423,7 +410,6 @@ class TestValidateSessionResults:
 
         session = ScanSession(
             session_id="test",
-            profile="fast",
             config_hash="hash",
             started_at=0.0,
             pid=1,
@@ -440,7 +426,6 @@ class TestValidateSessionResults:
 
         session = ScanSession(
             session_id="test",
-            profile="fast",
             config_hash="hash",
             started_at=0.0,
             pid=1,
@@ -454,7 +439,6 @@ class TestValidateSessionResults:
         results_dir = tmp_path / "results"
         session = ScanSession(
             session_id="test",
-            profile="fast",
             config_hash="hash",
             started_at=0.0,
             pid=1,
@@ -469,7 +453,6 @@ class TestFormatSummary:
     def test_seconds_ago(self):
         session = ScanSession(
             session_id="test",
-            profile="fast",
             config_hash="hash",
             started_at=time.time() - 30,
             pid=1,
@@ -478,12 +461,10 @@ class TestFormatSummary:
         summary = format_session_summary(session)
         assert "30s ago" in summary
         assert "0/1 targets" in summary
-        assert "fast profile" in summary
 
     def test_minutes_ago(self):
         session = ScanSession(
             session_id="test",
-            profile="balanced",
             config_hash="hash",
             started_at=time.time() - 2700,
             pid=1,  # 45 min
@@ -495,13 +476,14 @@ class TestFormatSummary:
 
         summary = format_session_summary(session)
         assert "45min ago" in summary
-        assert "18/29 targets" in summary
-        assert "balanced profile" in summary
+        # The target count closes the summary: nothing (formerly the scan
+        # profile) follows it.
+        assert summary.startswith("Previous scan (started ")
+        assert summary.endswith(", 18/29 targets)")
 
     def test_hours_ago(self):
         session = ScanSession(
             session_id="test",
-            profile="deep",
             config_hash="hash",
             started_at=time.time() - 7200,
             pid=1,  # 2 hours
@@ -512,24 +494,12 @@ class TestFormatSummary:
     def test_days_ago(self):
         session = ScanSession(
             session_id="test",
-            profile="deep",
             config_hash="hash",
             started_at=time.time() - 172800,
             pid=1,  # 2 days
         )
         summary = format_session_summary(session)
         assert "2.0d ago" in summary
-
-    def test_custom_profile(self):
-        session = ScanSession(
-            session_id="test",
-            profile="",
-            config_hash="hash",
-            started_at=time.time(),
-            pid=1,
-        )
-        summary = format_session_summary(session)
-        assert "custom profile" in summary
 
 
 # ── Integration: End-to-End Session Lifecycle ────────────────────
@@ -543,7 +513,6 @@ class TestSessionLifecycle:
         # Create session
         session = ScanSession(
             session_id="lifecycle-test",
-            profile="balanced",
             config_hash="abc123",
             started_at=time.time(),
             pid=os.getpid(),
@@ -583,7 +552,6 @@ class TestSessionLifecycle:
         hash1 = compute_config_hash(config)
         session = ScanSession(
             session_id="s1",
-            profile="fast",
             config_hash=hash1,
             started_at=time.time(),
             pid=1,

@@ -46,24 +46,35 @@ def _write(path: Path, obj) -> Path:
 # ---------------------------------------------------------------------------
 
 
-def test_bandit_unparseable_files_are_extracted(tmp_path: Path):
-    """The exact shape bandit emitted in the measured reproduction."""
+def test_semgrep_unparseable_files_are_extracted(tmp_path: Path):
+    """semgrep's `errors` entries name the file under `path`, the reason under
+    `message`."""
     out = _write(
-        tmp_path / "bandit.json",
+        tmp_path / "semgrep.json",
         {
             "errors": [
-                {"filename": "/r/broken/a.py", "reason": "syntax error while parsing"},
-                {"filename": "/r/broken/b.py", "reason": "syntax error while parsing"},
+                {
+                    "code": 3,
+                    "level": "warn",
+                    "message": "Syntax error at line /r/broken/a.py:1",
+                    "path": "/r/broken/a.py",
+                },
+                {
+                    "code": 3,
+                    "level": "warn",
+                    "message": "Syntax error at line /r/broken/b.py:4",
+                    "path": "/r/broken/b.py",
+                },
             ],
             "results": [],
         },
     )
 
-    found = extract_tool_diagnostics("bandit", out)
+    found = extract_tool_diagnostics("semgrep", out)
 
     assert [d.path for d in found] == ["r/broken/a.py", "r/broken/b.py"]
-    assert all("syntax error" in d.reason for d in found)
-    assert {d.tool for d in found} == {"bandit"}
+    assert all("Syntax error" in d.reason for d in found)
+    assert {d.tool for d in found} == {"semgrep"}
 
 
 def test_paths_are_normalized_like_location_path(tmp_path: Path):
@@ -74,54 +85,38 @@ def test_paths_are_normalized_like_location_path(tmp_path: Path):
     """
     root = "C:" + BS + "work" + BS + "repo"
     out = _write(
-        tmp_path / "bandit.json",
-        {"errors": [{"filename": root + BS + "pkg" + BS + "a.py", "reason": "bad"}]},
+        tmp_path / "semgrep.json",
+        {"errors": [{"path": root + BS + "pkg" + BS + "a.py", "message": "bad"}]},
     )
 
-    found = extract_tool_diagnostics("bandit", out, (root,))
+    found = extract_tool_diagnostics("semgrep", out, (root,))
 
     assert [d.path for d in found] == ["pkg/a.py"]
 
 
-def test_horusec_errors_is_a_string_not_a_list(tmp_path: Path):
-    """Measured: horusec writes `errors` as a **string**.
+def test_an_errors_string_is_one_diagnostic_not_one_per_character(tmp_path: Path):
+    """Measured on horusec (since removed): it wrote `errors` as a **string**.
 
-    Iterating it as a list yields one diagnostic per character. The extractor
-    inspects the value's type rather than trusting the key's name.
+    Iterating it as a list yields one diagnostic per character. The shared
+    extractor still inspects the value's type rather than trusting the key's
+    name, so the same output under the one tool that keeps a channel must read
+    as one run-level problem.
     """
-    out = _write(tmp_path / "horusec.json", {"errors": "failed to run analysis"})
+    out = _write(tmp_path / "semgrep.json", {"errors": "failed to run analysis"})
 
-    found = extract_tool_diagnostics("horusec", out)
+    found = extract_tool_diagnostics("semgrep", out)
 
     assert len(found) == 1, f"a string must not be iterated as a list: {found}"
     assert found[0].reason == "failed to run analysis"
     assert found[0].path == ""
 
 
-def test_scancode_reports_run_level_and_per_file(tmp_path: Path):
-    out = _write(
-        tmp_path / "scancode.json",
-        {
-            "headers": [{"errors": ["license db unavailable"], "warnings": ["slow"]}],
-            "files": [{"path": "a/b.txt", "scan_errors": ["unreadable"]}],
-        },
-    )
-
-    found = extract_tool_diagnostics("scancode", out)
-
-    assert {(d.path, d.reason) for d in found} == {
-        ("", "license db unavailable"),
-        ("", "slow"),
-        ("a/b.txt", "unreadable"),
-    }
-
-
-@pytest.mark.parametrize("tool", ["trivy", "grype", "syft", "zap", "cdxgen"])
+@pytest.mark.parametrize("tool", ["trivy", "grype", "syft", "zap", "checkov"])
 def test_tools_without_a_channel_cost_nothing(tool: str, tmp_path: Path):
     """Only the tools that have a channel pay the extra parse.
 
     Pins the design decision: reading centrally is cheap precisely because it
-    is not done for all 29 adapters.
+    is not done for every adapter.
     """
     assert tool not in DIAGNOSTIC_EXTRACTORS
     out = _write(tmp_path / f"{tool}.json", {"errors": [{"reason": "ignored"}]})
@@ -130,8 +125,8 @@ def test_tools_without_a_channel_cost_nothing(tool: str, tmp_path: Path):
 
 def test_a_healthy_run_produces_no_diagnostics(tmp_path: Path):
     """The negative control. Verified on a real 152-finding scan: 0 and 0."""
-    out = _write(tmp_path / "bandit.json", {"errors": [], "results": [{"x": 1}]})
-    assert extract_tool_diagnostics("bandit", out) == []
+    out = _write(tmp_path / "semgrep.json", {"errors": [], "results": [{"x": 1}]})
+    assert extract_tool_diagnostics("semgrep", out) == []
     assert summarize([]) == "", "a healthy run must render nothing at all"
 
 
@@ -141,9 +136,9 @@ def test_a_healthy_run_produces_no_diagnostics(tmp_path: Path):
 def test_unreadable_or_odd_output_never_raises(tmp_path: Path, payload: str):
     """`safe_load_json_file` already warns about these; a second one would only
     teach the reader to skip both."""
-    out = tmp_path / "bandit.json"
+    out = tmp_path / "semgrep.json"
     out.write_text(payload, encoding="utf-8")
-    assert extract_tool_diagnostics("bandit", out) == []
+    assert extract_tool_diagnostics("semgrep", out) == []
 
 
 def test_summarize_names_the_tools_and_counts_files():
@@ -165,14 +160,14 @@ def test_summarize_names_the_tools_and_counts_files():
 def test_collect_tool_diagnostics_walks_the_results_tree(tmp_path: Path):
     results = tmp_path / "results"
     _write(
-        results / "individual-repos" / "r1" / "bandit.json",
-        {"errors": [{"filename": "x/a.py", "reason": "syntax error"}]},
+        results / "individual-repos" / "r1" / "semgrep.json",
+        {"errors": [{"path": "x/a.py", "message": "syntax error"}]},
     )
     _write(results / "individual-repos" / "r1" / "trivy.json", {"Results": []})
 
     found = nr.collect_tool_diagnostics(results)
 
-    assert [(d.tool, d.path) for d in found] == [("bandit", "x/a.py")]
+    assert [(d.tool, d.path) for d in found] == [("semgrep", "x/a.py")]
 
 
 def test_every_target_type_is_walked_for_diagnostics(tmp_path: Path):
@@ -185,8 +180,8 @@ def test_every_target_type_is_walked_for_diagnostics(tmp_path: Path):
     kinds = ["repos", "images", "iac", "web", "gitlab", "k8s"]
     for kind in kinds:
         _write(
-            results / f"individual-{kind}" / "t" / "bandit.json",
-            {"errors": [{"filename": f"{kind}/a.py", "reason": "syntax error"}]},
+            results / f"individual-{kind}" / "t" / "semgrep.json",
+            {"errors": [{"path": f"{kind}/a.py", "message": "syntax error"}]},
         )
 
     found = nr.collect_tool_diagnostics(results)

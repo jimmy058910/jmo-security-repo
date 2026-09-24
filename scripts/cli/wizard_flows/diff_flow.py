@@ -19,8 +19,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from scripts.cli.wizard_flows.base_flow import PromptHelper
-from scripts.cli.wizard_flows.profile_config import DIFF_WIZARD_TOTAL_STEPS
 from scripts.cli.wizard_flows.ui_helpers import (
+    DIFF_WIZARD_TOTAL_STEPS,
     prompt_choice,
     safe_print,
     select_mode,
@@ -229,13 +229,12 @@ def run_diff_wizard_impl(
                 print("\nRecent scans:")
                 for i, scan in enumerate(scans, 1):
                     timestamp = scan.get("timestamp_iso", "unknown")
-                    profile = scan.get("profile", "unknown")
                     branch = scan.get("branch", "unknown")
                     total = scan.get("total_findings", 0)
                     scan_id = scan.get("id", "")[:8]
 
                     print(
-                        f"  [{i:2d}] {scan_id}  {timestamp}  {profile:10s}  {branch:15s}  ({total} findings)"
+                        f"  [{i:2d}] {scan_id}  {timestamp}  {branch:15s}  ({total} findings)"
                     )
 
                 # Select baseline

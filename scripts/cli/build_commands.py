@@ -1,8 +1,9 @@
 """
 CLI command handlers for `jmo build`.
 
-Provides Docker image building functionality, replacing Makefile docker-* targets.
-Supports all 4 variants: fast, slim, balanced, deep (full).
+Builds the JMo Security Docker image from ``Dockerfile``, replacing the
+Makefile docker-* targets. There is one image; it carries every scanner in the
+tool matrix plus the policy engine.
 """
 
 from __future__ import annotations
@@ -15,13 +16,8 @@ from pathlib import Path
 
 from scripts.core.tool_utils import tool_exists
 
-# Variant configuration: maps variant name to Dockerfile
-VARIANTS = {
-    "fast": "Dockerfile.fast",
-    "slim": "Dockerfile.slim",
-    "balanced": "Dockerfile.balanced",
-    "deep": "Dockerfile.deep",
-}
+# The one Dockerfile the image is built from.
+DOCKERFILE = "Dockerfile"
 
 # Default registry configuration. The org must match what release.yml pushes to
 # -- `IMAGE_NAME_GHCR: ${{ github.repository_owner }}/jmo-security` -- which is
@@ -31,29 +27,30 @@ DEFAULT_REGISTRY = "ghcr.io"
 DEFAULT_ORG = "jimmy058910"
 DEFAULT_IMAGE = "jmo-security"
 
+# `docker build` compiles and downloads every scanner, so its budget is generous;
+# the others are bounded so a wedged daemon cannot hang the command forever.
+BUILD_TIMEOUT = 7200
+PUSH_TIMEOUT = 1800
+RUN_TIMEOUT = 300
+
 
 def _image_ref(
-    variant: str,
     tag: str,
     registry: str,
     org: str,
     image_name: str,
     local: bool,
 ) -> str:
-    """Return the image reference for a variant, matching what release.yml publishes.
+    """Return the image reference, matching what release.yml publishes.
 
-    The build path and the `test` path each computed this independently, and
-    both produced `<tag>-<variant>` unconditionally -- so the default run named
-    `:latest-balanced`. That tag family does not exist: `release.yml` publishes
-    bare `:fast` / `:slim` / `:balanced` / `:deep` (with `:latest` pointing at
-    deep) plus versioned `:1.0.2-<variant>`. `jmo build test` therefore asked
-    for an image that is never pushed, and could only work with `--local`.
+    release.yml publishes one image, tagged ``:latest`` and semver (``:1.0.2``,
+    ``:1.0``, ``:1``) and nothing else, so a registry reference is the bare tag.
+    The v1.x ``:<variant>`` and ``:<version>-<variant>`` families are no longer
+    built; naming one would pull a frozen v1.x image without any error.
     """
     if local:
-        return f"{image_name}:local-{variant}"
-    if tag == "latest":
-        return f"{registry}/{org}/{image_name}:{variant}"
-    return f"{registry}/{org}/{image_name}:{tag}-{variant}"
+        return f"{image_name}:local"
+    return f"{registry}/{org}/{image_name}:{tag}"
 
 
 def _detect_arch() -> str:
@@ -92,23 +89,17 @@ def _check_docker() -> bool:
 
 
 def _find_repo_root() -> Path | None:
-    """Find the repository root (a directory holding versions.yaml and a variant).
+    """Find the repository root (a directory holding versions.yaml and the Dockerfile).
 
-    This probed for a file named exactly ``Dockerfile``. #303 renamed that file
-    to ``Dockerfile.deep`` on 2026-04-19, and nothing here followed: the
-    predicate became unsatisfiable anywhere in the tree, so the function
-    returned None on every call and `jmo build` answered every invocation --
-    from inside the repository root -- with "Cannot find repository root". It
-    stayed that way across v1.0.2 through v1.0.8.
-
-    The marker is now the variant set the command actually builds, so renaming
-    a variant cannot silently disable the command again.
+    The marker is the file this command builds. When it named a file the tree
+    no longer had -- #303 renamed ``Dockerfile`` to a per-variant name on
+    2026-04-19 and nothing here followed -- the predicate was unsatisfiable
+    anywhere, and `jmo build` answered every invocation with "Cannot find
+    repository root" from v1.0.2 through v1.0.8.
     """
     current = Path.cwd()
     for parent in [current, *current.parents]:
-        if not (parent / "versions.yaml").exists():
-            continue
-        if any((parent / df).exists() for df in VARIANTS.values()):
+        if (parent / "versions.yaml").exists() and (parent / DOCKERFILE).exists():
             return parent
     return None
 
@@ -158,14 +149,14 @@ def _validate_versions(repo_root: Path) -> bool:
     except subprocess.TimeoutExpired:
         # Was `return True`. A gate that never completed has not passed, and
         # this timeout is a real risk rather than a theoretical one: --validate
-        # makes ~29 network calls to PyPI, npm and the GitHub API against a
+        # makes a network call per tool to PyPI and the GitHub API against a
         # 120s budget, and the GitHub calls are rate-limited without a
         # GITHUB_TOKEN. `--skip-validate` already exists for callers who want
         # to bypass the check, so the error paths do not need to be lenient to
         # keep the command usable (#939).
         print(
-            "Version validation timed out after 120s (it makes ~29 network "
-            "calls; GitHub is rate-limited without GITHUB_TOKEN).",
+            "Version validation timed out after 120s (it makes a network call "
+            "per tool; GitHub is rate-limited without GITHUB_TOKEN).",
             file=sys.stderr,
         )
         print("Use --skip-validate to build without it.", file=sys.stderr)
@@ -177,7 +168,6 @@ def _validate_versions(repo_root: Path) -> bool:
 
 
 def _build_image(
-    variant: str,
     tag: str,
     repo_root: Path,
     registry: str,
@@ -188,30 +178,20 @@ def _build_image(
     push: bool = False,
     platform_target: str | None = None,
 ) -> int:
-    """Build a single Docker image variant."""
-    dockerfile = VARIANTS.get(variant)
-    if not dockerfile:
-        print(f"Error: Unknown variant '{variant}'", file=sys.stderr)
-        print(f"Available variants: {', '.join(VARIANTS.keys())}", file=sys.stderr)
-        return 1
-
-    dockerfile_path = repo_root / dockerfile
+    """Build the Docker image, and push it when asked."""
+    dockerfile_path = repo_root / DOCKERFILE
     if not dockerfile_path.exists():
         print(f"Error: Dockerfile not found: {dockerfile_path}", file=sys.stderr)
         return 1
 
-    # Determine image tag
-    full_tag = _image_ref(variant, tag, registry, org, image_name, local)
-
-    # Detect architecture
+    full_tag = _image_ref(tag, registry, org, image_name, local)
     arch = platform_target or _detect_arch()
 
-    print(f"Building {variant} variant...")
-    print(f"  Dockerfile: {dockerfile}")
+    print("Building the JMo Security image...")
+    print(f"  Dockerfile: {DOCKERFILE}")
     print(f"  Tag: {full_tag}")
     print(f"  Architecture: {arch}")
 
-    # Build command
     cmd = [
         "docker",
         "build",
@@ -229,28 +209,19 @@ def _build_image(
     cmd.append(str(repo_root))
 
     try:
-        result = subprocess.run(cmd, cwd=str(repo_root))
+        result = subprocess.run(cmd, cwd=str(repo_root), timeout=BUILD_TIMEOUT)
         if result.returncode != 0:
-            print(f"Error: Build failed for {variant}", file=sys.stderr)
+            print("Error: Build failed", file=sys.stderr)
             return result.returncode
 
-        # Tag as latest if this is the deep/full variant
-        if variant == "deep" and not local:
-            latest_tag = f"{registry}/{org}/{image_name}:{tag}"
-            subprocess.run(["docker", "tag", full_tag, latest_tag])
-            print(f"  Also tagged as: {latest_tag}")
-
-        # Push if requested
         if push and not local:
             print(f"Pushing {full_tag}...")
-            push_result = subprocess.run(["docker", "push", full_tag])
+            push_result = subprocess.run(
+                ["docker", "push", full_tag], timeout=PUSH_TIMEOUT
+            )
             if push_result.returncode != 0:
                 print(f"Error: Push failed for {full_tag}", file=sys.stderr)
                 return push_result.returncode
-
-            if variant == "deep":
-                latest_tag = f"{registry}/{org}/{image_name}:{tag}"
-                subprocess.run(["docker", "push", latest_tag])
 
         return 0
 
@@ -263,7 +234,7 @@ def cmd_build(args: argparse.Namespace) -> int:
     """
     Main handler for `jmo build` command.
 
-    Builds Docker images for JMo Security suite.
+    Builds the JMo Security Docker image.
     """
     build_cmd = getattr(args, "build_command", None)
 
@@ -279,7 +250,7 @@ def cmd_build(args: argparse.Namespace) -> int:
     if not repo_root:
         print(
             "Error: Cannot find repository root "
-            "(looking for versions.yaml and a Dockerfile.<variant>)",
+            f"(looking for versions.yaml and {DOCKERFILE})",
             file=sys.stderr,
         )
         print(
@@ -299,7 +270,6 @@ def cmd_build(args: argparse.Namespace) -> int:
     if build_cmd == "test":
         # Test a built image
         image = _image_ref(
-            args.variant,
             args.tag,
             args.registry,
             args.org,
@@ -314,7 +284,14 @@ def cmd_build(args: argparse.Namespace) -> int:
         ]
         for cmd in cmds:
             print(f"  Running: {' '.join(cmd)}")
-            result = subprocess.run(cmd)
+            try:
+                result = subprocess.run(cmd, timeout=RUN_TIMEOUT)
+            except subprocess.TimeoutExpired:
+                print(
+                    f"Test timed out after {RUN_TIMEOUT}s: {' '.join(cmd)}",
+                    file=sys.stderr,
+                )
+                return 1
             if result.returncode != 0:
                 print(f"Test failed: {' '.join(cmd)}", file=sys.stderr)
                 return 1
@@ -329,54 +306,24 @@ def cmd_build(args: argparse.Namespace) -> int:
             print("Use --skip-validate to bypass version checking", file=sys.stderr)
             return 1
 
-    # Determine which variants to build
-    if args.all:
-        variants = list(VARIANTS.keys())
-    else:
-        variants = [args.variant]
+    build_result = _build_image(
+        tag=args.tag,
+        repo_root=repo_root,
+        registry=args.registry,
+        org=args.org,
+        image_name=DEFAULT_IMAGE,
+        local=args.local,
+        no_cache=args.no_cache,
+        push=args.push,
+        platform_target=args.platform,
+    )
+    if build_result != 0:
+        return build_result
 
-    # Build each variant
-    failed = []
-    for variant in variants:
-        print(f"\n{'=' * 60}")
-        print(f"Building variant: {variant}")
-        print(f"{'=' * 60}\n")
-
-        build_result = _build_image(
-            variant=variant,
-            tag=args.tag,
-            repo_root=repo_root,
-            registry=args.registry,
-            org=args.org,
-            image_name=DEFAULT_IMAGE,
-            local=args.local,
-            no_cache=args.no_cache,
-            push=args.push,
-            platform_target=args.platform,
-        )
-
-        if build_result != 0:
-            failed.append(variant)
-
-    # Summary
-    print(f"\n{'=' * 60}")
-    print("Build Summary")
-    print(f"{'=' * 60}")
-
-    if failed:
-        print(f"Failed: {', '.join(failed)}")
-        print(f"Succeeded: {', '.join(v for v in variants if v not in failed)}")
-        return 1
-
-    print(f"All {len(variants)} variant(s) built successfully")
-
+    print("Image built successfully")
     if args.local:
-        print("\nLocal images created:")
-        for v in variants:
-            print(f"  - {DEFAULT_IMAGE}:local-{v}")
-        print(
-            f"\nTest with: docker run --rm {DEFAULT_IMAGE}:local-{variants[0]} --help"
-        )
+        local_ref = _image_ref(args.tag, args.registry, args.org, DEFAULT_IMAGE, True)
+        print(f"\nTest with: docker run --rm {local_ref} --help")
 
     return 0
 
@@ -387,30 +334,23 @@ def add_build_args(
     """Add 'build' subcommand arguments."""
     build_parser: argparse.ArgumentParser = subparsers.add_parser(
         "build",
-        help="Build Docker images for JMo Security",
+        help="Build the JMo Security Docker image",
         description="""
-Build Docker images for JMo Security suite.
+Build the JMo Security Docker image from Dockerfile.
 
-Replaces Makefile docker-* targets with unified CLI commands.
-
-Variants (tool counts come from PROFILE_TOOLS; see docs/PROFILES_AND_TOOLS.md):
-  fast       9 tools - CI/CD, pre-commit hooks
-  slim      13 tools - Cloud/IaC focused
-  balanced  17 tools - Production scans (DEFAULT)
-  deep      29 tools - Comprehensive audits
+Replaces Makefile docker-* targets with unified CLI commands. The image carries
+every scanner in the tool matrix plus the policy engine (see docs/TOOLS.md).
 
 Examples:
-  jmo build                           # Build balanced variant, registry tag
-  jmo build --local                   # Build balanced with a local-only tag
-  jmo build --variant deep            # Build deep/full variant
-  jmo build --all --local             # Build all variants with local tags
-  jmo build --push --tag 1.0.9        # Build and push to registry
+  jmo build                           # Build, tagged ghcr.io/jimmy058910/jmo-security:latest
+  jmo build --local                   # Build with the local-only tag jmo-security:local
+  jmo build --push --tag 2.0.0        # Build and push to the registry
   jmo build validate                  # Validate versions before building
-  jmo build test --variant balanced   # Test a built image
+  jmo build test --local              # Test a locally built image
 
 Pre-build Validation:
   By default, `jmo build` validates that all tool versions in versions.yaml
-  exist upstream (GitHub releases, PyPI, npm) before starting the build.
+  exist upstream (GitHub releases, PyPI) before starting the build.
   Use --skip-validate to bypass this check.
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -422,7 +362,7 @@ Pre-build Validation:
     # VALIDATE subcommand
     build_subparsers.add_parser(
         "validate",
-        help="Validate tool versions exist upstream (GitHub, PyPI, npm). Set GITHUB_TOKEN env var to avoid API rate limiting",
+        help="Validate tool versions exist upstream (GitHub, PyPI). Set GITHUB_TOKEN env var to avoid API rate limiting",
     )
 
     # TEST subcommand.
@@ -430,25 +370,20 @@ Pre-build Validation:
     # Every flag here is also declared on the parent `build` parser. argparse
     # applies a subparser's defaults *after* the parent has already parsed, so a
     # subparser default overwrites a value the user gave the parent: measured,
-    # `jmo build --variant deep test` produced `variant='balanced'` -- rc 0, no
-    # warning, the wrong image tested. `default=SUPPRESS` leaves the attribute
-    # untouched when the flag is absent, so the parent's value survives and an
-    # explicit `jmo build test --variant deep` still wins.
+    # `jmo build --variant deep test` (a flag since removed) produced
+    # `variant='balanced'` -- rc 0, no warning, the wrong image tested.
+    # `default=SUPPRESS` leaves the attribute untouched when the flag is absent,
+    # so the parent's value survives and an explicit `jmo build test --tag X`
+    # still wins.
     test_parser = build_subparsers.add_parser(
         "test",
         help="Test a built Docker image",
     )
     test_parser.add_argument(
-        "--variant",
-        choices=list(VARIANTS.keys()),
-        default=argparse.SUPPRESS,
-        help="Variant to test (default: balanced)",
-    )
-    test_parser.add_argument(
         "--local",
         action="store_true",
         default=argparse.SUPPRESS,
-        help="Test local-tagged image",
+        help="Test the local-tagged image",
     )
     test_parser.add_argument(
         "--registry",
@@ -468,20 +403,9 @@ Pre-build Validation:
 
     # Main build arguments
     build_parser.add_argument(
-        "--variant",
-        choices=list(VARIANTS.keys()),
-        default="balanced",
-        help="Docker variant to build (default: balanced)",
-    )
-    build_parser.add_argument(
-        "--all",
-        action="store_true",
-        help="Build all variants (fast, slim, balanced, deep)",
-    )
-    build_parser.add_argument(
         "--local",
         action="store_true",
-        help="Use local tags (jmo-security:local-<variant>) for testing",
+        help="Use the local tag (jmo-security:local) for testing",
     )
     build_parser.add_argument(
         "--tag",
@@ -501,7 +425,7 @@ Pre-build Validation:
     build_parser.add_argument(
         "--push",
         action="store_true",
-        help="Push images to registry after building",
+        help="Push the image to the registry after building",
     )
     build_parser.add_argument(
         "--no-cache",

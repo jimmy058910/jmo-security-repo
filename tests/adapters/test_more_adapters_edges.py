@@ -3,7 +3,6 @@ from pathlib import Path
 
 from scripts.core.adapters.checkov_adapter import CheckovAdapter
 from scripts.core.adapters.hadolint_adapter import HadolintAdapter
-from scripts.core.adapters.noseyparker_adapter import NoseyParkerAdapter
 
 
 def _write(p: Path, obj):
@@ -69,30 +68,6 @@ def test_hadolint_unrecognized_level_maps_info_and_tags(tmp_path: Path):
     findings = adapter.parse(f)
     assert findings and findings[0].severity == "INFO"
     assert set(getattr(findings[0], "tags", [])) >= {"dockerfile", "lint"}
-
-
-def test_noseyparker_alt_keys(tmp_path: Path):
-    # Use DetectorName and nested location.startLine/path
-    data = {
-        "version": "x",
-        "matches": [
-            {
-                "DetectorName": "Slack Token",
-                "location": {"path": "a.txt", "startLine": 42},
-                "context": "ctx",
-            }
-        ],
-    }
-    f = tmp_path / "np.json"
-    _write(f, data)
-    adapter = NoseyParkerAdapter()
-    adapter = NoseyParkerAdapter()
-    findings = adapter.parse(f)
-    assert (
-        findings
-        and findings[0].ruleId == "Slack Token"
-        and findings[0].location["startLine"] == 42
-    )
 
 
 def test_checkov_alt_keys(tmp_path: Path):

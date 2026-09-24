@@ -33,7 +33,7 @@ Use for ANY technical issue in JMo Security:
 - **CI/CD failures:** GitHub Actions timeouts, Docker build failures, pre-commit failures
 - **Performance issues:** Slow scans, thread inefficiency, memory exhaustion
 - **Multi-target issues:** Specific target type failing (repos work, images fail)
-- **Configuration issues:** Profile not applying, per_tool overrides ignored
+- **Configuration issues:** `tools:` list not applying, per_tool overrides ignored
 
 **Highest value when the shortcut looks obvious:**
 

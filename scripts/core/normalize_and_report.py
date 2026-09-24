@@ -215,15 +215,13 @@ def _normalize_paths_and_ids(
 
     **The id is only recomputed when the existing one can be shown to have come
     from the old path.** That check is not defensive padding -- it is load
-    bearing. Four adapters deliberately fingerprint on something that is *not*
+    bearing. Two adapters deliberately fingerprint on something that is *not*
     ``location.path``:
 
     ==============  =====================================================
     ``zap``         ``f"{uri}:{method}:{param}:{idx}"`` -- one alert on one
                     URI yields several findings that differ only by param
-    ``cdxgen``      ``component_id``
     ``nuclei``      the matched URL
-    ``mobsf``       the literal ``"AndroidManifest.xml"`` on one branch
     ==============  =====================================================
 
     Re-keying those from ``location.path`` would give every instance the same
@@ -304,10 +302,7 @@ def collect_tool_diagnostics(results_dir: Path) -> list[ToolDiagnostic]:
             for tool_output in target.glob("*.json"):
                 if tool_output.name == SCAN_TIMINGS_FILENAME:
                     continue
-                tool_name = tool_output.stem
-                if tool_name == "afl++":
-                    tool_name = "aflplusplus"
-                adapter_name = loader._tool_to_adapter_name(tool_name)
+                adapter_name = loader._tool_to_adapter_name(tool_output.stem)
                 out.extend(extract_tool_diagnostics(adapter_name, tool_output, roots))
     return out
 
@@ -389,14 +384,9 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
                     if tool_output.name == SCAN_TIMINGS_FILENAME:
                         continue
 
-                    tool_name = tool_output.stem  # e.g., "trivy", "semgrep", "afl++"
+                    tool_name = tool_output.stem  # e.g., "trivy", "osv-scanner"
 
-                    # Handle special case: afl++.json → tool name is "aflplusplus"
-                    if tool_name == "afl++":
-                        tool_name = "aflplusplus"
-
-                    # Normalize tool name to adapter name (e.g., "checkov-cicd" → "checkov")
-                    # This handles variant filenames from scan profiles
+                    # Hyphenated tool names map to underscored adapters
                     adapter_name = loader._tool_to_adapter_name(tool_name)
 
                     # Get plugin for this tool

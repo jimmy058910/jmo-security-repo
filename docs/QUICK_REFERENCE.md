@@ -7,17 +7,14 @@ Quick command reference for common operations.
 ## Scanning Commands
 
 ```bash
-# Fast scan (9 tools, 5-10 min)
-jmo scan --repo . --profile-name fast
+# Scan a repository (every applicable scanner)
+jmo scan --repo .
 
-# Slim scan (13 tools, 12-18 min)
-jmo scan --repo . --profile-name slim
+# Quick scan with a narrowed tool list
+jmo scan --repo . --tools trufflehog semgrep trivy
 
-# Balanced scan (17 tools, 18-25 min)
-jmo scan --repo . --profile-name balanced
-
-# Deep scan (29 tools, 40-70 min)
-jmo scan --repo . --profile-name deep
+# Skip specific tools
+jmo scan --repo . --skip-tools zap nuclei
 
 # Custom results directory
 jmo scan --repo . --results-dir ~/audits/myapp
@@ -53,7 +50,7 @@ jmo report results --fail-on HIGH
 
 ```bash
 # CI mode (scan + report + exit code)
-jmo ci --repo . --profile-name fast --fail-on CRITICAL
+jmo ci --repo . --fail-on CRITICAL
 
 # Diff between scans
 jmo diff results-baseline/ results-current/ --format md
@@ -76,19 +73,19 @@ jmo trends analyze --days 30
 ## Docker Commands
 
 ```bash
-# Balanced scan
-docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:balanced \
+# Full scan
+docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
   scan --repo /scan --results-dir /scan/results
 
-# Fast scan
-docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:fast \
-  scan --repo /scan --results-dir /scan/results
+# Quick scan with a narrowed tool list
+docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
+  scan --repo /scan --results-dir /scan/results --tools trufflehog semgrep trivy
 
 # With history persistence
 docker run --rm \
   -v "$(pwd):/scan" \
   -v "$(pwd)/.jmo:/scan/.jmo" \
-  ghcr.io/jimmy058910/jmo-security:balanced \
+  ghcr.io/jimmy058910/jmo-security:latest \
   scan --repo /scan --results-dir /scan/results
 ```
 
@@ -122,11 +119,11 @@ cmd.exe /c start results/summaries/dashboard.html  # WSL
 ## Tool Management
 
 ```bash
-# Check tool status for your profile
-jmo tools check --profile balanced
+# Check tool status
+jmo tools check
 
 # Install missing tools (cross-platform)
-jmo tools install --profile balanced
+jmo tools install
 
 # Update outdated tools
 jmo tools update
@@ -137,8 +134,8 @@ jmo tools update --critical-only
 # Show outdated tools
 jmo tools outdated
 
-# List tools by profile
-jmo tools list --profile deep
+# List available tools
+jmo tools list
 
 # Uninstall JMo and optionally tools
 jmo tools uninstall
@@ -150,10 +147,10 @@ jmo tools uninstall
 
 ```bash
 # Check installed tools
-jmo tools check --profile balanced
+jmo tools check
 
 # Install missing tools
-jmo tools install --profile balanced
+jmo tools install
 
 # Increase timeout for large repos
 jmo scan --repo . --timeout 1200

@@ -1,8 +1,9 @@
 # Optimization Patterns Reference
 
 Code implementations for the report-phase profiling that `jmo report --profile`
-makes available: per-adapter parse cost, findings volume, and worker-count
-tuning.
+makes available (per-adapter parse cost, findings volume, worker-count tuning),
+and for the per-tool run times and timeouts every `jmo scan` records in
+`scan-timings.json` ([Phase 4](#phase-4-timeout-and-failure-analysis)).
 
 > **Read this before using any code below.**
 >
@@ -46,7 +47,7 @@ Written to `<results-dir>/summaries/timings.json` by
 | Key | Type | Meaning |
 |---|---|---|
 | `aggregate_seconds` | float | Wall-clock duration of the whole aggregation pass |
-| `recommended_threads` | int | CPU-derived suggestion, clamped to `profiling_min_threads`..`profiling_max_threads` (`scripts/core/config.py:168-170`) |
+| `recommended_threads` | int | CPU-derived suggestion, clamped to `profiling_min_threads`..`profiling_max_threads` (`scripts/core/config.py`, set from `jmo.yml`'s `profiling:` block) |
 | `jobs` | list | One entry per *(tool, result file)* parsed |
 | `jobs[].tool` | str | Adapter name |
 | `jobs[].path` | str | Result file that was parsed |
@@ -218,9 +219,10 @@ guards it:
 
 | Key | Meaning |
 |---|---|
-| `schema_version` | `1`. Refuse a shape you do not recognise rather than misreading it. |
-| `target` / `target_type` | Which target, and one of `repo` / `image` / `iac` / `url` / `k8s`. |
+| `schema_version` | `2` (`SCAN_TIMINGS_SCHEMA_VERSION`). Refuse a shape you do not recognise rather than misreading it. |
+| `target` / `target_type` | Which target, and one of `repo` / `image` / `iac` / `url` / `k8s` / `gitlab`. |
 | `wall_seconds` | Elapsed time of the whole parallel tool batch. |
+| `outcome` / `error` | `completed`, or `failed-before-tools` with a one-line `error` (a failed clone, a missing credential). A failed target has an empty `tools[]`, which is not the same as "nothing applied". |
 | `tools[]` | One entry per invocation: `tool`, `status`, `timed_out`, `returncode`, `attempts`, `duration`, `output_file`, `error_message`. |
 
 `tools[].status` carries **four** values, not a coarse pass/fail:
@@ -247,6 +249,54 @@ Use `wall_seconds` as the denominator for "what share of the scan was tool X".
 Using the sum understates every tool by the parallelism factor — the same
 invalid-denominator defect this skill was reviewed for.
 
+### Summarising one scan per tool
+
+```python
+import json
+from collections import defaultdict
+from pathlib import Path
+
+
+def summarize_scan_timings(results_dir: Path) -> dict:
+    """Per-tool run time and outcomes across every target of ONE scan.
+
+    Shares are of each target's own wall_seconds (see the denominator trap), so
+    `worst_share_pct` answers "on which target did this tool dominate the scan".
+    """
+    per_tool: dict[str, dict] = defaultdict(
+        lambda: {"runs": 0, "timed_out": 0, "no_output": 0, "max_duration": 0.0,
+                 "worst_share_pct": None, "worst_target": None}
+    )
+    failed_targets = []
+
+    for path in sorted(results_dir.glob("individual-*/*/scan-timings.json")):
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        if doc.get("schema_version") != 2:
+            raise ValueError(f"{path}: unrecognised schema_version {doc.get('schema_version')!r}")
+        if doc.get("outcome") != "completed":
+            failed_targets.append((doc.get("target"), doc.get("error")))
+            continue
+        wall = doc.get("wall_seconds") or 0
+        for run in doc.get("tools", []):
+            t = per_tool[run["tool"]]
+            t["runs"] += 1
+            t["timed_out"] += bool(run.get("timed_out"))
+            t["no_output"] += run.get("status") == "no_output"
+            duration = run.get("duration") or 0.0
+            t["max_duration"] = max(t["max_duration"], duration)
+            share = duration / wall * 100 if wall else None
+            if share is not None and (t["worst_share_pct"] is None or share > t["worst_share_pct"]):
+                t["worst_share_pct"], t["worst_target"] = round(share, 1), doc.get("target")
+
+    return {"tools": dict(per_tool), "failed_targets": failed_targets}
+```
+
+A tool with `timed_out > 0` is a P1 recommendation: raise its
+`per_tool.<tool>.timeout`, or give it flags that shrink its work. A tool with
+`no_output > 0` is not a performance problem at all; it is a tool that appeared
+to succeed and wrote nothing, and belongs in a bug report rather than in
+`jmo.yml`.
+
 ### What is still not answerable
 
 A **rate** needs more than one scan. `scan-timings.json` is per-scan and per-
@@ -254,8 +304,8 @@ target, and nothing collects it across runs — `history_db` still stores only
 one `duration_seconds` per scan (`scripts/core/history_db.py:103`) with no
 per-tool breakdown. So:
 
-- "did `dependency-check` time out on this scan" — yes, read `status`.
-- "does `dependency-check` time out 30% of the time" — no. That needs the
+- "did `semgrep` time out on this scan" — yes, read `timed_out`.
+- "does `semgrep` time out 30% of the time" — no. That needs the
   history persistence deferred out of #722.
 
 ---
@@ -263,18 +313,38 @@ per-tool breakdown. So:
 ## Phase 5: Generate Optimization Recommendations
 
 ```python
-def generate_recommendations(analysis: dict, bottlenecks: list) -> dict:
-    """Build recommendations from measured report-phase data.
+def generate_recommendations(
+    analysis: dict, bottlenecks: list, scan_summary: dict | None = None
+) -> dict:
+    """Build recommendations from measured scan- and report-phase data.
 
     Every value read here comes from `analysis` (the object returned by
-    analyze_timings) or from `bottlenecks`, so the function has no free
-    variables and no caller has to supply anything it did not compute.
+    analyze_timings), from `bottlenecks`, or from `scan_summary` (the object
+    returned by summarize_scan_timings), so the function has no free variables
+    and no caller has to supply anything it did not compute.
     """
     recommendations = {
         "immediate": [],  # P1: high impact, low effort
         "short_term": [],  # P2: medium impact, medium effort
         "long_term": [],  # P3: strategic
     }
+
+    # P1: a tool that timed out lost its findings on that target. The fix is a
+    # budget it can finish inside -- never a lower cap, which trades findings
+    # for a faster-looking scan.
+    for tool, t in (scan_summary or {}).get("tools", {}).items():
+        if t["timed_out"]:
+            recommendations["immediate"].append({
+                "priority": "P1",
+                "category": "timeout",
+                "tool": tool,
+                "action": f"Raise per_tool.{tool}.timeout above its longest run",
+                "evidence": (
+                    f"timed out on {t['timed_out']} of {t['runs']} targets; "
+                    f"longest run {t['max_duration']:.0f}s"
+                ),
+                "config_change": f"per_tool:\n  {tool}:\n    timeout: <seconds>",
+            })
 
     # P1: worker count. report_orchestrator already derives a recommendation
     # from CPU count; surface it only when it disagrees with what actually ran.
@@ -288,7 +358,7 @@ def generate_recommendations(analysis: dict, bottlenecks: list) -> dict:
             "rationale": (
                 "recommended_threads is derived from os.cpu_count() and clamped to "
                 "profiling_min_threads..profiling_max_threads "
-                "(scripts/core/config.py:168-170)."
+                "(scripts/core/config.py)."
             ),
             "config_change": f"jmo report <results-dir> --threads {recommended}",
         })
@@ -336,61 +406,74 @@ Call it with the objects the earlier phases produced:
 data = load_timings(Path("results/summaries/timings.json"))
 analysis = analyze_timings(data)
 bottlenecks = identify_bottlenecks(analysis)
-recommendations = generate_recommendations(analysis, bottlenecks)
+scan_summary = summarize_scan_timings(Path("results"))
+recommendations = generate_recommendations(analysis, bottlenecks, scan_summary)
 ```
 
 ---
 
 ## Tool-Specific Optimization Patterns
 
-**Profile tool lists are not reproduced here.** They live in
-`scripts/core/tool_registry.py:PROFILE_TOOLS`, which `jmo.yml` names as the
-single source of truth. Read them with:
+**The tool list is not reproduced here.** It lives in
+`scripts/core/tool_registry.py:TOOL_MATRIX`, the single source of the default.
+Read it with:
 
 ```bash
-python -c "from scripts.core.tool_registry import PROFILE_TOOLS; print(sorted(PROFILE_TOOLS['balanced']))"
+python -c "from scripts.core.tool_registry import TOOL_MATRIX; print(sorted(TOOL_MATRIX))"
 ```
 
-The snippets below show **per-tool overrides only** — the part a profile actually
-configures in `jmo.yml`.
+The snippets below show **top-level `jmo.yml` overrides only** — `threads`,
+`timeout` and `per_tool`. None of them changes which tools run; that is
+`--tools`, `--skip-tools` or a `tools:` list.
+
+### semgrep
+
+- **Purpose:** multi-language SAST
+- **Runs on:** repositories
+- **Timeout floor:** 900s in `TOOL_TIMEOUT_DEFAULTS` (`scripts/cli/scan_utils.py`)
+
+semgrep's cost is its **rule count**, not the size of the tree: it restricts
+itself to git-tracked files, so `--exclude` flags for vendored directories do
+not move its runtime. The floor exists because two measurements of the same
+work on the same machine were 410s and 583s apart (#1204). A
+`per_tool.semgrep.timeout` below the floor is honoured, and a cap that kills a
+healthy semgrep run discards its findings.
+
+```yaml
+# jmo.yml
+per_tool:
+  semgrep:
+    timeout: 1200   # only if scan-timings.json shows it timing out at 900
+```
 
 ### Nuclei
 
 - **Purpose:** web/API vulnerability scanning across a large template set
-- **Target flags:** `--url`, `--urls-file`
+- **Runs on:** `--url` / `--urls-file` targets only (DAST; never on a repository)
 - **Output:** JSON-lines (streaming)
-- **Present in:** `fast`, `slim`, `balanced`, `deep`
 
 ```yaml
 # jmo.yml
-profiles:
-  balanced:
-    per_tool:
-      nuclei:
-        timeout: 300
-        flags: ["-severity", "critical,high", "-rate-limit", "150"]
-
-  deep:
-    per_tool:
-      nuclei:
-        timeout: 600
-        flags: ["-severity", "critical,high,medium", "-rate-limit", "100", "-bulk-size", "25"]
+per_tool:
+  nuclei:
+    timeout: 300
+    flags: ["-severity", "critical,high", "-rate-limit", "150"]
 ```
 
 Timeout guidance, from configured values rather than measured runtime:
 
 | Configured timeout | Effect |
 |---|---|
-| unset | May run until the scan-level timeout on large sites |
+| unset | Takes the top-level `timeout`; may run to that limit on large sites |
 | 60s | Frequently too short for a full template pass |
-| 300s | Common choice for `balanced` |
-| 600s | Common choice for `deep` |
+| 300s | Enough for a critical/high template pass on most sites |
+| 600s | Room for medium-severity templates as well |
 
 ### GitLab targets
 
 - **Target flags:** `--gitlab-repo`, `--gitlab-group`
-- **Runs:** the same profile tool list as any other repository target, minus
-  tools that need a live URL
+- **Runs:** the same tools as any other repository target (zap and nuclei never
+  run on a repository)
 
 Remote repositories are usually larger than local checkouts, and cloning is
 included in the scan window, so per-tool timeouts tuned for local repos are
@@ -398,17 +481,15 @@ often too tight:
 
 ```yaml
 # jmo.yml
-profiles:
-  balanced:
-    threads: 4
+threads: 4
+timeout: 900
+per_tool:
+  semgrep:
+    timeout: 1200
+  trivy:
     timeout: 900
-    per_tool:
-      semgrep:
-        timeout: 1200
-      trivy:
-        timeout: 900
-      noseyparker:
-        timeout: 1800
+  trufflehog:
+    timeout: 1800
 ```
 
 **Container discovery.** The GitLab path also discovers container images

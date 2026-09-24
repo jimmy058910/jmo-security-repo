@@ -6,7 +6,7 @@ This test suite validates the ToolManager class:
 2. ToolManager initialization and tool checking
 3. Version parsing and comparison
 4. Binary finding
-5. Profile and summary functionality
+5. Matrix checks and summary functionality (TOOL_MATRIX, or an explicit tool list)
 6. Version drift detection
 7. Helper functions
 
@@ -19,6 +19,9 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+from scripts.core.install_config import ISOLATED_TOOLS
+from scripts.core.tool_registry import POLICY_ENGINE, TOOL_MATRIX
 
 # ========== Category 1: VERSION_PATTERNS Constants ==========
 
@@ -110,7 +113,7 @@ def test_toolstatus_custom_values():
         expected_version="0.50.0",
         is_outdated=True,
         is_critical=True,
-        install_hint="brew install trivy",
+        install_hint="jmo tools install trivy",
         binary_path="/usr/local/bin/trivy",
         execution_ready=True,
     )
@@ -312,31 +315,37 @@ def test_toolmanager_check_tool_outdated():
     assert status.is_outdated is True
 
 
-def test_toolmanager_check_profile():
-    """Test check_profile checks all tools in profile."""
-    from scripts.cli.tool_manager import PROFILE_TOOLS, ToolManager
+def test_toolmanager_check_matrix_defaults_to_the_tool_matrix():
+    """check_matrix() checks exactly the TOOL_MATRIX, once each, by name."""
+    from scripts.cli.tool_manager import ToolManager
+    from scripts.core.tool_registry import TOOL_MATRIX
 
     mock_status = MagicMock()
     mock_status.installed = True
 
     manager = ToolManager()
 
-    with patch.object(manager, "check_tool", return_value=mock_status):
-        statuses = manager.check_profile("fast")
+    with patch.object(manager, "check_tool", return_value=mock_status) as check:
+        statuses = manager.check_matrix()
 
-    # Should check each tool in fast profile
-    expected_count = len(PROFILE_TOOLS["fast"])
-    assert len(statuses) == expected_count
+    assert list(statuses) == list(TOOL_MATRIX)
+    assert [c.args[0] for c in check.call_args_list] == list(TOOL_MATRIX)
 
 
-def test_toolmanager_check_profile_invalid():
-    """Test check_profile with invalid profile."""
+def test_toolmanager_check_matrix_honours_an_explicit_tool_list():
+    """An explicit list narrows the work: only those tools are probed."""
     from scripts.cli.tool_manager import ToolManager
 
-    manager = ToolManager()
-    statuses = manager.check_profile("nonexistent")
+    mock_status = MagicMock()
+    mock_status.installed = True
 
-    assert statuses == {}
+    manager = ToolManager()
+
+    with patch.object(manager, "check_tool", return_value=mock_status) as check:
+        statuses = manager.check_matrix(["trivy", "semgrep"])
+
+    assert list(statuses) == ["trivy", "semgrep"]
+    assert [c.args[0] for c in check.call_args_list] == ["trivy", "semgrep"]
 
 
 # ========== Category 5: Version Parsing ==========
@@ -536,30 +545,11 @@ def test_find_binary_zap_special_path(tmp_path):
     assert result == str(zap_script)
 
 
-def test_find_binary_dependency_check_special_path(tmp_path):
-    """Test _find_binary finds dependency-check in special location."""
-    from scripts.cli.tool_manager import ToolManager
-
-    manager = ToolManager()
-
-    # Create mock dependency-check path
-    dc_dir = tmp_path / ".jmo" / "bin" / "dependency-check" / "bin"
-    dc_dir.mkdir(parents=True)
-    dc_script = dc_dir / "dependency-check.sh"
-    dc_script.touch()
-
-    with patch("shutil.which", return_value=None):
-        with patch.object(Path, "home", return_value=tmp_path):
-            result = manager._find_binary("dependency-check.sh")
-
-    assert result == str(dc_script)
-
-
-# ========== Category 9: Profile Functions ==========
+# ========== Category 9: Matrix Functions ==========
 
 
 def test_get_missing_tools():
-    """Test get_missing_tools returns only missing tools."""
+    """Test get_missing_tools returns only missing tools, from the given list."""
     from scripts.cli.tool_manager import ToolManager
 
     missing_status = MagicMock()
@@ -572,17 +562,17 @@ def test_get_missing_tools():
 
     with patch.object(
         manager,
-        "check_profile",
+        "check_matrix",
         return_value={"trivy": installed_status, "semgrep": missing_status},
-    ):
-        missing = manager.get_missing_tools("fast")
+    ) as check_matrix:
+        missing = manager.get_missing_tools(["trivy", "semgrep"])
 
-    assert len(missing) == 1
-    assert missing[0].installed is False
+    check_matrix.assert_called_once_with(["trivy", "semgrep"])
+    assert missing == [missing_status]
 
 
 def test_get_outdated_tools():
-    """Test get_outdated_tools returns only outdated tools."""
+    """Test get_outdated_tools returns only outdated tools among `restrict_to`."""
     from scripts.cli.tool_manager import ToolManager
 
     outdated_status = MagicMock()
@@ -594,16 +584,18 @@ def test_get_outdated_tools():
     current_status.is_outdated = False
 
     manager = ToolManager()
+    by_name = {"trivy": outdated_status, "semgrep": current_status}
 
-    with patch.object(
-        manager,
-        "check_profile",
-        return_value={"trivy": outdated_status, "semgrep": current_status},
+    with (
+        patch.object(manager, "check_tool", side_effect=by_name.__getitem__) as check,
+        patch.object(manager, "check_all_tools") as check_all,
     ):
-        outdated = manager.get_outdated_tools("fast")
+        outdated = manager.get_outdated_tools(restrict_to=["trivy", "semgrep"])
 
-    assert len(outdated) == 1
-    assert outdated[0].is_outdated is True
+    assert outdated == [outdated_status]
+    # restrict_to narrows the probes, not just the result.
+    assert [c.args[0] for c in check.call_args_list] == ["trivy", "semgrep"]
+    check_all.assert_not_called()
 
 
 def test_get_critical_outdated():
@@ -633,8 +625,8 @@ def test_get_critical_outdated():
     assert critical[0].is_critical is True
 
 
-def test_get_profile_summary():
-    """Test get_profile_summary returns correct counts."""
+def test_get_matrix_summary():
+    """Test get_matrix_summary returns correct counts for the given tools."""
     from scripts.cli.tool_manager import ToolManager
 
     installed_status = MagicMock()
@@ -642,58 +634,27 @@ def test_get_profile_summary():
     installed_status.execution_ready = True
     installed_status.is_outdated = False
     installed_status.is_critical = False
-    installed_status.manual_install = False
 
     missing_status = MagicMock()
     missing_status.installed = False
     missing_status.execution_ready = False
     missing_status.is_outdated = False
     missing_status.is_critical = False
-    missing_status.manual_install = False
 
     manager = ToolManager()
 
     with patch.object(
         manager,
-        "check_profile",
+        "check_matrix",
         return_value={"trivy": installed_status, "semgrep": missing_status},
-    ):
-        summary = manager.get_profile_summary("fast")
+    ) as check_matrix:
+        summary = manager.get_matrix_summary(["trivy", "semgrep"])
 
+    check_matrix.assert_called_once_with(["trivy", "semgrep"])
     assert summary["total"] == 2
     assert summary["installed"] == 1
     assert summary["missing"] == 1
-
-
-def test_get_profile_summary_distinguishes_manual_install():
-    """v1.0.5: get_profile_summary splits missing into real_missing + manual_install_missing."""
-    from scripts.cli.tool_manager import ToolManager
-
-    real_miss = MagicMock()
-    real_miss.installed = False
-    real_miss.execution_ready = False
-    real_miss.is_outdated = False
-    real_miss.is_critical = False
-    real_miss.manual_install = False
-
-    manual_miss = MagicMock()
-    manual_miss.installed = False
-    manual_miss.execution_ready = False
-    manual_miss.is_outdated = False
-    manual_miss.is_critical = False
-    manual_miss.manual_install = True
-
-    manager = ToolManager()
-    with patch.object(
-        manager,
-        "check_profile",
-        return_value={"prowler": real_miss, "akto": manual_miss},
-    ):
-        summary = manager.get_profile_summary("deep")
-
-    assert summary["missing"] == 2  # union, back-compat
-    assert summary["real_missing"] == 1
-    assert summary["manual_install_missing"] == 1
+    assert summary["ready"] is False
 
 
 # ========== Category 10: Version Drift ==========
@@ -710,9 +671,12 @@ def test_get_version_drift_no_drift():
 
     manager = ToolManager()
 
-    with patch.object(manager, "check_profile", return_value={"trivy": status}):
-        drift = manager.get_version_drift("fast")
+    with patch.object(
+        manager, "check_matrix", return_value={"trivy": status}
+    ) as check_matrix:
+        drift = manager.get_version_drift(["trivy"])
 
+    check_matrix.assert_called_once_with(["trivy"])
     assert len(drift) == 0
 
 
@@ -728,9 +692,9 @@ def test_get_version_drift_with_drift():
 
     manager = ToolManager()
 
-    with patch.object(manager, "check_profile", return_value={"trivy": status}):
+    with patch.object(manager, "check_matrix", return_value={"trivy": status}):
         with patch.object(manager, "_compare_version_direction", return_value="behind"):
-            drift = manager.get_version_drift("fast")
+            drift = manager.get_version_drift(["trivy"])
 
     assert len(drift) == 1
     assert drift[0]["tool"] == "trivy"
@@ -769,21 +733,6 @@ def test_verify_execution_missing_deps():
     assert "java" in missing  # zap requires a Java runtime
 
 
-def test_verify_execution_cdxgen_node_version():
-    """Test _verify_execution checks Node.js version for cdxgen."""
-    from scripts.cli.tool_manager import ToolManager
-
-    manager = ToolManager()
-
-    with patch("shutil.which", return_value="/usr/bin/node"):
-        with patch.object(manager, "_find_binary", return_value="/usr/bin/cdxgen"):
-            with patch.object(manager, "_get_node_version", return_value=(18, 0, 0)):
-                ready, warning, missing = manager._verify_execution("cdxgen")
-
-    assert ready is False
-    assert "Node.js" in warning
-
-
 # ========== Category 12: Helper Functions ==========
 
 
@@ -805,34 +754,6 @@ def test_get_remediation_for_tool_unknown():
 
     assert "commands" in result
     assert "jmo tools install unknown-tool" in result["commands"]
-
-
-def test_get_node_version():
-    """Test _get_node_version parses Node.js version."""
-    from scripts.cli.tool_manager import ToolManager
-
-    manager = ToolManager()
-
-    mock_result = MagicMock()
-    mock_result.returncode = 0
-    mock_result.stdout = "v20.10.0\n"
-
-    with patch("subprocess.run", return_value=mock_result):
-        version = manager._get_node_version()
-
-    assert version == (20, 10, 0)
-
-
-def test_get_node_version_not_installed():
-    """Test _get_node_version returns None when Node not installed."""
-    from scripts.cli.tool_manager import ToolManager
-
-    manager = ToolManager()
-
-    with patch("subprocess.run", side_effect=FileNotFoundError):
-        version = manager._get_node_version()
-
-    assert version is None
 
 
 def test_get_clean_env():
@@ -883,134 +804,6 @@ def test_print_tool_status_table():
     assert mock_print.call_count >= 3
 
 
-def test_print_tool_status_table_renders_manual_state():
-    """Manual-install tools render as MANUAL with distinct hint."""
-    from scripts.cli.tool_manager import ToolStatus, print_tool_status_table
-
-    statuses = {
-        "prowler": ToolStatus(
-            name="prowler",
-            installed=False,
-            install_hint="pip install prowler",
-            manual_install=False,
-        ),
-        "mobsf": ToolStatus(
-            name="mobsf",
-            installed=False,
-            expected_version="4.4.2",
-            manual_install=True,
-        ),
-    }
-
-    captured: list[str] = []
-    with patch(
-        "builtins.print",
-        side_effect=lambda *a, **k: captured.append(" ".join(str(x) for x in a)),
-    ):
-        print_tool_status_table(statuses, show_hints=True)
-
-    output = "\n".join(captured)
-    assert "MANUAL" in output  # status text rendered
-    assert "Manual install required" in output  # distinct hint
-    assert "docs/MANUAL_INSTALLATION.md" in output
-    assert "MISSING" in output  # prowler still rendered as MISSING
-
-
-def test_tool_status_derives_manual_status_type():
-    """ToolStatus(installed=False, manual_install=True) -> ToolStatusType.MANUAL."""
-    from scripts.cli.tool_manager import ToolStatus, ToolStatusType
-
-    manual = ToolStatus(name="akto", installed=False, manual_install=True)
-    real_missing = ToolStatus(name="prowler", installed=False, manual_install=False)
-
-    assert manual.status_type == ToolStatusType.MANUAL
-    assert manual.status_text == "MANUAL"
-    assert manual.status_color == "cyan"
-    assert real_missing.status_type == ToolStatusType.MISSING
-    assert real_missing.status_text == "MISSING"
-
-
-def test_print_profile_summary():
-    """Test print_profile_summary outputs profile info."""
-    from scripts.cli.tool_manager import print_profile_summary
-
-    mock_manager = MagicMock()
-    mock_manager.get_profile_summary.return_value = {
-        "profile": "fast",
-        "total": 8,
-        "installed": 6,
-        "execution_ready": 6,
-        "missing": 2,
-        "real_missing": 2,
-        "manual_install_missing": 0,
-        "not_ready": 0,
-        "outdated": 0,
-        "critical_outdated": 0,
-        "ready": False,
-        "warnings": [],
-    }
-
-    with patch("builtins.print") as mock_print:
-        print_profile_summary(mock_manager)
-
-    # Should print summary
-    assert mock_print.call_count >= 1
-
-
-def test_print_profile_summary_renders_manual_split():
-    """v1.0.5: deep profile shows 'N missing + M manual' when both exist."""
-    from scripts.cli.tool_manager import print_profile_summary
-
-    mock_manager = MagicMock()
-
-    def summary_for(profile: str) -> dict:
-        # Only "deep" has manual_install tools in real config; mock that shape.
-        if profile == "deep":
-            return {
-                "profile": "deep",
-                "total": 28,
-                "installed": 21,
-                "execution_ready": 21,
-                "missing": 7,
-                "real_missing": 3,
-                "manual_install_missing": 4,
-                "not_ready": 0,
-                "outdated": 0,
-                "critical_outdated": 0,
-                "ready": False,
-                "warnings": [],
-            }
-        return {
-            "profile": profile,
-            "total": 9,
-            "installed": 9,
-            "execution_ready": 9,
-            "missing": 0,
-            "real_missing": 0,
-            "manual_install_missing": 0,
-            "not_ready": 0,
-            "outdated": 0,
-            "critical_outdated": 0,
-            "ready": True,
-            "warnings": [],
-        }
-
-    mock_manager.get_profile_summary.side_effect = summary_for
-
-    captured: list[str] = []
-    with patch(
-        "builtins.print",
-        side_effect=lambda *a, **k: captured.append(" ".join(str(x) for x in a)),
-    ):
-        print_profile_summary(mock_manager)
-
-    output = "\n".join(captured)
-    assert "3 missing" in output
-    assert "4 manual" in output
-    # Non-deep profiles shouldn't have the "+ manual" suffix
-    assert "Ready" in output
-
-
 def test_get_missing_tools_for_scan():
     """Unavailable tools are returned in the missing list, by name.
 
@@ -1032,14 +825,20 @@ class TestGetRemediationForTool:
     """Tests for get_remediation_for_tool function."""
 
     def test_get_remediation_with_deps(self):
-        """Test remediation commands include dependencies."""
-        from scripts.cli.tool_manager import get_remediation_for_tool
+        """Test remediation commands include dependencies (zap needs Java)."""
+        from scripts.cli.tool_manager import (
+            REMEDIATION_COMMANDS,
+            get_remediation_for_tool,
+        )
 
-        result = get_remediation_for_tool("dependency-check", "linux")
+        result = get_remediation_for_tool("zap", "linux")
         # Should return commands dict
         assert "commands" in result
         assert "manual" in result
         assert "jmo_install" in result
+        # The dependency command comes before the tool's own install command.
+        java_linux = REMEDIATION_COMMANDS["zap"]["deps"]["java"]["linux"]
+        assert result["commands"][0] == java_linux
 
     def test_get_remediation_windows(self):
         """Test remediation commands for Windows platform."""
@@ -1122,25 +921,6 @@ class TestFindBinary:
             result = manager._find_binary("zap.sh")
 
         assert result == str(zap_sh)
-
-    def test_find_dependency_check_special_locations(self, tmp_path, monkeypatch):
-        """Test dependency-check found in special locations."""
-        from scripts.cli.tool_manager import ToolManager
-
-        manager = ToolManager()
-
-        # Create fake dependency-check location
-        dc_dir = tmp_path / "dependency-check" / "bin"
-        dc_dir.mkdir(parents=True)
-        dc_sh = dc_dir / "dependency-check.sh"
-        dc_sh.touch()
-
-        monkeypatch.setattr(Path, "home", lambda: tmp_path)
-
-        with patch("shutil.which", return_value=None):
-            result = manager._find_binary("dependency-check.sh")
-
-        assert result == str(dc_sh)
 
 
 class TestGetToolVersion:
@@ -1294,478 +1074,154 @@ class TestGetToolVersion:
         assert error is None
 
 
-# ========== Category 14: Tool-Specific Version Parsing ==========
-
-
-def test_parse_version_dependency_check():
-    """Test dependency-check version parsing with actual output format.
-
-    dependency-check outputs: "Dependency-Check Core version 12.1.0"
-    This tests the fixed regex pattern.
-    """
-    from scripts.cli.tool_manager import ToolManager
-
-    manager = ToolManager()
-    output = "Dependency-Check Core version 12.1.0"
-    version = manager._parse_version("dependency-check", output)
-
-    assert version == "12.1.0"
-
-
-def test_parse_version_dependency_check_multiline():
-    """Test dependency-check version parsing with full multiline output."""
-    from scripts.cli.tool_manager import ToolManager
-
-    manager = ToolManager()
-    # Simulating full output from dependency-check --version
-    output = """Dependency-Check Core version 12.1.0
-NVD API Endpoint: https://services.nvd.nist.gov/rest/json/cves/2.0
-"""
-    version = manager._parse_version("dependency-check", output)
-
-    assert version == "12.1.0"
-
-
-def test_parse_version_lynis():
-    """Test lynis version parsing with actual output format.
-
-    lynis --version outputs: "Lynis 3.1.3"
-    """
-    from scripts.cli.tool_manager import ToolManager
-
-    manager = ToolManager()
-    output = "Lynis 3.1.3"
-    version = manager._parse_version("lynis", output)
-
-    assert version == "3.1.3"
-
-
-def test_parse_version_lynis_show_version():
-    """Test lynis version parsing with 'lynis show version' output."""
-    from scripts.cli.tool_manager import ToolManager
-
-    manager = ToolManager()
-    # 'lynis show version' may output just the version number
-    output = "3.1.3"
-    version = manager._parse_version("lynis", output)
-
-    assert version == "3.1.3"
-
-
-class TestVersionCommandFallback:
-    """Tests for fallback version command functionality."""
-
-    def test_get_version_with_fallback_primary_succeeds(self):
-        """Test that fallback is not used when primary command succeeds."""
-        from scripts.cli.tool_manager import ToolManager
-
-        manager = ToolManager()
-        manager.platform = "linux"
-
-        mock_result = MagicMock()
-        mock_result.stdout = "Lynis 3.1.3"
-        mock_result.stderr = ""
-        mock_result.returncode = 0
-
-        with patch("subprocess.run", return_value=mock_result) as mock_run:
-            version, error = manager._get_tool_version("lynis", "/usr/bin/lynis")
-
-        assert version == "3.1.3"
-        assert error is None
-        # Should only call subprocess.run once (primary command)
-        assert mock_run.call_count == 1
-
-    def test_get_version_with_fallback_primary_fails(self):
-        """Test that fallback is used when primary command fails to parse version."""
-        from scripts.cli.tool_manager import ToolManager
-
-        manager = ToolManager()
-        manager.platform = "linux"
-
-        # First call (primary) returns unparseable output
-        primary_result = MagicMock()
-        primary_result.stdout = "Unknown output format"
-        primary_result.stderr = ""
-        primary_result.returncode = 0
-
-        # Second call (fallback) returns valid version
-        fallback_result = MagicMock()
-        fallback_result.stdout = "3.1.3"
-        fallback_result.stderr = ""
-        fallback_result.returncode = 0
-
-        with patch(
-            "subprocess.run", side_effect=[primary_result, fallback_result]
-        ) as mock_run:
-            version, error = manager._get_tool_version("lynis", "/usr/bin/lynis")
-
-        assert version == "3.1.3"
-        assert error is None
-        # Should call subprocess.run twice (primary + fallback)
-        assert mock_run.call_count == 2
-
-    def test_get_version_fallback_also_fails(self):
-        """Test behavior when both primary and fallback fail."""
-        from scripts.cli.tool_manager import ToolManager
-
-        manager = ToolManager()
-        manager.platform = "linux"
-
-        # Both calls return unparseable output
-        mock_result = MagicMock()
-        mock_result.stdout = "Unparseable output"
-        mock_result.stderr = ""
-        mock_result.returncode = 0
-
-        with patch("subprocess.run", return_value=mock_result):
-            version, error = manager._get_tool_version("lynis", "/usr/bin/lynis")
-
-        assert version is None
-        assert error is None
-
-    def test_lynis_version_commands_structure(self):
-        """Test that lynis has both default and fallback commands configured."""
-        from scripts.cli.tool_manager import VERSION_COMMANDS
-
-        lynis_config = VERSION_COMMANDS.get("lynis")
-        assert lynis_config is not None
-        assert isinstance(lynis_config, dict)
-        assert "default" in lynis_config
-        assert "fallback" in lynis_config
-        assert lynis_config["default"] == ["lynis", "--version"]
-        assert lynis_config["fallback"] == ["lynis", "show", "version"]
-
-
-def test_dependency_check_pattern_matches_actual_output():
-    """Verify dependency-check regex matches the actual tool output."""
-    from scripts.cli.tool_manager import VERSION_PATTERNS
-
-    pattern = VERSION_PATTERNS["dependency-check"]
-
-    # Test actual output format
-    actual_output = "Dependency-Check Core version 12.1.0"
-    match = pattern.search(actual_output)
-    assert match is not None
-    assert match.group(1) == "12.1.0"
-
-    # Test with different version numbers
-    alt_output = "Dependency-Check Core version 9.0.10"
-    match = pattern.search(alt_output)
-    assert match is not None
-    assert match.group(1) == "9.0.10"
-
-
-# ========== Category 15: ToolStatusSummary Tests ==========
+# ========== Category 14: ToolStatusSummary Tests ==========
 
 
 class TestToolStatusSummary:
     """Tests for ToolStatusSummary dataclass."""
 
     def test_toolstatussummary_defaults(self):
-        """Test ToolStatusSummary with default values."""
+        """Test ToolStatusSummary keeps every count and list it is given."""
         from scripts.cli.tool_manager import ToolStatusSummary
 
         summary = ToolStatusSummary(
-            profile_name="deep",
-            profile_total=28,
-            platform_applicable=27,
-            installed=25,
-            execution_ready=22,
-            platform_skipped=["falco", "afl++"],
-            manual_install=[],
+            total=12,
+            installed=10,
+            execution_ready=8,
             missing_dependency=["zap"],
-            not_installed=["noseyparker"],
-            version_issues=["prowler"],
-            content_triggered=["mobsf", "akto"],
+            not_installed=["yara", "nuclei"],
+            version_issues=["checkov"],
         )
 
-        assert summary.profile_name == "deep"
-        assert summary.profile_total == 28
-        assert summary.platform_applicable == 27
-        assert summary.installed == 25
-        assert summary.execution_ready == 22
-        assert len(summary.platform_skipped) == 2
-        assert len(summary.content_triggered) == 2
+        assert summary.total == 12
+        assert summary.installed == 10
+        assert summary.execution_ready == 8
+        assert summary.missing_dependency == ["zap"]
+        assert summary.not_installed == ["yara", "nuclei"]
+        assert summary.version_issues == ["checkov"]
 
     def test_toolstatussummary_needs_attention_count(self):
         """Test needs_attention_count property."""
         from scripts.cli.tool_manager import ToolStatusSummary
 
         summary = ToolStatusSummary(
-            profile_name="balanced",
-            profile_total=18,
-            platform_applicable=16,
-            installed=14,
-            execution_ready=12,
-            platform_skipped=["falco", "afl++"],
-            manual_install=["mobsf"],
+            total=12,
+            installed=11,
+            execution_ready=9,
             missing_dependency=["zap"],
-            not_installed=[],
-            version_issues=["prowler"],
-            content_triggered=[],
+            not_installed=["yara"],
+            version_issues=["checkov"],
         )
 
-        # needs_attention = manual(1) + missing_deps(1) + not_installed(0) + version_issues(1) = 3
+        # needs_attention = missing_deps(1) + not_installed(1) + version_issues(1) = 3
         assert summary.needs_attention_count == 3
-
-    def test_toolstatussummary_skipped_count(self):
-        """Test skipped_count property."""
-        from scripts.cli.tool_manager import ToolStatusSummary
-
-        summary = ToolStatusSummary(
-            profile_name="deep",
-            profile_total=29,
-            platform_applicable=27,
-            installed=25,
-            execution_ready=22,
-            platform_skipped=["falco", "afl++"],
-            manual_install=["mobsf"],
-            missing_dependency=[],
-            not_installed=[],
-            version_issues=[],
-            content_triggered=["akto"],
-        )
-
-        # skipped = platform(2) + manual(1) + content_triggered(1) = 4
-        assert summary.skipped_count == 4
 
     def test_toolstatussummary_format_status_line_all_ready(self):
         """Test format_status_line when all tools are ready."""
         from scripts.cli.tool_manager import ToolStatusSummary
+        from scripts.core.tool_registry import TOOL_MATRIX
 
+        n = len(TOOL_MATRIX)
         summary = ToolStatusSummary(
-            profile_name="fast",
-            profile_total=9,
-            platform_applicable=9,
-            installed=9,
-            execution_ready=9,
-            platform_skipped=[],
-            manual_install=[],
+            total=n,
+            installed=n,
+            execution_ready=n,
             missing_dependency=[],
             not_installed=[],
             version_issues=[],
-            content_triggered=[],
         )
 
-        status_line = summary.format_status_line()
-        assert "All 9 tools ready" in status_line
+        assert summary.format_status_line() == f"All {n} tools ready"
 
     def test_toolstatussummary_format_status_line_partial(self):
         """Test format_status_line when some tools need attention."""
         from scripts.cli.tool_manager import ToolStatusSummary
+        from scripts.core.tool_registry import TOOL_MATRIX
 
+        n = len(TOOL_MATRIX)
         summary = ToolStatusSummary(
-            profile_name="balanced",
-            profile_total=18,
-            platform_applicable=16,
-            installed=14,
-            execution_ready=12,
-            platform_skipped=["falco", "afl++"],
-            manual_install=[],
+            total=n,
+            installed=n - 1,
+            execution_ready=n - 2,
             missing_dependency=["zap"],
-            not_installed=[],
+            not_installed=["yara"],
             version_issues=[],
-            content_triggered=[],
         )
 
-        status_line = summary.format_status_line()
-        assert "12/16 tools ready" in status_line
-        assert "1 need attention" in status_line
+        assert summary.format_status_line() == (
+            f"{n - 2}/{n} tools ready (2 need attention)"
+        )
 
 
 class TestGetToolSummary:
     """Tests for get_tool_summary method."""
 
+    @staticmethod
+    def _status(installed, execution_ready, version_error=None, missing_deps=()):
+        status = MagicMock()
+        status.installed = installed
+        status.execution_ready = execution_ready
+        status.version_error = version_error
+        status.missing_deps = list(missing_deps)
+        return status
+
     def test_get_tool_summary_basic(self):
-        """Test get_tool_summary returns ToolStatusSummary."""
+        """Test get_tool_summary counts exactly the tools it is given."""
         from scripts.cli.tool_manager import ToolManager, ToolStatusSummary
 
         manager = ToolManager()
-
-        # Mock check_tool to return predictable results
-        mock_status_installed = MagicMock()
-        mock_status_installed.installed = True
-        mock_status_installed.execution_ready = True
-        mock_status_installed.version_error = None
-        mock_status_installed.missing_deps = []
-
-        mock_status_missing = MagicMock()
-        mock_status_missing.installed = False
-        mock_status_missing.execution_ready = False
-        mock_status_missing.version_error = None
-        mock_status_missing.missing_deps = []
+        installed = self._status(installed=True, execution_ready=True)
+        missing = self._status(installed=False, execution_ready=False)
+        tools = ["trivy", "semgrep", "checkov", "zap"]
 
         def mock_check_tool(name):
-            if name in ["trivy", "semgrep", "checkov"]:
-                return mock_status_installed
-            return mock_status_missing
+            return missing if name == "zap" else installed
 
-        with patch.object(manager, "check_tool", side_effect=mock_check_tool):
-            with patch(
-                "scripts.cli.tool_manager.get_tools_for_profile_filtered",
-                return_value=["trivy", "semgrep", "checkov"],
-            ):
-                with patch(
-                    "scripts.cli.tool_manager.get_skipped_tools_for_profile",
-                    return_value=[("falco", "Linux only")],
-                ):
-                    with patch(
-                        "scripts.cli.tool_manager.PROFILE_TOOLS",
-                        {"fast": ["trivy", "semgrep", "checkov", "falco"]},
-                    ):
-                        summary = manager.get_tool_summary("fast")
+        with patch.object(manager, "check_tool", side_effect=mock_check_tool) as check:
+            summary = manager.get_tool_summary(tools)
 
         assert isinstance(summary, ToolStatusSummary)
-        assert summary.profile_name == "fast"
-        assert summary.profile_total == 4  # Total in profile
-        assert summary.platform_applicable == 3  # After filtering
+        assert summary.total == 4
         assert summary.installed == 3  # Tools with installed=True
         assert summary.execution_ready == 3  # Tools that are ready
-        assert "falco" in summary.platform_skipped
+        assert summary.not_installed == ["zap"]
+        assert [c.args[0] for c in check.call_args_list] == tools
 
-    def test_get_tool_summary_with_content_triggered(self):
-        """Test get_tool_summary identifies content-triggered tools."""
+    def test_get_tool_summary_defaults_to_the_tool_matrix(self):
+        """With no list, the summary covers the whole TOOL_MATRIX, once each."""
         from scripts.cli.tool_manager import ToolManager
+        from scripts.core.tool_registry import TOOL_MATRIX
 
         manager = ToolManager()
+        ready = self._status(installed=True, execution_ready=True)
 
-        mock_status = MagicMock()
-        mock_status.installed = True
-        mock_status.execution_ready = True
-        mock_status.version_error = None
-        mock_status.missing_deps = []
+        with patch.object(manager, "check_tool", return_value=ready) as check:
+            summary = manager.get_tool_summary()
 
-        with patch.object(manager, "check_tool", return_value=mock_status):
-            with patch(
-                "scripts.cli.tool_manager.get_tools_for_profile_filtered",
-                return_value=["trivy", "mobsf", "akto"],
-            ):
-                with patch(
-                    "scripts.cli.tool_manager.get_skipped_tools_for_profile",
-                    return_value=[],
-                ):
-                    with patch(
-                        "scripts.cli.tool_manager.PROFILE_TOOLS",
-                        {"deep": ["trivy", "mobsf", "akto"]},
-                    ):
-                        with patch(
-                            "scripts.cli.tool_manager.CONTENT_TRIGGERED_TOOLS",
-                            {"mobsf", "akto"},
-                        ):
-                            summary = manager.get_tool_summary("deep")
-
-        # mobsf and akto should be in content_triggered
-        assert "mobsf" in summary.content_triggered
-        assert "akto" in summary.content_triggered
-        assert len(summary.content_triggered) == 2
+        assert summary.total == len(TOOL_MATRIX)
+        assert summary.execution_ready == len(TOOL_MATRIX)
+        assert [c.args[0] for c in check.call_args_list] == list(TOOL_MATRIX)
 
     def test_get_tool_summary_with_version_issues(self):
         """Test get_tool_summary detects version/crash issues."""
         from scripts.cli.tool_manager import ToolManager
 
         manager = ToolManager()
-
-        mock_status_ok = MagicMock()
-        mock_status_ok.installed = True
-        mock_status_ok.execution_ready = True
-        mock_status_ok.version_error = None
-        mock_status_ok.missing_deps = []
-
-        mock_status_crash = MagicMock()
-        mock_status_crash.installed = True
-        mock_status_crash.execution_ready = False
-        mock_status_crash.version_error = "ImportError - pydantic conflict"
-        mock_status_crash.missing_deps = []
+        ok = self._status(installed=True, execution_ready=True)
+        crash = self._status(
+            installed=True,
+            execution_ready=False,
+            version_error="ImportError - pydantic conflict",
+        )
 
         def mock_check_tool(name):
-            if name == "prowler":
-                return mock_status_crash
-            return mock_status_ok
+            return crash if name == "checkov" else ok
 
         with patch.object(manager, "check_tool", side_effect=mock_check_tool):
-            with patch(
-                "scripts.cli.tool_manager.get_tools_for_profile_filtered",
-                return_value=["trivy", "prowler"],
-            ):
-                with patch(
-                    "scripts.cli.tool_manager.get_skipped_tools_for_profile",
-                    return_value=[],
-                ):
-                    with patch(
-                        "scripts.cli.tool_manager.PROFILE_TOOLS",
-                        {"balanced": ["trivy", "prowler"]},
-                    ):
-                        with patch(
-                            "scripts.cli.tool_manager.CONTENT_TRIGGERED_TOOLS",
-                            set(),
-                        ):
-                            summary = manager.get_tool_summary("balanced")
+            summary = manager.get_tool_summary(["trivy", "checkov"])
 
-        assert "prowler" in summary.version_issues
-
-    def test_get_tool_summary_with_manual_install(self):
-        """Test get_tool_summary identifies manual install tools."""
-        from scripts.cli.tool_manager import ToolManager
-
-        manager = ToolManager()
-
-        mock_status_ok = MagicMock()
-        mock_status_ok.installed = True
-        mock_status_ok.execution_ready = True
-        mock_status_ok.version_error = None
-        mock_status_ok.missing_deps = []
-
-        mock_status_missing = MagicMock()
-        mock_status_missing.installed = False
-        mock_status_missing.execution_ready = False
-        mock_status_missing.version_error = None
-        mock_status_missing.missing_deps = []
-
-        def mock_check_tool(name):
-            if name == "mobsf":
-                return mock_status_missing
-            return mock_status_ok
-
-        with patch.object(manager, "check_tool", side_effect=mock_check_tool):
-            with patch(
-                "scripts.cli.tool_manager.get_tools_for_profile_filtered",
-                return_value=["trivy", "mobsf"],
-            ):
-                with patch(
-                    "scripts.cli.tool_manager.get_skipped_tools_for_profile",
-                    return_value=[],
-                ):
-                    with patch(
-                        "scripts.cli.tool_manager.PROFILE_TOOLS",
-                        {"deep": ["trivy", "mobsf"]},
-                    ):
-                        with patch(
-                            "scripts.cli.tool_manager.CONTENT_TRIGGERED_TOOLS",
-                            set(),
-                        ):
-                            with patch(
-                                "scripts.cli.tool_manager.MANUAL_INSTALL_TOOLS",
-                                {"mobsf"},
-                            ):
-                                summary = manager.get_tool_summary("deep")
-
-        # mobsf not installed and in MANUAL_INSTALL_TOOLS
-        assert "mobsf" in summary.manual_install
-
-    def test_get_tool_summary_invalid_profile(self):
-        """Test get_tool_summary with invalid profile."""
-        from scripts.cli.tool_manager import ToolManager
-
-        manager = ToolManager()
-
-        with patch(
-            "scripts.cli.tool_manager.PROFILE_TOOLS",
-            {"fast": ["trivy"]},
-        ):
-            summary = manager.get_tool_summary("nonexistent")
-
-        assert summary.profile_total == 0
-        assert summary.platform_applicable == 0
+        assert summary.version_issues == ["checkov"]
+        assert summary.execution_ready == 1
 
 
 class TestCleanEnvPathSeparator:
@@ -1824,82 +1280,34 @@ class TestCleanEnvPathSeparator:
         )
 
 
-class TestVariantExecutionReadiness:
-    """`_verify_execution` must resolve a variant to its parent binary.
-
-    `semgrep-secrets`, `trivy-rbac` and `checkov-cicd` are TOOL_VARIANTS: they
-    run their parent's executable, which is why TOOL_BINARY_NAMES maps each to
-    it. `check_tool`'s installed check and version lookup both resolved that;
-    `_verify_execution` did not, so it probed for a binary literally named
-    `semgrep-secrets`, never found one, and reported the tool as installed-but-
-    not-executable in the same run that listed it OK.
-
-    Measured on the deep profile before the fix: `execution_ready` 18 of 21
-    installed, `not_ready` 3, and three warnings reading `Missing: <variant>`.
-    After: 21 / 0 / none.
-
-    The pre-existing tests in this file all patch `_verify_execution` out, so
-    nothing exercised this path.
-    """
-
-    @pytest.mark.parametrize(
-        "variant,parent",
-        [
-            ("semgrep-secrets", "semgrep"),
-            ("trivy-rbac", "trivy"),
-            ("checkov-cicd", "checkov"),
-        ],
-    )
-    def test_variant_is_ready_when_only_the_parent_binary_exists(self, variant, parent):
-        from scripts.cli.tool_manager import ToolManager
-
-        manager = ToolManager()
-        with (
-            patch(
-                "scripts.cli.tool_manager.tool_exists",
-                side_effect=lambda cmd, warn=False: cmd == parent,
-            ),
-            patch.object(manager, "_find_binary", return_value=None),
-        ):
-            ready, warning, missing = manager._verify_execution(variant)
-
-        assert ready is True, f"{variant} reported not-ready though {parent} exists"
-        assert warning is None, f"unexpected warning for {variant}: {warning}"
-        assert missing == []
-
-    def test_a_genuinely_absent_tool_is_still_reported_missing(self):
-        """The fix must not turn the check into an unconditional pass."""
-        from scripts.cli.tool_manager import ToolManager
-
-        manager = ToolManager()
-        with (
-            patch("scripts.cli.tool_manager.tool_exists", return_value=False),
-            patch.object(manager, "_find_binary", return_value=None),
-        ):
-            ready, warning, missing = manager._verify_execution("semgrep-secrets")
-
-        assert ready is False
-        assert warning and "Missing" in warning
-        assert missing == ["semgrep"], "should name the binary it actually probed"
+# Every tool `jmo tools install` installs, minus the isolated venvs (whose
+# case predates #1164 and has its own test below).
+_NON_ISOLATED_INSTALLED_TOOLS = [
+    t for t in (*TOOL_MATRIX, POLICY_ENGINE) if t not in ISOLATED_TOOLS
+]
 
 
-class TestIsolatedToolWithoutAVersionIsNotOK:
+class TestInstalledToolWithoutAVersionIsNotOK:
     """A version the probe could not read is not evidence the tool works.
 
-    An isolated venv is built by pip from a pinned requirement, so its version
-    is always knowable. `_get_tool_version` nonetheless returns `(None, None)`
-    on timeout, on FileNotFoundError, on PermissionError and on an unparseable
-    output -- and `_derive_status_type` downgraded only on `version_error`, so
-    all four rendered as OK.
+    `_get_tool_version` returns `(None, None)` on timeout, on FileNotFoundError,
+    on PermissionError and on an unparseable output -- and `_derive_status_type`
+    downgrades only on `version_error`, so all four rendered as OK.
 
     Measured in the 2026-09-02 dogfood, on a machine where checkov could not
     run at all:
 
         checkov           OK          -             3.3.16
-        checkov-cicd      OK          3.3.16        3.3.16
 
-    Same binary, same table, two probes. The dash was the only signal, and the
-    OK beside it overrode it.
+    The dash was the only signal, and the OK beside it overrode it.
+
+    The guard first fired only for ISOLATED_TOOLS. #1164 widened it to every
+    installed tool: every tool JMo still installs reports a version, and a
+    binary tool that did not (cdxgen under load, in #1164's reproduction)
+    printed OK at exit 0 just the same.
+
+    `_verify_execution` is stubbed to "ready" in every case here, so the
+    no-version guard is the only thing that can mark a tool not ready.
     """
 
     @staticmethod
@@ -1939,32 +1347,31 @@ class TestIsolatedToolWithoutAVersionIsNotOK:
         assert status.status_type is ToolStatusType.OK
         assert status.execution_ready is True
 
-    def test_a_variant_resolves_to_its_parent_for_the_isolated_check(self, monkeypatch):
-        """`checkov-cicd` is not itself in ISOLATED_TOOLS; its parent is.
+    @pytest.mark.parametrize("tool", _NON_ISOLATED_INSTALLED_TOOLS)
+    def test_a_non_isolated_tool_with_no_version_is_not_ready(self, monkeypatch, tool):
+        """#1164: an installed binary that reports no version is not healthy.
 
-        Keying the check on the variant name would leave the variant rows OK
-        while only the base row was downgraded -- half a fix, and the more
-        confusing half, since the two rows describe one binary.
+        Before #1164 this case was pinned the other way round (a non-isolated
+        tool with no version stayed OK). Narrowing the guard back to
+        `tool_name in ISOLATED_TOOLS` sends these tools to the stubbed
+        `_verify_execution`, which reports them ready with no warning, so
+        every assertion below fails.
         """
         from scripts.cli.tool_manager import ToolStatusType
 
-        status = self._check(monkeypatch, "checkov-cicd", None)
+        status = self._check(monkeypatch, tool, None)
 
-        assert status.status_type is not ToolStatusType.OK
+        assert status.installed is True
         assert status.execution_ready is False
+        assert status.status_type is ToolStatusType.FAILED
+        assert status.execution_warning == (
+            f"{tool} is installed but did not report a version; it may not "
+            f"run. Try: jmo tools install {tool} --force"
+        )
 
-    def test_a_non_isolated_tool_with_no_version_is_unaffected(self, monkeypatch):
-        """Plenty of tools legitimately decline to print a version.
-
-        Scoping this to isolated venvs is deliberate: widening it to every
-        tool would turn a silent-failure guard into a wall of false NOT READY.
-        """
-        from scripts.cli.tool_manager import ToolStatusType
-
-        status = self._check(monkeypatch, "trivy", None)
-
-        assert status.status_type is ToolStatusType.OK
-        assert status.execution_ready is True
+    def test_hadolint_is_among_the_newly_guarded_tools(self):
+        """The #1164 reproduction's shape: a binary tool never isolated."""
+        assert "hadolint" in _NON_ISOLATED_INSTALLED_TOOLS
 
 
 def test_checkov_version_probe_budget_exceeds_its_measured_startup():
@@ -1983,19 +1390,12 @@ def test_checkov_version_probe_budget_exceeds_its_measured_startup():
     )
 
 
-class TestUnpinnedSentinelIsNotShownAsAVersion:
-    """`0.0.0` in versions.yaml means "nothing to pin", not release 0.0.0.
+class TestExpectedVersionDisplay:
+    """`expected_version_display` shows the pin as it is, or a dash.
 
-    A MANUAL_INSTALL tool ships in no Docker image, so no release of it is
-    baked anywhere. `update_versions.py --validate` has read `0.0.0` that way
-    since #935 and prints `falco: unpinned (manual install, no image)` --
-    but the sentinel was defined only in that dev script, so the CLI printed
-    it verbatim:
-
-        falco             UNSUPPORTED    -             0.0.0
-
-    falco is the only entry carrying it (afl++, akto and mobsf all have real
-    versions), so it reads as a data error rather than a convention.
+    v1 rendered `0.0.0` as "unpinned" for manual-install tools (falco). Those
+    tools, and the sentinel, left in v2.0.0: every tool JMo installs now ships
+    in the image with a real pin, so there is no convention left to honour.
     """
 
     @staticmethod
@@ -2004,41 +1404,16 @@ class TestUnpinnedSentinelIsNotShownAsAVersion:
 
         return ToolStatus(name=name, installed=False, expected_version=expected)
 
-    def test_a_manual_tool_carrying_the_sentinel_reads_unpinned(self):
-        from scripts.cli.tool_manager import UNPINNED_SENTINEL
+    def test_a_0_0_0_pin_is_shown_verbatim(self):
+        """A `0.0.0` pin is a genuinely missing pin, so it must stay visible
+        instead of hiding behind a word that reads as deliberate."""
+        status = self._status("trivy", "0.0.0")
 
-        status = self._status("falco", UNPINNED_SENTINEL)
-
-        assert status.expected_version_display == "unpinned"
-        assert UNPINNED_SENTINEL not in status.expected_version_display
-
-    def test_the_raw_value_survives_for_machine_readers(self):
-        """Display only -- `tools check --json` must not move."""
-        from scripts.cli.tool_manager import UNPINNED_SENTINEL
-
-        status = self._status("falco", UNPINNED_SENTINEL)
-
-        assert status.expected_version == UNPINNED_SENTINEL
-
-    def test_a_non_manual_tool_carrying_0_0_0_still_shows_it(self):
-        """The control that matters.
-
-        The sentinel is honoured only for MANUAL_INSTALL_TOOLS, exactly as
-        `_validate_one` honours it. A `0.0.0` on a tool that *does* ship in an
-        image is a genuinely missing pin, and rendering that as "unpinned"
-        would hide it behind the same word that means "deliberate" elsewhere.
-        """
-        from scripts.cli.tool_manager import UNPINNED_SENTINEL
-
-        status = self._status("trivy", UNPINNED_SENTINEL)
-
-        assert status.expected_version_display == UNPINNED_SENTINEL
+        assert status.expected_version_display == "0.0.0"
 
     def test_real_versions_are_untouched(self):
         assert self._status("trivy", "0.74.0").expected_version_display == "0.74.0"
-        assert self._status("akto", "mini-testing-1.53.7").expected_version_display == (
-            "mini-testing-1.53.7"
-        )
+        assert self._status("zap", "2.16.1").expected_version_display == "2.16.1"
 
     def test_a_missing_expected_version_still_renders_a_dash(self):
         assert self._status("trivy", None).expected_version_display == "-"
@@ -2048,12 +1423,11 @@ class TestNotReadyIsVisibleInTheTable:
     """#1136: `check_tool` has always computed execution readiness and this
     table threw it away.
 
-    `_verify_execution` checks Java for dependency-check and zap, Node for
-    cdxgen, bash for lynis on Windows, and rules for yara. With `java` hidden
-    from PATH, `jmo tools check --profile deep` printed
-    `dependency-check  OK  -  12.1.0` and exited 0, while every scan using it
-    exited 1 and wrote no output. The dash in the Installed column was the only
-    evidence on screen, and OK overrode it.
+    `_verify_execution` checks Java for zap and rules for yara. With `java`
+    hidden from PATH, a v1 `jmo tools check` printed
+    `dependency-check  OK  -  12.1.0` (a Java tool since removed) and exited 0,
+    while every scan using it exited 1 and wrote no output. The dash in the
+    Installed column was the only evidence on screen, and OK overrode it.
     """
 
     @staticmethod
@@ -2076,10 +1450,10 @@ class TestNotReadyIsVisibleInTheTable:
 
     def test_an_installed_tool_that_cannot_run_is_not_ok(self):
         status = self._status(
-            "dependency-check",
+            "zap",
             installed=True,
             installed_version=None,
-            expected_version="12.1.0",
+            expected_version="2.16.1",
             execution_ready=False,
             execution_warning="Missing: java",
         )
@@ -2093,26 +1467,29 @@ class TestNotReadyIsVisibleInTheTable:
         """A row that says a tool is not ready and nothing about why sends the
         reader to the installer, which will report it already installed."""
         status = self._status(
-            "dependency-check",
+            "zap",
             installed=True,
             execution_ready=False,
-            execution_warning="Java not found (dependency-check requires Java 11+)",
+            execution_warning="Missing: java",
         )
 
         out = self._render(status)
 
-        assert "Java not found" in out
+        assert "Missing: java" in out
 
     def test_not_ready_outranks_outdated(self):
         """A tool that cannot run at all is a worse problem than an old one."""
         status = self._status(
-            "cdxgen",
+            "yara",
             installed=True,
-            installed_version="10.0.0",
-            expected_version="12.8.2",
+            installed_version="4.5.0",
+            expected_version="4.5.4",
             is_outdated=True,
             execution_ready=False,
-            execution_warning="Node.js not found (required for cdxgen)",
+            execution_warning=(
+                "No YARA rules installed - yara would report every scan clean. "
+                "Run: jmo tools install yara --force"
+            ),
         )
 
         out = self._render(status)
@@ -2123,10 +1500,10 @@ class TestNotReadyIsVisibleInTheTable:
     def test_a_ready_tool_is_still_ok(self):
         """The regression guard: with its dependency present, nothing changes."""
         status = self._status(
-            "dependency-check",
+            "zap",
             installed=True,
-            installed_version="12.1.0",
-            expected_version="12.1.0",
+            installed_version="2.16.1",
+            expected_version="2.16.1",
             execution_ready=True,
         )
 

@@ -937,7 +937,7 @@ def _check_docker_jmo_version() -> CheckResult | None:
                 "docker",
                 "run",
                 "--rm",
-                "ghcr.io/jimmy058910/jmo-security:balanced",
+                "ghcr.io/jimmy058910/jmo-security:latest",
                 "--help",
             ],
             capture_output=True,

@@ -95,8 +95,8 @@ class TestStubbedToolIsNotASuccess:
     On a normal host the pre-flight removes missing tools before the scanners
     run, so this fires only when `find_tool` disagrees with it at scan time.
     **In a container the pre-flight is skipped entirely** -- `jmo.py` gates it
-    on `DOCKER_CONTAINER` -- so it is the normal path there, not an edge case:
-    a `deep` image is expected to be missing the four MANUAL_INSTALL_TOOLS.
+    on `DOCKER_CONTAINER` -- so it is the normal path there for any tool the
+    image does not carry.
     """
 
     @pytest.mark.parametrize(
@@ -269,15 +269,33 @@ class TestStubbedToolIsNotASuccess:
         keeps the 39th from doing the same -- and it covers all five scanners,
         which is where a per-scanner test would leave gaps.
 
-        Derived, with a floor, so an extractor that finds nothing cannot pass.
+        The extractor is checked against an independent count rather than a
+        floor: every `if "<tool>" in tools:` block writes its stub exactly once
+        and then records the outcome, so each file must yield one stub site per
+        tool block. An extractor that finds nothing, or misses a block whose
+        stub is written in a shape it cannot see, fails here.
         """
         import ast
 
+        def is_tool_block(node: ast.AST) -> bool:
+            return (
+                isinstance(node, ast.If)
+                and isinstance(node.test, ast.Compare)
+                and isinstance(node.test.left, ast.Constant)
+                and isinstance(node.test.left.value, str)
+                and len(node.test.ops) == 1
+                and isinstance(node.test.ops[0], ast.In)
+                and ast.unparse(node.test.comparators[0]) == "tools"
+            )
+
         scan_jobs = Path(jmo.__file__).parent / "scan_jobs"
         offenders: list[str] = []
-        stub_calls = 0
+        stub_calls: dict[str, int] = {}
+        tool_blocks: dict[str, int] = {}
         for path in sorted(scan_jobs.glob("*.py")):
             tree = ast.parse(path.read_bytes().decode("utf-8"), filename=str(path))
+            stub_calls[path.name] = 0
+            tool_blocks[path.name] = sum(map(is_tool_block, ast.walk(tree)))
             for node in ast.walk(tree):
                 body = getattr(node, "body", None)
                 if not isinstance(body, list):
@@ -289,7 +307,7 @@ class TestStubbedToolIsNotASuccess:
                         and "write_stub" in ast.unparse(first.value.func)
                     ):
                         continue
-                    stub_calls += 1
+                    stub_calls[path.name] += 1
                     if (
                         isinstance(second, ast.Assign)
                         and "statuses[" in ast.unparse(second.targets[0])
@@ -298,8 +316,10 @@ class TestStubbedToolIsNotASuccess:
                     ):
                         offenders.append(f"{path.name}:{second.lineno}")
 
-        assert stub_calls >= 30, (
-            f"AST scan found only {stub_calls} stub calls; extractor is broken"
+        assert sum(tool_blocks.values()), "found no tool block in scan_jobs/"
+        assert stub_calls == tool_blocks, (
+            "stub sites found per scanner do not match its tool blocks; the "
+            f"extractor is missing some: stubs={stub_calls} blocks={tool_blocks}"
         )
         assert not offenders, (
             "a stub is written and the tool recorded as a successful run at:\n"
@@ -334,7 +354,7 @@ class TestRunTimed:
 def _scan_args(
     tmp_path: Path, cfg_path: Path, repos_dir: Path
 ) -> types.SimpleNamespace:
-    """The minimum namespace ``cmd_scan`` needs, mirroring test_cli_profiles."""
+    """The minimum namespace ``cmd_scan`` needs, mirroring test_cli_per_tool_config."""
     return types.SimpleNamespace(
         cmd="scan",
         repo=None,
@@ -346,7 +366,6 @@ def _scan_args(
         timeout=None,
         threads=None,
         allow_missing_tools=False,
-        profile_name=None,
         log_level="INFO",
         human_logs=False,
         no_store_history=True,
@@ -380,31 +399,28 @@ def scan_env(tmp_path: Path, monkeypatch):
     return _scan_args(tmp_path, cfg_path, repos_dir)
 
 
-class TestProfileShortcutsStoreHistory:
-    """#870: `jmo fast|balanced|full` silently stored nothing.
+class TestScanStoresHistory:
+    """#870: `--store-history` has to exist on the parser AND work.
 
-    `cmd_profile` copies the *profile* parser's namespace into `cmd_ci`, and
-    that parser defined 12 dests to `jmo ci`'s 42. `store_history` was among the
-    30 missing, and `report_orchestrator` gates storage on
-    `getattr(args, "store_history", False)` -- so an absent attribute meant OFF
-    while the parser that defines it defaults it ON. `jmo history list` and
-    `jmo trends` were permanently empty for anyone who only ran `jmo fast`, and
-    the shortcuts had no `--no-store-history` to turn it on either.
-
-    The parser-parity guards live in `test_ci_arg_forwarding.py`. This asserts
-    the behaviour they exist to protect, because "the dest is defined" and "a
-    row reaches the database" are different claims.
+    Found on the `jmo fast|balanced|full` shortcuts, whose parser lacked the
+    dest: storage is gated on `getattr(args, "store_history", False)`, so an
+    absent attribute meant OFF while the parser that defines it defaults it
+    ON, and `jmo history list` stayed empty. The shortcuts left in v2.0.0 and
+    `jmo scan` is the entry point, so the behaviour is asserted there --
+    "the dest is defined" and "a row reaches the database" are different
+    claims.
     """
 
-    def _profile_args(self, scan_env, tmp_path, db):
-        """The shortcut's namespace, as its own parser would produce it."""
+    @staticmethod
+    def _args(scan_env, tmp_path, db, *extra):
+        """`jmo scan`'s namespace, as its own parser produces it."""
         import sys
 
         from scripts.cli.jmo import parse_args
 
         argv = [
             "jmo",
-            "fast",
+            "scan",
             "--repos-dir",
             scan_env.repos_dir,
             "--results-dir",
@@ -413,200 +429,52 @@ class TestProfileShortcutsStoreHistory:
             scan_env.config,
             "--history-db",
             str(db),
-            # Pinned for the same reason as the duration test: naming a profile
-            # otherwise resolves the full tool list and the version check spawns
-            # a real binary, which the #907 guard refuses.
             "--tools",
             "trufflehog",
+            *extra,
         ]
         with patch.object(sys, "argv", argv):
             return parse_args()
 
-    def test_jmo_fast_records_the_scan_in_history(self, scan_env, tmp_path):
-        db = tmp_path / "history.db"
-        args = self._profile_args(scan_env, tmp_path, db)
-
-        assert args.store_history is True, (
-            "the shortcut parser still does not define store_history"
+    @staticmethod
+    def _scan(args, monkeypatch) -> int:
+        # The startup version check resolves binaries through its own finder;
+        # pinned so a trufflehog on PATH is never spawned for `--version`
+        # (#1234), which is the probe the #907 guard refuses.
+        monkeypatch.setattr(
+            "scripts.cli.tool_manager.ToolManager._find_binary", lambda *a, **k: None
         )
-
-        with (
-            patch("scripts.cli.scan_jobs.scan_repository") as mock_scan,
-            patch("scripts.cli.jmo._open_results"),
-        ):
+        with patch("scripts.cli.scan_jobs.scan_repository") as mock_scan:
             mock_scan.return_value = ("proj", {"trufflehog": True})
-            rc = jmo.cmd_profile(args, "fast")
+            return jmo.cmd_scan(args)
 
-        assert rc == 0
-        assert db.exists(), "jmo fast created no history database at all"
+    def test_jmo_scan_records_the_scan_in_history(
+        self, scan_env, tmp_path, monkeypatch
+    ):
+        db = tmp_path / "history.db"
+        args = self._args(scan_env, tmp_path, db)
+
+        assert args.store_history is True, "jmo scan no longer stores by default"
+        assert self._scan(args, monkeypatch) == 0
+
+        assert db.exists(), "jmo scan created no history database at all"
         con = sqlite3.connect(f"file:{db.as_posix()}?mode=ro", uri=True)
         try:
-            rows = con.execute("SELECT profile FROM scans").fetchall()
+            (stored,) = con.execute("SELECT COUNT(*) FROM scans").fetchone()
         finally:
             con.close()
-        assert len(rows) == 1, f"expected exactly one stored scan, got {rows}"
-        assert rows[0][0] == "fast", "the row must name the shortcut's profile"
+        assert stored == 1, f"expected exactly one stored scan, got {stored}"
 
-    def test_no_store_history_now_turns_it_off(self, scan_env, tmp_path):
-        """The other half of the fix: the flag has to exist AND work.
-
-        Without this the test above passes on a build that stores
-        unconditionally, which was option 2 in the issue and the thing option 1
-        was chosen over.
-        """
-        import sys
-
-        from scripts.cli.jmo import parse_args
-
+    def test_no_store_history_turns_it_off(self, scan_env, tmp_path, monkeypatch):
+        """The other half: without it, the test above passes on a build that
+        stores unconditionally."""
         db = tmp_path / "history.db"
-        argv = [
-            "jmo",
-            "fast",
-            "--repos-dir",
-            scan_env.repos_dir,
-            "--results-dir",
-            str(tmp_path / "results"),
-            "--config",
-            scan_env.config,
-            "--history-db",
-            str(db),
-            "--tools",
-            "trufflehog",
-            "--no-store-history",
-        ]
-        with patch.object(sys, "argv", argv):
-            args = parse_args()
-        assert args.store_history is False
+        args = self._args(scan_env, tmp_path, db, "--no-store-history")
 
-        with (
-            patch("scripts.cli.scan_jobs.scan_repository") as mock_scan,
-            patch("scripts.cli.jmo._open_results"),
-        ):
-            mock_scan.return_value = ("proj", {"trufflehog": True})
-            assert jmo.cmd_profile(args, "fast") == 0
+        assert args.store_history is False
+        assert self._scan(args, monkeypatch) == 0
 
         assert not db.exists(), "--no-store-history still wrote a database"
-
-    def test_a_contradictory_profile_name_is_refused(self, scan_env, tmp_path):
-        """`--profile-name` now exists on the shortcuts and cmd_profile sets it.
-
-        Overriding what the user typed in silence is the class this campaign
-        keeps finding, so the contradiction is an error instead.
-        """
-        import sys
-
-        from scripts.cli.jmo import parse_args
-
-        argv = [
-            "jmo",
-            "fast",
-            "--repos-dir",
-            scan_env.repos_dir,
-            "--results-dir",
-            str(tmp_path / "results"),
-            "--config",
-            scan_env.config,
-            # Isolation that has to hold for the MUTATED path, not just this
-            # one. The assertion below is that cmd_profile refuses before
-            # scanning -- so in a passing run nothing here is reached. Mutating
-            # the refusal away is exactly what makes it run, and without these
-            # two flags it then resolved the full 9-tool fast profile and wrote
-            # two rows into the developer's real .jmo/history.db, because #870
-            # gave the shortcuts store_history=True. A test is only isolated if
-            # it is isolated when its guard is removed.
-            "--history-db",
-            str(tmp_path / "history.db"),
-            "--tools",
-            "trufflehog",
-            "--profile-name",
-            "deep",
-        ]
-        with patch.object(sys, "argv", argv):
-            args = parse_args()
-
-        assert jmo.cmd_profile(args, "fast") == 2
-        assert not (tmp_path / "history.db").exists(), (
-            "the refusal happened after a scan, not before it"
-        )
-
-    @pytest.mark.parametrize(
-        ("extra", "expected"),
-        [
-            pytest.param([], True, id="default-allows-missing-tools"),
-            pytest.param(["--strict"], False, id="strict-disables-stubs"),
-        ],
-    )
-    def test_strict_still_controls_stubbing(self, scan_env, tmp_path, extra, expected):
-        """`--allow-missing-tools` now exists here too, so say which one wins.
-
-        The shortcuts allow missing tools by default -- the opposite of
-        `jmo ci` -- and `--strict` is the flag that turns that off. Both rows
-        matter: without the first, setting the value to a constant `False`
-        passes; without the second, a constant `True` passes.
-        """
-        import sys
-
-        from scripts.cli.jmo import parse_args
-
-        argv = [
-            "jmo",
-            "fast",
-            "--repos-dir",
-            scan_env.repos_dir,
-            "--results-dir",
-            str(tmp_path / "results"),
-            "--config",
-            scan_env.config,
-            "--no-store-history",
-            *extra,
-        ]
-        with patch.object(sys, "argv", argv):
-            args = parse_args()
-
-        captured = {}
-
-        def fake_ci(ns):
-            captured["ns"] = ns
-            return 0
-
-        with (
-            patch("scripts.cli.jmo.cmd_ci", fake_ci),
-            patch("scripts.cli.jmo._open_results"),
-        ):
-            assert jmo.cmd_profile(args, "fast") == 0
-
-        assert captured["ns"].allow_missing_tools is expected
-
-    def test_a_matching_profile_name_is_accepted(self, scan_env, tmp_path):
-        """Negative control: only a contradiction may be refused."""
-        import sys
-
-        from scripts.cli.jmo import parse_args
-
-        argv = [
-            "jmo",
-            "fast",
-            "--repos-dir",
-            scan_env.repos_dir,
-            "--results-dir",
-            str(tmp_path / "results"),
-            "--config",
-            scan_env.config,
-            "--tools",
-            "trufflehog",
-            "--no-store-history",
-            "--profile-name",
-            "fast",
-        ]
-        with patch.object(sys, "argv", argv):
-            args = parse_args()
-
-        with (
-            patch("scripts.cli.scan_jobs.scan_repository") as mock_scan,
-            patch("scripts.cli.jmo._open_results"),
-        ):
-            mock_scan.return_value = ("proj", {"trufflehog": True})
-            assert jmo.cmd_profile(args, "fast") == 0
 
 
 class TestScanRecordsItsOwnDuration:
@@ -632,16 +500,10 @@ class TestScanRecordsItsOwnDuration:
         db = tmp_path / "history.db"
         scan_env.store_history = True
         scan_env.history_db = str(db)
-        # The shared fixture's config names no default_profile, which makes
-        # cmd_scan record profile="custom" -- a value store_scan rejects, so
-        # the run would exit 0 having stored nothing and this test would be
-        # asserting against an empty table.
-        #
-        # --tools is pinned alongside it because naming a profile otherwise
-        # resolves the full 17-tool balanced list, and the version check then
-        # spawns a real `semgrep --version` -- which the #907 guard correctly
-        # refuses. The profile here is a label on the row, not a tool list.
-        scan_env.profile_name = "balanced"
+        # The fixture's jmo.yml already names only trufflehog. --tools pins it
+        # as well, so nothing about config resolution can widen this scan to
+        # the full TOOL_MATRIX, whose version check would spawn a real
+        # `semgrep --version` -- which the #907 guard correctly refuses.
         scan_env.tools = ["trufflehog"]
 
         # A clock that advances 1000s per read, so the recorded value cannot be
@@ -728,8 +590,8 @@ class TestScanExitCodeReflectsTargetOutcome:
     def test_partial_target_exits_zero_but_says_so(self, scan_env, capsys):
         """Deliberately scoped: only a target that produced *nothing* fails the run.
 
-        Individual tool failures are already reported per tool, and a deep
-        profile legitimately runs tools that do not apply everywhere. Making
+        Individual tool failures are already reported per tool, and a full
+        matrix scan legitimately runs tools that do not apply everywhere. Making
         any single tool failure non-zero would redden ordinary scans.
         """
         with patch("scripts.cli.scan_jobs.scan_repository") as mock_scan:
@@ -827,9 +689,7 @@ class TestResumeSkipIsVisibleAtDefaultVerbosity:
             (tmp_path / name).mkdir()
         targets = ScanTargets(repos=[tmp_path / "alpha", tmp_path / "beta"])
 
-        session = ScanSession(
-            session_id="s", profile="p", config_hash="h", started_at=0.0, pid=1
-        )
+        session = ScanSession(session_id="s", config_hash="h", started_at=0.0, pid=1)
         session.register_target("repo", "alpha", ["trufflehog"])
         session.register_target("repo", "beta", ["trufflehog"])
         session.mark_target_complete("alpha", {"trufflehog": True})
@@ -930,10 +790,10 @@ class TestToolApplicableToNoTargetType:
 
         This is what `tests/unit/test_signal_handling.py` had been doing by
         accident for years with `gitleaks` -- removed in v0.5.0 and implemented
-        nowhere -- while asserting the run exited 0. Measured across all four
-        profiles, **every** profile/target-type pair has at least one applicable
-        tool, so no profile-driven scan reaches this state; it takes an explicit
-        `--tools` naming something inapplicable.
+        nowhere -- while asserting the run exited 0. **Every** target type has
+        at least one applicable TOOL_MATRIX tool, so a default scan never
+        reaches this state; it takes an explicit `--tools` naming something
+        inapplicable.
         """
         from scripts.cli.scan_orchestrator import ScanOrchestrator, ScanTargets
 

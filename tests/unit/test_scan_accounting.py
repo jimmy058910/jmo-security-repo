@@ -8,7 +8,7 @@ artifacts, never from the exit code.
 
 These tests cover the *verdict logic* with fabricated inputs, so they can assert
 the cases a healthy scanner never produces - a tool in zero states, a tool in
-two, a name reported that is not in the profile. A reconciler that cannot fail
+two, a name reported that was never declared. A reconciler that cannot fail
 is worth nothing, and the only way to know it can is to hand it a broken scan.
 
 The end-to-end half - that the reconciler's patterns still match what the
@@ -127,9 +127,11 @@ def test_tool_in_two_states_is_contradictory() -> None:
 def test_manual_tool_that_is_also_unresolved_is_not_contradictory() -> None:
     """manual + unresolved is the correct pairing, not a disagreement.
 
-    The four MANUAL_INSTALL_TOOLS are manual-by-design and therefore also
-    absent. Counting that as a contradiction would make every deep scan fail
-    forever, which is how a guard gets disabled instead of fixed.
+    A manual-install tool is absent by design wherever nobody installed it by
+    hand. Counting that as a contradiction would make every scan declaring one
+    fail forever, which is how a guard gets disabled instead of fixed. No
+    v2.0.0 matrix tool is manual-install; the reconciler keeps the state for a
+    future one, so the label here is only a label.
     """
     result = reconcile(
         declared=["falco"],
@@ -154,11 +156,12 @@ def test_any_single_state_accounts_for_a_tool(state: str) -> None:
     assert result.ok
 
 
-def test_reported_tool_outside_the_profile_is_a_failure() -> None:
+def test_reported_tool_outside_the_declared_set_is_a_failure() -> None:
     """The scanner must name tools, not the binaries they happen to invoke.
 
     `docker` and `zap-baseline.py` were once reported as tools with missing
-    findings. Neither is in any profile; both are implementation details of zap.
+    findings. Neither was ever a declared tool; both were implementation
+    details of zap.
     """
     result = reconcile(
         declared=["zap"],
@@ -170,7 +173,7 @@ def test_reported_tool_outside_the_profile_is_a_failure() -> None:
     assert not result.ok
 
 
-def test_output_file_for_a_name_outside_the_profile_is_a_failure() -> None:
+def test_output_file_for_a_name_outside_the_declared_set_is_a_failure() -> None:
     """An output file nothing declared is an unexplained artifact."""
     result = reconcile(
         declared=["trivy"],

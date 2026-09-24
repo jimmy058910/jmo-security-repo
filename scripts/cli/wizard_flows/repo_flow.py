@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 from .base_flow import BaseWizardFlow
-from .profile_config import PROFILES, get_profile_warning
 
 
 class RepoFlow(BaseWizardFlow):
@@ -20,7 +19,7 @@ class RepoFlow(BaseWizardFlow):
         return {"repos": self.detector.detect_repos()}
 
     def prompt_user(self) -> dict[str, Any]:
-        """Prompt for profile and artifact generation options.
+        """Prompt for artifact generation options.
 
         Returns:
             Dictionary with user selections
@@ -30,28 +29,6 @@ class RepoFlow(BaseWizardFlow):
         # Display detected repositories
         self._print_detected_repos(self.detected_targets)
 
-        # Profile selection with recommendations. Both the descriptions and the
-        # choices come from PROFILES, which derives its tool counts from
-        # PROFILE_TOOLS -- the hardcoded copy here had drifted to the wrong
-        # counts and omitted `slim` entirely (#721).
-        profile_info = [
-            f"{key}: {spec['description']}, {spec['est_time']}"
-            for key, spec in PROFILES.items()
-        ]
-        self.prompter.print_summary_box("📊 Profile Options", profile_info)
-
-        profile = self.prompter.prompt_choice(
-            "Select scan profile:",
-            choices=list(PROFILES),
-            default="balanced",
-        )
-
-        # Show profile-specific warnings (e.g., deep profile first-run timing)
-        warning = get_profile_warning(profile)
-        if warning:
-            print()  # Add spacing
-            self.prompter.print_warning(warning)
-
         # Ask about artifact generation
         self.prompter.print_info(
             "Artifacts: Makefile targets, GitHub Actions workflows, shell scripts"
@@ -60,7 +37,7 @@ class RepoFlow(BaseWizardFlow):
             "Generate reusable artifacts?", default=True
         )
 
-        return {"profile": profile, "emit_artifacts": emit_artifacts}
+        return {"emit_artifacts": emit_artifacts}
 
     def _print_detected_repos(self, targets: dict) -> None:
         """Print summary of detected repositories."""
@@ -83,12 +60,12 @@ class RepoFlow(BaseWizardFlow):
 
         Args:
             targets: Detected targets (repos)
-            options: User selections (profile, artifacts)
+            options: User selections (artifacts)
 
         Returns:
             Command list
         """
-        cmd = ["jmo", "scan", "--profile-name", options["profile"]]
+        cmd = ["jmo", "scan"]
 
         if targets["repos"]:
             # Use first detected repo

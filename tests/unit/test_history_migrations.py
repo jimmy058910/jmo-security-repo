@@ -14,9 +14,10 @@ Run with: pytest tests/unit/test_history_migrations.py -v
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
-from scripts.core.history_db import get_connection, init_database
+from scripts.core.history_db import get_connection, init_database, store_scan
 from scripts.core.history_migrations import (
     Migration,
     discover_migrations,
@@ -197,16 +198,24 @@ def test_migration_idempotent(tmp_path: Path):
 
 
 def _build_legacy_scans_table(db_path: Path) -> None:
-    """Recreate `scans` with the pre-#721 CHECK that enumerated 3 profiles.
+    """Recreate `scans` as a pre-#721 database has it.
 
     Derived from the live DDL so that unrelated column changes stay in sync;
-    only the constraint that #721 removed is added back.
+    only what later versions removed is added back: the `profile` column and
+    its index (dropped in v2.0.0) and the CHECK that enumerated 3 profiles
+    (removed by #721).
     """
     from scripts.core.history_db import CREATE_SCANS_TABLE
 
     legacy_ddl = CREATE_SCANS_TABLE.replace(
+        "    tools TEXT NOT NULL,",
+        "    profile TEXT NOT NULL,\n    tools TEXT NOT NULL,",
+    ).replace(
         "CHECK (target_type IN",
         "CHECK (profile IN ('fast', 'balanced', 'deep')),\n    CHECK (target_type IN",
+    )
+    assert "profile TEXT NOT NULL" in legacy_ddl, (
+        "legacy fixture failed to inject the profile column"
     )
     assert "CHECK (profile IN" in legacy_ddl, "legacy fixture failed to inject CHECK"
 
@@ -227,10 +236,12 @@ def _build_legacy_scans_table(db_path: Path) -> None:
     conn.executescript(legacy_ddl)
     for ddl in index_ddl:
         conn.execute(ddl)
+    conn.execute("CREATE INDEX idx_scans_profile ON scans(profile)")
     conn.commit()
 
 
-def _insert_scan(conn, scan_id: str, profile: str) -> None:
+def _insert_legacy_scan(conn, scan_id: str, profile: str) -> None:
+    """Insert a scan row into a legacy table, which requires a profile."""
     conn.execute(
         """
         INSERT INTO scans (
@@ -243,33 +254,98 @@ def _insert_scan(conn, scan_id: str, profile: str) -> None:
     )
 
 
-def test_migration_lets_legacy_db_store_slim_scans(tmp_path: Path):
-    """#721: an existing database can store `slim` scans after migrating.
+def _insert_scan(conn, scan_id: str) -> None:
+    """Insert a scan row into the current schema, which has no profile."""
+    conn.execute(
+        """
+        INSERT INTO scans (
+            id, timestamp, timestamp_iso, tools, targets,
+            target_type, total_findings, critical_count, high_count,
+            medium_count, low_count, info_count, jmo_version
+        ) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
+        """,
+        (scan_id, 0, "1970-01-01T00:00:00", "[]", "[]", "repo", "test"),
+    )
+
+
+def _results_dir(tmp_path: Path) -> Path:
+    """A results directory holding one finding, as store_scan() reads it."""
+    summaries = tmp_path / "results" / "summaries"
+    summaries.mkdir(parents=True)
+    finding = {
+        "id": "new-finding",
+        "severity": "HIGH",
+        "tool": {"name": "trivy", "version": "0.74.0"},
+        "ruleId": "CVE-2024-1234",
+        "location": {"path": "src/main.py", "startLine": 1},
+        "message": "x",
+    }
+    (summaries / "findings.json").write_bytes(
+        json.dumps({"findings": [finding]}).encode("utf-8")
+    )
+    return tmp_path / "results"
+
+
+def test_migration_lets_legacy_db_store_scans(tmp_path: Path):
+    """#721: an existing database can store scans after migrating.
 
     Changing CREATE_SCANS_TABLE only fixes databases created afterwards.
     SQLite cannot drop a CHECK constraint in place, so an existing database
-    keeps rejecting slim scans until the table is rebuilt.
+    keeps its CHECK until migrated -- and SQLite also refuses to drop a column
+    a table CHECK names, so v2.0.0's DROP COLUMN profile depends on v1.2.0
+    having removed the constraint first.
     """
     db_path = tmp_path / "legacy.db"
     init_database(db_path)
     _build_legacy_scans_table(db_path)
 
     conn = get_connection(db_path)
-    _insert_scan(conn, "pre-existing", "balanced")
+    _insert_legacy_scan(conn, "pre-existing", "balanced")
     conn.commit()
+    conn.close()
 
     result = run_migrations(db_path)
     assert result["errors"] == [], f"migration failed: {result['errors']}"
+    assert result["final_version"] == "2.0.0"
+
+    scan_id = store_scan(_results_dir(tmp_path), tools=["trivy"], db_path=db_path)
 
     conn = get_connection(db_path)
-    _insert_scan(conn, "after-migration", "slim")
-    conn.commit()
+    stored = {row[0] for row in conn.execute("SELECT id FROM scans").fetchall()}
+    assert stored == {"pre-existing", scan_id}
 
-    stored = {
-        row[0]
-        for row in conn.execute("SELECT profile FROM scans ORDER BY id").fetchall()
-    }
-    assert stored == {"balanced", "slim"}
+
+def test_pre_721_database_accepts_the_next_store_without_migrating(tmp_path: Path):
+    """A database still carrying the #721 CHECK must accept the next store.
+
+    Migrations run only on an explicit `jmo history migrate`, while store_scan()
+    runs init_database() on every store, and init_database() drops the legacy
+    profile column in place. SQLite refuses to DROP a column that a table
+    CHECK names, so that drop has to cope with the constraint a pre-#721
+    database still has. Before v2.0.0 such a database stored fast, balanced
+    and deep scans without ever being migrated.
+    """
+    db_path = tmp_path / "legacy.db"
+    init_database(db_path)
+    _build_legacy_scans_table(db_path)
+
+    conn = get_connection(db_path)
+    _insert_legacy_scan(conn, "pre-existing", "balanced")
+    for i in range(3):
+        _insert_finding(conn, "pre-existing", f"fp-{i}")
+    conn.commit()
+    conn.close()
+
+    scan_id = store_scan(_results_dir(tmp_path), tools=["trivy"], db_path=db_path)
+
+    conn = get_connection(db_path)
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(scans)")}
+    assert "profile" not in columns
+    stored = {row[0] for row in conn.execute("SELECT id FROM scans").fetchall()}
+    assert stored == {"pre-existing", scan_id}
+    assert conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0] == 4, (
+        "the pre-existing findings did not survive the column drop"
+    )
 
 
 def _insert_finding(conn, scan_id: str, fingerprint: str) -> None:
@@ -310,7 +386,7 @@ def test_migration_preserves_existing_rows(tmp_path: Path):
 
     conn = get_connection(db_path)
     for i, profile in enumerate(["fast", "balanced", "deep"]):
-        _insert_scan(conn, f"scan-{i}", profile)
+        _insert_legacy_scan(conn, f"scan-{i}", profile)
     conn.execute(
         "UPDATE scans SET total_findings = 42, duration_seconds = 1.5 WHERE id = 'scan-1'"
     )
@@ -322,7 +398,7 @@ def test_migration_preserves_existing_rows(tmp_path: Path):
     conn.commit()
 
     before = conn.execute(
-        "SELECT id, profile, total_findings, duration_seconds FROM scans ORDER BY id"
+        "SELECT id, total_findings, duration_seconds FROM scans ORDER BY id"
     ).fetchall()
     assert len(before) == 3
 
@@ -330,8 +406,10 @@ def test_migration_preserves_existing_rows(tmp_path: Path):
     assert result["errors"] == [], f"migration failed: {result['errors']}"
 
     conn = get_connection(db_path)
+    # v2.0.0 drops the profile column itself; every other value must survive.
+    assert "profile" not in {row[1] for row in conn.execute("PRAGMA table_info(scans)")}
     after = conn.execute(
-        "SELECT id, profile, total_findings, duration_seconds FROM scans ORDER BY id"
+        "SELECT id, total_findings, duration_seconds FROM scans ORDER BY id"
     ).fetchall()
     assert [tuple(r) for r in after] == [tuple(r) for r in before]
 
@@ -347,7 +425,7 @@ def test_migration_preserves_existing_rows(tmp_path: Path):
 def test_migration_keeps_dependent_schema_objects(tmp_path: Path):
     """#721: indexes, triggers and views on `scans` must survive.
 
-    Eleven objects depend on `scans` (2 FK tables, 6 indexes, 2 triggers,
+    Eleven objects depend on `scans` (2 FK tables, 5 indexes, 2 triggers,
     2 views). A rebuild drops the indexes and triggers with the table, and
     `ALTER TABLE ... RENAME` fails outright because the triggers on `findings`
     reference `scans`.
@@ -384,13 +462,14 @@ def test_migration_is_idempotent_on_fresh_db(tmp_path: Path):
     """#721: the migration is a no-op on a database that never had the CHECK.
 
     init_database() records version 1.0.0 even though it now creates the fixed
-    schema, so run_migrations() will attempt this migration on fresh databases.
+    schema, so run_migrations() will attempt this migration on fresh databases
+    -- and v2.0.0's, on a table that never had a profile column.
     """
     db_path = tmp_path / "fresh.db"
     init_database(db_path)
 
     conn = get_connection(db_path)
-    _insert_scan(conn, "scan-slim", "slim")
+    _insert_scan(conn, "scan-fresh")
     conn.commit()
 
     result = run_migrations(db_path)
@@ -401,5 +480,5 @@ def test_migration_is_idempotent_on_fresh_db(tmp_path: Path):
     assert result_again["applied"] == [], "migrations should not re-apply"
 
     conn = get_connection(db_path)
-    rows = conn.execute("SELECT profile FROM scans").fetchall()
-    assert [r[0] for r in rows] == ["slim"]
+    rows = conn.execute("SELECT id FROM scans").fetchall()
+    assert [r[0] for r in rows] == ["scan-fresh"]

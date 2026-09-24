@@ -8,7 +8,8 @@ Referenced from the main [SKILL.md](../SKILL.md).
 **Files to update:**
 
 - README.md: Add tool to "Supported Tools" table
-- QUICKSTART.md: Add example **only if** tool in fast/balanced profile
+- docs/TOOLS.md: Add the tool to the matrix, with when it runs and its target types
+- QUICKSTART.md: Add example **only if** the tool joins `TOOL_MATRIX` (the default list)
 - CHANGELOG.md: Add to `[Unreleased]` -> `### Added`
 - docs/index.md: Update tool count if mentioned
 - DOCKER_HUB_README.md: Update tool count and tool list in features section
@@ -21,11 +22,11 @@ Referenced from the main [SKILL.md](../SKILL.md).
 **README.md** (tool table):
 
 ```markdown
-| Tool | Category | Description | Profile |
-|------|----------|-------------|---------|
-| trufflehog | Secrets | Verified secrets scanning | fast, balanced, deep |
-| semgrep | SAST | Multi-language static analysis | fast, balanced, deep |
-| snyk | SCA | Dependency vulnerability scanning with fix suggestions | balanced, deep |
+| Tool | Category | Description |
+|------|----------|-------------|
+| trufflehog | Secrets | Verified secrets scanning |
+| semgrep | SAST | Multi-language static analysis |
+| snyk | SCA | Dependency vulnerability scanning with fix suggestions |
 ```
 
 **QUICKSTART.md** (after "Basic Scanning" section):
@@ -36,10 +37,10 @@ Referenced from the main [SKILL.md](../SKILL.md).
 Scan for known vulnerabilities in package dependencies:
 
 ```bash
-# Balanced profile includes Snyk
-jmo scan --profile balanced --repos-dir ~/repos
+# Snyk is in the default tool matrix
+jmo scan --repos-dir ~/repos
 
-# Run Snyk explicitly
+# Run Snyk alone
 jmo scan --repo ./myapp --tools snyk --results-dir results
 ```
 ````
@@ -55,7 +56,7 @@ jmo scan --repo ./myapp --tools snyk --results-dir results
   - Detects CVEs with CVSS scoring
   - Provides upgrade path remediation
   - Maps to OWASP Top 10 (A06:2021 - Vulnerable Components)
-  - Available in balanced and deep profiles
+  - Runs by default on repository targets; narrow with `--tools` or `--skip-tools`
 ```
 
 **docs/USER_GUIDE.md** (only if Snyk has unique config like auth token):
@@ -121,8 +122,12 @@ Output:
 |-------------|-----------|-------|---------|
 | Repositories | `--repo`, `--repos-dir` | trufflehog, semgrep | `jmo scan --repo ./myapp` |
 | Container Images | `--image` | trivy, syft | `jmo scan --image nginx:latest` |
-| AWS Accounts | `--aws-account` | prowler, scoutsuite | `jmo scan --aws-account 123456789012` |
+| AWS Accounts | `--aws-account` | scoutsuite | `jmo scan --aws-account 123456789012` |
 ```
+
+> AWS account scanning is a **hypothetical** target type here, used only to show
+> the shape of the update. JMo has no cloud-account scanner; `--aws-account` does
+> not exist.
 
 **docs/USER_GUIDE.md** (comprehensive new section):
 
@@ -133,7 +138,7 @@ Output:
 
 1. AWS Credentials: Configure via AWS CLI or environment variables
 2. IAM Permissions: Scanning account needs SecurityAudit policy
-3. Tools: Install Prowler and/or ScoutSuite
+3. Tools: Install ScoutSuite
 
 #### CLI Options
 
@@ -152,7 +157,6 @@ AWS Target Options:
 ```text
 results/individual-aws-accounts/
   123456789012/
-    prowler.json
     scoutsuite.json
 ```
 ````
@@ -166,9 +170,9 @@ results/individual-aws-accounts/
 
 | Target Type | Primary Tools | Secondary Tools |
 |-------------|---------------|-----------------|
-| Repositories | trufflehog, semgrep | trivy, noseyparker, bandit |
+| Repositories | trufflehog, semgrep | syft, trivy, checkov |
 | Container Images | trivy, syft | - |
-| AWS Accounts | prowler, scoutsuite | - |
+| AWS Accounts | scoutsuite | - |
 ```
 
 ## 4. Breaking Change
@@ -302,59 +306,41 @@ jmo report ./results --outputs csv
   - No user action required; findings will appear in next scan
 ```
 
-## 7. Profile Changes (Tool Additions/Removals)
+## 7. Docker Image Changes
+
+There is **one** image, built from `Dockerfile` and published as
+`ghcr.io/jimmy058910/jmo-security:latest` and `:<version>` (Docker Hub:
+`jmogaming/jmo-security`). It carries every scanner in `TOOL_MATRIX` plus the
+opa policy engine. Never document a per-variant tag: none is built, and
+`tests/unit/test_docker_tag_pattern_drift.py` fails on the old suffixed form.
 
 **Files to update:**
 
-- README.md: Update tool table with profile assignments
-- QUICKSTART.md: Update profile descriptions
-- docs/USER_GUIDE.md: Update profile reference table
-- CHANGELOG.md: Add to `[Unreleased]` -> `### Changed`
-- CLAUDE.md: Update profile descriptions if significant change
+- docs/DOCKER_README.md: Update what the image carries, its size, examples
+- DOCKER_HUB_README.md: Update the image description (synced by release.yml)
+- README.md: Update Docker Quick Start if the image name or tags change
+- CHANGELOG.md: Add to `[Unreleased]` -> `### Added` or `### Changed`
+- docs/examples/github-actions-docker.yml: Update CI examples
 
-**Example: Moving Checkov from balanced to deep**
+**Example: A scanner joins the image**
 
 ```markdown
 ### Changed
 
-- **Checkov moved from balanced to deep profile**: Improves balanced scan time from 20 min to 15 min
-  - Rationale: Checkov IaC scanning adds 5 min overhead
-  - Impact: Balanced profile users no longer get IaC scanning by default
-  - Workaround: Explicitly enable: `jmo scan --profile-name balanced --tools checkov`
+- **Docker image**: now carries Snyk, so `docker run ... tools check` inside the
+  container lists it as ready. State the measured size change, if any.
 ```
 
-## 8. Docker Image Changes
-
-**Files to update:**
-
-- docs/DOCKER_README.md: Update image variants table, examples
-- README.md: Update Docker Quick Start if variant added/removed
-- CHANGELOG.md: Add to `[Unreleased]` -> `### Added` or `### Changed`
-- docs/examples/github-actions-docker.yml: Update CI examples
-
-**Example: Adding Alpine Variant**
-
-```markdown
-## Image Variants
-
-| Variant | Size | Tools Included | Use Case |
-|---------|------|----------------|----------|
-| `deep` | ~1.97 GB | 28 tools (4 manual-install) | Compliance audits, pentests |
-| `balanced` | ~1.41 GB | 17 tools | Production scans, CI/CD |
-| `slim` | ~557 MB | 13 tools | Cloud/IaC |
-| `fast` | ~502 MB | 9 tools | Pre-commit, PR validation |
-```
-
-## 9. Tool Count Changes (Critical for Docker Hub)
+## 8. Tool Count Changes (Critical for Docker Hub)
 
 **CRITICAL: Tool count must be consistent across ALL documentation.**
 
 **Files to update when tool count changes:**
 
-- DOCKER_HUB_README.md: Update tool count in image variants table AND features list
+- docs/TOOLS.md: Update the tool matrix and the "Removed in v2.0.0" list if a tool leaves
+- DOCKER_HUB_README.md: Update tool count in the description AND features list
 - .github/workflows/release.yml: Update short-description tool count
 - README.md: Update tool count references
-- QUICKSTART.md: Update profile descriptions if tool counts mentioned
 - docs/index.md: Update quick links tool count
 - CLAUDE.md: Update "Supported Tools" section
 - CHANGELOG.md: Document tool additions/removals with rationale
@@ -375,49 +361,37 @@ non-zero** when it fails, so the block can be pasted whole and trusted.
 #!/usr/bin/env bash
 set -euo pipefail
 
-# 1. Both counts come from the single source of truth -- NOT from jmo.yml.
-#    jmo.yml's `deep:` profile carries no `tools:` key at all (it says so in a
-#    comment); a grep for one there silently returns 0 and every later
-#    comparison then "passes" against nothing.
-#
-#    There are SEVERAL legitimate numbers -- one per profile, plus the unique
-#    catalogue total. Asserting against only one of them flags correct files:
-#    measured, a deep-only check reported 16 false positives, because 9 / 13 /
-#    17 are simply fast / slim / balanced.
-VALID=$(python - <<'PY'
-from scripts.core.tool_registry import PROFILE_TOOLS
-counts = {len(v) for v in PROFILE_TOOLS.values()}
-counts.add(len({t for v in PROFILE_TOOLS.values() for t in v}))
-print(" ".join(str(c) for c in sorted(counts)))
-PY
-)
-echo "legitimate tool counts: $VALID"
+# 1. The count comes from the single source of truth -- NOT from jmo.yml and
+#    not from another doc. TOOL_MATRIX is the tuple `jmo scan` considers when
+#    nothing narrows the list; there is exactly one legitimate number.
+N=$(python -c "from scripts.core.tool_registry import TOOL_MATRIX; print(len(TOOL_MATRIX))")
+echo "tool count: $N"
 
-# 2. Every stated count must be one of them. A number that is no longer any
-#    profile's size is stale by construction -- no judgement needed.
+# 2. Every stated count must equal it. A number that is not the matrix size is
+#    stale by construction -- no judgement needed.
 fail=0
-for f in DOCKER_HUB_README.md README.md docs/PROFILES_AND_TOOLS.md \
+for f in DOCKER_HUB_README.md README.md docs/TOOLS.md \
          .github/workflows/release.yml; do
   [ -f "$f" ] || { echo "MISSING: $f"; fail=1; continue; }
   while IFS= read -r hit; do
     n=$(printf '%s' "${hit#*:}" | grep -oE '^[0-9]+')
-    case " $VALID " in
-      *" $n "*) ;;
-      *) echo "STALE in $f:$hit"; fail=1 ;;
-    esac
-  done < <(grep -noE "[0-9]+ tools" "$f" || true)
+    [ "$n" = "$N" ] || { echo "STALE in $f:$hit"; fail=1; }
+  done < <(grep -noE "[0-9]+ (tools|scanners)" "$f" || true)
 done
 
 exit "$fail"
 ```
 
-> **Which of the live numbers a file should use is a judgement the script cannot
-> make** — it only proves the number is still one of them. Confirm the *sense*
-> yourself: `README.md`'s "29 tools across 12 categories" is the catalogue and
-> is correct; a profile comparison table saying 29 would be wrong.
+> **Count scanners, not adapters or installed binaries.** Three numbers look
+> alike and only one is the tool count:
 >
-> Do not add `jmo.yml` expecting a tool list. Profile membership lives in
-> `scripts/core/tool_registry.py:PROFILE_TOOLS`; `jmo.yml` sets only per-profile
-> `threads`/`timeout`/`retries`/`policy`. Its inline comment naming a count is
-> prose, and prose drifts — at the time of writing it says 29 for `deep`, which
-> is the catalogue number, while `PROFILE_TOOLS["deep"]` holds 28.
+> - `len(TOOL_MATRIX)` is the scanner count every doc states.
+> - The adapters on disk are more than that: `scripts/core/adapters/` also holds
+>   SARIF bindings that are not wired into scans yet.
+> - opa is installed and baked into the image, but it is the policy engine
+>   (`POLICY_ENGINE`), not a scanner, so it is never counted.
+>
+> Do not add `jmo.yml` expecting a tool list. It has no top-level `tools:` key
+> by default; a user adds one only to narrow the matrix.
+> `tests/unit/test_tool_catalogue_count_claims.py` checks the same claims in CI;
+> the script above is the quick local version.

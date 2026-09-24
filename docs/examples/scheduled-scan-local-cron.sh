@@ -8,7 +8,6 @@
 # jmo schedule create \
 #   --name nightly-scan \
 #   --cron "0 2 * * *" \
-#   --profile balanced \
 #   --repos-dir ~/repos \
 #   --backend local-cron
 #
@@ -23,7 +22,6 @@
 set -euo pipefail
 
 # Configuration
-PROFILE="${JMO_PROFILE:-balanced}"
 REPOS_DIR="${JMO_REPOS_DIR:-$HOME/repos}"
 RESULTS_DIR="${JMO_RESULTS_DIR:-$HOME/jmo-results/$(date +%Y-%m-%d)}"
 SLACK_WEBHOOK="${SLACK_WEBHOOK_URL-}"
@@ -35,14 +33,12 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 
 echo "========================================="
 echo "JMo Security Scan - $(date)"
-echo "Profile: $PROFILE"
 echo "Repos: $REPOS_DIR"
 echo "Results: $RESULTS_DIR"
 echo "========================================="
 
 # Run scan
 if jmo scan \
-  --profile "$PROFILE" \
   --repos-dir "$REPOS_DIR" \
   --results-dir "$RESULTS_DIR" \
   --allow-missing-tools \

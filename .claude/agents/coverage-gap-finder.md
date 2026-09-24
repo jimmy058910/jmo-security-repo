@@ -44,7 +44,7 @@ tests/
 │   ├── test_common_finding.py
 │   ├── test_compliance_mapper.py
 │   └── test_config.py
-├── adapters/               # Adapter tests (27 files)
+├── adapters/               # Adapter tests (one file per adapter)
 │   ├── test_trivy_adapter.py
 │   ├── test_semgrep_adapter.py
 │   └── ... (one per adapter)
@@ -107,222 +107,78 @@ Every adapter test must have 5 categories:
 ## Adapter Coverage Analysis
 
 ### Summary
-- ✅ **24/27 adapters** meet the coverage target
-- ⚠️ **3/27 adapters** below it
+- ✅ **<k>/<N> adapters** meet the coverage target
+- ⚠️ **1/<N> adapters** below it
 
 > Numbers here illustrate the report **format**. Re-measure them; and keep the
 > summary consistent with the detail list below it.
 
-### Below Threshold (3 adapters)
+### Below Threshold (1 adapter)
 
-#### 1. noseyparker_adapter.py - 76% coverage ❌
+#### 1. gosec_adapter.py - 76% coverage ❌
 
 **Uncovered Lines:** (read them from the coverage report, then open the file and
 cite what those lines actually contain — not what you expect an adapter to contain)
 
-- Lines 125-127: `matches` key absent or not a list
-- Lines 131-132: non-dict entry inside `matches`
-- Lines 138-141: `location.startLine` fallback when `line_number` is absent
+- Lines 129-130: `Issues` key absent or not a list
+- Lines 133-134: non-dict entry inside `Issues`
+- Lines 144-151: `line` given as a range (`"10-15"`), or unparseable and defaulted to 0
 
 **Missing Tests:**
 ```python
-# tests/adapters/test_noseyparker_adapter.py
+# tests/adapters/test_gosec_adapter.py
 # ADD THESE TESTS:
-# (write_tmp is defined at the top of each adapter test file; json and
-#  NoseyParkerAdapter are already imported there)
+# (write() is defined at the top of that file; Path and GosecAdapter are
+#  already imported there)
 
-def test_noseyparker_empty_results(tmp_path):
-    """No matches -> no findings."""
-    sample = {"version": "0.16.0", "matches": []}
-    path = write_tmp(tmp_path, "np.json", json.dumps(sample))
-    assert NoseyParkerAdapter().parse(path) == []
+def test_gosec_empty_issues(tmp_path: Path):
+    """No issues -> no findings."""
+    f = tmp_path / "gosec.json"
+    write(f, {"Issues": []})
+    assert GosecAdapter().parse(f) == []
 
-def test_noseyparker_matches_not_a_list(tmp_path):
-    """A non-list 'matches' is rejected, not iterated."""
-    sample = {"version": "0.16.0", "matches": {"signature": "AWS"}}
-    path = write_tmp(tmp_path, "np.json", json.dumps(sample))
-    assert NoseyParkerAdapter().parse(path) == []
+def test_gosec_issues_not_a_list(tmp_path: Path):
+    """A non-list 'Issues' is rejected, not iterated."""
+    f = tmp_path / "gosec.json"
+    write(f, {"Issues": {"rule_id": "G101"}})
+    assert GosecAdapter().parse(f) == []
 
-def test_noseyparker_skips_non_dict_match(tmp_path):
+def test_gosec_skips_non_dict_issue(tmp_path: Path):
     """Junk entries are skipped; valid siblings still parse."""
-    sample = {
-        "version": "0.16.0",
-        "matches": ["not-a-dict", {"signature": "AWS", "path": "a.txt", "line_number": 5}],
-    }
-    path = write_tmp(tmp_path, "np.json", json.dumps(sample))
-    findings = NoseyParkerAdapter().parse(path)
+    f = tmp_path / "gosec.json"
+    write(f, {"Issues": ["not-a-dict", {"rule_id": "G101", "file": "a.go", "line": "5"}]})
+    findings = GosecAdapter().parse(f)
     assert len(findings) == 1
-    assert findings[0].ruleId == "AWS"
+    assert findings[0].ruleId == "G101"
 
-def test_noseyparker_location_startline_fallback(tmp_path):
-    """startLine comes from location when line_number is absent."""
-    sample = {
-        "version": "0.16.0",
-        "matches": [{"signature": "AWS", "location": {"path": "a.txt", "startLine": 42}}],
-    }
-    path = write_tmp(tmp_path, "np.json", json.dumps(sample))
-    findings = NoseyParkerAdapter().parse(path)
-    assert findings[0].location["startLine"] == 42
-    assert findings[0].location["path"] == "a.txt"
+def test_gosec_line_range_takes_first_line(tmp_path: Path):
+    """A '10-15' range reports its first line."""
+    f = tmp_path / "gosec.json"
+    write(f, {"Issues": [{"rule_id": "G104", "file": "a.go", "line": "10-15"}]})
+    findings = GosecAdapter().parse(f)
+    assert findings[0].location["startLine"] == 10
+    assert findings[0].location["path"] == "a.go"
 ```
 
 **Estimated Coverage After:** re-run `pytest --cov` and quote the measured
 number; do not predict it.
 
-> **Test what the file does.** The adapter is a pure JSON parser — no
-> `subprocess`, no `shutil.which`, no Docker fallback lives in it (the container
-> runner is `scripts/core/run_noseyparker_docker.sh`). Monkeypatching
-> `shutil.which` or `subprocess.run` here patches nothing the code under test
-> calls, so such a test passes without exercising anything. Read the module
-> before proposing mocks for it.
-
----
-
-#### 2. falco_adapter.py - 81% coverage ⚠️
-
-**Uncovered Lines:**
-
-- Lines 34-38: Event type categorization
-- Lines 55-59: Priority mapping logic
-- Line 72: Kubernetes context extraction
-
-**Missing Tests:**
-
-```python
-# tests/adapters/test_falco_adapter.py
-# ADD THESE TESTS:
-
-def test_falco_event_type_categorization(tmp_path):
-    """Test different Falco event types mapped correctly."""
-    events = [
-        {"output": "Suspicious file open", "priority": "Warning", "rule": "file_access"},
-        {"output": "Network connection", "priority": "Notice", "rule": "net_connect"},
-    ]
-
-    for event in events:
-        sample = {"results": [event]}
-        path = write_tmp(tmp_path, "falco.json", json.dumps(sample))
-        out = load_falco(path)
-        assert len(out) == 1
-        # Verify event type in tags
-
-def test_falco_priority_to_severity_mapping(tmp_path):
-    """Test Falco priority mapped to CommonFinding severity."""
-    priorities = {
-        "Emergency": "CRITICAL",
-        "Alert": "CRITICAL",
-        "Critical": "HIGH",
-        "Error": "HIGH",
-        "Warning": "MEDIUM",
-        "Notice": "LOW",
-        "Informational": "INFO",
-        "Debug": "INFO",
-    }
-
-    for falco_priority, expected_severity in priorities.items():
-        sample = {"results": [{"priority": falco_priority, "rule": "test"}]}
-        path = write_tmp(tmp_path, "falco.json", json.dumps(sample))
-        out = load_falco(path)
-        assert out[0]["severity"] == expected_severity
-
-def test_falco_kubernetes_context(tmp_path):
-    """Test Kubernetes context extraction."""
-    sample = {
-        "results": [{
-            "output": "Pod exec",
-            "priority": "Warning",
-            "rule": "exec_pod",
-            "output_fields": {
-                "k8s.pod.name": "nginx-pod",
-                "k8s.ns.name": "production",
-            }
-        }]
-    }
-    path = write_tmp(tmp_path, "falco.json", json.dumps(sample))
-    out = load_falco(path)
-    assert "k8s.pod.name" in out[0]["context"]
-    assert out[0]["context"]["k8s.pod.name"] == "nginx-pod"
-```
-
-**Estimated Coverage After:** 92% (+11%)
-
----
-
-#### 3. aflplusplus_adapter.py - 78% coverage ❌
-
-**Uncovered Lines:**
-
-- Lines 28-32: Crash analysis logic
-- Lines 41-45: Unique crash deduplication
-- Lines 58-62: Path sanitization for crash files
-
-**Missing Tests:**
-
-```python
-# tests/adapters/test_aflplusplus_adapter.py
-# ADD THESE TESTS:
-
-def test_aflplusplus_crash_analysis(tmp_path):
-    """Test crash file analysis and severity assignment."""
-    sample = {
-        "crashes": [
-            {"file": "crash-001", "type": "segfault", "hash": "abc123"},
-            {"file": "crash-002", "type": "timeout", "hash": "def456"},
-        ]
-    }
-    path = write_tmp(tmp_path, "aflplusplus.json", json.dumps(sample))
-    out = load_aflplusplus(path)
-
-    assert len(out) == 2
-    # Segfault should be HIGH severity
-    assert out[0]["severity"] == "HIGH"
-    # Timeout should be MEDIUM severity
-    assert out[1]["severity"] == "MEDIUM"
-
-def test_aflplusplus_unique_crash_dedup(tmp_path):
-    """Test that duplicate crashes are deduplicated by hash."""
-    sample = {
-        "crashes": [
-            {"file": "crash-001", "type": "segfault", "hash": "same-hash"},
-            {"file": "crash-002", "type": "segfault", "hash": "same-hash"},  # Duplicate
-            {"file": "crash-003", "type": "timeout", "hash": "different-hash"},
-        ]
-    }
-    path = write_tmp(tmp_path, "aflplusplus.json", json.dumps(sample))
-    out = load_aflplusplus(path)
-
-    # Should only return 2 unique findings
-    assert len(out) == 2
-    assert out[0]["id"] != out[1]["id"]
-
-def test_aflplusplus_path_sanitization(tmp_path):
-    """Test that crash file paths are sanitized correctly."""
-    sample = {
-        "crashes": [
-            {"file": "/tmp/afl-fuzz/crashes/../crash-001", "type": "segfault", "hash": "abc"},
-        ]
-    }
-    path = write_tmp(tmp_path, "aflplusplus.json", json.dumps(sample))
-    out = load_aflplusplus(path)
-
-    # Path should be sanitized (no ../)
-    assert "../" not in out[0]["location"]["path"]
-```
-
-**Estimated Coverage After:** 90% (+12%)
+> **Test what the file does.** An adapter is a pure JSON parser — no
+> `subprocess` and no `shutil.which` live in it (the scan phase runs the tool,
+> from `scripts/cli/scan_jobs/`). Monkeypatching `shutil.which` or
+> `subprocess.run` here patches nothing the code under test calls, so such a
+> test passes without exercising anything. Read the module before proposing
+> mocks for it.
 
 ---
 
 ### Action Items
 
-To bring all adapters to ≥85% coverage:
+To bring every adapter to ≥85% coverage:
 
-1. **noseyparker_adapter.py:** Add 3 tests (+12% coverage) - 30 min
-2. **falco_adapter.py:** Add 3 tests (+11% coverage) - 30 min
-3. **aflplusplus_adapter.py:** Add 3 tests (+12% coverage) - 30 min
+1. **gosec_adapter.py:** Add the 4 tests above, then re-run the coverage report
 
-**Total Time:** 1.5 hours
-**Result:** All 27 adapters at ≥85% coverage
+**Result:** quote the re-measured per-adapter numbers, not a prediction
 
 ````
 
@@ -353,8 +209,8 @@ To bring all adapters to ≥85% coverage:
 ## Test Category Coverage Analysis
 
 ### Summary
-- ✅ **20/27 adapters** have all 5 categories
-- ⚠️ **7/27 adapters** missing categories
+- ✅ **<k>/<N> adapters** have all 5 categories
+- ⚠️ **<m>/<N> adapters** missing categories
 
 ### Missing Categories
 
@@ -487,32 +343,7 @@ def test_zap_compliance_enrichment(tmp_path: Path):
 
 ### Untested Functions (High Priority)
 
-#### 1. `_validate_profile(args, config)` - Line 87 ❌
-
-**Purpose:** Validates that requested profile exists in config
-
-**Why Critical:** Security risk if invalid profile runs with wrong tools
-
-**Test to Add:**
-```python
-def test_validate_profile_exists(tmp_path):
-    """Test that _validate_profile accepts valid profiles."""
-    config = {"profiles": {"fast": {}, "balanced": {}}}
-    args = argparse.Namespace(profile_name="fast")
-
-    # Should not raise
-    _validate_profile(args, config)
-
-def test_validate_profile_missing(tmp_path):
-    """Test that _validate_profile rejects invalid profiles."""
-    config = {"profiles": {"fast": {}}}
-    args = argparse.Namespace(profile_name="nonexistent")
-
-    with pytest.raises(SystemExit):
-        _validate_profile(args, config)
-```
-
-#### 2. `_iter_images(args)` - Line 142 ❌
+#### 1. `_iter_images(args)` - Line 142 ❌
 
 **Purpose:** Collects container images from CLI args and files
 
@@ -545,13 +376,13 @@ def test_iter_images_from_file(tmp_path):
 
 ### Medium Priority (Helper Functions)
 
-#### 3. `_sanitize_name(name: str)` - Line 215
+#### 2. `_sanitize_name(name: str)` - Line 215
 
 **Purpose:** Sanitizes target names for directory creation
 
 **Risk:** Low (cosmetic issue if broken)
 
-#### 4. `_write_stub(path, tool)` - Line 278
+#### 3. `_write_stub(path, tool)` - Line 278
 
 **Purpose:** Writes empty JSON stubs for missing tools
 
@@ -606,14 +437,13 @@ def test_iter_images_from_file(tmp_path):
    - `jmo report`
    - `jmo ci`
    - `jmo wizard`
-   - `jmo scan --profile fast`
-   - `jmo scan --profile balanced`
-   - `jmo scan --profile deep`
+   - `jmo scan --tools trivy semgrep`
+   - `jmo scan --skip-tools zap`
 
 2. **Search integration tests for each command**
 
 3. **Check flag combinations:**
-   - `--profile-name`
+   - `--tools` / `--skip-tools`
    - `--fail-on`
    - `--allow-missing-tools`
    - `--human-logs`
@@ -669,7 +499,7 @@ scripts/core/adapters/trivy_adapter.py        92%   15-18, 45
 **Bad coverage pattern:**
 
 ```text
-scripts/core/adapters/noseyparker_adapter.py  76%   22-35, 45-52, 68-71, 89
+scripts/core/adapters/gosec_adapter.py        76%   22-35, 45-52, 68-71, 89
 ```
 
 - 76% coverage ❌ (below threshold)

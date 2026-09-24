@@ -48,7 +48,6 @@ def basic_schedule():
             suspend=False,
             backend=BackendConfig(type="local-cron"),
             jobTemplate=JobTemplateSpec(
-                profile="balanced",
                 targets={},
                 options={},
                 results={},
@@ -376,7 +375,6 @@ def test_generate_cron_entry_default_results_dir(basic_schedule):
 
 def test_generate_cron_entry_comprehensive_all_targets(basic_schedule):
     """Test _generate_cron_entry with all target types in one schedule."""
-    basic_schedule.spec.jobTemplate.profile = "deep"
     basic_schedule.spec.jobTemplate.targets = {
         "repositories": {"repos_dir": "~/repos"},
         "images": ["nginx:latest"],
@@ -395,8 +393,10 @@ def test_generate_cron_entry_comprehensive_all_targets(basic_schedule):
     installer = CronInstaller()
     entry = installer._generate_cron_entry(basic_schedule)
 
-    # Verify profile
-    assert "jmo scan --profile-name deep" in entry
+    # Verify the command head: the first target follows `jmo scan` directly,
+    # with no profile flag (v2.0.0 removed scan profiles)
+    assert "0 2 * * * jmo scan --repos-dir" in entry
+    assert "--profile" not in entry
 
     # Verify all targets
     assert "--repos-dir" in entry and "~/repos" in entry

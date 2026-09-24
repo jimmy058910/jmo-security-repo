@@ -1,6 +1,6 @@
 # JMo Security Audit Tool Suite
 
-A terminal-first, cross-platform security audit toolkit that orchestrates 29 scanners (secrets, SAST, SBOM, SCA, IaC, Dockerfile, DAST, Kubernetes, cloud) with a unified Python CLI, normalized outputs, and an HTML dashboard.
+A terminal-first, cross-platform security audit toolkit that orchestrates 12 scanners (secrets, SAST, SBOM, SCA, IaC, Dockerfile, DAST, Kubernetes) with a unified Python CLI, normalized outputs, and an HTML dashboard.
 
 ## Quick Start
 
@@ -17,35 +17,27 @@ docker run --rm -it -v "$(pwd):/scan" jmogaming/jmo-security:latest \
 open results/summaries/dashboard.html
 ```
 
-## Image Variants
+## Image Tags
 
-| Tag | Size | Tools | Use Case |
-|-----|------|-------|----------|
-| `latest`, `X.Y.Z-deep` | ~1.97 GB | 29 tools | Complete scanning (deep profile, all tools) |
-| `X.Y.Z-balanced` | ~1.41 GB | 17 tools | Production CI/CD pipelines (balanced profile) |
-| `X.Y.Z-slim` | ~557 MB | 13 tools | Cloud-focused scanning (IaC, K8s, containers) |
-| `X.Y.Z-fast` | ~502 MB | 9 tools | CI/CD gate, pre-commit hooks (fast profile) |
+There is one image. `latest` tracks the newest release and `X.Y.Z` pins a specific one. Both carry the 12 scanners plus OPA, the policy engine.
 
 Docker Hub is a replica; the primary registry is GHCR (`ghcr.io/jimmy058910/jmo-security`), and the same tags are also on ECR Public (`public.ecr.aws/m2d8u2k1/jmo-security`).
 
 ## Features
 
 - 🎯 **Multi-Target Scanning**: Repos, containers, IaC, URLs, Kubernetes, GitLab
-- 🔐 **29 Security Tools** (25 Docker-ready + 4 manual): Secrets (TruffleHog, Nosey Parker, Semgrep-Secrets), SAST (Semgrep, Bandit, Gosec, Horusec), SBOM/SCA (Syft, CDXgen, ScanCode, Trivy, Grype, Dependency-Check), IaC/Cloud (Checkov, Prowler, Kubescape), DAST (OWASP ZAP, Nuclei), plus Hadolint, ShellCheck, YARA, Lynis, OPA and Trivy-RBAC. AFL++, MobSF, Akto and Falco need a manual install.
+- 🔐 **12 Security Scanners**: Secrets (TruffleHog), SAST (Semgrep, Gosec), SBOM/SCA (Syft, Trivy, Grype), IaC (Checkov, Trivy), Kubernetes (Trivy), DAST (OWASP ZAP, Nuclei), plus Hadolint, ShellCheck and YARA. The target's content decides which of them run. OPA ships alongside them as the policy engine.
 - 📊 **Unified Reporting**: JSON, Markdown, HTML dashboard, SARIF, YAML, CSV, compliance reports
 - ⚡ **Parallel Execution**: Scan multiple targets simultaneously with auto-detected CPU threads
-- 🎨 **4 Docker Variants**: Fast (9 tools, 5-10 min), Balanced (17 tools, 18-25 min), Slim (13 tools, cloud-focused), Deep (29 tools, 40-70 min)
 - 📈 **Real-Time Progress**: Live scan progress with ETA estimation
 
-## What's New in v1.1.0 (September 2026)
+## What's New in v2.0.0
 
-- **Every open defect fixed before the tag, not dispositioned.** A twelve-phase pre-release fix program exercised every command path, adapter and artifact against real repositories and closed what it found before tagging.
-- **Kubernetes findings now reach the report.** The kubescape adapter read a key no kubescape release emits, so every K8s scan silently yielded zero findings. Fixed and proven against real output from kubescape 3 and 4.
-- **Tool installs stay isolated.** `jmo tools install <names>` and `jmo tools update` keep prowler, semgrep and checkov in their own environments instead of the interpreter's, and an update that did not change the binary now fails instead of printing `[OK]`.
-- **Scanner pins current.** All 29 tools at their latest releases, including trivy 0.74 and kubescape 4.
-- **The numbers in the docs are derived, not typed.** Tool counts, profile sizes and version headers are checked against the registry in CI.
+- **No more scan profiles.** `fast`, `slim`, `balanced` and `deep` are gone. `jmo scan` considers all 12 scanners and the target's content decides which run; narrow the list with `--tools` or `--skip-tools`.
+- **16 tools removed**, among them kubescape, prowler, bandit (as a scanner), noseyparker and falco. Kubernetes scanning is Trivy's.
+- **One image.** `latest` and version tags; the `fast`, `slim`, `balanced`, `deep` and `full` tags are no longer built.
 
-Full list: [CHANGELOG.md](https://github.com/jimmy058910/jmo-security-repo/blob/main/CHANGELOG.md)
+Upgrading from v1.x: [UPGRADE.md](https://github.com/jimmy058910/jmo-security-repo/blob/main/UPGRADE.md). Full list: [CHANGELOG.md](https://github.com/jimmy058910/jmo-security-repo/blob/main/CHANGELOG.md)
 
 ## Multi-Target Scanning
 
@@ -86,7 +78,7 @@ docker run --rm -v "$(pwd):/scan" jmogaming/jmo-security:latest \
 - name: Security Scan
   run: |
     docker run --rm -v "${{ github.workspace }}:/scan" \
-      jmogaming/jmo-security:slim \
+      jmogaming/jmo-security:latest \
       scan --repo /scan --fail-on HIGH --results-dir /scan/results
 ```
 

@@ -55,9 +55,17 @@ def test_gather_results_merges_and_dedupes(tmp_path: Path):
         ),
     )
     write(
-        r2 / "noseyparker.json",
+        r2 / "hadolint.json",
         json.dumps(
-            {"matches": [{"signature": "slack", "path": "c.txt", "line_number": 4}]}
+            [
+                {
+                    "code": "DL3006",
+                    "file": "Dockerfile",
+                    "line": 4,
+                    "level": "warning",
+                    "message": "Always tag the version of an image explicitly",
+                }
+            ]
         ),
     )
 

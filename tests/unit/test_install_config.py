@@ -23,7 +23,6 @@ from scripts.core.install_config import (
     ISOLATED_TOOLS,
     MAX_CLEANUP_RETRIES,
     MAX_PARALLEL_WORKERS,
-    NPM_INSTALL_TIMEOUT_SECONDS,
     PIP_INSTALL_TIMEOUT_SECONDS,
     SPECIAL_INSTALL,
     SUBPROCESS_DEFAULT_TIMEOUT,
@@ -38,7 +37,6 @@ class TestTimeoutConstants:
         [
             ("DOWNLOAD_TIMEOUT_SECONDS", DOWNLOAD_TIMEOUT_SECONDS),
             ("PIP_INSTALL_TIMEOUT_SECONDS", PIP_INSTALL_TIMEOUT_SECONDS),
-            ("NPM_INSTALL_TIMEOUT_SECONDS", NPM_INSTALL_TIMEOUT_SECONDS),
             ("SUBPROCESS_DEFAULT_TIMEOUT", SUBPROCESS_DEFAULT_TIMEOUT),
             ("DOWNLOAD_CHUNK_SIZE", DOWNLOAD_CHUNK_SIZE),
             ("MAX_PARALLEL_WORKERS", MAX_PARALLEL_WORKERS),
@@ -102,14 +100,14 @@ class TestBinaryUrls:
 class TestExtractAppUrls:
     """Verify EXTRACT_APP_URLS entries."""
 
-    def test_covers_the_three_archive_distributed_tools(self) -> None:
+    def test_covers_the_archive_distributed_tools(self) -> None:
         """The extract-app tools, named.
 
         Both other tests in this class iterate the constant — one by
         ``parametrize``, one by ``for tool in EXTRACT_APP_URLS`` — so an empty
         dict makes both vacuously pass rather than fail.
         """
-        assert set(EXTRACT_APP_URLS) == {"dependency-check", "scancode", "zap"}
+        assert set(EXTRACT_APP_URLS) == {"zap"}
 
     @pytest.mark.parametrize("tool", list(EXTRACT_APP_URLS.keys()))
     def test_url_values_well_formed(self, tool: str) -> None:
@@ -135,13 +133,13 @@ class TestInstallScripts:
     """Verify INSTALL_SCRIPTS entries."""
 
     def test_covers_the_upstream_installer_script_tools(self) -> None:
-        """The four tools with an upstream ``install.sh``, named.
+        """The tools with an upstream ``install.sh``, named.
 
         ``release.rules.md`` records that piping these scripts is banned in CI
         precisely because they resolve "latest" at runtime; the set is small and
         deliberate, so pin it rather than asserting it is merely non-empty.
         """
-        assert set(INSTALL_SCRIPTS) == {"grype", "kubescape", "syft", "trivy"}
+        assert set(INSTALL_SCRIPTS) == {"grype", "syft", "trivy"}
 
     @pytest.mark.parametrize("tool", list(INSTALL_SCRIPTS.keys()))
     def test_scripts_are_https_urls(self, tool: str) -> None:
@@ -165,25 +163,36 @@ class TestInstallPriorities:
         for method in methods:
             assert isinstance(method, str) and len(method) > 0
 
+    def test_no_platform_installs_through_npm_or_brew(self) -> None:
+        """npm (cdxgen was its only tool) and brew left as strategies in v2.0.0.
+
+        brew was the first macOS choice and is never held to the pinned version
+        (``PINNED_INSTALL_METHODS`` excludes it), so macOS now installs the same
+        pinned binary every other platform does.
+        """
+        for platform, methods in INSTALL_PRIORITIES.items():
+            assert "npm" not in methods, platform
+            assert "brew" not in methods, platform
+
 
 class TestIsolatedTools:
     """Verify ISOLATED_TOOLS configuration."""
 
-    def test_covers_the_pydantic_conflicting_tools(self) -> None:
-        """The three tools that need their own venv, named.
+    def test_isolated_venvs_are_semgrep_and_checkov(self) -> None:
+        """The tools that keep their own venv, named.
 
-        Isolation exists for one measured reason: prowler pins ``pydantic<2``
-        while semgrep and checkov need ``>=2``. Dropping a tool from this dict
+        prowler's venv went with prowler: it existed because prowler pinned
+        ``pydantic<2`` while semgrep and checkov need ``>=2``. The other two
+        stay isolated from JMo's own environment. Dropping a tool from this dict
         does not fail any other test in the class — they all parametrize over
-        its keys — it just silently reinstates the conflict.
+        its keys — it just silently installs that tool into JMo's environment.
         """
-        assert set(ISOLATED_TOOLS) == {"prowler", "semgrep", "checkov"}
+        assert set(ISOLATED_TOOLS) == {"semgrep", "checkov"}
 
     @pytest.mark.parametrize("tool", list(ISOLATED_TOOLS.keys()))
     def test_required_keys(self, tool: str) -> None:
         config = ISOLATED_TOOLS[tool]
         assert "package" in config, f"{tool} missing 'package' key"
-        assert "conflicts_with" in config, f"{tool} missing 'conflicts_with' key"
         assert "reason" in config, f"{tool} missing 'reason' key"
 
     @pytest.mark.parametrize("tool", list(ISOLATED_TOOLS.keys()))
@@ -196,29 +205,6 @@ class TestIsolatedTools:
         """
         assert ISOLATED_TOOLS[tool]["package"] == tool
 
-    @pytest.mark.parametrize("tool", list(ISOLATED_TOOLS.keys()))
-    def test_conflicts_name_other_isolated_tools(self, tool: str) -> None:
-        """Every conflict resolves to another isolated tool, and never to self.
-
-        ``test_conflicts_are_symmetric`` below guards the pairing but skips any
-        conflict not in ``ISOLATED_TOOLS`` (``if conflict in ISOLATED_TOOLS``),
-        so a typo'd name silently passed both it and the replaced
-        ``len(conflicts) > 0``.
-        """
-        conflicts = ISOLATED_TOOLS[tool]["conflicts_with"]
-        assert isinstance(conflicts, list)
-        assert tool not in conflicts, f"{tool} conflicts with itself"
-        assert set(conflicts) <= set(ISOLATED_TOOLS) and conflicts
-
-    def test_conflicts_are_symmetric(self) -> None:
-        """If A conflicts with B, B should conflict with A."""
-        for tool, config in ISOLATED_TOOLS.items():
-            for conflict in config["conflicts_with"]:
-                if conflict in ISOLATED_TOOLS:
-                    assert tool in ISOLATED_TOOLS[conflict]["conflicts_with"], (
-                        f"{tool} conflicts with {conflict} but not vice versa"
-                    )
-
 
 class TestSpecialInstall:
     """Verify SPECIAL_INSTALL dict."""
@@ -226,26 +212,17 @@ class TestSpecialInstall:
     def test_maps_each_non_standard_tool_to_its_install_method(self) -> None:
         """Pin the whole mapping: ``tool_manager`` dispatches on these values.
 
-        Eight static entries, each choosing an install strategy, so equality is
-        cheaper to maintain than it looks and strictly more useful than the
-        replaced ``len(...) > 0`` — which passed for a dict that had lost every
-        entry, while ``test_values_are_known_methods`` below would have collected
-        zero cases and skipped.
+        Equality is strictly more useful than the replaced ``len(...) > 0`` —
+        which passed for a dict that had lost every entry, while
+        ``test_values_are_known_methods`` below would have failed collection.
+        The manual, docker and clone strategies left with the tools that needed
+        them (falco, afl++, mobsf, akto, lynis) in v2.0.0.
         """
-        assert SPECIAL_INSTALL == {
-            "zap": "extract_app",
-            "dependency-check": "extract_app",
-            "scancode": "extract_app",
-            "falco": "manual",
-            "afl++": "manual",
-            "mobsf": "docker",
-            "akto": "docker",
-            "lynis": "clone",
-        }
+        assert SPECIAL_INSTALL == {"zap": "extract_app"}
 
     @pytest.mark.parametrize("tool", list(SPECIAL_INSTALL.keys()))
     def test_values_are_known_methods(self, tool: str) -> None:
-        known_methods = {"extract_app", "manual", "docker", "clone"}
+        known_methods = {"extract_app"}
         assert SPECIAL_INSTALL[tool] in known_methods, (
             f"{tool} has unknown install method: {SPECIAL_INSTALL[tool]}"
         )
@@ -254,21 +231,15 @@ class TestSpecialInstall:
 class TestDependencyConfig:
     """Verify dependency auto-install configuration."""
 
-    def test_install_commands_has_java_and_node(self) -> None:
-        assert "java" in DEPENDENCY_INSTALL_COMMANDS
-        assert "node" in DEPENDENCY_INSTALL_COMMANDS
-
-    def test_verify_commands_has_java_and_node(self) -> None:
-        assert "java" in DEPENDENCY_VERIFY_COMMANDS
-        assert "node" in DEPENDENCY_VERIFY_COMMANDS
-
-    def test_display_names_has_java_and_node(self) -> None:
-        assert "java" in DEPENDENCY_DISPLAY_NAMES
-        assert "node" in DEPENDENCY_DISPLAY_NAMES
-
-    def test_manual_commands_has_java_and_node(self) -> None:
-        assert "java" in DEPENDENCY_MANUAL_COMMANDS
-        assert "node" in DEPENDENCY_MANUAL_COMMANDS
+    def test_java_is_the_one_runtime_dependency(self) -> None:
+        """zap needs Java. Node went with cdxgen, its only consumer."""
+        for table in (
+            DEPENDENCY_INSTALL_COMMANDS,
+            DEPENDENCY_VERIFY_COMMANDS,
+            DEPENDENCY_DISPLAY_NAMES,
+            DEPENDENCY_MANUAL_COMMANDS,
+        ):
+            assert set(table) == {"java"}
 
     @pytest.mark.parametrize("dep", list(DEPENDENCY_VERIFY_COMMANDS.keys()))
     def test_verify_command_invokes_the_dependency_with_a_version_flag(

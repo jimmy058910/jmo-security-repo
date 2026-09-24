@@ -41,7 +41,6 @@ def test_db(tmp_path: Path) -> Path:
         CREATE TABLE scans (
             id TEXT PRIMARY KEY,
             timestamp INTEGER NOT NULL,
-            profile TEXT NOT NULL,
             branch TEXT,
             total_findings INTEGER NOT NULL DEFAULT 0
         )
@@ -64,11 +63,11 @@ def test_db(tmp_path: Path) -> Path:
 
     # Insert test scans
     cursor.executemany(
-        "INSERT INTO scans (id, timestamp, profile, branch, total_findings) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO scans (id, timestamp, branch, total_findings) VALUES (?, ?, ?, ?)",
         [
-            ("scan-001", 1700000000, "balanced", "main", 3),
-            ("scan-002", 1700001000, "fast", "dev", 2),
-            ("scan-003", 1700002000, "deep", "main", 1),
+            ("scan-001", 1700000000, "main", 3),
+            ("scan-002", 1700001000, "dev", 2),
+            ("scan-003", 1700002000, "main", 1),
         ],
     )
 
@@ -234,7 +233,7 @@ class TestSecurityRejections:
         conn = _sqlite3.connect(f"file://{uri_path}?mode=ro", uri=True)
         try:
             with pytest.raises(_sqlite3.OperationalError, match="readonly"):
-                conn.execute("INSERT INTO scans VALUES ('evil', 0, 'fast', 'main', 0)")
+                conn.execute("INSERT INTO scans VALUES ('evil', 0, 'main', 0)")
         finally:
             conn.close()
 
@@ -273,12 +272,12 @@ class TestFunctionalQueries:
 
     def test_query_select_basic(self, test_db):
         result = execute_readonly_query(
-            test_db, "SELECT id, profile FROM scans ORDER BY timestamp"
+            test_db, "SELECT id, branch FROM scans ORDER BY timestamp"
         )
-        assert result["columns"] == ["id", "profile"]
+        assert result["columns"] == ["id", "branch"]
         assert result["row_count"] == 3
         assert result["truncated"] is False
-        assert result["rows"][0] == ["scan-001", "balanced"]
+        assert result["rows"][0] == ["scan-001", "main"]
 
     def test_query_select_with_params(self, test_db):
         result = execute_readonly_query(
@@ -307,7 +306,7 @@ class TestFunctionalQueries:
             test_db,
             """
             WITH recent AS (
-                SELECT id, profile FROM scans ORDER BY timestamp DESC LIMIT 2
+                SELECT id, branch FROM scans ORDER BY timestamp DESC LIMIT 2
             )
             SELECT * FROM recent
             """,
@@ -322,7 +321,7 @@ class TestFunctionalQueries:
         # satisfied either way, so it cannot tell the two apart.
         assert result["row_count"] > 0
         assert result["columns"][:2] == ["addr", "opcode"]
-        assert "profile" not in result["columns"]
+        assert "branch" not in result["columns"]
 
     def test_allow_safe_pragma(self, test_db):
         result = execute_readonly_query(test_db, "PRAGMA table_info(scans)")
@@ -432,7 +431,7 @@ def _build_mcp_db(db_path: Path) -> None:
     try:
         conn.execute(
             "CREATE TABLE scans (id TEXT PRIMARY KEY, timestamp INTEGER NOT NULL, "
-            "profile TEXT NOT NULL, branch TEXT, total_findings INTEGER DEFAULT 0)"
+            "branch TEXT, total_findings INTEGER DEFAULT 0)"
         )
         conn.execute(
             "CREATE TABLE findings (scan_id TEXT NOT NULL, fingerprint TEXT NOT NULL, "
@@ -441,12 +440,9 @@ def _build_mcp_db(db_path: Path) -> None:
             "PRIMARY KEY (scan_id, fingerprint))"
         )
         conn.executemany(
-            "INSERT INTO scans (id, timestamp, profile, branch, total_findings) "
-            "VALUES (?, ?, ?, ?, ?)",
-            [
-                (f"scan-{i:04d}", 1700000000 + i, "balanced", "main", 1)
-                for i in range(600)
-            ],
+            "INSERT INTO scans (id, timestamp, branch, total_findings) "
+            "VALUES (?, ?, ?, ?)",
+            [(f"scan-{i:04d}", 1700000000 + i, "main", 1) for i in range(600)],
         )
         conn.executemany(
             "INSERT INTO findings (scan_id, fingerprint, severity, tool, rule_id, "

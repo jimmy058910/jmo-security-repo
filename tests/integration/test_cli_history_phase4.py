@@ -61,16 +61,15 @@ def test_cli_history_optimize(tmp_path: Path):
     conn.execute(
         """
         INSERT INTO scans (
-            id, timestamp, timestamp_iso, profile, tools, targets, target_type,
+            id, timestamp, timestamp_iso, tools, targets, target_type,
             total_findings, critical_count, high_count, medium_count, low_count, info_count,
             jmo_version
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             "test-scan-001",
             1234567890,
             "2024-01-01T00:00:00Z",
-            "balanced",
             '["trivy"]',
             '["/test"]',
             "repo",
@@ -202,16 +201,15 @@ def test_cli_history_repair(tmp_path: Path):
     conn.execute(
         """
         INSERT INTO scans (
-            id, timestamp, timestamp_iso, profile, tools, targets, target_type,
+            id, timestamp, timestamp_iso, tools, targets, target_type,
             total_findings, critical_count, high_count, medium_count, low_count, info_count,
             jmo_version
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             scan_id,
             1234567890,
             "2024-01-01T00:00:00Z",
-            "balanced",
             '["trivy"]',
             '["/test"]',
             "repo",
@@ -267,16 +265,15 @@ def test_cli_history_repair(tmp_path: Path):
     conn3.execute(
         """
         INSERT INTO scans (
-            id, timestamp, timestamp_iso, profile, tools, targets, target_type,
+            id, timestamp, timestamp_iso, tools, targets, target_type,
             total_findings, critical_count, high_count, medium_count, low_count, info_count,
             jmo_version
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             "test-scan-json",
             1234567890,
             "2024-01-01T00:00:00Z",
-            "balanced",
             '["trivy"]',
             '["/test"]',
             "repo",

@@ -11,7 +11,7 @@ This project publishes to PyPI via GitHub Actions on git tags of the form `v*` u
 
 ## ⭐ Release Playbook — read this first
 
-**For a normal release, use Method 1 (Automated Release) below.** From GitHub Actions → **Automated Release** → *Run workflow* with a bump type + changelog entry. It updates all tools, bumps the version (all 3 version files), updates the CHANGELOG, syncs Dockerfiles, and opens a `release: vX.Y.Z` PR; **merging that PR auto-creates the tag and fires the full release.** Because its commit subject starts with `release: v`, it automatically sidesteps the badge-check trap (gotcha #1). Prefer this for ~95% of releases.
+**For a normal release, use Method 1 (Automated Release) below.** From GitHub Actions → **Automated Release** → *Run workflow* with a bump type + changelog entry. It updates all tools, bumps the version (all 3 version files), updates the CHANGELOG, syncs the Dockerfile, and opens a `release: vX.Y.Z` PR; **merging that PR auto-creates the tag and fires the full release.** Because its commit subject starts with `release: v`, it automatically sidesteps the badge-check trap (gotcha #1). Prefer this for ~95% of releases.
 
 **Use Method 2 (Manual) only when you're already mid-manual work** — e.g. a CVE-hotfix cycle where you've hand-merged fixes and the version is already bumped on `main`. This is how **v1.0.6** shipped; it works but has sharp edges — follow the gotchas below.
 
@@ -21,7 +21,7 @@ This project publishes to PyPI via GitHub Actions on git tags of the form `v*` u
 2. **Bump + CHANGELOG.** **Pick the level before you bump, from the CHANGELOG's section headings rather than the commit subjects** — a `### Removed`, or an entry marked "a behaviour change a script may notice", is a *minor* under semver even when every commit beneath it says `fix:`. See [release.rules.md → Choosing the bump level](../.claude/rules/release.rules.md#choosing-the-bump-level) for why v1.1.1 shipped a `### Removed` as a patch deliberately, and the condition that ends that exemption. Method 1 does this. Manual: bump the version in **all three** files — `pyproject.toml`, `scripts/cli/jmo.py` (`__version__`), `scripts/jmo_mcp/__init__.py` (`__version__`) — and move CHANGELOG `[Unreleased]` → `[X.Y.Z] - YYYY-MM-DD`. `tests/unit/test_version_consistency.py` fails if the three drift apart, so a partial bump is caught in CI rather than shipped.
    **Then run `make deps-lock` and commit `uv.lock` in the same PR — always, not only when a dependency changed.** `uv.lock` pins the project's *own* version (`name = "jmo-security"` / `version = "X.Y.Z"`), so the bump alone makes the lock stale: verified on the 1.0.8 bump, where `uv lock --check` failed on nothing but the three version edits. CI runs that check as a hard gate on every event, so a missed relock fails the release PR with an error that looks unrelated to the bump. A local `uv sync` refreshes the lock silently, which is why the drift stays invisible until CI.
 3. **Merge the release-prep PR to `main`** (Method 1 auto-tags here; Method 2, you tag next).
-4. **Tag & push:** `git fetch origin && git tag -a vX.Y.Z origin/main -m "vX.Y.Z" && git push origin vX.Y.Z`. The tag-push fires `release.yml`: **Pre-Release Validation → PyPI publish → 8 Docker builds (4 variants × 2 arches) → multi-arch merge → GitHub release → badge verify.** (Tagging `origin/main` directly works even if your local tree is dirty.)
+4. **Tag & push:** `git fetch origin && git tag -a vX.Y.Z origin/main -m "vX.Y.Z" && git push origin vX.Y.Z`. The tag-push fires `release.yml`: **Pre-Release Validation → PyPI publish → Docker builds (one image × 2 arches) → multi-arch merge → GitHub release → badge verify.** (Tagging `origin/main` directly works even if your local tree is dirty.)
 5. **Post-release:** confirm PyPI shows the new version; **rerun the pre-tag `main` CI run** so its badge check re-reads PyPI and goes green (gotcha #1); resync `dev` == `main`.
 
 > **One file, two triggers.** `release.yml` runs on **`workflow_dispatch`** (Method 1's `prepare-release`: bump + tools + PR) **and** on **tag push `v*`** (build + publish). **Never `workflow_dispatch` after a manual bump** — `prepare-release` bumps again, double-incrementing the version.
@@ -30,7 +30,7 @@ This project publishes to PyPI via GitHub Actions on git tags of the form `v*` u
 
 1. **`verify_badges.sh` is chicken-and-egg on a version bump.** It compares `pyproject.toml` against **live PyPI**, so a bumped-but-unpublished version *fails* the `quick-checks` badge step by design (it prints "Action needed: Tag and release"). It auto-skips when: the latest commit subject starts with `release: v`, HEAD is a `vX.Y.Z` tag, or the branch prefix is allowlisted (`dev|feature|refactor|hotfix|dependabot|chore|release|release-prep` — `scripts/dev/verify_badges.sh:100`). **Manual-release tips:** put release-prep work on a `release-prep/…` or `chore/…` branch (skips on the PR), and after the release publishes, **rerun the pre-tag `main` CI run** (`gh run rerun <id>`) so the badge check re-reads PyPI and turns green. Until then `main` shows red on *only* the badge check — expected, not broken.
 2. **The tag-push gate is `jmo validate --tier quick` (`release.yml`), which exits non-zero → aborts the release.** Run it locally *before* tagging — but **`uv sync --group dev` first** (it needs the pinned `ruff` + `jsonschema`), or it false-fails the ruff checks and reports a bogus `NO-GO`. A clean pass reads `Verdict: GO`. (The "quick" tier is offline/structural; it does *not* hard-check tool currency, so a slightly-stale tool backlog won't block a tag.)
-3. **`update_versions.py --update-all --level=minor` skips `0.x` tools.** It classifies any bump to a `0.y.z` tool (e.g. `ruff`, `trivy`) as "major" and skips it alongside the true majors. Always run **`--validate`** after `--sync` to confirm every bumped tool's download URL resolves *before* tagging — a bad URL passes PR CI but breaks the **Docker build on release** (images build only on the `v*` tag, not on PRs). Distinguish *new* failures from baseline noise (`cdxgen` PyPI-checker quirk, `falco` `0.0.0` placeholder fail on `main` too).
+3. **`update_versions.py --update-all --level=minor` skips `0.x` tools.** It classifies any bump to a `0.y.z` tool (e.g. `ruff`, `trivy`) as "major" and skips it alongside the true majors. Always run **`--validate`** after `--sync` to confirm every bumped tool's download URL resolves *before* tagging — a bad URL passes PR CI but breaks the **Docker build on release** (images build only on the `v*` tag, not on PRs). Distinguish *new* failures from baseline noise: run `--validate` on `main` too, and treat only failures `main` does not have as yours.
 4. **Resync `dev` after every squash-merge.** `dev` mirrors `main`. Normal case fast-forwards: `git push origin origin/main:dev`. After promoting a *dev-ahead* branch, the two diverge — resync with a lease guard: `git push --force-with-lease=dev:<old-sha> origin origin/main:dev`.
 
 ---
@@ -108,7 +108,7 @@ gh workflow run maintenance.yml --ref main -f task=tool-update -f bump_level=pat
 # Patches + minors + majors (skips only 'unknown')
 gh workflow run maintenance.yml --ref main -f task=tool-update -f bump_level=major
 
-# Everything including synthetic bumps (falco 0.0.0, akto mini-testing-X)
+# Everything, including bumps the classifier marks 'unknown'
 gh workflow run maintenance.yml --ref main -f task=tool-update -f bump_level=all
 ```
 
@@ -161,7 +161,7 @@ trade-off for not filtering `--create-issues` by bump level.
 1. ✅ Updates ALL security tools to latest versions
 2. ✅ Bumps version in pyproject.toml
 3. ✅ Updates CHANGELOG.md with your entry
-4. ✅ Syncs Dockerfiles with new tool versions
+4. ✅ Syncs the Dockerfile with new tool versions
 5. ✅ Creates release PR with detailed summary
 6. ✅ When merged → creates git tag and triggers full release
 
@@ -255,10 +255,10 @@ builds a distribution without cleaning first.
 
    # If updates found, update all tools
    python3 scripts/dev/update_versions.py --update-all  # Update versions.yaml
-   python3 scripts/dev/update_versions.py --sync         # Sync Dockerfiles
+   python3 scripts/dev/update_versions.py --sync         # Sync the Dockerfile
 
    # Commit tool updates
-   git add versions.yaml Dockerfile* scripts/dev/install_tools.sh
+   git add versions.yaml Dockerfile scripts/dev/install_tools.sh
    git commit -m "deps(tools): update all to latest before vX.Y.Z
 
    Updated all security tools before release vX.Y.Z:
@@ -373,10 +373,10 @@ cd jmo-security-repo
 make dev-deps
 
 # Install external tools
-jmo tools install --profile balanced
+jmo tools install
 
 # Verify tools installed
-jmo tools check --profile balanced
+jmo tools check
 ```
 
 **Success Criteria:**
@@ -396,8 +396,8 @@ jmo tools check --profile balanced
 **Goal:** Verify native CLI scanning works
 
 ```bash
-# Run fast profile scan
-jmo fast --repo .
+# Run a quick scan (scan + report)
+jmo ci --repo . --tools trufflehog semgrep trivy
 
 # Verify results generated
 ls -lh results/summaries/
@@ -429,7 +429,7 @@ find . -name "*.py" -exec dos2unix {} \;
 docker run --rm hello-world
 
 # Run scan in Docker
-docker run --rm -v $(pwd):/repo jmo-security:latest scan --repo /repo --profile-name fast
+docker run --rm -v $(pwd):/repo jmo-security:latest scan --repo /repo --tools trufflehog semgrep trivy
 ```
 
 **Success Criteria:**
@@ -483,7 +483,7 @@ file scripts/cli/jmo.py
 
 ```bash
 # Generate dashboard
-jmo fast --repo .
+jmo ci --repo . --tools trufflehog semgrep trivy
 
 # Open dashboard in Windows browser
 # Option 1: Use WSL path in Windows browser
@@ -527,11 +527,10 @@ ls results-symlink-test/
 **Goal:** Verify WSL performance comparable to native Linux
 
 ```bash
-# Time a fast scan
-time jmo fast --repo .
+# Time a quick scan
+time jmo ci --repo . --tools trufflehog semgrep trivy
 
 # Expected: Within 20% of native Linux performance
-# Fast profile: 5-10 minutes (WSL should be 6-12 minutes)
 ```
 
 **Success Criteria:**
@@ -668,7 +667,7 @@ echo "# Test" > README.md
 docker run --rm \
   -v $(pwd):/repo \
   jmogaming/jmo-security:latest \
-  scan --repo /repo --profile-name fast --allow-missing-tools
+  scan --repo /repo --tools trufflehog semgrep trivy --allow-missing-tools
 
 # Verify results created
 ls results/
@@ -707,11 +706,11 @@ docker run --rm jimmy058910/jmo-security:latest bash -c "curl -I https://github.
 **Goal:** Verify macOS Docker performance is acceptable
 
 ```bash
-# Time a fast scan
+# Time a quick scan
 time docker run --rm \
   -v $(pwd):/repo \
   jmogaming/jmo-security:latest \
-  scan --repo /repo --profile-name fast --allow-missing-tools
+  scan --repo /repo --tools trufflehog semgrep trivy --allow-missing-tools
 
 # Expected: Within 30% of Linux Docker performance
 ```
@@ -726,30 +725,6 @@ time docker run --rm \
 - Apple Silicon (M1/M2/M3) may be faster than Intel for some operations
 - Docker Desktop may be slower than native Linux (expected)
 
-#### TC5: Multi-Variant Testing
-
-**Goal:** Verify all Docker image variants work on macOS
-
-```bash
-# Test deep variant (default/latest)
-docker run --rm jmogaming/jmo-security:latest --help
-
-# Test balanced variant
-docker run --rm jmogaming/jmo-security:balanced --help
-
-# Test slim variant
-docker run --rm jmogaming/jmo-security:slim --help
-
-# Test fast variant
-docker run --rm jmogaming/jmo-security:fast --help
-```
-
-**Success Criteria:**
-
-- [ ] All 4 variants work
-- [ ] No platform-specific errors
-- [ ] Help commands succeed for all variants
-
 ### macOS Validation Summary
 
 **Checklist Completion:**
@@ -758,7 +733,6 @@ docker run --rm jmogaming/jmo-security:fast --help
 - [ ] TC2: Volume Mounts (✅ / ❌)
 - [ ] TC3: Network Access (✅ / ❌)
 - [ ] TC4: Performance (✅ / ❌)
-- [ ] TC5: Multi-Variant (✅ / ❌)
 
 **Issues Found:**
 

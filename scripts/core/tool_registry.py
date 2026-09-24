@@ -2,12 +2,13 @@
 Tool Registry for JMo Security.
 
 Provides structured access to versions.yaml tool definitions with
-profile filtering, version comparison, and installation metadata.
+version comparison and installation metadata.
 
 This module is the single source of truth for:
 - Tool version information
-- Profile-to-tool mappings
-- Installation commands per platform
+- The scan tool matrix (TOOL_MATRIX) and the policy engine (POLICY_ENGINE)
+- Which tools apply to which target type
+- Installation hints per platform
 - Critical tool identification
 """
 
@@ -27,111 +28,31 @@ logger = logging.getLogger(__name__)
 Platform = Literal["linux", "macos", "windows"]
 ToolCategory = Literal["python_tools", "binary_tools", "special_tools"]
 
-# Profile to tool mapping - canonical source from jmo.yml
-# These are the actual binary/command names used for detection
-PROFILE_TOOLS: dict[str, list[str]] = {
-    "fast": [
-        "trufflehog",
-        "semgrep",
-        "syft",
-        "trivy",
-        "checkov",
-        "hadolint",
-        "nuclei",
-        "shellcheck",
-        "opa",  # Policy engine for policy-as-code evaluation
-    ],  # 9 tools
-    "slim": [
-        "trufflehog",
-        "semgrep",
-        "syft",
-        "trivy",
-        "checkov",
-        "hadolint",
-        "nuclei",
-        "prowler",
-        "kubescape",
-        "grype",
-        "horusec",
-        "shellcheck",
-        "opa",  # Policy engine for policy-as-code evaluation
-    ],  # 13 tools
-    "balanced": [
-        "trufflehog",
-        "semgrep",
-        "syft",
-        "trivy",
-        "checkov",
-        "hadolint",
-        "zap",
-        "nuclei",
-        "prowler",
-        "kubescape",
-        "scancode",
-        "cdxgen",
-        "gosec",
-        "grype",
-        "horusec",
-        "shellcheck",
-        "opa",  # Policy engine for policy-as-code evaluation
-    ],  # 17 tools
-    "deep": [
-        "trufflehog",
-        "noseyparker",
-        "semgrep",
-        "semgrep-secrets",
-        "bandit",
-        "syft",
-        "trivy",
-        "trivy-rbac",
-        "checkov",
-        "checkov-cicd",
-        "hadolint",
-        "zap",
-        "nuclei",
-        "prowler",
-        "kubescape",
-        "akto",
-        "scancode",
-        "cdxgen",
-        "gosec",
-        "yara",
-        "grype",
-        "horusec",
-        "dependency-check",
-        "falco",
-        "afl++",
-        "mobsf",
-        "lynis",
-        "opa",  # Policy engine for policy-as-code evaluation
-        # shellcheck was in fast, slim and balanced but NOT deep -- the only
-        # tool anywhere in that position, so `deep` was not a superset of the
-        # profile a user escalates to it from, and escalating silently LOST
-        # shell-script linting with nothing said (#795). Dockerfile.deep has
-        # always built and verified the binary, so the image already shipped it;
-        # only the profile never asked for it. Enforced from here on by
-        # tests/unit/test_tool_registry_consistency.py.
-        "shellcheck",
-    ],  # 29 tools
-}
+#: The scanners `jmo scan` considers when nothing narrows the list. Resolution is
+#: `--tools`, then `jmo.yml` `tools:`, then this. Membership makes a tool eligible;
+#: the target's content decides whether it runs (scan_jobs/*).
+TOOL_MATRIX: tuple[str, ...] = (
+    "trufflehog",
+    "semgrep",
+    "syft",
+    "trivy",
+    "checkov",
+    "hadolint",
+    "shellcheck",
+    "gosec",
+    "yara",
+    "grype",
+    "zap",
+    "nuclei",
+)
 
-# Tool name normalization - maps jmo.yml names to binary names
+#: Evaluates policy-as-code in the report phase. Installed and baked into the image
+#: alongside the matrix, but it scans nothing, so it is not in TOOL_MATRIX.
+POLICY_ENGINE: str = "opa"
+
+# Tool name normalization - maps tool names to binary names where they differ
 TOOL_BINARY_NAMES: dict[str, str] = {
-    # Most tools use their name as-is, but some differ
-    "dependency-check": "dependency-check.sh",  # Java wrapper script
-    "afl++": "afl-fuzz",  # AFL++ binary name
-    "semgrep-secrets": "semgrep",  # Same binary, different config
-    "trivy-rbac": "trivy",  # Same binary, different config
-    "checkov-cicd": "checkov",  # Same binary, different config
-    "scancode": "scancode",  # scancode-toolkit installs as 'scancode'
     "zap": "zap.sh",  # ZAP wrapper script (or zap-cli)
-}
-
-# Tools that are variants (same binary, different invocation)
-TOOL_VARIANTS: dict[str, str] = {
-    "semgrep-secrets": "semgrep",
-    "trivy-rbac": "trivy",
-    "checkov-cicd": "checkov",
 }
 
 # Execution requirements - commands/dependencies needed to actually run tools (Fix 1.4)
@@ -139,146 +60,46 @@ TOOL_VARIANTS: dict[str, str] = {
 TOOL_EXECUTION_COMMANDS: dict[str, list[str]] = {
     "zap": ["zap.sh", "java"],  # ZAP launcher script + Java runtime
     "nuclei": ["nuclei"],  # Standard binary
-    "horusec": ["horusec"],  # horusec binary (optionally needs docker)
-    "cdxgen": ["cdxgen", "node"],  # Requires Node.js 20+
-    "dependency-check": [
-        "dependency-check.sh",
-        "java",
-    ],  # Java wrapper script + Java runtime
-    "prowler": ["prowler"],
-    "kubescape": ["kubescape"],
     "gosec": ["gosec"],
 }
 
-# Version requirements for tools with specific dependency versions
-TOOL_VERSION_REQUIREMENTS: dict[str, dict[str, str]] = {
-    "cdxgen": {"node": "20.0.0"},  # Requires Node.js 20+
-}
-
-# Tools `jmo tools check` must not report as a gap in the environment.
-#
-# **This is not "the list of content-triggered tools", despite the name.** Its
-# one consumer is `ToolManager.get_status_summary`, which buckets these under
-# `content_triggered` instead of `not_installed` so a user is not told to
-# install a tool that would only run on an APK or a live API endpoint.
-#
-# Which tools are *actually* gated on repository content is decided per tool, by
-# a predicate in the scanner that runs it -- `_repo_has_go_sources` and
-# `_repo_has_k8s_manifests` in `scan_jobs/repository_scanner.py`, and the
-# equivalent checks for zap, falco, afl++, prowler, mobsf and trivy-rbac. That
-# set is larger than this one and changes when a scanner changes.
-#
-# A second, hand-maintained copy of it used to sit inside TOOL_SCAN_TYPES["repo"]
-# below, listing `zap`/`falco`/`mobsf`/`afl++`. By #1081 it disagreed with this
-# constant in both directions and was wrong about four tools, and a reader had
-# no way to tell which of the two to believe. It is gone rather than corrected:
-# the enumeration was the defect, so matching them up today would only reset the
-# clock on the same drift.
-CONTENT_TRIGGERED_TOOLS: set[str] = {"mobsf", "akto"}
-
-# Manual install tools: Require manual installation due to platform limitations
-# These cannot be auto-installed via jmo tools install
-MANUAL_INSTALL_TOOLS: set[str] = {"falco", "afl++", "mobsf", "akto"}
-
-#: The `version:` a `versions.yaml` entry carries when there is nothing to pin.
-#:
-#: A MANUAL_INSTALL tool ships in no Docker image, so no release of it is
-#: baked anywhere and pinning one would be a claim about nothing. `0.0.0` says
-#: "unpinned" -- it is NOT an assertion that release 0.0.0 exists.
-#: `update_versions.py --validate` reads it that way and reports
-#: `falco: unpinned (manual install, no image)`; falco is currently the only
-#: entry using it.
-#:
-#: It lives here, rather than only in `scripts/dev/update_versions.py` where it
-#: began, because the CLI has to render it too: `jmo tools check` printed a bare
-#: `0.0.0` in its Expected column, which reads as a version claim and is the one
-#: user-facing surface that showed the sentinel raw.
-#:
-#: `update_versions.py` keeps a local mirror of this value for the same reason it
-#: mirrors MANUAL_INSTALL_TOOLS -- it runs in CI (`maintenance.yml`
-#: check-versions) WITHOUT `pip install -e .`, so importing scripts.core is not
-#: reliable there. `tests/unit/test_update_versions_manual_tools.py` fails if the
-#: two drift apart.
-UNPINNED_SENTINEL: str = "0.0.0"
-
-# Scan type applicability - which tools apply to which target types
-# Based on docs/PROFILES_AND_TOOLS.md Scan Type Tool Matrix
-# This enables smarter tool selection: only run tools applicable to the target
-TOOL_SCAN_TYPES: dict[str, set[str]] = {
-    # Tools that work on repositories (code analysis)
-    "repo": {
+# Scan type applicability - which tools apply to which target types.
+# See docs/TOOLS.md#target-types. Only tools applicable to a target are run on it.
+_REPO_TOOLS: frozenset[str] = frozenset(
+    {
         "trufflehog",
-        "noseyparker",
         "semgrep",
-        "semgrep-secrets",
-        "bandit",
         "syft",
         "trivy",
         "checkov",
-        "checkov-cicd",
         "hadolint",
+        "shellcheck",
         "gosec",
-        "cdxgen",
-        "scancode",
-        "kubescape",
-        "prowler",
         "yara",
         "grype",
-        "trivy-rbac",
-        "horusec",
-        "dependency-check",
-        "shellcheck",
-        "opa",
-        "zap",
-        "falco",
-        "mobsf",
-        "afl++",
         # Membership here means "valid for a repository target", NOT "runs on
-        # every repository". 8 of these 26 are gated on the tree actually
-        # holding something for them (zap, falco, afl++, prowler, mobsf,
-        # trivy-rbac, gosec, kubescape), and hadolint and shellcheck simply
-        # produce no invocation when they collect no files. See
-        # CONTENT_TRIGGERED_TOOLS above for where that decision lives.
-        # Note: nuclei is a DAST URL scanner, only valid for "url" scan type
-    },
+        # every repository". gosec is gated on the tree holding Go sources,
+        # hadolint and shellcheck produce no invocation when they collect no
+        # files, and zap records "nothing for it to scan" on a directory.
+        "zap",
+        # nuclei is a DAST URL scanner, only valid for "url"; opa is the
+        # report-phase policy engine, not a scanner, so it is on no target.
+    }
+)
+
+TOOL_SCAN_TYPES: dict[str, set[str]] = {
+    # Tools that work on repositories (code analysis)
+    "repo": set(_REPO_TOOLS),
     # Tools that work on container images
     "image": {"trivy", "syft"},
     # Tools that work on live URLs (DAST)
-    "url": {"nuclei", "zap", "akto"},
+    "url": {"nuclei", "zap"},
     # Tools that work on Kubernetes clusters
     "k8s": {"trivy"},
     # Tools that work on IaC files
-    "iac": {"trivy", "checkov", "kubescape"},
+    "iac": {"trivy", "checkov"},
     # Tools that work on GitLab repos (same as repo + image discovery)
-    "gitlab": {
-        "trufflehog",
-        "noseyparker",
-        "semgrep",
-        "semgrep-secrets",
-        "bandit",
-        "syft",
-        "trivy",
-        "checkov",
-        "checkov-cicd",
-        "hadolint",
-        "gosec",
-        "cdxgen",
-        "scancode",
-        "kubescape",
-        "prowler",
-        "yara",
-        "grype",
-        "trivy-rbac",
-        "horusec",
-        "dependency-check",
-        "shellcheck",
-        "opa",
-        "zap",
-        "falco",
-        "mobsf",
-        "afl++",
-        "nuclei",
-    },
+    "gitlab": set(_REPO_TOOLS) | {"nuclei"},
 }
 
 
@@ -307,205 +128,6 @@ def filter_tools_for_scan_type(tools: list[str], scan_type: str) -> list[str]:
     return [t for t in tools if t in applicable]
 
 
-# Platform compatibility requirements for tools
-# Tools not listed here are assumed to work on all platforms
-# This is used for proactive filtering in the wizard to skip incompatible tools
-TOOL_PLATFORM_REQUIREMENTS: dict[str, dict] = {
-    # Linux-only tools (kernel requirements)
-    "falco": {
-        "platforms": ["linux"],
-        "docker_image": "falcosecurity/falco",
-        "docker_flags": "--privileged",
-        "reason": "Requires Linux kernel module (eBPF or kernel module)",
-        "workarounds": ["docker"],
-    },
-    "afl++": {
-        "platforms": ["linux"],
-        "docker_image": "aflplusplus/aflplusplus",
-        "reason": "Requires Linux kernel features (ptrace, shared memory)",
-        "workarounds": ["docker", "wsl2"],
-    },
-    # Linux/macOS only (no Windows binaries).
-    #
-    # shellcheck used to be listed here as "No Windows build available from
-    # upstream". Measured false (#1091): BINARY_URLS["shellcheck"] has a
-    # Windows zip and `jmo tools install shellcheck` leaves
-    # ~/.jmo/bin/shellcheck.exe. The entry only made the wizard skip a tool
-    # that works, and would have made the install gate refuse it.
-    "noseyparker": {
-        "platforms": ["linux", "macos"],
-        "docker_image": "ghcr.io/praetorian-inc/noseyparker",
-        "reason": "Rust binary not available for Windows",
-        "workarounds": ["docker", "wsl2"],
-    },
-    "scancode": {
-        "platforms": ["linux", "macos"],
-        "reason": (
-            "Native Windows bootstrap fails inside scancode's own configure.bat "
-            "and upstream deprecates the platform in favour of WSL2 "
-            "(nexB/scancode-toolkit#2366); the deep Docker image carries it"
-        ),
-        "workarounds": ["wsl2", "docker"],
-    },
-    # All platforms but with requirements
-    "lynis": {
-        "platforms": ["linux", "macos", "windows"],
-        "windows_requires": ["bash"],
-        "docker_image": "cisofy/lynis",
-        "reason": "Shell script requires bash interpreter",
-        "workarounds": ["git_bash", "wsl", "docker"],
-    },
-    "prowler": {
-        "platforms": ["linux", "macos", "windows"],
-        "windows_requires": ["long_path_support"],
-        "reason": "Creates deeply nested paths exceeding 260-char limit",
-        "workarounds": ["docker", "registry_fix"],
-    },
-    # Docker-only tools (complex setup not recommended natively)
-    "mobsf": {
-        "platforms": [],  # No native support recommended
-        "docker_image": "opensecurity/mobile-security-framework-mobsf",
-        "docker_ports": ["8000:8000"],
-        "reason": "Complex setup (Android SDK + Python dependencies)",
-        "workarounds": ["docker"],
-    },
-    "akto": {
-        "platforms": [],
-        "docker_compose": True,
-        "reason": "Microservice architecture requires docker-compose",
-        "workarounds": ["docker_compose"],
-    },
-}
-
-
-def get_platform_status(tool_name: str, platform: str) -> dict:
-    """
-    Get platform compatibility status for a tool.
-
-    This function checks whether a tool is supported on the given platform
-    and provides detailed information about any compatibility issues.
-
-    Args:
-        tool_name: Name of the tool (e.g., 'falco', 'noseyparker')
-        platform: Current platform ("windows", "linux", "macos")
-
-    Returns:
-        Dictionary with:
-        - supported: bool - whether the tool works on this platform
-        - reason: str | None - explanation if not supported
-        - requirements: list[str] - platform-specific requirements (if supported)
-        - workarounds: list[str] - alternative ways to run the tool
-        - docker_image: str | None - Docker image for container-based execution
-    """
-    if tool_name not in TOOL_PLATFORM_REQUIREMENTS:
-        # Tool not in requirements dict - assume universal support
-        return {
-            "supported": True,
-            "reason": None,
-            "workarounds": [],
-            "requirements": [],
-        }
-
-    req = TOOL_PLATFORM_REQUIREMENTS[tool_name]
-
-    # Check if platform is in supported list
-    platforms = req.get("platforms", ["linux", "macos", "windows"])
-    if platform not in platforms:
-        return {
-            "supported": False,
-            "reason": req.get("reason", f"Not available on {platform}"),
-            "workarounds": req.get("workarounds", []),
-            "docker_image": req.get("docker_image"),
-            "requirements": [],
-        }
-
-    # Check platform-specific requirements (e.g., windows_requires)
-    platform_requires = req.get(f"{platform}_requires", [])
-    if platform_requires:
-        return {
-            "supported": True,  # Supported but with requirements
-            "reason": req.get("reason"),
-            "requirements": platform_requires,
-            "workarounds": req.get("workarounds", []),
-            "docker_image": req.get("docker_image"),
-        }
-
-    return {
-        "supported": True,
-        "reason": None,
-        "workarounds": [],
-        "requirements": [],
-    }
-
-
-def get_tools_for_profile_filtered(
-    profile: str, platform: str | None = None
-) -> list[str]:
-    """
-    Get tools for a profile, optionally filtered by platform compatibility.
-
-    This is a module-level function that provides platform-filtered tool lists
-    for use in the wizard and other CLI components.
-
-    Args:
-        profile: Profile name (fast, slim, balanced, deep)
-        platform: Optional platform filter ("windows", "linux", "macos").
-                  If None, returns all tools for the profile.
-
-    Returns:
-        List of tool names compatible with the platform.
-
-    Example:
-        >>> get_tools_for_profile_filtered("deep", "windows")
-        ['trufflehog', 'semgrep', ...]  # Excludes falco, afl++, etc.
-    """
-    all_tools = PROFILE_TOOLS.get(profile, [])
-
-    if platform is None:
-        return all_tools
-
-    compatible_tools = []
-    for tool in all_tools:
-        status = get_platform_status(tool, platform)
-        if status["supported"]:
-            compatible_tools.append(tool)
-
-    return compatible_tools
-
-
-def get_skipped_tools_for_profile(profile: str, platform: str) -> list[tuple[str, str]]:
-    """
-    Get tools that will be skipped on this platform.
-
-    This function identifies tools that are not compatible with the current
-    platform and returns them with explanatory reasons. Used by the wizard
-    to proactively inform users before tool checking.
-
-    Args:
-        profile: Profile name (fast, slim, balanced, deep)
-        platform: Current platform ("windows", "linux", "macos")
-
-    Returns:
-        List of (tool_name, reason) tuples for incompatible tools.
-
-    Example:
-        >>> get_skipped_tools_for_profile("deep", "windows")
-        [('falco', 'Requires Linux kernel module (eBPF or kernel module)'),
-         ('afl++', 'Requires Linux kernel features (ptrace, shared memory)'),
-         ...]
-    """
-    all_tools = PROFILE_TOOLS.get(profile, [])
-    skipped = []
-
-    for tool in all_tools:
-        status = get_platform_status(tool, platform)
-        if not status["supported"]:
-            reason = status.get("reason", "Not available on this platform")
-            skipped.append((tool, reason))
-
-    return skipped
-
-
 @dataclass
 class ToolInfo:
     """Information about a single security tool."""
@@ -522,9 +144,7 @@ class ToolInfo:
     # Installation metadata
     pypi_package: str | None = None
     github_repo: str | None = None
-    brew_package: str | None = None
     apt_package: str | None = None
-    npm_package: str | None = None
 
     # Binary information
     binary_name: str | None = None  # Actual binary name if different from tool name
@@ -541,14 +161,6 @@ class ToolInfo:
         if self.binary_name:
             return self.binary_name
         return TOOL_BINARY_NAMES.get(self.name, self.name)
-
-    def is_variant(self) -> bool:
-        """Check if this tool is a variant of another (same binary)."""
-        return self.name in TOOL_VARIANTS
-
-    def get_base_tool(self) -> str:
-        """Get the base tool name for variants."""
-        return TOOL_VARIANTS.get(self.name, self.name)
 
 
 class ToolRegistry:
@@ -614,9 +226,6 @@ class ToolRegistry:
                 if tool:
                     self._tools[name] = tool
 
-        # Add virtual tools (variants that share binaries)
-        self._add_virtual_tools()
-
         logger.debug(f"Loaded {len(self._tools)} tools from {self._versions_path}")
 
     def _parse_tool(
@@ -624,28 +233,6 @@ class ToolRegistry:
     ) -> ToolInfo | None:
         """Parse a single tool entry from versions.yaml."""
         try:
-            # Determine brew package name (often same as tool name)
-            brew_pkg = info.get("brew_package")
-            if brew_pkg is None and category == "binary_tools":
-                # Many binary tools are available via brew with same name
-                brew_pkg = name
-
-            # Determine apt package
-            apt_pkg = info.get("apt_package")
-
-            # `npm_package:` is the declared form. The `@`-prefix inference
-            # below is the legacy shape -- cdxgen carried its scoped npm name
-            # under `pypi_package` until #935, and this heuristic is why the
-            # *installer* worked while `update_versions.py --validate` did not:
-            # only one of the two readers knew the rule. Kept so an entry still
-            # using the old shape keeps installing, and so that this stays the
-            # single place that decides.
-            npm_pkg = info.get("npm_package")
-            pypi_pkg = info.get("pypi_package")
-            if npm_pkg is None and pypi_pkg and pypi_pkg.startswith("@"):
-                npm_pkg = pypi_pkg
-                pypi_pkg = None
-
             return ToolInfo(
                 name=name,
                 version=str(info.get("version", "unknown")),
@@ -653,11 +240,9 @@ class ToolRegistry:
                 category=category,
                 critical=info.get("critical", False),
                 docker_ready=info.get("docker_ready", True),
-                pypi_package=pypi_pkg,
+                pypi_package=info.get("pypi_package"),
                 github_repo=info.get("github_repo"),
-                brew_package=brew_pkg,
-                apt_package=apt_pkg,
-                npm_package=npm_pkg,
+                apt_package=info.get("apt_package"),
                 binary_name=info.get("binary_name"),
                 install_notes=info.get("notes"),
                 update_check=info.get("update_check"),
@@ -667,32 +252,6 @@ class ToolRegistry:
         ) as e:  # Acceptable: malformed tool entry — skip and continue loading others
             logger.warning(f"Failed to parse tool {name}: {e}")
             return None
-
-    def _add_virtual_tools(self) -> None:
-        """Add virtual tools that are variants of real tools."""
-        # These tools use the same binary but with different configurations
-        virtual_tools = {
-            "semgrep-secrets": ("semgrep", "Semgrep with secrets configuration"),
-            "trivy-rbac": ("trivy", "Trivy with RBAC scanning"),
-            "checkov-cicd": ("checkov", "Checkov with CI/CD framework"),
-        }
-
-        for variant_name, (base_name, description) in virtual_tools.items():
-            if variant_name not in self._tools and base_name in self._tools:
-                base_tool = self._tools[base_name]
-                self._tools[variant_name] = ToolInfo(
-                    name=variant_name,
-                    version=base_tool.version,
-                    description=description,
-                    category=base_tool.category,
-                    critical=False,
-                    docker_ready=base_tool.docker_ready,
-                    pypi_package=base_tool.pypi_package,
-                    github_repo=base_tool.github_repo,
-                    brew_package=None,  # Variants don't have separate packages
-                    apt_package=None,
-                    binary_name=base_tool.get_binary_name(),
-                )
 
     def get_tool(self, name: str) -> ToolInfo | None:
         """
@@ -706,37 +265,6 @@ class ToolRegistry:
         """
         return self._tools.get(name)
 
-    def get_tools_for_profile(self, profile: str) -> list[ToolInfo]:
-        """
-        Get all tools required for a scan profile.
-
-        Args:
-            profile: Profile name ('fast', 'slim', 'balanced', 'deep')
-
-        Returns:
-            List of ToolInfo objects for the profile
-        """
-        tool_names = PROFILE_TOOLS.get(profile, [])
-        tools = []
-        for name in tool_names:
-            tool = self.get_tool(name)
-            if tool:
-                tools.append(tool)
-            else:
-                # Create a placeholder for unknown tools
-                logger.warning(
-                    f"Tool {name} in profile {profile} not found in registry"
-                )
-                tools.append(
-                    ToolInfo(
-                        name=name,
-                        version="unknown",
-                        description=f"Unknown tool: {name}",
-                        category="binary_tools",
-                    )
-                )
-        return tools
-
     def get_critical_tools(self) -> list[ToolInfo]:
         """Get tools marked as critical for updates."""
         return [t for t in self._tools.values() if t.critical]
@@ -744,14 +272,6 @@ class ToolRegistry:
     def get_all_tools(self) -> list[ToolInfo]:
         """Get all registered tools."""
         return list(self._tools.values())
-
-    def get_profile_names(self) -> list[str]:
-        """Get list of available profile names."""
-        return list(PROFILE_TOOLS.keys())
-
-    def get_profile_tool_count(self, profile: str) -> int:
-        """Get count of tools in a profile."""
-        return len(PROFILE_TOOLS.get(profile, []))
 
 
 def detect_platform() -> Platform:
@@ -767,6 +287,10 @@ def get_install_hint(tool: ToolInfo, platform: Platform | None = None) -> str:
     """
     Get a platform-appropriate installation hint for a tool.
 
+    `jmo tools install` comes first on every platform: it is the path that
+    installs the pinned version. brew and npm are no longer install strategies
+    (v2.0.0), so they are not suggested either.
+
     Args:
         tool: ToolInfo object
         platform: Target platform (auto-detected if None)
@@ -777,36 +301,12 @@ def get_install_hint(tool: ToolInfo, platform: Platform | None = None) -> str:
     if platform is None:
         platform = detect_platform()
 
-    hints = []
-
-    if platform == "macos":
-        if tool.brew_package:
-            hints.append(f"brew install {tool.brew_package}")
-        if tool.pypi_package:
-            hints.append(f"pip install {tool.pypi_package}")
-        if tool.npm_package:
-            hints.append(f"npm install -g {tool.npm_package}")
-    elif platform == "linux":
-        if tool.apt_package:
-            hints.append(f"apt install {tool.apt_package}")
-        if tool.pypi_package:
-            hints.append(f"pip install {tool.pypi_package}")
-        if tool.npm_package:
-            hints.append(f"npm install -g {tool.npm_package}")
-        if tool.brew_package:
-            hints.append(f"brew install {tool.brew_package}")
-    elif platform == "windows":
-        if tool.pypi_package:
-            hints.append(f"pip install {tool.pypi_package}")
-        if tool.npm_package:
-            hints.append(f"npm install -g {tool.npm_package}")
-        # Windows often needs manual installation
-        hints.append("See JMo docs for Windows installation")
-
-    if not hints and tool.github_repo:
-        hints.append(f"See: https://github.com/{tool.github_repo}")
-
+    hints = [f"jmo tools install {tool.name}"]
+    if tool.pypi_package:
+        hints.append(f"pip install {tool.pypi_package}")
+    if platform == "linux" and tool.apt_package:
+        hints.append(f"apt install {tool.apt_package}")
     if tool.install_notes:
         hints.append(f"Note: {tool.install_notes}")
 
-    return " | ".join(hints) if hints else "See JMo documentation"
+    return " | ".join(hints)

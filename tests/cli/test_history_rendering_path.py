@@ -71,7 +71,6 @@ def populated_db(tmp_path: Path) -> Path:
     store_scan(
         db_path=db,
         results_dir=results,
-        profile="balanced",
         tools=["semgrep"],
         branch="main",
         duration_seconds=12.5,
@@ -112,10 +111,11 @@ def test_the_table_renders_every_column_it_declares(
     """A header the renderer prints must correspond to a value it prints."""
     out = _run_list(populated_db, capsys)
 
-    for header in ("Branch", "Profile", "Findings", "Duration"):
+    for header in ("Branch", "Findings", "Duration"):
         assert header in out, f"missing column {header!r} in:\n{out}"
     assert "main" in out
-    assert "balanced" in out
+    # Scan profiles left in v2.0.0, and the column with them.
+    assert "Profile" not in out
 
 
 def test_json_output_is_unaffected(
@@ -131,7 +131,8 @@ def test_json_output_is_unaffected(
 
     payload = json.loads(out)
     assert isinstance(payload, list)
-    assert payload[0]["profile"] == "balanced"
+    assert payload[0]["branch"] == "main"
+    assert "profile" not in payload[0]
 
 
 def test_the_empty_case_still_says_so(
