@@ -1618,3 +1618,28 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python scripts/dev/phase_audit.py verify
+
+  eol-flips:
+    name: eol-flips
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          # A pull_request checkout is the merge commit, so its first parent is
+          # the base tip and `HEAD^1` is exactly what the PR changes. No base
+          # ref to fetch, and no deeper history than this job needs.
+          fetch-depth: 2
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      # Stdlib-only, like phase_audit.py: no `uv sync`.
+      - name: No file changes its line endings, renames included
+        run: python scripts/dev/check_eol_flips.py --base HEAD^1

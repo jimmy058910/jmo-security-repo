@@ -232,17 +232,37 @@ path.write_bytes(s.replace(old, new).encode("utf-8"))
 ```
 
 Or pass `newline=""` to `open()`, which disables translation in both directions.
-The Edit tool does not have this problem; only scripts do.
+The Edit tool preserves a file's endings. **A file that is created, not edited,
+does not:** the Write tool writes LF (measured 2026-09-24: new files, 0 CRLF), and
+so does any script's fresh file. Rewriting a CRLF file with Write, or renaming it
+and writing the new name, converts every line.
 
-Detect it before committing — raw and EOL-insensitive counts must match:
+**Keep a file's endings when you replace it, rename it, or recreate it.** Phase 2
+renamed `tests/integration/test_cli_profiles.py` (CRLF, 1,027 lines) to
+`test_cli_per_tool_config.py` and wrote the new file fresh, in LF. Git pairs the two
+as a 54%-similar rename, so the PR read **+669/-1027 raw against +94/-452
+EOL-insensitive: 575 phantom lines** in a file whose real change was the 94/452.
+Restore by converting the new file's bytes (`b.replace(b"\n", b"\r\n")` after
+asserting it holds no `\r`), never by re-editing it.
+
+**This is enforced.** `scripts/dev/check_eol_flips.py` compares raw and
+EOL-insensitive `git diff --numstat` **over the whole diff at once**, with renames
+paired. It runs as the `eol-flips` pre-commit hook (on the index) and as the
+`eol-flips` CI job (on every PR). Run it by hand before pushing:
 
 ```bash
-for f in $(git diff origin/main HEAD --name-only); do
-  a=$(git diff origin/main HEAD --numstat -- "$f" | cut -f1)
-  b=$(git diff origin/main HEAD --ignore-cr-at-eol --numstat -- "$f" | cut -f1)
-  [ "$a" != "$b" ] && echo "EOL FLIP $f: raw=+$a ignore-CR=+$b"
-done
+# `git add` new files first: an untracked file is not in `git diff` at all.
+python scripts/dev/check_eol_flips.py --base origin/dev
 ```
+
+A deliberate conversion passes `--allow PATH`; locally, `SKIP=eol-flips` skips
+the hook.
+
+**Never loop per file with `-- "$f"`.** A pathspec naming only one side of a rename
+stops git pairing it, so the rename reads as a delete plus an add. Both of those
+agree with and without `--ignore-cr-at-eol`, and the flip is invisible. The loop
+this section used to show did exactly that: it reported 0 flips on the Phase 2
+tree above, and the whole-diff comparison found the rename on its first run.
 
 Do **not** check line endings with `grep -c $'\r'` — MSYS grep normalizes CR, and
 the pattern also matches a literal `r`, so it reports CRLF for LF files. Use

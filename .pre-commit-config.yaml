@@ -146,6 +146,13 @@ repos:
         files: ^\.github/(workflows|actions)/.*\.ya?ml$
         entry: python3 scripts/dev/check_yaml_env_tilde.py
         pass_filenames: false
+      - id: eol-flips
+        name: "eol-flips (no staged file changes its line endings, renames included)"
+        language: system
+        # The whole index at once: `mixed-line-ending` passes a file converted
+        # wholesale, and a per-file check cannot pair a rename.
+        entry: python3 scripts/dev/check_eol_flips.py --cached
+        pass_filenames: false
 
   # Local hook: keep uv.lock consistent with pyproject.toml.
   #
