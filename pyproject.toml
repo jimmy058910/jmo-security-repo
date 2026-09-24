@@ -215,6 +215,12 @@ markers = [
 # Exclude smoke tests by default (post-release only); run with: pytest -m smoke
 addopts = "-m 'not smoke'"
 
+# An empty parametrize list is otherwise ONE SKIPPED test at exit 0, so a test
+# parametrized over a module constant goes quiet, not red, when that constant
+# empties (#1061). This makes it a collection error everywhere. Guarded by
+# tests/unit/test_empty_parameter_set_fails.py.
+empty_parameter_set_mark = "fail_at_collect"
+
 # Test durations file for pytest-split sharding
 # Generate with: pytest --store-durations --durations-path=.test_durations
 # This enables duration-based splitting for more even shard distribution
