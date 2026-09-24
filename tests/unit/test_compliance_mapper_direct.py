@@ -173,9 +173,8 @@ def test_get_tool_category_secrets():
     assert result == "secrets"
 
     # The tag here is deliberately not "secrets", so the tool name is the only
-    # thing that can classify it. Was "gitleaks" until #796 removed that
-    # already-retired tool from the membership list.
-    result = get_tool_category("noseyparker", ["credentials"])
+    # thing that can classify it.
+    result = get_tool_category("trufflehog", ["credentials"])
     assert result == "secrets"
 
 
@@ -186,7 +185,8 @@ def test_get_tool_category_sast():
     result = get_tool_category("semgrep", ["sast"])
     assert result == "sast"
 
-    result = get_tool_category("bandit", ["security"])
+    # Tag deliberately not "sast": the tool name alone must classify it.
+    result = get_tool_category("semgrep", ["security"])
     assert result == "sast"
 
 

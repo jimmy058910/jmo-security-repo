@@ -43,7 +43,6 @@ def _get_jmo_version() -> str:
 def _generate_metadata(
     findings: list[dict[str, Any]],
     scan_id: str | None = None,
-    profile: str | None = None,
     tools: list[str] | None = None,
     target_count: int | None = None,
 ) -> dict[str, Any]:
@@ -52,7 +51,6 @@ def _generate_metadata(
     Args:
         findings: List of CommonFinding dictionaries
         scan_id: UUID of the scan (optional)
-        profile: Profile name used (e.g., "balanced")
         tools: List of tool names used in scan
         target_count: Number of targets scanned
 
@@ -66,7 +64,6 @@ def _generate_metadata(
         "schema_version": "1.2.0",
         "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "scan_id": scan_id or "",
-        "profile": profile or "",
         "tools": tools or [],
         "target_count": target_count or 0,
         "finding_count": len(findings),
@@ -255,11 +252,7 @@ def _get_category_summary(findings: list[dict[str, Any]]) -> dict[str, int]:
             tool = f.get("tool", {}).get("name", "").lower()
             rule = f.get("ruleId", "").lower()
 
-            if (
-                tool in ["trufflehog", "noseyparker"]
-                or "secret" in rule
-                or "key" in rule
-            ):
+            if tool == "trufflehog" or "secret" in rule or "key" in rule:
                 categories["🔑 Secrets"] += 1
             elif tool in ["trivy", "grype"] or "cve" in rule:
                 categories["🛡️ Vulnerabilities"] += 1
@@ -269,7 +262,7 @@ def _get_category_summary(findings: list[dict[str, Any]]) -> dict[str, int]:
                 or "terraform" in rule
             ):
                 categories["🐳 IaC/Container"] += 1
-            elif tool in ["semgrep", "bandit", "eslint"]:
+            elif tool in ["semgrep", "eslint"]:
                 categories["🔧 Code Quality"] += 1
             else:
                 categories["📦 Other"] += 1

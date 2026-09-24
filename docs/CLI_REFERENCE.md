@@ -13,10 +13,7 @@ in `pyproject.toml`. **Bump all three together**; nothing guards this one (#750)
 | Command | Purpose |
 |---------|---------|
 | `jmo wizard` | Interactive guided scanning |
-| `jmo fast` | Quick scan (9 tools, 5-10 min) |
-| `jmo balanced` | Production scan (17 tools, 18-25 min) |
-| `jmo full` | Comprehensive audit (29 tools, 40-70 min) |
-| `jmo scan` | Low-level scan with full control |
+| `jmo scan` | Scan with full control |
 | `jmo report` | Generate reports from scan results |
 | `jmo ci` | Scan + report for CI/CD pipelines |
 | `jmo diff` | Compare two scans |
@@ -40,16 +37,16 @@ These flags are shared across multiple commands:
 
 | Flag | Description | Used By |
 |------|-------------|---------|
-| `--config FILE` | Config file (default: `jmo.yml`) | scan, report, ci, fast, slim, balanced, full |
+| `--config FILE` | Config file (default: `jmo.yml`) | scan, report, ci |
 | `--human-logs` | Human-friendly colored logs instead of JSON | all commands |
 | `--log-level LEVEL` | Log level: `DEBUG`, `INFO`, `WARN`, `ERROR` | all commands |
-| `--results-dir DIR` | Results directory | scan, ci, report, fast, balanced, full |
+| `--results-dir DIR` | Results directory | scan, ci, report |
 | `--db PATH` | SQLite database path (default: `.jmo/history.db`) | history, trends, diff, wizard |
-| `--profile-name NAME` | Scan profile from config | scan, ci |
 | `--threads N` | Worker thread count | scan, report, ci |
-| `--timeout SECS` | Per-tool timeout | scan, ci, fast, slim, balanced, full |
+| `--timeout SECS` | Per-tool timeout | scan, ci |
 | `--tools TOOL...` | Override tool list | scan, ci |
-| `--fail-on SEV` | Severity threshold for exit code | report, ci, fast, balanced, full |
+| `--skip-tools TOOL...` | Remove tools from the list | scan, ci |
+| `--fail-on SEV` | Severity threshold for exit code | report, ci |
 | `--allow-missing-tools` | Skip missing tools instead of failing | scan, ci |
 
 ---
@@ -144,8 +141,8 @@ Run security scans against repositories, images, URLs, and infrastructure.
 |------|-------------|
 | `--results-dir DIR` | Base results directory (default: `results`) |
 | `--config FILE` | Config file (default: `jmo.yml`) |
-| `--profile-name NAME` | Scan profile: `fast`, `slim`, `balanced`, `deep` |
-| `--tools TOOL [TOOL ...]` | Override tools list from config |
+| `--tools TOOL [TOOL ...]` | Override tools list from config (default: the [tool matrix](TOOLS.md#the-tool-matrix)) |
+| `--skip-tools TOOL [TOOL ...]` | Remove tools from the list |
 | `--timeout SECS` | Per-tool timeout in seconds (default: 600) |
 | `--threads N` | Concurrent repos to scan (default: auto) |
 | `--allow-missing-tools` | Skip missing tools instead of failing (creates empty JSON) |
@@ -204,52 +201,6 @@ Combined scan + report for CI/CD pipelines. Supports all `jmo scan` flags plus:
 
 ---
 
-### jmo fast / balanced / full
-
-Beginner-friendly shortcut commands with sensible defaults. Each runs a scan and
-a report, exactly as `jmo ci` does — they route through it.
-
-| Command | Tools | Time | Description |
-|---------|-------|------|-------------|
-| `jmo fast` | 9 | 5-10 min | Quick pre-commit/PR validation |
-| `jmo balanced` | 17 | 18-25 min | Production scans |
-| `jmo full` | 28 | 40-70 min | Comprehensive audits |
-
-> **There is no `jmo slim` command.** This table used to list one; `slim` is a
-> *profile*, not a shortcut, and is reached with
-> `jmo scan --profile-name slim` or `jmo ci --profile-name slim` (13 tools,
-> 12-18 min, cloud/IaC). Corrected under [#1012](https://github.com/jimmy058910/jmo-security-repo/issues/1012).
-
-**Flags.** Since [#870](https://github.com/jimmy058910/jmo-security-repo/issues/870)
-these commands accept the whole `jmo ci` scan surface — every flag under
-[jmo scan](#jmo-scan)'s target selection and scan configuration, plus
-`--log-level` and `--human-logs`. Before that they accepted 11 of them, and
-`--no-store-history` was among the missing: the shortcuts stored no scan history
-at all, so `jmo history list` and `jmo trends` were empty for anyone who only
-ran `jmo fast`.
-
-Their own flags, which `jmo ci` does not have:
-
-| Flag | Description |
-|------|-------------|
-| `--fail-on SEV` | Severity threshold to fail (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, `INFO`) |
-| `--no-open` | Don't open results after run |
-| `--strict` | Fail if tools are missing (no stubs) |
-
-Two differences from `jmo ci` worth knowing:
-
-- **Missing tools are allowed by default here**, and `--strict` is what turns
-  that off. `jmo ci` defaults the other way. `--allow-missing-tools` exists on
-  these commands but asks for what already holds.
-- **`--profile-name` is redundant**: the command *is* the profile. Passing one
-  that agrees is accepted; passing one that contradicts (`jmo fast
-  --profile-name deep`) is an error rather than a silent override.
-
-`--policy`, `--fail-on-policy-violation`, `--strict-versions` and `--profile`
-(the timing flag) are `jmo ci` only. Use `jmo ci` when you need them.
-
----
-
 ### jmo wizard
 
 Interactive setup wizard for guided security scanning.
@@ -269,24 +220,7 @@ Interactive setup wizard for guided security scanning.
 
 **Tool Pre-flight Check:**
 
-The wizard performs a pre-flight check showing tool availability in clear categories:
-
-```text
-Balanced profile: 17 tools
-
-✅ READY TO SCAN (13 tools)
-
-⚠️ NOT INSTALLED (3 tools):
-   scancode, zap, nuclei
-   Install with: jmo tools install <tool-name>
-
-📖 REQUIRES MANUAL SETUP (1 tool):
-   prowler
-   See: docs/MANUAL_INSTALLATION.md
-
-Expected findings from: 13 tools
-   (4 tools will be skipped)
-```
+Before scanning, the wizard checks every tool in the [tool matrix](TOOLS.md#the-tool-matrix) and reports which are ready, which are missing or outdated, and which it will skip because they do not apply on this platform or to this target. Missing tools can be installed with `jmo tools install <tool-name>`.
 
 Use `--auto-fix` to automatically install missing tools, or use Docker mode for full tool coverage.
 
@@ -433,9 +367,10 @@ Manage security tool installation and updates.
 
 | Flag | Description |
 |------|-------------|
-| `[TOOLS ...]` | Specific tools to check (positional) |
-| `--profile PROFILE` | Check tools for profile: `fast`, `slim`, `balanced`, `deep` |
+| `[TOOLS ...]` | Specific tools to check (positional; default: the [tool matrix](TOOLS.md#the-tool-matrix)) |
 | `--json` | Output as JSON |
+
+The table lists the scanners. Below it, a separate **Policy engine** line reports OPA, which policy-as-code needs but which is not a scanner (see [Policy engine (OPA)](TOOLS.md#policy-engine-opa)).
 
 **Tool Status Categories:**
 
@@ -445,16 +380,15 @@ Manage security tool installation and updates.
 | OUTDATED | ⚠️ | Newer version available (still functional) |
 | SKIPPED | 🚫 | Not applicable for current platform/mode |
 | MISSING | ❌ | Not installed but can be auto-installed via `jmo tools install` |
-| MANUAL | ℹ️ | Requires manual installation — see [docs/MANUAL_INSTALLATION.md](MANUAL_INSTALLATION.md) (afl++, akto, falco, mobsf) |
+| MANUAL | ℹ️ | Requires manual installation — see [docs/MANUAL_INSTALLATION.md](MANUAL_INSTALLATION.md) |
 | FAILED | 💥 | Installed but broken (startup crash, missing deps) |
 
 Example output:
 
 ```text
-Balanced profile: 17 tools
-  ✅ 13 ready
+  ✅ 8 ready
   ⚠️ 2 outdated (run 'jmo tools update' when convenient)
-  ❌ 2 not installed (scancode, zap)
+  ❌ 2 not installed (zap, nuclei)
 ```
 
 **JSON output structure** (`--json`):
@@ -467,7 +401,7 @@ Each tool in the per-tool dict carries:
 | `installed_version` | string \| null | Detected version |
 | `expected_version` | string \| null | Pinned expected version from `versions.yaml` |
 | `is_outdated` | bool | Installed version is older than expected |
-| `is_critical` | bool | Tool is marked critical for the profile |
+| `is_critical` | bool | Tool is marked `critical` in `versions.yaml` |
 | `binary_path` | string \| null | Absolute path to the discovered binary |
 | `manual_install` | bool | Tool requires manual installation (added v1.0.5) — when `installed=false` AND `manual_install=true`, the tool is intentionally absent in containerized usage rather than truly missing |
 
@@ -475,8 +409,7 @@ Each tool in the per-tool dict carries:
 
 | Flag | Description |
 |------|-------------|
-| `[TOOLS ...]` | Specific tools to install (positional) |
-| `--profile PROFILE` | Install tools for profile (default: `balanced`) |
+| `[TOOLS ...]` | Specific tools to install (positional; default: the tool matrix plus OPA) |
 | `--yes`, `-y` | Non-interactive mode |
 | `--dry-run` | Show what would be installed |
 | `--print-script` | Print install script |
@@ -495,8 +428,6 @@ Each tool in the per-tool dict carries:
 
 | Flag | Description |
 |------|-------------|
-| `--profile PROFILE` | List tools in profile: `fast`, `slim`, `balanced`, `deep` |
-| `--profiles` | List available profiles |
 | `--json` | Output as JSON |
 
 **jmo tools outdated**
@@ -521,7 +452,7 @@ Debug version detection for specific tools.
 | Flag | Description |
 |------|-------------|
 | `[TOOLS ...]` | Tools to debug (positional) |
-| `--all`, `-a` | Debug all tools in balanced profile |
+| `--all`, `-a` | Debug every tool in the tool matrix |
 
 **jmo tools clean**
 
@@ -546,7 +477,6 @@ Manually store a completed scan.
 | Flag | Description |
 |------|-------------|
 | `--results-dir DIR` | Path to results directory (required) |
-| `--profile PROFILE` | Scan profile that was used: `fast`, `balanced`, `deep` |
 | `--commit HASH` | Git commit hash (auto-detected if not provided) |
 | `--branch NAME` | Git branch name (auto-detected if not provided) |
 | `--tag TAG` | Git tag (auto-detected if not provided) |
@@ -557,7 +487,6 @@ Manually store a completed scan.
 | Flag | Description |
 |------|-------------|
 | `--branch NAME` | Filter by branch name |
-| `--profile PROFILE` | Filter by profile: `fast`, `balanced`, `deep` |
 | `--since DELTA` | Filter by time delta (e.g., `7d`, `30d`, `90d`) |
 | `--limit N` | Maximum number of results (default: 50) |
 | `--json` | Output as JSON |
@@ -785,7 +714,6 @@ Create a new schedule.
 |------|-------------|
 | `--name NAME` | Schedule name (required) |
 | `--cron EXPR` | Cron expression, e.g., `0 2 * * *` (required) |
-| `--profile PROFILE` | Scan profile: `fast`, `slim`, `balanced`, `deep` (required) |
 | `--repos-dir DIR` | Repository directory to scan |
 | `--image IMAGE` | Container image to scan (repeatable) |
 | `--url URL` | Web URL to scan (repeatable) |
@@ -815,11 +743,10 @@ Create a new schedule.
 |------|-------------|
 | `NAME` | Schedule name (positional, required) |
 | `--cron EXPR` | New cron expression |
-| `--profile PROFILE` | New scan profile: `fast`, `slim`, `balanced`, `deep` |
 | `--suspend` | Suspend schedule (mutually exclusive with `--resume`) |
 | `--resume` | Resume schedule (mutually exclusive with `--suspend`) |
 
-At least one of these four flags is required; `jmo schedule update NAME` with
+At least one of these three flags is required; `jmo schedule update NAME` with
 none of them exits 1 rather than reporting a successful no-op.
 
 `--cron` is validated with `croniter`, which accepts more than either backend
@@ -872,22 +799,11 @@ Remove from local cron.
 
 ### jmo build
 
-Build Docker images for JMo Security.
-
-**Variants:**
-
-| Variant | Tools | Size | Use Case |
-|---------|-------|------|----------|
-| `fast` | 9 | ~502 MB | CI/CD, pre-commit hooks |
-| `slim` | 13 | ~557 MB | Cloud/IaC focused |
-| `balanced` | 17 | ~1.4 GB | Production scans (default) |
-| `deep` | 29 | ~2.0 GB | Comprehensive audits |
+Build the JMo Security Docker image from the repository's `Dockerfile`. There is one image; it carries every tool in the [tool matrix](TOOLS.md#the-tool-matrix) plus OPA.
 
 | Flag | Description |
 |------|-------------|
-| `--variant VARIANT` | Docker variant: `fast`, `slim`, `balanced`, `deep` (default: `balanced`) |
-| `--all` | Build all variants |
-| `--local` | Use local tags (e.g., `jmo-security:local-balanced`) for testing |
+| `--local` | Use a local tag for testing |
 | `--tag TAG` | Image tag (default: `latest`) |
 | `--registry REGISTRY` | Docker registry (default: `ghcr.io`) |
 | `--org ORG` | Docker organization (default: `jmosecurity`) |
@@ -906,7 +822,6 @@ Test a built Docker image.
 
 | Flag | Description |
 |------|-------------|
-| `--variant VARIANT` | Variant to test: `fast`, `slim`, `balanced`, `deep` (default: `balanced`) |
 | `--local` | Test local-tagged image |
 | `--registry REGISTRY` | Docker registry (default: `ghcr.io`) |
 | `--org ORG` | Docker organization (default: `jmosecurity`) |
@@ -966,8 +881,8 @@ Validate an adapter plugin file.
 
 ### jmo validate
 
-Pre-release validation system with GO/NO-GO scorecard. Runs 259 checks across 4
-categories (290 with `--tier full`), measured on the current CLI surface.
+Pre-release validation system with GO/NO-GO scorecard. Runs 244 checks across 4
+categories (272 with `--tier full`), measured on the current CLI surface.
 
 ```text
 jmo validate [OPTIONS]
@@ -985,11 +900,11 @@ jmo validate [OPTIONS]
 
 | Category | Quick Checks | Full Checks | What It Validates |
 |----------|-------------|-------------|-------------------|
-| CLI Completeness | 101 | 109 | Subcommand --help, arg validation, exit codes, version |
-| Scan Correctness | 79 | 91 | Adapter parsing, dedup, compliance, reporters, schema |
+| CLI Completeness | 98 | 106 | Subcommand --help, arg validation, exit codes, version |
+| Scan Correctness | 67 | 79 | Adapter parsing, dedup, compliance, reporters, schema |
 | Cross-Platform | 33 | 38 | Path handling, subprocess security, SQLite, env vars |
-| Release Artifacts | 46 | 52 | Version consistency, docs, git hygiene, code quality |
-| **Total** | **259** | **290** | |
+| Release Artifacts | 46 | 49 | Version consistency, docs, git hygiene, code quality |
+| **Total** | **244** | **272** | |
 
 The CLI Completeness row is sized by the parser: it runs one `--help` check per
 top-level subcommand and one per nested subcommand, so adding a command adds
@@ -1029,14 +944,17 @@ jmo validate --fail-fast
 ### Basic Scanning
 
 ```bash
-# Quick scan of a single repository
-jmo fast --repo ./myapp
+# Scan a single repository
+jmo scan --repo ./myapp
 
-# Production scan of multiple repositories
-jmo balanced --repos-dir ~/repos --human-logs
+# Quick scan with a narrowed tool list
+jmo scan --repo ./myapp --tools trufflehog semgrep trivy
+
+# Scan multiple repositories
+jmo scan --repos-dir ~/repos --human-logs
 
 # CI/CD pipeline with failure threshold
-jmo ci --repo . --fail-on HIGH --profile-name balanced
+jmo ci --repo . --fail-on HIGH
 ```
 
 ### Multi-Target Scanning
@@ -1085,11 +1003,11 @@ jmo diff --scan abc123 --scan def456
 ### Tool Management
 
 ```bash
-# Check tool status for profile
-jmo tools check --profile balanced
+# Check tool status
+jmo tools check
 
 # Install tools (parallel, interactive)
-jmo tools install --profile balanced
+jmo tools install
 
 # Update critical tools only
 jmo tools update --critical-only --yes
@@ -1098,14 +1016,14 @@ jmo tools update --critical-only --yes
 ### Docker Builds
 
 ```bash
-# Build balanced variant locally
-jmo build --variant balanced --local
+# Build the image locally
+jmo build --local
 
-# Build all variants and push to registry
-jmo build --all --push --tag v1.0.0
+# Build and push to registry
+jmo build --push --tag v1.0.0
 
 # Test a built image
-jmo build test --variant balanced --local
+jmo build test --local
 ```
 
 ---
@@ -1113,7 +1031,7 @@ jmo build test --variant balanced --local
 ## See Also
 
 - [USER_GUIDE.md](USER_GUIDE.md) - Comprehensive tutorial and configuration guide
-- [PROFILES_AND_TOOLS.md](PROFILES_AND_TOOLS.md) - Scan profiles and tool details
+- [TOOLS.md](TOOLS.md) - The tool matrix, when each tool runs, installation
 - [DOCKER_README.md](DOCKER_README.md) - Docker usage guide
 - [POLICY_AS_CODE.md](POLICY_AS_CODE.md) - OPA policy documentation
 - [HISTORY_GUIDE.md](HISTORY_GUIDE.md) - SQLite history and persistence

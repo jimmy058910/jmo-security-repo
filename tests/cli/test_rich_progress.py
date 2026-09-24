@@ -5,7 +5,6 @@ Covers:
 - Context manager (__enter__/__exit__)
 - update() for target completion
 - update_tool() for tool status callbacks
-- Multi-phase tool handling (_get_base_tool_name)
 - _format_elapsed() time formatting
 - _make_display() panel rendering
 - log() method
@@ -100,38 +99,6 @@ class TestContextManager:
         tracker.__exit__(None, None, None)
 
 
-# ========== Category 3: Tool Name Handling ==========
-
-
-class TestGetBaseToolName:
-    """Tests for _get_base_tool_name() multi-phase tool handling."""
-
-    def test_plain_tool_name(self):
-        """Test tool name without phase suffix."""
-        tracker = make_tracker()
-        assert tracker._get_base_tool_name("trivy") == "trivy"
-
-    def test_init_suffix(self):
-        """Test -init suffix stripping."""
-        tracker = make_tracker()
-        assert tracker._get_base_tool_name("noseyparker-init") == "noseyparker"
-
-    def test_scan_suffix(self):
-        """Test -scan suffix stripping."""
-        tracker = make_tracker()
-        assert tracker._get_base_tool_name("noseyparker-scan") == "noseyparker"
-
-    def test_report_suffix(self):
-        """Test -report suffix stripping."""
-        tracker = make_tracker()
-        assert tracker._get_base_tool_name("noseyparker-report") == "noseyparker"
-
-    def test_non_phase_hyphen(self):
-        """Test that non-phase hyphens are preserved."""
-        tracker = make_tracker()
-        assert tracker._get_base_tool_name("dependency-check") == "dependency-check"
-
-
 # ========== Category 4: Time Formatting ==========
 
 
@@ -206,18 +173,25 @@ class TestUpdateTool:
         assert tracker.tools_completed == 0
         assert "flaky" in tracker.tools_in_progress
 
-    def test_multi_phase_tool_counted_once(self):
-        """Test multi-phase tool is counted as single completion."""
+    def test_a_tool_that_completes_twice_is_counted_once(self):
+        """A second completion for the same tool must not advance the count.
+
+        The tool bar reads `[completed/total]`; a repeated completion would
+        push it past the total.
+        """
         tracker = make_tracker()
-        # noseyparker has 3 phases: init, scan, report
-        tracker.update_tool("noseyparker-init", "start")
-        tracker.update_tool("noseyparker-init", "success")
+        tracker.update_tool("trivy", "start")
+        tracker.update_tool("trivy", "success")
         assert tracker.tools_completed == 1
 
-        tracker.update_tool("noseyparker-scan", "start")
-        tracker.update_tool("noseyparker-scan", "success")
-        # Still 1, not 2 - same base tool
+        tracker.update_tool("trivy", "start")
+        tracker.update_tool("trivy", "success")
         assert tracker.tools_completed == 1
+
+        # A different tool still counts.
+        tracker.update_tool("semgrep", "start")
+        tracker.update_tool("semgrep", "success")
+        assert tracker.tools_completed == 2
 
     def test_kwargs_accepted(self):
         """Test forward-compatibility **kwargs don't cause errors."""

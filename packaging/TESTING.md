@@ -107,7 +107,7 @@ jmo adapters list
 
 # Step 5: Verify backward compatibility
 # Run existing v0.8.0 scan command
-jmo scan --repo ~/my-project --profile-name balanced
+jmo scan --repo ~/my-project
 # Expected: Scan completes successfully
 
 # PASS CRITERIA:
@@ -267,7 +267,7 @@ jmo adapters list
 # Expected: List of 12 adapter plugins
 
 # Step 5: Verify backward compatibility
-jmo scan --repo C:\Projects\my-project --profile-name balanced
+jmo scan --repo C:\Projects\my-project
 # Expected: Scan completes successfully
 
 # PASS CRITERIA:
@@ -349,7 +349,7 @@ Test that Homebrew and Winget installations produce consistent behavior.
 | `jmo adapters list` | ⬜ | ⬜ | ⬜ | 📋 |
 | Plugin hot-reload | ⬜ | ⬜ | ⬜ | 📋 |
 | Multi-target scan | ⬜ | ⬜ | ⬜ | 📋 |
-| Profile-based config | ⬜ | ⬜ | ⬜ | 📋 |
+| `jmo.yml` config | ⬜ | ⬜ | ⬜ | 📋 |
 | Schedule management | ⬜ | ⬜ | ⬜ | 📋 |
 
 **PASS CRITERIA:**

@@ -42,8 +42,6 @@ class TestWizardWorkflows:
                 str(E2E_FIXTURES),
                 "--target-type",
                 "repo",
-                "--profile",
-                "fast",
                 "--emit-script",
                 str(script_path),
             ],
@@ -58,8 +56,9 @@ class TestWizardWorkflows:
         assert any(
             cmd in content for cmd in ["jmo scan", "jmo ci", "scripts.cli.jmo"]
         ), f"Emitted script doesn't contain a jmo scan command:\n{content[:200]}"
-        # Script should reference the profile
-        assert "fast" in content, "Emitted script doesn't reference the profile"
+        # Script should scan the preset target, and select no profile (v2.0.0)
+        assert E2E_FIXTURES.resolve().as_posix() in content, content[:300]
+        assert "--profile-name" not in content
 
     @pytest.mark.skipif(sys.platform != "win32", reason="Windows only")
     def test_wizard_emit_script_windows(self, tmp_path):
@@ -82,8 +81,6 @@ class TestWizardWorkflows:
                 str(E2E_FIXTURES),
                 "--target-type",
                 "repo",
-                "--profile",
-                "fast",
                 "--emit-script",
                 str(script_path),
             ],
@@ -98,5 +95,6 @@ class TestWizardWorkflows:
         assert any(
             cmd in content for cmd in ["jmo scan", "jmo ci", "scripts.cli.jmo"]
         ), f"Emitted script doesn't contain a jmo scan command:\n{content[:200]}"
-        # Script should reference the profile
-        assert "fast" in content, "Emitted script doesn't reference the profile"
+        # Script should scan the preset target, and select no profile (v2.0.0)
+        assert E2E_FIXTURES.resolve().as_posix() in content, content[:300]
+        assert "--profile-name" not in content

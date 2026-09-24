@@ -92,8 +92,8 @@ First, generate findings for Copilot to analyze:
 # Interactive wizard (recommended for first-time users)
 jmo wizard
 
-# Or quick scan
-jmo fast --repo ./myapp
+# Or scan + report directly
+jmo ci --repo ./myapp --allow-missing-tools
 ```
 
 This creates `results/summaries/findings.json` that the MCP server will read.
@@ -224,7 +224,7 @@ docker pull ghcr.io/jimmy058910/jmo-security:latest
 docker run --rm \
   -v "$(pwd):/scan" \
   ghcr.io/jimmy058910/jmo-security:latest \
-  fast --repo /scan --results-dir /scan/results
+  ci --repo /scan --results-dir /scan/results
 ```
 
 **Step 3: Create MCP configuration in `.vscode/mcp.json`:**
@@ -562,7 +562,7 @@ docker pull ghcr.io/jimmy058910/jmo-security:latest
 
 ```bash
 # Run a scan first
-jmo fast --repo . --results-dir ./results
+jmo ci --repo . --results-dir ./results --allow-missing-tools
 
 # Verify findings.json exists
 ls -la results/summaries/findings.json
@@ -598,7 +598,7 @@ chmod 644 results/summaries/findings.json
 chmod 755 results/summaries
 
 # Or regenerate with correct permissions
-jmo fast --repo .
+jmo ci --repo . --allow-missing-tools
 ```
 
 ### Windows-Specific Issues
@@ -691,16 +691,16 @@ Set the API key in your shell:
 export JMO_API_KEY="your-api-key-here"
 ```
 
-### Custom Profiles
+### Multiple Results Directories
 
-Run scans with different profiles, point MCP to specific results:
+Run a quick scan and a full scan into separate directories, and point MCP to the one you want:
 
 ```bash
-# Fast scan
-jmo fast --repo . --results-dir ./results-fast
+# Quick scan with a narrowed tool list
+jmo ci --repo . --tools trufflehog semgrep trivy --results-dir ./results-quick
 
-# Deep scan
-jmo full --repo . --results-dir ./results-deep
+# Full scan (every applicable scanner)
+jmo ci --repo . --results-dir ./results-full
 ```
 
 Switch MCP configuration:
@@ -708,11 +708,11 @@ Switch MCP configuration:
 ```json
 {
   "mcpServers": {
-    "jmo-fast": {
-      "env": { "MCP_RESULTS_DIR": "./results-fast" }
+    "jmo-quick": {
+      "env": { "MCP_RESULTS_DIR": "./results-quick" }
     },
-    "jmo-deep": {
-      "env": { "MCP_RESULTS_DIR": "./results-deep" }
+    "jmo-full": {
+      "env": { "MCP_RESULTS_DIR": "./results-full" }
     }
   }
 }

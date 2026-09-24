@@ -63,14 +63,11 @@ from scripts.core.paths import (
 )
 from scripts.core.secure_temp import secure_temp_dir
 from scripts.core.tool_registry import (
-    TOOL_PLATFORM_REQUIREMENTS,
-    TOOL_VARIANTS,
     ToolInfo,
     ToolRegistry,
     detect_platform,
-    get_platform_status,
 )
-from scripts.core.tool_utils import find_tool, tool_exists
+from scripts.core.tool_utils import tool_exists
 from scripts.core.validation import (
     sanitize_subprocess_output,
     validate_tool_name,
@@ -118,14 +115,14 @@ def install_dependency(
     console: Console | None = None,
 ) -> tuple[bool, str]:
     """
-    Auto-install a runtime dependency (java, node).
+    Auto-install a runtime dependency (java, for zap).
 
     Tries each available package manager in order until one succeeds.
     On Windows, the PATH may not update immediately after install,
     so users may need to restart their terminal.
 
     Args:
-        dep_name: Dependency name ("java" or "node")
+        dep_name: Dependency name ("java")
         platform: Current platform ("windows", "linux", "macos")
         console: Optional Rich console for output (uses print if None)
 
@@ -152,50 +149,6 @@ def install_dependency(
 
     # Try each package manager in order of preference
     for pkg_manager, command in platform_commands.items():
-        # Special case: NodeSource for Node.js 20+ on Linux
-        if pkg_manager == "nodesource" and command == "curl_script":
-            if tool_exists("curl", warn=False):
-                _print("[*] Installing Node.js 20 via NodeSource...")
-                try:
-                    # Download and run NodeSource setup script
-                    curl_cmd = [
-                        "curl",
-                        "-fsSL",
-                        "https://deb.nodesource.com/setup_20.x",
-                        "-o",
-                        "/tmp/nodesource_setup.sh",  # nosec B108
-                    ]
-                    subprocess.run(
-                        curl_cmd, capture_output=True, timeout=60, check=True
-                    )
-
-                    # Run the setup script
-                    setup_cmd = ["bash", "/tmp/nodesource_setup.sh"]  # nosec B108
-                    if not is_root and sudo_available:
-                        setup_cmd = ["sudo"] + setup_cmd
-                    subprocess.run(
-                        setup_cmd, capture_output=True, timeout=120, check=True
-                    )
-
-                    # Install nodejs
-                    install_cmd = ["apt-get", "install", "-y", "nodejs"]
-                    if not is_root and sudo_available:
-                        install_cmd = ["sudo"] + install_cmd
-                    result = subprocess.run(
-                        install_cmd,
-                        capture_output=True,
-                        text=True,
-                        encoding="utf-8",
-                        errors="replace",
-                        timeout=300,
-                    )
-
-                    if result.returncode == 0:
-                        return True, "Installed Node.js 20 via NodeSource"
-                except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-                    _print(f"[dim]  NodeSource setup failed: {e}[/dim]")
-            continue  # Try next package manager
-
         if not _is_package_manager_available(pkg_manager):
             continue
 
@@ -266,7 +219,7 @@ def get_manual_dependency_command(dep_name: str, platform: str) -> str:
     copy-paste commands for their platform.
 
     Args:
-        dep_name: Dependency name ("java" or "node")
+        dep_name: Dependency name ("java")
         platform: Current platform ("windows", "linux", "macos")
 
     Returns:
@@ -280,7 +233,7 @@ def get_manual_dependency_command(dep_name: str, platform: str) -> str:
 # Install methods that pin an exact version from versions.yaml. When one of
 # these "succeeds" and the binary JMo then resolves still reports another
 # version, the install did not change what the scanner runs, and saying [OK]
-# beside the old number is the lie #1093 was filed on. brew/apt/install_script
+# beside the old number is the lie #1093 was filed on. apt/install_script
 # install whatever they carry, so a mismatch there stays a warning.
 PINNED_INSTALL_METHODS: frozenset[str] = frozenset({"pip", "isolated_venv", "binary"})
 
@@ -424,7 +377,7 @@ class ToolInstaller:
 
         Args:
             tool_name: Name of the tool to install
-            method: Force specific install method (pip, brew, apt, npm, binary)
+            method: Force specific install method (pip, apt, install_script, binary)
             force: Reinstall even if already installed
 
         Returns:
@@ -455,30 +408,6 @@ class ToolInstaller:
                     version_installed=status.installed_version,
                 )
 
-        # A platform the table says has no native build gets the reason and
-        # the workarounds, not an install attempt that cannot succeed (#1091:
-        # scancode's Windows extraction bootstraps itself into a broken venv;
-        # noseyparker's download would 404). One choke point, so `tools
-        # install <names>`, `tools update`, the profile installers and the
-        # scan-time auto-install all say the same thing. `platforms: []`
-        # entries (mobsf, akto) are docker-only by design and keep their
-        # SPECIAL_INSTALL handling below.
-        platform_status = get_platform_status(tool_name, self.platform)
-        if not platform_status["supported"] and TOOL_PLATFORM_REQUIREMENTS.get(
-            tool_name, {}
-        ).get("platforms"):
-            workarounds = ", ".join(platform_status.get("workarounds") or [])
-            return InstallResult(
-                tool_name=tool_name,
-                success=False,
-                method="unsupported",
-                message=(
-                    f"not available on {self.platform}: {platform_status['reason']}"
-                    f" (workarounds: {workarounds or 'none listed'})"
-                ),
-                duration_seconds=time.time() - start_time,
-            )
-
         # Get tool info
         tool_info = self.registry.get_tool(tool_name)
         if not tool_info:
@@ -496,24 +425,6 @@ class ToolInstaller:
         if tool_name in EOL_TOOLS:
             logger.warning(f"[deprecation] {tool_name}: {EOL_TOOLS[tool_name]}")
 
-        # Check for tool variants (share binary with base tool)
-        if tool_name in TOOL_VARIANTS:
-            base_tool = TOOL_VARIANTS[tool_name]
-            base_status = self.manager.check_tool(base_tool)
-            if base_status.installed:
-                return InstallResult(
-                    tool_name=tool_name,
-                    success=True,
-                    method="variant",
-                    message=f"Uses {base_tool} binary (v{base_status.installed_version})",
-                    version_installed=base_status.installed_version,
-                    duration_seconds=time.time() - start_time,
-                )
-            else:
-                # Base tool not installed - install it instead
-                logger.info(f"{tool_name} requires {base_tool}, installing base tool")
-                return self.install_tool(base_tool, method, force)
-
         # Check for special installation requirements
         if tool_name in SPECIAL_INSTALL:
             result = self._install_special(tool_name, tool_info, start_time)
@@ -522,11 +433,12 @@ class ToolInstaller:
             )
 
         # Isolated tools go to their own venv from EVERY entry point (#1101).
-        # The profile installers split these out before reaching `_install_pip`;
+        # The parallel installer splits these out before reaching `_install_pip`;
         # this method -- behind `jmo tools install <names>`, `jmo tools update`
-        # and the scan-time auto-install -- did not, so `pip install prowler`
-        # ran against sys.executable and dragged cryptography 50 -> 46 and, via
-        # semgrep's mcp==1.29.0 pin, mcp 2.0 -> 1.29 off uv.lock. Measured twice.
+        # and the scan-time auto-install -- did not, so a pip install of an
+        # isolated tool ran against sys.executable and dragged cryptography
+        # 50 -> 46 and, via semgrep's mcp==1.29.0 pin, mcp 2.0 -> 1.29 off
+        # uv.lock. Measured twice.
         if tool_name in ISOLATED_TOOLS:
             if tool_info.pypi_package:
                 package_spec = f"{tool_info.pypi_package}=={tool_info.version}"
@@ -580,24 +492,25 @@ class ToolInstaller:
             duration_seconds=duration,
         )
 
-    def install_profile(
+    def install_tools(
         self,
-        profile: str,
+        tools: list[str],
         skip_installed: bool = True,
     ) -> InstallProgress:
         """
-        Install all tools for a scan profile.
+        Install a list of tools one at a time.
+
+        The sequential counterpart of install_tools_parallel(), kept for
+        `jmo tools install --sequential`, where one tool's output at a time is
+        easier to debug.
 
         Args:
-            profile: Profile name (fast, slim, balanced, deep)
+            tools: Tool names to install
             skip_installed: Skip tools that are already installed
 
         Returns:
             InstallProgress with results for all tools
         """
-        from scripts.core.tool_registry import PROFILE_TOOLS
-
-        tools = PROFILE_TOOLS.get(profile, [])
         progress = InstallProgress(total=len(tools))
 
         for i, tool_name in enumerate(tools):
@@ -627,130 +540,6 @@ class ToolInstaller:
 
         return progress
 
-    def install_missing(self, profile: str) -> InstallProgress:
-        """Install only missing tools for a profile."""
-        return self.install_profile(profile, skip_installed=True)
-
-    def install_profile_parallel(
-        self,
-        profile: str,
-        skip_installed: bool = True,
-        max_workers: int = 4,
-        show_progress: bool = True,
-    ) -> InstallProgress:
-        """
-        Install tools for a profile in parallel with Rich progress display.
-
-        Uses a three-stage strategy for optimal performance:
-        1. Batch pip installs (single subprocess for all Python packages)
-        2. Batch npm installs (single subprocess for all Node packages)
-        3. Parallel binary downloads (ThreadPoolExecutor)
-
-        Args:
-            profile: Profile name ('fast', 'slim', 'balanced', 'deep')
-            skip_installed: Skip already-installed tools (default: True)
-            max_workers: Maximum concurrent installations (default: 4, max: 8)
-            show_progress: Show Rich progress bars (default: True)
-
-        Returns:
-            InstallProgress with results for all tools
-        """
-        from scripts.core.tool_registry import PROFILE_TOOLS
-
-        # Cap max_workers at 8 to avoid resource exhaustion
-        max_workers = min(max_workers, 8)
-
-        tools = PROFILE_TOOLS.get(profile, [])
-        if not tools:
-            logger.warning(f"Unknown profile '{profile}' or no tools defined")
-            return InstallProgress(total=0)
-
-        # Pre-flight deduplication to prevent race conditions
-        tools = list(dict.fromkeys(tools))
-
-        # Categorize tools by installation method
-        pip_tools: list[str] = []
-        npm_tools: list[str] = []
-        other_tools: list[str] = []
-        skipped_results: list[InstallResult] = []
-
-        for tool_name in tools:
-            # Check if should skip
-            if skip_installed:
-                status = self.manager.check_tool(tool_name)
-                if status.installed:
-                    skipped_results.append(
-                        InstallResult(
-                            tool_name=tool_name,
-                            success=True,
-                            method="skipped",
-                            message=f"Already installed (v{status.installed_version})",
-                            version_installed=status.installed_version,
-                        )
-                    )
-                    continue
-
-            # Categorize by install method
-            # IMPORTANT: Check SPECIAL_INSTALL first, as tools like scancode have
-            # pypi_package but require special installation (binary download)
-            if tool_name in SPECIAL_INSTALL:
-                other_tools.append(tool_name)
-            else:
-                tool_info = self.registry.get_tool(tool_name)
-                if tool_info:
-                    if tool_info.pypi_package:
-                        pip_tools.append(tool_name)
-                    elif tool_info.npm_package:
-                        npm_tools.append(tool_name)
-                    else:
-                        other_tools.append(tool_name)
-                else:
-                    other_tools.append(tool_name)
-
-        # Create progress tracker
-        total_to_install = len(pip_tools) + len(npm_tools) + len(other_tools)
-        progress = ParallelInstallProgress(total=len(tools))
-
-        # Add skipped results
-        for result in skipped_results:
-            progress.on_complete(result.tool_name, result)
-
-        if total_to_install == 0:
-            return progress.to_install_progress()
-
-        # Set up signal handler for graceful Ctrl+C
-        original_handler = signal.getsignal(signal.SIGINT)
-
-        def signal_handler(_signum: int, _frame: object) -> None:
-            logger.info("Installation cancelled by user")
-            progress.cancel()
-            raise KeyboardInterrupt
-
-        try:
-            signal.signal(signal.SIGINT, signal_handler)
-        except ValueError:
-            # Can't set signal handler in non-main thread
-            pass
-
-        try:
-            if show_progress:
-                self._install_with_rich_progress(
-                    pip_tools, npm_tools, other_tools, progress, max_workers
-                )
-            else:
-                self._install_without_progress(
-                    pip_tools, npm_tools, other_tools, progress, max_workers
-                )
-        except KeyboardInterrupt:
-            logger.info("Installation cancelled")
-        finally:
-            try:
-                signal.signal(signal.SIGINT, original_handler)
-            except ValueError:
-                pass
-
-        return progress.to_install_progress()
-
     def install_tools_parallel(
         self,
         tools: list[str],
@@ -761,13 +550,9 @@ class ToolInstaller:
         """
         Install a specific list of tools in parallel.
 
-        Unlike install_profile_parallel(), this method installs only the
-        specified tools rather than all tools from a profile.
-
-        Uses the same three-stage strategy:
-        1. Batch pip installs (with isolated venvs for conflicting tools)
-        2. Batch npm installs
-        3. Parallel binary downloads
+        Two stages:
+        1. pip installs (isolated venvs first, then one batch for the rest)
+        2. Parallel binary downloads
 
         Args:
             tools: List of specific tool names to install
@@ -789,7 +574,6 @@ class ToolInstaller:
 
         # Categorize tools by installation method
         pip_tools: list[str] = []
-        npm_tools: list[str] = []
         other_tools: list[str] = []
         skipped_results: list[InstallResult] = []
 
@@ -809,25 +593,19 @@ class ToolInstaller:
                     )
                     continue
 
-            # Categorize by install method
-            # IMPORTANT: Check SPECIAL_INSTALL first, as tools like scancode have
-            # pypi_package but require special installation (binary download)
+            # Categorize by install method. SPECIAL_INSTALL first: a special
+            # tool is never batched through pip, whatever its registry entry says.
             if tool_name in SPECIAL_INSTALL:
                 other_tools.append(tool_name)
             else:
                 tool_info = self.registry.get_tool(tool_name)
-                if tool_info:
-                    if tool_info.pypi_package:
-                        pip_tools.append(tool_name)
-                    elif tool_info.npm_package:
-                        npm_tools.append(tool_name)
-                    else:
-                        other_tools.append(tool_name)
+                if tool_info and tool_info.pypi_package:
+                    pip_tools.append(tool_name)
                 else:
                     other_tools.append(tool_name)
 
         # Create progress tracker
-        total_to_install = len(pip_tools) + len(npm_tools) + len(other_tools)
+        total_to_install = len(pip_tools) + len(other_tools)
         progress = ParallelInstallProgress(total=len(tools))
 
         # Add skipped results
@@ -840,7 +618,7 @@ class ToolInstaller:
 
         logger.info(
             f"Installing {total_to_install} tools: "
-            f"{len(pip_tools)} pip, {len(npm_tools)} npm, {len(other_tools)} binary"
+            f"{len(pip_tools)} pip, {len(other_tools)} binary"
         )
 
         # Handle keyboard interrupt gracefully
@@ -858,11 +636,11 @@ class ToolInstaller:
         try:
             if show_progress:
                 self._install_with_rich_progress(
-                    pip_tools, npm_tools, other_tools, progress, max_workers
+                    pip_tools, other_tools, progress, max_workers
                 )
             else:
                 self._install_without_progress(
-                    pip_tools, npm_tools, other_tools, progress, max_workers
+                    pip_tools, other_tools, progress, max_workers
                 )
         except KeyboardInterrupt:
             logger.info("Installation cancelled")
@@ -877,7 +655,6 @@ class ToolInstaller:
     def _install_with_rich_progress(
         self,
         pip_tools: list[str],
-        npm_tools: list[str],
         other_tools: list[str],
         progress: ParallelInstallProgress,
         max_workers: int,
@@ -894,7 +671,7 @@ class ToolInstaller:
             console=console,
             transient=False,
         ) as rich_progress:
-            total_tools = len(pip_tools) + len(npm_tools) + len(other_tools)
+            total_tools = len(pip_tools) + len(other_tools)
             main_task = rich_progress.add_task(
                 f"[cyan]Installing {total_tools} tools...", total=total_tools
             )
@@ -942,20 +719,7 @@ class ToolInstaller:
                     console.print(f"  {status} {result.tool_name} (pip)")
                 rich_progress.remove_task(pip_task)
 
-            # Stage 2: Batch npm installs
-            if npm_tools and not progress.is_cancelled():
-                npm_task = rich_progress.add_task(
-                    f"[dim]npm batch ({len(npm_tools)} packages)...", total=None
-                )
-                npm_results = self._batch_npm_install(npm_tools, progress)
-                for result in npm_results:
-                    progress.on_complete(result.tool_name, result)
-                    rich_progress.advance(main_task)
-                    status = "[green]✓[/]" if result.success else "[red]✗[/]"
-                    console.print(f"  {status} {result.tool_name} (npm)")
-                rich_progress.remove_task(npm_task)
-
-            # Stage 3: Parallel binary downloads
+            # Stage 2: Parallel binary downloads
             if other_tools and not progress.is_cancelled():
                 # Track active downloads
                 active_tasks: dict[str, TaskID] = {}
@@ -1011,7 +775,6 @@ class ToolInstaller:
     def _install_without_progress(
         self,
         pip_tools: list[str],
-        npm_tools: list[str],
         other_tools: list[str],
         progress: ParallelInstallProgress,
         max_workers: int,
@@ -1045,14 +808,7 @@ class ToolInstaller:
             for result in pip_results:
                 progress.on_complete(result.tool_name, result)
 
-        # Stage 2: Batch npm installs
-        if npm_tools and not progress.is_cancelled():
-            logger.info(f"Installing {len(npm_tools)} npm packages in batch...")
-            npm_results = self._batch_npm_install(npm_tools, progress)
-            for result in npm_results:
-                progress.on_complete(result.tool_name, result)
-
-        # Stage 3: Parallel binary downloads
+        # Stage 2: Parallel binary downloads
         if other_tools and not progress.is_cancelled():
             logger.info(
                 f"Installing {len(other_tools)} tools in parallel "
@@ -1088,14 +844,14 @@ class ToolInstaller:
     ) -> InstallResult:
         """Install a tool in an isolated virtual environment.
 
-        Used for tools with known dependency conflicts (e.g., prowler/checkov
-        pydantic conflict) that cannot be installed in the same environment.
+        Used for the tools in ISOLATED_TOOLS, whose pinned dependencies must
+        not reach JMo's own environment.
 
         The isolated venv is created at ~/.jmo/tools/venvs/<tool_name>/
 
         Args:
             tool_name: Name of the tool
-            package_spec: Pip package specification (e.g., "prowler==5.16.0")
+            package_spec: Pip package specification (e.g., "semgrep==1.175.0")
 
         Returns:
             InstallResult with success status and details
@@ -1366,129 +1122,6 @@ class ToolInstaller:
 
         return results
 
-    def _batch_npm_install(
-        self,
-        npm_tools: list[str],
-        progress: ParallelInstallProgress,
-    ) -> list[InstallResult]:
-        """
-        Install multiple npm packages in a single subprocess call.
-
-        Similar benefits to batch pip install.
-        Falls back to individual installs if batch fails.
-        """
-        results: list[InstallResult] = []
-        start_time = time.time()
-
-        # Check if npm is available
-        npm_cmd = find_tool("npm")
-        if not npm_cmd:
-            for tool_name in npm_tools:
-                results.append(
-                    InstallResult(
-                        tool_name=tool_name,
-                        success=False,
-                        method="npm",
-                        message="npm not installed",
-                    )
-                )
-            return results
-
-        # Get package names from tool registry
-        packages: list[str] = []
-        tool_to_package: dict[str, str] = {}
-
-        for tool_name in npm_tools:
-            tool_info = self.registry.get_tool(tool_name)
-            if tool_info and tool_info.npm_package:
-                packages.append(tool_info.npm_package)
-                tool_to_package[tool_name] = tool_info.npm_package
-
-        if not packages:
-            return results
-
-        # Signal start for all npm tools
-        for tool_name in npm_tools:
-            progress.on_start(tool_name)
-
-        # Try batch install
-        cmd = [npm_cmd, "install", "-g"] + packages
-
-        try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=600,
-            )
-
-            if result.returncode == 0:
-                # All succeeded - verify each tool
-                duration = time.time() - start_time
-                for tool_name in npm_tools:
-                    status = self.manager.check_tool(tool_name)
-                    results.append(
-                        InstallResult(
-                            tool_name=tool_name,
-                            success=True,
-                            method="npm_batch",
-                            message=f"Installed via npm batch: {tool_to_package.get(tool_name, '')}",
-                            version_installed=status.installed_version,
-                            duration_seconds=duration / len(npm_tools),
-                        )
-                    )
-            else:
-                # Batch failed - fall back to individual installs
-                logger.warning(
-                    f"Batch npm install failed, falling back to individual: "
-                    f"{result.stderr[:200] if result.stderr else 'unknown error'}"
-                )
-                for tool_name in npm_tools:
-                    if progress.is_cancelled():
-                        results.append(
-                            InstallResult(
-                                tool_name=tool_name,
-                                success=False,
-                                method="npm",
-                                message="Installation cancelled",
-                            )
-                        )
-                    else:
-                        individual_result = self.install_tool(tool_name)
-                        results.append(individual_result)
-
-        except subprocess.TimeoutExpired:
-            logger.error("Batch npm install timed out after 10 minutes")
-            for tool_name in npm_tools:
-                if progress.is_cancelled():
-                    results.append(
-                        InstallResult(
-                            tool_name=tool_name,
-                            success=False,
-                            method="npm",
-                            message="Installation cancelled",
-                        )
-                    )
-                else:
-                    individual_result = self.install_tool(tool_name)
-                    results.append(individual_result)
-
-        except Exception as e:
-            logger.error(f"Batch npm install error: {e}")
-            for tool_name in npm_tools:
-                results.append(
-                    InstallResult(
-                        tool_name=tool_name,
-                        success=False,
-                        method="npm",
-                        message=str(e),
-                    )
-                )
-
-        return results
-
     def _install_tool_threadsafe(
         self,
         tool_name: str,
@@ -1573,12 +1206,8 @@ class ToolInstaller:
         try:
             if method == "pip" and tool_info.pypi_package:
                 return self._install_pip(tool_name, tool_info, start_time)
-            elif method == "brew" and tool_info.brew_package:
-                return self._install_brew(tool_name, tool_info, start_time)
             elif method == "apt" and tool_info.apt_package:
                 return self._install_apt(tool_name, tool_info, start_time)
-            elif method == "npm" and tool_info.npm_package:
-                return self._install_npm(tool_name, tool_info, start_time)
             elif method == "install_script" and tool_name in INSTALL_SCRIPTS:
                 return self._install_via_script(tool_name, tool_info, start_time)
             elif method == "binary" and tool_name in BINARY_URLS:
@@ -1668,75 +1297,6 @@ class ToolInstaller:
                 duration_seconds=time.time() - start_time,
             )
 
-    def _install_brew(
-        self, tool_name: str, tool_info: ToolInfo, start_time: float
-    ) -> InstallResult:
-        """Install via Homebrew."""
-        import time
-
-        if not tool_exists("brew", warn=False):
-            return InstallResult(
-                tool_name=tool_name,
-                success=False,
-                method="brew",
-                message="Homebrew not installed",
-            )
-
-        package = tool_info.brew_package
-        if not package:
-            return InstallResult(
-                tool_name=tool_name,
-                success=False,
-                method="brew",
-                message="No brew package defined",
-            )
-
-        try:
-            cmd = ["brew", "install", package]
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=600,
-            )
-
-            if result.returncode == 0:
-                status = self.manager.check_tool(tool_name)
-                return InstallResult(
-                    tool_name=tool_name,
-                    success=True,
-                    method="brew",
-                    message=f"Installed via brew: {package}",
-                    version_installed=status.installed_version,
-                    duration_seconds=time.time() - start_time,
-                )
-            else:
-                return InstallResult(
-                    tool_name=tool_name,
-                    success=False,
-                    method="brew",
-                    message=f"brew install failed: {sanitize_subprocess_output(result.stderr, max_length=200)}",
-                    duration_seconds=time.time() - start_time,
-                )
-        except subprocess.TimeoutExpired:
-            return InstallResult(
-                tool_name=tool_name,
-                success=False,
-                method="brew",
-                message="Installation timed out",
-                duration_seconds=time.time() - start_time,
-            )
-        except Exception as e:
-            return InstallResult(
-                tool_name=tool_name,
-                success=False,
-                method="brew",
-                message=str(e),
-                duration_seconds=time.time() - start_time,
-            )
-
     def _install_apt(
         self, tool_name: str, tool_info: ToolInfo, start_time: float
     ) -> InstallResult:
@@ -1820,105 +1380,6 @@ class ToolInstaller:
                 duration_seconds=time.time() - start_time,
             )
 
-    def _install_npm(
-        self, tool_name: str, tool_info: ToolInfo, start_time: float
-    ) -> InstallResult:
-        """Install via npm."""
-        import time
-
-        npm_cmd = find_tool("npm")
-        if not npm_cmd:
-            return InstallResult(
-                tool_name=tool_name,
-                success=False,
-                method="npm",
-                message="npm not installed",
-            )
-
-        # Check Node.js version for packages that require newer versions
-        # cdxgen requires Node.js 18+ (fails silently on older versions)
-        if tool_name == "cdxgen":
-            node_cmd = find_tool("node")
-            if node_cmd:
-                try:
-                    ver_result = subprocess.run(
-                        [node_cmd, "--version"],
-                        capture_output=True,
-                        text=True,
-                        encoding="utf-8",
-                        errors="replace",
-                        timeout=10,
-                    )
-                    if ver_result.returncode == 0:
-                        # Parse version: v20.10.0 -> 20
-                        ver_str = ver_result.stdout.strip().lstrip("v")
-                        major_ver = int(ver_str.split(".")[0])
-                        if major_ver < 18:
-                            return InstallResult(
-                                tool_name=tool_name,
-                                success=False,
-                                method="npm",
-                                message=f"cdxgen requires Node.js 18+, found v{ver_str}. "
-                                "Install Node.js 20 LTS: https://nodejs.org/",
-                            )
-                except (subprocess.TimeoutExpired, ValueError, IndexError):
-                    pass  # Proceed with install, let it fail naturally if needed
-
-        package = tool_info.npm_package
-        if not package:
-            return InstallResult(
-                tool_name=tool_name,
-                success=False,
-                method="npm",
-                message="No npm package defined",
-            )
-
-        try:
-            cmd = [npm_cmd, "install", "-g", package]
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=300,
-            )
-
-            if result.returncode == 0:
-                status = self.manager.check_tool(tool_name)
-                return InstallResult(
-                    tool_name=tool_name,
-                    success=True,
-                    method="npm",
-                    message=f"Installed via npm: {package}",
-                    version_installed=status.installed_version,
-                    duration_seconds=time.time() - start_time,
-                )
-            else:
-                return InstallResult(
-                    tool_name=tool_name,
-                    success=False,
-                    method="npm",
-                    message=f"npm install failed: {sanitize_subprocess_output(result.stderr, max_length=200)}",
-                    duration_seconds=time.time() - start_time,
-                )
-        except subprocess.TimeoutExpired:
-            return InstallResult(
-                tool_name=tool_name,
-                success=False,
-                method="npm",
-                message="Installation timed out",
-                duration_seconds=time.time() - start_time,
-            )
-        except Exception as e:
-            return InstallResult(
-                tool_name=tool_name,
-                success=False,
-                method="npm",
-                message=str(e),
-                duration_seconds=time.time() - start_time,
-            )
-
     def _install_binary(
         self, tool_name: str, tool_info: ToolInfo, start_time: float
     ) -> InstallResult:
@@ -1977,7 +1438,6 @@ class ToolInstaller:
         # | {arch_amd}    | "amd64"                         | "arm64"                         |
         # | {arch_aarch}  | "x86_64"                        | "aarch64"                       |
         # | {trivy_arch}  | "64bit"                         | "ARM64"                         |
-        # | {rust_arch}   | "x86_64-unknown-linux-gnu"      | "aarch64-unknown-linux-gnu"     |
 
         # Go-style architecture (most common): x86_64 -> amd64
         arch_amd = "amd64" if arch == "x86_64" else "arm64" if arch == "arm64" else arch
@@ -1992,14 +1452,6 @@ class ToolInstaller:
             "64bit" if arch == "x86_64" else "ARM64" if arch == "arm64" else arch
         )
 
-        # Rust target triple (for noseyparker)
-        if os_name.lower() == "linux":
-            rust_arch = f"{arch_aarch}-unknown-linux-gnu"
-        elif os_name.lower() == "darwin":
-            rust_arch = f"{arch_aarch}-apple-darwin"
-        else:
-            rust_arch = f"{arch_aarch}-pc-windows-msvc"
-
         url = url_template.format(
             version=tool_info.version,
             os=os_name,
@@ -2009,7 +1461,6 @@ class ToolInstaller:
             arch_amd=arch_amd,
             arch_aarch=arch_aarch,
             trivy_arch=trivy_arch,
-            rust_arch=rust_arch,
         )
 
         # Log URL for debugging (helps users report issues with specific asset names)
@@ -2269,26 +1720,8 @@ class ToolInstaller:
 
         special_type = SPECIAL_INSTALL.get(tool_name)
 
-        if special_type == "docker":
-            return InstallResult(
-                tool_name=tool_name,
-                success=False,
-                method="docker",
-                message=f"{tool_name} requires Docker. Run via: docker run ...",
-                duration_seconds=time.time() - start_time,
-            )
-        elif special_type == "manual":
-            return InstallResult(
-                tool_name=tool_name,
-                success=False,
-                method="manual",
-                message=f"{tool_name} requires manual installation. See JMo docs.",
-                duration_seconds=time.time() - start_time,
-            )
-        elif special_type == "extract_app":
+        if special_type == "extract_app":
             return self._install_extract_app(tool_name, tool_info, start_time)
-        elif special_type == "clone":
-            return self._install_git_clone(tool_name, tool_info, start_time)
 
         return InstallResult(
             tool_name=tool_name,
@@ -2297,120 +1730,6 @@ class ToolInstaller:
             message=f"Unknown special install type: {special_type}",
             duration_seconds=time.time() - start_time,
         )
-
-    def _install_git_clone(
-        self, tool_name: str, tool_info: ToolInfo, start_time: float
-    ) -> InstallResult:
-        """Install by cloning git repository at specific version tag."""
-        import time
-
-        if not tool_info.github_repo:
-            return InstallResult(
-                tool_name=tool_name,
-                success=False,
-                method="clone",
-                message="No GitHub repository defined",
-            )
-
-        clone_dir = self.install_dir / tool_name
-        repo_url = f"https://github.com/{tool_info.github_repo}.git"
-
-        # Determine tag format - some tools use 'v' prefix, some don't
-        # Tools without 'v' prefix: lynis
-        no_v_prefix_tools = {"lynis"}
-        if tool_name in no_v_prefix_tools:
-            version_tag = tool_info.version
-        else:
-            version_tag = f"v{tool_info.version}"
-
-        try:
-            if clone_dir.exists():
-                # Check current version - if it matches, no action needed
-                current_tag_result = subprocess.run(
-                    [
-                        "git",
-                        "-C",
-                        str(clone_dir),
-                        "describe",
-                        "--tags",
-                        "--exact-match",
-                    ],
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    timeout=30,
-                )
-                current_tag = (
-                    current_tag_result.stdout.strip()
-                    if current_tag_result.returncode == 0
-                    else ""
-                )
-
-                if current_tag == version_tag:
-                    # Already at correct version
-                    status = self.manager.check_tool(tool_name)
-                    return InstallResult(
-                        tool_name=tool_name,
-                        success=True,
-                        method="clone",
-                        message=f"Already at {version_tag}",
-                        version_installed=status.installed_version,
-                        duration_seconds=time.time() - start_time,
-                    )
-
-                # Different version - remove and re-clone at correct tag
-                # (Shallow clones can't easily switch tags)
-                logger.info(
-                    f"Updating {tool_name} from {current_tag or 'unknown'} to {version_tag}"
-                )
-                shutil.rmtree(clone_dir)
-
-            # Fresh clone at specific tag
-            result = subprocess.run(
-                [
-                    "git",
-                    "clone",
-                    "--depth",
-                    "1",
-                    "--branch",
-                    version_tag,
-                    repo_url,
-                    str(clone_dir),
-                ],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=120,
-            )
-
-            if result.returncode == 0:
-                status = self.manager.check_tool(tool_name)
-                return InstallResult(
-                    tool_name=tool_name,
-                    success=True,
-                    method="clone",
-                    message=f"Cloned {version_tag} to {clone_dir}",
-                    version_installed=status.installed_version,
-                    duration_seconds=time.time() - start_time,
-                )
-            else:
-                return InstallResult(
-                    tool_name=tool_name,
-                    success=False,
-                    method="clone",
-                    message=f"Git clone failed: {sanitize_subprocess_output(result.stderr, max_length=200)}",
-                    duration_seconds=time.time() - start_time,
-                )
-        except Exception as e:
-            return InstallResult(
-                tool_name=tool_name,
-                success=False,
-                method="clone",
-                message=str(e),
-                duration_seconds=time.time() - start_time,
-            )
 
     def _post_install(self, tool_name: str, result: InstallResult) -> InstallResult:
         """Fetch companion data a tool needs but its package does not carry.
@@ -2529,10 +1848,10 @@ class ToolInstaller:
     def _install_extract_app(
         self, tool_name: str, tool_info: ToolInfo, start_time: float
     ) -> InstallResult:
-        """Install app that extracts to a directory (e.g., ZAP, scancode).
+        """Install app that extracts to a directory (e.g., ZAP).
 
         Downloads archive, extracts to ~/.jmo/{tool_name}/, and verifies.
-        Supports platform-specific URLs for tools like scancode.
+        Supports platform-specific URLs (a dict keyed by platform).
         Security: Uses safe_tar_extract/safe_zip_extract to prevent path traversal.
         """
         import time
@@ -2576,11 +1895,7 @@ class ToolInstaller:
         else:
             url_template = url_config
 
-        # Get Python version for tools that need it (e.g., scancode pre-built releases)
-        py_version = f"{sys.version_info.major}.{sys.version_info.minor}"
-
-        # Format URL with version and optional py_version
-        url = url_template.format(version=tool_info.version, py_version=py_version)
+        url = url_template.format(version=tool_info.version)
         app_dir = self.install_dir / tool_name
 
         logger.debug(f"Downloading {tool_name} from: {url}")
@@ -2667,43 +1982,6 @@ class ToolInstaller:
                     for exe in bin_dir.iterdir():
                         if exe.is_file():
                             exe.chmod(0o755)
-
-                # Scancode: Run ./configure to set up the Python venv
-                # The pre-built release requires this step to create venv/bin/scancode
-                # Note: Skip on Windows - pre-built Windows releases don't need configure
-                if tool_name == "scancode":
-                    configure_script = app_dir / "configure"
-                    if configure_script.exists():
-                        if self.platform == "windows":
-                            # Windows pre-built release is already configured
-                            logger.debug(
-                                "Skipping scancode configure on Windows (pre-built release)"
-                            )
-                        else:
-                            configure_script.chmod(0o755)
-                            logger.debug(
-                                f"Running scancode configure script in {app_dir}"
-                            )
-                            try:
-                                configure_result = subprocess.run(
-                                    ["./configure"],
-                                    cwd=str(app_dir),
-                                    capture_output=True,
-                                    text=True,
-                                    encoding="utf-8",
-                                    errors="replace",
-                                    timeout=300,  # Configure can take a while
-                                )
-                                if configure_result.returncode != 0:
-                                    logger.warning(
-                                        f"Scancode configure warning: {configure_result.stderr[:200]}"
-                                    )
-                            except subprocess.TimeoutExpired:
-                                logger.warning(
-                                    "Scancode configure timed out after 300s"
-                                )
-                            except Exception as e:
-                                logger.warning(f"Scancode configure failed: {e}")
 
                 # Verify installation
                 status = self.manager.check_tool(tool_name)

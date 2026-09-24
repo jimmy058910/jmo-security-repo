@@ -369,35 +369,6 @@ class TestUrlScanner:
             assert zap_def is not None
             assert "/usr/share/zap/zap.sh" in zap_def.command[0]
 
-    def test_scan_url_akto_missing_tool_with_stub(self, tmp_path):
-        """Test Akto missing tool writes stub when allow_missing_tools=True"""
-
-        def mock_find_tool(tool: str):
-            return None if tool == "akto" else f"/usr/bin/{tool}"
-
-        with patch("scripts.cli.scan_jobs.url_scanner.write_stub") as mock_stub:
-            with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
-                mock_runner = MagicMock()
-                MockRunner.return_value = mock_runner
-                mock_runner.run_all_parallel.return_value = []
-
-                url, statuses = scan_url(
-                    url="https://api.example.com",
-                    results_dir=tmp_path,
-                    tools=["akto"],
-                    timeout=600,
-                    retries=0,
-                    per_tool_config={},
-                    allow_missing_tools=True,
-                    find_tool_func=mock_find_tool,
-                )
-
-                # Stub should be written for missing Akto, and a stub is not a
-                # successful run (#825).
-                assert statuses["akto"] is False
-                assert not_attempted_tools(statuses) == ["akto"]
-                mock_stub.assert_called()
-
     def test_scan_url_tool_not_found_error(self, tmp_path):
         """A tool that resolved and then failed to exec is NOT a success.
 

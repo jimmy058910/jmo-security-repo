@@ -4,88 +4,48 @@
 
 ---
 
-## 🪟 Windows Tool Compatibility Matrix
+## Windows Tool Compatibility Matrix
 
-JMo Security orchestrates **12 external security tools**. On Windows, only **7 of these tools** work natively. The other 5 require WSL2 or Docker.
-
-### ✅ Works Natively on Windows (7/12)
+JMo Security orchestrates **12 scanners**. Every one of them has a native Windows build that `jmo tools install` sets up; two carry a caveat (Semgrep and ZAP).
 
 | Tool | Category | Native Windows Support | Notes |
 |------|----------|------------------------|-------|
-| **TruffleHog** | Secrets Scanning | ✅ Full support | Go binary, verified secrets only |
-| **Trivy** | Vulnerability Scanning | ✅ Full support | Go binary, scans containers/IaC/files |
-| **Syft** | SBOM Generation | ✅ Full support | Go binary, generates Software Bill of Materials |
-| **Checkov** | IaC Security | ✅ Full support | Python, scans Terraform/CloudFormation/K8s |
-| **Hadolint** | Dockerfile Linting | ✅ Full support | Haskell binary available for Windows |
-| **Nuclei** | Vulnerability Scanner | ✅ Full support | Go binary, 4000+ templates, fast API security |
-| **Bandit** | Python SAST | ✅ Full support | Python, static analysis for Python code |
+| **TruffleHog** | Secrets Scanning | Full support | Go binary, verified secrets only |
+| **Semgrep** | Multi-Language SAST | Some rules require Linux | Use Docker for full coverage |
+| **Syft** | SBOM Generation | Full support | Go binary, generates Software Bill of Materials |
+| **Trivy** | Vulnerability Scanning | Full support | Go binary, scans containers/IaC/files |
+| **Checkov** | IaC Security | Full support | Python, scans Terraform/CloudFormation/K8s |
+| **Hadolint** | Dockerfile Linting | Full support | Windows `.exe` from upstream; runs only when Dockerfiles are present |
+| **ShellCheck** | Shell Script Linting | Full support | Windows zip from upstream; runs only when shell scripts are present |
+| **gosec** | Go SAST | Full support | Go binary; runs only when Go sources are present |
+| **YARA** | Malware Pattern Matching | Full support | `yara-python` wheel; rules are fetched at install time |
+| **Grype** | Vulnerability Scanning | Full support | Go binary |
+| **OWASP ZAP** | DAST Web Scanning | Needs a Java runtime | Docker recommended; runs only on `--url` targets |
+| **Nuclei** | Vulnerability Scanner | Full support | Go binary, 4000+ templates; runs only on `--url` targets |
 
-### ❌ Requires WSL2 or Docker (5/12)
-
-| Tool | Category | Windows Limitation | Workaround |
-|------|----------|-------------------|------------|
-| **Nosey Parker** | Deep Secrets Scanning | ❌ No Windows build (Rust) | Use Docker or WSL2 |
-| **Semgrep** | Multi-Language SAST | ⚠️ Some rules require Linux | Use Docker for full coverage |
-| **OWASP ZAP** | DAST Web Scanning | ⚠️ Complex Java setup | Docker recommended |
-| **Falco** | Runtime Security | ❌ Linux kernel only (eBPF) | Docker/WSL2 required |
-| **AFL++** | Fuzzing | ❌ Linux kernel required | Docker/WSL2 required |
+OPA, the policy engine behind `jmo policy` and `jmo report --policy`, is not a scanner. `jmo tools install` installs it natively on Windows alongside the 12.
 
 ---
 
-## 📊 Profile Compatibility
+## Choosing What Runs
 
-### Fast Profile ✅ **Works on Native Windows**
-
-**Time:** 5-10 minutes | **Tools:** 8 tools
+There are no scan profiles. `jmo scan` considers all 12 scanners, and the target's content decides which of them run. Narrow the list when a tool is not set up yet:
 
 ```powershell
-jmo fast --repos-dir C:\Projects
+# Everything that applies to the target
+jmo scan --repos-dir C:\Projects
+
+# Only some tools
+jmo scan --repos-dir C:\Projects --tools trufflehog trivy semgrep
+
+# Leave ZAP out when Java is not configured
+jmo scan --url http://localhost:3000 --skip-tools zap
+
+# Continue past tools that are not installed
+jmo scan --repos-dir C:\Projects --allow-missing-tools
 ```
 
-**Tools included:**
-
-- ✅ TruffleHog (verified secrets)
-- ✅ Trivy (vulnerabilities, misconfigs)
-- ⚠️ Semgrep (90% of rules work, some Linux-specific rules skipped)
-
-**Coverage:** Secrets, vulnerabilities, basic SAST
-
-### Balanced Profile ⚠️ **Partially Works on Native Windows**
-
-**Time:** 18-25 minutes | **Tools:** 18 tools (7 work natively, rest require Docker)
-
-```powershell
-jmo balanced --repos-dir C:\Projects
-```
-
-**Tools included:**
-
-- ✅ TruffleHog, Trivy, Syft, Checkov, Hadolint, Nuclei, Bandit (7/8 work)
-- ⚠️ ZAP (requires Docker or complex Java setup)
-
-**Coverage:** Secrets, SAST, SCA, containers, IaC, Dockerfiles, limited DAST
-
-**Recommendation:** Use Docker for full balanced profile:
-
-```powershell
-jmo wizard --docker --profile balanced
-```
-
-### Deep Profile ❌ **Requires Docker/WSL2**
-
-**Time:** 40-70 minutes | **Tools:** 28 comprehensive tools
-
-**Tools NOT available natively:**
-
-- ❌ Nosey Parker (deep secrets)
-- ❌ Falco (runtime security)
-- ❌ AFL++ (fuzzing)
-
-**Recommendation:** MUST use Docker:
-
-```powershell
-jmo wizard --docker --profile deep
-```
+A top-level `tools:` list in `jmo.yml` narrows the list for every scan.
 
 ---
 
@@ -143,10 +103,10 @@ jmo wizard --docker --profile deep
 
 ---
 
-### Path 2: Native Windows (LIMITED - 7/12 Tools)
+### Path 2: Native Windows
 
-**Setup time:** 1 minute
-**Tool coverage:** 58% (7/12 tools)
+**Setup time:** a few minutes
+**Tool coverage:** all 12 scanners once `jmo tools install` has run (ZAP also needs Java)
 
 **Steps:**
 
@@ -156,42 +116,38 @@ jmo wizard --docker --profile deep
    winget install jmo.jmo-security
    ```
 
-2. **Run scans with limited tools:**
+2. **Install the scanners:**
 
    ```powershell
-   # Use fast profile (best for native Windows)
-   jmo fast --repos-dir C:\Projects
+   jmo tools install
+   ```
 
-   # Or balanced profile (ZAP will be skipped)
-   jmo balanced --repos-dir C:\Projects --allow-missing-tools
+3. **Run scans:**
+
+   ```powershell
+   jmo scan --repos-dir C:\Projects
+
+   # ZAP will be skipped if Java is not configured
+   jmo scan --repos-dir C:\Projects --allow-missing-tools
    ```
 
 **Limitations:**
 
-- ❌ No Nosey Parker (deep secrets scanning)
-- ❌ No Falco (runtime security)
-- ❌ No AFL++ (fuzzing)
-- ⚠️ No ZAP (DAST) unless Java configured
-- ⚠️ Some Semgrep rules skip on Windows
+- No ZAP (DAST) unless Java is configured
+- Some Semgrep rules skip on Windows
 
 **When to use:**
 
 - Quick validation scans
-- Pre-commit hooks (fast profile)
-- CI/CD where Docker not available
+- Pre-commit hooks
+- CI/CD where Docker is not available
 - Learning JMo Security basics
-
-**NOT recommended for:**
-
-- Production security audits
-- Compliance scanning
-- Comprehensive vulnerability assessment
 
 ---
 
 ## 🔧 Tool Installation (Optional for Native Windows)
 
-If using **Path 2 (Native Windows)**, you can install tools individually for better performance:
+If using **Path 2 (Native Windows)**, `jmo tools install` sets up every scanner. The package-manager commands below are an alternative for individual tools:
 
 ### Core Tools (Work on Windows)
 
@@ -248,42 +204,24 @@ go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
 # https://github.com/projectdiscovery/nuclei/releases
 ```
 
-**Bandit:**
-
-```powershell
-pip install bandit
-```
-
 **After installing tools, verify:**
 
 ```powershell
-jmo setup --check
+jmo tools check
 ```
 
 ---
 
 ## ❓ FAQ: Windows Compatibility
 
-### Q: Why don't all tools work on Windows?
+### Q: Why do some tools need extra setup on Windows?
 
-**A:** Many security tools are built for Linux and rely on:
+**A:** All 12 scanners have Windows builds, but two need more than the binary:
 
-- Linux kernel features (eBPF for Falco)
-- POSIX APIs (AFL++ fuzzing)
-- Linux package ecosystems
-- Rust/Go toolchains that prioritize Linux
+- **OWASP ZAP** needs a Java runtime
+- **Semgrep** has rules that assume Linux
 
-Windows is a secondary platform for most security tools.
-
-### Q: Will Windows support improve in the future?
-
-**A:** Unlikely for some tools:
-
-- **Falco:** Requires eBPF (Linux kernel only)
-- **AFL++:** Requires Linux kernel for fuzzing
-- **Nosey Parker:** Rust team prioritizes Linux/macOS
-
-**Docker/WSL2 is the permanent solution for full tool coverage on Windows.**
+Windows is a secondary platform for most security tools, so Docker/WSL2 remains the simplest route to full coverage.
 
 ### Q: Can I use Windows Subsystem for Linux (WSL1)?
 
@@ -293,20 +231,18 @@ Windows is a secondary platform for most security tools.
 
 **A:** ❌ No. Winget installs **only the JMo Security CLI**. You must:
 
-- Install tools separately (7 work natively), OR
+- Install the scanners with `jmo tools install`, OR
 - Use Docker mode (all 12 tools included)
 
 **Docker mode is recommended.**
 
-### Q: Which profile should I use on native Windows?
+### Q: Which tools should I run on native Windows?
 
-**A:** Use **fast profile** for best experience:
+**A:** All of them. There are no scan profiles: `jmo scan` runs whichever of the 12 scanners apply to the target. Add `--allow-missing-tools` while some are not installed yet:
 
 ```powershell
-jmo fast --repos-dir C:\Projects
+jmo scan --repos-dir C:\Projects --allow-missing-tools
 ```
-
-**Avoid deep profile on native Windows** - it will fail due to missing tools.
 
 ### Q: Can I mix native tools and Docker?
 
@@ -324,20 +260,19 @@ jmo fast --repos-dir C:\Projects
 ### ✅ DO
 
 1. **Use WSL2 + Docker Desktop** for production scans
-2. **Use fast profile** if running native Windows only
+2. **Run `jmo tools install`** once if running native Windows only
 3. **Use `--allow-missing-tools`** flag to skip unavailable tools gracefully
-4. **Check tool availability** before choosing profile:
+4. **Check tool availability** before scanning:
 
    ```powershell
-   jmo setup --check
+   jmo tools check
    ```
 
 ### ❌ DON'T
 
-1. **Don't use deep profile on native Windows** - will fail
-2. **Don't expect 100% tool parity** with Linux/macOS on native Windows
-3. **Don't skip Docker** if you need comprehensive security coverage
-4. **Don't ignore Windows Defender** - some tools may be flagged as false positives
+1. **Don't expect 100% tool parity** with Linux/macOS on native Windows
+2. **Don't skip Docker** if you need comprehensive security coverage
+3. **Don't ignore Windows Defender** - some tools may be flagged as false positives
 
 ---
 
@@ -358,10 +293,10 @@ jmo fast --repos-dir C:\Projects
 
 ```powershell
 # Check which tools are available
-jmo setup --check
+jmo tools check
 
 # Run with missing tools allowed
-jmo fast --repos-dir C:\Projects --allow-missing-tools
+jmo scan --repos-dir C:\Projects --allow-missing-tools
 ```
 
 ### Issue: ZAP fails to start
@@ -385,5 +320,5 @@ jmo wizard --docker
 
 ---
 
-**Last Updated:** December 2025
+**Last Updated:** September 2026
 **Maintainer:** Jimmy Moceri (@jimmy058910)

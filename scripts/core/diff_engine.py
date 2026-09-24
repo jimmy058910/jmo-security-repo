@@ -52,14 +52,12 @@ class DiffSource:
         source_type: "directory" or "sqlite"
         path: Directory path (for directory mode) or scan ID (for SQLite mode)
         timestamp: ISO 8601 timestamp
-        profile: Scan profile name (fast/balanced/deep)
         total_findings: Total number of findings in this scan
     """
 
     source_type: str  # "directory" or "sqlite"
     path: str  # Directory path or SQLite scan ID
     timestamp: str  # ISO 8601 timestamp
-    profile: str  # fast/balanced/deep
     total_findings: int
 
 
@@ -274,7 +272,6 @@ class DiffEngine:
                 source_type="sqlite",
                 path=baseline_scan_id,
                 timestamp=baseline_scan.get("timestamp_iso", ""),
-                profile=baseline_scan.get("profile", ""),
                 total_findings=baseline_scan.get("total_findings", 0),
             )
 
@@ -282,7 +279,6 @@ class DiffEngine:
                 source_type="sqlite",
                 path=current_scan_id,
                 timestamp=current_scan.get("timestamp_iso", ""),
-                profile=current_scan.get("profile", ""),
                 total_findings=current_scan.get("total_findings", 0),
             )
 
@@ -405,7 +401,6 @@ class DiffEngine:
                         source_type="directory",
                         path=str(results_dir),
                         timestamp=meta.get("timestamp", ""),
-                        profile=meta.get("profile", ""),
                         total_findings=len(findings),
                     )
             except (json.JSONDecodeError, KeyError):
@@ -416,7 +411,6 @@ class DiffEngine:
             source_type="directory",
             path=str(results_dir),
             timestamp="",
-            profile="",
             total_findings=len(findings),
         )
 

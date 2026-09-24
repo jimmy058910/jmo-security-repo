@@ -42,7 +42,7 @@ def results_pair(tmp_path):
         d = tmp_path / name
         (d / "summaries").mkdir(parents=True)
         (d / "summaries" / "findings.json").write_text(
-            json.dumps({"meta": {"profile": "fast"}, "findings": findings}),
+            json.dumps({"meta": {}, "findings": findings}),
             encoding="utf-8",
         )
         return d
@@ -146,6 +146,11 @@ class TestStdoutIsMachineReadable:
         assert from_stdout["meta"]["jmo_version"] != "1.0.0" or (
             from_file["meta"]["jmo_version"] == "1.0.0"
         )
+        # The stdout document is built by its own serializer
+        # (`_build_json_output`), so it needs its own check that the removed
+        # scan-profile field stayed out of the source blocks.
+        for side in ("baseline", "current"):
+            assert "profile" not in from_stdout["meta"][side]
 
 
 class TestMarkdownToStdoutKeepsItsCharacters:

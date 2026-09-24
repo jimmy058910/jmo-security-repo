@@ -48,7 +48,7 @@ jmo-security-scan:
   stage: scan
   image: ghcr.io/jimmy058910/jmo-security:latest
   script:
-    - jmo scan --repo . --profile balanced
+    - jmo scan --repo .
     - jmo report ./results
   artifacts:
     paths:
@@ -161,8 +161,8 @@ jmo-security-scan:
   stage: scan
   image: ghcr.io/jimmy058910/jmo-security:latest
   script:
-    - jmo scan --repo . --profile balanced --fail-on HIGH
-    - jmo report ./results
+    - jmo scan --repo .
+    - jmo report ./results --fail-on HIGH
   artifacts:
     paths:
       - results/
@@ -243,7 +243,7 @@ jobs:
       - name: Run security scan
         uses: docker://ghcr.io/jimmy058910/jmo-security:latest
         with:
-          args: scan --repo . --profile balanced
+          args: scan --repo .
 
       - name: Generate report
         uses: docker://ghcr.io/jimmy058910/jmo-security:latest

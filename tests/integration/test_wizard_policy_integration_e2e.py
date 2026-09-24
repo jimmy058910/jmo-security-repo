@@ -25,7 +25,6 @@ def sample_jmo_yml(tmp_path):
     config = tmp_path / "jmo.yml"
     config.write_text(
         """
-default_profile: fast
 tools:
   - trufflehog
 outputs:
@@ -139,10 +138,16 @@ def test_wizard_policy_integration_with_cli_flags(tmp_path):
             ),
         }
 
-        offer_policy_evaluation_after_scan(str(results_dir), "fast", args)
+        offer_policy_evaluation_after_scan(str(results_dir), args)
 
-        # Verify policy evaluation was called
-        assert mock_policy_menu.called
+        # Called once, with the findings from findings.json and --yes carried
+        # through as non-interactive; no profile rides along any more
+        mock_policy_menu.assert_called_once()
+        call = mock_policy_menu.call_args
+        assert call.args[0] == results_dir
+        assert [f["id"] for f in call.args[1]] == ["finding-1"]
+        assert len(call.args) == 2
+        assert call.kwargs == {"non_interactive": True}
 
 
 def test_wizard_policy_integration_skip_policies_flag(tmp_path):
@@ -170,7 +175,7 @@ def test_wizard_policy_integration_skip_policies_flag(tmp_path):
     with patch(
         "scripts.cli.wizard_flows.policy_flow.policy_evaluation_menu"
     ) as mock_policy_menu:
-        offer_policy_evaluation_after_scan(str(results_dir), "fast", args)
+        offer_policy_evaluation_after_scan(str(results_dir), args)
 
         # Verify policy evaluation was NOT called
         assert not mock_policy_menu.called
@@ -226,7 +231,7 @@ def test_wizard_policy_integration_interactive_mode(tmp_path, sample_jmo_yml):
             # shells out to whatever scanner binaries are actually on PATH).
             mock_tool_manager = MagicMock()
             mock_tool_manager.get_tool_summary.return_value = MagicMock(
-                execution_ready=10, platform_applicable=18
+                execution_ready=10, total=12
             )
             mock_tool_manager.check_tool.return_value = MagicMock(
                 installed=True, version="1.0.0", startup_ok=True
@@ -257,7 +262,7 @@ def test_wizard_policy_integration_no_findings(tmp_path):
     args = argparse.Namespace(policies=None, skip_policies=False, yes=False)
 
     # Should return gracefully without error
-    offer_policy_evaluation_after_scan(str(results_dir), "balanced", args)
+    offer_policy_evaluation_after_scan(str(results_dir), args)
 
     # No exception should be raised
 
@@ -281,7 +286,7 @@ def test_wizard_policy_integration_empty_findings(tmp_path):
     with patch(
         "scripts.cli.wizard_flows.policy_flow.policy_evaluation_menu"
     ) as mock_policy:
-        offer_policy_evaluation_after_scan(str(results_dir), "balanced", args)
+        offer_policy_evaluation_after_scan(str(results_dir), args)
         assert not mock_policy.called
 
 
@@ -325,7 +330,7 @@ def test_wizard_policy_integration_policy_evaluation_error(tmp_path):
         mock_policy.side_effect = Exception("Policy evaluation failed")
 
         # Should handle error gracefully and not crash
-        offer_policy_evaluation_after_scan(str(results_dir), "balanced", args)
+        offer_policy_evaluation_after_scan(str(results_dir), args)
 
         # Function should return without raising exception
 

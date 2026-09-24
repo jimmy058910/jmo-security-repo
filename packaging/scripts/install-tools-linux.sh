@@ -85,8 +85,8 @@ ubuntu | debian)
 
   # Install Python-based tools
   echo "📦 Installing Python-based tools..."
-  sudo pip3 install checkov bandit semgrep --quiet
-  echo "   ✅ Checkov, Bandit, Semgrep installed"
+  sudo pip3 install checkov semgrep --quiet
+  echo "   ✅ Checkov, Semgrep installed"
   echo ""
 
   # Install TruffleHog (Go binary)
@@ -120,7 +120,7 @@ fedora | rhel | centos)
   sudo dnf install -y python3 python3-pip curl wget
 
   # Install Python-based tools
-  sudo pip3 install checkov bandit semgrep --quiet
+  sudo pip3 install checkov semgrep --quiet
 
   # Install Go tools (similar to Ubuntu)
   # ... (same as Ubuntu section for GitHub installs)
@@ -141,7 +141,7 @@ arch | manjaro)
   fi
 
   # Install Python-based tools
-  sudo pip3 install checkov bandit semgrep --quiet
+  sudo pip3 install checkov semgrep --quiet
 
   ;;
 
@@ -156,16 +156,7 @@ esac
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "⚠️  Optional tools (require Docker):"
-echo ""
-echo "   • Nosey Parker (deep secrets scanning):"
-echo "     docker pull ghcr.io/praetorian-inc/noseyparker:latest"
-echo ""
-echo "   • Falco (runtime security):"
-echo "     Requires Kubernetes or Docker with privileged mode"
-echo ""
-echo "   • AFL++ (fuzzing):"
-echo "     docker pull aflplusplus/aflplusplus"
+echo "⚠️  Installed separately:"
 echo ""
 echo "   • OWASP ZAP (DAST):"
 echo "     Requires Java JRE 11+"
@@ -177,11 +168,11 @@ echo ""
 echo "✅ Tool installation complete!"
 echo ""
 echo "Verify installation:"
-echo "  jmotools setup --check"
+echo "  jmo tools check"
 echo ""
 echo "Start scanning:"
-echo "  jmotools wizard"
+echo "  jmo wizard"
 echo ""
-echo "💡 TIP: For ALL 12 tools with zero setup, use Docker mode:"
-echo "  jmotools wizard --docker"
+echo "💡 TIP: For every tool with zero setup, use Docker mode:"
+echo "  jmo wizard --docker"
 echo ""

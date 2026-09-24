@@ -205,7 +205,7 @@ def test_extractors_actually_found_something():
 
     create_reads = _args_read_by(routing["create"])
     assert len(create_reads) >= 8, f"handler-read extractor looks wrong: {create_reads}"
-    assert {"name", "cron", "profile"} <= create_reads
+    assert {"name", "cron", "repos_dir"} <= create_reads
 
 
 # ---------------------------------------------------------------------------

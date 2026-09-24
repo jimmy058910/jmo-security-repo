@@ -57,13 +57,6 @@ TOOL_CONTRACTS: dict[str, dict[str, Any]] = {
         "command": ["semgrep", "--config", "auto", "--json", "{target}"],
         "description": "SAST scanner with results array structure",
     },
-    "bandit": {
-        "required_keys": ["results"],
-        "result_item_keys": ["issue_severity", "issue_text", "filename"],
-        "sample_target": "python-vulnerable",
-        "command": ["bandit", "-r", "-f", "json", "{target}"],
-        "description": "Python security linter with results array",
-    },
     "hadolint": {
         "required_keys": [],  # Hadolint returns array at root
         "result_item_keys": ["code", "message", "file", "level"],
@@ -405,7 +398,7 @@ class TestContractInfrastructure:
 
     def test_contracts_cover_key_adapters(self):
         """Verify contracts exist for critical adapters."""
-        critical_tools = ["trivy", "semgrep", "bandit", "trufflehog", "checkov"]
+        critical_tools = ["trivy", "semgrep", "trufflehog", "checkov"]
 
         missing = [t for t in critical_tools if t not in TOOL_CONTRACTS]
 

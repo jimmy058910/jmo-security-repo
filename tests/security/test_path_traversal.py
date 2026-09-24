@@ -84,7 +84,6 @@ class TestPathTraversalResistance:
         config_path = config_dir / "jmo.yml"
 
         config_content = """
-default_profile: balanced
 tools:
   - trivy
   - semgrep
@@ -98,8 +97,9 @@ outputs:
         config = load_config(config_path)
 
         assert config is not None, "Should load config"
-        # Config is a Config object, not dict
-        assert config.default_profile == "balanced", "Should load correct profile"
+        # Config is a Config object, not dict. The list differs from the
+        # TOOL_MATRIX default, so this proves the file was actually read.
+        assert config.tools == ["trivy", "semgrep"], "Should load the file's tools"
 
         # Attempt path traversal via config path
         malicious_config_paths = [

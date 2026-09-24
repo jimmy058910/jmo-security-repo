@@ -135,20 +135,20 @@ def _docstring_lines(tree: ast.AST) -> set[int]:
     return lines
 
 
-def _candidate_flags() -> list[tuple[str, int, str, str]]:
+def _candidate_flags(root: Path = SCRIPTS) -> list[tuple[str, int, str, str]]:
     """(path, line, flag, text) for every flag in an in-scope string literal.
 
     Uses `ast` rather than reading lines, so a comment cannot trip it - the
     same approach as `tests/cross_platform/test_encoding_drift_guard.py`.
     """
     found: list[tuple[str, int, str, str]] = []
-    for path in sorted(SCRIPTS.rglob("*.py")):
+    for path in sorted(root.rglob("*.py")):
         try:
             tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
         except SyntaxError:  # pragma: no cover - would fail elsewhere first
             continue
         docstrings = _docstring_lines(tree)
-        rel = path.relative_to(REPO_ROOT).as_posix()
+        rel = path.relative_to(root.parent).as_posix()
         for node in ast.walk(tree):
             if not (isinstance(node, ast.Constant) and isinstance(node.value, str)):
                 continue
@@ -170,17 +170,49 @@ def test_the_parser_capture_found_the_real_options():
         assert expected in options, f"{expected} missing from the captured parser"
 
 
-def test_the_extractor_found_strings_to_check():
+#: A module exercising every scope rule once: in scope only when a non-docstring
+#: string literal mentions jmo.
+_SCOPE_FIXTURE = '''\
+"""Module docstring: jmo scan --in-module-docstring."""
+# A comment: jmo scan --in-comment
+A = "run jmo scan --repo . --results-dir out"
+B = "curl --retry 3"
+
+
+def f():
+    """jmo report --in-function-docstring"""
+    return "jmo report --fail-on HIGH"
+'''
+
+#: Real, stable user-facing references the scope must reach, one per module
+#: that has them. `history_commands.py`'s is the hint #1137 was filed about.
+_LIVE_ANCHORS = {
+    ("scripts/cli/history_commands.py", "--results-dir"),
+    ("scripts/cli/diff_commands.py", "--scan"),
+    ("scripts/cli/wizard_generators.py", "--fail-on"),
+    ("scripts/cli/jmo.py", "--repos-dir"),
+}
+
+
+def test_the_extractor_found_strings_to_check(tmp_path):
     """Meta-guard: an extractor that silently finds nothing passes everything.
 
-    219 candidate tokens were measured when this was written; the floor is set
-    well below that so ordinary edits do not trip it, but a scope that collapses
-    to nothing does.
+    This was a floor (`>= 100` of the 219 tokens measured when written) until
+    v2.0.0 removed the `--profile-name` hints and the count fell to 92. A count
+    of this extractor has no authority to be derived from, so it is replaced by
+    two checks that do: exact extraction from a module built to exercise each
+    scope rule, and named references in the real tree.
     """
-    candidates = _candidate_flags()
+    root = tmp_path / "pkg"
+    root.mkdir()
+    (root / "mod.py").write_bytes(_SCOPE_FIXTURE.encode("utf-8"))
+    found = {(line, flag) for _, line, flag, _ in _candidate_flags(root)}
+    assert found == {(3, "--repo"), (3, "--results-dir"), (9, "--fail-on")}, found
 
-    assert len(candidates) >= 100, (
-        f"only {len(candidates)} flag references found in scripts/ - the "
+    live = {(rel, flag) for rel, _, flag, _ in _candidate_flags()}
+    missing = _LIVE_ANCHORS - live
+    assert not missing, (
+        f"the scope no longer reaches {sorted(missing)} in scripts/ - the "
         "extractor or the scope is broken, and every other assertion here is "
         "vacuous"
     )

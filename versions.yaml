@@ -1,11 +1,5 @@
 schema_version: '1.0'
 python_tools:
-  bandit:
-    version: 1.9.4
-    pypi_package: bandit
-    description: Python security linter
-    update_check: pip index versions bandit
-    critical: false
   semgrep:
     version: 1.175.0
     pypi_package: semgrep
@@ -24,51 +18,6 @@ python_tools:
     description: Python linter and formatter
     update_check: pip index versions ruff
     critical: false
-  scancode:
-    version: 32.5.0
-    pypi_package: scancode-toolkit
-    description: License and copyright scanner
-    update_check: pip index versions scancode-toolkit
-    critical: false
-    notes: v1.0.0 - License compliance (OSS/GPL/MIT/Apache)
-  cdxgen:
-    version: 12.0.0
-    # npm, not PyPI. PyPI has no scoped names, so `pypi_package:
-    # '@cyclonedx/cdxgen'` could never validate -- and it aborted every
-    # `jmo build` until #935. It lives in python_tools because that section is
-    # about how a tool is installed in this file's taxonomy, not about which
-    # registry publishes it; the validator now dispatches on the package field.
-    npm_package: '@cyclonedx/cdxgen'
-    description: Multi-language SBOM generator (CycloneDX/SPDX)
-    update_check: npm view @cyclonedx/cdxgen version
-    critical: false
-    notes: v1.0.0 - 30+ language support, npm package
-    installation: npm install -g @cyclonedx/cdxgen
-  lynis:
-    version: 3.1.3
-    pypi_package: null
-    description: System hardening and security auditing
-    update_check: gh api repos/CISOfy/lynis/releases/latest
-    github_repo: CISOfy/lynis
-    critical: false
-    notes: 'v1.0.0 - Shell script based, no PyPI package.
-
-      Installation method: git clone to ~/.jmo/bin/lynis/ at pinned version tag.
-
-      The lynis script at ~/.jmo/bin/lynis/lynis is detected for version check.
-
-      System apt-installed lynis may be older and will be shadowed.
-
-      '
-    installation: git clone (pinned version) or apt-get install lynis
-  prowler:
-    version: 5.40.0
-    pypi_package: prowler
-    description: Multi-cloud CSPM (AWS/Azure/GCP/K8s)
-    update_check: pip index versions prowler
-    critical: true
-    notes: v1.0.0 - 400+ security checks across compliance frameworks (pip package
-      since v4.x)
 binary_tools:
   trufflehog:
     version: 3.97.1
@@ -81,16 +30,6 @@ binary_tools:
     update_check: gh api repos/trufflesecurity/trufflehog/releases/latest
     critical: true
     brew_package: trufflehog
-  noseyparker:
-    version: 0.24.0
-    github_repo: praetorian-inc/noseyparker
-    description: Deep secrets scanner (optional, deep profile)
-    release_pattern: noseyparker-v{version}-{arch}-unknown-linux-musl.tar.gz
-    architectures:
-      amd64: x86_64
-      arm64: aarch64
-    update_check: gh api repos/praetorian-inc/noseyparker/releases/latest
-    critical: false
   syft:
     version: 1.51.1
     github_repo: anchore/syft
@@ -125,16 +64,6 @@ binary_tools:
     update_check: gh api repos/hadolint/hadolint/releases/latest
     critical: false
     brew_package: hadolint
-  falcoctl:
-    version: 0.13.0
-    github_repo: falcosecurity/falcoctl
-    description: Falco CLI for static analysis
-    release_pattern: falcoctl_{version}_linux_{arch}.tar.gz
-    architectures:
-      amd64: amd64
-      arm64: arm64
-    update_check: gh api repos/falcosecurity/falcoctl/releases/latest
-    critical: false
   shfmt:
     version: 3.14.0
     github_repo: mvdan/sh
@@ -157,17 +86,6 @@ binary_tools:
     critical: false
     brew_package: nuclei
     notes: 'Requires templates update: nuclei -update-templates'
-  kubescape:
-    version: 4.0.13
-    github_repo: kubescape/kubescape
-    description: Kubernetes security scanner (NSA/CISA hardening)
-    release_pattern: kubescape_{version}_linux_{arch}
-    architectures:
-      amd64: amd64
-      arm64: arm64
-    update_check: gh api repos/kubescape/kubescape/releases/latest
-    critical: true
-    notes: v1.0.0 - K8s hardening and compliance
   gosec:
     version: 2.29.0
     github_repo: securego/gosec
@@ -199,46 +117,6 @@ special_tools:
     update_check: gh api repos/zaproxy/zaproxy/releases/latest
     critical: true
     installation: tar.gz with Java dependency
-  afl++:
-    version: 4.35c
-    github_repo: AFLplusplus/AFLplusplus
-    description: Coverage-guided fuzzing (optional, deep profile)
-    release_pattern: v{version}.tar.gz
-    update_check: gh api repos/AFLplusplus/AFLplusplus/releases/latest
-    critical: false
-    installation: Source build required (manual)
-    notes: 'MANUAL INSTALLATION REQUIRED - must be built from source.
-
-      See docs/PROFILES_AND_TOOLS.md for installation guide.
-
-      '
-  mobsf:
-    version: 4.5.2
-    github_repo: MobSF/Mobile-Security-Framework-MobSF
-    description: Mobile Security Framework (Android/iOS SAST/DAST)
-    release_pattern: v{version}.tar.gz
-    update_check: gh api repos/MobSF/Mobile-Security-Framework-MobSF/releases/latest
-    critical: false
-    installation: Python package + Android SDK subset
-    docker_ready: false
-    notes: 'v1.0.0 - MANUAL INSTALLATION REQUIRED (complex Android SDK dependencies).
-      Docker support planned for v1.0.1. See docs/MANUAL_INSTALLATION.md for setup
-      guide.
-
-      '
-  akto:
-    version: mini-testing-1.53.7
-    github_repo: akto-api-security/akto
-    description: API Security testing (OWASP API Top 10)
-    release_pattern: v{version}.tar.gz
-    update_check: gh api repos/akto-api-security/akto/releases/latest
-    critical: false
-    notes: 'v1.0.0 - MANUAL INSTALLATION REQUIRED (requires separate Docker service).
-      Docker support planned for v1.0.1. See docs/MANUAL_INSTALLATION.md for setup
-      guide.
-
-      '
-    docker_ready: false
   yara:
     # Tracks the PyPI package, which is what JMo installs. It previously
     # tracked github_repo VirusTotal/yara as well - a different project with
@@ -262,26 +140,6 @@ special_tools:
       is a separate package from the VirusTotal/yara repo.
 
       '
-  dependency-check:
-    version: 12.1.0
-    github_repo: jeremylong/DependencyCheck
-    description: OWASP SCA for known vulnerabilities
-    release_pattern: dependency-check-{version}-release.zip
-    update_check: gh api repos/jeremylong/DependencyCheck/releases/latest
-    critical: false
-    installation: Java-based CLI
-    notes: v1.0.0 - OWASP NVD integration
-  horusec:
-    version: 2.8.0
-    github_repo: ZupIT/horusec
-    description: Multi-language SAST (18+ languages)
-    release_pattern: horusec_{version}_linux_{arch}.tar.gz
-    architectures:
-      amd64: amd64
-      arm64: arm64
-    update_check: gh api repos/ZupIT/horusec/releases/latest
-    critical: false
-    notes: v1.0.0 - Alternative SAST for broad language coverage
   opa:
     version: 1.20.1
     github_repo: open-policy-agent/opa
@@ -306,27 +164,12 @@ special_tools:
     brew_package: shellcheck
     apt_package: shellcheck
     notes: Bash/sh/ksh script security and best practices
-  falco:
-    version: 0.0.0
-    github_repo: falcosecurity/falco
-    description: Runtime security and threat detection (kernel module)
-    release_pattern: null
-    update_check: null
-    critical: false
-    installation: Manual - requires kernel module installation
-    notes: 'Falco requires kernel module or eBPF probe installation.
-
-      Not available via automatic installation.
-
-      See: https://falco.org/docs/getting-started/installation/
-
-      '
 docker_images:
   ubuntu:
     version: '24.04'
     registry: docker.io
     image: ubuntu
-    description: Base image for all four Dockerfiles (deep, balanced, slim, fast)
+    description: Base image for the Dockerfile
     update_check: docker pull ubuntu:24.04 && docker inspect ubuntu:24.04 | jq -r
       '.[0].Created'
 update_policies:
@@ -338,29 +181,16 @@ update_policies:
     - checkov
     - zap
     - syft
-    - prowler
-    - kubescape
     description: Critical tools must be updated within 7 days of new release
   non_critical_tools:
     tools:
-    - bandit
     - ruff
     - hadolint
     - shfmt
-    - falcoctl
-    - noseyparker
-    - aflplusplus
     - nuclei
     - gosec
     - grype
-    - scancode
-    - cdxgen
-    - lynis
-    - mobsf
-    - akto
     - yara
-    - dependency-check
-    - horusec
     description: Non-critical tools can be updated monthly
   automated_check_schedule: Weekly (Sunday 00:00 UTC)
   manual_review_schedule: First Monday of each month

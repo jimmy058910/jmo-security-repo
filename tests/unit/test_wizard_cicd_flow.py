@@ -238,8 +238,8 @@ def test_detect_images_handles_invalid_yaml(tmp_path):
 # ========== Category 3: User Prompting ==========
 
 
-def test_prompt_user_fast_profile_no_images():
-    """Test prompt_user with fast profile and no pipeline images."""
+def test_prompt_user_no_images():
+    """Test prompt_user with no pipeline images. There is no profile prompt."""
     flow = CICDFlow()
     flow.detected_targets = {
         "github_actions": [],
@@ -249,14 +249,15 @@ def test_prompt_user_fast_profile_no_images():
     }
 
     with (
-        patch.object(flow.prompter, "prompt_choice", return_value="fast"),
+        patch.object(flow.prompter, "prompt_choice") as mock_choice,
         patch.object(
             flow.prompter, "prompt_yes_no", side_effect=[True, True]
         ) as _mock_yes_no,
     ):
         options = flow.prompt_user()
 
-        assert options["profile"] == "fast"
+        mock_choice.assert_not_called()
+        assert "profile" not in options
         assert options["scan_files"] is True
         assert options["scan_images"] is False  # No images detected
         assert options["check_permissions"] is False  # No GitHub Actions
@@ -271,13 +272,9 @@ def test_prompt_user_with_pipeline_images():
         "pipeline_images": ["python:3.10", "postgres:14"],
     }
 
-    with (
-        patch.object(flow.prompter, "prompt_choice", return_value="balanced"),
-        patch.object(flow.prompter, "prompt_yes_no", side_effect=[True, True, True]),
-    ):
+    with patch.object(flow.prompter, "prompt_yes_no", side_effect=[True, True, True]):
         options = flow.prompt_user()
 
-        assert options["profile"] == "balanced"
         assert options["scan_images"] is True
 
 
@@ -289,10 +286,7 @@ def test_prompt_user_with_github_actions():
         "pipeline_images": [],
     }
 
-    with (
-        patch.object(flow.prompter, "prompt_choice", return_value="fast"),
-        patch.object(flow.prompter, "prompt_yes_no", side_effect=[True, True, True]),
-    ):
+    with patch.object(flow.prompter, "prompt_yes_no", side_effect=[True, True, True]):
         options = flow.prompt_user()
 
         assert options["check_permissions"] is True
@@ -388,20 +382,13 @@ def test_build_command_basic():
     flow = CICDFlow()
     targets = {"repos": [Path(".")], "pipeline_images": []}
     options = {
-        "profile": "fast",
         "scan_files": True,
         "scan_images": False,
     }
 
     cmd = flow.build_command(targets, options)
 
-    assert "jmo" in cmd
-    assert "ci" in cmd
-    assert "--profile-name" in cmd
-    assert "fast" in cmd
-    assert "--fail-on" in cmd
-    assert "HIGH" in cmd
-    assert "--repos-dir" in cmd
+    assert cmd == ["jmo", "ci", "--fail-on", "HIGH", "--repos-dir", "."]
 
 
 def test_build_command_with_images(tmp_path, monkeypatch):
@@ -414,7 +401,6 @@ def test_build_command_with_images(tmp_path, monkeypatch):
         "pipeline_images": ["python:3.10", "postgres:14"],
     }
     options = {
-        "profile": "balanced",
         "scan_files": False,
         "scan_images": True,
     }
@@ -432,7 +418,6 @@ def test_build_command_scan_files_no_repos():
     flow = CICDFlow()
     targets = {"repos": [], "pipeline_images": []}
     options = {
-        "profile": "fast",
         "scan_files": True,
         "scan_images": False,
     }
@@ -447,7 +432,6 @@ def test_build_command_scan_images_no_images():
     flow = CICDFlow()
     targets = {"repos": [], "pipeline_images": []}
     options = {
-        "profile": "fast",
         "scan_files": False,
         "scan_images": True,
     }

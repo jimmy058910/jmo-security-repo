@@ -1,7 +1,8 @@
 """Tests for tool_installer dependency auto-install functionality (Chunk 4).
 
-These tests verify that runtime dependencies (Java, Node.js) can be
-detected and installed via package managers.
+These tests verify that runtime dependencies can be detected and installed via
+package managers. Java, for zap, is the only one left: Node.js went with cdxgen
+in v2.0.0.
 
 CRITICAL: All subprocess calls are mocked - tests never actually install anything.
 """
@@ -27,15 +28,14 @@ from scripts.core.install_config import (
 class TestDependencyConstants:
     """Test that dependency constants are properly structured."""
 
-    def test_dependency_install_commands_has_java_and_node(self):
-        """Verify java and node are both configured."""
-        assert "java" in DEPENDENCY_INSTALL_COMMANDS
-        assert "node" in DEPENDENCY_INSTALL_COMMANDS
+    def test_java_is_the_only_dependency(self):
+        """Java (for zap) is the one runtime dependency JMo installs."""
+        assert set(DEPENDENCY_INSTALL_COMMANDS) == {"java"}
 
     def test_dependency_install_commands_has_all_platforms(self):
         """Verify all platforms are covered for each dependency."""
         platforms = ["windows", "linux", "macos"]
-        for dep in ["java", "node"]:
+        for dep in DEPENDENCY_INSTALL_COMMANDS:
             for platform in platforms:
                 assert platform in DEPENDENCY_INSTALL_COMMANDS[dep], (
                     f"{dep} missing {platform} platform configuration"
@@ -43,24 +43,20 @@ class TestDependencyConstants:
 
     def test_dependency_verify_commands_structure(self):
         """Verify verify commands exist for all dependencies."""
-        assert "java" in DEPENDENCY_VERIFY_COMMANDS
-        assert "node" in DEPENDENCY_VERIFY_COMMANDS
+        assert set(DEPENDENCY_VERIFY_COMMANDS) == set(DEPENDENCY_INSTALL_COMMANDS)
         # Verify they're lists of command args
-        assert isinstance(DEPENDENCY_VERIFY_COMMANDS["java"], list)
-        assert isinstance(DEPENDENCY_VERIFY_COMMANDS["node"], list)
+        for dep, command in DEPENDENCY_VERIFY_COMMANDS.items():
+            assert isinstance(command, list), dep
 
     def test_dependency_display_names(self):
         """Verify display names exist for all dependencies."""
-        assert "java" in DEPENDENCY_DISPLAY_NAMES
-        assert "node" in DEPENDENCY_DISPLAY_NAMES
+        assert set(DEPENDENCY_DISPLAY_NAMES) == set(DEPENDENCY_INSTALL_COMMANDS)
         assert "17" in DEPENDENCY_DISPLAY_NAMES["java"]  # Java 17+
-        assert "20" in DEPENDENCY_DISPLAY_NAMES["node"]  # Node.js 20+
 
     def test_dependency_manual_commands_structure(self):
         """Verify manual commands exist for fallback."""
-        assert "java" in DEPENDENCY_MANUAL_COMMANDS
-        assert "node" in DEPENDENCY_MANUAL_COMMANDS
-        for dep in ["java", "node"]:
+        assert set(DEPENDENCY_MANUAL_COMMANDS) == set(DEPENDENCY_INSTALL_COMMANDS)
+        for dep in DEPENDENCY_MANUAL_COMMANDS:
             for platform in ["windows", "linux", "macos"]:
                 assert platform in DEPENDENCY_MANUAL_COMMANDS[dep]
 
@@ -202,8 +198,11 @@ class TestInstallDependency:
         mock_available.return_value = True
         mock_run.return_value = MagicMock(returncode=0, stderr="")
 
-        install_dependency("node", "linux")
+        install_dependency("java", "linux")
 
+        # An unknown dependency returns before any subprocess call, which would
+        # leave the loop below nothing to check.
+        assert mock_run.call_args_list, "install_dependency ran no command"
         # Check all subprocess.run calls never use shell=True
         # Note: shell=False is the default, so kwargs may not contain 'shell' at all
         for call in mock_run.call_args_list:
@@ -222,9 +221,9 @@ class TestGetManualDependencyCommand:
         cmd = get_manual_dependency_command("java", "windows")
         assert "choco" in cmd or "winget" in cmd
 
-    def test_node_linux_command(self):
-        """Test Node.js manual command for Linux."""
-        cmd = get_manual_dependency_command("node", "linux")
+    def test_java_linux_command(self):
+        """Test Java manual command for Linux."""
+        cmd = get_manual_dependency_command("java", "linux")
         assert "apt" in cmd or "dnf" in cmd
 
     def test_java_macos_command(self):
@@ -259,54 +258,27 @@ class TestCollectMissingDependencies:
 
         fix_info = [
             {
-                "name": "dependency-check",
+                "name": "zap",
                 "missing_deps": ["java"],
             }
         ]
         result = _collect_missing_dependencies(fix_info)
         assert "java" in result
-        assert "dependency-check" in result["java"]
-
-    def test_collects_node_dependency(self):
-        """Test collection of Node.js dependency."""
-        from scripts.cli.wizard import _collect_missing_dependencies
-
-        fix_info = [
-            {
-                "name": "cdxgen",
-                "missing_deps": ["node"],
-            }
-        ]
-        result = _collect_missing_dependencies(fix_info)
-        assert "node" in result
-        assert "cdxgen" in result["node"]
-
-    def test_normalizes_node20_to_node(self):
-        """Test that node20 is normalized to node."""
-        from scripts.cli.wizard import _collect_missing_dependencies
-
-        fix_info = [
-            {
-                "name": "cdxgen",
-                "missing_deps": ["node20"],
-            }
-        ]
-        result = _collect_missing_dependencies(fix_info)
-        # node20 should be normalized to node
-        assert "node" in result
-        assert "node20" not in result
+        assert "zap" in result["java"]
 
     def test_multiple_tools_same_dependency(self):
         """Test multiple tools requiring same dependency."""
         from scripts.cli.wizard import _collect_missing_dependencies
 
+        # Only zap needs Java today; the collector groups whatever it is given,
+        # so a second tool name is enough to exercise the grouping.
         fix_info = [
-            {"name": "dependency-check", "missing_deps": ["java"]},
+            {"name": "trivy", "missing_deps": ["java"]},
             {"name": "zap", "missing_deps": ["java"]},
         ]
         result = _collect_missing_dependencies(fix_info)
         assert "java" in result
-        assert "dependency-check" in result["java"]
+        assert "trivy" in result["java"]
         assert "zap" in result["java"]
 
     def test_skips_tools_without_missing_deps(self):

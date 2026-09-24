@@ -17,8 +17,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import pytest
-
 from scripts.cli.jmo import build_parser
 from scripts.core.validators.cli_validator import (
     _FIXED_QUICK_COUNT,
@@ -109,15 +107,3 @@ def test_prose_sentence_matches_the_table():
     match = re.search(r"Runs (\d+) checks", section)
     assert match, "the jmo validate section no longer states a headline count"
     assert int(match.group(1)) == _doc_table()["Total"][0]
-
-
-@pytest.mark.parametrize("variant", ["fast", "slim", "balanced", "deep"])
-def test_build_help_tool_counts_match_profile_tools(variant):
-    """`jmo build --help` listed 8/14/18/28 tools; PROFILE_TOOLS has 9/13/17/28."""
-    from scripts.cli.tool_manager import PROFILE_TOOLS
-
-    top = build_parser()._subparsers._group_actions[0].choices
-    epilog = top["build"].description or ""
-    match = re.search(rf"^\s*{variant}\s+(\d+) tools", epilog, re.MULTILINE)
-    assert match, f"`jmo build --help` no longer lists a tool count for {variant}"
-    assert int(match.group(1)) == len(PROFILE_TOOLS[variant])

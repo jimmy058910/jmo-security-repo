@@ -65,7 +65,6 @@ def sample_database(tmp_path):
             is_dirty INTEGER DEFAULT 0,
             branch TEXT,
             tag TEXT,
-            profile TEXT NOT NULL,
             tools TEXT NOT NULL,
             critical_count INTEGER DEFAULT 0,
             high_count INTEGER DEFAULT 0,
@@ -105,7 +104,6 @@ def sample_database(tmp_path):
             "timestamp": base_time,
             "timestamp_iso": "2025-01-01T12:00:00Z",
             "branch": None,
-            "profile": "balanced",
             "tools": "trivy,semgrep",
             "critical_count": 10,
             "high_count": 20,
@@ -117,7 +115,6 @@ def sample_database(tmp_path):
             "timestamp": base_time + (86400 * 7),
             "timestamp_iso": "2025-01-08T12:00:00Z",
             "branch": None,
-            "profile": "balanced",
             "tools": "trivy,semgrep",
             "critical_count": 8,
             "high_count": 18,
@@ -129,7 +126,6 @@ def sample_database(tmp_path):
             "timestamp": base_time + (86400 * 14),
             "timestamp_iso": "2025-01-15T12:00:00Z",
             "branch": None,
-            "profile": "balanced",
             "tools": "trivy,semgrep",
             "critical_count": 6,
             "high_count": 16,
@@ -141,7 +137,6 @@ def sample_database(tmp_path):
             "timestamp": base_time + (86400 * 21),
             "timestamp_iso": "2025-01-22T12:00:00Z",
             "branch": "dev",
-            "profile": "balanced",
             "tools": "trivy,semgrep",
             "critical_count": 12,  # Regression!
             "high_count": 14,
@@ -153,7 +148,6 @@ def sample_database(tmp_path):
             "timestamp": base_time + (86400 * 28),
             "timestamp_iso": "2025-01-29T12:00:00Z",
             "branch": "dev",
-            "profile": "balanced",
             "tools": "trivy,semgrep",
             "critical_count": 4,
             "high_count": 12,
@@ -166,16 +160,15 @@ def sample_database(tmp_path):
         conn.execute(
             """
             INSERT INTO scans (
-                id, timestamp, timestamp_iso, branch, profile, tools,
+                id, timestamp, timestamp_iso, branch, tools,
                 critical_count, high_count, medium_count, total_findings
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 scan["id"],
                 scan["timestamp"],
                 scan["timestamp_iso"],
                 scan["branch"],
-                scan["profile"],
                 scan["tools"],
                 scan["critical_count"],
                 scan["high_count"],
@@ -935,7 +928,9 @@ class TestCmdTrendsDevelopers:
             top = 10
             repo = str(non_repo)
             team_file = None
-            db = None
+            # Never None: that would fall back to the cwd's .jmo/history.db,
+            # the live database, if the repo check ever moved after the read.
+            db = str(tmp_path / "unused.db")
 
         result = cmd_trends_developers(Args())
 

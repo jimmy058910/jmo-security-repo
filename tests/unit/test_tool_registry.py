@@ -2,11 +2,11 @@
 """Tests for scripts/core/tool_registry.py module.
 
 This test suite validates the ToolRegistry class and related utilities:
-1. ToolInfo dataclass behavior
-2. ToolRegistry initialization and loading
-3. Profile-to-tool mappings
+1. TOOL_MATRIX, POLICY_ENGINE and the tables keyed by tool name
+2. ToolInfo dataclass behavior
+3. ToolRegistry initialization and loading
 4. Platform detection and install hints
-5. Variant handling for tools sharing binaries
+5. Every tool JMo installs has an install route on Linux, macOS and Windows
 
 Target Coverage: >= 85%
 """
@@ -17,53 +17,48 @@ from unittest.mock import patch
 
 import pytest
 
-# ========== Category 1: Constants and Profile Mappings ==========
+from scripts.core.tool_registry import POLICY_ENGINE, TOOL_MATRIX
+
+# ========== Category 1: The tool matrix and name-keyed tables ==========
+
+V2_PHASE_2_MATRIX = {
+    "trufflehog",
+    "semgrep",
+    "syft",
+    "trivy",
+    "checkov",
+    "hadolint",
+    "shellcheck",
+    "gosec",
+    "yara",
+    "grype",
+    "zap",
+    "nuclei",
+}
 
 
-def test_profile_tools_contains_expected_profiles():
-    """Test PROFILE_TOOLS has all expected profile names."""
-    from scripts.core.tool_registry import PROFILE_TOOLS
-
-    expected_profiles = {"fast", "slim", "balanced", "deep"}
-    assert set(PROFILE_TOOLS.keys()) == expected_profiles
+def test_tool_matrix_is_the_phase_2_set():
+    """TOOL_MATRIX is the v2.0.0 Phase 2 scanner set, with no duplicates."""
+    assert set(TOOL_MATRIX) == V2_PHASE_2_MATRIX
+    assert len(TOOL_MATRIX) == len(set(TOOL_MATRIX))
 
 
-def test_profile_tools_fast_count():
-    """Test fast profile has expected number of tools."""
-    from scripts.core.tool_registry import PROFILE_TOOLS
+def test_the_policy_engine_is_not_a_scanner():
+    """opa is installed alongside the matrix but scans no target type."""
+    from scripts.core.tool_registry import TOOL_SCAN_TYPES
 
-    # Fast profile: 8 core tools + OPA for policy-as-code = 9 tools
-    assert len(PROFILE_TOOLS["fast"]) == 9
-
-
-def test_profile_tools_deep_count():
-    """Test deep profile has expected number of tools."""
-    from scripts.core.tool_registry import PROFILE_TOOLS
-
-    # Deep profile: 28 security tools + OPA for policy-as-code = 29 tools.
-    # 28 -> 29 in #795: shellcheck was in fast/slim/balanced but not deep,
-    # so the most comprehensive profile was not a superset of the others.
-    assert len(PROFILE_TOOLS["deep"]) == 29
+    assert POLICY_ENGINE == "opa"
+    assert POLICY_ENGINE not in TOOL_MATRIX
+    assert POLICY_ENGINE not in TOOL_SCAN_TYPES["repo"]
+    assert [t for t, tools in TOOL_SCAN_TYPES.items() if POLICY_ENGINE in tools] == []
 
 
 def test_tool_binary_names_mapping():
-    """Test TOOL_BINARY_NAMES contains key mappings."""
+    """TOOL_BINARY_NAMES maps a tool to its binary where the two differ."""
     from scripts.core.tool_registry import TOOL_BINARY_NAMES
 
-    # Some tools have different binary names
-    assert TOOL_BINARY_NAMES.get("dependency-check") == "dependency-check.sh"
-    assert TOOL_BINARY_NAMES.get("afl++") == "afl-fuzz"
-    assert TOOL_BINARY_NAMES.get("semgrep-secrets") == "semgrep"
-
-
-def test_tool_variants_mapping():
-    """Test TOOL_VARIANTS identifies variant tools."""
-    from scripts.core.tool_registry import TOOL_VARIANTS
-
-    # Variants share the same binary as their base tool
-    assert TOOL_VARIANTS["semgrep-secrets"] == "semgrep"
-    assert TOOL_VARIANTS["trivy-rbac"] == "trivy"
-    assert TOOL_VARIANTS["checkov-cicd"] == "checkov"
+    # zap ships a launcher script, not a `zap` binary
+    assert TOOL_BINARY_NAMES.get("zap") == "zap.sh"
 
 
 def test_tool_execution_commands():
@@ -72,8 +67,8 @@ def test_tool_execution_commands():
 
     assert "zap" in TOOL_EXECUTION_COMMANDS
     assert "zap.sh" in TOOL_EXECUTION_COMMANDS["zap"]
-    assert "cdxgen" in TOOL_EXECUTION_COMMANDS
-    assert "node" in TOOL_EXECUTION_COMMANDS["cdxgen"]
+    # Java is the one runtime dependency left, and zap is the tool that needs it
+    assert "java" in TOOL_EXECUTION_COMMANDS["zap"]
 
 
 # ========== Category 2: ToolInfo Dataclass ==========
@@ -157,59 +152,15 @@ def test_toolinfo_get_binary_name_from_mapping():
     """Test get_binary_name uses TOOL_BINARY_NAMES mapping."""
     from scripts.core.tool_registry import ToolInfo
 
-    # afl++ has a binary name mapping to afl-fuzz
+    # zap has a binary name mapping to its zap.sh launcher
     tool = ToolInfo(
-        name="afl++",
-        version="4.0.0",
-        description="AFL++ fuzzer",
-        category="binary_tools",
+        name="zap",
+        version="2.16.1",
+        description="OWASP ZAP",
+        category="special_tools",
     )
 
-    assert tool.get_binary_name() == "afl-fuzz"
-
-
-def test_toolinfo_is_variant():
-    """Test is_variant correctly identifies variant tools."""
-    from scripts.core.tool_registry import ToolInfo
-
-    # semgrep-secrets is a variant of semgrep
-    variant_tool = ToolInfo(
-        name="semgrep-secrets",
-        version="1.0.0",
-        description="Semgrep secrets",
-        category="binary_tools",
-    )
-    assert variant_tool.is_variant() is True
-
-    # Regular tool is not a variant
-    regular_tool = ToolInfo(
-        name="trivy",
-        version="0.50.0",
-        description="Trivy",
-        category="binary_tools",
-    )
-    assert regular_tool.is_variant() is False
-
-
-def test_toolinfo_get_base_tool():
-    """Test get_base_tool returns correct base for variants."""
-    from scripts.core.tool_registry import ToolInfo
-
-    variant = ToolInfo(
-        name="trivy-rbac",
-        version="0.50.0",
-        description="Trivy RBAC",
-        category="binary_tools",
-    )
-    assert variant.get_base_tool() == "trivy"
-
-    regular = ToolInfo(
-        name="nuclei",
-        version="3.0.0",
-        description="Nuclei",
-        category="binary_tools",
-    )
-    assert regular.get_base_tool() == "nuclei"
+    assert tool.get_binary_name() == "zap.sh"
 
 
 # ========== Category 3: ToolRegistry ==========
@@ -233,11 +184,11 @@ def test_toolregistry_init_custom_path(tmp_path):
     versions_file.write_text(
         """
 python_tools:
-  bandit:
-    version: "1.7.5"
-    description: "Python security linter"
+  semgrep:
+    version: "1.50.0"
+    description: "Static analyzer"
     critical: true
-    pypi_package: bandit
+    pypi_package: semgrep
 
 binary_tools:
   trivy:
@@ -251,10 +202,9 @@ binary_tools:
     registry = ToolRegistry(versions_path=versions_file)
     tools = registry.get_all_tools()
 
-    # Should have loaded 2 base tools + virtual tools
+    # Exactly the two tools the file declares
     tool_names = [t.name for t in tools]
-    assert "bandit" in tool_names
-    assert "trivy" in tool_names
+    assert sorted(tool_names) == ["semgrep", "trivy"]
 
 
 def test_toolregistry_get_tool():
@@ -272,32 +222,6 @@ def test_toolregistry_get_tool():
     assert registry.get_tool("nonexistent-tool") is None
 
 
-def test_toolregistry_get_tools_for_profile():
-    """Test ToolRegistry.get_tools_for_profile returns correct tools."""
-    from scripts.core.tool_registry import PROFILE_TOOLS, ToolRegistry
-
-    registry = ToolRegistry()
-
-    fast_tools = registry.get_tools_for_profile("fast")
-    expected_count = len(PROFILE_TOOLS["fast"])
-    assert len(fast_tools) == expected_count
-
-    # Verify all returned tools have valid names
-    for tool in fast_tools:
-        assert tool.name in PROFILE_TOOLS["fast"]
-
-
-def test_toolregistry_get_tools_for_invalid_profile():
-    """Test ToolRegistry.get_tools_for_profile with invalid profile."""
-    from scripts.core.tool_registry import ToolRegistry
-
-    registry = ToolRegistry()
-
-    # Invalid profile returns empty list
-    tools = registry.get_tools_for_profile("nonexistent")
-    assert tools == []
-
-
 def test_toolregistry_get_critical_tools():
     """Test ToolRegistry.get_critical_tools returns critical tools."""
     from scripts.core.tool_registry import ToolRegistry
@@ -310,40 +234,18 @@ def test_toolregistry_get_critical_tools():
         assert tool.critical is True
 
 
-def test_toolregistry_get_all_tools():
-    """Test ToolRegistry.get_all_tools returns all registered tools."""
+def test_toolregistry_registers_every_tool_jmo_installs():
+    """Every TOOL_MATRIX tool and the policy engine is in the real registry.
+
+    `jmo tools install` reads each tool's version and package from the
+    registry and answers "Unknown tool" for anything missing, so this is the
+    set that has to be there -- derived from TOOL_MATRIX, not a count.
+    """
     from scripts.core.tool_registry import ToolRegistry
 
-    registry = ToolRegistry()
-    tools = registry.get_all_tools()
+    registered = {t.name for t in ToolRegistry().get_all_tools()}
 
-    # Should have a reasonable number of tools
-    assert len(tools) >= 10  # At least 10 tools in registry
-
-
-def test_toolregistry_get_profile_names():
-    """Test ToolRegistry.get_profile_names returns profile list."""
-    from scripts.core.tool_registry import ToolRegistry
-
-    registry = ToolRegistry()
-    profiles = registry.get_profile_names()
-
-    assert "fast" in profiles
-    assert "slim" in profiles
-    assert "balanced" in profiles
-    assert "deep" in profiles
-
-
-def test_toolregistry_get_profile_tool_count():
-    """Test ToolRegistry.get_profile_tool_count returns correct counts."""
-    from scripts.core.tool_registry import PROFILE_TOOLS, ToolRegistry
-
-    registry = ToolRegistry()
-
-    for profile in PROFILE_TOOLS:
-        count = registry.get_profile_tool_count(profile)
-        expected = len(PROFILE_TOOLS[profile])
-        assert count == expected, f"Profile {profile} count mismatch"
+    assert sorted({*TOOL_MATRIX, POLICY_ENGINE} - registered) == []
 
 
 def test_toolregistry_handles_missing_versions_file():
@@ -352,31 +254,6 @@ def test_toolregistry_handles_missing_versions_file():
 
     with pytest.raises(FileNotFoundError):
         ToolRegistry(versions_path=Path("/nonexistent/versions.yaml"))
-
-
-def test_toolregistry_adds_virtual_tools(tmp_path):
-    """Test ToolRegistry adds virtual tools (variants)."""
-    from scripts.core.tool_registry import ToolRegistry
-
-    versions_file = tmp_path / "versions.yaml"
-    versions_file.write_text(
-        """
-binary_tools:
-  semgrep:
-    version: "1.50.0"
-    description: "Semgrep static analyzer"
-    github_repo: returntocorp/semgrep
-""",
-        encoding="utf-8",
-    )
-
-    registry = ToolRegistry(versions_path=versions_file)
-
-    # Should have base tool and its variant
-    assert registry.get_tool("semgrep") is not None
-    semgrep_secrets = registry.get_tool("semgrep-secrets")
-    assert semgrep_secrets is not None
-    assert semgrep_secrets.description == "Semgrep with secrets configuration"
 
 
 # ========== Category 4: Platform Detection ==========
@@ -409,8 +286,8 @@ def test_detect_platform_windows():
 # ========== Category 5: Install Hints ==========
 
 
-def test_get_install_hint_macos_brew():
-    """Test get_install_hint returns brew install for macOS."""
+def test_get_install_hint_macos_leads_with_jmo_tools_install():
+    """macOS gets the pinned `jmo tools install`, never an unpinned brew install."""
     from scripts.core.tool_registry import ToolInfo, get_install_hint
 
     tool = ToolInfo(
@@ -418,11 +295,11 @@ def test_get_install_hint_macos_brew():
         version="0.50.0",
         description="Trivy",
         category="binary_tools",
-        brew_package="trivy",
     )
 
     hint = get_install_hint(tool, platform="macos")
-    assert "brew install trivy" in hint
+    assert hint.startswith("jmo tools install trivy")
+    assert "brew" not in hint
 
 
 def test_get_install_hint_macos_pip():
@@ -430,15 +307,15 @@ def test_get_install_hint_macos_pip():
     from scripts.core.tool_registry import ToolInfo, get_install_hint
 
     tool = ToolInfo(
-        name="bandit",
-        version="1.7.5",
-        description="Bandit",
+        name="semgrep",
+        version="1.50.0",
+        description="Semgrep",
         category="python_tools",
-        pypi_package="bandit",
+        pypi_package="semgrep",
     )
 
     hint = get_install_hint(tool, platform="macos")
-    assert "pip install bandit" in hint
+    assert "pip install semgrep" in hint
 
 
 def test_get_install_hint_linux_apt():
@@ -478,35 +355,19 @@ def test_get_install_hint_windows():
     from scripts.core.tool_registry import ToolInfo, get_install_hint
 
     tool = ToolInfo(
-        name="bandit",
-        version="1.7.5",
-        description="Bandit",
+        name="semgrep",
+        version="1.50.0",
+        description="Semgrep",
         category="python_tools",
-        pypi_package="bandit",
+        pypi_package="semgrep",
     )
 
     hint = get_install_hint(tool, platform="windows")
-    assert "pip install bandit" in hint
+    assert "pip install semgrep" in hint
 
 
-def test_get_install_hint_npm_package():
-    """Test get_install_hint returns npm install for npm packages."""
-    from scripts.core.tool_registry import ToolInfo, get_install_hint
-
-    tool = ToolInfo(
-        name="cdxgen",
-        version="10.0.0",
-        description="CycloneDX generator",
-        category="binary_tools",
-        npm_package="@cyclonedx/cdxgen",
-    )
-
-    hint = get_install_hint(tool, platform="linux")
-    assert "npm install -g @cyclonedx/cdxgen" in hint
-
-
-def test_get_install_hint_github_repo_fallback():
-    """Test get_install_hint falls back to GitHub repo link."""
+def test_get_install_hint_without_a_package_names_jmo_tools_install():
+    """A tool with no pip or apt package still gets a runnable hint."""
     from scripts.core.tool_registry import ToolInfo, get_install_hint
 
     tool = ToolInfo(
@@ -517,8 +378,7 @@ def test_get_install_hint_github_repo_fallback():
         github_repo="org/custom-tool",
     )
 
-    hint = get_install_hint(tool, platform="linux")
-    assert "https://github.com/org/custom-tool" in hint
+    assert get_install_hint(tool, platform="linux") == "jmo tools install custom-tool"
 
 
 def test_get_install_hint_with_notes():
@@ -542,11 +402,11 @@ def test_get_install_hint_auto_detect_platform():
     from scripts.core.tool_registry import ToolInfo, get_install_hint
 
     tool = ToolInfo(
-        name="bandit",
-        version="1.7.5",
-        description="Bandit",
+        name="semgrep",
+        version="1.50.0",
+        description="Semgrep",
         category="python_tools",
-        pypi_package="bandit",
+        pypi_package="semgrep",
     )
 
     # Should not raise, should auto-detect platform. Assert the hint carries a
@@ -554,7 +414,7 @@ def test_get_install_hint_auto_detect_platform():
     # string, including one that had lost the package name entirely, which is
     # the only part of the hint a user actually needs.
     hint = get_install_hint(tool)
-    assert "pip install bandit" in hint
+    assert "pip install semgrep" in hint
 
 
 # ========== Category 6: Edge Cases ==========
@@ -633,25 +493,92 @@ binary_tools:
     assert "invalid_tool" not in tool_names
 
 
-def test_toolregistry_parses_npm_from_pypi_field(tmp_path):
-    """Test ToolRegistry parses npm packages from @ prefixed pypi_package."""
-    from scripts.core.tool_registry import ToolRegistry
+# ========== Category 7: An install route on every platform ==========
+#
+# v2.0.0 removed platform gating: every tool `jmo tools install` installs must
+# install on Linux, macOS and Windows. (This replaces the shellcheck-on-Windows
+# case that lived in the deleted test_scancode_windows_entry_point.py: the
+# platform table once said shellcheck had no Windows build while BINARY_URLS
+# carried one.)
+#
+# The route is read off the installer's OWN dispatch rather than a restatement
+# of it: ToolInstaller.install_tool runs for real, with each install handler
+# swapped for a recorder. binary and extract_app downloads run their real URL
+# resolution (the platform key, then "default") and are recorded at
+# _get_download_command, so a URL table the installer cannot key for a platform
+# records nothing.
 
-    versions_file = tmp_path / "versions.yaml"
-    versions_file.write_text(
-        """
-binary_tools:
-  cdxgen:
-    version: "10.0.0"
-    description: "CycloneDX generator"
-    pypi_package: "@cyclonedx/cdxgen"
-""",
-        encoding="utf-8",
+_PLATFORMS = ("linux", "macos", "windows")
+
+
+def _install_routes(tool: str, platform: str, monkeypatch, tmp_path) -> list[str]:
+    """Drive `install_tool(tool)` as if on `platform`; return every route reached.
+
+    A route is a handler that would perform the install: pip, apt, an official
+    install script, the isolated venv, or a download whose URL the installer
+    resolved for `platform`. Every recorder reports failure, so install_tool
+    walks its whole priority list and nothing is installed.
+    """
+    from scripts.cli.installers.models import InstallResult
+    from scripts.cli.tool_installer import ToolInstaller
+
+    installer = ToolInstaller(install_dir=tmp_path / "bin")
+    installer.platform = platform
+    routes: list[str] = []
+
+    def recorder(route: str):
+        def handler(tool_name, *_args, **_kwargs):
+            routes.append(route)
+            return InstallResult(
+                tool_name=tool_name,
+                success=False,
+                method=route,
+                message=f"{route} recorded",
+            )
+
+        return handler
+
+    def download(url, _output_path):
+        routes.append(f"download {url}")
+        return None  # "no curl or wget": the handler stops before any network I/O
+
+    monkeypatch.setattr(installer, "_isolated_pip_install", recorder("isolated_venv"))
+    monkeypatch.setattr(installer, "_install_pip", recorder("pip"))
+    monkeypatch.setattr(installer, "_install_apt", recorder("apt"))
+    monkeypatch.setattr(installer, "_install_via_script", recorder("install_script"))
+    monkeypatch.setattr(installer, "_get_download_command", download)
+    monkeypatch.setattr(installer, "_get_arch", lambda: "x86_64")
+
+    result = installer.install_tool(tool, force=True)
+    assert result.success is False  # every handler was a recorder
+    return routes
+
+
+@pytest.mark.parametrize("platform", _PLATFORMS)
+@pytest.mark.parametrize("tool", [*TOOL_MATRIX, POLICY_ENGINE])
+def test_every_installed_tool_has_an_install_route_on_every_platform(
+    tool, platform, monkeypatch, tmp_path
+):
+    routes = _install_routes(tool, platform, monkeypatch, tmp_path)
+
+    assert routes, f"jmo tools install {tool} has no install route on {platform}"
+
+
+def test_a_binary_url_the_installer_cannot_key_leaves_no_route(monkeypatch, tmp_path):
+    """Negative control: the route check fails when a platform loses its URL.
+
+    hadolint installs only by binary download. With its "default" template
+    dropped, the installer has nothing to key Linux or macOS on, so both must
+    come back with no route while Windows keeps its own asset.
+    """
+    from scripts.core.install_config import BINARY_URLS
+
+    monkeypatch.setitem(
+        BINARY_URLS, "hadolint", {"windows": BINARY_URLS["hadolint"]["windows"]}
     )
 
-    registry = ToolRegistry(versions_path=versions_file)
-    tool = registry.get_tool("cdxgen")
-
-    assert tool is not None
-    assert tool.npm_package == "@cyclonedx/cdxgen"
-    assert tool.pypi_package is None
+    assert _install_routes("hadolint", "linux", monkeypatch, tmp_path) == []
+    assert _install_routes("hadolint", "macos", monkeypatch, tmp_path) == []
+    windows = _install_routes("hadolint", "windows", monkeypatch, tmp_path)
+    assert len(windows) == 1
+    assert windows[0].endswith("/hadolint-Windows-x86_64.exe")

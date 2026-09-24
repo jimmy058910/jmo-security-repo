@@ -82,7 +82,6 @@ class TestPlatformInfo:
             arch_amd="amd64",
             arch_aarch="x86_64",
             trivy_arch="64bit",
-            rust_arch="x86_64-unknown-linux-gnu",
             platform_key="linux",
         )
         with pytest.raises(AttributeError):
@@ -97,7 +96,6 @@ class TestPlatformInfo:
             arch_amd="arm64",
             arch_aarch="aarch64",
             trivy_arch="ARM64",
-            rust_arch="aarch64-apple-darwin",
             platform_key="macos",
         )
         assert info.os_name == "Darwin"
@@ -135,7 +133,6 @@ class TestGetPlatformInfo:
         assert info.arch_amd == "amd64"
         assert info.trivy_arch == "64bit"
         assert info.platform_key == "linux"
-        assert "linux-gnu" in info.rust_arch
         get_platform_info.cache_clear()
 
     @patch(
@@ -154,7 +151,6 @@ class TestGetPlatformInfo:
         assert info.arch_aarch == "aarch64"
         assert info.trivy_arch == "ARM64"
         assert info.platform_key == "macos"
-        assert "apple-darwin" in info.rust_arch
         get_platform_info.cache_clear()
 
     @patch(
@@ -170,7 +166,6 @@ class TestGetPlatformInfo:
         info = get_platform_info()
         assert info.arch == "x86_64"  # Normalized from AMD64
         assert info.platform_key == "windows"
-        assert "windows-msvc" in info.rust_arch
         get_platform_info.cache_clear()
 
     @patch(
@@ -510,7 +505,6 @@ class TestGetDestinationPath:
             arch_amd="amd64",
             arch_aarch="x86_64",
             trivy_arch="64bit",
-            rust_arch="x86_64-unknown-linux-gnu",
             platform_key="linux",
         )
         dest = installer._get_destination_path("trivy", "http://example.com/trivy")
@@ -526,7 +520,6 @@ class TestGetDestinationPath:
             arch_amd="amd64",
             arch_aarch="x86_64",
             trivy_arch="64bit",
-            rust_arch="x86_64-pc-windows-msvc",
             platform_key="windows",
         )
         dest = installer._get_destination_path("trivy", "http://example.com/trivy.exe")
@@ -541,8 +534,8 @@ class TestGetDestinationPath:
         it restated the implementation's condition rather than any requirement,
         and it defended a real defect.
 
-        Measured consequence. `~/.jmo/bin/` after `jmo tools install --profile
-        fast` on Windows:
+        Measured consequence. `~/.jmo/bin/` after a `jmo tools install` on
+        Windows:
 
             hadolint.exe, opa.exe          <- URL ended in .exe
             nuclei, shellcheck, syft,      <- extracted from an archive
@@ -567,7 +560,6 @@ class TestGetDestinationPath:
             arch_amd="amd64",
             arch_aarch="x86_64",
             trivy_arch="64bit",
-            rust_arch="x86_64-pc-windows-msvc",
             platform_key="windows",
         )
         dest = installer._get_destination_path(
@@ -585,7 +577,6 @@ class TestGetDestinationPath:
             arch_amd="amd64",
             arch_aarch="x86_64",
             trivy_arch="64bit",
-            rust_arch="x86_64-pc-windows-msvc",
             platform_key="windows",
         )
         dest = installer._get_destination_path(
@@ -739,7 +730,6 @@ class TestSafeTempdir:
             arch_amd="amd64",
             arch_aarch="x86_64",
             trivy_arch="64bit",
-            rust_arch="x86_64-unknown-linux-gnu",
             platform_key="linux",
         )
         # _safe_cleanup_tempdir should return immediately on non-Windows

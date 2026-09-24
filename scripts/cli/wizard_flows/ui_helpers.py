@@ -6,6 +6,9 @@ Contains:
 - prompt_text(): Simple text input prompt
 - prompt_choice(): Numbered choice selection prompt
 - select_mode(): Helper for mode selection with consistent formatting
+- WIZARD_TOTAL_STEPS, DIFF_WIZARD_TOTAL_STEPS: "Step X/Y" denominators
+- TOOL_TIME_ESTIMATES, calculate_time_estimate(), format_time_range():
+  the scan-time estimate shown before a scan starts
 
 These functions complement PromptHelper from base_flow.py, providing
 simpler input primitives. They depend only on base_flow.PromptHelper
@@ -23,6 +26,35 @@ from scripts.core.unicode_utils import safe_print as safe_print
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+# Wizard step configuration - ensures consistent "Step X/Y" display
+WIZARD_TOTAL_STEPS = (
+    6  # Execution, Target Type, Target Config, Advanced, Review, Execute
+)
+DIFF_WIZARD_TOTAL_STEPS = 5  # Mode, Directories, Filters, Format, Execute
+
+# Empirical per-tool timing estimates in seconds (Fix 2.2 - Issue #10), one per
+# TOOL_MATRIX scanner. Based on actual runs against medium-sized repos
+# (~10k-50k LOC).
+TOOL_TIME_ESTIMATES: dict[str, int] = {
+    # Fast tools (< 30s)
+    "trufflehog": 15,
+    "semgrep": 25,
+    "hadolint": 5,
+    "shellcheck": 10,
+    # Medium tools (30s - 2min)
+    "trivy": 45,
+    "grype": 40,
+    "syft": 30,
+    "checkov": 60,
+    "nuclei": 90,
+    "gosec": 45,
+    "yara": 45,
+    # Slow tools (2min+)
+    "zap": 300,  # 5 min for DAST baseline
+    # Default for unknown tools
+    "_default": 60,
+}
 
 # Import colorize from PromptHelper lazily to avoid import cycles at module load
 _colorize: Callable[[str, str], str] | None = None
@@ -130,3 +162,48 @@ def select_mode(title: str, modes: list[tuple[str, str]], default: str = "") -> 
     """
     # prompt_choice handles the display and input
     return prompt_choice(f"{title}:", modes, default=default)
+
+
+def calculate_time_estimate(available_tools: list[str]) -> tuple[int, int]:
+    """Calculate dynamic time estimate based on available tools.
+
+    Uses TOOL_TIME_ESTIMATES with parallelization factor for best-case
+    and retry buffer for worst-case estimates.
+
+    Args:
+        available_tools: List of tool names that will actually run
+
+    Returns:
+        Tuple of (min_seconds, max_seconds) estimate
+    """
+    total = 0
+    for tool in available_tools:
+        total += TOOL_TIME_ESTIMATES.get(tool, TOOL_TIME_ESTIMATES["_default"])
+
+    # Add buffer for overhead (parallel execution reduces time, but overhead adds)
+    min_time = int(total * 0.6)  # Best case with parallelization
+    max_time = int(total * 1.2)  # Worst case with retries
+
+    return min_time, max_time
+
+
+def format_time_range(min_sec: int, max_sec: int) -> str:
+    """Format time range as human-readable string.
+
+    Args:
+        min_sec: Minimum time in seconds
+        max_sec: Maximum time in seconds
+
+    Returns:
+        Human-readable time range (e.g., "4 min - 7 min")
+    """
+
+    def fmt(s: int) -> str:
+        if s < 60:
+            return f"{s}s"
+        elif s < 3600:
+            return f"{s // 60} min"
+        else:
+            return f"{s // 3600}h {(s % 3600) // 60}m"
+
+    return f"{fmt(min_sec)} - {fmt(max_sec)}"

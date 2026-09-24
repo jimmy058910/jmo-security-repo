@@ -3,13 +3,8 @@ from pathlib import Path
 
 from scripts.cli import jmo
 
-
-def test_effective_scan_settings_merge(tmp_path: Path, monkeypatch):
-    # Create config with defaults and a profile override
-    cfg = tmp_path / "jmo.yml"
-    cfg.write_text(
-        """
-tools: [gitleaks, trufflehog]
+_TOP_LEVEL_CFG = """
+tools: [trufflehog, trivy]
 threads: 3
 timeout: 111
 include: [app-*]
@@ -19,43 +14,34 @@ retries: 2
 per_tool:
   trivy:
     flags: ["--offline-scan"]
-profiles:
-  fast:
-    tools: [semgrep]
-    threads: 1
-    retries: 0
-    include: [app-1]
-    per_tool:
-      semgrep:
-        flags: ["--severity", "ERROR"]
-default_profile: fast
-        """,
-        encoding="utf-8",
-    )
+"""
+
+
+def test_effective_scan_settings_merge(tmp_path: Path, monkeypatch):
+    """Two layers (v2.0.0, no profiles): jmo.yml's top level, then the CLI."""
+    cfg = tmp_path / "jmo.yml"
+    cfg.write_bytes(_TOP_LEVEL_CFG.encode("utf-8"))
     args = types.SimpleNamespace(
-        config=str(cfg), profile_name=None, tools=None, threads=None, timeout=None
+        config=str(cfg), tools=None, threads=None, timeout=None
     )
     eff = jmo._effective_scan_settings(args)
-    # The profile declares `tools: [semgrep]`, and that is what it gets.
-    #
-    # This assertion used to read `eff["tools"] == PROFILE_TOOLS["fast"]`, with
-    # a comment saying tool lists come from the registry "NOT from jmo.yml
-    # profiles section". That described #975 rather than a contract: a
-    # documented, user-facing key was being ignored, and the test pinned the
-    # ignoring as though it were intended. `profiles:` is documented in
-    # CLAUDE.md's config table as "custom profile definitions with tool lists",
-    # and now is one.
-    #
-    # PROFILE_TOOLS remains the single source of truth for the BUILT-IN
-    # profiles -- a profile block with no `tools:` key still resolves from it,
-    # which `test_the_builtin_profile_still_applies_without_a_tools_key` in
-    # tests/unit/test_config_precedence.py pins.
+    # Every top-level scan setting arrives as written.
+    assert eff["tools"] == ["trufflehog", "trivy"]
+    assert eff["threads"] == 3
+    assert eff["timeout"] == 111
+    assert eff["retries"] == 2
+    assert eff["include"] == ["app-*"]
+    assert eff["exclude"] == ["test-*"]
+    assert eff["per_tool"] == {"trivy": {"flags": ["--offline-scan"]}}
+
+    # And each CLI flag outranks the value it shadows.
+    args = types.SimpleNamespace(
+        config=str(cfg), tools=["semgrep"], threads=1, timeout=5
+    )
+    eff = jmo._effective_scan_settings(args)
     assert eff["tools"] == ["semgrep"]
     assert eff["threads"] == 1
-    assert eff["timeout"] == 111  # inherited from base config
-    assert eff["retries"] == 0
-    assert eff["include"] == ["app-1"]
-    assert isinstance(eff["per_tool"], dict) and "semgrep" in eff["per_tool"]
+    assert eff["timeout"] == 5
 
 
 def test_log_json_and_human(capsys):
@@ -75,11 +61,10 @@ def test_log_json_and_human(capsys):
 def _skip_tools_args(tmp_path: Path, **overrides):
     """A namespace with NO `log_level`, so the default floor is what is tested."""
     cfg = tmp_path / "jmo.yml"
-    cfg.write_text("tools: [bandit]\n", encoding="utf-8")
+    cfg.write_text("tools: [trufflehog]\n", encoding="utf-8")
     base = {
         "config": str(cfg),
-        "profile_name": None,
-        "tools": ["bandit", "semgrep"],
+        "tools": ["trufflehog", "semgrep"],
         "threads": None,
         "timeout": None,
         "skip_tools": ["semgrep"],
@@ -103,7 +88,7 @@ def test_skip_tools_notice_is_visible_at_the_DEFAULT_log_level(tmp_path, capsys)
     args = _skip_tools_args(tmp_path)
     eff = jmo._effective_scan_settings(args)
 
-    assert eff["tools"] == ["bandit"], "the skipped tool must actually be dropped"
+    assert eff["tools"] == ["trufflehog"], "the skipped tool must actually be dropped"
     err = capsys.readouterr().err
     assert "semgrep" in err, (
         f"nothing named the skipped tool at the default level: {err!r}"
@@ -143,10 +128,10 @@ def test_skip_tools_that_matches_nothing_is_silent(tmp_path, capsys):
     Without it the run reports `Skipping 0 tool(s) at user request
     (--skip-tools):` with nothing after the colon.
     """
-    args = _skip_tools_args(tmp_path, tools=["bandit"], skip_tools=["not-a-tool"])
+    args = _skip_tools_args(tmp_path, tools=["trufflehog"], skip_tools=["not-a-tool"])
     eff = jmo._effective_scan_settings(args)
 
-    assert eff["tools"] == ["bandit"], "nothing should have been dropped"
+    assert eff["tools"] == ["trufflehog"], "nothing should have been dropped"
     err = capsys.readouterr().err
     assert "--skip-tools" not in err, f"reported a skip that did not happen: {err!r}"
     assert "0 tool(s)" not in err
@@ -156,11 +141,11 @@ def test_skip_tools_notice_names_every_dropped_tool(tmp_path, capsys):
     """A count without the names is the silence it replaced, one step removed."""
     args = _skip_tools_args(
         tmp_path,
-        tools=["bandit", "semgrep", "trivy"],
+        tools=["trufflehog", "semgrep", "trivy"],
         skip_tools=["semgrep", "trivy"],
     )
     eff = jmo._effective_scan_settings(args)
-    assert eff["tools"] == ["bandit"]
+    assert eff["tools"] == ["trufflehog"]
     err = capsys.readouterr().err
     assert "2 tool(s)" in err
     assert "semgrep" in err and "trivy" in err

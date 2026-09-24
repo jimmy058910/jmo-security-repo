@@ -26,7 +26,6 @@ class TestGitLabCIGeneratorBranchCoverage:
             schedule="0 2 * * *",
             timezone="UTC",
             jobTemplate=JobTemplateSpec(
-                profile="fast",
                 targets={
                     # No repositories - just images
                     "images": ["nginx:latest"],
@@ -61,7 +60,6 @@ class TestGitLabCIGeneratorBranchCoverage:
             schedule="0 2 * * *",
             timezone="UTC",
             jobTemplate=JobTemplateSpec(
-                profile="fast",
                 targets={
                     "repositories": {
                         # No repos_dir - just include/exclude patterns
@@ -99,7 +97,6 @@ class TestGitLabCIGeneratorBranchCoverage:
             schedule="0 2 * * *",
             timezone="UTC",
             jobTemplate=JobTemplateSpec(
-                profile="fast",
                 targets={"repositories": {"repos_dir": "."}},
                 results={},
                 options={},
@@ -130,7 +127,6 @@ class TestGitLabCIGeneratorBranchCoverage:
             schedule="0 2 * * *",
             timezone="UTC",
             jobTemplate=JobTemplateSpec(
-                profile="fast",
                 targets={
                     # The flat `urls` key, kept here deliberately as the
                     # back-compat arm: it is the shape this generator used to
@@ -157,17 +153,21 @@ class TestGitLabCIGeneratorBranchCoverage:
         # Only URL (bare -- shlex.quote leaves it alone; see above)
         assert "--url https://api.example.com" in script
 
-    def test_format_timeout_unknown_profile_uses_default(self):
-        """Test _format_timeout with unknown profile falls back to 30 minutes."""
+    def test_format_timeout_without_deadline_uses_default(self):
+        """No startingDeadlineSeconds: the one default job timeout, 30 minutes.
+
+        There were three (fast=10 / balanced=30 / deep=60) while schedules
+        carried a profile; v2.0.0 dropped the field, so every schedule without
+        an explicit deadline gets the same ceiling.
+        """
         generator = GitLabCIGenerator()
 
-        metadata = ScheduleMetadata(name="unknown-profile")
+        metadata = ScheduleMetadata(name="no-deadline")
         spec = ScheduleSpec(
             schedule="0 2 * * *",
             timezone="UTC",
             startingDeadlineSeconds=None,  # No explicit timeout
             jobTemplate=JobTemplateSpec(
-                profile="custom-unknown",  # Unknown profile
                 targets={"repositories": {"repos_dir": "."}},
                 results={},
                 options={},
@@ -179,7 +179,6 @@ class TestGitLabCIGeneratorBranchCoverage:
         workflow_yaml = generator.generate(schedule)
         workflow = yaml.safe_load(workflow_yaml)
 
-        # Unknown profile should use default 30 minutes
         assert workflow["security-scan"]["timeout"] == "30m"
 
     def test_to_yaml_no_description_annotation(self):
@@ -194,7 +193,6 @@ class TestGitLabCIGeneratorBranchCoverage:
             schedule="0 2 * * *",
             timezone="UTC",
             jobTemplate=JobTemplateSpec(
-                profile="fast",
                 targets={"repositories": {"repos_dir": "."}},
                 results={},
                 options={},

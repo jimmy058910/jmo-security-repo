@@ -4,7 +4,7 @@ AI tooling documentation for JMo Security. This file describes the agents, skill
 
 ## Project
 
-JMo Security is a terminal-first security audit toolkit orchestrating 29 scanners with unified CLI, normalized outputs (CommonFinding schema v1.2.0), and HTML dashboard. Two-phase architecture: scan (invoke tools) → report (normalize, dedupe, output).
+JMo Security is a terminal-first security audit toolkit orchestrating 12 scanners with unified CLI, normalized outputs (CommonFinding schema v1.2.0), and HTML dashboard. Two-phase architecture: scan (invoke tools) → report (normalize, dedupe, output).
 
 ## Build / Test / Lint
 
@@ -45,7 +45,7 @@ for the boundary and how it is enforced.
 | CI Debugger | `/jmo-ci-debugger` | Diagnose GitHub Actions CI failures |
 | Target Type Expander | `/jmo-target-type-expander` | Add new scan target types |
 | Compliance Mapper | `/jmo-compliance-mapper` | Map findings to 6 compliance frameworks |
-| Profile Optimizer | `/jmo-profile-optimizer` | Tune profile config from report-phase timings |
+| Profile Optimizer | `/jmo-profile-optimizer` | Tune threads, timeouts and per-tool flags from scan and report timings |
 | Security Hardening | `/jmo-security-hardening` | Implement OWASP/CWE security fixes |
 | Systematic Debugging | `/jmo-systematic-debugging` | Four-phase debugging framework |
 | Refactoring Assistant | `/jmo-refactoring-assistant` | Complex refactoring with test preservation |

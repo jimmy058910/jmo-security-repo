@@ -176,7 +176,7 @@ def test_docker_thing(self, tmp_path: Path):
 
 **Alternative when test doesn't fundamentally need non-root**: pass `--user 0:0` to docker run (run as root, traversal not blocked).
 
-**Variant: arbitrary UID (`--user $(id -u):$(id -g)`)** — semgrep, scancode, and other tools that write to `~/.cache` will fail because no `/etc/passwd` entry exists for that UID, so `HOME` resolves to `/`. Set `-e HOME=/tmp` explicitly so the container has a writable home.
+**Variant: arbitrary UID (`--user $(id -u):$(id -g)`)** — semgrep and other tools that write to `~/.cache` will fail because no `/etc/passwd` entry exists for that UID, so `HOME` resolves to `/`. Set `-e HOME=/tmp` explicitly so the container has a writable home.
 
 ## Workflow Marker Filter Convention
 
@@ -193,10 +193,10 @@ Pytest invocations in CI workflows use these filter sets. Each filter is tuned t
 | `scheduled.yml` Tool Smoke Tests | `-m "smoke"` | Runs only `@pytest.mark.smoke` tests against released `jmo-security` PyPI package. |
 | `scheduled.yml` Integration matrix | `-m "integration and not slow"` | Per-component integration tests; `not slow` keeps matrix runtime bounded. |
 | `scheduled.yml` E2E (×2 jobs) | `-m "not docker"` | E2E tests that don't require local Docker daemon (Released Package + general E2E). |
-| `scheduled.yml` E2E real-tool scans | `-m "requires_tools"` | Real-tool tests after installing all profile tools. |
+| `scheduled.yml` E2E real-tool scans | `-m "requires_tools"` | Real-tool tests after installing the tool matrix. |
 | `scheduled.yml` Tool Integration matrix | `-m "requires_tools"` | Same as E2E real-tool scans, sharded. |
 
-**Why the filter matters**: Nightly Extended Tests fixes from 2026-04-26 added `-m "not requires_tools and not smoke"` after `pytest tests/` was running EVERY test including ones that need real tools (which the Nightly runner doesn't install). Without the filter, `test_advanced_targets.test_deep_profile_scan` (requires real scanners) and `test_released_package.test_cli_help_works` (requires `pip install jmo-security`) would fail by design.
+**Why the filter matters**: Nightly Extended Tests fixes from 2026-04-26 added `-m "not requires_tools and not smoke"` after `pytest tests/` was running EVERY test including ones that need real tools (which the Nightly runner doesn't install). Without the filter, `test_advanced_targets.test_deep_profile_scan` (now `test_full_matrix_scan`; requires real scanners) and `test_released_package.test_cli_help_works` (requires `pip install jmo-security`) would fail by design.
 
 **Convention rules-of-thumb**:
 

@@ -51,7 +51,6 @@ def sample_schedule():
             suspend=False,
             backend=BackendConfig(type="local-cron"),
             jobTemplate=JobTemplateSpec(
-                profile="balanced",
                 targets={"repositories": {"repos_dir": "~/repos"}},
                 options={},
                 results={},
@@ -83,13 +82,13 @@ def test_install_to_crontab(sample_schedule):
 
         assert "# JMo Security Schedule: test-schedule" in cron_content
         assert "0 2 * * *" in cron_content
-        # `--profile-name`, not `--profile`: `jmo scan` defines only the
-        # former, and #1019 stopped every emitter relying on argparse
-        # resolving the abbreviation. The `existing_crontab` fixtures below
-        # deliberately KEEP the old spelling -- they stand for entries a
-        # previous version wrote, and preserving those is the behaviour
-        # under test.
-        assert "jmo scan --profile-name balanced" in cron_content
+        # No profile flag of either spelling: v2.0.0 removed scan profiles, so
+        # `jmo scan` defines neither `--profile` nor `--profile-name`. The
+        # `existing_crontab` fixtures below deliberately KEEP `--profile` --
+        # they stand for entries a pre-v2 version wrote, and preserving or
+        # replacing those by marker is the behaviour under test.
+        assert "0 2 * * * jmo scan --repos-dir" in cron_content
+        assert "--profile" not in cron_content
         assert "# End JMo Schedule" in cron_content
 
 
@@ -173,6 +172,8 @@ def test_prevent_duplicates(sample_schedule):
         assert cron_content.count("# JMo Security Schedule: test-schedule") == 1
         assert cron_content.count("0 2 * * *") == 1  # New cron expression
         assert "0 1 * * *" not in cron_content  # Old expression removed
+        # The pre-v2 entry's `--profile fast` went with it.
+        assert "--profile" not in cron_content
 
 
 def test_marker_based_removal():

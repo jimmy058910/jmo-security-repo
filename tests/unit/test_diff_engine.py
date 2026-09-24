@@ -90,7 +90,6 @@ def temp_baseline_dir(tmp_path, sample_findings_baseline):
         "meta": {
             "jmo_version": "1.0.0",
             "timestamp": "2025-11-04T10:00:00Z",
-            "profile": "balanced",
         },
         "findings": sample_findings_baseline,
     }
@@ -112,7 +111,6 @@ def temp_current_dir(tmp_path, sample_findings_current):
         "meta": {
             "jmo_version": "1.0.0",
             "timestamp": "2025-11-05T10:00:00Z",
-            "profile": "balanced",
         },
         "findings": sample_findings_current,
     }
@@ -182,7 +180,6 @@ def test_compare_directories_basic(temp_baseline_dir, temp_current_dir):
         source_type="directory",
         path=str(temp_baseline_dir),
         timestamp="2025-11-04T10:00:00Z",
-        profile="balanced",
         total_findings=2,
     )
 
@@ -190,7 +187,6 @@ def test_compare_directories_basic(temp_baseline_dir, temp_current_dir):
         source_type="directory",
         path=str(temp_current_dir),
         timestamp="2025-11-05T10:00:00Z",
-        profile="balanced",
         total_findings=2,
     )
 
@@ -217,7 +213,6 @@ def test_empty_directories():
         source_type="directory",
         path="/empty",
         timestamp="",
-        profile="",
         total_findings=0,
     )
 
@@ -249,7 +244,6 @@ def test_identical_scans():
         source_type="directory",
         path="/test",
         timestamp="",
-        profile="",
         total_findings=1,
     )
 
@@ -293,7 +287,7 @@ def test_modification_detection_severity():
         }
     ]
 
-    source = DiffSource("directory", "/test", "", "", 1)
+    source = DiffSource("directory", "/test", "", 1)
 
     diff = engine._compare_findings(baseline, current, source, source)
 
@@ -330,7 +324,7 @@ def test_modification_detection_priority():
         }
     ]
 
-    source = DiffSource("directory", "/test", "", "", 1)
+    source = DiffSource("directory", "/test", "", 1)
 
     diff = engine._compare_findings(baseline, current, source, source)
 
@@ -368,7 +362,7 @@ def test_modification_detection_compliance():
         }
     ]
 
-    source = DiffSource("directory", "/test", "", "", 1)
+    source = DiffSource("directory", "/test", "", 1)
 
     diff = engine._compare_findings(baseline, current, source, source)
 
@@ -403,7 +397,7 @@ def test_modification_detection_disabled():
         }
     ]
 
-    source = DiffSource("directory", "/test", "", "", 1)
+    source = DiffSource("directory", "/test", "", 1)
 
     diff = engine._compare_findings(baseline, current, source, source)
 
@@ -565,7 +559,6 @@ def test_invalid_scan_id(tmp_path):
         CREATE TABLE scans (
             id TEXT PRIMARY KEY,
             timestamp_iso TEXT,
-            profile TEXT,
             total_findings INTEGER
         )
         """)
@@ -627,7 +620,7 @@ def test_large_diff_performance():
         for i in range(500)
     ]
 
-    source = DiffSource("directory", "/test", "", "", 500)
+    source = DiffSource("directory", "/test", "", 500)
 
     import time
 
@@ -689,7 +682,7 @@ def test_complete_workflow():
         },
     ]
 
-    source = DiffSource("directory", "/test", "", "", 2)
+    source = DiffSource("directory", "/test", "", 2)
 
     diff = engine._compare_findings(baseline, current, source, source)
 
@@ -749,7 +742,6 @@ class TestDirectoryLoading:
             "meta": {
                 "jmo_version": "1.0.0",
                 "timestamp": "2025-11-05T10:00:00Z",
-                "profile": "balanced",
             },
             "results": [  # Wrong key - should be "findings" for v1.0.0 format
                 {"id": "fp1", "severity": "CRITICAL"},
@@ -814,7 +806,6 @@ class TestDirectoryLoading:
             "meta": {
                 "jmo_version": "1.0.0",
                 "timestamp": "2025-11-05T12:34:56Z",
-                "profile": "deep",
             },
             "findings": [{"id": "fp1"}],
         }
@@ -827,7 +818,6 @@ class TestDirectoryLoading:
 
         assert source.source_type == "directory"
         assert source.timestamp == "2025-11-05T12:34:56Z"
-        assert source.profile == "deep"
         assert source.total_findings == 1
 
     def test_extract_source_info_fallback(self, tmp_path):
@@ -840,7 +830,6 @@ class TestDirectoryLoading:
 
         assert source.source_type == "directory"
         assert source.timestamp == ""
-        assert source.profile == ""
         assert source.total_findings == 1
 
     def test_extract_source_info_invalid_json(self, tmp_path):
@@ -857,7 +846,7 @@ class TestDirectoryLoading:
 
         # Should fall back to minimal metadata
         assert source.timestamp == ""
-        assert source.profile == ""
+        assert source.total_findings == 1
 
 
 # ============================================================================
@@ -879,7 +868,6 @@ class TestSQLiteLoading:
             CREATE TABLE scans (
                 id TEXT PRIMARY KEY,
                 timestamp_iso TEXT,
-                profile TEXT,
                 total_findings INTEGER
             )
             """)
@@ -901,7 +889,7 @@ class TestSQLiteLoading:
         # Insert test data
         conn.execute("""
             INSERT INTO scans VALUES
-            ('scan1', '2025-11-05T10:00:00Z', 'balanced', 2)
+            ('scan1', '2025-11-05T10:00:00Z', 2)
             """)
         conn.execute("""
             INSERT INTO findings VALUES
@@ -980,7 +968,6 @@ class TestSQLiteLoading:
             CREATE TABLE scans (
                 id TEXT PRIMARY KEY,
                 timestamp_iso TEXT,
-                profile TEXT,
                 total_findings INTEGER
             )
             """)
@@ -1002,7 +989,7 @@ class TestSQLiteLoading:
         # Insert baseline scan
         conn.execute("""
             INSERT INTO scans VALUES
-            ('baseline', '2025-11-01T10:00:00Z', 'balanced', 2)
+            ('baseline', '2025-11-01T10:00:00Z', 2)
             """)
         conn.execute("""
             INSERT INTO findings VALUES
@@ -1018,7 +1005,7 @@ class TestSQLiteLoading:
         # Insert current scan
         conn.execute("""
             INSERT INTO scans VALUES
-            ('current', '2025-11-05T10:00:00Z', 'balanced', 2)
+            ('current', '2025-11-05T10:00:00Z', 2)
             """)
         conn.execute("""
             INSERT INTO findings VALUES
@@ -1047,7 +1034,8 @@ class TestSQLiteLoading:
         # Verify source metadata
         assert diff.baseline_source.source_type == "sqlite"
         assert diff.baseline_source.path == "baseline"
-        assert diff.baseline_source.profile == "balanced"
+        assert diff.baseline_source.timestamp == "2025-11-01T10:00:00Z"
+        assert diff.baseline_source.total_findings == 2
 
         assert diff.current_source.source_type == "sqlite"
         assert diff.current_source.path == "current"
@@ -1061,7 +1049,6 @@ class TestSQLiteLoading:
             CREATE TABLE scans (
                 id TEXT PRIMARY KEY,
                 timestamp_iso TEXT,
-                profile TEXT,
                 total_findings INTEGER
             )
             """)
@@ -1083,7 +1070,7 @@ class TestSQLiteLoading:
         # Insert only baseline scan
         conn.execute("""
             INSERT INTO scans VALUES
-            ('baseline', '2025-11-01T10:00:00Z', 'balanced', 0)
+            ('baseline', '2025-11-01T10:00:00Z', 0)
             """)
         conn.commit()
         conn.close()
@@ -1120,8 +1107,8 @@ class TestDiffEngineEdgeCases:
             for i in range(100)
         ]
 
-        source = DiffSource("directory", "/test", "", "", 0)
-        current_source = DiffSource("directory", "/test", "", "", 100)
+        source = DiffSource("directory", "/test", "", 0)
+        current_source = DiffSource("directory", "/test", "", 100)
 
         diff = engine._compare_findings(baseline, current, source, current_source)
 
@@ -1151,8 +1138,8 @@ class TestDiffEngineEdgeCases:
 
         current = []
 
-        source = DiffSource("directory", "/test", "", "", 100)
-        current_source = DiffSource("directory", "/test", "", "", 0)
+        source = DiffSource("directory", "/test", "", 100)
+        current_source = DiffSource("directory", "/test", "", 0)
 
         diff = engine._compare_findings(baseline, current, source, current_source)
 
@@ -1239,7 +1226,7 @@ class TestDiffEngineEdgeCases:
             },
         ]
 
-        source = DiffSource("directory", "/test", "", "", 4)
+        source = DiffSource("directory", "/test", "", 4)
 
         diff = engine._compare_findings(baseline, current, source, source)
 
@@ -1288,7 +1275,7 @@ class TestDiffEngineEdgeCases:
             for i in range(5000)
         ]
 
-        source = DiffSource("directory", "/test", "", "", 5000)
+        source = DiffSource("directory", "/test", "", 5000)
 
         import time
 
@@ -1325,7 +1312,7 @@ class TestDiffEngineEdgeCases:
             "message": "Hardcoded secret detected",
         }
 
-        source = DiffSource("directory", "/test", "", "", 1)
+        source = DiffSource("directory", "/test", "", 1)
 
         # Run diff twice with identical data
         diff1 = engine._compare_findings([finding_run1], [finding_run2], source, source)
@@ -1375,7 +1362,7 @@ class TestDiffEngineEdgeCases:
             }
         ]
 
-        source = DiffSource("directory", "/test", "", "", 1)
+        source = DiffSource("directory", "/test", "", 1)
 
         diff = engine._compare_findings(baseline, current, source, source)
 
@@ -1504,7 +1491,6 @@ class TestTrendIntegration:
             CREATE TABLE scans (
                 id TEXT PRIMARY KEY,
                 timestamp_iso TEXT,
-                profile TEXT,
                 total_findings INTEGER
             )
             """)
@@ -1526,7 +1512,7 @@ class TestTrendIntegration:
         # Insert baseline and current scans
         conn.execute("""
             INSERT INTO scans VALUES
-            ('baseline', '2025-11-01T10:00:00Z', 'balanced', 1)
+            ('baseline', '2025-11-01T10:00:00Z', 1)
             """)
         conn.execute("""
             INSERT INTO findings VALUES
@@ -1535,7 +1521,7 @@ class TestTrendIntegration:
             """)
         conn.execute("""
             INSERT INTO scans VALUES
-            ('current', '2025-11-05T10:00:00Z', 'balanced', 1)
+            ('current', '2025-11-05T10:00:00Z', 1)
             """)
         conn.execute("""
             INSERT INTO findings VALUES

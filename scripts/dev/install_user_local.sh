@@ -7,7 +7,6 @@
 #
 # Usage examples:
 #   bash scripts/dev/install_user_local.sh trivy
-#   bash scripts/dev/install_user_local.sh trivy noseyparker
 #   bash scripts/dev/install_user_local.sh all
 
 set -u # (no -e; we don't want to abort on first error)
@@ -30,19 +29,6 @@ case ":$PATH:" in
 *)
   export PATH="$HOME/.local/bin:$PATH"
   warn "Added ~/.local/bin to PATH for this session"
-  ;;
-esac
-
-ARCH_RAW=$(uname -m || echo x86_64)
-case "$ARCH_RAW" in
-x86_64 | amd64)
-  ARCH_GH=x86_64
-  ;;
-aarch64 | arm64)
-  ARCH_GH=arm64
-  ;;
-*)
-  ARCH_GH=x86_64
   ;;
 esac
 
@@ -74,72 +60,26 @@ install_trivy() {
   fi
 }
 
-install_noseyparker() {
-  log "Installing noseyparker (user-local)"
-  # Try common prebuilt asset names first, then cargo as fallback
-  # Typical asset example: noseyparker-v0.20.0-x86_64-unknown-linux-gnu.tar.gz
-  local base="https://github.com/praetorian-inc/noseyparker/releases/latest/download"
-  local cand1="noseyparker-x86_64-unknown-linux-gnu.tar.gz"
-  local cand2="noseyparker-aarch64-unknown-linux-gnu.tar.gz"
-  local pick="$cand1"
-  [ "$ARCH_GH" = "arm64" ] && pick="$cand2"
-  local tgz="/tmp/noseyparker.tgz"
-  if download "$base/$pick" "$tgz"; then
-    local inner
-    inner=$(tar -tzf "$tgz" 2>/dev/null | grep -E '(^|/)(noseyparker|np)$' | head -1)
-    if [ -n "$inner" ]; then
-      tar -xzf "$tgz" -C /tmp "$inner" 2>/dev/null || true
-      # Binary might be named noseyparker or np; normalize to noseyparker
-      if [ -f "/tmp/$inner" ]; then
-        install -m 0755 "/tmp/$inner" "$HOME/.local/bin/noseyparker" 2>/dev/null || true
-      fi
-    else
-      tar -xzf "$tgz" -C /tmp 2>/dev/null || true
-      if [ -f /tmp/noseyparker ]; then
-        install -m 0755 /tmp/noseyparker "$HOME/.local/bin/noseyparker" || true
-      elif [ -f /tmp/np ]; then
-        install -m 0755 /tmp/np "$HOME/.local/bin/noseyparker" || true
-      fi
-    fi
-  else
-    warn "Prebuilt noseyparker download failed; trying cargo fallback if available"
-    if command -v cargo >/dev/null 2>&1; then
-      (cargo install noseyparker >/tmp/noseyparker-cargo.log 2>&1 && cp "$HOME/.cargo/bin/noseyparker" "$HOME/.local/bin/noseyparker") || warn "cargo build/install failed (see /tmp/noseyparker-cargo.log)"
-    else
-      warn "Rust toolchain (cargo) not found; install rustup/cargo to build noseyparker from source"
-    fi
-  fi
-  if command -v noseyparker >/dev/null 2>&1; then
-    ok "noseyparker installed: $(noseyparker --version 2>/dev/null || echo installed)"
-  else
-    warn "noseyparker not found after attempt"
-  fi
-}
-
 verify() {
   echo ""
   log "Verification"
-  for t in trivy noseyparker; do
-    if command -v "$t" >/dev/null 2>&1; then
-      echo "  - $t: OK ($($t --version 2>/dev/null | head -n1 || echo present))"
-    else
-      echo "  - $t: missing"
-    fi
-  done
+  if command -v trivy >/dev/null 2>&1; then
+    echo "  - trivy: OK ($(trivy --version 2>/dev/null | head -n1 || echo present))"
+  else
+    echo "  - trivy: missing"
+  fi
 }
 
 main() {
   if [ $# -eq 0 ] || [ "$1" = "all" ]; then
     set +e
     install_trivy
-    install_noseyparker
     verify
     exit 0
   fi
   for tool in "$@"; do
     case "$tool" in
     trivy) install_trivy ;;
-    noseyparker) install_noseyparker ;;
     *) warn "Unknown tool: $tool" ;;
     esac
   done

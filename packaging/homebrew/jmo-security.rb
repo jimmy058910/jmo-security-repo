@@ -2,7 +2,7 @@
 class JmoSecurity < Formula
   include Language::Python::Virtualenv
 
-  desc "Unified security scanning suite with 29 tools and 4 scan profiles"
+  desc "Unified security scanning suite orchestrating open-source scanners"
   homepage "https://jmotools.com"
   url "https://github.com/jimmy058910/jmo-security-repo/archive/refs/tags/v1.0.0.tar.gz"
   sha256 "" # Will be calculated during release
@@ -78,11 +78,11 @@ class JmoSecurity < Formula
       Quick Start:
         jmo wizard                   # Interactive guided scanning
         jmo wizard --yes             # Non-interactive with defaults
-        jmo scan --profile fast      # Fast scan (9 tools, 5-10 min)
-        jmo scan --profile balanced  # Balanced scan (17 tools, 18-25 min)
+        jmo scan --repo .            # Scan a repository with the default tool matrix
+        jmo scan --repo . --tools trivy semgrep  # Narrow the tool list
 
       🐳 Zero-Installation Option (Recommended):
-        Use Docker mode for instant scanning with all 29 security tools:
+        Use Docker mode for instant scanning with every security tool preinstalled:
         jmo wizard --docker          # Auto-detects Docker and runs in container
 
       🔧 Optional: Install Security Tools Locally (Faster Scans):
@@ -99,11 +99,7 @@ class JmoSecurity < Formula
         brew install checkov                                # IaC security
         brew install hadolint                               # Dockerfile linting
         brew install nuclei                                 # Fast vuln scanner
-        brew install bandit                                 # Python SAST
         brew install --cask owasp-zap                       # DAST (requires Java)
-
-        # Docker-only tools (not available via Homebrew):
-        # - Nosey Parker, Falco, AFL++ (use Docker mode for these)
 
       Documentation:
         Homepage:       https://jmotools.com
@@ -119,8 +115,8 @@ class JmoSecurity < Formula
         Issues:  https://github.com/jimmy058910/jmo-security-repo/issues
         Discord: https://discord.gg/jmotools (coming soon)
 
-      What's New in v1.0.0:
-        ✅ 29 security scanners with unified profiles (fast/slim/balanced/deep)
+      Highlights:
+        ✅ One curated scanner matrix; narrow any scan with --tools
         ✅ SQLite historical storage for trend analysis
         ✅ Machine-readable diffs for CI/CD integration (jmo diff)
         ✅ Tool management commands (jmo tools install/check/update)
@@ -136,13 +132,13 @@ class JmoSecurity < Formula
 
     # Test beginner-friendly commands
     system bin/"jmo", "wizard", "--help"
-    system bin/"jmo", "fast", "--help"
-    system bin/"jmo", "balanced", "--help"
+    system bin/"jmo", "scan", "--help"
+    system bin/"jmo", "ci", "--help"
     system bin/"jmo", "schedule", "--help"
 
     # Test advanced commands
     output = shell_output("#{bin}/jmo scan --help")
-    assert_match "profile", output
+    assert_match "--repo", output
 
     # Verify Python package is importable
     system Formula["python@3.10"].opt_bin/"python3", "-c", "import scripts.cli.jmo"

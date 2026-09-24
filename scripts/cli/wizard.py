@@ -3,7 +3,6 @@
 Interactive wizard for guided security scanning.
 
 Provides step-by-step prompts for beginners to:
-- Select scanning profile (fast/balanced/deep)
 - Choose target repositories
 - Configure execution mode (native/Docker)
 - Preview and execute scan
@@ -21,9 +20,7 @@ from __future__ import annotations
 import logging
 import os
 import subprocess  # nosec B404 - CLI needs subprocess
-import sys
 from pathlib import Path
-from typing import cast
 
 from scripts.cli.cpu_utils import get_cpu_count
 from scripts.cli.wizard_flows.base_flow import PromptHelper, TargetDetector
@@ -33,6 +30,7 @@ from scripts.cli.wizard_flows.command_builder import build_command_parts
 from scripts.cli.wizard_flows.config_models import (
     TargetConfig,
     WizardConfig,
+    scan_defaults,
 )
 
 # Phase 4 refactor: Import diff wizard from diff_flow module
@@ -40,13 +38,6 @@ from scripts.cli.wizard_flows.config_models import (
 from scripts.cli.wizard_flows.diff_flow import (
     DiffArgs,  # noqa: F401
     run_diff_wizard_impl,
-)
-from scripts.cli.wizard_flows.profile_config import (
-    PROFILES,
-    TOOL_TIME_ESTIMATES,  # noqa: F401 - re-exported for backward compat
-    WIZARD_TOTAL_STEPS,
-    calculate_time_estimate,
-    format_time_range,
 )
 from scripts.cli.wizard_flows.target_configurators import (
     configure_gitlab_target as _configure_gitlab,
@@ -77,7 +68,7 @@ from scripts.cli.wizard_flows.tool_checker import (  # noqa: F401
     _install_missing_tools_interactive,
     _install_opa_tool,
     _show_all_fix_commands,
-    check_tools_for_profile,
+    check_tools_for_matrix,
 )
 
 # Phase 3 refactor: Import trend analysis from trend_flow module
@@ -92,6 +83,12 @@ from scripts.cli.wizard_flows.trend_flow import (  # noqa: F401
     _run_trend_command_interactive,
     explore_trends_interactive,
     offer_trend_analysis_after_scan,
+)
+from scripts.cli.wizard_flows.ui_helpers import (
+    TOOL_TIME_ESTIMATES,  # noqa: F401 - re-exported for backward compat
+    WIZARD_TOTAL_STEPS,
+    calculate_time_estimate,
+    format_time_range,
 )
 from scripts.cli.wizard_flows.ui_helpers import (
     UNICODE_FALLBACKS as _UNICODE_FALLBACKS,  # noqa: F401 - re-exported for tests
@@ -122,6 +119,7 @@ from scripts.cli.wizard_generators import (
     generate_shell_script,
 )
 from scripts.core.exceptions import ToolExecutionException
+from scripts.core.tool_registry import TOOL_MATRIX
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -144,42 +142,6 @@ def _get_db_path() -> Path:
 # scripts/cli/jmo.py:__version__, and anything needing it at runtime should
 # call scripts.core.jmo_version.get_jmo_version(), which resolves from
 # installed distribution metadata and falls back to pyproject.toml.
-
-# Standardized error message templates for tool issues
-# These provide consistent, actionable guidance for different failure scenarios
-TOOL_ISSUE_TEMPLATES: dict[str, str] = {
-    "linux_only": """  [{icon}] {tool}: Linux only
-       {reason}
-       Options:
-         - Docker: {docker_command}
-         - WSL2: wsl --install -d Ubuntu
-       Docs: {docs_url}""",
-    "no_windows_binary": """  [{icon}] {tool}: No Windows binary available
-       {reason}
-       Options:
-         - Docker: {docker_command}
-         - WSL2: wsl --install -d Ubuntu
-       Docs: {docs_url}""",
-    "missing_dependency": """  [{icon}] {tool}: {dependency} {min_version}+ required
-       {tool} requires {dependency} to run.
-       Auto-fix will install {dependency} automatically.
-       Manual: {manual_command}""",
-    "startup_crash": """  [!!] {tool}: STARTUP CRASH - {error_type}
-       Error: {error_detail}
-       Fix: jmo tools clean --force && jmo tools install {tool}
-            (Reinstalls in isolated virtual environment)""",
-    "docker_only": """  [{icon}] {tool}: Docker required
-       {reason}
-       Docker command:
-         {docker_command}
-       Docs: {docs_url}""",
-    "windows_registry": """  [{icon}] {tool}: Windows configuration required
-       {reason}
-       Fix (requires admin PowerShell):
-         {registry_command}
-       Then reboot and re-run: jmo tools install {tool}
-       Alternative: Use Docker mode""",
-}
 
 
 # Use PromptHelper from wizard_flows for all prompting/coloring
@@ -275,43 +237,12 @@ def _apply_target_preset(
             target_config.url = f"https://{target}"
 
 
-def select_profile() -> str:
-    """Step 1: Select scanning profile.
-
-    Shows profile comparison to help users differentiate between profiles (Fix 3.1).
-    """
-    _print_step(1, WIZARD_TOTAL_STEPS, "Select Scanning Profile")
-
-    print("\nAvailable profiles:")
-    for key, info in PROFILES.items():
-        name = cast(str, info["name"])
-        tools = cast(list[str], info["tools"])
-        print(f"\n  {_colorize(name, 'bold')} ({key})")
-        print(f"    {info['description']}")
-        print(f"    Time: {info['est_time']} | Tools: {len(tools)}")
-        print(f"    Use: {info['use_case']}")
-
-    # Profile comparison to help differentiate (Fix 3.1)
-    print("\n" + _colorize("Profile comparison:", "bold"))
-    print("  fast (8):      Core scanners - quick pre-commit checks")
-    print("  slim (14):     fast + Cloud/IaC (prowler, kubescape)")
-    print("  balanced (18): slim + Full SCA + DAST (zap, cdxgen)")
-    print("  deep (28):     balanced + Fuzzing, compliance, advanced")
-
-    # Use _select_mode helper (simpler than full custom display)
-    return _select_mode(
-        "Profiles",
-        [(k, str(PROFILES[k]["name"])) for k in PROFILES.keys()],
-        default="balanced",
-    )
-
-
 def select_execution_mode(force_docker: bool = False) -> bool:
-    """Step 2: Select execution mode (native vs Docker).
+    """Step 1: Select execution mode (native vs Docker).
 
     Uses numbered selection for consistency (Fix 3.2).
     """
-    _print_step(2, WIZARD_TOTAL_STEPS, "Select Execution Mode")
+    _print_step(1, WIZARD_TOTAL_STEPS, "Select Execution Mode")
 
     has_docker = _detect_docker()
     docker_running = _check_docker_running() if has_docker else False
@@ -351,28 +282,17 @@ def select_execution_mode(force_docker: bool = False) -> bool:
     choice = input("\nChoice [1]: ").strip()
     use_docker = choice != "2"  # Default to Docker (1)
 
-    # Warn Windows users about limited native tool availability
-    if not use_docker and sys.platform == "win32":
-        print(
-            _colorize(
-                "\n⚠️  Note: Some security tools (lynis, shellcheck, falco) may not be "
-                "available natively on Windows. Consider using Docker mode for full "
-                "tool coverage, or run 'jmo tools check' to verify installed tools.",
-                "yellow",
-            )
-        )
-
     return use_docker
 
 
 def select_target_type() -> str:
     """
-    Step 3a: Select target TYPE (repo, image, iac, url, gitlab, k8s).
+    Step 2: Select target TYPE (repo, image, iac, url, gitlab, k8s).
 
     Returns:
         Target type string
     """
-    _print_step(3, WIZARD_TOTAL_STEPS, "Select Scan Target Type")
+    _print_step(2, WIZARD_TOTAL_STEPS, "Select Scan Target Type")
 
     # Use _select_mode helper
     return _select_mode(
@@ -426,30 +346,28 @@ def configure_k8s_target() -> TargetConfig:
     return config  # type: ignore[no-any-return]  # Delegated function returns TargetConfig
 
 
-def configure_advanced(profile: str) -> tuple[int | None, int | None, str]:
+def configure_advanced() -> tuple[int | None, int | None, str]:
     """
-    Step 5: Configure advanced options.
+    Step 4: Configure advanced options.
 
     Returns:
         Tuple of (threads, timeout, fail_on)
     """
-    _print_step(5, WIZARD_TOTAL_STEPS, "Advanced Configuration")
+    _print_step(4, WIZARD_TOTAL_STEPS, "Advanced Configuration")
 
-    profile_info = PROFILES[profile]
     cpu_count = get_cpu_count()
-    profile_threads = cast(int, profile_info["threads"])
-    profile_timeout = cast(int, profile_info["timeout"])
+    default_threads, default_timeout = scan_defaults()
 
     # Use ToolManager for consistent tool counts (single source of truth)
     from scripts.cli.tool_manager import ToolManager
 
     tm = ToolManager()
-    summary = tm.get_tool_summary(profile)
+    summary = tm.get_tool_summary()
 
-    print("\nProfile defaults:")
-    print(f"  Threads: {profile_threads}")
-    print(f"  Timeout: {profile_timeout}s")
-    print(f"  Tools: {summary.platform_applicable} ({summary.execution_ready} ready)")
+    print("\nDefaults:")
+    print(f"  Threads: {default_threads}")
+    print(f"  Timeout: {default_timeout}s")
+    print(f"  Tools: {summary.total} ({summary.execution_ready} ready)")
     print(f"\nSystem: {cpu_count} CPU cores detected")
 
     if not _prompt_yes_no("\nCustomize advanced settings?", default=False):
@@ -458,21 +376,21 @@ def configure_advanced(profile: str) -> tuple[int | None, int | None, str]:
     # Threads
     print(f"\nThread count (1-{cpu_count * 2})")
     print("  Lower = more thorough, Higher = faster (if I/O bound)")
-    threads_str = _prompt_text("Threads", default=str(profile_threads))
+    threads_str = _prompt_text("Threads", default=str(default_threads))
     try:
         threads = int(threads_str)
         threads = max(1, min(threads, cpu_count * 2))
     except ValueError:
-        threads = profile_threads
+        threads = default_threads
 
     # Timeout
     print("\nPer-tool timeout in seconds")
-    timeout_str = _prompt_text("Timeout", default=str(profile_timeout))
+    timeout_str = _prompt_text("Timeout", default=str(default_timeout))
     try:
         timeout = int(timeout_str)
         timeout = max(60, timeout)
     except ValueError:
-        timeout = profile_timeout
+        timeout = default_timeout
 
     # Fail-on severity
     print("\nFail on severity threshold (for CI/CD)")
@@ -529,7 +447,7 @@ def _display_target_details(target: TargetConfig) -> None:
 
 def review_and_confirm(config: WizardConfig) -> bool:
     """
-    Step 6: Review configuration and confirm.
+    Step 5: Review configuration and confirm.
 
     Shows dynamic time estimate based on available tools (Fix 2.2 - Issue #10).
     Uses ToolStatusSummary for consistent tool counts across wizard/scan.
@@ -537,38 +455,33 @@ def review_and_confirm(config: WizardConfig) -> bool:
     Returns:
         True if user confirms, False otherwise
     """
-    _print_step(6, WIZARD_TOTAL_STEPS, "Review Configuration")
+    _print_step(5, WIZARD_TOTAL_STEPS, "Review Configuration")
 
-    profile_info = PROFILES[config.profile]
-    profile_name = cast(str, profile_info["name"])
-    profile_threads = cast(int, profile_info["threads"])
-    profile_timeout = cast(int, profile_info["timeout"])
+    default_threads, default_timeout = scan_defaults()
 
     # Use ToolStatusSummary for consistent counts (single source of truth)
     try:
         from scripts.cli.tool_manager import ToolManager
 
         tm = ToolManager()
-        summary = tm.get_tool_summary(config.profile)
+        # check_matrix first: get_tool_summary then reads the memoised statuses
+        tool_statuses = tm.check_matrix()
+        summary = tm.get_tool_summary()
 
         # Get execution-ready tools for time estimate
-        tool_statuses = tm.check_profile(config.profile)
         available_tools = [
             name for name, status in tool_statuses.items() if status.execution_ready
         ]
-
-        # Calculate dynamic estimate based on available tools
-        min_time, max_time = calculate_time_estimate(available_tools)
-        dynamic_estimate = format_time_range(min_time, max_time)
     except Exception:
-        # Fallback to static estimate if tool check fails
+        # Fallback: estimate for the whole matrix if the tool check fails
         summary = None
-        profile_tools = cast(list[str], profile_info["tools"])
-        available_tools = profile_tools
-        dynamic_estimate = cast(str, profile_info["est_time"])
+        available_tools = list(TOOL_MATRIX)
+
+    # Calculate dynamic estimate based on available tools
+    min_time, max_time = calculate_time_estimate(available_tools)
+    dynamic_estimate = format_time_range(min_time, max_time)
 
     print("\n" + _colorize("Configuration Summary:", "bold"))
-    print(f"  Profile: {_colorize(profile_name, 'green')} ({config.profile})")
     print(f"  Mode: {_colorize('Docker' if config.use_docker else 'Native', 'green')}")
     print(f"  Target Type: {_colorize(config.target.type, 'green')}")
 
@@ -577,24 +490,19 @@ def review_and_confirm(config: WizardConfig) -> bool:
 
     print(f"  Results: {config.results_dir}")
 
-    threads = config.threads or profile_threads
-    timeout = config.timeout or profile_timeout
+    threads = config.threads or default_threads
+    timeout = config.timeout or default_timeout
     print(f"  Threads: {threads}")
     print(f"  Timeout: {timeout}s")
 
     if config.fail_on:
         print(f"  Fail on: {_colorize(config.fail_on, 'yellow')}")
 
-    # Show tools available vs platform-applicable (consistent denominator)
+    # Show tools ready out of the matrix (consistent denominator)
     if summary:
         print(
-            f"\n  Tools: {_colorize(f'{summary.execution_ready}/{summary.platform_applicable}', 'green')} ready"
+            f"\n  Tools: {_colorize(f'{summary.execution_ready}/{summary.total}', 'green')} ready"
         )
-        # Show content-triggered tools info if any
-        if summary.content_triggered:
-            print(
-                f"         ({len(summary.content_triggered)} content-triggered: {', '.join(summary.content_triggered)})"
-            )
     else:
         # Fallback display
         print(f"\n  Tools: {_colorize(str(len(available_tools)), 'green')} available")
@@ -638,48 +546,28 @@ def _print_scan_completion_summary(
     config: WizardConfig,
     exit_code: int,
     tools_executed: int | None = None,
-    tools_skipped_platform: list[str] | None = None,
-    tools_skipped_content: list[str] | None = None,
 ) -> None:
     """Print a completion summary after scan finishes.
 
-    Shows what ran, what was skipped, and where results are.
-    Helps Windows users understand why some tools were skipped.
+    Shows what ran and where results are.
 
     Args:
         config: Wizard configuration
         exit_code: Scan exit code (0=clean, 1=findings, other=error)
         tools_executed: Number of tools that ran (if known)
-        tools_skipped_platform: Tools skipped due to platform incompatibility
-        tools_skipped_content: Tools skipped due to no relevant content
     """
     print()
     print("═" * 54)
     print(_colorize("  Scan Completion Summary", "bold"))
     print("═" * 54)
     print()
-    print(f"  Profile: {config.profile}")
     print(f"  Target: {config.target.type} - {_get_target_display(config)}")
     print(f"  Exit code: {exit_code}")
     print()
 
     # Show tool execution info if available
     if tools_executed is not None:
-        try:
-            from scripts.cli.tool_manager import ToolManager
-
-            tm = ToolManager()
-            summary = tm.get_tool_summary(config.profile)
-            total = summary.platform_applicable
-            print(f"  Tools executed: {tools_executed}/{total}")
-        except ImportError:
-            print(f"  Tools executed: {tools_executed}")
-
-    if tools_skipped_platform:
-        print(f"  Skipped (platform): {', '.join(tools_skipped_platform)}")
-
-    if tools_skipped_content:
-        print(f"  Skipped (no content): {', '.join(tools_skipped_content)}")
+        print(f"  Tools executed: {tools_executed}/{len(TOOL_MATRIX)}")
 
     print()
     print(f"  Results: {config.results_dir}/")
@@ -735,7 +623,7 @@ def execute_scan(config: WizardConfig, yes: bool = False) -> int:
     Returns:
         Exit code from scan
     """
-    _print_step(7, WIZARD_TOTAL_STEPS, "Execute Scan")
+    _print_step(6, WIZARD_TOTAL_STEPS, "Execute Scan")
 
     command = generate_command(config)
 
@@ -768,27 +656,17 @@ def execute_scan(config: WizardConfig, yes: bool = False) -> int:
 
         # Get tool execution info for summary
         tools_executed = None
-        tools_skipped_platform = None
-        tools_skipped_content = None
         try:
             from scripts.cli.tool_manager import ToolManager
 
             tm = ToolManager()
-            summary = tm.get_tool_summary(config.profile)
+            summary = tm.get_tool_summary()
             tools_executed = summary.execution_ready
-            tools_skipped_platform = summary.platform_skipped
-            tools_skipped_content = summary.content_triggered
         except ImportError:
             pass
 
         # Print completion summary (Windows UX improvement)
-        _print_scan_completion_summary(
-            config,
-            result.returncode,
-            tools_executed,
-            tools_skipped_platform,
-            tools_skipped_content,
-        )
+        _print_scan_completion_summary(config, result.returncode, tools_executed)
 
         # Print results guide after scan completes
         if result.returncode == 0 or result.returncode == 1:
@@ -836,7 +714,6 @@ def run_wizard(
     skip_policies: bool = False,
     db_path: str | None = None,
     # Preset options for automation
-    profile: str | None = None,
     target_type: str | None = None,
     target: str | None = None,
     use_docker: bool | None = None,
@@ -862,12 +739,11 @@ def run_wizard(
         policies: List of policies to evaluate after scan (e.g., ['owasp-top-10', 'zero-secrets'])
         skip_policies: Skip policy evaluation entirely
         db_path: Path to SQLite history database (default: ~/.jmo/history.db)
-        profile: Preset profile (fast/slim/balanced/deep)
         target_type: Preset target type (repo/image/iac/url)
         target: Preset target value (path, image name, or URL)
         use_docker: Preset execution mode (True=Docker, False=native, None=prompt)
         auto_fix: Automatically install missing tools without prompting
-        install_deps: Automatically install missing dependencies (Java, Node.js)
+        install_deps: Automatically install missing dependencies (Java)
         threads: Preset thread count for scanning
         timeout: Preset per-tool timeout in seconds
         fail_on: Preset severity threshold for CI failures
@@ -886,10 +762,8 @@ def run_wizard(
     config = WizardConfig()
 
     # Check if we have enough presets to skip interactive mode
-    # Presets fully specify the wizard when: profile + target_type + target are all provided
-    has_full_presets = (
-        profile is not None and target_type is not None and target is not None
-    )
+    # Presets fully specify the wizard when: target_type + target are both provided
+    has_full_presets = target_type is not None and target is not None
 
     try:
         if yes or has_full_presets:
@@ -900,9 +774,6 @@ def run_wizard(
                 print(
                     "\n" + _colorize("Non-interactive mode: using defaults", "yellow")
                 )
-
-            # Profile: use preset, or default to balanced
-            config.profile = profile or "balanced"
 
             # Execution mode: preset > force_docker > auto-detect
             if use_docker is not None:
@@ -929,8 +800,7 @@ def run_wizard(
             config.fail_on = fail_on or ""
 
             # Tool check for non-interactive mode
-            should_continue, _ = check_tools_for_profile(
-                config.profile,
+            should_continue, _ = check_tools_for_matrix(
                 yes=True,
                 use_docker=config.use_docker,
                 auto_fix=auto_fix,
@@ -948,12 +818,11 @@ def run_wizard(
             config.policies_enabled = policies_enabled
         else:
             # Interactive mode with new multi-target selection
-            config.profile = select_profile()
             config.use_docker = select_execution_mode(force_docker)
 
             # Tool pre-flight check (only for native mode)
-            should_continue, _ = check_tools_for_profile(
-                config.profile, yes=False, use_docker=config.use_docker
+            should_continue, _ = check_tools_for_matrix(
+                yes=False, use_docker=config.use_docker
             )
             if not should_continue:
                 print(_colorize("\nWizard cancelled", "yellow"))
@@ -963,8 +832,9 @@ def run_wizard(
             if not config.use_docker:
                 from scripts.cli.scan_utils import check_version_drift_before_scan
 
+                # The wizard's scan never narrows --tools, so it runs the matrix
                 if not check_version_drift_before_scan(
-                    config.profile, interactive=True
+                    list(TOOL_MATRIX), interactive=True
                 ):
                     print(_colorize("\nWizard cancelled", "yellow"))
                     return 0
@@ -995,7 +865,7 @@ def run_wizard(
             elif target_type == "k8s":
                 config.target = configure_k8s_target()
 
-            threads, timeout, fail_on = configure_advanced(config.profile)
+            threads, timeout, fail_on = configure_advanced()
             config.threads = threads
             config.timeout = timeout
             config.fail_on = fail_on
@@ -1031,7 +901,7 @@ def run_wizard(
             return 0
 
         if emit_gha:
-            content = generate_github_actions(config, PROFILES)
+            content = generate_github_actions(config)
             gha_path = Path(emit_gha)
             gha_path.parent.mkdir(parents=True, exist_ok=True)
             gha_path.write_text(content, encoding="utf-8")
@@ -1146,9 +1016,7 @@ def run_wizard(
                     skip_policies=skip_policies,
                     yes=yes,
                 )
-                offer_policy_evaluation_after_scan(
-                    config.results_dir, config.profile, policy_args
-                )
+                offer_policy_evaluation_after_scan(config.results_dir, policy_args)
                 # 2. Trend analysis
                 offer_trend_analysis_after_scan(config.results_dir)
 
@@ -1169,7 +1037,7 @@ def run_wizard(
         return 1
 
 
-def offer_policy_evaluation_after_scan(results_dir: str, profile: str, args) -> None:
+def offer_policy_evaluation_after_scan(results_dir: str, args) -> None:
     """
     Offer policy evaluation after scan completes.
 
@@ -1178,7 +1046,6 @@ def offer_policy_evaluation_after_scan(results_dir: str, profile: str, args) -> 
 
     Args:
         results_dir: Results directory from completed scan
-        profile: Scan profile name (fast/balanced/deep)
         args: Parsed CLI arguments with policy flags
     """
     import json
@@ -1221,7 +1088,6 @@ def offer_policy_evaluation_after_scan(results_dir: str, profile: str, args) -> 
         # Call policy evaluation menu
         policy_results = policy_evaluation_menu(
             Path(results_dir),
-            profile,
             findings,
             non_interactive=non_interactive,
         )

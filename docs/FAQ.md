@@ -10,7 +10,7 @@ Both are first-class; pick based on your environment:
 
 | Use pip when... | Use Docker when... |
 |-----------------|--------------------|
-| You want to integrate `jmo` into scripts, Makefiles, CI containers | You want every scanner pre-installed without managing 28 separate binaries |
+| You want to integrate `jmo` into scripts, Makefiles, CI containers | You want every scanner pre-installed without managing each binary yourself |
 | You already have Python 3.12+ and can install extras as needed | You're scanning on a machine without Python or want isolation |
 | You want the smallest install footprint | You're running one-shot audits and don't want local state |
 | You're developing a custom adapter | You want consistent, reproducible results across team machines |
@@ -20,10 +20,10 @@ You can mix — use `pip` locally for development and Docker in CI. See [docs/DO
 ### What are the system requirements?
 
 - **Python:** 3.12 or newer (for pip install)
-- **Docker:** 24.0+ recommended (for Docker variants)
-- **Disk:** ~200 MB for `pip install jmo-security`; ~1.5–3 GB for Docker images depending on variant
+- **Docker:** 24.0+ recommended (for the Docker image)
+- **Disk:** ~200 MB for `pip install jmo-security`; a few GB for the Docker image
 - **OS:** Linux (primary), macOS, Windows 10/11 (tested)
-- **Tools (pip install only):** `jmo tools install` fetches the 29 scanners on demand
+- **Tools (pip install only):** `jmo tools install` fetches the 12 scanners and the OPA policy engine on demand
 
 ### Is JMo Security available on Homebrew or WinGet?
 
@@ -34,25 +34,18 @@ Both are wired into the release pipeline via `homebrew-bump` and `winget-bump` j
 If you installed JMo Security via pip:
 
 ```bash
-jmo tools install --profile balanced
+jmo tools install
 ```
 
 The tool installer uses isolated virtualenvs for pip-based tools (avoids conflicts with your project venv), native package managers (apt/dnf/brew/choco) when available, and binary downloads as a fallback. Run `jmo tools check` to verify.
 
 Docker users skip this step — all scanners are pre-installed in the image.
 
-### Do I need all 29 scanners?
+### Do I need all 12 scanners?
 
-No. JMo Security ships 4 profiles with different tool subsets:
+No, and you rarely run them all. `jmo scan` considers every scanner, but the target's content decides which ones run: hadolint needs Dockerfiles, shellcheck needs shell scripts, gosec needs Go sources, and zap and nuclei only run on `--url` targets. To narrow the list yourself, use `--tools` (for example `jmo scan --repo . --tools trufflehog semgrep trivy`), `--skip-tools`, or a top-level `tools:` list in `jmo.yml`.
 
-| Profile | Tools | Use case | Runtime |
-|---------|-------|----------|---------|
-| `fast` | 9 | Pre-commit, PR validation | 5–10 min |
-| `slim` | 13 | Cloud/IaC (AWS, Azure, GCP, K8s) | 12–18 min |
-| `balanced` | 17 | Production scans, CI/CD | 18–25 min |
-| `deep` (default) | 29 | Compliance audits, pentests | 40–70 min |
-
-See [docs/PROFILES_AND_TOOLS.md](PROFILES_AND_TOOLS.md) for the full tool list per profile.
+See [docs/TOOLS.md](TOOLS.md) for the full tool list and when each tool runs.
 
 ---
 
@@ -83,16 +76,18 @@ Target flags are mutually exclusive — pick one per `jmo scan` invocation. For 
 
 ### How long do scans take?
 
-See the profile table above. Actual runtime depends on target size, network speed (for tools fetching vulnerability databases), and which tools are enabled. Use `jmo scan --profile-name fast` for quick feedback loops.
+Runtime depends on target size, network speed (for tools fetching vulnerability databases), and which tools run. Narrow the list with `--tools` for quick feedback loops (for example `jmo scan --repo . --tools trufflehog semgrep`). See [SCAN_OPTIMIZATION.md](SCAN_OPTIMIZATION.md) for more.
 
 ### Can I skip specific tools?
 
-Yes. Override per-tool config in `jmo.yml`:
+Yes. List the tools you want at the top level of `jmo.yml`; anything not listed does not run:
 
 ```yaml
+tools:
+  - trufflehog
+  - semgrep
+  - trivy
 per_tool:
-  gitleaks:
-    enabled: false
   semgrep:
     timeout: 600
 ```
@@ -115,18 +110,15 @@ No. JMo Security collects no telemetry and phones home to nothing — all scanni
 
 ## Docker specifics
 
-### Which image variant should I pull?
+### Which image should I pull?
 
-Pick the smallest variant that covers your needs:
+There is one image, and it carries every scanner:
 
 ```bash
-docker pull ghcr.io/jimmy058910/jmo-security:fast        # ~800 MB, 9 scanners
-docker pull ghcr.io/jimmy058910/jmo-security:slim        # ~1.4 GB, 13 scanners
-docker pull ghcr.io/jimmy058910/jmo-security:balanced    # ~1.6 GB, 17 scanners
-docker pull ghcr.io/jimmy058910/jmo-security:latest      # ~2.0 GB, 29 scanners (default)
+docker pull ghcr.io/jimmy058910/jmo-security:latest
 ```
 
-Pin to a version tag (e.g., `:v1.0.1-balanced`) in CI for reproducibility.
+Pin to a version tag (e.g., `:2.0.0`) in CI for reproducibility. The per-profile tags (`:fast`, `:slim`, `:balanced`, `:deep`) stopped being built with v2.0.0; old pulls of them still work but stay on v1.x.
 
 ### How do I persist scan history across Docker runs?
 
@@ -147,7 +139,7 @@ The SQLite history DB (`.jmo/history.db`) persists between container runs so `jm
 
 ### Can I build a custom Docker image with just the tools I need?
 
-Yes. Use the provided `Dockerfile` variants as base images, or write your own `Dockerfile` starting from `python:3.12-slim` and `pip install jmo-security`, then `jmo tools install --profile <your-profile>`.
+Yes. Use the published image as a base, or write your own `Dockerfile` starting from `python:3.12-slim` and `pip install jmo-security`, then `jmo tools install <tool> ...` for the tools you need.
 
 ---
 
@@ -160,10 +152,10 @@ jobs:
   security-scan:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/jimmy058910/jmo-security:balanced
+      image: ghcr.io/jimmy058910/jmo-security:latest
     steps:
       - uses: actions/checkout@v4
-      - run: jmo ci --repo . --profile-name balanced --fail-on HIGH
+      - run: jmo ci --repo . --fail-on HIGH
       - uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: results/summaries/findings.sarif
@@ -203,7 +195,7 @@ Yes — native Windows 10/11 is tested in CI on every release. Some tools (ZAP, 
 
 ### Does JMo Security work on Apple Silicon (arm64)?
 
-Yes. Docker images are published as multi-arch manifests (`linux/amd64` and `linux/arm64`). Some scanners (e.g., scancode-toolkit) skip arm64 where upstream wheels aren't available — documented per variant. pip installation works natively.
+Yes. Docker images are published as multi-arch manifests (`linux/amd64` and `linux/arm64`). pip installation works natively.
 
 ---
 

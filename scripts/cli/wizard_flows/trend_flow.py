@@ -353,21 +353,16 @@ def _compare_scans_interactive(db_path: Path) -> None:
 
         # Display scans
         print("\n" + colorize("Recent Scans:", "bold"))
-        print(
-            f"{'#':<4} {'ID':<10} {'Timestamp':<20} {'Profile':<12} {'Branch':<15} {'Findings':<10}"
-        )
-        print("-" * 80)
+        print(f"{'#':<4} {'ID':<10} {'Timestamp':<20} {'Branch':<15} {'Findings':<10}")
+        print("-" * 67)
 
         for i, scan in enumerate(scans, 1):
             scan_id = scan.get("id", "")[:8]
             timestamp = scan.get("timestamp_iso", "unknown")[:19]
-            profile = scan.get("profile", "unknown")
             branch = scan.get("branch", "unknown")[:14]
             total = scan.get("total_findings", 0)
 
-            print(
-                f"{i:<4} {scan_id:<10} {timestamp:<20} {profile:<12} {branch:<15} {total:<10}"
-            )
+            print(f"{i:<4} {scan_id:<10} {timestamp:<20} {branch:<15} {total:<10}")
 
         # Select scans
         print()

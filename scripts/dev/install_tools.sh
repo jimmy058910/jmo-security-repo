@@ -3,14 +3,12 @@
 # Installs core + curated tools:
 # - Core: python3, pip, jq, curl, git
 # - Linters: shellcheck, shfmt, ruff, bandit
-# - Secrets: trufflehog (verified), noseyparker (optional, deep profile)
-# - SAST: semgrep, bandit (Python-specific)
+# - Secrets: trufflehog (verified)
+# - SAST: semgrep
 # - SBOM/Vuln/Misconfig: syft, trivy
 # - IaC: checkov
 # - Dockerfile: hadolint
 # - DAST: OWASP ZAP (web security)
-# - Runtime: Falco (container/K8s monitoring, deep profile)
-# - Fuzzing: AFL++ (coverage-guided fuzzing, deep profile)
 # Usage:
 #   bash scripts/dev/install_tools.sh          # install if missing
 #   bash scripts/dev/install_tools.sh --upgrade # upgrade/refresh when possible
@@ -147,18 +145,6 @@ Darwin)
   if ! command -v zap.sh >/dev/null 2>&1 && ! command -v zap >/dev/null 2>&1; then
     brew install --cask owasp-zap || warn "ZAP installation failed; install manually from https://www.zaproxy.org/download/"
   fi
-  # Nosey Parker (optional; deep profile only)
-  if ! command -v noseyparker >/dev/null 2>&1; then
-    warn "noseyparker not found (optional for deep profile); install via: brew install noseyparker or see upstream docs"
-  fi
-  # Falco (optional; deep profile, requires kernel modules)
-  if ! command -v falco >/dev/null 2>&1; then
-    warn "falco not found (optional for deep profile); install via: brew tap falcosecurity/tap && brew install falco"
-  fi
-  # AFL++ (optional; deep profile)
-  if ! command -v afl-fuzz >/dev/null 2>&1; then
-    warn "AFL++ not found (optional for deep profile); install via: brew install afl++"
-  fi
   # OPA (Policy-as-Code engine)
   if ! command -v opa >/dev/null 2>&1; then
     brew install opa || warn "OPA installation failed; install manually from https://www.openpolicyagent.org/docs/latest/#running-opa"
@@ -199,10 +185,6 @@ Linux)
     if ! command -v trufflehog >/dev/null 2>&1; then
       bg bash -c 'curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sudo sh -s -- -b /usr/local/bin'
     else ok "trufflehog installed"; fi
-    # Nosey Parker - optional (deep profile only)
-    if ! command -v noseyparker >/dev/null 2>&1; then
-      warn "noseyparker not found (optional for deep profile); see https://github.com/praetorian-inc/noseyparker for install options"
-    fi
     # SBOM & scanners
     if ! command -v syft >/dev/null 2>&1; then
       bg bash -c 'curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sudo sh -s -- -b /usr/local/bin'
@@ -246,14 +228,6 @@ Linux)
         rm /tmp/nuclei.zip && \
         nuclei -update-templates -silent"
     else ok "nuclei installed"; fi
-    # Falco (runtime security - optional, deep profile)
-    if ! command -v falco >/dev/null 2>&1; then
-      warn "falco not found (optional for deep profile); requires kernel modules - see https://falco.org/docs/getting-started/installation/"
-    fi
-    # AFL++ (fuzzing - optional, deep profile)
-    if ! command -v afl-fuzz >/dev/null 2>&1; then
-      warn "AFL++ not found (optional for deep profile); install via: sudo apt-get install afl++ or build from source"
-    fi
     # OPA (Policy-as-Code engine)
     if ! command -v opa >/dev/null 2>&1; then
       case "$(uname -m)" in

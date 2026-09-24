@@ -26,9 +26,9 @@ references:
 ## Naming Convention (CRITICAL)
 
 - `PluginMetadata.name` must use **underscores**, matching the adapter filename.
-  - Example: `dependency_check_adapter.py` → `name="dependency_check"`.
+  - Example: `osv_scanner_adapter.py` → `name="osv_scanner"`.
 - `PluginMetadata.tool_name` is the actual binary name (can use hyphens).
-  - Example: `tool_name="dependency-check"`.
+  - Example: `tool_name="osv-scanner"`.
 
 ## Compliance Enrichment Architecture
 
@@ -50,8 +50,8 @@ See [CONTRIBUTING.md](../../CONTRIBUTING.md) for the detailed workflow.
 then **recomputes the id from the normalised path** — but only when it can prove
 the id came from the path, by recomputing
 `fingerprint(tool, ruleId, path, startLine, message)` and comparing. That check
-is what lets zap, cdxgen, nuclei and mobsf key on something else without being
-silently collapsed into one finding.
+is what lets zap and nuclei key on something else without being silently
+collapsed into one finding.
 
 **So an adapter that keys on the path with a *different* second component falls
 through the crack**: it wants re-keying and does not get it, and the host's raw
@@ -59,8 +59,6 @@ path stays hashed into the id forever. `syft` was the measured case (#1135) — 
 sets `ruleId = "SBOM.PACKAGE"` (a constant) but fingerprints on the package
 name, so 23 paths were normalised and **0 ids re-keyed**, and **0 of 22**
 packages common to a Windows and a WSL run of juice-shop shared an id.
-`horusec` had the same shape until #1141 gave it a real `rule_id`; it now
-re-keys 579 of 584.
 
 **syft is fixed the other way, and the crack is still there.** Rather than
 align the rule slot, its artifacts branch now hashes
@@ -70,13 +68,14 @@ Aligning the slot would have worked too; normalising first keeps the adapter
 correct on its own instead of depending on the report phase running with the
 right roots. **Any new adapter with a constant `ruleId` has the same choice to
 make, and nothing will tell it so** — `_normalize_paths_and_ids` fails silently
-by design, since the alternative is collapsing zap's and cdxgen's findings.
+by design, since the alternative is collapsing the findings of adapters such
+as zap that key on something other than the path.
 
 **When you add or change an adapter:** either fingerprint as
 `fingerprint(tool, <the ruleId you set>, path, line, message)`, or normalise the
 path yourself before hashing. Nothing enforces this — a guard over the golden
-fixtures would be vacuous, since the four adapters with fixtures all already
-pass and the broken one has none.
+fixtures would be vacuous, since the adapters with fixtures all already pass
+and the broken one has none.
 
 ## SARIF tools: one binding file over `sarif_common.py`
 
@@ -95,14 +94,14 @@ it through the real loader. `CONTRIBUTING.md` has the template.
   class), and that suite asserts every adapter returns a list. Their malformed-input
   coverage is `test_sarif_common.py`.
 - **`SarifToolSpec.tool` is both `Finding.tool["name"]` and the `versions.yaml` key**, so
-  it is the binary name with hyphens (`osv-scanner`), like `dependency-check` and
-  `trivy-rbac`; `PluginMetadata.name` stays the underscored file stem.
+  it is the binary name with hyphens (`osv-scanner`); `PluginMetadata.name` stays
+  the underscored file stem.
 - **Severity never comes from `level` alone.** osv-scanner writes `warning` on every
   result and its real score is the rule's `security-severity`; zizmor's `Low` and
   `Informational` both map to `note`. Rank order: `security-severity`, a `severity` or
   `*/severity` property, `level`, `defaultConfiguration.level`, then MEDIUM. gitleaks has
   no severity anywhere and resolves to MEDIUM by that default, on purpose: whether a
-  secret should outrank that is decided by the PR that puts it in a profile.
+  secret should outrank that is decided by the PR that wires it into scans.
 - **`file:` URIs are decoded in the adapter** (`file:///C:/x` -> `C:/x`) because
   `normalize_finding_path` passes anything containing `://` through unchanged, and an
   undecoded URI would ship the scanning machine's path into `findings.sarif` (#861).

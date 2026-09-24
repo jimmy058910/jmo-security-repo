@@ -54,7 +54,6 @@ class TestEncryptFindingsFlag:
                 "schema_version": "1.2.0",
                 "timestamp": "2025-11-04T12:00:00Z",
                 "scan_id": "test-enc-1",
-                "profile": "fast",
                 "tools": ["trufflehog"],
                 "target_count": 1,
                 "finding_count": 1,
@@ -90,7 +89,6 @@ class TestEncryptFindingsFlag:
         # Act: Store scan with encrypt_findings=True
         scan_id = store_scan(
             results_dir=results_dir,
-            profile="fast",
             tools=["trufflehog"],
             db_path=db_path,
             encrypt_findings=True,  # ← FLAG UNDER TEST
@@ -152,7 +150,6 @@ class TestEncryptFindingsFlag:
                 "schema_version": "1.2.0",
                 "timestamp": "2025-11-04T12:00:00Z",
                 "scan_id": "test-enc-2",
-                "profile": "fast",
                 "tools": [],
                 "target_count": 1,
                 "finding_count": 0,
@@ -173,7 +170,6 @@ class TestEncryptFindingsFlag:
         ):
             store_scan(
                 results_dir=results_dir,
-                profile="fast",
                 tools=["trivy"],
                 db_path=db_path,
                 encrypt_findings=True,  # Requires key
@@ -197,7 +193,6 @@ class TestEncryptFindingsFlag:
                 "schema_version": "1.2.0",
                 "timestamp": "2025-11-04T12:00:00Z",
                 "scan_id": "test-enc-3",
-                "profile": "balanced",
                 "tools": ["trivy"],
                 "target_count": 1,
                 "finding_count": 1,
@@ -231,7 +226,6 @@ class TestEncryptFindingsFlag:
         # Act: Store scan with default (encrypt_findings=False)
         scan_id = store_scan(
             results_dir=results_dir,
-            profile="balanced",
             tools=["trivy"],
             db_path=db_path,
             encrypt_findings=False,  # ← DEFAULT BEHAVIOR
@@ -285,7 +279,6 @@ class TestEncryptFindingsFlag:
                 "schema_version": "1.2.0",
                 "timestamp": "2025-11-04T12:00:00Z",
                 "scan_id": "test-enc-4",
-                "profile": "fast",
                 "tools": ["trufflehog"],
                 "target_count": 1,
                 "finding_count": 1,
@@ -319,7 +312,6 @@ class TestEncryptFindingsFlag:
         # Act: Store with encryption (redaction automatic for secret scanners)
         scan_id = store_scan(
             results_dir=results_dir,
-            profile="fast",
             tools=["trufflehog"],
             db_path=db_path,
             encrypt_findings=True,

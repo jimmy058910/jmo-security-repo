@@ -82,42 +82,22 @@ if __package__ in (None, ""):  # pragma: no cover - only on direct execution
 from scripts.core.unicode_utils import harden_console_streams  # noqa: E402
 
 VERSIONS_YAML = REPO_ROOT / "versions.yaml"
-# versions.yaml key -> the variable stem actually used in Dockerfiles and
+# versions.yaml key -> the variable stem actually used in the Dockerfile and
 # workflow env: blocks, where `key.upper()` does not produce it. Deriving the
-# name silently misses abbreviations and hyphens: `noseyparker` is pinned as
+# name silently misses abbreviations and hyphens: `noseyparker` was pinned as
 # NP_VERSION and `dependency-check` as DC_VERSION, so both were unreachable by
-# --sync and stayed correct only by luck (#797).
-VERSION_VAR_ALIASES: dict[str, str] = {
-    "dependency-check": "DC",
-    "noseyparker": "NP",
-}
+# --sync and stayed correct only by luck (#797). Both left in v2.0.0; every
+# remaining pin uppercases cleanly, so the table is empty until one does not.
+VERSION_VAR_ALIASES: dict[str, str] = {}
 
-# Registry entries deliberately not pinned in any image or workflow, so having
-# no match is correct rather than a defect. These four are MANUAL_INSTALL_TOOLS
-# — they are not installed by any image by design, which is also why a
-# correctly-built deep container reports rc=1 from `jmo tools check`.
-UNPINNED_BY_DESIGN: set[str] = {"afl++", "akto", "mobsf", "falco"}
+# Registry entries deliberately not pinned in the image or any workflow, so
+# having no match is correct rather than a defect. The manual-install tools
+# that needed this left in v2.0.0; every remaining entry ships in the image.
+UNPINNED_BY_DESIGN: set[str] = set()
 
-DOCKERFILE = REPO_ROOT / "Dockerfile.deep"
-DOCKERFILE_BALANCED = REPO_ROOT / "Dockerfile.balanced"
-DOCKERFILE_SLIM = REPO_ROOT / "Dockerfile.slim"
-DOCKERFILE_FAST = REPO_ROOT / "Dockerfile.fast"
+DOCKERFILE = REPO_ROOT / "Dockerfile"
 INSTALL_TOOLS = REPO_ROOT / "scripts" / "dev" / "install_tools.sh"
 WORKFLOWS_DIR = REPO_ROOT / ".github" / "workflows"
-
-# Tools that require manual installation (platform limitations) and are
-# intentionally NOT baked into any Docker image. They carry synthetic versions
-# in versions.yaml (e.g. falco 0.0.0), so they ALWAYS read as "outdated" and
-# would otherwise spawn a fresh "Update <tool>" issue every weekly check-versions
-# cron run. We skip GitHub issue creation for them (the version delta is still
-# surfaced in --check-latest / --report output) to stop the recurring churn.
-#
-# Source of truth: scripts/core/tool_registry.py MANUAL_INSTALL_TOOLS. This is a
-# deliberate local mirror because scripts/dev/update_versions.py runs in CI
-# (maintenance.yml check-versions) WITHOUT `pip install -e .`, so importing the
-# scripts.core package is not reliably available there. A drift-guard unit test
-# (tests/unit/test_update_versions_manual_tools.py) asserts the two stay in sync.
-MANUAL_INSTALL_TOOLS: frozenset[str] = frozenset({"falco", "afl++", "mobsf", "akto"})
 
 # ANSI colors
 BLUE = "\033[0;34m"
@@ -463,22 +443,6 @@ def get_latest_pypi_version(package: str) -> str | None:
         return None
 
 
-def get_npm_version_exists(package: str, version: str) -> bool:
-    """Check if a specific npm package version exists."""
-    try:
-        result = subprocess.run(
-            ["npm", "view", f"{package}@{version}", "version"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=30,
-        )
-        return result.returncode == 0 and version in result.stdout
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return False
-
-
 # "I could not check" is not "it does not exist".
 #
 # All three checkers below used to shell out to an external CLI and return
@@ -486,14 +450,12 @@ def get_npm_version_exists(package: str, version: str) -> bool:
 # missing *release* -- a false failure indistinguishable from a real one. That
 # is the fail-closed twin of #939's fail-open gate, and on Windows it fired
 # every time: `subprocess.run(["npm", ...])` with shell=False cannot resolve
-# `npm.CMD` (Windows does not apply PATHEXT to a bare name in list form), so
-# `check_npm_version_exists` had never once succeeded there. Measured: cdxgen
-# 12.0.0 IS published on npm (236 versions, latest 12.8.4) and the check
-# reported it absent. Same shape as the recorded ".exe omission made scanners
-# inert" trap.
+# `npm.CMD` (Windows does not apply PATHEXT to a bare name in list form), so the
+# npm check had never once succeeded there. Same shape as the recorded ".exe
+# omission made scanners inert" trap. (npm's only tool, cdxgen, left in v2.0.0.)
 #
-# npm and PyPI are now queried over plain HTTP, which needs no CLI at all and
-# removes the dependency on a `pip` that a uv-created venv does not ship.
+# PyPI is now queried over plain HTTP, which needs no CLI at all and removes the
+# dependency on a `pip` that a uv-created venv does not ship.
 # GitHub keeps `gh` because it carries the auth that avoids anonymous rate
 # limits, but reports UNKNOWN rather than False when `gh` is absent.
 EXISTS = "exists"
@@ -545,56 +507,18 @@ def check_pypi_version_exists(package: str, version: str) -> str:
     return EXISTS if version in (data.get("releases") or {}) else ABSENT
 
 
-def check_npm_version_exists(package: str, version: str) -> str:
-    """Whether an npm release exists: EXISTS, ABSENT or UNKNOWN.
-
-    The scoped name must be percent-encoded -- `@cyclonedx/cdxgen` becomes
-    `@cyclonedx%2Fcdxgen`, or the slash is read as a path separator.
-    """
-    data = _registry_json(
-        f"https://registry.npmjs.org/{urllib.parse.quote(package, safe='@')}"
-    )
-    if data is None:
-        return UNKNOWN
-    return EXISTS if version in (data.get("versions") or {}) else ABSENT
-
-
-# A MANUAL_INSTALL tool ships in no image, so it has nothing to pin. `0.0.0` is
-# the placeholder those entries carry -- not a claim that release 0.0.0 exists,
-# which is how the validator read it, failing every `jmo build` (#935).
-#
-# Source of truth: scripts/core/tool_registry.py UNPINNED_SENTINEL. This is a
-# deliberate local mirror, for the same reason MANUAL_INSTALL_TOOLS above is one:
-# this script runs in CI (maintenance.yml check-versions) WITHOUT
-# `pip install -e .`, so importing the scripts.core package is not reliably
-# available there. The drift-guard unit test
-# (tests/unit/test_update_versions_manual_tools.py) asserts the two stay in sync.
-UNPINNED_SENTINEL = "0.0.0"
-
-
 def _validate_one(tool: str, info: dict) -> tuple[str, str]:
-    """Classify one versions.yaml entry as passed / failed / unpinned.
+    """Classify one versions.yaml entry as passed / failed.
 
     Dispatches on **which package field the entry carries**, not on which
     section it lives in. The section is about how a tool is installed; the
     registry to ask is a property of the package. Conflating the two is what
-    sent `cdxgen`'s scoped npm name to PyPI, where it could never be found --
-    and the dedicated npm block written to catch that could never fire, because
-    the `python_tools` loop always claimed cdxgen first (into `failed` when
-    `pypi_package` was set, into `passed` as "skipped" when it was not).
+    once sent cdxgen's scoped npm name to PyPI, where it could never be found.
 
     Returns:
-        (bucket, message) where bucket is "passed", "failed" or "unpinned".
+        (bucket, message) where bucket is "passed" or "failed".
     """
     version = str(info["version"])
-
-    if version == UNPINNED_SENTINEL and tool in MANUAL_INSTALL_TOOLS:
-        # Deliberately a third state, not folded into "passed". #373 established
-        # this shape for `jmo tools check`: a user must be able to tell "we
-        # deliberately do not pin this" from "this validated". The sentinel is
-        # honoured *only* for MANUAL_INSTALL_TOOLS -- a 0.0.0 on a tool that
-        # ships in an image is a genuinely unset version and must still fail.
-        return "unpinned", f"{tool}: unpinned (manual install, no image)"
 
     def _report(state: str, registry: str, package: str) -> tuple[str, str]:
         if state == EXISTS:
@@ -608,12 +532,6 @@ def _validate_one(tool: str, info: dict) -> tuple[str, str]:
                 f"{tool}: {version} COULD NOT CHECK on {registry} ({package})",
             )
         return "failed", f"{tool}: {version} NOT FOUND on {registry} ({package})"
-
-    npm_package = info.get("npm_package")
-    if npm_package:
-        return _report(
-            check_npm_version_exists(npm_package, version), "npm", npm_package
-        )
 
     pypi_package = info.get("pypi_package")
     if pypi_package:
@@ -630,21 +548,17 @@ def _validate_one(tool: str, info: dict) -> tuple[str, str]:
     return "passed", f"{tool}: {version} (skipped - manual validation required)"
 
 
-def validate_all_versions() -> tuple[list[str], list[str], list[str]]:
+def validate_all_versions() -> tuple[list[str], list[str]]:
     """
     Validate that all versions in versions.yaml exist upstream.
 
     Returns:
-        (passed, failed, unpinned). `unpinned` is the MANUAL_INSTALL tools
-        carrying the sentinel version -- a third state rather than a silent
-        pass, so "we deliberately do not pin this" is distinguishable from
-        "this validated" (the shape #373 established for `jmo tools check`).
+        (passed, failed).
     """
     versions = load_versions()
     passed: list[str] = []
     failed: list[str] = []
-    unpinned: list[str] = []
-    buckets = {"passed": passed, "failed": failed, "unpinned": unpinned}
+    buckets = {"passed": passed, "failed": failed}
 
     for section in ("python_tools", "binary_tools", "special_tools"):
         entries = versions.get(section) or {}
@@ -656,7 +570,7 @@ def validate_all_versions() -> tuple[list[str], list[str], list[str]]:
             (err if bucket == "failed" else ok)(message)
             buckets[bucket].append(tool)
 
-    return passed, failed, unpinned
+    return passed, failed
 
 
 def check_latest_versions() -> dict[str, tuple[str, str, bool]]:
@@ -674,7 +588,7 @@ def check_latest_versions() -> dict[str, tuple[str, str, bool]]:
         current = info["version"]
         pypi_package = info.get("pypi_package")
         if not pypi_package:
-            # Skip tools without PyPI package (e.g., lynis)
+            # Skip tools without a PyPI package
             continue
         latest = get_latest_pypi_version(pypi_package)
         if latest:
@@ -739,10 +653,10 @@ def _print_classification_json() -> int:
     Output shape (to stdout, one blob — machine-readable for auto-PR workflows):
 
         {
-          "bandit":   {"current": "1.9.3",    "latest": "1.9.4",  "level": "patch",   "critical": false},
+          "gosec":    {"current": "2.28.0",   "latest": "2.28.1", "level": "patch",   "critical": false},
           "semgrep":  {"current": "1.151.0",  "latest": "1.159.0","level": "minor",   "critical": true},
-          "kubescape":{"current": "3.0.47",   "latest": "4.0.5",  "level": "major",   "critical": true},
-          "falco":    {"current": "0.0.0",    "latest": "0.43.1", "level": "unknown", "critical": false}
+          "trivy":    {"current": "0.74.0",   "latest": "1.0.0",  "level": "major",   "critical": true},
+          "zap":      {"current": "2.17.0",   "latest": "w2026-09-01", "level": "unknown", "critical": true}
         }
 
     Bump levels "patch" and "minor" are typically safe to auto-merge (with
@@ -820,12 +734,12 @@ def update_tool_version(tool: str, new_version: str) -> bool:
 
 
 def sync_dockerfiles(dry_run: bool = False) -> bool:
-    """Sync Dockerfiles AND .github/workflows/*.yml `env:` blocks with versions.yaml.
+    """Sync the Dockerfile AND .github/workflows/*.yml `env:` blocks with versions.yaml.
 
     Two file families are kept in sync:
 
-    1. Dockerfiles (`Dockerfile.{deep,balanced,slim,fast}`) — shell-style
-       `TOOL_VERSION="X.Y.Z"` (no whitespace around `=`).
+    1. The `Dockerfile` — shell-style `TOOL_VERSION="X.Y.Z"` (no whitespace
+       around `=`).
     2. GitHub Actions workflows (`.github/workflows/*.yml`) — YAML mapping form
        `TOOL_VERSION: "X.Y.Z"` (colon + single space). Pinned env: blocks were
        added in PR #358 to harden tool installs against upstream `install.sh`
@@ -853,7 +767,7 @@ def sync_dockerfiles(dry_run: bool = False) -> bool:
     # (#797), and how `osv-scanner`'s pin went stale before it (#702).
     #
     # `pypi_package` is read from versions.yaml rather than a hardcoded list:
-    # the correct names (`scancode-toolkit`, `yara-python`) were already in the
+    # the correct names (`yara-python` among them) were already in the
     # registry, they just were not being used.
     version_map: dict[str, tuple[str, str | None, str]] = {}
 
@@ -868,13 +782,8 @@ def sync_dockerfiles(dry_run: bool = False) -> bool:
     # matches nothing is the failure this function used to report as success.
     matched: set[str] = set()
 
-    # Update each Dockerfile
-    for dockerfile_path in [
-        DOCKERFILE,
-        DOCKERFILE_BALANCED,
-        DOCKERFILE_SLIM,
-        DOCKERFILE_FAST,
-    ]:
+    # Update the Dockerfile
+    for dockerfile_path in [DOCKERFILE]:
         if not dockerfile_path.exists():
             warn(f"{dockerfile_path.name} not found, skipping")
             continue
@@ -895,16 +804,13 @@ def sync_dockerfiles(dry_run: bool = False) -> bool:
             if not pkg:
                 continue
 
-            # Three pin styles exist in these Dockerfiles and all three have to
-            # be reachable, or --sync reports success over a stale pin:
-            #   pip  -> package==X.Y.Z   (prowler, semgrep, ...)
-            #   npm  -> @scope/pkg@X.Y.Z (cdxgen)
+            # The pip pin style, `package==X.Y.Z` (semgrep, checkov, ...), has
+            # to be reachable too, or --sync reports success over a stale pin.
             # Package names come from versions.yaml's `pypi_package`, not a
             # hardcoded list -- that list named 4 of 8 python_tools, which is
             # how prowler drifted 18 versions unnoticed (#797).
-            sep = "@" if pkg.startswith("@") else "=="
-            pattern = rf"{re.escape(pkg)}{re.escape(sep)}[0-9][0-9.]*"
-            content, n = re.subn(pattern, f"{pkg}{sep}{version}", content)
+            pattern = rf"{re.escape(pkg)}==[0-9][0-9.]*"
+            content, n = re.subn(pattern, f"{pkg}=={version}", content)
             if n:
                 matched.add(tool)
 
@@ -1085,19 +991,10 @@ def check_outdated_and_create_issues(create_issues: bool = False) -> int:
 
     outdated_critical = []
     outdated_normal = []
-    outdated_manual = []
 
     # Categorize outdated tools
     for tool, (current, latest, is_outdated) in results.items():
         if not is_outdated:
-            continue
-
-        # Manual-install tools are never baked into images and can't be
-        # auto-updated; filing a weekly issue for them is pure noise (they
-        # always read as outdated). Surface the version delta in the log but
-        # don't create an issue. See MANUAL_INSTALL_TOOLS comment above.
-        if tool in MANUAL_INSTALL_TOOLS:
-            outdated_manual.append((tool, current, latest))
             continue
 
         # Check if tool is critical
@@ -1123,24 +1020,11 @@ def check_outdated_and_create_issues(create_issues: bool = False) -> int:
         for tool, current, latest in outdated_normal:
             log(f"  - {tool}: {current} → {latest}")
 
-    if outdated_manual:
-        log(
-            f"Found {len(outdated_manual)} outdated MANUAL-install tools "
-            "(no issue filed; install manually):"
-        )
-        for tool, current, latest in outdated_manual:
-            log(f"  - MANUAL: {tool}: {current} → {latest}")
-
     # Create GitHub issues if requested
-    if create_issues and (outdated_critical or outdated_normal or outdated_manual):
+    if create_issues and (outdated_critical or outdated_normal):
         log("Closing superseded version update issues before creating new ones...")
-        # Include manual tools in the sweep so any lingering "Update <manual-tool>"
-        # issues (filed before we stopped creating them) get auto-closed and are
-        # never re-filed — keeps the fix self-healing without manual cleanup.
         _close_superseded_version_issues(
-            [t for t, _, _ in outdated_critical]
-            + [t for t, _, _ in outdated_normal]
-            + [t for t, _, _ in outdated_manual]
+            [t for t, _, _ in outdated_critical] + [t for t, _, _ in outdated_normal]
         )
         log("Creating GitHub issues for outdated tools...")
 
@@ -1238,7 +1122,7 @@ python3 scripts/dev/update_versions.py --sync
 
     # Manual tools are counted as outdated (messaging/`--fail-if-outdated`
     # stay honest) even though no issue is filed for them.
-    return len(outdated_critical) + len(outdated_normal) + len(outdated_manual)
+    return len(outdated_critical) + len(outdated_normal)
 
 
 def update_all_tools(
@@ -1373,7 +1257,7 @@ def main() -> int:
     group.add_argument(
         "--validate",
         action="store_true",
-        help="Validate all versions exist upstream (GitHub, PyPI, npm) before Docker build",
+        help="Validate all versions exist upstream (GitHub, PyPI) before Docker build",
     )
     group.add_argument(
         "--classify",
@@ -1498,12 +1382,9 @@ def main() -> int:
 
         elif args.validate:
             log("Validating all tool versions exist upstream...")
-            passed, failed, unpinned = validate_all_versions()
+            passed, failed = validate_all_versions()
             print()
-            log(
-                f"Validation complete: {len(passed)} passed, {len(failed)} failed, "
-                f"{len(unpinned)} unpinned (manual install)"
-            )
+            log(f"Validation complete: {len(passed)} passed, {len(failed)} failed")
             if failed:
                 err(f"Failed tools: {', '.join(failed)}")
                 err("Fix these versions before building Docker images")

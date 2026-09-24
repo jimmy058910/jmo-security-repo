@@ -33,7 +33,6 @@ const createScan = (overrides: Partial<ScanMetadata>): ScanMetadata => ({
   },
   git: {},
   config: {
-    profile: 'balanced',
     tools: ['trivy'],
   },
   ...overrides,

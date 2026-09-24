@@ -632,7 +632,6 @@ class TamperDetector:
         subject_list = attestation_data.get("subject", [])
 
         tools = external_params.get("tools", [])
-        profile = external_params.get("profile", "")
         builder_id = builder.get("id", "")
 
         # Check for empty findings with many tools (suspicious)
@@ -653,7 +652,6 @@ class TamperDetector:
                                 evidence={
                                     "tool_count": len(tools),
                                     "findings_count": findings_count,
-                                    "profile": profile,
                                 },
                             )
                         )

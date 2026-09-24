@@ -21,7 +21,7 @@ on:
         required: true
         type: string
       dry_run:
-        # Exercises the tag path without publishing: builds ONE variant (fast)
+        # Exercises the tag path without publishing: builds the image
         # with provenance + SBOM attestations on, verifies they landed on the
         # merged manifest, builds the wheel/sdist/SBOM/checksums and uploads
         # them to a DRAFT pre-release named dryrun-<run_id>, then deletes it.
@@ -186,7 +186,7 @@ jobs:
 
           # Add tool updates if any (env var, not interpolated, to avoid shell injection)
           if [[ "$TOOLS_UPDATED" == "true" ]]; then
-            git add versions.yaml Dockerfile.deep Dockerfile.balanced Dockerfile.slim Dockerfile.fast
+            git add versions.yaml Dockerfile
           fi
 
           # Create commit
@@ -199,10 +199,6 @@ jobs:
           - Version bump: $VERSION_BUMP
           - All security tools updated to latest versions
           - CHANGELOG.md updated
-
-          Generated with Claude Code (https://claude.com/claude-code)
-
-          Co-Authored-By: Claude <noreply@anthropic.com>
           COMMIT_MSG
 
           # Substitute variables via env (safer than GitHub-context interpolation in run:)
@@ -343,7 +339,7 @@ jobs:
         # like /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine --
         # but the Python process inherits the raw PATH string, and shutil.which()
         # on Windows cannot interpret a POSIX path. Every external tool lookup
-        # (bandit, semgrep, trivy...) then silently returns None. cygpath -w fixes
+        # (semgrep, checkov, trivy...) then silently returns None. cygpath -w fixes
         # it; the POSIX branch only ever runs on Linux/macOS.
         run: |
           if [ -d .venv/Scripts ]; then
@@ -364,9 +360,6 @@ jobs:
           gzip -t /tmp/trufflehog.tar.gz
           tar -xzf /tmp/trufflehog.tar.gz -C /usr/local/bin trufflehog
           chmod +x /usr/local/bin/trufflehog
-
-          # Install Bandit for security audit
-          pip install bandit
 
       - name: Install GitHub CLI (for CI status checks)
         run: |
@@ -476,7 +469,7 @@ jobs:
   # Uses native ARM runners instead of QEMU emulation (65 min → ~20 min)
 
   docker-build-amd64:
-    name: Docker ${{ matrix.variant }} (amd64)
+    name: Docker (amd64)
     runs-on: ubuntu-latest
     needs: pypi-publish
     # Explicit rather than the implicit success(): on a dry run the skipped
@@ -484,11 +477,6 @@ jobs:
     # to here (measured on run 33639997109), exactly as it does on any chain
     # without always().
     if: always() && needs.pypi-publish.result == 'success' && (startsWith(github.ref, 'refs/tags/v') || inputs.dry_run == true)
-    strategy:
-      fail-fast: false
-      matrix:
-        # A dry run builds one variant; a tag builds all four.
-        variant: ${{ fromJSON(inputs.dry_run == true && '["fast"]' || '["deep", "balanced", "slim", "fast"]') }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -503,23 +491,16 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Determine Dockerfile
-        id: dockerfile
-        run: |
-          # After v1.0.2 every variant has its own Dockerfile.<variant> — no
-          # special case for the heavyweight image (which is now Dockerfile.deep).
-          echo "file=Dockerfile.${{ matrix.variant }}" >> "$GITHUB_OUTPUT"
-
       - name: Build and push by digest
         id: build
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: ${{ steps.dockerfile.outputs.file }}
+          file: Dockerfile
           platforms: linux/amd64
           outputs: type=image,name=${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }},push-by-digest=true,name-canonical=true,push=true
-          cache-from: type=gha,scope=${{ matrix.variant }}-amd64
-          cache-to: type=gha,mode=max,scope=${{ matrix.variant }}-amd64
+          cache-from: type=gha,scope=image-amd64
+          cache-to: type=gha,mode=max,scope=image-amd64
           # Decision 6 (2026-09-02): attach SLSA provenance and an SBOM to every
           # per-arch image. Both were off since the multi-arch split; the merged
           # manifest carries them through `imagetools create`, and the dry run
@@ -536,13 +517,13 @@ jobs:
       - name: Upload digest
         uses: actions/upload-artifact@v7
         with:
-          name: digests-${{ matrix.variant }}-amd64
+          name: digests-amd64
           path: /tmp/digests/*
           if-no-files-found: error
           retention-days: 1
 
   docker-build-arm64:
-    name: Docker ${{ matrix.variant }} (arm64)
+    name: Docker (arm64)
     runs-on: ubuntu-24.04-arm
     needs: pypi-publish
     # Explicit rather than the implicit success(): on a dry run the skipped
@@ -550,11 +531,6 @@ jobs:
     # to here (measured on run 33639997109), exactly as it does on any chain
     # without always().
     if: always() && needs.pypi-publish.result == 'success' && (startsWith(github.ref, 'refs/tags/v') || inputs.dry_run == true)
-    strategy:
-      fail-fast: false
-      matrix:
-        # A dry run builds one variant; a tag builds all four.
-        variant: ${{ fromJSON(inputs.dry_run == true && '["fast"]' || '["deep", "balanced", "slim", "fast"]') }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -569,23 +545,16 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Determine Dockerfile
-        id: dockerfile
-        run: |
-          # After v1.0.2 every variant has its own Dockerfile.<variant> — no
-          # special case for the heavyweight image (which is now Dockerfile.deep).
-          echo "file=Dockerfile.${{ matrix.variant }}" >> "$GITHUB_OUTPUT"
-
       - name: Build and push by digest
         id: build
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: ${{ steps.dockerfile.outputs.file }}
+          file: Dockerfile
           platforms: linux/arm64
           outputs: type=image,name=${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }},push-by-digest=true,name-canonical=true,push=true
-          cache-from: type=gha,scope=${{ matrix.variant }}-arm64
-          cache-to: type=gha,mode=max,scope=${{ matrix.variant }}-arm64
+          cache-from: type=gha,scope=image-arm64
+          cache-to: type=gha,mode=max,scope=image-arm64
           # Decision 6 (2026-09-02): attach SLSA provenance and an SBOM to every
           # per-arch image. Both were off since the multi-arch split; the merged
           # manifest carries them through `imagetools create`, and the dry run
@@ -602,21 +571,17 @@ jobs:
       - name: Upload digest
         uses: actions/upload-artifact@v7
         with:
-          name: digests-${{ matrix.variant }}-arm64
+          name: digests-arm64
           path: /tmp/digests/*
           if-no-files-found: error
           retention-days: 1
 
-  # Merge amd64 + arm64 digests into multi-arch manifests, push to all registries
+  # Merge amd64 + arm64 digests into a multi-arch manifest, push to all registries
   docker-merge:
-    name: Merge Docker ${{ matrix.variant }}
+    name: Merge Docker manifest
     runs-on: ubuntu-latest
     needs: [docker-build-amd64, docker-build-arm64]
     if: always() && needs.docker-build-amd64.result == 'success'
-    strategy:
-      fail-fast: false
-      matrix:
-        variant: ${{ fromJSON(inputs.dry_run == true && '["fast"]' || '["deep", "balanced", "slim", "fast"]') }}
     steps:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -654,44 +619,32 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}
-          # NOTE on `suffix=`: the global `flavor: suffix=-<variant>` below gets applied
-          # to every tag type including type=raw and type=semver. For the bare-tag family
-          # (:latest, :deep, :balanced, :slim, :fast, :1.0.2, :1.0, :1) we override
-          # with `suffix=` (empty) per-tag to produce bare tags instead of `:latest-deep`,
-          # `:deep-deep`, `:1.0.2-deep`. Without the override we get garbage like `:deep-deep`.
+          # One image, two tag families: semver and :latest. There is no flavor
+          # suffix; the v1.x per-variant tags (:deep, :1.0.2-fast, ...) are no
+          # longer built, and the ones already published are left in place.
           tags: |
-            # Versioned-with-variant: suffix -<variant> applied via global flavor.
-            # Produces :1.0.2-deep, :1.0.2-balanced, :1.0.2-slim, :1.0.2-fast (and :1.0-*, :1-*).
+            # :1.0.2, :1.0, :1 — pin-friendly tags for CI.
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            # Bare semver (no variant suffix) — only on the deep matrix job.
-            # Produces :1.0.2, :1.0, :1 — pin-friendly tags for CI.
-            type=semver,pattern={{version}},suffix=,enable=${{ matrix.variant == 'deep' }}
-            type=semver,pattern={{major}}.{{minor}},suffix=,enable=${{ matrix.variant == 'deep' }}
-            type=semver,pattern={{major}},suffix=,enable=${{ matrix.variant == 'deep' }}
-            # Bare :latest — points at the heavyweight deep variant.
-            type=raw,value=latest,suffix=,enable=${{ startsWith(github.ref, 'refs/tags/v') && matrix.variant == 'deep' }}
-            # Bare :deep / :balanced / :slim / :fast — user-facing convenience tags
-            # referenced in FAQ, USER_GUIDE, DOCKER_README.
-            type=raw,value=${{ matrix.variant }},suffix=,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            # :latest, on a tag push only.
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
             # Dry run: the only tag, deleted at the end of this job.
             type=raw,value=dryrun-${{ github.run_id }},enable=${{ inputs.dry_run == true }}
           flavor: |
-            suffix=-${{ matrix.variant }},onlatest=${{ matrix.variant != 'deep' }}
             latest=false
 
       - name: Download amd64 digest
         uses: actions/download-artifact@v8
         with:
-          name: digests-${{ matrix.variant }}-amd64
+          name: digests-amd64
           path: /tmp/digests-amd64
 
       - name: Download arm64 digest
         uses: actions/download-artifact@v8
         continue-on-error: true
         with:
-          name: digests-${{ matrix.variant }}-arm64
+          name: digests-arm64
           path: /tmp/digests-arm64
 
       - name: Create GHCR multi-arch manifest
@@ -786,7 +739,7 @@ jobs:
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DRY_TAG: dryrun-${{ github.run_id }}-${{ matrix.variant }}
+          DRY_TAG: dryrun-${{ github.run_id }}
         run: |
           IDS=$(gh api --paginate "user/packages/container/jmo-security/versions" \
             --jq ".[] | select((.metadata.container.tags // []) | index(\"$DRY_TAG\")) | .id")
@@ -825,7 +778,7 @@ jobs:
             echo "value=latest" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Pull and measure all variants
+      - name: Pull and measure the image
         env:
           REF_NAME: ${{ github.ref_name }}
           TAG_VALUE: ${{ steps.tag.outputs.value }}
@@ -833,38 +786,28 @@ jobs:
           IMAGE_NAME: ${{ env.IMAGE_NAME_GHCR }}
         run: |
           {
-            echo "## Docker Image Size Comparison ($REF_NAME - 4 Variants)"
+            echo "## Docker Image Size ($REF_NAME)"
             echo ""
-            echo "| Variant | Size (amd64) | Size (arm64) | Reduction vs v0.6.0 |"
-            echo "|---------|--------------|--------------|---------------------|"
+            echo "| Image | Size (amd64) | Size (arm64) | Reduction vs v0.6.0 |"
+            echo "|-------|--------------|--------------|---------------------|"
           } > size-comparison.md
 
-          for VARIANT in deep balanced slim fast; do
-            TAG="${TAG_VALUE}-${VARIANT}"
-            IMAGE="${REGISTRY}/${IMAGE_NAME}:${TAG}"
+          IMAGE="${REGISTRY}/${IMAGE_NAME}:${TAG_VALUE}"
+          echo "Measuring $IMAGE..."
 
-            echo "Measuring $IMAGE..."
+          # Get size for amd64 platform from manifest
+          SIZE_AMD64=$(docker manifest inspect "$IMAGE" | \
+            jq -r '.manifests[] | select(.platform.architecture=="amd64") | .size' | \
+            numfmt --to=iec-i --suffix=B --format="%.1f")
 
-            # Get size for amd64 platform from manifest
-            SIZE_AMD64=$(docker manifest inspect "$IMAGE" | \
-              jq -r '.manifests[] | select(.platform.architecture=="amd64") | .size' | \
-              numfmt --to=iec-i --suffix=B --format="%.1f")
+          # Get size for arm64 platform from manifest
+          SIZE_ARM64=$(docker manifest inspect "$IMAGE" | \
+            jq -r '.manifests[] | select(.platform.architecture=="arm64") | .size' | \
+            numfmt --to=iec-i --suffix=B --format="%.1f")
 
-            # Get size for arm64 platform from manifest
-            SIZE_ARM64=$(docker manifest inspect "$IMAGE" | \
-              jq -r '.manifests[] | select(.platform.architecture=="arm64") | .size' | \
-              numfmt --to=iec-i --suffix=B --format="%.1f")
-
-            echo "| ${VARIANT} | ${SIZE_AMD64} | ${SIZE_ARM64} | TBD (manual comparison) |" >> size-comparison.md
-          done
+          echo "| ${TAG_VALUE} | ${SIZE_AMD64} | ${SIZE_ARM64} | TBD (manual comparison) |" >> size-comparison.md
 
           {
-            echo ""
-            echo "**Target Sizes:**"
-            echo "- Deep: ~1.97 GB (29 tools, 4 of them manual-install)"
-            echo "- Balanced: ~1.41 GB (17 tools, production CI/CD)"
-            echo "- Slim: ~557 MB (13 tools, cloud-focused)"
-            echo "- Fast: ~502 MB (9 tools, CI/CD gate)"
             echo ""
             echo "**Phase 1 Optimizations Applied (155 MB savings):**"
             echo "- Nuclei template filtering (65 MB)"
@@ -882,15 +825,12 @@ jobs:
           name: docker-size-comparison-${{ steps.tag.outputs.value }}
           path: size-comparison.md
 
-  # Scan Docker images for vulnerabilities
+  # Scan the Docker image for vulnerabilities
   docker-scan:
-    name: Scan Docker ${{ matrix.variant }}
+    name: Scan Docker image
     runs-on: ubuntu-latest
     needs: docker-merge
     if: always() && needs.docker-merge.result == 'success' && !inputs.dry_run
-    strategy:
-      matrix:
-        variant: [deep, balanced, slim, fast]
     steps:
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v4
@@ -904,14 +844,13 @@ jobs:
         env:
           REF_TYPE: ${{ github.ref_type }}
           REF_NAME: ${{ github.ref_name }}
-          VARIANT: ${{ matrix.variant }}
         run: |
-          # For tags like v0.4.0, the image is tagged as 0.4.0-variant (without 'v')
+          # For tags like v0.4.0, the image is tagged as 0.4.0 (without 'v')
           if [ "$REF_TYPE" = "tag" ]; then
             VERSION="${REF_NAME#v}"  # Strip 'v' prefix
-            echo "value=${VERSION}-${VARIANT}" >> "$GITHUB_OUTPUT"
+            echo "value=${VERSION}" >> "$GITHUB_OUTPUT"
           else
-            echo "value=latest-${VARIANT}" >> "$GITHUB_OUTPUT"
+            echo "value=latest" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Run Trivy vulnerability scanner
@@ -919,14 +858,14 @@ jobs:
         with:
           image-ref: ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${{ steps.tag.outputs.value }}
           format: 'sarif'
-          output: 'trivy-results-${{ matrix.variant }}.sarif'
+          output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
 
       - name: Upload Trivy results to GitHub Security
         uses: github/codeql-action/upload-sarif@v4
         with:
-          sarif_file: 'trivy-results-${{ matrix.variant }}.sarif'
-          category: 'docker-${{ matrix.variant }}'
+          sarif_file: 'trivy-results.sarif'
+          category: 'docker'
 
   # Update Docker Hub README
   docker-hub-readme:
@@ -953,7 +892,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           repository: ${{ env.IMAGE_NAME_DOCKERHUB }}
-          short-description: "Security audit toolkit with 29 tools - scan repos, images, IaC, URLs, K8s in one unified CLI"
+          short-description: "Security audit toolkit - scan repos, images, IaC, URLs, K8s in one unified CLI"
           readme-filepath: ./DOCKER_HUB_README.md
 
       - name: Docker Hub update skipped
@@ -1076,6 +1015,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
+          GHCR_IMAGE: ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}
         run: |
           set -euo pipefail
           TAG="${GITHUB_REF##*/}"
@@ -1090,7 +1030,7 @@ jobs:
           fi
 
           RELEASE_URL="https://github.com/$REPO/releases/tag/$TAG"
-          DOCKER_TAG="ghcr.io/${REPO}:${TAG#v}"
+          DOCKER_TAG="${GHCR_IMAGE}:${TAG#v}"
 
           BODY=$(cat <<EOF
           # JMo Security $TAG is out :tada:
@@ -1100,8 +1040,7 @@ jobs:
           ## TL;DR
 
           - **PyPI**: \`pip install jmo-security==${TAG#v}\`
-          - **Docker** (deep variant): \`docker pull $DOCKER_TAG\`
-          - **Other variants**: \`:fast\`, \`:slim\`, \`:balanced\`
+          - **Docker**: \`docker pull $DOCKER_TAG\`
 
           ## Feedback
 

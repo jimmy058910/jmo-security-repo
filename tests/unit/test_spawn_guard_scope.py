@@ -20,8 +20,8 @@ a guard that checks last time's syntax gets walked around.
 
 Two changes, and the second is the one that generalises:
 
-1. `SCANNER_BINARY_NAMES` is **derived** from `PROFILE_TOOLS` and
-   `TOOL_BINARY_NAMES` instead of listed, so a tool added to a profile is
+1. `SCANNER_BINARY_NAMES` is **derived** from `TOOL_MATRIX`, `POLICY_ENGINE`
+   and `TOOL_BINARY_NAMES` instead of listed, so a tool added to the matrix is
    covered with no second edit.
 2. A separate check asserts the **property** -- no test may spawn a process
    that installs a package or downloads a payload -- because a list of scanner
@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import pytest
 
-from scripts.core.tool_registry import PROFILE_TOOLS
+from scripts.core.tool_registry import POLICY_ENGINE, TOOL_BINARY_NAMES, TOOL_MATRIX
 from tests.conftest import (
     SCANNER_BINARY_NAMES,
     installer_argv_match,
@@ -46,36 +46,42 @@ from tests.conftest import (
 
 @pytest.mark.parametrize(
     "binary",
-    ["semgrep", "bandit", "trivy", "trufflehog", "checkov", "syft", "hadolint"],
+    ["semgrep", "trivy", "trufflehog", "checkov", "syft", "hadolint"],
 )
-def test_every_profile_scanner_is_watched(binary: str) -> None:
+def test_every_matrix_scanner_is_watched(binary: str) -> None:
     """The recorder used to see exactly one of these."""
     assert scanner_binary_match(binary) == binary
     assert scanner_binary_match(f"C:\\tools\\{binary}.EXE") == binary
 
 
-def test_the_watched_set_covers_every_tool_in_every_profile() -> None:
+def test_the_watched_set_covers_every_tool_in_the_matrix() -> None:
     """Derived, so it cannot fall behind the registry.
 
-    Stated over the whole registry rather than the seven names above: a tool
-    added to a profile tomorrow must be watched without anyone remembering to
-    edit a list.
+    Stated over the whole matrix rather than the names above: a tool added to
+    TOOL_MATRIX tomorrow must be watched without anyone remembering to edit a
+    list. The policy engine is not a scanner but a scan runs it, so it counts.
     """
-    from scripts.core.tool_registry import TOOL_BINARY_NAMES
-
     unwatched = sorted(
         tool
-        for tools in PROFILE_TOOLS.values()
-        for tool in tools
+        for tool in (*TOOL_MATRIX, POLICY_ENGINE)
         if scanner_binary_match(TOOL_BINARY_NAMES.get(tool, tool)) is None
     )
 
-    assert not unwatched, f"profile tools nothing watches: {unwatched}"
+    assert not unwatched, f"matrix tools nothing watches: {unwatched}"
 
 
 def test_the_derivation_actually_found_something() -> None:
-    """Meta-guard: an empty set makes every assertion above vacuous."""
-    assert len(SCANNER_BINARY_NAMES) >= 20, sorted(SCANNER_BINARY_NAMES)
+    """Meta-guard: an empty set makes every assertion above vacuous.
+
+    An equality with the registry rather than a floor: every matrix tool and
+    the policy engine contribute their binary, plus the bare name of a wrapper
+    script (`zap.sh` -> `zap`), so the set can be neither empty nor short --
+    nor carry a name for a tool the matrix no longer has.
+    """
+    binaries = {TOOL_BINARY_NAMES.get(t, t) for t in (*TOOL_MATRIX, POLICY_ENGINE)}
+    stems = {b.rsplit(".", 1)[0] for b in binaries if "." in b}
+
+    assert set(SCANNER_BINARY_NAMES) == binaries | stems, sorted(SCANNER_BINARY_NAMES)
     assert "semgrep" in SCANNER_BINARY_NAMES
 
 

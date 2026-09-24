@@ -138,7 +138,7 @@ class GitHubActionsGenerator:
             str: Complete command line arguments
         """
         spec = schedule.spec.jobTemplate
-        args = ["scan", "--profile-name", spec.profile]
+        args = ["scan"]
 
         # Add targets based on type
         targets = spec.targets

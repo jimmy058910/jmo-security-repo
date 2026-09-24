@@ -9,7 +9,7 @@ Guidance for Claude Code when working with the JMo Security Audit Tool Suite rep
 
 ## Project Overview
 
-JMo Security is a terminal-first security audit toolkit orchestrating 29 scanners with unified CLI, normalized outputs, and HTML dashboard.
+JMo Security is a terminal-first security audit toolkit orchestrating 12 scanners with unified CLI, normalized outputs, and HTML dashboard.
 
 **Version:** v1.1.1 (latest released — see CHANGELOG.md for full history)
 **Philosophy:** Two-phase architecture: scan (invoke tools) → report (normalize, dedupe, output)
@@ -115,7 +115,7 @@ When creating plans (via `/plan` or plan mode): be extremely concise, present a 
 ```bash
 uv sync --group dev                    # Install dev deps + project (editable) from uv.lock
 make pre-commit-install                # Setup pre-commit hooks
-jmo tools install --profile balanced   # Install security tools
+jmo tools install                      # Install security tools
 make test-fast                         # Fast parallel tests (recommended for dev)
 ```
 
@@ -126,12 +126,12 @@ make test-fast                         # Fast parallel tests (recommended for de
 | Command | Purpose |
 |---------|---------|
 | `jmo wizard` | Interactive setup wizard |
-| `jmo scan --profile balanced` | Production scan (17 tools, 18-25 min) |
+| `jmo scan --repo .` | Production scan (the target's content decides which of the 12 scanners run; narrow with `--tools` / `--skip-tools`) |
 | `jmo scan --image nginx:latest` | Container image scan |
 | `jmo report ./results` | Generate reports from scan |
 | `jmo ci --fail-on HIGH` | CI/CD mode with threshold |
 | `jmo tools check` | Check tool installation status |
-| `jmo tools install --profile balanced` | Install tools (parallel by default, 3-4x faster; `--sequential` to debug, `--jobs N` default 4, max 8) |
+| `jmo tools install` | Install tools (parallel by default, 3-4x faster; `--sequential` to debug, `--jobs N` default 4, max 8) |
 | `jmo tools clean --force` | Remove isolated venvs (pip conflict tools) |
 | `jmo diff results-A/ results-B/` | Compare scans |
 | `jmo history list` | View scan history |
@@ -141,7 +141,7 @@ make test-fast                         # Fast parallel tests (recommended for de
 | `make test-fast` | Parallel tests, no coverage (fastest dev loop) |
 | `make test-parallel` / `make test` | Parallel with coverage (CI-like) / sequential with coverage |
 | `make test-e2e` / `-visual` / `-report` | E2E (pytest-native) / Playwright dashboard / JSON report |
-| `python scripts/dev/test_wizard_tools.py --profile balanced` | Test wizard tool detection (non-interactive). Run before `jmo wizard` — it tests isolated venvs, version detection, and Java/Node/bash deps |
+| `python scripts/dev/test_wizard_tools.py` | Test wizard tool detection (non-interactive). Run before `jmo wizard` — it tests isolated venvs, version detection, and the Java dependency |
 
 ### Version Management (CRITICAL)
 
@@ -226,27 +226,14 @@ skill keeps its old `.graphify_version` stamp while the binary moves on.
 | `scripts/core/common_finding.py` | CommonFinding schema v1.2.0 |
 | `scripts/core/schema_validator.py` | JSON schema validation for findings |
 | `scripts/core/install_config.py` | Installation URLs, timeouts, isolated tools config |
-| `scripts/core/adapters/*.py` | Tool output parsers (30 adapters; three are SARIF bindings over `sarif_common.py`) |
+| `scripts/core/adapters/*.py` | Tool output parsers (15 adapters; three are SARIF bindings over `sarif_common.py`) |
 | `scripts/core/reporters/` | Output formatters |
 | `scripts/jmo_mcp/jmo_server.py` | MCP server (see [mcp.rules.md](.claude/rules/mcp.rules.md)) |
 | `docs/schemas/common_finding.v1.json` | CommonFinding JSON Schema (Draft 2020-12) |
 | `jmo.yml` / `versions.yaml` | Main configuration / tool version registry |
-| `Dockerfile.*` | `Dockerfile.deep` (heavyweight, also tagged `:latest`), `.fast`, `.slim`, `.balanced` |
+| `Dockerfile` | The one image (tagged `:latest` and the release version): the 12 scanners plus OPA |
 
 `tests/` holds 8,000+ tests across unit/adapters/reporters/integration; `.github/workflows/` holds CI/CD.
-
-## Scan Profiles
-
-> **Canonical Reference:** [docs/PROFILES_AND_TOOLS.md](docs/PROFILES_AND_TOOLS.md) — complete tool lists, tool selection philosophy, content-triggered execution, scan type matrices, dependencies, manual installation
-
-| Profile | Tools | Time | Use Case | Docker Tag |
-|---------|-------|------|----------|------------|
-| `fast` | 9 | 5-10 min | Pre-commit, PR validation | `:fast` |
-| `slim` | 13 | 12-18 min | Cloud/IaC, AWS/Azure/GCP/K8s | `:slim` |
-| `balanced` | 17 | 18-25 min | Production scans, CI/CD | `:balanced` |
-| `deep` | 29 | 40-70 min | Compliance audits, pentests | `:deep` (default) |
-
-**Note:** The heavyweight image lives at `Dockerfile.deep` (also pulled via `:latest` and `:deep` bare tags).
 
 ## Path-Scoped Rules
 
@@ -281,11 +268,12 @@ files, so scope a rule to the code it actually governs.
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `default_profile` | string | Default scan profile (fast/slim/balanced/deep) |
+| `tools` | list | Tools to run (default: the whole `TOOL_MATRIX`); `--tools` / `--skip-tools` override it |
+| `threads` | int or `auto` | Parallel scan workers |
+| `timeout` | int | Per-tool timeout in seconds (`per_tool.<tool>.timeout` overrides it) |
 | `fail_on` | string | Severity threshold for CI failures |
 | `retries` | int | Retries for failed tool invocations |
 | `per_tool` | object | Per-tool configuration overrides |
-| `profiles` | object | Custom profile definitions with tool lists |
 | `outputs` | object | Output/reporting settings |
 | `profiling` | object | Scan/report timing instrumentation |
 | `policy` | object | Policy-as-code settings |
@@ -314,8 +302,8 @@ See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for complete configuration referenc
 | Daily nightly fails, and the visible failure count is exactly 5 | `--maxfail=5` truncation. Fix the visible 5, re-dispatch with `gh workflow run scheduled.yml --ref main -f task=nightly`, repeat. See [testing.rules.md](.claude/rules/testing.rules.md) "Bug Archeology" |
 | Code on main works but Docker images don't | Container code is whatever shipped in the last release tag. `scripts/cli/` and `scripts/core/` fixes don't propagate until the next `v*` tag triggers `release.yml` and rebuilds GHCR images. `tests/` fixes ARE effective immediately — pytest runs on the host |
 | `PermissionError: [Errno 13]` from `Path.exists()` inside a container | Python 3.12 propagates it instead of returning False. UID mismatch on a bind mount (host 1001 vs container `USER jmo` 1000). In a test: `os.chmod(tmp_path, 0o777)` before `docker run`. In code: wrap in `try/except OSError`. See [testing.cross-platform.rules.md](.claude/rules/testing.cross-platform.rules.md) |
-| `expected_tools` count off by one after a PROFILE_TOOLS change | Counts in `tests/e2e/test_docker_workflows.py::DOCKER_VARIANTS`, the `DEEP_EXPECTED_TOOLS` lists, AND `.github/workflows/scheduled.yml` all need cascading updates. Grep the variant counts (`14`, `18`, `25`) across both directories at once |
-| Docker build fails with `tar: not in gzip format` / `gzip: stdin: not in gzip format` | A binary download returned an HTML error page or partial body — `curl -sSL` exits 0 on HTTP errors. Every download in `Dockerfile.*` MUST use `curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600`, plus a `gzip -t`/`xz -t`/`unzip -t` integrity check before extraction. See [docker.rules.md](.claude/rules/docker.rules.md) |
+| `expected_tools` count off by one after a `TOOL_MATRIX` change | Don't edit a number: `tests/e2e/test_docker_workflows.py` and `.github/workflows/scheduled.yml`'s `validate-image` job both derive `expected_tools` from `len(TOOL_MATRIX)`. A mismatch means the image and the matrix disagree, so add or remove the tool in `Dockerfile` (versions via `update_versions.py`) |
+| Docker build fails with `tar: not in gzip format` / `gzip: stdin: not in gzip format` | A binary download returned an HTML error page or partial body — `curl -sSL` exits 0 on HTTP errors. Every download in `Dockerfile` MUST use `curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600`, plus a `gzip -t`/`xz -t`/`unzip -t` integrity check before extraction. See [docker.rules.md](.claude/rules/docker.rules.md) |
 | `UnicodeEncodeError` / `UnicodeDecodeError` locally on Windows but CI is green | CI sets `PYTHONUTF8: "1"` (`ci.yml:299,318,343`), forcing UTF-8 for `open()`, `read_text()` **and** stdio — an environment no real user has. Reproduce with `PYTHONUTF8` unset. See [windows-encoding.rules.md](.claude/rules/windows-encoding.rules.md) |
 | `ruff --select PLW1514` says "All checks passed" on a file that demonstrably fails to decode | It flags `p.read_text()` only when it can prove the receiver is a `Path`; it cannot type `(tmp_path / "x").read_text()` — the dominant pytest idiom. 153 flagged vs 1198 real sites. Treat the lint count as a **lower bound**, never the sole guard |
 | A commit shows thousands of changed lines for a small edit | `Path.write_text()` on Windows translates `\n` → `\r\n` (`newline=None` → `os.linesep`), converting a whole LF file. Use `write_bytes()`. A file the Write tool or a script *creates* is LF, so a renamed or recreated CRLF file flips too. `scripts/dev/check_eol_flips.py` catches both (the `eol-flips` pre-commit hook and CI job; by hand, `--base origin/dev`); it diffs the whole tree because a per-file `-- "$f"` check cannot pair a rename. `grep -c $'\r'` is NOT reliable under MSYS |
@@ -325,7 +313,7 @@ See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for complete configuration referenc
 
 **Core:** [README.md](README.md) | [QUICKSTART.md](QUICKSTART.md) | [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md) | [CONTRIBUTING.md](CONTRIBUTING.md) | [TEST.md](TEST.md)
 
-**Features:** [docs/PROFILES_AND_TOOLS.md](docs/PROFILES_AND_TOOLS.md) | [docs/VERSION_MANAGEMENT.md](docs/VERSION_MANAGEMENT.md) | [docs/DOCKER_README.md](docs/DOCKER_README.md) | [docs/RESULTS_GUIDE.md](docs/RESULTS_GUIDE.md)
+**Features:** [docs/TOOLS.md](docs/TOOLS.md) | [docs/VERSION_MANAGEMENT.md](docs/VERSION_MANAGEMENT.md) | [docs/DOCKER_README.md](docs/DOCKER_README.md) | [docs/RESULTS_GUIDE.md](docs/RESULTS_GUIDE.md)
 
 **Operations:** [docs/RELEASE.md](docs/RELEASE.md) | [docs/SCHEDULE_GUIDE.md](docs/SCHEDULE_GUIDE.md) | [docs/POLICY_AS_CODE.md](docs/POLICY_AS_CODE.md) | [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md)
 

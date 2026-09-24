@@ -206,13 +206,13 @@ def test_deployment_prompt_user_staging():
     }
 
     with patch.object(flow.prompter, "prompt_choice") as mock_choice:
-        mock_choice.side_effect = ["staging", "balanced", "HIGH"]
+        mock_choice.side_effect = ["staging", "HIGH"]
 
         options = flow.prompt_user()
 
-        assert options["environment"] == "staging"
-        assert options["profile"] == "balanced"
-        assert options["fail_on"] == "HIGH"
+        assert options == {"environment": "staging", "fail_on": "HIGH"}
+        # Environment, then threshold: there is no profile prompt any more
+        assert mock_choice.call_count == 2
 
 
 def test_deployment_prompt_user_production(capsys):
@@ -226,17 +226,18 @@ def test_deployment_prompt_user_production(capsys):
     }
 
     with patch.object(flow.prompter, "prompt_choice") as mock_choice:
-        mock_choice.side_effect = ["production", "deep", "CRITICAL"]
+        mock_choice.side_effect = ["production", "CRITICAL"]
 
         options = flow.prompt_user()
 
-        assert options["environment"] == "production"
-        assert options["profile"] == "deep"
-        assert options["fail_on"] == "CRITICAL"
+        assert options == {"environment": "production", "fail_on": "CRITICAL"}
+        assert mock_choice.call_count == 2
 
-        # Verify production requirements were printed
+        # Verify production requirements were printed, without a profile line
         captured = capsys.readouterr()
         assert "Production Deployment Requirements" in captured.out
+        assert "Zero CRITICAL findings" in captured.out
+        assert "profile" not in captured.out.lower()
 
 
 # ========== Category 3: DeploymentFlow - Target Summary ==========
@@ -365,16 +366,12 @@ def test_deployment_build_command_with_images():
         "iac": [],
         "web": [],
     }
-    options = {"profile": "deep", "fail_on": "CRITICAL"}
+    options = {"environment": "production", "fail_on": "CRITICAL"}
 
     cmd = flow.build_command(targets, options)
 
-    assert "jmo" in cmd
-    assert "ci" in cmd
-    assert "--profile-name" in cmd
-    assert "deep" in cmd
-    assert "--fail-on" in cmd
-    assert "CRITICAL" in cmd
+    assert cmd[:4] == ["jmo", "ci", "--fail-on", "CRITICAL"]
+    assert "--profile-name" not in cmd
     assert "--image" in cmd
     # Should limit to 3 images
     assert cmd.count("--image") == 3
@@ -388,7 +385,7 @@ def test_deployment_build_command_with_iac():
         "iac": [Path("main.tf"), Path("variables.tf")],
         "web": [],
     }
-    options = {"profile": "balanced", "fail_on": "HIGH"}
+    options = {"environment": "staging", "fail_on": "HIGH"}
 
     cmd = flow.build_command(targets, options)
 
@@ -403,7 +400,7 @@ def test_deployment_build_command_with_web():
         "iac": [],
         "web": ["http://localhost:3000", "http://localhost:8080"],
     }
-    options = {"profile": "balanced", "fail_on": "HIGH"}
+    options = {"environment": "staging", "fail_on": "HIGH"}
 
     cmd = flow.build_command(targets, options)
 
@@ -477,14 +474,8 @@ def test_dependency_build_command_basic(tmp_path, monkeypatch):
 
     cmd = flow.build_command(targets, options)
 
-    assert "jmo" in cmd
-    assert "scan" in cmd
-    assert "--profile-name" in cmd
-    assert "balanced" in cmd
-    assert "--tools" in cmd
-    assert "syft" in cmd
-    assert "trivy" in cmd
-    assert "--repo" in cmd
+    # SBOM + SCA narrow the matrix with --tools; nothing selects a profile
+    assert cmd == ["jmo", "scan", "--tools", "syft", "trivy", "--repo", str(tmp_path)]
 
 
 def test_dependency_build_command_with_images(tmp_path, monkeypatch):

@@ -13,7 +13,6 @@ from scripts.cli.installers.binary_installer import (
     get_platform_info,
 )
 from scripts.cli.installers.models import InstallProgress, InstallResult
-from scripts.cli.installers.npm_installer import NpmInstaller
 from scripts.cli.installers.pip_installer import IsolatedPipInstaller, PipInstaller
 
 __all__ = [
@@ -25,7 +24,6 @@ __all__ = [
     "InstallProgress",
     "InstallResult",
     "IsolatedPipInstaller",
-    "NpmInstaller",
     "PipInstaller",
     "PlatformInfo",
     "SubprocessRunner",

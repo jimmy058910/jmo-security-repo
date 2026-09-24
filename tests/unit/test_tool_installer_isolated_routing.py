@@ -3,10 +3,10 @@ resolved binary still reports the old version is a failure (#1101, #1093).
 
 Measured 2026-08-31 and again 2026-09-02: `jmo tools install prowler semgrep
 checkov` and `jmo tools update` both loop `install_tool()`, whose pip branch
-targets `sys.executable`; only the profile installers split isolated tools
-out. prowler landed in the project `.venv` and dragged cryptography
-50.0.0 -> 46.0.7 and, via semgrep's `mcp==1.29.0` pin, mcp 2.0.0 -> 1.29.0 off
-`uv.lock` -- JMo's own MCP server could not import.
+targets `sys.executable`; only the parallel installer split isolated tools
+out. prowler (removed in v2.0.0) landed in the project `.venv` and dragged
+cryptography 50.0.0 -> 46.0.7 and, via semgrep's `mcp==1.29.0` pin, mcp 2.0.0 ->
+1.29.0 off `uv.lock` -- JMo's own MCP server could not import.
 
 And `_validate_installed_version` only *warned* on a mismatch, so `tools
 update` printed `[OK] semgrep (v1.161.0)` two lines after
@@ -19,6 +19,7 @@ No test touched `install_tool`, `_install_pip`, `_isolated_pip_install` or
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -30,19 +31,24 @@ from scripts.core.install_config import ISOLATED_TOOLS
 # Spelled out rather than derived from ISOLATED_TOOLS: a parametrize over the
 # constant under test cannot fail when that constant empties (#1061). The
 # canary below is what fails if the config and this literal drift apart.
-ISOLATED = ("prowler", "semgrep", "checkov")
+ISOLATED = ("semgrep", "checkov")
 
 
 def test_the_literal_matches_the_config():
     assert set(ISOLATED) == set(ISOLATED_TOOLS)
 
 
-def _installer_with_nothing_installed() -> ToolInstaller:
+def _installer_with_nothing_installed(tmp_path, monkeypatch) -> ToolInstaller:
+    # Kept off the real installation. Every handler these tests reach is
+    # patched, but by default the installer writes binaries to ~/.jmo/bin and
+    # isolated venvs under ~/.jmo/tools, so a handler an edit leaves unpatched
+    # would otherwise install into the developer's own toolchain.
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
     manager = MagicMock()
     manager.check_tool.return_value = MagicMock(installed=False)
-    installer = ToolInstaller(manager=manager)
+    installer = ToolInstaller(manager=manager, install_dir=tmp_path / ".jmo" / "bin")
     # Windows priorities start with pip, so a pypi tool reaches _install_pip
-    # without first probing apt/brew on the host running the test.
+    # without first probing apt on the host running the test.
     installer.platform = "windows"
     return installer
 
@@ -59,8 +65,10 @@ def _isolated_ok(tool: str, version: str) -> MagicMock:
 
 
 @pytest.mark.parametrize("tool", ISOLATED)
-def test_install_tool_routes_isolated_tools_to_the_isolated_venv(tool):
-    installer = _installer_with_nothing_installed()
+def test_install_tool_routes_isolated_tools_to_the_isolated_venv(
+    tool, tmp_path, monkeypatch
+):
+    installer = _installer_with_nothing_installed(tmp_path, monkeypatch)
     pinned = installer.registry.get_tool(tool).version
     package = ISOLATED_TOOLS[tool].get("package", tool)
     isolated = _isolated_ok(tool, pinned)
@@ -80,9 +88,9 @@ def test_install_tool_routes_isolated_tools_to_the_isolated_venv(tool):
 
 
 @pytest.mark.parametrize("tool", ISOLATED)
-def test_the_update_path_force_reinstall_also_isolates(tool):
+def test_the_update_path_force_reinstall_also_isolates(tool, tmp_path, monkeypatch):
     """`jmo tools update` is `install_tool(name, force=True)` per tool."""
-    installer = _installer_with_nothing_installed()
+    installer = _installer_with_nothing_installed(tmp_path, monkeypatch)
     pinned = installer.registry.get_tool(tool).version
     isolated = _isolated_ok(tool, pinned)
     plain = MagicMock()
@@ -97,12 +105,12 @@ def test_the_update_path_force_reinstall_also_isolates(tool):
     plain.assert_not_called()
 
 
-def test_a_regular_pip_tool_still_goes_through_pip():
-    installer = _installer_with_nothing_installed()
-    pinned = installer.registry.get_tool("bandit").version
+def test_a_regular_pip_tool_still_goes_through_pip(tmp_path, monkeypatch):
+    installer = _installer_with_nothing_installed(tmp_path, monkeypatch)
+    pinned = installer.registry.get_tool("yara").version
     plain = MagicMock(
         return_value=InstallResult(
-            tool_name="bandit", success=True, method="pip", version_installed=pinned
+            tool_name="yara", success=True, method="pip", version_installed=pinned
         )
     )
     isolated = MagicMock()
@@ -110,8 +118,11 @@ def test_a_regular_pip_tool_still_goes_through_pip():
     with (
         patch.object(installer, "_install_pip", plain),
         patch.object(installer, "_isolated_pip_install", isolated),
+        # yara's rule bundle is fetched after a successful install; that
+        # download is not what this test is about, and must not hit the network.
+        patch.object(installer, "_install_yara_rules", side_effect=lambda r: r),
     ):
-        result = installer.install_tool("bandit")
+        result = installer.install_tool("yara")
 
     plain.assert_called_once()
     isolated.assert_not_called()
@@ -160,9 +171,9 @@ class TestPinnedInstallVerdict:
         assert "[FAIL] semgrep" in out
         assert "[OK]" not in out
 
-    @pytest.mark.parametrize("method", ["brew", "apt"])
+    @pytest.mark.parametrize("method", ["install_script", "apt"])
     def test_an_unpinned_package_manager_still_only_warns(self, method):
-        """brew/apt install whatever they carry; a mismatch there is not a lie."""
+        """apt/install_script install whatever they carry; a mismatch there is not a lie."""
         installer = ToolInstaller(manager=MagicMock())
         out = installer._validate_installed_version(
             InstallResult(

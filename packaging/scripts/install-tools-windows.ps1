@@ -72,7 +72,7 @@ if (-not (Test-Command winget)) {
 Write-Host "✅ Winget found: $(winget --version)" -ForegroundColor Green
 
 if (-not (Test-Command python)) {
-    Write-Host "⚠️  Python not found. Some tools (Checkov, Bandit) require Python." -ForegroundColor Yellow
+    Write-Host "⚠️  Python not found. Some tools (Checkov) require Python." -ForegroundColor Yellow
     Write-Host "   Install from: https://www.python.org/downloads/" -ForegroundColor Yellow
 } else {
     Write-Host "✅ Python found: $(python --version)" -ForegroundColor Green
@@ -80,7 +80,7 @@ if (-not (Test-Command python)) {
 Write-Host ""
 
 Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
-Write-Host "Installing 7/12 Windows-compatible tools..." -ForegroundColor Cyan
+Write-Host "Installing Windows-compatible tools..." -ForegroundColor Cyan
 Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
 Write-Host ""
 
@@ -161,24 +161,13 @@ if (Test-Command go) {
 }
 Write-Host ""
 
-# 7. Bandit (Python package)
-if (Test-Command python) {
-    Install-PythonTool "Bandit" "bandit" "Python security linter"
-} else {
-    Write-Host "📦 Bandit: Requires Python. Install Python first." -ForegroundColor Yellow
-    Write-Host ""
-}
-
 Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
 Write-Host ""
 
-Write-Host "⚠️  Windows Limitations (5/12 tools NOT available natively):" -ForegroundColor Yellow
+Write-Host "⚠️  Windows Limitations (tools NOT available natively):" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "   ❌ Semgrep: Some rules require Linux (use Docker)" -ForegroundColor Red
 Write-Host "   ❌ OWASP ZAP: Requires Java JRE 11+ (complex setup)" -ForegroundColor Red
-Write-Host "   ❌ Nosey Parker: No Windows build (Docker only)" -ForegroundColor Red
-Write-Host "   ❌ Falco: Requires Linux kernel + eBPF (Docker/WSL2 only)" -ForegroundColor Red
-Write-Host "   ❌ AFL++: Requires Linux kernel (Docker only)" -ForegroundColor Red
 Write-Host ""
 
 Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
@@ -189,14 +178,14 @@ Write-Host ""
 Write-Host "📋 Next Steps:" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "   1. Verify installation:" -ForegroundColor White
-Write-Host "      jmotools setup --check" -ForegroundColor Gray
+Write-Host "      jmo tools check" -ForegroundColor Gray
 Write-Host ""
-Write-Host "   2. Start scanning (use fast or balanced profile):" -ForegroundColor White
-Write-Host "      jmotools wizard --profile fast" -ForegroundColor Gray
+Write-Host "   2. Start scanning:" -ForegroundColor White
+Write-Host "      jmo wizard" -ForegroundColor Gray
 Write-Host ""
-Write-Host "   3. 💡 RECOMMENDED: For ALL 12 tools, use Docker mode:" -ForegroundColor White
+Write-Host "   3. 💡 RECOMMENDED: For every tool, use Docker mode:" -ForegroundColor White
 Write-Host "      # Install WSL2 + Docker Desktop first" -ForegroundColor Gray
-Write-Host "      jmotools wizard --docker" -ForegroundColor Gray
+Write-Host "      jmo wizard --docker" -ForegroundColor Gray
 Write-Host ""
 
 if (-not (Test-Command scoop)) {

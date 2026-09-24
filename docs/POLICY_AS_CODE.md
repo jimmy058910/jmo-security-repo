@@ -30,7 +30,7 @@ opa version
 
 ```bash
 # Scan with automatic policy evaluation
-jmo scan --repo . --profile-name balanced
+jmo scan --repo .
 jmo report results/ --policy zero-secrets
 
 # Or use wizard mode
@@ -83,7 +83,7 @@ JMo Security includes **5 built-in policies** for common security scenarios:
 
 **Criteria:**
 
-- ❌ FAIL: Any verified secret detected by TruffleHog, Nosey Parker, or semgrep-secrets
+- ❌ FAIL: Any verified secret detected by TruffleHog
 - ✅ PASS: Zero verified secrets found
 
 **Use Case:** Pre-commit hooks, CI/CD gate, production deployments
@@ -394,7 +394,7 @@ jmo policy validate my-policy
 jmo policy test my-policy --findings-file results/summaries/findings.json
 
 # Use in scans
-jmo scan --repo . --profile-name balanced
+jmo scan --repo .
 jmo report results/ --policy my-policy
 ```
 
@@ -522,28 +522,6 @@ policy:
 
   # Fail CI/CD on policy violations (default: false)
   fail_on_violation: false
-
-# Profile-specific policy defaults
-profiles:
-  fast:
-    policy:
-      default_policies:
-        - zero-secrets
-
-  balanced:
-    policy:
-      default_policies:
-        - zero-secrets
-        - owasp-top-10
-
-  deep:
-    policy:
-      default_policies:
-        - zero-secrets
-        - owasp-top-10
-        - pci-dss
-        - production-hardening
-        - hipaa-compliance
 ```
 
 ### Environment Variables

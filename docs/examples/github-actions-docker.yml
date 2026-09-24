@@ -26,7 +26,7 @@ jobs:
 
       - name: Run security scan
         run: |
-          jmo scan --repo . --results results --profile balanced --human-logs
+          jmo scan --repo . --results results --human-logs
 
       - name: Upload results
         uses: actions/upload-artifact@v4
@@ -99,7 +99,7 @@ jobs:
         run: |
           docker run --rm -v $(pwd):/scan \
             ghcr.io/jimmy058910/jmo-security:latest \
-            scan --repo /scan --results /scan/results --profile balanced --human-logs
+            scan --repo /scan --results /scan/results --human-logs
 
       - name: Generate report
         run: |
@@ -122,48 +122,7 @@ jobs:
           path: results/
 
 ---
-# Example 4: Matrix scanning (multiple profiles/variants)
-name: Security Scan Matrix
-
-on:
-  push:
-    branches: [main]
-  schedule:
-    - cron: '0 3 * * *'  # Daily at 3 AM
-
-jobs:
-  security-matrix:
-    name: Scan with ${{ matrix.profile }} profile
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        profile: [fast, balanced, deep]
-        image: [latest, slim]
-        exclude:
-          - profile: deep
-            image: slim  # Slim doesn't have all tools for deep scan
-
-    container:
-      image: ghcr.io/jimmy058910/jmo-security:${{ matrix.image }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Run ${{ matrix.profile }} scan
-        run: |
-          jmo scan --repo . --results results --profile ${{ matrix.profile }} --human-logs
-
-      - name: Upload results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: security-results-${{ matrix.profile }}-${{ matrix.image }}
-          path: results/
-
----
-# Example 5: Scan multiple repositories
+# Example 4: Scan multiple repositories
 name: Multi-Repo Security Scan
 
 on:
@@ -196,7 +155,7 @@ jobs:
             -v $(pwd)/repos:/repos:ro \
             -v $(pwd)/results:/results \
             ghcr.io/jimmy058910/jmo-security:latest \
-            scan --repos-dir /repos --results /results --profile balanced --human-logs
+            scan --repos-dir /repos --results /results --human-logs
 
       - name: Upload consolidated results
         uses: actions/upload-artifact@v4
@@ -206,7 +165,7 @@ jobs:
           path: results/
 
 ---
-# Example 6: PR comment with findings summary
+# Example 5: PR comment with findings summary
 name: Security PR Comment
 
 on:
@@ -229,7 +188,7 @@ jobs:
         run: |
           docker run --rm -v $(pwd):/scan \
             ghcr.io/jimmy058910/jmo-security:latest \
-            ci --repo /scan --results /scan/results --profile-name balanced --human-logs || true
+            ci --repo /scan --results /scan/results --human-logs || true
 
       - name: Read summary
         id: summary
@@ -258,8 +217,8 @@ jobs:
           SUMMARY: ${{ steps.summary.outputs.summary }}
 
 ---
-# Example 7: Scheduled deep scan with notifications
-name: Weekly Deep Security Scan
+# Example 6: Scheduled scan with notifications
+name: Weekly Security Scan
 
 on:
   schedule:
@@ -267,8 +226,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  deep-scan:
-    name: Deep Security Audit
+  weekly-scan:
+    name: Weekly Security Audit
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/jimmy058910/jmo-security:latest
@@ -277,16 +236,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run deep scan
+      - name: Run scan
         id: scan
         run: |
-          jmo ci --repo . --results results --profile-name deep --fail-on MEDIUM --human-logs || true
+          jmo ci --repo . --results results --fail-on MEDIUM --human-logs || true
 
       - name: Upload results
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: weekly-deep-scan
+          name: weekly-scan
           path: results/
 
       - name: Create issue on failures
@@ -300,12 +259,12 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               title: 'Security Scan Failed - Review Required',
-              body: `The weekly deep security scan has detected issues:\n\n${summary}`,
+              body: `The weekly security scan has detected issues:\n\n${summary}`,
               labels: ['security', 'automated']
             });
 
 ---
-# Example 8: Differential scan (show only new findings)
+# Example 7: Differential scan (show only new findings)
 name: PR Differential Security Scan
 
 on:
@@ -327,7 +286,7 @@ jobs:
         run: |
           docker run --rm -v $(pwd):/scan \
             ghcr.io/jimmy058910/jmo-security:latest \
-            scan --repo /scan --results /scan/results-pr --profile balanced --human-logs
+            scan --repo /scan --results /scan/results-pr --human-logs
 
       - name: Checkout base branch
         uses: actions/checkout@v4
@@ -339,7 +298,7 @@ jobs:
         run: |
           docker run --rm -v $(pwd):/scan \
             ghcr.io/jimmy058910/jmo-security:latest \
-            scan --repo /scan --results /scan/results-base --profile balanced --human-logs
+            scan --repo /scan --results /scan/results-base --human-logs
 
       # Note: Diff command requires Item 4 from ROADMAP (Machine-Readable Diff Reports)
       # This is a placeholder for future functionality

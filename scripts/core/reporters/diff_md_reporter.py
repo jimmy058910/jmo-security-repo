@@ -70,14 +70,8 @@ def _write_header(md: StringIO, diff: DiffResult) -> None:
     baseline_date = diff.baseline_source.timestamp[:10]
     current_date = diff.current_source.timestamp[:10]
 
-    md.write(
-        f"**Baseline:** `{diff.baseline_source.path}` "
-        f"({baseline_date}, {diff.baseline_source.profile} profile)\n"
-    )
-    md.write(
-        f"**Current:** `{diff.current_source.path}` "
-        f"({current_date}, {diff.current_source.profile} profile)\n\n"
-    )
+    md.write(f"**Baseline:** `{diff.baseline_source.path}` ({baseline_date})\n")
+    md.write(f"**Current:** `{diff.current_source.path}` ({current_date})\n\n")
     md.write("---\n\n")
 
 

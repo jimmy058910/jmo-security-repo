@@ -14,7 +14,7 @@ time the cron fired, in CI, long after anyone could connect it to the create.
 **Reachability.** The issue says `jmo schedule create` exposes `--repo` and
 `--repos-dir`, so a user reaches this from the CLI. It does not: measured, that
 subcommand's options are `--backend --cron --description --image --label --name
---profile --repos-dir --slack-webhook --timezone --url`, with **no** `--repo`.
+--repos-dir --slack-webhook --timezone --url`, with **no** `--repo`.
 `repo` arrives only through `from_simple_args`' `**kwargs`, so the reachable
 paths are the Python API and a hand-edited `~/.jmo/schedules.json` -- which is
 what the plan said and the issue did not.
@@ -121,7 +121,6 @@ def test_both_repo_and_repos_dir_is_rejected_at_creation() -> None:
         ScanSchedule.from_simple_args(
             name="nightly",
             cron="0 2 * * *",
-            profile="balanced",
             repos_dir="/srv/repos",
             repo="/srv/one-repo",
         )
@@ -151,7 +150,6 @@ def test_any_single_target_alone_is_accepted(key: str) -> None:
     schedule = ScanSchedule.from_simple_args(
         name="nightly",
         cron="0 2 * * *",
-        profile="balanced",
         **{key: "/srv/target"},
     )
     assert schedule.spec.jobTemplate.targets["repositories"][key] == "/srv/target"
@@ -182,7 +180,6 @@ def test_the_factory_drops_an_empty_value_before_the_rule_sees_it() -> None:
     schedule = ScanSchedule.from_simple_args(
         name="nightly",
         cron="0 2 * * *",
-        profile="balanced",
         repos_dir="",
         repo="/srv/one-repo",
     )
@@ -223,7 +220,6 @@ def _hand_built_conflicting_schedule() -> ScanSchedule:
         spec=ScheduleSpec(
             schedule="0 2 * * *",
             jobTemplate=JobTemplateSpec(
-                profile="balanced",
                 targets={
                     "repositories": {"repo": "/srv/one", "repos_dir": "/srv/many"}
                 },

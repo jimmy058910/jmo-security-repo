@@ -10,9 +10,58 @@ All notable changes to JMo Security will be documented in this file.
   adapters bound through it: `zizmor`, `gitleaks` and `osv_scanner`. A `zizmor.json`,
   `gitleaks.json` or `osv-scanner.json` written in SARIF form into a results directory is
   parsed, normalised, deduplicated and reported like any other tool output. None of the
-  three is in a scan profile yet; that is Phase 4 of the v2.0.0 program.
+  three runs in a scan yet: `TOOL_MATRIX` gains them in Phase 4 of the v2.0.0 program.
+
+### Removed
+
+- **Breaking. 16 scanners leave; a scan runs 12.** noseyparker, semgrep-secrets, bandit,
+  trivy-rbac, prowler, kubescape, akto, scancode, cdxgen, dependency-check, horusec, falco,
+  falcoctl, afl++, mobsf and lynis are gone, with their adapters, installer entries,
+  `versions.yaml` rows and docs. `TOOL_MATRIX` is trufflehog, semgrep, syft, trivy,
+  checkov, hadolint, shellcheck, gosec, yara, grype, zap and nuclei. opa is the policy
+  engine: installed and checked by `jmo tools check`, not a scanner. checkov-cicd folds
+  into checkov. A `--tools` flag or `tools:` list naming a removed tool does not run it
+  and says so, and a scan left with no tool to run exits 1 (#1088, #1099, #1152, #1164,
+  #1217, #1219, #1222, #1225).
+- **Breaking. Scan profiles are gone.** `--profile-name`, the `jmo fast`, `jmo balanced`
+  and `jmo full` subcommands, and `--profile` on `jmo tools`, `jmo wizard`,
+  `jmo schedule` and `jmo history` no longer exist; every scan resolves to
+  `TOOL_MATRIX`, narrowed with `--tools` / `--skip-tools`. A `jmo.yml` that still sets
+  `profiles:` or `default_profile:` loads with a warning naming both keys ("they configure
+  nothing and are ignored"), and the rest of the file still applies. `jmo report
+  --profile` and `jmo ci --profile` stay: they were always the timing flag.
+- **Breaking. One Docker image.** `Dockerfile.fast`, `.slim` and `.balanced` are deleted
+  and `Dockerfile.deep` is now `Dockerfile`. A release publishes `:latest`, `:<version>`,
+  `:<major>.<minor>` and `:<major>`; the variant tags (`:fast`, `:slim`, `:balanced`,
+  `:deep` and their `-<variant>`-suffixed versions) are no longer built. The ones already
+  on GHCR stay there, frozen at v1.x, so pulling `:balanced` keeps working and keeps
+  giving you v1: switch to `:latest`. `jmo validate` was caught by exactly that. It ran
+  `:balanced --help`, which validated the frozen image, and it now checks `:latest`.
+  Built locally the image is 1,220.6 MiB, against 2,033 MiB for v1.0.8's published
+  `:latest`.
+
+### Changed
+
+- **Breaking. The history database drops `scans.profile`.** The first store after
+  upgrading removes the column in place, in one transaction. That includes databases
+  from before v1.2.0, whose `CHECK(profile IN ...)` constraint SQLite otherwise refuses
+  to drop the column past. Every scan and finding is kept; the profile each scan ran
+  under is not.
+  Copy `.jmo/history.db` before upgrading if you want it. Measured on a real
+  1.1.0-shaped database: 2,492 scans and 215,761 findings in, all 215,761 findings out.
 
 ### Fixed
+
+- **Wizard commands with a severity threshold ran.** Every one the wizard built was
+  `jmo scan ... --fail-on X`. `jmo scan` has no `--fail-on`, so argparse read it as an
+  abbreviation of `--fail-on-store-error`, rejected the value and exited 2 before scanning.
+  The wizard, and the GitHub Actions workflow it generates, now emit `jmo ci`, which has
+  the threshold. Found by feeding the wizard's real `build_command_parts` output to the
+  real parser, not a hand-typed copy of it.
+- **hadolint output parses in milliseconds, not a minute.** The adapter looked up
+  hadolint's version once per finding, and each lookup re-parsed `versions.yaml` (about
+  200 ms). 1,000 findings took 61 s; the lookup is now once per parse, under 0.1 s, with
+  identical output.
 
 - Two findings of one rule on one line at different columns no longer collapse to one
   id, so deduplication no longer drops the second. shellcheck and the SARIF adapters key

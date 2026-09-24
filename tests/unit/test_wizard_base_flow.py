@@ -558,10 +558,10 @@ class ConcreteWizardFlow(BaseWizardFlow):
         return {"repos": [Path("/repo1"), Path("/repo2")]}
 
     def prompt_user(self):
-        return {"profile": "balanced"}
+        return {"emit_artifacts": False}
 
     def build_command(self, targets, options):
-        return ["jmo", "scan", "--profile", "balanced"]
+        return ["jmo", "scan", "--repos-dir", "."]
 
 
 def test_base_wizard_flow_execute_success():
@@ -639,14 +639,60 @@ def test_base_wizard_flow_execute_exception():
         assert result == 1
 
 
-def test_base_wizard_flow_estimate_time():
-    """Test BaseWizardFlow _estimate_time returns correct estimates."""
+def test_base_wizard_flow_estimate_time_sums_the_matrix():
+    """Without --tools the scan considers every TOOL_MATRIX tool, so the estimate
+    is the matrix's, computed by the same helpers the interactive wizard uses."""
+    from scripts.cli.wizard_flows.ui_helpers import (
+        calculate_time_estimate,
+        format_time_range,
+    )
+    from scripts.core.tool_registry import TOOL_MATRIX
+
     flow = ConcreteWizardFlow()
 
-    assert flow._estimate_time("fast") == "5-8 minutes"
-    assert flow._estimate_time("balanced") == "15-20 minutes"
-    assert flow._estimate_time("deep") == "30-60 minutes"
-    assert flow._estimate_time("unknown") == "15-20 minutes"  # Default
+    expected = format_time_range(*calculate_time_estimate(list(TOOL_MATRIX)))
+    assert flow._estimate_time(["jmo", "scan", "--repos-dir", "."]) == expected
+
+
+def test_base_wizard_flow_estimate_time_honours_tools():
+    """`--tools a b` narrows the estimate to those tools, up to the next flag."""
+    from scripts.cli.wizard_flows.ui_helpers import (
+        calculate_time_estimate,
+        format_time_range,
+    )
+
+    flow = ConcreteWizardFlow()
+    command = ["jmo", "scan", "--tools", "syft", "trivy", "--repo", "."]
+
+    expected = format_time_range(*calculate_time_estimate(["syft", "trivy"]))
+    assert flow._estimate_time(command) == expected
+    # Narrowing must actually change the answer, or the test proves nothing
+    assert expected != flow._estimate_time(["jmo", "scan", "--repo", "."])
+
+
+def test_base_wizard_flow_estimate_time_empty_tools_falls_back_to_matrix():
+    """A bare `--tools` names nothing, so the whole matrix is still estimated."""
+    flow = ConcreteWizardFlow()
+
+    assert flow._estimate_time(["jmo", "scan", "--tools", "--repo", "."]) == (
+        flow._estimate_time(["jmo", "scan", "--repo", "."])
+    )
+
+
+def test_base_wizard_flow_preflight_names_no_profile():
+    """The preflight box shows the command and an estimate, and no profile line."""
+    flow = ConcreteWizardFlow()
+
+    with (
+        patch.object(flow.prompter, "print_summary_box") as mock_box,
+        patch.object(flow.prompter, "confirm", return_value=False),
+    ):
+        flow.execute()
+
+    items = mock_box.call_args[0][1]
+    assert items[0] == "Command: jmo scan --repos-dir ."
+    assert items[1].startswith("Estimated time: ")
+    assert not any("profile" in item.lower() for item in items)
 
 
 def test_base_wizard_flow_execute_all_empty_lists():
@@ -793,7 +839,7 @@ def test_artifact_generator_generate_makefile(tmp_path):
     # Mock the underlying generator to avoid complex config requirements
     with patch("scripts.cli.wizard_generators.generate_makefile_target") as mock_gen:
         mock_gen.return_value = "# Mock Makefile\nsecurity-scan:\n\tjmo scan"
-        generator.generate_makefile(["jmo", "scan", "--profile", "balanced"], output)
+        generator.generate_makefile(["jmo", "scan", "--repo", "."], output)
 
     # Verify the generator was called
     mock_gen.assert_called_once()
@@ -810,9 +856,7 @@ def test_artifact_generator_generate_github_actions(tmp_path):
     # Mock the underlying generator to avoid complex config requirements
     with patch("scripts.cli.wizard_generators.generate_github_actions") as mock_gen:
         mock_gen.return_value = "# Mock GHA workflow"
-        generator.generate_github_actions(
-            ["jmo", "scan", "--profile", "balanced"], output
-        )
+        generator.generate_github_actions(["jmo", "scan", "--repo", "."], output)
 
     mock_gen.assert_called_once()
 
@@ -827,9 +871,7 @@ def test_artifact_generator_generate_shell_script(tmp_path):
     # Mock the underlying generator
     with patch("scripts.cli.wizard_generators.generate_shell_script") as mock_gen:
         mock_gen.return_value = "#!/bin/bash\njmo scan"
-        generator.generate_shell_script(
-            ["jmo", "scan", "--profile", "balanced"], output
-        )
+        generator.generate_shell_script(["jmo", "scan", "--repo", "."], output)
 
     mock_gen.assert_called_once()
 

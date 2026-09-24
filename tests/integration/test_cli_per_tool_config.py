@@ -1,4 +1,14 @@
 #!/usr/bin/env python3
+"""`jmo.yml`'s top-level scan settings reach the scan.
+
+Ported from `test_cli_profiles.py` when v2.0.0 removed scan profiles. Every
+setting those tests exercised through a `profiles.<name>` block (tools,
+include/exclude, per-tool flags, timeouts, retries) is now written once at the
+top level, so each test here states it there. What only profiles could do --
+select a named tool subset, merge a profile's `per_tool` over the root one,
+override `threads` per profile -- left with them, and so did its tests.
+"""
+
 from __future__ import annotations
 
 import types
@@ -15,31 +25,53 @@ def _write_yaml(p: Path, data: dict) -> None:
     p.write_text(yaml.safe_dump(data), encoding="utf-8")
 
 
-def test_scan_profile_include_exclude_only_scans_included(tmp_path: Path, monkeypatch):
+def test_scan_include_exclude_only_scans_included(tmp_path: Path, monkeypatch):
     # Create fake repos: a, b, skipme
     repos_dir = tmp_path / "repos"
     (repos_dir / "a").mkdir(parents=True)
     (repos_dir / "b").mkdir(parents=True)
     (repos_dir / "skipme").mkdir(parents=True)
 
-    # Config with profile controlling include/exclude and tools
-    # Updated to use trufflehog (gitleaks removed in v0.5.0)
+    # Config controlling include/exclude and tools
     cfg = {
-        "default_profile": "fast",
-        "profiles": {
-            "fast": {
-                "tools": ["trufflehog"],
-                "include": ["a*", "b"],
-                "exclude": ["skip*"],
-                "timeout": 60,
-                "threads": 2,
-            }
-        },
+        "tools": ["trufflehog"],
+        "include": ["a*", "b"],
+        "exclude": ["skip*"],
+        "timeout": 60,
+        "threads": 2,
     }
     cfg_path = tmp_path / "jmo.yml"
     _write_yaml(cfg_path, cfg)
 
-    # Mock tool availability check to pretend trufflehog is installed
+    # Every tool resolves -- to a stub under tmp_path, never a real binary --
+    # and every launch is recorded. The negative half below used to depend on
+    # which scanners the machine had installed: a tool the config excluded
+    # could only be seen running if it was really there. Here any tool the
+    # scanner reaches for is "installed", so one that runs is always caught.
+    import subprocess
+
+    from scripts.cli.scan_jobs import repository_scanner
+    from scripts.core import tool_runner
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+
+    def resolve(name: str) -> str:
+        stub = bin_dir / name
+        stub.write_bytes(b"")
+        return str(stub)
+
+    launched: list[str] = []
+
+    def fake_run(cmd, *args, **kwargs):
+        if isinstance(cmd, list) and cmd and Path(cmd[0]).parent == bin_dir:
+            launched.append(Path(cmd[0]).name)
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(repository_scanner, "find_tool", resolve)
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(tool_runner, "_run_bounded", fake_run)
+    # Mock tool availability check to pretend every requested tool is installed
     monkeypatch.setattr(jmo, "_check_scan_tools", lambda args, tools: (tools, []))
     # Set CI=true to skip interactive prompts
     monkeypatch.setenv("CI", "true")
@@ -59,15 +91,8 @@ def test_scan_profile_include_exclude_only_scans_included(tmp_path: Path, monkey
         timeout=None,
         threads=None,
         allow_missing_tools=True,
-        profile_name=None,
         log_level="DEBUG",
         human_logs=True,
-        # `--skip-tools semgrep` used to be required here, and the comment it
-        # replaced explained why: `profiles.fast.tools: [trufflehog]` above was
-        # dead config, so the built-in `fast` list ran regardless -- including
-        # semgrep, resolved for real and fetching its ruleset over the network
-        # (#907). The config now does what it says (#975), so the workaround is
-        # gone and this test exercises the key it was always relying on.
         skip_tools=None,
     )
     rc = jmo.cmd_scan(args)
@@ -78,24 +103,22 @@ def test_scan_profile_include_exclude_only_scans_included(tmp_path: Path, monkey
     assert (indiv / "b" / "trufflehog.json").exists()
     assert not (indiv / "skipme").exists()
 
-    # The negative half, which is what #975 asks for and what this test's shape
-    # could never catch: a tool the configuration excludes must not run.
-    # Asserting the included tool appears says nothing about the eight that
-    # also did.
+    # The negative half, which is what #975 asks for: a tool the configuration
+    # excludes must not run. Asserting the included tool appears says nothing
+    # about the eight that also did.
+    assert set(launched) == {"trufflehog"}, (
+        f"`tools: [trufflehog]` excluded the rest, and these ran: {sorted(launched)}"
+    )
     # `scan-timings.json` is the scan phase's own diagnostic, not a tool's
     # output -- every target gets one whatever ran.
     #
     # Only `.json` files are considered, which is a property rather than a
-    # list: every one of the 31 tool outputs in `repository_scanner.py` is
-    # written as `out_dir / "<tool>.json"`, and the scan phase's scratch is
-    # dot-prefixed -- `.afl_corpus`, `.afl_output`, `.noseyparker_datastore`,
-    # `.trufflehog-exclude`. Enumerating the scratch instead is what this used
-    # to do, and it broke the moment a fourth one appeared: #1134 added
+    # list: every tool output in `repository_scanner.py` is written as
+    # `out_dir / "<tool>.json"`, and the scan phase's scratch is dot-prefixed
+    # (`.trufflehog-exclude`). Enumerating the scratch instead is what this
+    # used to do, and it broke the moment a new one appeared: #1134 added
     # `trufflehog-exclude.txt`, which matched neither shape, and the 2026-09-04
     # nightly failed with `['trufflehog-exclude.txt'] == []`.
-    #
-    # This is strictly stronger as well as more durable: a stray `.json` from
-    # any tool still fails, including one nobody has added yet.
     not_a_tool_output = {"trufflehog.json", "scan-timings.json"}
     for scanned in ("a", "b"):
         stray = sorted(
@@ -104,8 +127,8 @@ def test_scan_profile_include_exclude_only_scans_included(tmp_path: Path, monkey
             if p.suffix == ".json" and p.name not in not_a_tool_output
         )
         assert stray == [], (
-            f"`profiles.fast.tools: [trufflehog]` excluded these, and they ran "
-            f"anyway in {scanned}: {stray}"
+            f"`tools: [trufflehog]` excluded these, and they ran anyway in "
+            f"{scanned}: {stray}"
         )
 
 
@@ -116,13 +139,8 @@ def test_scan_per_tool_flags_injected(tmp_path: Path, monkeypatch):
     r.mkdir(parents=True)
 
     cfg = {
-        "default_profile": "fast",
-        "profiles": {
-            "fast": {
-                "tools": ["semgrep"],
-                "per_tool": {"semgrep": {"flags": ["--exclude", "node_modules"]}},
-            }
-        },
+        "tools": ["semgrep"],
+        "per_tool": {"semgrep": {"flags": ["--exclude", "node_modules"]}},
     }
     cfg_path = tmp_path / "jmo.yml"
     _write_yaml(cfg_path, cfg)
@@ -179,7 +197,6 @@ def test_scan_per_tool_flags_injected(tmp_path: Path, monkeypatch):
         timeout=None,
         threads=None,
         allow_missing_tools=False,
-        profile_name=None,
         log_level="INFO",
         human_logs=False,
     )
@@ -204,13 +221,8 @@ def test_scan_retries_on_failure_then_success(tmp_path: Path, monkeypatch):
 
     cfg = {
         "retries": 2,
-        "default_profile": "deep",
-        "profiles": {
-            "deep": {
-                "tools": ["syft"],
-                "timeout": 5,
-            }
-        },
+        "tools": ["syft"],
+        "timeout": 5,
     }
     cfg_path = tmp_path / "jmo.yml"
     _write_yaml(cfg_path, cfg)
@@ -262,7 +274,6 @@ def test_scan_retries_on_failure_then_success(tmp_path: Path, monkeypatch):
         timeout=None,
         threads=None,
         allow_missing_tools=False,
-        profile_name=None,
         log_level="INFO",
         human_logs=False,
     )
@@ -272,12 +283,12 @@ def test_scan_retries_on_failure_then_success(tmp_path: Path, monkeypatch):
     assert attempt["n"] >= 2
 
 
-# ========== Expanded Per-Tool Override Tests (Added Oct 19 2025) ==========
+# ========== Per-Tool Override Tests (Added Oct 19 2025) ==========
 
 
 @pytest.mark.requires_tools
 def test_per_tool_timeout_override(tmp_path: Path):
-    """Test per-tool timeout override in profile."""
+    """Test per-tool timeout override of the top-level timeout."""
     import os
     import subprocess
     import sys
@@ -291,18 +302,15 @@ def test_per_tool_timeout_override(tmp_path: Path):
     config_file.write_text("""
 tools: [semgrep]
 outputs: [json]
+timeout: 300
 
-profiles:
-  custom:
-    tools: [semgrep]
-    timeout: 300
-    per_tool:
-      semgrep:
-        timeout: 600  # Override global timeout
-        flags: ["--exclude", "tests"]
+per_tool:
+  semgrep:
+    timeout: 600  # Override global timeout
+    flags: ["--exclude", "tests"]
 """)
 
-    # Run scan with custom profile
+    # Run scan with the custom config
     cmd = [
         sys.executable,
         "-m",
@@ -316,8 +324,6 @@ profiles:
         str(tmp_path / "history.db"),
         "--repo",
         str(test_repo),
-        "--profile-name",
-        "custom",
         "--config",
         str(config_file),
         "--results-dir",
@@ -348,7 +354,7 @@ profiles:
 
 
 def test_per_tool_flags_override(tmp_path: Path):
-    """Test per-tool flags override in profile."""
+    """Test per-tool flags override."""
     import os
     import subprocess
     import sys
@@ -384,13 +390,10 @@ def test_per_tool_flags_override(tmp_path: Path):
 tools: [semgrep]
 outputs: [json]
 
-profiles:
-  exclude-tests:
-    tools: [semgrep]
-    per_tool:
-      semgrep:
-        flags: ["--exclude", "tests"]
-        configs: ["{offline_semgrep_rule.as_posix()}"]
+per_tool:
+  semgrep:
+    flags: ["--exclude", "tests"]
+    configs: ["{offline_semgrep_rule.as_posix()}"]
 """)
 
     # Run scan
@@ -407,8 +410,6 @@ profiles:
         str(tmp_path / "history.db"),
         "--repo",
         str(test_repo),
-        "--profile-name",
-        "exclude-tests",
         "--config",
         str(config_file),
         "--results-dir",
@@ -430,7 +431,7 @@ profiles:
 
 
 def test_per_tool_retries_override(tmp_path: Path):
-    """Test per-tool retry override in profile."""
+    """Test per-tool retry override of the top-level retries."""
     import os
     import subprocess
     import sys
@@ -444,14 +445,11 @@ def test_per_tool_retries_override(tmp_path: Path):
     config_file.write_text("""
 tools: [trivy]
 outputs: [json]
+retries: 0  # Global: no retries
 
-profiles:
-  retry-profile:
-    tools: [trivy]
-    retries: 0  # Global: no retries
-    per_tool:
-      trivy:
-        retries: 2  # Override: 2 retries for trivy
+per_tool:
+  trivy:
+    retries: 2  # Override: 2 retries for trivy
 """)
 
     # Run scan
@@ -468,8 +466,6 @@ profiles:
         str(tmp_path / "history.db"),
         "--repo",
         str(test_repo),
-        "--profile-name",
-        "retry-profile",
         "--config",
         str(config_file),
         "--results-dir",
@@ -487,362 +483,18 @@ profiles:
     assert result.returncode in [0, 1]
 
 
-@pytest.mark.requires_tools
-def test_profile_tool_selection_fast(tmp_path: Path):
-    """Test fast profile invokes correct tool subset."""
-    import os
-    import subprocess
-    import sys
-
-    test_repo = tmp_path / "test-repo"
-    test_repo.mkdir()
-    (test_repo / "app.py").write_text("x = 1")
-
-    results_dir = tmp_path / "results"
-
-    # Run fast profile scan
-    cmd = [
-        sys.executable,
-        "-m",
-        "scripts.cli.jmo",
-        "scan",
-        # The history db path is CWD-relative, so the
-        # HOME/USERPROFILE redirect below does not reach
-        # it. Without this the scan lands in the repo's
-        # real .jmo/history.db (measured: 2470 -> 2471).
-        "--history-db",
-        str(tmp_path / "history.db"),
-        "--repo",
-        str(test_repo),
-        "--profile-name",
-        "fast",
-        "--results-dir",
-        str(results_dir),
-        "--allow-missing-tools",
-        "--human-logs",
-    ]
-    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
-    # resolves `Path.home()` with no injection point. monkeypatch cannot
-    # reach across this subprocess boundary, so redirect it via the env vars
-    # Path.home() actually reads: USERPROFILE on Windows (ntpath.expanduser),
-    # HOME on Linux/macOS (posixpath.expanduser).
-    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=240, env=env)
-    assert result.returncode in [0, 1]
-
-    # Verify expected tools invoked (check logs OR stub files)
-    output = result.stdout + result.stderr
-    tool_output_dir = results_dir / "individual-repos" / "test-repo"
-
-    # Fast profile: trufflehog, semgrep, trivy
-    expected_tools = ["trufflehog", "semgrep", "trivy"]
-    for tool in expected_tools:
-        # Tool invoked if logged OR stub file exists
-        stub_file = tool_output_dir / f"{tool}.json"
-        assert tool in output.lower() or stub_file.exists(), (
-            f"Fast profile should invoke {tool} (log or stub)"
-        )
-
-
-@pytest.mark.requires_tools
-def test_profile_tool_selection_balanced(tmp_path: Path):
-    """Test balanced profile invokes correct tool subset."""
-    import os
-    import subprocess
-    import sys
-
-    test_repo = tmp_path / "test-repo"
-    test_repo.mkdir()
-    (test_repo / "app.py").write_text("x = 1")
-    # Add Dockerfile for hadolint
-    (test_repo / "Dockerfile").write_text("FROM python:3.11\nCOPY . /app")
-    # Add HTML file for zap
-    (test_repo / "index.html").write_text("<html><body>Test</body></html>")
-
-    results_dir = tmp_path / "results"
-
-    # Run balanced profile scan
-    cmd = [
-        sys.executable,
-        "-m",
-        "scripts.cli.jmo",
-        "scan",
-        # The history db path is CWD-relative, so the
-        # HOME/USERPROFILE redirect below does not reach
-        # it. Without this the scan lands in the repo's
-        # real .jmo/history.db (measured: 2470 -> 2471).
-        "--history-db",
-        str(tmp_path / "history.db"),
-        "--repo",
-        str(test_repo),
-        "--profile-name",
-        "balanced",
-        "--results-dir",
-        str(results_dir),
-        "--allow-missing-tools",
-        "--human-logs",
-    ]
-    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
-    # resolves `Path.home()` with no injection point. monkeypatch cannot
-    # reach across this subprocess boundary, so redirect it via the env vars
-    # Path.home() actually reads: USERPROFILE on Windows (ntpath.expanduser),
-    # HOME on Linux/macOS (posixpath.expanduser).
-    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=240, env=env)
-    assert result.returncode in [0, 1]
-
-    # Verify expected tools invoked (check logs OR stub files)
-    output = result.stdout + result.stderr
-    tool_output_dir = results_dir / "individual-repos" / "test-repo"
-
-    # Balanced profile for repositories: Core tools that always run
-    # Note: hadolint only runs if Dockerfile exists, zap only if web files exist
-    # We verify the core tools that should always run
-    core_tools = [
-        "trufflehog",
-        "semgrep",
-        "syft",
-        "trivy",
-        "checkov",
-    ]
-    for tool in core_tools:
-        stub_file = tool_output_dir / f"{tool}.json"
-        assert tool in output.lower() or stub_file.exists(), (
-            f"Balanced profile should invoke {tool} (log or stub)"
-        )
-
-    # Verify conditional tools run when applicable
-    for tool in ["hadolint", "zap"]:
-        stub_file = tool_output_dir / f"{tool}.json"
-        assert tool in output.lower() or stub_file.exists(), (
-            f"{tool} should run when applicable files exist (log or stub)"
-        )
-
-
-@pytest.mark.requires_tools
-def test_profile_tool_selection_deep(tmp_path: Path):
-    """Test deep profile invokes correct tool subset."""
-    import os
-    import subprocess
-    import sys
-
-    test_repo = tmp_path / "test-repo"
-    test_repo.mkdir()
-    (test_repo / "app.py").write_text("x = 1")
-    # Add Dockerfile for hadolint
-    (test_repo / "Dockerfile").write_text("FROM python:3.11\nCOPY . /app")
-    # Add HTML file for zap
-    (test_repo / "index.html").write_text("<html><body>Test</body></html>")
-
-    results_dir = tmp_path / "results"
-
-    # Run deep profile scan
-    cmd = [
-        sys.executable,
-        "-m",
-        "scripts.cli.jmo",
-        "scan",
-        # The history db path is CWD-relative, so the
-        # HOME/USERPROFILE redirect below does not reach
-        # it. Without this the scan lands in the repo's
-        # real .jmo/history.db (measured: 2470 -> 2471).
-        "--history-db",
-        str(tmp_path / "history.db"),
-        "--repo",
-        str(test_repo),
-        "--profile-name",
-        "deep",
-        "--results-dir",
-        str(results_dir),
-        "--allow-missing-tools",
-        "--human-logs",
-    ]
-    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
-    # resolves `Path.home()` with no injection point. monkeypatch cannot
-    # reach across this subprocess boundary, so redirect it via the env vars
-    # Path.home() actually reads: USERPROFILE on Windows (ntpath.expanduser),
-    # HOME on Linux/macOS (posixpath.expanduser).
-    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=240, env=env)
-    assert result.returncode in [0, 1]
-
-    # Verify expected tools invoked (check logs OR stub files)
-    output = result.stdout + result.stderr
-    tool_output_dir = results_dir / "individual-repos" / "test-repo"
-
-    # Deep profile for repositories: Core tools that always run
-    # Note: falco/afl++ need special files that are hard to fabricate in tests
-    core_tools = [
-        "trufflehog",
-        "noseyparker",  # May show as noseyparker-init/scan/report
-        "semgrep",
-        "bandit",
-        "syft",
-        "trivy",
-        "checkov",
-    ]
-    for tool in core_tools:
-        stub_file = tool_output_dir / f"{tool}.json"
-        assert tool in output.lower() or stub_file.exists(), (
-            f"Deep profile should invoke {tool} (log or stub)"
-        )
-
-    # Verify conditional tools run when applicable
-    for tool in ["hadolint", "zap"]:
-        stub_file = tool_output_dir / f"{tool}.json"
-        assert tool in output.lower() or stub_file.exists(), (
-            f"{tool} should run when applicable files exist (log or stub)"
-        )
-
-
-@pytest.mark.requires_tools
-def test_profile_inherits_global_per_tool_config(tmp_path: Path):
-    """Test profile inherits global per_tool config and merges correctly."""
-    import os
-    import subprocess
-    import sys
-
-    test_repo = tmp_path / "test-repo"
-    test_repo.mkdir()
-    (test_repo / "app.py").write_text("import os")
-
-    # Create config with global per_tool and profile per_tool
-    config_file = tmp_path / "inherit-config.yml"
-    config_file.write_text("""
-tools: [trivy, semgrep]
-outputs: [json]
-
-per_tool:
-  trivy:
-    flags: ["--no-progress"]  # Global trivy config
-  semgrep:
-    flags: ["--exclude", "tests"]  # Global semgrep config
-
-profiles:
-  custom:
-    tools: [trivy, semgrep]
-    per_tool:
-      trivy:
-        timeout: 600  # Profile adds timeout (merges with global flags)
-      semgrep:
-        flags: ["--exclude", "node_modules"]  # Profile overrides global flags
-""")
-
-    # Run scan
-    cmd = [
-        sys.executable,
-        "-m",
-        "scripts.cli.jmo",
-        "scan",
-        # The history db path is CWD-relative, so the
-        # HOME/USERPROFILE redirect below does not reach
-        # it. Without this the scan lands in the repo's
-        # real .jmo/history.db (measured: 2470 -> 2471).
-        "--history-db",
-        str(tmp_path / "history.db"),
-        "--repo",
-        str(test_repo),
-        "--profile-name",
-        "custom",
-        "--config",
-        str(config_file),
-        "--results-dir",
-        str(tmp_path / "results"),
-        "--allow-missing-tools",
-    ]
-    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
-    # resolves `Path.home()` with no injection point. monkeypatch cannot
-    # reach across this subprocess boundary, so redirect it via the env vars
-    # Path.home() actually reads: USERPROFILE on Windows (ntpath.expanduser),
-    # HOME on Linux/macOS (posixpath.expanduser).
-    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, env=env)
-    assert result.returncode in [0, 1]
-
-    # Verify both tools ran (check logs OR stub files)
-    output = result.stdout + result.stderr
-    results_dir = tmp_path / "results"
-    tool_output_dir = results_dir / "individual-repos" / "test-repo"
-
-    for tool in ["trivy", "semgrep"]:
-        stub_file = tool_output_dir / f"{tool}.json"
-        assert tool in output.lower() or stub_file.exists(), (
-            f"{tool} should run (log or stub)"
-        )
-
-
-@pytest.mark.requires_tools
-def test_profile_thread_override(tmp_path: Path):
-    """Test profile-specific thread count override."""
-    import os
-    import subprocess
-    import sys
-
-    test_repo = tmp_path / "test-repo"
-    test_repo.mkdir()
-    (test_repo / "app.py").write_text("print('test')")
-
-    # Create config with profile thread override
-    config_file = tmp_path / "thread-config.yml"
-    config_file.write_text("""
-tools: [trufflehog, semgrep]
-outputs: [json]
-threads: 2  # Global default
-
-profiles:
-  high-thread:
-    tools: [trufflehog, semgrep]
-    threads: 8  # Profile overrides to 8
-""")
-
-    # Run scan with profile
-    cmd = [
-        sys.executable,
-        "-m",
-        "scripts.cli.jmo",
-        "scan",
-        # The history db path is CWD-relative, so the
-        # HOME/USERPROFILE redirect below does not reach
-        # it. Without this the scan lands in the repo's
-        # real .jmo/history.db (measured: 2470 -> 2471).
-        "--history-db",
-        str(tmp_path / "history.db"),
-        "--repo",
-        str(test_repo),
-        "--profile-name",
-        "high-thread",
-        "--config",
-        str(config_file),
-        "--results-dir",
-        str(tmp_path / "results"),
-        "--allow-missing-tools",
-        "--human-logs",
-    ]
-    # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
-    # resolves `Path.home()` with no injection point. monkeypatch cannot
-    # reach across this subprocess boundary, so redirect it via the env vars
-    # Path.home() actually reads: USERPROFILE on Windows (ntpath.expanduser),
-    # HOME on Linux/macOS (posixpath.expanduser).
-    env = {**os.environ, "USERPROFILE": str(tmp_path), "HOME": str(tmp_path)}
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, env=env)
-    assert result.returncode in [0, 1]
-
-    # Verify scan completed (thread count affects parallelism, not correctness)
-    assert (tmp_path / "results" / "individual-repos").exists()
-
-
 def test_scan_startup_does_not_version_check_unrequested_tools(
     tmp_path: Path, monkeypatch
 ):
-    """Scan startup cost must scale with the tools asked for, not the profile.
+    """Scan startup cost must scale with the tools asked for, not the matrix.
 
-    Measured on this machine, `deep` profile, terragoat:
+    Measured on this machine (v1, its 22-tool `deep` profile, terragoat):
         22-tool scan   Scan targets -> Starting scan = 23.3s
          3-tool scan   Scan targets -> Starting scan = 20.8s
 
-    Nearly identical, because `cmd_scan` calls `ToolManager.get_tool_summary(
+    Nearly identical, because `cmd_scan` called `ToolManager.get_tool_summary(
     profile)` purely to render the `X/Y` number in one INFO line, and that
-    sweeps every platform-applicable tool in the profile, spawning a
+    swept every platform-applicable tool in the profile, spawning a
     `--version` subprocess for each.
 
     That flat ~21s tax is what breaks
@@ -854,10 +506,7 @@ def test_scan_startup_does_not_version_check_unrequested_tools(
     repos_dir = tmp_path / "repos"
     (repos_dir / "proj").mkdir(parents=True)
 
-    cfg = {
-        "default_profile": "fast",
-        "profiles": {"fast": {"tools": ["trufflehog"], "timeout": 60, "threads": 1}},
-    }
+    cfg = {"tools": ["trufflehog"], "timeout": 60, "threads": 1}
     cfg_path = tmp_path / "jmo.yml"
     _write_yaml(cfg_path, cfg)
 
@@ -888,7 +537,6 @@ def test_scan_startup_does_not_version_check_unrequested_tools(
         timeout=None,
         threads=None,
         allow_missing_tools=True,
-        profile_name="fast",
         log_level="INFO",
         human_logs=True,
     )
@@ -910,8 +558,8 @@ def test_scan_startup_does_not_version_check_unrequested_tools(
     unrequested = sorted(set(checked) - {"trufflehog"})
     assert not unrequested, (
         f"scan startup version-checked {len(unrequested)} tool(s) nobody asked "
-        f"for: {unrequested}. Each is a subprocess spawn; on the deep profile "
-        f"this costs ~21s before any scanning begins."
+        f"for: {unrequested}. Each is a subprocess spawn; across the whole "
+        f"matrix this cost ~21s before any scanning began."
     )
 
 
@@ -920,10 +568,10 @@ def test_scan_startup_probes_each_tool_at_most_once(tmp_path: Path, monkeypatch)
 
     Measured: `ToolManager.check_tool("checkov")` costs 4.23s on the first call
     and 3.08s on the second - there is no caching, and a `--version` probe of a
-    Python-based tool is genuinely that slow on Windows. A full `balanced`
-    sweep is 16.4s.
+    Python-based tool is genuinely that slow on Windows. A full sweep of v1's
+    17-tool `balanced` profile was 16.4s.
 
-    Scan startup performs that sweep three times, against three separate
+    Scan startup performed that sweep three times, against three separate
     ToolManager instances: the critical-update warning, the missing-tool
     pre-flight, and the summary used for one log line. Nothing can change on
     disk between them, so two of the three are pure waste - and together they
@@ -953,15 +601,10 @@ def test_scan_startup_probes_each_tool_at_most_once(tmp_path: Path, monkeypatch)
     )
 
     cfg = {
-        "default_profile": "fast",
-        "profiles": {
-            "fast": {
-                "tools": ["trufflehog", "semgrep", "trivy"],
-                "timeout": 60,
-                "threads": 1,
-                "per_tool": {"semgrep": {"configs": [str(offline_semgrep_rule)]}},
-            }
-        },
+        "tools": ["trufflehog", "semgrep", "trivy"],
+        "timeout": 60,
+        "threads": 1,
+        "per_tool": {"semgrep": {"configs": [str(offline_semgrep_rule)]}},
     }
     cfg_path = tmp_path / "jmo.yml"
     _write_yaml(cfg_path, cfg)
@@ -1005,7 +648,6 @@ def test_scan_startup_probes_each_tool_at_most_once(tmp_path: Path, monkeypatch)
         timeout=None,
         threads=None,
         allow_missing_tools=True,
-        profile_name="fast",
         log_level="INFO",
         human_logs=True,
     )

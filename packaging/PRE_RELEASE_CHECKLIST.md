@@ -129,9 +129,9 @@ jmo.exe wizard --help
 jmo.exe scan --help
 # Expected: Scan help text appears
 
-# Test 4: Fast profile help
-jmo.exe fast --help
-# Expected: Fast profile help text appears
+# Test 4: Report help
+jmo.exe report --help
+# Expected: Report help text appears
 
 # Test 5: Schedule help
 jmo.exe schedule --help

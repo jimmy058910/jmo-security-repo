@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any
 
 from .base_flow import BaseWizardFlow
-from .profile_config import PROFILES, get_profile_warning
 
 
 class EntireStackFlow(BaseWizardFlow):
@@ -26,28 +25,15 @@ class EntireStackFlow(BaseWizardFlow):
         }
 
     def prompt_user(self) -> dict[str, Any]:
-        """Prompt for profile selection with smart recommendations.
+        """Prompt for scan options with smart recommendations.
 
         Returns:
-            Dictionary with profile selection and options
+            Dictionary with user selections
         """
         # Generate and display smart recommendations
         recommendations = self._generate_recommendations(self.detected_targets)
         if recommendations:
             self.prompter.print_summary_box("💡 Smart Recommendations", recommendations)
-
-        # Profile selection
-        profile = self.prompter.prompt_choice(
-            "Select scan profile:",
-            choices=list(PROFILES),
-            default="balanced",
-        )
-
-        # Show profile-specific warnings (e.g., deep profile first-run timing)
-        warning = get_profile_warning(profile)
-        if warning:
-            print()  # Add spacing
-            self.prompter.print_warning(warning)
 
         # Artifact generation option
         emit_artifacts = self.prompter.prompt_yes_no(
@@ -61,7 +47,6 @@ class EntireStackFlow(BaseWizardFlow):
         )
 
         return {
-            "profile": profile,
             "emit_artifacts": emit_artifacts,
             "parallel": parallel_scan,
         }
@@ -71,12 +56,12 @@ class EntireStackFlow(BaseWizardFlow):
 
         Args:
             targets: Detected targets (all types)
-            options: User selections (profile)
+            options: User selections
 
         Returns:
             Command list
         """
-        cmd = ["jmo", "scan", "--profile-name", options["profile"]]
+        cmd = ["jmo", "scan"]
 
         # Add repositories
         if targets["repos"]:

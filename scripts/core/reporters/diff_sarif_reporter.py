@@ -14,7 +14,7 @@ SARIF Diff Representation:
 
 v1.0.0 Metadata:
     Run properties include diff context:
-    - baseline/current source info (path, timestamp, profile)
+    - baseline/current source info (path, timestamp)
     - statistics (totals, net change, trend)
     - JMo Security tool information
 
@@ -129,14 +129,12 @@ def write_sarif_diff(diff: DiffResult, out_path: Path) -> None:
                         "source_type": diff.baseline_source.source_type,
                         "path": diff.baseline_source.path,
                         "timestamp": diff.baseline_source.timestamp,
-                        "profile": diff.baseline_source.profile,
                         "total_findings": diff.baseline_source.total_findings,
                     },
                     "current": {
                         "source_type": diff.current_source.source_type,
                         "path": diff.current_source.path,
                         "timestamp": diff.current_source.timestamp,
-                        "profile": diff.current_source.profile,
                         "total_findings": diff.current_source.total_findings,
                     },
                     "statistics": diff.statistics,

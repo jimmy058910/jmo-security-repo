@@ -94,7 +94,6 @@ class BackendConfig:
 class JobTemplateSpec:
     """Scan job specification."""
 
-    profile: str
     targets: dict[str, Any]
     results: dict[str, Any]
     options: dict[str, Any]
@@ -116,9 +115,7 @@ class ScheduleSpec:
         default_factory=lambda: BackendConfig(type="github-actions")
     )
     jobTemplate: JobTemplateSpec = field(
-        default_factory=lambda: JobTemplateSpec(
-            profile="balanced", targets={}, results={}, options={}
-        )
+        default_factory=lambda: JobTemplateSpec(targets={}, results={}, options={})
     )
 
 
@@ -147,7 +144,7 @@ class ScanSchedule:
     spec: ScheduleSpec = field(
         default_factory=lambda: ScheduleSpec(
             schedule="",
-            jobTemplate=JobTemplateSpec(profile="", targets={}, results={}, options={}),
+            jobTemplate=JobTemplateSpec(targets={}, results={}, options={}),
         )
     )
     status: ScheduleStatus = field(default_factory=lambda: ScheduleStatus())
@@ -161,7 +158,6 @@ class ScanSchedule:
         cls,
         name: str,
         cron: str,
-        profile: str,
         repos_dir: str | None = None,
         backend: str = "github-actions",
         labels: dict[str, str] | None = None,
@@ -174,7 +170,6 @@ class ScanSchedule:
         ScanSchedule.from_simple_args(
             name="nightly-scan",
             cron="0 2 * * *",
-            profile="balanced",
             repos_dir="~/repos",
             labels={"env": "prod"}
         )
@@ -186,7 +181,6 @@ class ScanSchedule:
             spec=ScheduleSpec(
                 schedule="0 2 * * *",
                 jobTemplate=JobTemplateSpec(
-                    profile="balanced",
                     targets={"repos_dir": "~/repos"},
                     ...
                 )
@@ -284,7 +278,6 @@ class ScanSchedule:
                     type=backend, config=kwargs.pop("backend_config", {})
                 ),
                 jobTemplate=JobTemplateSpec(
-                    profile=profile,
                     targets=targets,
                     results=results,
                     options=options,
@@ -499,9 +492,14 @@ class ScheduleManager:
         backend = self._rehydrate(
             BackendConfig, data["spec"]["backend"], where="spec.backend", name=name
         )
+        # A schedule stored before v2.0.0 carries the scan profile it ran.
+        # Profiles are gone, so the key is dropped here rather than reported by
+        # _rehydrate as "written by a newer version", which it was not.
+        job_data = dict(data["spec"]["jobTemplate"])
+        job_data.pop("profile", None)
         job_template = self._rehydrate(
             JobTemplateSpec,
-            data["spec"]["jobTemplate"],
+            job_data,
             where="spec.jobTemplate",
             name=name,
         )

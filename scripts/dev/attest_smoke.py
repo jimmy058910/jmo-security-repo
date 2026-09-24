@@ -58,8 +58,8 @@ FIXTURE = {
             "id": "0000eba9addb92a7",
             "severity": "HIGH",
             "title": "Attest smoke fixture",
-            "tool": "bandit",
-            "ruleId": "B101",
+            "tool": "semgrep",
+            "ruleId": "smoke.fixture.rule",
             "location": {"path": "smoke/app.py", "startLine": 1},
         }
     ],

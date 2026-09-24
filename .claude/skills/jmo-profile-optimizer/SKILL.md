@@ -1,14 +1,14 @@
 ---
 name: jmo-profile-optimizer
-description: Analyze scan-phase tool timings (`scan-timings.json`) and report-phase parse timings (`jmo report --profile`), then tune profile configuration (threads, timeouts, per-tool flags) against measured evidence. Use when a scan or its report is slow, or a profile needs rebalancing.
-argument-hint: <profile-name>
+description: Analyze scan-phase tool timings (`scan-timings.json`) and report-phase parse timings (`jmo report --profile`), then tune per-tool configuration in `jmo.yml` (threads, the scan timeout, `per_tool` timeouts and flags) against measured evidence. Use when a scan or its report is slow, or a tool keeps timing out.
+argument-hint: <baseline-label>
 user-invocable: true
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash
 ---
 
 ## Execution
 
-Optimize profile: **$ARGUMENTS**
+Baseline label: **$ARGUMENTS** (names the scanned target set, e.g. `juice-shop`; it keys the stored baseline)
 
 **Current config:**
 !head -30 jmo.yml 2>/dev/null || echo "jmo.yml not found"
@@ -43,6 +43,24 @@ So "why is the scan slow" is now answerable per tool, from the scan's own
 output. "Is tool X *usually* slow, or was that one run" is not — that needs the
 per-scan files collected over time, which nothing does yet.
 
+### What this skill tunes
+
+There are no scan profiles: `TOOL_MATRIX` in `scripts/core/tool_registry.py` is
+the one default tool list, and the target's content decides which of those tools
+run. Everything this skill changes is a **top-level** `jmo.yml` key:
+
+| Key | Controls |
+|---|---|
+| `threads` | Targets scanned concurrently, and the report phase's worker count (`--threads` on `jmo scan` / `jmo report` overrides it) |
+| `timeout` | Default per-tool timeout in seconds (`jmo scan --timeout` overrides it) |
+| `per_tool.<tool>.timeout` | That tool's timeout; wins outright over the default and any floor |
+| `per_tool.<tool>.flags` | Extra flags for that tool (output-location flags are dropped; JMo owns them) |
+| `tools` | Narrows the list; `jmo scan --tools` / `--skip-tools` do the same per run |
+
+A tool with a floor in `TOOL_TIMEOUT_DEFAULTS` (`scripts/cli/scan_utils.py`)
+never gets less than the floor from `timeout` or `--timeout`; only a
+`per_tool.<tool>.timeout` can go below it.
+
 ---
 
 ## Skill Invocation
@@ -51,48 +69,53 @@ per-scan files collected over time, which nothing does yet.
 
 **Direct actions:**
 
-- "Optimize the {profile} profile configuration"
-- "Analyze timings.json and recommend improvements"
-- "Which adapter is slowest to parse?"
+- "Tune the per-tool timeouts for this repository"
+- "Analyze scan-timings.json and timings.json and recommend improvements"
+- "Which tool is slowest to run?" / "Which adapter is slowest to parse?"
 
 **Problem statements:**
 
+- "The scan is taking too long"
+- "{tool} keeps timing out"
 - "Report generation is taking too long"
-- "Aggregation is slow on large result sets"
 - "{tool} produces too many findings"
 
 **Context clues:**
 
-- References to `timings.json`, aggregation time, or worker/thread counts
+- References to `scan-timings.json`, `timings.json`, aggregation time, or worker/thread counts
 - Questions about `per_tool` timeout or flag configuration in `jmo.yml`
 
 ---
 
 ## Skill Workflow (6 Phases)
 
-### Phase 0: Validate the profile name, then query memory
+### Phase 0: Validate the baseline label, then query memory
 
 `$ARGUMENTS` is untrusted input that becomes part of a file path. **Validate it
-before any file tool call.** Reject anything containing path separators or `..`,
-then confirm it names a profile that actually exists — built-in profiles come
-from `scripts/core/tool_registry.py:PROFILE_TOOLS`, and users may define more
-under `profiles:` in `jmo.yml`.
+before any file tool call.** Reject anything that is not lowercase
+alphanumerics, `-` or `_` — no path separators, no `..`, no leading dash.
 
-Only after validation, load `.jmo/memory/profiles/{profile}.json`. A missing file
+Only after validation, load `.jmo/memory/timings/{label}.json`. A missing file
 is a cache miss, not an error — `.jmo/` is gitignored and absent from a fresh
-clone.
+clone. Compare like with like: a baseline is only meaningful against a scan of
+the same target set, which is what the label names.
 
-> Validation helper and query implementation: [references/memory-integration.md](references/memory-integration.md#profile-name-validation-required-before-any-memory-path)
+> Validation helper and query implementation: [references/memory-integration.md](references/memory-integration.md#baseline-label-validation-required-before-any-memory-path)
 
 ---
 
-### Phase 1: Load and analyze timings.json
+### Phase 1: Load and analyze the timing files
 
-Parse `<results-dir>/summaries/timings.json`. Group the flat `jobs` list by tool
-and compute, per tool: total parse seconds, parse count, findings produced, mean,
-max, and real percentiles from the observed samples.
+Parse `<results-dir>/summaries/timings.json` (report phase). Group the flat
+`jobs` list by tool and compute, per tool: total parse seconds, parse count,
+findings produced, mean, max, and real percentiles from the observed samples.
 
-> Schema and analysis code: [references/optimization-patterns.md](references/optimization-patterns.md#phase-1-load-and-analyze-timingsjson)
+Then read every `<results-dir>/individual-*/<target>/scan-timings.json` (scan
+phase) for each tool's run `duration`, `status`, `timed_out` and `attempts` on
+each target. Timeout recommendations come from this file only.
+
+> Schemas and analysis code: [references/optimization-patterns.md](references/optimization-patterns.md#phase-1-load-and-analyze-timingsjson)
+> and [Phase 4](references/optimization-patterns.md#phase-4-timeout-and-failure-analysis)
 
 ---
 
@@ -126,10 +149,12 @@ in parallel across `meta.max_workers`, so shares of wall clock would not sum to
 Produce prioritized recommendations in three tiers, each citing the measurement
 that produced it:
 
-- **P1 Immediate:** correct the report worker count when it disagrees with
-  `recommended_threads`
+- **P1 Immediate:** give a tool that `timed_out` on this scan a
+  `per_tool.<tool>.timeout` it can finish inside, and correct the report worker
+  count when it disagrees with `recommended_threads`
 - **P2 Short-term:** profile the parse path of any adapter over the bottleneck
-  threshold
+  threshold, and narrow the work of a tool that dominates the scan's
+  `wall_seconds` with its own `per_tool.<tool>.flags` (exclusions, severity)
 - **P3 Long-term:** reduce finding volume at source for tools whose output
   dominates parse and deduplication cost
 
@@ -138,14 +163,16 @@ that produced it:
 **Per-tool timeout and failure analysis is available for a single scan, but
 *rates* are not** — nothing aggregates `scan-timings.json` across runs. See
 [Phase 4](references/optimization-patterns.md#phase-4-timeout-and-failure-analysis)
-before making any recommendation about timeouts.
+before making any recommendation about timeouts. Never recommend a *lower*
+timeout to speed a scan up: a cap that kills a healthy tool makes the scan
+faster and loses its findings.
 
 ---
 
 ### Phase 5: Store memory
 
-Persist the analyzed timings as the profile's updated baseline in
-`.jmo/memory/profiles/{profile}.json`, incrementing `optimization_count` from the
+Persist the analyzed timings as the label's updated baseline in
+`.jmo/memory/timings/{label}.json`, incrementing `optimization_count` from the
 previously stored record.
 
 > Storage implementation: [references/memory-integration.md](references/memory-integration.md#phase-6-store-the-updated-baseline)
@@ -165,11 +192,12 @@ next-steps checklist.
 ## Producing the input
 
 ```bash
-# Profile selection is --profile-name; --profile is the report timing flag.
-jmo scan --repos-dir ~/repos --profile-name balanced --results-dir ./results
+# `jmo scan` always writes scan-timings.json; `jmo report --profile` writes timings.json.
+jmo scan --repos-dir ~/repos --results-dir ./results
 jmo report ./results --profile
 
 cat results/summaries/timings.json
+cat results/individual-repos/*/scan-timings.json
 ```
 
 Whole-scan wall-clock durations come from the history database, not from
@@ -184,8 +212,8 @@ jmo history show <scan-id>
 
 ## Tool-Specific Optimization Patterns
 
-Per-tool `jmo.yml` overrides for Nuclei and GitLab targets, including timeout
-guidance and the container-discovery cost of GitLab scanning.
+Per-tool `jmo.yml` overrides for semgrep, Nuclei and GitLab targets, including
+timeout guidance and the container-discovery cost of GitLab scanning.
 
 > Full patterns: [references/optimization-patterns.md](references/optimization-patterns.md#tool-specific-optimization-patterns)
 
@@ -195,6 +223,6 @@ guidance and the container-discovery cost of GitLab scanning.
 
 | File | Contents |
 |------|----------|
-| [references/memory-integration.md](references/memory-integration.md) | Profile-name validation, memory query/store, baseline comparison |
-| [references/optimization-patterns.md](references/optimization-patterns.md) | timings.json schema, bottleneck analysis, recommendation engine, per-tool tuning |
+| [references/memory-integration.md](references/memory-integration.md) | Baseline-label validation, memory query/store, baseline comparison |
+| [references/optimization-patterns.md](references/optimization-patterns.md) | timings.json and scan-timings.json schemas, bottleneck analysis, recommendation engine, per-tool tuning |
 | [references/output-report-format.md](references/output-report-format.md) | OPTIMIZATION_REPORT.md template and section explanations |

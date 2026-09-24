@@ -58,8 +58,7 @@ The wizard now displays a 6-step progress bar during execution:
 → [Step 4/6] Preparing preflight summary...  [████████████████░░░░] 67%
 
 ┌─ 🚀 Preflight Check ───────────────────────────────────────────────
-│ • Profile: balanced
-│ • Command: jmo ci --profile-name balanced --fail-on HIGH --image nginx:latest
+│ • Command: jmo ci --fail-on HIGH --image nginx:latest
 │ • Estimated time: 18-25 minutes
 └────────────────────────────────────────────────────────────────────
 
@@ -120,26 +119,10 @@ When deploying to production, the wizard displays strict requirements:
 
 ```text
 ┌─ ⚠️  Production Deployment Requirements ───────────────────────────
-│ • Deep scan profile (comprehensive checks)
 │ • Zero CRITICAL findings
 │ • Compliance validation (OWASP, CWE, PCI DSS)
 │ • All container images scanned
 │ • Infrastructure-as-Code validated
-└────────────────────────────────────────────────────────────────────
-
-⚠️  Production deployments require 'deep' profile (40-70 min)
-```
-
-### Profile Information (RepoFlow)
-
-Clear profile comparison before selection:
-
-```text
-┌─ 📊 Profile Options ───────────────────────────────────────────────
-│ • fast: 9 tools, 5-10 minutes (pre-commit, quick checks)
-│ • slim: 13 tools, 12-18 minutes (cloud/IaC, AWS/Azure/GCP/K8s)
-│ • balanced: 17 tools, 18-25 minutes (CI/CD, regular audits)
-│ • deep: 29 tools, 40-70 minutes (security audits, compliance)
 └────────────────────────────────────────────────────────────────────
 ```
 
@@ -153,8 +136,6 @@ Clear profile comparison before selection:
 │   → security.yml
 │ • Container images: 2 found in pipelines
 └────────────────────────────────────────────────────────────────────
-
-ℹ️  Recommended: 'fast' profile for CI/CD pipelines (5-10 minutes)
 ```
 
 ### Dependency Detection (DependencyFlow)
@@ -190,29 +171,25 @@ When running in native mode (non-Docker), the wizard performs a pre-flight tool 
 ### Tool Status Display
 
 ```text
-Checking 18 applicable tools for 'balanced' profile...
+Checking applicable tools...
 
-✅ 15 tools ready
-⚠️  3 tool(s) need attention:
+✅ 8 tools ready
+⚠️  2 tool(s) need attention:
 
-  [!] dependency-check: Java not found (dependency-check requires Java 11+)
-     Fix: jmo tools install dependency-check
+  [!] zap: Java not found (zap requires Java 11+)
+     Fix: jmo tools install zap
 
-  [!] cdxgen: Node.js not found (required for cdxgen)
-     Fix: jmo tools install cdxgen
-
-  [~] zap: STARTUP CRASH: pydantic version conflict
-     Fix: jmo tools clean && jmo tools install zap
+  [~] semgrep: STARTUP CRASH: pydantic version conflict
+     Fix: jmo tools clean && jmo tools install semgrep
 ```
 
 ### Dependency Auto-Install
 
-When tools require runtime dependencies (Java, Node.js), the wizard offers to **install them automatically**:
+When tools require runtime dependencies (Java for ZAP), the wizard offers to **install them automatically**:
 
 ```text
 ⚠️  Some tools require runtime dependencies:
-   - Java 17+ (required by: dependency-check, zap)
-   - Node.js 20+ (required by: cdxgen)
+   - Java 17+ (required by: zap)
 
 Install missing dependencies?
   [1] Yes, install automatically
@@ -223,9 +200,6 @@ Choice [1]: 1
 
 [*] Installing java via chocolatey...
    ✅ Java 17+ installed: Installed via chocolatey
-
-[*] Installing node via chocolatey...
-   ✅ Node.js 20+ installed: Installed via chocolatey
 ```
 
 **Supported package managers:**
@@ -242,8 +216,8 @@ After dependency installation, the wizard offers tool installation options:
 
 ```text
 Options:
-  [1] Auto-fix all issues (3 tools)
-  [2] Continue with 15 working tools (skip: dependency-check, cdxgen...)
+  [1] Auto-fix all issues (2 tools)
+  [2] Continue with 8 working tools (skip: zap, semgrep)
   [3] Show all fix commands (copy/paste manually)
   [4] Cancel wizard
 ```
@@ -253,26 +227,6 @@ Options:
 **Option 2:** Continues with available tools - useful when you don't need the missing tools.
 
 **Option 3:** Shows copy-paste commands for manual installation.
-
-### Platform-Specific Guidance
-
-Some tools require manual installation on certain platforms:
-
-```text
-📖 2 tool(s) require manual installation:
-──────────────────────────────────────────────────
-
-  ⚠️  prowler
-     Reason: AWS CLI required for cloud scanning
-     See: docs/MANUAL_INSTALLATION.md
-
-  ⚠️  lynis
-     Reason: Requires bash (install WSL, Git Bash, or Cygwin)
-     See: docs/MANUAL_INSTALLATION.md
-
-──────────────────────────────────────────────────
-Tip: Use Docker mode for full tool support, or continue without these tools.
-```
 
 ---
 
@@ -294,7 +248,6 @@ The wizard supports 5 specialized workflows tailored to different use cases. Eac
 ```bash
 jmo wizard
 # Select workflow: "Single Repository"
-# Profile: balanced (recommended)
 # Generates: Makefile with security-scan target
 ```
 
@@ -330,7 +283,6 @@ jmo wizard
 ```bash
 jmo wizard
 # Select workflow: "Entire Development Stack"
-# Profile: balanced
 # Parallel scanning: yes
 # Generate artifacts: yes
 ```
@@ -351,13 +303,12 @@ jmo wizard
 
 **Artifacts Generated:**
 
-- Comprehensive Makefile with 8 targets:
+- Comprehensive Makefile with targets such as:
   - `security-scan-all` - Scan entire stack
   - `security-scan-repos` - Repositories only
   - `security-scan-images` - Images only
   - `security-scan-iac` - IaC files only
-  - `security-scan-fast` - Quick scan (5-10 min)
-  - `security-scan-deep` - Comprehensive (40-70 min)
+  - `security-scan-fast` - Quick scan with a narrowed `--tools` list
   - `security-report` - Generate report
   - `security-clean` - Clean results
 - Multi-target GitHub Actions workflow
@@ -381,7 +332,6 @@ jmo wizard
 ```bash
 jmo wizard
 # Select workflow: "CI/CD Security Audit"
-# Profile: fast (recommended for CI/CD)
 # Scan pipeline files: yes
 # Scan pipeline images: yes (2 images detected)
 # Check GitHub Actions permissions: yes
@@ -416,8 +366,8 @@ jmo wizard
 
 **Environment-Aware Defaults:**
 
-- **Staging:** balanced profile, fail on HIGH
-- **Production:** deep profile, fail on CRITICAL
+- **Staging:** fail on HIGH
+- **Production:** fail on CRITICAL
 
 **Example:**
 
@@ -427,11 +377,9 @@ jmo wizard
 # Environment detected: production
 #
 # ⚠️  Production deployment requires:
-#   • Deep scan profile (comprehensive checks)
 #   • Zero CRITICAL findings
 #   • Compliance validation (OWASP, CWE, PCI DSS)
 #
-# Profile: deep (recommended for production)
 # Fail on: CRITICAL
 ```
 
@@ -492,11 +440,11 @@ jmo wizard
 
 | Workflow | Best For | Time | Tools |
 |----------|----------|------|-------|
-| **Single Repository** | Individual repos, quick checks | 5-10 min (fast) | 9 tools |
-| **Entire Stack** | Full development environment | 18-25 min | 17 tools |
-| **CI/CD Audit** | Pipeline security validation | 5-10 min | 2-3 tools |
-| **Pre-Deployment** | Production deployment gates | 15-30 min | 8-12 tools |
-| **Dependency Audit** | SBOM + vulnerability focus | 5-10 min | 2 tools |
+| **Single Repository** | Individual repos, quick checks | 5-25 min | Every tool that applies to the repository |
+| **Entire Stack** | Full development environment | 18-25 min | Every tool that applies to each target |
+| **CI/CD Audit** | Pipeline security validation | 5-10 min | trufflehog, semgrep, trivy, syft |
+| **Pre-Deployment** | Production deployment gates | 15-30 min | trivy, checkov, syft, and more per target |
+| **Dependency Audit** | SBOM + vulnerability focus | 5-10 min | syft, trivy |
 
 **Pro Tip:** Use `jmo wizard` and select the workflow that matches your current task. The wizard will auto-detect targets and provide smart recommendations.
 
@@ -514,16 +462,9 @@ jmo wizard
 
 ### Interactive Steps
 
-#### Step 1: Select Scanning Profile
+There is no profile to choose: the scan considers the whole tool matrix, and each target's content decides which tools run (see [TOOLS.md](../TOOLS.md#when-each-tool-runs)).
 
-Choose from four profiles based on your needs:
-
-- **fast** (5-10 min, 9 tools): Quick scan with core tools
-- **slim** (12-18 min, 13 tools): Cloud/IaC focused (AWS/Azure/GCP/K8s)
-- **balanced** (18-25 min, 17 tools): Comprehensive scan with all recommended tools
-- **deep** (40-70 min, 29 tools): Exhaustive scan with all tools
-
-#### Step 2: Select Execution Mode
+#### Step 1: Select Execution Mode
 
 Choose how to run the scan:
 
@@ -532,7 +473,7 @@ Choose how to run the scan:
 
 The wizard automatically detects if Docker is installed and running.
 
-#### Step 3a: Select Target Type
+#### Step 2: Select Target Type
 
 Choose what type of asset to scan:
 
@@ -543,7 +484,7 @@ Choose what type of asset to scan:
 - **gitlab**: GitLab repositories (with token)
 - **k8s**: Kubernetes clusters (live clusters)
 
-#### Step 3b: Configure Target
+#### Step 3: Configure Target
 
 Based on the target type selected, configure specific details:
 
@@ -576,19 +517,19 @@ Based on the target type selected, configure specific details:
 - Context, namespace, or all namespaces
 - Context validation with kubectl
 
-#### Step 5: Advanced Configuration
+#### Step 4: Advanced Configuration
 
 Optionally customize:
 
-- **Threads**: Parallelism level (default based on profile)
+- **Threads**: Parallelism level (default from `jmo.yml` or auto)
 - **Timeout**: Per-tool timeout in seconds
 - **Fail-on**: Severity threshold for CI/CD (CRITICAL, HIGH, MEDIUM)
 
-#### Step 6: Review Configuration
+#### Step 5: Review Configuration
 
 Review your choices and confirm before execution.
 
-#### Step 7: Execute Scan
+#### Step 6: Execute Scan
 
 The wizard generates and displays the command, then prompts for execution.
 
@@ -601,14 +542,14 @@ Use defaults for automated workflows or scripting.
 ### Quick Scan with Defaults
 
 ```bash
-# Use balanced profile on current directory
+# Scan the current directory with defaults
 jmo wizard --yes
 ```
 
 ### With Custom Options
 
 ```bash
-# Fast profile in Docker mode
+# Defaults, in Docker mode
 jmo wizard --yes --docker
 
 # Specific directory
@@ -618,7 +559,7 @@ jmo wizard --yes
 
 **Note:** Non-interactive mode uses these defaults:
 
-- Profile: balanced
+- Tools: the whole tool matrix (content decides which run)
 - Target: current directory (repos-dir mode)
 - Docker: enabled if available and running
 - Results: `./results`
@@ -643,7 +584,7 @@ Benefits:
 jmo wizard
 ```
 
-At Step 2, choose **docker** mode. The wizard will use `ghcr.io/jimmy058910/jmo-security:latest`.
+At Step 1, choose **docker** mode. The wizard will use `ghcr.io/jimmy058910/jmo-security:latest`.
 
 ### Force Docker Mode
 
@@ -765,7 +706,7 @@ newgrp docker
 
 ### Why WSL2 + Docker for Windows?
 
-- ✅ **Full compatibility:** All 29 tools work (many don't on native Windows)
+- ✅ **Full compatibility:** Every tool in the image works (several don't on native Windows)
 - ✅ **Zero native installs:** No Python/git/tools on Windows required
 - ✅ **Linux performance:** Scans run at native Linux speed
 - ✅ **Easy file access:** Access Windows files via `/mnt/c/Users/...`
@@ -787,17 +728,16 @@ jmo wizard
 
 **Steps:**
 
-1. Choose **balanced** profile
-2. Choose **docker** or **native** mode
-3. Select target type: **image**
-4. Enter image name: `nginx:latest` (or provide `images.txt` file)
-5. Accept defaults for threads/timeout
-6. Review and execute
+1. Choose **docker** or **native** mode
+2. Select target type: **image**
+3. Enter image name: `nginx:latest` (or provide `images.txt` file)
+4. Accept defaults for threads/timeout
+5. Review and execute
 
 **Generated Command:**
 
 ```bash
-jmo scan --image nginx:latest --results-dir results --profile-name balanced --threads 4 --timeout 600
+jmo scan --image nginx:latest --results-dir results --threads 4 --timeout 600
 ```
 
 **Results:**
@@ -816,17 +756,16 @@ jmo wizard
 
 **Steps:**
 
-1. Choose **balanced** profile
-2. Choose **native** mode (Checkov requires local install)
-3. Select target type: **iac**
-4. Enter file path: `./infrastructure.tfstate`
-5. Wizard auto-detects: **Terraform** (from extension/content)
-6. Review and execute
+1. Choose **native** mode (Checkov requires local install)
+2. Select target type: **iac**
+3. Enter file path: `./infrastructure.tfstate`
+4. Wizard auto-detects: **Terraform** (from extension/content)
+5. Review and execute
 
 **Generated Command:**
 
 ```bash
-jmo scan --terraform-state ./infrastructure.tfstate --results-dir results --profile-name balanced
+jmo scan --terraform-state ./infrastructure.tfstate --results-dir results
 ```
 
 **Supported IaC Types:**
@@ -852,18 +791,17 @@ jmo wizard
 
 **Steps:**
 
-1. Choose **balanced** profile
-2. Choose **docker** mode (ZAP works best in Docker)
-3. Select target type: **url**
-4. Enter URL: `https://example.com`
-5. Wizard validates URL (HEAD request, 2s timeout)
-6. Review and execute
+1. Choose **docker** mode (ZAP works best in Docker)
+2. Select target type: **url**
+3. Enter URL: `https://example.com`
+4. Wizard validates URL (HEAD request, 2s timeout)
+5. Review and execute
 
 **Generated Command:**
 
 ```bash
 docker run --rm -v "$(pwd)/results:/results" ghcr.io/jimmy058910/jmo-security:latest \
-  scan --url https://example.com --results /results --profile balanced
+  scan --url https://example.com --results /results
 ```
 
 **URL Validation:**
@@ -895,13 +833,12 @@ jmo wizard
 
 **Steps:**
 
-1. Choose **balanced** profile
-2. Choose **native** or **docker** mode
-3. Select target type: **gitlab**
-4. GitLab URL: `https://gitlab.com` (default)
-5. Token: Uses `$GITLAB_TOKEN` env var (or prompts)
-6. Repo: `mygroup/myrepo` (or group: `mygroup`)
-7. Review and execute
+1. Choose **native** or **docker** mode
+2. Select target type: **gitlab**
+3. GitLab URL: `https://gitlab.com` (default)
+4. Token: Uses `$GITLAB_TOKEN` env var (or prompts)
+5. Repo: `mygroup/myrepo` (or group: `mygroup`)
+6. Review and execute
 
 **Generated Command:**
 
@@ -942,13 +879,12 @@ jmo wizard
 
 **Steps:**
 
-1. Choose **balanced** profile
-2. Choose **native** mode (requires kubectl)
-3. Select target type: **k8s**
-4. Enter context: `prod` (or use current context)
-5. Namespace: `default` (or `--all-namespaces`)
-6. Wizard validates context with kubectl
-7. Review and execute
+1. Choose **native** mode (requires kubectl)
+2. Select target type: **k8s**
+3. Enter context: `prod` (or use current context)
+4. Namespace: `default` (or `--all-namespaces`)
+5. Wizard validates context with kubectl
+6. Review and execute
 
 **Generated Command:**
 
@@ -1144,7 +1080,6 @@ Selection: 2
 │ Scan #5 (current)                                                  │
 │ • Date: 2025-11-05 18:30:15                                        │
 │ • Branch: main                                                     │
-│ • Profile: balanced                                                │
 │ • Findings: 314 (8 CRITICAL, 28 HIGH, 82 MEDIUM)                  │
 │ • Duration: 14.3 minutes                                           │
 │ • Tools: 8 (trufflehog, semgrep, trivy, syft, checkov, etc.)     │
@@ -1426,7 +1361,7 @@ Example:
 
 Requirements:
   • Minimum 5 scans for reliable results
-  • Consistent scanning (same tools, profiles)
+  • Consistent scanning (same tools)
   • Non-parametric (no assumptions about data distribution)
 
 🏆 Security Score Calculation
@@ -1607,7 +1542,7 @@ jmo wizard --yes --analyze-trends
 
 **Workflow:**
 
-1. Runs scan with defaults (balanced profile)
+1. Runs scan with defaults
 2. After scan completes, automatically runs trend analysis
 3. Displays terminal report
 4. Exits
@@ -1669,14 +1604,14 @@ docker run --rm \
   -v "$(pwd):/scan" \
   -v ~/.jmo:/root/.jmo \
   ghcr.io/jimmy058910/jmo-security:latest \
-  scan --repo /scan --results-dir /scan/results --profile-name balanced
+  scan --repo /scan --results-dir /scan/results
 
 # Run second scan (days/weeks later)
 docker run --rm \
   -v "$(pwd):/scan" \
   -v ~/.jmo:/root/.jmo \
   ghcr.io/jimmy058910/jmo-security:latest \
-  scan --repo /scan --results-dir /scan/results --profile-name balanced
+  scan --repo /scan --results-dir /scan/results
 
 # Analyze trends (after ≥5 scans)
 docker run --rm \
@@ -1725,7 +1660,7 @@ jobs:
             -v ${{ github.workspace }}:/scan \
             -v ${{ github.workspace }}/.jmo:/root/.jmo \
             ghcr.io/jimmy058910/jmo-security:latest \
-            scan --repo /scan --results-dir /scan/results --profile-name balanced
+            scan --repo /scan --results-dir /scan/results
 
       # Analyze trends
       - name: Analyze trends
@@ -1779,9 +1714,9 @@ jobs:
 
 ```bash
 # Run at least 2 scans with same branch
-jmo scan --repo . --profile balanced --results-dir results/
+jmo scan --repo . --results-dir results/
 # ... wait (days/weeks)
-jmo scan --repo . --profile balanced --results-dir results/
+jmo scan --repo . --results-dir results/
 
 # Now trends work
 jmo trends analyze --branch main --format terminal
@@ -1822,7 +1757,7 @@ docker run --rm \
 1. **Consistent scanning:** Run scans on same schedule (weekly, post-fix, etc.)
 2. **Branch isolation:** Use `--branch main` vs `--branch develop` for separate trends
 3. **Sufficient data:** Wait for ≥5 scans before drawing conclusions
-4. **Profile consistency:** Use same profile (balanced) for trend accuracy
+4. **Tool consistency:** Scan with the same tool list each time for trend accuracy
 5. **Developer attribution:** Requires git repository access
 6. **Docker volume mounting:** Always mount `.jmo/` for persistence
 7. **CI/CD caching:** Use `actions/cache` or `cache:` in GitLab CI
@@ -1851,7 +1786,7 @@ jmo wizard --emit-make-target Makefile.security
 # JMo Security Scan Target (generated by wizard)
 .PHONY: security-scan
 security-scan:
-  jmo balanced --repos-dir /home/user/repos --results-dir results --threads 4 --timeout 600 --human-logs
+  jmo scan --repos-dir /home/user/repos --results-dir results --threads 4 --timeout 600 --human-logs
 ```
 
 **Usage:**
@@ -1873,7 +1808,7 @@ jmo wizard --emit-script scan.sh
 # JMo Security Scan Script (generated by wizard)
 set -euo pipefail
 
-jmo balanced --repos-dir /home/user/repos --results-dir results --threads 4 --timeout 600 --human-logs
+jmo scan --repos-dir /home/user/repos --results-dir results --threads 4 --timeout 600 --human-logs
 ```
 
 **Usage:**
@@ -1920,13 +1855,12 @@ jobs:
 
       - name: Install Security Tools
         run: |
-          # Install based on profile: balanced
-          # Tools: gitleaks, noseyparker, semgrep, syft, trivy, checkov, hadolint
+          # Tools: trufflehog, semgrep, syft, trivy, checkov, hadolint, ...
           # See: https://github.com/jimmy058910/jmo-security-repo#tool-installation
 
       - name: Run Security Scan
         run: |
-          jmo balanced --repos-dir . --results-dir results \
+          jmo scan --repos-dir . --results-dir results \
             --threads 4 \
             --timeout 600
 
@@ -1973,7 +1907,7 @@ jobs:
 
       - name: Run Security Scan
         run: |
-          jmo scan --repo . --results results --profile balanced \
+          jmo scan --repo . --results results \
             --threads 4 \
             --timeout 600
 
@@ -2004,12 +1938,11 @@ jmo wizard --docker
 
 **Steps:**
 
-1. Choose **balanced** profile (default)
-2. Docker mode detected and enabled
-3. Enter repos directory path
-4. Accept defaults for threads/timeout
-5. Review and confirm
-6. Execute scan
+1. Docker mode detected and enabled
+2. Enter repos directory path
+3. Accept defaults for threads/timeout
+4. Review and confirm
+5. Execute scan
 
 ### CI/CD Integration Setup
 
@@ -2018,13 +1951,13 @@ jmo wizard --docker
 jmo wizard --emit-gha .github/workflows/security.yml
 ```
 
-Then edit the generated workflow to add `--fail-on HIGH`:
+Then edit the generated workflow to gate on `--fail-on HIGH` (a `jmo ci` flag: scan, report and threshold in one step):
 
 ```yaml
 
 - name: Run Security Scan
   run: |
-    jmo balanced --repos-dir . --results-dir results \
+    jmo ci --repos-dir . --results-dir results \
       --threads 4 \
       --timeout 600 \
       --fail-on HIGH
@@ -2068,10 +2001,9 @@ crontab -e
    ```
 
 3. Select:
-   - Profile: **deep**
    - Mode: **native** or **docker**
    - Target: **repos-dir** → `/home/user/security-audit`
-   - Threads: 2 (for deep scans)
+   - Threads: 2 (for long, full-matrix scans)
 
 ### Clone from TSV and Scan
 
@@ -2091,7 +2023,6 @@ crontab -e
    ```
 
 3. Select:
-   - Profile: **balanced**
    - Mode: **docker** (recommended)
    - Target: **tsv** → `./repos.tsv`
    - Destination: `cloned-repos`
@@ -2106,7 +2037,7 @@ jmo wizard --yes
 
 Uses defaults:
 
-- Profile: balanced
+- Tools: the whole tool matrix (content decides which run)
 - Target: current directory
 - Results: `./results`
 
@@ -2127,10 +2058,10 @@ If you're repeating scans with similar settings:
 
 ```bash
 # Save the generated command from first run
-jmo wizard --yes 2>&1 | grep "jmo balanced"
+jmo wizard --yes 2>&1 | grep "jmo scan"
 
 # Run directly next time
-jmo balanced --repos-dir ~/repos --results-dir results --threads 4 --timeout 600
+jmo scan --repos-dir ~/repos --results-dir results --threads 4 --timeout 600
 ```
 
 ### 2. Docker Mode for Clean Environments
@@ -2159,14 +2090,7 @@ Team members can then run:
 make -f Makefile.security security-scan
 ```
 
-### 4. Profile Selection Guide
-
-- **fast**: Pre-commit hooks, quick validation (5-10 min, 9 tools)
-- **slim**: Cloud/IaC, AWS/Azure/GCP/K8s (12-18 min, 13 tools)
-- **balanced**: CI/CD pipelines, regular audits (18-25 min, 17 tools)
-- **deep**: Weekly/monthly deep audits, compliance (40-70 min, 29 tools)
-
-### 5. Severity Threshold for CI
+### 4. Severity Threshold for CI
 
 Set `--fail-on` based on your security posture:
 

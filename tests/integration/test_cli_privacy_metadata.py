@@ -38,7 +38,6 @@ class TestCollectMetadataFlag:
                 "schema_version": "1.2.0",
                 "timestamp": "2025-11-04T12:00:00Z",
                 "scan_id": "test-scan-1",
-                "profile": "balanced",
                 "tools": ["bandit"],
                 "target_count": 1,
                 "finding_count": 1,
@@ -68,7 +67,6 @@ class TestCollectMetadataFlag:
         # Act: Store scan with default (no flag = privacy mode)
         scan_id = store_scan(
             results_dir=results_dir,
-            profile="balanced",
             tools=["bandit"],
             db_path=db_path,
             # collect_metadata defaults to False
@@ -113,7 +111,6 @@ class TestCollectMetadataFlag:
                 "schema_version": "1.2.0",
                 "timestamp": "2025-11-04T12:00:00Z",
                 "scan_id": "test-scan-2",
-                "profile": "fast",
                 "tools": ["checkov"],
                 "target_count": 1,
                 "finding_count": 1,
@@ -143,7 +140,6 @@ class TestCollectMetadataFlag:
         # Act: Store scan with collect_metadata=True (opt-in)
         scan_id = store_scan(
             results_dir=results_dir,
-            profile="fast",
             tools=["checkov"],
             db_path=db_path,
             collect_metadata=True,  # ← OPT-IN FLAG
@@ -193,7 +189,6 @@ class TestCollectMetadataFlag:
                 "schema_version": "1.2.0",
                 "timestamp": "2025-11-04T12:00:00Z",
                 "scan_id": "test-scan-3",
-                "profile": "fast",
                 "tools": [],
                 "target_count": 1,
                 "finding_count": 0,
@@ -211,7 +206,6 @@ class TestCollectMetadataFlag:
         # Act: Store 3 scans with different privacy settings
         scan_id_1 = store_scan(
             results_dir=results_dir,
-            profile="fast",
             tools=["trivy"],
             db_path=db_path,
             collect_metadata=False,  # Privacy mode
@@ -219,7 +213,6 @@ class TestCollectMetadataFlag:
 
         scan_id_2 = store_scan(
             results_dir=results_dir,
-            profile="balanced",
             tools=["semgrep"],
             db_path=db_path,
             collect_metadata=True,  # Metadata collection
@@ -227,7 +220,6 @@ class TestCollectMetadataFlag:
 
         scan_id_3 = store_scan(
             results_dir=results_dir,
-            profile="deep",
             tools=["trufflehog"],
             db_path=db_path,
             collect_metadata=False,  # Privacy mode

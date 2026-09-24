@@ -31,8 +31,9 @@ checkov's structured fields (`bc_category`, `benchmarks`, `description`,
 Extracting from a field like that would attribute a CWE to a finding because
 the **scanned repository** happened to mention one, so any codebase with
 ``# CWE-89`` in a comment would acquire spurious compliance mappings. That is
-why prose is read only from an explicit per-tool allowlist of *tool-authored*
-fields, never from anything echoing the scanned file.
+why only structured fields are read, never prose. (bandit's `issue_cwe` and
+horusec's `details` prose, the two tools in the table that reported a CWE in
+their own output, left in v2.0.0.)
 """
 
 from __future__ import annotations
@@ -46,23 +47,6 @@ _CWE_IN_TEXT = re.compile(r"\bCWE[-_ ]?(\d{1,5})\b", re.IGNORECASE)
 
 # Structured keys, in the spellings tools actually use. `cweid` is zap's.
 _STRUCTURED_KEYS = ("cwe", "CWE", "cweid", "cwe_id", "cweId", "cweID")
-
-# Fields whose text the TOOL wrote, per adapter. Dotted paths, resolved against
-# `raw`. Nothing here may be a field that echoes the scanned file's content --
-# see the module docstring for why that distinction is the whole safety
-# property of this module.
-_PROSE_FIELDS: dict[str, tuple[str, ...]] = {
-    "horusec": ("vulnerabilities.details",),
-}
-
-
-def _dig(raw: Any, dotted: str) -> Any:
-    node: Any = raw
-    for part in dotted.split("."):
-        if not isinstance(node, dict):
-            return None
-        node = node.get(part)
-    return node
 
 
 def _ids_from_value(value: Any) -> list[str]:
@@ -89,7 +73,7 @@ def _ids_from_value(value: Any) -> list[str]:
     return out
 
 
-def extract_cwes_from_raw(raw: Any, tool: str = "") -> list[str]:
+def extract_cwes_from_raw(raw: Any) -> list[str]:
     """CWE ids the tool reported, as canonical ``CWE-<n>``, in first-seen order.
 
     Returns `[]` for anything it cannot read confidently. Silence is correct
@@ -105,19 +89,6 @@ def extract_cwes_from_raw(raw: Any, tool: str = "") -> list[str]:
     for key in _STRUCTURED_KEYS:
         if key in raw:
             ids.extend(_ids_from_value(raw[key]))
-
-    # 2. bandit's `{"issue_cwe": {"id": 502, "link": ...}}`.
-    issue_cwe = raw.get("issue_cwe")
-    if isinstance(issue_cwe, dict):
-        ids.extend(_ids_from_value(issue_cwe.get("id")))
-    elif issue_cwe is not None:
-        ids.extend(_ids_from_value(issue_cwe))
-
-    # 3. Prose the tool itself wrote, for tools that cite a CWE only in words.
-    for dotted in _PROSE_FIELDS.get(tool, ()):
-        value = _dig(raw, dotted)
-        if isinstance(value, str):
-            ids.extend(_CWE_IN_TEXT.findall(value))
 
     seen: set[str] = set()
     ordered: list[str] = []
@@ -141,8 +112,7 @@ def backfill_risk_cwe(findings: list[dict[str, Any]]) -> int:
         risk = finding.get("risk")
         if isinstance(risk, dict) and risk.get("cwe"):
             continue
-        tool = (finding.get("tool") or {}).get("name", "")
-        cwes = extract_cwes_from_raw(finding.get("raw"), tool)
+        cwes = extract_cwes_from_raw(finding.get("raw"))
         if not cwes:
             continue
         if not isinstance(risk, dict):

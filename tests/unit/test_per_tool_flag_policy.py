@@ -109,19 +109,20 @@ class TestReservedFlagsAreRefused:
 class TestTimeoutFloorReachesEveryTargetType:
     """The floor lived in repository_scanner, so only repo scans honoured it."""
 
-    def test_floor_raises_a_low_profile_default(self):
+    def test_floor_raises_a_low_scan_default(self):
         """`zap` needs 900 s and also runs on `url` targets.
 
-        Measured before consolidation: a `balanced` URL scan gave zap the
-        profile's 600 s -- **300 s short, a third of its budget** -- while the
-        identical tool on a repository target got 900 s, because only
-        `repository_scanner`'s copy of this helper applied the floor.
+        Measured before consolidation: a URL scan at the (then `balanced`
+        profile's, now top-level) 600 s default gave zap **300 s short, a third
+        of its budget** -- while the identical tool on a repository target got
+        900 s, because only `repository_scanner`'s copy of this helper applied
+        the floor.
         """
         assert TOOL_TIMEOUT_DEFAULTS["zap"] == 900
         assert tool_timeout({}, "zap", 600) == 900
 
-    def test_semgrep_carries_a_floor_above_every_profile_default(self):
-        """#1204: semgrep had no floor, so it took the profile default.
+    def test_semgrep_carries_a_floor_above_a_low_scan_default(self):
+        """#1204: semgrep had no floor, so it took the scan default.
 
         Its cost is its RULE COUNT, not the tree it walks -- it restricts itself
         to git-tracked files, so the vendored-directory exclusions #1080 added
@@ -129,26 +130,16 @@ class TestTimeoutFloorReachesEveryTargetType:
         tracked files and the same 2,930 rules resolved from `--config auto`:
         **409.8 s** and, in #1204, **583 s**. 42% apart on one machine.
 
-        The values are spelled out rather than read from PROFILES: a guard that
+        The values are spelled out rather than read from `jmo.yml`: a guard that
         derives its expectation from the thing it guards cannot fail when that
-        thing changes (#1061). fast=300, slim=500, balanced=600, deep=900 are
-        `jmo.yml`'s. #1204's own table said balanced=500 and deep=600, which is
-        measured false and shifted by a row -- so the honest statement is that
-        `fast` lost semgrep outright and `slim` cleared it by 90 s.
+        thing changes (#1061). 300/500/600/900 are the four defaults v1's
+        profiles shipped; v2.0.0's top-level default is 600.
         """
         assert TOOL_TIMEOUT_DEFAULTS["semgrep"] == 900
-        for profile_default in (300, 500, 600, 900):
-            assert tool_timeout({}, "semgrep", profile_default) == 900
+        for scan_default in (300, 500, 600, 900):
+            assert tool_timeout({}, "semgrep", scan_default) == 900
 
-    def test_semgrep_secrets_is_a_separate_entry_and_has_no_floor(self):
-        """`semgrep-secrets` runs `--config p/secrets`, a curated set rather
-        than the 2,930 rules `auto` resolves, and it is a separate profile tool
-        with its own command builder. Giving the binary's name a floor must not
-        silently give the variant one -- the lookup is by tool name."""
-        assert "semgrep-secrets" not in TOOL_TIMEOUT_DEFAULTS
-        assert tool_timeout({}, "semgrep-secrets", 300) == 300
-
-    def test_a_generous_profile_default_is_not_lowered(self):
+    def test_a_generous_scan_default_is_not_lowered(self):
         assert tool_timeout({}, "zap", 1800) == 1800
 
     def test_explicit_per_tool_timeout_wins_outright(self):
@@ -253,75 +244,72 @@ class TestShippedFlagsAreFlagsTheToolActuallyHas:
     differing: `kubescape.json` **not written / 0 findings** with `--silent`,
     **179,810 bytes / 51 findings** without.
 
-    **This is the third instance of the shape in this repository**, which is
-    why the guard is a table rather than one assertion:
+    **This shape has recurred four times in this repository**, which is why
+    the guard is a table rather than one assertion. Three were on tools v2.0.0
+    removed -- trivy-rbac `--scanners` (#1206), prowler `--quiet`, kubescape
+    `--silent` (#1223) -- so their entries went with them. The fourth is on a
+    tool that stays:
 
-    - `trivy-rbac` passed `--scanners config` to `trivy config`, which has no
-      such flag (#1206) -- dead since the v1.0.0 sixteen-tool commit.
-    - `prowler` was passed `--quiet`, which prowler 5.x does not have. That fix
-      left a comment **three lines above** the first kubescape `--silent`, in
-      this same file, and nobody connected them.
-    - `kubescape` was passed `--silent` (#1223) -- dead since 2025-12-14.
+    - `yara` shipped `--max-rules-per-file=500`, which is not a yara option
+      (recorded in `jmo.yml`'s own comment on the yara entry).
 
     What this guard is NOT: proof that a flag is valid. Only running the binary
-    shows that, and the suite mocks `subprocess`. It is a memory of the three
-    the project has already paid for, so a fourth cannot be the *same* one.
+    shows that, and the suite mocks `subprocess`. It is a memory of the ones
+    the project has already paid for, so the next cannot be the *same* one.
     """
 
     # (tool, flag) -> why the tool rejects it. Spelled out rather than derived:
     # a guard that reads its expectation from the file it guards cannot fail
     # when that file changes (#1061).
     REJECTED_FLAGS: dict[tuple[str, str], str] = {
-        ("kubescape", "--silent"): (
-            "kubescape has no --silent at 4.0.13 (`kubescape scan --help` "
-            "matches it 0 times); it exits 1 having written nothing (#1223)"
-        ),
-        ("prowler", "--quiet"): (
-            "prowler 5.x has no --quiet; argparse exits 2 before the scan "
-            "starts. --no-banner is what suppresses its chatter, and the "
-            "scanner passes that itself"
-        ),
-        ("trivy-rbac", "--scanners"): (
-            "`trivy config` has no --scanners at 0.74.0: FATAL unknown flag, "
-            "exit 1, no output file (#1206). It is also redundant -- "
-            "`trivy config` IS the misconfiguration scanner"
+        ("yara", "--max-rules-per-file=500"): (
+            "not a yara option: v4.5.8 defines `max-rules` and "
+            "`max-strings-per-rule` and nothing of that name, so the scanner "
+            "would be rejected on an unknown option"
         ),
     }
 
     @staticmethod
-    def _shipped_per_tool_flags() -> dict[tuple[str, str], list[str]]:
-        """{(profile, tool): flags} for every profile in the shipped jmo.yml."""
+    def _jmo_yml() -> Path:
+        return Path(__file__).resolve().parents[2] / "jmo.yml"
+
+    @classmethod
+    def _shipped_per_tool_flags(cls) -> dict[str, list[str]]:
+        """{tool: flags} for the shipped jmo.yml's top-level `per_tool`."""
         import yaml
 
-        config = Path(__file__).resolve().parents[2] / "jmo.yml"
-        data = yaml.safe_load(config.read_text(encoding="utf-8"))
-        out: dict[tuple[str, str], list[str]] = {}
-        for profile, body in (data.get("profiles") or {}).items():
-            for tool, entry in ((body or {}).get("per_tool") or {}).items():
-                flags = (entry or {}).get("flags")
-                if isinstance(flags, list):
-                    out[(str(profile), str(tool))] = [str(f) for f in flags]
+        data = yaml.safe_load(cls._jmo_yml().read_text(encoding="utf-8"))
+        out: dict[str, list[str]] = {}
         for tool, entry in (data.get("per_tool") or {}).items():
             flags = (entry or {}).get("flags")
             if isinstance(flags, list):
-                out[("<top-level>", str(tool))] = [str(f) for f in flags]
+                out[str(tool)] = [str(f) for f in flags]
         return out
 
     def test_the_extractor_actually_finds_the_shipped_flags(self):
         """Meta-guard: an extractor that silently finds nothing passes every
-        assertion built on it."""
+        assertion built on it.
+
+        Checked against the product's own loader, an independent reading of
+        the same file, rather than against a count.
+        """
+        from scripts.core.config import load_config
+
         shipped = self._shipped_per_tool_flags()
+        loaded = load_config(str(self._jmo_yml())).per_tool
+        assert shipped == {
+            tool: entry["flags"]
+            for tool, entry in loaded.items()
+            if isinstance((entry or {}).get("flags"), list)
+        }
+        assert "trivy" in shipped, "trivy carries flags in jmo.yml"
 
-        assert len(shipped) >= 8, f"only found {len(shipped)} per_tool flag lists"
-        assert any(t == "trivy" for _p, t in shipped), "trivy carries flags in jmo.yml"
-        assert any(p == "fast" for p, _t in shipped), "the fast profile sets flags"
-
-    def test_no_profile_ships_a_flag_its_tool_rejects(self):
+    def test_jmo_yml_ships_no_flag_its_tool_rejects(self):
         shipped = self._shipped_per_tool_flags()
 
         offences = [
-            f"profile {profile!r} passes {tool} {flag!r} -- {why}"
-            for (profile, tool), flags in sorted(shipped.items())
+            f"per_tool.{tool} passes {flag!r} -- {why}"
+            for tool, flags in sorted(shipped.items())
             for (bad_tool, flag), why in self.REJECTED_FLAGS.items()
             if tool == bad_tool and flag in flags
         ]
@@ -329,17 +317,3 @@ class TestShippedFlagsAreFlagsTheToolActuallyHas:
         assert not offences, "jmo.yml ships flags the tool rejects:\n  " + "\n  ".join(
             offences
         )
-
-    def test_kubescape_carries_no_flags_at_all(self):
-        """The narrow regression, stated separately from the table.
-
-        `--silent` was kubescape's ONLY flag in every profile that set one, so
-        the honest post-fix state is that it takes none -- and a table entry
-        alone would still pass if someone re-added it under a different
-        spelling.
-        """
-        shipped = self._shipped_per_tool_flags()
-
-        kubescape = {p: f for (p, t), f in shipped.items() if t == "kubescape"}
-
-        assert kubescape == {}, f"kubescape should ship no flags, got {kubescape}"

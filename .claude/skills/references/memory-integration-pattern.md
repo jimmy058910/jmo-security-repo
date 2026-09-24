@@ -13,7 +13,7 @@ JMo Security skills use a file-based memory system stored in `.jmo/memory/` (git
 | adapter-generator | `adapters/` | `.jmo/memory/adapters/trivy.json` |
 | test-fabricator | `test-patterns/` | `.jmo/memory/test-patterns/trivy.json` |
 | compliance-mapper | `compliance/` | `.jmo/memory/compliance/CWE-79.json` |
-| profile-optimizer | `profiles/` | `.jmo/memory/profiles/balanced.json` |
+| profile-optimizer | `timings/` | `.jmo/memory/timings/juice-shop.json` |
 | ci-debugger | `ci-fixes/` | `.jmo/memory/ci-fixes/sarif-upload.json` |
 | security-hardening | `hardening/` | `.jmo/memory/hardening/CWE-78.json` |
 | refactoring-assistant | `refactoring/` | `.jmo/memory/refactoring/monolith-split.json` |

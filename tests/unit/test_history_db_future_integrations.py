@@ -80,17 +80,16 @@ def db_with_sample_scans(temp_db):
         conn.execute(
             """
             INSERT INTO scans (
-                id, timestamp, timestamp_iso, branch, profile,
+                id, timestamp, timestamp_iso, branch,
                 jmo_version, tools, targets, target_type, total_findings,
                 critical_count, high_count, medium_count, low_count, info_count
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 scan_id,
                 timestamp,
                 time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(timestamp)),
                 "main",
-                "balanced",
                 "1.0.0",
                 json.dumps(["trivy", "semgrep", "checkov"]),
                 json.dumps(["repo-test"]),  # targets
@@ -183,17 +182,16 @@ def db_with_recurring_findings(temp_db):
         conn.execute(
             """
             INSERT INTO scans (
-                id, timestamp, timestamp_iso, branch, profile,
+                id, timestamp, timestamp_iso, branch,
                 jmo_version, tools, targets, target_type, total_findings,
                 critical_count, high_count, medium_count, low_count, info_count
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 scan_id,
                 timestamp,
                 time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(timestamp)),
                 "main",
-                "balanced",
                 "1.0.0",
                 json.dumps(["trivy", "semgrep"]),
                 json.dumps(["repo-recurring"]),  # targets
@@ -424,16 +422,15 @@ class TestReactDashboardHelpers:
         conn.execute(
             """
             INSERT INTO scans (
-                id, timestamp, timestamp_iso, branch, profile,
+                id, timestamp, timestamp_iso, branch,
                 jmo_version, tools, targets, target_type, total_findings
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 "scan-feature",
                 current_time,
                 "2025-01-01T00:00:00Z",
                 "feature/x",
-                "balanced",
                 "1.0.0",
                 json.dumps(["trivy"]),
                 json.dumps(["repo-test"]),
@@ -754,17 +751,16 @@ class TestComplianceHelpers:
         conn.execute(
             """
             INSERT INTO scans (
-                id, timestamp, timestamp_iso, branch, profile,
+                id, timestamp, timestamp_iso, branch,
                 jmo_version, tools, targets, target_type, total_findings,
                 critical_count, high_count, medium_count, low_count, info_count
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 "single-scan",
                 int(time.time()),
                 time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 "main",
-                "balanced",
                 "1.0.0",
                 json.dumps(["trivy"]),
                 json.dumps(["repo-single"]),  # targets

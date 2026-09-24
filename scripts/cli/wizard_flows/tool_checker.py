@@ -4,7 +4,7 @@ Handles pre-flight checks for required security tools and provides
 auto-fix capabilities for missing or misconfigured tools.
 
 Functions:
-    check_tools_for_profile: Main tool availability check
+    check_tools_for_matrix: Main tool availability check (every TOOL_MATRIX tool)
     _auto_fix_tools: Automatic tool installation with parallel support
     _show_all_fix_commands: Display manual fix commands
     _collect_missing_dependencies: Gather missing runtime deps
@@ -12,7 +12,6 @@ Functions:
     _check_policy_tools: OPA availability check
     _install_opa_tool: OPA installation helper
     _print_status_legend: Display tool status icon meanings
-    _print_platform_summary: Show Windows/platform limitations with Docker recommendation
 """
 
 from __future__ import annotations
@@ -20,19 +19,9 @@ from __future__ import annotations
 import logging
 import shlex
 import subprocess  # nosec B404 - CLI needs subprocess
-import sys
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    pass
+from typing import Any
 
 logger = logging.getLogger(__name__)
-
-# Platform detection
-IS_WINDOWS = sys.platform == "win32"
-
-# Docker mode recommendation threshold (percentage of unavailable tools)
-DOCKER_RECOMMENDATION_THRESHOLD = 0.15  # 15%
 
 
 # ---------------------------------------------------------------------------
@@ -77,7 +66,7 @@ def _get_print_step() -> Any:
 
 
 # ---------------------------------------------------------------------------
-# Status Legend and Platform Summary (Windows UX Improvements)
+# Status Legend
 # ---------------------------------------------------------------------------
 
 
@@ -92,155 +81,9 @@ def _print_status_legend() -> None:
     print("\n" + colorize("Tool Status Legend:", "bold"))
     print(f"  {FALLBACKS.get('✅', '[OK]')}  = Ready to run")
     print(f"  {FALLBACKS.get('⚠', '[!]')}  = Needs attention (can be fixed)")
-    print("  ~   = Platform incompatible (cannot run natively)")
-    print(
-        f"  {FALLBACKS.get('○', 'o')}   = Content-triggered (runs only if relevant content found)"
-    )
     print(f"  {FALLBACKS.get('✗', 'X')}   = Not installed")
     print("  !!  = Startup crash (needs reinstall)")
     print()
-
-
-def _print_platform_summary(
-    platform_skipped: list[str],
-    profile_total: int,
-    platform: str,
-) -> tuple[bool, bool]:
-    """Print a summary of platform-incompatible tools with Docker recommendation.
-
-    Args:
-        platform_skipped: List of tool names that are platform-incompatible
-        profile_total: Total tools in the profile
-        platform: Current platform (windows, linux, macos)
-
-    Returns:
-        Tuple of (should_recommend_docker, user_wants_docker)
-    """
-    colorize = _get_colorize()
-    FALLBACKS = _get_unicode_fallbacks()
-
-    if not platform_skipped:
-        return False, False
-
-    unavailable_ratio = (
-        len(platform_skipped) / profile_total if profile_total > 0 else 0
-    )
-
-    # Platform-specific messages
-    if platform == "windows":
-        platform_display = "Windows"
-        workaround_primary = "Docker Desktop"
-        workaround_secondary = "WSL2 (Windows Subsystem for Linux)"
-    elif platform == "macos":
-        platform_display = "macOS"
-        workaround_primary = "Docker Desktop"
-        workaround_secondary = "Homebrew (some tools)"
-    else:
-        platform_display = platform.capitalize()
-        workaround_primary = "Docker"
-        workaround_secondary = None
-
-    print()
-    print("═" * 54)
-    print(colorize(f"  {platform_display} Compatibility Summary", "bold"))
-    print("═" * 54)
-    print()
-    print(f"  {len(platform_skipped)} tool(s) unavailable on {platform_display}:")
-    print()
-
-    # Group by reason (simplified - actual reasons would come from tool registry)
-    for tool in platform_skipped:
-        reason = _get_platform_unavailable_reason(tool, platform)
-        print(f"    {FALLBACKS.get('~', '~')} {colorize(tool, 'yellow')}")
-        print(f"       Reason: {reason}")
-    print()
-
-    # Show workarounds
-    print(colorize("  Workarounds:", "blue"))
-    print(f"    - {workaround_primary}: Full tool support in container")
-    if workaround_secondary:
-        print(f"    - {workaround_secondary}")
-    print()
-
-    # Recommend Docker if significant number of tools unavailable
-    should_recommend = unavailable_ratio >= DOCKER_RECOMMENDATION_THRESHOLD
-    user_wants_docker = False
-
-    if should_recommend:
-        print(
-            colorize(
-                f"  {FALLBACKS.get('💡', '!')} Recommendation: Use Docker mode for full tool coverage",
-                "blue",
-            )
-        )
-        print(
-            f"     ({len(platform_skipped)}/{profile_total} = {unavailable_ratio * 100:.0f}% tools unavailable)"
-        )
-        print()
-        print("     Command: jmo wizard --docker")
-        print()
-
-    print("═" * 54)
-
-    return should_recommend, user_wants_docker
-
-
-def _get_platform_unavailable_reason(tool: str, platform: str) -> str:
-    """Get the reason why a tool is unavailable on this platform.
-
-    Args:
-        tool: Tool name
-        platform: Current platform
-
-    Returns:
-        Human-readable reason string
-    """
-    # Platform-specific reasons for common tools
-    windows_reasons = {
-        "falco": "Linux kernel module required (eBPF)",
-        "shellcheck": "No Windows binary from upstream (use WSL2)",
-        "lynis": "Unix/Linux system auditing only",
-        "afl++": "Linux fuzzer with kernel dependencies",
-        "noseyparker": "No Windows binary available",
-        "kubescape": "Binary distribution issues on Windows",
-        "scancode": "Complex dependency chain fails on Windows",
-    }
-
-    macos_reasons = {
-        "falco": "Linux kernel module required (eBPF)",
-        "lynis": "Reduced functionality on macOS",
-    }
-
-    if platform == "windows":
-        return windows_reasons.get(tool, "No Windows support")
-    elif platform == "macos":
-        return macos_reasons.get(tool, "Limited macOS support")
-    else:
-        return "Platform-specific limitation"
-
-
-# Windows-incompatible tools - cannot be auto-fixed on Windows
-WINDOWS_INCOMPATIBLE_TOOLS = {
-    "falco",
-    "shellcheck",
-    "lynis",
-    "afl++",
-    "noseyparker",
-    "kubescape",
-    "scancode",
-}
-
-
-def _is_windows_incompatible(tool_name: str) -> bool:
-    """Check if a tool is known to be Windows-incompatible.
-
-    Args:
-        tool_name: Name of the tool
-
-    Returns:
-        True if tool cannot run on Windows
-    """
-    return tool_name.lower() in WINDOWS_INCOMPATIBLE_TOOLS
 
 
 # ---------------------------------------------------------------------------
@@ -248,34 +91,30 @@ def _is_windows_incompatible(tool_name: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def check_tools_for_profile(
-    profile: str,
+def check_tools_for_matrix(
     yes: bool = False,
     use_docker: bool = False,
     auto_fix: bool = False,
     install_deps: bool = False,
 ) -> tuple[bool, list[str]]:
     """
-    Check tool availability for the selected profile.
+    Check availability of every tool in TOOL_MATRIX.
 
     This is the pre-flight tool check that runs before scan execution.
-    If tools are missing, offers to install them or continue anyway.
-
-    Proactive filtering (Chunk 2): Tools incompatible with the current platform
-    are shown as "skipped" before the main tool check, keeping the failure list
-    focused on tools that can actually be fixed.
+    If tools are missing, offers to install them or continue anyway. Every
+    matrix tool installs on every platform, so each one that is not ready is
+    something the user can fix.
 
     Args:
-        profile: Selected scan profile (fast, slim, balanced, deep)
         yes: Non-interactive mode (skip prompts)
         use_docker: True if using Docker (tools bundled in image)
         auto_fix: Automatically install missing tools without prompting
-        install_deps: Automatically install missing dependencies (Java, Node.js)
+        install_deps: Automatically install missing dependencies (Java)
 
     Returns:
         Tuple of (should_continue: bool, available_tools: list[str])
     """
-    from scripts.cli.wizard_flows.profile_config import WIZARD_TOTAL_STEPS
+    from scripts.cli.wizard_flows.ui_helpers import WIZARD_TOTAL_STEPS
 
     colorize = _get_colorize()
     FALLBACKS = _get_unicode_fallbacks()
@@ -285,9 +124,9 @@ def check_tools_for_profile(
     if use_docker:
         return True, []
 
-    print_step(2, WIZARD_TOTAL_STEPS, "Tool Pre-flight Check")
+    print_step(1, WIZARD_TOTAL_STEPS, "Tool Pre-flight Check")
 
-    # Show status legend at the start (Windows UX improvement)
+    # Show status legend at the start
     _print_status_legend()
 
     try:
@@ -297,83 +136,18 @@ def check_tools_for_profile(
             ToolStatusType,
             get_remediation_for_tool,
         )
-        from scripts.core.tool_registry import (
-            PROFILE_TOOLS,
-            detect_platform,
-        )
+        from scripts.core.tool_registry import detect_platform
 
         manager = ToolManager()
         platform = detect_platform()
 
-        # Get unified tool status summary (single source of truth)
-        summary: ToolStatusSummary = manager.get_tool_summary(profile)
+        # One probe per tool: the manager memoises check_tool, so the summary
+        # below reads the same statuses rather than probing again.
+        statuses = manager.check_matrix()
+        summary: ToolStatusSummary = manager.get_tool_summary()
 
-        # Show profile info with clear breakdown
-        print(
-            colorize(
-                f"\n{summary.profile_name.capitalize()} profile: {summary.profile_total} tools",
-                "blue",
-            )
-        )
-
-        # Show platform summary with Docker recommendation (Windows UX improvement)
-        # This gives Windows users clear feedback about why tools are unavailable
-        if summary.platform_skipped and IS_WINDOWS:
-            should_recommend_docker, _ = _print_platform_summary(
-                summary.platform_skipped,
-                summary.profile_total,
-                platform,
-            )
-            if should_recommend_docker and not yes:
-                # Offer to switch to Docker mode interactively
-                print(
-                    colorize(
-                        "\nSwitch to Docker mode for full tool support? [y/N]: ",
-                        "blue",
-                    ),
-                    end="",
-                )
-                switch_choice = input().strip().lower()
-                if switch_choice == "y":
-                    print(colorize("\nSwitching to Docker mode...", "green"))
-                    print("Run: jmo wizard --docker")
-                    return False, []  # Cancel to let user restart with Docker
-        elif summary.platform_skipped:
-            # Non-Windows: just show the skipped tools
-            platform_reason = f"{len(summary.platform_skipped)} {platform}-incompatible"
-            print(
-                colorize(
-                    f"  {FALLBACKS.get('~', '~')} {platform_reason}: {', '.join(summary.platform_skipped)}",
-                    "dim",
-                )
-            )
-
-        # Show content-triggered tools if any
-        if summary.content_triggered:
-            print(
-                colorize(
-                    f"  {FALLBACKS.get('○', 'o')} {len(summary.content_triggered)} content-triggered: {', '.join(summary.content_triggered)}",
-                    "dim",
-                )
-            )
-
-        print(f"\nChecking {summary.platform_applicable} applicable tools...")
-
-        # Get detailed statuses for tools needing attention
-        all_statuses = manager.check_profile(profile)
-
-        # Filter to platform-applicable tools only
-        applicable_tools = [
-            name
-            for name in PROFILE_TOOLS.get(profile, [])
-            if name not in summary.platform_skipped
-            and name not in summary.content_triggered
-        ]
-        statuses = {
-            name: status
-            for name, status in all_statuses.items()
-            if name in applicable_tools
-        }
+        print(colorize(f"\nTool matrix: {summary.total} tools", "blue"))
+        print(f"\nChecking {summary.total} tools...")
 
         missing = [s for s in statuses.values() if not s.installed]
         outdated = [s for s in statuses.values() if s.is_outdated]
@@ -412,16 +186,13 @@ def check_tools_for_profile(
         )
         print(
             colorize(
-                f"{FALLBACKS.get('⚠', '[!]')} {summary.needs_attention_count} tool(s) need attention:",
+                f"{FALLBACKS.get('⚠', '[!]')} {len(tools_needing_attention)} tool(s) need attention:",
                 "yellow",
             )
         )
 
         # Collect fix commands for display and potential auto-execution
         fix_info: list[dict] = []
-
-        # Track manual-only tools separately for clearer display
-        manual_only_count = 0
 
         for status in tools_needing_attention:
             if not status.installed:
@@ -446,25 +217,13 @@ def check_tools_for_profile(
             )
 
             # Display the issue - use status_type for icon/color (Chunk 3)
-            is_manual = remediation.get("is_manual", False)
-
-            if is_manual:
-                manual_only_count += 1
-                icon = FALLBACKS.get("📖", "[?]")
-                # Show manual reason instead of generic issue
-                issue = remediation.get("manual_reason", issue)
-            else:
-                # Use status_type-based icon from STATUS_ICONS mapping
-                icon = f"[{status.status_icon}]"
+            icon = f"[{status.status_icon}]"
 
             # Color based on status_type (Chunk 3: red for CRASH/FAILED/MISSING, yellow for others)
             print(f"\n  {icon} {colorize(status.name, status.status_color)}: {issue}")
 
-            # Show fix command or manual guidance
-            if is_manual:
-                url = remediation.get("manual_url", "docs/MANUAL_INSTALLATION.md")
-                print(f"     See: {url}")
-            elif status.status_type == ToolStatusType.CRASH:
+            # Show fix command
+            if status.status_type == ToolStatusType.CRASH:
                 # Phase 4/Chunk 3: Suggest fix based on whether tool supports isolated venv
                 # Lazy import to avoid circular dependency
                 from scripts.cli.tool_installer import ISOLATED_TOOLS
@@ -518,7 +277,7 @@ def check_tools_for_profile(
         # Non-interactive mode: handle auto_fix or continue with available tools
         if yes:
             # If auto_fix is enabled, automatically install missing tools
-            if auto_fix and tools_needing_attention:
+            if auto_fix:
                 print(
                     colorize(
                         f"\nAuto-fix enabled: installing {len(tools_needing_attention)} missing tool(s)...",
@@ -528,7 +287,6 @@ def check_tools_for_profile(
                 return _auto_fix_tools(
                     fix_info,
                     platform,
-                    profile,
                     available,
                     auto_install_deps=install_deps,
                 )
@@ -540,30 +298,14 @@ def check_tools_for_profile(
                     "yellow",
                 )
             )
-            if tools_needing_attention:
-                skipped = [t["name"] for t in fix_info]
-                print(f"Skipping: {', '.join(skipped)}")
+            skipped = [t["name"] for t in fix_info]
+            print(f"Skipping: {', '.join(skipped)}")
             return True, available
 
         # Interactive: offer choices with auto-fix option
-        # Calculate fixable count (exclude platform-incompatible on Windows)
-        if IS_WINDOWS:
-            fixable_tools = [
-                t for t in fix_info if not _is_windows_incompatible(t["name"])
-            ]
-            platform_skipped_count = len(fix_info) - len(fixable_tools)
-        else:
-            fixable_tools = fix_info
-            platform_skipped_count = 0
-
         print("\n" + "─" * 50)
         print(colorize("Options:", "blue"))
-        if platform_skipped_count > 0:
-            print(
-                f"  [1] Auto-fix {len(fixable_tools)} issues (skip {platform_skipped_count} platform-incompatible)"
-            )
-        else:
-            print(f"  [1] Auto-fix all issues ({len(tools_needing_attention)} tools)")
+        print(f"  [1] Auto-fix all issues ({len(tools_needing_attention)} tools)")
         print(
             f"  [2] Continue with {len(available)} working tools (skip: {', '.join(t['name'] for t in fix_info[:3])}{'...' if len(fix_info) > 3 else ''})"
         )
@@ -574,7 +316,7 @@ def check_tools_for_profile(
             choice = input("\nChoice [1]: ").strip() or "1"
             if choice == "1":
                 # Auto-fix: run remediation commands
-                return _auto_fix_tools(fix_info, platform, profile, available)
+                return _auto_fix_tools(fix_info, platform, available)
             elif choice == "2":
                 print(
                     colorize(
@@ -645,14 +387,14 @@ def _collect_missing_dependencies(fix_info: list[dict]) -> dict[str, list[str]]:
     Collect missing dependencies and which tools need them.
 
     Scans the fix_info list for tools that have missing runtime dependencies
-    (like Java or Node.js) and groups them by dependency.
+    (like Java) and groups them by dependency.
 
     Args:
-        fix_info: List of tool fix info dicts from check_tools_for_profile
+        fix_info: List of tool fix info dicts from check_tools_for_matrix
 
     Returns:
         Dict mapping dependency name to list of tools requiring it.
-        Example: {"java": ["dependency-check", "zap"], "node": ["cdxgen"]}
+        Example: {"java": ["zap"]}
     """
     deps: dict[str, list[str]] = {}
 
@@ -664,10 +406,6 @@ def _collect_missing_dependencies(fix_info: list[dict]) -> dict[str, list[str]]:
             continue
 
         for dep in missing:
-            # Normalize dependency names
-            # "node" and "node20" both map to "node"
-            if dep.startswith("node"):
-                dep = "node"
             if dep not in deps:
                 deps[dep] = []
             if info["name"] not in deps[dep]:
@@ -684,22 +422,19 @@ def _collect_missing_dependencies(fix_info: list[dict]) -> dict[str, list[str]]:
 def _auto_fix_tools(
     fix_info: list[dict],
     platform: str,
-    profile: str,
     available: list[str],
     auto_install_deps: bool = False,
 ) -> tuple[bool, list[str]]:
     """
     Automatically fix tools with issues using parallel installation.
 
-    Uses three-phase strategy:
-    1. Skip manual-only tools (show guidance instead of failing)
-    2. Parallel installation for JMo-manageable tools (pip, npm, binary downloads)
-    3. Sequential execution for platform-specific commands (brew, apt, choco)
+    Uses a two-phase strategy, after installing any missing runtime dependency:
+    1. Parallel installation for JMo-manageable tools (pip, binary downloads)
+    2. Sequential execution for platform-specific commands
 
     Args:
         fix_info: List of dicts with tool name, issue, and remediation info
         platform: Current platform (linux, macos, windows)
-        profile: Profile name
         available: Currently available tool names
         auto_install_deps: Automatically install dependencies without prompting
 
@@ -710,7 +445,7 @@ def _auto_fix_tools(
     FALLBACKS = _get_unicode_fallbacks()
 
     # Phase -1: Check for missing runtime dependencies (Chunk 4)
-    # Dependencies like Java/Node.js must be installed before the tools that need them
+    # Dependencies like Java must be installed before the tools that need them
     missing_deps = _collect_missing_dependencies(fix_info)
 
     if missing_deps:
@@ -776,81 +511,14 @@ def _auto_fix_tools(
             return False, available
         # choice == "2" continues without installing deps (tools may fail)
 
-    # Phase 0: Separate tools by category
-    # - platform_incompatible: Cannot run on this platform (show but don't attempt fix)
-    # - manual_tools: Require manual installation
-    # - auto_fix_info: Can be auto-installed
-    platform_incompatible: list[dict] = []
-    manual_tools: list[dict] = []
-    auto_fix_info: list[dict] = []
-
-    for info in fix_info:
-        remediation = info["remediation"]
-        tool_name = info["name"]
-
-        # Check for platform incompatibility first
-        if remediation.get("platform_incompatible") or (
-            IS_WINDOWS and _is_windows_incompatible(tool_name)
-        ):
-            platform_incompatible.append(info)
-        elif remediation.get("is_manual"):
-            manual_tools.append(info)
-        else:
-            auto_fix_info.append(info)
-
-    # Show platform-incompatible tools (Windows UX improvement)
-    if platform_incompatible:
-        colorize = _get_colorize()
-        FALLBACKS = _get_unicode_fallbacks()
-        print(
-            colorize(
-                f"\n{FALLBACKS.get('~', '~')} Skipping {len(platform_incompatible)} platform-incompatible tool(s):",
-                "dim",
-            )
-        )
-        skipped_names = [info["name"] for info in platform_incompatible]
-        print(f"  {', '.join(skipped_names)}")
-        print(colorize("  (Use Docker or WSL2 for these tools)", "dim"))
-
-    # Show manual tools guidance upfront (don't attempt install)
-    if manual_tools:
-        print(
-            colorize(
-                f"\n{FALLBACKS.get('📖', '[?]')} {len(manual_tools)} tool(s) require manual installation:",
-                "yellow",
-            )
-        )
-        print("─" * 50)
-        for info in manual_tools:
-            tool_name = info["name"]
-            remediation = info["remediation"]
-            reason = remediation.get("manual_reason", "Manual installation required")
-            url = remediation.get("manual_url", "docs/MANUAL_INSTALLATION.md")
-
-            print(f"\n  {FALLBACKS.get('⚠', '[!]')} {colorize(tool_name, 'yellow')}")
-            print(f"     Reason: {reason}")
-            print(f"     See: {url}")
-        print("\n" + "─" * 50)
-        print(
-            colorize(
-                "Tip: Use Docker mode for full tool support, or continue without these tools.",
-                "blue",
-            )
-        )
-
-    # If no auto-fixable tools, return early
-    if not auto_fix_info:
-        print(
-            colorize(
-                f"\n{FALLBACKS.get('⚠', '[!]')} No tools can be auto-installed on this platform.",
-                "yellow",
-            )
-        )
+    # Every matrix tool installs on every platform, so each one listed here is
+    # an auto-fix candidate.
+    if not fix_info:
         return True, available
 
     print(
         colorize(
-            f"\n{FALLBACKS.get('🔧', '[*]')} Auto-fixing {len(auto_fix_info)} tool(s)...",
+            f"\n{FALLBACKS.get('🔧', '[*]')} Auto-fixing {len(fix_info)} tool(s)...",
             "blue",
         )
     )
@@ -860,7 +528,7 @@ def _auto_fix_tools(
     jmo_tools: list[str] = []
     platform_commands: list[tuple[str, list[str]]] = []  # (tool_name, commands)
 
-    for info in auto_fix_info:
+    for info in fix_info:
         tool_name = info["name"]
         remediation = info["remediation"]
 
@@ -902,8 +570,7 @@ def _auto_fix_tools(
 
             installer = ToolInstaller()
 
-            # Use install_tools_parallel for SPECIFIC tools (not entire profile!)
-            # This fixes the bug where all 28 profile tools were being installed
+            # Install only the tools that need fixing, not the whole matrix
             progress = installer.install_tools_parallel(
                 tools=jmo_tools,  # Only install the tools that need fixing
                 skip_installed=False,  # Don't skip - these are broken/missing
@@ -924,15 +591,6 @@ def _auto_fix_tools(
                         )
                         if result.tool_name not in available:
                             available.append(result.tool_name)
-                elif result.method in ("manual", "docker"):
-                    # Manual/Docker tools are expected to fail auto-install - show as skipped, not failed
-                    print(
-                        colorize(
-                            f"   {FALLBACKS.get('⏭', '[~]')} {result.tool_name}: {result.message[:60]}",
-                            "yellow",
-                        )
-                    )
-                    # Don't count as failed - these are expected skips
                 else:
                     failed += 1
                     failed_tools.append(result.tool_name)
@@ -1075,14 +733,15 @@ def _auto_fix_tools(
     try:
         from scripts.cli.tool_manager import ToolManager
 
+        # A fresh manager: its status memo must not predate the installs above.
         manager = ToolManager()
-        summary = manager.get_tool_summary(profile)
+        statuses = manager.check_matrix()
+        summary = manager.get_tool_summary()
 
         # Get list of execution-ready tools
-        statuses = manager.check_profile(profile)
         available = [name for name, s in statuses.items() if s.execution_ready]
 
-        if summary.execution_ready == summary.platform_applicable:
+        if summary.execution_ready == summary.total:
             print(
                 colorize(
                     f"{FALLBACKS.get('✅', '[OK]')} {summary.format_status_line()}",
@@ -1097,13 +756,6 @@ def _auto_fix_tools(
                 )
             )
             # Show breakdown of what still needs attention
-            if summary.manual_install:
-                print(
-                    colorize(
-                        f"  {FALLBACKS.get('○', 'o')} {len(summary.manual_install)} require manual install: {', '.join(summary.manual_install)}",
-                        "dim",
-                    )
-                )
             if summary.version_issues:
                 print(
                     colorize(
@@ -1128,7 +780,6 @@ def _auto_fix_tools(
 
 def _install_missing_tools_interactive(
     missing: list,
-    profile: str,
     available: list[str],
 ) -> tuple[bool, list[str]]:
     """
@@ -1136,7 +787,6 @@ def _install_missing_tools_interactive(
 
     Args:
         missing: List of ToolStatus for missing tools
-        profile: Profile name
         available: Currently available tool names
 
     Returns:
@@ -1194,7 +844,7 @@ def _install_missing_tools_interactive(
     except ImportError as e:
         logger.warning(f"Tool installer unavailable: {e}")
         print(colorize(f"\nInstaller unavailable: {e}", "red"))
-        print("Install manually using: jmo tools install --profile " + profile)
+        print("Install manually using: jmo tools install")
 
         cont = input("Continue anyway? [y/N]: ").strip().lower()
         return cont == "y", available

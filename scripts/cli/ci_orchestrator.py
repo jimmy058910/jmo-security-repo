@@ -11,8 +11,7 @@ from pathlib import Path
 # default -- so their absence is an AttributeError rather than a fallback.
 # `jmo ci`'s own parser supplies all of them except ``out``, which only
 # `jmo report` defines. The list exists for callers that build a namespace by
-# hand: `cmd_profile` routes `jmo fast|balanced|full` through here with 11
-# dests against `jmo ci`'s 40.
+# hand (the test suite does).
 #
 # This is deliberately NOT a mirror of the parser, and the distinction is the
 # whole point of the rewrite below. Two hand-written mirror classes used to live
@@ -42,8 +41,8 @@ def _phase_args(a, required: dict[str, object], **overrides):
     """Return the caller's namespace, adapted for one phase.
 
     ``copy.copy`` rather than ``argparse.Namespace(**vars(a))``: the test suite
-    and `cmd_profile` both pass objects whose attributes live on the *class*,
-    where ``vars(instance)`` is ``{}`` and every field would be dropped.
+    passes objects whose attributes live on the *class*, where
+    ``vars(instance)`` is ``{}`` and every field would be dropped.
 
     The copy also means the phase cannot mutate the caller's namespace --
     `cmd_scan` adds ``results_dir_pos``/``out``/``fail_on`` to whatever it is
@@ -74,10 +73,17 @@ def cmd_ci(args, cmd_scan_fn, cmd_report_fn) -> int:
     # v1.0.0: Strict version check for reproducible CI builds
     if getattr(args, "strict_versions", False):
         from scripts.cli.tool_manager import ToolManager
+        from scripts.core.config import load_config
 
-        profile = getattr(args, "profile_name", None) or "balanced"
+        # The tools this run will use: --tools, else the config's list (which
+        # defaults to TOOL_MATRIX), minus --skip-tools.
+        tools = (
+            getattr(args, "tools", None)
+            or load_config(getattr(args, "config", "jmo.yml")).tools
+        )
+        skipped = set(getattr(args, "skip_tools", None) or [])
         manager = ToolManager()
-        drift = manager.get_version_drift(profile)
+        drift = manager.get_version_drift([t for t in tools if t not in skipped])
 
         if drift:
             # Categorize by direction

@@ -72,15 +72,15 @@ jq 'group_by(.ruleId) | map({rule: .[0].ruleId, count: length, severity: .[0].se
 
 | Tool | Rule | False Positive? | How to Verify |
 |------|------|-----------------|---------------|
-| Bandit | B101 | ✅ Yes (in test files) | Path contains `test` |
-| Bandit | B411 | ✅ Yes (in PyPI packages) | Path is `.venv/lib/python3.X/site-packages/` |
+| Semgrep | `insecure-file-permissions` | ✅ Yes (in test setup) | Path contains `test` |
+| Semgrep, Trivy | Anything under `.venv/` | ✅ Yes (in PyPI packages) | Path is `.venv/lib/python3.X/site-packages/` |
 | Semgrep | `run-shell-injection` | ✅ Yes (GHA echo) | Check it's not in script execution |
 | TruffleHog | Generic secrets | ⚠️ Maybe | Look for comments `# Example (not real)` |
 | Trivy | CVE in test deps | ⚠️ Maybe | Check if imported in production |
 
-**Quick check for Bandit B101 in tests:**
+**Quick check for Semgrep file-permission findings in tests:**
 ```bash
-jq '[.[] | select(.ruleId == "B101" and (.location.path | contains("test")))] | length' priority.json
+jq '[.[] | select((.ruleId | contains("insecure-file-permissions")) and (.location.path | contains("test")))] | length' priority.json
 ```
 ---
 
@@ -102,13 +102,13 @@ suppressions:
 
   # Specific false positives
 
-  - ruleId: "B101"
-
-    reason: "pytest uses assert extensively"
+  - ruleId: "*insecure-file-permissions*"
+    path: "tests/*"
+    reason: "Test setup chmods its own temp directories"
 ```
 **Re-run scan to verify:**
 ```bash
-jmo balanced --repos-dir .
+jmo ci --repos-dir .
 cat results/summaries/SUPPRESSIONS.md
 ```
 ---

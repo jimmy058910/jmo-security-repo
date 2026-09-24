@@ -59,7 +59,7 @@ jobs:
             --repo . \
             --policy zero-secrets \
             --fail-on-policy-violation \
-            --profile-name fast
+            --tools trufflehog semgrep trivy
 
       - name: Upload Policy Results
         if: always()
@@ -115,8 +115,7 @@ jobs:
           jmo ci \
             --repo . \
             --policy $POLICIES \
-            --fail-on-policy-violation \
-            --profile-name balanced
+            --fail-on-policy-violation
 
       - name: Upload Results
         if: always()
@@ -163,8 +162,7 @@ jobs:
             --repo . \
             --policy zero-secrets \
             --policy owasp-top-10 \
-            --fail-on-policy-violation \
-            --profile-name balanced
+            --fail-on-policy-violation
 
       - name: Post PR Comment
         if: always()
@@ -212,8 +210,7 @@ security-scan:
         --repo . \
         --policy zero-secrets \
         --policy owasp-top-10 \
-        --fail-on-policy-violation \
-        --profile-name balanced
+        --fail-on-policy-violation
 
   artifacts:
     when: always
@@ -377,8 +374,7 @@ pipeline {
                         jmo ci \
                           --repo . \
                           ${policyArgs} \
-                          --fail-on-policy-violation \
-                          --profile-name balanced
+                          --fail-on-policy-violation
                     """
                 }
             }
@@ -425,8 +421,7 @@ node {
                   --repo . \
                   --policy zero-secrets \
                   --policy owasp-top-10 \
-                  --fail-on-policy-violation \
-                  --profile-name balanced
+                  --fail-on-policy-violation
             '''
         } catch (Exception e) {
             currentBuild.result = 'FAILURE'
@@ -458,7 +453,7 @@ jmo ci \
   --repo . \
   --policy zero-secrets \
   --fail-on-policy-violation \
-  --profile-name fast
+  --tools trufflehog semgrep trivy
 
 if [ $? -ne 0 ]; then
   echo "❌ COMMIT BLOCKED: Security policy violations detected"
@@ -486,7 +481,7 @@ repos:
     hooks:
       - id: jmo-security-scan
         name: JMo Security Scan
-        entry: bash -c 'jmo ci --repo . --policy zero-secrets --fail-on-policy-violation --profile-name fast'
+        entry: bash -c 'jmo ci --repo . --policy zero-secrets --fail-on-policy-violation --tools trufflehog semgrep trivy'
         language: system
         pass_filenames: false
         always_run: true
@@ -523,8 +518,7 @@ services:
           --repo /scan \
           --policy zero-secrets \
           --policy owasp-top-10 \
-          --fail-on-policy-violation \
-          --profile-name balanced
+          --fail-on-policy-violation
       "
 ```
 
@@ -572,8 +566,7 @@ spec:
                 --policy zero-secrets \
                 --policy owasp-top-10 \
                 --policy production-hardening \
-                --fail-on-policy-violation \
-                --profile-name balanced
+                --fail-on-policy-violation
           volumeMounts:
             - name: source-code
               mountPath: /scan

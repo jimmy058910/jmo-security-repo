@@ -40,7 +40,6 @@ def test_workflow_file_validity():
             suspend=False,
             backend=BackendConfig(type="github-actions"),
             jobTemplate=JobTemplateSpec(
-                profile="balanced",
                 targets={
                     "repositories": {"repos_dir": "~/repos"},
                     "images": ["nginx:latest"],
@@ -108,7 +107,6 @@ def test_actionlint_validation():
             suspend=False,
             backend=BackendConfig(type="github-actions"),
             jobTemplate=JobTemplateSpec(
-                profile="balanced",
                 targets={"repositories": {"repos_dir": "~/repos"}},
                 options={},
                 results={},
@@ -161,7 +159,6 @@ def test_workflow_triggers_correctly():
             suspend=False,
             backend=BackendConfig(type="github-actions"),
             jobTemplate=JobTemplateSpec(
-                profile="fast",
                 targets={"repositories": {"repos_dir": "~/repos"}},
                 options={},
                 results={},
@@ -205,7 +202,6 @@ def test_schedule_runs_at_correct_time():
                 suspend=False,
                 backend=BackendConfig(type="github-actions"),
                 jobTemplate=JobTemplateSpec(
-                    profile="balanced",
                     targets={"repositories": {"repos_dir": "~/repos"}},
                     options={},
                     results={},
@@ -238,7 +234,6 @@ def test_workflow_with_notifications():
             suspend=False,
             backend=BackendConfig(type="github-actions"),
             jobTemplate=JobTemplateSpec(
-                profile="balanced",
                 targets={"repositories": {"repos_dir": "~/repos"}},
                 options={},
                 results={},

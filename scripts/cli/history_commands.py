@@ -144,13 +144,9 @@ def cmd_history_store(args) -> int:
             else:
                 tools = []
 
-        # Get profile from args
-        profile = getattr(args, "profile", "balanced")
-
         # Store scan
         scan_id = db_store_scan(
             results_dir=results_dir,
-            profile=profile,
             tools=tools,
             db_path=db_path,
             commit_hash=getattr(args, "commit", None),
@@ -166,10 +162,8 @@ def cmd_history_store(args) -> int:
         sys.stderr.write(f"Error: {e}\n")
         return 1
     except ValueError as e:
-        # A rejected profile name is a user mistake, not a crash.
-        # store_scan() validates against get_known_profiles() -- the tool
-        # registry PLUS jmo.yml `profiles:` -- and its message names every
-        # known profile, so a traceback adds noise and no information.
+        # Invalid input (e.g. encryption requested with no key) is a user
+        # mistake, not a crash; store_scan()'s message says which.
         sys.stderr.write(f"Error: {e}\n")
         return 1
     except Exception as e:
@@ -201,7 +195,6 @@ def cmd_history_list(args) -> int:
 
         # Parse filters
         branch = getattr(args, "branch", None)
-        profile = getattr(args, "profile", None)
         since = None
         if getattr(args, "since", None):
             since_seconds = parse_time_delta(args.since)
@@ -211,7 +204,6 @@ def cmd_history_list(args) -> int:
         scans = list_scans(
             conn,
             branch=branch,
-            profile=profile,
             since=since,
             limit=getattr(args, "limit", 50),
         )
@@ -254,7 +246,6 @@ def cmd_history_list(args) -> int:
             table.add_column("Scan ID", style="cyan", no_wrap=True)
             table.add_column("Timestamp", no_wrap=True)
             table.add_column("Branch")
-            table.add_column("Profile", no_wrap=True)
             table.add_column("Findings", justify="right", no_wrap=True)
             table.add_column("Critical", justify="right", style="red", no_wrap=True)
             table.add_column("High", justify="right", style="yellow", no_wrap=True)
@@ -265,7 +256,6 @@ def cmd_history_list(args) -> int:
                     scan["id"][:8] + "...",
                     scan["timestamp_iso"][:19].replace("T", " "),
                     scan["branch"] or "N/A",
-                    scan["profile"],
                     str(scan["total_findings"]),
                     str(scan["critical_count"]),
                     str(scan["high_count"]),
@@ -336,7 +326,6 @@ def cmd_history_show(args) -> int:
                 sys.stdout.write(f"Commit:          {scan['commit_short']}{dirty}\n")
             if scan["tag"]:
                 sys.stdout.write(f"Tag:             {scan['tag']}\n")
-            sys.stdout.write(f"Profile:         {scan['profile']}\n")
             tools = json.loads(scan["tools"])
             sys.stdout.write(
                 f"Tools:           {len(tools)} ({', '.join(tools[:5])}{', ...' if len(tools) > 5 else ''})\n"
@@ -563,7 +552,6 @@ def cmd_history_export(args) -> int:
                     "scan_id",
                     "timestamp",
                     "branch",
-                    "profile",
                     "fingerprint",
                     "severity",
                     "tool",
@@ -580,7 +568,6 @@ def cmd_history_export(args) -> int:
                             scan["id"],
                             scan["timestamp_iso"],
                             scan["branch"],
-                            scan["profile"],
                             finding["fingerprint"],
                             finding["severity"],
                             finding["tool"],
@@ -658,14 +645,6 @@ def cmd_history_stats(args) -> int:
                 if scans_without_branch:
                     sys.stdout.write(
                         f"  {'(no branch recorded)':20} {scans_without_branch:4} scans\n"
-                    )
-                sys.stdout.write("\n")
-
-            if stats["scans_by_profile"]:
-                sys.stdout.write("Scans by Profile:\n")
-                for item in stats["scans_by_profile"]:
-                    sys.stdout.write(
-                        f"  {item['profile']:10} {item['count']:4} scans\n"
                     )
                 sys.stdout.write("\n")
 

@@ -101,7 +101,7 @@ def large_database(tmp_path: Path) -> Path:
     This fixture simulates a production database with realistic data:
     - 10,000 scans spanning 180 days
     - 100,000 findings (avg 10 per scan)
-    - Multiple branches, profiles, target types
+    - Multiple branches and target types
     - Realistic severity distribution
 
     Returns:
@@ -114,7 +114,6 @@ def large_database(tmp_path: Path) -> Path:
 
     # Generate 10k scans
     branches = ["main", "dev", "feature/auth", "feature/api"]
-    profiles = ["fast", "balanced", "deep"]
     target_types = ["repo", "image", "iac", "url", "gitlab", "k8s"]
     tools_list = [
         '["trivy", "semgrep"]',
@@ -156,7 +155,6 @@ def large_database(tmp_path: Path) -> Path:
             random.choice(branches),
             None,  # tag
             random.choice([0, 0, 0, 1]),  # is_dirty (mostly clean)
-            random.choice(profiles),
             random.choice(tools_list),
             f'["/test/repo-{i % 100}"]',
             random.choice(target_types),
@@ -208,10 +206,10 @@ def large_database(tmp_path: Path) -> Path:
             """
             INSERT INTO scans (
                 id, timestamp, timestamp_iso, commit_hash, commit_short, branch, tag, is_dirty,
-                profile, tools, targets, target_type, total_findings, critical_count, high_count,
+                tools, targets, target_type, total_findings, critical_count, high_count,
                 medium_count, low_count, info_count, jmo_version, hostname, username, ci_provider,
                 ci_build_id, duration_seconds
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             scan_rows,
         )

@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from typing import Any as AnyType
 
+from scripts.core.tool_registry import TOOL_MATRIX
+
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
@@ -144,17 +146,10 @@ class RetryConfig:
 
 @dataclass
 class Config:
-    tools: list[str] = field(
-        default_factory=lambda: [
-            "trufflehog",
-            "semgrep",
-            "syft",
-            "trivy",
-            "checkov",
-            "hadolint",
-            "zap",
-        ]
-    )
+    # The whole matrix unless jmo.yml `tools:` narrows it. There are no profiles
+    # (v2.0.0): TOOL_MATRIX is the one default, so it is read from the registry
+    # rather than restated here.
+    tools: list[str] = field(default_factory=lambda: list(TOOL_MATRIX))
     # `compliance` and `suppressions` are here so gating them under #867 does
     # not change what a config that never mentions `outputs:` produces. They
     # were written unconditionally before, outside any gate; being in the
@@ -176,8 +171,6 @@ class Config:
     timeout: int | None = None
     log_level: str = "INFO"
     # Advanced
-    default_profile: str | None = None
-    profiles: dict[str, dict[str, Any]] = field(default_factory=dict)
     per_tool: dict[str, dict[str, Any]] = field(default_factory=dict)
     retries: int | RetryConfig = 0
     # Profiling thread recommendations (used when --profile flag set)
@@ -212,7 +205,6 @@ class Config:
 RECOGNISED_CONFIG_KEYS: frozenset[str] = frozenset(
     {
         "deduplication",
-        "default_profile",
         "exclude",
         "fail_on",
         "include",
@@ -220,7 +212,6 @@ RECOGNISED_CONFIG_KEYS: frozenset[str] = frozenset(
         "outputs",
         "per_tool",
         "policy",
-        "profiles",
         "profiling",
         "retries",
         "threads",
@@ -259,7 +250,7 @@ def load_config(path: str | None) -> Config:
     """Load and parse JMo Security configuration from YAML file.
 
     Reads jmo.yml configuration file and returns parsed Config dataclass with
-    tool selection, profiles, output formats, and per-tool overrides.
+    tool selection, output formats, and per-tool overrides.
 
     Args:
         path (str | None): Path to jmo.yml configuration file, or None for defaults
@@ -267,7 +258,6 @@ def load_config(path: str | None) -> Config:
     Returns:
         Config: Parsed configuration dataclass with keys:
             - tools (list): Enabled security tools
-            - profiles (dict): Named profile configurations
             - outputs (list): Output format selection
             - per_tool (dict): Per-tool overrides
             - email (dict): Email notification settings
@@ -277,12 +267,9 @@ def load_config(path: str | None) -> Config:
         None: Returns default Config() if path is None, file missing, or YAML error
 
     Example:
-        >>> config = load_config('jmo.yml')
-        >>> print(config.default_profile)
-        balanced
         >>> config = load_config(None)  # Returns defaults
-        >>> print(config.tools)
-        []
+        >>> config.tools == list(TOOL_MATRIX)
+        True
 
     Note:
         If jmo.yml not found or YAML library missing, returns default Config with empty values.
@@ -346,12 +333,6 @@ def load_config(path: str | None) -> Config:
         lvl = str(data["log_level"]).upper()
         if lvl in ("DEBUG", "INFO", "WARN", "ERROR"):
             cfg.log_level = lvl
-    # default_profile
-    if isinstance(data.get("default_profile"), str):
-        cfg.default_profile = str(data["default_profile"]).strip() or None
-    # profiles (free-form dict)
-    if isinstance(data.get("profiles"), dict):
-        cfg.profiles = data["profiles"]
     # per_tool overrides
     if isinstance(data.get("per_tool"), dict):
         cfg.per_tool = data["per_tool"]
@@ -418,22 +399,6 @@ def load_config(path: str | None) -> Config:
                 opa=opa_config,
             )
 
-            # Apply profile-specific policy overrides
-            profile_name = cfg.default_profile or data.get("default_profile")
-            if profile_name and isinstance(cfg.profiles.get(profile_name), dict):
-                profile_data = cfg.profiles[profile_name]
-                if isinstance(profile_data.get("policy"), dict):
-                    profile_policy = profile_data["policy"]
-                    # Override with profile-specific settings
-                    if isinstance(profile_policy.get("default_policies"), list):
-                        policy_config.default_policies = profile_policy[
-                            "default_policies"
-                        ]
-                    if "fail_on_violation" in profile_policy:
-                        policy_config.fail_on_violation = profile_policy[
-                            "fail_on_violation"
-                        ]
-
             cfg.policy = policy_config
         except (ValueError, TypeError):
             # If policy config is invalid, use defaults
@@ -449,7 +414,7 @@ def load_config_with_env_overrides(path: str | None) -> Config:
     1. CLI arguments (handled by caller)
     2. Environment variables (this function)
     3. jmo.yml config file
-    4. Profile defaults
+    4. Built-in defaults
     """
     config = load_config(path)
 

@@ -363,7 +363,6 @@ class TestHighVolumeHistoricalData:
             # Store scan
             scan_id = store_scan(
                 results_dir=scan_results_dir,
-                profile="balanced",
                 tools=["trivy", "semgrep"],
                 db_path=db_path,
                 commit_hash=f"commit-{i}",
@@ -418,7 +417,6 @@ class TestHighVolumeHistoricalData:
 
             scan_id = store_scan(
                 results_dir=scan_results_dir,
-                profile="balanced",
                 tools=["trivy"],
                 db_path=db_path,
                 commit_hash=f"commit-{i}",

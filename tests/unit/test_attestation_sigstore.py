@@ -389,9 +389,7 @@ class TestCLISigningIntegration:
 
         scan_args_path = tmp_path / "scan_args.json"
         scan_args_path.write_text(
-            json.dumps(
-                {"profile_name": "balanced", "tools": ["trivy"], "repos": ["test-repo"]}
-            )
+            json.dumps({"tools": ["trivy"], "repos": ["test-repo"]})
         )
 
         # Mock successful signing (subprocess call)
@@ -598,7 +596,6 @@ class TestSLSALevel2Requirements:
         generator = ProvenanceGenerator()
         statement = generator.generate(
             findings_path=findings_path,
-            profile="balanced",
             tools=["trivy"],
             targets=["test-repo"],
         )

@@ -17,14 +17,12 @@ v1.0.0 Metadata Wrapper Schema:
                 "source_type": "directory",
                 "path": "results-baseline/",
                 "timestamp": "2025-11-01T10:00:00Z",
-                "profile": "balanced",
                 "total_findings": 42
             },
             "current": {
                 "source_type": "directory",
                 "path": "results-current/",
                 "timestamp": "2025-11-05T10:00:00Z",
-                "profile": "balanced",
                 "total_findings": 38
             }
         },
@@ -120,14 +118,12 @@ def write_json_diff(diff: DiffResult, out_path: Path) -> None:
                 "source_type": diff.baseline_source.source_type,
                 "path": diff.baseline_source.path,
                 "timestamp": diff.baseline_source.timestamp,
-                "profile": diff.baseline_source.profile,
                 "total_findings": diff.baseline_source.total_findings,
             },
             "current": {
                 "source_type": diff.current_source.source_type,
                 "path": diff.current_source.path,
                 "timestamp": diff.current_source.timestamp,
-                "profile": diff.current_source.profile,
                 "total_findings": diff.current_source.total_findings,
             },
         },

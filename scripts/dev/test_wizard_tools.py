@@ -3,13 +3,12 @@
 Comprehensive wizard tool testing script.
 
 Tests all wizard functionality non-interactively:
-- Tool detection and version parsing
+- Tool detection and version parsing, for every TOOL_MATRIX tool
 - Isolated venv functionality
-- Dependency checking (Java, Node.js, bash)
-- Platform-specific tool handling
+- Dependency checking (Java, for zap)
 
 Usage:
-    python scripts/dev/test_wizard_tools.py [--profile PROFILE] [--verbose]
+    python scripts/dev/test_wizard_tools.py [--verbose]
 
 Run this BEFORE 'jmo wizard' to verify tool infrastructure is working.
 """
@@ -17,6 +16,7 @@ Run this BEFORE 'jmo wizard' to verify tool infrastructure is working.
 from __future__ import annotations
 
 import argparse
+import shutil
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -35,7 +35,11 @@ from scripts.cli.tool_installer import (  # noqa: E402
 from scripts.cli.tool_manager import (  # noqa: E402
     ToolManager,
 )
-from scripts.core.tool_registry import PROFILE_TOOLS, ToolRegistry  # noqa: E402
+from scripts.core.tool_registry import (  # noqa: E402
+    TOOL_EXECUTION_COMMANDS,
+    TOOL_MATRIX,
+    ToolRegistry,
+)
 
 if TYPE_CHECKING:
     pass
@@ -135,49 +139,32 @@ class WizardToolTester:
                     )
                     print(f"  [FAIL] {tool_name}: bin dir missing")
 
-    def test_version_detection(self, profile: str) -> None:
-        """Report each profile tool's status, as the product reports it.
+    def test_version_detection(self) -> None:
+        """Report each matrix tool's status, as the product reports it.
 
         This used to probe `_find_binary` and `_get_tool_version` directly -
         two private helpers that answer narrower questions than `check_tool()`
         does - and so contradicted `jmo tools check` and, in one case, itself.
-        Measured on Windows with the balanced profile (#1138):
+        Measured on Windows (#1138):
 
             [MISS] zap: not installed      while tools check read zap OK 2.17.0
             [OK]   zap: ready to execute   in the SAME run
-            cdxgen: version parse failed   while tools check read 12.8.2
 
         `check_tool()` is the product's own verdict and is memoised per tool, so
         asking it here and again in the readiness test costs a cache hit rather
         than a second probe - and the two can no longer disagree.
         """
         print("\n" + "=" * 60)
-        print(f"TEST: Version Detection ({profile} profile)")
+        print("TEST: Version Detection (tool matrix)")
         print("=" * 60)
 
-        tools = PROFILE_TOOLS.get(profile, [])
-
-        for tool_name in sorted(tools):
+        for tool_name in sorted(TOOL_MATRIX):
             status = self.tm.check_tool(tool_name)
             self.log(
                 f"{tool_name}: installed={status.installed} "
                 f"version={status.installed_version} "
-                f"ready={status.execution_ready} "
-                f"platform_supported={status.platform_supported}"
+                f"ready={status.execution_ready}"
             )
-
-            if not status.platform_supported:
-                reason = (
-                    status.platform_reason or f"not available on {self.tm.platform}"
-                )
-                print(f"  [SKIP] {tool_name}: {reason}")
-                self.add_result(
-                    f"version_{tool_name}",
-                    True,  # Not a failure, just skipped
-                    "Platform skip",
-                    reason,
-                )
-                continue
 
             if not status.installed:
                 print(f"  [MISS] {tool_name}: not installed")
@@ -223,76 +210,44 @@ class WizardToolTester:
                 )
 
     def test_dependency_checks(self) -> None:
-        """Test dependency verification (Java, Node.js, bash)."""
+        """Test that the host has the runtimes matrix tools need (Java, for zap).
+
+        A question about the machine, not about a tool's status, so it is not
+        asked of `check_tool()`: that says whether zap is ready, not whether
+        the reason it is not is a missing JRE.
+        """
         print("\n" + "=" * 60)
         print("TEST: Dependency Verification")
         print("=" * 60)
 
-        # Test Java (for dependency-check)
-        print("\n  Java (required by dependency-check):")
-        java_ver = self.tm._get_java_version()
-        if java_ver:
-            print(f"    [OK] Java {'.'.join(map(str, java_ver))} found")
-            self.add_result("dep_java", True, f"Java {java_ver[0]}", "")
+        print("\n  Java (required by zap):")
+        java_path = shutil.which("java")
+        if java_path:
+            print(f"    [OK] Java found at {java_path}")
+            self.add_result("dep_java", True, "Java available", java_path)
         else:
             print("    [MISS] Java not found")
             self.add_result(
                 "dep_java",
                 False,
                 "Java not found",
-                "Install JDK 11+ for dependency-check",
+                "Install Java 17+ for zap",
             )
 
-        # Test Node.js (for cdxgen)
-        print("\n  Node.js (required by cdxgen):")
-        node_ver = self.tm._get_node_version()
-        if node_ver:
-            print(f"    [OK] Node.js {'.'.join(map(str, node_ver))} found")
-            self.add_result("dep_nodejs", True, f"Node {node_ver[0]}", "")
-        else:
-            print("    [MISS] Node.js not found")
-            self.add_result(
-                "dep_nodejs",
-                False,
-                "Node.js not found",
-                "Install Node.js 20+ for cdxgen",
-            )
-
-        # Test bash (for lynis on Windows)
-        print("\n  Bash (required by lynis on Windows):")
-        import shutil
-
-        bash_path = shutil.which("bash")
-        if bash_path:
-            print(f"    [OK] Bash found at {bash_path}")
-            self.add_result("dep_bash", True, "Bash available", bash_path)
-        else:
-            if sys.platform == "win32":
-                print("    [MISS] Bash not found (lynis won't work)")
-                self.add_result(
-                    "dep_bash",
-                    False,
-                    "Bash not found",
-                    "Install Git Bash, WSL, or Cygwin",
-                )
-            else:
-                print("    [OK] Unix system (bash assumed)")
-                self.add_result("dep_bash", True, "Unix system", "")
-
-    def test_tool_execution_readiness(self, profile: str) -> None:
-        """Test _verify_execution for tools with special requirements."""
+    def test_tool_execution_readiness(self) -> None:
+        """Test execution readiness for matrix tools with runtime requirements."""
         print("\n" + "=" * 60)
-        print(f"TEST: Execution Readiness ({profile} profile)")
+        print("TEST: Execution Readiness (tool matrix)")
         print("=" * 60)
 
-        # Tools with special requirements
-        special_tools = ["cdxgen", "lynis", "dependency-check", "zap"]
-        tools = PROFILE_TOOLS.get(profile, [])
+        # Tools whose execution needs more than their own binary (zap: Java)
+        special_tools = [
+            name
+            for name in TOOL_MATRIX
+            if set(TOOL_EXECUTION_COMMANDS.get(name, [])) - {name}
+        ]
 
         for tool_name in special_tools:
-            if tool_name not in tools:
-                continue
-
             # `check_tool`, not `_verify_execution`. The private helper answers
             # "would this run if it were installed"; the product's verdict also
             # accounts for the tool being absent. Asking the narrower question
@@ -304,10 +259,7 @@ class WizardToolTester:
                 f"ready={status.execution_ready} warning={status.execution_warning}"
             )
 
-            if not status.platform_supported:
-                print(f"  [SKIP] {tool_name}: not available on {self.tm.platform}")
-                self.add_result(f"exec_{tool_name}", True, "Platform skip", "")
-            elif status.execution_ready:
+            if status.execution_ready:
                 print(f"  [OK] {tool_name}: ready to execute")
                 self.add_result(f"exec_{tool_name}", True, "Ready", "")
             else:
@@ -344,19 +296,18 @@ class WizardToolTester:
 
         return {"total": total, "passed": passed, "failed": failed}
 
-    def run_all(self, profile: str) -> dict:
+    def run_all(self) -> dict:
         """Run all tests."""
         print("\n" + "#" * 60)
         print("# JMo Security - Wizard Tool Infrastructure Test")
         print("#" * 60)
-        print(f"\nProfile: {profile}")
-        print(f"Platform: {self.tm.platform}")
-        print(f"Tools in profile: {len(PROFILE_TOOLS.get(profile, []))}")
+        print(f"\nPlatform: {self.tm.platform}")
+        print(f"Tools in matrix: {len(TOOL_MATRIX)}")
 
         self.test_isolated_venv_structure()
-        self.test_version_detection(profile)
+        self.test_version_detection()
         self.test_dependency_checks()
-        self.test_tool_execution_readiness(profile)
+        self.test_tool_execution_readiness()
 
         return self.print_summary()
 
@@ -365,12 +316,6 @@ def main() -> int:
     """Main entry point."""
     parser = argparse.ArgumentParser(
         description="Test wizard tool detection comprehensively"
-    )
-    parser.add_argument(
-        "--profile",
-        default="balanced",
-        choices=["fast", "slim", "balanced", "deep"],
-        help="Scan profile to test (default: balanced)",
     )
     parser.add_argument(
         "--verbose",
@@ -382,7 +327,7 @@ def main() -> int:
     args = parser.parse_args()
 
     tester = WizardToolTester(verbose=args.verbose)
-    stats = tester.run_all(args.profile)
+    stats = tester.run_all()
 
     print("\n" + "=" * 60)
     if stats["failed"] == 0:
@@ -393,25 +338,17 @@ def main() -> int:
         print("\nNext steps:")
         # Derived from what actually failed. This was three hardcoded lines
         # printed whenever anything failed, so a run that had just reported
-        # `[OK] Java 21.0.12 found` went on to advise "Install Java 11+ for
-        # dependency-check" (#1138).
+        # `[OK] Java 21.0.12 found` went on to advise installing Java (#1138).
         steps = []
         failed = {r.name for r in tester.results if not r.passed}
         if any(n.startswith("version_") for n in failed):
-            steps.append(
-                "Install missing tools: jmo tools install --profile " + args.profile
-            )
-        for dep, hint in (
-            ("dep_java", "Install Java 11+ (dependency-check and zap need it)"),
-            ("dep_nodejs", "Install Node.js 20+ (cdxgen needs it)"),
-            ("dep_bash", "Install Git Bash, WSL or Cygwin (lynis needs bash)"),
-        ):
-            if dep in failed:
-                steps.append(hint)
+            steps.append("Install missing tools: jmo tools install")
+        if "dep_java" in failed:
+            steps.append("Install Java 17+ (zap needs it)")
         if any(n.startswith("venv_") for n in failed):
             steps.append(
                 "Rebuild isolated venvs: jmo tools clean --force, "
-                "then jmo tools install --profile " + args.profile
+                "then jmo tools install"
             )
         steps.append("Re-run this test to verify fixes")
 

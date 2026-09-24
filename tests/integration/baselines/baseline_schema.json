@@ -9,7 +9,7 @@
     "metadata": {
       "type": "object",
       "description": "Information about the baseline target and generation",
-      "required": ["target", "version", "generated", "profile"],
+      "required": ["target", "version", "generated"],
       "properties": {
         "target": {
           "type": "string",
@@ -23,11 +23,6 @@
           "type": "string",
           "format": "date-time",
           "description": "ISO timestamp when baseline was generated"
-        },
-        "profile": {
-          "type": "string",
-          "enum": ["fast", "slim", "balanced", "deep"],
-          "description": "JMo scan profile used for baseline generation"
         },
         "tools_used": {
           "type": "array",

@@ -14,12 +14,14 @@ Coverage targets:
 - Output format flags
 """
 
+import argparse
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from scripts.cli.ci_orchestrator import cmd_ci
+from scripts.core.tool_registry import TOOL_MATRIX
 
 
 @pytest.fixture
@@ -70,7 +72,6 @@ def complete_args():
         timeout = 900
         threads = 8
         allow_missing_tools = True
-        profile_name = "balanced"
         log_level = "DEBUG"
         human_logs = True
         # History database flags
@@ -150,7 +151,6 @@ def test_cmd_ci_complete_args(complete_args):
     assert scan_args.timeout == 900
     assert scan_args.threads == 8
     assert scan_args.allow_missing_tools is True
-    assert scan_args.profile_name == "balanced"
     assert scan_args.log_level == "DEBUG"
     assert scan_args.human_logs is True
     assert scan_args.store_history is True
@@ -175,7 +175,6 @@ def test_cmd_ci_complete_args(complete_args):
     assert report_args.yaml is True
     assert report_args.store_history is True
     assert report_args.history_db == "/path/to/history.db"
-    assert report_args.profile_name == "balanced"
     assert report_args.policies == ["no_high_severity", "require_cwe"]
     assert report_args.fail_on_policy_violation is True
 
@@ -494,7 +493,6 @@ class TestStrictVersions:
 
         class Args:
             strict_versions = True
-            profile_name = "balanced"
             repo = "/repo"
             results_dir = "results"
 
@@ -518,7 +516,6 @@ class TestStrictVersions:
 
         class Args:
             strict_versions = True
-            profile_name = "balanced"
             repo = "/repo"
             results_dir = "results"
 
@@ -560,7 +557,6 @@ class TestStrictVersions:
 
         class Args:
             strict_versions = True
-            profile_name = "balanced"
             repo = "/repo"
             results_dir = "results"
 
@@ -592,7 +588,6 @@ class TestStrictVersions:
 
         class Args:
             strict_versions = True
-            profile_name = "balanced"
             repo = "/repo"
             results_dir = "results"
 
@@ -621,17 +616,36 @@ class TestStrictVersions:
         assert mock_scan.called
         assert mock_report.called
 
-    def test_strict_versions_default_profile(self):
-        """Test strict_versions uses 'balanced' profile by default."""
+    @pytest.mark.parametrize(
+        ("cfg_body", "tools", "skip_tools", "expected"),
+        [
+            (None, None, None, list(TOOL_MATRIX)),
+            ("tools: [trivy, gosec]\n", None, None, ["trivy", "gosec"]),
+            ("tools: [gosec]\n", ["trivy", "semgrep"], ["semgrep"], ["trivy"]),
+        ],
+        ids=["matrix-by-default", "config-tools", "cli-tools-minus-skipped"],
+    )
+    def test_strict_versions_checks_the_resolved_tools(
+        self, tmp_path, cfg_body, tools, skip_tools, expected
+    ):
+        """The versions checked are the tools this run will use.
 
-        class Args:
-            strict_versions = True
-            # No profile_name set
-            repo = "/repo"
-            results_dir = "results"
+        Same resolution as the scan: `--tools`, else jmo.yml `tools:`, else
+        TOOL_MATRIX, minus `--skip-tools`. Checking a wider set fails CI on a
+        tool that was never going to run; a narrower one passes a stale one.
+        """
+        cfg = tmp_path / "jmo.yml"
+        if cfg_body is not None:
+            cfg.write_bytes(cfg_body.encode("utf-8"))
 
-        mock_scan = MagicMock(return_value=0)
-        mock_report = MagicMock(return_value=0)
+        args = argparse.Namespace(
+            strict_versions=True,
+            config=str(cfg),
+            tools=tools,
+            skip_tools=skip_tools,
+            repo="/repo",
+            results_dir="results",
+        )
         mock_manager = MagicMock()
         mock_manager.get_version_drift.return_value = []
 
@@ -639,17 +653,15 @@ class TestStrictVersions:
             patch("scripts.cli.jmo._log"),
             patch("scripts.cli.tool_manager.ToolManager", return_value=mock_manager),
         ):
-            cmd_ci(Args(), mock_scan, mock_report)
+            cmd_ci(args, MagicMock(return_value=0), MagicMock(return_value=0))
 
-        # Should call get_version_drift with "balanced" as default
-        mock_manager.get_version_drift.assert_called_once_with("balanced")
+        mock_manager.get_version_drift.assert_called_once_with(expected)
 
     def test_strict_versions_mixed_drift(self):
         """Test strict_versions with mixed ahead/behind drift."""
 
         class Args:
             strict_versions = True
-            profile_name = "fast"
             repo = "/repo"
             results_dir = "results"
 
@@ -690,7 +702,6 @@ class TestStrictVersions:
 
         class Args:
             strict_versions = False
-            profile_name = "balanced"
             repo = "/repo"
             results_dir = "results"
 

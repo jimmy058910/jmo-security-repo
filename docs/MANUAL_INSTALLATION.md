@@ -8,10 +8,6 @@ Complete reference for installing JMo Security and its external security tools.
 - [JMo Security Installation](#jmo-security-installation)
 - [External Tool Installation](#external-tool-installation)
 - [Platform-Specific Guide](#platform-specific-guide)
-- [Manual Installation Tools](#manual-installation-tools)
-  - [Windows-Specific Installation](#windows-specific-installation)
-    - [Prowler (Windows)](#prowler-windows)
-    - [Lynis (Windows)](#lynis-windows)
 - [Troubleshooting](#troubleshooting)
 
 ---
@@ -22,8 +18,8 @@ Complete reference for installing JMo Security and its external security tools.
 
 ```bash
 # All tools pre-installed, works on all platforms
-docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:balanced \
-  scan --repo /scan --results-dir /scan/results --profile-name balanced
+docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
+  scan --repo /scan --results-dir /scan/results
 ```
 
 **Native installation:**
@@ -32,14 +28,14 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:balanced \
 # 1. Install JMo Security
 pip install jmo-security
 
-# 2. Check tool status for your profile
-jmo tools check --profile balanced
+# 2. Check tool status
+jmo tools check
 
 # 3. Install missing tools (cross-platform)
-jmo tools install --profile balanced
+jmo tools install
 
 # 4. Verify installation
-jmo tools check --profile balanced
+jmo tools check
 ```
 
 ---
@@ -76,35 +72,37 @@ pip install -e .
 
 ## External Tool Installation
 
-JMo Security orchestrates 29 external security tools. Use the built-in tool manager or install manually.
+JMo Security orchestrates the external security tools in the [tool matrix](TOOLS.md#the-tool-matrix), plus OPA for policy-as-code. Use the built-in tool manager or install manually.
 
 ### Automated Installation (Recommended)
 
 **Using `jmo tools` (All Platforms):**
 
 ```bash
-# Check what's needed for your profile
-jmo tools check --profile balanced
+# Check what's installed and what's missing
+jmo tools check
 
 # Install missing tools (auto-detects platform)
-jmo tools install --profile balanced
+jmo tools install
 
-# Or install all tools for deep scanning
-jmo tools install --profile deep
+# Or install specific tools
+jmo tools install trivy semgrep
 ```
 
 **Installation methods by platform:**
 
 | Platform | Methods (in priority order) |
 |----------|----------------------------|
-| Linux | apt, pip, npm, binary download, brew |
-| macOS | brew, pip, npm, binary download |
+| Linux | apt, pip, npm, install script, binary download, brew |
+| macOS | brew, pip, npm, install script, binary download |
 | Windows | pip, npm, binary download, manual |
+
+Semgrep and Checkov always go into isolated virtual environments, and ZAP is always an extracted archive, whatever the platform. [TOOLS.md](TOOLS.md#installation) lists where each tool ends up.
 
 **Windows (PowerShell):**
 
 ```powershell
-jmo tools install --profile balanced
+jmo tools install
 ```
 
 ### Manual Tool Installation
@@ -121,12 +119,6 @@ brew install trufflesecurity/trufflehog/trufflehog
 scoop install trufflehog
 ```
 
-**Nosey Parker** (Deep secrets scanning - Docker only):
-
-```bash
-docker pull ghcr.io/praetorian-inc/noseyparker:latest
-```
-
 #### SAST (Static Analysis)
 
 **Semgrep** (Multi-language SAST):
@@ -139,10 +131,14 @@ brew install semgrep
 pip install semgrep
 ```
 
-**Bandit** (Python security linter):
+**Gosec** (Go security analyzer):
 
 ```bash
-pip install bandit
+# macOS
+brew install gosec
+
+# Linux/Windows (Go)
+go install github.com/securego/gosec/v2/cmd/gosec@latest
 ```
 
 #### Vulnerabilities + SBOM
@@ -172,6 +168,19 @@ brew install syft
 scoop install syft
 ```
 
+**Grype** (Vulnerability scanner, Anchore database):
+
+```bash
+# macOS
+brew install grype
+
+# Linux
+curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
+
+# Windows (Chocolatey)
+choco install grype -y
+```
+
 #### IaC Security
 
 **Checkov** (Infrastructure as Code):
@@ -192,6 +201,31 @@ brew install hadolint
 
 # Windows: Download from https://github.com/hadolint/hadolint/releases
 ```
+
+#### Shell Script Linting
+
+**ShellCheck** (Shell script static analysis):
+
+```bash
+# macOS
+brew install shellcheck
+
+# Ubuntu/Debian
+sudo apt install shellcheck -y
+
+# Windows (Chocolatey)
+choco install shellcheck -y
+```
+
+#### Malware Detection
+
+**YARA** (Malware pattern matching):
+
+```bash
+pip install yara-python
+```
+
+`yara-python` is only the engine; it carries no rules, and YARA with no rules matches nothing. `jmo tools install yara` also downloads JMo's pinned rule bundle into `~/.jmo/yara-rules/`. If you install the engine by hand, point `per_tool.yara.rules_path` in `jmo.yml` at a rule set.
 
 #### DAST (Dynamic Analysis)
 
@@ -214,12 +248,9 @@ brew install nuclei
 go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
 ```
 
-#### Java-Based Tools (Dependency-Check, ZAP)
+#### Java for ZAP
 
-Several tools require **Java 11+** (Java 17+ recommended):
-
-- **OWASP Dependency-Check** - SCA/vulnerability scanner
-- **OWASP ZAP** - Dynamic application security testing
+**OWASP ZAP** requires **Java 17+**. It is the only tool in the matrix that needs Java; `jmo tools install zap` installs ZAP itself but not Java.
 
 **Install Java:**
 
@@ -247,16 +278,6 @@ java -version
 # Should show: openjdk version "17.x.x" or similar
 ```
 
-**Install Dependency-Check:**
-
-```bash
-# All platforms (after Java is installed)
-jmo tools install dependency-check
-
-# Or manual download from:
-# https://github.com/jeremylong/DependencyCheck/releases
-```
-
 > **Note:** The wizard will automatically detect if Java is missing and offer to **auto-install** it using your system's package manager (Chocolatey/winget on Windows, apt/dnf on Linux, Homebrew on macOS). If auto-install fails, it shows clear manual installation instructions.
 
 ### Tool Compatibility Matrix
@@ -269,26 +290,14 @@ jmo tools install dependency-check
 | Syft | ✅ | ✅ | ✅ | ✅ |
 | Checkov | ✅ | ✅ | ✅ | ✅ |
 | Hadolint | ✅ | ✅ | ✅ | ✅ |
+| ShellCheck | ✅ | ✅ | ✅ | ✅ |
+| Gosec | ✅ | ✅ | ✅ | ✅ |
+| Grype | ✅ | ✅ | ✅ | ✅ |
+| YARA | ✅ | ✅ | ✅ | ✅ |
 | Nuclei | ✅ | ✅ | ✅ | ✅ |
-| Bandit | ✅ | ✅ | ✅ | ✅ |
 | OWASP ZAP | ✅ | ✅ | ✅ | ✅ |
-| Nosey Parker | ❌ | ✅ | ❌ | ✅ |
-| Falco | ❌ | ✅ | ❌ | ✅ |
-| AFL++ | ❌ | ✅ | ❌ | Manual |
-| MobSF | ❌ | ❌ | ❌ | ✅ |
-| Akto | ❌ | ❌ | ❌ | ✅ |
 
-**Legend:** ✅ Full support | ⚠️ Limited support | ❌ Docker only | Manual = See [Manual Installation](#manual-installation-tools)
-
-> **Wizard behavior:** When running `jmo wizard`, platform-incompatible tools are automatically skipped with explanatory messages. For example, on Windows:
->
-> ```text
-> ~ Skipped on windows (4 tools):
->   ~ falco: Requires Linux kernel module
->   ~ afl++: Requires Linux kernel features
->   ~ noseyparker: Rust binary not available for Windows
->   ~ mobsf: Complex setup (Docker recommended)
-> ```
+**Legend:** ✅ Full support | ⚠️ Limited support
 
 ---
 
@@ -373,7 +382,7 @@ Security tools may be flagged as false positives. Add exclusion:
 Add-MpPreference -ExclusionPath "$env:USERPROFILE\AppData\Local\Programs\Python\Python311\Scripts"
 ```
 
-**Limitation:** 5/12 tools require WSL2 or Docker. Use Docker mode for full coverage.
+**Note:** Every tool in the [tool matrix](TOOLS.md#the-tool-matrix) installs natively on Windows. ZAP additionally needs Java 17+ (see [Java for ZAP](#java-for-zap)).
 
 ### Windows WSL
 
@@ -482,201 +491,6 @@ newgrp docker
 
 ---
 
-## Manual Installation Tools
-
-Some tools require manual installation due to complex dependencies or platform-specific limitations.
-
-### Windows-Specific Installation
-
-The following tools have special requirements on Windows that prevent automatic installation:
-
-#### Prowler (Windows)
-
-**Issue:** Prowler installation on Windows fails due to long path limitations (>260 characters). The AWS SDK and its dependencies create deeply nested paths that exceed Windows' default MAX_PATH limit.
-
-**Solution:** Enable Windows Long Path Support (requires admin privileges and reboot):
-
-1. **Enable via Registry (Recommended):**
-
-   ```powershell
-   # Run PowerShell as Administrator
-   New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
-     -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
-   ```
-
-2. **Enable via Group Policy (Alternative):**
-   - Press Win+R, type `gpedit.msc`
-   - Navigate to: Computer Configuration → Administrative Templates → System → Filesystem
-   - Enable "Enable Win32 long paths"
-
-3. **Reboot your system** (required for the change to take effect)
-
-4. **Install Prowler:**
-
-   ```powershell
-   pip install prowler
-   prowler -v  # Verify installation
-   ```
-
-**Alternative:** Use WSL2 or Docker mode for full Prowler support:
-
-```powershell
-# WSL2
-wsl -d Ubuntu-22.04
-pip install prowler
-
-# Docker
-docker run -v "$PWD:/scan" ghcr.io/jimmy058910/jmo-security:balanced scan --profile balanced
-```
-
-#### Lynis (Windows)
-
-**Issue:** Lynis is a shell script that requires a Unix shell (bash) to run. It cannot run natively on Windows without a Unix-like environment.
-
-**Solution Options:**
-
-1. **Use WSL2 (Recommended):**
-
-   ```powershell
-   # Install WSL2 if not already installed
-   wsl --install -d Ubuntu-22.04
-
-   # From WSL2 terminal
-   sudo apt update && sudo apt install lynis -y
-   lynis show version
-   ```
-
-2. **Use Git Bash:**
-
-   ```bash
-   # Install Git for Windows (includes Git Bash)
-   # https://git-scm.com/download/win
-
-   # From Git Bash terminal
-   git clone https://github.com/CISOfy/lynis.git ~/.lynis
-   ~/.lynis/lynis show version
-   ```
-
-3. **Use Docker mode:**
-
-   ```powershell
-   docker run -v "$PWD:/scan" ghcr.io/jimmy058910/jmo-security:balanced scan --profile balanced
-   ```
-
-**Note:** On Windows, JMo will skip Lynis if bash is not available. Use Docker mode for full tool coverage.
-
----
-
-### Docker Image Tool Counts
-
-| Variant | Docker-Ready | Manual Tools |
-|---------|--------------|--------------|
-| **Deep/Full** | 25 | 4 (AFL++, Akto, Falco, MobSF) |
-| **Balanced** | 17 | 0 |
-| **Slim** | 13 | 0 |
-| **Fast** | 9 | 0 |
-
-### AFL++ Installation (Fuzzing)
-
-AFL++ is a powerful fuzzing framework but requires LLVM development headers for full compilation. It's optional for most security scanning workflows.
-
-**Ubuntu/Debian:**
-
-```bash
-# Install build dependencies
-sudo apt-get install -y build-essential clang llvm-14-dev libc++-dev \
-  libc++abi-dev libunwind-dev libglib2.0-dev
-
-# Clone and build
-git clone https://github.com/AFLplusplus/AFLplusplus.git
-cd AFLplusplus
-make distrib
-sudo make install
-
-# Verify
-afl-fuzz --help
-```
-
-**Docker (Easiest):**
-
-```bash
-# Use official AFL++ Docker image
-docker pull aflplusplus/aflplusplus
-
-# Run AFL++ from Docker
-docker run -it -v $(pwd):/src aflplusplus/aflplusplus
-```
-
-**JMo Integration:**
-
-AFL++ is primarily used for fuzz testing compiled binaries, not typical security scanning workflows. If you need fuzzing capabilities:
-
-```bash
-# Run AFL++ separately on compiled targets
-afl-fuzz -i input/ -o findings/ -- ./target_binary @@
-```
-
-### MobSF Installation
-
-**Prerequisites:** Python 3.12+, JDK 8+, 2 GB storage
-
-```bash
-# Install MobSF
-pip install mobsf==4.2.0
-
-# Install Android SDK tools
-wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
-unzip commandlinetools-linux-9477386_latest.zip -d ~/android-sdk
-export ANDROID_HOME=~/android-sdk
-
-$ANDROID_HOME/cmdline-tools/bin/sdkmanager --sdk_root=$ANDROID_HOME \
-  "build-tools;30.0.3" "platforms;android-30"
-
-# Install APK tools
-sudo apt-get install -y aapt
-wget https://github.com/iBotPeaches/Apktool/releases/download/v2.10.0/apktool_2.10.0.jar
-sudo mv apktool_2.10.0.jar /usr/local/bin/apktool.jar
-
-# Verify
-mobsf --version
-```
-
-**JMo Integration:**
-
-```bash
-jmo scan --repo ./mobile-app --profile deep --tools mobsf
-```
-
-### Akto Installation
-
-**Prerequisites:** Docker 20.10+, Docker Compose 1.29+
-
-```bash
-# Deploy Akto
-git clone https://github.com/akto-api-security/akto.git
-cd akto
-docker-compose up -d
-
-# Configure JMo
-mkdir -p ~/.jmo
-cat > ~/.jmo/akto.yml << EOF
-akto:
-  endpoint: http://localhost:8080/api
-  api_key: YOUR_API_KEY
-EOF
-
-# Get API key from Akto dashboard: http://localhost:8080
-# Settings → API Keys → Generate
-```
-
-**JMo Integration:**
-
-```bash
-jmo scan --url https://api.example.com --profile deep --tools akto
-```
-
----
-
 ## Troubleshooting
 
 ### "jmo: command not found"
@@ -699,11 +513,11 @@ export PATH="$HOME/.local/bin:$PATH"  # Linux/macOS
 
 ```bash
 # Option 1: Check and install tools
-jmo tools check --profile balanced
-jmo tools install --profile balanced
+jmo tools check
+jmo tools install
 
 # Option 2: Use Docker (all tools included)
-docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:balanced scan --repo /scan
+docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest scan --repo /scan
 
 # Option 3: Allow missing tools
 jmo scan --repo . --allow-missing-tools
@@ -745,7 +559,7 @@ jmo scan --repo ~/myrepo
 Add-MpPreference -ExclusionPath "$env:USERPROFILE\scoop\apps"
 
 # Or use Docker mode
-docker run --rm -v "${PWD}:/scan" ghcr.io/jimmy058910/jmo-security:balanced scan --repo /scan
+docker run --rm -v "${PWD}:/scan" ghcr.io/jimmy058910/jmo-security:latest scan --repo /scan
 ```
 
 ---
@@ -755,7 +569,7 @@ docker run --rm -v "${PWD}:/scan" ghcr.io/jimmy058910/jmo-security:balanced scan
 | Feature | macOS | Windows | WSL | Linux | Docker |
 |---------|-------|---------|-----|-------|--------|
 | **Setup Time** | 5 min | 10 min | 15 min | 5 min | 2 min |
-| **Tool Support** | 90% | 50% | 100% | 100% | 100% |
+| **Tool Support** | All | All (Semgrep limited) | All | All | All |
 | **Performance** | Fast | Fast | Fast | Fast | Fast |
 | **CI/CD Ready** | Yes | Limited | Yes | Yes | Yes |
 | **Recommended** | Local dev | Docker | Full tooling | Servers | All |

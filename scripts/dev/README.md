@@ -94,7 +94,7 @@ Installs external security scanning tools (semgrep, trivy, checkov, etc.) based 
 **Usage:**
 
 ```bash
-jmo tools install --profile balanced
+jmo tools install
 ```
 
 ---

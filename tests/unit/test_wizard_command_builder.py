@@ -368,7 +368,6 @@ def test_build_command_parts_native_repo(tmp_path):
     """Test build_command_parts for native repo scan."""
     config = MagicMock()
     config.use_docker = False
-    config.profile = "balanced"
     config.results_dir = str(tmp_path / "results")
     config.threads = 4
     config.timeout = 600
@@ -385,21 +384,23 @@ def test_build_command_parts_native_repo(tmp_path):
     cmd = build_command_parts(config)
 
     assert cmd[0] == "jmo"
-    assert cmd[1] == "scan"
+    # A severity threshold makes it `jmo ci`: `jmo scan` defines no --fail-on
+    # (it abbreviates to --fail-on-store-error and HIGH is left unrecognised).
+    assert cmd[1] == "ci"
     assert "--repos-dir" in cmd
     assert "--results-dir" in cmd
     assert "--threads" in cmd
     assert "--timeout" in cmd
-    assert "--fail-on" in cmd
+    assert cmd[cmd.index("--fail-on") + 1] == "HIGH"
     assert "--allow-missing-tools" in cmd
     assert "--human-logs" in cmd
+    assert "--profile-name" not in cmd
 
 
 def test_build_command_parts_docker_repo(tmp_path):
     """Test build_command_parts for Docker repo scan."""
     config = MagicMock()
     config.use_docker = True
-    config.profile = "fast"
     config.results_dir = str(tmp_path / "results")
 
     target = MagicMock()
@@ -413,16 +414,15 @@ def test_build_command_parts_docker_repo(tmp_path):
     assert "run" in cmd
     assert "--rm" in cmd
     assert JMO_DOCKER_IMAGE_FULL in cmd
-    assert "scan" in cmd
-    assert "--profile-name" in cmd
-    assert "fast" in cmd
+    assert cmd[cmd.index(JMO_DOCKER_IMAGE_FULL) + 1] == "scan"
+    assert cmd[-2:] == ["--results-dir", "/results"]
+    assert "--profile-name" not in cmd
 
 
 def test_build_command_parts_native_image():
     """Test build_command_parts for native image scan."""
     config = MagicMock()
     config.use_docker = False
-    config.profile = "balanced"
     config.results_dir = "./results"
     config.threads = None
     config.timeout = None
@@ -438,17 +438,21 @@ def test_build_command_parts_native_image():
 
     cmd = build_command_parts(config)
 
-    assert "jmo" in cmd
-    assert "balanced" in cmd
-    assert "--image" in cmd
-    assert "nginx:latest" in cmd
+    # No threshold: a plain `jmo scan`, and nothing selects a profile
+    assert cmd == [
+        "jmo",
+        "scan",
+        "--image",
+        "nginx:latest",
+        "--results-dir",
+        "./results",
+    ]
 
 
 def test_build_command_parts_docker_volumes(tmp_path):
     """Test build_command_parts includes correct volume mounts for Docker."""
     config = MagicMock()
     config.use_docker = True
-    config.profile = "balanced"
     config.results_dir = str(tmp_path / "results")
 
     target = MagicMock()
@@ -471,7 +475,6 @@ def test_build_command_parts_docker_image(tmp_path):
     """Test build_command_parts for Docker mode with image target."""
     config = MagicMock()
     config.use_docker = True
-    config.profile = "fast"
     config.results_dir = str(tmp_path / "results")
 
     target = MagicMock()
@@ -494,7 +497,6 @@ def test_build_command_parts_docker_iac(tmp_path):
     """Test build_command_parts for Docker mode with IaC target."""
     config = MagicMock()
     config.use_docker = True
-    config.profile = "balanced"
     config.results_dir = str(tmp_path / "results")
 
     target = MagicMock()
@@ -515,7 +517,6 @@ def test_build_command_parts_docker_url(tmp_path):
     """Test build_command_parts for Docker mode with URL target."""
     config = MagicMock()
     config.use_docker = True
-    config.profile = "balanced"
     config.results_dir = str(tmp_path / "results")
 
     target = MagicMock()
@@ -536,7 +537,6 @@ def test_build_command_parts_docker_gitlab(tmp_path):
     """Test build_command_parts for Docker mode with GitLab target."""
     config = MagicMock()
     config.use_docker = True
-    config.profile = "balanced"
     config.results_dir = str(tmp_path / "results")
 
     target = MagicMock()
@@ -559,7 +559,6 @@ def test_build_command_parts_docker_k8s(tmp_path):
     """Test build_command_parts for Docker mode with Kubernetes target."""
     config = MagicMock()
     config.use_docker = True
-    config.profile = "balanced"
     config.results_dir = str(tmp_path / "results")
 
     target = MagicMock()
@@ -580,7 +579,6 @@ def test_build_command_parts_docker_unknown_target_type(tmp_path):
     """Test build_command_parts for Docker mode with unknown target type."""
     config = MagicMock()
     config.use_docker = True
-    config.profile = "balanced"
     config.results_dir = str(tmp_path / "results")
 
     target = MagicMock()
@@ -598,7 +596,6 @@ def test_build_command_parts_native_no_results_dir():
     """Test build_command_parts native mode without results_dir."""
     config = MagicMock()
     config.use_docker = False
-    config.profile = "fast"
     config.results_dir = None  # No results dir
     config.threads = None
     config.timeout = None

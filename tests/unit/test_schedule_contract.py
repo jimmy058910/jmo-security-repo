@@ -154,7 +154,6 @@ def test_factory_built_schedule_carries_its_targets_into_the_workflow(generator)
     schedule = ScanSchedule.from_simple_args(
         name="factory-built",
         cron="0 2 * * 1",
-        profile="balanced",
         repos_dir="/srv/repos",
         image="nginx:1.27",
         url="https://example.test",
@@ -177,9 +176,7 @@ def _schedule_with(targets: dict) -> ScanSchedule:
         metadata=ScheduleMetadata(name="quoting"),
         spec=ScheduleSpec(
             schedule="0 2 * * *",
-            jobTemplate=JobTemplateSpec(
-                profile="fast", targets=targets, results={}, options={}
-            ),
+            jobTemplate=JobTemplateSpec(targets=targets, results={}, options={}),
         ),
     )
 
@@ -273,8 +270,6 @@ def test_schedule_create_accepts_exactly_what_the_installer_accepts(
             name,
             "--cron",
             "0 2 * * *",
-            "--profile",
-            "fast",
             "--repos-dir",
             "/srv/repos",
         ],
@@ -308,7 +303,7 @@ def test_update_recomputes_the_next_run_time(tmp_path):
 
     manager = ScheduleManager(config_dir=tmp_path)
     schedule = ScanSchedule.from_simple_args(
-        name="recompute", cron="0 2 * * *", profile="fast", repos_dir="/srv/repos"
+        name="recompute", cron="0 2 * * *", repos_dir="/srv/repos"
     )
     manager.create(schedule)
     first = manager.get("recompute").status.nextScheduleTime

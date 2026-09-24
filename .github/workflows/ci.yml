@@ -113,28 +113,10 @@ jobs:
           pip install yamllint
           yamllint -c .yamllint.yaml .
 
-      - name: Lint Dockerfile.fast
+      - name: Lint Dockerfile
         uses: hadolint/hadolint-action@v3.5.0
         with:
-          dockerfile: Dockerfile.fast
-          failure-threshold: warning
-
-      - name: Lint Dockerfile.slim
-        uses: hadolint/hadolint-action@v3.5.0
-        with:
-          dockerfile: Dockerfile.slim
-          failure-threshold: warning
-
-      - name: Lint Dockerfile.balanced
-        uses: hadolint/hadolint-action@v3.5.0
-        with:
-          dockerfile: Dockerfile.balanced
-          failure-threshold: warning
-
-      - name: Lint Dockerfile.deep
-        uses: hadolint/hadolint-action@v3.5.0
-        with:
-          dockerfile: Dockerfile.deep
+          dockerfile: Dockerfile
           failure-threshold: warning
 
       - name: Set up uv
@@ -188,7 +170,7 @@ jobs:
           # Pinned install (versions.yaml). The upstream install.sh calls
           # GitHub's API to discover the "latest" tag and has flaked in CI
           # ("unable to find ''" errors). See PR #350 + release.rules.md
-          # "CI install hardening" entry. Mirror of the Dockerfile.deep
+          # "CI install hardening" entry. Mirror of the Dockerfile
           # download pattern (--fail + retry + integrity check). Short
           # local var `v` keeps the URL line within yamllint's 140-char limit.
           v="3.94.3"  # trufflehog version per versions.yaml
@@ -390,8 +372,8 @@ jobs:
         # WINDOWS-style path: Git Bash resolves POSIX entries like
         # /d/a/repo/.venv/Scripts itself, so `python -m pytest` runs fine, but the
         # Python process inherits the raw PATH string and shutil.which() on Windows
-        # cannot interpret a POSIX path -- so every external tool lookup (bandit,
-        # semgrep, trivy...) silently returns None and tool-discovery tests fail
+        # cannot interpret a POSIX path -- so every external tool lookup (semgrep,
+        # checkov, trivy...) silently returns None and tool-discovery tests fail
         # while everything else passes. cygpath -w fixes it; the POSIX branch only
         # ever runs on Linux/macOS.
         run: |
@@ -1263,7 +1245,7 @@ jobs:
   #
   # Why this ALWAYS runs, rather than being folded in or path-gated:
   #   - #922 proposed adding opa to tool-contract-tests. Measured: that job is
-  #     paths-filtered to versions.yaml / Dockerfile.* / test_tool_contracts.py,
+  #     paths-filtered to versions.yaml / Dockerfile / test_tool_contracts.py,
   #     so editing a policy would not trigger it. The gate would sit dark over
   #     exactly the changes it exists to catch.
   #   - Path-gating on policies/** would be wrong for a second reason: these
@@ -1364,29 +1346,27 @@ jobs:
   # nothing, and every marker filter in ci.yml and scheduled.yml carries
   # `not docker`. Chunk 21 ran them by hand once and immediately found defects
   # that had never been evaluated -- an image-size assertion failing on every
-  # published variant (#961), and 26 call sites collapsing "no daemon", "tag
+  # published image (#961), and 26 call sites collapsing "no daemon", "tag
   # missing", "not logged in" and "pull timed out" into one identical SKIP.
   #
   # Why PATH-GATED rather than on every PR. With JMO_DOCKER_REGISTRY unset these
   # tests audit the LAST RELEASED image, and images rebuild only on a `v*` tag
   # push. Between tags the subject under test is therefore a CONSTANT: running
   # them on every PR re-measures an unchanging artifact for real CI minutes and
-  # no new information. The answer can only move when a Dockerfile, the test
-  # file, or the tool registry driving the expected-tool counts changes.
+  # no new information. The answer can only move when the Dockerfile, the test
+  # file, or the tool registry driving the expected-tool count changes.
   #
   # And why it BUILDS rather than pulls: a Dockerfile change does not alter what
   # is published, so testing the published image would not test the change. The
-  # fast variant is used because it is the cheapest build that still exercises
-  # the whole path; the full four-variant sweep runs weekly in scheduled.yml
-  # against the published images, which is the other half of this gate.
-  #
-  # Scope is logged rather than left implicit -- `-k fast` selects 13 of 60, and
-  # a job that quietly tests a fifth of what its name suggests is its own kind
-  # of lie.
+  # weekly docker-e2e-suite in scheduled.yml runs the same file against the
+  # published image, which is the other half of this gate.
   docker-smoke:
     name: docker-smoke
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    # Was 40 for the fast variant and a fifth of the tests. It now builds the
+    # full image (the v1.x images took 660-960s on GHA even with a warm cache,
+    # #941) and runs the whole file, which took 15 minutes across all of them.
+    timeout-minutes: 60
     permissions:
       contents: read
     steps:
@@ -1399,7 +1379,7 @@ jobs:
         with:
           filters: |
             docker:
-              - 'Dockerfile.*'
+              - 'Dockerfile'
               - 'tests/e2e/test_docker_workflows.py'
               - 'scripts/core/tool_registry.py'
 
@@ -1426,9 +1406,9 @@ jobs:
             echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           fi
 
-      - name: Build the fast variant from THIS PR
+      - name: Build the image from THIS PR
         if: steps.changes.outputs.docker == 'true'
-        run: docker build -t jmo-security-pr:fast -f Dockerfile.fast .
+        run: docker build -t jmo-security-pr:latest -f Dockerfile .
 
       - name: "Guard: the image must exist, or every test below skips"
         if: steps.changes.outputs.docker == 'true'
@@ -1437,25 +1417,21 @@ jobs:
         # turn into a pull failure rather than a clear "the build broke". Assert
         # the artifact first so the failure names its own cause.
         run: |
-          docker image inspect jmo-security-pr:fast --format 'built {{.Id}}'
+          docker image inspect jmo-security-pr:latest --format 'built {{.Id}}'
 
-      - name: Run the fast-variant Docker tests
+      - name: Run the Docker tests
         if: steps.changes.outputs.docker == 'true'
         env:
           # Point the suite at the image built above, NOT the published one --
           # otherwise this job would test an artifact the PR cannot affect.
           JMO_DOCKER_REGISTRY: jmo-security-pr
         run: |
-          echo "::notice::Running the fast-variant subset (13 of 60 tests)."
-          echo "::notice::The other 47 target slim/balanced/deep, which this job"
-          echo "::notice::does not build. They run weekly in scheduled.yml"
-          echo "::notice::against the published images."
-          pytest tests/e2e/test_docker_workflows.py -k fast -m docker -q -rs --timeout=900
+          pytest tests/e2e/test_docker_workflows.py -m docker -q -rs --timeout=900
 
       - name: Skip note (no Docker-affecting changes)
         if: steps.changes.outputs.docker != 'true'
         run: |
-          echo "No Dockerfile.*, test_docker_workflows.py or tool_registry.py changes."
+          echo "No Dockerfile, test_docker_workflows.py or tool_registry.py changes."
           echo "These tests audit the last RELEASED image, which only a v* tag rebuilds,"
           echo "so nothing in this PR can change their answer. Full sweep runs weekly."
 
@@ -1464,7 +1440,7 @@ jobs:
   # This job is a required status check for PRs labeled dependencies+automated
   # (see docs/RELEASE.md -> "Tool-Version Auto-Merge"). It must ALWAYS run
   # (so the required-check name stays stable for branch protection) but only
-  # does real work when versions.yaml or Dockerfile.* changed — other PRs get
+  # does real work when versions.yaml or Dockerfile changed — other PRs get
   # a trivial pass via the paths-filter step.
   #
   # Both the job key AND `name:` are pinned to `tool-contract-tests` so branch
@@ -1487,7 +1463,7 @@ jobs:
           filters: |
             versions:
               - 'versions.yaml'
-              - 'Dockerfile.*'
+              - 'Dockerfile'
               - 'tests/integration/test_tool_contracts.py'
 
       - name: Set up uv
@@ -1531,7 +1507,7 @@ jobs:
             -o /tmp/trivy.tar.gz
           gzip -t /tmp/trivy.tar.gz
           tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy
-          pip install semgrep bandit checkov
+          pip install semgrep checkov
           curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
             "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-Linux-x86_64" \
             -o /usr/local/bin/hadolint
@@ -1548,7 +1524,6 @@ jobs:
           echo "Installed tools:"
           trivy --version || echo "trivy not available"
           semgrep --version || echo "semgrep not available"
-          bandit --version || echo "bandit not available"
           hadolint --version || echo "hadolint not available"
           trufflehog --version || echo "trufflehog not available"
           checkov --version || echo "checkov not available"
@@ -1569,7 +1544,7 @@ jobs:
         if: steps.changes.outputs.versions != 'true'
         run: |
           echo "No version-affecting files changed — contract tests not required."
-          echo "Paths watched: versions.yaml, Dockerfile.*, tests/integration/test_tool_contracts.py"
+          echo "Paths watched: versions.yaml, Dockerfile, tests/integration/test_tool_contracts.py"
 
   # ==========================================================================
   # phase-audit -- is every open issue scheduled, and do the labels agree?

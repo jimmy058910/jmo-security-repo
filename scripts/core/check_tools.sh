@@ -43,10 +43,6 @@ check_tool "Semgrep" \
   "semgrep --version" \
   "pip install semgrep OR brew install semgrep" || ALL_INSTALLED=false
 
-check_tool "Nosey Parker" \
-  "noseyparker --version" \
-  "Download from https://github.com/praetorian-inc/noseyparker/releases" || ALL_INSTALLED=false
-
 # Optional but useful
 check_tool "jq (JSON processor)" \
   "jq --version" \

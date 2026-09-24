@@ -159,19 +159,21 @@ def build_command_parts(config: WizardConfig) -> list[str]:
         cmd_parts.extend(target_flags)
 
         cmd_parts.extend(["--results-dir", "/results"])
-        cmd_parts.extend(["--profile-name", config.profile])
 
     else:
-        # Native command
-        cmd_parts = ["jmo", "scan"]
+        # Native command. A severity threshold makes it `jmo ci` (scan, report,
+        # then exit on the threshold): `jmo scan` defines no --fail-on, and
+        # argparse resolved `--fail-on HIGH` as the prefix of
+        # --fail-on-store-error, leaving HIGH as an unrecognised argument, so
+        # every wizard run with a threshold exited 2.
+        cmd_parts = ["jmo", "ci" if config.fail_on else "scan"]
 
         # Add target-specific flags
         cmd_parts.extend(_get_target_args_with_volumes(config.target, use_docker=False))
 
-        # Results directory and profile (normalize backslashes for script compatibility)
+        # Results directory (normalize backslashes for script compatibility)
         if config.results_dir:
             cmd_parts.extend(["--results-dir", config.results_dir.replace("\\", "/")])
-        cmd_parts.extend(["--profile-name", config.profile])
 
         # Advanced options
         if config.threads is not None:

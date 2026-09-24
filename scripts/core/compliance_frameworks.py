@@ -259,41 +259,6 @@ TOOL_RULE_TO_OWASP_TOP10_2021 = {
         "CKV_K8S_*": ["A05:2021"],
         "CKV_DOCKER_*": ["A05:2021"],
     },
-    "bandit": {
-        "B201": ["A03:2021"],  # Flask debug mode
-        "B301": ["A08:2021"],  # Pickle usage
-        "B302": ["A08:2021"],  # Marshal usage
-        "B303": ["A02:2021"],  # MD5 usage
-        "B304": ["A02:2021"],  # Insecure cipher
-        "B305": ["A02:2021"],  # Insecure cipher mode
-        "B306": ["A02:2021"],  # Insecure temporary file
-        "B307": ["A03:2021"],  # Eval usage
-        "B308": ["A02:2021"],  # Mark_safe usage
-        "B309": ["A05:2021"],  # HTTPSConnection
-        "B310": ["A05:2021"],  # URLopen
-        "B311": ["A02:2021"],  # Pseudo-random
-        "B312": ["A02:2021"],  # Telnet usage
-        "B313": ["A03:2021"],  # XML bad parser
-        "B314": ["A03:2021"],  # XML bad parser
-        "B315": ["A03:2021"],  # XML bad parser
-        "B316": ["A03:2021"],  # XML bad parser
-        "B317": ["A03:2021"],  # XML bad parser
-        "B318": ["A03:2021"],  # XML etree
-        "B319": ["A03:2021"],  # XML sax
-        "B320": ["A03:2021"],  # XML lxml
-        "B321": ["A03:2021"],  # FTP usage
-        "B323": ["A05:2021"],  # Unverified SSL/TLS
-        "B324": ["A02:2021"],  # Insecure hash
-        "B401": ["A03:2021"],  # Shell injection
-        "B602": ["A03:2021"],  # Shell=True
-        "B603": ["A03:2021"],  # Subprocess without shell check
-        "B604": ["A03:2021"],  # Function call with shell=True
-        "B605": ["A03:2021"],  # Shell injection (start_process)
-        "B606": ["A03:2021"],  # Shell injection (no_shell)
-        "B607": ["A03:2021"],  # Partial path
-        "B608": ["A03:2021"],  # SQL injection
-        "B609": ["A03:2021"],  # Wildcard injection
-    },
     "zap": {
         "10010": ["A03:2021"],  # XSS
         "10012": ["A03:2021"],  # Script in comments

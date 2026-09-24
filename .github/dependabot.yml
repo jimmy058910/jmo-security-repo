@@ -46,7 +46,7 @@ updates:
           - "minor"
           - "patch"
 
-  # Docker base images (Ubuntu, Alpine)
+  # Docker base image (Ubuntu)
   - package-ecosystem: "docker"
     directory: "/"
     # Retargeted from the default branch (main) to dev for the v1.1.0
@@ -181,7 +181,7 @@ updates:
 # Important notes:
 # 1. Dependabot DOES NOT track binary tools (trivy, trufflehog, syft, etc.)
 #    Those are managed via versions.yaml + update_versions.py + CI checks
-# 2. Python security tools (semgrep, checkov, bandit) are tracked in Dockerfiles
+# 2. Python security tools (semgrep, checkov) are tracked in the Dockerfile
 #    but should be manually synced via update_versions.py after Dependabot PRs
 # 3. For critical tool updates, use scripts/dev/update_versions.py directly
-# 4. Weekly version-check.yml workflow creates issues for outdated tools
+# 4. The weekly version check in maintenance.yml creates issues for outdated tools

@@ -18,6 +18,20 @@ from pathlib import Path
 
 import pytest
 
+# The scanners v1's `fast` scan profile ran (opa aside: it is the policy engine,
+# not a scanner). Scan profiles are gone (v2.0.0); these tests exercised the
+# timings pipeline over that set, so they name it instead.
+FORMER_FAST_TOOLS = [
+    "trufflehog",
+    "semgrep",
+    "syft",
+    "trivy",
+    "checkov",
+    "hadolint",
+    "nuclei",
+    "shellcheck",
+]
+
 
 @pytest.mark.requires_tools
 @pytest.mark.slow
@@ -35,10 +49,12 @@ def test_profile_flag_generates_timings(tmp_path):
         "scan",
         "--repo",
         str(test_repo),
-        "--profile-name",
-        "fast",
+        "--tools",
+        *FORMER_FAST_TOOLS,
         "--results-dir",
         str(tmp_path / "results"),
+        "--history-db",
+        str(tmp_path / "history.db"),
         "--allow-missing-tools",
     ]
     # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
@@ -93,6 +109,8 @@ def test_timings_data_structure(tmp_path):
         "trivy",
         "--results-dir",
         str(tmp_path / "results"),
+        "--history-db",
+        str(tmp_path / "history.db"),
         "--allow-missing-tools",
     ]
     # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
@@ -154,10 +172,13 @@ def test_ci_command_with_profile_generates_timings(tmp_path):
         "ci",
         "--repo",
         str(test_repo),
-        "--profile-name",
-        "fast",
+        "--tools",
+        *FORMER_FAST_TOOLS,
         "--results-dir",
         str(tmp_path / "results"),
+        # Never the repository's own .jmo/history.db: `jmo ci` stores by default.
+        "--history-db",
+        str(tmp_path / "history.db"),
         "--allow-missing-tools",
         "--profile",  # Enable profiling
     ]
@@ -208,6 +229,8 @@ def test_profile_without_flag_no_timings(tmp_path):
         "trivy",
         "--results-dir",
         str(tmp_path / "results"),
+        "--history-db",
+        str(tmp_path / "history.db"),
         "--allow-missing-tools",
     ]
     # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
@@ -252,10 +275,10 @@ def test_timings_thread_recommendation(tmp_path):
         "scan",
         "--repo",
         str(test_repo),
-        "--profile-name",
-        "balanced",
         "--results-dir",
         str(tmp_path / "results"),
+        "--history-db",
+        str(tmp_path / "history.db"),
         "--allow-missing-tools",
     ]
     # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
@@ -306,6 +329,9 @@ def test_timings_json_is_valid_json(tmp_path):
         "semgrep",
         "--results-dir",
         str(tmp_path / "results"),
+        # Never the repository's own .jmo/history.db: `jmo ci` stores by default.
+        "--history-db",
+        str(tmp_path / "history.db"),
         "--allow-missing-tools",
         "--profile",
     ]

@@ -36,26 +36,6 @@ from scripts.core.cwe_extraction import backfill_risk_cwe, extract_cwes_from_raw
 # ---------------------------------------------------------------------------
 
 
-def test_bandit_issue_cwe_is_lifted():
-    """The shape bandit actually emits, from a real scan."""
-    raw = {"issue_cwe": {"id": 502, "link": "https://cwe.mitre.org/..."}}
-    assert extract_cwes_from_raw(raw, "bandit") == ["CWE-502"]
-
-
-def test_horusec_cites_its_cwe_only_in_prose():
-    """horusec writes no structured CWE; it names one in its own `details`."""
-    raw = {
-        "vulnerabilities": {
-            "details": (
-                "(1/1) * Possible vulnerability detected: AWS Manager ID. For "
-                "more information checkout the CWE-798 "
-                "(https://cwe.mitre.org/data/definitions/798.html) advisory."
-            )
-        }
-    }
-    assert extract_cwes_from_raw(raw, "horusec") == ["CWE-798"]
-
-
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [
@@ -66,16 +46,15 @@ def test_horusec_cites_its_cwe_only_in_prose():
         ({"cweid": "79"}, ["CWE-79"]),
         ({"cwe": ["CWE-89", "CWE-943"]}, ["CWE-89", "CWE-943"]),
         ({"cwe": "CWE-522: Insufficiently Protected Credentials"}, ["CWE-522"]),
-        ({"issue_cwe": {"id": 78}}, ["CWE-78"]),
     ],
 )
 def test_structured_shapes_tools_actually_use(raw, expected):
-    assert extract_cwes_from_raw(raw, "any") == expected
+    assert extract_cwes_from_raw(raw) == expected
 
 
 def test_duplicates_collapse_and_order_is_preserved():
     raw = {"cwe": ["CWE-89", "CWE-79", "cwe_89"]}
-    assert extract_cwes_from_raw(raw, "t") == ["CWE-89", "CWE-79"]
+    assert extract_cwes_from_raw(raw) == ["CWE-89", "CWE-79"]
 
 
 # ---------------------------------------------------------------------------
@@ -97,19 +76,19 @@ def test_a_cwe_in_the_scanned_files_source_is_never_read():
         "description": None,
         "vulnerability_details": None,
     }
-    assert extract_cwes_from_raw(raw, "checkov") == []
+    assert extract_cwes_from_raw(raw) == []
 
 
-def test_prose_is_only_read_from_the_tools_that_declare_it():
-    """horusec's `details` is read; the same text under any other tool is not.
+def test_prose_is_never_read():
+    """Only structured keys are read, at the top level of `raw`.
 
-    Keeps the allowlist honest: adding a tool here is a decision, not a
-    side effect of a field happening to be named `details`.
+    Prose was read for horusec alone, from an allowlist; that tool left in
+    v2.0.0 and the allowlist with it. A CWE named in a free-text field is not
+    the tool's structured claim, so neither a nested `details` nor a top-level
+    description may yield one.
     """
-    raw = {"vulnerabilities": {"details": "see CWE-798 advisory"}}
-    assert extract_cwes_from_raw(raw, "horusec") == ["CWE-798"]
-    assert extract_cwes_from_raw(raw, "checkov") == []
-    assert extract_cwes_from_raw(raw, "") == []
+    assert extract_cwes_from_raw({"vulnerabilities": {"details": "CWE-798"}}) == []
+    assert extract_cwes_from_raw({"description": "see CWE-89 advisory"}) == []
 
 
 @pytest.mark.parametrize(
@@ -129,11 +108,11 @@ def test_prose_is_only_read_from_the_tools_that_declare_it():
 )
 def test_anything_unreadable_yields_nothing(raw):
     """A wrong CWE produces a wrong compliance mapping, which is worse than none."""
-    assert extract_cwes_from_raw(raw, "bandit") == []
+    assert extract_cwes_from_raw(raw) == []
 
 
 def test_a_long_digit_run_is_not_mistaken_for_a_cwe():
-    assert extract_cwes_from_raw({"cwe": "CWE-1234567"}, "t") == []
+    assert extract_cwes_from_raw({"cwe": "CWE-1234567"}) == []
 
 
 # ---------------------------------------------------------------------------
@@ -142,22 +121,26 @@ def test_a_long_digit_run_is_not_mistaken_for_a_cwe():
 
 
 def test_backfill_populates_risk_cwe_as_an_array():
-    findings = [{"tool": {"name": "bandit"}, "raw": {"issue_cwe": {"id": 502}}}]
+    findings = [{"tool": {"name": "zap"}, "raw": {"cweid": "89"}}]
 
     assert backfill_risk_cwe(findings) == 1
 
     # An ARRAY of strings per docs/schemas/common_finding.v1.json; a bare string
     # here was the only schema violation in a 242-finding scan.
-    assert findings[0]["risk"]["cwe"] == ["CWE-502"]
+    assert findings[0]["risk"]["cwe"] == ["CWE-89"]
 
 
 def test_backfill_never_overwrites_what_an_adapter_already_set():
-    """semgrep had the tool's structured metadata; this works from a copy."""
+    """semgrep had the tool's structured metadata; this works from a copy.
+
+    `raw` carries a readable CWE of its own, so a backfill that ignored the
+    adapter's value would have something to overwrite it with.
+    """
     findings = [
         {
             "tool": {"name": "semgrep"},
             "risk": {"cwe": ["CWE-89"], "confidence": "HIGH"},
-            "raw": {"issue_cwe": {"id": 502}},
+            "raw": {"cwe": "CWE-502"},
         }
     ]
 
@@ -169,9 +152,9 @@ def test_backfill_never_overwrites_what_an_adapter_already_set():
 def test_backfill_preserves_other_risk_keys():
     findings = [
         {
-            "tool": {"name": "bandit"},
+            "tool": {"name": "zap"},
             "risk": {"confidence": "HIGH"},
-            "raw": {"issue_cwe": {"id": 78}},
+            "raw": {"cweid": "78"},
         }
     ]
 
@@ -200,12 +183,12 @@ def test_backfill_runs_before_compliance_enrichment():
     def _finding():
         return {
             "id": "x",
-            "ruleId": "B403",
+            "ruleId": "ZAP-89",
             "severity": "HIGH",
-            "tool": {"name": "bandit"},
-            "location": {"path": "a.py"},
+            "tool": {"name": "zap"},
+            "location": {"path": "http://example.com/page"},
             "message": "m",
-            "raw": {"issue_cwe": {"id": 502}},
+            "raw": {"cweid": "89"},
         }
 
     without = enrich_finding_with_compliance(_finding())
@@ -215,7 +198,7 @@ def test_backfill_runs_before_compliance_enrichment():
     backfill_risk_cwe([lifted])
     with_cwe = enrich_finding_with_compliance(lifted)
     assert (with_cwe.get("compliance") or {}).get("cweTop25_2024"), (
-        "CWE-502 is in the CWE Top 25; lifting it must reach the framework"
+        "CWE-89 is in the CWE Top 25; lifting it must reach the framework"
     )
 
 
@@ -224,7 +207,9 @@ def test_the_pipeline_actually_calls_the_backfill(tmp_path):
 
     Every other test here exercises the functions directly, so all of them pass
     with the `gather_results` call site deleted - which a mutation run caught.
-    This one goes through the real report path with real bandit output.
+    This one goes through the real report path with real zap output: the zap
+    adapter keeps `cweid` in `raw` and sets no `risk`, so the backfill is the
+    only thing that can put CWE-89 into `risk.cwe`.
     """
     import json
 
@@ -232,20 +217,29 @@ def test_the_pipeline_actually_calls_the_backfill(tmp_path):
 
     results = tmp_path / "results"
     (results / "individual-repos" / "r").mkdir(parents=True)
-    (results / "individual-repos" / "r" / "bandit.json").write_text(
+    (results / "individual-repos" / "r" / "zap.json").write_text(
         json.dumps(
             {
-                "errors": [],
-                "results": [
+                "@version": "2.17.0",
+                "site": [
                     {
-                        "filename": "a.py",
-                        "issue_confidence": "HIGH",
-                        "issue_severity": "HIGH",
-                        "issue_text": "Consider possible security implications.",
-                        "issue_cwe": {"id": 502},
-                        "line_number": 5,
-                        "test_id": "B403",
-                        "test_name": "blacklist",
+                        "alerts": [
+                            {
+                                "alert": "SQL Injection",
+                                "risk": "High",
+                                "confidence": "Medium",
+                                "desc": "SQL injection may be possible.",
+                                "cweid": "89",
+                                "wascid": "19",
+                                "instances": [
+                                    {
+                                        "uri": "http://example.com/page?id=1",
+                                        "method": "GET",
+                                        "param": "id",
+                                    }
+                                ],
+                            }
+                        ]
                     }
                 ],
             }
@@ -255,8 +249,8 @@ def test_the_pipeline_actually_calls_the_backfill(tmp_path):
 
     findings = nr.gather_results(results)
 
-    assert findings, "the bandit adapter produced nothing to assert on"
-    assert [(f.get("risk") or {}).get("cwe") for f in findings] == [["CWE-502"]]
+    assert findings, "the zap adapter produced nothing to assert on"
+    assert [(f.get("risk") or {}).get("cwe") for f in findings] == [["CWE-89"]]
     assert (findings[0].get("compliance") or {}).get("cweTop25_2024"), (
         "the lift must happen before compliance enrichment, or it reaches nothing"
     )

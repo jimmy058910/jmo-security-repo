@@ -18,30 +18,15 @@ from pathlib import Path
 import pytest
 
 # Import all adapters for comprehensive testing
-from scripts.core.adapters.aflplusplus_adapter import AFLPlusPlusAdapter
-from scripts.core.adapters.akto_adapter import AktoAdapter
-from scripts.core.adapters.bandit_adapter import BanditAdapter
-from scripts.core.adapters.cdxgen_adapter import CdxgenAdapter
 from scripts.core.adapters.checkov_adapter import CheckovAdapter
-from scripts.core.adapters.dependency_check_adapter import DependencyCheckAdapter
-from scripts.core.adapters.falco_adapter import FalcoAdapter
 from scripts.core.adapters.gosec_adapter import GosecAdapter
 from scripts.core.adapters.grype_adapter import GrypeAdapter
 from scripts.core.adapters.hadolint_adapter import HadolintAdapter
-from scripts.core.adapters.horusec_adapter import HorusecAdapter
-from scripts.core.adapters.kubescape_adapter import KubescapeAdapter
-from scripts.core.adapters.lynis_adapter import LynisAdapter
-from scripts.core.adapters.mobsf_adapter import MobsfAdapter
-from scripts.core.adapters.noseyparker_adapter import NoseyParkerAdapter
 from scripts.core.adapters.nuclei_adapter import NucleiAdapter
-from scripts.core.adapters.prowler_adapter import ProwlerAdapter
-from scripts.core.adapters.scancode_adapter import ScancodeAdapter
 from scripts.core.adapters.semgrep_adapter import SemgrepAdapter
-from scripts.core.adapters.semgrep_secrets_adapter import SemgrepSecretsAdapter
 from scripts.core.adapters.shellcheck_adapter import ShellCheckAdapter
 from scripts.core.adapters.syft_adapter import SyftAdapter
 from scripts.core.adapters.trivy_adapter import TrivyAdapter
-from scripts.core.adapters.trivy_rbac_adapter import TrivyRbacAdapter
 from scripts.core.adapters.trufflehog_adapter import TruffleHogAdapter
 from scripts.core.adapters.yara_adapter import YaraAdapter
 from scripts.core.adapters.zap_adapter import ZapAdapter
@@ -51,30 +36,15 @@ from scripts.core.adapters.zap_adapter import ZapAdapter
 # ============================================================================
 
 ALL_ADAPTERS = [
-    ("aflplusplus", AFLPlusPlusAdapter),
-    ("akto", AktoAdapter),
-    ("bandit", BanditAdapter),
-    ("cdxgen", CdxgenAdapter),
     ("checkov", CheckovAdapter),
-    ("dependency_check", DependencyCheckAdapter),
-    ("falco", FalcoAdapter),
     ("gosec", GosecAdapter),
     ("grype", GrypeAdapter),
     ("hadolint", HadolintAdapter),
-    ("horusec", HorusecAdapter),
-    ("kubescape", KubescapeAdapter),
-    ("lynis", LynisAdapter),
-    ("mobsf", MobsfAdapter),
-    ("noseyparker", NoseyParkerAdapter),
     ("nuclei", NucleiAdapter),
-    ("prowler", ProwlerAdapter),
-    ("scancode", ScancodeAdapter),
     ("semgrep", SemgrepAdapter),
-    ("semgrep_secrets", SemgrepSecretsAdapter),
     ("shellcheck", ShellCheckAdapter),
     ("syft", SyftAdapter),
     ("trivy", TrivyAdapter),
-    ("trivy_rbac", TrivyRbacAdapter),
     ("trufflehog", TruffleHogAdapter),
     ("yara", YaraAdapter),
     ("zap", ZapAdapter),
@@ -452,32 +422,6 @@ class TestTrivyMalformed:
         assert isinstance(result, list)
 
 
-class TestBanditMalformed:
-    """Bandit-specific malformed input tests."""
-
-    def test_bandit_missing_results(self, tmp_path: Path):
-        """Bandit should handle missing 'results' key."""
-        content = '{"metrics": {}, "errors": []}'
-        test_file = tmp_path / "bandit.json"
-        test_file.write_text(content, encoding="utf-8")
-
-        adapter = BanditAdapter()
-        result = adapter.parse(test_file)
-
-        assert isinstance(result, list)
-
-    def test_bandit_null_results(self, tmp_path: Path):
-        """Bandit should handle null results."""
-        content = '{"results": null}'
-        test_file = tmp_path / "bandit.json"
-        test_file.write_text(content, encoding="utf-8")
-
-        adapter = BanditAdapter()
-        result = adapter.parse(test_file)
-
-        assert isinstance(result, list)
-
-
 class TestCheckovMalformed:
     """Checkov-specific malformed input tests."""
 
@@ -592,7 +536,7 @@ class TestAdapterConcurrentFailures:
         indiv = tmp_path / "individual-repos" / "test-repo"
         indiv.mkdir(parents=True)
 
-        for tool in ["semgrep", "trivy", "bandit", "checkov", "hadolint"]:
+        for tool in ["semgrep", "trivy", "checkov", "hadolint"]:
             (indiv / f"{tool}.json").write_text("INVALID{JSON", encoding="utf-8")
 
         findings = gather_results(tmp_path)

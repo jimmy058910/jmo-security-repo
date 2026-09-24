@@ -200,7 +200,7 @@ def _cmd_schedule_create(args, manager: ScheduleManager) -> int:
     if args.description:
         annotations["description"] = args.description
     else:
-        annotations["description"] = f"{args.profile.capitalize()} scan"
+        annotations["description"] = "Scheduled scan"
 
     schedule = ScanSchedule(
         metadata=ScheduleMetadata(
@@ -217,7 +217,6 @@ def _cmd_schedule_create(args, manager: ScheduleManager) -> int:
                 type=args.backend,
             ),
             jobTemplate=JobTemplateSpec(
-                profile=args.profile,
                 targets=targets,
                 options={},
                 results={"retention_days": 90},
@@ -232,7 +231,6 @@ def _cmd_schedule_create(args, manager: ScheduleManager) -> int:
     _success(f"Created schedule '{args.name}'")
     _info(f"Backend: {args.backend}")
     _info(f"Cron: {args.cron}")
-    _info(f"Profile: {args.profile}")
 
     _warn_nonstandard_cron(args.cron)
     _warn_timezone_ignored(args.backend, args.timezone)
@@ -328,10 +326,10 @@ def _cmd_schedule_update(args, manager: ScheduleManager) -> int:
     # schedule 'x'" having changed nothing a user could name -- a success
     # message for work that did not happen, which is the one thing this
     # command must never produce.
-    if not (args.cron or args.profile or args.suspend or args.resume):
+    if not (args.cron or args.suspend or args.resume):
         _error(
             f"Nothing to update for '{args.name}'. Pass at least one of "
-            f"--cron, --profile, --suspend or --resume."
+            f"--cron, --suspend or --resume."
         )
         return 1
 
@@ -345,9 +343,6 @@ def _cmd_schedule_update(args, manager: ScheduleManager) -> int:
             return 1
         _warn_nonstandard_cron(args.cron)
         schedule.spec.schedule = args.cron
-
-    if args.profile:
-        schedule.spec.jobTemplate.profile = args.profile
 
     if args.suspend:
         schedule.spec.suspend = True
@@ -571,18 +566,17 @@ def _print_schedules_table(schedules: list[ScanSchedule]) -> None:
         return
 
     # Header
-    print(f"{'NAME':<20} {'BACKEND':<15} {'PROFILE':<10} {'CRON':<20} {'STATUS':<10}")
-    print("-" * 80)
+    print(f"{'NAME':<20} {'BACKEND':<15} {'CRON':<20} {'STATUS':<10}")
+    print("-" * 69)
 
     # Rows
     for schedule in schedules:
         name = schedule.metadata.name[:19]
         backend = schedule.spec.backend.type[:14]
-        profile = schedule.spec.jobTemplate.profile[:9]
         cron = schedule.spec.schedule[:19]
         status = "SUSPENDED" if schedule.spec.suspend else "ACTIVE"
 
-        print(f"{name:<20} {backend:<15} {profile:<10} {cron:<20} {status:<10}")
+        print(f"{name:<20} {backend:<15} {cron:<20} {status:<10}")
 
 
 def _use_color() -> bool:

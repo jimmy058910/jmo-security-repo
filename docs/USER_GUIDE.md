@@ -71,14 +71,14 @@ The `reporting` extra bundles PyYAML and jsonschema so YAML output and schema va
 1. Check tool status and install missing tools
 
 ```bash
-jmo tools check --profile balanced
-jmo tools install --profile balanced
+jmo tools check
+jmo tools install
 ```
 
-2. Run a fast multi-repo scan + report in one step
+2. Run a multi-repo scan + report in one step
 
 ```bash
-# Scan all immediate subfolders under ~/repos with the default (balanced) profile
+# Scan all immediate subfolders under ~/repos with every applicable tool
 jmo ci --repos-dir ~/repos --fail-on HIGH --profile --human-logs
 
 # Open the dashboard
@@ -92,32 +92,18 @@ Outputs are written under `results/` by default, with unified summaries in `resu
 
 For complete CLI documentation including all commands and flags, see [CLI_REFERENCE.md](CLI_REFERENCE.md).
 
-### Beginner mode: jmo wrapper (optional, simpler commands)
-
-Prefer memorable commands that verify tools, optionally clone from a TSV, run the right profile, and open results at the end? Use `jmo`:
+### First-time setup
 
 ```bash
-# Quick fast scan (auto-opens results)
-jmo fast --repos-dir ~/security-testing
-
-# Deep/full scan using the curated 'deep' profile
-jmo full --repos-dir ~/security-testing --allow-missing-tools
-
-# Clone from TSV first, then balanced scan
-jmo balanced --tsv ./candidates.tsv --dest ./repos-tsv
-
-# Bootstrap and verify curated tools (Linux/WSL/macOS)
-jmo setup --check
+# Verify the tools, and optionally install what is missing (Linux/WSL/macOS)
+jmo setup
 jmo setup --auto-install
 ```
 
-Makefile shortcuts are also available:
+A Makefile shortcut is also available:
 
 ```bash
-make setup             # jmo setup --check (installs package if needed)
-make fast DIR=~/repos  # jmo fast --repos-dir ~/repos
-make balanced DIR=~/repos
-make full DIR=~/repos
+make setup             # jmo tools check (installs package if needed)
 ```
 
 ## Everyday basics
@@ -128,10 +114,10 @@ make full DIR=~/repos
 jmo scan --repo /path/to/repo --human-logs
 ```
 
-- Scan a directory of repos with a named profile
+- Scan a directory of repos with a narrowed tool list
 
 ```bash
-jmo scan --repos-dir ~/repos --profile-name fast --human-logs
+jmo scan --repos-dir ~/repos --tools trufflehog semgrep trivy --human-logs
 ```
 
 - Report/aggregate from existing results only
@@ -155,49 +141,51 @@ jmo scan --repos-dir ~/repos --allow-missing-tools
 ./scripts/core/populate_targets.sh --dest ~/security-testing --parallel 8
 ```
 
-Tip: You can also run `jmo tools install` to install the security scanners for your profile, and `jmo tools check` to verify your setup.
+Tip: You can also run `jmo tools install` to install the security scanners, and `jmo tools check` to verify your setup.
 
 ## Worked example: scanning a single Python package
 
-This walkthrough scans a single local Python project end-to-end using the `fast` profile, then generates a report and opens the HTML dashboard. It assumes you already have JMo installed (see [Quick start](#quick-start-2-minutes)).
+This walkthrough scans a single local Python project end-to-end, then generates a report and opens the HTML dashboard. It assumes you already have JMo installed (see [Quick start](#quick-start-2-minutes)).
 
 **1. Check that the required tools are installed**
 
 ```bash
-jmo tools check --profile fast
+jmo tools check
 ```
 
 If any tools are missing, install them:
 
 ```bash
-jmo tools install --profile fast
+jmo tools install
 ```
 
 **2. Scan the project**
 
-Point `jmo scan` at your Python package directory. The `--profile-name fast` flag selects 9 lightweight tools and sets a 300-second timeout per tool:
+Point `jmo scan` at your Python package directory. With no `--tools`, it considers every scanner in the [tool matrix](TOOLS.md#the-tool-matrix):
 
 ```bash
-jmo scan --repo ~/projects/my-python-app --profile-name fast --human-logs
+jmo scan --repo ~/projects/my-python-app --human-logs
 ```
 
 **Which tools actually run on a Python project?**
 
-Not all 9 fast-profile tools produce findings for every project. JMo uses content-triggered execution — some tools only fire when specific file types are present. For a typical Python package you can expect:
+Not every tool produces findings for every project. JMo uses content-triggered execution — some tools only fire when specific file types are present. For a typical Python package you can expect:
 
 | Tool | Why it runs |
 |------|-------------|
-| **TruffleHog** | Scans git history for leaked secrets (API keys, tokens) |
+| **TruffleHog** | Scans for leaked secrets (API keys, tokens) |
 | **Semgrep** | Static analysis for Python security issues (SQL injection, insecure deserialization, etc.) |
 | **Syft** | Generates a Software Bill of Materials (SBOM) from `requirements.txt` / `pyproject.toml` |
 | **Trivy** | Checks Python dependencies for known CVEs |
+| **Grype** | Checks the same dependencies against a second vulnerability database |
 | **Checkov** | Scans any IaC files if present (Terraform, CloudFormation) |
+| **YARA** | Matches malware patterns (web shells, backdoors) across the tree |
 | **Hadolint** | Lints Dockerfiles — only fires if a `Dockerfile` exists in the repo |
 | **ShellCheck** | Analyses shell scripts — only fires if `.sh` files exist |
-| **Nuclei** | Skipped for local repos (targets live URLs and APIs) |
-| **`opa`** | Policy engine — evaluates any `.rego` policy files, if present |
+| **Gosec** | Skipped unless the repo contains Go code |
+| **ZAP, Nuclei** | Skipped for local repos (they test a running application at a URL) |
 
-Tools that find no applicable files write an empty stub so reporting still works. See [Content-Triggered Tool Execution](PROFILES_AND_TOOLS.md#content-triggered-tool-execution) for the full matrix.
+Tools with nothing to scan are skipped for that repository, and reporting works the same either way. See [When each tool runs](TOOLS.md#when-each-tool-runs) for the full matrix. OPA, the policy engine, is not a scanner: it evaluates policies against the findings during the report phase.
 
 **3. Generate the report**
 
@@ -229,33 +217,35 @@ The dashboard is a self-contained HTML file with sorting, filtering, severity ba
 
 ```bash
 # Install tools, scan, report, and open dashboard — four commands
-jmo tools install --profile fast
-jmo scan --repo ~/projects/my-python-app --profile-name fast --human-logs
+jmo tools install
+jmo scan --repo ~/projects/my-python-app --human-logs
 jmo report results/ --profile --human-logs
 open results/summaries/dashboard.html   # macOS (use xdg-open on Linux)
 ```
 
 ## Tool Management
 
-JMo Security orchestrates 29 security scanners. For native installations (non-Docker), use the `jmo tools` command to manage these tools.
+JMo Security orchestrates the security scanners in the [tool matrix](TOOLS.md#the-tool-matrix), plus OPA for policy-as-code. For native installations (non-Docker), use the `jmo tools` command to manage these tools.
 
 **Docker users:** Skip this section - Docker images include all tools pre-installed. Tool management is for native/pip installations only.
 
 ### Checking Tool Status
 
 ```bash
-# Show profile overview (default)
+# Show tool status (default)
 jmo tools
 
-# Check all tools for a specific profile
-jmo tools check --profile balanced
+# Check every tool in the matrix
+jmo tools check
 
 # Check specific tools
 jmo tools check trivy semgrep checkov
 
 # JSON output for automation
-jmo tools check --profile balanced --json
+jmo tools check --json
 ```
+
+The table lists the scanners; OPA, the policy engine, is reported on its own "Policy engine" line below it.
 
 **Output shows:**
 
@@ -269,45 +259,37 @@ jmo tools check --profile balanced --json
 Tool installation is **parallel by default** (3-4x faster than sequential). Pip packages are batched, npm packages are batched, and binary downloads run concurrently.
 
 ```bash
-# Interactive installation for profile (parallel, prompts for confirmation)
-jmo tools install --profile balanced
+# Interactive installation of the tool matrix plus OPA (parallel, prompts for confirmation)
+jmo tools install
 
 # Non-interactive (CI/CD)
-jmo tools install --profile balanced --yes
+jmo tools install --yes
 
 # Install specific tools
 jmo tools install trivy semgrep checkov
 
 # Increase parallel workers (default: 4, max: 8)
-jmo tools install --profile balanced --jobs 8
+jmo tools install --jobs 8
 
 # Sequential mode (for debugging)
-jmo tools install --profile balanced --sequential
+jmo tools install --sequential
 
 # Dry-run (show what would be installed)
-jmo tools install --profile balanced --dry-run
+jmo tools install --dry-run
 
 # Generate install script for review
-jmo tools install --profile balanced --print-script > install-tools.sh
+jmo tools install --print-script > install-tools.sh
 ```
-
-**Expected installation times (parallel mode):**
-
-| Profile | Sequential | Parallel | Speedup |
-|---------|------------|----------|---------|
-| fast (9 tools) | ~5-8 min | ~2-3 min | ~2.5x |
-| balanced (17 tools) | ~12-18 min | ~4-6 min | ~3x |
-| deep (29 tools) | ~20-30 min | ~6-10 min | ~3x |
 
 **Installation methods (platform-specific):**
 
 | Platform | Methods (in priority order) |
 |----------|----------------------------|
-| Linux | apt, pip, npm, binary download, brew |
-| macOS | brew, pip, npm, binary download |
+| Linux | apt, pip, npm, install script, binary download, brew |
+| macOS | brew, pip, npm, install script, binary download |
 | Windows | pip, npm, binary download, manual |
 
-**Binary downloads:** Tools like Trivy, Grype, and Syft are downloaded from GitHub releases to `~/.jmo/bin/`.
+**Binary downloads:** Most tools are pinned release binaries downloaded from GitHub to `~/.jmo/bin/`. Semgrep and Checkov go into isolated virtual environments. [TOOLS.md](TOOLS.md#installation) lists the method and location for every tool.
 
 ### Updating Tools
 
@@ -340,17 +322,11 @@ jmo tools outdated --critical-only
 jmo tools outdated --json
 ```
 
-### Listing Tools and Profiles
+### Listing Tools
 
 ```bash
 # List all available tools
 jmo tools list
-
-# List tools in specific profile
-jmo tools list --profile balanced
-
-# List available profiles
-jmo tools list --profiles
 
 # JSON output
 jmo tools list --json
@@ -375,10 +351,9 @@ jmo tools uninstall --yes
 **What gets removed with `--all`:**
 
 - `~/.jmo/` directory (config, cache, history.db, bin/)
-- pip-installed tools (semgrep, checkov, bandit, etc.)
+- pip-installed tools (semgrep, checkov, yara-python, etc.)
 - npm-installed tools (retire.js, etc.)
 - Binary tools in `~/.jmo/bin/`
-- `~/.kubescape/` directory
 
 **What requires manual removal:**
 
@@ -387,7 +362,7 @@ jmo tools uninstall --yes
 
 ### Cleaning Isolated Venvs
 
-Some tools have conflicting pip dependencies (e.g., prowler and checkov have pydantic version conflicts). These tools are automatically installed in **isolated virtual environments** at `~/.jmo/tools/venvs/<tool>/`.
+Some tools have pip dependencies that would conflict with JMo's own or with each other's. Semgrep and Checkov are therefore automatically installed in **isolated virtual environments** at `~/.jmo/tools/venvs/<tool>/`.
 
 ```bash
 # Show what isolated venvs exist (dry run)
@@ -406,7 +381,7 @@ jmo tools clean --force
 **After cleaning**, reinstall the tools:
 
 ```bash
-jmo tools install prowler scancode
+jmo tools install semgrep checkov
 ```
 
 **Note:** Tools installed in isolated venvs are automatically discovered by `jmo tools check` and work transparently with all JMo commands.
@@ -417,7 +392,7 @@ The `jmo scan` and `jmo wizard` commands automatically check for missing tools:
 
 **Interactive mode:**
 
-1. Detects missing tools from requested profile
+1. Detects missing tools from the requested tool list
 2. Prompts with options:
    - Install missing tools now
    - Continue with available tools
@@ -432,30 +407,13 @@ The `jmo scan` and `jmo wizard` commands automatically check for missing tools:
 - Non-blocking warning at scan start if critical tools are outdated
 - Suggests `jmo tools update --critical-only`
 
-### Profile Tool Counts
-
-| Profile | Tools | Description |
-|---------|-------|-------------|
-| `fast` | 9 | Pre-commit, PR validation |
-| `slim` | 13 | Cloud/IaC, AWS/Azure/GCP/K8s |
-| `balanced` | 17 | Production CI/CD |
-| `deep` | 29 | Comprehensive audits |
-
-**Fast profile tools:** trufflehog, semgrep, syft, trivy, checkov, hadolint, nuclei, shellcheck
-
-**Slim profile adds:** prowler, kubescape, grype, horusec, dependency-check
-
-**Balanced profile adds:** zap, scancode, cdxgen, gosec
-
-**Deep profile adds:** noseyparker, semgrep-secrets, bandit, trivy-rbac, checkov-cicd, akto, yara, falco, afl++, mobsf, lynis
-
 ### Platform Support
 
 | Platform | Installation Methods | Notes |
 |----------|---------------------|-------|
-| Linux | apt, pip, npm, binary, brew | apt requires sudo |
-| macOS | brew, pip, npm, binary | Homebrew preferred |
-| Windows | pip, npm, binary, manual | WSL recommended for full support |
+| Linux | apt, pip, npm, install script, binary, brew | apt requires sudo |
+| macOS | brew, pip, npm, install script, binary | Homebrew preferred |
+| Windows | pip, npm, binary, manual | Every tool in the matrix installs natively |
 
 ## Multi-Target Scanning
 
@@ -580,7 +538,7 @@ https://staging.example.com
 
 - Use `--tools zap` for comprehensive DAST with active scanning (slower, thorough)
 - Use `--tools nuclei` for fast template-based scanning (CVEs, known issues)
-- Use `--tools zap,nuclei` for both comprehensive + fast scanning (recommended for balanced/deep profiles)
+- Use `--tools zap nuclei` for both comprehensive + fast scanning (the default when `--tools` is omitted)
 
 #### GitLab Integration
 
@@ -589,7 +547,7 @@ https://staging.example.com
 - `--gitlab-group GROUP`: Scan all repositories in a group
 - `--gitlab-repo REPO`: Single GitLab repository (format: `group/repo`)
 
-**Tools used:** Full repository scanner (TruffleHog, Semgrep, Bandit, Trivy, Syft, Checkov, Hadolint, Noseyparker, Falco, AFL++)
+**Tools used:** Full repository scanner (TruffleHog, Semgrep, Syft, Trivy, Checkov, YARA, Grype, plus Hadolint, ShellCheck and Gosec when their content is present)
 
 **Architecture:** GitLab repos are cloned temporarily and scanned using the same repository scanner as local repos, providing comprehensive coverage instead of secrets-only scanning
 
@@ -810,17 +768,7 @@ wait
 jmo scan --repo ./app1 --image app1:latest --results-dir ./results
 ```
 
-**2. Use profiles for faster scanning:**
-
-```bash
-# Fast profile for quick feedback (9 tools, 300s timeout)
-jmo scan --image nginx:latest --profile-name fast
-
-# Deep profile for comprehensive audits (29 tools, 900s timeout)
-jmo scan --k8s-context prod --k8s-all-namespaces --profile-name deep
-```
-
-**3. Batch processing:**
+**2. Batch processing:**
 
 ```bash
 # Process batches of images
@@ -834,12 +782,14 @@ done
 
 | Target Type | Trivy | Syft | Checkov | ZAP | TruffleHog | Semgrep |
 |-------------|-------|------|---------|-----|------------|---------|
-| Repositories | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Repositories | ✓ | ✓ | ✓ | - | ✓ | ✓ |
 | Container Images | ✓ | ✓ | - | - | - | - |
 | IaC Files | ✓ | - | ✓ | - | - | - |
-| Web URLs | - | - | - | ✓ | ✓ | - |
-| GitLab Repos | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Web URLs | - | - | - | ✓ | - | - |
+| GitLab Repos | ✓ | ✓ | ✓ | - | ✓ | ✓ |
 | Kubernetes | ✓ | - | - | - | - | - |
+
+The full mapping for every tool is in [TOOLS.md](TOOLS.md#target-types).
 
 **Note:**
 
@@ -914,7 +864,6 @@ All JSON/YAML outputs now include scan metadata:
     "schema_version": "1.2.0",
     "timestamp": "2025-11-04T12:34:56Z",
     "scan_id": "scan-abc123",
-    "profile": "balanced",
     "tools": ["trivy", "semgrep", "trufflehog"],
     "target_count": 5,
     "finding_count": 42,
@@ -1083,24 +1032,23 @@ priority = (severity_score × epss_multiplier × kev_multiplier × reachability_
 
 ## Cross-Tool Deduplication
 
-JMo Security automatically clusters duplicate findings detected by multiple tools into a single consensus finding. How much this shrinks a report depends entirely on how much the profile's tools overlap; see [Known limitations](KNOWN_LIMITATIONS.md#deduplication) for what it measures on the corpora this repository can reproduce.
+JMo Security automatically clusters duplicate findings detected by multiple tools into a single consensus finding. How much this shrinks a report depends entirely on how much the tools that ran overlap; see [Known limitations](KNOWN_LIMITATIONS.md#deduplication) for what it measures on the corpora this repository can reproduce.
 
 ### How It Works
 
 When multiple tools detect the same underlying issue, JMo clusters them into a single "consensus finding":
 
-**Before (3 separate findings):**
+**Before (2 separate findings):**
 
 - Trivy: HIGH - SQL Injection in app.py:42
 - Semgrep: HIGH - SQL injection detected in app.py:42
-- Bandit: MEDIUM - Possible SQL injection in app.py:43
 
 **After (1 consensus finding):**
 
-- 🔍 Detected by 3 tools | HIGH CONFIDENCE
-- Tools: trivy, semgrep, bandit
+- Detected by 2 tools | MEDIUM CONFIDENCE
+- Tools: trivy, semgrep
 - SQL Injection vulnerability in query construction
-- app.py:42-43
+- app.py:42
 
 ### Confidence Levels
 
@@ -1162,13 +1110,12 @@ Findings with similarity above the configured threshold (default: 65%) are clust
   "message": "SQL Injection vulnerability in query construction",
   "detected_by": [
     {"name": "trivy", "version": "0.50.0"},
-    {"name": "semgrep", "version": "1.60.0"},
-    {"name": "bandit", "version": "1.7.0"}
+    {"name": "semgrep", "version": "1.60.0"}
   ],
   "confidence": {
-    "level": "HIGH",
-    "tool_count": 3,
-    "avg_similarity": 0.87
+    "level": "MEDIUM",
+    "tool_count": 2,
+    "avg_similarity": 0.90
   },
   "context": {
     "duplicates": [
@@ -1176,11 +1123,6 @@ Findings with similarity above the configured threshold (default: 65%) are clust
         "id": "fp2",
         "tool": {"name": "semgrep"},
         "similarity_score": 0.90
-      },
-      {
-        "id": "fp3",
-        "tool": {"name": "bandit"},
-        "similarity_score": 0.85
       }
     ]
   }
@@ -1203,15 +1145,13 @@ This reverts to Phase 1 deduplication only (same tool, same location).
 
 - **Time:** <2 seconds for 1000 findings, <10 seconds for 10000 findings
 - **Scalability:** LSH algorithm enables O(n log n) clustering for large scans
-- **Reduction:** Depends on how much the profile's tools overlap — see [Known limitations](KNOWN_LIMITATIONS.md#deduplication)
+- **Reduction:** Depends on how much the tools that ran overlap — see [Known limitations](KNOWN_LIMITATIONS.md#deduplication)
 
 ## Configuration (jmo.yml)
 
-`jmo.yml` controls what runs and how results are emitted. Top‑level fields supported by the CLI include:
+`jmo.yml` controls what runs and how results are emitted. Every setting is a top‑level key; there are no profile blocks. Top‑level fields supported by the CLI include:
 
-- tools: [trufflehog, noseyparker, semgrep, syft, trivy, checkov, hadolint, zap, nuclei, falco, afl++, bandit]
-  - Note: Added Nuclei for API security scanning (CVEs, misconfigurations, 4000+ templates)
-  - Note: Removed deprecated tools (gitleaks, tfsec, osv-scanner). Added DAST (zap), runtime security (falco), and fuzzing (afl++)
+- tools: the scanners to consider. Optional: when it is absent, every scan considers the whole [tool matrix](TOOLS.md#the-tool-matrix), and the target's content decides which of them run. `--tools` on the command line overrides it
 - outputs: [json, md, yaml, html, simple-html, sarif, csv, compliance, suppressions]
   - `compliance` gates `COMPLIANCE_SUMMARY.md`, `PCI_DSS_COMPLIANCE.md` and
     `attack-navigator.json`; `suppressions` gates `SUPPRESSIONS.md`. Both are on by
@@ -1225,9 +1165,8 @@ This reverts to Phase 1 deduplication only (same tool, same location).
 - timeout: default per‑tool timeout seconds
 - log_level: DEBUG|INFO|WARN|ERROR (defaults to INFO)
 - retries: global retry count for flaky tool invocations (0 by default)
-- default_profile: name of the profile to use when --profile-name is not provided
-- profiles: named profile blocks
-- per_tool: global per‑tool overrides (merged with per‑profile overrides)
+- per_tool: per‑tool overrides (`flags`, `timeout`, and tool-specific keys)
+- policy: policy-as-code settings (see [POLICY_AS_CODE.md](POLICY_AS_CODE.md))
 
 Example:
 
@@ -1235,59 +1174,36 @@ Example:
 tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, zap, nuclei]
 outputs: [json, md, yaml, html, simple-html, sarif, csv, compliance, suppressions]
 fail_on: ""
-default_profile: balanced
 threads: 4
+timeout: 600
 retries: 0
+include: ["*"]
+exclude: ["big-monorepo*"]
 
-profiles:
-  fast:
-    tools: [trufflehog, semgrep, trivy]
-    threads: 8
-    timeout: 300
-    include: ["*"]
-    exclude: ["big-monorepo*"]
-    per_tool:
-      semgrep:
-        flags: ["--exclude", "node_modules", "--exclude", ".git"]
-  balanced:
-    tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, zap, nuclei]
-    threads: 4
-    timeout: 600
-    per_tool:
-      trivy:
-        flags: ["--no-progress"]
-      zap:
-        flags: ["-config", "api.disablekey=true", "-config", "spider.maxDuration=5"]
-  deep:
-    tools: [trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, nuclei, falco, afl++]
-    threads: 2
-    timeout: 900
-    retries: 1
-    per_tool:
-      zap:
-        flags: ["-config", "api.disablekey=true", "-config", "spider.maxDuration=10"]
-      falco:
-        timeout: 600
-      afl++:
-        timeout: 1800
-        flags: ["-m", "none"]
+per_tool:
+  semgrep:
+    flags: ["--exclude", "node_modules", "--exclude", ".git"]
+  trivy:
+    flags: ["--no-progress"]
+  zap:
+    flags: ["-config", "api.disablekey=true", "-config", "spider.maxDuration=5"]
+
+policy:
+  enabled: true
+  auto_evaluate: true
+  default_policies: [owasp-top-10, zero-secrets]
 ```
 
-Use a profile at runtime:
-
-```bash
-jmo scan --repos-dir ~/repos --profile-name fast
-```
+A `jmo.yml` written for v1.x may still carry `profiles:` or `default_profile:`. Those keys are no longer read: the file loads, a warning names the unknown key, and none of the profile's settings apply. Move what you need to the top level. See [UPGRADE.md](../UPGRADE.md#upgrading-to-v200).
 
 Notes and precedence:
 
 - Severity order is CRITICAL > HIGH > MEDIUM > LOW > INFO. Thresholds gate at and above the chosen level.
-- Threads/timeout/tool lists are merged from config + profile; CLI flags override config/profile where provided.
-- Per‑tool overrides are merged with root config; values set in a profile win over root.
+- CLI flags override `jmo.yml` where provided: `--tools` over `tools`, `--threads` over `threads`, `--timeout` over `timeout`.
 
 ## Plugin System
 
-JMo Security uses a plugin-based architecture for all 30 adapters, enabling hot-reload during development and community-contributed integrations.
+JMo Security uses a plugin-based architecture for all of its adapters, enabling hot-reload during development and community-contributed integrations.
 
 **Key Benefits:**
 
@@ -1346,7 +1262,6 @@ schedule = ScanSchedule(
         timezone="UTC",
         backend=BackendConfig(type="gitlab-ci"),
         jobTemplate=JobTemplateSpec(
-            profile="balanced",
             targets={"repos_dir": "/repos"},
             results={"dir": "/results"},
             options={"fail_on": "HIGH"},
@@ -1377,31 +1292,30 @@ print(f"📅 Next run: {schedule.status.nextScheduleTime}")
 
 ```bash
 # Create schedule
-jmo schedule create nightly-deep \
+jmo schedule create nightly-audit \
   --cron "0 2 * * *" \
-  --profile deep \
   --repos-dir ~/repos \
   --backend gitlab-ci \
-  --description "Nightly deep security audit"
+  --description "Nightly security audit"
 
 # List all schedules
 jmo schedule list
 
 # Get specific schedule
-jmo schedule get nightly-deep
+jmo schedule get nightly-audit
 
 # Update schedule
-jmo schedule update nightly-deep --profile balanced
+jmo schedule update nightly-audit --cron "0 3 * * *"
 
 # Delete schedule
-jmo schedule delete nightly-deep --force
+jmo schedule delete nightly-audit --force
 
 # Export to GitLab CI
-jmo schedule export nightly-deep --backend gitlab-ci > .gitlab-ci.yml
+jmo schedule export nightly-audit --backend gitlab-ci > .gitlab-ci.yml
 
 # Suspend/resume
-jmo schedule suspend nightly-deep
-jmo schedule resume nightly-deep
+jmo schedule suspend nightly-audit
+jmo schedule resume nightly-audit
 ```
 
 **Supported backends:**
@@ -1437,7 +1351,6 @@ prod_schedules = manager.list(labels={"environment": "production"})
 ```python
 schedule = manager.get("weekly-scan")
 schedule.spec.schedule = "0 3 * * *"  # Change to 3 AM
-schedule.spec.jobTemplate.profile = "deep"  # Use deep profile
 manager.update(schedule)
 ```
 
@@ -1616,7 +1529,7 @@ jmo setup
 
 # Setup automatically:
 # 1. Checks for installed security tools
-# 2. Creates jmo.yml with recommended profile
+# 2. Creates jmo.yml with recommended defaults
 # 3. Initializes SQLite history database
 # 4. Validates Python dependencies
 ```
@@ -1629,10 +1542,10 @@ jmo setup
 ### Common flags
 
 - --config jmo.yml: choose a config file (default: jmo.yml)
-- --profile-name NAME: apply a named profile from config
 - --threads N: set workers (scan/report)
 - --timeout SECS: default per‑tool timeout (scan)
 - --tools ...: override tool list (scan/ci)
+- --skip-tools ...: remove tools from the list (scan/ci)
 - --fail-on SEVERITY: gate the exit code during report/ci
 - --human-logs: color, human‑friendly logs on stderr (default logs are JSON)
 - --allow-missing-tools: write empty JSON stubs if a tool is not found (scan/ci)
@@ -1654,7 +1567,7 @@ Environment variables:
 
 ## Per‑tool overrides and retries
 
-You can supply global `per_tool` overrides at the root and/or inside a profile; profile values win and are merged. Supported keys are free‑form; commonly used keys include `flags` (list of strings) and `timeout` (int).
+You can supply `per_tool` overrides at the top level of `jmo.yml`. Supported keys are free‑form; commonly used keys include `flags` (list of strings) and `timeout` (int).
 
 Example:
 
@@ -1667,21 +1580,17 @@ per_tool:
     # Override Semgrep registry configs (default: ["auto"])
     # Use language-specific packs or local rules for offline scanning
     configs: ["auto", "p/python", "p/javascript"]
-profiles:
-  balanced:
-    per_tool:
-      semgrep:
-        flags: ["--exclude", "node_modules", "--exclude", ".git"]
+    flags: ["--exclude", "node_modules", "--exclude", ".git"]
 ```
 
 Default directory exclusions:
 
 - JMo already excludes `.git`, `node_modules`, `vendor`, `.venv` and `venv` from
-  the tools that read your source (semgrep, trivy, bandit, checkov), so the
+  the tools that read your source (semgrep, trivy, checkov), so the
   `--exclude` entries above are no longer needed to get that effect. Your own
   `flags` are appended after JMo's, so anything you add still applies.
 - The tools that *inventory* dependencies are deliberately exempt:
-  `dependency-check` and `syft` still read those directories, because a vendored
+  `syft` and `grype` still read those directories, because a vendored
   tree is what they exist to look at.
 - To scan a vendored directory with a SAST tool anyway, point JMo at it
   directly: `jmo scan --repo ./vendor/some-library`.
@@ -1690,7 +1599,7 @@ Default directory exclusions:
   without this every tool reads JMo's own output back as findings — a "secret"
   inside a `syft.json` JMo wrote itself, a finding quoted verbatim in
   `summaries/findings.json`. They grow every time you scan. This applies to
-  every tool that takes an exclusion, `horusec` included.
+  every tool that takes an exclusion.
 
   It is excluded by **name**, because that is the only spelling the tools'
   exclusion flags agree on — so a second directory of the same name elsewhere in
@@ -1700,12 +1609,12 @@ Default directory exclusions:
 
 Retries:
 
-- Set `retries: N` at the root or inside a profile to automatically retry failing tool commands up to N times.
+- Set `retries: N` at the top level to automatically retry failing tool commands up to N times.
 - Human logs will show attempts when > 1, e.g. `attempts={'semgrep': 2}`.
 
 Threading and performance:
 
-- Scan workers: precedence is CLI/profile threads > JMO_THREADS env > config default > auto.
+- Scan workers: precedence is CLI `--threads` > JMO_THREADS env > config `threads` > auto.
 - Report workers: set via `--threads` (preferred) or config; the aggregator will also suggest `recommended_threads` in `timings.json` based on CPU count.
 
 ## Handling False Positives
@@ -1731,8 +1640,8 @@ suppressions:
     reason: "Third-party dependencies, vetted and not deployed"
 
   # Suppress one rule everywhere it fires.
-  - ruleId: "B101"
-    reason: "pytest uses assert statements by design"
+  - ruleId: "DL3008"
+    reason: "apt package versions are pinned by the base image digest"
 
   # Selectors combine with AND: this matches only these two lines,
   # of this rule, in this file.
@@ -1766,8 +1675,8 @@ Two behaviours are worth knowing before you write a pattern:
   `/home/ci/repo/iac/main.tf` alike, but not `my-iac/main.tf`. Matching is
   **case-sensitive on every platform**, so a config behaves the same on your
   machine as in CI.
-- **Rule identifiers differ sharply between tools.** bandit emits `B101`,
-  checkov `CKV_AWS_23`, horusec a UUID, and semgrep a long dotted path such as
+- **Rule identifiers differ sharply between tools.** hadolint emits `DL3008`,
+  checkov `CKV_AWS_23`, and semgrep a long dotted path such as
   `yaml.github-actions.security.run-shell-injection.run-shell-injection`. Use a
   glob (`*run-shell-injection*`) unless you copied an exact id out of a report.
 
@@ -2034,8 +1943,8 @@ Export findings to spreadsheet-friendly CSV format for Excel, Google Sheets, or 
 ```csv
 priority,kev,epss,severity,ruleId,path,line,message,tool,detected_by,triaged
 8.5,NO,,CRITICAL,github,config.py,15,GitHub Personal Access Token detected,trufflehog,trufflehog,NO
-7.2,YES,45.32%,HIGH,CVE-2024-1234,package.json,0,Vulnerability in lodash,trivy,trivy,YES
-3.5,NO,0.12%,MEDIUM,python.lang.security.audit.dangerous-code-exec,app.py,42,Use of exec() detected,semgrep,"semgrep, bandit",NO
+7.2,YES,45.32%,HIGH,CVE-2024-1234,package.json,0,Vulnerability in lodash,trivy,"trivy, grype",YES
+3.5,NO,0.12%,MEDIUM,python.lang.security.audit.dangerous-code-exec,app.py,42,Use of exec() detected,semgrep,semgrep,NO
 ```
 
 **Triage Status Integration:**
@@ -2163,7 +2072,7 @@ Track security scans over time for trend analysis, regression detection, and com
 
 ```bash
 # Store scan results automatically
-jmo scan --repo ./myapp --profile balanced --store-history
+jmo scan --repo ./myapp --store-history
 
 # View scan history
 jmo history list
@@ -2275,7 +2184,7 @@ Proves who scanned what, when, and with which tools - making scan results tamper
 **Key Benefits:**
 
 - **Tamper Evidence**: Detect if scan results were modified after generation
-- **Audit Trail**: Full provenance (commit, tools, profile, CI environment)
+- **Audit Trail**: Full provenance (commit, tools, CI environment)
 - **Compliance**: Meet SOC 2, ISO 27001, PCI DSS supply chain requirements
 - **Keyless Signing**: Sigstore OIDC - no key management, uses GitHub/GitLab identity
 - **Public Transparency**: Rekor transparency log provides independent verification
@@ -2316,10 +2225,10 @@ jmo verify findings.json findings.json.att.json \
 
 ```bash
 # Check what's installed/missing
-jmo tools check --profile balanced
+jmo tools check
 
 # Install missing tools (cross-platform, automatic method selection)
-jmo tools install --profile balanced
+jmo tools install
 
 # Update outdated tools
 jmo tools update
@@ -2355,61 +2264,13 @@ Verify at: https://github.com/Homebrew/install/blob/HEAD/install.sh
 Press Enter to continue after verifying, or Ctrl+C to cancel...
 ```
 
-### Nosey Parker on WSL (native recommended) and auto-fallback (Docker)
-
-On Windows Subsystem for Linux (WSL), the most reliable approach is a native Nosey Parker install. Prebuilt binaries can fail on older glibc; building from source works well.
-
-Native (WSL/Linux) install steps:
-
-```bash
-# 1) Prereqs
-sudo apt-get update -y
-sudo apt-get install -y build-essential pkg-config libssl-dev libsqlite3-dev zlib1g-dev libboost-all-dev
-
-# Ensure a recent CMake (>= 3.18) is available; upgrade if needed for your distro.
-cmake --version || true
-
-# 2) Rust toolchain
-curl https://sh.rustup.rs -sSf | sh -s -- -y
-source "$HOME/.cargo/env"
-
-# 3) Build from source
-git clone --depth=1 https://github.com/praetorian-inc/noseyparker /tmp/noseyparker-src
-cd /tmp/noseyparker-src
-cargo build --release
-
-# 4) Put on PATH
-mkdir -p "$HOME/.local/bin"
-ln -sf "$PWD/target/release/noseyparker-cli" "$HOME/.local/bin/noseyparker"
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
-noseyparker --version
-```
-
-The CLI will use the local `noseyparker` binary when available. If it’s missing or fails to run, it automatically falls back to a Docker-based runner and writes:
-
-```text
-results/individual-repos/<repo-name>/noseyparker.json
-```
-
-Requirements for fallback: Docker running and access to `ghcr.io/praetorian-inc/noseyparker:latest`.
-
-Manual invocation (optional):
-
-```bash
-bash scripts/core/run_noseyparker_docker.sh \
-  --repo /path/to/repo \
-  --out results/individual-repos/<repo-name>/noseyparker.json
-```
-
-You do not need to call this manually during normal `jmo scan/ci`; it’s used automatically if needed.
-
 ## CI and local verification
 
 - Local “CI” bundle: `make verify` runs lint, tests, and a basic security sweep where configured.
 - One‑shot CI flow: `jmo ci` combines scan + report and gates on `--fail-on`. Example:
 
 ```bash
-jmo ci --repos-dir ~/repos --profile-name balanced --fail-on HIGH --profile
+jmo ci --repos-dir ~/repos --fail-on HIGH --profile
 ```
 
 Outputs include: `summaries/findings.json`, `SUMMARY.md`, `findings.yaml`, `findings.sarif`, `dashboard.html`, and `timings.json` (when profiling).
@@ -2454,44 +2315,42 @@ repos:
 
 ---
 
-#### Stage 2: Commit/PR Stage (Fast Feedback - Under 10 Minutes)
+#### Stage 2: PR Checks (Fast Feedback)
 
-**Goal:** Quick validation for CI/CD gates using **fast profile**
+**Goal:** Quick validation on every pull request
 
-**Profile:** `fast` (9 tools: trufflehog, semgrep, syft, trivy, checkov, hadolint, nuclei, shellcheck, opa)
+Narrow the tool list with `--tools` so the check stays fast. Secrets, SAST and dependency CVEs cover most of what a single change can introduce. The narrowing lives on the command line, so the nightly scan below reads the same `jmo.yml` and still gets the whole matrix.
 
-**Configuration:**
+**Configuration (shared with the nightly scan):**
 
 ```yaml
-# jmo.yml - fast profile
-profiles:
-  fast:
-    tools: [trufflehog, semgrep, trivy]
-    threads: 8
-    timeout: 300
-    per_tool:
-      semgrep:
-        flags: ["--exclude", "node_modules", "--exclude", ".git", "--exclude", "test"]
-      trivy:
-        flags: ["--no-progress", "--exit-code", "0"]
+# jmo.yml
+threads: 4
+timeout: 600
+per_tool:
+  semgrep:
+    flags: ["--exclude", "test"]
+  trivy:
+    flags: ["--no-progress"]
 ```
 
 **CI Workflow (GitHub Actions):**
 
 ```yaml
-name: Security Fast Scan
-on: [pull_request, push]
+name: Security PR Check
+on: [pull_request]
 jobs:
-  security-fast:
+  security-pr:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run Fast Security Scan
+      - name: Run PR Security Scan
         run: |
           pip install jmo-security
-          jmo ci --repo . --profile-name fast --fail-on HIGH --human-logs
+          jmo tools install trufflehog semgrep trivy --yes
+          jmo ci --repo . --tools trufflehog semgrep trivy --fail-on HIGH --human-logs
 
       - name: Upload SARIF
         if: always()
@@ -2500,53 +2359,36 @@ jobs:
           sarif_file: results/summaries/findings.sarif
 ```
 
-**Expected Runtime:** 5-10 minutes
 **Failure Criteria:** CRITICAL or HIGH severity findings
 
 ---
 
-#### Stage 3: Build Stage (Comprehensive - 18-25 Minutes)
+#### Stage 3: Nightly Full Scan
 
-**Goal:** Complete coverage for merge/release using **balanced profile**
+**Goal:** Complete coverage on a schedule
 
-**Profile:** `balanced` (17 tools: trufflehog, semgrep, syft, trivy, checkov, hadolint, nuclei, shellcheck, prowler, kubescape, grype, horusec, dependency-check, zap, scancode, cdxgen, gosec)
+With no `--tools`, `jmo ci` considers every tool in the [tool matrix](TOOLS.md#the-tool-matrix), and the repository's content decides which of them run. ZAP and Nuclei test a running application, so they run only if you also pass `--url` (for example `--url https://staging.example.com`).
 
-**Configuration:**
-
-```yaml
-# jmo.yml - balanced profile
-profiles:
-  balanced:
-    tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, zap, nuclei]
-    threads: 4
-    timeout: 600
-    per_tool:
-      zap:
-        flags: ["-config", "api.disablekey=true", "-config", "spider.maxDuration=5"]
-      trivy:
-        flags: ["--no-progress", "--severity", "HIGH,CRITICAL"]
-```
-
-**CI Workflow (GitHub Actions):**
+**CI Workflow (Scheduled):**
 
 ```yaml
-name: Security Comprehensive Scan
+name: Security Nightly Scan
 on:
-  push:
-    branches: [main, develop]
-  pull_request:
-    branches: [main]
+  schedule:
+    - cron: '0 2 * * *'  # Nightly 2 AM UTC
+  workflow_dispatch:      # Manual trigger
 jobs:
-  security-comprehensive:
+  security-nightly:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run Balanced Security Scan
+      - name: Run Full Security Scan
         run: |
           pip install "jmo-security[reporting]"
-          jmo ci --repo . --profile-name balanced --fail-on HIGH --profile --human-logs
+          jmo tools install --yes
+          jmo ci --repo . --fail-on HIGH --profile --human-logs
 
       - name: Upload Results as Artifacts
         if: always()
@@ -2563,166 +2405,11 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: results/summaries/findings.sarif
-
-      - name: Comment PR with Summary
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const summary = fs.readFileSync('results/summaries/SUMMARY.md', 'utf8');
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: '## 🔒 Security Scan Results\n\n' + summary
-            });
 ```
 
-**Expected Runtime:** 18-25 minutes
+To skip the install step, run the job in the Docker image instead (`container: ghcr.io/jimmy058910/jmo-security:latest`), which carries every tool. See [Docker Guide: CI/CD](DOCKER_README.md#cicd-integration).
+
 **Failure Criteria:** HIGH severity findings (configurable)
-
----
-
-#### Stage 4: Nightly/Weekly Deep Audits (40-70 Minutes)
-
-**Goal:** Maximum coverage with **deep profile** for compliance/audits
-
-**Profile:** `deep` (29 tools: full suite including noseyparker, bandit, zap, nuclei, falco, afl++)
-
-**Configuration:**
-
-```yaml
-# jmo.yml - deep profile
-profiles:
-  deep:
-    tools: [trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, nuclei, falco, afl++]
-    threads: 2
-    timeout: 900
-    retries: 1
-    per_tool:
-      noseyparker:
-        timeout: 1200
-      afl++:
-        timeout: 1800
-        flags: ["-m", "none"]
-```
-
-**CI Workflow (Scheduled):**
-
-```yaml
-name: Security Deep Audit
-on:
-  schedule:
-    - cron: '0 2 * * 0'  # Weekly Sunday 2 AM
-  workflow_dispatch:      # Manual trigger
-jobs:
-  security-deep:
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Full history for noseyparker
-
-      - name: Run Deep Security Audit
-        run: |
-          pip install "jmo-security[reporting]"
-          jmo ci --repo . --profile-name deep --fail-on MEDIUM --profile --human-logs --allow-missing-tools
-
-      - name: Upload Comprehensive Results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: security-deep-audit
-          path: results/
-          retention-days: 90
-
-      - name: Send Slack Notification
-        if: failure()
-        uses: slackapi/slack-github-action@v1
-        with:
-          payload: |
-            {
-              "text": "⚠️ Security Deep Audit Failed",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "Security deep audit found critical issues. Check <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|workflow run> for details."
-                  }
-                }
-              ]
-            }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
-```
-
-**Expected Runtime:** 40-70 minutes
-**Failure Criteria:** MEDIUM severity or higher (more relaxed for deep audits)
-
----
-
-#### Stage 5: Production/Runtime Monitoring (Continuous)
-
-**Goal:** Continuous runtime security with Falco for Kubernetes/containers
-
-**Tools:**
-
-- Falco (eBPF-based runtime monitoring)
-- Trivy continuous vulnerability monitoring
-
-**Kubernetes Deployment:**
-
-```yaml
-# falco-daemonset.yaml
-apiVersion: apps/v1
-kind: DaemonSet
-metadata:
-  name: falco
-  namespace: falco
-spec:
-  selector:
-    matchLabels:
-      app: falco
-  template:
-    metadata:
-      labels:
-        app: falco
-    spec:
-      serviceAccountName: falco
-      hostNetwork: true
-      hostPID: true
-      containers:
-      - name: falco
-        image: falcosecurity/falco:latest
-        securityContext:
-          privileged: true
-        volumeMounts:
-        - mountPath: /host/var/run/docker.sock
-          name: docker-socket
-        - mountPath: /host/dev
-          name: dev-fs
-        - mountPath: /host/proc
-          name: proc-fs
-          readOnly: true
-      volumes:
-      - name: docker-socket
-        hostPath:
-          path: /var/run/docker.sock
-      - name: dev-fs
-        hostPath:
-          path: /dev
-      - name: proc-fs
-        hostPath:
-          path: /proc
-```
-
-**Alerting:**
-
-- Falco alerts → Slack/PagerDuty for security events
-- Trivy daily scans → Email/Jira tickets for new vulnerabilities
 
 ---
 
@@ -2742,12 +2429,11 @@ spec:
     key: security-tools-${{ runner.os }}-${{ hashFiles('.tool-versions') }}
 ```
 
-**2. Incremental Scanning:**
+**2. Narrow the Tool List on PRs:**
 
 ```bash
-# Scan only changed files in PRs (fast profile)
-git diff --name-only origin/main... > changed-files.txt
-jmo scan --repo . --profile-name fast --include-files changed-files.txt
+# Run only the tools a PR most needs; the nightly scan runs the rest
+jmo scan --repo . --tools trufflehog semgrep trivy
 ```
 
 **3. Parallel Execution:**
@@ -2775,15 +2461,13 @@ jobs:
 
 #### Summary Table
 
-| Stage | Profile | Tools | Runtime | Trigger | Fail On |
-|-------|---------|-------|---------|---------|------------|
-| **Pre-commit** | N/A | TruffleHog, Semgrep IDE | < 30s | Local commit | Any finding |
-| **Commit/PR** | fast | 9 tools | 5-10 min | Push, PR | HIGH+ |
-| **Build** | balanced | 17 tools | 18-25 min | Main branch, PR | HIGH+ |
-| **Deep Audit** | deep | 29 tools | 40-70 min | Weekly, manual | MEDIUM+ |
-| **Runtime** | N/A | Falco, Trivy | Continuous | Always | CRITICAL |
+| Stage | Tools | Trigger | Fail On |
+|-------|-------|---------|------------|
+| **Pre-commit** | TruffleHog, Semgrep IDE, Hadolint | Local commit | Any finding |
+| **PR checks** | `--tools trufflehog semgrep trivy` | Pull request | HIGH+ |
+| **Nightly** | The whole tool matrix | Schedule, manual | HIGH+ |
 
-**Key Principle:** Fail fast with fast profile in PR stage, comprehensive coverage in build stage, exhaustive audits weekly.
+**Key Principle:** Fail fast with a narrowed tool list on pull requests, and run the whole matrix nightly.
 
 ---
 
@@ -2796,14 +2480,13 @@ Quick example for GitLab CI:
 ```yaml
 # .gitlab-ci.yml
 variables:
-  JMO_PROFILE: "balanced"
   JMO_FAIL_ON: "HIGH"
 
 security:scan:
-  image: jmogaming/jmo-security:slim
+  image: jmogaming/jmo-security:latest
   stage: security
   script:
-    - jmo scan --repo . --profile-name ${JMO_PROFILE} --results-dir results --human-logs
+    - jmo scan --repo . --results-dir results --human-logs
     - jmo report results --fail-on ${JMO_FAIL_ON} --profile --human-logs
   artifacts:
     when: always
@@ -2817,7 +2500,6 @@ security:scan:
 **Key features:**
 
 - Docker-based scanning (zero installation)
-- Profile-based configuration (fast, slim, balanced, deep)
 - SARIF upload for GitLab Security Dashboard
 - Multi-target support (repositories, containers, IaC, URLs)
 
@@ -2834,8 +2516,7 @@ Quick example for Jenkins:
 pipeline {
     agent any
     environment {
-        JMO_IMAGE = 'jmogaming/jmo-security:slim'
-        JMO_PROFILE = 'balanced'
+        JMO_IMAGE = 'jmogaming/jmo-security:latest'
         JMO_FAIL_ON = 'HIGH'
     }
     stages {
@@ -2848,7 +2529,7 @@ pipeline {
             }
             steps {
                 sh """
-                    jmo scan --repo . --profile-name ${JMO_PROFILE} --results-dir results --human-logs
+                    jmo scan --repo . --results-dir results --human-logs
                     jmo report results --fail-on ${JMO_FAIL_ON} --profile --human-logs
                 """
             }
@@ -2923,7 +2604,7 @@ jmo wizard --log-level DEBUG
 
 - **GitLab scanner:** Clone failures, token errors, image scan errors, cleanup errors
 - **Wizard:** URL validation failures (HTTP errors, timeouts, DNS), IaC file type detection errors, K8s context validation errors
-- **Adapters:** JSON parse failures with fallback behavior (Nuclei, Falco, TruffleHog)
+- **Adapters:** JSON parse failures with fallback behavior (Nuclei, TruffleHog)
 - **Detailed stack traces:** Full exception context for all errors
 
 **Example output:**
@@ -2943,7 +2624,7 @@ jmo wizard --log-level DEBUG
 
 Tools not found
 
-- Run `jmo tools check` to see tool status, then `jmo tools install --profile balanced` to install; use `--allow-missing-tools` for exploratory runs.
+- Run `jmo tools check` to see tool status, then `jmo tools install` to install; use `--allow-missing-tools` for exploratory runs.
 
 No repositories to scan
 
@@ -2951,7 +2632,7 @@ No repositories to scan
 
 Slow scans
 
-- Reduce the toolset via a lighter profile (`fast`), or increase threads; use `report --profile` to inspect `timings.json` and adjust.
+- Reduce the toolset with `--tools` or `--skip-tools`, or increase threads; use `report --profile` to inspect `timings.json` and adjust.
 
 YAML reporter missing
 
@@ -2963,7 +2644,7 @@ Permission denied on scripts
 
 Hadolint shows no results
 
-- Hadolint only runs when a `Dockerfile` exists at the repo root; this is expected. With `--allow-missing-tools`, a stub may be created when appropriate so reporting still works.
+- Hadolint only runs when the repo contains a Dockerfile (`Dockerfile`, `Dockerfile.*` or `*.Dockerfile`, at any depth); this is expected. With `--allow-missing-tools`, a stub may be created when appropriate so reporting still works.
 
 TruffleHog output looks empty
 
@@ -2978,10 +2659,7 @@ For complete CLI documentation with all flags and options, see **[CLI_REFERENCE.
 | Command | Purpose |
 |---------|---------|
 | `jmo wizard` | Interactive guided scanning |
-| `jmo fast` | Quick scan (9 tools, 5-10 min) |
-| `jmo balanced` | Production scan (17 tools, 18-25 min) |
-| `jmo full` | Comprehensive audit (29 tools, 40-70 min) |
-| `jmo scan` | Low-level scan with full control |
+| `jmo scan` | Scan with full control |
 | `jmo report` | Generate reports from scan results |
 | `jmo ci` | Scan + report for CI/CD pipelines |
 | `jmo diff` | Compare two scans |
@@ -3003,20 +2681,20 @@ For complete CLI documentation with all flags and options, see **[CLI_REFERENCE.
 # Interactive wizard (recommended for beginners)
 jmo wizard
 
-# Quick scan of a single repository
-jmo fast --repo ./myapp
+# Scan a single repository
+jmo scan --repo ./myapp
 
-# Production scan with multiple repositories
-jmo balanced --repos-dir ~/repos --human-logs
+# Scan multiple repositories
+jmo scan --repos-dir ~/repos --human-logs
 
 # CI/CD pipeline with failure threshold
-jmo ci --repo . --fail-on HIGH --profile-name balanced
+jmo ci --repo . --fail-on HIGH
 
 # Compare two scans
 jmo diff baseline-results/ current-results/
 
 # Check tool installation status
-jmo tools check --profile balanced
+jmo tools check
 ```
 
 ---

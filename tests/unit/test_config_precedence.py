@@ -28,7 +28,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from scripts.cli import jmo as jmo_mod
+from scripts.cli.tool_manager import ToolStatus
 from scripts.core.config import Config, load_config_with_env_overrides
+from scripts.core.tool_registry import POLICY_ENGINE, TOOL_MATRIX
 
 # `_get_max_workers` falls through to CPU auto-detection. Pin it to a value no
 # other layer uses so "which layer won" is unambiguous rather than inferred.
@@ -151,23 +153,17 @@ def test_dedup_out_of_range_or_junk_env_keeps_the_config_file_value(
 
 
 # --------------------------------------------------------------------------
-# per_tool: root block and per-profile block, "profile values win and are merged"
+# per_tool: the top-level block reaches the scan settings, as a copy
 # --------------------------------------------------------------------------
 
 
 _PER_TOOL_CFG = """\
-default_profile: fast
 per_tool:
   semgrep:
     timeout: 111
     flags: [--from-root]
   trivy:
     timeout: 999
-profiles:
-  fast:
-    per_tool:
-      semgrep:
-        timeout: 222
 """
 
 
@@ -175,7 +171,6 @@ def _effective_per_tool(tmp_path: Path) -> dict:
     path = _write_cfg(tmp_path, _PER_TOOL_CFG)
     args = argparse.Namespace(
         config=path,
-        profile_name=None,
         threads=None,
         timeout=None,
         tools=None,
@@ -187,26 +182,23 @@ def _effective_per_tool(tmp_path: Path) -> dict:
     return jmo_mod._effective_scan_settings(args)["per_tool"]
 
 
-class TestProfileToolListIsHonoured:
-    """#975: `profiles.<name>.tools` was documented, user-facing, and inert.
+class TestConfiguredToolListIsHonoured:
+    """#975: a configured tool list must narrow the scan, and only narrow it.
 
-    `_effective_scan_settings` resolved the tool list from the built-in
-    `PROFILE_TOOLS` mapping and never looked at the profile's own `tools:` key.
-    A user who wrote `profiles: {fast: {tools: [trufflehog]}}` got the full
-    built-in `fast` profile instead -- measured, one configured tool resolving
-    to nine, with semgrep among them fetching its ruleset over the network.
+    v1 resolved the tool list from the built-in `PROFILE_TOOLS` mapping and
+    never looked at a profile's own `tools:` key: a user who configured one
+    tool got nine, with semgrep among them fetching its ruleset over the
+    network. Profiles are gone (v2.0.0); `jmo.yml`'s top-level `tools:` is now
+    the one configured narrowing, below `--tools` and above `TOOL_MATRIX`.
 
     Every test here asserts the **negative**, because that is the shape the
-    defect hid behind. `tests/integration/test_cli_profiles.py` sets exactly
-    this config and passes, having only ever checked that trufflehog's output
-    appeared. A test that asserts the included tool is present cannot notice
-    that eight excluded ones are too.
+    defect hid behind. A test that asserts the included tool is present cannot
+    notice that eight excluded ones are too.
     """
 
     def _tools(self, tmp_path: Path, body: str, **overrides) -> list[str]:
         fields = {
             "config": _write_cfg(tmp_path, body),
-            "profile_name": None,
             "threads": None,
             "timeout": None,
             "tools": None,
@@ -216,91 +208,51 @@ class TestProfileToolListIsHonoured:
         return jmo_mod._effective_scan_settings(argparse.Namespace(**fields))["tools"]
 
     def test_a_configured_tool_list_excludes_everything_else(self, tmp_path: Path):
-        tools = self._tools(
-            tmp_path,
-            "default_profile: fast\nprofiles:\n  fast:\n    tools:\n    - trufflehog\n",
-        )
+        tools = self._tools(tmp_path, "tools:\n- trufflehog\n")
         assert tools == ["trufflehog"]
         # Named explicitly: semgrep is the one that reaches the network, and it
         # is how the defect was noticed at all.
         assert "semgrep" not in tools, (
-            "a profile asking for one tool still resolved semgrep, which then "
+            "a config asking for one tool still resolved semgrep, which then "
             "fetches its ruleset over the network"
         )
 
-    def test_the_builtin_profile_still_applies_without_a_tools_key(
-        self, tmp_path: Path
-    ):
-        """Negative control: overriding must not become the only behaviour.
+    def test_the_matrix_applies_without_a_tools_key(self, tmp_path: Path):
+        """Negative control: narrowing must not become the only behaviour.
 
-        Without this, resolving `[]` for every profile would satisfy the test
+        Without this, resolving `[]` for every config would satisfy the test
         above while breaking every user who never wrote a `tools:` key.
         """
-        tools = self._tools(tmp_path, "default_profile: fast\n")
-        assert len(tools) > 1 and "semgrep" in tools
-
-    def test_an_empty_list_is_not_a_narrowing(self, tmp_path: Path):
-        """`tools: []` asks for nothing, which is not a scan.
-
-        Treated as absent rather than as "run no tools", so a truncated config
-        does not silently produce an empty scan that reports success.
-        """
-        tools = self._tools(
-            tmp_path, "default_profile: fast\nprofiles:\n  fast:\n    tools: []\n"
-        )
-        assert len(tools) > 1
+        tools = self._tools(tmp_path, "fail_on: HIGH\n")
+        assert tools == list(TOOL_MATRIX)
 
     def test_the_cli_flag_still_outranks_the_config(self, tmp_path: Path):
-        tools = self._tools(
-            tmp_path,
-            "default_profile: fast\nprofiles:\n  fast:\n    tools:\n    - trufflehog\n",
-            tools=["gosec"],
-        )
+        tools = self._tools(tmp_path, "tools:\n- trufflehog\n", tools=["gosec"])
         assert tools == ["gosec"]
 
-    def test_a_profile_that_is_not_built_in_can_define_its_own_tools(
-        self, tmp_path: Path
-    ):
-        """The documented use: a profile name PROFILE_TOOLS has never heard of.
 
-        Before the fix this fell through to the top-level `tools:` key, so a
-        custom profile could not narrow anything at all.
-        """
-        tools = self._tools(
-            tmp_path,
-            "default_profile: mine\ntools:\n- semgrep\n- trivy\n"
-            "profiles:\n  mine:\n    tools:\n    - bandit\n",
-        )
-        assert tools == ["bandit"]
-        assert "semgrep" not in tools and "trivy" not in tools
+def test_per_tool_top_level_block_reaches_the_scan_settings_whole(tmp_path: Path):
+    """Every tool and every key of `per_tool:` arrives, none dropped.
 
-
-def test_per_tool_profile_value_wins_over_the_root_value(tmp_path: Path):
-    assert _effective_per_tool(tmp_path)["semgrep"]["timeout"] == 222
-
-
-def test_per_tool_root_keys_survive_a_partial_profile_override(tmp_path: Path):
-    """Regression for #791.
-
-    USER_GUIDE.md:1652 promises the two blocks "are merged". A flat
-    `dict.update()` replaced semgrep's whole entry, so overriding only its
-    timeout silently dropped the root-level flags.
+    #791 was a key lost on the way (a flat `dict.update()` replaced a tool's
+    whole entry, dropping its flags). With profiles gone there is no second
+    block to merge, so the whole mapping must arrive as written.
     """
-    assert _effective_per_tool(tmp_path)["semgrep"]["flags"] == ["--from-root"]
+    assert _effective_per_tool(tmp_path) == {
+        "semgrep": {"timeout": 111, "flags": ["--from-root"]},
+        "trivy": {"timeout": 999},
+    }
 
 
-def test_per_tool_tools_the_profile_never_mentions_are_untouched(tmp_path: Path):
-    assert _effective_per_tool(tmp_path)["trivy"] == {"timeout": 999}
-
-
-def test_per_tool_merge_does_not_mutate_the_loaded_config(tmp_path: Path):
-    """The merge must copy: mutating cfg.per_tool would leak across profiles."""
+def test_per_tool_copy_does_not_mutate_the_loaded_config(tmp_path: Path):
+    """The copy must go a level deep: a caller editing one tool's entry must
+    not reach back into the loaded config."""
     from scripts.core.config import load_config
 
     path = _write_cfg(tmp_path, _PER_TOOL_CFG)
     cfg = load_config(path)
-    merged = jmo_mod._merge_per_tool(cfg.per_tool, cfg.profiles["fast"]["per_tool"])
-    merged["semgrep"]["timeout"] = 777
+    copied = jmo_mod._copy_per_tool(cfg.per_tool)
+    copied["semgrep"]["timeout"] = 777
     assert cfg.per_tool["semgrep"]["timeout"] == 111
 
 
@@ -315,20 +267,18 @@ def test_history_records_the_tools_that_ran_not_the_configured_tools(
     """Regression for #787.
 
     Before the fix this asserted the config's list: 1790 of 1833 rows in the
-    real database named jmo.yml's 8 tools regardless of profile, including
+    real database named jmo.yml's 8 tools regardless of what ran, including
     `nuclei`, which was not installed and so cannot have run in any of them.
     """
     results_dir = tmp_path / "results"
     (results_dir / "individual-repos" / "repo1").mkdir(parents=True)
     (results_dir / ".scan_metadata.json").write_bytes(
-        json.dumps(
-            {"profile": "deep", "tools": ["trufflehog"], "target_count": 1}
-        ).encode("utf-8")
+        json.dumps({"tools": ["trufflehog"], "target_count": 1}).encode("utf-8")
     )
     # A config whose tool list is deliberately nothing like what ran.
     cfg_path = _write_cfg(
         tmp_path,
-        "default_profile: balanced\ntools:\n- semgrep\n- trivy\n- nuclei\noutputs:\n- json\n",
+        "tools:\n- semgrep\n- trivy\n- nuclei\noutputs:\n- json\n",
     )
 
     args = argparse.Namespace(
@@ -341,7 +291,6 @@ def test_history_records_the_tools_that_ran_not_the_configured_tools(
         threads=None,
         store_history=True,
         history_db=str(tmp_path / "history.db"),  # never the real .jmo/history.db
-        profile_name=None,
     )
 
     with patch("scripts.core.history_db.store_scan", return_value="scan-id") as store:
@@ -353,37 +302,9 @@ def test_history_records_the_tools_that_ran_not_the_configured_tools(
         "history recorded the configured tool list instead of what ran: "
         f"{kwargs['tools']}"
     )
-    assert kwargs["profile"] == "deep", (
-        f"history recorded the config default instead of the scanned profile: "
-        f"{kwargs['profile']}"
-    )
-
-
-def test_history_falls_back_to_config_profile_when_no_scan_metadata(
-    tmp_path: Path,
-):
-    """Without .scan_metadata.json there is nothing better than the config."""
-    results_dir = tmp_path / "results"
-    (results_dir / "individual-repos" / "repo1").mkdir(parents=True)
-    cfg_path = _write_cfg(tmp_path, "default_profile: fast\noutputs:\n- json\n")
-
-    args = argparse.Namespace(
-        cmd="report",
-        results_dir=str(results_dir),
-        out=str(results_dir / "summaries"),
-        config=cfg_path,
-        fail_on=None,
-        profile=False,
-        threads=None,
-        store_history=True,
-        history_db=str(tmp_path / "history.db"),
-        profile_name=None,
-    )
-
-    with patch("scripts.core.history_db.store_scan", return_value="scan-id") as store:
-        jmo_mod.cmd_report(args)
-
-    assert store.call_args.kwargs["profile"] == "fast"
+    # The mock would accept a stale `profile=` that the real store_scan
+    # (v2.0.0, no profile parameter) rejects with a TypeError.
+    assert "profile" not in kwargs, kwargs
 
 
 def test_history_infers_tools_from_findings_when_scan_metadata_has_none(
@@ -392,8 +313,8 @@ def test_history_infers_tools_from_findings_when_scan_metadata_has_none(
     """The middle rung of #787's chain: metadata absent, findings present.
 
     ``tools_used`` resolves scan metadata -> tools named by the findings ->
-    nothing.  Rung 1 and the profile side of rung 2 are pinned above; this pins
-    the tool side of rung 2, which is what runs whenever a results directory is
+    nothing.  Rung 1 is pinned above; this pins rung 2, which is what runs
+    whenever a results directory is
     reported without the scan's own ``.scan_metadata.json`` beside it (``jmo
     report`` on a directory copied off another machine, or produced before the
     metadata file existed).
@@ -422,7 +343,7 @@ def test_history_infers_tools_from_findings_when_scan_metadata_has_none(
     )
     cfg_path = _write_cfg(
         tmp_path,
-        "default_profile: fast\ntools:\n- semgrep\n- nuclei\noutputs:\n- json\n",
+        "tools:\n- semgrep\n- nuclei\noutputs:\n- json\n",
     )
 
     args = argparse.Namespace(
@@ -435,7 +356,6 @@ def test_history_infers_tools_from_findings_when_scan_metadata_has_none(
         threads=None,
         store_history=True,
         history_db=str(tmp_path / "history.db"),
-        profile_name=None,
     )
 
     with patch("scripts.core.history_db.store_scan", return_value="scan-id") as store:
@@ -453,49 +373,45 @@ def test_history_infers_tools_from_findings_when_scan_metadata_has_none(
 # --------------------------------------------------------------------------
 
 
-def _summary(missing: int) -> dict:
-    return {
-        "profile": "p",
-        "total": 10,
-        "installed": 10 - missing,
-        "missing": missing,
-        "real_missing": missing,
-        "manual_install_missing": 0,
-        "ready": missing == 0,
-        "warnings": [],
+def _matrix_manager(missing: int) -> MagicMock:
+    """A ToolManager whose matrix check reports `missing` tools absent."""
+    absent = set(TOOL_MATRIX[:missing])
+    manager = MagicMock()
+    manager.check_matrix.return_value = {
+        name: ToolStatus(name=name, installed=name not in absent)
+        for name in TOOL_MATRIX
     }
+    manager.check_tool.side_effect = lambda name: ToolStatus(name=name, installed=True)
+    return manager
 
 
 @pytest.mark.parametrize("output_json", [True, False])
-def test_bare_tools_check_exits_nonzero_when_a_profile_is_short_a_tool(output_json):
+def test_bare_tools_check_exits_nonzero_when_the_matrix_is_short_a_tool(output_json):
     """Regression for #788: readiness was computed and then discarded."""
     from scripts.cli.tool_commands import cmd_tools_check
 
-    manager = MagicMock()
-    manager.get_profile_summary.side_effect = lambda _p: _summary(missing=2)
-    manager.get_critical_outdated.return_value = []
-
-    args = argparse.Namespace(tools=None, profile=None, json=output_json)
+    manager = _matrix_manager(missing=2)
+    args = argparse.Namespace(tools=None, json=output_json)
     with (
         patch("scripts.cli.tool_commands.ToolManager", return_value=manager),
-        patch("scripts.cli.tool_commands.print_profile_summary"),
+        patch("scripts.cli.tool_commands.print_tool_status_table"),
         patch("builtins.print"),
     ):
         assert cmd_tools_check(args) == 1
+    # The bare form checks the matrix and the policy engine, nothing narrower.
+    manager.check_matrix.assert_called_once_with()
+    manager.check_tool.assert_called_once_with(POLICY_ENGINE)
 
 
 @pytest.mark.parametrize("output_json", [True, False])
-def test_bare_tools_check_exits_zero_when_every_profile_is_complete(output_json):
+def test_bare_tools_check_exits_zero_when_the_matrix_is_complete(output_json):
     from scripts.cli.tool_commands import cmd_tools_check
 
-    manager = MagicMock()
-    manager.get_profile_summary.side_effect = lambda _p: _summary(missing=0)
-    manager.get_critical_outdated.return_value = []
-
-    args = argparse.Namespace(tools=None, profile=None, json=output_json)
+    manager = _matrix_manager(missing=0)
+    args = argparse.Namespace(tools=None, json=output_json)
     with (
         patch("scripts.cli.tool_commands.ToolManager", return_value=manager),
-        patch("scripts.cli.tool_commands.print_profile_summary"),
+        patch("scripts.cli.tool_commands.print_tool_status_table"),
         patch("builtins.print"),
     ):
         assert cmd_tools_check(args) == 0
@@ -757,17 +673,42 @@ def test_diff_log_level_actually_changes_what_is_emitted(tmp_path: Path):
 _COMMAND_REF = re.compile(r"`jmo\s+([a-z][a-z0-9-]+)|\bjmo\s+([a-z][a-z0-9-]+)\s+--")
 
 
+def _declared_subcommands() -> set[str]:
+    """Every `subparsers.add_parser("<name>")` literal under scripts/cli.
+
+    An independent reading of the same tree, from source rather than from a
+    run: the two must agree exactly, so neither can silently come back empty.
+    """
+    names: set[str] = set()
+    for path in Path("scripts/cli").rglob("*.py"):
+        for node in ast.walk(ast.parse(path.read_bytes().decode("utf-8"))):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "add_parser"
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "subparsers"
+                and node.args
+                and isinstance(node.args[0], ast.Constant)
+            ):
+                names.add(node.args[0].value)
+    return names
+
+
 def test_no_user_facing_string_names_a_nonexistent_subcommand():
     """Regression for #790.
 
     Before the fix, first-run output told users to run `jmo config --email ...`
-    and `jmo subscribe`, neither of which is in the parser's 20 subcommands.
+    and `jmo subscribe`, neither of which the parser defines.
 
     Scans string literals via `ast` rather than by line, so comments cannot
     trip it — the same approach as tests/cross_platform/test_encoding_drift_guard.py.
     """
     real = _parser_subcommands()
-    assert len(real) >= 20, f"parser capture looks wrong: {sorted(real)}"
+    assert real == _declared_subcommands(), (
+        f"parser capture disagrees with the source: {sorted(real)}"
+    )
+    assert {"scan", "report", "ci", "tools"} <= real
 
     offenders: list[str] = []
     for path in sorted(Path("scripts").rglob("*.py")):

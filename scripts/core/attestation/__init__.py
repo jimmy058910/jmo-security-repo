@@ -11,7 +11,6 @@ Usage:
     generator = ProvenanceGenerator()
     provenance = generator.generate(
         findings_path=Path("results/findings.json"),
-        profile="balanced",
         tools=["trivy", "semgrep"],
         targets=["repo1"]
     )

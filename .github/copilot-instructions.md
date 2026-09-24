@@ -6,7 +6,7 @@ These guidelines help AI coding agents work effectively in this repository. Focu
 
 - Terminal-first security audit toolkit with a Python CLI (`scripts/cli/jmo.py`) and supporting modules under `scripts/core/`.
 - Two main phases:
-  1) scan: invoke external scanners (semgrep, trivy, checkov, bandit, noseyparker, syft, trufflehog, hadolint, zap, falco, afl++) and write raw JSON per repo under `results/individual-repos/<repo>/`.
+  1) scan: invoke external scanners (trufflehog, semgrep, syft, trivy, checkov, hadolint, shellcheck, gosec, yara, grype, zap, nuclei) and write raw JSON per repo under `results/individual-repos/<repo>/`.
   2) report: normalize + dedupe into a CommonFinding shape and emit summaries (`findings.json`, `SUMMARY.md`, `dashboard.html`, optional SARIF) under `results/summaries/`.
 
 - Goals: unified outputs, stable fingerprints for dedupe, resilient to missing tools, and fast local iteration.
@@ -14,7 +14,7 @@ These guidelines help AI coding agents work effectively in this repository. Focu
 ## Key entry points
 
 - CLI: `scripts/cli/jmo.py`
-  - Subcommands: `scan`, `report`, `ci`. Common flags: `--results-dir`, `--config jmo.yml`, `--threads`, `--profile`, `--human-logs`.
+  - Subcommands: `scan`, `report`, `ci`. Common flags: `--results-dir`, `--config jmo.yml`, `--threads`, `--human-logs`; `report` and `ci` also take `--profile` (parse timings).
   - `scan` discovers repos from `--repo`, `--repos-dir`, or `--targets` and writes tool JSON to `results/individual-repos/<repo>/`.
   - `report` aggregates and writes to `<results_dir>/summaries` (JSON/MD/YAML/HTML/SARIF). Supports `--fail-on` severity threshold and profiling to `timings.json`.
   - `ci` = `scan` then `report` in one go; accepts same flags plus `--fail-on`.
@@ -28,11 +28,11 @@ These guidelines help AI coding agents work effectively in this repository. Focu
 
 - Results layout:
   - Base dir default: `results/`
-  - Raw per-repo: `results/individual-repos/<repo>/{semgrep,trivy,checkov,bandit,noseyparker,syft,trufflehog,hadolint,zap,falco,afl++}.json`
+  - Raw per-repo: `results/individual-repos/<repo>/<tool>.json`, one file per scanner that ran
   - Summaries: `results/summaries/`
 - Config: `jmo.yml`
-  - Keys: `tools`, `outputs`, `fail_on`, `threads`, `profiles`, `per_tool`, `retries`.
-  - Profiles can override tools/timeouts; `--profile-name` applies a profile in `scan`.
+  - Keys: `tools`, `outputs`, `fail_on`, `threads`, `timeout`, `retries`, `per_tool`, `policy`, all top-level. There are no scan profiles.
+  - `--tools` and `--skip-tools` narrow the scanner list for one run.
 - Missing tools: if `--allow-missing-tools` is set, `scan` writes empty stubs via `_write_stub()` instead of failing.
 - Severities: ordered `CRITICAL>HIGH>MEDIUM>LOW>INFO`; `--fail-on` triggers non-zero exit if any finding at or above threshold.
 - Logging: machine JSON by default, human-friendly with `--human-logs`. Effective log level comes from CLI or config.
@@ -47,8 +47,8 @@ These guidelines help AI coding agents work effectively in this repository. Focu
 - CI-like flow with threshold:
   - `python3 scripts/cli/jmo.py ci --repos-dir ~/repos --fail-on HIGH --profile`
 - Tool management:
-  - `jmo tools check --profile balanced` to see tool status
-  - `jmo tools install --profile balanced` to install missing tools
+  - `jmo tools check` to see tool status
+  - `jmo tools install` to install missing tools
 - Make targets:
   - `make dev-deps` (pytest, ruff, bandit, pyyaml, jsonschema)
   - `make fmt` / `make lint` / `make test`
@@ -62,9 +62,8 @@ These guidelines help AI coding agents work effectively in this repository. Focu
 
 ## External tools & integration
 
-- Tools invoked via subprocess without shell: semgrep, trivy, checkov, bandit, noseyparker (local or docker fallback), syft, trufflehog, hadolint, zap, falco, afl++.
-- Respect tool-specific return codes: semgrep (0/1/2), trivy (0/1), checkov (0/1), bandit (0/1). The CLI treats these as success when outputs are produced.
-- Nosey Parker: if local binary fails or missing, attempts docker via `scripts/core/run_noseyparker_docker.sh`.
+- Tools invoked via subprocess without shell: trufflehog, semgrep, syft, trivy, checkov, hadolint, shellcheck, gosec, yara, grype, zap, nuclei.
+- Respect tool-specific return codes: semgrep (0/1/2), trivy (0/1), checkov (0/1). The CLI treats these as success when outputs are produced.
 
 ## Safe change checklist for agents
 
@@ -88,35 +87,17 @@ These guidelines help AI coding agents work effectively in this repository. Focu
 
 ## Maintainers’ appendix
 
-### Profiles in `jmo.yml` (default_profile: balanced)
+### Tool selection in `jmo.yml`
 
-- fast
-  - tools: [trufflehog, semgrep, trivy]
-  - threads: 8
-  - timeout: 300
-  - per_tool:
-    - semgrep.flags: ["--exclude", "node_modules", "--exclude", ".git"]
-
-- balanced (default)
-  - tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, zap]
-  - threads: 4
-  - timeout: 600
-  - per_tool:
-    - semgrep.flags: ["--exclude", "node_modules", "--exclude", ".git"]
-    - trivy.flags: ["--no-progress"]
-
-- deep
-  - tools: [trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, falco, afl++]
-  - threads: 2
-  - timeout: 900
-  - retries: 1
-  - per_tool:
-    - semgrep.flags: ["--exclude", "node_modules", "--exclude", ".git"]
-    - trivy.flags: ["--no-progress"]
+- There are no scan profiles. The scanner list resolves `--tools`, then the top-level `tools:` list in `jmo.yml`, then `TOOL_MATRIX` in `scripts/core/tool_registry.py` (the 12 scanners). `--skip-tools` removes names from whichever list applies.
+- A listed tool is only eligible: the target's content decides whether it runs (hadolint needs Dockerfiles, shellcheck shell scripts, gosec Go sources; zap and nuclei run only on `--url` targets).
+- Tuning lives at the top level: `threads`, `timeout`, `retries`, and `per_tool`, e.g.
+  - semgrep.flags: ["--exclude", "node_modules", "--exclude", ".git"]
+  - trivy.flags: ["--no-progress"]
 
 Notes
 
-- You can override a profile at runtime via `--profile-name` (scan/ci) and still pass per-tool flags using `jmo.yml` `per_tool`.
+- OPA is the policy engine, not a scanner: it evaluates `policies/` in the report phase and is not in `TOOL_MATRIX`.
 - `allow-missing-tools` writes stub outputs instead of failing; useful for constrained CI environments.
 
 ### CommonFinding fields used by reporters

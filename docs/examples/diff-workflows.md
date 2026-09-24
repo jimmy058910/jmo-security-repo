@@ -47,8 +47,8 @@ graph LR
 ````markdown
 # 🔍 Security Diff Report
 
-**Baseline:** `main` (2025-11-05, balanced profile)
-**Current:** `feature/new-api` (2025-11-05, balanced profile)
+**Baseline:** `main` (2025-11-05)
+**Current:** `feature/new-api` (2025-11-05)
 
 ---
 
@@ -165,14 +165,14 @@ fi
 
 ```bash
 # Scan and save baseline
-jmo scan --repo . --profile balanced --results-dir sprint-start/
+jmo scan --repo . --results-dir sprint-start/
 ```
 
 **At Sprint End:**
 
 ```bash
 # Scan current state
-jmo scan --repo . --profile balanced --results-dir sprint-end/
+jmo scan --repo . --results-dir sprint-end/
 
 # Generate diff
 jmo diff sprint-start/ sprint-end/ \
@@ -219,11 +219,11 @@ echo "  - Trend: $TREND"
 ```bash
 # Scan previous release (from tag)
 git checkout v1.0.0
-jmo scan --repo . --profile deep --results-dir v1.0.0-results/
+jmo scan --repo . --results-dir v1.0.0-results/
 
 # Scan release candidate
 git checkout v1.1.0-rc1
-jmo scan --repo . --profile deep --results-dir v1.1.0-results/
+jmo scan --repo . --results-dir v1.1.0-results/
 
 # Generate diff
 jmo diff v1.0.0-results/ v1.1.0-results/ \
@@ -263,7 +263,7 @@ fi
 
 ```bash
 # Store scans in SQLite (automatic after every scan)
-jmo scan --repo . --profile balanced --results-dir results/
+jmo scan --repo . --results-dir results/
 # Scan auto-stored to ~/.jmo/scans.db
 
 # List historical scans
@@ -315,7 +315,7 @@ REPOS=("frontend" "backend" "mobile-app")
 for repo in "${REPOS[@]}"; do
   echo "📊 Scanning $repo..."
   cd "$repo"
-  jmo scan --repo . --profile fast --results-dir "../scans/$repo"
+  jmo scan --repo . --tools trufflehog semgrep trivy --results-dir "../scans/$repo"
   cd ..
 done
 
@@ -329,14 +329,14 @@ Validate security impact of dependency updates:
 
 ```bash
 # Before update
-jmo scan --repo . --profile balanced --results-dir pre-update/
+jmo scan --repo . --results-dir pre-update/
 
 # Update dependencies
 npm update
 # or: pip install --upgrade -r requirements.txt
 
 # After update
-jmo scan --repo . --profile balanced --results-dir post-update/
+jmo scan --repo . --results-dir post-update/
 
 # Check impact
 jmo diff pre-update/ post-update/ \
@@ -360,7 +360,7 @@ def security_baseline():
     subprocess.run([
         "jmo", "scan",
         "--repo", ".",
-        "--profile", "fast",
+        "--tools", "trufflehog", "semgrep", "trivy",
         "--results-dir", "test-baseline/"
     ], check=True)
 
@@ -370,7 +370,7 @@ def test_no_new_critical_findings(security_baseline):
     subprocess.run([
         "jmo", "scan",
         "--repo", ".",
-        "--profile", "fast",
+        "--tools", "trufflehog", "semgrep", "trivy",
         "--results-dir", "test-current/"
     ], check=True)
 
@@ -403,8 +403,8 @@ def test_no_new_critical_findings(security_baseline):
 
 ```bash
 # Ensure same tool versions
-jmo scan --repo . --profile fast --tools trivy,semgrep --results-dir baseline/
-jmo scan --repo . --profile fast --tools trivy,semgrep --results-dir current/
+jmo scan --repo . --tools trivy semgrep --results-dir baseline/
+jmo scan --repo . --tools trivy semgrep --results-dir current/
 
 # Verify fingerprint stability
 jq '.id' baseline/summaries/findings.json | head -5
@@ -484,7 +484,7 @@ jmo diff --scan abc123 --scan def456 --format json
 
 ## Best Practices
 
-1. **Use consistent profiles:** Always compare scans with the same profile (fast/balanced/deep)
+1. **Use a consistent tool set:** Always compare scans run with the same tools (same `--tools` or jmo.yml `tools:`)
 2. **Version control baselines:** Commit baseline results for reproducible comparisons
 3. **Automate everything:** Use CI/CD for consistent, automated diffing
 4. **Filter intelligently:** Use `--severity` and `--tool` filters to reduce noise

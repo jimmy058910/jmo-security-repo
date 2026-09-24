@@ -64,7 +64,7 @@ JMo Security's MCP server enables Claude Code to:
 
    ```bash
    # Run a scan to generate results
-   jmo scan --repo . --profile-name balanced
+   jmo scan --repo .
 
    # Verify findings.json exists
    ls -la results/summaries/findings.json
@@ -327,7 +327,7 @@ Same configuration as Method 1 (Local Python Installation).
 cd /path/to/your/project
 
 # Run JMo scan
-jmo scan --repo . --profile-name balanced
+jmo scan --repo .
 
 # Verify results
 cat results/summaries/findings.json
@@ -563,7 +563,7 @@ docker run --rm -i \
 3. **Re-run scan:**
 
    ```bash
-   jmo scan --repo . --profile-name balanced --human-logs
+   jmo scan --repo . --human-logs
    ```
 
 ### Windows-Specific Issues
@@ -694,25 +694,23 @@ Claude: [Connects to api-backend MCP server]
 }
 ```
 
-### Custom Scan Profiles
+### Custom Tool Selection
 
-**Run scan with custom profile before MCP analysis:**
+**Narrow the tool list before MCP analysis:**
 
 ```bash
-# Create custom profile in jmo.yml
+# Set the tool list and per-tool options at the top level of jmo.yml
 cat > jmo.yml <<EOF
-profiles:
-  ai-focused:
-    tools: [semgrep, bandit, trufflehog, trivy]
-    threads: 8
-    timeout: 300
-    per_tool:
-      semgrep:
-        flags: ["--config", "auto", "--exclude", "tests/"]
+tools: [semgrep, trufflehog, trivy]
+threads: 8
+timeout: 300
+per_tool:
+  semgrep:
+    flags: ["--config", "auto", "--exclude", "tests/"]
 EOF
 
-# Run scan with custom profile
-jmo scan --repo . --profile-name ai-focused
+# Run the scan (jmo.yml supplies the tool list)
+jmo scan --repo .
 
 # MCP server will use these results
 ```
@@ -726,7 +724,7 @@ jmo scan --repo . --profile-name ai-focused
 # scan-and-analyze.sh
 
 # 1. Run scan
-jmo scan --repo . --profile-name balanced
+jmo scan --repo .
 
 # 2. Start Claude Code with MCP server
 # (MCP server auto-starts via config)
@@ -754,7 +752,7 @@ jobs:
       - name: Run JMo Security Scan
         run: |
           pip install jmo-security[mcp]
-          jmo scan --repo . --profile-name balanced
+          jmo scan --repo .
 
       - name: Upload results
         uses: actions/upload-artifact@v4
@@ -776,7 +774,7 @@ jobs:
    - [Anthropic MCP SDK](https://github.com/anthropics/mcp-sdk-python)
 
 2. **Customize Your Workflow:**
-   - Create custom scan profiles
+   - Narrow the tool list in `jmo.yml`
    - Set up automated scans
    - Integrate with your CI/CD pipeline
 

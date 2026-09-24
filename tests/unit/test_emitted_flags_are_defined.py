@@ -13,6 +13,10 @@ single plausible future flag -- `--profile-config`, `--profile-timings`,
 `--profiles` -- breaks all of them at once, with `ambiguous option`, and does
 NOT break the tests of the change that introduced it.
 
+v2.0.0 removed scan profiles and `--profile-name` with them. The hazard was
+never that one flag: any emitted option that resolves only by abbreviation
+carries it, so the guard stands for every flag the emitters still produce.
+
 `tests/unit/test_schedule_target_coverage.py` covers the two schedule workflow
 generators and now requires exact names too. This file covers the emitters that
 guard could not reach: the cron installer and `scripts/cli/wizard_flows/`.
@@ -91,7 +95,6 @@ def _schedule() -> ScanSchedule:
         spec=ScheduleSpec(
             schedule="0 2 * * *",
             jobTemplate=JobTemplateSpec(
-                profile="deep",
                 targets={"repositories": {"repos_dir": "/srv/repos"}},
                 results={},
                 options={},
@@ -102,7 +105,6 @@ def _schedule() -> ScanSchedule:
 
 def _wizard_config(*, use_docker: bool) -> WizardConfig:
     config = WizardConfig()
-    config.profile = "balanced"
     config.results_dir = "results"
     config.use_docker = use_docker
     config.target.type = "repo"
@@ -139,35 +141,30 @@ def _cron_argv() -> list[str]:
 
 
 def _repo_flow_argv() -> list[str]:
-    return RepoFlow().build_command(
-        {"repos": [Path(".")], "images": []}, {"profile": "deep"}
-    )
+    return RepoFlow().build_command({"repos": [Path(".")], "images": []}, {})
 
 
 def _stack_flow_argv() -> list[str]:
     return EntireStackFlow().build_command(
-        {"repos": [Path(".")], "images": [], "iac": [], "web": []},
-        {"profile": "balanced"},
+        {"repos": [Path(".")], "images": [], "iac": [], "web": []}, {}
     )
 
 
 def _dependency_flow_argv() -> list[str]:
-    return DependencyFlow().build_command(
-        {"repos": [Path(".")], "images": []}, {"profile": "balanced"}
-    )
+    return DependencyFlow().build_command({"repos": [Path(".")], "images": []}, {})
 
 
 def _cicd_flow_argv() -> list[str]:
     return CICDFlow().build_command(
         {"repos": [Path(".")], "pipeline_images": []},
-        {"profile": "fast", "scan_files": True, "scan_images": False},
+        {"scan_files": True, "scan_images": False},
     )
 
 
 def _deployment_flow_argv() -> list[str]:
     return DeploymentFlow().build_command(
         {"repos": [Path(".")], "images": [], "iac": [], "web": []},
-        {"profile": "fast", "fail_on": "HIGH"},
+        {"fail_on": "HIGH"},
     )
 
 
@@ -241,6 +238,26 @@ def test_every_emitted_command_actually_parses(name: str) -> None:
         pytest.fail(f"{name} emits a command that exits {exc.code}: {' '.join(argv)}")
 
 
+# One flag each emitter must carry for the inputs above. `--profile-name` used
+# to be the one flag every emitter shared; v2.0.0 removed it, so each now names
+# the flag its own inputs guarantee. The two `jmo ci` emitters carry the CI
+# threshold (`jmo scan` has no `--fail-on`, which is why they emit `ci`).
+MUST_EMIT = {
+    "cron_installer": "--results-dir",
+    "wizard_flows/repo_flow": "--repo",
+    "wizard_flows/stack_flow": "--repos-dir",
+    "wizard_flows/dependency_flow": "--tools",
+    "wizard_flows/cicd_flow": "--fail-on",
+    "wizard_flows/deployment_flow": "--fail-on",
+    "wizard_flows/command_builder[native]": "--results-dir",
+    "wizard_flows/command_builder[docker]": "--results-dir",
+}
+
+
+def test_every_emitter_names_a_flag_it_must_carry() -> None:
+    assert set(MUST_EMIT) == set(EMITTERS)
+
+
 @pytest.mark.parametrize("name", sorted(EMITTERS))
 def test_each_emitter_produced_something_to_check(name: str) -> None:
     """Meta-guard.
@@ -253,7 +270,10 @@ def test_each_emitter_produced_something_to_check(name: str) -> None:
     assert len(argv) >= 4, f"{name} produced only {argv}"
     flags = {t for t in argv if t.startswith("--")}
     assert flags, f"{name} produced no flags at all: {argv}"
-    assert "--profile-name" in flags, (
-        f"{name} no longer emits --profile-name; either the profile stopped "
+    assert MUST_EMIT[name] in flags, (
+        f"{name} no longer emits {MUST_EMIT[name]}; either its input stopped "
         f"being passed or the spelling regressed. Emitted: {sorted(flags)}"
     )
+    # Said outright although the parse check above would also catch it: a
+    # removed flag that comes back is a v2.0.0 regression, not a typo.
+    assert "--profile-name" not in flags, f"{name} still emits --profile-name"

@@ -249,7 +249,7 @@ JMo CLI doesn't support top-level `--version` flag. Version is embedded in packa
     # Test 3: CI command syntax
     docker run --rm ghcr.io/${{ github.repository }}:${{ env.TEST_TAG }} ci --help
 
-    # Test 4: Tools are accessible (for full variant)
+    # Test 4: Tools are accessible in the image
     docker run --rm --entrypoint sh ghcr.io/${{ github.repository }}:${{ env.TEST_TAG }} \
       -c "trufflehog --version && semgrep --version && trivy --version"
 ```
@@ -259,7 +259,7 @@ JMo CLI doesn't support top-level `--version` flag. Version is embedded in packa
 - `--help` is universally supported
 - Tests CLI is functional without needing actual scan
 - Verifies entrypoint and command parsing
-- Tool checks validate image variant completeness
+- Tool checks validate that the image carries its scanners
 
 ### Alternative: Check Python Package Version
 
@@ -1784,7 +1784,7 @@ F401 [*] `scripts.core.config.load_config` imported but unused
   --> scripts/cli/wizard.py:28:33
 
 F541 [*] f-string without any placeholders
-   --> scripts/core/adapters/mobsf_adapter.py:211:39
+   --> scripts/core/adapters/<tool>_adapter.py:211:39
 
 Found 7 errors (7 fixable with --fix).
 ```

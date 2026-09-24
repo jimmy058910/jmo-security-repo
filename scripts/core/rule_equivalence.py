@@ -108,7 +108,6 @@ RULE_EQUIVALENCE: dict[str, list[tuple[str, str]]] = {
         ("trivy", "Public S3 bucket"),
         # cross: "S3 Bucket has an ACL defined which allows public READ access."
         ("checkov", "CKV_AWS_20"),
-        ("prowler", "s3_bucket_public_access"),
         # REMOVED (#846), measured against checkov's own `check_name`:
         #   CKV_AWS_21 "Ensure all data stored in the S3 bucket have versioning
         #              enabled" -- versioning, not public access
@@ -120,7 +119,6 @@ RULE_EQUIVALENCE: dict[str, list[tuple[str, str]]] = {
     "iac-unencrypted-storage": [
         ("trivy", "Unencrypted storage"),
         ("checkov", "CKV_AWS_3"),  # cross: EBS volume encryption
-        ("prowler", "ec2_ebs_volume_encryption"),
         # REMOVED (#846): CKV_AWS_17. Its inline comment here said "RDS
         # encryption"; checkov's own `check_name`, measured on a real scan, is
         # "Ensure all data stored in RDS is not publicly accessible". The
@@ -133,7 +131,6 @@ RULE_EQUIVALENCE: dict[str, list[tuple[str, str]]] = {
         # cross: both are "ingress from 0.0.0.0:0", to port 22 and 3389
         ("checkov", "CKV_AWS_24"),
         ("checkov", "CKV_AWS_25"),
-        ("prowler", "ec2_securitygroup_allow_ingress_from_internet"),
         # REMOVED (#846): CKV_AWS_23 "Ensure every security group and rule has
         # a description" -- a documentation control, not an ingress finding.
         # Measured from checkov's own `check_name`.
@@ -143,20 +140,17 @@ RULE_EQUIVALENCE: dict[str, list[tuple[str, str]]] = {
         ("trivy", "Privileged container"),
         ("trivy", "KSV001"),
         ("checkov", "CKV_K8S_1"),
-        ("kubescape", "C-0057"),
     ],
     "k8s-root-container": [
         ("trivy", "Container running as root"),
         ("trivy", "KSV012"),
         ("checkov", "CKV_K8S_6"),
         ("checkov", "CKV_K8S_20"),
-        ("kubescape", "C-0013"),
     ],
     "k8s-host-network": [
         ("trivy", "Host network enabled"),
         ("trivy", "KSV009"),
         ("checkov", "CKV_K8S_19"),
-        ("kubescape", "C-0041"),
     ],
     "k8s-no-resource-limits": [
         ("trivy", "No resource limits"),
@@ -164,52 +158,26 @@ RULE_EQUIVALENCE: dict[str, list[tuple[str, str]]] = {
         ("checkov", "CKV_K8S_11"),
         ("checkov", "CKV_K8S_12"),
         ("checkov", "CKV_K8S_13"),
-        ("kubescape", "C-0009"),
     ],
     # ===== Secret Detection =====
     "secret-aws-access-key": [
         ("trufflehog", "AWS"),
         ("trufflehog", "aws-access-token"),
         ("semgrep", "generic.secrets.security.detected-aws-account-id"),
-        ("noseyparker", "AWS Access Key ID"),
     ],
     "secret-github-token": [
         ("trufflehog", "Github"),
         ("trufflehog", "github-pat"),
         ("semgrep", "generic.secrets.security.detected-github-pat"),
-        ("noseyparker", "GitHub Personal Access Token"),
     ],
     "secret-private-key": [
         ("trufflehog", "PrivateKey"),
         ("semgrep", "generic.secrets.security.detected-private-key"),
-        ("noseyparker", "PEM-Encoded Private Key"),
     ],
     # ===== Code Security =====
-    "code-sql-injection": [
-        ("semgrep", "python.django.security.injection.sql.sql-injection"),
-        ("semgrep", "python.sqlalchemy.security.sqlalchemy-execute-raw-query"),
-        ("bandit", "B608"),
-    ],
-    "code-xss": [
-        ("semgrep", "python.django.security.injection.reflected-data-httpresponse"),
-        ("semgrep", "javascript.browser.security.dom-based-xss"),
-        ("bandit", "B320"),
-    ],
-    "code-command-injection": [
-        ("semgrep", "python.lang.security.audit.dangerous-subprocess-use"),
-        ("semgrep", "python.lang.security.audit.subprocess-shell-true"),
-        ("bandit", "B602"),
-        ("bandit", "B603"),
-    ],
-    "code-path-traversal": [
-        ("semgrep", "python.lang.security.audit.path-traversal"),
-        ("bandit", "B310"),
-    ],
     "code-hardcoded-password": [
         ("semgrep", "python.lang.security.audit.hardcoded-password"),
         ("semgrep", "generic.secrets.security.hardcoded-password"),
-        ("bandit", "B105"),
-        ("bandit", "B106"),
         ("trufflehog", "Password"),
     ],
 }

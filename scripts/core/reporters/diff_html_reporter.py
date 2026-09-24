@@ -22,7 +22,7 @@ Rendering Modes:
 v1.0.0 Metadata:
     Both modes include standardized diff metadata:
     - diff_version: "1.0.0"
-    - baseline/current source info (path, timestamp, profile, findings count)
+    - baseline/current source info (path, timestamp, findings count)
     - statistics (totals, net change, trend)
 
 Data Modes (Vanilla JS):
@@ -121,14 +121,12 @@ def _write_html_diff_vanilla(diff: DiffResult, out_path: Path) -> None:
                 "source_type": diff.baseline_source.source_type,
                 "path": diff.baseline_source.path,
                 "timestamp": diff.baseline_source.timestamp,
-                "profile": diff.baseline_source.profile,
                 "total_findings": diff.baseline_source.total_findings,
             },
             "current": {
                 "source_type": diff.current_source.source_type,
                 "path": diff.current_source.path,
                 "timestamp": diff.current_source.timestamp,
-                "profile": diff.current_source.profile,
                 "total_findings": diff.current_source.total_findings,
             },
         },
@@ -494,8 +492,8 @@ body.dark-mode .filters select {{
       const baseline = data.meta.baseline;
       const current = data.meta.current;
       document.getElementById('diff-meta').innerHTML = `
-        <strong>Baseline:</strong> ${{baseline.path}} (${{baseline.timestamp.split('T')[0]}}, ${{baseline.profile}} profile, ${{baseline.total_findings}} findings)<br>
-        <strong>Current:</strong> ${{current.path}} (${{current.timestamp.split('T')[0]}}, ${{current.profile}} profile, ${{current.total_findings}} findings)
+        <strong>Baseline:</strong> ${{baseline.path}} (${{baseline.timestamp.split('T')[0]}}, ${{baseline.total_findings}} findings)<br>
+        <strong>Current:</strong> ${{current.path}} (${{current.timestamp.split('T')[0]}}, ${{current.total_findings}} findings)
       `;
 
       // Render summary

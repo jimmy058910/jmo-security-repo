@@ -16,15 +16,15 @@ Tests focus on:
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
-from scripts.cli.wizard import PROFILES
 from scripts.cli.wizard_generators import (
     JMO_DOCKER_IMAGE_FULL,
     generate_github_actions,
     generate_makefile_target,
     generate_shell_script,
 )
+from scripts.core.tool_registry import TOOL_MATRIX
 
 
 def create_wizard_config(**kwargs: Any) -> MagicMock:
@@ -33,7 +33,6 @@ def create_wizard_config(**kwargs: Any) -> MagicMock:
 
     # Define all expected attributes with defaults
     default_attrs = {
-        "profile": "balanced",
         "use_docker": False,
         "threads": None,
         "timeout": None,
@@ -63,14 +62,13 @@ def create_wizard_config(**kwargs: Any) -> MagicMock:
 def test_github_actions_gitlab_docker():
     """Test GitHub Actions generation for GitLab target with Docker."""
     config = create_wizard_config(
-        profile="fast",
         use_docker=True,
         fail_on="HIGH",
     )
     config.target.type = "gitlab"
     config.target.gitlab_repo = "myorg/myproject"
 
-    result = generate_github_actions(config, PROFILES)
+    result = generate_github_actions(config)
 
     # Verify GitLab-specific setup steps
     assert "Configure GitLab Access" in result
@@ -80,12 +78,14 @@ def test_github_actions_gitlab_docker():
     # Verify Docker container usage
     assert "container:" in result
     assert JMO_DOCKER_IMAGE_FULL in result
+    # A threshold runs `jmo ci` (jmo scan defines no --fail-on)
+    assert "jmo ci" in result
+    assert "--fail-on HIGH" in result
 
 
 def test_github_actions_gitlab_native():
     """Test GitHub Actions generation for GitLab target with native mode."""
     config = create_wizard_config(
-        profile="balanced",
         use_docker=False,
         threads=4,
         timeout=600,
@@ -93,7 +93,7 @@ def test_github_actions_gitlab_native():
     config.target.type = "gitlab"
     config.target.gitlab_repo = "group/repo"
 
-    result = generate_github_actions(config, PROFILES)
+    result = generate_github_actions(config)
 
     # Verify GitLab repo flag
     assert "--gitlab-repo group/repo" in result
@@ -112,13 +112,12 @@ def test_github_actions_gitlab_native():
 def test_github_actions_k8s_docker():
     """Test GitHub Actions generation for K8s target with Docker."""
     config = create_wizard_config(
-        profile="balanced",
         use_docker=True,
     )
     config.target.type = "k8s"
     config.target.k8s_context = "prod-cluster"
 
-    result = generate_github_actions(config, PROFILES)
+    result = generate_github_actions(config)
 
     # Verify K8s-specific setup steps
     assert "Configure kubectl" in result
@@ -129,13 +128,12 @@ def test_github_actions_k8s_docker():
 def test_github_actions_k8s_native():
     """Test GitHub Actions generation for K8s target with native mode."""
     config = create_wizard_config(
-        profile="fast",
         use_docker=False,
     )
     config.target.type = "k8s"
     config.target.k8s_context = "staging"
 
-    result = generate_github_actions(config, PROFILES)
+    result = generate_github_actions(config)
 
     # Verify K8s context flag
     assert "--k8s-context staging" in result
@@ -150,33 +148,32 @@ def test_github_actions_k8s_native():
 def test_github_actions_image_docker():
     """Test GitHub Actions generation for container image with Docker."""
     config = create_wizard_config(
-        profile="balanced",
         use_docker=True,
         fail_on="MEDIUM",
     )
     config.target.type = "image"
     config.target.image_name = "nginx:latest"
 
-    result = generate_github_actions(config, PROFILES)
+    result = generate_github_actions(config)
 
     # Verify image flag
     assert "--image nginx:latest" in result
 
-    # Verify fail-on threshold
+    # Verify fail-on threshold, on the subcommand that defines it
+    assert "jmo ci" in result
     assert "--fail-on MEDIUM" in result
 
 
 def test_github_actions_image_native():
     """Test GitHub Actions generation for container image with native mode."""
     config = create_wizard_config(
-        profile="fast",
         use_docker=False,
         threads=8,
     )
     config.target.type = "image"
     config.target.image_name = "python:3.11"
 
-    result = generate_github_actions(config, PROFILES)
+    result = generate_github_actions(config)
 
     # Verify image flag
     assert "--image python:3.11" in result
@@ -188,18 +185,17 @@ def test_github_actions_image_native():
 def test_github_actions_image_native_no_name():
     """Test GitHub Actions generation for image without image_name (edge case)."""
     config = create_wizard_config(
-        profile="balanced",
         use_docker=False,
     )
     config.target.type = "image"
     config.target.image_name = None
 
-    result = generate_github_actions(config, PROFILES)
+    result = generate_github_actions(config)
 
     # Should generate valid workflow even without image name
     assert "security-scan:" in result
     assert "jmo scan" in result
-    assert "--profile-name balanced" in result
+    assert "--profile-name" not in result
 
 
 # ========== Test Category 4: URL Target Type ==========
@@ -208,13 +204,12 @@ def test_github_actions_image_native_no_name():
 def test_github_actions_url_docker():
     """Test GitHub Actions generation for URL target with Docker."""
     config = create_wizard_config(
-        profile="balanced",
         use_docker=True,
     )
     config.target.type = "url"
     config.target.url = "https://api.example.com"
 
-    result = generate_github_actions(config, PROFILES)
+    result = generate_github_actions(config)
 
     # Verify URL flag
     assert "--url https://api.example.com" in result
@@ -223,13 +218,12 @@ def test_github_actions_url_docker():
 def test_github_actions_url_native():
     """Test GitHub Actions generation for URL target with native mode."""
     config = create_wizard_config(
-        profile="fast",
         use_docker=False,
     )
     config.target.type = "url"
     config.target.url = "https://example.com"
 
-    result = generate_github_actions(config, PROFILES)
+    result = generate_github_actions(config)
 
     # Verify URL flag
     assert "--url https://example.com" in result
@@ -238,17 +232,16 @@ def test_github_actions_url_native():
 def test_github_actions_url_native_no_url():
     """Test GitHub Actions generation for URL without url value (edge case)."""
     config = create_wizard_config(
-        profile="balanced",
         use_docker=False,
     )
     config.target.type = "url"
     config.target.url = None
 
-    result = generate_github_actions(config, PROFILES)
+    result = generate_github_actions(config)
 
     # Should generate valid workflow even without URL
     assert "jmo scan" in result
-    assert "--profile-name balanced" in result
+    assert "--profile-name" not in result
 
 
 # ========== Test Category 5: IaC Target Type ==========
@@ -257,13 +250,12 @@ def test_github_actions_url_native_no_url():
 def test_github_actions_iac_terraform():
     """Test GitHub Actions generation for Terraform IaC."""
     config = create_wizard_config(
-        profile="balanced",
         use_docker=False,
     )
     config.target.type = "iac"
     config.target.iac_type = "terraform"
 
-    result = generate_github_actions(config, PROFILES)
+    result = generate_github_actions(config)
 
     # Verify Terraform flag
     assert "--terraform-state infrastructure" in result
@@ -272,13 +264,12 @@ def test_github_actions_iac_terraform():
 def test_github_actions_iac_cloudformation():
     """Test GitHub Actions generation for CloudFormation IaC."""
     config = create_wizard_config(
-        profile="balanced",
         use_docker=False,
     )
     config.target.type = "iac"
     config.target.iac_type = "cloudformation"
 
-    result = generate_github_actions(config, PROFILES)
+    result = generate_github_actions(config)
 
     # Verify CloudFormation flag
     assert "--cloudformation infrastructure" in result
@@ -287,13 +278,12 @@ def test_github_actions_iac_cloudformation():
 def test_github_actions_iac_k8s_manifest():
     """Test GitHub Actions generation for K8s manifest IaC."""
     config = create_wizard_config(
-        profile="balanced",
         use_docker=False,
     )
     config.target.type = "iac"
     config.target.iac_type = "k8s-manifest"
 
-    result = generate_github_actions(config, PROFILES)
+    result = generate_github_actions(config)
 
     # Verify K8s manifest flag
     assert "--k8s-manifest infrastructure" in result
@@ -305,13 +295,12 @@ def test_github_actions_iac_k8s_manifest():
 def test_github_actions_repos_dir_mode():
     """Test GitHub Actions generation with repos-dir mode."""
     config = create_wizard_config(
-        profile="fast",
         use_docker=False,
     )
     config.target.type = "repo"
     config.target.repo_mode = "repos-dir"
 
-    result = generate_github_actions(config, PROFILES)
+    result = generate_github_actions(config)
 
     # Verify repos-dir flag
     assert "--repos-dir ." in result
@@ -320,13 +309,12 @@ def test_github_actions_repos_dir_mode():
 def test_github_actions_repo_mode():
     """Test GitHub Actions generation with single repo mode."""
     config = create_wizard_config(
-        profile="balanced",
         use_docker=False,
     )
     config.target.type = "repo"
     config.target.repo_mode = "repo"
 
-    result = generate_github_actions(config, PROFILES)
+    result = generate_github_actions(config)
 
     # Verify repo flag
     assert "--repo ." in result
@@ -338,7 +326,6 @@ def test_github_actions_repo_mode():
 def test_github_actions_thread_override():
     """Test GitHub Actions with explicit thread override."""
     config = create_wizard_config(
-        profile="balanced",
         use_docker=False,
         threads=16,
         timeout=1200,
@@ -346,17 +333,20 @@ def test_github_actions_thread_override():
     config.target.type = "repo"
     config.target.repo_mode = "repo"
 
-    result = generate_github_actions(config, PROFILES)
+    result = generate_github_actions(config)
 
-    # Verify thread override (not profile default of 4)
+    # Verify the config's values win over the scan defaults (4 / 600)
     assert "--threads 16" in result
     assert "--timeout 1200" in result
 
 
-def test_github_actions_use_profile_defaults():
-    """Test GitHub Actions uses profile defaults when overrides not specified."""
+def test_github_actions_uses_scan_defaults():
+    """Unset threads/timeout come from scan_defaults(), not a profile.
+
+    A distinctive stub value proves the generator reads it rather than a
+    hardcoded pair that happens to match.
+    """
     config = create_wizard_config(
-        profile="fast",
         use_docker=False,
         threads=None,
         timeout=None,
@@ -364,11 +354,49 @@ def test_github_actions_use_profile_defaults():
     config.target.type = "repo"
     config.target.repo_mode = "repo"
 
-    result = generate_github_actions(config, PROFILES)
+    with patch(
+        "scripts.cli.wizard_flows.config_models.scan_defaults",
+        return_value=(5, 450),
+    ):
+        result = generate_github_actions(config)
 
-    # Should use fast profile defaults: threads=8, timeout=300
-    assert "--threads 8" in result
-    assert "--timeout 300" in result
+    assert "--threads 5" in result
+    assert "--timeout 450" in result
+
+
+def test_github_actions_defaults_without_jmo_yml(tmp_path, monkeypatch):
+    """With no jmo.yml in the working directory the built-in 4 / 600 apply."""
+    monkeypatch.chdir(tmp_path)
+    config = create_wizard_config(
+        use_docker=False,
+        threads=None,
+        timeout=None,
+    )
+    config.target.type = "repo"
+    config.target.repo_mode = "repo"
+
+    result = generate_github_actions(config)
+
+    assert "--threads 4" in result
+    assert "--timeout 600" in result
+
+
+def test_github_actions_defaults_read_the_top_level_of_jmo_yml(tmp_path, monkeypatch):
+    """jmo.yml's top-level threads/timeout are what an unset wizard value means."""
+    (tmp_path / "jmo.yml").write_bytes(b"threads: 6\ntimeout: 900\n")
+    monkeypatch.chdir(tmp_path)
+    config = create_wizard_config(
+        use_docker=False,
+        threads=None,
+        timeout=None,
+    )
+    config.target.type = "repo"
+    config.target.repo_mode = "repo"
+
+    result = generate_github_actions(config)
+
+    assert "--threads 6" in result
+    assert "--timeout 900" in result
 
 
 # ========== Test Category 8: Fail-On Threshold Variations ==========
@@ -377,67 +405,49 @@ def test_github_actions_use_profile_defaults():
 def test_github_actions_fail_on_critical():
     """Test GitHub Actions with CRITICAL fail-on threshold."""
     config = create_wizard_config(
-        profile="balanced",
         use_docker=True,
         fail_on="CRITICAL",
     )
     config.target.type = "repo"
 
-    result = generate_github_actions(config, PROFILES)
+    result = generate_github_actions(config)
 
+    assert "jmo ci" in result
+    assert "jmo scan" not in result
     assert "--fail-on CRITICAL" in result
 
 
 def test_github_actions_fail_on_low():
     """Test GitHub Actions with LOW fail-on threshold."""
     config = create_wizard_config(
-        profile="balanced",
         use_docker=False,
         fail_on="LOW",
     )
     config.target.type = "repo"
     config.target.repo_mode = "repo"
 
-    result = generate_github_actions(config, PROFILES)
+    result = generate_github_actions(config)
 
+    assert "jmo ci" in result
+    assert "jmo scan" not in result
     assert "--fail-on LOW" in result
 
 
 def test_github_actions_no_fail_on():
     """Test GitHub Actions without fail-on threshold."""
     config = create_wizard_config(
-        profile="balanced",
         use_docker=False,
         fail_on="",
     )
     config.target.type = "repo"
     config.target.repo_mode = "repo"
 
-    result = generate_github_actions(config, PROFILES)
+    result = generate_github_actions(config)
 
-    # Should not include --fail-on when empty
+    # Should not include --fail-on when empty, and stays a plain scan
     assert "--fail-on" not in result
-
-
-# ========== Test Category 9: Profile Coverage ==========
-
-
-def test_github_actions_deep_profile():
-    """Test GitHub Actions generation with deep profile."""
-    config = create_wizard_config(
-        profile="deep",
-        use_docker=False,
-    )
-    config.target.type = "repo"
-    config.target.repo_mode = "repo"
-
-    result = generate_github_actions(config, PROFILES)
-
-    # Verify deep profile defaults: threads=2, timeout=900
-    assert "--threads 2" in result
-    assert "--timeout 900" in result
     assert "jmo scan" in result
-    assert "--profile-name deep" in result
+    assert "jmo ci" not in result
 
 
 # ========== Test Category 10: Environment Variables ==========
@@ -446,12 +456,11 @@ def test_github_actions_deep_profile():
 def test_github_actions_gitlab_env_vars():
     """Test that GitLab target includes environment variables in scan step."""
     config = create_wizard_config(
-        profile="balanced",
         use_docker=True,
     )
     config.target.type = "gitlab"
 
-    result = generate_github_actions(config, PROFILES)
+    result = generate_github_actions(config)
 
     # Verify env section exists in scan step
     assert "Run Security Scan" in result
@@ -463,12 +472,11 @@ def test_github_actions_gitlab_env_vars():
 def test_github_actions_no_env_vars_for_repo():
     """Test that repo target doesn't include env section."""
     config = create_wizard_config(
-        profile="balanced",
         use_docker=True,
     )
     config.target.type = "repo"
 
-    result = generate_github_actions(config, PROFILES)
+    result = generate_github_actions(config)
 
     # Verify no env section in scan step (only in setup if needed)
     lines = result.split("\n")
@@ -492,8 +500,8 @@ def test_github_actions_no_env_vars_for_repo():
 
 def test_makefile_generation_with_config():
     """Test Makefile target generation with config object."""
-    config = create_wizard_config(profile="balanced")
-    command = "jmotools balanced --repo . --results-dir results"
+    config = create_wizard_config()
+    command = "jmo scan --repo . --results-dir results"
 
     result = generate_makefile_target(config, command)
 
@@ -505,8 +513,8 @@ def test_makefile_generation_with_config():
 
 def test_shell_script_generation_with_config():
     """Test shell script generation with config object."""
-    config = create_wizard_config(profile="fast")
-    command = "jmotools fast --repos-dir . --results-dir results"
+    config = create_wizard_config()
+    command = "jmo scan --repos-dir . --results-dir results"
 
     result = generate_shell_script(config, command)
 
@@ -518,8 +526,8 @@ def test_shell_script_generation_with_config():
 
 def test_shell_script_multiline_command():
     """Test shell script generation with multiline command."""
-    config = create_wizard_config(profile="balanced")
-    command = """jmotools balanced \\
+    config = create_wizard_config()
+    command = """jmo scan \\
   --repo . \\
   --threads 4 \\
   --timeout 600 \\
@@ -539,49 +547,46 @@ def test_shell_script_multiline_command():
 def test_github_actions_unknown_target_type():
     """Test GitHub Actions generation gracefully handles unknown target type."""
     config = create_wizard_config(
-        profile="balanced",
         use_docker=False,
     )
     config.target.type = "unknown_type"
 
     # Should not crash, should generate valid workflow
-    result = generate_github_actions(config, PROFILES)
+    result = generate_github_actions(config)
 
     assert "security-scan:" in result
     assert "jmo scan" in result
-    assert "--profile-name balanced" in result
+    assert "--profile-name" not in result
 
 
 def test_github_actions_gitlab_without_repo():
     """Test GitLab target without gitlab_repo attribute."""
     config = create_wizard_config(
-        profile="balanced",
         use_docker=False,
     )
     config.target.type = "gitlab"
     config.target.gitlab_repo = None
 
-    result = generate_github_actions(config, PROFILES)
+    result = generate_github_actions(config)
 
     # Should generate valid workflow even without gitlab_repo
     assert "jmo scan" in result
-    assert "--profile-name balanced" in result
+    assert "--profile-name" not in result
 
 
 def test_github_actions_k8s_without_context():
     """Test K8s target without k8s_context attribute."""
     config = create_wizard_config(
-        profile="balanced",
         use_docker=False,
     )
     config.target.type = "k8s"
     config.target.k8s_context = None
 
-    result = generate_github_actions(config, PROFILES)
+    result = generate_github_actions(config)
 
     # Should generate valid workflow even without k8s_context
     assert "jmo scan" in result
-    assert "--profile-name balanced" in result
+    assert "--profile-name" not in result
 
 
 # ========== Test Category 13: YAML Structure Verification ==========
@@ -590,12 +595,11 @@ def test_github_actions_k8s_without_context():
 def test_github_actions_valid_yaml_structure_docker():
     """Test that generated Docker workflow has valid YAML structure."""
     config = create_wizard_config(
-        profile="balanced",
         use_docker=True,
     )
     config.target.type = "repo"
 
-    result = generate_github_actions(config, PROFILES)
+    result = generate_github_actions(config)
 
     # Verify key YAML sections
     assert "name: Security Scan" in result
@@ -614,13 +618,12 @@ def test_github_actions_valid_yaml_structure_docker():
 def test_github_actions_valid_yaml_structure_native():
     """Test that generated native workflow has valid YAML structure."""
     config = create_wizard_config(
-        profile="fast",
         use_docker=False,
     )
     config.target.type = "repo"
     config.target.repo_mode = "repo"
 
-    result = generate_github_actions(config, PROFILES)
+    result = generate_github_actions(config)
 
     # Verify key YAML sections
     assert "name: Security Scan" in result
@@ -641,16 +644,18 @@ def test_github_actions_valid_yaml_structure_native():
 def test_github_actions_includes_tool_comments():
     """Test that native workflow includes tool installation comments."""
     config = create_wizard_config(
-        profile="balanced",
         use_docker=False,
     )
     config.target.type = "repo"
     config.target.repo_mode = "repo"
 
-    result = generate_github_actions(config, PROFILES)
+    result = generate_github_actions(config)
 
-    # Verify tool comments
-    assert "# Install based on profile: balanced" in result
-    # Should list balanced profile tools
-    assert "trufflehog" in result
-    assert "semgrep" in result
+    # Verify tool comments: the install step names the whole matrix
+    assert "# Install the tool matrix: jmo tools install" in result
+    assert "profile" not in result.lower()
+    tools_line = next(
+        line for line in result.splitlines() if line.strip().startswith("# Tools:")
+    )
+    for tool in TOOL_MATRIX:
+        assert tool in tools_line, f"{tool} missing from {tools_line!r}"

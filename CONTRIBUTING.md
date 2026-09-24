@@ -21,23 +21,12 @@ Be respectful and constructive. We expect contributors to follow a standard code
 ```bash
 uv sync --group dev                    # Install dev deps + project (editable) from uv.lock
 make pre-commit-install                # Setup pre-commit hooks
-jmo tools install --profile balanced   # Install security tools (17 tools)
+jmo tools install                      # Install the security tools
 make test                              # Run unit tests and coverage
 make fmt && make lint
 ```
 
-### Unified Scan Profiles (v1.0.0)
-
-CLI profiles and Docker variants are unified - same 4 profiles, same tools:
-
-| Profile | Tools | Time | Use Case | Docker Tag |
-|---------|-------|------|----------|------------|
-| `fast` | 9 | 5-10 min | Pre-commit, PR validation | `jmo-security:fast` |
-| `slim` | 13 | 12-18 min | Cloud/IaC (AWS/Azure/GCP/K8s) | `jmo-security:slim` |
-| `balanced` | 17 | 18-25 min | Production scans, CI/CD | `jmo-security:balanced` |
-| `deep` | 29 | 40-70 min | Compliance audits, pentests | `jmo-security:deep` |
-
-**Canonical tool reference:** [docs/PROFILES_AND_TOOLS.md](docs/PROFILES_AND_TOOLS.md)
+**Canonical tool reference:** [docs/TOOLS.md](docs/TOOLS.md)
 
 ## Dependency management
 
@@ -91,11 +80,11 @@ Full detail in [docs/internal/DEPENDENCY_MANAGEMENT.md](docs/internal/DEPENDENCY
 Use the built-in tool manager to install security tools (cross-platform):
 
 ```bash
-# Check which tools are installed for your profile
-jmo tools check --profile balanced
+# Check which tools are installed
+jmo tools check
 
 # Install missing tools (auto-detects platform)
-jmo tools install --profile balanced
+jmo tools install
 
 # Update outdated tools
 jmo tools update
@@ -115,7 +104,7 @@ jmo tools uninstall --all
 
 ### Version Management (v1.0.0 - CRITICAL)
 
-Tool versions are centrally managed via `versions.yaml`. **NEVER manually edit tool versions in Dockerfiles!**
+Tool versions are centrally managed via `versions.yaml`. **NEVER manually edit tool versions in the Dockerfile!**
 
 ```bash
 # Check for available updates
@@ -124,14 +113,14 @@ python3 scripts/dev/update_versions.py --check-latest
 # Update specific tool in versions.yaml
 python3 scripts/dev/update_versions.py --tool trivy --version 0.68.0
 
-# Sync Dockerfiles with versions.yaml
+# Sync the Dockerfile with versions.yaml
 python3 scripts/dev/update_versions.py --sync
 
 # View current version report
 python3 scripts/dev/update_versions.py --report
 ```
 
-**Critical tools** (must be updated within 7 days of new release): trivy, trufflehog, semgrep, checkov, zap, syft, prowler, kubescape
+**Critical tools** (must be updated within 7 days of new release): trivy, trufflehog, semgrep, checkov, zap, syft
 
 **Complete guide:** [docs/VERSION_MANAGEMENT.md](docs/VERSION_MANAGEMENT.md)
 
@@ -241,17 +230,17 @@ These checks run automatically on commit and are also enforced in CI (note: the 
 ### Basic workflow (v1.0.0)
 
 ```bash
-# Quick scan with fast profile (9 tools, 5-10 min)
-jmo scan --repo . --profile fast --human-logs
+# Scan with the full tool matrix (content decides which tools run)
+jmo scan --repo . --human-logs
 
-# Production scan with balanced profile (17 tools, 18-25 min)
-jmo scan --repo . --profile balanced --human-logs
+# Quick scan with a narrowed tool list
+jmo scan --repo . --tools trivy semgrep --human-logs
 
-# Generate reports from existing scan
+# Generate reports from existing scan (--profile writes parse timings)
 jmo report ./results --profile --human-logs
 
 # CI mode with severity threshold
-jmo ci --fail-on HIGH --profile-name balanced
+jmo ci --repo . --fail-on HIGH
 
 # Compare scans (diff feature)
 jmo diff results-baseline/ results-current/ --format md
@@ -319,7 +308,6 @@ All outputs use the standardized metadata wrapper:
     "schema_version": "1.2.0",
     "timestamp": "2025-12-22T10:30:00Z",
     "scan_id": "abc123",
-    "profile": "balanced",
     "tools": ["trivy", "semgrep", "checkov", "..."],
     "finding_count": 68
   },
@@ -337,7 +325,7 @@ make regenerate-samples
 
 # Individual steps (if needed)
 make samples-clean     # Remove old outputs
-make samples-scan      # Run balanced profile scan (5-15 min)
+make samples-scan      # Scan the fixture (5-15 min)
 make samples-report    # Generate all report formats
 make samples-verify    # Verify v1.0.0 format compliance
 ```
@@ -392,46 +380,30 @@ make samples-verify
 
 Before publishing Docker images to GHCR, test them locally to validate changes.
 
-### Docker Variants (v1.0.0)
-
-Docker tags now match CLI profiles:
-
-| Tag | Profile | Tools | Dockerfile |
-|-----|---------|-------|------------|
-| `fast` | fast | 9 | `Dockerfile.fast` |
-| `slim` | slim | 13 | `Dockerfile.slim` |
-| `balanced` | balanced | 17 | `Dockerfile.balanced` |
-| `deep` / `latest` | deep | 29* | `Dockerfile` |
-
-*4 deep profile tools require manual installation (AFL++, Akto, Falco, MobSF)
+There is one image, built from the repository's single `Dockerfile`. It carries the 12 scanners plus OPA, the policy engine.
 
 ### Build local images
 
 ```bash
-# Build all variants (fast/slim/balanced/deep)
-make docker-build-local
-
-# Or build specific variant
-docker build -t jmo-security:local-balanced -f Dockerfile.balanced .
-docker build -t jmo-security:local-fast -f Dockerfile.fast .
+# Build the image from ./Dockerfile
+docker build -t jmo-security:local .
 ```
 
 ### Test local images
 
 ```bash
 # Test CLI works
-docker run --rm jmo-security:local-balanced --help
-docker run --rm jmo-security:local-balanced ci --help
+docker run --rm jmo-security:local --help
+docker run --rm jmo-security:local ci --help
 
 # Test scan with volume mount (CRITICAL: mount .jmo for history persistence)
 docker run --rm \
   -v $(pwd):/scan \
   -v $(pwd)/.jmo:/scan/.jmo \
   -v $(pwd)/results:/results \
-  jmo-security:local-balanced ci \
+  jmo-security:local ci \
   --repo /scan \
   --results-dir /results \
-  --profile balanced \
   --allow-missing-tools
 ```
 
@@ -442,7 +414,7 @@ docker run --rm \
 ```bash
 # Set environment variables to use local images
 export DOCKER_IMAGE_BASE="jmo-security"
-export DOCKER_TAG="local-balanced"
+export DOCKER_TAG="local"
 
 # Run specific Docker tests
 pytest tests/e2e/test_docker_workflows.py -k "U9 or U10 or U11" -v
@@ -455,13 +427,13 @@ make test-e2e
 
 Before pushing Docker images:
 
-- [ ] Build all four variants locally (fast/slim/balanced/deep)
+- [ ] Build the image locally
 - [ ] Test CLI works (`--help`, `scan --help`, `ci --help`)
-- [ ] Test single repo scan with each profile
+- [ ] Test single repo scan
 - [ ] Test multi-target scan (repo + image + IaC)
 - [ ] Verify `.jmo/history.db` persistence with volume mount
 - [ ] Run E2E tests U9, U10, U11 with local images
-- [ ] Verify image sizes are reasonable
+- [ ] Verify the image size is reasonable
 
 ## Package Manager Testing
 
@@ -1059,7 +1031,7 @@ gh pr create --title "Hotfix: bypass CI" --label "hotfix"
 
 ## Adding Tool Adapters (Plugin System)
 
-JMo Security uses a plugin-based architecture for all 30 adapters. This enables hot-reload during development, independent updates, and community-contributed integrations.
+JMo Security uses a plugin-based architecture for all 15 adapters. This enables hot-reload during development, independent updates, and community-contributed integrations.
 
 ### Plugin Architecture Overview
 
@@ -1069,7 +1041,7 @@ JMo Security uses a plugin-based architecture for all 30 adapters. This enables 
 - **Fast Development** - 4 hours → 1 hour per adapter (75% reduction)
 - **Independent Updates** - Ship adapter improvements without core releases
 - **Low-Risk Testing** - Test new tools in `~/.jmo/adapters/` without modifying core
-- **Performance** - <100ms plugin loading overhead for all 30 adapters
+- **Performance** - <100ms plugin loading overhead for all 15 adapters
 
 **Core Components:**
 
@@ -1090,7 +1062,7 @@ JMo Security uses a plugin-based architecture for all 30 adapters. This enables 
 
 > **Important:** Use the utilities in `scripts/core/adapters/common.py` for consistent JSON loading and error handling. This ensures proper UTF-8 handling, empty file detection, and standardized logging.
 >
-> **Severity Mapping:** Use `map_tool_severity()` from `scripts/core/common_finding.py` for tool-specific severity normalization. This centralized function handles mappings for ZAP, Semgrep, Nuclei, Falco, and falls back to generic normalization for other tools. See [Severity Mapping](#severity-mapping) for details.
+> **Severity Mapping:** Use `map_tool_severity()` from `scripts/core/common_finding.py` for tool-specific severity normalization. This centralized function handles mappings for ZAP, Semgrep, Nuclei, and falls back to generic normalization for other tools. See [Severity Mapping](#severity-mapping) for details.
 >
 > **Compliance Enrichment:** Adapters should NOT handle compliance enrichment. Return raw findings and let the report phase handle enrichment. All findings are enriched centrally in `normalize_and_report.py` via `enrich_findings_with_compliance()` after collection and deduplication. This single-pass batch operation is more efficient than per-adapter enrichment.
 
@@ -1107,7 +1079,7 @@ from scripts.core.common_finding import map_tool_severity  # For tool-specific s
     version="1.0.0",
     author="Your Name",
     description="Adapter for Snyk SCA scanner",
-    tool_name="snyk",  # The actual binary/command name (can use hyphens like "dependency-check")
+    tool_name="snyk",  # The actual binary/command name (can use hyphens like "osv-scanner")
     schema_version="1.2.0",
     output_format="json",
     exit_codes={0: "clean", 1: "findings", 2: "error"}
@@ -1352,7 +1324,6 @@ JMo Security provides centralized severity mapping via `map_tool_severity()` in 
 | ZAP | informational, low, medium, high, critical | INFO, LOW, MEDIUM, HIGH, CRITICAL |
 | Semgrep | error, warning, info | HIGH, MEDIUM, LOW |
 | Nuclei | info, low, medium, high, critical, unknown | INFO, LOW, MEDIUM, HIGH, CRITICAL, INFO |
-| Falco | emergency, alert, critical, error, warning, notice, informational, debug | CRITICAL, CRITICAL, CRITICAL, HIGH, MEDIUM, LOW, INFO, INFO |
 
 **Usage in Adapters:**
 
@@ -1363,7 +1334,6 @@ from scripts.core.common_finding import map_tool_severity
 severity = map_tool_severity("zap", "informational")  # Returns "INFO"
 severity = map_tool_severity("semgrep", "ERROR")      # Returns "HIGH"
 severity = map_tool_severity("nuclei", "critical")    # Returns "CRITICAL"
-severity = map_tool_severity("falco", "warning")      # Returns "MEDIUM"
 
 # Unknown tools fall back to generic normalize_severity()
 severity = map_tool_severity("unknown_tool", "HIGH")  # Returns "HIGH"
@@ -1417,7 +1387,7 @@ for name in registry.list_plugins():
 - [ ] Uses `@adapter_plugin` decorator with complete `PluginMetadata`
 - [ ] Implements `parse()` method returning `List[Finding]`
 - [ ] Uses `map_tool_severity()` for severity normalization (add to `TOOL_SEVERITY_MAPPINGS` if needed)
-- [ ] `metadata.name` uses underscores, matching adapter filename (e.g., `dependency_check_adapter.py` → `"dependency_check"`)
+- [ ] `metadata.name` uses underscores, matching adapter filename (e.g., `osv_scanner_adapter.py` → `"osv_scanner"`)
 - [ ] Tests added in `tests/adapters/test_<tool>_adapter.py`
 - [ ] Validation passes: `jmo adapters validate`
 - [ ] Integration test with real tool output
@@ -1511,11 +1481,10 @@ This project was built by **James (Jimmy) Moceri** as a capstone for the **Insti
 
 **v1.0.0 Highlights:**
 
-- 29 security scanners with plugin adapter architecture
+- Security scanners orchestrated through a plugin adapter architecture
 - SQLite historical storage for trend analysis
 - Machine-readable diffs for CI/CD integration
 - Cross-tool deduplication via similarity clustering
-- 4 unified scan profiles (fast/slim/balanced/deep)
 
 **Professional Background:**
 

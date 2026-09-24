@@ -1,50 +1,17 @@
 """
 Repository Scanner
 
-Scans local Git repositories using multiple security tools.
+Scans a local repository with every matrix tool that applies to one:
+trufflehog (verified secrets), semgrep (SAST), syft (SBOM), trivy
+(vulnerabilities, secrets, misconfiguration), checkov (IaC and CI/CD
+policy), hadolint (Dockerfiles), shellcheck (shell scripts), gosec (Go),
+yara (malware rules) and grype (vulnerabilities).
 
-Fully Implemented Tools (26 total):
-
-Core Tools (11):
-1. TruffleHog: Verified secrets scanning
-2. Nosey Parker: Deep secrets detection (multi-phase: init/scan/report, Docker fallback)
-3. Semgrep: Static analysis (SAST)
-4. Bandit: Python security analysis
-5. Syft: SBOM generation
-6. Trivy: Vulnerability and secrets scanning
-7. Checkov: IaC policy checks
-8. Hadolint: Dockerfile linting
-9. ZAP: Web vulnerability scanning (limited to repos with HTML/JS/PHP files)
-10. Falco: Runtime security monitoring (validates Falco rule files)
-11. AFL++: Coverage-guided fuzzing (analyzes compiled binaries)
-
-v1.0.0 New Tools (15):
-12. Checkov CI/CD: GitHub Actions workflow security
-13. Gosec: Go security analyzer
-14. cdxgen: SBOM and dependency analysis
-15. ScanCode: License and copyright scanner
-16. Kubescape: Kubernetes security scanner
-17. Prowler: Multi-cloud CSPM (AWS/Azure/GCP/K8s)
-18. YARA: Malware detection
-19. Grype: Vulnerability scanner for containers/filesystems
-20. MobSF: Mobile Security Framework (Android/iOS)
-21. Lynis: System hardening and security auditing
-22. Trivy RBAC: Kubernetes RBAC security assessment
-23. Semgrep Secrets: Hardcoded credentials detection
-24. Horusec: Multi-language SAST (18+ languages)
-25. Dependency-Check: OWASP SCA for known vulnerabilities
-26. Akto: API Security testing (URL scanner only)
-
-Special Tool Behaviors:
-- Nosey Parker: Multi-phase execution (init → scan → report) with automatic Docker fallback
-- ZAP: Scans static web files when present; writes stub if no web files found
-- Falco: Validates Falco rule files when present; writes stub if no rules found
-- AFL++: Fuzzes binaries when found; writes stub if no fuzzable binaries found
-- Prowler: Only runs if cloud config files (*.tf, *.tfvars, cloudformation.yaml) detected
-- MobSF: Only runs if mobile app files (*.apk, *.ipa) detected
-- Lynis: System-level scanner - writes stub for repository scans
-- Trivy RBAC: Only runs if Kubernetes manifests detected
-- Akto: Only available in URL scanner (requires live API endpoints)
+Content decides what runs. hadolint and shellcheck collect their files first
+and produce no invocation without them; gosec runs only on a tree with Go
+sources or a go.mod. zap is a DAST tool: handed a directory, it records
+'nothing for it to scan' rather than running. nuclei is URL-only and never
+reaches this module (tool_registry.TOOL_SCAN_TYPES).
 
 Integrates with ToolRunner for parallel execution and resilient error handling.
 """
@@ -65,7 +32,6 @@ from ..path_sanitizers import _sanitize_path_component, _validate_output_path
 from ..scan_utils import (
     NOT_ATTEMPTED_MISSING,
     NOT_ATTEMPTED_NOTHING_APPLICABLE,
-    SCAN_EXCLUDED_DIRS,
     TOOL_TIMEOUT_DEFAULTS,
     VENDORED_DIRS,
     find_tool,
@@ -98,10 +64,10 @@ __all__ = ["TOOL_TIMEOUT_DEFAULTS", "scan_repository"]
 # does not announce itself reads as "everything was scanned" when it was not.
 MAX_FILE_ARGS = 300
 
-# Every directory name this module's own file enumeration skips. JMo's in-tree
-# scratch plus the vendored dependency trees - the same two lists the per-tool
-# `--exclude` flags are built from, so the walk and the flags cannot drift.
-_SKIPPED_DIR_NAMES: frozenset[str] = frozenset((*SCAN_EXCLUDED_DIRS, *VENDORED_DIRS))
+# Every directory name this module's own file enumeration skips: the vendored
+# dependency trees - the same list the per-tool `--exclude` flags are built
+# from, so the walk and the flags cannot drift.
+_SKIPPED_DIR_NAMES: frozenset[str] = frozenset(VENDORED_DIRS)
 
 
 def _same_tree(candidate: Path, target: Path) -> bool:
@@ -141,13 +107,6 @@ def _collect_files(
         for path in repo.glob(pattern):
             # Repositories vendor dependencies; scanning node_modules or a
             # bundled venv buries the repo's own findings in third-party noise.
-            # SCAN_EXCLUDED_DIRS joins them because JMo's own enumeration is a
-            # walk like any other: horusec's `.horusec/<uuid>` is a copy of the
-            # whole repository, so without it every Dockerfile and shell script
-            # is collected twice - once at its real path and once at a staged
-            # one that may be deleted before the tool opens it - and the
-            # duplicates count against MAX_FILE_ARGS, evicting real files
-            # (#1132).
             #
             # The names come from scan_utils rather than a literal here: this
             # walk and the per-tool `--exclude` flags are two answers to the
@@ -197,8 +156,7 @@ def _iter_repo_files(repo: Path, skip_tree: Path | None = None) -> Iterator[Path
     for the tool and get no value from the walk.
 
     A generator, so a caller that only needs "is there one?" stops at the first
-    match instead of materialising a list the way the older content checks in
-    this module (``zap``, ``mobsf``, ``trivy-rbac``) do.
+    match instead of materialising a list.
     """
     for dirpath, dirnames, filenames in os.walk(repo):
         base = Path(dirpath)
@@ -230,59 +188,6 @@ def _repo_has_go_sources(repo: Path, skip_tree: Path | None = None) -> bool:
     """
     for path in _iter_repo_files(repo, skip_tree):
         if path.suffix == ".go" or path.name == "go.mod":
-            return True
-    return False
-
-
-#: What a Kubernetes manifest has that other YAML does not. Every manifest
-#: carries a top-level ``apiVersion:`` -- Helm templates, kustomizations and
-#: CRDs included -- and nothing else in a normal repository does.
-#:
-#: Content rather than filename, because the filenames are not diagnostic in
-#: either direction. Measured on OWASP Juice Shop, the repository #1081 was
-#: found against: **90 `.yaml`/`.yml` files, none holding `apiVersion:`** -- CI
-#: workflows, a docker-compose file and config. An extension-only predicate
-#: would hand kubescape all 90 and reproduce the ERROR. And a name-based one
-#: misses the other way: ``pod.yaml``, ``ingress.yaml`` and ``configmap.yaml``
-#: are manifests that match none of the ``*deployment*`` / ``*service*`` /
-#: ``k8s/**`` globs trivy-rbac used until #1212, which also globbed no ``.yml``
-#: at all -- 1 of 5 real manifest filenames, measured. Both tools now share
-#: this predicate.
-_K8S_MANIFEST_MARKER = "apiVersion:"
-_K8S_MANIFEST_SUFFIXES: frozenset[str] = frozenset({".yaml", ".yml"})
-
-
-def _repo_has_k8s_manifests(repo: Path, skip_tree: Path | None = None) -> bool:
-    """True when at least one YAML under ``repo`` looks like a K8s manifest.
-
-    ``encoding="utf-8", errors="replace"`` is deliberate on both halves. Without
-    an explicit encoding, ``read_text`` opens with the locale codec and a UTF-8
-    YAML raises ``UnicodeDecodeError`` on a cp1252 console -- a crash CI cannot
-    see, because it sets ``PYTHONUTF8=1``. ``replace`` then keeps one
-    undecodable file from hiding a manifest sitting beside it; the marker is
-    pure ASCII, so a replacement character elsewhere cannot mask it.
-
-    Whole file rather than a capped prefix: a multi-document manifest can carry
-    its first ``apiVersion:`` after a long leading document, and skipping a real
-    Kubernetes repository is the expensive error. Only ``.yaml``/``.yml`` are
-    opened, which on every repository measured is a double-digit file count.
-
-    Known limitation: JSON manifests are not detected. kubescape accepts them,
-    but they are rare enough in checked-in trees that reading every ``.json``
-    (SBOMs, lockfiles, tool output) to find one is not a trade worth making.
-    """
-    for path in _iter_repo_files(repo, skip_tree):
-        if path.suffix.lower() not in _K8S_MANIFEST_SUFFIXES:
-            continue
-        try:
-            text = path.read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            # Unreadable is not "absent" -- but it is also not something this
-            # predicate can resolve, and a permission error on one file must
-            # not take the scan down. Python 3.12 propagates PermissionError
-            # from path probes rather than returning False (#1163).
-            continue
-        if _K8S_MANIFEST_MARKER in text:
             return True
     return False
 
@@ -323,9 +228,6 @@ def scan_repository(
     """
     statuses: dict[str, bool] = {}
     tool_defs = []
-    # Definitions that must not start until the main wave has drained, because
-    # they read an artifact another tool in that wave produces.
-    deferred_tool_defs: list[ToolDefinition] = []
 
     # Use provided functions or defaults
     _write_stub = write_stub_func or write_stub
@@ -337,7 +239,7 @@ def scan_repository(
     # without it and still exits 0. That is how checkov vanished from a repo with
     # 47 Terraform files while `jmo tools check` reported it OK.
     #
-    # Recording here rather than in all 26 blocks: they share this one alias.
+    # Recording here rather than in every block: they share this one alias.
     unresolved: list[str] = []
 
     # Tools this scanner actually has a code path for. Only an implemented block
@@ -348,33 +250,18 @@ def scan_repository(
     # already exists.
     considered: set[str] = set()
 
-    # For a lookup made on behalf of a profile tool, the binary that was
-    # actually missing - so the report can name both.
-    missing_dependency: dict[str, str] = {}
+    def _find_tool(tool_name: str) -> str | None:
+        """Resolve a tool's binary, recording that this scanner considered it.
 
-    def _find_tool(tool_name: str, record_as: str | None = None) -> str | None:
-        """Resolve a binary, recorded against the profile tool that needs it.
-
-        `record_as` matters because several blocks resolve a binary that is not
-        the tool the user asked for: checkov-cicd runs `checkov`, trivy-rbac
-        runs `trivy`, semgrep-secrets runs `semgrep`, zap runs `zap-baseline.py`
-        plus `docker`, afl++ runs `afl-fuzz`.
-
-        Without it, `considered` only ever learned the binary names, so
-        `not_implemented` (`set(tools) - considered`) accused tools that had
-        demonstrably run - a deep scan of terragoat reported checkov-cicd,
-        semgrep-secrets and trivy-rbac as having "no repository implementation"
-        in the same run that wrote all three of their output files. In the other
-        direction, `unresolved` reported `docker` and `zap-baseline.py` as tools
-        whose findings were missing, and neither is a tool in any profile.
+        Every block resolves the binary named after its own tool, so the name
+        recorded in `considered` and `unresolved` is the tool the user asked
+        for. (Variant tools that ran another tool's binary, and needed a
+        separate owner name, left in v2.0.0.)
         """
-        owner = record_as or tool_name
-        considered.add(owner)
+        considered.add(tool_name)
         resolved = _resolve_tool(tool_name)
         if resolved is None:
-            unresolved.append(owner)
-            if owner != tool_name:
-                missing_dependency[owner] = tool_name
+            unresolved.append(tool_name)
         return resolved
 
     # `_find_any_tool` lived here, resolving the first of several
@@ -396,7 +283,7 @@ def scan_repository(
     # were horusec and trufflehog reporting a previous scan's `results/`, and
     # they scale with how many times the user has scanned (#1156).
     #
-    # Resolved once, here, because it is the same answer for all 26 blocks and
+    # Resolved once, here, because it is the same answer for every block and
     # `results_dir` is only in scope in this function. `None` when the results
     # directory lives elsewhere, which is the usual CI shape and needs nothing.
     # `results_dir` is NOT the results root: every scanner is handed
@@ -433,9 +320,8 @@ def scan_repository(
         """Timeout for this tool, honouring the slow-tool floor.
 
         Priority: an explicit `per_tool.<tool>.timeout` wins outright, else the
-        profile default raised to `TOOL_TIMEOUT_DEFAULTS` if the tool has a
-        floor. Slow tools (cdxgen, dependency-check, scancode) have minimums so
-        a low profile default cannot kill them early.
+        scan default raised to `TOOL_TIMEOUT_DEFAULTS` if the tool has a floor,
+        so a low default cannot kill a slow tool early.
 
         Delegates to the shared implementation. This body was the only one of
         five that applied the floor at all.
@@ -523,8 +409,8 @@ def scan_repository(
                 "--output",
                 str(semgrep_out),
                 # JMo's exclusions go before the user's flags so an explicit
-                # per_tool entry still wins: bandit's -x is last-wins, and the
-                # repeatable forms accumulate either way (#1132).
+                # per_tool entry still wins; the repeatable forms accumulate
+                # either way (#1132).
                 *tool_exclusion_flags("semgrep", results_dir_name=results_name),
                 *semgrep_flags,
                 str(repo),
@@ -681,7 +567,7 @@ def scan_repository(
 
     # ShellCheck: shell script static analysis
     #
-    # shellcheck ships in PROFILE_TOOLS["fast"], installs cleanly and reports OK
+    # shellcheck shipped in the smallest profile, installed cleanly and reported OK
     # from `jmo tools check`, but had no repository implementation at all - so it
     # could never run, and `shellcheck_adapter.py` sat waiting for input that was
     # never produced. Measured: docker-library/postgres has 55 shell scripts and
@@ -723,146 +609,6 @@ def scan_repository(
             _write_stub("shellcheck", shellcheck_out)
             record_not_attempted(statuses, "shellcheck")
 
-    # Bandit: Python security analysis
-    if "bandit" in tools:
-        bandit_out = out_dir / "bandit.json"
-        bandit_path = _find_tool("bandit")
-        if bandit_path:
-            bandit_flags = get_tool_flags("bandit")
-            bandit_cmd = [
-                bandit_path,
-                "-r",
-                str(repo),
-                "-f",
-                "json",
-                "-o",
-                str(bandit_out),
-                *tool_exclusion_flags("bandit", results_dir_name=results_name),
-                *bandit_flags,
-            ]
-            tool_defs.append(
-                ToolDefinition(
-                    name="bandit",
-                    command=bandit_cmd,
-                    output_file=bandit_out,
-                    timeout=get_tool_timeout("bandit", timeout),
-                    retries=retries,
-                    ok_return_codes=(0, 1),
-                    capture_stdout=False,
-                )
-            )
-        elif allow_missing_tools:
-            _write_stub("bandit", bandit_out)
-            record_not_attempted(statuses, "bandit")
-
-    # Nosey Parker: Deep secrets detection with Docker fallback
-    if "noseyparker" in tools:
-        noseyparker_out = out_dir / "noseyparker.json"
-        noseyparker_flags = get_tool_flags("noseyparker")
-
-        # Strategy 1: Try local noseyparker binary (two-phase: scan + report)
-        noseyparker_path = _find_tool("noseyparker")
-        if noseyparker_path:
-            # noseyparker creates the datastore root itself and refuses to
-            # touch one that already exists. Creating it here is what made the
-            # local-binary path incapable of producing a finding. Measured with
-            # noseyparker 0.24.0:
-            #
-            # | parent | datastore root | command | rc |
-            # |---|---|---|---|
-            # | exists  | pre-created  | datastore init | 2 "File exists" |
-            # | MISSING | missing      | datastore init | 2 "No such file" |
-            # | exists  | missing      | datastore init | 0 |
-            # | exists  | initialised  | datastore init | 2 "File exists" |
-            # | exists  | pre-created  | scan | 2 "Unsupported schema version 0" |
-            # | exists  | missing      | scan | **0, matches found** |
-            #
-            # So the parent must exist and the root must not -- and `scan`
-            # creates the datastore on its own, which makes `datastore init`
-            # unnecessary as well as non-idempotent. Dropping it removes a
-            # phase that could only ever fail on the second run into a results
-            # directory, and removes one ordering hazard.
-            datastore_dir = out_dir / ".noseyparker_datastore"
-            datastore_dir.parent.mkdir(parents=True, exist_ok=True)
-
-            # Phase 1: Scan repository
-            scan_cmd = [
-                noseyparker_path,
-                "scan",
-                "--datastore",
-                str(datastore_dir),
-                str(repo),
-                *noseyparker_flags,
-            ]
-            # Phase 2: Generate JSON report
-            report_cmd = [
-                noseyparker_path,
-                "report",
-                "--format",
-                "json",
-                "--datastore",
-                str(datastore_dir),
-            ]
-
-            tool_defs.append(
-                ToolDefinition(
-                    name="noseyparker-scan",
-                    command=scan_cmd,
-                    output_file=None,  # Scan writes to datastore
-                    timeout=get_tool_timeout("noseyparker", timeout),
-                    retries=retries,
-                    ok_return_codes=(0, 1),  # 0=clean, 1=findings
-                    capture_stdout=False,
-                )
-            )
-            # `report` reads the datastore that `scan` writes, and
-            # run_all_parallel submits every definition at once with no
-            # ordering guarantee -- the "3 sequential commands" this block
-            # claimed to be were never sequenced. Measured: `report` against a
-            # datastore no scan has populated exits 2 with "unable to open
-            # database file". So it runs in a second wave, after the first has
-            # drained.
-            deferred_tool_defs.append(
-                ToolDefinition(
-                    name="noseyparker-report",
-                    command=report_cmd,
-                    output_file=noseyparker_out,
-                    timeout=120,  # Report generation should be fast
-                    retries=0,
-                    ok_return_codes=(0,),
-                    capture_stdout=True,  # Capture JSON output
-                )
-            )
-        # Strategy 2: Fallback to Docker-based noseyparker
-        else:
-            docker_np_path = _find_tool("docker", record_as="noseyparker")
-            noseyparker_docker_script = (
-                Path(__file__).parent.parent.parent / "core/run_noseyparker_docker.sh"
-            )
-            if docker_np_path and noseyparker_docker_script.exists():
-                docker_cmd = [
-                    "bash",
-                    str(noseyparker_docker_script),
-                    "--repo",
-                    str(repo),
-                    "--out",
-                    str(noseyparker_out),
-                ]
-                tool_defs.append(
-                    ToolDefinition(
-                        name="noseyparker",
-                        command=docker_cmd,
-                        output_file=noseyparker_out,
-                        timeout=get_tool_timeout("noseyparker", timeout),
-                        retries=retries,
-                        ok_return_codes=(0,),
-                        capture_stdout=False,  # Script writes file directly
-                    )
-                )
-            elif allow_missing_tools:
-                _write_stub("noseyparker", noseyparker_out)
-                record_not_attempted(statuses, "noseyparker")
-
     # ZAP: DAST, and a repository is not a running application.
     #
     # This block used to build a command. It could not work in any
@@ -903,150 +649,6 @@ def scan_repository(
         _write_stub("zap", zap_out)
         record_not_attempted(statuses, "zap", NOT_ATTEMPTED_NOTHING_APPLICABLE)
 
-    # Falco: Runtime security monitoring (repository rules analysis)
-    # Note: Falco is best suited for live containers/K8s (see k8s_scanner.py).
-    # For repositories, we check for Falco rule files and validate them.
-    if "falco" in tools:
-        falco_out = out_dir / "falco.json"
-        falco_path = _find_tool("falco")
-        if falco_path:
-            falco_flags = get_tool_flags("falco")
-            # Look for Falco rule files in repository
-            falco_rules = list(repo.glob("**/*falco*.yaml")) + list(
-                repo.glob("**/*falco*.yml")
-            )
-            if falco_rules:
-                # Validate Falco rules using falco --validate
-                rules_file = falco_rules[0]
-                falco_cmd = [
-                    falco_path,
-                    "--validate",
-                    str(rules_file),
-                    "--output-json",
-                    *falco_flags,
-                ]
-                tool_defs.append(
-                    ToolDefinition(
-                        name="falco",
-                        command=falco_cmd,
-                        output_file=falco_out,
-                        timeout=get_tool_timeout("falco", timeout),
-                        retries=retries,
-                        ok_return_codes=(0, 1),
-                        capture_stdout=True,
-                    )
-                )
-            else:
-                # No Falco rules found - write empty stub
-                _write_stub("falco", falco_out)
-                record_not_attempted(
-                    statuses, "falco", NOT_ATTEMPTED_NOTHING_APPLICABLE
-                )
-        elif allow_missing_tools:
-            _write_stub("falco", falco_out)
-            record_not_attempted(statuses, "falco")
-
-    # AFL++: Coverage-guided fuzzing (repository binary analysis)
-    # Note: AFL++ requires instrumented binaries and fuzzing harness.
-    # For repositories, we check for compiled binaries and run basic fuzz testing.
-    if "afl++" in tools:
-        afl_out = out_dir / "aflplusplus.json"
-        afl_fuzz_path = _find_tool("afl-fuzz", record_as="afl++")
-        afl_analyze_path = _find_tool("afl-analyze", record_as="afl++")
-        if afl_fuzz_path or afl_analyze_path:
-            afl_flags = get_tool_flags("afl++")
-            # Look for compiled binaries or fuzzing harnesses
-            binaries = []
-            for pattern in ["**/*-afl", "**/*-fuzzer", "**/bin/*", "**/build/*"]:
-                found = [
-                    f
-                    for f in repo.glob(pattern)
-                    if f.is_file() and f.stat().st_mode & 0o111
-                ]
-                binaries.extend(found)
-
-            if binaries and afl_analyze_path:
-                # Run afl-analyze on the first binary found
-                binary = binaries[0]
-                # Create minimal input corpus
-                corpus_dir = out_dir / ".afl_corpus"
-                corpus_dir.mkdir(parents=True, exist_ok=True)
-                (corpus_dir / "test1").write_bytes(b"test")
-
-                # Run AFL++ dry run (no actual fuzzing, just validation)
-                afl_cmd = [
-                    afl_fuzz_path or afl_analyze_path,
-                    "-i",
-                    str(corpus_dir),
-                    "-o",
-                    str(out_dir / ".afl_output"),
-                    "-V",
-                    "10",  # 10-second timeout
-                    "-m",
-                    "none",  # No memory limit
-                    *afl_flags,
-                    "--",
-                    str(binary),
-                ]
-                tool_defs.append(
-                    ToolDefinition(
-                        name="afl++",
-                        command=afl_cmd,
-                        output_file=afl_out,
-                        timeout=get_tool_timeout("afl++", timeout),
-                        retries=0,  # Fuzzing is deterministic, no retries
-                        ok_return_codes=(0, 1),
-                        capture_stdout=True,
-                    )
-                )
-            else:
-                # No fuzzable binaries found - write empty stub
-                _write_stub("afl++", afl_out)
-                record_not_attempted(
-                    statuses, "afl++", NOT_ATTEMPTED_NOTHING_APPLICABLE
-                )
-        elif allow_missing_tools:
-            _write_stub("afl++", afl_out)
-            record_not_attempted(statuses, "afl++")
-
-    # ========== v1.0.0 New Tools (17 total) ==========
-
-    # Checkov CI/CD: GitHub Actions workflow scanning
-    # NOTE: checkov creates a DIRECTORY with --output-file, not a flat file
-    # We must use --output-file-path (directory) and then move results_json.json
-    if "checkov-cicd" in tools:
-        checkov_cicd_out = out_dir / "checkov-cicd.json"
-        checkov_cicd_temp_dir = out_dir / "checkov-cicd-temp"
-        checkov_cicd_path = _find_tool("checkov", record_as="checkov-cicd")
-        if checkov_cicd_path:
-            checkov_cicd_flags = get_tool_flags("checkov-cicd")
-            checkov_cicd_cmd = [
-                checkov_cicd_path,
-                "--framework",
-                "github_actions",
-                "--output",
-                "json",
-                "--output-file-path",
-                str(checkov_cicd_temp_dir),
-                *checkov_cicd_flags,
-                "--directory",
-                str(repo / ".github" / "workflows"),
-            ]
-            tool_defs.append(
-                ToolDefinition(
-                    name="checkov-cicd",
-                    command=checkov_cicd_cmd,
-                    output_file=checkov_cicd_temp_dir / "results_json.json",
-                    timeout=get_tool_timeout("checkov-cicd", timeout),
-                    retries=retries,
-                    ok_return_codes=(0, 1),
-                    capture_stdout=False,
-                )
-            )
-        elif allow_missing_tools:
-            _write_stub("checkov-cicd", checkov_cicd_out)
-            record_not_attempted(statuses, "checkov-cicd")
-
     # Gosec: Go security analyzer
     # Content-triggered: gosec loads Go packages, so a tree with no Go gives it
     # nothing to do. It exits in ~100 ms with an accepted return code and no
@@ -1085,220 +687,6 @@ def scan_repository(
                 (
                     NOT_ATTEMPTED_MISSING
                     if not gosec_path
-                    else NOT_ATTEMPTED_NOTHING_APPLICABLE
-                ),
-            )
-
-    # cdxgen: SBOM and dependency analysis
-    # Performance optimizations (v1.0.1):
-    # - --no-install-deps: Don't run npm/pip install (major speedup, was causing 9+ min scans)
-    # - --required-only: Skip optional/dev dependencies (reduces noise)
-    # These can be overridden via per_tool_config flags if full analysis needed
-    if "cdxgen" in tools:
-        cdxgen_out = out_dir / "cdxgen.json"
-        cdxgen_path = _find_tool("cdxgen")
-        if cdxgen_path:
-            cdxgen_flags = get_tool_flags("cdxgen")
-            cdxgen_cmd = [
-                cdxgen_path,
-                "--no-install-deps",  # Don't install dependencies (major speedup)
-                "--required-only",  # Only required deps, skip optional/dev
-                "-o",
-                str(cdxgen_out),
-                *cdxgen_flags,
-                str(repo),
-            ]
-            tool_defs.append(
-                ToolDefinition(
-                    name="cdxgen",
-                    command=cdxgen_cmd,
-                    output_file=cdxgen_out,
-                    timeout=get_tool_timeout("cdxgen", timeout),
-                    retries=retries,
-                    ok_return_codes=(0,),
-                    capture_stdout=False,
-                )
-            )
-        elif allow_missing_tools:
-            _write_stub("cdxgen", cdxgen_out)
-            record_not_attempted(statuses, "cdxgen")
-
-    # ScanCode: License and copyright scanner
-    if "scancode" in tools:
-        scancode_out = out_dir / "scancode.json"
-        scancode_path = _find_tool("scancode")
-        if scancode_path:
-            scancode_flags = get_tool_flags("scancode")
-            # ScanCode emits detection data only for the detectors it is asked
-            # for. With none requested it walks the tree and writes structure
-            # only -- `path`, `type`, `scan_errors` and nothing else -- so
-            # `scancode_adapter`, which reads `license_detections` and
-            # `copyrights`, was structurally incapable of returning a finding.
-            # A `deep` scan spent up to twenty minutes producing a file that
-            # could not contribute one, and graded the tool `success` (#835).
-            #
-            # Exactly the two the adapter reads. Measured against scancode
-            # 32.5.0: `--license --copyright` and `--license --copyright
-            # --package --info` produce the *same* 2 findings on the same
-            # fixture, but the second writes 34 keys per entry against 11 --
-            # 23 per entry that nothing consumes, on a tree that ran to 30,496
-            # entries in the recorded juice-shop scan.
-            scancode_cmd = [
-                scancode_path,
-                "--license",
-                "--copyright",
-                "--json",
-                str(scancode_out),
-                *scancode_flags,
-                str(repo),
-            ]
-            tool_defs.append(
-                ToolDefinition(
-                    name="scancode",
-                    command=scancode_cmd,
-                    output_file=scancode_out,
-                    timeout=get_tool_timeout("scancode", timeout),
-                    retries=retries,
-                    ok_return_codes=(0, 1),
-                    capture_stdout=False,
-                )
-            )
-        elif allow_missing_tools:
-            _write_stub("scancode", scancode_out)
-            record_not_attempted(statuses, "scancode")
-
-    # Kubescape: Kubernetes security scanner
-    # Content-triggered, and its failure is NOT the fast exit #1081 describes:
-    # measured at 4.0.12 on juice-shop, kubescape spends ~4 s loading policies
-    # and then dies parsing files that are not manifests at all
-    # (`failed to parse .../frontend/tsconfig.json`), leaving a 0-byte output
-    # that `tool_runner` grades `no_output`. Not running it on a tree with no
-    # manifests avoids that path entirely.
-    #
-    # It does NOT make kubescape work where manifests exist: kubescape fetches
-    # its policy bundle at scan time, and the bundle now served carries a
-    # control the pinned 4.0.12 binary cannot evaluate, so every scan exits 1
-    # with 0 bytes (#1211). The same binary worked on 2026-09-01 -- the golden
-    # fixture proves it -- so the version pin did not hold the behaviour. That
-    # ERROR is correct and is deliberately left firing.
-    #
-    # `apiVersion:` rather than a filename glob -- see `_repo_has_k8s_manifests`
-    # for what that was measured against.
-    if "kubescape" in tools:
-        kubescape_out = out_dir / "kubescape.json"
-        kubescape_path = _find_tool("kubescape")
-        has_manifests = (
-            _repo_has_k8s_manifests(repo, results_tree) if kubescape_path else False
-        )
-        if kubescape_path and has_manifests:
-            kubescape_flags = get_tool_flags("kubescape")
-            kubescape_cmd = [
-                kubescape_path,
-                "scan",
-                str(repo),
-                "--format",
-                "json",
-                "--output",
-                str(kubescape_out),
-                *kubescape_flags,
-            ]
-            tool_defs.append(
-                ToolDefinition(
-                    name="kubescape",
-                    command=kubescape_cmd,
-                    output_file=kubescape_out,
-                    timeout=get_tool_timeout("kubescape", timeout),
-                    retries=retries,
-                    ok_return_codes=(0, 1),
-                    capture_stdout=False,
-                )
-            )
-        elif allow_missing_tools or not has_manifests:
-            _write_stub("kubescape", kubescape_out)
-            record_not_attempted(
-                statuses,
-                "kubescape",
-                (
-                    NOT_ATTEMPTED_MISSING
-                    if not kubescape_path
-                    else NOT_ATTEMPTED_NOTHING_APPLICABLE
-                ),
-            )
-
-    # Prowler: Multi-cloud CSPM (AWS/Azure/GCP/K8s)
-    # Note: Prowler scans cloud infrastructure, not code repositories
-    # For repository scanning, we only run if cloud config files are detected
-    if "prowler" in tools:
-        prowler_out = out_dir / "prowler.json"
-        # Check for cloud config files (terraform, cloudformation, etc.)
-        cloud_files = (
-            list(repo.glob("**/*.tf"))
-            + list(repo.glob("**/*.tfvars"))
-            + list(repo.glob("**/cloudformation.yaml"))
-            + list(repo.glob("**/cloudformation.json"))
-        )
-        prowler_path = _find_tool("prowler")
-        if cloud_files and prowler_path:
-            prowler_flags = get_tool_flags("prowler")
-            # `prowler iac` scans Infrastructure-as-Code from a local path with
-            # no cloud credentials, which is what this branch wants - it is
-            # gated on .tf/cloudformation files being present.
-            #
-            # What was here before could not run at all. prowler's CLI requires
-            # a provider subcommand ({aws,azure,gcp,kubernetes,iac,...}); with
-            # none, argparse printed usage and exited **2**, which is where the
-            # reported "Return code 2 not in (0, 1, 3)" came from. Widening the
-            # accepted set to include 2 would have been the wrong fix: 2 is
-            # argparse's usage error, so accepting it means accepting "I passed
-            # nonsense arguments" as a successful scan.
-            #
-            # `--output-formats json` was also invalid - prowler 5.x offers
-            # {csv,json-asff,json-ocsf,html,sarif} and no plain `json`.
-            prowler_cmd = [
-                prowler_path,
-                "iac",
-                "--scan-path",
-                str(repo),
-                "--output-formats",
-                "json-ocsf",
-                "--output-directory",
-                str(out_dir),
-                "--output-filename",
-                "prowler",
-                # prowler renders a summary table to stdout that can raise
-                # UnicodeEncodeError on a non-UTF-8 console. Nothing reads it.
-                "--no-banner",
-                *prowler_flags,
-            ]
-            tool_defs.append(
-                ToolDefinition(
-                    name="prowler",
-                    command=prowler_cmd,
-                    # The file prowler ACTUALLY writes, not the one the report
-                    # phase wants. `--output-filename prowler` plus
-                    # `--output-formats json-ocsf` yields `prowler.ocsf.json`,
-                    # and ToolRunner checks this path the instant the process
-                    # exits - before the rename below. Declaring `prowler.json`
-                    # made it report `no_output` for a scan that had just
-                    # written 372 KB, and the reconciler then saw the renamed
-                    # artifact too and called prowler CONTRADICTORY.
-                    output_file=out_dir / "prowler.ocsf.json",
-                    timeout=get_tool_timeout("prowler", timeout),
-                    retries=retries,
-                    # 0=clean, 1=findings, 3=no credentials. NOT 2: that is
-                    # argparse rejecting the command line.
-                    ok_return_codes=(0, 1, 3),
-                    capture_stdout=False,
-                )
-            )
-        elif allow_missing_tools or not cloud_files:
-            _write_stub("prowler", prowler_out)
-            record_not_attempted(
-                statuses,
-                "prowler",
-                (
-                    NOT_ATTEMPTED_MISSING
-                    if not prowler_path
                     else NOT_ATTEMPTED_NOTHING_APPLICABLE
                 ),
             )
@@ -1383,232 +771,6 @@ def scan_repository(
             _write_stub("grype", grype_out)
             record_not_attempted(statuses, "grype")
 
-    # MobSF: Mobile Security Framework (Android/iOS)
-    # Note: Only runs if APK/IPA files are detected
-    if "mobsf" in tools:
-        mobsf_out = out_dir / "mobsf.json"
-        # Check for mobile app files
-        mobile_files = list(repo.glob("**/*.apk")) + list(repo.glob("**/*.ipa"))
-        mobsf_path = _find_tool("mobsf")
-        if mobile_files and mobsf_path:
-            mobsf_flags = get_tool_flags("mobsf")
-            mobile_file = mobile_files[0]  # Scan first found mobile app
-            mobsf_cmd = [
-                mobsf_path,
-                "-f",
-                str(mobile_file),
-                "-o",
-                str(mobsf_out),
-                *mobsf_flags,
-            ]
-            tool_defs.append(
-                ToolDefinition(
-                    name="mobsf",
-                    command=mobsf_cmd,
-                    output_file=mobsf_out,
-                    timeout=get_tool_timeout("mobsf", timeout),
-                    retries=retries,
-                    ok_return_codes=(0,),
-                    capture_stdout=False,
-                )
-            )
-        elif allow_missing_tools or not mobile_files:
-            _write_stub("mobsf", mobsf_out)
-            record_not_attempted(
-                statuses,
-                "mobsf",
-                (
-                    NOT_ATTEMPTED_MISSING
-                    if not mobsf_path
-                    else NOT_ATTEMPTED_NOTHING_APPLICABLE
-                ),
-            )
-
-    # Lynis: System hardening and security auditing
-    # Note: Lynis scans the local system, not code repositories
-    # For repository scanning, we write a stub
-    if "lynis" in tools:
-        lynis_out = out_dir / "lynis.json"
-        if allow_missing_tools:
-            _write_stub("lynis", lynis_out)
-            record_not_attempted(statuses, "lynis", NOT_ATTEMPTED_NOTHING_APPLICABLE)
-
-    # Trivy RBAC: Kubernetes workload and RBAC misconfiguration assessment
-    # Note: Requires K8s manifests in repository, detected by `apiVersion:` in
-    # file *content* -- three filename globs matched 1 of 5 real manifest names
-    # and no `.yml` at any depth, so this reported "nothing to scan" on
-    # repositories full of manifests (#1212). `_find_tool` runs first so a
-    # missing binary does not pay for a whole-tree read.
-    if "trivy-rbac" in tools:
-        trivy_rbac_out = out_dir / "trivy-rbac.json"
-        trivy_rbac_path = _find_tool("trivy", record_as="trivy-rbac")
-        has_manifests = (
-            _repo_has_k8s_manifests(repo, results_tree) if trivy_rbac_path else False
-        )
-        if trivy_rbac_path and has_manifests:
-            trivy_rbac_flags = get_tool_flags("trivy-rbac")
-            trivy_rbac_cmd = [
-                trivy_rbac_path,
-                "config",
-                "--format",
-                "json",
-                "--output",
-                str(trivy_rbac_out),
-                # No `--scanners`: `trivy config` has no such flag at the pinned
-                # 0.74.0 and exits 1 with `unknown flag` and no output file, so
-                # trivy-rbac contributed nothing on every K8s repository (#1206).
-                # It was redundant anyway -- `trivy config` IS the misconfig
-                # scanner. The flag that does exist here is `--misconfig-scanners`,
-                # which selects config *formats* (terraform, kubernetes, helm),
-                # not scanner classes.
-                *tool_exclusion_flags("trivy-rbac", results_dir_name=results_name),
-                *trivy_rbac_flags,
-                str(repo),
-            ]
-            tool_defs.append(
-                ToolDefinition(
-                    name="trivy-rbac",
-                    command=trivy_rbac_cmd,
-                    output_file=trivy_rbac_out,
-                    timeout=get_tool_timeout("trivy-rbac", timeout),
-                    retries=retries,
-                    ok_return_codes=(0, 1),
-                    capture_stdout=False,
-                )
-            )
-        elif allow_missing_tools or not has_manifests:
-            _write_stub("trivy-rbac", trivy_rbac_out)
-            record_not_attempted(
-                statuses,
-                "trivy-rbac",
-                (
-                    NOT_ATTEMPTED_MISSING
-                    if not trivy_rbac_path
-                    else NOT_ATTEMPTED_NOTHING_APPLICABLE
-                ),
-            )
-
-    # Semgrep Secrets: Hardcoded credentials detection
-    if "semgrep-secrets" in tools:
-        semgrep_secrets_out = out_dir / "semgrep-secrets.json"
-        semgrep_secrets_path = _find_tool("semgrep", record_as="semgrep-secrets")
-        if semgrep_secrets_path:
-            semgrep_secrets_flags = get_tool_flags("semgrep-secrets")
-            semgrep_secrets_cmd = [
-                semgrep_secrets_path,
-                "--config",
-                "p/secrets",
-                "--json",
-                "--output",
-                str(semgrep_secrets_out),
-                *tool_exclusion_flags("semgrep-secrets", results_dir_name=results_name),
-                *semgrep_secrets_flags,
-                str(repo),
-            ]
-            tool_defs.append(
-                ToolDefinition(
-                    name="semgrep-secrets",
-                    command=semgrep_secrets_cmd,
-                    output_file=semgrep_secrets_out,
-                    timeout=get_tool_timeout("semgrep-secrets", timeout),
-                    retries=retries,
-                    ok_return_codes=(0, 1, 2),
-                    capture_stdout=False,
-                )
-            )
-        elif allow_missing_tools:
-            _write_stub("semgrep-secrets", semgrep_secrets_out)
-            record_not_attempted(statuses, "semgrep-secrets")
-
-    # Horusec: Multi-language SAST scanner (18+ languages)
-    # Uses --disable-docker (-D) flag to run native engines without Docker dependency
-    # This allows horusec to work on systems where Docker is unavailable or not running
-    if "horusec" in tools:
-        horusec_out = out_dir / "horusec.json"
-        horusec_path = _find_tool("horusec")
-        if horusec_path:
-            horusec_flags = get_tool_flags("horusec")
-            horusec_cmd = [
-                horusec_path,
-                "start",
-                "-p",
-                str(repo),
-                "-o",
-                "json",
-                "-O",
-                str(horusec_out),
-                "-D",  # Disable Docker - run native engines only
-                *tool_exclusion_flags("horusec", results_dir_name=results_name),
-                *horusec_flags,
-            ]
-            tool_defs.append(
-                ToolDefinition(
-                    name="horusec",
-                    command=horusec_cmd,
-                    output_file=horusec_out,
-                    timeout=get_tool_timeout("horusec", timeout),
-                    retries=retries,
-                    ok_return_codes=(0, 1),
-                    capture_stdout=False,
-                )
-            )
-        elif allow_missing_tools:
-            _write_stub("horusec", horusec_out)
-            record_not_attempted(statuses, "horusec")
-
-    # Dependency-Check: OWASP SCA for known vulnerabilities
-    if "dependency-check" in tools:
-        dependency_check_out = out_dir / "dependency-check.json"
-        # find_tool checks both PATH and ~/.jmo/bin/dependency-check/bin/dependency-check.sh
-        dc_path = _find_tool("dependency-check")
-        if dc_path:
-            dependency_check_flags = get_tool_flags("dependency-check")
-            dependency_check_cmd = [
-                dc_path,  # Use full path from find_tool
-                "--project",
-                name,
-                "--scan",
-                str(repo),
-                "--format",
-                "JSON",
-                "--out",
-                str(dependency_check_out),
-                *tool_exclusion_flags(
-                    "dependency-check", results_dir_name=results_name
-                ),
-                *dependency_check_flags,
-            ]
-            tool_defs.append(
-                ToolDefinition(
-                    name="dependency-check",
-                    command=dependency_check_cmd,
-                    output_file=dependency_check_out,
-                    timeout=get_tool_timeout("dependency-check", timeout),
-                    retries=retries,
-                    # ODC's exit codes, from its own App.java:
-                    #   0  success
-                    #   1  a file named on the command line was not found
-                    #   13 FATAL exceptions during the scan
-                    #   14 NON-FATAL exceptions during the scan
-                    #   15 a vulnerability met the --failOnCVSS threshold
-                    # 14 and 15 both write a complete report; 1 and 13 do not.
-                    # The old (0, 1) had it exactly backwards: it accepted a
-                    # genuine failure and rejected the two codes that mean
-                    # "results are on disk". Measured on all three dogfood
-                    # repositories - every one returned 14, every one wrote
-                    # valid JSON, and jmoadaptivegolf's held 65 findings (4
-                    # CRITICAL) that the scan phase was calling a failure while
-                    # the report phase counted them (#1133).
-                    ok_return_codes=(0, 14, 15),
-                    capture_stdout=False,
-                )
-            )
-        elif allow_missing_tools:
-            _write_stub("dependency-check", dependency_check_out)
-            record_not_attempted(statuses, "dependency-check")
-
-    # ========== End of v1.0.0 New Tools ==========
-
     # A requested tool that never ran must say so. Silence here is the same
     # failure class as #700 (an accepted return code with no output written):
     # the scan looks complete, exits 0, and the missing tool's findings are
@@ -1623,27 +785,21 @@ def scan_repository(
         if missing in statuses:
             continue
         statuses[missing] = False
-        # Name the dependency when the tool itself is not what was missing.
-        # `zap` needs `zap-baseline.py` and `docker`; reporting the helper's
-        # name alone sent the reader looking for a tool that is in no profile,
-        # while the tool that actually lost its findings went unnamed.
-        dep = missing_dependency.get(missing)
-        what = f"its dependency `{dep}`" if dep else "its executable"
         logger.error(
-            "%s: requested but %s could not be found - it did "
+            "%s: requested but its executable could not be found - it did "
             "NOT run and its findings are MISSING from this scan. "
             "Run `jmo tools check` to confirm installation, or pass "
             "--allow-missing-tools to record an explicit empty result.",
             missing,
-            what,
         )
 
     # Requested but never even attempted: this scanner has no code path for
-    # them. nuclei scans URLs only and opa is evaluated in the report phase, so
-    # both are correct to skip on a repository - but the profile still counts
-    # them, which is why the progress bar reads [N/9] while fewer can run.
-    # Kept distinct from `unresolved` so a genuinely missing binary is not lost
-    # among tools that were never going to run.
+    # them. With the default matrix this is empty - nuclei is URL-only and is
+    # filtered out before it reaches a repository, and opa is the report-phase
+    # policy engine rather than a scanner - so it fires only for an explicit
+    # `--tools` naming something this module cannot run. Kept distinct from
+    # `unresolved` so a genuinely missing binary is not lost among tools that
+    # were never going to run.
     not_implemented = set(tools) - considered
     if not_implemented:
         logger.warning(
@@ -1675,15 +831,6 @@ def scan_repository(
     tools_started = time.perf_counter()
     results = runner.run_all_parallel()
 
-    # Second wave: definitions that read what the first wave wrote. Kept as
-    # ToolDefinitions rather than a bare subprocess call so they keep the same
-    # timeout, retry and classification the rest of the scan gets.
-    if deferred_tool_defs:
-        results += ToolRunner(
-            tools=deferred_tool_defs,
-            progress_callback=progress_callback,  # type: ignore[arg-type]
-        ).run_all_parallel()
-
     # ToolRunner already timed and classified every invocation. Record that
     # before the loop below reduces the results to booleans, which is where it
     # used to be lost (#722).
@@ -1697,54 +844,11 @@ def scan_repository(
 
     # Process results
     attempts_map: dict[str, int] = {}
-    noseyparker_phases = {"scan": False, "report": False}
 
     for result in results:
-        # Handle multi-phase noseyparker execution
-        if result.tool.startswith("noseyparker-"):
-            phase = result.tool.split("-")[1]  # Extract "scan" or "report"
-            if result.status == "success":
-                noseyparker_phases[phase] = True
-                if phase == "report" and result.output_file and result.capture_stdout:
-                    result.output_file.write_text(result.stdout or "", encoding="utf-8")
-            else:
-                noseyparker_phases[phase] = False
-                # This `continue` used to skip the failure reporting every
-                # other tool gets, so a failed phase left only
-                # "Return code 2 not in (0,)" in scan-timings and nothing at
-                # all in the log. That is why the datastore error was
-                # invisible for as long as it was: the phases were the one
-                # code path that could fail without saying why.
-                report_tool_failure(result, f"its {phase} phase failed")
-            continue  # Don't set individual phase status in statuses dict
-
-        # prowler names its own artifact. `--output-filename prowler` with
-        # `--output-formats json-ocsf` produces `prowler.ocsf.json`, so the
-        # declared output_file (`prowler.json`) would never appear and the tool
-        # would be recorded `no_output` after a scan that genuinely worked.
-        if result.tool == "prowler":
-            ocsf_out = out_dir / "prowler.ocsf.json"
-            prowler_json = out_dir / "prowler.json"
-            if ocsf_out.exists() and not prowler_json.exists():
-                ocsf_out.replace(prowler_json)
-
-        # Handle checkov-cicd special case: move results from temp directory
-        if result.tool == "checkov-cicd" and result.status == "success":
-            # checkov creates: checkov-cicd-temp/results_json.json
-            # We need: checkov-cicd.json (flat file)
-            import shutil
-
-            checkov_cicd_out = out_dir / "checkov-cicd.json"
-            checkov_cicd_temp_dir = out_dir / "checkov-cicd-temp"
-            checkov_cicd_temp_file = checkov_cicd_temp_dir / "results_json.json"
-            if checkov_cicd_temp_file.exists():
-                shutil.move(str(checkov_cicd_temp_file), str(checkov_cicd_out))
-                # Clean up temp directory
-                shutil.rmtree(checkov_cicd_temp_dir, ignore_errors=True)
-
         if result.status == "success":
             # Write stdout to file ONLY if we captured it (capture_stdout=True)
-            # Tools with capture_stdout=False write their own files (semgrep, trivy, bandit)
+            # Tools with capture_stdout=False write their own files (semgrep, trivy)
             if result.output_file and result.capture_stdout:
                 result.output_file.write_text(result.stdout or "", encoding="utf-8")
             statuses[result.tool] = True
@@ -1811,19 +915,6 @@ def scan_repository(
                     else "it failed"
                 ),
             )
-
-    # Aggregate noseyparker multi-phase status
-    if any(noseyparker_phases.values()):
-        # If any phase succeeded, check if all required phases succeeded
-        if noseyparker_phases["scan"] and noseyparker_phases["report"]:
-            statuses["noseyparker"] = True
-        elif allow_missing_tools:
-            # Partial success - write stub
-            noseyparker_out = out_dir / "noseyparker.json"
-            _write_stub("noseyparker", noseyparker_out)
-            record_not_attempted(statuses, "noseyparker")
-        else:
-            statuses["noseyparker"] = False
 
     # Include attempts metadata if any retries occurred
     if attempts_map:

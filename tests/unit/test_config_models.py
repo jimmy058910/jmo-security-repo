@@ -87,10 +87,6 @@ class TestTargetConfig:
 class TestWizardConfig:
     """Tests for WizardConfig defaults, db_path, and serialization."""
 
-    def test_default_profile(self) -> None:
-        wc = WizardConfig()
-        assert wc.profile == "balanced"
-
     def test_default_use_docker(self) -> None:
         wc = WizardConfig()
         assert wc.use_docker is False
@@ -136,8 +132,8 @@ class TestWizardConfig:
     def test_to_dict_returns_all_keys(self) -> None:
         wc = WizardConfig()
         d = wc.to_dict()
+        # No "profile": v2.0.0 has no scan profiles, so the wizard records none.
         expected_keys = {
-            "profile",
             "use_docker",
             "target",
             "results_dir",
@@ -190,10 +186,10 @@ class TestWizardConfig:
 
     def test_to_dict_preserves_values(self) -> None:
         wc = WizardConfig()
-        wc.profile = "deep"
+        wc.use_docker = True
         wc.threads = 8
         wc.fail_on = "HIGH"
         d = wc.to_dict()
-        assert d["profile"] == "deep"
+        assert d["use_docker"] is True
         assert d["threads"] == 8
         assert d["fail_on"] == "HIGH"

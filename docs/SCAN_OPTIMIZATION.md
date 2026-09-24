@@ -4,16 +4,7 @@ Comprehensive guide for optimizing JMo Security scan performance without sacrifi
 
 ## Overview
 
-A typical balanced profile scan (17 tools) takes 18-25 minutes. This guide covers strategies to reduce scan times by 30-60% while maintaining thorough security coverage.
-
-**Key Metrics:**
-
-| Profile | Tools | Default Time | Optimized Time | Reduction |
-|---------|-------|--------------|----------------|-----------|
-| fast | 9 | 5-10 min | 3-6 min | ~40% |
-| slim | 13 | 12-18 min | 8-12 min | ~35% |
-| balanced | 17 | 18-25 min | 12-18 min | ~30% |
-| deep | 29 | 40-70 min | 30-50 min | ~25% |
+`jmo scan` considers every scanner in the tool matrix, and the target's content decides which ones run (see [TOOLS.md](TOOLS.md#when-each-tool-runs)). On a large repository that can take tens of minutes. This guide covers strategies to reduce scan times by 30-60% while maintaining thorough security coverage.
 
 ## Quick Wins (Immediate Impact)
 
@@ -21,42 +12,32 @@ A typical balanced profile scan (17 tools) takes 18-25 minutes. This guide cover
 
 The default thread count is conservative. Modern CPUs can handle more parallelism.
 
-**Current defaults in `jmo.yml`:**
+**Current default in `jmo.yml`:**
 
 ```yaml
-profiles:
-  fast:
-    threads: 8      # Already optimized
-  slim:
-    threads: 4      # Can increase
-  balanced:
-    threads: 4      # Can increase
-  deep:
-    threads: 2      # Conservative for stability
+threads: 4      # Top-level default; can increase
 ```
 
 **Recommended settings based on CPU cores:**
 
-| CPU Cores | fast | slim | balanced | deep |
-|-----------|------|------|----------|------|
-| 4 cores | 4 | 3 | 3 | 2 |
-| 8 cores | 8 | 6 | 6 | 4 |
-| 16 cores | 12 | 10 | 8 | 6 |
-| 32+ cores | 16 | 12 | 10 | 8 |
+| CPU Cores | threads |
+|-----------|---------|
+| 4 cores | 3 |
+| 8 cores | 6 |
+| 16 cores | 8 |
+| 32+ cores | 10 |
 
 **How to apply:**
 
 ```yaml
-# In jmo.yml, update your preferred profile:
-profiles:
-  balanced:
-    threads: 6  # Increase from 4 to 6 for 8-core CPU
+# In jmo.yml:
+threads: 6  # Increase from 4 to 6 for 8-core CPU
 ```
 
 Or use the `--threads` CLI flag:
 
 ```bash
-jmo scan --repo . --profile balanced --threads 6
+jmo scan --repo . --threads 6
 ```
 
 Or set environment variable:
@@ -111,24 +92,23 @@ echo "Cache pre-warming complete!"
 jmo scan --repo .
 ```
 
-### 3. Use Appropriate Profile for Task
+### 3. Narrow the Tool List for Quick Checks
 
-Don't use `deep` profile for quick checks. Match profile to use case:
+A quick check does not need every scanner. Narrow the list with `--tools` (or `--skip-tools`) and keep the full matrix for nightly and release scans:
 
-| Use Case | Recommended Profile | Time |
-|----------|-------------------|------|
-| Pre-commit hook | `fast` | 3-6 min |
-| PR validation | `fast` or `slim` | 5-12 min |
-| Nightly CI/CD | `balanced` | 15-20 min |
-| Release audit | `deep` | 40-60 min |
-| Compliance audit | `deep` | 40-60 min |
+| Use Case | Tools |
+|----------|-------|
+| Pre-commit hook | `--tools trufflehog semgrep` |
+| PR validation | `--tools trufflehog semgrep trivy` |
+| Nightly CI/CD | all (no `--tools`) |
+| Release or compliance audit | all (no `--tools`) |
 
 ```bash
 # Quick pre-commit check
-jmo scan --repo . --profile fast
+jmo scan --repo . --tools trufflehog semgrep
 
 # Full production scan
-jmo scan --repo . --profile balanced
+jmo scan --repo .
 ```
 
 ## Tool-Specific Optimizations
@@ -316,54 +296,34 @@ jmo scan --targets repos.txt --threads 8
 
 ### 10. Skip Tools Based on Target Type
 
-Not all tools are relevant for all targets. Create custom profiles:
-
-**In `jmo.yml`:**
-
-```yaml
-profiles:
-  # For Python projects only
-  python-fast:
-    tools:
-      - trufflehog
-      - semgrep
-      - bandit      # Python-specific
-      - trivy
-      - checkov
-    threads: 6
-    timeout: 300
-    per_tool:
-      semgrep:
-        flags:
-          - --config
-          - p/python
-
-  # For container images only
-  container-scan:
-    tools:
-      - trivy
-      - grype
-      - syft
-      - hadolint
-    threads: 4
-    timeout: 300
-
-  # For IaC/cloud only
-  iac-scan:
-    tools:
-      - checkov
-      - trivy
-      - kubescape
-      - prowler
-    threads: 4
-    timeout: 400
-```
-
-**Usage:**
+Not all tools are relevant for all targets, and JMo already skips the ones that are not: hadolint runs only when Dockerfiles are present, shellcheck only with shell scripts, gosec only with Go sources, and zap and nuclei only on `--url` targets. To narrow further, name the tools:
 
 ```bash
-jmo scan --repo ./python-app --profile python-fast
-jmo scan --image nginx:latest --profile container-scan
+# Python project: secrets, SAST, dependencies, IaC
+jmo scan --repo ./python-app --tools trufflehog semgrep trivy checkov
+
+# Container image only
+jmo scan --image nginx:latest --tools trivy syft
+
+# IaC only
+jmo scan --repo ./infra --tools checkov trivy
+```
+
+To make a narrower list the default for a project, set a top-level `tools:` list in its `jmo.yml`:
+
+```yaml
+tools:
+  - trufflehog
+  - semgrep
+  - trivy
+  - checkov
+threads: 6
+timeout: 300
+per_tool:
+  semgrep:
+    flags:
+      - --config
+      - p/python
 ```
 
 ### 11. Incremental/Differential Scanning
@@ -391,7 +351,7 @@ semgrep scan --baseline-commit HEAD~1 .
   run: |
     # Only scan if security-relevant files changed
     if echo "${{ steps.changed-files.outputs.all_changed_files }}" | grep -qE '\.(py|js|ts|go|java|yaml|yml|tf|json)$'; then
-      jmo scan --repo . --profile fast
+      jmo scan --repo . --tools trufflehog semgrep trivy
     fi
 ```
 
@@ -437,7 +397,7 @@ Track which tools are slowest:
 
 ```bash
 # Enable timing output
-time jmo scan --repo . --profile balanced 2>&1 | tee scan.log
+time jmo scan --repo . 2>&1 | tee scan.log
 
 # Parse timing from results
 grep -E "duration|elapsed" results/summaries/*.json
@@ -461,30 +421,33 @@ echo "=== Scan Performance ==="
 echo "Total duration: ${duration}s ($(($duration / 60))m $(($duration % 60))s)"
 ```
 
-### 14. Profile-Specific Timeouts
+### 14. Timeouts and Retries
 
-Set aggressive timeouts for fast scans, generous for deep scans:
+Set one default timeout at the top level of `jmo.yml`, and give the slow tools more room in `per_tool`:
 
 ```yaml
-profiles:
-  fast:
-    timeout: 300    # 5 minutes max per tool
-  balanced:
-    timeout: 600    # 10 minutes max per tool
-  deep:
-    timeout: 900    # 15 minutes max per tool
-    retries: 1      # Retry once on timeout
+timeout: 600      # 10 minutes max per tool
+retries: 1        # Retry once on timeout
+per_tool:
+  semgrep:
+    timeout: 900  # 15 minutes for a large codebase
+```
+
+For a one-off quick run, `--timeout` overrides the default:
+
+```bash
+jmo scan --repo . --tools trufflehog semgrep --timeout 300
 ```
 
 ## Docker Optimizations
 
 ### 15. Use Pre-built Images
 
-JMo Docker images have pre-cached databases:
+The JMo Docker image has pre-cached databases:
 
 ```bash
-# Use profile-specific images (databases pre-loaded)
-docker run -v $PWD:/scan jmo-security:balanced scan --repo /scan
+# One image carries every scanner (databases pre-loaded)
+docker run -v $PWD:/scan ghcr.io/jimmy058910/jmo-security:latest scan --repo /scan
 ```
 
 ### 16. Mount Cache Volumes
@@ -497,14 +460,14 @@ docker run \
   -v jmo-trivy-cache:/root/.cache/trivy \
   -v jmo-grype-cache:/root/.cache/grype \
   -v jmo-nuclei-templates:/root/.nuclei-templates \
-  jmo-security:balanced scan --repo /scan
+  ghcr.io/jimmy058910/jmo-security:latest scan --repo /scan
 ```
 
 ## Optimization Checklist
 
 Before running a scan, verify these settings:
 
-- [ ] Using appropriate profile for the task
+- [ ] Tool list narrowed with `--tools` for quick checks
 - [ ] Thread count matches available CPU cores
 - [ ] Vulnerability databases are pre-cached
 - [ ] Tool exclusions are configured (node_modules, .git, vendor)
@@ -519,7 +482,7 @@ Before running a scan, verify these settings:
 
    ```bash
    # Watch scan progress
-   jmo scan --repo . --profile balanced 2>&1 | grep -E "Running|Complete"
+   jmo scan --repo . 2>&1 | grep -E "Running|Complete"
    ```
 
 2. **Check resource usage:**
@@ -553,18 +516,12 @@ Before running a scan, verify these settings:
 
 1. **Increase threads** to match CPU cores (biggest impact)
 2. **Pre-cache vulnerability databases** before scans
-3. **Use appropriate profile** (fast for PRs, balanced for CI)
+3. **Narrow the tool list** with `--tools` for PRs and pre-commit; run everything nightly
 4. **Configure tool exclusions** (node_modules, .git, vendor)
 5. **Set severity filters** for nuclei and trivy
 
-**Expected improvements:**
-
-- Fast profile: 5-10 min to 3-6 min (40% faster)
-- Balanced profile: 18-25 min to 12-18 min (30% faster)
-- Deep profile: 40-70 min to 30-50 min (25% faster)
-
 ## See Also
 
-- [PROFILES_AND_TOOLS.md](PROFILES_AND_TOOLS.md) - Profile definitions and tool lists
+- [TOOLS.md](TOOLS.md) - The tool matrix and when each tool runs
 - [USER_GUIDE.md](USER_GUIDE.md) - Complete configuration reference
 - [DOCKER_README.md](DOCKER_README.md) - Docker-specific optimizations

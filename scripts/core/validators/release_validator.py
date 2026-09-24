@@ -1,4 +1,4 @@
-"""Release Artifacts validator (52 checks).
+"""Release Artifacts validator (49 checks).
 
 Validates that the project is ready for a public release by checking
 version consistency, documentation, tool versions, badges, git hygiene,
@@ -20,6 +20,7 @@ from typing import Any
 
 import yaml
 
+from scripts.core.tool_registry import POLICY_ENGINE, TOOL_MATRIX
 from scripts.core.validators import (
     CategoryResult,
     CheckResult,
@@ -342,14 +343,21 @@ def _check_versions_yaml_exists() -> CheckResult:
     return None  # type: ignore[return-value]
 
 
-def _check_deep_profile_versions() -> CheckResult:
-    """All tools in deep profile have version entries in versions.yaml."""
+def _check_matrix_versions() -> CheckResult:
+    """Every TOOL_MATRIX scanner and the policy engine has a versions.yaml entry.
+
+    This checked the deep profile's tool list until scan profiles were removed
+    in v2.0.0. The matrix plus the policy engine is what `jmo tools install`
+    installs and the image carries, so it is the set that must be pinned. The
+    registry import is not guarded: a failed import used to leave an empty tool
+    list, and an empty list has no missing entries.
+    """
     try:
         text = _read_text("versions.yaml")
         data = yaml.safe_load(text) or {}
     except Exception as exc:
         return CheckResult(
-            name="deep-profile-versions",
+            name="matrix-versions",
             status=CheckStatus.FAIL,
             message=f"Cannot load versions.yaml: {exc}",
         )
@@ -362,32 +370,21 @@ def _check_deep_profile_versions() -> CheckResult:
                 if key != "schema_version":
                     version_tools.add(key)
 
-    # Get deep profile tools from tool_registry
-    try:
-        from scripts.core.tool_registry import PROFILE_TOOLS
-
-        deep_tools = PROFILE_TOOLS.get("deep", [])
-    except ImportError:
-        deep_tools = []
-
     # Normalize names: hyphens and underscores are equivalent
     def normalize(name: str) -> str:
-        return name.lower().replace("-", "_").replace("+", "plus")
+        return name.lower().replace("-", "_")
 
     normalized_versions = {normalize(t) for t in version_tools}
 
-    missing: list[str] = []
-    for tool in deep_tools:
-        norm = normalize(tool)
-        if norm not in normalized_versions:
-            # Also try without suffixes like -rbac, -cicd, -secrets
-            base = norm.split("_")[0] if "_" in norm else norm
-            if base not in normalized_versions:
-                missing.append(tool)
+    missing = [
+        tool
+        for tool in (*TOOL_MATRIX, POLICY_ENGINE)
+        if normalize(tool) not in normalized_versions
+    ]
 
     if missing:
         return CheckResult(
-            name="deep-profile-versions",
+            name="matrix-versions",
             status=CheckStatus.WARN,
             message=f"{len(missing)} tool(s) missing version entries: {', '.join(missing[:5])}",
         )
@@ -418,7 +415,7 @@ def _check_version_format() -> CheckResult:
                 continue
             ver_str = str(version)
             # Accept semver-ish: digits separated by dots (at least X.Y), may
-            # be prefixed (e.g. akto's mini-testing-1.53.7)
+            # be prefixed (e.g. mini-testing-1.53.7)
             if not re.search(r"\d+(\.\d+){1,}", ver_str):
                 invalid.append(f"{tool_name}={ver_str}")
 
@@ -1552,7 +1549,7 @@ def _check_precommit_yml() -> CheckResult:
 
 
 # ---------------------------------------------------------------------------
-# Full tier additional checks (6 checks)
+# Full tier additional checks (3 checks)
 # ---------------------------------------------------------------------------
 
 
@@ -1577,14 +1574,14 @@ def _check_dockerfile_build(dockerfile: str) -> CheckResult:
                 f"jmo-validate-{Path(dockerfile).name.lower()}",
                 ".",
             ],
-            # Budget derived from measured builds, not guessed. All four
-            # variants were built from dev on 2026-08-22 WITH a warm layer
-            # cache: deep 858s, balanced 572s, slim 406s, fast 259s. GHA amd64,
-            # also cached, recorded in #941: balanced 960s, deep 660s. Since
-            # --no-cache is strictly slower than every one of those, a 600s
-            # budget could not be met by deep (858s cached, 43% over before the
-            # cache is even dropped). 1800s is ~2.1x the slowest local build and
-            # ~1.9x the slowest GHA one.
+            # Budget derived from measured builds, not guessed. The v1.x
+            # images were built from dev on 2026-08-22 WITH a warm layer cache;
+            # the heaviest, which this Dockerfile descends from and is lighter
+            # than, took 858s. GHA amd64, also cached, recorded in
+            # #941: up to 960s. Since --no-cache is strictly slower than every
+            # one of those, a 600s budget could not be met (858s cached, 43%
+            # over before the cache is even dropped). 1800s is ~2.1x the
+            # slowest local build and ~1.9x the slowest GHA one.
             #
             # If this needs raising again, re-measure rather than doubling: the
             # number is only meaningful next to the builds it must accommodate.
@@ -1710,7 +1707,7 @@ _QUICK_CHECKS: list[tuple[str, _CheckFn]] = [
     ("anchor-links", _check_anchor_links),
     # 3. Tool versions (4)
     ("versions-yaml-exists", _check_versions_yaml_exists),
-    ("deep-profile-versions", _check_deep_profile_versions),
+    ("matrix-versions", _check_matrix_versions),
     ("version-format", _check_version_format),
     ("outdated-tools", _check_outdated_tools),
     # 4. Badge accuracy (2)
@@ -1751,13 +1748,8 @@ _QUICK_CHECKS: list[tuple[str, _CheckFn]] = [
     ("precommit-yml-valid", _check_precommit_yml),
 ]
 
-# Full tier additional Dockerfiles (4) + pip install (1) + entry point (1) = 6
-_DOCKERFILES = [
-    "Dockerfile.deep",
-    "Dockerfile.fast",
-    "Dockerfile.slim",
-    "Dockerfile.balanced",
-]
+# Full tier additional checks: the image build (1) + dev install (1) + entry point (1) = 3
+_DOCKERFILE = "Dockerfile"
 
 
 def validate_release(tier: str) -> CategoryResult:
@@ -1768,20 +1760,14 @@ def validate_release(tier: str) -> CategoryResult:
     for name, fn in _QUICK_CHECKS:
         checks.append(timed_check(name, fn))
 
-    # Full tier: 6 additional checks
+    # Full tier: 3 additional checks
     if tier == "full":
-
-        def _make_docker_check(df: str) -> _CheckFn:
-            """Create a closure for dockerfile build check."""
-            return lambda: _check_dockerfile_build(df)
-
-        for dockerfile in _DOCKERFILES:
-            checks.append(
-                timed_check(
-                    f"docker-build-{Path(dockerfile).name.lower()}",
-                    _make_docker_check(dockerfile),
-                )
+        checks.append(
+            timed_check(
+                f"docker-build-{_DOCKERFILE.lower()}",
+                lambda: _check_dockerfile_build(_DOCKERFILE),
             )
+        )
         checks.append(timed_check("dev-install", _check_dev_install))
         checks.append(timed_check("jmo-entry-point", _check_jmo_version_entry_point))
 

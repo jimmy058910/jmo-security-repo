@@ -6,6 +6,7 @@ Tests the validate_scans() function and individual check groups.
 from __future__ import annotations
 
 import importlib
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -89,6 +90,16 @@ from scripts.core.validators.scan_validator import (
 # ============================================================================
 
 
+ADAPTER_DIR = Path(__file__).resolve().parents[2] / "scripts" / "core" / "adapters"
+
+# Every quick-tier group except fixture parsing, which has one check per
+# adapter: 6 registry + 3 severity + 5 schema + 6 edge cases + 12 dedup
+# + 8 compliance + 4 SBOM + 8 reporters. The per-adapter share is derived
+# from EXPECTED_ADAPTERS so the total cannot drift from the adapter list.
+QUICK_NON_ADAPTER_CHECKS = 52
+FULL_ONLY_CHECKS = 12
+
+
 class TestValidateScans:
     """Tests for the main validate_scans() entry point."""
 
@@ -97,16 +108,19 @@ class TestValidateScans:
         assert isinstance(result, CategoryResult)
         assert result.name == "Scan Correctness"
 
-    def test_quick_tier_has_79_checks(self):
-        # 6 adapter registry + 27 fixture parsing + 3 severity + 5 schema
-        # + 6 edge cases + 12 dedup + 8 compliance + 4 SBOM + 8 reporters = 79
+    def test_quick_tier_has_one_parse_check_per_adapter(self):
+        expected = QUICK_NON_ADAPTER_CHECKS + len(EXPECTED_ADAPTERS)
         result = validate_scans("quick")
-        assert result.total == 79, f"Expected 79 quick checks, got {result.total}"
+        assert result.total == expected, (
+            f"Expected {expected} quick checks, got {result.total}"
+        )
 
-    def test_full_tier_has_91_checks(self):
-        # 79 quick + 12 full-tier = 91
+    def test_full_tier_adds_the_full_only_checks(self):
+        expected = QUICK_NON_ADAPTER_CHECKS + len(EXPECTED_ADAPTERS) + FULL_ONLY_CHECKS
         result = validate_scans("full")
-        assert result.total == 91, f"Expected 91 full checks, got {result.total}"
+        assert result.total == expected, (
+            f"Expected {expected} full checks, got {result.total}"
+        )
 
     def test_full_tier_includes_quick_checks(self):
         quick = validate_scans("quick")
@@ -144,7 +158,7 @@ class TestValidateScans:
     def test_unknown_tier_treated_as_quick(self):
         """Unknown tier should run quick checks only (no full extras)."""
         result = validate_scans("unknown_tier")
-        assert result.total == 79
+        assert result.total == QUICK_NON_ADAPTER_CHECKS + len(EXPECTED_ADAPTERS)
 
 
 # ============================================================================
@@ -155,11 +169,16 @@ class TestValidateScans:
 class TestConstants:
     """Tests for module-level constants."""
 
-    def test_expected_adapter_count(self):
-        assert EXPECTED_ADAPTER_COUNT == 27
+    def test_expected_adapters_are_exactly_the_adapter_files_on_disk(self):
+        on_disk = {
+            p.name.removesuffix("_adapter.py") for p in ADAPTER_DIR.glob("*_adapter.py")
+        }
+        # Meta-guard: an empty glob would make the equality below vacuous.
+        assert on_disk, f"no adapters found under {ADAPTER_DIR}"
+        assert set(EXPECTED_ADAPTERS) == on_disk
 
-    def test_expected_adapters_list(self):
-        assert len(EXPECTED_ADAPTERS) == 27
+    def test_expected_adapter_count_is_derived_from_the_list(self):
+        assert len(EXPECTED_ADAPTERS) == EXPECTED_ADAPTER_COUNT
 
     def test_adapters_sorted(self):
         assert sorted(EXPECTED_ADAPTERS) == EXPECTED_ADAPTERS
@@ -168,7 +187,7 @@ class TestConstants:
         assert {"CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"} == STANDARD_SEVERITIES
 
     def test_known_adapters_in_list(self):
-        for adapter in ["bandit", "trivy", "semgrep", "grype", "zap"]:
+        for adapter in ["osv_scanner", "trivy", "semgrep", "grype", "zap"]:
             assert adapter in EXPECTED_ADAPTERS
 
 
@@ -218,8 +237,10 @@ class TestAdapterRegistryChecks:
     def test_adapter_count(self):
         result = _check_adapter_count()
         assert isinstance(result, CheckResult)
-        # Should pass if all 28 adapters are available
-        assert result.status in (CheckStatus.PASS, CheckStatus.FAIL, CheckStatus.ERROR)
+        # This accepted PASS, FAIL or ERROR, so it could not fail -- and the
+        # check it runs did fail for a long time (EXPECTED_ADAPTER_COUNT was 27
+        # against 30 adapters on disk) without anyone noticing.
+        assert result.status == CheckStatus.PASS, result.message
 
     def test_adapter_naming(self):
         result = _check_adapter_naming()
@@ -262,14 +283,14 @@ class TestFixtureParsing:
     """Tests for adapter parse function checks."""
 
     def test_make_adapter_parse_check_returns_callable(self):
-        check_fn = _make_adapter_parse_check("bandit")
+        check_fn = _make_adapter_parse_check("semgrep")
         assert callable(check_fn)
 
-    def test_parse_check_bandit(self):
-        check_fn = _make_adapter_parse_check("bandit")
+    def test_parse_check_semgrep(self):
+        check_fn = _make_adapter_parse_check("semgrep")
         result = check_fn()
         assert isinstance(result, CheckResult)
-        assert result.name == "parse-bandit"
+        assert result.name == "parse-semgrep"
         assert result.status in (CheckStatus.PASS, CheckStatus.FAIL, CheckStatus.ERROR)
 
     def test_parse_check_trivy(self):
@@ -283,8 +304,8 @@ class TestFixtureParsing:
         assert result.status == CheckStatus.ERROR
         assert "Import failed" in result.message
 
-    def test_all_27_adapters_have_parse_checks(self):
-        """All 27 expected adapters should produce valid checks."""
+    def test_every_expected_adapter_has_a_parse_check(self):
+        """Every expected adapter should produce a valid check."""
         for adapter_name in EXPECTED_ADAPTERS:
             check_fn = _make_adapter_parse_check(adapter_name)
             result = check_fn()

@@ -42,7 +42,7 @@ from scripts.core.suppress import apply_suppressions
 **Adapter pattern:**
 
 ```python
-# All 27 adapters follow this pattern
+# Every adapter follows this pattern
 from scripts.core.common_finding import fingerprint, normalize_severity
 from scripts.core.plugin_api import AdapterPlugin, Finding
 
@@ -68,7 +68,7 @@ def write_<format>(findings: List[Dict], output_path: Path) -> None
 ```text
 common_finding.py (schema definition)
   ↓
-adapters/*.py (all 27 adapters use schema)
+adapters/*.py (every adapter uses schema)
   ↓
 normalize_and_report.py (aggregates findings)
   ↓
@@ -89,9 +89,10 @@ reporters/compliance_reporter.py (generate reports)
 
 Adapters are **not** in this chain: they emit unenriched findings, and
 `normalize_and_report.py` enriches once after dedup. A change to the framework
-mappings therefore has one call site, not 27. (One adapter,
-`semgrep_secrets_adapter.py:289`, still calls `enrich_finding_with_compliance`
-itself and is an outlier to fix, not a pattern to copy.)
+mappings therefore has one call site, not one per adapter. (The last adapter
+that called `enrich_finding_with_compliance` itself was `semgrep-secrets`,
+removed in v2.0.0; a new call in an adapter is an outlier to fix, not a pattern
+to copy.)
 
 **Chain 3: CLI Configuration**
 
@@ -102,7 +103,7 @@ config.py (load_config function)
   ↓
 jmo.py (CLI uses config)
   ↓
-profiles (fast/balanced/deep)
+tool list (--tools > jmo.yml tools: > TOOL_MATRIX)
 ```
 
 ---
@@ -127,7 +128,7 @@ profiles (fast/balanced/deep)
    ```
 
 3. **Categorize affected files** (re-count these; they drift):
-   - **Adapters** (27 files) - Create findings with schema
+   - **Adapters** (every `*_adapter.py`) - Create findings with schema
    - **Reporters** (13 files) - Read findings, expect schema fields
    - **Tests** (20+ files) - Validate schema structure
    - **Docs** (5 files) - Document schema
@@ -145,7 +146,7 @@ profiles (fast/balanced/deep)
 ## Impact Analysis: Adding 'priority' Field to CommonFinding
 
 ### Summary
-Adding a 'priority' field will affect **37 files** across 4 categories.
+Adding a 'priority' field will affect **<N> files** across 4 categories.
 
 ### Schema Change Details
 
@@ -178,7 +179,7 @@ finding = {
 
 ---
 
-### Affected Files (37 total)
+### Affected Files (<N> total)
 
 #### 1. Core Schema (2 files) - MUST UPDATE
 
@@ -187,9 +188,11 @@ finding = {
   - Update `fingerprint()` signature (if priority affects the fingerprint)
   - Note: there is **no** shared schema-version constant to bump. `plugin_api.py`
     carries `"1.2.0"` as a *default* twice (`Finding.schemaVersion:34`,
-    `PluginMetadata.schema_version:79`), but **all 27 adapters override both
-    explicitly** — so changing the defaults alone changes nothing, and a version
-    bump is **54 edits across 27 files**, not one. (`CURRENT_SCHEMA_VERSION` in
+    `PluginMetadata.schema_version:79`), but **every scanner adapter overrides
+    both explicitly** (the SARIF bindings take theirs from `sarif_common.py`) — so
+    changing the defaults alone changes nothing, and a version bump is dozens of
+    edits across the adapter files, not one. Count them with
+    `grep -c '"1.2.0"' scripts/core/adapters/*.py`. (`CURRENT_SCHEMA_VERSION` in
     `base_adapter.py` used to be cited here; that module was deleted, #745.)
 
 - ✅ `docs/schemas/common_finding.v1.json` - Update JSON schema
@@ -197,7 +200,7 @@ finding = {
   - Define enum: ["P0", "P1", "P2", "P3"]
   - Add description and examples
 
-#### 2. Adapters (27 files) - MUST UPDATE
+#### 2. Adapters (every `*_adapter.py`) - MUST UPDATE
 
 All adapters create findings and must include priority field:
 
@@ -206,11 +209,10 @@ All adapters create findings and must include priority field:
 - ✅ `scripts/core/adapters/trufflehog_adapter.py` - Add priority calculation
 - ✅ `scripts/core/adapters/syft_adapter.py` - Add priority calculation
 - ✅ `scripts/core/adapters/checkov_adapter.py` - Add priority calculation
-- ✅ `scripts/core/adapters/bandit_adapter.py` - Add priority calculation
 - ✅ `scripts/core/adapters/hadolint_adapter.py` - Add priority calculation
-- ✅ `scripts/core/adapters/noseyparker_adapter.py` - Add priority calculation
-- ✅ `scripts/core/adapters/falco_adapter.py` - Add priority calculation
-- ✅ `scripts/core/adapters/aflplusplus_adapter.py` - Add priority calculation
+- ✅ `scripts/core/adapters/grype_adapter.py` - Add priority calculation
+- ✅ `scripts/core/adapters/zap_adapter.py` - Add priority calculation
+- ✅ `scripts/core/adapters/sarif_common.py` - One change covers the SARIF bindings
 - ✅ ... (and all other adapters in scripts/core/adapters/)
 
 **Pattern to add:**
@@ -247,7 +249,7 @@ All adapter tests must validate priority field:
 - ✅ `tests/adapters/test_trivy_adapter.py` - Add priority assertions
 - ✅ `tests/adapters/test_semgrep_adapter.py` - Add priority assertions
 - ✅ `tests/adapters/test_trufflehog_adapter.py` - Add priority assertions
-- ... (all 11 adapter tests)
+- ... (every adapter test)
 
 - ✅ `tests/unit/test_common_finding.py` - Add priority field tests
 - ✅ `tests/reporters/test_basic_reporter.py` - Validate priority in output
@@ -290,7 +292,7 @@ def test_trivy_priority_field(tmp_path: Path):
 
 **Step 2: Update Adapters (2-3 hours)**
 
-- Add priority calculation to all 27 adapters
+- Add priority calculation to every adapter
 - Use severity-based default logic
 - Test each adapter individually
 
@@ -336,7 +338,7 @@ def test_trivy_priority_field(tmp_path: Path):
 
 Before merging:
 
-- [ ] All 27 adapters include priority field
+- [ ] Every adapter includes priority field
 - [ ] All adapter tests assert priority values
 - [ ] HTML dashboard shows priority column
 - [ ] SUMMARY.md sorted by priority

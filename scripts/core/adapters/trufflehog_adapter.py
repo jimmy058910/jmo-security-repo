@@ -41,10 +41,6 @@ Severity Classification:
 - MEDIUM: Unverified secrets (pattern match only)
 - CWE-798: Use of Hard-coded Credentials
 
-Complementary to Nosey Parker:
-- TruffleHog: API verification, reduces false positives
-- Nosey Parker: Faster, broader patterns, no verification
-
 Example:
     >>> adapter = TruffleHogAdapter()
     >>> findings = adapter.parse(Path('trufflehog.json'))

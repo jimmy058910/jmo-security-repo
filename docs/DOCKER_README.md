@@ -11,7 +11,7 @@ All security tools pre-installed and ready to use. Perfect for beginners, CI/CD 
 ## Table of Contents
 
 - [Quick Start (Absolute Beginners)](#quick-start-absolute-beginners)
-- [Image Variants](#image-variants)
+- [The Image](#the-image)
 - [Basic Usage](#basic-usage)
 - [CI/CD Integration](#cicd-integration)
 - [Advanced Configuration](#advanced-configuration)
@@ -142,11 +142,11 @@ cd /path/to/your/project
 # Run the scan (Linux/macOS/WSL - use quoted $(pwd))
 # Option 1: ECR Public (recommended for AWS users)
 docker run --rm -v "$(pwd):/scan" public.ecr.aws/m2d8u2k1/jmo-security:latest \
-  scan --repo /scan --results-dir /scan/results --profile-name balanced --human-logs
+  scan --repo /scan --results-dir /scan/results --human-logs
 
 # Option 2: GitHub Container Registry (recommended for general users)
 docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
-  scan --repo /scan --results-dir /scan/results --profile-name balanced --human-logs
+  scan --repo /scan --results-dir /scan/results --human-logs
 ```
 
 **What this command does:**
@@ -158,13 +158,14 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
 - `scan` - Run a security scan
 - `--repo /scan` - Scan the mounted directory
 - `--results /scan/results` - Save results to `results` folder
-- `--profile balanced` - Use default scanning profile (recommended)
 - `--human-logs` - Show readable progress messages
+
+Every scanner in the image is considered, and the repository's content decides which ones run. See [Tools](TOOLS.md#when-each-tool-runs).
 
 #### Windows PowerShell (Use This Syntax)
 
 ```powershell
-docker run --rm -v "${PWD}:/scan" ghcr.io/jimmy058910/jmo-security:latest scan --repo /scan --results-dir /scan/results --profile-name balanced --human-logs
+docker run --rm -v "${PWD}:/scan" ghcr.io/jimmy058910/jmo-security:latest scan --repo /scan --results-dir /scan/results --human-logs
 ```
 
 **Important:** Windows users must use `${PWD}` (with curly braces) and quotes.
@@ -195,13 +196,13 @@ Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jimmy058910/jmo-securi
 
 ```powershell
 # PowerShell
-.\jmo-docker.ps1 scan --repo /scan --profile fast
+.\jmo-docker.ps1 scan --repo /scan
 
 # CMD
-jmo-docker scan --repo /scan --profile fast
+jmo-docker scan --repo /scan
 
 # Git Bash (if you downloaded the bash version)
-./jmo-docker scan --repo /scan --profile fast
+./jmo-docker scan --repo /scan
 ```
 
 **What the wrapper does automatically:**
@@ -271,167 +272,29 @@ results/
 
 ---
 
-## Image Variants
+## The Image
 
-JMo Security provides **4 optimized Docker image variants** for different use cases and resource constraints.
+JMo Security publishes **one Docker image**. It carries every scanner in the [tool matrix](TOOLS.md#the-tool-matrix) plus OPA, the policy engine, so there is no variant to choose and nothing to install.
 
-### Quick Variant Selection
+| Registry | Image |
+|----------|-------|
+| GitHub Container Registry | `ghcr.io/jimmy058910/jmo-security:latest` |
+| Docker Hub | `jmogaming/jmo-security:latest` |
+| Amazon ECR Public | `public.ecr.aws/m2d8u2k1/jmo-security:latest` |
 
-| Variant | Tag | Size | Tools | Scan Time | Best For |
-|---------|-----|------|-------|-----------|----------|
-| **Deep** | `:deep`, `:latest` | ~1.97 GB | 29 | 40-70 min | Complete security audits, local development |
-| **Balanced** | `:balanced` | ~1.41 GB | 17 | 18-25 min | Production CI/CD, regular audits |
-| **Slim** | `:slim` | ~557 MB | 13 | 12-18 min | Cloud-focused, IaC, container security |
-| **Fast** | `:fast` | ~502 MB | 9 | 5-10 min | CI/CD gates, pre-commit hooks |
+`:latest` follows the newest release. In CI, pin a version tag such as `:2.0.0` instead. The image is built from the repository's `Dockerfile`.
 
-**Notes:**
+Carrying every scanner does not mean every scanner runs. The target's content decides: hadolint runs only when the repository has Dockerfiles, shellcheck only when it has shell scripts, gosec only when it has Go sources, and the DAST tools (ZAP, Nuclei) only on `--url` targets. See [When each tool runs](TOOLS.md#when-each-tool-runs). To narrow the list yourself, pass `--tools` or `--skip-tools`.
 
-- **29 total tools**: 25 Docker-ready (automatically included), 4 manual install (AFL++, Akto, Falco, MobSF). Falco is easy to miss here because `falcoctl` IS baked into `Dockerfile.deep` -- it is a different binary from `falco` itself, which is not.
-- **Scan times**: Estimated for typical repository (10K-50K LOC, 100-500 dependencies)
-
-### Decision Tree
-
-```text
-START: What is your primary use case?
-
-├─ Complete security audit (pre-release, compliance)
-│  → Use DEEP variant (:deep)
-│     - 29 tools, 40-70 min scans
-│     - Best for: Security teams, audits, compliance
-
-├─ Production CI/CD (daily/weekly scans)
-│  → Use BALANCED variant (:balanced)
-│     - 17 tools, 18-25 min scans
-│     - Best for: DevOps, regular audits, balanced coverage
-
-├─ Cloud/K8s/IaC focused (containers, infrastructure)
-│  → Use SLIM variant (:slim)
-│     - 13 tools, 12-18 min scans
-│     - Best for: Cloud-native, IaC, container security
-
-└─ Fast feedback (pre-commit, PR checks)
-   → Use FAST variant (:fast)
-      - 9 tools, 5-10 min scans
-      - Best for: Developers, CI gates, quick validation
-```
-
-### Resource Constraints
-
-| Variant | Min RAM | Min Disk | Min CPU | Network Bandwidth |
-|---------|---------|----------|---------|-------------------|
-| **Deep** | 2 GB | 4 GB | 2 cores | Medium (initial pull) |
-| **Balanced** | 1.5 GB | 3 GB | 2 cores | Medium (initial pull) |
-| **Slim** | 1 GB | 2 GB | 1 core | Low (fast pull) |
-| **Fast** | 512 MB | 1.5 GB | 1 core | Low (fast pull) |
-
----
-
-### Tool Distribution by Category
-
-**Legend:** ✅ Included | ❌ Excluded | 🔧 Manual install required
-
-#### Secrets Detection
-
-| Tool | Deep | Balanced | Slim | Fast | Notes |
-|------|------|----------|------|------|-------|
-| **TruffleHog** | ✅ | ✅ | ✅ | ✅ | Core tool, always included |
-| **Nosey Parker** | ✅ | ❌ | ❌ | ❌ | Deep profile only |
-| **Semgrep-Secrets** | ✅ | ❌ | ❌ | ❌ | Semgrep secret rules |
-
-#### Static Analysis (SAST)
-
-| Tool | Deep | Balanced | Slim | Fast | Notes |
-|------|------|----------|------|------|-------|
-| **Semgrep** | ✅ | ✅ | ✅ | ✅ | 4000+ rules, 30+ languages |
-| **Bandit** | ✅ | ❌ | ❌ | ❌ | Python-specific |
-| **Gosec** | ✅ | ✅ | ❌ | ❌ | Go security scanner |
-| **Horusec** | ✅ | ✅ | ✅ | ❌ | 18 languages, 10+ analyzers |
-
-#### Software Composition Analysis (SCA)
-
-| Tool | Deep | Balanced | Slim | Fast | Notes |
-|------|------|----------|------|------|-------|
-| **Syft** | ✅ | ✅ | ✅ | ✅ | Core SBOM tool |
-| **Trivy** | ✅ | ✅ | ✅ | ✅ | Core scanner |
-| **Grype** | ✅ | ✅ | ✅ | ❌ | Anchore scanner |
-| **Dependency-Check** | ✅ | ✅ | ✅ | ❌ | OWASP vuln database |
-
-#### Infrastructure as Code (IaC) & Containers
-
-| Tool | Deep | Balanced | Slim | Fast | Notes |
-|------|------|----------|------|------|-------|
-| **Checkov** | ✅ | ✅ | ✅ | ✅ | Terraform, CloudFormation, K8s |
-| **Checkov-CICD** | ✅ | ❌ | ❌ | ❌ | CI/CD pipeline security |
-| **Hadolint** | ✅ | ✅ | ✅ | ✅ | Dockerfile best practices |
-
-#### Cloud Security (CSPM) & Kubernetes
-
-| Tool | Deep | Balanced | Slim | Fast | Notes |
-|------|------|----------|------|------|-------|
-| **Prowler** | ✅ | ✅ | ✅ | ❌ | AWS/Azure/GCP/K8s auditing |
-| **Kubescape** | ✅ | ✅ | ✅ | ❌ | K8s RBAC, NSA/CISA frameworks |
-| **Trivy-RBAC** | ✅ | ❌ | ❌ | ❌ | K8s RBAC misconfig |
-
-#### Dynamic Application Security Testing (DAST)
-
-| Tool | Deep | Balanced | Slim | Fast | Notes |
-|------|------|----------|------|------|-------|
-| **OWASP ZAP** | ✅ | ✅ | ❌ | ❌ | Web app security testing |
-| **Nuclei** | ✅ | ✅ | ✅ | ✅ | 4000+ vulnerability templates |
-| **Akto** | 🔧 | 🔧 | 🔧 | 🔧 | Manual install, API security |
-
-#### Specialized Tools (Deep Variant Only)
-
-| Tool | Category | Notes |
-|------|----------|-------|
-| **Falco** | Runtime Monitoring | eBPF-based, deep profile |
-| **YARA** | Malware Detection | Web shells, backdoors |
-| **Lynis** | System Hardening | Unix security, CIS baselines |
-| **AFL++** | Fuzzing | Coverage-guided, binaries |
-| **ScanCode** | License Compliance | License detection, provenance |
-| **cdxgen** | SBOM | CycloneDX format |
-| **shellcheck** | Shell Linting | Bash/sh script analysis |
-| **MobSF** | Mobile Security | Manual install, Android/iOS |
-
----
+**Tags from earlier releases:** until v2.0.0 the image came in four variants, tagged `:fast`, `:slim`, `:balanced` and `:deep` (with `:full` as an old alias) plus version-suffixed forms. Those tags are no longer built. Images already published under them are not deleted, but they receive no updates. Use `:latest` or a version tag.
 
 ### Image Optimizations
 
-- **Multi-stage builds:** Separate builder and runtime stages eliminate build tools (curl, wget, tar, build-essential, clang, llvm)
+- **Multi-stage builds:** Separate builder and runtime stages keep download and build tooling out of the runtime image
 - **Layer caching cleanup:** Aggressive removal of apt cache, pip cache, and Python bytecode
 - **Volume mounting support:** Use `-v trivy-cache:/root/.cache/trivy` for persistent Trivy DB caching
 
 **Note:** Trivy database pre-download was intentionally removed (adds 800MB to image) in favor of volume caching approach for better size/performance trade-off.
-
-### Choosing a Variant
-
-```bash
-# Deep - Maximum coverage (29 tools, 25 Docker-ready) — also published as :latest
-docker pull ghcr.io/jimmy058910/jmo-security:deep
-
-# Balanced - Production CI/CD (17 tools)
-docker pull ghcr.io/jimmy058910/jmo-security:balanced
-
-# Slim - Cloud/K8s focused (13 tools)
-docker pull ghcr.io/jimmy058910/jmo-security:slim
-
-# Fast - Quick validation (9 tools)
-docker pull ghcr.io/jimmy058910/jmo-security:fast
-```
-
-All tags are also published with version suffixes (e.g. `:1.0.2-deep`, `:1.0-deep`, `:1-deep`) for pinning in CI. For one release cycle, `:full` is kept as an alias for `:deep` so existing scripts don't break — use `:deep` going forward.
-
-### Alpine Deprecation Notice
-
-**Dockerfile.alpine has been deprecated** and replaced by the balanced/slim variants.
-
-**Rationale:**
-
-1. Alpine's musl libc caused compatibility issues with 8+ tools
-2. Slim variant (557 MB) provides better tool coverage than Alpine (~600 MB)
-3. Many security tools require glibc (not available in Alpine)
-
-**Migration:** `docker pull ghcr.io/jimmy058910/jmo-security:slim`
 
 ---
 
@@ -439,42 +302,30 @@ All tags are also published with version suffixes (e.g. `:1.0.2-deep`, `:1.0-dee
 
 ### Common Scanning Scenarios
 
-#### Fast Scan (Quick Check)
-
-```bash
-docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:fast \
-  scan --repo /scan --results /scan/results --profile fast --human-logs
-```
-
-**Time:** 5-10 minutes
-**Tools:** trufflehog, semgrep, syft, trivy, checkov, hadolint, nuclei, shellcheck, opa (9 tools)
-
-#### Balanced Scan (Recommended Default)
-
-```bash
-docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:balanced \
-  scan --repo /scan --results /scan/results --profile balanced --human-logs
-```
-
-**Time:** 18-25 minutes
-**Tools:** Fast + prowler, kubescape, grype, horusec, zap, scancode, cdxgen, gosec (17 tools)
-
-#### Deep Scan (Comprehensive)
+#### Scan a Repository
 
 ```bash
 docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
-  scan --repo /scan --results /scan/results --profile deep --human-logs
+  scan --repo /scan --results /scan/results --human-logs
 ```
 
-**Time:** 40-70 minutes
-**Tools:** All 29 tools (25 Docker-ready + 4 manual installation)
+Every scanner in the image is considered; the ones the repository has content for run. See [When each tool runs](TOOLS.md#when-each-tool-runs).
+
+#### Quick Check (Narrow the Tool List)
+
+```bash
+docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
+  scan --repo /scan --results /scan/results --tools trufflehog semgrep trivy --human-logs
+```
+
+`--tools` replaces the list for this run; `--skip-tools zap nuclei` removes names from it instead.
 
 ### Scan Multiple Projects
 
 ```bash
 # If ~/projects contains multiple repos
 docker run --rm -v ~/projects:/repos ghcr.io/jimmy058910/jmo-security:latest \
-  scan --repos-dir /repos --results /repos/security-results --profile balanced --human-logs
+  scan --repos-dir /repos --results /repos/security-results --human-logs
 ```
 
 ### Scan with CI Gating
@@ -529,7 +380,7 @@ jobs:
           sarif_file: results/summaries/findings.sarif
 ```
 
-#### Scheduled Deep Scan
+#### Scheduled Full Scan
 
 ```yaml
 name: Weekly Security Audit
@@ -548,8 +399,8 @@ jobs:
 
       - uses: actions/checkout@v4
 
-      - name: Deep Scan
-        run: jmo ci --repo . --profile-name deep
+      - name: Full Scan
+        run: jmo ci --repo .
 
       - name: Upload Results
         uses: actions/upload-artifact@v4
@@ -569,7 +420,7 @@ jobs:
   scan:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/jimmy058910/jmo-security:slim
+      image: ghcr.io/jimmy058910/jmo-security:latest
     strategy:
       matrix:
         repo: [repo1, repo2, repo3]
@@ -630,19 +481,16 @@ pipeline {
 
 ## Advanced Configuration
 
-### Custom Profiles with jmo.yml
+### Custom Configuration with jmo.yml
 
-Mount a custom configuration file:
+Mount a custom configuration file. Every setting is a top-level key; a `tools:` list narrows the scanners for every scan that reads this file:
 
 ```bash
 # Create jmo.yml in your project
 cat > jmo.yml <<EOF
-default_profile: custom
-profiles:
-  custom:
-    tools: [trufflehog, semgrep, trivy]
-    timeout: 300
-    threads: 8
+tools: [trufflehog, semgrep, trivy]
+timeout: 300
+threads: 8
 per_tool:
   semgrep:
     flags: ["--exclude", "node_modules", "--exclude", "*.test.js"]
@@ -652,9 +500,9 @@ per_tool:
     flags: ["-config", "api.disablekey=true"]
 EOF
 
-# Run with custom profile
+# Run with the mounted config (jmo.yml in the working directory /scan is read by default)
 docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
-  scan --repo /scan --results /scan/results --profile-name custom --human-logs
+  scan --repo /scan --results /scan/results --human-logs
 ```
 
 ### Trivy Database Caching
@@ -667,14 +515,14 @@ docker run --rm \
   -v "$(pwd):/scan" \
   -v trivy-cache:/root/.cache/trivy \
   ghcr.io/jimmy058910/jmo-security:latest \
-  scan --repo /scan --profile balanced
+  scan --repo /scan
 
 # Subsequent scans: Reuses cached DB (30-60s faster - no download!)
 docker run --rm \
   -v "$(pwd):/scan" \
   -v trivy-cache:/root/.cache/trivy \
   ghcr.io/jimmy058910/jmo-security:latest \
-  scan --repo /scan --profile balanced
+  scan --repo /scan
 ```
 
 **Benefits:**
@@ -731,7 +579,7 @@ suppressions:
 # Run as current user to avoid permission issues
 docker run --rm --user $(id -u):$(id -g) \
   -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
-  scan --repo /scan --results /scan/results --profile balanced
+  scan --repo /scan --results /scan/results
 ```
 
 ### Resource Limits
@@ -742,7 +590,7 @@ docker run --rm \
   --memory="2g" \
   --cpus="2.0" \
   -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
-  scan --repo /scan --results /scan/results --profile balanced
+  scan --repo /scan --results /scan/results
 ```
 
 ---
@@ -768,8 +616,6 @@ services:
       - /scan
       - --results
       - /scan/results
-      - --profile
-      - balanced
       - --human-logs
 
   # CI mode with gating
@@ -786,35 +632,16 @@ services:
       - --fail-on
       - HIGH
       - --profile
-
-  # Fast scan with slim image
-  fast:
-    image: ghcr.io/jimmy058910/jmo-security:slim
-    volumes:
-
-      - .:/scan
-    command:
-
-      - scan
-      - --repo
-      - /scan
-      - --results
-      - /scan/results
-      - --profile
-      - fast
 ```
 
 **Usage:**
 
 ```bash
-# Run balanced scan
+# Run a scan
 docker-compose run --rm scan
 
 # Run CI mode
 docker-compose run --rm ci
-
-# Run fast scan
-docker-compose run --rm fast
 ```
 
 ---
@@ -844,7 +671,7 @@ docker run --rm \
   -v "$(pwd):/scan" \
   -v ~/.jmo:/root/.jmo \
   ghcr.io/jimmy058910/jmo-security:latest \
-  scan --repo /scan --results-dir /scan/results-baseline --profile-name balanced
+  scan --repo /scan --results-dir /scan/results-baseline
 ```
 
 **What this does:**
@@ -861,7 +688,7 @@ docker run --rm \
   -v "$(pwd):/scan" \
   -v ~/.jmo:/root/.jmo \
   ghcr.io/jimmy058910/jmo-security:latest \
-  scan --repo /scan --results-dir /scan/results-current --profile-name balanced
+  scan --repo /scan --results-dir /scan/results-current
 ```
 
 #### Step 3: Analyze Trends
@@ -1060,7 +887,7 @@ jobs:
             -v ${{ github.workspace }}:/scan \
             -v ${{ github.workspace }}/.jmo:/root/.jmo \
             ghcr.io/jimmy058910/jmo-security:latest \
-            scan --repo /scan --results-dir /scan/results --profile-name balanced
+            scan --repo /scan --results-dir /scan/results
 
       # Check for regressions (fail if new HIGH/CRITICAL)
       - name: Check for regressions
@@ -1116,7 +943,7 @@ security-scan-with-trends:
         -v $PWD:/scan \
         -v $PWD/.jmo:/root/.jmo \
         ghcr.io/jimmy058910/jmo-security:latest \
-        scan --repo /scan --results-dir /scan/results --profile-name balanced
+        scan --repo /scan --results-dir /scan/results
     # Check regressions
     - |
       docker run --rm \
@@ -1153,7 +980,7 @@ docker run --rm \
   -e JMO_HISTORY_DB_PATH=/root/.jmo/custom-history.db \
   -e JMO_LOG_LEVEL=DEBUG \
   ghcr.io/jimmy058910/jmo-security:latest \
-  scan --repo /scan --profile-name balanced
+  scan --repo /scan
 ```
 
 **Configuration precedence:**
@@ -1271,11 +1098,11 @@ sudo usermod -aG docker $USER
 
 #### Scan takes too long
 
-**Solution 1:** Use faster profile
+**Solution 1:** Run fewer tools
 
 ```bash
-docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:slim \
-  scan --repo /scan --results /scan/results --profile fast
+docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
+  scan --repo /scan --results /scan/results --tools trufflehog semgrep trivy
 ```
 
 **Solution 2:** Increase threads
@@ -1292,7 +1119,7 @@ echo "threads: 8" > jmo.yml
 **Solution:** Use full path with forward slashes and quotes:
 
 ```powershell
-docker run --rm -v "C:/Users/YourName/project:/scan" ghcr.io/jimmy058910/jmo-security:latest scan --repo /scan --results /scan/results --profile balanced
+docker run --rm -v "C:/Users/YourName/project:/scan" ghcr.io/jimmy058910/jmo-security:latest scan --repo /scan --results /scan/results
 ```
 
 #### "No scan targets provided" when using Git Bash on Windows
@@ -1309,21 +1136,21 @@ docker run --rm -v "C:/Users/YourName/project:/scan" ghcr.io/jimmy058910/jmo-sec
 
 ```bash
 MSYS_NO_PATHCONV=1 docker run --rm -v "C:\Projects\myrepo:/scan" \
-  ghcr.io/jimmy058910/jmo-security:fast scan --repo /scan --profile fast
+  ghcr.io/jimmy058910/jmo-security:latest scan --repo /scan
 ```
 
 **Solution 2:** Use PowerShell or Command Prompt instead of Git Bash:
 
 ```powershell
 # PowerShell (no path conversion issues)
-docker run --rm -v "${PWD}:/scan" ghcr.io/jimmy058910/jmo-security:fast scan --repo /scan --profile fast
+docker run --rm -v "${PWD}:/scan" ghcr.io/jimmy058910/jmo-security:latest scan --repo /scan
 ```
 
 **Solution 3:** Use double-slash prefix to prevent MSYS conversion:
 
 ```bash
 docker run --rm -v "C:\Projects\myrepo://scan" \
-  ghcr.io/jimmy058910/jmo-security:fast scan --repo //scan --profile fast
+  ghcr.io/jimmy058910/jmo-security:latest scan --repo //scan
 ```
 
 **Why this happens:** Git Bash includes MSYS/MinGW which tries to be helpful by converting paths that look like Unix paths to Windows paths. When you type `/scan`, MSYS assumes you mean a local Unix path and converts it to `C:/Program Files/Git/scan`.
@@ -1338,7 +1165,7 @@ docker run --rm -v "C:\Projects\myrepo://scan" \
 
    ```bash
    docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
-     scan --repo /scan --results /scan/results --profile balanced --allow-missing-tools
+     scan --repo /scan --results /scan/results --allow-missing-tools
    ```
 
 #### Permission errors on results files
@@ -1350,48 +1177,29 @@ docker run --rm -v "C:\Projects\myrepo://scan" \
 ```bash
 docker run --rm --user $(id -u):$(id -g) \
   -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
-  scan --repo /scan --results /scan/results --profile balanced
+  scan --repo /scan --results /scan/results
 ```
 
 #### WSL2 Docker builds are very slow
 
 **Problem:** Building Docker images on WSL2 takes 20-30 minutes due to slow filesystem I/O between WSL2 and Docker daemon.
 
-**Expected Build Times on WSL2:**
-
-| Variant | Tools | Build Time | Use Case |
-|---------|-------|------------|----------|
-| Fast | 9 | 5-10 min | CI/CD gates, pre-commit |
-| Slim | 13 | 10-15 min | Cloud/IaC scanning |
-| Balanced | 17 | 18-25 min | Production audits |
-| Deep | 29 | 20-30 min | Comprehensive security |
-
 **Solutions:**
 
-**Solution 1:** Use pre-built images (recommended)
+**Solution 1:** Use the pre-built image (recommended)
 
 ```bash
 # Pull from GHCR instead of building locally
-docker pull ghcr.io/jimmy058910/jmo-security:fast
-docker pull ghcr.io/jimmy058910/jmo-security:slim
-docker pull ghcr.io/jimmy058910/jmo-security:balanced
 docker pull ghcr.io/jimmy058910/jmo-security:latest
 ```
 
-**Solution 2:** Use smaller variants for testing
-
-```bash
-# Use fast variant (9 tools, 5-10 min build) instead of deep
-docker build -f Dockerfile.fast -t jmo-security:fast .
-```
-
-**Solution 3:** Enable Docker BuildKit
+**Solution 2:** Enable Docker BuildKit
 
 ```bash
 DOCKER_BUILDKIT=1 docker build -t jmo-security:latest .
 ```
 
-**Solution 4:** Move project to Windows filesystem
+**Solution 3:** Move project to Windows filesystem
 
 ```bash
 # Better I/O performance than WSL2 home directory
@@ -1399,7 +1207,7 @@ cd /mnt/c/Projects/jmo-security-repo
 docker build -t jmo-security:latest .
 ```
 
-**Solution 5:** Use native Linux
+**Solution 4:** Use native Linux
 
 - Native Linux builds are 3-5x faster than WSL2
 - Consider a Linux VM or dual-boot for frequent Docker builds
@@ -1431,15 +1239,6 @@ Build:
 docker build -t my-custom-security:latest .
 ```
 
-### Using Different Base
-
-```dockerfile
-FROM ghcr.io/jimmy058910/jmo-security:slim
-
-# Add only specific tools you need
-RUN pip install bandit==1.7.5
-```
-
 ---
 
 ## Security Considerations
@@ -1448,7 +1247,7 @@ RUN pip install bandit==1.7.5
 
 **Practices we follow:**
 
-- Official base images (Ubuntu 22.04, Alpine 3.18)
+- Official base image (Ubuntu 24.04)
 - Pinned tool versions (reproducible builds)
 - Trivy scanning in CI (gate on HIGH/CRITICAL)
 - SBOM generation (transparency)

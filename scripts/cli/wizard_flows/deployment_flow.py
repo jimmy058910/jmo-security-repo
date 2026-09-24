@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any
 
 from .base_flow import BaseWizardFlow
-from .profile_config import get_profile_warning
 
 
 class DeploymentFlow(BaseWizardFlow):
@@ -49,7 +48,6 @@ class DeploymentFlow(BaseWizardFlow):
         # Production deployment warning
         if environment == "production":
             prod_requirements = [
-                "Deep scan profile (comprehensive checks)",
                 "Zero CRITICAL findings",
                 "Compliance validation (OWASP, CWE, PCI DSS)",
                 "All container images scanned",
@@ -58,31 +56,6 @@ class DeploymentFlow(BaseWizardFlow):
             self.prompter.print_summary_box(
                 "⚠️  Production Deployment Requirements", prod_requirements
             )
-
-        # Profile selection based on environment
-        profile_default = "deep" if environment == "production" else "balanced"
-        if environment == "production":
-            self.prompter.print_warning(
-                "Production deployments require 'deep' profile (30-60 min)"
-            )
-        else:
-            self.prompter.print_info(
-                "Staging deployments typically use 'balanced' profile (15-20 min)"
-            )
-
-        profile = self.prompter.prompt_choice(
-            "Select scan profile:",
-            # curated-profile-subset: a deployment gate needs real coverage, so
-            # `fast` is deliberately not offered here.
-            choices=["balanced", "deep"],
-            default=profile_default,
-        )
-
-        # Show profile-specific warnings (e.g., deep profile first-run timing)
-        warning = get_profile_warning(profile)
-        if warning:
-            print()  # Add spacing
-            self.prompter.print_warning(warning)
 
         # Failure threshold based on environment
         fail_default = "CRITICAL" if environment == "production" else "HIGH"
@@ -94,7 +67,6 @@ class DeploymentFlow(BaseWizardFlow):
 
         return {
             "environment": environment,
-            "profile": profile,
             "fail_on": fail_threshold,
         }
 
@@ -139,8 +111,6 @@ class DeploymentFlow(BaseWizardFlow):
         cmd = [
             "jmo",
             "ci",
-            "--profile-name",
-            options["profile"],
             "--fail-on",
             options["fail_on"],
         ]

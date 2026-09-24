@@ -64,14 +64,16 @@ Use the full template at [templates/adapter-template.py](templates/adapter-templ
 - Inherits `AdapterPlugin`, implements `parse()` returning `List[Finding]`
 - Sets `Finding.id` with the module-level `fingerprint()` from
   `scripts.core.common_finding` - **not** `self.get_fingerprint()`. The method on
-  `AdapterPlugin` takes one already-built `Finding` (`plugin_api.py:144`) and so
+  `AdapterPlugin` takes one already-built `Finding` (`plugin_api.py:145`) and so
   cannot be called from inside the constructor of the `Finding` that needs the
   id. `fingerprint(tool, rule_id, path, start_line, message)` returns 16
-  lowercase hex chars; every shipped adapter uses it
-  (`bandit_adapter.py:164`)
+  lowercase hex chars; most shipped adapters call it directly
+  (`gosec_adapter.py:166`). semgrep, trivy and trufflehog instead build the
+  `Finding` first and then assign `finding.id = self.get_fingerprint(finding)`
+  (`trivy_adapter.py:178`), which delegates to the same formula
 - `name` in metadata matches the **adapter filename** identifier - underscored,
-  normalized once: `dependency-check` -> `dependency_check_adapter.py` and
-  `name="dependency_check"`. It is not the tool's output filename
+  normalized once: `osv-scanner` -> `osv_scanner_adapter.py` and
+  `name="osv_scanner"`. It is not the tool's output filename
 - Adapters do NOT handle compliance enrichment (centralized in normalize_and_report.py)
 
 ### Phase 3: Write Tests
@@ -90,7 +92,7 @@ Auto-discovery via `discover_adapters()` eliminates manual imports. Skip to Phas
 
 ### Phase 5: Update Configuration
 
-Add `{tool}` to appropriate profiles in `jmo.yml` and set per-tool flags/timeout. Profile criteria: fast (<5 min), balanced (production-ready), deep (specialized).
+Add `{tool}` to `TOOL_MATRIX` in `scripts/core/tool_registry.py` (the one default tool list; there are no scan profiles), wire it into the scan job for each target type it applies to, and state when it runs in `docs/TOOLS.md`. Set any per-tool flags or timeout under the top-level `per_tool:` key in `jmo.yml`.
 
 ### Phase 6: Update Documentation
 
@@ -98,7 +100,7 @@ Update README.md, QUICKSTART.md, docs/USER_GUIDE.md, CLAUDE.md, CHANGELOG.md wit
 
 ### Phase 6.5: Docker, Wizard, and Installation Integration
 
-Still required -- plugin system only affects Python adapters. Update: `versions.yaml`, install scripts, 3 Dockerfiles, wizard profiles. Verify parity across all integration points.
+Still required -- plugin system only affects Python adapters. Update: `versions.yaml`, install scripts, the `Dockerfile` (via `update_versions.py --sync`, never by hand), and the wizard's tool detection. Verify parity across all integration points.
 
 ### Phase 7: Write Integration Tests
 
@@ -124,11 +126,12 @@ PR title: `feat(adapters): add {tool} scanner support (v3.0.0 plugin)`. Include 
 
 See [examples/new-tool-examples.md](examples/new-tool-examples.md) for complete adapter implementations:
 
-1. **Prowler** (Cloud CSPM) -- AWS/Azure/GCP auditing, 400+ compliance checks
-2. **MobSF** (Mobile SAST) -- iOS/Android static analysis, OWASP Mobile Top 10
-3. **Checkov** (CI/CD Security) -- GitHub Actions/GitLab CI scanning with CI/CD tagging
-4. **ScanCode** (License Compliance) -- OSS license detection, risky license flagging
-5. **Lynis** (System Hardening) -- Text log parsing, warning/suggestion extraction
+1. **Checkov** (CI/CD Security) -- GitHub Actions/GitLab CI scanning with CI/CD tagging
+
+For a tool that emits SARIF, do not start from these: write a ~34-line binding over
+`scripts/core/adapters/sarif_common.py`, as `zizmor_adapter.py`,
+`gitleaks_adapter.py` and `osv_scanner_adapter.py` do (see
+`.claude/rules/adapters.rules.md`, "SARIF tools").
 
 ---
 
@@ -139,7 +142,7 @@ See [examples/new-tool-examples.md](examples/new-tool-examples.md) for complete 
 - [ ] Plugin auto-discovery works (no manual imports)
 - [ ] Tests use `adapter.parse()` method (not `load_{tool}()`)
 - [ ] Tests verify `Finding` objects (not dicts)
-- [ ] Configuration updated (jmo.yml profiles)
+- [ ] Tool added to `TOOL_MATRIX` and its scan job; `per_tool` defaults in jmo.yml if any
 - [ ] Documentation updated (README, QUICKSTART, USER_GUIDE)
 - [ ] Docker/Wizard/Installation integration complete
 - [ ] Integration test passes (end-to-end)

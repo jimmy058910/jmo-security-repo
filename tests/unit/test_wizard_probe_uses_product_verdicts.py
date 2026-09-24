@@ -50,9 +50,11 @@ NARROWER_THAN_CHECK_TOOL = {
 }
 
 #: Probing the host for a *dependency* is not the same question and stays.
-#: `_get_java_version` / `_get_node_version` are about the machine, not about a
-#: tool's status, and `check_tool` has no field that answers them.
-ALLOWED_PRIVATE = {"_get_java_version", "_get_node_version"}
+#: Whether the machine has a JRE (zap needs one) is about the machine, not about
+#: a tool's status, and `check_tool` has no field that answers it. The probe asks
+#: `shutil.which("java")`; ToolManager's private `_get_java_version` /
+#: `_get_node_version` helpers it used before are gone.
+HOST_DEPENDENCIES = {"java"}
 
 
 def _private_tool_manager_calls() -> list[tuple[int, str]]:
@@ -75,6 +77,25 @@ def _private_tool_manager_calls() -> list[tuple[int, str]]:
         ):
             calls.append((node.lineno, func.attr))
     return calls
+
+
+def _host_dependency_probes() -> set[str]:
+    """Constant first arguments of every `which(...)` / `shutil.which(...)` call."""
+    tree = ast.parse(PROBE.read_text(encoding="utf-8"))
+    probed: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not node.args:
+            continue
+        func = node.func
+        name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+        first = node.args[0]
+        if (
+            name == "which"
+            and isinstance(first, ast.Constant)
+            and isinstance(first.value, str)
+        ):
+            probed.add(first.value)
+    return probed
 
 
 def test_the_probe_exists_where_claude_md_says_it_does():
@@ -112,14 +133,16 @@ def test_host_dependency_probes_are_still_allowed():
     """Negative control, in the over-correction direction.
 
     "Use check_tool for everything" would be wrong: whether the *machine* has
-    Java or Node is a different question, and `check_tool` has no field for it.
-    If this fails, the denylist above has been widened into a ban on asking.
+    Java is a different question, and `check_tool` has no field for it. The
+    probe still has to ask the host directly, and that question must not be
+    one the denylist above forbids.
     """
-    assert not (NARROWER_THAN_CHECK_TOOL & ALLOWED_PRIVATE)
+    assert not (NARROWER_THAN_CHECK_TOOL & {"which"})
 
-    attrs = {attr for _, attr in _private_tool_manager_calls()}
+    missing = HOST_DEPENDENCIES - _host_dependency_probes()
 
-    assert attrs & ALLOWED_PRIVATE, (
-        "the probe no longer checks for Java/Node at all - it should still "
-        "report a missing host dependency, just not re-derive tool status"
+    assert not missing, (
+        f"the probe no longer asks the host for {sorted(missing)} - it should "
+        "still report a missing host dependency (zap needs Java), just not "
+        "re-derive tool status"
     )

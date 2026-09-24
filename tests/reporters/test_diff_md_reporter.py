@@ -14,7 +14,6 @@ def sample_diff_result():
         source_type="directory",
         path="baseline-results/",
         timestamp="2025-11-04T10:00:00Z",
-        profile="balanced",
         total_findings=150,
     )
 
@@ -22,7 +21,6 @@ def sample_diff_result():
         source_type="directory",
         path="current-results/",
         timestamp="2025-11-05T10:00:00Z",
-        profile="balanced",
         total_findings=142,
     )
 
@@ -138,11 +136,8 @@ def test_markdown_header(tmp_path, sample_diff_result):
 
     # Check header elements
     assert "# 🔍 Security Diff Report" in content
-    assert "**Baseline:** `baseline-results/`" in content
-    assert "**Current:** `current-results/`" in content
-    assert "2025-11-04" in content
-    assert "2025-11-05" in content
-    assert "balanced profile" in content
+    assert "**Baseline:** `baseline-results/` (2025-11-04)\n" in content
+    assert "**Current:** `current-results/` (2025-11-05)\n" in content
 
 
 def test_markdown_summary_table(tmp_path, sample_diff_result):
@@ -274,7 +269,6 @@ def test_markdown_empty_sections(tmp_path):
         source_type="directory",
         path="baseline/",
         timestamp="2025-11-04T10:00:00Z",
-        profile="fast",
         total_findings=100,
     )
 
@@ -282,7 +276,6 @@ def test_markdown_empty_sections(tmp_path):
         source_type="directory",
         path="current/",
         timestamp="2025-11-05T10:00:00Z",
-        profile="fast",
         total_findings=100,
     )
 
@@ -328,7 +321,6 @@ def test_markdown_improving_trend(tmp_path):
         source_type="directory",
         path="baseline/",
         timestamp="2025-11-04T10:00:00Z",
-        profile="balanced",
         total_findings=120,
     )
 
@@ -336,7 +328,6 @@ def test_markdown_improving_trend(tmp_path):
         source_type="directory",
         path="current/",
         timestamp="2025-11-05T10:00:00Z",
-        profile="balanced",
         total_findings=100,
     )
 
@@ -387,7 +378,6 @@ def test_markdown_unicode_handling(tmp_path):
         source_type="directory",
         path="baseline/",
         timestamp="2025-11-04T10:00:00Z",
-        profile="balanced",
         total_findings=0,
     )
 
@@ -395,7 +385,6 @@ def test_markdown_unicode_handling(tmp_path):
         source_type="directory",
         path="current/",
         timestamp="2025-11-05T10:00:00Z",
-        profile="balanced",
         total_findings=1,
     )
 
@@ -450,7 +439,6 @@ def test_markdown_creates_parent_directory(tmp_path):
         source_type="directory",
         path="baseline/",
         timestamp="2025-11-04T10:00:00Z",
-        profile="fast",
         total_findings=0,
     )
 
@@ -458,7 +446,6 @@ def test_markdown_creates_parent_directory(tmp_path):
         source_type="directory",
         path="current/",
         timestamp="2025-11-05T10:00:00Z",
-        profile="fast",
         total_findings=0,
     )
 
@@ -495,7 +482,6 @@ def test_markdown_modification_types(tmp_path):
         source_type="directory",
         path="baseline/",
         timestamp="2025-11-04T10:00:00Z",
-        profile="balanced",
         total_findings=3,
     )
 
@@ -503,7 +489,6 @@ def test_markdown_modification_types(tmp_path):
         source_type="directory",
         path="current/",
         timestamp="2025-11-05T10:00:00Z",
-        profile="balanced",
         total_findings=3,
     )
 

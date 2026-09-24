@@ -1,6 +1,6 @@
 # Makefile - Developer shortcuts for terminal-first workflow
 
-.PHONY: help fmt lint typecheck test test-fast test-parallel test-profile test-e2e test-e2e-visual test-e2e-report verify clean tools verify-env analyze-completeness verify-completeness dev-deps dev-setup pre-commit-install pre-commit-run install-git-hooks upgrade-pip deps-sync deps-lock deps-upgrade docker-build docker-build-all docker-build-local docker-push docker-test validate-readme check-pypi-readme collect-metrics metrics verify-badges samples-clean samples-scan samples-report samples-verify regenerate-samples dist dist-clean dist-verify clean-build clean-test clean-caches clean-all
+.PHONY: help fmt lint typecheck test test-fast test-parallel test-profile test-e2e test-e2e-visual test-e2e-report verify clean tools verify-env analyze-completeness verify-completeness dev-deps dev-setup pre-commit-install pre-commit-run install-git-hooks upgrade-pip deps-sync deps-lock deps-upgrade docker-build docker-build-local docker-push docker-test validate-readme check-pypi-readme collect-metrics metrics verify-badges samples-clean samples-scan samples-report samples-verify regenerate-samples dist dist-clean dist-verify clean-build clean-test clean-caches clean-all
 
 # Prefer workspace venv if available.
 #
@@ -42,14 +42,11 @@ help:
 	@echo "  capture-screenshot - Render dashboard.html from RESULTS_DIR and save PNG via headless Chromium"
 	@echo "  screenshots-demo  - Produce demo results from samples/fixtures/infra-demo (stubs allowed), render dashboard, capture PNG"
 	@echo "  setup     - Check security tool installation (jmo tools check)"
-	@echo "  fast      - Fast profile scan (9 tools) via jmo"
-	@echo "  balanced  - Balanced profile scan (17 tools) via jmo"
-	@echo "  full      - Deep profile scan (29 tools) via jmo"
 	@echo "  attack-navigator - Open ATT&CK Navigator with scan findings (auto-serve)"
 	@echo ""
 	@echo "Sample Fixture Targets:"
 	@echo "  regenerate-samples   - Full sample regeneration (scan + report + verify)"
-	@echo "  samples-scan         - Scan samples/fixtures/infra-demo with balanced profile"
+	@echo "  samples-scan         - Scan samples/fixtures/infra-demo"
 	@echo "  samples-report       - Generate reports from sample scan results"
 	@echo "  samples-verify       - Verify sample outputs have v1.0.0 format"
 	@echo "  samples-clean        - Remove old sample outputs"
@@ -67,11 +64,10 @@ help:
 	@echo "  clean-caches         - Remove Python caches only"
 	@echo ""
 	@echo "Docker Targets:"
-	@echo "  docker-build         - Build Docker image (VARIANT=full|slim|alpine, default: full)"
-	@echo "  docker-build-all     - Build all Docker image variants (full, slim, alpine)"
-	@echo "  docker-build-local   - Build all variants with 'local' tag for testing before release"
-	@echo "  docker-test          - Test Docker image (VARIANT=full|slim|alpine, default: full)"
-	@echo "  docker-push          - Push Docker image to registry (VARIANT=full|slim|alpine, TAG=latest)"
+	@echo "  docker-build         - Build the Docker image, tagged DOCKER_TAG (default: latest) and VERSION"
+	@echo "  docker-build-local   - Build the image as jmo-security-dev:latest for local testing"
+	@echo "  docker-test          - Smoke-test the image tagged DOCKER_TAG"
+	@echo "  docker-push          - Push the image to the registry (DOCKER_TAG and VERSION)"
 	@echo ""
 	@echo "Release Targets:"
 	@echo "  validate-readme      - Check README consistency (PyPI + Docker Hub + GHCR)"
@@ -336,29 +332,10 @@ screenshots-demo:
 	@echo "[screenshots-demo] Dashboard: /tmp/jmo-infra-demo-results/summaries/dashboard.html"
 	@echo "[screenshots-demo] Screenshot(s) saved under $${OUTDIR:-docs/internal/screenshots}"
 
-.PHONY: setup fast balanced full
+.PHONY: setup
 setup:
 	@which jmo >/dev/null 2>&1 || (echo 'Installing package to expose jmo…' && $(PY) -m pip install -e . )
 	jmo tools check || true
-
-# Usage: make fast [DIR=~/repos] [TARGETS=results/targets.tsv.txt] [RESULTS=results]
-fast:
-	@which jmo >/dev/null 2>&1 || (echo 'Installing package to expose jmo…' && $(PY) -m pip install -e . )
-	@if [ -n "$(DIR)" ]; then jmo scan --profile fast --repo $(DIR) --results $${RESULTS:-results}; \
-	elif [ -n "$(TARGETS)" ]; then jmo scan --profile fast --targets $(TARGETS) --results $${RESULTS:-results}; \
-	else echo 'Set DIR=~/repos or TARGETS=results/targets.tsv.txt'; exit 1; fi
-
-balanced:
-	@which jmo >/dev/null 2>&1 || (echo 'Installing package to expose jmo…' && $(PY) -m pip install -e . )
-	@if [ -n "$(DIR)" ]; then jmo scan --profile balanced --repo $(DIR) --results $${RESULTS:-results}; \
-	elif [ -n "$(TARGETS)" ]; then jmo scan --profile balanced --targets $(TARGETS) --results $${RESULTS:-results}; \
-	else echo 'Set DIR=~/repos or TARGETS=results/targets.tsv.txt'; exit 1; fi
-
-full:
-	@which jmo >/dev/null 2>&1 || (echo 'Installing package to expose jmo…' && $(PY) -m pip install -e . )
-	@if [ -n "$(DIR)" ]; then jmo scan --profile deep --repo $(DIR) --results $${RESULTS:-results}; \
-	elif [ -n "$(TARGETS)" ]; then jmo scan --profile deep --targets $(TARGETS) --results $${RESULTS:-results}; \
-	else echo 'Set DIR=~/repos or TARGETS=results/targets.tsv.txt'; exit 1; fi
 
 # ============================================================================
 # Sample Fixture Targets
@@ -395,14 +372,12 @@ samples-scan: samples-clean
 	@echo ""
 	@echo "╔══════════════════════════════════════════════════════════════╗"
 	@echo "║  Scanning sample fixture: $(SAMPLES_FIXTURE)                 ║"
-	@echo "║  Profile: balanced (17 tools)                                ║"
 	@echo "║  Estimated time: 5-15 minutes                                ║"
 	@echo "╚══════════════════════════════════════════════════════════════╝"
 	@echo ""
 	PYTHONPATH=. $(PY) scripts/cli/jmo.py scan \
 		--repo $(SAMPLES_FIXTURE) \
 		--results $(SAMPLES_OUTPUT) \
-		--profile balanced \
 		--allow-missing-tools \
 		--human-logs
 	@echo ""
@@ -597,68 +572,46 @@ DOCKER_REGISTRY ?= ghcr.io
 DOCKER_ORG ?= jimmy058910
 DOCKER_IMAGE ?= jmo-security
 DOCKER_TAG ?= latest
-VARIANT ?= deep
+DOCKER_REF := $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE)
 
-# Determine Dockerfile based on variant. After v1.0.2, every variant lives in
-# its own file — the heavyweight image is Dockerfile.deep, not bare Dockerfile.
-DOCKERFILE := Dockerfile.$(VARIANT)
+# The project version from pyproject.toml; the image is tagged with it beside
+# DOCKER_TAG, the way release.yml publishes `:latest` and semver.
+VERSION ?= $(shell $(PY) -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
 
 # Auto-detect target architecture (amd64 or arm64) for Docker builds
-# This ensures Alpine builds install semgrep/checkov on amd64
 TARGETARCH := $(shell uname -m | sed 's/x86_64/amd64/g' | sed 's/aarch64/arm64/g')
 
 docker-build:
-	@echo "Building Docker image: $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)-$(VARIANT)"
+	@echo "Building Docker image: $(DOCKER_REF):$(DOCKER_TAG) and $(DOCKER_REF):$(VERSION)"
 	@echo "Target architecture: $(TARGETARCH)"
-	docker build --build-arg TARGETARCH=$(TARGETARCH) -f $(DOCKERFILE) -t $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)-$(VARIANT) .
-	@if [ "$(VARIANT)" = "deep" ]; then \
-		docker tag $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)-$(VARIANT) $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG); \
-		echo "Tagged as latest: $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)"; \
-	fi
-
-docker-build-all:
-	@echo "Building all Docker image variants..."
-	$(MAKE) docker-build VARIANT=deep
-	$(MAKE) docker-build VARIANT=balanced
-	$(MAKE) docker-build VARIANT=slim
-	$(MAKE) docker-build VARIANT=fast
+	docker build --build-arg TARGETARCH=$(TARGETARCH) -f Dockerfile -t $(DOCKER_REF):$(DOCKER_TAG) -t $(DOCKER_REF):$(VERSION) .
 
 docker-build-local:
-	@echo "Building all Docker variants with 'local' tag for testing..."
+	@echo "Building the Docker image with a local tag for testing..."
 	@echo "Target architecture: $(TARGETARCH)"
-	docker build --build-arg TARGETARCH=$(TARGETARCH) -f Dockerfile.deep -t jmo-security:local-deep .
-	docker build --build-arg TARGETARCH=$(TARGETARCH) -f Dockerfile.balanced -t jmo-security:local-balanced .
-	docker build --build-arg TARGETARCH=$(TARGETARCH) -f Dockerfile.slim -t jmo-security:local-slim .
-	docker build --build-arg TARGETARCH=$(TARGETARCH) -f Dockerfile.fast -t jmo-security:local-fast .
+	docker build --build-arg TARGETARCH=$(TARGETARCH) -f Dockerfile -t jmo-security-dev:latest .
 	@echo ""
-	@echo "Local Docker images built successfully:"
-	@echo "  - jmo-security:local-deep"
-	@echo "  - jmo-security:local-balanced"
-	@echo "  - jmo-security:local-slim"
-	@echo "  - jmo-security:local-fast"
+	@echo "Local Docker image built: jmo-security-dev:latest"
 	@echo ""
-	@echo "Test with: docker run --rm jmo-security:local-deep --help"
-	@echo "Run E2E tests: DOCKER_IMAGE_BASE=jmo-security DOCKER_TAG=local make test-e2e"
+	@echo "Test with: docker run --rm jmo-security-dev:latest --help"
+	@echo "Run Docker E2E tests: JMO_DOCKER_REGISTRY=jmo-security-dev pytest tests/e2e/test_docker_workflows.py -m docker"
 
 docker-test:
-	@echo "Testing Docker image: $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)-$(VARIANT)"
-	docker run --rm $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)-$(VARIANT) --version
-	docker run --rm $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)-$(VARIANT) --help
+	@echo "Testing Docker image: $(DOCKER_REF):$(DOCKER_TAG)"
+	docker run --rm $(DOCKER_REF):$(DOCKER_TAG) --version
+	docker run --rm $(DOCKER_REF):$(DOCKER_TAG) --help
 	@echo "Creating test scan..."
 	@mkdir -p /tmp/docker-test-scan
 	@echo "print('test')" > /tmp/docker-test-scan/test.py
-	docker run --rm -v /tmp/docker-test-scan:/scan $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)-$(VARIANT) \
-		scan --repo /scan --results /scan/results --profile fast --human-logs || true
+	docker run --rm -v /tmp/docker-test-scan:/scan $(DOCKER_REF):$(DOCKER_TAG) \
+		scan --repo /scan --results /scan/results --human-logs || true
 	@rm -rf /tmp/docker-test-scan
 	@echo "Test completed successfully"
 
 docker-push:
-	@echo "Pushing Docker image: $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)-$(VARIANT)"
-	docker push $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)-$(VARIANT)
-	@if [ "$(VARIANT)" = "deep" ]; then \
-		docker push $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG); \
-		echo "Pushed latest: $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)"; \
-	fi
+	@echo "Pushing Docker image: $(DOCKER_REF):$(DOCKER_TAG) and $(DOCKER_REF):$(VERSION)"
+	docker push $(DOCKER_REF):$(DOCKER_TAG)
+	docker push $(DOCKER_REF):$(VERSION)
 
 # ATT&CK Navigator automation
 ATTACK_JSON ?= results/summaries/attack-navigator.json
@@ -667,7 +620,7 @@ attack-navigator:
 		echo "❌ Error: $(ATTACK_JSON) not found"; \
 		echo ""; \
 		echo "Run a scan first:"; \
-		echo "  make balanced"; \
+		echo "  jmo scan --repo . --results-dir results"; \
 		echo "  jmo report results --profile"; \
 		exit 1; \
 	fi

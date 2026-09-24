@@ -83,7 +83,6 @@ def create_test_finding(
 def create_test_scan(
     finding_count: int = 100,
     scan_id: str | None = None,
-    profile: str = "balanced",
     commit_hash: str = "abc123",
 ) -> dict[str, Any]:
     """Create a test scan with findings for performance testing."""
@@ -112,7 +111,6 @@ def create_test_scan(
         "timestamp": int(time.time()),
         "git_commit": commit_hash,
         "git_branch": "main",
-        "profile": profile,
         "tools": ["trivy", "semgrep", "trufflehog", "checkov", "syft"],
         "target_count": 1,
         "findings": findings,
@@ -277,7 +275,6 @@ class TestPerformanceBenchmarks:
             stored.append(
                 store_scan(
                     results_dir=results_dir,
-                    profile=scan_data["profile"],
                     tools=scan_data["tools"],
                     db_path=fresh_path,
                     commit_hash=scan_data["git_commit"],
@@ -298,7 +295,6 @@ class TestPerformanceBenchmarks:
         # written there -- and its id is this store's, not a sample's.
         scan_id = store_scan(
             results_dir=results_dir,
-            profile=scan_data["profile"],
             tools=scan_data["tools"],
             db_path=db_path,
             commit_hash=scan_data["git_commit"],
@@ -417,7 +413,6 @@ class TestPerformanceBenchmarks:
             # Store scan with incrementing timestamps (daily scans)
             scan_id = store_scan(
                 results_dir=scan_results_dir,
-                profile=scan_data["profile"],
                 tools=scan_data["tools"],
                 db_path=db_path,
                 commit_hash=scan_data["git_commit"],
