@@ -66,11 +66,6 @@ SKIP_DIR_NAMES: set[str] = {
     # maintainer's machine, each a frozen copy of the Hub description. Not
     # repository content, and absent from a clone.
     "metrics",
-    # Gitignored (`paperclip/`): the maintainer's ops and marketing directory.
-    # Absent from a clone, so an allowlist entry for a file in it passes on the
-    # maintainer's machine and fails on every CI runner, which is what two v1.1.0
-    # announcements did on #1292.
-    "paperclip",
     # A nested git worktree is a *second checkout*, not repository content.
     # `.claude/worktrees/release-v107` held a pre-squash copy of CHANGELOG.md
     # whose historical `:latest-full` / `:latest-slim` references tripped this
