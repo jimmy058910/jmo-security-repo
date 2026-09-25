@@ -2012,10 +2012,10 @@ crontab -e
 1. Create TSV file (`repos.tsv`):
 
    ```tsv
-   url  description
-   https://github.com/org/repo1.git  Main API
-   https://github.com/org/repo2.git  Frontend
-   https://github.com/org/repo3.git  Mobile app
+   url
+   https://github.com/org/repo1.git
+   https://github.com/org/repo2.git
+   https://github.com/org/repo3.git
    ```
 
 2. Run wizard:
@@ -2028,6 +2028,9 @@ crontab -e
    - Mode: **docker** (recommended)
    - Target: **tsv** → `./repos.tsv`
    - Destination: `cloned-repos`
+
+   The container has no git credentials, so only public repositories clone in Docker
+   mode; run natively for private ones. See [Scan from TSV](scan_from_tsv.md).
 
 ### Quick Validation Before Commit
 

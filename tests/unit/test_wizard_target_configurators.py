@@ -155,16 +155,18 @@ def test_configure_repo_target_repos_dir_no_repos_retry():
         assert mock_validate.call_count == 2
 
 
-def test_configure_repo_target_tsv_mode():
+def test_configure_repo_target_tsv_mode(tmp_path):
     """Test configure_repo_target with TSV mode."""
     mock_config = MagicMock()
     mock_print_step = MagicMock()
+    tsv = tmp_path / "repos.tsv"
+    tsv.write_bytes(b"url\n")
 
     with (
         patch(
             "scripts.cli.wizard_flows.target_configurators._prompter"
         ) as mock_prompter,
-        patch("builtins.input", side_effect=["./repos.tsv", "repos-tsv"]),
+        patch("builtins.input", side_effect=[str(tsv), "repos-tsv"]),
     ):
         mock_prompter.prompt_choice.return_value = "tsv"
 
@@ -172,8 +174,30 @@ def test_configure_repo_target_tsv_mode():
 
         assert result.type == "repo"
         assert result.repo_mode == "tsv"
-        assert result.tsv_path == "./repos.tsv"
+        assert result.tsv_path == str(tsv)
         assert result.tsv_dest == "repos-tsv"
+
+
+def test_configure_repo_target_tsv_mode_asks_again_for_a_missing_file(tmp_path):
+    """Docker mounts a missing file anyway, and creates a root-owned directory
+    of that name on the host, so a TSV that is not there is asked for again."""
+    tsv = tmp_path / "repos.tsv"
+    tsv.write_bytes(b"url\n")
+
+    with (
+        patch(
+            "scripts.cli.wizard_flows.target_configurators._prompter"
+        ) as mock_prompter,
+        patch(
+            "builtins.input",
+            side_effect=[str(tmp_path / "missing.tsv"), str(tsv), "repos-tsv"],
+        ),
+    ):
+        mock_prompter.prompt_choice.return_value = "tsv"
+
+        result = configure_repo_target(MagicMock(), MagicMock())
+
+    assert result.tsv_path == str(tsv)
 
 
 def test_configure_repo_target_targets_mode():

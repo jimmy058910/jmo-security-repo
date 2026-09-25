@@ -66,6 +66,8 @@ from __future__ import annotations
 # ==============================================================================
 # Flow Classes (existing)
 # ==============================================================================
+# TODO(issue-#1301): `jmo wizard` never constructs the five scan-flow classes
+# below (RepoFlow ... DependencyFlow); only tests do.
 from .base_flow import BaseWizardFlow as BaseWizardFlow
 from .base_flow import PromptHelper as PromptHelper
 from .base_flow import TargetDetector as TargetDetector

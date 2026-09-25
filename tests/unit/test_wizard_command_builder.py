@@ -70,45 +70,22 @@ def test_build_repo_args_targets_mode_native():
 
 
 def test_build_repo_args_tsv_mode_native():
-    """Test build_repo_args with TSV mode in native."""
-    target = MagicMock()
-    target.repo_mode = "tsv"
-    target.tsv_path = "./repos.tsv"
-    target.tsv_dest = "repos-tsv"
+    """The tsv command, parsed by `jmo scan`'s own parser.
 
-    args = build_repo_args(target, use_docker=False)
-
-    assert "--tsv" in args
-    assert "./repos.tsv" in args
-    assert "--dest" in args
-    assert "repos-tsv" in args
-
-
-def test_build_repo_args_tsv_mode_no_dest():
-    """Test build_repo_args with TSV mode without dest."""
-    target = MagicMock()
-    target.repo_mode = "tsv"
-    target.tsv_path = "./repos.tsv"
-    target.tsv_dest = None
-
-    args = build_repo_args(target, use_docker=False)
-
-    assert "--tsv" in args
-    assert "./repos.tsv" in args
-    assert "--dest" not in args
-
-
-def test_build_repo_args_tsv_mode_no_dest_attr():
-    """Test build_repo_args with TSV mode where tsv_dest attribute doesn't exist."""
-    target = MagicMock(spec=["repo_mode", "tsv_path"])  # No tsv_dest attr
+    This asserted `"--tsv" in args` for as long as `jmo scan` rejected the
+    command outright (#1299). `--dest` is always named: `jmo scan --tsv` has no
+    default destination, and the wizard's own default is `repos-tsv`.
+    """
+    target = WizardConfig().target
+    target.type = "repo"
     target.repo_mode = "tsv"
     target.tsv_path = "./repos.tsv"
 
-    args = build_repo_args(target, use_docker=False)
+    parsed = build_parser().parse_args(
+        ["scan", *build_repo_args(target, use_docker=False)]
+    )
 
-    assert "--tsv" in args
-    assert "./repos.tsv" in args
-    assert "--dest" not in args
+    assert (parsed.tsv, parsed.dest) == ("./repos.tsv", "repos-tsv")
 
 
 def test_build_repo_args_docker_mode(tmp_path):
@@ -766,6 +743,26 @@ def test_docker_targets_mode_is_refused_with_the_reason(tmp_path):
         build_command_parts(config)
 
     assert "container" in str(err.value)
+
+
+def test_docker_tsv_mode_clones_into_the_asked_for_destination(tmp_path):
+    """The Docker branch passed no target at all for tsv mode (#1299).
+
+    The TSV is mounted read-only. Clones go to the destination the wizard
+    asked for, mounted at /repos-tsv, so they persist between runs and a
+    second run fast-forwards them; not under /results, which a CI job
+    uploads whole.
+    """
+    config = _docker_config(tmp_path, "tsv")
+    config.target.tsv_path = str(tmp_path / "repos.tsv")
+    config.target.tsv_dest = str(tmp_path / "clones")
+
+    cmd = build_command_parts(config)
+    parsed = build_parser().parse_args(_entrypoint_argv(cmd))
+
+    assert (parsed.tsv, parsed.dest) == ("/repos.tsv", "/repos-tsv")
+    assert f"{(tmp_path / 'repos.tsv').resolve()}:/repos.tsv:ro" in _mounts(cmd)
+    assert f"{(tmp_path / 'clones').resolve()}:/repos-tsv" in _mounts(cmd)
 
 
 def test_docker_threshold_runs_jmo_ci(tmp_path):
