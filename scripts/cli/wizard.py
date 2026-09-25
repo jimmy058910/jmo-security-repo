@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shlex
 import subprocess  # nosec B404 - CLI needs subprocess
 from pathlib import Path
 
@@ -528,8 +529,12 @@ def generate_command(config: WizardConfig) -> str:
     Generate the jmotools/jmo command from config (for display/export).
 
     Supports all 6 target types: repo, image, iac, url, gitlab, k8s.
+
+    POSIX-quoted, because `--emit-script` and `--emit-make` write it into a
+    shell line: joined with bare spaces, a path with a space became two
+    arguments and a `$` in it was expanded.
     """
-    return " ".join(_build_command_parts(config))
+    return shlex.join(_build_command_parts(config))
 
 
 def generate_command_list(config: WizardConfig) -> list[str]:
@@ -646,6 +651,10 @@ def execute_scan(config: WizardConfig, yes: bool = False) -> int:
         command_list = generate_command_list(config)
 
         env = os.environ.copy()
+        # The command carries no token (it is printed, and written into
+        # scripts); `jmo` and Docker's `-e GITLAB_TOKEN` read it from here.
+        if config.target.type == "gitlab" and config.target.gitlab_token:
+            env["GITLAB_TOKEN"] = config.target.gitlab_token
 
         result = subprocess.run(
             command_list,
@@ -878,7 +887,9 @@ def run_wizard(
         if emit_make:
             command = generate_command(config)
             content = generate_makefile_target(config, command)
-            Path(emit_make).write_text(content, encoding="utf-8")
+            # Bytes, not write_text: on Windows that writes CRLF, and a `\r`
+            # breaks make recipes and Linux bash (`set: pipefail: invalid option`).
+            Path(emit_make).write_bytes(content.encode("utf-8"))
             print(f"\n{_colorize('Generated:', 'green')} {emit_make}")
             return 0
 
@@ -888,7 +899,7 @@ def run_wizard(
             script_path = Path(emit_script)
             try:
                 script_path.parent.mkdir(parents=True, exist_ok=True)
-                script_path.write_text(content, encoding="utf-8")
+                script_path.write_bytes(content.encode("utf-8"))  # LF, as above
             except OSError as e:
                 print(f"Error: Could not write to {emit_script}: {e}")
                 return 1

@@ -265,6 +265,19 @@ class ScanSchedule:
         if "description" in kwargs:
             annotations["description"] = kwargs.pop("description")
 
+        backend_config = kwargs.pop("backend_config", {})
+        timezone = kwargs.pop("timezone", "UTC")
+        suspend = kwargs.pop("suspend", False)
+
+        # Whatever is left was read by nothing above. It used to be dropped, so
+        # a typo, or `profile=` after v2.0.0 removed profiles, built a schedule
+        # silently missing what the caller asked for (#1277).
+        if kwargs:
+            raise TypeError(
+                "from_simple_args() got unexpected keyword argument(s): "
+                + ", ".join(sorted(kwargs))
+            )
+
         # Create nested structure
         return cls(
             metadata=ScheduleMetadata(
@@ -274,16 +287,14 @@ class ScanSchedule:
             ),
             spec=ScheduleSpec(
                 schedule=cron,
-                backend=BackendConfig(
-                    type=backend, config=kwargs.pop("backend_config", {})
-                ),
+                backend=BackendConfig(type=backend, config=backend_config),
                 jobTemplate=JobTemplateSpec(
                     targets=targets,
                     results=results,
                     options=options,
                 ),
-                timezone=kwargs.pop("timezone", "UTC"),
-                suspend=kwargs.pop("suspend", False),
+                timezone=timezone,
+                suspend=suspend,
             ),
         )
 

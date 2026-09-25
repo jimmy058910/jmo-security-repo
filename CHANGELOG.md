@@ -52,6 +52,53 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **`jmo tools check` reads zap's own version.** It misread it two ways. In the image,
+  the JVM prints a four-part Java version first, and `17.0.20.1` read as zap `0.20.1`,
+  outdated. On a host, the version probe ran `zap.bat` from the wrong directory; it could
+  not find its jar, echoed the jar's name, and `zap-2.17.0.jar` read as a healthy
+  `2.17.0` for a zap that could not start. The probe now runs from zap's install
+  directory, and neither line is read as zap's version (#1283).
+- **Exported schedules with a severity threshold run.** The GitHub Actions and GitLab CI
+  exporters and the cron installer appended `--fail-on X` to `jmo scan`, which exits 2
+  before scanning. A schedule with a threshold now exports `jmo ci ... --fail-on X`, and
+  one without stays `jmo scan`. The test meant to catch this passed for every schedule,
+  because it handed the parser `jmo` as the subcommand, which also exits 2 (#1277).
+- **Cron-installed schedules run.** No job the installer wrote ever started. cron ends a
+  command at the first unescaped `%` and sends the rest to stdin, and every line
+  carried `$(date +%Y-%m-%d)`, so the shell received `... $(date +` and stopped on a
+  syntax error. Every `%` is now escaped. The default results directory, written as a
+  quoted `'~/jmo-results'` that no shell expands, is now `"$HOME"/jmo-results`, and a
+  base directory in another user's home (`~bob/...`) is refused (#1277).
+- **Every exporter carries a schedule's timeout.** GitHub Actions and cron dropped it;
+  GitLab CI carried it. GitLab now also quotes `--threads` and `--timeout` like every
+  other value on its command line (#1277).
+- **`GITLAB_TOKEN` is read when `--gitlab-token` is not given**, as `--help` says. It
+  never was: the scan always passed the option's empty value, which hid the variable.
+- **The wizard's Docker mode scans what you chose.** A single repository was mounted
+  and passed as `--repos-dir /scan`, which scans each subdirectory as its own repository
+  and never the repository's own files; it is now `--repo /scan`. A targets file lists
+  paths on your machine that the container cannot see, so Docker mode now refuses it
+  with that reason instead of mounting the file where a directory belongs. Docker mode
+  also dropped the severity threshold, `--threads`, `--timeout`, `--allow-missing-tools`
+  and `--human-logs`; it now carries them, and a threshold makes the command
+  `jmo ci --fail-on X` (#1298, #1277).
+- **The wizard's generated workflow, script and Makefile.** The native GitHub Actions
+  workflow set up Python 3.11 for a package that requires 3.12, so its `pip install`
+  failed; its "Install Security Tools" step held only comments, so no scanner was
+  installed; and for a directory of repositories it scanned `--repos-dir .`, each
+  subdirectory of the checkout as its own repository. It now installs Python 3.12,
+  runs `jmo tools install --yes`, and scans its own checkout, `--repo .`, in every
+  mode. `--emit-script` and `--emit-make` quote the command, so a path with a space or
+  a `$` survives, and write Unix line endings: a script generated on Windows stopped
+  Linux bash at `set: pipefail: invalid option name` (#1298).
+- **The wizard no longer prints or writes a GitLab token.** It put the token on the
+  command line, which the wizard displays and `--emit-script`/`--emit-make` save to
+  disk. The scan now receives it as `GITLAB_TOKEN` in its environment, and Docker mode
+  forwards it by name (`-e GITLAB_TOKEN`) (#1298).
+- `ScanSchedule.from_simple_args` and `MetadataCapture.from_scan_args` reject a keyword
+  they do not read, such as a typo or `profile=`, instead of dropping it or, for
+  `from_scan_args`, copying it into attestation metadata. Nothing in the product calls
+  `from_scan_args`, so no attestation ever carried one (#1277).
 - **Wizard commands with a severity threshold ran.** Every one the wizard built was
   `jmo scan ... --fail-on X`. `jmo scan` has no `--fail-on`, so argparse read it as an
   abbreviation of `--fail-on-store-error`, rejected the value and exited 2 before scanning.

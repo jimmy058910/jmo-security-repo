@@ -260,15 +260,78 @@ def test_generate_github_actions_native_mode_repo(mock_config):
     assert "name: Security Scan" in result
     assert "runs-on: ubuntu-latest" in result
     assert "container:" not in result  # No container in native mode
-    assert "setup-python@v5" in result
-    assert "python-version: '3.11'" in result
+    assert "setup-python@v5" in result  # its version: the test below
     assert "pip install jmo-security" in result
     assert "Install Security Tools" in result
     assert "jmo scan" in result
-    assert "--repos-dir ." in result
+    # The checkout itself: `--repos-dir .` scanned each subdirectory of it as a
+    # repository and never the root's files.
+    assert "--repo ." in result
+    assert "--repos-dir" not in result
     assert "--profile-name" not in result
     # Tools comment lists the whole matrix, derived rather than typed
     assert f"# Tools: {', '.join(TOOL_MATRIX)}" in result
+
+
+def test_the_native_workflow_installs_the_scanners(mock_config):
+    """Its "Install Security Tools" step held only comments.
+
+    So the scan step found no scanner and stopped ("None of the requested
+    tools are installed"), or scanned with whatever the runner happened to have.
+    """
+    import shlex
+
+    import yaml
+
+    from scripts.cli.jmo import build_parser
+
+    mock_config.use_docker = False
+    mock_config.target.type = "repo"
+
+    steps = yaml.safe_load(generate_github_actions(mock_config))["jobs"][
+        "security-scan"
+    ]["steps"]
+    run = next(s["run"] for s in steps if s.get("name") == "Install Security Tools")
+    commands = [
+        ln.strip()
+        for ln in run.splitlines()
+        if ln.strip() and not ln.lstrip().startswith("#")
+    ]
+
+    assert commands, "the install step runs nothing"
+    for command in commands:
+        argv = shlex.split(command)
+        assert argv[0] == "jmo", command
+        parsed = build_parser().parse_args(argv[1:])
+        assert (parsed.cmd, parsed.tools_command) == ("tools", "install")
+        assert parsed.yes is True, "a CI job cannot answer a prompt"
+
+
+def test_the_native_workflow_installs_a_python_the_package_supports(mock_config):
+    """It set up Python 3.11 for a package that requires 3.12, so its
+    `pip install jmo-security` could never succeed. The floor is read from
+    pyproject.toml, so the next bump cannot leave the template behind.
+    """
+    import re
+    import tomllib
+    from pathlib import Path
+
+    pyproject = Path(__file__).parents[2] / "pyproject.toml"
+    requires = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"][
+        "requires-python"
+    ]
+    floor = tuple(int(n) for n in re.fullmatch(r">=(\d+)\.(\d+)", requires).groups())
+    mock_config.use_docker = False
+    mock_config.target.type = "repo"
+
+    result = generate_github_actions(mock_config)
+
+    pinned = re.search(r"python-version: '(\d+)\.(\d+)'", result)
+    assert pinned, "no python-version in the native workflow"
+    assert tuple(int(n) for n in pinned.groups()) >= floor, (
+        f"workflow sets up Python {'.'.join(pinned.groups())}, "
+        f"package requires {requires}"
+    )
 
 
 def test_generate_github_actions_native_mode_single_repo(mock_config):

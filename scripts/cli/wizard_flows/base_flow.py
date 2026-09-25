@@ -555,43 +555,6 @@ class PromptHelper:
         return self.prompt_yes_no(message, default=True)
 
 
-class ArtifactGenerator:
-    """Generate reusable scan artifacts (Makefile, GHA, scripts)."""
-
-    def generate_makefile(self, command: list[str], output_path: Path) -> None:
-        """Generate Makefile with scan target.
-
-        Args:
-            command: Command list to run
-            output_path: Path to write Makefile
-        """
-        from scripts.cli.wizard_generators import generate_makefile_target
-
-        generate_makefile_target(command, output_path)  # type: ignore[arg-type]  # Path coerces to str for generator
-
-    def generate_github_actions(self, command: list[str], output_path: Path) -> None:
-        """Generate GitHub Actions workflow.
-
-        Args:
-            command: Command list to run
-            output_path: Path to write workflow YAML
-        """
-        from scripts.cli.wizard_generators import generate_github_actions
-
-        generate_github_actions(command)
-
-    def generate_shell_script(self, command: list[str], output_path: Path) -> None:
-        """Generate shell script.
-
-        Args:
-            command: Command list to run
-            output_path: Path to write shell script
-        """
-        from scripts.cli.wizard_generators import generate_shell_script
-
-        generate_shell_script(command, output_path)  # type: ignore[arg-type]  # Path coerces to str for generator
-
-
 class BaseWizardFlow(ABC):
     """Abstract base class for wizard workflows."""
 
@@ -603,7 +566,6 @@ class BaseWizardFlow(ABC):
         """
         self.config = config or {}
         self.detector = TargetDetector()
-        self.generator = ArtifactGenerator()
         self.prompter = PromptHelper()
 
     @abstractmethod

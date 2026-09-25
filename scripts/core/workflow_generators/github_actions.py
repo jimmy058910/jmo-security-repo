@@ -138,7 +138,11 @@ class GitHubActionsGenerator:
             str: Complete command line arguments
         """
         spec = schedule.spec.jobTemplate
-        args = ["scan"]
+        # A severity threshold makes it `jmo ci`: `jmo scan` has no --fail-on,
+        # and `--fail-on HIGH` resolved as the prefix of --fail-on-store-error,
+        # leaving HIGH unrecognised, so the step exited 2 (#1277).
+        fail_on = spec.options.get("fail_on")
+        args = ["ci" if fail_on else "scan"]
 
         # Add targets based on type
         targets = spec.targets
@@ -204,8 +208,11 @@ class GitHubActionsGenerator:
             args.append("--allow-missing-tools")
         if "threads" in opts:
             args.extend(["--threads", str(opts["threads"])])
-        if "fail_on" in opts:
-            args.extend(["--fail-on", opts["fail_on"]])
+        # Read by GitLab and dropped here, silently.
+        if "timeout" in opts:
+            args.extend(["--timeout", str(opts["timeout"])])
+        if fail_on:
+            args.extend(["--fail-on", fail_on])
 
         # Human-readable logs for GitHub Actions
         args.append("--human-logs")

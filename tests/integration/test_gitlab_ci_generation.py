@@ -572,3 +572,25 @@ def test_gitlab_ci_quotes_values_that_need_it(tmp_path):
     assert "/tmp/r; touch /tmp/PWNED" in words
     assert "evil'; id; '" in words
     assert "https://x/?a=1 b" in words
+
+
+def test_gitlab_ci_quotes_the_options_too(tmp_path):
+    """--threads and --timeout reached the `script:` line unquoted.
+
+    The targets on the same line were quoted, and so was the threshold, so a
+    hand-edited schedule could still inject through the two options. GitHub
+    Actions quotes every argument; this is the same property.
+    """
+    import shlex
+
+    created = _schedule_with_targets(
+        tmp_path, "options-need-quoting", {"repositories": {"repos_dir": "/srv/r"}}
+    )
+    created.spec.jobTemplate.options = {"threads": "4; id", "timeout": "$(id)"}
+    script = " ".join(
+        yaml.safe_load(GitLabCIGenerator().generate(created))["security-scan"]["script"]
+    )
+
+    words = shlex.split(script.replace("\\\n", " "))
+    assert words[words.index("--threads") + 1] == "4; id"
+    assert words[words.index("--timeout") + 1] == "$(id)"

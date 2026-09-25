@@ -48,6 +48,10 @@ def generate_makefile_target(
     Returns:
         Makefile target content with workflow-specific targets
     """
+    # make expands `$` in a recipe before /bin/sh sees it, so a literal one is
+    # `$$`. `command` is already shell-quoted; this is make's layer on top.
+    command = command.replace("$", "$$")
+
     # Basic template for simple workflows
     if workflow_type in ["repo", "dependency"]:
         return f"""
@@ -325,10 +329,11 @@ jobs:
 
         # Add target-specific flags
         if config.target.type == "repo":
-            if config.target.repo_mode == "repos-dir":
-                scan_cmd_lines.insert(1, "--repos-dir .")
-            elif config.target.repo_mode == "repo":
-                scan_cmd_lines.insert(1, "--repo .")
+            # The checkout, whatever the local repo_mode was: that describes the
+            # wizard user's disk, not the one repository this workflow runs on.
+            # `--repos-dir .` scanned each subdirectory as its own repository
+            # and never the root's files; targets and tsv emitted no target.
+            scan_cmd_lines.insert(1, "--repo .")
         elif config.target.type == "image":
             if config.target.image_name:
                 scan_cmd_lines.insert(1, f"--image {config.target.image_name}")
@@ -386,7 +391,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
       - name: Install JMo Security
         run: pip install jmo-security
@@ -396,6 +401,7 @@ jobs:
           # Install the tool matrix: jmo tools install
           # Tools: {tools_list}
           # See: https://github.com/jimmy058910/jmo-security-repo#tool-installation
+          jmo tools install --yes
 {setup_steps_str}
       - name: Run Security Scan{env_section}
         run: |

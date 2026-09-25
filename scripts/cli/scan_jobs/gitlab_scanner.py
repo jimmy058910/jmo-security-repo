@@ -229,7 +229,10 @@ def scan_gitlab_repo(
     started = time.perf_counter()
     full_path = gitlab_info["full_path"]
     gitlab_url = gitlab_info["url"]
-    gitlab_token = gitlab_info.get("token", os.getenv("GITLAB_TOKEN"))
+    # `or`, not a .get default: the dict always carries "token" (None without
+    # --gitlab-token), so the default never applied and GITLAB_TOKEN, which
+    # --help offers as the alternative, was never read.
+    gitlab_token = gitlab_info.get("token") or os.getenv("GITLAB_TOKEN")
 
     if not gitlab_token:
         # No token - cannot clone, return failure for all tools
