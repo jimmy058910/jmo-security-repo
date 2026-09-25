@@ -56,20 +56,33 @@ def redact(url: str) -> str:
     return _USERINFO.sub(r"\1***@", url)
 
 
-#: Programs git runs to ask for a password *before* it consults
-#: `GIT_TERMINAL_PROMPT` (measured: with the prompt disabled and `GIT_ASKPASS`
-#: set, as a VS Code terminal sets it, git still ran the askpass program).
-_ASKPASS_VARS = ("GIT_ASKPASS", "SSH_ASKPASS")
+#: The askpass program git and ssh are given: a path that cannot run, and an
+#: absolute one, so nothing is looked up on PATH. Asking through it fails at
+#: once. (Git for Windows maps it to `nul`: "cannot spawn nul".)
+_NO_ASKPASS = "/dev/null"
 
 
 def _git_env() -> dict[str, str]:
-    """The environment git runs in: no https credential prompt of any kind.
+    """The environment git runs in: nothing can prompt, for https or ssh.
 
-    A credential helper still answers (that is how private repositories clone),
-    but nothing asks: no askpass program, no terminal prompt, and Git
-    Credential Manager told not to open its window.
+    A credential helper, an ssh agent and a known host still work: that is how
+    private repositories clone. Only asking is removed. Measured under WSL and
+    on Windows (Git for Windows' bundled OpenSSH 10.3p1):
+
+    - git runs an askpass program *before* it consults `GIT_TERMINAL_PROMPT`,
+      from `GIT_ASKPASS`, then `core.askPass`, then `SSH_ASKPASS`. Removing the
+      variables left a configured `core.askPass` running; a set `GIT_ASKPASS`
+      outranks it.
+    - With a terminal attached, ssh waits there on an unknown host key or a
+      key's passphrase. `SSH_ASKPASS_REQUIRE=force` (OpenSSH 8.4+) sends it to
+      the askpass program instead, so the row fails: `Host key verification
+      failed.` Older ssh ignores the variable and can still ask.
+    - Git Credential Manager is told not to open its window.
     """
-    env = {k: v for k, v in os.environ.items() if k.upper() not in _ASKPASS_VARS}
+    env = dict(os.environ)
+    env["GIT_ASKPASS"] = _NO_ASKPASS
+    env["SSH_ASKPASS"] = _NO_ASKPASS
+    env["SSH_ASKPASS_REQUIRE"] = "force"
     env["GIT_TERMINAL_PROMPT"] = "0"
     env["GCM_INTERACTIVE"] = "never"
     return env

@@ -18,10 +18,11 @@ All notable changes to JMo Security will be documented in this file.
   never over a directory that is not a clone of that URL; each refused or failed row is
   named, and a TSV none of whose rows cloned exits 1. Of two repositories with one name
   (`alice/app`, `bob/app`), whose results would share a folder, the second is refused
-  by name. `--dest` has no default. An https row never waits on a password prompt. The
-  wizard's tsv mode had always emitted this command, and `jmo scan` rejected it (exit 2)
-  natively and in Docker; it runs in both now (#1299). `scripts/cli/clone_from_tsv.py`
-  no longer runs as a script of its own.
+  by name. `--dest` has no default. No row waits on a prompt: one that needs a password,
+  a key's passphrase or a new ssh host key fails by name. The wizard's tsv mode had
+  always emitted this command, and `jmo scan` rejected it (exit 2) natively and in
+  Docker; it runs in both now (#1299). `scripts/cli/clone_from_tsv.py` no longer runs
+  as a script of its own.
 
 ### Removed
 

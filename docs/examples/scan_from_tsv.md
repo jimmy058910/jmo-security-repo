@@ -96,11 +96,12 @@ Notes:
 ### Private repositories
 
 Clones use your own git credentials: a credential helper for `https://`, an ssh key for
-`ssh://` and `git@host:`. For `https://`, nothing asks: no terminal prompt, no askpass
-program and no credential-manager window, so a row that would need a password fails
-by name instead of holding up the scan. ssh can still ask on your terminal for an
-unknown host key or a key's passphrase, as it would for a clone you ran yourself; add
-the host key and load the key into an agent first.
+`ssh://` and `git@host:`. Nothing asks during a scan: not git, not ssh and not a
+credential-manager window. So a row that would need a password, a key's passphrase or
+a new host key fails by name instead of holding up the scan. Before a run, load your
+key into an agent (`ssh-add`) and trust each ssh host once, for example with
+`ssh -T git@github.com`. ssh older than OpenSSH 8.4 (2020) cannot be kept from asking,
+and may still prompt on your terminal.
 
 ### Docker
 

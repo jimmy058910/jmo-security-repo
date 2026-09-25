@@ -489,7 +489,7 @@ def review_and_confirm(config: WizardConfig) -> bool:
     # Display target-specific details using helper
     _display_target_details(config.target)
     if config.target.type == "repo" and config.target.repo_mode == "tsv":
-        # An https clone never prompts: a row git cannot reach fails by name.
+        # Clones never prompt: a row git cannot reach fails by name.
         if config.use_docker:
             note = (
                 "The container has no git credentials, so only public "
@@ -498,7 +498,8 @@ def review_and_confirm(config: WizardConfig) -> bool:
         else:
             note = (
                 "Rows clone with your own git credentials (a credential helper "
-                "or an ssh key); an https row that needs a password fails by name."
+                "or an ssh key in an agent); nothing prompts, so a row that needs "
+                "a password or a new host key fails by name."
             )
         print(_colorize(f"    Note: {note}", "yellow"))
 

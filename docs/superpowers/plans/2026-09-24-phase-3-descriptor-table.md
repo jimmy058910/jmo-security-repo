@@ -432,7 +432,7 @@ Second review of the riders, then fixed here too:
   https repository fails at once instead of waiting on a prompt. Private repositories
   need a credential helper or an ssh key; the docs say so. Messages show `https://***@`
   in place of userinfo. *Corrected by the review below:* `GIT_TERMINAL_PROMPT=0` alone
-  is not enough, and ssh can still prompt on the terminal.
+  is not enough, and ssh prompts on the terminal itself (see option C).
 - **`clone_from_tsv.py`'s `main()` goes** (and with it `--targets-out` and `--max`): no
   entry point in `pyproject.toml`, so it ran only from a checkout, and `jmo scan --tsv`
   replaces it. The module stays as the library discovery calls.
@@ -515,7 +515,7 @@ reproduced before it was fixed, and each fix went through the same mutation run
 |---|---|---|
 | Two repositories of one name share `individual-repos/<name>`: concurrent writes, last writer wins | `results_dir / _sanitize_path_component(repo.name)` (`repository_scanner.py:275`) | The second is refused by name; a URL listed twice is cloned and scanned once |
 | One row crashes the scan | a `--dest` that is a file: `FileExistsError`; `own:er` on Windows: `NotADirectoryError`; a symlink loop: `RuntimeError` (Python 3.12.3) | Every filesystem call fails its row; an unusable `--dest` is refused once for the file |
-| `GIT_TERMINAL_PROMPT=0` does not stop prompts | under WSL, a local 401 server: with `GIT_ASKPASS` (as VS Code sets it) or `SSH_ASKPASS` set, the askpass program **ran**; with both removed, "terminal prompts disabled" | Both removed from git's environment; `GCM_INTERACTIVE=never` (GCM's documented switch, not measured). ssh's own terminal prompts are left alone and the docs say so |
+| `GIT_TERMINAL_PROMPT=0` does not stop prompts | under WSL, a local 401 server: with `GIT_ASKPASS` (as VS Code sets it) or `SSH_ASKPASS` set, the askpass program **ran**; with both removed, "terminal prompts disabled" | Superseded by option C below; `GCM_INTERACTIVE=never` (GCM's documented switch, not measured) |
 | Credentials logged for non-https rows | `http://`, `HTTPS://`, `ssh://u:pw@` passed `redact` unchanged | Any scheme, any case |
 | A token in a folder name | `https://user:TOK@host/project.git` → `dest/user:TOK@host/project` | A one-segment path's owner is the host without userinfo or port |
 | ssh user and host unrestricted | `ssh://h$(id)/o/r` and `ssh://a@-oProxyCommand=x/o/r` passed | https and ssh hosts get the scp form's alphabet; an ssh user too (CVE-2023-51385 class) |
@@ -536,7 +536,22 @@ Left open, decided by Jimmy (2026-09-25):
   measured here, since Docker runs only under WSL.
 - **The wizard's `repos-tsv` default** is kept: the wizard shows it and asks, which is
   not the silent default the T1 decision rules out.
-- ssh `BatchMode` (it would override a `core.sshCommand`): being decided.
+- **ssh prompts: option C** (a second commit). ssh asks on the terminal itself, so
+  git's prompt switches never reached it. `ssh -o BatchMode=yes` would override a
+  user's `core.sshCommand` and PuTTY setups, so it was not used. Both askpass variables
+  are now `/dev/null` (a path that cannot run, and absolute, so nothing is looked up
+  on `PATH`), with `SSH_ASKPASS_REQUIRE=force`. Measured:
+
+  | Probe | Before | Option C |
+  |---|---|---|
+  | ssh with a terminal (WSL, OpenSSH 9.6), unknown host | waits at "Are you sure you want to continue connecting" until killed | `Host key verification failed.`, exits on its own |
+  | ssh on Windows (Git for Windows' OpenSSH 10.3p1) | (no terminal in the harness, so it failed either way) | tries the askpass program (`ssh_askpass: exec(/dev/null)`): the variable is honoured |
+  | https, 401 server, `core.askPass` configured (WSL and Windows) | the configured program **ran**: removing the two variables had left this third source live | not run; "terminal prompts disabled" (Windows maps the path to `nul`: "cannot spawn nul") |
+
+  A new test drives real git against a local 401 server with a `core.askPass` marker,
+  red before the change. 5 mutations (one per variable): **5 caught**, the
+  `GIT_ASKPASS` one by the real-git test on its own too. Older ssh (before 8.4)
+  ignores the variable, and the docs say so.
 - `--dest` without `--tsv` is ignored, and `include`/`exclude` filters run after
   cloning: left as they are.
 

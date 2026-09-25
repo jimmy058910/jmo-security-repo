@@ -62,8 +62,12 @@ class TestRun:
         inside a scan. `GIT_TERMINAL_PROMPT=0` alone is not enough: git runs an
         askpass program *before* consulting it (measured under WSL against a
         local 401 server: with `GIT_ASKPASS` set, as a VS Code terminal sets
-        it, the askpass program ran; with it and `SSH_ASKPASS` removed, git
-        stopped at "terminal prompts disabled").
+        it, the askpass program ran). Both askpass variables point at a path
+        that cannot run, and `SSH_ASKPASS_REQUIRE=force` makes ssh use it even
+        with a terminal attached, so an unknown host key or a key's passphrase
+        fails the row instead of waiting (measured: `Host key verification
+        failed.` where ssh had sat at "Are you sure you want to continue
+        connecting").
         """
         monkeypatch.setenv("GIT_ASKPASS", "/some/askpass")
         monkeypatch.setenv("SSH_ASKPASS", "/some/ssh-askpass")
@@ -76,10 +80,55 @@ class TestRun:
         env = kwargs["env"]
         assert env["GIT_TERMINAL_PROMPT"] == "0"
         assert env["GCM_INTERACTIVE"] == "never"
-        assert "GIT_ASKPASS" not in env
-        assert "SSH_ASKPASS" not in env
+        assert env["GIT_ASKPASS"] == "/dev/null"
+        assert env["SSH_ASKPASS"] == "/dev/null"
+        assert env["SSH_ASKPASS_REQUIRE"] == "force"
         assert kwargs["stdin"] is subprocess.DEVNULL
         assert kwargs.get("shell", False) is False
+
+    def test_no_askpass_program_runs_not_even_one_git_config_names(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """Real git against a local server that answers 401.
+
+        `core.askPass` in the user's git config is a third askpass source, and
+        removing the two variables left it live: measured on Windows and under
+        WSL, the configured program ran. A set `GIT_ASKPASS` outranks it.
+        """
+        import http.server
+        import threading
+
+        class Unauthorized(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(401)
+                self.send_header("WWW-Authenticate", 'Basic realm="x"')
+                self.end_headers()
+
+            def log_message(self, *args):
+                pass
+
+        server = http.server.HTTPServer(("127.0.0.1", 0), Unauthorized)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        marker = tmp_path / "askpass.sh"
+        marker.write_bytes(b'#!/bin/sh\ntouch "$(dirname "$0")/ASKPASS_RAN"\necho x\n')
+        marker.chmod(0o755)
+        monkeypatch.setenv("GIT_CONFIG_COUNT", "2")
+        monkeypatch.setenv("GIT_CONFIG_KEY_0", "core.askPass")
+        monkeypatch.setenv("GIT_CONFIG_VALUE_0", marker.as_posix())
+        # No credential helper, so nothing answers before a prompt would.
+        monkeypatch.setenv("GIT_CONFIG_KEY_1", "credential.helper")
+        monkeypatch.setenv("GIT_CONFIG_VALUE_1", "")
+        try:
+            url = f"http://127.0.0.1:{server.server_port}/o/r.git"
+            rc, _out, err = run(["git", "clone", "--", url, str(tmp_path / "c")])
+        finally:
+            server.shutdown()
+            thread.join(timeout=10)
+
+        assert rc != 0
+        assert not (tmp_path / "ASKPASS_RAN").exists(), err
+        assert "terminal prompts disabled" in err
 
     def test_a_cwd_that_cannot_be_entered_is_a_failure_not_a_traceback(
         self, tmp_path
