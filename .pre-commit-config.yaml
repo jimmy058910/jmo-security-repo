@@ -112,6 +112,10 @@ repos:
     hooks:
       - id: shellcheck
         args: ["-S", "error", "-e", "SC2016,SC2028"]
+        # The contract-test sample is broken on purpose: shellcheck must find
+        # its issues (tests/integration/test_tool_contracts.py). It used to
+        # carry `disable=all` to pass here, which blinded that contract.
+        exclude: ^tests/fixtures/samples/
   - repo: https://github.com/scop/pre-commit-shfmt
     rev: v3.13.1-1
     hooks:

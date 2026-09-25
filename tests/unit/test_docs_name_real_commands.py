@@ -169,3 +169,25 @@ def test_documentation_names_only_real_commands() -> None:
         "an ALLOWED entry no longer matches anything, so it is documenting a "
         f"sentence that has been removed: {stale}"
     )
+
+
+def test_no_documented_command_runs_jmo_scan_with_a_threshold() -> None:
+    """`jmo scan` has no --fail-on; a threshold is `jmo ci` (#1277).
+
+    argparse reads `--fail-on HIGH` as the prefix of --fail-on-store-error and
+    exits 2 on the leftover `HIGH`. docs/SCHEDULE_GUIDE.md taught it in three
+    runnable blocks. Only fenced code is checked: prose that names the broken
+    form to explain it (the CHANGELOG does) is not a command to copy.
+    """
+    offenders = []
+    for rel in _checked_files():
+        in_fence = False
+        text = (REPO_ROOT / rel).read_bytes().decode("utf-8", errors="replace")
+        for lineno, line in enumerate(text.splitlines(), 1):
+            if line.lstrip().startswith("```"):
+                in_fence = not in_fence
+                continue
+            if in_fence and re.search(r"\bjmo\s+scan\b[^#]*--fail-on\b", line):
+                offenders.append(f"{rel}:{lineno}: {line.strip()}")
+
+    assert not offenders, "use `jmo ci` for a threshold:\n" + "\n".join(offenders)

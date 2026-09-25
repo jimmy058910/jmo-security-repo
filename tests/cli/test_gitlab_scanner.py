@@ -856,6 +856,35 @@ class TestAbandonedGitlabTargetsStillGetTimings:
         assert doc["outcome"] == "failed-before-tools"
         assert "token" in doc["error"].lower(), doc["error"]
 
+    def test_the_token_falls_back_to_the_environment(self, tmp_path, monkeypatch):
+        """`--gitlab-token` is optional because GITLAB_TOKEN is read instead.
+
+        It never was: `jmo scan` always builds the dict with a `"token"` key
+        (None when the flag is absent), and `dict.get`'s default applies only
+        to a missing key. The tests above omit the key, which is how they
+        passed. This is the shape `scan_orchestrator` really builds.
+        """
+        monkeypatch.setenv("GITLAB_TOKEN", "glpat-from-env")
+        with patch(
+            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run"
+        ) as mock_subprocess:
+            mock_subprocess.return_value = MagicMock(
+                returncode=128, stderr=b"fatal: repository not found"
+            )
+            scan_gitlab_repo(
+                gitlab_info={**self.GITLAB_INFO, "token": None},
+                results_dir=tmp_path,
+                tools=["trufflehog"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+            )
+
+        assert mock_subprocess.called, "never cloned: the env token was not read"
+        doc = self._timings(tmp_path)
+        assert "token" not in doc["error"].lower(), doc["error"]
+
     def test_a_failed_clone_still_records_a_row(self, tmp_path):
         with patch(
             "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run"

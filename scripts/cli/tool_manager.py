@@ -90,9 +90,16 @@ VERSION_PATTERNS: dict[str, re.Pattern] = {
     # Must NOT match Java version - use negative lookbehinds:
     # - (?<!version ) - not preceded by "version " (excludes "Java version 17.0.17")
     # - (?<!\d) - not preceded by digit (prevents matching "7.0.17" substring of "17.0.17")
+    # - (?<!\.) - not preceded by a dot: the image's JVM is four-part, and
+    #   "17.0.20.1" read as "0.20.1" (#1283)
+    # - (?!\d|\.jar|\.\d) - not a jar's name: zap.bat that cannot find its jar echoes
+    #   "zap-2.17.0.jar", which read as a healthy 2.17.0 (#1283). The \d stops
+    #   backtracking from reading "zap-2.17.10.jar" as 2.17.1, and \.\d stops a
+    #   four-part version reading as its first three parts after a quote,
+    #   where no lookbehind fires ("17.0.20.1" -> "17.0.20")
     # Also matches "OWASP ZAP 2.16.1" or standalone "2.16.1" on its own line
     "zap": re.compile(
-        r"(?<!version )(?<!\d)(?:(?:OWASP\s+)?(?:ZAP|Zed Attack Proxy)\s+)?v?(\d+\.\d+\.\d+)",
+        r"(?<!version )(?<!\d)(?<!\.)(?:(?:OWASP\s+)?(?:ZAP|Zed Attack Proxy)\s+)?v?(\d+\.\d+\.\d+)(?!\d|\.jar|\.\d)",
         re.IGNORECASE,
     ),
     # yara-python outputs just the version number (e.g., "4.5.4")
@@ -1023,8 +1030,12 @@ class ToolManager:
         timeout = VERSION_TIMEOUTS.get(tool_name, 10)
 
         # ZAP: Read version from file instead of running Java app (too slow)
+        probe_cwd: Path | None = None
         if tool_name == "zap" and binary_path:
             zap_dir = Path(binary_path).parent
+            # zap.bat/zap.sh find zap-<ver>.jar relative to the working
+            # directory; run from anywhere else, the probe fails (#1283).
+            probe_cwd = zap_dir
             # Try reading version from ZAP's version file
             version_files = [
                 zap_dir / "ZAP_VERSION",
@@ -1055,6 +1066,7 @@ class ToolManager:
                 errors="replace",
                 timeout=timeout,
                 env=clean_env,
+                cwd=probe_cwd,
             )
             # Combine stdout and stderr - some tools write version to stderr
             output = (result.stdout or "") + (result.stderr or "")
@@ -1189,8 +1201,10 @@ class ToolManager:
             logger.debug(f"Parsed version for {tool_name}: {version}")
             return version
 
-        # Fallback: try default pattern
-        if tool_name in VERSION_PATTERNS:
+        # Fallback: try default pattern. Not for zap: its pattern misses on
+        # purpose (a JVM line, an echoed jar name), and the default pattern
+        # would read exactly those as zap's version (#1283).
+        if tool_name in VERSION_PATTERNS and tool_name != "zap":
             match = VERSION_PATTERNS["default"].search(output)
             if match:
                 version = match.group(1)

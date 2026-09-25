@@ -1848,19 +1848,21 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
       - name: Install JMo Security
         run: pip install jmo-security
 
       - name: Install Security Tools
         run: |
+          # Install the tool matrix: jmo tools install
           # Tools: trufflehog, semgrep, syft, trivy, checkov, hadolint, ...
           # See: https://github.com/jimmy058910/jmo-security-repo#tool-installation
+          jmo tools install --yes
 
       - name: Run Security Scan
         run: |
-          jmo scan --repos-dir . --results-dir results \
+          jmo scan --repo . --results-dir results \
             --threads 4 \
             --timeout 600
 
@@ -1900,14 +1902,14 @@ jobs:
   security-scan:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/jimmy058910/jmo-security:latest
+      image: ghcr.io/jimmy058910/jmo-security:v<version>  # the jmo release that generated it
     steps:
 
       - uses: actions/checkout@v4
 
       - name: Run Security Scan
         run: |
-          jmo scan --repo . --results results \
+          jmo scan --results-dir results --repo . \
             --threads 4 \
             --timeout 600
 
@@ -1957,7 +1959,7 @@ Then edit the generated workflow to gate on `--fail-on HIGH` (a `jmo ci` flag: s
 
 - name: Run Security Scan
   run: |
-    jmo ci --repos-dir . --results-dir results \
+    jmo ci --repo . --results-dir results \
       --threads 4 \
       --timeout 600 \
       --fail-on HIGH

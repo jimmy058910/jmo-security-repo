@@ -256,7 +256,12 @@ def test_extractor_meta_guard():
     assert folded, "folded `command: >` blocks are not being extracted"
     assert folded[0][0] == "ci", folded
 
-    gha = [cmd for label, cmd in ALL_COMMANDS if label.startswith("github-actions")]
+    # The scan step only: the native workflow also runs `jmo tools install --yes`.
+    gha = [
+        cmd
+        for label, cmd in ALL_COMMANDS
+        if label.startswith("github-actions") and cmd[0] in ("scan", "ci")
+    ]
     assert gha and all("--threads" in cmd for cmd in gha), (
         f"continuation lines of the GitHub Actions `run:` block were not joined: {gha}"
     )
@@ -325,15 +330,30 @@ def test_generated_command_is_accepted_by_the_parser(label, argv):
     assert ok, f"{label}: `jmo {' '.join(argv)}` is rejected by jmo's own parser\n{err}"
 
 
-def _scan_option_strings(subcommand: str) -> set[str]:
+def _scan_option_strings(argv: list[str]) -> set[str]:
+    """The options of the deepest parser `argv` reaches.
+
+    `tools install --yes` defines `--yes` on `install`, not on `tools`, so
+    stopping at the first subcommand called a real flag undefined.
+    """
     parser = jmo.build_parser()
-    for action in parser._actions:
-        if isinstance(getattr(action, "choices", None), dict):
-            sub = action.choices.get(subcommand)
-            if sub is None:
-                return set()
-            return {opt for act in sub._actions for opt in act.option_strings}
-    return set()
+    depth = 0
+    for token in argv:
+        subparsers = next(
+            (
+                a
+                for a in parser._actions
+                if isinstance(getattr(a, "choices", None), dict)
+            ),
+            None,
+        )
+        if subparsers is None or token not in subparsers.choices:
+            break
+        parser = subparsers.choices[token]
+        depth += 1
+    if depth == 0:
+        return set()  # not a subcommand at all: the parse test reports it
+    return {opt for act in parser._actions for opt in act.option_strings}
 
 
 @pytest.mark.parametrize(
@@ -356,7 +376,7 @@ def test_every_generated_flag_is_defined_exactly(label, argv):
     `ambiguous option`, and does NOT break the tests of the change that added
     it (#1019).
     """
-    defined = _scan_option_strings(argv[0])
+    defined = _scan_option_strings(argv)
     if not defined:
         pytest.skip(f"`jmo {argv[0]}` is not a subcommand with options")
     undefined = sorted(

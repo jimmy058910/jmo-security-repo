@@ -302,29 +302,34 @@ def test_run_wizard_non_interactive(
     assert rc == 0
 
 
-@patch("scripts.cli.wizard.Path.write_text")
 @patch("scripts.cli.tool_manager.ToolManager")
-def test_run_wizard_emit_makefile(mock_tool_manager_class, mock_write):
-    """Test wizard with --emit-make-target."""
+def test_run_wizard_emit_makefile(mock_tool_manager_class, tmp_path, monkeypatch):
+    """Test wizard with --emit-make-target.
+
+    A real write inside tmp_path. This patched `Path.write_text` and passed a
+    relative name, so when the product changed how it writes, a run wrote a
+    real Makefile.security into the repository root.
+    """
+    monkeypatch.chdir(tmp_path)
     mock_tool_manager_class.return_value = _fake_tool_manager()
     rc = run_wizard(yes=True, emit_make="Makefile.security")
 
-    mock_write.assert_called_once()
-    content = mock_write.call_args[0][0]
+    content = (tmp_path / "Makefile.security").read_bytes().decode("utf-8")
     assert ".PHONY: security-scan" in content
     assert rc == 0
 
 
-@patch("scripts.cli.wizard.Path.write_text")
 @patch("scripts.cli.wizard.Path.chmod")
 @patch("scripts.cli.tool_manager.ToolManager")
-def test_run_wizard_emit_script(mock_tool_manager_class, mock_chmod, mock_write):
-    """Test wizard with --emit-script."""
+def test_run_wizard_emit_script(
+    mock_tool_manager_class, mock_chmod, tmp_path, monkeypatch
+):
+    """Test wizard with --emit-script (a real write inside tmp_path, as above)."""
+    monkeypatch.chdir(tmp_path)
     mock_tool_manager_class.return_value = _fake_tool_manager()
     rc = run_wizard(yes=True, emit_script="scan.sh")
 
-    mock_write.assert_called_once()
-    content = mock_write.call_args[0][0]
+    content = (tmp_path / "scan.sh").read_bytes().decode("utf-8")
     assert "#!/usr/bin/env bash" in content
     mock_chmod.assert_called_once_with(0o755)
     assert rc == 0
@@ -919,18 +924,43 @@ def test_generate_command_targets_mode():
     assert "--targets /path/to/targets.txt" in cmd
 
 
-def test_generate_command_docker_no_mount():
-    """Test Docker command with unsupported target mode."""
+def test_generate_command_docker_refuses_targets_mode():
+    """A targets file lists host paths, which the container cannot see.
+
+    This used to build a `docker run` with no target at all, silently.
+    """
     config = WizardConfig()
     config.use_docker = True
     config.target.type = "repo"
-    config.target.repo_mode = "targets"  # Not repo or repos-dir
+    config.target.repo_mode = "targets"
+    config.target.repo_path = "targets.txt"
     config.results_dir = "results"
 
-    cmd = generate_command(config)
-    assert "docker run" in cmd
-    # Should not have target mount for targets mode
-    assert "-v" in cmd  # results mount only
+    with pytest.raises(ValueError, match="container cannot see"):
+        generate_command(config)
+
+
+@patch("scripts.cli.tool_manager.ToolManager")
+def test_run_wizard_docker_targets_file_is_refused(
+    mock_tool_manager_class, tmp_path, capsys
+):
+    """The refusal reaches the user as a wizard error, and nothing is written."""
+    mock_tool_manager_class.return_value = _fake_tool_manager()
+    targets = tmp_path / "targets.txt"
+    targets.write_text("/srv/a\n", encoding="utf-8")
+    make_file = tmp_path / "Makefile.security"
+
+    rc = run_wizard(
+        yes=True,
+        use_docker=True,
+        target_type="repo",
+        target=str(targets),
+        emit_make=str(make_file),
+    )
+
+    assert rc == 1
+    assert "container cannot see" in capsys.readouterr().out
+    assert not make_file.exists()
 
 
 @patch("scripts.cli.wizard._prompt_yes_no", return_value=False)
@@ -1171,26 +1201,153 @@ def test_emit_gha_argparse_default():
     assert args.emit_gha == ".github/workflows/jmo-security.yml"
 
 
-@patch("scripts.cli.wizard.Path.write_text")
 @patch("scripts.cli.wizard.Path.chmod")
 @patch("scripts.cli.tool_manager.ToolManager")
 def test_run_wizard_emit_script_default_filename(
-    mock_tool_manager_class, mock_chmod, mock_write
+    mock_tool_manager_class, mock_chmod, tmp_path, monkeypatch
 ):
     """Test wizard with --emit-script using default filename.
 
-    This is an integration test verifying the full flow works with default filename.
+    This is an integration test verifying the full flow works with default
+    filename, writing for real inside tmp_path (see test_run_wizard_emit_makefile).
     """
     # Note: We pass the default filename directly to simulate argparse behavior
     # The actual argparse integration is tested in test_emit_script_argparse_default
+    monkeypatch.chdir(tmp_path)
     mock_tool_manager_class.return_value = _fake_tool_manager()
     rc = run_wizard(yes=True, emit_script="jmo-scan.sh")
 
-    mock_write.assert_called_once()
-    content = mock_write.call_args[0][0]
+    content = (tmp_path / "jmo-scan.sh").read_bytes().decode("utf-8")
     assert "#!/usr/bin/env bash" in content
     mock_chmod.assert_called_once_with(0o755)
     assert rc == 0
+
+
+# A path a shell would split, and a `$` a shell (or make) would expand.
+_AWKWARD_PATH = "/srv/my repos/$app"
+
+
+def _config_with_awkward_path() -> WizardConfig:
+    config = WizardConfig()
+    config.target.type = "repo"
+    config.target.repo_mode = "repo"
+    config.target.repo_path = _AWKWARD_PATH
+    return config
+
+
+def test_the_emitted_script_keeps_a_path_whole():
+    """`--emit-script` joined the command with bare spaces.
+
+    A repository path with a space became two arguments, and a `$` was
+    expanded by the shell, so the script scanned something else or nothing.
+    """
+    import shlex
+
+    script = generate_shell_script(None, generate_command(_config_with_awkward_path()))
+    line = script.strip().splitlines()[-1]
+
+    argv = shlex.split(line)
+    assert argv[argv.index("--repo") + 1] == _AWKWARD_PATH
+    # shlex.split does not expand `$` inside double quotes, but bash does: only
+    # single quotes keep it literal, so assert that form, not just the tokens.
+    assert shlex.quote(_AWKWARD_PATH) in line
+
+
+def test_the_emitted_makefile_keeps_a_path_whole():
+    """The same for `--emit-make`, where make expands `$` before the shell runs.
+
+    make expands any lone `$x` as a make variable (here to nothing), turns
+    `$$` into `$`, and hands the line to /bin/sh. The oracle does all three:
+    no lone `$` may survive, then `$$` -> `$`, then the shell lexer. Checking
+    only the last two passed with the escaping removed (found by mutation).
+    """
+    import shlex
+
+    makefile = generate_makefile_target(
+        None, generate_command(_config_with_awkward_path())
+    )
+    recipe = next(ln for ln in makefile.splitlines() if ln.startswith("\tjmo "))
+
+    assert "$" not in recipe.replace("$$", ""), f"make would expand a `$` in {recipe!r}"
+    argv = shlex.split(recipe.strip().replace("$$", "$"))
+    assert argv[argv.index("--repo") + 1] == _AWKWARD_PATH
+
+
+@pytest.mark.parametrize("flag", ["emit_script", "emit_make"])
+@patch("scripts.cli.tool_manager.ToolManager")
+def test_the_emitted_file_has_unix_line_endings(
+    mock_tool_manager_class, flag, tmp_path
+):
+    """Both are run by a POSIX shell or make, and a `\r` breaks both.
+
+    `Path.write_text` translates `\n` to `\r\n` on Windows, so a generated
+    script failed at `set -euo pipefail\r`.
+    """
+    mock_tool_manager_class.return_value = _fake_tool_manager()
+    out = tmp_path / "artifact"
+
+    rc = run_wizard(yes=True, **{flag: str(out)})
+
+    assert rc == 0
+    assert b"\r\n" not in out.read_bytes()
+
+
+def _gha_jmo_argv(workflow: str) -> list[str]:
+    """The `jmo` argv of the workflow's scan step, continuations joined."""
+    import shlex
+
+    import yaml
+
+    steps = yaml.safe_load(workflow)["jobs"]["security-scan"]["steps"]
+    # Starts with: an earlier step's comment mentions `jmo tools install`.
+    run = next(s["run"] for s in steps if s.get("run", "").startswith("jmo "))
+    argv = shlex.split(run.replace("\\\n", " "))
+    return argv[argv.index("jmo") + 1 :]
+
+
+@pytest.mark.parametrize("use_docker", [False, True], ids=["native", "docker"])
+@pytest.mark.parametrize("repo_mode", ["repo", "repos-dir", "targets", "tsv"])
+def test_a_generated_workflow_scans_its_own_checkout(use_docker, repo_mode):
+    """The workflow runs on the one repository it is committed to.
+
+    The local `repo_mode` describes the wizard user's disk, not the CI checkout.
+    Native mode emitted `--repos-dir .` for `repos-dir`, which scans each
+    subdirectory of the checkout as its own repository and never the root's
+    files, and no target at all for `targets` and `tsv`. Docker mode already
+    emitted `--repo .` for every mode.
+    """
+    from scripts.cli.jmo import build_parser
+
+    config = WizardConfig()
+    config.use_docker = use_docker
+    config.target.type = "repo"
+    config.target.repo_mode = repo_mode
+
+    parsed = build_parser().parse_args(_gha_jmo_argv(generate_github_actions(config)))
+
+    assert (parsed.repo, parsed.repos_dir) == (".", None)
+
+
+@patch("scripts.cli.tool_manager.ToolManager")
+@patch("scripts.cli.wizard.subprocess.run")
+def test_the_scan_gets_the_gitlab_token_through_its_environment(
+    mock_run, mock_tool_manager_class
+):
+    """The command no longer carries the token, so the child's env must."""
+    mock_tool_manager_class.return_value = _fake_tool_manager()
+    mock_run.return_value = MagicMock(returncode=0)
+    config = WizardConfig()
+    config.target.type = "gitlab"
+    config.target.gitlab_repo = "group/project"
+    config.target.gitlab_token = "glpat-SECRET"
+
+    from scripts.cli.wizard import execute_scan
+
+    execute_scan(config, yes=True)
+
+    argv = mock_run.call_args[0][0]
+    assert not any("glpat-SECRET" in part for part in argv)
+    assert mock_run.call_args.kwargs["env"]["GITLAB_TOKEN"] == "glpat-SECRET"
 
 
 if __name__ == "__main__":

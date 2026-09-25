@@ -90,6 +90,8 @@ def _option_strings(subcommand: str) -> set[str]:
 
 
 def _schedule() -> ScanSchedule:
+    # With a threshold: `options={}` never reached the cron installer's
+    # `--fail-on`, which it appended to `jmo scan` (exit 2, #1277).
     return ScanSchedule(
         metadata=ScheduleMetadata(name="nightly"),
         spec=ScheduleSpec(
@@ -97,7 +99,7 @@ def _schedule() -> ScanSchedule:
             jobTemplate=JobTemplateSpec(
                 targets={"repositories": {"repos_dir": "/srv/repos"}},
                 results={},
-                options={},
+                options={"fail_on": "HIGH"},
             ),
         ),
     )
@@ -240,10 +242,10 @@ def test_every_emitted_command_actually_parses(name: str) -> None:
 
 # One flag each emitter must carry for the inputs above. `--profile-name` used
 # to be the one flag every emitter shared; v2.0.0 removed it, so each now names
-# the flag its own inputs guarantee. The two `jmo ci` emitters carry the CI
+# the flag its own inputs guarantee. The three `jmo ci` emitters carry the CI
 # threshold (`jmo scan` has no `--fail-on`, which is why they emit `ci`).
 MUST_EMIT = {
-    "cron_installer": "--results-dir",
+    "cron_installer": "--fail-on",
     "wizard_flows/repo_flow": "--repo",
     "wizard_flows/stack_flow": "--repos-dir",
     "wizard_flows/dependency_flow": "--tools",

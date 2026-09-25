@@ -422,7 +422,7 @@ jmo-security-scan:
   stage: scan
   image: ghcr.io/jimmy058910/jmo-security:latest
   script:
-    - jmo scan --repos-dir /repos --fail-on HIGH
+    - jmo ci --repos-dir /repos --fail-on HIGH
     - jmo report /results
   artifacts:
     paths:
@@ -645,7 +645,7 @@ jobs:
 
       - name: Run security scan
         run: |
-          jmo scan --repo . --fail-on HIGH
+          jmo ci --repo . --fail-on HIGH
           jmo report ./results
 
       - name: Upload SARIF
@@ -720,7 +720,7 @@ RESULTS_DIR="/path/to/results/$(date +%Y-%m-%d)"
 SLACK_WEBHOOK="https://hooks.slack.com/services/..."
 
 # Run scan
-jmo scan --repos-dir "$REPOS_DIR" --results-dir "$RESULTS_DIR" --fail-on HIGH
+jmo ci --repos-dir "$REPOS_DIR" --results-dir "$RESULTS_DIR" --fail-on HIGH
 
 # Generate reports
 jmo report "$RESULTS_DIR"

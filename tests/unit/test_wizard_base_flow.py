@@ -829,53 +829,6 @@ def test_target_detector_defaults_to_cwd(tmp_path, monkeypatch):
     assert isinstance(locks, list)
 
 
-def test_artifact_generator_generate_makefile(tmp_path):
-    """Test ArtifactGenerator.generate_makefile delegates to wizard_generators."""
-    from scripts.cli.wizard_flows.base_flow import ArtifactGenerator
-
-    generator = ArtifactGenerator()
-    output = tmp_path / "Makefile"
-
-    # Mock the underlying generator to avoid complex config requirements
-    with patch("scripts.cli.wizard_generators.generate_makefile_target") as mock_gen:
-        mock_gen.return_value = "# Mock Makefile\nsecurity-scan:\n\tjmo scan"
-        generator.generate_makefile(["jmo", "scan", "--repo", "."], output)
-
-    # Verify the generator was called
-    mock_gen.assert_called_once()
-
-
-def test_artifact_generator_generate_github_actions(tmp_path):
-    """Test ArtifactGenerator.generate_github_actions delegates to wizard_generators."""
-    from scripts.cli.wizard_flows.base_flow import ArtifactGenerator
-
-    generator = ArtifactGenerator()
-    output = tmp_path / ".github" / "workflows" / "security.yml"
-    output.parent.mkdir(parents=True)
-
-    # Mock the underlying generator to avoid complex config requirements
-    with patch("scripts.cli.wizard_generators.generate_github_actions") as mock_gen:
-        mock_gen.return_value = "# Mock GHA workflow"
-        generator.generate_github_actions(["jmo", "scan", "--repo", "."], output)
-
-    mock_gen.assert_called_once()
-
-
-def test_artifact_generator_generate_shell_script(tmp_path):
-    """Test ArtifactGenerator.generate_shell_script delegates to wizard_generators."""
-    from scripts.cli.wizard_flows.base_flow import ArtifactGenerator
-
-    generator = ArtifactGenerator()
-    output = tmp_path / "scan.sh"
-
-    # Mock the underlying generator
-    with patch("scripts.cli.wizard_generators.generate_shell_script") as mock_gen:
-        mock_gen.return_value = "#!/bin/bash\njmo scan"
-        generator.generate_shell_script(["jmo", "scan", "--repo", "."], output)
-
-    mock_gen.assert_called_once()
-
-
 # ========== Category 4: ANSI Support Detection ==========
 
 

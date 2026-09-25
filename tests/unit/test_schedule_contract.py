@@ -165,6 +165,19 @@ def test_factory_built_schedule_carries_its_targets_into_the_workflow(generator)
     assert "https://example.test" in rendered
 
 
+@pytest.mark.parametrize("kwarg", ["profile", "reposdir"])
+def test_the_factory_rejects_a_keyword_it_does_not_read(kwarg: str) -> None:
+    """An unknown keyword used to vanish (#1277).
+
+    `profile=` after v2.0.0 removed profiles, or a typo such as `reposdir=`,
+    built a schedule that silently lacked what the caller asked for.
+    """
+    with pytest.raises(TypeError, match=kwarg):
+        ScanSchedule.from_simple_args(
+            name="nightly", cron="0 2 * * *", repos_dir="/srv/repos", **{kwarg: "x"}
+        )
+
+
 def _gha_run_line(schedule: ScanSchedule) -> str:
     workflow = yaml.safe_load(GitHubActionsGenerator().generate(schedule))
     steps = workflow["jobs"]["security-scan"]["steps"]
@@ -318,3 +331,116 @@ def test_update_recomputes_the_next_run_time(tmp_path):
     # Negative control -- it must NOT still satisfy the old expression, which is
     # exactly what the pre-fix value did.
     assert not croniter.match("30 5 * * 1", datetime.fromisoformat(first))
+
+
+def _cron_entry(results: dict) -> str:
+    """The crontab block, built off Linux too (the entry is string building)."""
+    from unittest.mock import patch
+
+    from scripts.core.cron_installer import CronInstaller
+
+    schedule = _schedule_with({"repositories": {"repos_dir": "/srv/repos"}})
+    schedule.spec.jobTemplate.results = results
+    with patch("scripts.core.cron_installer.platform.system", return_value="Linux"):
+        installer = CronInstaller()
+    return installer._generate_cron_entry(schedule)
+
+
+@pytest.mark.parametrize(
+    ("results", "rendered"),
+    [
+        ({}, '--results-dir "$HOME"/jmo-results/$(date +\\%Y-\\%m-\\%d)'),
+        ({"base_dir": "~/my results"}, "--results-dir \"$HOME\"'/my results'/$(date"),
+        ({"base_dir": "/var/jmo"}, "--results-dir /var/jmo/$(date +\\%Y-\\%m-\\%d)"),
+    ],
+    ids=["default-home", "home-with-space", "absolute"],
+)
+def test_the_cron_results_dir_expands_home(results: dict, rendered: str) -> None:
+    """The default `~/jmo-results` was quoted whole: `'~/jmo-results'/...`.
+
+    A shell expands `~` only unquoted at the start of a word, and `jmo` does
+    not expand `--results-dir` either, so a cron scan would have written into
+    a directory literally named `~` under cron's working directory. (None ran
+    at all: see test_cron_runs_the_whole_command.) `"$HOME"` expands inside
+    double quotes; the rest of the path stays quoted.
+    """
+    entry = _cron_entry(results)
+
+    assert rendered in entry
+    assert "'~" not in entry
+
+
+def test_the_cron_results_dir_refuses_another_users_home() -> None:
+    """`~bob/results` was written quoted, so it too became a literal `~bob`.
+
+    Only `~` and `~/...` are rendered through "$HOME"; another user's home has
+    no quoted form a shell expands, so it is refused rather than mangled.
+    """
+    from scripts.core.cron_installer import CronValidationError
+
+    with pytest.raises(CronValidationError, match="~bob"):
+        _cron_entry({"base_dir": "~bob/results"})
+
+
+def _what_cron_hands_the_shell(entry: str) -> str:
+    """crontab(5): an unescaped `%` ends the command, and `\\%` becomes `%`.
+
+    Everything after the first unescaped `%` is sent to the command's stdin,
+    so the shell never sees it.
+    """
+    line = next(ln for ln in entry.splitlines() if not ln.startswith("#"))
+    command = line.split(None, 5)[5]
+    command = re.split(r"(?<!\\)%", command, maxsplit=1)[0]
+    return command.replace("\\%", "%")
+
+
+def test_cron_runs_the_whole_command() -> None:
+    """Every crontab line was cut at `$(date +`, so no job ever started.
+
+    The installer wrote `$(date +%Y-%m-%d)` with the `%` unescaped. cron ended
+    the command at the first one, `sh` got `... $(date +` and stopped on a
+    syntax error, and everything after it, the threshold included, went to
+    stdin. A `%` in a path had the same effect.
+    """
+    from unittest.mock import patch
+
+    from scripts.cli.jmo import build_parser
+    from scripts.core.cron_installer import CronInstaller
+
+    schedule = _schedule_with({"repositories": {"repos_dir": "/srv/100%/repos"}})
+    schedule.spec.jobTemplate.options = {"fail_on": "HIGH"}
+    with patch("scripts.core.cron_installer.platform.system", return_value="Linux"):
+        entry = CronInstaller()._generate_cron_entry(schedule)
+
+    command = _what_cron_hands_the_shell(entry)
+    # The shell substitutes the date; do the same before lexing.
+    argv = shlex.split(re.sub(r"\$\([^)]*\)", "2026-09-25", command))
+    parsed = build_parser().parse_args(argv[1:])
+
+    assert parsed.fail_on == "HIGH"
+    assert parsed.repos_dir == "/srv/100%/repos"
+    assert parsed.results_dir.endswith("/jmo-results/2026-09-25")
+
+
+def test_cron_carries_every_option() -> None:
+    """cron read `threads`, `allow_missing_tools` and `fail_on`, never `timeout`."""
+    from unittest.mock import patch
+
+    from scripts.cli.jmo import build_parser
+    from scripts.core.cron_installer import CronInstaller
+
+    schedule = _schedule_with({"repositories": {"repos_dir": "/srv/repos"}})
+    schedule.spec.jobTemplate.options = {
+        "threads": 4,
+        "timeout": 900,
+        "allow_missing_tools": True,
+    }
+    with patch("scripts.core.cron_installer.platform.system", return_value="Linux"):
+        entry = CronInstaller()._generate_cron_entry(schedule)
+
+    command = _what_cron_hands_the_shell(entry)
+    argv = shlex.split(re.sub(r"\$\([^)]*\)", "2026-09-25", command))
+    parsed = build_parser().parse_args(argv[1:])
+
+    assert (parsed.threads, parsed.timeout) == (4, 900)
+    assert parsed.allow_missing_tools is True

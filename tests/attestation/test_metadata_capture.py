@@ -10,6 +10,8 @@ Tests metadata capture from three sources:
 import subprocess
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from scripts.core.attestation.metadata_capture import MetadataCapture
 
 
@@ -56,16 +58,18 @@ class TestFromScanArgs:
 
         assert metadata == {"tools": ["trivy"]}
 
-    def test_capture_with_kwargs(self):
-        """Test capturing additional kwargs."""
+    @pytest.mark.parametrize("kwarg", ["password", "profile"])
+    def test_an_undeclared_kwarg_is_rejected(self, kwarg):
+        """Attestation metadata carries the declared scan parameters only.
+
+        Every keyword used to be copied in, so a `password=` passed beside the
+        scan arguments would have reached attestation metadata, and a typo
+        vanished into it. Nothing in the product calls this, so none did (#1277).
+        """
         capture = MetadataCapture()
 
-        metadata = capture.from_scan_args(
-            custom_field="value",
-            another_field=123,
-        )
-
-        assert metadata == {"custom_field": "value", "another_field": 123}
+        with pytest.raises(TypeError, match=kwarg):
+            capture.from_scan_args(tools=["trivy"], **{kwarg: "x"})
 
     def test_capture_empty_lists(self):
         """Test capturing empty lists."""

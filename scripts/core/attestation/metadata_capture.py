@@ -32,7 +32,6 @@ class MetadataCapture:
         urls: list[str] | None = None,
         threads: int | None = None,
         timeout: int | None = None,
-        **kwargs,
     ) -> dict[str, Any]:
         """
         Capture scan parameters from command-line arguments.
@@ -44,10 +43,15 @@ class MetadataCapture:
             urls: List of URLs scanned
             threads: Thread count
             timeout: Timeout in seconds
-            **kwargs: Additional scan parameters
 
         Returns:
             Dict of scan metadata
+
+        There is deliberately no ``**kwargs``. It used to copy every keyword
+        into the metadata, so a password or token passed beside the scan
+        arguments would have reached the attestation, and a typo vanished into
+        it. An unknown keyword is now a ``TypeError``. Nothing in the product
+        calls this yet (#1277).
         """
         metadata: dict[str, Any] = {}
 
@@ -68,9 +72,6 @@ class MetadataCapture:
 
         if timeout is not None:
             metadata["timeout"] = timeout
-
-        # Add any additional kwargs
-        metadata.update(kwargs)
 
         return metadata
 

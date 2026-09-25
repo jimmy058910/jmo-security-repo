@@ -235,16 +235,22 @@ def _github_argv(schedule: ScanSchedule) -> list[str]:
 
 
 def _gitlab_argv(schedule: ScanSchedule) -> list[str]:
+    """The argv the parser sees: the script line minus its leading `jmo`.
+
+    Handing the parser `jmo` as the subcommand made every assertion on the exit
+    code vacuous (#1277), because `invalid choice: 'jmo'` also exits 2.
+    """
     job = yaml.safe_load(GitLabCIGenerator().generate(schedule))["security-scan"]
-    line = next(s for s in job["script"] if "jmo scan" in s)
-    return shlex.split(line.replace("\\\n", " "))
+    line = next(s for s in job["script"] if s.startswith("jmo "))
+    argv = shlex.split(line.replace("\\\n", " "))
+    return argv[1:]
 
 
 @pytest.mark.parametrize(
     "render", [_github_argv, _gitlab_argv], ids=["github", "gitlab"]
 )
 def test_a_conflicting_schedule_still_renders_a_command_the_parser_rejects(
-    render,
+    render, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """Documents the residue, and pins that it is a *read*-side gap.
 
@@ -253,9 +259,29 @@ def test_a_conflicting_schedule_still_renders_a_command_the_parser_rejects(
     flags. Asserting the rejection here is what keeps that honest: if a future
     change makes the consumers silently drop one, this test fails and the
     dropping is a decision someone takes on purpose rather than a side effect.
+
+    The exit code alone proved nothing (#1277): the GitLab argv began with
+    `jmo`, which the parser rejects as an unknown subcommand, so this passed for
+    every schedule. The message is what names the rule that fired.
     """
     argv = render(_hand_built_conflicting_schedule())
     assert "--repo" in argv and "--repos-dir" in argv
     with pytest.raises(SystemExit) as exc:
         build_parser().parse_args(argv)
     assert exc.value.code == 2
+    assert "not allowed with argument" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "render", [_github_argv, _gitlab_argv], ids=["github", "gitlab"]
+)
+def test_a_single_target_schedule_renders_a_command_the_parser_accepts(
+    render,
+) -> None:
+    """The negative control that makes the rejection above mean something."""
+    schedule = _hand_built_conflicting_schedule()
+    schedule.spec.jobTemplate.targets["repositories"] = {"repos_dir": "/srv/many"}
+
+    parsed = build_parser().parse_args(render(schedule))
+
+    assert parsed.repos_dir == "/srv/many"

@@ -1496,6 +1496,8 @@ jobs:
           TRIVY_VERSION: "0.74.0"
           TRUFFLEHOG_VERSION: "3.97.1"
           HADOLINT_VERSION: "2.15.1"
+          GRYPE_VERSION: "0.118.0"
+          SYFT_VERSION: "1.51.1"
         run: |
           # Same install block as scheduled.yml:tool-contract-tests — kept in
           # sync manually. Any drift means the weekly and PR gates disagree.
@@ -1519,6 +1521,17 @@ jobs:
           gzip -t /tmp/trufflehog.tar.gz
           tar -xzf /tmp/trufflehog.tar.gz -C /usr/local/bin trufflehog
           chmod +x /usr/local/bin/trufflehog
+          # Grype and Syft: their contracts had no install line, so neither
+          # had ever run in CI (#1073).
+          for t in grype syft; do
+            case "$t" in grype) ver="$GRYPE_VERSION" ;; syft) ver="$SYFT_VERSION" ;; esac
+            curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+              "https://github.com/anchore/${t}/releases/download/v${ver}/${t}_${ver}_linux_amd64.tar.gz" \
+              -o "/tmp/${t}.tar.gz"
+            gzip -t "/tmp/${t}.tar.gz"
+          done
+          tar -xzf /tmp/grype.tar.gz -C /usr/local/bin grype
+          tar -xzf /tmp/syft.tar.gz -C /usr/local/bin syft
           sudo apt-get update && sudo apt-get install -y shellcheck
 
           echo "Installed tools:"
@@ -1528,6 +1541,8 @@ jobs:
           trufflehog --version || echo "trufflehog not available"
           checkov --version || echo "checkov not available"
           shellcheck --version || echo "shellcheck not available"
+          grype version || echo "grype not available"
+          syft version || echo "syft not available"
 
       - name: Run tool contract tests
         if: steps.changes.outputs.versions == 'true'

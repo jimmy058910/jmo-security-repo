@@ -593,10 +593,11 @@ _ALLOWED_OFFLINE_SCANNER_SPAWNS = {
     # allowlist is what keeps that honest: putting the inert patch back makes
     # the recorder fire here rather than passing quietly.
     #
-    # `/usr/local/bin/trufflehog --version`, eighteen times. Added 2026-08-28
-    # from nightly run 33177110349 (#1039), where every one of the run's 18
-    # errors was this same probe. 14 remain: the v2.0.0 cut deleted the
-    # `jmo fast` history tests and made the include/exclude port hermetic.
+    # `/usr/local/bin/trufflehog --version`. Added 2026-08-28 from nightly run
+    # 33177110349 (#1039), where all 18 of the run's errors were this probe.
+    # The v2.0.0 cut took 4 off (it deleted the `jmo fast` history tests and
+    # made the include/exclude port hermetic); #1237 removed 10 more (below);
+    # these 4 remain.
     #
     # **They are green on every PR because only the nightly installs the real
     # security tools.** The PR shards have no trufflehog on PATH, so
@@ -604,34 +605,36 @@ _ALLOWED_OFFLINE_SCANNER_SPAWNS = {
     # THIRD environment, after the local box and PR CI, and a guard-scope
     # change is not finished being measured until it has run in all three --
     # #994 widened this recorder, verified locally and on PR CI, and these
-    # eighteen were still invisible to both.
+    # were still invisible to both.
     #
-    # Same reason as the three `test_jmo.py` entries above, at larger scale:
-    # each runs a real `jmo scan` or `jmo ci` whose pre-flight version-checks
-    # the tools it was asked for, and trufflehog is the tool these tests use.
-    # The probe is the PRODUCT behaving correctly; the tests' invariants are
-    # about scan accounting, exit codes and history, not about whether
-    # trufflehog exists. `test_scan_startup_does_not_version_check_unrequested_tools`
-    # is the clearest case: its subject IS the version check.
+    # The probe is NOT the tool pre-flight. Measured 2026-09-25 with a fake
+    # trufflehog on PATH and the Python stack of every spawn recorded: each
+    # `--version` comes from the startup version check, `cmd_scan` ->
+    # `_warn_critical_updates` -> `ToolManager.get_critical_outdated` ->
+    # `_get_tool_version`, which runs before `_check_scan_tools` and resolves
+    # through `ToolManager._find_binary`. The three measured here (the
+    # per-tool-config test and both `test_cli_scan_ci.py` tests) also run the
+    # real `trufflehog filesystem ... --no-update` scan through
+    # `tool_runner.run_tool`, because they do not stub the scan.
+    # `test_signal_handling.py` skips on Windows and was not measured.
     #
-    # `--version` fetches nothing. `requires_tools` is wrong for all of them:
-    # it would remove the only end-to-end scan-accounting coverage the shards
-    # have, on every runner, to silence a probe that is already offline.
+    # The probe is the PRODUCT behaving correctly, and `--version` fetches
+    # nothing. The real scan is offline too: each of the three points it at a
+    # directory it has just `mkdir`-ed and left empty, so trufflehog finds
+    # nothing to verify, and `--no-update` skips its update check.
+    # `test_scan_startup_does_not_version_check_unrequested_tools` is the
+    # clearest case: its subject IS the version check. `requires_tools` is
+    # wrong for all of them: it would remove end-to-end coverage the shards
+    # have, on every runner, to silence a spawn that is already offline.
     #
-    # The durable alternative, if this list grows again: `_check_scan_tools`
-    # reads `args._startup_tool_manager`, so a stub manager set there skips
-    # the real resolver entirely. That is a change to eighteen call sites
-    # rather than one, which is why it is recorded here instead of taken.
-    "tests/cli/test_scan_runtime_accounting.py::TestAllowMissingToolsSaysWhatHappened::test_nothing_left_to_run_is_explained",
-    "tests/cli/test_scan_runtime_accounting.py::TestScanExitCodeReflectsTargetOutcome::test_partial_target_exits_zero_but_says_so",
-    "tests/cli/test_scan_runtime_accounting.py::TestScanExitCodeReflectsTargetOutcome::test_successful_target_still_exits_zero",
-    "tests/cli/test_scan_runtime_accounting.py::TestScanExitCodeReflectsTargetOutcome::test_target_where_every_tool_failed_exits_non_zero",
-    "tests/cli/test_scan_runtime_accounting.py::TestScanRecordsItsOwnDuration::test_a_scan_stores_a_duration_a_user_can_read",
-    "tests/cli/test_scan_runtime_accounting.py::TestStubbedToolIsNotASuccess::test_a_fully_stubbed_target_still_exits_zero",
-    "tests/cli/test_scan_runtime_accounting.py::TestStubbedToolIsNotASuccess::test_a_real_scan_reports_no_stubs",
-    "tests/cli/test_scan_runtime_accounting.py::TestStubbedToolIsNotASuccess::test_the_end_of_scan_summary_names_the_stubbed_tools",
-    "tests/cli/test_scan_runtime_accounting.py::TestStubbedToolIsNotASuccess::test_the_per_target_line_says_no_tool_ran",
-    "tests/cli/test_scan_runtime_accounting.py::TestStubbedToolIsNotASuccess::test_the_scan_metadata_carries_which_tools_were_stubbed",
+    # REMOVED (#1237): the 10 `tests/cli/test_scan_runtime_accounting.py`
+    # entries. Their tests' invariants are scan accounting, not whether
+    # trufflehog exists, and all of them use `scan_env`, which now pins
+    # `ToolManager._find_binary`. Measured with a fake trufflehog on PATH:
+    # without the pin, 10 teardown errors; with it, 39 passed and 0 spawns.
+    # That pin is the way to keep a test off this list. A stub manager on
+    # `args._startup_tool_manager` is NOT: `cmd_scan` overwrites that attribute
+    # before either probe runs, and `_warn_critical_updates` never reads it.
     "tests/integration/test_cli_per_tool_config.py::test_scan_startup_does_not_version_check_unrequested_tools",
     "tests/integration/test_cli_scan_ci.py::test_ci_composes_scan_and_report",
     "tests/integration/test_cli_scan_ci.py::test_ci_runs_the_report_phase_exactly_once",

@@ -66,7 +66,6 @@ from __future__ import annotations
 # ==============================================================================
 # Flow Classes (existing)
 # ==============================================================================
-from .base_flow import ArtifactGenerator as ArtifactGenerator
 from .base_flow import BaseWizardFlow as BaseWizardFlow
 from .base_flow import PromptHelper as PromptHelper
 from .base_flow import TargetDetector as TargetDetector
@@ -181,7 +180,6 @@ __all__ = [
     "BaseWizardFlow",
     "TargetDetector",
     "PromptHelper",
-    "ArtifactGenerator",
     "RepoFlow",
     "EntireStackFlow",
     "CICDFlow",

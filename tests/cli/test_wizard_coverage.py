@@ -302,8 +302,9 @@ def test_github_actions_repos_dir_mode():
 
     result = generate_github_actions(config)
 
-    # Verify repos-dir flag
-    assert "--repos-dir ." in result
+    # The checkout, not its subdirectories: a workflow runs on one repository
+    assert "--repo ." in result
+    assert "--repos-dir" not in result
 
 
 def test_github_actions_repo_mode():

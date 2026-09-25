@@ -250,7 +250,7 @@ class CronInstaller:
 
         Format:
             # JMo Security Schedule: nightly
-            0 2 * * * jmo scan --repos-dir ~/repos --results-dir ~/jmo-results/$(date +%Y-%m-%d)
+            0 2 * * * jmo scan --repos-dir ~/repos --results-dir "$HOME"/jmo-results/$(date +\\%Y-\\%m-\\%d)
             # End JMo Schedule
 
         Args:
@@ -276,8 +276,12 @@ class CronInstaller:
                 f"Expected 5-field cron format (e.g., '0 2 * * *')."
             )
 
-        # Build jmo command with validated inputs
-        jmo_cmd = "jmo scan"
+        # Build jmo command with validated inputs. A severity threshold makes it
+        # `jmo ci`: `jmo scan` has no --fail-on, and `--fail-on HIGH` resolved
+        # as the prefix of --fail-on-store-error, leaving HIGH unrecognised, so
+        # the installed cron job exited 2 every time it fired (#1277).
+        fail_on = spec.options.get("fail_on")
+        jmo_cmd = "jmo ci" if fail_on else "jmo scan"
 
         # Add targets with validation
         targets = spec.targets
@@ -378,7 +382,24 @@ class CronInstaller:
         results_base = spec.results.get("base_dir", "~/jmo-results")
         if not validate_path_safe(results_base, "results_base"):
             raise CronValidationError(f"Invalid results base path: '{results_base}'")
-        jmo_cmd += f" --results-dir {shlex.quote(results_base)}/$(date +%Y-%m-%d)"
+        # A shell expands `~` only unquoted at the start of a word, and jmo does
+        # not expand --results-dir, so the quoted default '~/jmo-results' sent
+        # every scan into a directory literally named `~` under cron's working
+        # directory. "$HOME" expands inside double quotes; the rest stays quoted.
+        if results_base == "~" or results_base.startswith("~/"):
+            base_word = '"$HOME"' + (
+                shlex.quote(results_base[1:]) if results_base != "~" else ""
+            )
+        elif results_base.startswith("~"):
+            # `~bob/x` has no quoted form a shell expands; quoting it would
+            # create a directory literally named `~bob`.
+            raise CronValidationError(
+                f"Unsupported results base path: '{results_base}'. Use ~/... "
+                f"or an absolute path."
+            )
+        else:
+            base_word = shlex.quote(results_base)
+        jmo_cmd += f" --results-dir {base_word}/$(date +%Y-%m-%d)"
 
         # Add options with validation
         opts = spec.options
@@ -389,8 +410,13 @@ class CronInstaller:
             if not validate_positive_int(threads, "threads", max_value=64):
                 raise CronValidationError(f"Invalid threads value: '{threads}'")
             jmo_cmd += f" --threads {threads}"
-        if "fail_on" in opts:
-            fail_on = opts["fail_on"]
+        # Read by GitLab and dropped here and by GitHub Actions, silently.
+        if "timeout" in opts:
+            timeout = opts["timeout"]
+            if not validate_positive_int(timeout, "timeout"):
+                raise CronValidationError(f"Invalid timeout value: '{timeout}'")
+            jmo_cmd += f" --timeout {timeout}"
+        if fail_on:
             valid_severities = ("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO")
             if fail_on.upper() not in valid_severities:
                 raise CronValidationError(
@@ -398,6 +424,12 @@ class CronInstaller:
                     f"Valid: {', '.join(valid_severities)}"
                 )
             jmo_cmd += f" --fail-on {shlex.quote(fail_on)}"
+
+        # crontab(5): an unescaped `%` ends the command and the rest goes to
+        # stdin. The `$(date +%Y-%m-%d)` above was written that way, so every
+        # installed job reached the shell as `... $(date +` and never started;
+        # a `%` in a path cut the line the same way. cron turns `\%` into `%`.
+        jmo_cmd = jmo_cmd.replace("%", r"\%")
 
         # Multi-line entry with markers
         entry = f"""

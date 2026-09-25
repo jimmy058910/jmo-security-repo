@@ -386,6 +386,13 @@ def scan_env(tmp_path: Path, monkeypatch):
     (#933), which resolves ``Path.home() / ".jmo" / "config.yml"`` with no
     injection point. Redirect it here so every test using this fixture writes
     to ``tmp_path`` instead of the developer's real config file.
+
+    The pre-flight is not the only startup probe. Before it, ``cmd_scan`` calls
+    ``_warn_critical_updates``, which version-checks every requested tool
+    through ``ToolManager._find_binary`` on the real PATH. On a machine with
+    trufflehog installed, every test here spawned ``trufflehog --version`` and
+    needed an allowlist entry to pass (#1237). Resolving nothing is the state
+    every PR shard is already in.
     """
     repos_dir = tmp_path / "repos"
     (repos_dir / "proj").mkdir(parents=True)
@@ -394,6 +401,9 @@ def scan_env(tmp_path: Path, monkeypatch):
         yaml.safe_dump({"tools": ["trufflehog"], "outputs": ["json"]}), encoding="utf-8"
     )
     monkeypatch.setattr(jmo, "_check_scan_tools", lambda args, tools: (tools, []))
+    monkeypatch.setattr(
+        "scripts.cli.tool_manager.ToolManager._find_binary", lambda *a, **k: None
+    )
     monkeypatch.setenv("CI", "true")
     monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
     return _scan_args(tmp_path, cfg_path, repos_dir)
@@ -437,13 +447,7 @@ class TestScanStoresHistory:
             return parse_args()
 
     @staticmethod
-    def _scan(args, monkeypatch) -> int:
-        # The startup version check resolves binaries through its own finder;
-        # pinned so a trufflehog on PATH is never spawned for `--version`
-        # (#1234), which is the probe the #907 guard refuses.
-        monkeypatch.setattr(
-            "scripts.cli.tool_manager.ToolManager._find_binary", lambda *a, **k: None
-        )
+    def _scan(args) -> int:
         with patch("scripts.cli.scan_jobs.scan_repository") as mock_scan:
             mock_scan.return_value = ("proj", {"trufflehog": True})
             return jmo.cmd_scan(args)
@@ -455,7 +459,7 @@ class TestScanStoresHistory:
         args = self._args(scan_env, tmp_path, db)
 
         assert args.store_history is True, "jmo scan no longer stores by default"
-        assert self._scan(args, monkeypatch) == 0
+        assert self._scan(args) == 0
 
         assert db.exists(), "jmo scan created no history database at all"
         con = sqlite3.connect(f"file:{db.as_posix()}?mode=ro", uri=True)
@@ -472,7 +476,7 @@ class TestScanStoresHistory:
         args = self._args(scan_env, tmp_path, db, "--no-store-history")
 
         assert args.store_history is False
-        assert self._scan(args, monkeypatch) == 0
+        assert self._scan(args) == 0
 
         assert not db.exists(), "--no-store-history still wrote a database"
 
@@ -894,17 +898,8 @@ class TestTheTwoNotAttemptedReasonsReadDifferently:
             lambda **kw: types.SimpleNamespace(run_all_parallel=list),
         )
         # Two resolvers, and only `find_tool` above decides what this test
-        # sees. cmd_scan consults the other one first: `_warn_critical_updates`
-        # version-checks every requested tool through
-        # `ToolManager._find_binary`, which reads the real PATH, so on a runner
-        # with the binary installed it spawned `<tool> --version` and failed
-        # the real-binary guard at teardown (#1234). The nightly caught it in
-        # the class below, which asks for trufflehog; this one is exposed the
-        # same way wherever gosec is on PATH. Resolving nothing there is the
-        # state every PR shard is already in.
-        monkeypatch.setattr(
-            "scripts.cli.tool_manager.ToolManager._find_binary", lambda *a, **k: None
-        )
+        # sees. The other, `ToolManager._find_binary`, is the startup version
+        # check's; `scan_env` pins it (#1234, #1237).
         jmo.cmd_scan(scan_env)
         return capsys.readouterr().err
 
@@ -985,12 +980,6 @@ class TestThePerTargetLineOnlyWarnsAboutRealGaps:
                     ToolResult(tool="trufflehog", status="success", attempts=1)
                 ]
             ),
-        )
-        # The startup version check's resolver, pinned for the reason given in
-        # `_scan_with` above. Without it the nightly's real trufflehog was
-        # spawned for `--version` here (#1234).
-        monkeypatch.setattr(
-            "scripts.cli.tool_manager.ToolManager._find_binary", lambda *a, **k: None
         )
         jmo.cmd_scan(scan_env)
         return capsys.readouterr().err

@@ -923,6 +923,85 @@ class TestFindBinary:
         assert result == str(zap_sh)
 
 
+# #1283. Two misreads, one symptom. In the image the JVM prints a four-part Java
+# version first, and the zap pattern read "0.20.1" out of "17.0.20.1". On a host,
+# zap.bat run from the wrong directory cannot find its jar, echoes the jar's
+# name, and the version was read out of the filename: `jmo tools check` said
+# `zap OK 2.17.0` for a zap that could not start.
+_ZAP_IMAGE_OUTPUT = (
+    "Found Java version 17.0.20.1\n"
+    "Available memory: 7937 MB\n"
+    "Using JVM args: -Xmx1984m\n"
+    "2.17.0\n"
+)
+# Measured 2026-09-24 from `zap.bat -version` with no working directory set
+# (rc 1); only the two local paths are replaced.
+_ZAP_HOST_JAR_FAILURE = (
+    '\nC:\\work>if exist "C:\\Users\\dev\\ZAP\\.ZAP_JVM.properties" '
+    '(set /p jvmopts= 0<"C:\\Users\\dev\\ZAP\\.ZAP_JVM.properties" )  '
+    "else (set jvmopts=-Xmx512m ) \n"
+    "\nC:\\work>java -Xmx512m -jar zap-2.17.0.jar -version \n"
+    "Error: Unable to access jarfile zap-2.17.0.jar\n"
+)
+
+
+class TestZapVersionProbe:
+    """zap's version is its own line, never the JVM's and never a jar's name."""
+
+    @pytest.mark.parametrize(
+        ("output", "expected"),
+        [
+            pytest.param(_ZAP_IMAGE_OUTPUT, "2.17.0", id="image-4-part-java"),
+            pytest.param(
+                "Found Java version 17.0.12\n2.16.1\n", "2.16.1", id="3-part-java"
+            ),
+            pytest.param("Found Java version 17.0.20.1\n", None, id="java-line-only"),
+            pytest.param(_ZAP_HOST_JAR_FAILURE, None, id="host-jar-not-found"),
+        ],
+    )
+    def test_parse_version_reads_only_zaps_own_version(self, output, expected):
+        from scripts.cli.tool_manager import ToolManager
+
+        assert ToolManager()._parse_version("zap", output) == expected
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            "Found Java version 17.0.20.1",
+            "Error: Unable to access jarfile zap-2.17.0.jar",
+            # Backtracking must not shorten the last part to leave "0.jar" behind.
+            "Error: Unable to access jarfile zap-2.17.10.jar",
+            # A four-part token after a quote: the lookbehinds do not fire on `"`,
+            # so only the lookahead can refuse the first three parts.
+            'openjdk version "17.0.20.1" 2025-07-15',
+        ],
+    )
+    def test_the_zap_pattern_itself_rejects_non_zap_versions(self, line):
+        from scripts.cli.tool_manager import VERSION_PATTERNS
+
+        assert VERSION_PATTERNS["zap"].search(line) is None
+
+    def test_the_probe_runs_from_zaps_install_directory(self, tmp_path):
+        """zap.bat finds `zap-<ver>.jar` relative to the working directory.
+
+        Measured: from the repository root it exits 1 (jar not found); with
+        cwd set to its own directory it exits 0 and prints 2.17.0.
+        """
+        from scripts.cli.tool_manager import ToolManager
+
+        zap_dir = tmp_path / "zap"  # no ZAP_VERSION file, no "ZAP_" in the name
+        zap_dir.mkdir()
+        zap_bin = zap_dir / "zap.bat"
+        zap_bin.touch()
+
+        result = MagicMock(stdout="2.17.0\n", stderr="", returncode=0)
+        with patch("subprocess.run", return_value=result) as run:
+            version, error = ToolManager()._get_tool_version("zap", str(zap_bin))
+
+        assert (version, error) == ("2.17.0", None)
+        assert Path(run.call_args.kwargs.get("cwd") or "") == zap_dir
+
+
 class TestGetToolVersion:
     """Tests for _get_tool_version method.
 
