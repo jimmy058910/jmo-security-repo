@@ -1350,5 +1350,62 @@ def test_the_scan_gets_the_gitlab_token_through_its_environment(
     assert mock_run.call_args.kwargs["env"]["GITLAB_TOKEN"] == "glpat-SECRET"
 
 
+def _docker_tsv_config(tmp_path: Path) -> WizardConfig:
+    config = WizardConfig()
+    config.use_docker = True
+    config.results_dir = str(tmp_path / "results")
+    config.target.type = "repo"
+    config.target.repo_mode = "tsv"
+    config.target.tsv_path = str(tmp_path / "repos.tsv")
+    config.target.tsv_dest = str(tmp_path / "clones")
+    return config
+
+
+@patch("scripts.cli.tool_manager.ToolManager")
+@patch("scripts.cli.wizard.subprocess.run")
+def test_docker_mounts_exist_before_the_container_starts(
+    mock_run, mock_tool_manager_class, tmp_path
+):
+    """Docker creates a missing bind-mount source as root, and the image's
+    user (uid 1000) cannot write it: measured, `mkdir: Permission denied`.
+    The clone destination and the results directory are both written."""
+    mock_tool_manager_class.return_value = _fake_tool_manager()
+    config = _docker_tsv_config(tmp_path)
+    seen: dict[str, bool] = {}
+
+    def record(*_a, **_k):
+        seen["clones"] = (tmp_path / "clones").is_dir()
+        seen["results"] = (tmp_path / "results").is_dir()
+        return MagicMock(returncode=0)
+
+    mock_run.side_effect = record
+
+    from scripts.cli.wizard import execute_scan
+
+    execute_scan(config, yes=True)
+
+    assert seen == {"clones": True, "results": True}
+
+
+@pytest.mark.parametrize("use_docker", [False, True], ids=["native", "docker"])
+@patch("scripts.cli.wizard._prompt_yes_no", return_value=True)
+@patch("scripts.cli.tool_manager.ToolManager")
+def test_review_says_where_tsv_credentials_come_from(
+    mock_tool_manager_class, _yes_no, use_docker, tmp_path, capsys
+):
+    """jmo never prompts for a clone's credentials, and the container has none."""
+    from scripts.cli.wizard import review_and_confirm
+
+    mock_tool_manager_class.return_value = _fake_tool_manager()
+    config = _docker_tsv_config(tmp_path)
+    config.use_docker = use_docker
+
+    review_and_confirm(config)
+
+    out = capsys.readouterr().out
+    assert "credential" in out
+    assert ("public repositories" in out) is use_docker
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

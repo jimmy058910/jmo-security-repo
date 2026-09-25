@@ -451,10 +451,11 @@ class ScanOrchestrator:
         """
         Discover local Git repositories from CLI arguments.
 
-        Supports three input modes:
+        Supports four input modes:
         - --repo: Single repository path
         - --repos-dir: Directory containing multiple repos
         - --targets: File with list of repository paths
+        - --tsv: TSV of repositories, cloned into --dest first
 
         Also detects MSYS path mangling from Git Bash on Windows and provides
         helpful error messages with solutions.
@@ -531,7 +532,80 @@ class ScanOrchestrator:
                     if listed == 0:
                         self._reject("--targets", args.targets, "file lists no paths")
 
+        # TSV of repositories to clone, then scan (#1299)
+        elif getattr(args, "tsv", None):
+            repos.extend(self._clone_tsv(args.tsv, getattr(args, "dest", None)))
+
         return repos
+
+    def _clone_tsv(self, tsv: str, dest: str | None) -> list[Path]:
+        """Clone every repository a TSV lists into `dest`; return the clones.
+
+        Each row that is refused or fails to clone is rejected by name, and a
+        file whose every row failed is rejected as a whole: a scan of nothing
+        is not a clean scan.
+        """
+        import csv
+
+        from scripts.cli.clone_from_tsv import clone_or_update, parse_tsv, redact
+
+        if not dest:
+            # No default: the working directory puts clones inside whatever
+            # repository the user runs from, and the results directory is
+            # uploaded whole by CI and deleted between runs.
+            self._reject("--tsv", tsv, "needs --dest DIR, where to clone the rows")
+            return []
+        path = _user_path(tsv)
+        why = _probe(path.exists, "file does not exist")
+        if why:
+            self._reject("--tsv", tsv, why)
+            return []
+        try:
+            urls = parse_tsv(path)
+        except OSError as exc:
+            self._reject("--tsv", tsv, _unreadable(exc))
+            return []
+        except (RuntimeError, UnicodeDecodeError, csv.Error) as exc:
+            self._reject("--tsv", tsv, str(exc))
+            return []
+        if not urls:
+            self._reject("--tsv", tsv, "file lists no repositories")
+            return []
+        dest_path = _user_path(dest)
+        try:
+            dest_path.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            self._reject("--tsv", tsv, f"--dest {dest} cannot be used: {exc}")
+            return []
+
+        from scripts.cli.path_sanitizers import _sanitize_path_component
+
+        clones: list[Path] = []
+        # Results land in individual-repos/<repository name>, so two clones of
+        # one name (alice/app, bob/app) would write one folder concurrently and
+        # the last writer's findings would stand for both.
+        results_owner: dict[str, str] = {}
+        for url in dict.fromkeys(urls):  # a row listed twice is scanned once
+            clone, why = clone_or_update(url, dest_path)
+            if clone is None:
+                self._reject("--tsv", redact(url), why or "clone failed")
+                continue
+            key = _sanitize_path_component(clone.name).casefold()
+            # TODO(issue-#1303): a stopgap; drop this refusal once each
+            # repository's results folder is unique (Phase 3 PR B).
+            if key in results_owner:
+                self._reject(
+                    "--tsv",
+                    redact(url),
+                    f"its results would overwrite {results_owner[key]}'s: both "
+                    f"are named {clone.name}",
+                )
+                continue
+            results_owner[key] = redact(url)
+            clones.append(clone)
+        if not clones:
+            self._reject("--tsv", tsv, "no listed repository could be cloned")
+        return clones
 
     def _discover_images(self, args) -> list[str]:
         """

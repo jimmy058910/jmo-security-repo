@@ -142,6 +142,10 @@ def _effective_scan_settings(args) -> dict[str, Any]:
 def _add_target_args(parser: argparse.ArgumentParser, target_group: Any = None) -> None:
     """Add common target scanning arguments (repos, images, IaC, URLs, GitLab, K8s)."""
     # Repository targets (mutually exclusive if in a group)
+    tsv_help = (
+        "TSV with a 'url' or 'full_name' column: clone each repository into "
+        "--dest, then scan the clones"
+    )
     if target_group:
         g = target_group
         g.add_argument("--repo", help="Path to a single repository to scan")
@@ -149,12 +153,21 @@ def _add_target_args(parser: argparse.ArgumentParser, target_group: Any = None) 
             "--repos-dir", help="Directory whose immediate subfolders are repos to scan"
         )
         g.add_argument("--targets", help="File listing repo paths (one per line)")
+        g.add_argument("--tsv", help=tsv_help)
     else:
         parser.add_argument("--repo", help="Path to a single repository to scan")
         parser.add_argument(
             "--repos-dir", help="Directory whose immediate subfolders are repos to scan"
         )
         parser.add_argument("--targets", help="File listing repo paths (one per line)")
+        parser.add_argument("--tsv", help=tsv_help)
+    parser.add_argument(
+        "--dest",
+        help=(
+            "Where --tsv clones to (required with it), as <dest>/<owner>/<repo>; "
+            "an existing clone of the same URL is fast-forwarded"
+        ),
+    )
 
     # Container image scanning
     parser.add_argument(
@@ -2976,6 +2989,7 @@ def cmd_scan(args) -> int:
     eff = _effective_scan_settings(args)
     cfg = load_config(args.config)
     tools = eff["tools"]
+    # TODO(issue-#1302): no expanduser, so a quoted `~` is a literal directory.
     results_dir = Path(args.results_dir)
 
     # One ToolManager for the whole startup path. It memoises check_tool, and

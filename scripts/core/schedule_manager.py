@@ -29,9 +29,14 @@ _T = TypeVar("_T")
 # including if a fourth option joins it.
 #
 # Only the first two are reachable from a schedule today: no consumer emits
-# `--targets`. It is listed because the authority lists it, not because a
-# generator uses it.
-MUTUALLY_EXCLUSIVE_REPOSITORY_KEYS: tuple[str, ...] = ("repo", "repos_dir", "targets")
+# `--targets` or `--tsv`. They are listed because the authority lists them, not
+# because a generator uses them.
+MUTUALLY_EXCLUSIVE_REPOSITORY_KEYS: tuple[str, ...] = (
+    "repo",
+    "repos_dir",
+    "targets",
+    "tsv",
+)
 
 # The `targets["repositories"]` key each scan flag corresponds to. Keeping the
 # mapping explicit is what lets the test compare two vocabularies without
@@ -40,6 +45,7 @@ REPOSITORY_KEY_TO_SCAN_FLAG: dict[str, str] = {
     "repo": "--repo",
     "repos_dir": "--repos-dir",
     "targets": "--targets",
+    "tsv": "--tsv",
 }
 
 

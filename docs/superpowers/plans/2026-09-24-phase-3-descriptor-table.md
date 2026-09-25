@@ -7,10 +7,11 @@ tool lands in exactly one of **ran / skipped:\<reason\> / failed:\<reason\>**, w
 its duration, in `scan-timings.json` and in `history.db`. One exclusion list is
 rendered in every tool's own grammar. A scan that examined nothing is `failed`. And
 when `.git` exists, secrets are also read from history: `trufflehog git` and `gitleaks
-git`, with gitleaks wired into the matrix here (12 → 13). It closes eleven issues: the
-nine rostered (#722 #1073 #1227 #1231 #1235 #1237 #1277 #1279 #1283), and two filed
+git`, with gitleaks wired into the matrix here (12 → 13). It closes twelve issues: the
+nine rostered (#722 #1073 #1227 #1231 #1235 #1237 #1277 #1279 #1283), two filed
 with PR A: the wizard issue (#1298) and the tsv issue (#1299),
-which PR T closes by making `jmo scan --tsv` real.
+which PR T closes by making `jmo scan --tsv` real, and one filed with PR T: #1303, two
+repositories of one folder name sharing a results folder, which PR B closes.
 
 **Architecture:** a `ToolDescriptor` per tool (target types, trigger predicate, one or
 more invocations, exclusion style, cost class, version probe, return codes, output
@@ -156,7 +157,7 @@ Four PRs into `dev`, each green before the next is cut from it.
 |---|---|---|
 | **A** | this plan; program-plan and spec text; both new issues, filed and rostered; riders that touch no engine code (see "PR A riders") | #1073 #1237 #1277 #1283 #1298 |
 | **T** | `jmo scan --tsv/--dest`: parser flags, target collection, the hardened clone path, the wizard's tsv mode native and Docker | #1299 |
-| **B** | the descriptor table over the 18 blocks, the accounting record, the single exclusion list, G2, tool-name validation, `scan_tool_runs` | #722 #1227 #1231 #1235 #1279 |
+| **B** | the descriptor table over the 18 blocks, the accounting record, the single exclusion list, G2, tool-name validation, `scan_tool_runs`, a results folder unique per repository | #722 #1227 #1231 #1235 #1279 #1303 |
 | **C** | gitleaks wired as descriptor rows (dir and git), trufflehog's git invocation, both adapters writing `secretContext` | G1 (spec §4.3) |
 
 B precedes C because the program's rule holds inside the phase too: a new tool is a
@@ -374,49 +375,185 @@ Second review of the riders, then fixed here too:
 
 ## Task T1: Measure first (PR T)
 
-- [ ] `clone_from_tsv.py`'s existing tests (`tests/cli/test_clone_from_tsv.py`): what
+- [x] `clone_from_tsv.py`'s existing tests (`tests/cli/test_clone_from_tsv.py`): what
   they cover, and which of them survive the move into the product path.
-- [ ] How `--targets` flows from the parser through target collection
+- [x] How `--targets` flows from the parser through target collection
   (`scan_orchestrator.py:482-532`) and into the repository job: `--tsv` produces the same
   kind of list, after cloning.
-- [ ] The CWE-88 and CWE-22 claims in the measurement table, reproduced against
+- [x] The CWE-88 and CWE-22 claims in the measurement table, reproduced against
   `clone_or_update` in a temp directory with a local bare repository, no network: a URL
   that starts with `-`, and one whose path segments are `..`. The test must not execute
   anything a hostile row names.
-- [ ] Docker: does `git clone` over `https://` work inside the image (a public repository,
+- [x] Docker: does `git clone` over `https://` work inside the image (a public repository,
   once), and where do clones land so a second run updates rather than re-clones.
+
+**Measured (T1, 2026-09-25).** Git 2.55.0.windows.3 on the host; the image is
+`jmo-security-dev:v2` under WSL (git 2.43.0, uid 1000).
+
+| Claim | Measured |
+|---|---|
+| The 23 existing tests | `parse_tsv` 9 (survive as they are); `run` 3; `ensure_unshallowed` 3 and `clone_or_update` 4 **mock `run` with fixed `side_effect` sequences**, so they pin git's call order, never run git, and passed over every defect below; `main` 4 |
+| `--targets`' flow | `--repo`/`--repos-dir`/`--targets` share scan's mutually exclusive group (`jmo.py:147-151`), and `ci` gets the same group (`:366`). `_discover_repos` `_reject`s each bad entry by name (`scan_orchestrator.py:509-532`); `cmd_scan` exits 1, "Every target was rejected", when nothing is left (`jmo.py:3076-3091`). `rejected` is logged, never persisted. `jmo ci` copies the namespace (`_phase_args`), so a `getattr`-read `tsv`/`dest` needs no `_SCAN_REQUIRED` entry. The wizard runs its argv through a subprocess, so the parser is the only route in |
+| CWE-88 | `clone_or_update("-h", dest)` ran `git clone -h <dest>/misc/-h`: **rc 129 and git's usage text**, the row parsed as an option. `git clone -- -h d`: `fatal: repository '-h' does not exist`, rc 128 |
+| CWE-22 | `https://example.invalid/../escape.git` returned `dest/../escape` and ran `remote -v`, `fetch --all --tags --prune` (twice) and `rev-parse` **in a repository outside `dest`**. `…/owner/..` with `dest` inside another repository returned `dest` itself; `remote -v` walked up and **the fetch ran in the enclosing repository**. A plain (contained) directory at `dest/owner/repo` inside a repository: the same walk-up. On Windows, `…/..\..\made-outside\o/r.git` made **`made-outside\o` two levels above `dest`** in `mkdir(parents=True)`, before git ran |
+| scp-form rows | `git@github.com:owner/repo.git`, which the allowlist below permits, **crashes on Windows**: the folder `git@github.com:owner` raises `NotADirectoryError` (WinError 267) out of `mkdir`. A trailing `/` makes the repository name empty and the clone lands at `dest/repo` |
+| The update path | `fetch` does not move the working tree: after a new commit on origin the clone stayed on the first commit (`173f96c` vs `34c766e`); `merge --ff-only` moved it. **A second run scanned the first run's files** |
+| Credentials | git strips userinfo from its own messages (`unable to access 'https://127.0.0.1:9/x.git/'` for a `user:TOKEN@` URL); the module's own lines print the raw URL. `run()` has **no `timeout=`**, and nothing stops git prompting for credentials |
+| Docker | https clone inside the image rc 0, owned 1000:1000 on the host; a second run on the same mount reads origin, fetches and fast-forwards, all rc 0. **A host directory that does not exist is created by Docker as root:root 755, and the image user cannot write it** (`mkdir: Permission denied`): the wizard's existing `results` mount has the same trap. A clone owned by another uid: `git config --get` rc 1 **with no message**; `rev-parse --show-toplevel` rc 128, `dubious ownership` |
+| Tests without network | `url.<base>.insteadOf` through `GIT_CONFIG_COUNT`/`KEY_0`/`VALUE_0` rewrites `https://example.invalid/owner/repo.git` to a local bare repository: clone rc 0, and `remote.origin.url` keeps the row's URL, so an origin check still compares against the row |
+
+**Decided in T1** (veto any in review):
+
+- **No `file://`.** The allowlist is `https://`, `ssh://` and `git@host:`, each followed by
+  an alphanumeric host, printable ASCII only. A TSV names remote repositories; a
+  `file://` or bare-path row would copy any local repository into `--dest`. Tests keep
+  real git and no network with `insteadOf` from the environment, rewriting
+  `https://example.invalid/...` (RFC 6761: never resolves). No test-only switch in
+  product code.
+- **`--dest` has no default; `--tsv` without it is rejected by name.** Every default is
+  wrong somewhere: the working directory puts clones inside whatever repository the
+  user runs from (its `git status`, its next scan); the results directory is uploaded
+  whole by the wizard's own workflow (`upload-artifact`, `path: results/`), so cloned
+  private source would become a CI artifact, and users delete it between runs, which
+  defeats updating. The wizard already asks (default `repos-tsv`).
+- **Every guard lives in `clone_or_update`**, the one entry point, which returns the
+  clone or the reason: allowlist, then containment (resolved target must be exactly
+  `<dest>/<owner>/<repo>`, checked **before** anything touches the disk), then `--`.
+  The folder comes from the URL's path (after `host:` for the scp form, trailing `/`
+  dropped).
+- **An existing target must be a clone of the row's URL**: `rev-parse --show-toplevel`
+  is the target (no walk-up; it also names `dubious ownership`) and `remote.origin.url`
+  equals the row. Otherwise the row fails by name. This closes the walk-up and the
+  collision of two hosts' `owner/repo`.
+- **Update means fast-forward**: fetch, then `merge --ff-only`. A failed fetch or a
+  clone that cannot fast-forward fails its row. Scanning the old checkout would report
+  on code that is no longer there.
+- **Every git call gets `timeout=`, `GIT_TERMINAL_PROMPT=0` and no stdin**: a private
+  https repository fails at once instead of waiting on a prompt. Private repositories
+  need a credential helper or an ssh key; the docs say so. Messages show `https://***@`
+  in place of userinfo. *Corrected by the review below:* `GIT_TERMINAL_PROMPT=0` alone
+  is not enough, and ssh prompts on the terminal itself (see option C).
+- **`clone_from_tsv.py`'s `main()` goes** (and with it `--targets-out` and `--max`): no
+  entry point in `pyproject.toml`, so it ran only from a checkout, and `jmo scan --tsv`
+  replaces it. The module stays as the library discovery calls.
+- **Docker mounts the wizard's clone destination** at `/repos-tsv` rather than putting
+  clones under `/results`: the wizard asks for that directory, native mode honours it,
+  and `results` is what gets uploaded. The wizard creates the host directory first
+  (measured above).
 
 ## Task T2: `jmo scan --tsv FILE --dest DIR`
 
 **Files:** `scripts/cli/jmo.py` (`_add_target_args`), `scripts/cli/scan_orchestrator.py`
 (target collection), `scripts/cli/clone_from_tsv.py`; tests beside each.
 
-- [ ] Red first, through `build_parser()` and `jmo scan --history-db <tmp>` on a local
+- [x] Red first, through `build_parser()` and `jmo scan --history-db <tmp>` on a local
   bare repository listed in a TSV (a `file://` URL, allowed in tests only if the scheme
   allowlist permits it by design; decide in T1): today exit 2.
-- [ ] Parser: `--tsv` in the target group beside `--targets`, `--dest` required with it
+- [x] Parser: `--tsv` in the target group beside `--targets`, `--dest` required with it
   (or a default under the results directory; decide in T1 and say why). The same
   `_reject` validation as `--targets`: missing file, no header, no `url`/`full_name`.
-- [ ] Hardening, each red first: `--` before the URL; schemes `https://`, `ssh://`,
+- [x] Hardening, each red first: `--` before the URL; schemes `https://`, `ssh://`,
   `git@host:` only; the resolved destination must stay under `--dest`, or the row is
   rejected by name. Mutation: remove each guard and its test fails.
-- [ ] Clone failures are per-row and named; a TSV whose every row failed is a target
+- [x] Clone failures are per-row and named; a TSV whose every row failed is a target
   failure, not a clean scan of nothing.
+
+**Done (2026-09-25).** The tests run real git against a bare repository behind
+`insteadOf` (`tests/cli/conftest.py`), replacing the `side_effect` mocks. 23 mutations
+(allowlist ×4, containment, mkdir-before-check, `--`, top-level, origin, fast-forward,
+fetch failure, timeout ×3, prompt, stdin, the scp and trailing-slash folders, redaction
+×2, no-`--dest`, all-failed, header-only, parser): **23 caught**. One survived first: the
+top-level check's test used an enclosing repository with no origin, so the origin check
+refused it too. The test now uses a clone of the row's own URL.
 
 ## Task T3: The wizard's tsv mode, native and Docker
 
 **Files:** `scripts/cli/wizard_flows/command_builder.py`, `tests/unit/test_wizard_command_builder.py`.
 
-- [ ] Replace `test_build_repo_args_tsv_mode_native`'s membership asserts with a parse
+- [x] Replace `test_build_repo_args_tsv_mode_native`'s membership asserts with a parse
   through `build_parser()`; it fails today. The parser oracle already exists,
   `tests/unit/test_wizard_generated_commands_parse.py`, and it fixes
   `repo_mode = "repo"` (`:70`, `:169`), which is why it never saw tsv: extend its cases
   to all four modes, native and Docker, rather than writing a second oracle.
-- [ ] Docker: mount the TSV read-only and point `--dest` under the `/results` mount so
+- [x] Docker: mount the TSV read-only and point `--dest` under the `/results` mount so
   clones persist between runs. Private repositories need credentials the container does
   not have: say so in the wizard's output, and in `docs/examples/scan_from_tsv.md`.
-- [ ] Gate: the wizard's generated tsv command, native, runs end to end on the bare-repo
+  **Changed in T1:** `--dest` is the wizard's own destination mounted at `/repos-tsv`,
+  not a path under `/results` (see "Decided in T1").
+- [x] Gate: the wizard's generated tsv command, native, runs end to end on the bare-repo
   fixture through `jmo scan --history-db <tmp>`.
+
+**Done (2026-09-25).** The oracle's new case parses each mode's command and asserts
+that the mode's own target is set, since a command with no target parses. Docker tsv
+mode emitted exactly that (`scan --results-dir /results ...`). 6 mutations (the Docker
+branch, native `--dest`, `:ro`, both `mkdir`s, the Docker note): **6 caught**.
+Gates, real scanners, `--history-db <tmp>`, a TSV of one good row and one `http://` row:
+
+| Run | rc | Wall | Clone HEAD | Outputs | History rows |
+|---|---|---|---|---|---|
+| native 1 | 0 | 50.2 s | first commit | 10 tools + `scan-timings.json` | 1 |
+| native 2, after an upstream commit | 0 | 24.9 s | the new commit | the same 10 | 2 |
+| Docker 1 (WSL; the branch's `scripts/` over the image's) | 0 | 4 s | first commit, owned 1000:1000 | `trufflehog.json` + `scan-timings.json` (`--tools trufflehog shellcheck`; no shell file for shellcheck) | 1 |
+| Docker 2, after an upstream commit | 0 | 3 s | the new commit | the same | 2 |
+
+Re-run after the review's fixes, same outcomes: native 42.6 s and 20.9 s, Docker 3 s
+and 3 s. The `http://` row was named each time (`not an allowed clone URL`); the live
+`.jmo/history.db` read 2,492 scans before and after; the TSV mount refuses a write
+(`Read-only file system`). The Docker runs are the wizard's own argv with three
+test-only additions: the source mount, the bare-repository mount and the `insteadOf`
+environment.
+
+Filed with this PR and scheduled into Phase 8 (handoff 3.2): **#1301**, the five wizard
+flow classes `jmo wizard` never constructs, and **#1302**, `--results-dir` with no
+`expanduser` (measured: `--results-dir '~/x'` wrote `./~/x/summaries`, rc 0).
+
+**Review (2026-09-25), then fixed here.** A fresh review of T1-T3. Each finding was
+reproduced before it was fixed, and each fix went through the same mutation run
+(**17 caught**; the symlink-loop guard under WSL, where its test runs).
+
+| Finding | Reproduced | Fix |
+|---|---|---|
+| Two repositories of one name share `individual-repos/<name>`: concurrent writes, last writer wins | `results_dir / _sanitize_path_component(repo.name)` (`repository_scanner.py:275`) | The second is refused by name; a URL listed twice is cloned and scanned once |
+| One row crashes the scan | a `--dest` that is a file: `FileExistsError`; `own:er` on Windows: `NotADirectoryError`; a symlink loop: `RuntimeError` (Python 3.12.3) | Every filesystem call fails its row; an unusable `--dest` is refused once for the file |
+| `GIT_TERMINAL_PROMPT=0` does not stop prompts | under WSL, a local 401 server: with `GIT_ASKPASS` (as VS Code sets it) or `SSH_ASKPASS` set, the askpass program **ran**; with both removed, "terminal prompts disabled" | Superseded by option C below; `GCM_INTERACTIVE=never` (GCM's documented switch, not measured) |
+| Credentials logged for non-https rows | `http://`, `HTTPS://`, `ssh://u:pw@` passed `redact` unchanged | Any scheme, any case |
+| A token in a folder name | `https://user:TOK@host/project.git` → `dest/user:TOK@host/project` | A one-segment path's owner is the host without userinfo or port |
+| ssh user and host unrestricted | `ssh://h$(id)/o/r` and `ssh://a@-oProxyCommand=x/o/r` passed | https and ssh hosts get the scp form's alphabet; an ssh user too (CVE-2023-51385 class) |
+| `parse_tsv` on a spreadsheet export | a BOM: "must include either"; a `URL` header: zero rows | `utf-8-sig`; rows keyed by the matched header |
+| The wizard mounts a TSV that is not there | Docker creates a root-owned directory of that name | The wizard asks again |
+| A clone that cannot fast-forward fails every run | traced | Its message says to delete the clone |
+| Test gaps | the backslash test passed on POSIX without its guard; the fixture failed under `protocol.file.allow=never`; the leading-dash rows were refused by the host alphabet first (a mutant survived) | Windows-only; the fixture sets it; three rows only the leading-character rule refuses |
+
+Left open, decided by Jimmy (2026-09-25):
+
+- **Same-name collision** (it predates this PR for `--targets`): **#1303**, fixed in
+  PR B by a results folder unique per repository. Measured with `--targets`: two
+  `app` repositories, "2 repos" scanned, one `individual-repos/app`, whose
+  `shellcheck.json` names only the first repository's file. PR B also removes PR T's
+  same-name refusal.
+- **Docker Desktop on Windows**, where bind mounts may read as another owner and make
+  every second run fail with `dubious ownership`: **#1304**, Phase 8. It can't be
+  measured here, since Docker runs only under WSL.
+- **The wizard's `repos-tsv` default** is kept: the wizard shows it and asks, which is
+  not the silent default the T1 decision rules out.
+- **ssh prompts: option C** (a second commit). ssh asks on the terminal itself, so
+  git's prompt switches never reached it. `ssh -o BatchMode=yes` would override a
+  user's `core.sshCommand` and PuTTY setups, so it was not used. Both askpass variables
+  are now `/dev/null` (a path that cannot run, and absolute, so nothing is looked up
+  on `PATH`), with `SSH_ASKPASS_REQUIRE=force`. Measured:
+
+  | Probe | Before | Option C |
+  |---|---|---|
+  | ssh with a terminal (WSL, OpenSSH 9.6), unknown host | waits at "Are you sure you want to continue connecting" until killed | `Host key verification failed.`, exits on its own |
+  | ssh on Windows (Git for Windows' OpenSSH 10.3p1) | (no terminal in the harness, so it failed either way) | tries the askpass program (`ssh_askpass: exec(/dev/null)`): the variable is honoured |
+  | https, 401 server, `core.askPass` configured (WSL and Windows) | the configured program **ran**: removing the two variables had left this third source live | not run; "terminal prompts disabled" (Windows maps the path to `nul`: "cannot spawn nul") |
+
+  A new test drives real git against a local 401 server with a `core.askPass` marker,
+  red before the change. 5 mutations (one per variable): **5 caught**, the
+  `GIT_ASKPASS` one by the real-git test on its own too. Older ssh (before 8.4)
+  ignores the variable, and the docs say so.
+- `--dest` without `--tsv` is ignored, and `include`/`exclude` filters run after
+  cloning: left as they are.
 
 ---
 

@@ -389,6 +389,68 @@ def test_every_generated_flag_is_defined_exactly(label, argv):
     )
 
 
+#: What each repository mode must leave on the parsed namespace, native and in
+#: the container. `_wizard_command` fixes `repo_mode = "repo"`, which is why
+#: this oracle never saw tsv mode's `--tsv`, rejected by `jmo scan` natively and
+#: in Docker for as long as the mode existed (#1299).
+_REPO_MODES = {
+    "repo": {"repo"},
+    "repos-dir": {"repos_dir"},
+    "targets": {"targets"},
+    "tsv": {"tsv", "dest"},
+}
+
+
+def _mode_argv(repo_mode: str, use_docker: bool, tmp_path) -> list[str]:
+    """The argv `jmo` itself receives for one repository mode."""
+    from scripts.cli.wizard_flows.command_builder import build_command_parts
+    from scripts.cli.wizard_flows.config_models import WizardConfig
+    from scripts.cli.wizard_generators import JMO_DOCKER_IMAGE_FULL
+
+    config = WizardConfig()
+    config.use_docker = use_docker
+    config.results_dir = str(tmp_path / "results")
+    config.target.type = "repo"
+    config.target.repo_mode = repo_mode
+    config.target.repo_path = str(tmp_path / "repo")
+    config.target.tsv_path = str(tmp_path / "repos.tsv")
+    parts = build_command_parts(config)
+    anchor = JMO_DOCKER_IMAGE_FULL if use_docker else "jmo"
+    return parts[parts.index(anchor) + 1 :]
+
+
+@pytest.mark.parametrize("use_docker", [False, True], ids=["native", "docker"])
+@pytest.mark.parametrize("repo_mode", sorted(_REPO_MODES))
+def test_every_repository_mode_builds_a_command_that_scans_it(
+    repo_mode, use_docker, tmp_path
+):
+    """Parses, names only flags `jmo` defines, and carries the mode's target.
+
+    Parsing alone is not enough here: a command with no target at all parses,
+    and that is exactly what the Docker branch emitted for tsv mode.
+    """
+    if use_docker and repo_mode == "targets":
+        # A targets file lists host paths the container cannot see: refused
+        # with a reason (`test_docker_targets_mode_is_refused_with_the_reason`).
+        with pytest.raises(ValueError, match="container"):
+            _mode_argv(repo_mode, use_docker, tmp_path)
+        return
+
+    argv = _mode_argv(repo_mode, use_docker, tmp_path)
+
+    ok, err = parse_ok(argv)
+    assert ok, f"`jmo {' '.join(argv)}` is rejected by jmo's own parser\n{err}"
+    undefined = [
+        tok
+        for tok in argv
+        if tok.startswith("--") and tok not in _scan_option_strings(argv)
+    ]
+    assert not undefined, f"`jmo {' '.join(argv)}` emits {undefined}"
+    parsed = jmo.build_parser().parse_args(argv)
+    for dest in _REPO_MODES[repo_mode]:
+        assert getattr(parsed, dest), f"{repo_mode}: `{' '.join(argv)}` sets no {dest}"
+
+
 def test_a_known_bad_command_is_actually_rejected():
     """Negative control.
 

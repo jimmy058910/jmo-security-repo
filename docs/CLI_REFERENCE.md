@@ -104,6 +104,11 @@ Run security scans against repositories, images, URLs, and infrastructure.
 | `--repo PATH` | Path to a single repository to scan |
 | `--repos-dir DIR` | Directory whose immediate subfolders are repos to scan |
 | `--targets FILE` | File listing repo paths (one per line) |
+| `--tsv FILE` | TSV with a `url` or `full_name` column: clone each repository into `--dest`, then scan the clones ([guide](examples/scan_from_tsv.md)) |
+
+`--dest DIR` is required with `--tsv`: clones land at `<dest>/<owner>/<repo>`, and an
+existing clone of the same URL is fast-forwarded. Only `https://`, `ssh://` and
+`git@host:` URLs are cloned.
 
 **Additional Targets (can combine with repo targets):**
 

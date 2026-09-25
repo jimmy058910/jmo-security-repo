@@ -66,7 +66,14 @@ def configure_repo_target(
     config.repo_mode = mode
 
     if mode == "tsv":
-        config.tsv_path = _prompt_text("Path to TSV file", default="./repos.tsv")
+        # Checked here, not at scan time: in Docker mode a missing file is
+        # mounted anyway, and Docker creates a directory by that name as root.
+        while True:
+            tsv_path = _prompt_text("Path to TSV file", default="./repos.tsv")
+            if validate_path(tsv_path, must_exist=True):
+                break
+            print(_prompter.colorize(f"File not found: {tsv_path}", "red"))
+        config.tsv_path = tsv_path
         config.tsv_dest = _prompt_text("Clone destination", default="repos-tsv")
         return config
 

@@ -11,6 +11,18 @@ All notable changes to JMo Security will be documented in this file.
   `gitleaks.json` or `osv-scanner.json` written in SARIF form into a results directory is
   parsed, normalised, deduplicated and reported like any other tool output. None of the
   three runs in a scan yet: `TOOL_MATRIX` gains them in Phase 4 of the v2.0.0 program.
+- **`jmo scan --tsv FILE --dest DIR`**, and the same on `jmo ci`: clone every repository
+  a TSV lists into `<dest>/<owner>/<repo>`, then scan the clones. A second run
+  fast-forwards an existing clone of the same URL, so it scans current code. Only
+  `https://`, `ssh://` and `git@host:` URLs clone, never to a path outside `--dest` and
+  never over a directory that is not a clone of that URL; each refused or failed row is
+  named, and a TSV none of whose rows cloned exits 1. Of two repositories with one name
+  (`alice/app`, `bob/app`), whose results would share a folder, the second is refused
+  by name. `--dest` has no default. No row waits on a prompt: one that needs a password,
+  a key's passphrase or a new ssh host key fails by name. The wizard's tsv mode had
+  always emitted this command, and `jmo scan` rejected it (exit 2) natively and in
+  Docker; it runs in both now (#1299). `scripts/cli/clone_from_tsv.py` no longer runs
+  as a script of its own.
 
 ### Removed
 
@@ -52,6 +64,9 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **The wizard's Docker mode creates the directories the container writes to** before
+  it starts one. Under a Linux Docker engine, a missing bind-mount source is created as
+  root, and the image's user (uid 1000) could not write into it.
 - **`jmo tools check` reads zap's own version.** It misread it two ways. In the image,
   the JVM prints a four-part Java version first, and `17.0.20.1` read as zap `0.20.1`,
   outdated. On a host, the version probe ran `zap.bat` from the wrong directory; it could

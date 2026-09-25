@@ -21,13 +21,31 @@ def build_repo_args(target: TargetConfig, use_docker: bool = False) -> list[str]
         # ignored repo_mode and passed --repos-dir for every mode: a single
         # repository was scanned as a directory of repositories (each
         # subdirectory, never its own root files), and a targets file was
-        # mounted where a directory belongs. tsv mode is not handled here yet.
+        # mounted where a directory belongs.
         if target.repo_mode == "targets":
             raise ValueError(
                 "Docker mode cannot scan a targets file: it lists paths on this "
                 "machine, which the container cannot see. Use repos-dir on the "
                 "directory that holds the repositories, or run natively."
             )
+        if target.repo_mode == "tsv":
+            # The TSV read-only; the clones in the destination the wizard asked
+            # for, so they persist and a second run fast-forwards them. Not
+            # under /results, which a CI job uploads whole.
+            # TODO(issue-#1304): measured on Linux paths only; a Docker Desktop
+            # mount may read as another owner (`dubious ownership`).
+            tsv_abs = str(Path(target.tsv_path).resolve())
+            dest_abs = str(Path(target.tsv_dest).resolve())
+            return [
+                "-v",
+                f"{tsv_abs}:/repos.tsv:ro",
+                "-v",
+                f"{dest_abs}:/repos-tsv",
+                "--tsv",
+                "/repos.tsv",
+                "--dest",
+                "/repos-tsv",
+            ]
         if target.repo_path and target.repo_mode in ("repo", "repos-dir"):
             repo_abs = str(Path(target.repo_path).resolve())
             flag = "--repo" if target.repo_mode == "repo" else "--repos-dir"
@@ -41,9 +59,15 @@ def build_repo_args(target: TargetConfig, use_docker: bool = False) -> list[str]
         elif target.repo_mode == "targets":
             args.extend(["--targets", target.repo_path.replace("\\", "/")])
         elif target.repo_mode == "tsv":
-            args.extend(["--tsv", target.tsv_path.replace("\\", "/")])
-            if hasattr(target, "tsv_dest") and target.tsv_dest:
-                args.extend(["--dest", target.tsv_dest])
+            # `jmo scan --tsv` has no default destination, so always name one.
+            args.extend(
+                [
+                    "--tsv",
+                    target.tsv_path.replace("\\", "/"),
+                    "--dest",
+                    target.tsv_dest.replace("\\", "/"),
+                ]
+            )
 
     return args
 
