@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from scripts.cli.jmo import cmd_ci, cmd_scan
@@ -6,8 +7,8 @@ from scripts.cli.jmo import cmd_ci, cmd_scan
 def test_scan_skips_missing_tools_and_runs_available(tmp_path: Path, monkeypatch):
     """Test that scan succeeds with allow_missing_tools=True.
 
-    v1.0.0 Architecture: Missing tools are skipped entirely (no stubs).
-    Only available/installed tools produce output files.
+    Since v2.0.0 Phase 3 a missing tool is not dropped: it is stubbed, and its
+    row says `skipped:not installed`. Only available tools run.
 
     Availability is arranged, not found. This used to request real tools and
     lean on bandit, a dev dependency on CI's PATH, as the one guaranteed to
@@ -18,7 +19,7 @@ def test_scan_skips_missing_tools_and_runs_available(tmp_path: Path, monkeypatch
     """
     import subprocess
 
-    from scripts.cli.scan_jobs import repository_scanner
+    from scripts.cli.scan_jobs import tool_loop
     from scripts.cli.tool_manager import ToolManager
     from scripts.core import tool_runner
 
@@ -38,7 +39,7 @@ def test_scan_skips_missing_tools_and_runs_available(tmp_path: Path, monkeypatch
 
     # Both resolvers: the pre-flight check and the scanner's own lookup.
     monkeypatch.setattr(ToolManager, "_find_binary", lambda self, name: resolve(name))
-    monkeypatch.setattr(repository_scanner, "find_tool", resolve)
+    monkeypatch.setattr(tool_loop, "find_tool", resolve)
 
     ran: list[str] = []
 
@@ -55,8 +56,10 @@ def test_scan_skips_missing_tools_and_runs_available(tmp_path: Path, monkeypatch
     rbase = tmp_path / "repos"
     r1 = rbase / "repo1"
     r2 = rbase / "repo2"
-    r1.mkdir(parents=True)
-    r2.mkdir(parents=True)
+    for repo in (r1, r2):
+        repo.mkdir(parents=True)
+        # A file each: an empty tree fails every tool before any runs (G2).
+        (repo / "app.py").write_bytes(b"x = 1\n")
 
     missing = ["syft", "trivy", "checkov"]
 
@@ -83,9 +86,20 @@ def test_scan_skips_missing_tools_and_runs_available(tmp_path: Path, monkeypatch
         assert (outdir / f"{available}.json").exists(), (
             f"Repo {repo.name!r} got no {available} output"
         )
-        # And a missing tool leaves nothing behind: no stubs.
-        stubs = sorted(t for t in missing if (outdir / f"{t}.json").exists())
-        assert not stubs, f"missing tools wrote output for {repo.name}: {stubs}"
+        # And a missing tool is recorded as such. Before Phase 3 the host
+        # pre-flight removed it, so it left no file and no row; in Docker,
+        # where pre-flight is skipped, the same scan stubbed it. Now both
+        # stub it under --allow-missing-tools, and the row says why.
+        rows = {
+            r["tool"]: r
+            for r in json.loads((outdir / "scan-timings.json").read_bytes())["tools"]
+        }
+        assert rows[available]["state"] == "ran"
+        for tool in missing:
+            assert (rows[tool]["state"], rows[tool]["reason"]) == (
+                "skipped",
+                "not installed",
+            ), rows[tool]
 
 
 def test_ci_composes_scan_and_report(tmp_path: Path, monkeypatch):

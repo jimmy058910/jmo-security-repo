@@ -224,10 +224,29 @@ def cmd_report(args, _log_fn) -> int:
     # Read the tools the scan ran from its metadata, if available
     scan_metadata_path = results_dir / ".scan_metadata.json"
     tools_from_scan: list[str] = []
+    # True when the scan's rows say no tool ran on any target. Such a run is
+    # not stored in history: a scan of 0 findings reads, to `jmo trends` and
+    # `jmo diff`, as every earlier finding resolved.
+    nothing_ran = False
     if scan_metadata_path.exists():
         try:
             scan_meta = json.loads(scan_metadata_path.read_text(encoding="utf-8"))
             tools_from_scan = scan_meta.get("tools", [])
+            # The tools that ran on at least one target (#787). `tools` is the
+            # request, which since v2.0.0 keeps a tool that is not installed
+            # (its row says `failed:not installed`); the rows say what ran.
+            runs = scan_meta.get("tool_runs")
+            if isinstance(runs, list):
+                tools_from_scan = list(
+                    dict.fromkeys(
+                        r["tool"]
+                        for r in runs
+                        if isinstance(r, dict)
+                        and r.get("state") == "ran"
+                        and "tool" in r
+                    )
+                )
+                nothing_ran = bool(runs) and not tools_from_scan
         except (json.JSONDecodeError, OSError):
             pass
 
@@ -499,7 +518,15 @@ def cmd_report(args, _log_fn) -> int:
     history_db_path = (
         Path(_configured_db) if _configured_db else Path(".jmo/history.db")
     )
-    if getattr(args, "store_history", False):
+    if getattr(args, "store_history", False) and nothing_ran:
+        _log_fn(
+            args,
+            "WARN",
+            "No tool ran on any target, so this scan was not stored in the "
+            "history database: stored, its 0 findings would read as every "
+            "earlier finding resolved.",
+        )
+    elif getattr(args, "store_history", False):
         try:
             from scripts.core.history_db import store_scan as db_store_scan
 
@@ -573,6 +600,8 @@ def cmd_report(args, _log_fn) -> int:
     # severity code while the function returned something else.
     if not getattr(args, "store_history", False):
         history_state = "off"
+    elif nothing_ran:
+        history_state = "not stored, no tool ran"
     elif stored_ok:
         history_state = "stored"
     else:

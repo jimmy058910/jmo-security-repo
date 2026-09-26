@@ -28,6 +28,7 @@ from scripts.cli.scan_orchestrator import (
     ScanConfig,
     ScanOrchestrator,
     classify_target_outcome,
+    summarize_target,
 )
 from scripts.cli.schedule_commands import cmd_schedule
 from scripts.cli.trend_commands import cmd_trends
@@ -35,6 +36,7 @@ from scripts.core.config import load_config
 from scripts.core.exceptions import (
     ConfigurationException,
 )
+from scripts.core.scan_timings import Reason, State, ToolRun
 from scripts.core.unicode_utils import (
     harden_console_streams,
     safe_write,
@@ -69,15 +71,25 @@ def _copy_per_tool(per_tool: dict[str, Any]) -> dict[str, Any]:
 def _effective_scan_settings(args) -> dict[str, Any]:
     """Compute effective scan settings from the CLI and the config.
 
-    Returns dict with keys: tools, threads, timeout, include, exclude, retries, per_tool, skip_tools
+    Returns dict with keys: tools, explicit_tools, threads, timeout, include,
+    exclude, retries, per_tool, skip_tools
 
     Two layers, CLI over `jmo.yml`. There are no profiles (v2.0.0): the tool
     list is `--tools`, else `jmo.yml` `tools:`, else `Config.tools`, which
     defaults to `tool_registry.TOOL_MATRIX`.
+
+    Raises:
+        UnknownToolError: a name in any of the three is not in the matrix
+            (#1279). The CLI flags are also checked at parse time; `jmo.yml`
+            is checked here, where a scan reads it.
     """
+    from scripts.core.tool_descriptors import parse_tool_names
+
     cfg = load_config(getattr(args, "config", None))
 
-    tools = getattr(args, "tools", None) or list(cfg.tools)
+    cli_tools = getattr(args, "tools", None)
+    tools = parse_tool_names(cli_tools or cfg.tools)
+    explicit_tools = bool(cli_tools) or cfg.tools_from_file
     threads = getattr(args, "threads", None) or cfg.threads
     timeout = getattr(args, "timeout", None) or cfg.timeout or 600
     include = cfg.include
@@ -86,7 +98,7 @@ def _effective_scan_settings(args) -> dict[str, Any]:
     per_tool = _copy_per_tool(cfg.per_tool)
 
     # Handle --skip-tools flag to exclude specific tools
-    skip_tools = getattr(args, "skip_tools", None) or []
+    skip_tools = parse_tool_names(getattr(args, "skip_tools", None) or [])
     if skip_tools and tools:
         dropped = [t for t in tools if t in skip_tools]
         tools = [t for t in tools if t not in skip_tools]
@@ -127,6 +139,7 @@ def _effective_scan_settings(args) -> dict[str, Any]:
 
     return {
         "tools": tools,
+        "explicit_tools": explicit_tools,
         "threads": threads,
         "timeout": timeout,
         "include": include,
@@ -203,6 +216,24 @@ def _add_target_args(parser: argparse.ArgumentParser, target_group: Any = None) 
     )
 
 
+class _ToolNamesAction(argparse.Action):
+    """`--tools`/`--skip-tools`: split on commas and spaces, reject unknowns.
+
+    `--tools trivy,syft` was one tool named `trivy,syft` that ran nowhere, and
+    e2e tests written that way passed while scanning nothing (#1279). An
+    unknown name is a usage error, exit 2, naming it; a removed one says so.
+    """
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        from scripts.core.tool_descriptors import UnknownToolError, parse_tool_names
+
+        try:
+            names = parse_tool_names(values or [])
+        except UnknownToolError as exc:
+            parser.error(f"{option_string}: {exc}")
+        setattr(namespace, self.dest, names)
+
+
 def _add_scan_config_args(parser: argparse.ArgumentParser) -> None:
     """Add common scan configuration arguments."""
     parser.add_argument(
@@ -213,11 +244,17 @@ def _add_scan_config_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--config", default="jmo.yml", help="Config file (default: jmo.yml)"
     )
-    parser.add_argument("--tools", nargs="*", help="Override tools list from config")
+    parser.add_argument(
+        "--tools",
+        nargs="*",
+        action=_ToolNamesAction,
+        help="Override tools list from config (spaces or commas: trivy,syft)",
+    )
     parser.add_argument(
         "--skip-tools",
         nargs="*",
         default=[],
+        action=_ToolNamesAction,
         help="Tools to skip (e.g., --skip-tools zap nuclei)",
     )
     parser.add_argument(
@@ -2047,16 +2084,17 @@ def _check_scan_tools(args, requested_tools: list[str]) -> tuple[list[str], list
         requested_tools: List of tool names requested for the scan
 
     Returns:
-        Tuple of (available_tools, missing_tool_names). An empty first element
-        means there is nothing to scan with, for any of three reasons: every
-        tool is missing (logged here), ``--allow-missing-tools`` left nothing
-        installed (logged by the caller, which is the only place that knows the
-        flag was the reason), or the user cancelled (logged here).
+        (tools to scan, missing tool names). The first element is every
+        requested tool when the scan goes ahead, and empty only when the user
+        cancelled (logged here).
 
-        This used to say it returned ``([], [])`` on cancel. No path returns
-        that -- every one carries ``missing_names`` -- so a caller written to
-        that docstring's discriminator would never have matched.
+        A missing tool is no longer removed from the scan (v2.0.0 Phase 3). It
+        was, and on this host it then had no row anywhere: the scan jobs, which
+        resolve each binary themselves, never saw it. Now each one is recorded
+        as `failed:not installed`, or `skipped:not installed` under
+        `--allow-missing-tools`, on every target it reads.
     """
+    requested = list(requested_tools)
     try:
         from scripts.cli.tool_manager import get_missing_tools_for_scan
 
@@ -2066,13 +2104,12 @@ def _check_scan_tools(args, requested_tools: list[str]) -> tuple[list[str], list
 
         if not missing_statuses:
             # All tools available
-            return available, []
+            return requested, []
 
         missing_names = [s.name for s in missing_statuses]
 
-        # If --allow-missing-tools, just return available tools
         if getattr(args, "allow_missing_tools", False):
-            return available, missing_names
+            return requested, missing_names
 
         # Check if any tools are available
         if not available:
@@ -2082,7 +2119,7 @@ def _check_scan_tools(args, requested_tools: list[str]) -> tuple[list[str], list
                 f"None of the requested tools are installed: {', '.join(missing_names)}",
             )
             print("\nRun 'jmo tools install' to install required tools.")
-            return [], missing_names
+            return requested, missing_names
 
         # Interactive prompt -- skipped when nobody is there to answer.
         #
@@ -2109,7 +2146,7 @@ def _check_scan_tools(args, requested_tools: list[str]) -> tuple[list[str], list
             or os.environ.get("CI")
             or os.environ.get("DOCKER_CONTAINER") == "1"
         ):
-            return available, missing_names
+            return requested, missing_names
 
         # Show what's missing
         print(
@@ -2123,7 +2160,7 @@ def _check_scan_tools(args, requested_tools: list[str]) -> tuple[list[str], list
         print(f"\n{len(available)} tool(s) available for scanning.")
         print("\nOptions:")
         print("  [1] Install missing tools now")
-        print("  [2] Continue with available tools")
+        print("  [2] Continue (the missing tools are recorded as not installed)")
         print("  [3] Cancel scan")
 
         while True:
@@ -2142,7 +2179,7 @@ def _check_scan_tools(args, requested_tools: list[str]) -> tuple[list[str], list
                 # `tool_commands.py` reached the same conclusion for the install
                 # prompt; the two paths must not disagree about what EOF means.
                 print("\nNo input available - continuing with available tools.")
-                return available, missing_names
+                return requested, missing_names
             except KeyboardInterrupt:
                 # A person deciding to stop, unlike EOF which is the absence of
                 # a person. Cancelling is what they asked for.
@@ -2153,13 +2190,15 @@ def _check_scan_tools(args, requested_tools: list[str]) -> tuple[list[str], list
                 # Install missing tools. Anything installed here invalidates the
                 # memoised status the shared ToolManager is holding - that is
                 # the one moment in a run when what is on disk actually changes.
-                result = _install_and_retry(missing_statuses, available)
+                _available, still_missing = _install_and_retry(
+                    missing_statuses, available
+                )
                 startup_tm = getattr(args, "_startup_tool_manager", None)
                 if startup_tm is not None:
                     startup_tm.invalidate_status_cache()
-                return result
+                return requested, still_missing
             elif choice == "2":
-                return available, missing_names
+                return requested, missing_names
             elif choice == "3":
                 _log(args, "ERROR", "Scan cancelled: you chose [3] Cancel scan.")
                 return [], missing_names
@@ -2712,7 +2751,7 @@ class ProgressTracker:
         self,
         target_type: str,
         target_name: str,
-        statuses: Mapping[str, Any],
+        statuses: Mapping[str, ToolRun],
         elapsed: float = 0.0,
     ):
         """Update progress after completing a target scan.
@@ -2720,8 +2759,8 @@ class ProgressTracker:
         Args:
             target_type: Type of target (repo, image, url, etc.)
             target_name: Name/identifier of target
-            statuses: The scanner's per-tool boolean map for this target. The
-                success symbol is derived from this and nothing else.
+            statuses: The target's rows by tool. The success symbol is derived
+                from these and nothing else.
             elapsed: Seconds this target took, measured in the worker.
 
         The symbol used to be ``"✓" if elapsed >= 0 else "✗"`` -- a duration
@@ -2732,25 +2771,12 @@ class ProgressTracker:
         """
         import time
 
-        from scripts.cli.scan_utils import (
-            NOT_ATTEMPTED_MISSING,
-            not_attempted_tools,
-        )
-
-        outcome = classify_target_outcome(statuses)
-        # A stubbed tool is False now, so it must be excluded here or every
-        # "findings MISSING from N failed tool(s)" line would accuse tools that
-        # were never installed of failing (#825). This stays the UNION of both
-        # reasons -- narrowing it would put skipped tools back into the vote.
-        skipped_tools = set(not_attempted_tools(statuses))
-        # The subset that is a gap in the environment rather than a correct
-        # decision about this target. Only these earn a WARN (#1081).
-        missing_tools = set(not_attempted_tools(statuses, reason=NOT_ATTEMPTED_MISSING))
-        failed_tools = sorted(
-            name
-            for name, ok in (statuses or {}).items()
-            if not name.startswith("__") and not ok and name not in skipped_tools
-        )
+        summary = summarize_target(statuses)
+        outcome = summary.outcome
+        failed_tools = summary.failed
+        # A gap in the environment rather than a correct decision about this
+        # target. Only these earn a WARN when everything else ran (#1081).
+        missing_tools = summary.not_installed
 
         with self._lock:
             self.completed += 1
@@ -2804,9 +2830,8 @@ class ProgressTracker:
                 _log(
                     self.args,
                     "WARN",
-                    f"{message} - NO tool ran against this target; "
-                    f"{len(skipped_tools)} stubbed and their empty output is "
-                    f"NOT a clean result: {', '.join(sorted(skipped_tools))}",
+                    f"{message} - NO tool ran against this target, so its empty "
+                    f"output is NOT a clean result: {', '.join(summary.skipped)}",
                 )
             elif outcome == TARGET_PARTIAL:
                 _log(
@@ -2821,17 +2846,15 @@ class ProgressTracker:
                 # about the scan -- but which tools were stubbed is still the
                 # difference between "clean" and "not looked at".
                 #
-                # `missing_tools`, not `skipped_tools`: only a tool that is not
-                # installed is a gap in the environment. One that had nothing to
-                # scan is reported once at the end of the run, at INFO -- gating
-                # gosec and kubescape on content (#1081) would otherwise have put
-                # this WARN on every target of every Node, Python, Java, Ruby and
-                # PHP scan, which is how a line stops being read.
+                # Only a tool that is not installed: one that had nothing to
+                # scan is reported once at the end of the run, at INFO. Gating
+                # gosec on content (#1081) would otherwise put this WARN on every
+                # target of every Node, Python, Java, Ruby and PHP scan.
                 _log(
                     self.args,
                     "WARN",
                     f"{message} - {len(missing_tools)} tool(s) were stubbed and "
-                    f"did NOT run: {', '.join(sorted(missing_tools))}",
+                    f"did NOT run: {', '.join(missing_tools)}",
                 )
             else:
                 _log(self.args, "INFO", message)
@@ -2965,12 +2988,23 @@ def cmd_scan(args) -> int:
     import time
 
     # Clear tool warning deduplication tracker at scan start (Fix 1.3 - Issue #3)
-    from scripts.cli.scan_utils import (
-        NOT_ATTEMPTED_MISSING,
-        NOT_ATTEMPTED_NOTHING_APPLICABLE,
-        clear_tool_warnings,
-        not_attempted_tools,
-    )
+    from scripts.cli.scan_utils import clear_tool_warnings
+    from scripts.core.tool_descriptors import UnknownToolError
+
+    # Usage errors first, exit 2, before anything prompts or writes.
+    if getattr(args, "dest", None) and not getattr(args, "tsv", None):
+        _log(
+            args,
+            "ERROR",
+            "--dest only applies to --tsv: it names where --tsv clones the "
+            "repositories it lists",
+        )
+        return 2
+    try:
+        eff = _effective_scan_settings(args)
+    except UnknownToolError as exc:
+        _log(args, "ERROR", f"{getattr(args, 'config', 'jmo.yml')} tools: {exc}")
+        return 2
 
     clear_tool_warnings()
 
@@ -2985,8 +3019,6 @@ def cmd_scan(args) -> int:
     # than `monotonic` because monotonic is the coarser of the two on Windows.
     scan_started = time.perf_counter()
 
-    # Load effective settings (CLI over jmo.yml, per-tool overrides included)
-    eff = _effective_scan_settings(args)
     cfg = load_config(args.config)
     tools = eff["tools"]
     # TODO(issue-#1302): no expanduser, so a quoted `~` is a literal directory.
@@ -3014,52 +3046,40 @@ def cmd_scan(args) -> int:
     # a tool it actually runs.
     _warn_critical_updates(tools, manager=_startup_tm)
 
-    # Security: Validate tool names to prevent command injection
-    import re
-
-    invalid_chars = re.compile(r"[;&|`$()<>]")
-    for tool in tools:
-        if invalid_chars.search(tool):
-            _log(
-                args,
-                "ERROR",
-                "Invalid tool name: contains shell metacharacters",
-            )
-            return 1  # Return non-zero exit code for security rejection
-
-    # Tool availability pre-flight check (skip in Docker mode)
+    # Tool availability pre-flight (skipped in Docker mode). It offers to
+    # install, and it can be cancelled; it no longer removes a missing tool,
+    # whose row on every target it reads says `not installed`. The names were
+    # validated against the matrix above, so none carries anything a shell
+    # would read.
     missing_tools: list[str] = []
     if not os.environ.get("DOCKER_CONTAINER"):
         tools, missing_tools = _check_scan_tools(args, tools)
         if not tools:
-            # Nothing left to run. Three different situations reach here and
-            # this branch used to return 1 saying nothing on any stream (#811):
-            #
-            #   * --allow-missing-tools with every tool absent. _check_scan_tools
-            #     returns ([], missing) without logging, because the flag is
-            #     checked before the "none installed" error. Silent.
-            #   * no flag, every tool absent. Already logged "None of the
-            #     requested tools are installed" -- do not repeat it.
-            #   * the user chose Cancel at the prompt. Now logged there.
-            #
-            # The comment this replaces said "user cancelled", which is the one
-            # case that cannot happen non-interactively -- and non-interactive
-            # is where the silence did the damage: a CI job asserting only
-            # `rc != 0` cannot tell this bail from the failure it meant to test.
-            if getattr(args, "allow_missing_tools", False):
-                _log(
-                    args,
-                    "ERROR",
-                    "--allow-missing-tools was given, but none of the requested "
-                    "tool(s) are installed, so there is nothing to scan with: "
-                    f"{', '.join(missing_tools)}",
-                )
+            # Either the user cancelled at the prompt (logged there), or the
+            # request was empty to begin with (`--skip-tools` naming every
+            # tool, or `tools: []`), which is still silent, as it was before.
+            return 1
+        if getattr(args, "allow_missing_tools", False) and set(tools) <= set(
+            missing_tools
+        ):
+            # #811: the flag records an explicit empty result for a tool the
+            # user knows they lack. With every tool missing there is nothing to
+            # scan with, and a CI job asserting only `rc != 0` must be able to
+            # tell this from the failure it meant to test, so it is said.
+            _log(
+                args,
+                "ERROR",
+                "--allow-missing-tools was given, but none of the requested "
+                "tool(s) are installed, so there is nothing to scan with: "
+                f"{', '.join(missing_tools)}",
+            )
             return 1
         if missing_tools:
             _log(
                 args,
                 "WARN",
-                f"Skipping {len(missing_tools)} missing tool(s): {', '.join(missing_tools)}",
+                f"{len(missing_tools)} requested tool(s) are not installed and "
+                f"will not run: {', '.join(missing_tools)}",
             )
 
     # Create ScanConfig from effective settings
@@ -3076,6 +3096,7 @@ def cmd_scan(args) -> int:
         include_patterns=eff.get("include", []) or [],
         exclude_patterns=eff.get("exclude", []) or [],
         allow_missing_tools=getattr(args, "allow_missing_tools", False),
+        explicit_tools=bool(eff.get("explicit_tools")),
     )
 
     # Use ScanOrchestrator to discover all targets
@@ -3195,9 +3216,10 @@ def cmd_scan(args) -> int:
             started_at=time.time(),
             pid=os.getpid(),
         )
-        # Register all targets
-        for repo in targets.repos:
-            scan_session.register_target("repo", repo.name, tools)
+        # Register all targets. A repository is keyed by its results folder,
+        # unique in the scan, not its folder name (#1303).
+        for repo_name in targets.repo_names:
+            scan_session.register_target("repo", repo_name, tools)
         for image in targets.images:
             scan_session.register_target("image", image, tools)
         for iac_type, iac_path in targets.iac_files:
@@ -3242,39 +3264,26 @@ def cmd_scan(args) -> int:
         and sys.stderr.isatty()
     )
 
-    # Log scan start message with context about tools being used.
-    #
-    # The denominator is what was asked for, so the arithmetic always closes:
-    # `will run` + `skipped` == `requested`. It previously reported
-    # `platform_applicable`, producing lines like "22/23 tools ... (6 skipped)"
-    # on deep - where 22 + 6 = 28, not 23 - which no reader could reconcile.
-    # Using the matrix's size instead would be equally wrong whenever `--tools`
-    # narrows the run.
-    skipped_count = len(missing_tools) if missing_tools else 0
-    requested_total = total_tools + skipped_count
-    if skipped_count > 0:
-        # Name every skipped tool. Truncating to three hides which findings are
-        # absent, and the reader has no other way to recover the list.
-        _log(
-            args,
-            "INFO",
-            f"Starting scan with {total_tools} of {requested_total} requested tools "
-            f"for {total_targets} target(s) "
-            f"({skipped_count} skipped: {', '.join(missing_tools)})",
-        )
-    else:
-        _log(
-            args,
-            "INFO",
-            f"Starting scan with {total_tools} of {requested_total} requested tools "
-            f"for {total_targets} target(s)...",
-        )
+    # Log scan start message. Every requested tool gets a row on every target,
+    # so the count is what was asked for; the not-installed ones are named,
+    # because truncating that list hides which findings will be absent.
+    missing_note = (
+        f" ({len(missing_tools)} not installed: {', '.join(missing_tools)})"
+        if missing_tools
+        else ""
+    )
+    _log(
+        args,
+        "INFO",
+        f"Starting scan with {total_tools} requested tool(s) for "
+        f"{total_targets} target(s){missing_note}",
+    )
 
     # Per-target outcomes, so the exit code can reflect them. `scan_all`'s
     # return value was discarded at both call sites below, which is why a target
     # that produced nothing could not affect the exit code however loudly the
     # scanner reported it (#809).
-    scan_results: list[tuple[str, dict]] = []
+    scan_results: list[tuple[str, str, dict[str, ToolRun]]] = []
 
     if use_rich_progress:
         # Use Rich-based progress tracker for clean, thread-safe display
@@ -3357,8 +3366,8 @@ def cmd_scan(args) -> int:
     # this draws is "did this target produce anything at all".
     failed_targets = [
         str(name)
-        for name, statuses in scan_results
-        if classify_target_outcome(statuses) == TARGET_FAILED
+        for _type, name, rows in scan_results
+        if classify_target_outcome(rows) == TARGET_FAILED
     ]
     if failed_targets:
         _log(
@@ -3373,23 +3382,21 @@ def cmd_scan(args) -> int:
     # a real file containing that tool's own empty-result shape, so nothing
     # downstream can tell it from a clean scan -- which is how a `zero-secrets`
     # policy passes on a run where no secret scanner executed. The run still
-    # exits on findings alone: `--allow-missing-tools` bought that, and taking
-    # it back here would invert what the flag is for.
-    # Split by REASON, because the two mean opposite things to a reader. A tool
-    # that is not installed produced an empty file without looking - the
-    # `zero-secrets` shape above. A tool the target had nothing for produced an
-    # empty file that is simply CORRECT: gosec on a repository with no Go has
-    # not missed anything.
+    # exits on findings alone: `--allow-missing-tools` bought that.
     #
-    # Reason-blind, this warned about both in the words of the first, and #1081
-    # made that load-bearing: gating gosec and kubescape on content moved them
-    # out of an ERROR and into this WARN, which would have fired on every Node,
-    # Python, Java, Ruby and PHP repository saying "nothing looked, which is not
-    # the same as finding nothing" - the same false alarm in a quieter voice.
+    # Only `not installed`. A tool the target had nothing for (gosec on a
+    # repository with no Go) produced an empty file that is simply correct, and
+    # warning about it in these words would fire on most repositories (#1081).
     stubbed_by_target = {
         str(name): missing
-        for name, statuses in scan_results
-        if (missing := not_attempted_tools(statuses, reason=NOT_ATTEMPTED_MISSING))
+        for _type, name, rows in scan_results
+        if (
+            missing := [
+                r.tool
+                for r in rows.values()
+                if r.state is State.SKIPPED and r.reason is Reason.NOT_INSTALLED
+            ]
+        )
     }
     if stubbed_by_target:
         total_stubbed = sum(len(v) for v in stubbed_by_target.values())
@@ -3408,25 +3415,29 @@ def cmd_scan(args) -> int:
 
     # Benign, so INFO rather than WARN - but still said out loud, because "why
     # is there no gosec output?" is a question a user will ask and the answer
-    # should not require reading scan-timings.json.
-    inapplicable_by_target = {
-        str(name): idle
-        for name, statuses in scan_results
+    # should not require reading scan-timings.json. A tool that reads no target
+    # of this type at all is left out: every image target would list ten.
+    skipped_by_target = {
+        str(name): skipped
+        for _type, name, rows in scan_results
         if (
-            idle := not_attempted_tools(
-                statuses, reason=NOT_ATTEMPTED_NOTHING_APPLICABLE
-            )
+            skipped := [
+                f"{r.tool} ({r.reason})"
+                for r in rows.values()
+                if r.state is State.SKIPPED
+                and r.reason not in (Reason.NOT_INSTALLED, Reason.NOT_FOR_TARGET)
+            ]
         )
     }
-    if inapplicable_by_target:
-        total_inapplicable = sum(len(v) for v in inapplicable_by_target.values())
+    if skipped_by_target:
+        total_skipped = sum(len(v) for v in skipped_by_target.values())
         _log(
             args,
             "INFO",
-            f"{total_inapplicable} tool(s) were SKIPPED with nothing to scan: "
+            f"{total_skipped} tool(s) were SKIPPED with nothing to scan: "
             + "; ".join(
                 f"{target}: {', '.join(tools_)}"
-                for target, tools_ in sorted(inapplicable_by_target.items())
+                for target, tools_ in sorted(skipped_by_target.items())
             ),
         )
 
@@ -3449,11 +3460,17 @@ def cmd_scan(args) -> int:
         # aggregation, not the ~20 minutes of scanning, and a wrong number reads
         # as measured where N/A is honestly empty (#981).
         "duration_seconds": round(time.perf_counter() - scan_started, 3),
-        # Which tools were stubbed rather than run, per target (#825). Carried
-        # across the scan->report handoff because a stub is indistinguishable
-        # from a clean result once the scan process is gone: it is that tool's
-        # own empty-result shape in a file with that tool's own name.
-        "stubbed_tools": stubbed_by_target,
+        # One row per requested tool per target: ran, skipped:<reason> or
+        # failed:<reason>, with its seconds (#722). Carried across the
+        # scan->report handoff for `scan_tool_runs`, and written from what every
+        # target returned, so a target whose scanner raised - and so wrote no
+        # scan-timings.json - is here too. A stub is indistinguishable from a
+        # clean result once the scan process is gone; its row is not (#825).
+        "tool_runs": [
+            {"target": str(name), "target_type": target_type, **row.to_dict()}
+            for target_type, name, rows in scan_results
+            for row in rows.values()
+        ],
         # The paths actually scanned. store_scan() needs these to record git
         # context for the right repository: `results_dir/individual-repos/<name>`
         # is an OUTPUT directory, so walking up from it finds whatever repo

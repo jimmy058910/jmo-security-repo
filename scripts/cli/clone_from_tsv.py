@@ -162,6 +162,16 @@ def _folder(url: str) -> tuple[str, str]:
     return parts[-2], parts[-1].removesuffix(".git")
 
 
+def repo_name(url: str) -> str | None:
+    """The folder a row clones into, or None for a row the allowlist refuses.
+
+    What `include`/`exclude` match, so a row they drop is never cloned.
+    """
+    if not _ALLOWED_URL.fullmatch(url):
+        return None
+    return _folder(url)[1]
+
+
 def _not_a_clone_of(target: Path, url: str) -> str | None:
     """Why the existing `target` must not be updated in this row's name.
 

@@ -29,7 +29,7 @@ jmo tools check
 jmo tools install
 ```
 
-Tip: You can still proceed with `--allow-missing-tools` to create stubs for missing tools.
+Tip: with `--allow-missing-tools`, a tool that is not installed is recorded as `skipped:not installed` instead of failing the scan.
 
 ### 2) Write the TSV
 
@@ -82,10 +82,13 @@ This will:
 
 Each row that cannot be used is named in the log with its reason, and the rest are
 still scanned. If no row could be cloned, the command exits 1. A URL listed twice is
-scanned once. Results are written per repository name
-(`results/individual-repos/<repo>/`), so of two repositories with the same name
-(`alice/app` and `bob/app`) the second is refused by name rather than overwriting the
-first one's findings; scan it in a separate run with its own `--results-dir`.
+scanned once. Results are written per repository
+(`results/individual-repos/<repo>/`). Two repositories with the same name, such as
+`alice/app` and `bob/app`, are both scanned, into `alice__app/` and `bob__app/`.
+
+`include` and `exclude` in `jmo.yml` match the repository name in each URL, so a row
+they drop is never cloned or fetched. `--dest` without `--tsv` is a usage error (exit
+2).
 
 Notes:
 
@@ -120,7 +123,7 @@ docker run --rm \
   scan --tsv /repos.tsv --dest /repos-tsv --results-dir /results
 ```
 
-`jmo wizard` builds this command for you in its tsv mode.
+`jmo wizard` builds this command for you in its tsv mode. The command it prints does not create the two directories yet ([#1307](https://github.com/jimmy058910/jmo-security-repo/issues/1307)), so run the `mkdir -p` first.
 
 ### 4) Review the results
 

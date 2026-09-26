@@ -472,6 +472,22 @@ Metadata:
   - Duration:  245.2 seconds
 ```
 
+**Which tool made the scan slow.** After the summary, `show` prints a `Tool Runs:`
+section with one line per target and tool: the target, the tool, its seconds, and what
+it recorded (`ran`, `skipped:<reason>` or `failed:<reason>`, as in
+[What a scan records](TOOLS.md#what-a-scan-records)). `--json` carries the same rows as
+`tool_runs`. A skipped tool shows no seconds.
+
+```text
+Tool Runs:
+  myapp                    hadolint               skipped:no Dockerfiles
+  myapp                    semgrep        412.3s  ran
+  myapp                    trivy           38.1s  ran
+  myapp                    zap                    skipped:needs --url
+```
+
+Scans stored before v2.0.0 have no rows, and the section is omitted.
+
 ### `jmo history diff`
 
 **Compare two historical scans from the SQLite database.**
@@ -783,6 +799,7 @@ The history database uses SQLite with the following schema:
 
 - `scans` - Scan metadata (timestamp, branch, tools, severity counts, CI metadata)
 - `findings` - Individual findings (fingerprint, severity, rule, location, message, full CommonFinding JSON)
+- `scan_tool_runs` - One row per target and tool: state (`ran` / `skipped` / `failed`), reason, seconds, exit code, attempts. Keyed by scan, target type, target and tool; created on the first store into an older database
 - `compliance_mappings` - Framework mappings (OWASP, CWE, CIS, NIST, PCI-DSS, MITRE ATT&CK)
 - `schema_version` - Database schema version for migrations
 

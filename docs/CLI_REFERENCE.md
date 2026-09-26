@@ -44,8 +44,8 @@ These flags are shared across multiple commands:
 | `--db PATH` | SQLite database path (default: `.jmo/history.db`) | history, trends, diff, wizard |
 | `--threads N` | Worker thread count | scan, report, ci |
 | `--timeout SECS` | Per-tool timeout | scan, ci |
-| `--tools TOOL...` | Override tool list | scan, ci |
-| `--skip-tools TOOL...` | Remove tools from the list | scan, ci |
+| `--tools TOOL...` | Override tool list (space- or comma-separated; an unknown name exits 2) | scan, ci |
+| `--skip-tools TOOL...` | Remove tools from the list (same rules) | scan, ci |
 | `--fail-on SEV` | Severity threshold for exit code | report, ci |
 | `--allow-missing-tools` | Skip missing tools instead of failing | scan, ci |
 
@@ -106,9 +106,14 @@ Run security scans against repositories, images, URLs, and infrastructure.
 | `--targets FILE` | File listing repo paths (one per line) |
 | `--tsv FILE` | TSV with a `url` or `full_name` column: clone each repository into `--dest`, then scan the clones ([guide](examples/scan_from_tsv.md)) |
 
-`--dest DIR` is required with `--tsv`: clones land at `<dest>/<owner>/<repo>`, and an
+`--dest DIR` is required with `--tsv`, and without `--tsv` it is a usage error (exit 2). Clones land at `<dest>/<owner>/<repo>`, and an
 existing clone of the same URL is fast-forwarded. Only `https://`, `ssh://` and
-`git@host:` URLs are cloned.
+`git@host:` URLs are cloned. `jmo.yml`'s `include`/`exclude` patterns match the
+repository name in each URL, so a row they drop is never cloned.
+
+Every repository gets its own folder under `individual-repos/`, whatever the target
+flag. Two with the same folder name (`alice/app` and `bob/app`, a common case with
+`--tsv`) are named after their parents, `alice__app` and `bob__app`.
 
 **Additional Targets (can combine with repo targets):**
 
@@ -146,8 +151,8 @@ existing clone of the same URL is fast-forwarded. Only `https://`, `ssh://` and
 |------|-------------|
 | `--results-dir DIR` | Base results directory (default: `results`) |
 | `--config FILE` | Config file (default: `jmo.yml`) |
-| `--tools TOOL [TOOL ...]` | Override tools list from config (default: the [tool matrix](TOOLS.md#the-tool-matrix)) |
-| `--skip-tools TOOL [TOOL ...]` | Remove tools from the list |
+| `--tools TOOL [TOOL ...]` | Override tools list from config (default: the [tool matrix](TOOLS.md#the-tool-matrix)). `--tools trivy semgrep` and `--tools trivy,semgrep` are the same. A name that is not in the matrix is a usage error (exit 2) naming it, and a tool removed in v2.0.0 says so |
+| `--skip-tools TOOL [TOOL ...]` | Remove tools from the list (same splitting and checking) |
 | `--timeout SECS` | Per-tool timeout in seconds (default: 600) |
 | `--threads N` | Concurrent repos to scan (default: auto) |
 | `--allow-missing-tools` | Skip missing tools instead of failing (creates empty JSON) |
@@ -498,6 +503,10 @@ Manually store a completed scan.
 | `--db PATH` | Path to SQLite database |
 
 **jmo history show**
+
+Prints the scan's summary, then a "Tool Runs" section: each target's tools with their
+seconds and `ran`, `skipped:<reason>` or `failed:<reason>` (`--json`: `tool_runs`).
+Scans stored before v2.0.0 have no rows.
 
 | Flag | Description |
 |------|-------------|

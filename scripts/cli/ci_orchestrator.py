@@ -132,6 +132,11 @@ def cmd_ci(args, cmd_scan_fn, cmd_report_fn) -> int:
     # findings table for one scan (measured: 2 rows / 34 findings where
     # `jmo scan` produced 1 / 17).
     scan_rc = int(cmd_scan_fn(_phase_args(args, _SCAN_REQUIRED, skip_auto_report=True)))
+    if scan_rc == 2:
+        # A usage error, raised before anything was scanned (an unknown name
+        # in jmo.yml's `tools:`, `--dest` without `--tsv`). The report would
+        # read an earlier run's results/ and store them as a new scan.
+        return 2
 
     # Import _log here to avoid circular dependency
     from scripts.cli.jmo import _log

@@ -28,9 +28,10 @@ def _write_yaml(p: Path, data: dict) -> None:
 def test_scan_include_exclude_only_scans_included(tmp_path: Path, monkeypatch):
     # Create fake repos: a, b, skipme
     repos_dir = tmp_path / "repos"
-    (repos_dir / "a").mkdir(parents=True)
-    (repos_dir / "b").mkdir(parents=True)
-    (repos_dir / "skipme").mkdir(parents=True)
+    for name in ("a", "b", "skipme"):
+        (repos_dir / name).mkdir(parents=True)
+        # A file each: an empty tree fails every tool before any runs (G2).
+        (repos_dir / name / "app.py").write_bytes(b"x = 1\n")
 
     # Config controlling include/exclude and tools
     cfg = {
@@ -50,7 +51,7 @@ def test_scan_include_exclude_only_scans_included(tmp_path: Path, monkeypatch):
     # scanner reaches for is "installed", so one that runs is always caught.
     import subprocess
 
-    from scripts.cli.scan_jobs import repository_scanner
+    from scripts.cli.scan_jobs import tool_loop
     from scripts.core import tool_runner
 
     bin_dir = tmp_path / "bin"
@@ -68,7 +69,7 @@ def test_scan_include_exclude_only_scans_included(tmp_path: Path, monkeypatch):
             launched.append(Path(cmd[0]).name)
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
-    monkeypatch.setattr(repository_scanner, "find_tool", resolve)
+    monkeypatch.setattr(tool_loop, "find_tool", resolve)
     monkeypatch.setattr(subprocess, "run", fake_run)
     monkeypatch.setattr(tool_runner, "_run_bounded", fake_run)
     # Mock tool availability check to pretend every requested tool is installed
@@ -137,6 +138,7 @@ def test_scan_per_tool_flags_injected(tmp_path: Path, monkeypatch):
     repos_dir = tmp_path / "repos"
     r = repos_dir / "proj"
     r.mkdir(parents=True)
+    (r / "app.py").write_bytes(b"x = 1\n")  # not empty: G2 fails an empty tree
 
     cfg = {
         "tools": ["semgrep"],
@@ -218,6 +220,7 @@ def test_scan_retries_on_failure_then_success(tmp_path: Path, monkeypatch):
     repos_dir = tmp_path / "repos"
     r = repos_dir / "proj"
     r.mkdir(parents=True)
+    (r / "app.py").write_bytes(b"x = 1\n")  # not empty: G2 fails an empty tree
 
     cfg = {
         "retries": 2,

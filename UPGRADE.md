@@ -76,6 +76,27 @@ These 16 tools are no longer installed, run or parsed. Their `per_tool` blocks i
 
 Bandit remains this repository's own pre-commit hook and lint step; only bandit as a JMo scanner is gone. Details: [docs/TOOLS.md](docs/TOOLS.md#removed-in-v200).
 
+### Tool names are checked
+
+`--tools`, `--skip-tools` and `jmo.yml`'s `tools:` split on commas as well as spaces. `--tools trivy,syft` now selects two tools. In v1.x it was one tool named `trivy,syft`, which ran nowhere.
+
+A name that is not in the matrix is a usage error, exit code 2, naming it. That includes the 16 removed tools, whose error says so. In v1.x, `--tools bandit` scanned with nothing and exited 1, and a typo selected nothing without a word.
+
+### Every tool gets a row: `scan-timings.json` v3
+
+Each target's `scan-timings.json` is at `schema_version` 3. It has one row for **every requested tool**, including the ones that did not run. Each row is `ran`, `skipped:<reason>` or `failed:<reason>`, so a tool that was not installed, had nothing to read, or read zero files says so. v2 listed only the tools that ran, and those tools' fields changed:
+
+| v2 | v3 |
+|----|----|
+| `status`, `timed_out`, `error_message` | `state` (`ran` / `skipped` / `failed`), `reason` (for example `timed out`, `not installed`, `no Dockerfiles`), `detail` |
+| `duration` | `seconds` |
+| `returncode` (`-1` for any failure) | `exit_code` (a failed run's own code, or `null` when there was none) |
+| `output_file` | removed: the output is `<tool>.json` beside the document |
+
+`.scan_metadata.json` loses `stubbed_tools` and gains `tool_runs`, the same rows for every target.
+
+Two outcomes changed with it. A repository with no files outside the excluded directories now fails every tool that reads it (`failed:no files to scan`), where v1.x graded the tools a success. So does a tool whose own output reports 0 files examined (`failed:examined 0 files`).
+
 ### One Docker image
 
 There is one image, built from `Dockerfile`: `ghcr.io/jimmy058910/jmo-security:latest` and version tags such as `:2.0.0` (Docker Hub: `jmogaming/jmo-security`). It carries the 12 scanners plus OPA.
@@ -87,6 +108,8 @@ The `:fast`, `:slim`, `:balanced`, `:deep` and `:full` tags, and the tags with a
 Scans no longer record a profile, so the history database has no `profile` column. Run `jmo history migrate` to drop it from an existing `.jmo/history.db`. You can also skip that step: the next scan that stores history drops the column itself. Findings are kept either way.
 
 `findings.json` `meta`, attestations and diff output no longer carry a profile either.
+
+The database also gains a `scan_tool_runs` table: one row per target and tool, with its state, reason and seconds. `jmo history show <scan-id>` prints it. It is created the first time a scan stores into the database. Scans stored before then have no rows.
 
 ### Schedules
 

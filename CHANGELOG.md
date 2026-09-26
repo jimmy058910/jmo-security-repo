@@ -16,9 +16,10 @@ All notable changes to JMo Security will be documented in this file.
   fast-forwards an existing clone of the same URL, so it scans current code. Only
   `https://`, `ssh://` and `git@host:` URLs clone, never to a path outside `--dest` and
   never over a directory that is not a clone of that URL; each refused or failed row is
-  named, and a TSV none of whose rows cloned exits 1. Of two repositories with one name
-  (`alice/app`, `bob/app`), whose results would share a folder, the second is refused
-  by name. `--dest` has no default. No row waits on a prompt: one that needs a password,
+  named, and a TSV none of whose rows cloned exits 1. Two repositories with one name
+  (`alice/app`, `bob/app`) are both scanned, each into a results folder of its own.
+  `include`/`exclude` drop a row before it is cloned. `--dest` has no default, and
+  without `--tsv` it is a usage error (exit 2). No row waits on a prompt: one that needs a password,
   a key's passphrase or a new ssh host key fails by name. The wizard's tsv mode had
   always emitted this command, and `jmo scan` rejected it (exit 2) natively and in
   Docker; it runs in both now (#1299). `scripts/cli/clone_from_tsv.py` no longer runs
@@ -32,9 +33,9 @@ All notable changes to JMo Security will be documented in this file.
   `versions.yaml` rows and docs. `TOOL_MATRIX` is trufflehog, semgrep, syft, trivy,
   checkov, hadolint, shellcheck, gosec, yara, grype, zap and nuclei. opa is the policy
   engine: installed and checked by `jmo tools check`, not a scanner. checkov-cicd folds
-  into checkov. A `--tools` flag or `tools:` list naming a removed tool does not run it
-  and says so, and a scan left with no tool to run exits 1 (#1088, #1099, #1152, #1164,
-  #1217, #1219, #1222, #1225).
+  into checkov. Naming a removed tool in `--tools`, `--skip-tools` or `tools:` is a
+  usage error (exit 2) that says it was removed (#1088, #1099, #1152, #1164, #1217,
+  #1219, #1222, #1225).
 - **Breaking. Scan profiles are gone.** `--profile-name`, the `jmo fast`, `jmo balanced`
   and `jmo full` subcommands, and `--profile` on `jmo tools`, `jmo wizard`,
   `jmo schedule` and `jmo history` no longer exist; every scan resolves to
@@ -61,9 +62,59 @@ All notable changes to JMo Security will be documented in this file.
   under is not.
   Copy `.jmo/history.db` before upgrading if you want it. Measured on a real
   1.1.0-shaped database: 2,492 scans and 215,761 findings in, all 215,761 findings out.
+- **Breaking. Every requested tool gets one row per target.** Each row is `ran`,
+  `skipped:<reason>` or `failed:<reason>`, with its seconds, exit code and attempts. The
+  rows are in each target's `scan-timings.json` (schema 3), in `.scan_metadata.json`'s
+  `tool_runs` (replacing `stubbed_tools`), and in a new history table, `scan_tool_runs`,
+  which `jmo history show` prints. A tool used to vanish from every artifact when it had
+  nothing to read: on a repository without Dockerfiles or shell scripts, hadolint and
+  shellcheck left no row, no file and no log line (#1227). "Which tool made my scan slow"
+  is now answerable from history (#722). The six scan jobs run one loop over a per-tool
+  descriptor table, where there were eighteen hand-written blocks.
+- **Breaking. A scan of nothing fails.** A repository with no file outside the excluded
+  directories fails every tool that reads it (`failed:no files to scan`, exit 1). On an
+  empty tree, trivy and semgrep used to be graded a success. A tool whose own output
+  reports 0 files examined is `failed:examined 0 files`: semgrep (`paths.scanned`) and
+  gosec (`Stats.files`). gosec reads 0 on every machine without a Go toolchain, the image
+  included, so on a Go repository it now fails where it used to pass (#1231, #1310).
+- **Breaking. Tool names are checked.** `--tools`, `--skip-tools` and `tools:` split on
+  commas and spaces, so `--tools trivy,syft` selects two tools. It used to be one tool
+  named `trivy,syft`, which ran nowhere. An unknown name is a usage error, exit 2, naming
+  it, and `jmo ci` stops there too, before its report reads an earlier run's results
+  (#1279).
+- **One exclusion list, rendered for every tool.** `.git`, `node_modules`, `vendor`,
+  `.venv` and `venv`, and the results directory when it sits inside the scanned tree,
+  reach each tool in its own syntax. syft and grype now skip the results directory, where
+  they used to read a previous scan's `requirements.txt`. They still read vendored trees,
+  which are an SBOM's subject, except that grype skips a virtualenv. trufflehog joins the
+  vendored tier: on a real Next.js application it went from 281 s and 253 findings, 222
+  of them in `node_modules`, to 12 s and 31. Its patterns are anchored below the scan
+  root, so a repository that itself lives under a `vendor/` or `node_modules/`
+  directory is still read. gosec gains `-exclude-dir`, as whole path segments, and
+  yara's runner `--exclude-dir` (#1235).
+- **Missing tools stay in the scan.** Pre-flight used to drop a missing tool, which then
+  had no record anywhere. Each now gets `failed:not installed`, or `skipped:not installed`
+  under `--allow-missing-tools`, on every target it reads. With every tool stripped from
+  `PATH`, a scan writes 12 rows per target, where it used to exit 1 before scanning.
+  `--allow-missing-tools` with nothing installed still exits 1 (#811). A scan in which
+  no tool ran on any target is not stored in history, where its 0 findings would read
+  as every earlier finding resolved.
+- **checkov runs only when there is IaC**: Terraform, CloudFormation, a Helm chart or a
+  GitHub Actions workflow. It used to run on every repository. **zap and nuclei are
+  URL-only**, and on any other target their row is `skipped:needs --url`. A tool you did
+  not name never produces the "applicable to no target type" warning.
+- **Repositories with the same folder name each get their own results folder**
+  (`alice__app`, `bob__app`). Two `app` repositories scanned together used to share one,
+  and the last writer's findings stood for both: 2 findings reported where there were 4
+  (#1303).
 
 ### Fixed
 
+- **nuclei and ZAP produce findings on URL scans.** nuclei 3 rejects `-json` on every
+  platform (exit 2); it now gets `-jsonl`. On Windows, `zap.bat` looks for its jar in the
+  working directory, which was never its own ("Unable to access jarfile"); it now runs
+  from its own directory. Measured through `jmo scan --url` against a local server: zap
+  ran in 18.9 s and nuclei in 113 s, where both used to fail.
 - **The wizard's Docker mode creates the directories the container writes to** before
   it starts one. Under a Linux Docker engine, a missing bind-mount source is created as
   root, and the image's user (uid 1000) could not write into it.

@@ -42,9 +42,8 @@ def no_real_scanners(monkeypatch):
         asked.append(tool_name)
         return None
 
-    monkeypatch.setattr(
-        "scripts.cli.scan_jobs.repository_scanner.find_tool", _resolve_nothing
-    )
+    # Every scan job resolves its tools in the one loop (v2.0.0 Phase 3).
+    monkeypatch.setattr("scripts.cli.scan_jobs.tool_loop.find_tool", _resolve_nothing)
     return asked
 
 

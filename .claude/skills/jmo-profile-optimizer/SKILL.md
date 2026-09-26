@@ -35,13 +35,14 @@ them is how this skill drifted in the first place.
 | How many findings does each tool produce? | yes | `timings.json` `jobs[].count` |
 | Is the report worker count right? | yes | `recommended_threads` vs `meta.max_workers` |
 | How long did the whole scan take? | yes | `jmo history list` / `jmo history show` |
-| How long did **one tool** take to run? | yes | `scan-timings.json` `tools[].duration` |
-| Did a tool time out **on this scan**? | yes | `scan-timings.json` `tools[].timed_out` — a boolean, **not** a `status` value |
-| What is a tool's timeout **rate across scans**? | **no** | `scan-timings.json` is per-scan; nothing aggregates it yet (#722) |
+| How long did **one tool** take to run? | yes | `scan-timings.json` `tools[].seconds`, or `jmo history show <scan-id>` |
+| Did a tool time out **on this scan**? | yes | `scan-timings.json`: its row is `state: failed`, `reason: timed out` |
+| What is a tool's timeout **rate across scans**? | yes, since v2.0.0 | the history database's `scan_tool_runs` table, through `jmo history query` (#722) |
 
-So "why is the scan slow" is now answerable per tool, from the scan's own
-output. "Is tool X *usually* slow, or was that one run" is not — that needs the
-per-scan files collected over time, which nothing does yet.
+So "why is the scan slow" is answerable per tool, from the scan's own output,
+and "is tool X *usually* slow, or was that one run" from history. Every
+requested tool has a row, including the ones that were skipped or failed without
+running, so a missing tool is never mistaken for a fast one.
 
 ### What this skill tunes
 
@@ -111,8 +112,9 @@ Parse `<results-dir>/summaries/timings.json` (report phase). Group the flat
 findings produced, mean, max, and real percentiles from the observed samples.
 
 Then read every `<results-dir>/individual-*/<target>/scan-timings.json` (scan
-phase) for each tool's run `duration`, `status`, `timed_out` and `attempts` on
-each target. Timeout recommendations come from this file only.
+phase, schema 3) for each tool's row on each target: `state`, `reason`,
+`seconds`, `exit_code` and `attempts`. Timeout recommendations come from this
+file, and rates from `scan_tool_runs` in history.
 
 > Schemas and analysis code: [references/optimization-patterns.md](references/optimization-patterns.md#phase-1-load-and-analyze-timingsjson)
 > and [Phase 4](references/optimization-patterns.md#phase-4-timeout-and-failure-analysis)
@@ -149,7 +151,7 @@ in parallel across `meta.max_workers`, so shares of wall clock would not sum to
 Produce prioritized recommendations in three tiers, each citing the measurement
 that produced it:
 
-- **P1 Immediate:** give a tool that `timed_out` on this scan a
+- **P1 Immediate:** give a tool whose row is `failed:timed out` on this scan a
   `per_tool.<tool>.timeout` it can finish inside, and correct the report worker
   count when it disagrees with `recommended_threads`
 - **P2 Short-term:** profile the parse path of any adapter over the bottleneck
@@ -160,8 +162,8 @@ that produced it:
 
 > Recommendation engine: [references/optimization-patterns.md](references/optimization-patterns.md#phase-5-generate-optimization-recommendations)
 
-**Per-tool timeout and failure analysis is available for a single scan, but
-*rates* are not** — nothing aggregates `scan-timings.json` across runs. See
+**Per-tool timeout and failure analysis comes from a single scan's rows, and
+*rates* from history** — `scan_tool_runs`, for scans stored since v2.0.0. See
 [Phase 4](references/optimization-patterns.md#phase-4-timeout-and-failure-analysis)
 before making any recommendation about timeouts. Never recommend a *lower*
 timeout to speed a scan up: a cap that kills a healthy tool makes the scan

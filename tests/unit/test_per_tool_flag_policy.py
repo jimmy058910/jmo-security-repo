@@ -207,28 +207,31 @@ def test_no_scanner_reimplements_the_helpers() -> None:
     `_iter_*` helpers.
     """
     offenders: list[str] = []
-    checked = 0
     delegates_to = {"get_tool_flags": "tool_flags", "get_tool_timeout": "tool_timeout"}
 
-    for path in _scan_job_modules():
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+    jobs = _scan_job_modules()
+    assert len(jobs) >= 6, f"found only {jobs}; this guard may cover nothing"
+    for path in jobs:
+        tree = ast.parse(path.read_bytes().decode("utf-8"))
         for node in ast.walk(tree):
-            if not isinstance(node, ast.FunctionDef):
-                continue
-            if node.name not in delegates_to:
-                continue
-            checked += 1
-            if not _is_delegation_to(node, delegates_to[node.name]):
-                offenders.append(f"{path.name}:{node.lineno} {node.name}")
+            if isinstance(node, ast.FunctionDef) and node.name in delegates_to:
+                if not _is_delegation_to(node, delegates_to[node.name]):
+                    offenders.append(f"{path.name}:{node.lineno} {node.name}")
 
-    assert checked >= 8, (
-        f"expected both helpers in several scanners, found only {checked} -- "
-        "this guard may have stopped covering anything"
-    )
     assert not offenders, (
         "these re-derive per-tool config instead of delegating to "
         "scan_utils.tool_flags / scan_utils.tool_timeout:\n  " + "\n  ".join(offenders)
     )
+
+    # Since Phase 3 every job runs its tools through the one loop, so the copies
+    # have one place to come back: assert that place uses both helpers.
+    loop = ast.parse((SCAN_JOBS / "tool_loop.py").read_bytes().decode("utf-8"))
+    called = {
+        node.func.id
+        for node in ast.walk(loop)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    }
+    assert {"tool_flags", "tool_timeout"} <= called, called
 
 
 class TestShippedFlagsAreFlagsTheToolActuallyHas:

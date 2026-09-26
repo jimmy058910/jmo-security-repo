@@ -82,6 +82,9 @@ class ToolDefinition:
     retries: int | RetryConfig = 0
     ok_return_codes: tuple[int, ...] = (0, 1)
     capture_stdout: bool = False
+    # zap.bat finds its jar relative to the working directory (measured:
+    # "Unable to access jarfile zap-2.17.0.jar" from anywhere else).
+    cwd: Path | None = None
 
     @property
     def retry_config(self) -> RetryConfig:
@@ -162,6 +165,7 @@ def _run_bounded(
     encoding: str,
     errors: str,
     timeout: float | None,
+    cwd: Path | None = None,
 ) -> subprocess.CompletedProcess:
     """``subprocess.run``, but a timeout kills the whole process tree.
 
@@ -180,6 +184,7 @@ def _run_bounded(
         stderr=stderr,
         encoding=encoding,
         errors=errors,
+        cwd=cwd,
         # POSIX only: makes the child a process-group leader so killpg reaches
         # its descendants. Not valid on Windows, where taskkill /T is used.
         start_new_session=(sys.platform != "win32"),
@@ -222,7 +227,12 @@ class ToolResult:
             timeout into ``status`` would discard it. A timed-out tool
             therefore reports ``status="error"`` or ``"retry_exhausted"`` **and**
             ``timed_out=True``.
-        returncode: Process return code (or -1 if timeout/error)
+        returncode: Process return code: the last one a crash exited with, or
+            -1 when there was none (a timeout, a spawn failure).
+        failure: Which kind of failure ended the run, from `_classify_failure`:
+            "crash", "timeout", "missing_tool", "system_error", "unknown", or ""
+            when it did not fail. The scan's accounting row maps it to a
+            reason; matching `error_message` text for it was load-bearing prose.
         stdout: Standard output (empty if not captured)
         stderr: Standard error output
         attempts: Number of execution attempts made
@@ -243,6 +253,7 @@ class ToolResult:
     capture_stdout: bool = False
     error_message: str = ""
     timed_out: bool = False
+    failure: str = ""
 
     def is_success(self) -> bool:
         """Check if tool execution was successful."""
@@ -404,9 +415,11 @@ class ToolRunner:
         attempt = 0
         last_error = ""
         # Paired with last_error: whichever failure ends the loop is the one
-        # the returned ToolResult describes, so this must be reassigned at
+        # the returned ToolResult describes, so these must be reassigned at
         # every site that sets last_error -- not only at the timeout one.
         last_failure_was_timeout = False
+        last_failure = ""
+        last_returncode = -1
 
         # Track attempts per failure type
         attempts_by_type: dict[str, int] = {}
@@ -486,6 +499,7 @@ class ToolRunner:
                         subprocess.PIPE if tool.capture_stdout else subprocess.DEVNULL
                     ),
                     stderr=subprocess.PIPE,
+                    cwd=tool.cwd,
                     # NOT text=True. That decodes with the *parent's* locale
                     # codec under strict errors, and scanner output carries
                     # whatever bytes the scanned repo contains. On Windows the
@@ -566,6 +580,8 @@ class ToolRunner:
                     f"Return code {result.returncode} not in {tool.ok_return_codes}"
                 )
                 last_failure_was_timeout = False
+                last_failure = "crash"
+                last_returncode = result.returncode
                 attempts_by_type["crash"] = attempts_by_type.get("crash", 0) + 1
                 budget = rc.attempts_for_failure("crash")
                 if attempts_by_type["crash"] < budget:
@@ -578,6 +594,8 @@ class ToolRunner:
             except subprocess.TimeoutExpired:
                 last_error = f"Timeout after {tool.timeout}s"
                 last_failure_was_timeout = True
+                last_failure = "timeout"
+                last_returncode = -1
                 attempts_by_type["timeout"] = attempts_by_type.get("timeout", 0) + 1
                 budget = rc.attempts_for_failure("timeout")
 
@@ -617,11 +635,14 @@ class ToolRunner:
                     attempts=attempt,
                     duration=duration,
                     error_message=f"Tool not found: {tool.command[0]}",
+                    failure="missing_tool",
                 )
 
             except (OSError, PermissionError) as e:
                 last_error = str(e)
                 last_failure_was_timeout = False
+                last_failure = "system_error"
+                last_returncode = -1
                 attempts_by_type["system_error"] = (
                     attempts_by_type.get("system_error", 0) + 1
                 )
@@ -637,6 +658,8 @@ class ToolRunner:
             except Exception as e:  # Acceptable: tool invocation may fail unexpectedly — retry with budget
                 last_error = str(e)
                 last_failure_was_timeout = False
+                last_failure = "unknown"
+                last_returncode = -1
                 attempts_by_type["unknown"] = attempts_by_type.get("unknown", 0) + 1
                 budget = rc.attempts_for_failure("unknown")
                 logger.error(
@@ -654,11 +677,12 @@ class ToolRunner:
         return ToolResult(
             tool=tool.name,
             status="retry_exhausted" if attempt > 1 else "error",
-            returncode=-1,
+            returncode=last_returncode,
             attempts=attempt,
             duration=duration,
             error_message=last_error,
             timed_out=last_failure_was_timeout,
+            failure=last_failure,
         )
 
     def run_all_parallel(self) -> list[ToolResult]:

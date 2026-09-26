@@ -24,9 +24,12 @@ import logging
 import os
 import tempfile
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+from scripts.core.scan_timings import State, ToolRun
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +72,10 @@ class TargetRecord:
     target_id: str  # Unique identifier for this target
     completed: bool = False
     tools: dict[str, ToolRecord] = field(default_factory=dict)
+    # A completed target's accounting rows and the name its scan job recorded
+    # them under: a resumed scan skips the target but still reports its rows.
+    name: str = ""
+    rows: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -76,6 +83,8 @@ class TargetRecord:
             "target_id": self.target_id,
             "completed": self.completed,
             "tools": {name: tr.to_dict() for name, tr in self.tools.items()},
+            "name": self.name,
+            "rows": self.rows,
         }
 
     @classmethod
@@ -88,6 +97,8 @@ class TargetRecord:
             target_id=data["target_id"],
             completed=data.get("completed", False),
             tools=tools,
+            name=data.get("name", ""),
+            rows=data.get("rows") or {},
         )
 
 
@@ -131,21 +142,53 @@ class ScanSession:
             tools=tool_records,
         )
 
-    def mark_target_complete(self, target_id: str, statuses: dict[str, bool]) -> None:
-        """Mark a target as completed with tool statuses."""
+    def mark_target_complete(
+        self, target_id: str, rows: Mapping[str, ToolRun], name: str | None = None
+    ) -> None:
+        """Mark a target as completed, with each tool's state from its row.
+
+        The rows themselves are kept, with `name` (what the scan job recorded
+        the target as), so a resumed scan can report a target it does not
+        scan again.
+        """
         if target_id not in self.targets:
             return
         target = self.targets[target_id]
         target.completed = True
-        for tool_name, success in statuses.items():
-            if tool_name.startswith("__"):
-                continue  # Skip metadata keys like __attempts__
+        target.name = name or target_id
+        target.rows = {tool: row.to_dict() for tool, row in rows.items()}
+        status = {
+            State.RAN: "completed",
+            State.FAILED: "failed",
+            State.SKIPPED: "skipped",
+        }
+        for tool_name, row in rows.items():
             if tool_name in target.tools:
-                target.tools[tool_name].status = "completed" if success else "failed"
+                target.tools[tool_name].status = status[row.state]
+                target.tools[tool_name].error = row.label if row.reason else ""
 
     def is_target_completed(self, target_id: str) -> bool:
         """Check if a specific target has been completed."""
         return target_id in self.targets and self.targets[target_id].completed
+
+    def completed_rows(self, target_id: str) -> tuple[str, dict[str, ToolRun]] | None:
+        """A completed target's recorded name and rows, or None without them.
+
+        None for a session written before the rows were kept; an unreadable row
+        is dropped with a warning rather than failing the resume.
+        """
+        target = self.targets.get(target_id)
+        if target is None or not target.completed or not target.rows:
+            return None
+        rows: dict[str, ToolRun] = {}
+        for tool, data in target.rows.items():
+            try:
+                rows[tool] = ToolRun.from_dict(data)
+            except (KeyError, TypeError, ValueError) as exc:
+                logger.warning(
+                    "Session row for %s/%s unreadable: %s", target_id, tool, exc
+                )
+        return (target.name or target_id, rows) if rows else None
 
     def to_dict(self) -> dict[str, Any]:
         return {

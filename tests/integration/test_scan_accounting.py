@@ -9,45 +9,36 @@ stream. Five tools were unaccounted for and three were reported in two
 contradictory states at once.
 
 So this test runs a real ``jmo scan`` and reconciles the scan against its own
-artifacts: every tool in ``TOOL_MATRIX`` - the default when nothing narrows the
-list - must land in exactly one state (see
-``scripts/dev/reconcile_scan_accounting.py``). Zero states is a silent
-omission; two is the diagnostics disagreeing with themselves.
+artifacts: every requested tool - the whole ``TOOL_MATRIX`` but the one this
+test skips - must have exactly one row, ``ran``, ``skipped:<reason>`` or
+``failed:<reason>`` (see ``scripts/dev/reconcile_scan_accounting.py``). No row
+is a silent omission; two is the scan disagreeing with itself.
 
 **Why this is not marked ``requires_tools``.** The invariant is
-environment-independent - it holds with no tools installed (everything
-``unresolved``), with a full local install (mixed), and inside a Docker image
-(mostly ``output``). Only the *distribution* moves. Marking it
+environment-independent - it holds with no tools installed (every row
+``failed:not installed``), with a full local install (mixed), and inside a
+Docker image (mostly ``ran``). Only the *distribution* moves. Marking it
 ``requires_tools`` would exclude it from every CI job and forfeit the
 protection entirely; ``slow`` keeps it in the PR shards
 (``-m "not smoke and not requires_tools and not docker"``) while excusing it
 from the quick coverage gate, which adds ``not slow``.
 
-**Why the child runs in container mode.** Before v2.0.0 the host pre-flight
-never emptied the scan: bandit, a dev dependency, resolved from the venv on
-every machine, so at least one declared tool always reached the scanners. No
-v2.0.0 matrix tool is present that way, and with none installed the host
-pre-flight exits 1 before any target is scanned - this test would reconcile
-nothing on a runner without scanners. So the child runs with
-``DOCKER_CONTAINER=1``: pre-flight is skipped and every tool reaches the scan
-core, installed or not, which is the path a Docker user takes. Container mode
-also rejects a ``C:\\...`` ``--repo`` as MSYS-mangled
+**Why the child runs in container mode.** The host pre-flight probes each
+tool's version, a real subprocess per tool that this test does not need.
+``DOCKER_CONTAINER=1`` skips it, which is the path a Docker user takes; since
+Phase 3 the scan records a missing tool either way. Container mode also rejects
+a ``C:\\...`` ``--repo`` as MSYS-mangled
 (``scan_orchestrator._detect_msys_path_mangling``), so the child runs from
 ``tmp_path`` with relative paths.
 
-The host pre-flight this skips is covered elsewhere: dropping the missing tools
-and continuing by ``tests/cli/test_jmo.py::TestScanPreflightAtEOF``
-(``test_non_tty_proceeds_with_available_tools``), and the reconciler's reading
-of its "Skipping N missing tool(s)" line by
-``tests/unit/test_scan_accounting.py::test_parses_preflight_skip_list``.
-
 **Never assert which state a tool is in.** The distribution is not portable:
-a tool that runs here is ``unresolved`` on a runner without it. A test pinning
-a state would pass on one machine and fail on another.
+a tool that runs here is ``failed:not installed`` on a runner without it. A
+test pinning a state would pass on one machine and fail on another.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -56,14 +47,14 @@ from pathlib import Path
 import pytest
 
 from scripts.core.tool_registry import TOOL_MATRIX
-from scripts.dev.reconcile_scan_accounting import parse_log, parse_outputs, reconcile
+from scripts.dev.reconcile_scan_accounting import reconcile
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # Deliberately vulnerable, and deliberately narrow: Terraform, a Dockerfile,
 # Python and a JS manifest, with no shell or Go sources at all. The omissions
 # matter as much as the contents - a tool with nothing to look at must report
-# itself idle rather than vanish.
+# itself skipped, with the reason, rather than vanish (#1227).
 FIXTURE_FILES = {
     "main.tf": (
         'resource "aws_s3_bucket" "b" {\n'
@@ -130,9 +121,9 @@ SCAN_BUDGET_S = 420
 # (`--config auto`) fetches its ruleset from semgrep.dev, so on a machine where
 # semgrep is genuinely on PATH this test spawned a real, unmarked,
 # network-blocking scan of its own -- and PER_TOOL_TIMEOUT_S caps it mid-fetch,
-# producing the exact output-vs-failed contradiction described above. Skipping
-# lands it in `skipped`, which is an accounted state, without this test
-# depending on network access to pass.
+# producing the exact output-vs-failed contradiction described above.
+# `--skip-tools` takes it out of the request, so it is not declared and has no
+# row, and this test does not depend on network access to pass.
 SKIP_TOOLS = ("semgrep",)
 
 # A capped-out tool is still *accounted* - `failed` is a state like any other,
@@ -145,7 +136,7 @@ SKIP_TOOLS = ("semgrep",)
 @pytest.mark.timeout(600)  # > SCAN_BUDGET_S, so TimeoutExpired fires first and
 # its diagnostics get printed; pytest-timeout would kill the test with none.
 def test_default_scan_accounts_for_every_matrix_tool(tmp_path: Path) -> None:
-    """Every tool in TOOL_MATRIX lands in exactly one state.
+    """Every requested tool has exactly one row on the target.
 
     The unnarrowed scan is the strongest case: every tool the product ships,
     the most opportunities for one to be dropped without a trace.
@@ -189,8 +180,8 @@ def test_default_scan_accounts_for_every_matrix_tool(tmp_path: Path) -> None:
         cap_config.name,
         "--skip-tools",
         *SKIP_TOOLS,
-        # The `idle` diagnostic is emitted at DEBUG. Without this, a tool
-        # with no matching files is genuinely unaccounted for.
+        # The rows are the account now; the log level only sets how much
+        # evidence the saved stderr carries.
         "--log-level",
         "DEBUG",
         # Point history at tmp_path. The suite defaulting to the
@@ -276,45 +267,29 @@ def test_default_scan_accounts_for_every_matrix_tool(tmp_path: Path) -> None:
         f"stderr: {proc.stderr[-2000:]}"
     )
 
-    declared = list(TOOL_MATRIX)
-    counts, unparseable = parse_outputs(results_dir)
-    result = reconcile(
-        declared=declared,
-        diags=parse_log(proc.stderr),
-        output_counts=counts,
-        unparseable=unparseable,
-    )
+    # `--skip-tools semgrep` takes it out of the request: every other matrix
+    # tool is declared, and each must have exactly one row.
+    declared = [t for t in TOOL_MATRIX if t not in SKIP_TOOLS]
+    meta = json.loads((results_dir / ".scan_metadata.json").read_bytes())
+    assert meta["tools"] == declared, meta["tools"]
 
-    assert result.never_mentioned == [], (
-        f"{len(result.never_mentioned)} declared tool(s) appear in no stream and "
-        f"no artifact: {result.never_mentioned}. The scan omitted them silently. "
-        f"Full log: {log_path}"
-    )
-    assert result.silent_fail == [], (
-        f"{len(result.silent_fail)} tool(s) failed leaving only a transient "
-        f"progress glyph: {result.silent_fail}. A non-TTY run records nothing at "
-        f"all. Full log: {log_path}"
-    )
-    assert result.contradictory == [], (
-        f"{len(result.contradictory)} tool(s) were reported in two states at "
-        f"once: {result.contradictory}. The scan's own diagnostics disagree. "
-        f"Full log: {log_path}"
-    )
-    assert result.stray_reported == [], (
-        f"The scan reported on names that are not tools in the matrix: "
-        f"{result.stray_reported}. Report the tool, not the binary it invokes. "
-        f"Full log: {log_path}"
-    )
-    assert result.stray_output == [], (
-        f"Output files exist for names nothing declared: {result.stray_output}. "
-        f"Full log: {log_path}"
-    )
-    assert result.unparseable == [], (
-        f"Output files exist but do not parse: {result.unparseable}. An "
-        f"unreadable file is data loss, not a successful tool run."
-    )
+    result = reconcile(results_dir, declared)
 
-    # Belt and braces: the invariant restated as a whole, so a state added to
+    assert result.missing == [], (
+        f"declared tool(s) with no row: {result.missing}. The scan omitted them "
+        f"silently. Full log: {log_path}"
+    )
+    assert result.duplicate == [], f"two rows for one tool: {result.duplicate}"
+    assert result.stray == [], f"rows for undeclared names: {result.stray}"
+    assert result.invalid == [], f"rows that do not parse: {result.invalid}"
+    assert result.no_output == [], (
+        f"`ran` with no parseable output: {result.no_output}. An unreadable file "
+        f"is data loss, not a successful tool run. Full log: {log_path}"
+    )
+    assert result.timings_disagree == [], result.timings_disagree
+
+    # Belt and braces: the invariant restated as a whole, so a check added to
     # the reconciler without a matching assertion above still fails here.
     assert result.ok, f"Scan did not fully account for itself. Full log: {log_path}"
-    assert len(result.states) == len(declared)
+    (rows,) = result.rows.values()
+    assert list(rows) == declared

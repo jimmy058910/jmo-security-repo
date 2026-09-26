@@ -150,6 +150,9 @@ class Config:
     # (v2.0.0): TOOL_MATRIX is the one default, so it is read from the registry
     # rather than restated here.
     tools: list[str] = field(default_factory=lambda: list(TOOL_MATRIX))
+    # True when jmo.yml named `tools:`, so the list is a request rather than the
+    # default (#1279: only a named tool is worth an "applies to nothing" line).
+    tools_from_file: bool = False
     # `compliance` and `suppressions` are here so gating them under #867 does
     # not change what a config that never mentions `outputs:` produces. They
     # were written unconditionally before, outside any gate; being in the
@@ -307,7 +310,11 @@ def load_config(path: str | None) -> Config:
     _warn_unrecognised_config_keys(p, data)
     cfg = Config()
     if isinstance(data.get("tools"), list):
+        # Validated, and split on commas, where a scan reads it
+        # (`parse_tool_names`), so a bad entry fails the scan with its name
+        # rather than every command that happens to load this file.
         cfg.tools = [str(x) for x in data["tools"]]
+        cfg.tools_from_file = True
     if isinstance(data.get("outputs"), list):
         cfg.outputs = [str(x) for x in data["outputs"]]
     if isinstance(data.get("fail_on"), str):

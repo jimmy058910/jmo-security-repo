@@ -14,6 +14,7 @@ from scripts.cli.scan_orchestrator import (
     ScanOrchestrator,
     ScanTargets,
     _detect_msys_path_mangling,
+    repo_result_names,
 )
 
 
@@ -972,16 +973,19 @@ class TestUnroutedToolsAreReported:
     different to whoever reads the output, or every skip reads as a scan.
     """
 
-    def _orchestrator(self, tmp_path, tools):
+    def _orchestrator(self, tmp_path, tools, explicit=True):
         cfg = ScanConfig(
             tools=tools,
             results_dir=tmp_path / "results",
             timeout=60,
             retries=0,
+            explicit_tools=explicit,
         )
         return ScanOrchestrator(cfg)
 
     def test_url_only_tool_on_a_repo_scan_is_reported(self, tmp_path, caplog):
+        """A named tool. (lynis, the other case this covered, left in v2.0.0 and
+        is now refused at parse time: #1279.)"""
         import logging
 
         repo = tmp_path / "proj"
@@ -990,7 +994,7 @@ class TestUnroutedToolsAreReported:
         targets = ScanTargets()
         targets.repos = [repo]
 
-        orch = self._orchestrator(tmp_path, ["trufflehog", "nuclei", "lynis"])
+        orch = self._orchestrator(tmp_path, ["trufflehog", "nuclei"])
 
         with (
             patch("scripts.cli.scan_jobs.scan_repository", return_value=("proj", {})),
@@ -998,11 +1002,9 @@ class TestUnroutedToolsAreReported:
         ):
             orch.scan_all(targets, per_tool_config={})
 
+        assert "no target type in this scan" in caplog.text
         assert "nuclei" in caplog.text, (
             f"nuclei was dropped from a repo scan without a word:\n{caplog.text}"
-        )
-        assert "lynis" in caplog.text, (
-            f"lynis was dropped from a repo scan without a word:\n{caplog.text}"
         )
 
     def test_routed_tool_is_not_reported_as_unrouted(self, tmp_path, caplog):
@@ -1254,3 +1256,64 @@ class TestTargetFilesAreDecodedAndSplitPortably:
 
         assert urls == ["https://example.com"]
         assert any("héllo-not-a-url" in r for r in orch._rejected), orch._rejected
+
+
+class TestUniqueResultNames:
+    """#1303: results land in individual-repos/<name>, so two repositories of
+    one folder name shared one folder, and the last writer's findings stood
+    for both. Each name must be unique, case-insensitively as Windows is."""
+
+    def test_a_name_that_does_not_collide_is_unchanged(self, tmp_path):
+        repos = [tmp_path / "work" / "app", tmp_path / "work" / "api"]
+
+        assert repo_result_names(repos) == ["app", "api"]
+
+    def test_a_collision_takes_the_parent_as_a_prefix(self, tmp_path):
+        repos = [
+            tmp_path / "alice" / "app",
+            tmp_path / "x" / "api",
+            tmp_path / "bob" / "app",
+        ]
+
+        assert repo_result_names(repos) == ["alice__app", "api", "bob__app"]
+
+    @pytest.mark.parametrize(("first", "second"), [("App", "app"), ("app", "App")])
+    def test_names_differing_only_in_case_collide(self, tmp_path, first, second):
+        """Both orders: a count keyed on one spelling is right in one of them."""
+        repos = [tmp_path / "alice" / first, tmp_path / "bob" / second]
+
+        assert repo_result_names(repos) == [f"alice__{first}", f"bob__{second}"]
+
+    def test_a_collision_the_prefix_does_not_settle_takes_a_suffix(self, tmp_path):
+        repos = [tmp_path / "a" / "alice" / "app", tmp_path / "b" / "Alice" / "app"]
+
+        assert repo_result_names(repos) == ["alice__app", "Alice__app-2"]
+
+    def test_a_prefixed_name_never_takes_a_plain_name_already_used(self, tmp_path):
+        repos = [
+            tmp_path / "x" / "alice__app",
+            tmp_path / "alice" / "app",
+            tmp_path / "bob" / "app",
+        ]
+
+        assert repo_result_names(repos) == ["alice__app", "alice__app-2", "bob__app"]
+
+    def test_scan_all_gives_each_repository_its_own_folder(self, tmp_path):
+        """Measured before the fix through `jmo scan`: two `app` repositories
+        of two findings each reported 2 findings from 1 folder; after, 4 from 2."""
+        repos = [tmp_path / "work" / "app", tmp_path / "oss" / "app"]
+        for repo in repos:
+            repo.mkdir(parents=True)
+        orch = ScanOrchestrator(
+            ScanConfig(results_dir=tmp_path / "results", tools=["trivy"])
+        )
+
+        with patch("scripts.cli.scan_jobs.scan_repository") as scan:
+            scan.side_effect = lambda repo, *a, result_name, **k: (result_name, {})
+            results = orch.scan_all(ScanTargets(repos=repos), {})
+
+        assert sorted(c.kwargs["result_name"] for c in scan.call_args_list) == [
+            "oss__app",
+            "work__app",
+        ]
+        assert sorted(name for _, name, _ in results) == ["oss__app", "work__app"]

@@ -717,3 +717,19 @@ class TestStrictVersions:
         # ToolManager should not be instantiated
         assert not mock_tm_class.called
         assert rc == 0
+
+
+@pytest.mark.parametrize("report_rc", [0, 1])
+def test_a_scan_usage_error_stops_ci_before_the_report(minimal_args, report_rc):
+    """`cmd_scan` exits 2 on a usage error (an unknown name in jmo.yml's
+    `tools:`, `--dest` without `--tsv`) before it scans anything. The report
+    would then read whatever an earlier run left in results/, store it in
+    history as a new scan, and a failing threshold would replace the 2."""
+    mock_scan = MagicMock(return_value=2)
+    mock_report = MagicMock(return_value=report_rc)
+
+    with patch("scripts.cli.jmo._log"):
+        rc = cmd_ci(minimal_args, mock_scan, mock_report)
+
+    assert rc == 2
+    assert not mock_report.called, "the report ran over results no scan wrote"

@@ -757,9 +757,11 @@ class TestScanPreflightAtEOF:
         def _eof(_prompt=""):
             raise EOFError
 
-        available, missing = self._call(monkeypatch, isatty=True, on_input=_eof)
+        to_scan, missing = self._call(monkeypatch, isatty=True, on_input=_eof)
 
-        assert available == ["trivy"], (
+        # Every requested tool goes ahead: the missing one gets a
+        # `not installed` row rather than being removed (Phase 3).
+        assert to_scan == ["trivy", "noseyparker"], (
             "EOF at the prompt dropped every tool, so the scan produced no "
             "results directory and said nothing about why"
         )
@@ -771,9 +773,9 @@ class TestScanPreflightAtEOF:
         def _never(_prompt=""):
             raise AssertionError("must not prompt when stdin is not a tty")
 
-        available, missing = self._call(monkeypatch, isatty=False, on_input=_never)
+        to_scan, missing = self._call(monkeypatch, isatty=False, on_input=_never)
 
-        assert available == ["trivy"]
+        assert to_scan == ["trivy", "noseyparker"]
         assert missing == ["noseyparker"]
 
     def test_explicit_cancel_still_cancels(self, monkeypatch):
@@ -860,11 +862,11 @@ class TestScanPreflightHonoursNonInteractive:
     def test_declared_non_interactive_takes_the_advertised_default(
         self, monkeypatch, env_var, value
     ):
-        available, missing = self._call(monkeypatch, env_var, value)
+        to_scan, missing = self._call(monkeypatch, env_var, value)
 
-        # [2] "Continue with available tools" is the default the prompt itself
-        # advertises, and the same branch EOF settles on.
-        assert available == ["trivy"]
+        # [2] "Continue" is the default the prompt itself advertises, and the
+        # same branch EOF settles on. The missing tool stays in the scan.
+        assert to_scan == ["trivy", "noseyparker"]
         assert missing == ["noseyparker"]
 
     def test_an_interactive_console_still_prompts(self, monkeypatch):

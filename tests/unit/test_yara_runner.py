@@ -289,6 +289,55 @@ class TestMatching:
         assert "node_modules" not in matched[0]
 
 
+class TestExcludeDir:
+    """#1235: a results directory inside the scanned tree was read back by
+    every later scan. The scan names it with `--exclude-dir`. Tested on the
+    walk itself, which needs no yara module, so it runs where yara is absent."""
+
+    def test_a_named_directory_is_pruned_at_any_depth(self, tmp_path):
+        target = _target_dir(tmp_path)
+        for rel in ("results", "sub/results"):
+            (target / rel).mkdir(parents=True)
+            (target / rel / "old.json").write_bytes(MARKER)
+        (target / "own.php").write_bytes(MARKER)
+
+        files, _ = yara_runner.iter_target_files(target, 10_000, frozenset({"results"}))
+        control, _ = yara_runner.iter_target_files(target, 10_000)
+
+        assert [f.relative_to(target).as_posix() for f in files] == ["own.php"]
+        assert len(control) == 3, "without the name all three are read"
+
+    def test_the_vendored_list_still_applies_beside_it(self, tmp_path):
+        target = _target_dir(tmp_path)
+        (target / "node_modules").mkdir()
+        (target / "node_modules" / "x.js").write_bytes(MARKER)
+        (target / "own.php").write_bytes(MARKER)
+
+        files, _ = yara_runner.iter_target_files(target, 10_000, frozenset({"results"}))
+
+        assert [f.name for f in files] == ["own.php"]
+
+    def test_the_flag_repeats_and_reaches_the_walk(self, tmp_path, monkeypatch):
+        seen: list[frozenset[str]] = []
+
+        def walk(target, max_bytes, exclude_dirs=frozenset()):
+            seen.append(exclude_dirs)
+            return [], 0
+
+        monkeypatch.setattr(yara_runner, "iter_target_files", walk)
+        monkeypatch.setattr(yara_runner, "_import_yara", lambda: object())
+        monkeypatch.setattr(
+            yara_runner, "compile_rules", lambda *a, **k: (object(), 1, [])
+        )
+        rules = _rules_dir(tmp_path, hit=RULE_HIT)
+        argv = ["--rules", str(rules), "--target", str(_target_dir(tmp_path))]
+        argv += ["--output", str(tmp_path / "o.json")]
+
+        yara_runner.main([*argv, "--exclude-dir", "results", "--exclude-dir", "out"])
+
+        assert seen == [frozenset({"results", "out"})]
+
+
 class TestAdapterContract:
     """The runner's output must be what the adapter actually parses.
 

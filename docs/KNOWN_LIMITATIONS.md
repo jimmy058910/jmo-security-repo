@@ -130,15 +130,6 @@ bound — that would be a defect, not this limitation.
 
 ## Scanning
 
-### `--repo` pointing at a path that does not exist exits 0
-
-`jmo scan --repo /nonexistent` warns `No scan targets provided` and exits **0**,
-not 2. A scan with nothing to scan is treated as a scan that found nothing, which
-is consistent with how the CLI reports an empty result elsewhere.
-
-**What to do:** in CI, check that the results directory contains the scan you
-expected rather than relying on the exit code alone to prove a target was read.
-
 ### Concurrent scans on Windows are not verified
 
 Two scans writing into the same results directory or history database at once has
@@ -147,11 +138,18 @@ are write-once, so the risk is low — but it is untested, not proven.
 
 **What to do:** on Windows, give concurrent scans separate `--results-dir` paths.
 
-### Secret scanning skips `.git/` and `.jmo/`
+### Secret scanning skips `.git/`, `.jmo/` and vendored trees
 
 TruffleHog runs over the working tree with `.git/` and `.jmo/` excluded, so a
 secret that exists **only** in git history — committed and later removed, or
 sitting in a dangling blob — is not reported.
+
+Since v2.0.0 it also skips the vendored trees every source reader skips:
+`node_modules/`, `vendor/`, `.venv/` and `venv/`, at any depth. It also skips the
+results directory when it sits inside the scanned tree. A key committed inside a
+vendored package is therefore not reported. This was measured on a real Next.js
+application: 253 findings before, 222 of them in `node_modules`, and a run of 281 s;
+31 findings after, none in `node_modules`, in 12 s.
 
 Both exclusions are deliberate. A finding at `.git/objects/03/f8eab...` or
 `.git/logs/HEAD` names no commit and no source file, so there is nothing to act
@@ -167,7 +165,27 @@ present, are scanned normally. `.github/` is **not** excluded.
 
 **What to do:** to audit history, run TruffleHog's git mode directly —
 `trufflehog git file://<repo>` — which reports the commit and file for each
-finding. JMo does not run it for you.
+finding. JMo does not run it for you. To audit a vendored tree, run TruffleHog on
+that directory directly.
+
+### Semgrep also skips tests, build output and vendored code
+
+Semgrep brings its own ignore list. When the scanned directory has no
+`.semgrepignore`, it skips `tests/` and `test/` at any depth, `build/`, `dist/`,
+`node_modules/`, `vendor/` and `.venv/`. JMo's own exclusions are passed on top of
+it, so a flaw that lives only in test code is not reported by Semgrep.
+
+Measured with Semgrep 1.175.0 on a fixture with one Python file in each of those
+directories and five others: it scanned the five others and none of these, inside a
+git work tree or not. No flag or environment variable turns the list off.
+
+It is kept because the only way around it is to write a `.semgrepignore` into the
+repository being scanned, and a scanner should not change the tree it reads.
+
+**What to do:** to have Semgrep read test code, put a `.semgrepignore` at the root
+of the scanned repository. An empty one disables the built-in list (measured: all
+13 files scanned). JMo still keeps the vendored trees and its results directory out
+through its own flags.
 
 ---
 

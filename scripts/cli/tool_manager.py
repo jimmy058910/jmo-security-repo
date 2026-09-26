@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
+from scripts.core.tool_descriptors import DESCRIPTORS, VersionProbe
 from scripts.core.tool_registry import (
     TOOL_EXECUTION_COMMANDS,
     TOOL_MATRIX,
@@ -67,81 +68,33 @@ STATUS_ICONS: dict[ToolStatusType, str] = {
     ToolStatusType.CRASH: "!!",
 }
 
-# Version extraction patterns for different tools
+# Version probes: each scanner's is declared on its descriptor
+# (scripts/core/tool_descriptors.py); OPA, the policy engine, is not a scanner
+# and keeps its own here. `default` is the fallback semver pattern.
+_OPA_PROBE = VersionProbe(
+    re.compile(r"Version:\s*v?(\d+\.\d+\.\d+)"), command=["opa", "version"]
+)
+_PROBES: dict[str, VersionProbe] = {
+    **{name: d.version_probe for name, d in DESCRIPTORS.items()},
+    "opa": _OPA_PROBE,
+}
+
 VERSION_PATTERNS: dict[str, re.Pattern] = {
-    # Standard semver pattern - used as fallback
     "default": re.compile(r"v?(\d+\.\d+(?:\.\d+)?(?:-[\w.]+)?)"),
-    # Tool-specific patterns (order matters - more specific patterns first)
-    "trivy": re.compile(r"Version:\s*v?(\d+\.\d+\.\d+)"),
-    "grype": re.compile(r"Version:\s*v?(\d+\.\d+\.\d+)"),
-    "syft": re.compile(r"Version:\s*v?(\d+\.\d+\.\d+)"),
-    "nuclei": re.compile(r"Version:\s*v?(\d+\.\d+\.\d+)"),
-    "trufflehog": re.compile(r"trufflehog\s+v?(\d+\.\d+\.\d+)"),
-    # shellcheck outputs: "ShellCheck - ...\nversion: 0.10.0\n..."
-    # Match "version: X.Y.Z" or just plain "X.Y.Z" on a line
-    "shellcheck": re.compile(r"(?:version:?\s*)?(\d+\.\d+\.\d+)", re.IGNORECASE),
-    "gosec": re.compile(r"Version:\s*v?(\d+\.\d+\.\d+)"),
-    "hadolint": re.compile(r"Haskell Dockerfile Linter\s+v?(\d+\.\d+\.\d+)"),
-    # checkov outputs "checkov X.Y.Z" - make pattern more specific to avoid matching warnings
-    "checkov": re.compile(r"(?:checkov\s+)?(\d+\.\d+\.\d+)", re.IGNORECASE),
-    # semgrep --version outputs "X.Y.Z" on first line (after filtering Python warnings)
-    "semgrep": re.compile(r"^(\d+\.\d+\.\d+)$", re.MULTILINE),
-    # ZAP -version outputs: "Found Java version 17.0.17\n...\n2.16.1"
-    # Must NOT match Java version - use negative lookbehinds:
-    # - (?<!version ) - not preceded by "version " (excludes "Java version 17.0.17")
-    # - (?<!\d) - not preceded by digit (prevents matching "7.0.17" substring of "17.0.17")
-    # - (?<!\.) - not preceded by a dot: the image's JVM is four-part, and
-    #   "17.0.20.1" read as "0.20.1" (#1283)
-    # - (?!\d|\.jar|\.\d) - not a jar's name: zap.bat that cannot find its jar echoes
-    #   "zap-2.17.0.jar", which read as a healthy 2.17.0 (#1283). The \d stops
-    #   backtracking from reading "zap-2.17.10.jar" as 2.17.1, and \.\d stops a
-    #   four-part version reading as its first three parts after a quote,
-    #   where no lookbehind fires ("17.0.20.1" -> "17.0.20")
-    # Also matches "OWASP ZAP 2.16.1" or standalone "2.16.1" on its own line
-    "zap": re.compile(
-        r"(?<!version )(?<!\d)(?<!\.)(?:(?:OWASP\s+)?(?:ZAP|Zed Attack Proxy)\s+)?v?(\d+\.\d+\.\d+)(?!\d|\.jar|\.\d)",
-        re.IGNORECASE,
-    ),
-    # yara-python outputs just the version number (e.g., "4.5.4")
-    # Removed ^ anchor which doesn't work with multiline output
-    "yara": re.compile(r"v?(\d+\.\d+\.\d+)"),
-    "opa": re.compile(r"Version:\s*v?(\d+\.\d+\.\d+)"),
+    **{name: probe.pattern for name, probe in _PROBES.items()},
 }
 
-# Version commands for tools that don't use --version
-# Type can be:
-#   - list[str]: Universal command (works on all platforms)
-#   - dict[str, list[str]]: Platform-specific commands with keys "windows", "linux", "macos", "default"
+# Commands for tools that do not answer `--version`: a list, or a mapping keyed
+# by platform ("windows", "linux", "macos", "default").
 VERSION_COMMANDS: dict[str, list[str] | dict[str, list[str]]] = {
-    # Tools using 'version' subcommand (no dashes)
-    "grype": ["grype", "version"],
-    "syft": ["syft", "version"],
-    "opa": ["opa", "version"],
-    # Tools using single dash -version
-    "nuclei": ["nuclei", "-version"],
-    # ZAP: Platform-specific (zap.sh on Unix, zap.bat on Windows)
-    "zap": {
-        "windows": ["zap.bat", "-version"],
-        "default": ["zap.sh", "-version"],
-    },
-    # yara-python is a Python library, not a CLI - check via Python import
-    # The native 'yara' CLI is a separate package from yara-python
-    "yara": [sys.executable, "-c", "import yara; print(yara.YARA_VERSION)"],
+    name: probe.command for name, probe in _PROBES.items() if probe.command is not None
 }
 
-# Tools that need longer timeout for version check (e.g., Java-based tools)
-# Default timeout is 10 seconds, these get extended
+# Budgets longer than the 10 s default, for tools whose startup straddles it.
+# A budget near a tool's real startup cost reports a healthy tool as broken at
+# random, which is what makes "no version means not ready" safe to enforce.
 VERSION_TIMEOUTS: dict[str, int] = {
-    "zap": 30,  # ZAP is Java-based, needs JVM startup time
-    # checkov imports its whole rule set before printing --version. Measured on
-    # Windows 11 / checkov 3.3.16: 9.1s cold, 11s during a loaded scan session,
-    # 2.8-6.0s warm - straddling the 10s default. That is why one dogfood run
-    # showed the SAME checkov binary as `OK  -` and `OK  3.3.16` in the SAME
-    # table: two probes, one over budget and one under.
-    # A version probe whose budget is near the tool's real startup cost reports
-    # a healthy tool as broken at random, which is what makes the
-    # "no version means not ready" rule in check_tool safe to enforce.
-    "checkov": 30,
+    name: probe.timeout for name, probe in _PROBES.items() if probe.timeout is not None
 }
 
 # Remediation commands for tools with issues

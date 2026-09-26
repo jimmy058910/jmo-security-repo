@@ -1,42 +1,40 @@
-"""The scan phase must persist the per-tool measurements it already takes.
+"""The scan phase writes one accounting row per requested tool (#722, #1227).
 
-`ToolRunner` has always produced a `ToolResult` per invocation carrying
-`duration` (a real `perf_counter` span), `status`, `returncode` and `attempts`.
-Every scan job then iterated those results reading only `.tool` and `.status`,
-collapsed them to a dict of booleans, and dropped the rest on the floor -- so
-"which tool made my scan slow?" was unanswerable from JMo's own data even though
-JMo had measured the answer (#722).
+`ToolRunner` has always timed and classified every invocation, and every scan
+job reduced that to a dict of booleans; a tool that never reached `ToolRunner`
+had no row at all. Schema 3 of `scan-timings.json` is the rows: every requested
+tool, `ran`, `skipped:<reason>` or `failed:<reason>`, with its seconds.
 
-These tests pin the file that keeps it. Two properties matter more than the
-schema itself:
+Two properties matter more than the schema itself:
 
-* **Nothing captured from the tool's own streams may be written.** `stdout` on a
-  secret scanner's result is the secrets it found. `to_dict()` already excludes
-  `stdout`/`stderr`; a future `asdict()` "simplification" would turn this
-  artifact into a leak, so it is asserted rather than assumed.
-* **`status` is not collapsed into a coarser outcome enum.** #722 proposed a
-  four-value outcome with `skipped` in it; `ToolRunner`'s four real values are
-  different, and `no_output` -- an accepted return code with nothing written --
-  is the exact shape of the #700 bug class. Mapping between the two vocabularies
-  would discard the signal that found a real defect.
-
-See `TOOL_RUNNER_STATUSES` below for why that count is four and not the five
-`ToolResult`'s docstring advertises (#727).
+* **Nothing captured from the tool's own streams may be written.** `stdout` on
+  a secret scanner's result is the secrets it found. A row has no field that
+  could hold it, and a test builds one from such a result to prove it.
+* **`no_output` is not folded into a coarser outcome.** An accepted return code
+  with nothing written is the #700 bug class; it keeps a reason of its own.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+from dataclasses import fields
 from pathlib import Path
 
 import pytest
 
+from scripts.cli.scan_jobs.tool_loop import _row_from_results
 from scripts.core.scan_timings import (
+    FAIL_REASONS,
     SCAN_TIMINGS_FILENAME,
     SCAN_TIMINGS_SCHEMA_VERSION,
+    SKIP_REASONS,
+    Reason,
+    State,
+    ToolRun,
     write_scan_timings,
 )
+from scripts.core.tool_descriptors import DESCRIPTORS
 from scripts.core.tool_runner import ToolResult
 
 EXPECTED_TOP_LEVEL_KEYS = {
@@ -44,37 +42,35 @@ EXPECTED_TOP_LEVEL_KEYS = {
     "target",
     "target_type",
     "wall_seconds",
-    # Schema 2 (#824). A document with an empty `tools` list is otherwise
-    # ambiguous: a target abandoned before any tool ran reads identically to
-    # one whose requested tools all applied to a different target type.
+    # Schema 2 (#824): a target abandoned before any tool ran is otherwise
+    # indistinguishable from one whose tools all applied elsewhere.
     "outcome",
     "error",
     "tools",
 }
+EXPECTED_ROW_KEYS = {
+    "tool",
+    "state",
+    "reason",
+    "seconds",
+    "exit_code",
+    "attempts",
+    "invocations",
+    "detail",
+}
 
 
-def _write(tmp_path: Path, results: list[ToolResult], **kwargs) -> dict:
-    """Write a timings file into tmp_path and return the parsed document."""
-    params = {
-        "target": "demo",
-        "target_type": "repo",
-        "wall_seconds": 1.0,
-        **kwargs,
-    }
-    path = write_scan_timings(tmp_path, results, **params)
-    return json.loads(path.read_text(encoding="utf-8"))
+def _write(tmp_path: Path, rows: list[ToolRun], **kwargs) -> dict:
+    params = {"target": "demo", "target_type": "repo", "wall_seconds": 1.0, **kwargs}
+    path = write_scan_timings(tmp_path, {r.tool: r for r in rows}, **params)
+    return json.loads(path.read_bytes())
 
 
 def test_writes_the_file_beside_the_tool_outputs(tmp_path: Path) -> None:
-    """The artifact lands in the target's own output directory.
-
-    Consumers discover it the same way they discover `trivy.json` -- by name
-    inside `individual-<type>s/<target>/` -- so it must be a sibling of the
-    tool output it describes, not a separate tree to correlate.
-    """
+    """Consumers find it by name inside `individual-<type>s/<target>/`."""
     path = write_scan_timings(
         tmp_path,
-        [ToolResult(tool="trivy", status="success", returncode=0, duration=3.5)],
+        {"trivy": ToolRun("trivy", State.RAN, seconds=3.5)},
         target="demo",
         target_type="repo",
         wall_seconds=3.6,
@@ -85,200 +81,171 @@ def test_writes_the_file_beside_the_tool_outputs(tmp_path: Path) -> None:
 
 
 def test_top_level_keys_are_pinned_to_the_producer(tmp_path: Path) -> None:
-    """Pinned with `==`, matching the timings.json contract test from #723.
+    """A removed key breaks a consumer as badly as a renamed one, and an added
+    key is a schema change that should be a conscious edit here."""
+    doc = _write(tmp_path, [ToolRun("trivy", State.RAN)])
 
-    A removed key breaks a consumer exactly as badly as a renamed one, and a
-    silently added key is a schema change that should be a conscious edit here.
-    This is the guard the report-phase `timings.json` lacked for months while
-    the published skill drifted completely away from it.
-    """
-    doc = _write(tmp_path, [ToolResult(tool="trivy", status="success")])
-
-    assert set(doc) == EXPECTED_TOP_LEVEL_KEYS, (
-        "scan-timings.json top-level keys drifted from the producer.\n"
-        f"  missing: {sorted(EXPECTED_TOP_LEVEL_KEYS - set(doc))}\n"
-        f"  unexpected: {sorted(set(doc) - EXPECTED_TOP_LEVEL_KEYS)}"
-    )
+    assert set(doc) == EXPECTED_TOP_LEVEL_KEYS
     assert doc["schema_version"] == SCAN_TIMINGS_SCHEMA_VERSION
     assert doc["target"] == "demo"
     assert doc["target_type"] == "repo"
 
 
+def test_row_keys_are_pinned(tmp_path: Path) -> None:
+    doc = _write(tmp_path, [ToolRun("trivy", State.RAN)])
+
+    assert set(doc["tools"][0]) == EXPECTED_ROW_KEYS
+
+
 def test_schema_version_is_pinned_to_a_literal() -> None:
-    """The version is only useful if it moves when the shape does.
-
-    The assertion above compares the document to the producer's own constant,
-    which is a tautology: change the constant and it still passes. So does
-    changing the key set without touching the constant, which is the failure
-    the version exists to prevent -- a consumer cannot refuse a shape it does
-    not understand if the shape changed under a version that did not.
-
-    The literal here is the second opinion. It sits next to
-    `EXPECTED_TOP_LEVEL_KEYS` on purpose: both edits belong in the same commit,
-    and this test is what makes a bump a deliberate act rather than something
-    that can be forgotten.
-
-    Version 2 added `outcome` and `error` (#824).
-    """
-    assert SCAN_TIMINGS_SCHEMA_VERSION == 2, (
-        "the schema version changed without this literal being updated; if the "
-        "document's shape changed, update EXPECTED_TOP_LEVEL_KEYS too"
-    )
-    assert len(EXPECTED_TOP_LEVEL_KEYS) == 7, (
-        "the top-level key set changed size without a schema-version bump: "
-        f"{sorted(EXPECTED_TOP_LEVEL_KEYS)}"
-    )
+    """The version is only useful if it moves when the shape does. Version 3
+    (v2.0.0 Phase 3) replaced ToolRunner's result fields with the row."""
+    assert SCAN_TIMINGS_SCHEMA_VERSION == 3
+    assert len(EXPECTED_TOP_LEVEL_KEYS) == 7
+    assert len(EXPECTED_ROW_KEYS) == 8
 
 
-def test_per_tool_entries_are_exactly_tool_result_to_dict(tmp_path: Path) -> None:
-    """The per-tool record is `ToolResult.to_dict()`, not a re-derived shape.
-
-    Re-deriving would create a second vocabulary for data that already has one,
-    and every rename in `ToolResult` would then need a matching edit here to
-    stay honest -- which is precisely the drift this file exists to prevent.
-    """
-    result = ToolResult(
-        tool="semgrep",
-        status="success",
-        returncode=0,
+def test_a_row_round_trips(tmp_path: Path) -> None:
+    row = ToolRun(
+        "semgrep",
+        State.FAILED,
+        Reason.EXIT_CODE,
+        seconds=12.5,
+        exit_code=7,
         attempts=2,
-        duration=12.5,
-        output_file=Path("semgrep.json"),
+        invocations=1,
+        detail="Return code 7 not in (0, 1, 2)",
     )
 
-    doc = _write(tmp_path, [result])
+    doc = _write(tmp_path, [row])
 
-    assert doc["tools"] == [result.to_dict()]
+    assert ToolRun.from_dict(doc["tools"][0]) == row
+    assert doc["tools"][0]["state"] == "failed"
+    assert doc["tools"][0]["reason"] == "unaccepted exit code"
 
 
 def test_never_serializes_tool_stdout_or_stderr(tmp_path: Path) -> None:
-    """A scanner's captured output is its findings. It must not land here.
+    """trufflehog's stdout is a list of live credentials, and this artifact is
+    pasted into issues. A row built from such a result must not carry it."""
+    assert not {f.name for f in fields(ToolRun)} & {"stdout", "stderr"}
 
-    trufflehog's stdout is a list of live credentials. `scan-timings.json` is a
-    performance artifact users paste into issues, so anything read off the
-    tool's own streams is disqualified regardless of how convenient it is.
-    """
-    doc_text = json.dumps(
-        _write(
-            tmp_path,
-            [
-                ToolResult(
-                    tool="trufflehog",
-                    status="success",
-                    returncode=0,
-                    duration=4.0,
-                    stdout='{"Raw": "AKIA_SECRET_FROM_STDOUT"}',
-                    stderr="stderr-content-marker",
-                )
-            ],
-        )
+    result = ToolResult(
+        tool="trufflehog",
+        status="success",
+        returncode=0,
+        duration=4.0,
+        stdout='{"Raw": "AKIA_SECRET_FROM_STDOUT"}',
+        stderr="stderr-content-marker",
     )
-
-    assert "AKIA_SECRET_FROM_STDOUT" not in doc_text, (
-        "tool stdout reached scan-timings.json. On a secret scanner that is the "
-        "secrets themselves. Serialize via ToolResult.to_dict(), never asdict()."
+    row = _row_from_results(
+        DESCRIPTORS["trufflehog"], [result], 1, tmp_path, lambda *a: None
     )
-    assert "stderr-content-marker" not in doc_text, (
-        "tool stderr reached scan-timings.json; it can carry scanned file "
-        "content and paths well beyond what a timing artifact needs."
-    )
+    doc_text = json.dumps(_write(tmp_path, [row]))
+
+    assert "AKIA_SECRET_FROM_STDOUT" not in doc_text
+    assert "stderr-content-marker" not in doc_text
 
 
-# The four values `tool_runner.py` actually assigns to `ToolResult.status`.
-#
-# Deliberately NOT five. `ToolResult`'s docstring claimed a `"timeout"` status
-# that `run_tool` never assigned, and #722's rescoping read that claim off the
-# docstring rather than the code. Listing it here would make this file assert
-# against fiction -- the exact defect class the #718 remediation exists to
-# remove.
-#
-# A timed-out tool reports `error` or `retry_exhausted` **and** `timed_out=True`
-# (#727). The flag is what carries the timeout; `status` carries whether the
-# retry budget was exhausted. Both are in `to_dict()`, so both reach this file.
-TOOL_RUNNER_STATUSES = ["success", "no_output", "error", "retry_exhausted"]
-
-
-@pytest.mark.parametrize("status", TOOL_RUNNER_STATUSES)
-def test_preserves_every_tool_runner_status_verbatim(
-    tmp_path: Path, status: str
+@pytest.mark.parametrize(
+    ("result", "label"),
+    [
+        (ToolResult(tool="checkov", status="success"), "ran"),
+        (
+            ToolResult(tool="checkov", status="no_output", returncode=0),
+            "failed:no output",
+        ),
+        (
+            ToolResult(tool="checkov", status="error", returncode=3, failure="crash"),
+            "failed:unaccepted exit code",
+        ),
+        (
+            ToolResult(
+                tool="checkov",
+                status="retry_exhausted",
+                timed_out=True,
+                failure="timeout",
+            ),
+            "failed:timed out",
+        ),
+        (
+            ToolResult(tool="checkov", status="error", failure="missing_tool"),
+            "failed:not found at run time",
+        ),
+        (
+            ToolResult(tool="checkov", status="error", failure="system_error"),
+            "failed:could not be run",
+        ),
+    ],
+)
+def test_every_tool_runner_outcome_keeps_its_own_reason(
+    tmp_path, result, label
 ) -> None:
-    """Each status survives; none is folded into a coarser outcome.
+    """None is folded into another: `no_output` is how checkov's broken
+    Windows wrapper was graded a success across a whole benchmark."""
+    row = _row_from_results(
+        DESCRIPTORS["checkov"], [result], 1, tmp_path, lambda *a: None
+    )
 
-    `no_output` is the one that matters most: an accepted return code with an
-    empty artifact is how checkov's broken Windows wrapper was graded a success
-    across all 5 repos of a public-repo benchmark while the scan exited 0. A
-    four-value outcome enum of the shape #722 proposed has nowhere to put it.
-    """
-    doc = _write(tmp_path, [ToolResult(tool="checkov", status=status)])
-
-    assert doc["tools"][0]["status"] == status
+    assert row.label == label
 
 
-def test_records_wall_seconds_apart_from_the_sum_of_durations(
-    tmp_path: Path,
-) -> None:
-    """Both numbers are kept, because they answer different questions.
+def test_the_reason_sets_are_closed_and_cover_every_reason() -> None:
+    """A reason that is recorded and never printed is the trap that removed a
+    third NOT_ATTEMPTED_* reason in Phase 2; every Reason is one of the two."""
+    assert set(Reason) == SKIP_REASONS | FAIL_REASONS
+    assert {Reason.NOT_INSTALLED} == SKIP_REASONS & FAIL_REASONS
 
-    Tools run concurrently, so the per-tool durations sum to more than the
-    elapsed time. Using that sum as the denominator for "what share of my scan
-    was tool X" understates every tool by the parallelism factor -- the same
-    invalid-denominator defect the profile-optimizer review caught (#718 chunk
-    A). Recording the real elapsed span removes the temptation to reconstruct
-    it wrongly.
-    """
+
+def test_records_wall_seconds_apart_from_the_sum_of_durations(tmp_path: Path) -> None:
+    """Tools run concurrently, so per-tool seconds sum to more than the elapsed
+    time; both are kept because they answer different questions."""
     doc = _write(
         tmp_path,
         [
-            ToolResult(tool="trivy", status="success", duration=30.0),
-            ToolResult(tool="semgrep", status="success", duration=45.0),
+            ToolRun("trivy", State.RAN, seconds=30.0),
+            ToolRun("semgrep", State.RAN, seconds=45.0),
         ],
         wall_seconds=48.0,
     )
 
     assert doc["wall_seconds"] == 48.0
-    assert sum(t["duration"] for t in doc["tools"]) == 75.0, (
-        "per-tool durations must be preserved individually, not normalised "
-        "against wall_seconds"
-    )
+    assert sum(t["seconds"] for t in doc["tools"]) == 75.0
 
 
-def test_empty_result_set_still_writes_a_file(tmp_path: Path) -> None:
-    """ "No tools ran" is a measurement, and a missing file cannot express it.
-
-    Without the file, a scan where every tool was skipped is indistinguishable
-    from a build where this feature is not working at all.
-    """
+def test_empty_row_set_still_writes_a_file(tmp_path: Path) -> None:
     doc = _write(tmp_path, [], wall_seconds=0.0)
 
     assert doc["tools"] == []
-    assert doc["wall_seconds"] == 0.0
 
 
 def test_an_unwritable_directory_does_not_abort_the_scan(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """A diagnostic artifact must never cost a completed scan its results.
-
-    This runs after every tool has finished -- up to 70 minutes of work on a
-    `deep` profile. Raising here would discard all of it to protect a timing
-    file, so the failure is logged and the scan continues.
-
-    Logged, not swallowed: a silently absent artifact is the failure mode this
-    repository keeps relearning, so it has to name itself on a durable stream
-    rather than only in a progress glyph.
-    """
+    """This runs after every tool has finished; raising would discard a
+    completed scan to protect a timing file. Logged, not swallowed."""
     missing = tmp_path / "does" / "not" / "exist"
 
     with caplog.at_level(logging.WARNING, logger="scripts.core.scan_timings"):
         path = write_scan_timings(
             missing,
-            [ToolResult(tool="trivy", status="success")],
+            {"trivy": ToolRun("trivy", State.RAN)},
             target="demo",
             target_type="repo",
             wall_seconds=1.0,
         )
 
     assert path is None, "an unwritable destination must report no file written"
-    assert SCAN_TIMINGS_FILENAME in caplog.text, (
-        f"the write failed on no stream. caplog was: {caplog.text!r}"
+    assert SCAN_TIMINGS_FILENAME in caplog.text
+
+
+def test_the_file_is_written_with_lf_endings(tmp_path: Path) -> None:
+    """write_bytes, not write_text, which emits CRLF on Windows."""
+    path = write_scan_timings(
+        tmp_path,
+        {"trivy": ToolRun("trivy", State.RAN)},
+        target="d",
+        target_type="repo",
+        wall_seconds=0,
     )
+
+    assert b"\r\n" not in path.read_bytes()

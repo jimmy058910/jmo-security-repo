@@ -15,6 +15,18 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 
 from scripts.cli.scan_jobs.gitlab_scanner import scan_gitlab_repo
+from scripts.core.scan_timings import Reason, State, ToolRun
+
+
+def _rows(**ran: bool) -> dict[str, ToolRun]:
+    """What `scan_repository` returns: one row per tool. These tests mock it, and
+    the GitLab job passes its rows through; they used to mock v1's booleans."""
+    return {
+        tool: ToolRun(tool, State.RAN)
+        if ok
+        else ToolRun(tool, State.FAILED, Reason.EXIT_CODE)
+        for tool, ok in ran.items()
+    }
 
 
 class TestGitlabScanner:
@@ -34,7 +46,7 @@ class TestGitlabScanner:
                 mock_subprocess.return_value = MagicMock(returncode=0)
 
                 # Mock scan_repository return value: (repo_name, statuses_dict)
-                mock_scan_repo.return_value = ("myrepo", {"trufflehog": True})
+                mock_scan_repo.return_value = ("myrepo", _rows(trufflehog=True))
 
                 gitlab_info = {
                     "full_path": "mygroup/myrepo",
@@ -55,7 +67,7 @@ class TestGitlabScanner:
                 )
 
                 assert full_path == "mygroup/myrepo"
-                assert statuses["trufflehog"] is True
+                assert statuses["trufflehog"].state is State.RAN
 
                 # Verify scan_repository was called
                 assert mock_scan_repo.called
@@ -71,7 +83,7 @@ class TestGitlabScanner:
             ) as mock_scan_repo,
         ):
             mock_subprocess.return_value = MagicMock(returncode=0)
-            mock_scan_repo.return_value = ("repo", {"trufflehog": True})
+            mock_scan_repo.return_value = ("repo", _rows(trufflehog=True))
 
             gitlab_info = {
                 "full_path": "engineering/*",
@@ -92,7 +104,7 @@ class TestGitlabScanner:
             )
 
             assert "engineering" in full_path
-            assert statuses["trufflehog"] is True
+            assert statuses["trufflehog"].state is State.RAN
 
     def test_scan_gitlab_sanitizes_path(self, tmp_path):
         """Test that GitLab paths are sanitized for directory names"""
@@ -105,7 +117,7 @@ class TestGitlabScanner:
             ) as mock_scan_repo,
         ):
             mock_subprocess.return_value = MagicMock(returncode=0)
-            mock_scan_repo.return_value = ("project", {"trufflehog": True})
+            mock_scan_repo.return_value = ("project", _rows(trufflehog=True))
 
             gitlab_info = {
                 "full_path": "my-group/sub-group/project",
@@ -126,7 +138,7 @@ class TestGitlabScanner:
             )
 
             assert full_path == "my-group/sub-group/project"
-            assert statuses["trufflehog"] is True
+            assert statuses["trufflehog"].state is State.RAN
 
     def test_scan_gitlab_with_timeout_override(self, tmp_path):
         """Test per-tool timeout overrides"""
@@ -139,7 +151,7 @@ class TestGitlabScanner:
             ) as mock_scan_repo,
         ):
             mock_subprocess.return_value = MagicMock(returncode=0)
-            mock_scan_repo.return_value = ("repo", {"trufflehog": True})
+            mock_scan_repo.return_value = ("repo", _rows(trufflehog=True))
 
             per_tool_config = {
                 "trufflehog": {"timeout": 900, "flags": ["--concurrency", "4"]}
@@ -164,7 +176,7 @@ class TestGitlabScanner:
             )
 
             assert full_path == "org/repo"
-            assert statuses["trufflehog"] is True
+            assert statuses["trufflehog"].state is State.RAN
 
             # Verify scan_repository was called with per_tool_config
             mock_scan_repo.assert_called_once()
@@ -183,7 +195,7 @@ class TestGitlabScanner:
         ):
             mock_subprocess.return_value = MagicMock(returncode=0)
             # Mock tool failure
-            mock_scan_repo.return_value = ("test", {"trufflehog": False})
+            mock_scan_repo.return_value = ("test", _rows(trufflehog=False))
 
             gitlab_info = {
                 "full_path": "fail/test",
@@ -203,7 +215,7 @@ class TestGitlabScanner:
                 allow_missing_tools=False,
             )
 
-            assert statuses["trufflehog"] is False
+            assert statuses["trufflehog"].state is State.FAILED
 
     def test_scan_gitlab_with_retries(self, tmp_path):
         """Test GitLab scanning with retries"""
@@ -219,7 +231,11 @@ class TestGitlabScanner:
             # Mock retry scenario (tool succeeded on retry)
             mock_scan_repo.return_value = (
                 "test",
-                {"trufflehog": True, "__attempts__": {"trufflehog": 3}},
+                {
+                    "trufflehog": ToolRun(
+                        "trufflehog", State.RAN, attempts=3, invocations=1
+                    )
+                },
             )
 
             gitlab_info = {
@@ -240,9 +256,8 @@ class TestGitlabScanner:
                 allow_missing_tools=False,
             )
 
-            assert statuses["trufflehog"] is True
-            assert "__attempts__" in statuses
-            assert statuses["__attempts__"]["trufflehog"] == 3
+            assert statuses["trufflehog"].state is State.RAN
+            assert statuses["trufflehog"].attempts == 3
 
             # Verify retries parameter was passed
             call_kwargs = mock_scan_repo.call_args.kwargs
@@ -259,7 +274,7 @@ class TestGitlabScanner:
             ) as mock_scan_repo,
         ):
             mock_subprocess.return_value = MagicMock(returncode=0)
-            mock_scan_repo.return_value = ("scanner", {"trufflehog": True})
+            mock_scan_repo.return_value = ("scanner", _rows(trufflehog=True))
 
             gitlab_info = {
                 "full_path": "security/scanner",
@@ -280,7 +295,7 @@ class TestGitlabScanner:
             )
 
             assert full_path == "security/scanner"
-            assert statuses["trufflehog"] is True
+            assert statuses["trufflehog"].state is State.RAN
 
             # Verify scan_repository was called (directory creation happens inside)
             assert mock_scan_repo.called
@@ -313,8 +328,8 @@ class TestGitlabScanner:
 
             # Should return failure for all tools
             assert full_path == "fail/clone"
-            assert statuses["trufflehog"] is False
-            assert statuses["semgrep"] is False
+            assert statuses["trufflehog"].label == "failed:target not scanned"
+            assert statuses["semgrep"].label == "failed:target not scanned"
 
     def test_scan_gitlab_no_token(self, tmp_path):
         """Test GitLab scan when token is missing"""
@@ -338,7 +353,8 @@ class TestGitlabScanner:
 
         # Should return failure for all tools
         assert full_path == "notoken/repo"
-        assert statuses["trufflehog"] is False
+        assert statuses["trufflehog"].label == "failed:target not scanned"
+        assert statuses["trufflehog"].detail == "no GitLab token"
 
     def test_discover_container_images_dockerfile(self, tmp_path):
         """Test discovering images from Dockerfiles"""
@@ -479,8 +495,8 @@ spec:
 
             # Should return failure for all tools
             assert full_path == "timeout/repo"
-            assert statuses["trufflehog"] is False
-            assert statuses["semgrep"] is False
+            assert statuses["trufflehog"].label == "failed:target not scanned"
+            assert statuses["semgrep"].label == "failed:target not scanned"
 
     def test_scan_gitlab_generic_exception(self, tmp_path):
         """Test GitLab scan when unexpected exception occurs"""
@@ -510,7 +526,7 @@ spec:
 
             # Should return failure for all tools
             assert full_path == "error/repo"
-            assert statuses["trufflehog"] is False
+            assert statuses["trufflehog"].label == "failed:target not scanned"
 
     def test_scan_gitlab_with_image_discovery(self, tmp_path):
         """Test GitLab scan with container image discovery and scanning"""
@@ -529,12 +545,12 @@ spec:
             mock_subprocess.return_value = MagicMock(returncode=0)
             mock_scan_repo.return_value = (
                 "repo",
-                {"trivy": True, "syft": True},
+                _rows(trivy=True, syft=True),
             )
             mock_discover.return_value = {"nginx:latest", "python:3.11"}
             mock_scan_image.return_value = (
                 "nginx:latest",
-                {"trivy": True, "syft": True},
+                _rows(trivy=True, syft=True),
             )
 
             gitlab_info = {
@@ -556,8 +572,8 @@ spec:
             )
 
             assert full_path == "devops/app"
-            assert statuses["trivy"] is True
-            assert statuses["syft"] is True
+            assert statuses["trivy"].state is State.RAN
+            assert statuses["syft"].state is State.RAN
 
             # Verify image discovery was called
             assert mock_discover.called
@@ -576,7 +592,7 @@ spec:
             ) as mock_scan_repo,
         ):
             mock_subprocess.return_value = MagicMock(returncode=0)
-            mock_scan_repo.return_value = ("repo", {"trufflehog": True})
+            mock_scan_repo.return_value = ("repo", _rows(trufflehog=True))
 
             # Test http:// URL
             gitlab_info = {
@@ -598,7 +614,7 @@ spec:
             )
 
             assert full_path == "test/repo"
-            assert statuses["trufflehog"] is True
+            assert statuses["trufflehog"].state is State.RAN
 
             # Verify clone URL was constructed correctly without embedded token
             # (secure: uses GIT_ASKPASS for credentials instead)
@@ -634,7 +650,7 @@ spec:
                 mock_subprocess.return_value = MagicMock(returncode=0)
                 mock_scan_repo.return_value = (
                     "myrepo",
-                    {"trufflehog": True},
+                    _rows(trufflehog=True),
                 )
                 mock_discover.return_value = set()
                 mock_rmtree.side_effect = OSError("Permission denied")
@@ -657,7 +673,7 @@ spec:
                 )
 
                 assert full_path == "mygroup/myrepo"
-                assert statuses["trufflehog"] is True
+                assert statuses["trufflehog"].state is State.RAN
 
     def test_scan_gitlab_custom_tool_exists_func(self, tmp_path):
         """Test using custom tool_exists_func"""
@@ -680,7 +696,7 @@ spec:
             mock_subprocess.return_value = MagicMock(returncode=0)
             mock_scan_repo.return_value = (
                 "myrepo",
-                {"trufflehog": True, "semgrep": True},
+                _rows(trufflehog=True, semgrep=True),
             )
             mock_discover.return_value = set()
 
@@ -727,7 +743,7 @@ spec:
             patch("scripts.cli.scan_jobs.gitlab_scanner.shutil.copy2"),
         ):
             mock_subprocess.return_value = MagicMock(returncode=0)
-            mock_scan_repo.return_value = ("myrepo", {"trufflehog": True})
+            mock_scan_repo.return_value = ("myrepo", _rows(trufflehog=True))
             mock_discover.return_value = set()
 
             scan_gitlab_repo(
@@ -768,14 +784,14 @@ spec:
                 mock_subprocess.return_value = MagicMock(returncode=0)
                 mock_scan_repo.return_value = (
                     "myrepo",
-                    {"trufflehog": True},
+                    _rows(trufflehog=True),
                 )
                 mock_discover.return_value = {
                     "nginx:latest",
                     "postgres:14",
                 }
                 mock_scan_image.side_effect = [
-                    ("nginx:latest", {"trivy": True, "syft": True}),
+                    ("nginx:latest", _rows(trivy=True, syft=True)),
                     RuntimeError("Image scan failed"),
                 ]
 
@@ -796,11 +812,12 @@ spec:
                     allow_missing_tools=False,
                 )
 
-                assert statuses["trufflehog"] is True
-                assert (
-                    "image:nginx:latest:trivy" in statuses
-                    or "image:postgres:14:trivy" in statuses
-                )
+                # TODO(issue-#1311): the image scans are attempted
+                # (and, unmocked, every call raises TypeError), but nothing of
+                # theirs is merged into this target's rows: one row per
+                # requested tool, keyed by the tool, and the "image:<ref>:<tool>"
+                # keys this asserted were never produced outside this mock.
+                assert statuses == _rows(trufflehog=True)
                 assert mock_scan_image.call_count == 2
 
 
@@ -848,11 +865,19 @@ class TestAbandonedGitlabTargetsStillGetTimings:
             allow_missing_tools=False,
         )
 
-        assert statuses == {"trufflehog": False, "semgrep": False}
+        assert {t: r.label for t, r in statuses.items()} == {
+            "trufflehog": "failed:target not scanned",
+            "semgrep": "failed:target not scanned",
+        }
         doc = self._timings(tmp_path)
         assert doc["target"] == "group/project"
         assert doc["target_type"] == "gitlab"
-        assert doc["tools"] == [], "no tool ran, so none may be timed"
+        # A row per requested tool, none of which ran, so none has a time.
+        assert [(r["tool"], r["state"]) for r in doc["tools"]] == [
+            ("trufflehog", "failed"),
+            ("semgrep", "failed"),
+        ]
+        assert all(r["seconds"] == 0 for r in doc["tools"])
         assert doc["outcome"] == "failed-before-tools"
         assert "token" in doc["error"].lower(), doc["error"]
 
@@ -902,7 +927,7 @@ class TestAbandonedGitlabTargetsStillGetTimings:
                 allow_missing_tools=False,
             )
 
-        assert statuses == {"trufflehog": False}
+        assert statuses["trufflehog"].label == "failed:target not scanned"
         doc = self._timings(tmp_path)
         assert doc["outcome"] == "failed-before-tools"
         assert "128" in doc["error"], doc["error"]
@@ -924,7 +949,7 @@ class TestAbandonedGitlabTargetsStillGetTimings:
                 allow_missing_tools=False,
             )
 
-        assert statuses == {"trufflehog": False}
+        assert statuses["trufflehog"].label == "failed:target not scanned"
         doc = self._timings(tmp_path)
         assert doc["outcome"] == "failed-before-tools"
         assert "timeout" in doc["error"].lower(), doc["error"]
@@ -944,7 +969,8 @@ class TestAbandonedGitlabTargetsStillGetTimings:
                 allow_missing_tools=False,
             )
 
-        assert statuses == {"trufflehog": False}
+        assert statuses["trufflehog"].label == "failed:target not scanned"
+        assert "disk on fire" in statuses["trufflehog"].detail
         doc = self._timings(tmp_path)
         assert doc["outcome"] == "failed-before-tools"
         assert "disk on fire" in doc["error"], doc["error"]
@@ -964,7 +990,7 @@ class TestAbandonedGitlabTargetsStillGetTimings:
         out = tmp_path / "ok"
         out.mkdir()
         write_scan_timings(
-            out, [], target="group/project", target_type="gitlab", wall_seconds=1.0
+            out, {}, target="group/project", target_type="gitlab", wall_seconds=1.0
         )
         doc = json.loads((out / "scan-timings.json").read_bytes().decode("utf-8"))
         assert doc["outcome"] != OUTCOME_FAILED_BEFORE_TOOLS

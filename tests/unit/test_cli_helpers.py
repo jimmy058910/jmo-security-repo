@@ -128,13 +128,27 @@ def test_skip_tools_that_matches_nothing_is_silent(tmp_path, capsys):
     Without it the run reports `Skipping 0 tool(s) at user request
     (--skip-tools):` with nothing after the colon.
     """
-    args = _skip_tools_args(tmp_path, tools=["trufflehog"], skip_tools=["not-a-tool"])
+    # A real tool that is not in the list. An unknown name is a usage error
+    # now (#1279), tested below.
+    args = _skip_tools_args(tmp_path, tools=["trufflehog"], skip_tools=["semgrep"])
     eff = jmo._effective_scan_settings(args)
 
     assert eff["tools"] == ["trufflehog"], "nothing should have been dropped"
     err = capsys.readouterr().err
     assert "--skip-tools" not in err, f"reported a skip that did not happen: {err!r}"
     assert "0 tool(s)" not in err
+
+
+def test_an_unknown_skip_tools_name_is_refused_by_name(tmp_path):
+    """#1279: a typo in --skip-tools used to skip nothing, silently."""
+    import pytest
+
+    from scripts.core.tool_descriptors import UnknownToolError
+
+    args = _skip_tools_args(tmp_path, tools=["trufflehog"], skip_tools=["semgrpe"])
+
+    with pytest.raises(UnknownToolError, match="semgrpe"):
+        jmo._effective_scan_settings(args)
 
 
 def test_skip_tools_notice_names_every_dropped_tool(tmp_path, capsys):

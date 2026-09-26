@@ -29,6 +29,7 @@ import scripts.core.tool_registry as registry
 # `zap.sh`), not tools, so a shape heuristic would assert the wrong thing and
 # "pass" for the wrong reason.
 TOOL_NAME_SIDES: dict[str, str] = {
+    "DESCRIPTORS": "keys",  # tool -> its descriptor; every table below derives from it
     "TOOL_SCAN_TYPES": "values",  # scan type -> {tool, ...}
     "TOOL_BINARY_NAMES": "keys",  # tool -> binary name
     "TOOL_EXECUTION_COMMANDS": "keys",  # tool -> [executables it needs]
