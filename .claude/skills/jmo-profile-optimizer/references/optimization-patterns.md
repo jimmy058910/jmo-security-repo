@@ -209,42 +209,48 @@ computing per-tool timeout and failure rates from
 when this skill was rewritten there was no per-tool scan data at all, so the
 analysis was deleted rather than repaired.
 
-**#722 added the data source.** Every scan now writes
-`<results-dir>/individual-*/<target>/scan-timings.json`, built from the
-`ToolResult` objects `ToolRunner` had always produced and the scan jobs had
-always discarded.
+**#722 added the data source, and v2.0.0 made it complete.** Every scan writes
+`<results-dir>/individual-*/<target>/scan-timings.json`. Since schema 3 (v2.0.0)
+it has one row for **every requested tool** on the target, whether the tool ran,
+was skipped or failed, and the same rows reach the history database's
+`scan_tool_runs` table.
 
 Schema — the authority is `scripts/core/scan_timings.py`, and `schema_version`
 guards it:
 
 | Key | Meaning |
 |---|---|
-| `schema_version` | `2` (`SCAN_TIMINGS_SCHEMA_VERSION`). Refuse a shape you do not recognise rather than misreading it. |
+| `schema_version` | `3` (`SCAN_TIMINGS_SCHEMA_VERSION`). Refuse a shape you do not recognise rather than misreading it. |
 | `target` / `target_type` | Which target, and one of `repo` / `image` / `iac` / `url` / `k8s` / `gitlab`. |
 | `wall_seconds` | Elapsed time of the whole parallel tool batch. |
-| `outcome` / `error` | `completed`, or `failed-before-tools` with a one-line `error` (a failed clone, a missing credential). A failed target has an empty `tools[]`, which is not the same as "nothing applied". |
-| `tools[]` | One entry per invocation: `tool`, `status`, `timed_out`, `returncode`, `attempts`, `duration`, `output_file`, `error_message`. |
+| `outcome` / `error` | `completed`, or `failed-before-tools` with a one-line `error` (a failed clone, a missing credential, a tree with no files to scan). A failed target still has a row per tool, each `failed` with that reason, or `skipped` when the tool does not read that kind of target. |
+| `tools[]` | One row per requested tool: `tool`, `state`, `reason`, `seconds`, `exit_code`, `attempts`, `invocations`, `detail`. |
 
-`tools[].status` carries **four** values, not a coarse pass/fail:
-`success`, `no_output`, `error`, `retry_exhausted`. Read `no_output`
-carefully — it means an *accepted* return code with an empty artifact, which
-is a tool that appeared to work and did not.
+`state` is `ran`, `skipped` or `failed`. `reason` is `null` for `ran` and one of
+a closed set otherwise (`Reason` in `scan_timings.py`):
 
-> **A timeout is `tools[].timed_out`, not a `status` value.** `status` has no
-> `"timeout"` member — its docstring claimed one for months while `run_tool`
-> never assigned it, which is how #722 came to be filed on a false premise.
-> #727 added a separate boolean instead of a fifth status, so that
-> `retry_exhausted` keeps its own meaning: *this failure burned the whole retry
-> budget*. A timed-out tool therefore reports **both**
-> `status: "error" | "retry_exhausted"` **and** `timed_out: true`.
+- **skipped:** `needs --url`, `not for this target type`, `not installed` (only
+  under `--allow-missing-tools`), `no Dockerfiles`, `no shell scripts`,
+  `no Go sources`, `no IaC or workflow files`
+- **failed:** `not installed`, `timed out`, `no files to scan`,
+  `examined 0 files`, `unaccepted exit code`, `no output`,
+  `not found at run time`, `could not be run`, `target not scanned`,
+  `scanner error`
+
+> **Only `timed out` is a budget question.** `no output` is an accepted exit
+> code with an empty artifact, a tool that appeared to work and did not.
+> `examined 0 files` is a tool whose own output says it read nothing (semgrep's
+> `paths.scanned`, gosec's `Stats.files`). Both belong in a bug report, not in
+> `jmo.yml`.
 >
-> Read them together. `timed_out` with `retry_exhausted` and `attempts: 4` is a
-> tool that is reliably too slow for its budget; `timed_out` with `error` and
-> `attempts: 1` timed out once and was not retried.
+> `attempts` counts every try. `timed out` with `attempts: 4` is a tool that is
+> reliably too slow for its budget; with `attempts: 1` it timed out once and was
+> not retried. `exit_code` is the failed run's own code, or `null` when there was
+> none (a timeout, a spawn failure).
 
 ### The denominator trap
 
-Tools run concurrently, so `sum(tools[].duration)` **exceeds** `wall_seconds`.
+Tools run concurrently, so `sum(tools[].seconds)` **exceeds** `wall_seconds`.
 Use `wall_seconds` as the denominator for "what share of the scan was tool X".
 Using the sum understates every tool by the parallelism factor — the same
 invalid-denominator defect this skill was reviewed for.
@@ -262,29 +268,34 @@ def summarize_scan_timings(results_dir: Path) -> dict:
 
     Shares are of each target's own wall_seconds (see the denominator trap), so
     `worst_share_pct` answers "on which target did this tool dominate the scan".
+    `runs` counts every row that was not skipped, ran or failed; a skipped row
+    is counted apart and never timed, because it did not run.
     """
     per_tool: dict[str, dict] = defaultdict(
-        lambda: {"runs": 0, "timed_out": 0, "no_output": 0, "max_duration": 0.0,
-                 "worst_share_pct": None, "worst_target": None}
+        lambda: {"runs": 0, "skipped": 0, "timed_out": 0, "no_output": 0,
+                 "max_seconds": 0.0, "worst_share_pct": None, "worst_target": None}
     )
     failed_targets = []
 
     for path in sorted(results_dir.glob("individual-*/*/scan-timings.json")):
-        doc = json.loads(path.read_text(encoding="utf-8"))
-        if doc.get("schema_version") != 2:
+        doc = json.loads(path.read_bytes())
+        if doc.get("schema_version") != 3:
             raise ValueError(f"{path}: unrecognised schema_version {doc.get('schema_version')!r}")
         if doc.get("outcome") != "completed":
             failed_targets.append((doc.get("target"), doc.get("error")))
             continue
         wall = doc.get("wall_seconds") or 0
-        for run in doc.get("tools", []):
-            t = per_tool[run["tool"]]
+        for row in doc.get("tools", []):
+            t = per_tool[row["tool"]]
+            if row["state"] == "skipped":
+                t["skipped"] += 1
+                continue
             t["runs"] += 1
-            t["timed_out"] += bool(run.get("timed_out"))
-            t["no_output"] += run.get("status") == "no_output"
-            duration = run.get("duration") or 0.0
-            t["max_duration"] = max(t["max_duration"], duration)
-            share = duration / wall * 100 if wall else None
+            t["timed_out"] += row.get("reason") == "timed out"
+            t["no_output"] += row.get("reason") in ("no output", "examined 0 files")
+            seconds = row.get("seconds") or 0.0
+            t["max_seconds"] = max(t["max_seconds"], seconds)
+            share = seconds / wall * 100 if wall else None
             if share is not None and (t["worst_share_pct"] is None or share > t["worst_share_pct"]):
                 t["worst_share_pct"], t["worst_target"] = round(share, 1), doc.get("target")
 
@@ -294,19 +305,23 @@ def summarize_scan_timings(results_dir: Path) -> dict:
 A tool with `timed_out > 0` is a P1 recommendation: raise its
 `per_tool.<tool>.timeout`, or give it flags that shrink its work. A tool with
 `no_output > 0` is not a performance problem at all; it is a tool that appeared
-to succeed and wrote nothing, and belongs in a bug report rather than in
+to succeed and read or wrote nothing, and belongs in a bug report rather than in
 `jmo.yml`.
 
-### What is still not answerable
+### Rates across scans: `scan_tool_runs`
 
-A **rate** needs more than one scan. `scan-timings.json` is per-scan and per-
-target, and nothing collects it across runs — `history_db` still stores only
-one `duration_seconds` per scan (`scripts/core/history_db.py:103`) with no
-per-tool breakdown. So:
+A **rate** needs more than one scan. Since v2.0.0, `store_scan` writes every row
+into the history database's `scan_tool_runs` table, keyed by scan, target type,
+target and tool (#722). So "does semgrep time out 30% of the time" is one query:
 
-- "did `semgrep` time out on this scan" — yes, read `timed_out`.
-- "does `semgrep` time out 30% of the time" — no. That needs the
-  history persistence deferred out of #722.
+```bash
+jmo history query "SELECT tool, COUNT(*) AS runs, SUM(reason IS 'timed out') AS timeouts, ROUND(AVG(seconds), 1) AS mean_s, MAX(seconds) AS max_s FROM scan_tool_runs WHERE state != 'skipped' GROUP BY tool ORDER BY mean_s DESC"
+```
+
+`IS`, not `=`: a `ran` row's `reason` is `NULL`, and `NULL = 'timed out'` is
+`NULL`, which `SUM` skips, so a tool that never timed out would show a blank
+instead of 0. Only scans stored since v2.0.0 have rows; an older scan is simply
+not in the rate. `jmo history show <scan-id>` prints one scan's rows.
 
 ---
 
@@ -341,7 +356,7 @@ def generate_recommendations(
                 "action": f"Raise per_tool.{tool}.timeout above its longest run",
                 "evidence": (
                     f"timed out on {t['timed_out']} of {t['runs']} targets; "
-                    f"longest run {t['max_duration']:.0f}s"
+                    f"longest run {t['max_seconds']:.0f}s"
                 ),
                 "config_change": f"per_tool:\n  {tool}:\n    timeout: <seconds>",
             })
@@ -493,13 +508,13 @@ per_tool:
 ```
 
 **Container discovery.** The GitLab path also discovers container images
-referenced by Dockerfiles, `docker-compose.yml`, and Kubernetes manifests, then
-scans each with Trivy. Every discovered image is an additional scan target, so
-budget scan time by image count rather than by repository count.
+referenced by Dockerfiles, `docker-compose.yml`, and Kubernetes manifests, but
+it has never scanned one: every call raised before it started (#1311). Budget
+GitLab scan time by repository count until that is fixed or removed.
 
 > Whether any of these settings actually helps is not measurable from
 > `timings.json` — it records report-phase parsing only. Verify a timeout change
 > against `scan-timings.json`: re-run the scan and compare that tool's
-> `duration` and `timed_out`. A cap that "fixed" a slow tool by killing it shows
-> up as `timed_out: true`, which a whole-scan duration from `jmo history list`
-> would have reported as an improvement.
+> `seconds` and `state`. A cap that "fixed" a slow tool by killing it shows
+> up as `failed` with reason `timed out`, which a whole-scan duration from
+> `jmo history list` would have reported as an improvement.

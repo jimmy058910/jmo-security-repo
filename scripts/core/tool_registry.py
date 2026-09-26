@@ -22,6 +22,8 @@ from typing import Literal, get_args
 
 import yaml
 
+from scripts.core.tool_descriptors import DESCRIPTORS
+
 logger = logging.getLogger(__name__)
 
 # Type aliases
@@ -30,77 +32,37 @@ ToolCategory = Literal["python_tools", "binary_tools", "special_tools"]
 
 #: The scanners `jmo scan` considers when nothing narrows the list. Resolution is
 #: `--tools`, then `jmo.yml` `tools:`, then this. Membership makes a tool eligible;
-#: the target's content decides whether it runs (scan_jobs/*).
-TOOL_MATRIX: tuple[str, ...] = (
-    "trufflehog",
-    "semgrep",
-    "syft",
-    "trivy",
-    "checkov",
-    "hadolint",
-    "shellcheck",
-    "gosec",
-    "yara",
-    "grype",
-    "zap",
-    "nuclei",
-)
+#: the target's type and content decide whether it runs. Declared in
+#: `tool_descriptors.DESCRIPTORS`; every table below is derived from it.
+TOOL_MATRIX: tuple[str, ...] = tuple(DESCRIPTORS)
 
 #: Evaluates policy-as-code in the report phase. Installed and baked into the image
 #: alongside the matrix, but it scans nothing, so it is not in TOOL_MATRIX.
 POLICY_ENGINE: str = "opa"
 
-# Tool name normalization - maps tool names to binary names where they differ
+#: Tool name -> executable name, where they differ.
 TOOL_BINARY_NAMES: dict[str, str] = {
-    "zap": "zap.sh",  # ZAP wrapper script (or zap-cli)
+    name: d.binary for name, d in DESCRIPTORS.items() if d.binary
 }
 
-# Execution requirements - commands/dependencies needed to actually run tools (Fix 1.4)
-# Maps tool name to list of commands that must be available for execution
+#: Tool name -> the commands that must exist for it to execute (a launcher
+#: script and the runtime it starts, for zap).
 TOOL_EXECUTION_COMMANDS: dict[str, list[str]] = {
-    "zap": ["zap.sh", "java"],  # ZAP launcher script + Java runtime
-    "nuclei": ["nuclei"],  # Standard binary
-    "gosec": ["gosec"],
+    name: list(d.execution_commands)
+    for name, d in DESCRIPTORS.items()
+    if d.execution_commands
 }
 
-# Scan type applicability - which tools apply to which target types.
-# See docs/TOOLS.md#target-types. Only tools applicable to a target are run on it.
-_REPO_TOOLS: frozenset[str] = frozenset(
-    {
-        "trufflehog",
-        "semgrep",
-        "syft",
-        "trivy",
-        "checkov",
-        "hadolint",
-        "shellcheck",
-        "gosec",
-        "yara",
-        "grype",
-        # Membership here means "valid for a repository target", NOT "runs on
-        # every repository". gosec is gated on the tree holding Go sources,
-        # hadolint and shellcheck produce no invocation when they collect no
-        # files, and zap records "nothing for it to scan" on a directory.
-        "zap",
-        # nuclei is a DAST URL scanner, only valid for "url"; opa is the
-        # report-phase policy engine, not a scanner, so it is on no target.
-    }
-)
-
+#: Which tools read which target types (docs/TOOLS.md#target-types). Membership
+#: means "reads this kind of target", not "runs on every one": content decides
+#: that (hadolint needs a Dockerfile). zap and nuclei read only URLs.
 TOOL_SCAN_TYPES: dict[str, set[str]] = {
-    # Tools that work on repositories (code analysis)
-    "repo": set(_REPO_TOOLS),
-    # Tools that work on container images
-    "image": {"trivy", "syft"},
-    # Tools that work on live URLs (DAST)
-    "url": {"nuclei", "zap"},
-    # Tools that work on Kubernetes clusters
-    "k8s": {"trivy"},
-    # Tools that work on IaC files
-    "iac": {"trivy", "checkov"},
-    # Tools that work on GitLab repos (same as repo + image discovery)
-    "gitlab": set(_REPO_TOOLS) | {"nuclei"},
+    target_type: {
+        name for name, d in DESCRIPTORS.items() if target_type in d.target_types
+    }
+    for target_type in ("repo", "image", "url", "k8s", "iac", "gitlab")
 }
+_REPO_TOOLS: frozenset[str] = frozenset(TOOL_SCAN_TYPES["repo"])
 
 
 def filter_tools_for_scan_type(tools: list[str], scan_type: str) -> list[str]:

@@ -13,10 +13,13 @@ from scripts.cli import jmo
     reason="Unix signal handling not fully supported on Windows",
 )
 def test_cmd_scan_signal_stop(tmp_path: Path, monkeypatch):
-    # Create two repos under repos_dir
+    # Create two repos under repos_dir. Each holds a file: an empty tree fails
+    # every tool before any runs (`failed:no files to scan`, G2), which would
+    # make this a test of that rule instead of the signal path.
     base = tmp_path / "repos"
-    (base / "one").mkdir(parents=True)
-    (base / "two").mkdir(parents=True)
+    for name in ("one", "two"):
+        (base / name).mkdir(parents=True)
+        (base / name / "README.md").write_bytes(b"# " + name.encode() + b"\n")
     out_base = tmp_path / "results"
 
     # Configure a single tool and thread. The tool is deliberately one the

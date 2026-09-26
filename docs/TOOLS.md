@@ -4,11 +4,11 @@
 
 To narrow the list:
 
-- `--tools trivy semgrep` replaces the list for one run
+- `--tools trivy semgrep` (or `--tools trivy,semgrep`) replaces the list for one run
 - `--skip-tools zap` drops names from it
 - a top-level `tools:` list in `jmo.yml` replaces it for every run that reads that file
 
-`--tools` wins over `jmo.yml`, and `jmo.yml` wins over the matrix.
+`--tools` wins over `jmo.yml`, and `jmo.yml` wins over the matrix. Names split on commas and spaces. A name that is not in the matrix stops the scan before it starts, exit code 2, naming it, and a [removed tool](#removed-in-v200) says it was removed.
 
 ## The tool matrix
 
@@ -18,7 +18,7 @@ To narrow the list:
 | Semgrep | Code-level flaws (SAST), many languages | Repository, GitLab | Always | Isolated Python venv |
 | Syft | Software bill of materials (SBOM) | Repository, image, GitLab | Always | Release binary or install script |
 | Trivy | Vulnerable dependencies, secrets, misconfigurations | Repository, image, IaC, Kubernetes, GitLab | Always | Release binary or install script |
-| Checkov | IaC misconfigurations: Terraform, CloudFormation, Kubernetes, Dockerfiles, CI workflows | Repository, IaC, GitLab | Always | Isolated Python venv |
+| Checkov | IaC misconfigurations: Terraform, CloudFormation, Kubernetes, Dockerfiles, CI workflows | Repository, IaC, GitLab | IaC is present | Isolated Python venv |
 | Hadolint | Dockerfile problems | Repository, GitLab | Dockerfiles are present | Release binary |
 | ShellCheck | Shell script bugs (unquoted expansions, unguarded `cd`) | Repository, GitLab | Shell scripts are present | Release binary |
 | Gosec | Go security issues | Repository, GitLab | Go sources or a `go.mod` are present | Release binary |
@@ -31,34 +31,51 @@ Versions are pinned in [`versions.yaml`](../versions.yaml). OPA is installed alo
 
 ## When each tool runs
 
-Being in the matrix makes a tool eligible. Two things then decide whether it runs on a given target: the target type (next section) and, for three tools, the target's content.
+Being in the matrix makes a tool eligible. Two things then decide whether it runs on a given target: the target type (next section) and, for four tools on a repository, the target's content.
 
 | Tool | Content it needs | Files it looks for |
 |------|------------------|--------------------|
 | Hadolint | Dockerfiles | `Dockerfile`, `Dockerfile.*`, `*.Dockerfile` |
 | ShellCheck | Shell scripts | `*.sh`, `*.bash`, `*.ksh` |
 | Gosec | Go code | any `.go` file, or a `go.mod` |
+| Checkov | Infrastructure as code | `*.tf`, `*.tf.json`, a Helm `Chart.yaml`, a GitHub Actions workflow (`.github/workflows/*.yml`), or a YAML, JSON or `.template` file whose first 8 KB name `AWSTemplateFormatVersion` or an `AWS::` type (CloudFormation) |
 
-When the content is absent, the tool is skipped for that target and contributes no findings. It is not an error.
+When the content is absent, the tool is skipped for that target and contributes no findings. It is not an error. An IaC file target (`--terraform-state`, `--cloudformation`, `--k8s-manifest`) is itself the content, so Checkov always reads it.
 
-ZAP and Nuclei are DAST scanners: they find vulnerabilities by exercising a **running application** over HTTP, so they run only on `--url` and `--urls-file` targets and never on a repository. Point them at a deployed or local instance:
+Kubernetes manifests and Dockerfiles do not trigger Checkov on their own. In a repository with nothing else of its kind, Trivy's misconfiguration scan covers them. When Checkov runs for another reason, it reads them too.
+
+Vendored trees are never content: `.git`, `node_modules`, `vendor`, `.venv` and `venv` are excluded before anything is looked for, and so is the results directory when it sits inside the scanned tree.
+
+### What a scan records
+
+Every requested tool leaves one row per target, in `scan-timings.json`, in `.scan_metadata.json` and, when history is on, in the `scan_tool_runs` table (`jmo history show <scan-id>`):
+
+| Row | Meaning |
+|-----|---------|
+| `ran` | It ran and its output is beside the row. |
+| `skipped:<reason>` | It did not apply: `needs --url`, `not for this target type`, `no Dockerfiles`, `no shell scripts`, `no Go sources`, `no IaC or workflow files`, or `not installed` under `--allow-missing-tools`. |
+| `failed:<reason>` | It applied and produced nothing you can trust: `not installed`, `timed out`, `no files to scan`, `examined 0 files`, `unaccepted exit code`, `no output`, and a few rarer ones. |
+
+`failed:no files to scan` means the repository had no file outside the excluded directories, so no tool ran against it. `failed:examined 0 files` means the tool's own output reports that it read nothing. Semgrep and Gosec report that count, and it is how a run that scanned nothing stops passing for a clean one.
+
+ZAP and Nuclei are DAST scanners: they find vulnerabilities by exercising a **running application** over HTTP, so they run only on `--url` and `--urls-file` targets and never on a repository, where their row reads `skipped:needs --url`. Point them at a deployed or local instance:
 
 ```bash
 jmo scan --url https://staging.example.com
 ```
 
-The remaining repository tools (TruffleHog, Semgrep, Syft, Trivy, Checkov, YARA, Grype) run on every repository scan.
+The remaining repository tools (TruffleHog, Semgrep, Syft, Trivy, YARA, Grype) run on every repository scan.
 
 ## Target types
 
 | Target | Flags | Tools that run |
 |--------|-------|----------------|
-| Repository | `--repo`, `--repos-dir`, `--targets` | TruffleHog, Semgrep, Syft, Trivy, Checkov, YARA, Grype; Hadolint, ShellCheck and Gosec when their content is present |
+| Repository | `--repo`, `--repos-dir`, `--targets`, `--tsv` | TruffleHog, Semgrep, Syft, Trivy, YARA, Grype; Hadolint, ShellCheck, Gosec and Checkov when their content is present |
 | Container image | `--image`, `--images-file` | Trivy, Syft |
 | IaC file | `--terraform-state`, `--cloudformation`, `--k8s-manifest` | Trivy (`trivy config`), Checkov |
 | URL | `--url`, `--urls-file` | ZAP, Nuclei |
 | Kubernetes cluster | `--k8s-context`, optionally with `--k8s-namespace` or `--k8s-all-namespaces` | Trivy (`trivy k8s`) |
-| GitLab | `--gitlab-repo` or `--gitlab-group` (token from `--gitlab-token` or `GITLAB_TOKEN`) | The repository tools on the clone, then Trivy and Syft on the container images it references |
+| GitLab | `--gitlab-repo` or `--gitlab-group` (token from `--gitlab-token` or `GITLAB_TOKEN`) | The repository tools on the clone. The container images it references are discovered but not scanned ([#1311](https://github.com/jimmy058910/jmo-security-repo/issues/1311)) |
 
 Targets combine in one run: `jmo scan --repo . --image myapp:latest` scans both, each with its own tools.
 
@@ -83,6 +100,7 @@ jmo tools check     # what is installed, at which version, and what is missing
 Platform differences:
 
 - **Linux:** ShellCheck is installed with `sudo apt-get install shellcheck` when passwordless sudo is available, which gives the distribution's version. Otherwise it is the pinned binary.
+- **Gosec needs a Go toolchain** (`go` on `PATH`) to load packages, which neither `jmo tools install` nor the Docker image provides. Without one it examines 0 files, and its row reads `failed:examined 0 files` ([#1310](https://github.com/jimmy058910/jmo-security-repo/issues/1310)).
 - **ZAP needs Java 17 or newer** at runtime, which `jmo tools install` does not provide. Install it yourself (`winget install Microsoft.OpenJDK.17`, `sudo apt-get install default-jre-headless`, or `brew install openjdk@17`); `jmo wizard` offers to do it for you.
 - **YARA without rules finds nothing.** If the rule bundle download fails, the install reports failure rather than leaving a scanner that silently matches nothing. To use your own rules, set `per_tool.yara.rules_path` in `jmo.yml`.
 
@@ -102,7 +120,7 @@ See [POLICY_AS_CODE.md](POLICY_AS_CODE.md) for writing and applying policies.
 
 ## Removed in v2.0.0
 
-These tools are no longer installed, run or parsed. A `per_tool` block for one of them in `jmo.yml` has nothing left to configure, and naming one in `--tools` selects nothing.
+These tools are no longer installed, run or parsed. A `per_tool` block for one of them in `jmo.yml` has nothing left to configure. Naming one in `--tools`, `--skip-tools` or `tools:` is a usage error (exit code 2) that says it was removed.
 
 | Tool | What it did | Why it was removed |
 |------|-------------|--------------------|

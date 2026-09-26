@@ -648,9 +648,11 @@ class TestErrorHandling:
         assert result.is_success() is False
         assert result.status == "retry_exhausted"
         assert result.attempts == 2  # Initial + 1 retry
-        # Return code is set to -1 when retries exhausted
-        assert result.returncode == -1
-        assert "127" in result.error_message  # Original code should be in message
+        # The crash's own code, which the scan's accounting row reports; it
+        # was -1 here, and the code survived only inside error_message.
+        assert result.returncode == 127
+        assert result.failure == "crash"
+        assert "127" in result.error_message
 
     @pytest.mark.skipif(
         sys.platform == "win32", reason="sh command not available on Windows"
@@ -1917,3 +1919,101 @@ class TestIsolatedVenvOnTheChildPath:
             "checkov could not import itself, so the child PATH is still not "
             f"pointing at its venv. stderr={result.stderr!r}"
         )
+
+
+class TestFailureKind:
+    """What the scan's accounting row is built from (Phase 3): `failure` names
+    the kind of failure that ended the run, and `returncode` is the crash's own
+    exit code. Both describe the LAST failure: a crash then a timeout is a
+    timeout, with no exit code, and the reverse is a crash with its code."""
+
+    @staticmethod
+    def _tool(tmp_path: Path, code: str, **kw) -> ToolDefinition:
+        kw.setdefault("output_file", tmp_path / "out.json")
+        return ToolDefinition(
+            name="probe",
+            command=[sys.executable, "-c", code],
+            ok_return_codes=(0,),
+            **kw,
+        )
+
+    def test_a_crash_keeps_its_exit_code(self, tmp_path):
+        tool = self._tool(tmp_path, "import sys; sys.exit(7)")
+        result = ToolRunner([tool]).run_tool(tool)
+
+        assert (result.status, result.returncode, result.failure) == (
+            "error",
+            7,
+            "crash",
+        )
+        assert result.timed_out is False
+
+    def test_a_timeout_has_no_exit_code(self, tmp_path):
+        tool = self._tool(tmp_path, "import time; time.sleep(30)", timeout=1)
+
+        result = ToolRunner([tool]).run_tool(tool)
+
+        assert (result.returncode, result.failure, result.timed_out) == (
+            -1,
+            "timeout",
+            True,
+        )
+
+    def test_a_missing_binary_says_so(self, tmp_path):
+        tool = ToolDefinition(
+            name="probe",
+            command=["this-binary-absolutely-does-not-exist-xyz123"],
+            output_file=tmp_path / "out.json",
+        )
+
+        result = ToolRunner([tool]).run_tool(tool)
+
+        assert (result.returncode, result.failure) == (-1, "missing_tool")
+
+    def test_success_is_no_failure(self, tmp_path):
+        code = f"open({str(tmp_path / 'out.json')!r}, 'w').write('[]')"
+
+        tool = self._tool(tmp_path, code)
+        result = ToolRunner([tool]).run_tool(tool)
+
+        assert (result.status, result.failure) == ("success", "")
+
+    @pytest.mark.parametrize(
+        ("first", "then", "expected"),
+        [
+            ("crash", "timeout", (-1, "timeout", True)),
+            ("timeout", "crash", (7, "crash", False)),
+        ],
+    )
+    def test_the_last_failure_is_the_one_reported(
+        self, tmp_path, monkeypatch, first, then, expected
+    ):
+        monkeypatch.setattr("scripts.core.tool_runner.time.sleep", lambda s: None)
+        calls = iter([first] + [then] * 5)
+
+        def bounded(cmd, **kwargs):
+            if next(calls) == "timeout":
+                raise subprocess.TimeoutExpired(cmd, 1)
+            return MagicMock(returncode=7, stdout=b"", stderr=b"")
+
+        tool = self._tool(tmp_path, "", retries=1, timeout=1)
+        with patch("scripts.core.tool_runner._run_bounded", side_effect=bounded):
+            result = ToolRunner([tool]).run_tool(tool)
+
+        assert (result.returncode, result.failure, result.timed_out) == expected
+        assert result.attempts == 3
+
+    def test_the_tool_runs_in_its_working_directory(self, tmp_path, monkeypatch):
+        """zap.bat finds its jar relative to the working directory: from
+        anywhere else it exits "Unable to access jarfile"."""
+        home, elsewhere = tmp_path / "zap", tmp_path / "elsewhere"
+        home.mkdir()
+        elsewhere.mkdir()
+        monkeypatch.chdir(elsewhere)
+        code = "open('out.json', 'w').write('[]')"
+        tool = self._tool(tmp_path, code, cwd=home, output_file=home / "out.json")
+
+        result = ToolRunner([tool]).run_tool(tool)
+
+        assert result.status == "success"
+        assert not (elsewhere / "out.json").exists()

@@ -203,9 +203,10 @@ Every ratio goes through `pct_change`, so a zero or absent baseline produces a
 `no_sample` entry instead of `ZeroDivisionError`. Newly introduced tools are
 skipped explicitly rather than compared against nothing.
 
-> **Timeout and failure rates are not compared.** Per-tool outcomes exist for a
-> single scan (`scan-timings.json`), but nothing aggregates them across runs, so
-> there is no rate to compare a baseline against. See
+> **Timeout and failure rates are not compared against this baseline.** The
+> baseline stores report-phase parse timings only. Per-tool rates across scans
+> live in the history database's `scan_tool_runs` table (since v2.0.0) and are
+> read from there, not from this memory entry. See
 > [optimization-patterns.md Phase 4](optimization-patterns.md#phase-4-timeout-and-failure-analysis).
 
 ### Example comparison output
@@ -291,5 +292,5 @@ from the history database instead:
 
 ```bash
 jmo history list --limit 10     # includes a Duration column
-jmo history show <scan-id>      # includes "Duration: N seconds"
+jmo history show <scan-id>      # "Duration: N seconds", then each tool's "Tool Runs" row
 ```

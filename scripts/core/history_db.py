@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any
 
 from scripts.core.jmo_version import get_jmo_version
+from scripts.core.scan_timings import ToolRun
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -171,6 +172,29 @@ CREATE TABLE IF NOT EXISTS scan_metadata (
 );
 """
 
+# One row per target and tool (#722): what each requested tool did and how long
+# it took. `scans.duration_seconds` is one number for the whole scan, which
+# cannot answer "which tool made my scan slow". The state and reason vocabulary
+# is `scan_timings.State` / `Reason`.
+CREATE_SCAN_TOOL_RUNS_TABLE = """
+CREATE TABLE IF NOT EXISTS scan_tool_runs (
+    scan_id TEXT NOT NULL,
+    target TEXT NOT NULL,
+    target_type TEXT NOT NULL,
+    tool TEXT NOT NULL,
+    state TEXT NOT NULL,
+    reason TEXT,
+    seconds REAL,
+    exit_code INTEGER,
+    attempts INTEGER NOT NULL DEFAULT 0,
+
+    PRIMARY KEY (scan_id, target_type, target, tool),
+    FOREIGN KEY (scan_id) REFERENCES scans(id) ON DELETE CASCADE,
+    CHECK (state IN ('ran', 'skipped', 'failed')),
+    CHECK ((state = 'ran') = (reason IS NULL))
+);
+"""
+
 # Indices for performance
 CREATE_INDICES = [
     "CREATE INDEX IF NOT EXISTS idx_scans_timestamp ON scans(timestamp DESC);",
@@ -186,6 +210,7 @@ CREATE_INDICES = [
     "CREATE INDEX IF NOT EXISTS idx_findings_path ON findings(path);",
     "CREATE INDEX IF NOT EXISTS idx_findings_cvss ON findings(cvss_score DESC) WHERE cvss_score IS NOT NULL;",
     "CREATE INDEX IF NOT EXISTS idx_metadata_scan_id ON scan_metadata(scan_id);",
+    "CREATE INDEX IF NOT EXISTS idx_tool_runs_scan_id ON scan_tool_runs(scan_id);",
 ]
 
 # Triggers for auto-updating scan summary counts
@@ -395,10 +420,14 @@ def init_database(db_path: Path = DEFAULT_DB_PATH) -> None:
         db_path: Path to SQLite database file
 
     Creates:
-        - All tables (scans, findings, scan_metadata, schema_version)
+        - All tables (scans, findings, scan_metadata, scan_tool_runs,
+          schema_version)
         - All indices for performance
         - All triggers for auto-updating counts
         - All views for common queries
+
+    Every statement is `IF NOT EXISTS`, so a database written by an older
+    version gains the tables it lacks here, on the next store.
     """
     conn = get_connection(db_path)
 
@@ -409,6 +438,7 @@ def init_database(db_path: Path = DEFAULT_DB_PATH) -> None:
             conn.execute(CREATE_SCANS_TABLE)
             conn.execute(CREATE_FINDINGS_TABLE)
             conn.execute(CREATE_SCAN_METADATA_TABLE)
+            conn.execute(CREATE_SCAN_TOOL_RUNS_TABLE)
 
             # Create indices
             for idx_sql in CREATE_INDICES:
@@ -902,6 +932,62 @@ def _scan_duration_seconds(results_dir: Path) -> float | None:
     return float(raw) if raw >= 0 else None
 
 
+def _scan_tool_runs(results_dir: Path) -> list[tuple[Any, ...]]:
+    """The scan's accounting rows as `scan_tool_runs` values (without scan_id).
+
+    Read from `tool_runs` in `.scan_metadata.json`, which `cmd_scan` writes
+    from what every target returned -- including a target whose scanner raised
+    and so wrote no `scan-timings.json`. Empty for a results directory from
+    before the key existed. A row that does not parse is skipped and said:
+    losing one row must not lose the scan.
+    """
+    try:
+        meta = json.loads((results_dir / ".scan_metadata.json").read_text("utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    raw = meta.get("tool_runs") if isinstance(meta, dict) else None
+    if not isinstance(raw, list):
+        return []
+    values: list[tuple[Any, ...]] = []
+    for entry in raw:
+        try:
+            row = ToolRun.from_dict(entry)
+            target = str(entry["target"])
+            target_type = str(entry["target_type"])
+        except (KeyError, TypeError, ValueError) as exc:
+            logger.warning("Skipping an unreadable tool_runs row %r: %s", entry, exc)
+            continue
+        values.append(
+            (
+                target,
+                target_type,
+                row.tool,
+                row.state.value,
+                None if row.reason is None else row.reason.value,
+                row.seconds,
+                row.exit_code,
+                row.attempts,
+            )
+        )
+    return values
+
+
+def get_scan_tool_runs(conn: sqlite3.Connection, scan_id: str) -> list[dict[str, Any]]:
+    """A scan's per-tool rows, or [] for a database written before they existed."""
+    try:
+        cursor = conn.execute(
+            "SELECT target, target_type, tool, state, reason, seconds, exit_code, "
+            "attempts FROM scan_tool_runs WHERE scan_id = ? "
+            "ORDER BY target_type, target, tool",
+            (scan_id,),
+        )
+    except sqlite3.OperationalError as exc:
+        if "no such table" in str(exc):
+            return []
+        raise
+    return [dict(row) for row in cursor.fetchall()]
+
+
 def _by_tool(findings: list[dict[str, Any]]) -> str:
     """`tool=count` pairs, so a count points at something actionable."""
     counts: dict[str, int] = {}
@@ -1350,6 +1436,19 @@ def store_scan(
                 "INSERT INTO scan_metadata (scan_id, key, value) VALUES (?, 'results_dir', ?)",
                 (scan_id, str(results_dir.absolute())),
             )
+
+            # Per-tool accounting (#722), in the same transaction as the scan.
+            tool_runs = _scan_tool_runs(results_dir)
+            if tool_runs:
+                conn.executemany(
+                    """
+                    INSERT OR REPLACE INTO scan_tool_runs (
+                        scan_id, target, target_type, tool, state, reason,
+                        seconds, exit_code, attempts
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    [(scan_id, *values) for values in tool_runs],
+                )
 
         _report_findings_not_stored(dropped_no_id, dropped_duplicate, scan_id)
         logger.info(

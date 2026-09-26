@@ -92,11 +92,14 @@ per_tool:
     timeout: 600
 ```
 
-Or skip tools via CLI (space-separated, not comma):
+Or skip tools via CLI (space- or comma-separated):
 
 ```bash
 jmo scan --repo . --skip-tools trivy checkov
+jmo scan --repo . --skip-tools trivy,checkov   # the same
 ```
+
+A name that is not a JMo tool stops the scan with exit code 2 and names it, so a typo cannot quietly skip nothing.
 
 ### Why does my scan fail with "tool not found"?
 

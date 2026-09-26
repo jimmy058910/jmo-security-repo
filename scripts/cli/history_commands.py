@@ -31,6 +31,7 @@ from scripts.core.history_db import (
     get_database_stats,
     get_findings_for_scan,
     get_scan_by_id,
+    get_scan_tool_runs,
     get_trend_summary,
     list_scans,
     optimize_database,
@@ -305,12 +306,16 @@ def cmd_history_show(args) -> int:
             findings = get_findings_for_scan(conn, scan["id"])
         else:
             findings = []
+        # What each tool did and how long it took (#722): "why is my scan
+        # slow" was unanswerable from JMo's own data before these rows.
+        tool_runs = get_scan_tool_runs(conn, scan["id"])
 
         conn.close()
 
         # Format output
         if getattr(args, "json", False):
             output = dict(scan)
+            output["tool_runs"] = tool_runs
             if findings:
                 output["findings"] = [dict(f) for f in findings]
             sys.stdout.write(json.dumps(output, indent=2) + "\n")
@@ -344,6 +349,24 @@ def cmd_history_show(args) -> int:
             safe_write("  " + "─" * 14 + "\n")
             sys.stdout.write(f"  TOTAL:         {scan['total_findings']}\n")
             sys.stdout.write("\n")
+
+            # TODO(issue-#1316): off-target rows (`needs --url`, `not for this
+            # target type`) belong in --json only.
+            if tool_runs:
+                sys.stdout.write("Tool Runs:\n")
+                for run in tool_runs:
+                    state = run["state"] + (
+                        f":{run['reason']}" if run["reason"] else ""
+                    )
+                    seconds = (
+                        f"{run['seconds']:8.1f}s"
+                        if run["state"] != "skipped"
+                        else " " * 9
+                    )
+                    sys.stdout.write(
+                        f"  {run['target']:<24} {run['tool']:<11} {seconds}  {state}\n"
+                    )
+                sys.stdout.write("\n")
 
             if findings:
                 sys.stdout.write(f"\nTop Findings ({len(findings)} total):\n")

@@ -19,6 +19,7 @@ import yaml
 
 from scripts.cli import jmo
 from scripts.cli.scan_orchestrator import ScanConfig, ScanOrchestrator
+from scripts.core.scan_timings import State, ToolRun
 
 
 def _tsv(tmp_path: Path, *rows: str, header: str = "url") -> Path:
@@ -44,7 +45,7 @@ class TestParser:
         assert exc.value.code == 2
 
 
-def _discover(tmp_path: Path, **kw):
+def _discover(tmp_path: Path, include=(), exclude=(), **kw):
     args = SimpleNamespace(
         repo=None,
         repos_dir=None,
@@ -69,7 +70,12 @@ def _discover(tmp_path: Path, **kw):
     for key, value in kw.items():
         setattr(args, key, value)
     orch = ScanOrchestrator(
-        ScanConfig(tools=["trufflehog"], results_dir=tmp_path / "results")
+        ScanConfig(
+            tools=["trufflehog"],
+            results_dir=tmp_path / "results",
+            include_patterns=list(include),
+            exclude_patterns=list(exclude),
+        )
     )
     return orch.discover_targets(args)
 
@@ -144,11 +150,10 @@ class TestDiscovery:
             for r in targets.rejected
         ), targets.rejected
 
-    def test_two_repositories_of_one_name_do_not_share_results(
-        self, git_remote, tmp_path
-    ):
-        """Results land in individual-repos/<name>: alice/app and bob/app wrote
-        one folder concurrently, and the last writer's findings stood for both."""
+    def test_two_repositories_of_one_name_are_both_scanned(self, git_remote, tmp_path):
+        """#1303: forks clone to `<dest>/<owner>/<repo>`, so two rows of one
+        repository name are the normal case here. PR T refused the second as a
+        stopgap; each now gets a results folder of its own."""
         other = git_remote.add_owner("someone-else")
         dest = tmp_path / "clones"
 
@@ -156,11 +161,41 @@ class TestDiscovery:
             tmp_path, tsv=str(_tsv(tmp_path, git_remote.url, other)), dest=str(dest)
         )
 
-        assert targets.repos == [(dest / "owner" / "repo").resolve()]
-        assert any(
-            r.startswith(f"--tsv {other}:") and "would overwrite" in r
-            for r in targets.rejected
-        ), targets.rejected
+        assert targets.repos == [
+            (dest / "owner" / "repo").resolve(),
+            (dest / "someone-else" / "repo").resolve(),
+        ]
+        assert targets.repo_names == ["owner__repo", "someone-else__repo"]
+        assert targets.rejected == []
+
+    def test_include_and_exclude_drop_a_row_before_it_is_cloned(
+        self, git_remote, tmp_path, monkeypatch
+    ):
+        """Decided 2026-09-25 (handoff 3.3): the filters match the folder a row
+        clones into, which its URL already names, so an excluded row costs no
+        clone and no fetch."""
+        import scripts.cli.clone_from_tsv as clone_from_tsv
+
+        cloned: list[str] = []
+        real = clone_from_tsv.clone_or_update
+
+        def spy(url, dest):
+            cloned.append(url)
+            return real(url, dest)
+
+        monkeypatch.setattr(clone_from_tsv, "clone_or_update", spy)
+        other = git_remote.add_owner("someone-else")
+        dest = tmp_path / "clones"
+        tsv = _tsv(tmp_path, git_remote.url, other)
+
+        targets = _discover(tmp_path, tsv=str(tsv), dest=str(dest), exclude=["repo"])
+
+        assert cloned == [], f"an excluded row was cloned: {cloned}"
+        assert targets.repos == []
+        assert targets.rejected == [
+            f"--tsv {tsv}: include/exclude left no row to clone"
+        ]
+        assert not (dest / "owner").exists()
 
     def test_a_row_listed_twice_is_scanned_once(self, git_remote, tmp_path):
         dest = tmp_path / "clones"
@@ -247,7 +282,10 @@ class TestCmdScan:
         with patch.object(sys, "argv", argv):
             args = jmo.parse_args()
         with patch("scripts.cli.scan_jobs.scan_repository") as scan:
-            scan.return_value = ("repo", {"trufflehog": True})
+            scan.return_value = (
+                "repo",
+                {"trufflehog": ToolRun("trufflehog", State.RAN)},
+            )
             rc = jmo.cmd_scan(args)
         return rc, [c.args[0] for c in scan.call_args_list], db
 

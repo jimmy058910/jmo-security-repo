@@ -12,13 +12,18 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from scripts.cli.jmo import ProgressTracker
+from scripts.core.scan_timings import Reason, State, ToolRun
 
-# `update()` derives the progress symbol from the scanner's per-tool status map,
-# so every call has to supply one -- including the tests that are about ETA or
-# percentages rather than about the symbol.
-ALL_OK: dict[str, bool] = {"trufflehog": True}
-ALL_FAILED: dict[str, bool] = {"trufflehog": False}
-PARTIAL: dict[str, bool] = {"trufflehog": True, "trivy": False}
+# `update()` derives the progress symbol from the target's rows, so every call
+# has to supply them -- including the tests that are about ETA or percentages
+# rather than about the symbol.
+_RAN = ToolRun("trufflehog", State.RAN)
+ALL_OK = {"trufflehog": _RAN}
+ALL_FAILED = {"trufflehog": ToolRun("trufflehog", State.FAILED, Reason.TIMED_OUT)}
+PARTIAL = {
+    "trufflehog": _RAN,
+    "trivy": ToolRun("trivy", State.FAILED, Reason.EXIT_CODE),
+}
 
 
 class TestProgressTracker:
@@ -222,11 +227,8 @@ class TestProgressTracker:
             assert "(2m 5s)" in mock_log.call_args[0][2]
 
     def test_empty_status_map_is_a_failure_not_a_success(self):
-        """A target whose scanner raised has no statuses, and must not read as OK.
-
-        ``scan_all`` appends ``(target_id, {})`` when a scan job raises.
-        ``all([])`` is True, so a naive check would render the loudest possible
-        outcome as a clean scan.
+        """A target with no rows must not read as OK: ``all([])`` is True, so a
+        naive check would render the loudest possible outcome as a clean scan.
         """
         args = Namespace()
         tracker = ProgressTracker(total=1, args=args)
@@ -239,8 +241,8 @@ class TestProgressTracker:
             assert level == "ERROR"
             assert "no tool ran" in message
 
-    def test_metadata_keys_are_not_counted_as_tools(self):
-        """``__attempts__`` rides in the status map and is not a tool."""
+    def test_an_off_target_skip_does_not_warn(self):
+        """zap `skipped:needs --url` on a repository is not news on its line."""
         args = Namespace()
         tracker = ProgressTracker(total=1, args=args)
         tracker.start()
@@ -249,13 +251,13 @@ class TestProgressTracker:
             tracker.update(
                 "repo",
                 "r",
-                {"trufflehog": True, "__attempts__": {"trufflehog": 2}},
+                {**ALL_OK, "zap": ToolRun("zap", State.SKIPPED, Reason.NEEDS_URL)},
                 1.0,
             )
             level, message = mock_log.call_args[0][1], mock_log.call_args[0][2]
             assert "✓" in message
             assert level == "INFO"
-            assert "__attempts__" not in message
+            assert "zap" not in message
 
     def test_thread_safety(self):
         """Test ProgressTracker is thread-safe."""

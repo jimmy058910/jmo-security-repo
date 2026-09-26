@@ -2,11 +2,12 @@
 """Guards for the scan phase's partial-failure accounting (chunk 4, #809/#811).
 
 The failure this file exists to prevent: **the scan layer knew a target had
-produced nothing and said it succeeded anyway.** Every scanner in
-``scan_jobs/`` reports ``dict.fromkeys(tools, False)`` on its failure paths, and
-that map reached neither the progress line nor the exit code -- so
-``jmo scan --gitlab-repo <x>`` with no token printed ``[1/1] OK`` and exited 0,
-and its ``zero-secrets`` policy passed on a scan where no secret scanner ran.
+produced nothing and said it succeeded anyway.** A GitLab target with no token
+printed ``[1/1] OK`` and exited 0, and its ``zero-secrets`` policy passed on a
+scan where no secret scanner ran.
+
+Since v2.0.0 Phase 3 a target's account is its rows, one per requested tool:
+``ran``, ``skipped:<reason>`` or ``failed:<reason>``.
 
 Each test below asserts more than one condition, because on chunk 3 two tests
 asserting only ``rc != 0`` passed on CI for the wrong reason: the shards install
@@ -36,296 +37,188 @@ from scripts.cli.scan_orchestrator import (
     TARGET_PARTIAL,
     _run_timed,
     classify_target_outcome,
+    summarize_target,
 )
+from scripts.core.scan_timings import Reason, State, ToolRun
+
+
+def row(tool: str, label: str) -> ToolRun:
+    """`ran`, or `<state>:<reason value>`."""
+    if label == "ran":
+        return ToolRun(tool, State.RAN)
+    state, _, reason = label.partition(":")
+    return ToolRun(tool, State(state), Reason(reason))
+
+
+def rows(**labels: str) -> dict[str, ToolRun]:
+    return {tool: row(tool, label) for tool, label in labels.items()}
 
 
 class TestClassifyTargetOutcome:
     """The one place that decides whether a target produced anything."""
 
     @pytest.mark.parametrize(
-        ("statuses", "expected"),
+        ("labels", "expected"),
         [
-            ({"trivy": True, "trufflehog": True}, TARGET_OK),
-            ({"trivy": True, "trufflehog": False}, TARGET_PARTIAL),
-            ({"trivy": False, "trufflehog": False}, TARGET_FAILED),
-            ({"trivy": True}, TARGET_OK),
-            ({"trivy": False}, TARGET_FAILED),
+            ({"trivy": "ran", "trufflehog": "ran"}, TARGET_OK),
+            ({"trivy": "ran", "trufflehog": "failed:timed out"}, TARGET_PARTIAL),
+            (
+                {"trivy": "failed:no output", "trufflehog": "failed:timed out"},
+                TARGET_FAILED,
+            ),
+            ({"trivy": "ran"}, TARGET_OK),
+            ({"trivy": "failed:unaccepted exit code"}, TARGET_FAILED),
         ],
     )
-    def test_outcome_follows_the_booleans(self, statuses, expected):
-        assert classify_target_outcome(statuses) == expected
+    def test_outcome_follows_the_rows(self, labels, expected):
+        assert classify_target_outcome(rows(**labels)) == expected
 
-    def test_empty_map_is_failure_not_vacuous_success(self):
-        """``all([])`` is True. That reading is the bug, not the fix.
-
-        ``scan_all`` appends ``(target_id, {})`` when a scan job raises, and a
-        scanner handed no applicable tools returns an empty map too. Both mean
-        the target contributed nothing.
-        """
+    def test_no_rows_is_failure_not_vacuous_success(self):
+        """``all([])`` is True. That reading is the bug, not the fix."""
         assert classify_target_outcome({}) == TARGET_FAILED
         assert classify_target_outcome(None) == TARGET_FAILED
 
-    def test_metadata_keys_are_not_tools(self):
-        """``__attempts__`` rides in the same dict and must not vote."""
-        assert classify_target_outcome({"__attempts__": {"trivy": 3}}) == TARGET_FAILED
+    def test_only_off_target_rows_is_failure(self):
+        """No requested tool reads this kind of target: it contributed nothing
+        (`--tools nuclei` against a repository)."""
         assert (
-            classify_target_outcome({"trivy": True, "__attempts__": {"trivy": 3}})
-            == TARGET_OK
+            classify_target_outcome(rows(nuclei="skipped:needs --url")) == TARGET_FAILED
         )
         assert (
-            classify_target_outcome({"trivy": False, "__attempts__": {"trivy": 3}})
+            classify_target_outcome(rows(semgrep="skipped:not for this target type"))
             == TARGET_FAILED
         )
 
 
-class TestStubbedToolIsNotASuccess:
-    """#825: `--allow-missing-tools` recorded a tool that never ran as `True`.
-
-    Every scanner had the shape::
-
-        elif allow_missing_tools:
-            _write_stub("trivy", trivy_out)
-            statuses["trivy"] = True
-
-    so a tool that was never executed carried the same value as one that ran
-    and succeeded, and an empty stub was written that the report phase reads as
-    "this tool found nothing". That is the `zero-secrets` shape: an empty result
-    from a secret scanner that never ran satisfies a zero-secrets policy.
-
-    On a normal host the pre-flight removes missing tools before the scanners
-    run, so this fires only when `find_tool` disagrees with it at scan time.
-    **In a container the pre-flight is skipped entirely** -- `jmo.py` gates it
-    on `DOCKER_CONTAINER` -- so it is the normal path there for any tool the
-    image does not carry.
-    """
+class TestSkippedToolIsNotASuccess:
+    """#825: `--allow-missing-tools` recorded a tool that never ran as a
+    success, so an empty stub from a secret scanner that never ran satisfied a
+    zero-secrets policy. A skipped tool gets no vote, in either direction:
+    counting it as a failure would make a target where one tool ran cleanly and
+    two were not installed a partial failure."""
 
     @pytest.mark.parametrize(
-        ("statuses", "expected", "why"),
+        ("labels", "expected", "why"),
         [
             pytest.param(
-                {"trivy": False, "__not_attempted__": {"trivy": "not installed"}},
+                {"trivy": "skipped:not installed"},
                 TARGET_NOT_ATTEMPTED,
                 "the only tool was stubbed",
                 id="all-stubbed",
             ),
             pytest.param(
-                {
-                    "trivy": True,
-                    "nuclei": False,
-                    "__not_attempted__": {"nuclei": "not installed"},
-                },
+                {"trivy": "ran", "semgrep": "skipped:not installed"},
                 TARGET_OK,
                 "what ran, worked",
                 id="one-ran-one-stubbed",
             ),
             pytest.param(
-                {
-                    "trivy": False,
-                    "nuclei": False,
-                    "__not_attempted__": {"nuclei": "not installed"},
-                },
+                {"trivy": "failed:timed out", "semgrep": "skipped:not installed"},
                 TARGET_FAILED,
                 "the tool that ran failed; the stub does not soften that",
                 id="one-failed-one-stubbed",
             ),
             pytest.param(
-                {"trivy": False, "trufflehog": False},
-                TARGET_FAILED,
-                "no stubs: both genuinely ran and failed",
-                id="no-stubs-still-failed",
+                {"hadolint": "skipped:no Dockerfiles", "zap": "skipped:needs --url"},
+                TARGET_NOT_ATTEMPTED,
+                "every tool that reads it had nothing: not a failure",
+                id="content-skips-only",
             ),
         ],
     )
-    def test_a_stub_does_not_vote(self, statuses, expected, why):
-        """A tool that never ran gets no vote, in either direction.
+    def test_a_skip_does_not_vote(self, labels, expected, why):
+        assert classify_target_outcome(rows(**labels)) == expected, why
 
-        `True` was the original bug. `False` would be the opposite error: a
-        target where one tool ran cleanly and two were not installed has not
-        partially failed.
-        """
-        assert classify_target_outcome(statuses) == expected, why
+    def test_a_row_cannot_be_ran_with_a_reason(self):
+        """The drift this file once guarded with an AST scan of 38 stub sites
+        (`write_stub` followed by `statuses[tool] = True`) cannot be written
+        now: a row that ran has no reason, and one that did not has one."""
+        with pytest.raises(ValueError):
+            ToolRun("trivy", State.RAN, Reason.NOT_INSTALLED)
+        with pytest.raises(ValueError):
+            ToolRun("trivy", State.SKIPPED)
+        with pytest.raises(ValueError):
+            ToolRun("trivy", State.SKIPPED, Reason.TIMED_OUT)
+        with pytest.raises(ValueError):
+            ToolRun("trivy", State.FAILED)
+        with pytest.raises(ValueError):
+            ToolRun("trivy", State.FAILED, Reason.NO_IAC)
 
-    def test_record_not_attempted_sets_false_and_records_the_reason(self):
-        from scripts.cli.scan_utils import (
-            NOT_ATTEMPTED_KEY,
-            not_attempted_tools,
-            record_not_attempted,
-        )
-
-        statuses: dict = {}
-        record_not_attempted(statuses, "trivy")
-        record_not_attempted(statuses, "mobsf", "nothing for it to scan")
-
-        # False, not True: the tool did not run, so it did not succeed.
-        assert statuses["trivy"] is False
-        assert statuses["mobsf"] is False
-        assert not_attempted_tools(statuses) == ["mobsf", "trivy"]
-        # The two reasons are kept apart: one is a gap in the environment the
-        # user can close, the other is a correct decision about this target.
-        assert statuses[NOT_ATTEMPTED_KEY]["trivy"] == "not installed"
-        assert statuses[NOT_ATTEMPTED_KEY]["mobsf"] == "nothing for it to scan"
-
-    def _stubbed_scan(self, scan_env, tmp_path, monkeypatch):
+    def _stubbed_scan(self, scan_env, monkeypatch):
         """A scan where no tool resolves, so every one is stubbed."""
         scan_env.allow_missing_tools = True
         monkeypatch.setattr(
-            "scripts.cli.scan_jobs.repository_scanner.find_tool",
-            lambda *a, **k: None,
+            "scripts.cli.scan_jobs.tool_loop.find_tool", lambda *a, **k: None
         )
         return jmo.cmd_scan(scan_env)
 
     def test_a_fully_stubbed_target_still_exits_zero(
-        self, scan_env, tmp_path, monkeypatch, capsys
+        self, scan_env, monkeypatch, capsys
     ):
-        """`--allow-missing-tools` is what makes this reachable.
-
-        Making it non-zero would invert what the flag is for, which is the
-        objection the issue raises against simply flipping True to False.
-        """
-        rc = self._stubbed_scan(scan_env, tmp_path, monkeypatch)
-        assert rc == 0
+        """`--allow-missing-tools` is what makes this reachable; making it
+        non-zero would invert what the flag is for."""
+        assert self._stubbed_scan(scan_env, monkeypatch) == 0
 
     @staticmethod
     def _lines(err: str, needle: str) -> list[str]:
         return [ln for ln in err.splitlines() if needle in ln]
 
-    def test_the_per_target_line_says_no_tool_ran(
-        self, scan_env, tmp_path, monkeypatch, capsys
-    ):
-        """The progress line for this target, specifically.
-
-        Asserted separately from the end-of-scan summary below, because both
-        carry the tool's name and the word STUBBED -- so a test that only looks
-        at the whole stream passes with either one deleted. Both survived a
-        mutation run for exactly that reason.
-        """
-        self._stubbed_scan(scan_env, tmp_path, monkeypatch)
+    def test_the_per_target_line_says_no_tool_ran(self, scan_env, monkeypatch, capsys):
+        """The progress line for this target, specifically: both it and the
+        end-of-scan summary name the tool, so a test reading the whole stream
+        passes with either one deleted."""
+        self._stubbed_scan(scan_env, monkeypatch)
         err = capsys.readouterr().err
 
-        # `[1/1]` is the progress line and nothing else.
         progress = self._lines(err, "[1/1]")
         assert len(progress) == 1, f"expected one progress line: {progress}"
         line = progress[0]
         assert '"level": "WARN"' in line, "the progress line was logged at INFO"
         assert "NO tool ran against this target" in line
-        assert "trufflehog" in line, "the stubbed tool is not named on its own line"
-        # The glyph is matched escaped: `_log` emits JSON, and json.dumps'
-        # ensure_ascii default renders U+25CB as the six characters `○`.
+        assert "trufflehog (not installed)" in line, line
+        # `_log` emits JSON; json.dumps renders U+25CB as `○`.
         assert "\\u25cb" in line, "the progress line still shows a pass/fail glyph"
         assert "\\u2713" not in line, "a fully stubbed target rendered as a success"
 
     def test_the_end_of_scan_summary_names_the_stubbed_tools(
-        self, scan_env, tmp_path, monkeypatch, capsys
+        self, scan_env, monkeypatch, capsys
     ):
-        """The run-level line, which is what a user reads after a long scan.
-
-        A per-target line scrolls past on a 50-repo run; this one does not.
-        """
-        self._stubbed_scan(scan_env, tmp_path, monkeypatch)
+        self._stubbed_scan(scan_env, monkeypatch)
         err = capsys.readouterr().err
 
         summary = self._lines(err, "were STUBBED, not executed")
         assert len(summary) == 1, f"expected one end-of-scan summary: {summary}"
-        line = summary[0]
-        assert '"level": "WARN"' in line
-        assert "proj: trufflehog" in line, "the summary does not attribute per target"
-        assert "not the same as finding nothing" in line
+        assert '"level": "WARN"' in summary[0]
+        assert "proj: trufflehog" in summary[0], (
+            "the summary does not attribute per target"
+        )
+        assert "not the same as finding nothing" in summary[0]
 
-    def test_the_scan_metadata_carries_which_tools_were_stubbed(
-        self, scan_env, tmp_path, monkeypatch, capsys
-    ):
-        """The report phase cannot tell a stub from a clean run on its own.
-
-        A stub is that tool's own empty-result shape, in a file with that
-        tool's own name, so once the scan process is gone there is nothing to
-        distinguish it. The scan->report handoff has to carry it.
-        """
-        self._stubbed_scan(scan_env, tmp_path, monkeypatch)
+    def test_the_scan_metadata_carries_every_row(self, scan_env, monkeypatch, capsys):
+        """The report phase cannot tell a stub from a clean run on its own; the
+        scan->report handoff carries the row, which history then stores."""
+        self._stubbed_scan(scan_env, monkeypatch)
         capsys.readouterr()
 
         meta = json.loads(
-            (tmp_path / "results" / ".scan_metadata.json").read_bytes().decode("utf-8")
+            (Path(scan_env.results_dir) / ".scan_metadata.json").read_bytes()
         )
-        assert meta["stubbed_tools"] == {"proj": ["trufflehog"]}
+        assert [
+            (r["target"], r["target_type"], r["tool"], r["state"], r["reason"])
+            for r in meta["tool_runs"]
+        ] == [("proj", "repo", "trufflehog", "skipped", "not installed")]
+        assert "stubbed_tools" not in meta, "the rows replace it"
 
     def test_a_real_scan_reports_no_stubs(self, scan_env, capsys):
-        """Negative control, in both directions.
-
-        Without it, reporting every target as stubbed would satisfy every test
-        above, and `stubbed_tools` would be noise rather than a signal.
-        """
+        """Negative control: reporting every target as stubbed would satisfy
+        every test above."""
         with patch("scripts.cli.scan_jobs.scan_repository") as mock_scan:
-            mock_scan.return_value = ("proj", {"trufflehog": True})
+            mock_scan.return_value = ("proj", rows(trufflehog="ran"))
             assert jmo.cmd_scan(scan_env) == 0
 
         err = capsys.readouterr().err
         assert "STUBBED" not in err
         assert "\\u2713" in err, "a clean target should still carry the tick"
-
-    def test_no_stub_site_records_a_bare_true(self):
-        """Drift guard: the next `elif allow_missing_tools:` must not regress.
-
-        38 sites wrote a stub and then claimed success. An AST scan is what
-        keeps the 39th from doing the same -- and it covers all five scanners,
-        which is where a per-scanner test would leave gaps.
-
-        The extractor is checked against an independent count rather than a
-        floor: every `if "<tool>" in tools:` block writes its stub exactly once
-        and then records the outcome, so each file must yield one stub site per
-        tool block. An extractor that finds nothing, or misses a block whose
-        stub is written in a shape it cannot see, fails here.
-        """
-        import ast
-
-        def is_tool_block(node: ast.AST) -> bool:
-            return (
-                isinstance(node, ast.If)
-                and isinstance(node.test, ast.Compare)
-                and isinstance(node.test.left, ast.Constant)
-                and isinstance(node.test.left.value, str)
-                and len(node.test.ops) == 1
-                and isinstance(node.test.ops[0], ast.In)
-                and ast.unparse(node.test.comparators[0]) == "tools"
-            )
-
-        scan_jobs = Path(jmo.__file__).parent / "scan_jobs"
-        offenders: list[str] = []
-        stub_calls: dict[str, int] = {}
-        tool_blocks: dict[str, int] = {}
-        for path in sorted(scan_jobs.glob("*.py")):
-            tree = ast.parse(path.read_bytes().decode("utf-8"), filename=str(path))
-            stub_calls[path.name] = 0
-            tool_blocks[path.name] = sum(map(is_tool_block, ast.walk(tree)))
-            for node in ast.walk(tree):
-                body = getattr(node, "body", None)
-                if not isinstance(body, list):
-                    continue
-                for first, second in itertools.pairwise(body):
-                    if not (
-                        isinstance(first, ast.Expr)
-                        and isinstance(first.value, ast.Call)
-                        and "write_stub" in ast.unparse(first.value.func)
-                    ):
-                        continue
-                    stub_calls[path.name] += 1
-                    if (
-                        isinstance(second, ast.Assign)
-                        and "statuses[" in ast.unparse(second.targets[0])
-                        and isinstance(second.value, ast.Constant)
-                        and second.value.value is True
-                    ):
-                        offenders.append(f"{path.name}:{second.lineno}")
-
-        assert sum(tool_blocks.values()), "found no tool block in scan_jobs/"
-        assert stub_calls == tool_blocks, (
-            "stub sites found per scanner do not match its tool blocks; the "
-            f"extractor is missing some: stubs={stub_calls} blocks={tool_blocks}"
-        )
-        assert not offenders, (
-            "a stub is written and the tool recorded as a successful run at:\n"
-            + "\n".join(f"  {o}" for o in offenders)
-            + "\nUse record_not_attempted(statuses, <tool>) instead."
-        )
 
 
 class TestRunTimed:
@@ -333,17 +226,15 @@ class TestRunTimed:
 
     def test_returns_result_and_a_real_duration(self):
         def job(a, b, *, c):
-            return f"{a}{b}{c}", {"trivy": True}
+            return f"{a}{b}{c}", rows(trivy="ran")
 
-        name, statuses, elapsed = _run_timed(job, "x", "y", c="z")
+        name, result, elapsed = _run_timed(job, "x", "y", c="z")
         assert name == "xyz"
-        assert statuses == {"trivy": True}
+        assert result == rows(trivy="ran")
         assert isinstance(elapsed, float)
         assert elapsed >= 0.0
 
     def test_exceptions_propagate_to_the_future(self):
-        """A raising job must still reach scan_all's except branch."""
-
         def job():
             raise RuntimeError("boom")
 
@@ -379,23 +270,19 @@ def scan_env(tmp_path: Path, monkeypatch):
 
     Pinning ``_check_scan_tools`` is the point: without it a runner with no
     scanners installed bails before the code under test and returns non-zero
-    for an unrelated reason, which is exactly how two chunk-3 guards passed
-    while never executing what they claimed to cover.
+    for an unrelated reason.
 
-    ``cmd_scan`` unconditionally calls ``_show_kofi_reminder()`` near the end
-    (#933), which resolves ``Path.home() / ".jmo" / "config.yml"`` with no
-    injection point. Redirect it here so every test using this fixture writes
-    to ``tmp_path`` instead of the developer's real config file.
+    ``cmd_scan`` unconditionally calls ``_show_kofi_reminder()`` (#933), which
+    resolves ``Path.home()``; redirected here. ``_warn_critical_updates``
+    version-checks every requested tool through ``ToolManager._find_binary`` on
+    the real PATH, so that resolves nothing (#1237).
 
-    The pre-flight is not the only startup probe. Before it, ``cmd_scan`` calls
-    ``_warn_critical_updates``, which version-checks every requested tool
-    through ``ToolManager._find_binary`` on the real PATH. On a machine with
-    trufflehog installed, every test here spawned ``trufflehog --version`` and
-    needed an allowlist entry to pass (#1237). Resolving nothing is the state
-    every PR shard is already in.
+    The repository holds a file: an empty tree fails every tool before any
+    runs (G2), which is not what these tests are about.
     """
     repos_dir = tmp_path / "repos"
     (repos_dir / "proj").mkdir(parents=True)
+    (repos_dir / "proj" / "README.md").write_bytes(b"# proj\n")
     cfg_path = tmp_path / "jmo.yml"
     cfg_path.write_text(
         yaml.safe_dump({"tools": ["trufflehog"], "outputs": ["json"]}), encoding="utf-8"
@@ -410,20 +297,11 @@ def scan_env(tmp_path: Path, monkeypatch):
 
 
 class TestScanStoresHistory:
-    """#870: `--store-history` has to exist on the parser AND work.
-
-    Found on the `jmo fast|balanced|full` shortcuts, whose parser lacked the
-    dest: storage is gated on `getattr(args, "store_history", False)`, so an
-    absent attribute meant OFF while the parser that defines it defaults it
-    ON, and `jmo history list` stayed empty. The shortcuts left in v2.0.0 and
-    `jmo scan` is the entry point, so the behaviour is asserted there --
-    "the dest is defined" and "a row reaches the database" are different
-    claims.
-    """
+    """#870: `--store-history` has to exist on the parser AND work, and #722:
+    the per-tool rows reach `scan_tool_runs` with the scan."""
 
     @staticmethod
     def _args(scan_env, tmp_path, db, *extra):
-        """`jmo scan`'s namespace, as its own parser produces it."""
         import sys
 
         from scripts.cli.jmo import parse_args
@@ -447,14 +325,12 @@ class TestScanStoresHistory:
             return parse_args()
 
     @staticmethod
-    def _scan(args) -> int:
+    def _scan(args, result=None) -> int:
         with patch("scripts.cli.scan_jobs.scan_repository") as mock_scan:
-            mock_scan.return_value = ("proj", {"trufflehog": True})
+            mock_scan.return_value = ("proj", result or rows(trufflehog="ran"))
             return jmo.cmd_scan(args)
 
-    def test_jmo_scan_records_the_scan_in_history(
-        self, scan_env, tmp_path, monkeypatch
-    ):
+    def test_jmo_scan_records_the_scan_in_history(self, scan_env, tmp_path):
         db = tmp_path / "history.db"
         args = self._args(scan_env, tmp_path, db)
 
@@ -469,34 +345,134 @@ class TestScanStoresHistory:
             con.close()
         assert stored == 1, f"expected exactly one stored scan, got {stored}"
 
-    def test_no_store_history_turns_it_off(self, scan_env, tmp_path, monkeypatch):
-        """The other half: without it, the test above passes on a build that
-        stores unconditionally."""
+    def test_every_row_reaches_scan_tool_runs(self, scan_env, tmp_path):
+        """#722: "why is my scan slow" needs per-tool seconds in history, and a
+        tool that did not run needs its row too."""
+        db = tmp_path / "history.db"
+        args = self._args(scan_env, tmp_path, db)
+        result = {
+            "trufflehog": ToolRun(
+                "trufflehog",
+                State.RAN,
+                seconds=12.5,
+                exit_code=0,
+                attempts=1,
+                invocations=1,
+            ),
+        }
+
+        assert self._scan(args, result) == 0
+
+        con = sqlite3.connect(f"file:{db.as_posix()}?mode=ro", uri=True)
+        try:
+            stored = con.execute(
+                "SELECT target, target_type, tool, state, reason, seconds, exit_code, "
+                "attempts FROM scan_tool_runs"
+            ).fetchall()
+        finally:
+            con.close()
+        assert stored == [("proj", "repo", "trufflehog", "ran", None, 12.5, 0, 1)]
+
+    def test_history_names_only_the_tools_that_ran(self, scan_env, tmp_path):
+        """#787: `scans.tools` and findings.json's `meta.tools` are what the scan
+        did, not what was asked for. Pre-flight used to drop a missing tool
+        before the list was recorded; it keeps it now (its row says `failed:not
+        installed`), so the list has to come from the rows."""
+        db = tmp_path / "history.db"
+        args = self._args(scan_env, tmp_path, db, "--tools", "trufflehog,trivy")
+        result = {
+            "trufflehog": ToolRun("trufflehog", State.RAN, attempts=1, invocations=1),
+            "trivy": ToolRun("trivy", State.FAILED, Reason.NOT_INSTALLED),
+        }
+
+        self._scan(args, result)
+
+        con = sqlite3.connect(f"file:{db.as_posix()}?mode=ro", uri=True)
+        try:
+            (stored,) = con.execute("SELECT tools FROM scans").fetchone()
+        finally:
+            con.close()
+        assert json.loads(stored) == ["trufflehog"]
+        findings = json.loads(
+            (tmp_path / "results" / "summaries" / "findings.json").read_bytes()
+        )
+        assert findings["meta"]["tools"] == ["trufflehog"]
+
+    def test_a_scan_in_which_no_tool_ran_is_not_stored(
+        self, scan_env, tmp_path, caplog
+    ):
+        """With pre-flight keeping missing tools, a host with none installed now
+        scans (every row `failed:not installed`) instead of exiting before the
+        report. Stored, that run is a scan with 0 findings, which `jmo trends`
+        and `jmo diff` read as every earlier finding resolved."""
+        db = tmp_path / "history.db"
+        args = self._args(scan_env, tmp_path, db)
+        result = {
+            "trufflehog": ToolRun("trufflehog", State.FAILED, Reason.NOT_INSTALLED)
+        }
+
+        rc = self._scan(args, result)
+
+        assert rc != 0
+        if db.exists():
+            con = sqlite3.connect(f"file:{db.as_posix()}?mode=ro", uri=True)
+            try:
+                (stored,) = con.execute("SELECT COUNT(*) FROM scans").fetchone()
+            finally:
+                con.close()
+            assert stored == 0, "a scan in which nothing ran reached history"
+
+    def test_each_row_keeps_its_targets_type(self, scan_env, tmp_path):
+        """The key is (target_type, target, tool): a repository and an image
+        in one scan are told apart by the type each row carries."""
+        db = tmp_path / "history.db"
+        args = self._args(
+            scan_env,
+            tmp_path,
+            db,
+            "--image",
+            "alpine:3.19",
+            "--tools",
+            "trufflehog,trivy",
+        )
+        trivy = ToolRun(
+            "trivy", State.RAN, seconds=3.0, exit_code=0, attempts=1, invocations=1
+        )
+
+        with (
+            patch("scripts.cli.scan_jobs.scan_repository") as repo_scan,
+            patch("scripts.cli.scan_jobs.scan_image") as image_scan,
+        ):
+            repo_scan.return_value = ("proj", rows(trufflehog="ran", trivy="ran"))
+            image_scan.return_value = ("alpine:3.19", {"trivy": trivy})
+            assert jmo.cmd_scan(args) == 0
+
+        con = sqlite3.connect(f"file:{db.as_posix()}?mode=ro", uri=True)
+        try:
+            stored = con.execute(
+                "SELECT target_type, target, tool FROM scan_tool_runs ORDER BY 1, 2, 3"
+            ).fetchall()
+        finally:
+            con.close()
+        assert stored == [
+            ("image", "alpine:3.19", "trivy"),
+            ("repo", "proj", "trivy"),
+            ("repo", "proj", "trufflehog"),
+        ]
+
+    def test_no_store_history_turns_it_off(self, scan_env, tmp_path):
         db = tmp_path / "history.db"
         args = self._args(scan_env, tmp_path, db, "--no-store-history")
 
         assert args.store_history is False
         assert self._scan(args) == 0
-
         assert not db.exists(), "--no-store-history still wrote a database"
 
 
 class TestScanRecordsItsOwnDuration:
-    """#981: `scans.duration_seconds` was NULL on 2472 of 2472 rows.
-
-    The column, the `store_scan` parameter and both readers all existed. No
-    production caller ever passed a value, so the number a user sees was `N/A`
-    for the entire recorded history of the database.
-
-    The tempting one-line fix -- pass the report phase's `elapsed`, which is
-    already in scope at the call site -- is wrong: that times aggregation,
-    roughly thirty seconds standing in for a twenty-minute scan. A wrong number
-    reads as measured, while NULL renders as honestly empty. So the scan phase
-    records its own wall clock and hands it over in `.scan_metadata.json`.
-
-    This drives the whole chain rather than any one link, because each link was
-    individually present and working before the fix.
-    """
+    """#981: `scans.duration_seconds` was NULL on 2472 of 2472 rows. The scan
+    phase records its own wall clock and hands it over in `.scan_metadata.json`;
+    the report phase's `elapsed` times aggregation, not scanning."""
 
     def test_a_scan_stores_a_duration_a_user_can_read(
         self, scan_env, tmp_path, monkeypatch
@@ -504,56 +480,28 @@ class TestScanRecordsItsOwnDuration:
         db = tmp_path / "history.db"
         scan_env.store_history = True
         scan_env.history_db = str(db)
-        # The fixture's jmo.yml already names only trufflehog. --tools pins it
-        # as well, so nothing about config resolution can widen this scan to
-        # the full TOOL_MATRIX, whose version check would spawn a real
-        # `semgrep --version` -- which the #907 guard correctly refuses.
         scan_env.tools = ["trufflehog"]
 
-        # A clock that advances 1000s per read, so the recorded value cannot be
-        # confused with the real wall clock of a mocked scan (well under a
-        # second). Patching rather than sleeping is the same call as the
-        # attestation-ordering fix: make the guard deterministic instead of
-        # widening its tolerance.
-        #
-        # It starts at a large offset on purpose. `perf_counter`'s zero point is
-        # undefined, so a duration must be a *delta* between two reads -- and
-        # with the clock based at zero, forgetting the subtraction produces a
-        # number that passes every "is it plausible" check. The offset is what
-        # makes the two cases distinguishable.
+        # A clock that advances 1000s per read from a large base, so a recorded
+        # value is a delta between two reads and cannot be a raw reading.
         clock_base = 500_000.0
         ticks = itertools.count(clock_base, 1000.0)
         monkeypatch.setattr(time, "perf_counter", lambda: next(ticks))
 
         with patch("scripts.cli.scan_jobs.scan_repository") as mock_scan:
-            mock_scan.return_value = ("proj", {"trufflehog": True})
+            mock_scan.return_value = ("proj", rows(trufflehog="ran"))
             assert jmo.cmd_scan(scan_env) == 0
 
-        meta = json.loads(
-            (tmp_path / "results" / ".scan_metadata.json").read_bytes().decode("utf-8")
-        )
-        assert "duration_seconds" in meta, (
-            "the scan phase did not record its duration, so the report phase "
-            "has nothing to store"
-        )
-        assert meta["duration_seconds"] >= 1000.0, (
-            "the recorded duration did not come from the patched clock: "
-            f"{meta['duration_seconds']}"
-        )
-        assert meta["duration_seconds"] < clock_base, (
-            "the duration is an absolute clock reading, not an elapsed time -- "
-            f"{meta['duration_seconds']} is past the clock's own base offset"
-        )
+        meta = json.loads((tmp_path / "results" / ".scan_metadata.json").read_bytes())
+        assert meta["duration_seconds"] >= 1000.0, meta["duration_seconds"]
+        assert meta["duration_seconds"] < clock_base, meta["duration_seconds"]
 
         con = sqlite3.connect(f"file:{db.as_posix()}?mode=ro", uri=True)
         try:
             stored = con.execute("SELECT duration_seconds FROM scans").fetchone()[0]
         finally:
             con.close()
-        assert stored == meta["duration_seconds"], (
-            "the scan's duration did not reach the database: "
-            f"stored={stored!r} recorded={meta['duration_seconds']!r}"
-        )
+        assert stored == meta["duration_seconds"]
 
 
 class TestScanExitCodeReflectsTargetOutcome:
@@ -561,29 +509,19 @@ class TestScanExitCodeReflectsTargetOutcome:
 
     def test_target_where_every_tool_failed_exits_non_zero(self, scan_env, capsys):
         with patch("scripts.cli.scan_jobs.scan_repository") as mock_scan:
-            mock_scan.return_value = ("proj", {"trufflehog": False})
+            mock_scan.return_value = ("proj", rows(trufflehog="failed:timed out"))
             rc = jmo.cmd_scan(scan_env)
 
         err = capsys.readouterr().err
-        # Four independent conditions. The exit code alone cannot tell this
-        # apart from a pre-flight bail, and the glyph alone is not durable.
-        #
-        # The glyph is matched in its escaped form: `_log` emits JSON via
-        # json.dumps, whose ensure_ascii default renders U+2717 as the six
-        # literal characters `✗`. Asserting the raw character here would
-        # fail against output that is entirely correct.
         assert rc != 0, "a target that produced nothing must not exit 0"
         assert "produced no findings" in err
         assert "proj" in err
         assert "\\u2717" in err, "the progress line should carry the failure glyph"
-        # The level carries the outcome for anyone consuming the JSON stream
-        # rather than the glyph.
         assert '"level": "ERROR"' in err
 
     def test_successful_target_still_exits_zero(self, scan_env, capsys):
-        """The control. Without it the test above passes for any always-fail bug."""
         with patch("scripts.cli.scan_jobs.scan_repository") as mock_scan:
-            mock_scan.return_value = ("proj", {"trufflehog": True})
+            mock_scan.return_value = ("proj", rows(trufflehog="ran"))
             rc = jmo.cmd_scan(scan_env)
 
         err = capsys.readouterr().err
@@ -592,14 +530,12 @@ class TestScanExitCodeReflectsTargetOutcome:
         assert "\\u2713" in err, "a clean target should carry the success glyph"
 
     def test_partial_target_exits_zero_but_says_so(self, scan_env, capsys):
-        """Deliberately scoped: only a target that produced *nothing* fails the run.
-
-        Individual tool failures are already reported per tool, and a full
-        matrix scan legitimately runs tools that do not apply everywhere. Making
-        any single tool failure non-zero would redden ordinary scans.
-        """
+        """Only a target that produced *nothing* fails the run."""
         with patch("scripts.cli.scan_jobs.scan_repository") as mock_scan:
-            mock_scan.return_value = ("proj", {"trufflehog": True, "trivy": False})
+            mock_scan.return_value = (
+                "proj",
+                rows(trufflehog="ran", trivy="failed:unaccepted exit code"),
+            )
             rc = jmo.cmd_scan(scan_env)
 
         err = capsys.readouterr().err
@@ -608,12 +544,17 @@ class TestScanExitCodeReflectsTargetOutcome:
         assert "trivy" in err
 
 
-class TestAllowMissingToolsSaysWhatHappened:
-    """#811: the flag that exists to let a scan proceed failed silently."""
+class TestPreflightNoLongerDropsTools:
+    """Phase 3: a missing tool reaches the scan and gets a row. It used to be
+    removed before any target, so on a host it had no row anywhere."""
 
-    def test_nothing_left_to_run_is_explained(self, scan_env, capsys, monkeypatch):
+    def test_nothing_installed_with_the_flag_still_says_so(
+        self, scan_env, capsys, monkeypatch
+    ):
+        """#811: with every tool missing, `--allow-missing-tools` has nothing to
+        scan with, and says so rather than exiting 1 in silence."""
         monkeypatch.setattr(
-            jmo, "_check_scan_tools", lambda args, tools: ([], ["nuclei"])
+            jmo, "_check_scan_tools", lambda args, tools: (tools, list(tools))
         )
         scan_env.allow_missing_tools = True
 
@@ -621,11 +562,40 @@ class TestAllowMissingToolsSaysWhatHappened:
         captured = capsys.readouterr()
 
         assert rc == 1
-        # The original defect was silence on *both* streams, so assert on both.
         combined = captured.out + captured.err
-        assert combined.strip(), "the branch returned 1 with no output on any stream"
         assert "--allow-missing-tools" in combined
-        assert "nuclei" in combined
+        assert "trufflehog" in combined
+
+    def test_nothing_installed_without_the_flag_scans_and_records_each(
+        self, scan_env, capsys, monkeypatch
+    ):
+        """B8's stripped-PATH case: today's pre-flight exited 1 before any
+        target; now every row says `failed:not installed`, and the target
+        produced nothing, so the run still exits 1."""
+        monkeypatch.setattr(
+            jmo, "_check_scan_tools", lambda args, tools: (tools, list(tools))
+        )
+        monkeypatch.setattr(
+            "scripts.cli.scan_jobs.tool_loop.find_tool", lambda *a, **k: None
+        )
+
+        rc = jmo.cmd_scan(scan_env)
+        err = capsys.readouterr().err
+
+        assert rc == 1
+        meta = json.loads(
+            (Path(scan_env.results_dir) / ".scan_metadata.json").read_bytes()
+        )
+        assert [(r["tool"], r["state"], r["reason"]) for r in meta["tool_runs"]] == [
+            ("trufflehog", "failed", "not installed")
+        ]
+        assert "not installed and will not run: trufflehog" in err
+
+    def test_a_cancel_at_the_prompt_still_stops(self, scan_env, monkeypatch):
+        monkeypatch.setattr(jmo, "_check_scan_tools", lambda args, tools: ([], []))
+
+        assert jmo.cmd_scan(scan_env) == 1
+        assert not (Path(scan_env.results_dir) / ".scan_metadata.json").exists()
 
 
 class TestReportDoesNotWarnAboutItsOwnArtifact:
@@ -638,7 +608,7 @@ class TestReportDoesNotWarnAboutItsOwnArtifact:
         target = tmp_path / "individual-repos" / "proj"
         target.mkdir(parents=True)
         (target / SCAN_TIMINGS_FILENAME).write_text(
-            json.dumps({"schema_version": 1, "tools": []}), encoding="utf-8"
+            json.dumps({"schema_version": 3, "tools": []}), encoding="utf-8"
         )
 
         with caplog.at_level(
@@ -672,17 +642,8 @@ class TestResumeSkipIsVisibleAtDefaultVerbosity:
     """A resumed scan covers fewer targets. The reader has to be told."""
 
     def test_skip_notice_survives_the_default_log_level(self, tmp_path, caplog):
-        """Asserted as "at least WARNING", which is the property that matters.
-
-        `configure_scan_logging` sets the `scripts` logger to WARNING by
-        default, so this notice was emitted at a level the scan itself
-        configures away -- measured: present under `--log-level INFO`, absent
-        under `--log-level WARN`, which is the default. Meanwhile jmo.py's own
-        `_log` prints INFO, so the two logging systems have different effective
-        floors and the only line reporting reduced coverage was on the quiet
-        one. The progress display also ends part-way (`Progress: 50%`) with no
-        other explanation.
-        """
+        """`configure_scan_logging` floors the `scripts` logger at WARNING, so an
+        INFO notice here was configured away by the scan itself."""
         from scripts.cli.scan_orchestrator import ScanOrchestrator, ScanTargets
         from scripts.cli.scan_session import ScanSession
 
@@ -696,10 +657,10 @@ class TestResumeSkipIsVisibleAtDefaultVerbosity:
         session = ScanSession(session_id="s", config_hash="h", started_at=0.0, pid=1)
         session.register_target("repo", "alpha", ["trufflehog"])
         session.register_target("repo", "beta", ["trufflehog"])
-        session.mark_target_complete("alpha", {"trufflehog": True})
+        session.mark_target_complete("alpha", rows(trufflehog="ran"))
 
         with patch("scripts.cli.scan_jobs.scan_repository") as mock_scan:
-            mock_scan.return_value = ("beta", {"trufflehog": True})
+            mock_scan.return_value = ("beta", rows(trufflehog="ran"))
             with caplog.at_level(
                 logging.WARNING, logger="scripts.cli.scan_orchestrator"
             ):
@@ -707,188 +668,134 @@ class TestResumeSkipIsVisibleAtDefaultVerbosity:
                     targets, {}, session=session, session_path=tmp_path / "s.json"
                 )
 
-        # Only the un-completed target ran -- the resume itself works.
-        assert [name for name, _ in results] == ["beta"]
-
+        # alpha is not scanned again; its rows come back from the session.
+        assert [c.kwargs["result_name"] for c in mock_scan.call_args_list] == ["beta"]
+        assert sorted(name for _type, name, _rows in results) == ["alpha", "beta"]
         visible = [
             r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING
         ]
-        assert any("skipped 1 previously completed" in m for m in visible), (
-            "the only notice that this run covered fewer targets than requested "
-            "was emitted below the default log level, so nobody saw it. Records "
-            f"at >=WARNING were: {visible}"
-        )
+        assert any("skipped 1 previously completed" in m for m in visible), visible
 
 
 class TestCrashedTargetIsStillAccounted:
     """A scanner that raises is the loudest outcome, and it was the quietest."""
 
-    def test_raising_scanner_still_reaches_the_progress_display(self, tmp_path):
-        """The callback used to be skipped entirely on the exception path.
-
-        The run then ended showing fewer completed targets than it had, with no
-        line naming the one that vanished.
-        """
+    def _raise(self, tmp_path, callback):
         from scripts.cli.scan_orchestrator import ScanOrchestrator, ScanTargets
 
-        config = jmo.ScanConfig(results_dir=tmp_path, tools=["trufflehog"])
+        config = jmo.ScanConfig(results_dir=tmp_path, tools=["trufflehog", "zap"])
         orchestrator = ScanOrchestrator(config)
         (tmp_path / "proj").mkdir()
         targets = ScanTargets(repos=[tmp_path / "proj"])
 
-        calls: list[tuple] = []
-
-        def progress_callback(target_type, target_id, statuses, elapsed=0.0):
-            calls.append((target_type, target_id, statuses, elapsed))
-
         with patch("scripts.cli.scan_jobs.scan_repository") as mock_scan:
             mock_scan.side_effect = RuntimeError("scanner exploded")
-            results = orchestrator.scan_all(
-                targets, {}, progress_callback=progress_callback
-            )
+            return orchestrator.scan_all(targets, {}, progress_callback=callback)
+
+    def test_raising_scanner_still_reaches_the_progress_display(self, tmp_path):
+        """The callback used to be skipped on the exception path, and the run
+        ended showing fewer targets than it had."""
+        calls: list[tuple] = []
+
+        results = self._raise(
+            tmp_path, lambda t, i, r, elapsed=0.0: calls.append((t, i, r))
+        )
 
         assert len(calls) == 1, "the crashed target never reached the progress display"
         assert calls[0][1] == "proj"
-        # Empty status map -> classify_target_outcome says TARGET_FAILED, which
-        # is what drives the cross and the non-zero exit.
-        assert calls[0][2] == {}
-        assert results == [("proj", {})]
+        (target_type, name, failed) = results[0]
+        assert (target_type, name) == ("repo", "proj")
+        # A row per tool, with the reason, so it reaches history too.
+        assert failed["trufflehog"].label == "failed:scanner error"
+        assert "scanner exploded" in (failed["trufflehog"].detail or "")
+        assert failed["zap"].label == "skipped:needs --url"
+        assert classify_target_outcome(failed) == TARGET_FAILED
+        assert calls[0][2] == failed
 
     def test_a_broken_progress_callback_cannot_kill_the_scan(self, tmp_path):
-        """The new call sits inside an except block; anything it raises escapes.
-
-        Guarded the way ToolRunner guards its callbacks. Without it a display
-        bug turns one target's failure into the death of the whole run.
-        """
-        from scripts.cli.scan_orchestrator import ScanOrchestrator, ScanTargets
-
-        config = jmo.ScanConfig(results_dir=tmp_path, tools=["trufflehog"])
-        orchestrator = ScanOrchestrator(config)
-        (tmp_path / "proj").mkdir()
-        targets = ScanTargets(repos=[tmp_path / "proj"])
-
         def exploding_callback(*args, **kwargs):
             raise ValueError("display is broken")
 
-        with patch("scripts.cli.scan_jobs.scan_repository") as mock_scan:
-            mock_scan.side_effect = RuntimeError("scanner exploded")
-            results = orchestrator.scan_all(
-                targets, {}, progress_callback=exploding_callback
-            )
+        results = self._raise(tmp_path, exploding_callback)
 
-        assert results == [("proj", {})]
+        assert results[0][2]["trufflehog"].label == "failed:scanner error"
 
 
 class TestToolApplicableToNoTargetType:
-    """A requested tool that applies nowhere leaves the target with no tools."""
+    """#1279 item 1: only a tool someone named earns the "applicable to no
+    target type" line. The matrix default put zap and nuclei in every
+    repository scan, where it fired although nothing was requested."""
 
-    def test_target_with_no_applicable_tool_produced_nothing(self, tmp_path, caplog):
-        """`nuclei` is URL-only, so a repo target is handed an empty tool list.
-
-        `filter_tools_for_scan_type(["nuclei"], "repo")` is `[]`, so the repo
-        scanner builds no ToolDefinitions and returns an empty status map --
-        which `classify_target_outcome` reads as TARGET_FAILED, because the
-        target genuinely contributed nothing. `scan_all` was already warning
-        about exactly this ("Requested but applicable to no target type in this
-        scan"); the outcome now agrees with the warning.
-
-        This is what `tests/unit/test_signal_handling.py` had been doing by
-        accident for years with `gitleaks` -- removed in v0.5.0 and implemented
-        nowhere -- while asserting the run exited 0. **Every** target type has
-        at least one applicable TOOL_MATRIX tool, so a default scan never
-        reaches this state; it takes an explicit `--tools` naming something
-        inapplicable.
-        """
+    def _scan(self, tmp_path, caplog, explicit):
         from scripts.cli.scan_orchestrator import ScanOrchestrator, ScanTargets
 
-        config = jmo.ScanConfig(results_dir=tmp_path, tools=["nuclei"])
-        orchestrator = ScanOrchestrator(config)
+        config = jmo.ScanConfig(
+            results_dir=tmp_path, tools=["nuclei"], explicit_tools=explicit
+        )
         (tmp_path / "proj").mkdir()
-        targets = ScanTargets(repos=[tmp_path / "proj"])
-
+        (tmp_path / "proj" / "a.py").write_bytes(b"x = 1\n")
         with caplog.at_level(logging.WARNING, logger="scripts.cli.scan_orchestrator"):
-            results = orchestrator.scan_all(targets, {})
-
-        assert len(results) == 1
-        name, statuses = results[0]
-        assert {k: v for k, v in statuses.items() if not k.startswith("__")} == {}
-        assert classify_target_outcome(statuses) == TARGET_FAILED
-
-        # The warning and the verdict must agree -- one without the other is how
-        # this went unnoticed.
+            results = ScanOrchestrator(config).scan_all(
+                ScanTargets(repos=[tmp_path / "proj"]), {}
+            )
         visible = [
             r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING
         ]
-        assert any("applicable to no target type" in m for m in visible), (
-            f"expected the unrouted-tool warning; got {visible}"
+        return results, visible
+
+    def test_a_named_tool_that_reads_no_target_here_is_warned_about(
+        self, tmp_path, caplog
+    ):
+        results, visible = self._scan(tmp_path, caplog, explicit=True)
+
+        (_type, _name, target_rows) = results[0]
+        assert target_rows == rows(nuclei="skipped:needs --url")
+        # The target contributed nothing, and the warning agrees.
+        assert classify_target_outcome(target_rows) == TARGET_FAILED
+        assert any("applicable to no target type" in m for m in visible), visible
+
+    def test_a_defaulted_tool_gets_its_row_and_no_warning(self, tmp_path, caplog):
+        results, visible = self._scan(tmp_path, caplog, explicit=False)
+
+        assert results[0][2] == rows(nuclei="skipped:needs --url")
+        assert not any("applicable to no target type" in m for m in visible), visible
+
+
+class TestTheSkipReasonsReadDifferently:
+    """#1081: `not installed` is a gap the user can close; `no Go sources` is a
+    correct decision about this target. The end-of-scan WARN is for the first
+    only, and must keep firing for it."""
+
+    def test_the_summary_separates_them(self):
+        summary = summarize_target(
+            rows(
+                semgrep="ran",
+                trivy="skipped:not installed",
+                gosec="skipped:no Go sources",
+                zap="skipped:needs --url",
+                grype="failed:timed out",
+            )
         )
 
-
-class TestTheTwoNotAttemptedReasonsReadDifferently:
-    """#1081: the reason `record_not_attempted` stores was dropped on the way
-    to the screen.
-
-    `not_attempted_tools` returned the dict's KEYS, discarding the reason. Three
-    of its four callers only need membership -- to keep a skipped tool out of
-    the failed-tools vote -- so nothing noticed that the fourth, the end-of-scan
-    STUBBED warning, described both reasons in the words of one:
-
-        N tool run(s) ... were STUBBED, not executed. Their output files are
-        empty because nothing looked, which is not the same as finding nothing
-
-    True of a tool that is not installed. Backwards for a tool the target had
-    nothing for: gosec on a repository with no Go has not missed anything, and
-    an empty result is the correct answer rather than a gap.
-
-    Gating gosec and kubescape on content is what made this load-bearing. Both
-    were an ERROR before; without the split they would have become this WARN on
-    every Node, Python, Java, Ruby and PHP repository -- the same false alarm in
-    a quieter voice.
-    """
-
-    def test_the_filter_separates_the_two_reasons(self):
-        from scripts.cli.scan_utils import (
-            NOT_ATTEMPTED_MISSING,
-            NOT_ATTEMPTED_NOTHING_APPLICABLE,
-            not_attempted_tools,
-            record_not_attempted,
-        )
-
-        statuses: dict = {"semgrep": True}
-        record_not_attempted(statuses, "trivy", NOT_ATTEMPTED_MISSING)
-        record_not_attempted(statuses, "gosec", NOT_ATTEMPTED_NOTHING_APPLICABLE)
-        record_not_attempted(statuses, "kubescape", NOT_ATTEMPTED_NOTHING_APPLICABLE)
-
-        assert not_attempted_tools(statuses, reason=NOT_ATTEMPTED_MISSING) == ["trivy"]
-        assert not_attempted_tools(
-            statuses, reason=NOT_ATTEMPTED_NOTHING_APPLICABLE
-        ) == ["gosec", "kubescape"]
-        # Unfiltered is unchanged -- three callers depend on it meaning
-        # "everything that did not run", and narrowing it would put skipped
-        # tools back into the failed-tools vote (#825).
-        assert not_attempted_tools(statuses) == ["gosec", "kubescape", "trivy"]
-
-    def test_an_unknown_reason_matches_nothing_rather_than_everything(self):
-        """A filter that silently degrades to 'no filter' is how a guard stops
-        guarding without failing."""
-        from scripts.cli.scan_utils import not_attempted_tools, record_not_attempted
-
-        statuses: dict = {}
-        record_not_attempted(statuses, "trivy")
-
-        assert not_attempted_tools(statuses, reason="something else") == []
+        assert summary.not_installed == ["trivy"]
+        assert summary.failed == ["grype"]
+        # In-scope skips only: a tool that reads no target of this kind is not
+        # news on a line about why this target produced nothing.
+        assert summary.skipped == ["gosec (no Go sources)", "trivy (not installed)"]
+        assert summary.outcome == TARGET_PARTIAL
 
     @staticmethod
     def _scan_with(scan_env, tmp_path, monkeypatch, capsys, tool, resolves):
-        """Run a one-repo scan for `tool` against an empty repository."""
+        """Run a one-repo scan for `tool` against a repository with no Go."""
         cfg = tmp_path / "jmo.yml"
         cfg.write_text(
             yaml.safe_dump({"tools": [tool], "outputs": ["json"]}), encoding="utf-8"
         )
         scan_env.config = str(cfg)
         scan_env.tools = [tool]
+        scan_env.allow_missing_tools = True
         monkeypatch.setattr(
-            "scripts.cli.scan_jobs.repository_scanner.find_tool",
+            "scripts.cli.scan_jobs.tool_loop.find_tool",
             (lambda *a, **k: "/usr/bin/" + tool)
             if resolves
             else (lambda *a, **k: None),
@@ -897,35 +804,28 @@ class TestTheTwoNotAttemptedReasonsReadDifferently:
             "scripts.cli.scan_jobs.repository_scanner.ToolRunner",
             lambda **kw: types.SimpleNamespace(run_all_parallel=list),
         )
-        # Two resolvers, and only `find_tool` above decides what this test
-        # sees. The other, `ToolManager._find_binary`, is the startup version
-        # check's; `scan_env` pins it (#1234, #1237).
         jmo.cmd_scan(scan_env)
         return capsys.readouterr().err
 
     def test_nothing_to_scan_is_not_reported_as_a_stub(
         self, scan_env, tmp_path, monkeypatch, capsys
     ):
-        """gosec installed, repository has no Go: benign, and must say so."""
         err = self._scan_with(
             scan_env, tmp_path, monkeypatch, capsys, "gosec", resolves=True
         )
 
-        assert "were STUBBED, not executed" not in err, (
-            "a tool with nothing to scan was reported as an unexamined gap: " + err
-        )
+        assert "were STUBBED, not executed" not in err, err
         skipped = [
             ln for ln in err.splitlines() if "SKIPPED with nothing to scan" in ln
         ]
         assert len(skipped) == 1, f"expected one skipped line: {err}"
-        assert "gosec" in skipped[0]
+        assert "gosec (no Go sources)" in skipped[0]
         assert '"level": "INFO"' in skipped[0], "a benign outcome was raised to WARN"
 
     def test_a_missing_binary_is_still_reported_as_a_stub(
         self, scan_env, tmp_path, monkeypatch, capsys
     ):
-        """The other half. Splitting the message must not delete either branch:
-        a fix that simply stopped warning would pass the test above."""
+        """The other half: a fix that simply stopped warning would pass above."""
         err = self._scan_with(
             scan_env, tmp_path, monkeypatch, capsys, "gosec", resolves=False
         )
@@ -938,25 +838,12 @@ class TestTheTwoNotAttemptedReasonsReadDifferently:
 
 
 class TestThePerTargetLineOnlyWarnsAboutRealGaps:
-    """The same reason-blind wording as the end-of-scan summary, one line up.
-
-    `ScanProgressReporter` warned "N tool(s) were stubbed and did NOT run" for
-    every not-attempted tool regardless of why. That branch fires when the scan
-    otherwise SUCCEEDED, so after #1081 gated gosec and kubescape on content it
-    would have carried a WARN on every target of every Node, Python, Java, Ruby
-    and PHP scan -- for two tools that correctly had nothing to do.
-
-    The union is still what keeps a skipped tool out of the failed-tools vote
-    (#825); only the WARN narrows.
-    """
+    """The per-target progress line warns "stubbed and did NOT run" only for a
+    tool that is not installed; a content skip is said once, at INFO, at the
+    end of the run."""
 
     @staticmethod
     def _scan(scan_env, tmp_path, monkeypatch, capsys, *, gosec_resolves):
-        """One tool that succeeds plus gosec, on a repository with no Go.
-
-        `gosec_resolves` picks which not-attempted reason gosec gets: installed
-        with nothing to scan, or simply absent.
-        """
         from scripts.core.tool_runner import ToolResult
 
         cfg = tmp_path / "jmo.yml"
@@ -970,7 +857,7 @@ class TestThePerTargetLineOnlyWarnsAboutRealGaps:
 
         resolvable = {"trufflehog", "gosec"} if gosec_resolves else {"trufflehog"}
         monkeypatch.setattr(
-            "scripts.cli.scan_jobs.repository_scanner.find_tool",
+            "scripts.cli.scan_jobs.tool_loop.find_tool",
             lambda name, *a, **k: ("/usr/bin/" + name) if name in resolvable else None,
         )
         monkeypatch.setattr(
@@ -996,25 +883,62 @@ class TestThePerTargetLineOnlyWarnsAboutRealGaps:
         err = self._scan(scan_env, tmp_path, monkeypatch, capsys, gosec_resolves=True)
         line = self._progress_line(err)
 
-        assert "were stubbed and did NOT run" not in line, (
-            "a correct skip was reported as an unexamined gap: " + line
-        )
+        assert "were stubbed and did NOT run" not in line, line
         assert '"level": "INFO"' in line, "a clean target was raised to WARN: " + line
-        # Still said once, at the end of the run, so the information is not lost.
         assert "SKIPPED with nothing to scan" in err
         assert "gosec" in err
 
     def test_a_missing_tool_still_warns_on_the_target_line(
         self, scan_env, tmp_path, monkeypatch, capsys
     ):
-        """The branch must not be deleted, only narrowed. An empty stub from a
-        scanner that was never installed still satisfies a `zero-secrets`
-        policy, which is what #825 put this warning here for."""
         err = self._scan(scan_env, tmp_path, monkeypatch, capsys, gosec_resolves=False)
         line = self._progress_line(err)
 
-        assert "1 tool(s) were stubbed and did NOT run" in line, (
-            "the true warning was lost with the false one: " + line
-        )
+        assert "1 tool(s) were stubbed and did NOT run" in line, line
         assert "gosec" in line
         assert '"level": "WARN"' in line
+
+
+class TestResumedTargetsKeepTheirRows:
+    """`--resume` skips the targets its session completed. Their rows must still
+    reach `tool_runs`, or history loses them and the reconciler sees more
+    timing documents than targets (review of PR B, Important #2)."""
+
+    def test_a_completed_target_is_not_rescanned_and_keeps_its_rows(self, tmp_path):
+        from scripts.cli.scan_orchestrator import (
+            ScanConfig,
+            ScanOrchestrator,
+            ScanTargets,
+        )
+        from scripts.cli.scan_session import ScanSession, load_session, save_session
+
+        alpha, beta = tmp_path / "alpha", tmp_path / "beta"
+        for repo in (alpha, beta):
+            repo.mkdir()
+        session = ScanSession(session_id="s", config_hash="h", started_at=0.0, pid=1)
+        for name in ("alpha", "beta"):
+            session.register_target("repo", name, ["trufflehog"])
+        done = ToolRun(
+            "trufflehog", State.RAN, seconds=4.5, exit_code=0, attempts=1, invocations=1
+        )
+        session.mark_target_complete("alpha", {"trufflehog": done})
+        path = tmp_path / "session.json"
+        save_session(session, path)
+        resumed = load_session(path)  # the rows must survive the file itself
+        orch = ScanOrchestrator(
+            ScanConfig(results_dir=tmp_path / "results", tools=["trufflehog"])
+        )
+
+        with patch("scripts.cli.scan_jobs.scan_repository") as scan:
+            scan.side_effect = lambda repo, *a, result_name, **k: (
+                result_name,
+                rows(trufflehog="ran"),
+            )
+            results = orch.scan_all(
+                ScanTargets(repos=[alpha, beta]), {}, session=resumed, session_path=path
+            )
+
+        assert [c.kwargs["result_name"] for c in scan.call_args_list] == ["beta"]
+        by_name = {name: target_rows for _, name, target_rows in results}
+        assert sorted(by_name) == ["alpha", "beta"]
+        assert by_name["alpha"] == {"trufflehog": done}

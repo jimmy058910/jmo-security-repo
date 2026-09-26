@@ -41,8 +41,9 @@ from scripts.cli.scan_orchestrator import (
     TARGET_FAILED,
     TARGET_NOT_ATTEMPTED,
     TARGET_PARTIAL,
-    classify_target_outcome,
+    summarize_target,
 )
+from scripts.core.scan_timings import ToolRun
 
 if TYPE_CHECKING:
     from argparse import Namespace
@@ -247,7 +248,7 @@ class RichScanProgressTracker:
         self,
         target_type: str,
         target_name: str,
-        statuses: Mapping[str, Any] | None = None,
+        statuses: Mapping[str, ToolRun] | None = None,
         elapsed: float = 0.0,
     ) -> None:
         """Update progress after completing a target scan.
@@ -257,7 +258,7 @@ class RichScanProgressTracker:
         Args:
             target_type: Type of target (repo, image, url, etc.)
             target_name: Name/identifier of target
-            statuses: The scanner's per-tool boolean map for this target.
+            statuses: The target's rows by tool.
             elapsed: Seconds this target took, measured in the worker.
 
         This method is passed to ``scan_all`` as ``progress_callback`` **as a
@@ -267,24 +268,12 @@ class RichScanProgressTracker:
         because the parameter was never read. The target bar therefore advanced
         identically whether a target found everything or nothing (#809).
         """
-        from scripts.cli.scan_utils import (
-            NOT_ATTEMPTED_MISSING,
-            not_attempted_tools,
-        )
-
-        outcome = classify_target_outcome(statuses)
-        # Excluded for the same reason as in `ScanProgressReporter`: a stubbed
-        # tool is False now, and accusing it of failing would be wrong (#825).
-        # The UNION of both not-attempted reasons, deliberately.
-        skipped_tools = set(not_attempted_tools(statuses))
-        # The subset that is an environment gap. A tool with nothing to scan is
-        # reported once at the end of the run instead of once per target (#1081).
-        missing_tools = set(not_attempted_tools(statuses, reason=NOT_ATTEMPTED_MISSING))
-        failed_tools = sorted(
-            name
-            for name, ok in (statuses or {}).items()
-            if not name.startswith("__") and not ok and name not in skipped_tools
-        )
+        summary = summarize_target(statuses)
+        outcome = summary.outcome
+        failed_tools = summary.failed
+        # An environment gap. A tool with nothing to scan is reported once at
+        # the end of the run instead of once per target (#1081).
+        missing_tools = summary.not_installed
 
         # Outside the lock: self.log() takes it, and re-entering a
         # threading.Lock from the same thread deadlocks.
@@ -303,8 +292,8 @@ class RichScanProgressTracker:
             self.log(
                 "WARN",
                 f"{target_type}: {target_name} - NO tool ran against this "
-                f"target; {len(skipped_tools)} stubbed and their empty output "
-                f"is NOT a clean result: {', '.join(sorted(skipped_tools))}",
+                f"target, so its empty output is NOT a clean result: "
+                f"{', '.join(summary.skipped)}",
             )
         elif outcome == TARGET_PARTIAL:
             self.log(
@@ -316,7 +305,7 @@ class RichScanProgressTracker:
             self.log(
                 "WARN",
                 f"{target_type}: {target_name} - {len(missing_tools)} tool(s) "
-                f"were stubbed and did NOT run: {', '.join(sorted(missing_tools))}",
+                f"were stubbed and did NOT run: {', '.join(missing_tools)}",
             )
 
         with self._lock:

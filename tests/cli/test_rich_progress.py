@@ -450,13 +450,7 @@ class TestUpdateOnlyWarnsAboutRealGaps:
         return seen
 
     def test_a_tool_with_nothing_to_scan_is_not_warned_about(self, monkeypatch):
-        from scripts.cli.scan_utils import (
-            NOT_ATTEMPTED_NOTHING_APPLICABLE,
-            record_not_attempted,
-        )
-
-        statuses: dict = {"trufflehog": True}
-        record_not_attempted(statuses, "gosec", NOT_ATTEMPTED_NOTHING_APPLICABLE)
+        statuses = _rows(trufflehog="ran", gosec="skipped:no Go sources")
 
         assert self._logged(monkeypatch, statuses) == [], (
             "a correct skip produced a warning on the target line"
@@ -465,10 +459,7 @@ class TestUpdateOnlyWarnsAboutRealGaps:
     def test_a_missing_tool_is_still_warned_about(self, monkeypatch):
         """Narrowed, not deleted: an empty stub from a scanner that never ran
         still satisfies a `zero-secrets` policy (#825)."""
-        from scripts.cli.scan_utils import NOT_ATTEMPTED_MISSING, record_not_attempted
-
-        statuses: dict = {"trufflehog": True}
-        record_not_attempted(statuses, "gosec", NOT_ATTEMPTED_MISSING)
+        statuses = _rows(trufflehog="ran", gosec="skipped:not installed")
 
         logged = self._logged(monkeypatch, statuses)
 
@@ -481,15 +472,11 @@ class TestUpdateOnlyWarnsAboutRealGaps:
     def test_a_mixed_target_names_only_the_missing_tool(self, monkeypatch):
         """The discriminating case. With one of each reason, a reason-blind
         implementation names both and reports the count as 2."""
-        from scripts.cli.scan_utils import (
-            NOT_ATTEMPTED_MISSING,
-            NOT_ATTEMPTED_NOTHING_APPLICABLE,
-            record_not_attempted,
+        statuses = _rows(
+            trufflehog="ran",
+            semgrep="skipped:not installed",
+            gosec="skipped:no Go sources",
         )
-
-        statuses: dict = {"trufflehog": True}
-        record_not_attempted(statuses, "semgrep", NOT_ATTEMPTED_MISSING)
-        record_not_attempted(statuses, "gosec", NOT_ATTEMPTED_NOTHING_APPLICABLE)
 
         logged = self._logged(monkeypatch, statuses)
 
@@ -502,13 +489,11 @@ class TestUpdateOnlyWarnsAboutRealGaps:
     def test_a_failed_tool_is_unaffected(self, monkeypatch):
         """The narrowing must not reach the failure path: a tool that ran and
         failed is neither reason and still has to be reported."""
-        from scripts.cli.scan_utils import (
-            NOT_ATTEMPTED_NOTHING_APPLICABLE,
-            record_not_attempted,
+        statuses = _rows(
+            trufflehog="ran",
+            semgrep="failed:unaccepted exit code",
+            gosec="skipped:no Go sources",
         )
-
-        statuses: dict = {"trufflehog": True, "semgrep": False}
-        record_not_attempted(statuses, "gosec", NOT_ATTEMPTED_NOTHING_APPLICABLE)
 
         logged = self._logged(monkeypatch, statuses)
 
@@ -517,3 +502,17 @@ class TestUpdateOnlyWarnsAboutRealGaps:
         assert level == "WARN"
         assert "findings MISSING from 1 failed tool(s)" in msg
         assert "semgrep" in msg
+
+
+def _rows(**labels: str):
+    """`ran`, or `<state>:<reason value>`, by tool."""
+    from scripts.core.scan_timings import Reason, State, ToolRun
+
+    rows = {}
+    for tool, label in labels.items():
+        if label == "ran":
+            rows[tool] = ToolRun(tool, State.RAN)
+        else:
+            state, _, reason = label.partition(":")
+            rows[tool] = ToolRun(tool, State(state), Reason(reason))
+    return rows

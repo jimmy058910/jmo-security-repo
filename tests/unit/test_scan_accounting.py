@@ -1,365 +1,160 @@
 #!/usr/bin/env python3
-"""Guard the scan-accounting reconciler: every declared tool, exactly one state.
+"""Guard the scan-accounting reconciler: every requested tool, exactly one row.
 
 `scripts/dev/reconcile_scan_accounting.py` is the acceptance instrument for the
 silent-data-loss class this repo has repeatedly shipped: a scan that exits 0
 while producing less than it found. Its verdict is derived from the scan's own
 artifacts, never from the exit code.
 
-These tests cover the *verdict logic* with fabricated inputs, so they can assert
-the cases a healthy scanner never produces - a tool in zero states, a tool in
-two, a name reported that was never declared. A reconciler that cannot fail
-is worth nothing, and the only way to know it can is to hand it a broken scan.
+Since v2.0.0 Phase 3 the scan writes the account itself, one row per requested
+tool per target, and the reconciler checks the rows instead of scraping log
+lines. These tests hand it broken artifacts - a tool with no row, a tool with
+two, a row for an undeclared name, a `ran` row with no output - because a
+reconciler that cannot fail is worth nothing.
 
-The end-to-end half - that the reconciler's patterns still match what the
-scanner actually emits - is `tests/integration/test_scan_accounting.py`, which
-reconciles a real scan rather than a frozen fixture. That split is deliberate:
-replaying a captured log would pin yesterday's message wording and stay green
-while live scans went unaccounted.
+The end-to-end half is `tests/integration/test_scan_accounting.py`, which
+reconciles a real scan.
 """
 
 from __future__ import annotations
 
-import pytest
+import json
+from pathlib import Path
 
-from scripts.dev.reconcile_scan_accounting import (
-    ACCOUNTED_STATES,
-    Diagnostics,
-    parse_log,
-    parse_outputs,
-    reconcile,
+from scripts.core.scan_timings import (
+    SCAN_TIMINGS_FILENAME,
+    Reason,
+    State,
+    ToolRun,
+    build_scan_timings,
 )
-
-# ---------------------------------------------------------------------------
-# Verbatim diagnostics, copied from real scan logs rather than written to match
-# the regexes. Paraphrasing these would make the parser tests circular: they
-# would prove the patterns match text this file invented, which is exactly the
-# property that does not matter.
-# ---------------------------------------------------------------------------
-
-LOG_PREFLIGHT_SKIP = (
-    '{"ts": "2026-08-01T06:45:14.624359Z", "level": "WARN", "msg": '
-    '"Skipping 6 missing tool(s): noseyparker, akto, scancode, falco, afl++, mobsf"}'
-)
-LOG_DEPENDENCY_MISSING = (
-    '{"ts": "2026-08-01T10:38:46.608735Z", "level": "ERROR", "msg": '
-    '"zap: requested but its dependency `docker` could not be found - it did NOT '
-    "run and its findings are MISSING from this scan. Run `jmo tools check` to "
-    "confirm installation, or pass --allow-missing-tools to record an explicit "
-    'empty result."}'
-)
-LOG_EXECUTABLE_MISSING = (
-    '{"ts": "2026-08-01T10:38:46.608735Z", "level": "ERROR", "msg": '
-    '"trivy: requested but its executable could not be found - it did NOT '
-    "run and its findings are MISSING from this scan. Run `jmo tools check` to "
-    "confirm installation, or pass --allow-missing-tools to record an explicit "
-    'empty result."}'
-)
-LOG_RUNTIME_NOT_FOUND = (
-    '{"ts": "2026-08-01T10:39:30.258849Z", "level": "ERROR", "msg": '
-    '"yara: its executable was not found at run time - it did NOT contribute '
-    'findings to this scan (Tool not found: python:yara)"}'
-)
-LOG_RUNTIME_FAILURE = (
-    '{"ts": "2026-08-01T10:39:30.279507Z", "level": "ERROR", "msg": '
-    '"prowler: it failed - it did NOT contribute findings to this scan '
-    '(Return code 2 not in (0, 1, 3))"}'
-)
-LOG_NO_OUTPUT = (
-    '{"ts": "2026-08-02T01:27:32.866687Z", "level": "ERROR", "msg": '
-    '"checkov-cicd: it exited with an accepted code but wrote no output - it did '
-    "NOT contribute findings to this scan (Exited 0 (an accepted code) but wrote "
-    'no output)"}'
-)
-LOG_UNROUTED = (
-    '{"ts": "2026-08-01T10:38:46.497567Z", "level": "WARN", "msg": '
-    '"Requested but applicable to no target type in this scan, so not run and '
-    'contributing no findings: lynis, nuclei"}'
-)
-LOG_NOT_IMPLEMENTED = (
-    '{"ts": "2026-08-01T10:38:46.608735Z", "level": "WARN", "msg": '
-    '"Requested but not applicable to repository targets (no repository '
-    'implementation): opa"}'
-)
-LOG_IDLE = (
-    '{"ts": "2026-08-01T10:44:13.639063Z", "level": "DEBUG", "msg": '
-    '"No matching files in terragoat for: noseyparker"}'
-)
-
-
-# ---------------------------------------------------------------------------
-# The verdict: every declared tool in exactly one state
-# ---------------------------------------------------------------------------
-
-
-def test_tool_in_no_state_is_unaccounted() -> None:
-    """A declared tool absent from every stream and artifact must fail the run.
-
-    This is the whole point. Four of the seven defects fixed on this branch
-    presented exactly this way: the tool was declared, never ran, and left no
-    trace anywhere - while the scan exited 0.
-    """
-    result = reconcile(declared=["trivy"], diags=Diagnostics(), output_counts={})
-
-    assert result.unaccounted == ["trivy"]
-    assert result.never_mentioned == ["trivy"]
-    assert not result.ok
-
-
-def test_tool_in_two_states_is_contradictory() -> None:
-    """A tool that both produced output and was called unimplemented is a bug.
-
-    Measured on this repo: `_find_tool` recorded the *binary* rather than the
-    tool, so checkov-cicd / semgrep-secrets / trivy-rbac were each reported as
-    having "no repository implementation" in the same run that wrote all three
-    of their output files.
-    """
-    result = reconcile(
-        declared=["checkov-cicd"],
-        diags=Diagnostics(not_impl=frozenset({"checkov-cicd"})),
-        output_counts={"checkov-cicd": 12},
-    )
-
-    assert result.contradictory == ["checkov-cicd"]
-    assert not result.ok
-
-
-def test_manual_tool_that_is_also_unresolved_is_not_contradictory() -> None:
-    """manual + unresolved is the correct pairing, not a disagreement.
-
-    A manual-install tool is absent by design wherever nobody installed it by
-    hand. Counting that as a contradiction would make every scan declaring one
-    fail forever, which is how a guard gets disabled instead of fixed. No
-    v2.0.0 matrix tool is manual-install; the reconciler keeps the state for a
-    future one, so the label here is only a label.
-    """
-    result = reconcile(
-        declared=["falco"],
-        diags=Diagnostics(unresolved=frozenset({"falco"})),
-        output_counts={},
-        manual=frozenset({"falco"}),
-    )
-
-    assert result.contradictory == []
-    assert result.ok
-
-
-@pytest.mark.parametrize("state", ACCOUNTED_STATES)
-def test_any_single_state_accounts_for_a_tool(state: str) -> None:
-    """Each state alone is a complete account. None is second-class."""
-    if state == "output":
-        result = reconcile(["trivy"], Diagnostics(), {"trivy": 3})
-    else:
-        result = reconcile(["trivy"], Diagnostics(**{state: frozenset({"trivy"})}), {})
-
-    assert result.states["trivy"] == [state]
-    assert result.ok
-
-
-def test_reported_tool_outside_the_declared_set_is_a_failure() -> None:
-    """The scanner must name tools, not the binaries they happen to invoke.
-
-    `docker` and `zap-baseline.py` were once reported as tools with missing
-    findings. Neither was ever a declared tool; both were implementation
-    details of zap.
-    """
-    result = reconcile(
-        declared=["zap"],
-        diags=Diagnostics(unresolved=frozenset({"zap", "docker", "zap-baseline.py"})),
-        output_counts={},
-    )
-
-    assert result.stray_reported == ["docker", "zap-baseline.py"]
-    assert not result.ok
-
-
-def test_output_file_for_a_name_outside_the_declared_set_is_a_failure() -> None:
-    """An output file nothing declared is an unexplained artifact."""
-    result = reconcile(
-        declared=["trivy"],
-        diags=Diagnostics(),
-        output_counts={"trivy": 1, "mystery-tool": 4},
-    )
-
-    assert result.stray_output == ["mystery-tool"]
-    assert not result.ok
-
-
-def test_unparseable_output_is_a_failure() -> None:
-    """A file that exists but does not parse is data loss, not success."""
-    result = reconcile(
-        declared=["trivy"],
-        diags=Diagnostics(),
-        output_counts={"trivy": 0},
-        unparseable=frozenset({"trivy"}),
-    )
-
-    assert result.unparseable == ["trivy"]
-    assert not result.ok
-
-
-def test_failure_with_only_a_progress_glyph_is_reported_as_silent() -> None:
-    """A tool whose only trace is a transient glyph is worse than unmentioned.
-
-    The Rich progress display draws a red cross and then overwrites it; a
-    non-TTY run (CI, cron, a detached scan) never renders it at all. Separating
-    this from `never_mentioned` is what tells you whether the tool ran and its
-    failure was discarded, or was dropped before it ever ran - different bugs
-    with different fixes.
-    """
-    result = reconcile(
-        declared=["prowler"],
-        diags=Diagnostics(tick_fail=frozenset({"prowler"})),
-        output_counts={},
-    )
-
-    assert result.silent_fail == ["prowler"]
-    assert result.never_mentioned == []
-    assert not result.ok
-
-
-def test_fully_accounted_scan_passes() -> None:
-    """The healthy case: every tool in exactly one state, verdict PASS."""
-    result = reconcile(
-        declared=["trivy", "opa", "lynis", "falco", "prowler"],
-        diags=Diagnostics(
-            not_impl=frozenset({"opa"}),
-            unrouted=frozenset({"lynis"}),
-            unresolved=frozenset({"falco"}),
-            failed=frozenset({"prowler"}),
-        ),
-        output_counts={"trivy": 7},
-        manual=frozenset({"falco"}),
-    )
-
-    assert result.unaccounted == []
-    assert result.contradictory == []
-    assert result.ok
-
-
-# ---------------------------------------------------------------------------
-# The parser: the scanner's own diagnostics, verbatim
-# ---------------------------------------------------------------------------
-
-
-def test_parses_preflight_skip_list() -> None:
-    """Pre-flight drops every missing tool in one message, comma-separated."""
-    diags = parse_log(LOG_PREFLIGHT_SKIP)
-
-    assert diags.unresolved == frozenset(
-        {"noseyparker", "akto", "scancode", "falco", "afl++", "mobsf"}
-    )
-
-
-def test_parses_missing_dependency_as_unresolved() -> None:
-    """zap is unresolved when docker is absent, and zap is the tool named."""
-    diags = parse_log(LOG_DEPENDENCY_MISSING)
-
-    assert diags.unresolved == frozenset({"zap"})
-
-
-def test_parses_missing_executable_as_unresolved() -> None:
-    diags = parse_log(LOG_EXECUTABLE_MISSING)
-
-    assert diags.unresolved == frozenset({"trivy"})
-
-
-def test_parses_runtime_resolution_failure_as_unresolved() -> None:
-    """Resolved at pre-flight, unfindable at run time - still unresolved."""
-    diags = parse_log(LOG_RUNTIME_NOT_FOUND)
-
-    assert diags.unresolved == frozenset({"yara"})
-
-
-def test_parses_runtime_failure() -> None:
-    diags = parse_log(LOG_RUNTIME_FAILURE)
-
-    assert diags.failed == frozenset({"prowler"})
-
-
-def test_parses_accepted_exit_code_with_no_output() -> None:
-    """Exit 0 and nothing written is the #700 class - it must not read as success."""
-    diags = parse_log(LOG_NO_OUTPUT)
-
-    assert diags.no_output == frozenset({"checkov-cicd"})
-    assert diags.failed == frozenset()
-
-
-def test_parses_unrouted_list() -> None:
-    diags = parse_log(LOG_UNROUTED)
-
-    assert diags.unrouted == frozenset({"lynis", "nuclei"})
-
-
-def test_parses_not_implemented_list() -> None:
-    diags = parse_log(LOG_NOT_IMPLEMENTED)
-
-    assert diags.not_impl == frozenset({"opa"})
-
-
-def test_parses_idle() -> None:
-    """Emitted at DEBUG, and unreachable at any flag setting until this branch."""
-    diags = parse_log(LOG_IDLE)
-
-    assert diags.idle == frozenset({"noseyparker"})
-
-
-def test_diagnostic_is_found_when_a_progress_spinner_shares_its_line() -> None:
-    """Rich writes progress frames to stderr with no newline.
-
-    A real run puts hundreds of in-place spinner frames and then a JSON
-    diagnostic on one physical line. Parsing the log as line-delimited JSON
-    therefore drops that diagnostic entirely and reports its tool as
-    unaccounted. The parser must scan the whole text.
-    """
-    spinner = "".join(
-        f"[16/22] ⠳ semgrep ({n}s) [72%]" + " " * 8 for n in range(20, 44)
-    )
-    log = f"{spinner}{LOG_RUNTIME_FAILURE}\n"
-
-    diags = parse_log(log)
-
-    assert diags.failed == frozenset({"prowler"})
-
-
-def test_progress_glyphs_are_not_mistaken_for_durable_accounts() -> None:
-    """A green tick is a UI artifact; it must not satisfy the invariant.
-
-    If `[3/9] ✓ trivy` counted as an account, a tool that ticked green and then
-    wrote nothing would pass - which is the exact failure the reconciler exists
-    to catch.
-    """
-    diags = parse_log("[3/9] ✓ trivy [33%]\n")
-
-    assert diags.tick_ok == frozenset({"trivy"})
-    result = reconcile(declared=["trivy"], diags=diags, output_counts={})
-    assert result.unaccounted == ["trivy"]
-    assert not result.ok
-
-
-def test_scan_timings_is_not_counted_as_a_tool_output(tmp_path) -> None:
-    """`scan-timings.json` is metadata about the scan, not a tool's output.
-
-    `parse_outputs` maps every `*.json` under `individual-*/<target>/` to a tool
-    by filename stem, so a non-tool artifact dropped in that directory is
-    reported as `stray_output` -- an output file nothing declared. That is the
-    reconciler working correctly; the fix is to tell it which filenames are
-    scan metadata rather than to loosen the invariant, which is the only thing
-    standing between a silently-unaccounted tool and a green scan (#722).
-    """
-    target = tmp_path / "individual-repos" / "demo"
+from scripts.dev.reconcile_scan_accounting import main, reconcile
+
+RAN = ToolRun("trivy", State.RAN, seconds=1.0)
+SKIPPED = ToolRun("hadolint", State.SKIPPED, Reason.NO_DOCKERFILES)
+FAILED = ToolRun("semgrep", State.FAILED, Reason.TIMED_OUT)
+DECLARED = ["trivy", "hadolint", "semgrep"]
+
+
+def _scan(
+    tmp_path: Path, rows=(RAN, SKIPPED, FAILED), *, meta_rows=None, outputs=None
+) -> Path:
+    """A results directory with one repository target."""
+    results = tmp_path / "results"
+    target = results / "individual-repos" / "proj"
     target.mkdir(parents=True)
-    (target / "trivy.json").write_bytes(b'{"Results": []}')
-    (target / "scan-timings.json").write_bytes(
-        b'{"schema_version": 1, "target": "demo", "target_type": "repo", '
-        b'"wall_seconds": 1.0, "tools": []}'
-    )
+    by_tool = {r.tool: r for r in rows}
+    doc = build_scan_timings(by_tool, target="proj", target_type="repo", wall_seconds=1)
+    doc["tools"] = [r.to_dict() for r in rows]  # keep duplicates if a test wants them
+    (target / SCAN_TIMINGS_FILENAME).write_bytes(json.dumps(doc).encode("utf-8"))
+    for tool, body in (outputs if outputs is not None else {"trivy": "{}"}).items():
+        (target / f"{tool}.json").write_bytes(body.encode("utf-8"))
+    meta = {
+        "tools": DECLARED,
+        "tool_runs": [
+            {"target": "proj", "target_type": "repo", **r.to_dict()}
+            for r in (rows if meta_rows is None else meta_rows)
+        ],
+    }
+    (results / ".scan_metadata.json").write_bytes(json.dumps(meta).encode("utf-8"))
+    return results
 
-    counts, unparseable = parse_outputs(tmp_path)
 
-    assert "scan-timings" not in counts, (
-        "scan-timings.json was counted as a tool output, so the reconciler "
-        "will report it as an artifact nothing declared"
-    )
-    assert "trivy" in counts, "a real tool output must still be counted"
-    assert unparseable == frozenset()
+def test_a_fully_accounted_scan_passes(tmp_path) -> None:
+    result = reconcile(_scan(tmp_path))
+
+    assert result.ok, result
+    assert result.rows[("repo", "proj")]["hadolint"].label == "skipped:no Dockerfiles"
+
+
+def test_a_tool_with_no_row_is_missing(tmp_path) -> None:
+    """The #1227 shape: hadolint with no Dockerfile had no row anywhere."""
+    result = reconcile(_scan(tmp_path, rows=(RAN, FAILED)))
+
+    assert not result.ok
+    assert "proj: hadolint" in result.missing
+    assert "individual-repos/proj: hadolint" in result.missing
+
+
+def test_a_tool_with_two_rows_is_a_duplicate(tmp_path) -> None:
+    result = reconcile(_scan(tmp_path, rows=(RAN, SKIPPED, FAILED, RAN)))
+
+    assert not result.ok
+    assert "proj: trivy" in result.duplicate
+
+
+def test_a_row_for_an_undeclared_tool_is_stray(tmp_path) -> None:
+    extra = ToolRun("zap", State.SKIPPED, Reason.NEEDS_URL)
+    result = reconcile(_scan(tmp_path, rows=(RAN, SKIPPED, FAILED, extra)))
+
+    assert not result.ok
+    assert "proj: zap" in result.stray
+
+
+def test_a_row_that_does_not_parse_is_invalid(tmp_path) -> None:
+    results = _scan(tmp_path)
+    meta = json.loads((results / ".scan_metadata.json").read_bytes())
+    meta["tool_runs"][0]["state"] = "succeeded"
+    (results / ".scan_metadata.json").write_bytes(json.dumps(meta).encode("utf-8"))
+
+    result = reconcile(results)
+
+    assert not result.ok
+    assert result.invalid and "succeeded" in result.invalid[0]
+
+
+def test_ran_with_no_output_file_fails(tmp_path) -> None:
+    """The #700 class: a success with nothing written."""
+    result = reconcile(_scan(tmp_path, outputs={}))
+
+    assert not result.ok
+    assert result.no_output == ["individual-repos/proj: trivy"]
+
+
+def test_ran_with_unparseable_output_fails(tmp_path) -> None:
+    result = reconcile(_scan(tmp_path, outputs={"trivy": "{not json"}))
+
+    assert not result.ok
+    assert result.no_output == ["individual-repos/proj: trivy"]
+
+
+def test_ndjson_output_parses(tmp_path) -> None:
+    """trufflehog and nuclei write NDJSON; an empty file is a clean run."""
+    for i, body in enumerate(('{"a": 1}\n{"b": 2}\n', "")):
+        result = reconcile(_scan(tmp_path / f"case{i}", outputs={"trivy": body}))
+        assert result.ok, (body, result)
+
+
+def test_a_target_whose_scanner_raised_has_rows_and_no_folder(tmp_path) -> None:
+    """Its rows are in the metadata only: it wrote nothing. That is accounted."""
+    results = _scan(tmp_path)
+    meta = json.loads((results / ".scan_metadata.json").read_bytes())
+    meta["tool_runs"] += [
+        {"target": "crashed", "target_type": "repo", **r.to_dict()}
+        for r in (
+            ToolRun("trivy", State.FAILED, Reason.SCANNER_ERROR),
+            ToolRun("hadolint", State.FAILED, Reason.SCANNER_ERROR),
+            ToolRun("semgrep", State.FAILED, Reason.SCANNER_ERROR),
+        )
+    ]
+    (results / ".scan_metadata.json").write_bytes(json.dumps(meta).encode("utf-8"))
+
+    assert reconcile(results).ok
+
+
+def test_timings_for_a_target_the_metadata_does_not_know_disagree(tmp_path) -> None:
+    results = _scan(tmp_path, meta_rows=())
+
+    result = reconcile(results)
+
+    assert not result.ok
+    assert result.timings_disagree
+
+
+def test_main_exits_non_zero_on_a_broken_scan(tmp_path, capsys) -> None:
+    ok = _scan(tmp_path / "ok")
+    broken = _scan(tmp_path / "broken", rows=(RAN,))
+
+    assert main([str(ok)]) == 0
+    assert main([str(broken)]) == 1
+    assert "MISSING" in capsys.readouterr().out

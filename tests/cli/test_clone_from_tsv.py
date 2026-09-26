@@ -26,6 +26,7 @@ from scripts.cli.clone_from_tsv import (
     ensure_unshallowed,
     parse_tsv,
     redact,
+    repo_name,
     run,
 )
 from tests.cli.conftest import REMOTE_URL, commit, git
@@ -446,6 +447,36 @@ class TestCloneOrUpdate:
         (cmd, _cwd) = calls[-1]
         assert Path(cmd[-1]) == (dest / "example.invalid" / "project").resolve()
         assert not [p for p in tmp_path.rglob("*") if "tok123" in p.name]
+
+
+class TestRepoName:
+    """What `include`/`exclude` match before a row is cloned (decided
+    2026-09-25): the folder the clone lands in, read from the URL alone."""
+
+    @pytest.mark.parametrize(
+        ("url", "name"),
+        [
+            ("https://github.com/alice/app.git", "app"),
+            ("https://github.com/alice/app/", "app"),
+            ("git@github.com:alice/app.git", "app"),
+            ("ssh://git@example.com:2222/team/sub/app", "app"),
+            ("https://user:tok123@example.invalid:8443/project.git", "project"),
+        ],
+    )
+    def test_the_name_is_the_folder_the_clone_lands_in(self, url, name) -> None:
+        assert repo_name(url) == name
+
+    @pytest.mark.parametrize(
+        "url", ["-h", "file:///tmp/app", "/srv/app", "ext::sh -c x"]
+    )
+    def test_a_row_the_allowlist_refuses_has_no_name(self, url) -> None:
+        assert repo_name(url) is None
+
+    def test_it_agrees_with_where_the_clone_lands(self, git_remote, tmp_path) -> None:
+        repo, why = clone_or_update(git_remote.url, tmp_path / "dest")
+
+        assert why is None
+        assert repo is not None and repo.name == repo_name(git_remote.url)
 
 
 class TestOneRowNeverEndsTheScan:

@@ -28,6 +28,18 @@ from scripts.cli.scan_session import (
     save_session,
     validate_session_results,
 )
+from scripts.core.scan_timings import Reason, State, ToolRun
+
+
+def _rows(**ran: bool) -> dict[str, ToolRun]:
+    """Rows from `tool=True` (ran) or `tool=False` (failed)."""
+    return {
+        tool: ToolRun(tool, State.RAN)
+        if ok
+        else ToolRun(tool, State.FAILED, Reason.EXIT_CODE)
+        for tool, ok in ran.items()
+    }
+
 
 # ── ToolRecord ──────────────────────────────────────────────────
 
@@ -144,24 +156,45 @@ class TestScanSession:
             pid=1,
         )
         session.register_target("repo", "myrepo", ["trivy", "semgrep"])
-        session.mark_target_complete("myrepo", {"trivy": True, "semgrep": False})
+        session.mark_target_complete("myrepo", _rows(trivy=True, semgrep=False))
         assert session.targets["myrepo"].completed is True
         assert session.targets["myrepo"].tools["trivy"].status == "completed"
         assert session.targets["myrepo"].tools["semgrep"].status == "failed"
 
-    def test_mark_target_complete_skips_metadata_keys(self):
+    def test_a_completed_targets_rows_come_back_under_the_jobs_name(self):
+        """A resumed scan reports a target it skips under the name its scan job
+        recorded: an IaC target's session id is its path, but its rows say
+        `terraform:main.tf`, and history keys on that."""
+        session = ScanSession(session_id="t", config_hash="h", started_at=0.0, pid=1)
+        session.register_target("iac", "/work/main.tf", ["checkov"])
+        rows = {"checkov": ToolRun("checkov", State.RAN, seconds=2.0, attempts=1)}
+        session.mark_target_complete("/work/main.tf", rows, name="terraform:main.tf")
+
+        kept = ScanSession.from_dict(session.to_dict()).completed_rows("/work/main.tf")
+
+        assert kept == ("terraform:main.tf", rows)
+        assert session.completed_rows("never-registered") is None
+
+    def test_mark_target_complete_records_a_skip_as_skipped(self):
+        """A skipped tool is neither completed nor failed, and says why."""
         session = ScanSession(
             session_id="test",
             config_hash="hash",
             started_at=0.0,
             pid=1,
         )
-        session.register_target("repo", "myrepo", ["trivy"])
+        session.register_target("repo", "myrepo", ["trivy", "gosec"])
         session.mark_target_complete(
-            "myrepo", {"trivy": True, "__attempts__": {"trivy": 2}}
+            "myrepo",
+            {
+                **_rows(trivy=True),
+                "gosec": ToolRun("gosec", State.SKIPPED, Reason.NO_GO_SOURCES),
+            },
         )
         assert session.targets["myrepo"].completed is True
-        # __attempts__ should not crash or create a tool record
+        assert session.targets["myrepo"].tools["trivy"].status == "completed"
+        assert session.targets["myrepo"].tools["gosec"].status == "skipped"
+        assert session.targets["myrepo"].tools["gosec"].error == "skipped:no Go sources"
 
     def test_mark_nonexistent_target(self):
         session = ScanSession(
@@ -171,7 +204,7 @@ class TestScanSession:
             pid=1,
         )
         # Should not raise
-        session.mark_target_complete("nonexistent", {"trivy": True})
+        session.mark_target_complete("nonexistent", _rows(trivy=True))
 
     def test_completed_and_pending_targets(self):
         session = ScanSession(
@@ -184,8 +217,8 @@ class TestScanSession:
         session.register_target("repo", "repo2", ["trivy"])
         session.register_target("repo", "repo3", ["trivy"])
 
-        session.mark_target_complete("repo1", {"trivy": True})
-        session.mark_target_complete("repo3", {"trivy": True})
+        session.mark_target_complete("repo1", _rows(trivy=True))
+        session.mark_target_complete("repo3", _rows(trivy=True))
 
         assert session.completed_count == 2
         assert "repo2" in session.pending_targets
@@ -201,7 +234,7 @@ class TestScanSession:
         )
         session.register_target("repo", "repo1", ["trivy"])
         assert session.is_target_completed("repo1") is False
-        session.mark_target_complete("repo1", {"trivy": True})
+        session.mark_target_complete("repo1", _rows(trivy=True))
         assert session.is_target_completed("repo1") is True
         assert session.is_target_completed("nonexistent") is False
 
@@ -214,7 +247,7 @@ class TestScanSession:
         )
         session.register_target("repo", "repo1", ["trivy", "semgrep"])
         session.register_target("image", "nginx:latest", ["trivy"])
-        session.mark_target_complete("repo1", {"trivy": True, "semgrep": False})
+        session.mark_target_complete("repo1", _rows(trivy=True, semgrep=False))
 
         data = session.to_dict()
         session2 = ScanSession.from_dict(data)
@@ -383,7 +416,7 @@ class TestValidateSessionResults:
             pid=1,
         )
         session.register_target("repo", "myrepo", ["trivy"])
-        session.mark_target_complete("myrepo", {"trivy": True})
+        session.mark_target_complete("myrepo", _rows(trivy=True))
 
         assert validate_session_results(session, results_dir) is True
 
@@ -398,7 +431,7 @@ class TestValidateSessionResults:
             pid=1,
         )
         session.register_target("repo", "myrepo", ["trivy"])
-        session.mark_target_complete("myrepo", {"trivy": True})
+        session.mark_target_complete("myrepo", _rows(trivy=True))
 
         assert validate_session_results(session, results_dir) is False
 
@@ -415,7 +448,7 @@ class TestValidateSessionResults:
             pid=1,
         )
         session.register_target("repo", "myrepo", ["trivy"])
-        session.mark_target_complete("myrepo", {"trivy": True})
+        session.mark_target_complete("myrepo", _rows(trivy=True))
 
         assert validate_session_results(session, results_dir) is False
 
@@ -472,7 +505,7 @@ class TestFormatSummary:
         for i in range(29):
             session.register_target("repo", f"repo{i}", ["trivy"])
         for i in range(18):
-            session.mark_target_complete(f"repo{i}", {"trivy": True})
+            session.mark_target_complete(f"repo{i}", _rows(trivy=True))
 
         summary = format_session_summary(session)
         assert "45min ago" in summary
@@ -522,7 +555,7 @@ class TestSessionLifecycle:
         session.register_target("image", "nginx:latest", ["trivy"])
 
         # Complete first target and checkpoint
-        session.mark_target_complete("repo1", {"trivy": True, "semgrep": True})
+        session.mark_target_complete("repo1", _rows(trivy=True, semgrep=True))
         save_session(session, session_path)
 
         # Simulate crash: load from disk
@@ -534,8 +567,8 @@ class TestSessionLifecycle:
         assert restored.is_target_completed("nginx:latest") is False
 
         # Complete remaining targets
-        restored.mark_target_complete("repo2", {"trivy": True, "semgrep": False})
-        restored.mark_target_complete("nginx:latest", {"trivy": True})
+        restored.mark_target_complete("repo2", _rows(trivy=True, semgrep=False))
+        restored.mark_target_complete("nginx:latest", _rows(trivy=True))
         save_session(restored, session_path)
 
         # Clean exit
@@ -557,7 +590,7 @@ class TestSessionLifecycle:
             pid=1,
         )
         session.register_target("repo", "myrepo", ["trivy"])
-        session.mark_target_complete("myrepo", {"trivy": True})
+        session.mark_target_complete("myrepo", _rows(trivy=True))
         save_session(session, session_path)
 
         # Config changes

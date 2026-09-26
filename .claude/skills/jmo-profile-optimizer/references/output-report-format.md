@@ -74,7 +74,7 @@ in parallel, so shares of wall clock would not sum to 100%.
       semgrep:
         timeout: 1200
 
-**Evidence:** `timed_out: true` on juice-shop after 900s (its floor in
+**Evidence:** semgrep's row is `failed` with reason `timed out` on juice-shop after 900s (its floor in
 `TOOL_TIMEOUT_DEFAULTS`), so that target lost every semgrep finding.
 
 **2. Align the report worker count**
@@ -127,10 +127,10 @@ optimizing the adapter.
 4. Store the updated baseline (automatic, final phase)
 
 **Verifying a timeout change:** `timings.json` cannot confirm it — it records
-report-phase parsing only. Read that tool's `duration` and `timed_out` in
+report-phase parsing only. Read that tool's `seconds`, `state` and `reason` in
 `scan-timings.json` before and after. Do not judge it by whole-scan duration
 alone: a cap tight enough to kill a healthy tool makes the scan *faster* while
-producing `timed_out: true` and no findings.
+producing `failed` with reason `timed out`, and no findings.
 
 ---
 
@@ -153,7 +153,9 @@ producing `timed_out: true` and no findings.
 | Updated Configuration | Ready-to-paste `jmo.yml` per-tool overrides |
 | Next Steps | Applying and verifying the changes |
 
-**Not included:** per-tool timeout and failure *rates*. A rate needs many scans,
-and nothing aggregates `scan-timings.json` across runs yet. Per-tool outcomes
-**for a single scan** are available — see
+**Rates are optional.** A per-tool timeout or failure rate needs many scans. It
+comes from the history database's `scan_tool_runs` table (`jmo history query`),
+which holds scans stored since v2.0.0. Include it when the history has enough
+scans, and say how many. Per-tool outcomes **for a single scan** are always
+available — see
 [optimization-patterns.md Phase 4](optimization-patterns.md#phase-4-timeout-and-failure-analysis).

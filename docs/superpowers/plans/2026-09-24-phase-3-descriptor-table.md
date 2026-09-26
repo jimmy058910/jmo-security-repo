@@ -552,8 +552,11 @@ Left open, decided by Jimmy (2026-09-25):
   red before the change. 5 mutations (one per variable): **5 caught**, the
   `GIT_ASKPASS` one by the real-git test on its own too. Older ssh (before 8.4)
   ignores the variable, and the docs say so.
-- `--dest` without `--tsv` is ignored, and `include`/`exclude` filters run after
-  cloning: left as they are.
+- `--dest` without `--tsv`, and `include`/`exclude` filters that run after cloning:
+  **corrected 2026-09-25 (PR B).** This line said both were "left as they are" by
+  Jimmy's decision; he had not decided them. Asked in PR B, he chose: `--dest`
+  without `--tsv` is a usage error (exit 2), and the filters drop a row by its folder
+  name before anything is cloned. Both land in PR B.
 
 ---
 
@@ -561,22 +564,119 @@ Left open, decided by Jimmy (2026-09-25):
 
 Numbers the descriptor table must preserve, taken before any code moves:
 
-- [ ] **The golden per-tool record.** For each of the six target types, a fixture scan
+- [x] **The golden per-tool record.** For each of the six target types, a fixture scan
   through `jmo scan --history-db <tmp>` with the tools this machine has. Save each
   `scan-timings.json`, `.scan_metadata.json`, the tool output files and the stderr log.
   Run `reconcile_scan_accounting.py` on each: this is the before-picture every
   descriptor row is checked against.
-- [ ] **Which tools report an examined-files count** (G2): run each installed tool once on
+- [x] **Which tools report an examined-files count** (G2): run each installed tool once on
   a 4-file fixture and once on an empty tree, and record the field (semgrep
   `paths.scanned`; gosec `Stats.files`; checkov's summary; trivy, syft, grype,
   trufflehog, yara are expected to have none). Only a field that means "files examined"
   qualifies.
-- [ ] **Every reader of the per-tool tables** the descriptors absorb (list above), and of
+- [x] **Every reader of the per-tool tables** the descriptors absorb (list above), and of
   `scan-timings.json` and `__not_attempted__`, including `rich_progress.py`, the
   reconciler, `jmo-profile-optimizer` and the tests. Record the list in the PR.
-- [ ] **Each tool's exclusion syntax at the pinned version**, where not already measured:
+- [x] **Each tool's exclusion syntax at the pinned version**, where not already measured:
   syft 1.51.1 and grype 0.118.0 `--exclude` (does a dir scan need a `./` prefix?);
   yara_runner's walk; trufflehog `--exclude-paths` in **git** mode.
+
+**Measured (B1, 2026-09-25).** Host Windows 11: 11 of 12 installed (yara-python absent;
+gosec 2.28.0, grype 0.115.0, hadolint 2.14.0, nuclei 3.11.0 behind their pins). Every
+scan ran from an empty directory with no `jmo.yml`, so the defaults applied.
+
+| Claim | Measured |
+|---|---|
+| Golden, repository (7 files: py, Dockerfile, sh, go.mod + go, tf, requirements) | rc 0, 27 s. **9 rows for 12 tools**: yara was dropped by pre-flight ("Skipping 1 missing tool"), nuclei by routing (the unrouted line, though nothing was requested), and zap wrote a stub that the reconciler counts as `output` |
+| Golden, repository with only `lib.py` and `README.md` | 6 rows. **hadolint and shellcheck: no row, no file, no line at any level** (#1227). gosec and zap in the INFO "SKIPPED" line. checkov **ran**, on a tree with no IaC |
+| Golden, IaC / image / k8s / GitLab | IaC `main.tf`: 2 rows. `alpine:3.19`: 2 rows. A context that does not exist: trivy exits 1 with `FATAL`, which (0, 1) grades as `no_output`. GitLab without a token: `failed-before-tools`, and the ERROR names **nuclei** among "every tool failed": `TOOL_SCAN_TYPES["gitlab"]` includes nuclei, which `scan_repository` has no path for |
+| Golden, URL (a local `http.server`) | Both tools failed, and **neither has produced findings on this host**. nuclei 3.x exits 2: `flag provided but not defined: -json` (it is `-jsonl`; `-je` exports a file). zap resolves to `~/.jmo/bin/zap/zap.bat` (so a Windows scan does find it, handoff 3.4) and exits 1: `Unable to access jarfile zap-2.17.0.jar`, the #1283 probe defect in the scan. `zap.sh` changes into its own directory; `zap.bat` does not |
+| Examined-files fields (G2) | semgrep `paths.scanned`: 2 of 4 with `p/python`, 0 on an empty tree. gosec `Stats.files`: **0 on this host and in the image, always**: neither has a Go toolchain, and gosec cannot load a package without one (`Golang errors: loading files from package`), so every gosec run so far scanned nothing and was graded success. checkov's `resource_count` counts resources, not files. trivy, syft, grype: none. trufflehog: `chunks` in a stderr log line, not files |
+| syft 1.51.1, grype 0.115.0 (host) and 0.118.0 (image) `--exclude` | A bare `results` is **fatal**, rc 1: "must start with one of: './', '*/', or '**/'". `./results` drops only the root copy; `**/results` drops root and nested. Identical across all three binaries |
+| gosec 2.29.0 `-exclude-dir` (image) | `-exclude-dir=results` matches the name at any depth; `-exclude-dir=**/results` exits 2 |
+| trufflehog 3.97.1 `--exclude-paths` in git mode | Paths are repository-relative (`results/creds.txt`), so today's `[\\/]results[\\/]` misses a root `results/`. `(^\|[\\/])results[\\/]` works in git and filesystem mode. On Windows the git target must be `file://C:/...`: `file:///C:/...` doubles the drive (`C:/C:/...`, PR C) |
+| yara_runner's walk | Prunes `SKIP_DIRS`, a copy of `VENDORED_DIRS`, and never the results directory |
+| semgrep's built-in list (Unresolved #3), 1.161.0, re-measured on 1.175.0 | With no `.semgrepignore`, semgrep skips `tests/`, `test/` (any depth), `build/`, `dist/`, `node_modules/`, `vendor/`, `.venv/`, in a git work tree or not. An empty `.semgrepignore` at the scan root disables the list. There is no flag or environment variable (semgrep-core's strings checked). ~~`find_tool("semgrep")` runs 1.161.0 while `jmo tools check` reports 1.175.0~~: **measured false**, corrected below |
+| Readers of `individual-repos/<name>` (#1303) | `scan_repository` (output folder), `gitlab_scanner` (copies `temp_results/<name>`), `ScanOrchestrator.scan_all` (session key and target id), `cmd_scan` (`register_target`, progress lines), `history_db.collect_targets` (folder names become `scans.targets`), `normalize_and_report` and the reconciler (walk every folder; the name is unused), and PR B's `scan_tool_runs.target` |
+| Two repositories, identical `deploy.sh`, `--repos-dir` | **2 findings, not 4.** `normalize_finding_path` strips each scan root, so both files are `deploy.sh`, the ids match, and dedup keeps one. Not #1303: the folders are distinct |
+| #1303 through `--targets` | Reproduced: one `individual-repos/app`, `bob.sh`'s 2 findings only |
+
+**Decided in B1** (Jimmy, 2026-09-25): `--dest` without `--tsv` exits 2; `include`/`exclude`
+drop a TSV row before it is cloned; semgrep keeps its built-in list, recorded in
+`docs/KNOWN_LIMITATIONS.md` (the alternative writes a file into the user's tree); the
+nuclei flag and zap's working directory are fixed here, red first through `jmo scan
+--url`. Unresolved #2 was decided at PR time: folded into #1235.
+
+**Decided in B1** (from the measurements; veto any in review):
+
+- **Rows, not booleans.** Each scan job returns `(name, rows)`, one `ToolRun` per
+  requested tool; the boolean map, `__not_attempted__` and `__attempts__` go.
+  `classify_target_outcome`, both progress trackers, the session and `cmd_scan`'s
+  summary read rows. A job that raises gets `failed:scanner error` rows from
+  `scan_all`. History reads the rows from `.scan_metadata.json`'s `tool_runs`, which
+  `cmd_scan` writes from what every target returned, so a target whose job raised
+  (and wrote no `scan-timings.json`) is still in `scan_tool_runs`.
+- **Pre-flight stops removing tools.** It still offers to install, and it still stops
+  when `--allow-missing-tools` leaves nothing installed (#811). Otherwise every
+  requested tool reaches the jobs, which resolve it and write `failed:not installed`
+  or, with the flag, `skipped:not installed`. That is what makes B8's stripped-PATH
+  run produce rows at all; today it exits 1 before any target.
+- **Order per tool:** off-target, then the binary, then the content trigger, then the
+  run. A target whose pruned walk yields no file fails every row first (G2). zap and
+  nuclei are URL-only, so `repo` loses zap and `gitlab` loses nuclei from
+  `TOOL_SCAN_TYPES`: the two deliberate differences from its old literal.
+- **Stubs** stay for a skipped row of a tool that applies to the target type (not
+  installed, or no content) and for a timeout, in the descriptor's shape. An
+  off-target tool gets no file. The row, not the file, is the record.
+- **`cost_class` becomes `timeout_floor`**, its one consumer (`TOOL_TIMEOUT_DEFAULTS`).
+- **Exclusion styles**, from the table above: semgrep `--exclude=N`, gosec
+  `-exclude-dir=N`, trivy `--skip-dirs **/N`, syft and grype `--exclude **/N`, checkov
+  `--skip-path N`, trufflehog a generated file of `(^|[\\/])N[\\/]`, hadolint,
+  shellcheck and yara walk-fed (yara_runner gains `--exclude-dir`), zap and nuclei
+  "not a filesystem scan".
+- **G2's tool-level count** is semgrep's `paths.scanned` and gosec's `Stats.files`, read
+  from the output file. No other tool has a count that means files.
+- **Defects routed**, filed and rostered in this branch: identical findings in two
+  repositories collapse into one; gosec needs a Go toolchain that neither the image nor
+  `jmo tools install` provides; GitLab's container-image discovery has never scanned
+  an image (`scan_image` is called with `tool_exists_func`, which it does not take, so
+  every call raises into the `except`; and its results would be discarded with the
+  temporary directory).
+
+**Correction (2026-09-25, before filing).** The fifth routed defect, "`jmo tools check`
+probes a different semgrep from the one the scan runs", is false, and it was not
+filed. Both resolvers return the same `~/.jmo/tools/venvs/semgrep/Scripts/semgrep.exe`.
+That file is a pip launcher, and it finds its interpreter through `PATH`. Run bare,
+with another Python's semgrep ahead on `PATH`, it printed 1.161.0. Run with the
+venv's `Scripts` first, the way `ToolRunner` and the version probe both run it, it
+prints 1.175.0.
+
+Every `semgrep.json` a real `jmo scan` wrote in B1 and B8 says 1.175.0. The 1.161.0
+came from B1's own bare invocations, so the hidden-list row was re-measured on
+1.175.0, and it holds.
+
+## Task B1a: A results folder unique per repository (#1303)
+
+**Files:** `scripts/cli/scan_orchestrator.py` (discovery assigns the name; `_clone_tsv`
+loses the refusal), `scripts/cli/scan_jobs/repository_scanner.py` (takes the name),
+`scripts/cli/jmo.py` (session and progress use it).
+
+- [x] Red first, through `jmo scan --targets` with two `app` repositories
+  (`alice/app/alice.sh`, `bob/app/bob.sh`): today one folder, bob's findings only.
+- [x] Discovery gives every repository a folder name unique in the scan,
+  case-insensitively: a name that collides is prefixed with its parent's
+  (`alice__app`, `bob__app`), and a numeric suffix settles a collision that survives
+  that. A name that does not collide is unchanged. The session key, the target id in
+  progress lines and `scan_tool_runs.target`, and `scans.targets` all carry it.
+- [x] `_clone_tsv` loses its same-name refusal (`TODO(issue-#1303)`), and a test clones
+  two repositories of one name and reports both.
+
+**Done (2026-09-25).** Old code: one `individual-repos/app` and 2 findings. New:
+`alice__app` and `bob__app`, 4 findings, both in `scans.targets`, 2 `scan_tool_runs`
+rows. `repo_result_names` names each repository once, at discovery. `scan_all`, the
+session and the progress lines read the name from there. `TestUniqueResultNames`
+tests the case collision in both orders: a count keyed on one spelling passes in one
+order only, and that is how mutation N2 first survived.
 
 ## Task B2: `ToolDescriptor` and the table
 
@@ -590,20 +690,53 @@ Modify `tool_registry.py`, `scan_utils.py`, `scripts/cli/tool_manager.py`.
   (command, pattern, timeout), `ok_return_codes`, `capture_stdout`, `stub_shape`,
   `scanned_count(path) -> int | None`. `DESCRIPTORS: dict[str, ToolDescriptor]`.
   `TOOL_MATRIX = tuple(DESCRIPTORS)`; `TOOL_SCAN_TYPES` derives from `target_types`.
-- [ ] Red first: `set(DESCRIPTORS) == set(TOOL_MATRIX)`; each of today's tables is
+- [x] Red first: `set(DESCRIPTORS) == set(TOOL_MATRIX)`; each of today's tables is
   **derived** from the descriptors and equals its pre-change literal (captured in the
   test from B1). Then build the table and delete the literals.
+
+**Done (2026-09-25).** `scripts/core/tool_descriptors.py` holds 12 descriptors in
+`TOOL_MATRIX` order. `tests/unit/test_tool_descriptors.py` pins each derived table
+against its pre-change literal, and every difference is a named one:
+
+- `repo` loses zap and `gitlab` loses nuclei (URL-only).
+- shellcheck, gosec and yara declare the `{}` stub they already fell back to.
+- syft and grype (`--exclude`) and gosec (`-exclude-dir`) gain an exclusion.
+- trufflehog, hadolint, shellcheck, gosec and yara join the vendored tier.
+
+The field list differs from the Interfaces line above, by the B1 rulings:
+
+- `cost_class` became `timeout_floor`.
+- `invocations` maps target type to builder.
+- `vendor_noise` became `excluded_vendored`.
+- `stub_shape` became `stub`.
+- `ok_return_codes` and `capture_stdout` live on each `Invocation`.
+
+Mutations DV1-DV14 were all caught.
 
 ## Task B3: Six scan jobs iterate the table
 
 **Files:** `scripts/cli/scan_jobs/{repository,iac,image,k8s,url,gitlab}_scanner.py`.
 
-- [ ] One generic loop: for each requested tool whose descriptor applies to the target
+- [x] One generic loop: for each requested tool whose descriptor applies to the target
   type, resolve the binary, evaluate the trigger, render exclusions, build the
   invocations, and hand them to `ToolRunner`. Every branch returns a row; none returns
   nothing (#1227).
-- [ ] For each job, the B1 golden record reproduces, except for the changes this phase
+- [x] For each job, the B1 golden record reproduces, except for the changes this phase
   intends (the rows B4 adds). Diff the artifacts, not the log lines.
+
+**Done (2026-09-25).** `scripts/cli/scan_jobs/tool_loop.py`'s `run_tools` is the loop.
+The five jobs are thin wrappers around it, and gitlab delegates to `scan_repository`
+with `target_type="gitlab"`. Re-running the golden repository fixture gave 12 rows
+where it had given 9. On a tree with nothing for them, hadolint and shellcheck now
+read `skipped:no Dockerfiles` and `skipped:no shell scripts`. Before, they had no
+row, no file and no mention. Found on the way and fixed: checkov's content trigger
+fired on an IaC **file** target, which has no tree to walk, so a file scan would
+have been skipped. Triggers now run only on a tree
+(`test_checkov_runs_on_a_file_target_with_no_tree_to_walk`). GitLab's image
+discovery still runs and still raises a `TypeError` on every image, logged as an
+ERROR, as it always has. What was removed is the merge of its statuses, which
+never existed, into the repository's rows. #1311 decides fix or remove.
+Mutations L1-L23 were all caught.
 
 ## Task B4: The accounting record, `scan-timings.json` v3, `scan_tool_runs`
 
@@ -612,39 +745,81 @@ Modify `tool_registry.py`, `scan_utils.py`, `scripts/cli/tool_manager.py`.
 `scripts/cli/scan_orchestrator.py:307` (`classify_target_outcome`, `:988` unrouted),
 `scripts/cli/rich_progress.py`, `scripts/dev/reconcile_scan_accounting.py`.
 
-- [ ] Row: `tool`, `state`, `reason`, `seconds`, `exit_code`, `attempts`, `invocations`.
+- [x] Row: `tool`, `state`, `reason`, `seconds`, `exit_code`, `attempts`, `invocations`.
   Schema v3. **Every requested tool has exactly one row per target**, including
   `skipped` ones. The reconciler reads rows instead of scraping logs, and its invariant
   becomes a test.
-- [ ] `scan_tool_runs(scan_id, target, tool, state, reason, seconds, exit_code, attempts)`,
+- [x] `scan_tool_runs(scan_id, target, tool, state, reason, seconds, exit_code, attempts)`,
   `CREATE TABLE IF NOT EXISTS` in `init_database` like `scan_metadata`. Test against
   every historical schema shape in `tests/` (the 1.1.0 `CHECK(profile)` trap).
   `store_scan` reads the rows from each target's `scan-timings.json`.
-- [ ] `jmo history show <id>` prints per-tool state and seconds (#722's "why is my scan
+- [x] `jmo history show <id>` prints per-tool state and seconds (#722's "why is my scan
   slow" question).
+
+**Done (2026-09-25).** `ToolRun` (`scripts/core/scan_timings.py`) refuses a
+state/reason pair that does not go together, and the reasons are a closed enum.
+Rulings: the row also carries `detail` (in JSON only); the table adds `target_type`
+to its key, because a repository and an IaC file can share a name; and `store_scan`
+reads `.scan_metadata.json`'s `tool_runs`, not each `scan-timings.json`, because a
+target whose job raised writes no timings file but still has rows.
+
+`tests/unit/test_history_tool_runs.py` drops the table from the 1.2.0, 1.1.0 and
+post-v2 shapes and stores into each. The table is created, the rows land, the old
+scan's findings survive, and `integrity_check` is `ok`. `history show` prints a
+"Tool Runs" section, and a read-only database without the table still shows.
+
+The reconciler checks rows now: missing, duplicate, stray, invalid, `ran` with no
+parseable output, and a timings document the metadata does not know. Each of those
+checks has a negative control. Mutations H1-H13, R1-R6, S1-S3 and M1-M2 were all
+caught. H6, S3 and M2 first survived on test inputs too narrow to tell, and each got
+a sharper test.
 
 ## Task B5: One exclusion list, rendered for every tool (#1235)
 
 **Files:** `scripts/cli/scan_utils.py` (`excluded_dirs_for`, `tool_exclusion_flags`),
 `scripts/core/yara_runner.py`.
 
-- [ ] Tiers: source readers and secret scanners get `VENDORED_DIRS` + the in-tree results
+- [x] Tiers: source readers and secret scanners get `VENDORED_DIRS` + the in-tree results
   directory; syft and grype get the results directory only, plus `.venv`/`venv` for
   grype. Every descriptor declares a style, and **"none" is not a style**: a tool with
   no exclusion syntax is walk-fed or documented as unable to exclude. Test: the rendered
   command for every descriptor excludes an in-tree `results/`, **syft included**.
-- [ ] Measure on the Next.js application from the decision above, through `jmo scan`:
+- [x] Measure on the Next.js application from the decision above, through `jmo scan`:
   trufflehog time and findings before/after. Record counts only.
-- [ ] File grype's `.venv` exclusion issue (promised on #1235) and roster it in this PR, or
-  fold it into #1235's corrected body if Jimmy prefers. Decide at PR time.
+- [x] File grype's `.venv` exclusion issue (promised on #1235) and roster it in this PR, or
+  fold it into #1235's corrected body if Jimmy prefers. Decide at PR time. **Folded
+  into #1235** (Jimmy, 2026-09-25): PR B implements it, and #1235's body says so.
+
+**Done (2026-09-25); the grype `.venv` item is folded into #1235.** On the Next.js application,
+through `jmo scan --tools trufflehog`: **281.0 s and 253 findings (222 in
+`node_modules`) before, 12.0 s and 31 (0 there) after.** With an in-tree `results/`
+holding a previous scan's `requirements.txt`, syft and grype read it on the old code
+and skip it on the new one.
+
+Styles are rendered as measured in B1. trufflehog's patterns are anchored
+`(^|[\\/])N[\\/]`, so a root `results/` is excluded in git mode too. yara_runner
+takes `--exclude-dir` (a ruling: an INLINE style to JMo's own runner). Its
+`SKIP_DIRS` is `VENDORED_DIRS` itself, not a copy. semgrep's built-in list stays,
+and `docs/KNOWN_LIMITATIONS.md` records it (Unresolved #3, decided). Mutations
+E1-E2, Y1-Y3 and L15-L18 were all caught.
 
 ## Task B6: G2 — zero examined is `failed` (#1231)
 
-- [ ] Target level: a repository whose walk yields 0 files after exclusions is
+- [x] Target level: a repository whose walk yields 0 files after exclusions is
   `failed:no files to scan` before any tool runs.
-- [ ] Tool level: a descriptor with `scanned_count` whose output says 0, on a target where
+- [x] Tool level: a descriptor with `scanned_count` whose output says 0, on a target where
   the walk found files, is `failed:examined 0 files`. Fixture: #1231's A/B, a plain
   directory under an unrelated git work tree, where semgrep reports `paths.scanned` 0.
+
+**Done (2026-09-25).** On an empty tree, the old code graded trivy and semgrep
+`success` with rc 0. Now both rows read `failed:no files to scan` and the scan exits
+1. The tool level reads semgrep's `paths.scanned` and gosec's `Stats.files` from the
+output file, as B1 decided. gosec's has read 0 on every run on this host and in the
+image, which have no Go toolchain, so on a Go repository it is now
+`failed:examined 0 files`, where it used to pass as success (filed, see the routed
+defects). The #1231 A/B was not re-run as a real semgrep scan inside a foreign work
+tree. The tests feed the loop semgrep output with `paths.scanned` of 0 and of 4.
+Mutations L4, L5, D8 and D9 were all caught.
 
 ## Task B7: Tool names (#1279)
 
@@ -652,19 +827,86 @@ Modify `tool_registry.py`, `scan_utils.py`, `scripts/cli/tool_manager.py`.
 `scripts/cli/scan_orchestrator.py:988-994`; the six e2e sites in
 `tests/e2e/test_scan_workflows.py` and `test_docker_workflows.py`.
 
-- [ ] Split on commas and whitespace for `--tools`, `--skip-tools` and `tools:`; an unknown
+- [x] Split on commas and whitespace for `--tools`, `--skip-tools` and `tools:`; an unknown
   name exits 2 with its name, and "removed in v2.0.0" for the cut sixteen. Red first
   with `--tools trivy,syft` and `--tools bandit`.
-- [ ] Defaulted tools never produce the "requested but applicable to no target type"
+- [x] Defaulted tools never produce the "requested but applicable to no target type"
   line; they are `skipped:needs --url` rows.
+
+**Done (2026-09-25).** Measured against the old code:
+
+| Input | Old | New |
+|---|---|---|
+| `--tools checkov,trivy` | rc 1, "None of the requested tools are installed: checkov,trivy" | rc 0, both ran |
+| `--tools bandit` | rc 1, "applicable to no target type" | rc 2, "removed in v2.0.0" |
+| `jmo.yml` `tools: [trivy, bandit]` | rc 0, one WARN | rc 2, naming it |
+
+`parse_tool_names` is the one parser, used by the argparse action and by `jmo.yml`.
+`ScanConfig.explicit_tools` keeps the "applicable to no target type" warning to
+names the user typed. Two riders were decided in B1:
+
+- `--dest` without `--tsv` now exits 2 (it used to run with rc 0).
+- `include`/`exclude` drop a TSV row before it is cloned.
+
+The six e2e `--tools trivy,syft` sites now select two tools, because the parser
+changed and not the sites. Mutations D10-D13, J1-J2, F1-F3 and O1 were all caught.
 
 ## Task B8: Gates, then PR B
 
-- [ ] Acceptance on a fixture with no Dockerfile, shell or IaC, through `jmo scan`: rows
+- [x] Acceptance on a fixture with no Dockerfile, shell or IaC, through `jmo scan`: rows
   sum to `len(TOOL_MATRIX)`, each `ran` or `skipped:<reason>`; hadolint, shellcheck,
   gosec, checkov `skipped` with the content reason, zap and nuclei `skipped:needs --url`.
   Repeat with `HOME` and `PATH` stripped: every row `failed:not installed`, still summing.
-- [ ] #722: `scan_tool_runs` holds a row with `seconds` for every tool of that scan.
+- [x] #722: `scan_tool_runs` holds a row with `seconds` for every tool of that scan.
+
+**Acceptance measured (2026-09-25).**
+
+- **Plain fixture.** 12 rows, each `ran` or `skipped:<reason>`. The one exception is
+  yara, `failed:not installed`, because this host lacks yara-python. The reconciler
+  passes.
+- **`HOME` and `PATH` stripped.** 12 rows: 10 are `failed:not installed`, and zap and
+  nuclei are `skipped:needs --url`. rc 1, and the reconciler passes. The old code
+  exited 1 before any target and wrote 0 rows.
+
+That second count is a ruling. The plan's order decides off-target before the binary
+(B3), so the two URL tools say why they did not run, not whether they are installed.
+
+URL, run with the real tools:
+
+| Tool | Old | New |
+|---|---|---|
+| zap | rc 1, "Unable to access jarfile" | ran in 18.9 s, `zap.json` 16.6 KB |
+| nuclei | rc 2, `-json` undefined | ran in 113 s |
+
+`scan_tool_runs` gets a row per tool with its seconds
+(`test_every_row_reaches_scan_tool_runs`, `test_each_row_keeps_its_targets_type`).
+
+**Final review (2026-09-25).** A fresh reviewer found 0 Critical, 3 Important and 14
+Minor. The three Important, plus two Minor re-graded by their effect, were fixed, each
+red before green:
+
+- **#787 regressed.** Pre-flight now keeps a missing tool, so `scans.tools` and
+  `findings.json`'s `meta.tools` named uninstalled tools. They now come from the
+  rows: a tool with a `ran` row.
+- **Resume lost rows.** A resumed scan's skipped targets had no rows. The session
+  keeps each completed target's rows, under the name its job recorded them by.
+- **Exclusions matched the scan root.** Measured with the real binaries:
+  - trufflehog read nothing in a repository under `vendor/`. Its patterns are now
+    anchored below one resolved root.
+  - gosec's `.git` also dropped `.github/x`, a substring match. The claim that it
+    matched the root was measured false: gosec matches root-relative paths. Its
+    names are now escaped, whole-segment regexes.
+  - `collect_files` tested absolute parts. It now tests parts relative to the repo.
+- **`jmo ci` ignored the scan's exit 2** and ran its report over an earlier run's
+  results. It now stops there.
+- **A scan in which no tool ran was stored in history**, where it reads as every
+  finding resolved. It is not stored now.
+
+Routed, not fixed: #1312 (URL and IaC folder collisions, #1303's class) and #1313
+(checkov's `--skip-path` substrings, unmeasured). The deferred minors are filed and
+rostered in Phase 3 as #1315 (target names), #1316 (surfacing), #1317 (messages),
+and #1318 (test gaps). Measured false and closed: semgrep on a docs-only repository
+scans both files (`paths.scanned` 2). Suite 8960 / 98 / 0.
 - [ ] Suite ID-set diff; `windows-2022` log line; both CI events.
 
 ---
@@ -731,8 +973,8 @@ wizard generates, native and Docker, parses through `build_parser()`, and `jmo s
 1. **trufflehog verifies secrets over the network by default**, and git mode adds calls.
    Spec §11's "no network call" is a program criterion. Does `--no-verification` become
    the default (and verification a `--with` option), and in which phase?
-2. **grype's `.venv` exclusion:** its own issue (as promised on #1235) or folded into
-   #1235's body? Decide at PR B.
+2. ~~**grype's `.venv` exclusion:** its own issue (as promised on #1235) or folded into
+   #1235's body? Decide at PR B.~~ Folded into #1235 (Jimmy, 2026-09-25).
 3. **semgrep brings a second exclusion list.** With no `.semgrepignore`, semgrep applies
    a built-in one (`tests/`, `test/`, `node_modules/`, …): measured in A4, a directory
    under `tests/` scanned 0 files on Windows and on Linux. B5's single list competes

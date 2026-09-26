@@ -1,7 +1,8 @@
 """
 Tests for IaC Scanner
 
-Tests the iac_scanner module with various scenarios.
+Tests the iac_scanner module with various scenarios. Each test resolves its
+tools explicitly: the scan loop only reads a result for a tool it planned.
 """
 
 import sys
@@ -13,408 +14,264 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 
 from scripts.cli.scan_jobs.iac_scanner import scan_iac_file
-from scripts.cli.scan_utils import not_attempted_tools
+from scripts.core.scan_timings import State
+from scripts.core.tool_runner import ToolResult
+
+
+def _all_found(tool_name):
+    return f"/usr/bin/{tool_name}"
+
+
+def _scan(tmp_path, results, tools, find=_all_found, **kw):
+    iac_path = kw.pop("iac_path", None)
+    if iac_path is None:
+        iac_path = tmp_path / "main.tf"
+        iac_path.write_text('resource "aws_s3_bucket" "b" {}', encoding="utf-8")
+    with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
+        mock_runner = MagicMock()
+        MockRunner.return_value = mock_runner
+        mock_runner.run_all_parallel.return_value = results
+        identifier, rows = scan_iac_file(
+            iac_type=kw.pop("iac_type", "terraform"),
+            iac_path=iac_path,
+            results_dir=kw.pop("results_dir", tmp_path),
+            tools=tools,
+            timeout=600,
+            retries=kw.pop("retries", 0),
+            per_tool_config=kw.pop("per_tool_config", {}),
+            allow_missing_tools=kw.pop("allow_missing_tools", False),
+            find_tool_func=find,
+            **kw,
+        )
+    return identifier, rows, MockRunner
+
+
+def _defs(MockRunner):
+    MockRunner.assert_called_once()
+    args, kwargs = MockRunner.call_args
+    return kwargs.get("tools") or (args[0] if args else [])
 
 
 class TestIacScanner:
     """Test IaC scanner functionality"""
 
     def test_scan_iac_basic(self, tmp_path):
-        """Test basic IaC scanning with checkov and trivy"""
-        iac_file = tmp_path / "infrastructure.tf"
-        iac_file.write_text('resource "aws_instance" "example" {}')
-
-        with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-
-            from scripts.core.tool_runner import ToolResult
-
-            mock_runner.run_all_parallel.return_value = [
+        identifier, rows, _ = _scan(
+            tmp_path,
+            [
                 ToolResult(tool="checkov", status="success", attempts=1),
                 ToolResult(tool="trivy", status="success", attempts=1),
-            ]
+            ],
+            ["checkov", "trivy"],
+        )
 
-            identifier, statuses = scan_iac_file(
-                iac_type="terraform",
-                iac_path=iac_file,
-                results_dir=tmp_path,
-                tools=["checkov", "trivy"],
-                timeout=600,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-            )
+        assert identifier == "terraform:main.tf"
+        assert rows["checkov"].state is State.RAN
+        assert rows["trivy"].state is State.RAN
 
-            assert identifier == "terraform:infrastructure.tf"
-            assert statuses["checkov"] is True
-            assert statuses["trivy"] is True
-            assert "__attempts__" not in statuses
+    def test_checkov_runs_on_a_file_target_with_no_tree_to_walk(self, tmp_path):
+        """checkov's content trigger reads a tree. An IaC file target has none,
+        and the file is itself checkov's content: it must run, not be skipped
+        as `no IaC or workflow files` (a defect caught while writing B3)."""
+        _, rows, MockRunner = _scan(
+            tmp_path,
+            [ToolResult(tool="checkov", status="success", attempts=1)],
+            ["checkov"],
+        )
+
+        assert rows["checkov"].state is State.RAN
+        (checkov_def,) = _defs(MockRunner)
+        assert checkov_def.command[1:3] == ["-f", str(tmp_path / "main.tf")]
 
     def test_scan_iac_with_retries(self, tmp_path):
-        """Test IaC scanning with retries"""
-        iac_file = tmp_path / "template.yaml"
-        iac_file.write_text("AWSTemplateFormatVersion: '2010-09-09'")
-
-        with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-
-            from scripts.core.tool_runner import ToolResult
-
-            mock_runner.run_all_parallel.return_value = [
-                ToolResult(tool="checkov", status="success", attempts=2),  # Retried
+        _, rows, _ = _scan(
+            tmp_path,
+            [
+                ToolResult(tool="checkov", status="success", attempts=2),
                 ToolResult(tool="trivy", status="success", attempts=1),
-            ]
+            ],
+            ["checkov", "trivy"],
+            retries=1,
+        )
 
-            identifier, statuses = scan_iac_file(
-                iac_type="cloudformation",
-                iac_path=iac_file,
-                results_dir=tmp_path,
-                tools=["checkov", "trivy"],
-                timeout=600,
-                retries=1,
-                per_tool_config={},
-                allow_missing_tools=False,
-            )
-
-            assert statuses["checkov"] is True
-            assert "__attempts__" in statuses
-            assert statuses["__attempts__"]["checkov"] == 2
+        assert rows["checkov"].state is State.RAN
+        assert rows["checkov"].attempts == 2
 
     def test_scan_iac_uses_filename_as_dirname(self, tmp_path):
         """Test that IaC file stem is used for directory name"""
         iac_file = tmp_path / "my-infrastructure.tf"
         iac_file.write_text('resource "null_resource" "test" {}')
-
-        # Create individual-iac subdirectory (matches production usage in scan_orchestrator)
         iac_results_dir = tmp_path / "individual-iac"
 
-        with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
+        _scan(
+            tmp_path,
+            [ToolResult(tool="checkov", status="success", attempts=1)],
+            ["checkov"],
+            iac_path=iac_file,
+            results_dir=iac_results_dir,
+        )
 
-            from scripts.core.tool_runner import ToolResult
-
-            mock_runner.run_all_parallel.return_value = [
-                ToolResult(tool="checkov", status="success", attempts=1),
-            ]
-
-            scan_iac_file(
-                iac_type="terraform",
-                iac_path=iac_file,
-                results_dir=iac_results_dir,  # Pass individual-iac directory (matches production)
-                tools=["checkov"],
-                timeout=600,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-            )
-
-            # Check that directory was created with file stem
-            expected_dir = iac_results_dir / "my-infrastructure"
-            assert expected_dir.exists()
+        assert (iac_results_dir / "my-infrastructure").exists()
 
     def test_scan_iac_with_tool_timeout_override(self, tmp_path):
-        """Test per-tool timeout overrides"""
         iac_file = tmp_path / "deployment.yaml"
         iac_file.write_text("apiVersion: v1\nkind: Pod")
 
-        # Mock find_tool to return path for trivy
-        def mock_find_tool(tool_name):
-            return f"/usr/bin/{tool_name}" if tool_name == "trivy" else None
-
-        with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-
-            from scripts.core.tool_runner import ToolResult
-
-            mock_runner.run_all_parallel.return_value = [
-                ToolResult(tool="trivy", status="success", attempts=1),
-            ]
-
-            per_tool_config = {
+        _, _, MockRunner = _scan(
+            tmp_path,
+            [ToolResult(tool="trivy", status="success", attempts=1)],
+            ["trivy"],
+            find=lambda t: f"/usr/bin/{t}" if t == "trivy" else None,
+            iac_path=iac_file,
+            iac_type="k8s",
+            per_tool_config={
                 "trivy": {"timeout": 900, "flags": ["--severity", "HIGH"]}
-            }
+            },
+        )
 
-            scan_iac_file(
-                iac_type="k8s",
-                iac_path=iac_file,
-                results_dir=tmp_path,
-                tools=["trivy"],
-                timeout=600,
-                retries=0,
-                per_tool_config=per_tool_config,
-                allow_missing_tools=False,
-                find_tool_func=mock_find_tool,  # Inject mock
-            )
-
-            # Verify ToolRunner was called
-            MockRunner.assert_called_once()
-            args, kwargs = MockRunner.call_args
-
-            # Check that tool definitions have correct timeout
-            # ToolRunner is called with positional arg: ToolRunner(tools=tool_defs)
-            tool_defs = kwargs.get("tools") or (args[0] if args else [])
-            trivy_def = next((t for t in tool_defs if t.name == "trivy"), None)
-            assert trivy_def is not None, "trivy tool definition not found"
-            assert trivy_def.timeout == 900
-            assert "--severity" in trivy_def.command
-            assert "HIGH" in trivy_def.command
+        trivy_def = next((t for t in _defs(MockRunner) if t.name == "trivy"), None)
+        assert trivy_def is not None, "trivy tool definition not found"
+        assert trivy_def.timeout == 900
+        assert "--severity" in trivy_def.command
+        assert "HIGH" in trivy_def.command
+        assert trivy_def.command[1] == "config"
 
     def test_scan_iac_tool_failure(self, tmp_path):
-        """Test handling of tool failures"""
-        iac_file = tmp_path / "main.tf"
-        iac_file.write_text("terraform {}")
-
-        with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-
-            from scripts.core.tool_runner import ToolResult
-
-            mock_runner.run_all_parallel.return_value = [
-                ToolResult(tool="checkov", status="error", returncode=2, attempts=1),
+        _, rows, _ = _scan(
+            tmp_path,
+            [
+                ToolResult(
+                    tool="checkov", status="error", returncode=3, failure="crash"
+                ),
                 ToolResult(tool="trivy", status="success", attempts=1),
-            ]
+            ],
+            ["checkov", "trivy"],
+        )
 
-            identifier, statuses = scan_iac_file(
-                iac_type="terraform",
-                iac_path=iac_file,
-                results_dir=tmp_path,
-                tools=["checkov", "trivy"],
-                timeout=600,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-            )
-
-            assert statuses["checkov"] is False  # Failed
-            assert statuses["trivy"] is True  # Succeeded
+        assert rows["checkov"].label == "failed:unaccepted exit code"
+        assert rows["trivy"].state is State.RAN
 
     def test_scan_iac_only_checkov(self, tmp_path):
-        """Test scanning with only checkov (no trivy)"""
-        iac_file = tmp_path / "security.tf"
-        iac_file.write_text("")
+        _, rows, _ = _scan(
+            tmp_path,
+            [ToolResult(tool="checkov", status="success", attempts=1)],
+            ["checkov"],
+        )
 
-        with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
+        assert list(rows) == ["checkov"]
 
-            from scripts.core.tool_runner import ToolResult
+    def test_a_repository_tool_is_skipped_on_a_file(self, tmp_path):
+        _, rows, _ = _scan(
+            tmp_path,
+            [ToolResult(tool="checkov", status="success", attempts=1)],
+            ["checkov", "hadolint", "nuclei"],
+        )
 
-            mock_runner.run_all_parallel.return_value = [
-                ToolResult(tool="checkov", status="success", attempts=1),
-            ]
-
-            identifier, statuses = scan_iac_file(
-                iac_type="terraform",
-                iac_path=iac_file,
-                results_dir=tmp_path,
-                tools=["checkov"],  # Only checkov
-                timeout=600,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-            )
-
-            assert "checkov" in statuses
-            assert "trivy" not in statuses
+        assert rows["hadolint"].label == "skipped:not for this target type"
+        assert rows["nuclei"].label == "skipped:needs --url"
 
     def test_scan_iac_creates_output_directory(self, tmp_path):
-        """Test that output directories are created"""
         iac_file = tmp_path / "network.tf"
         iac_file.write_text('resource "aws_vpc" "main" {}')
-
-        # Create individual-iac subdirectory (matches production usage in scan_orchestrator)
         iac_results_dir = tmp_path / "individual-iac"
 
-        with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
+        _scan(
+            tmp_path,
+            [ToolResult(tool="checkov", status="success", attempts=1)],
+            ["checkov"],
+            iac_path=iac_file,
+            results_dir=iac_results_dir,
+        )
 
-            from scripts.core.tool_runner import ToolResult
-
-            mock_runner.run_all_parallel.return_value = [
-                ToolResult(tool="checkov", status="success", attempts=1),
-            ]
-
-            scan_iac_file(
-                iac_type="terraform",
-                iac_path=iac_file,
-                results_dir=iac_results_dir,  # Pass individual-iac directory
-                tools=["checkov"],
-                timeout=600,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-            )
-
-            # Check directory structure
-            assert iac_results_dir.exists()
-            assert (iac_results_dir / "network").exists()
+        assert (iac_results_dir / "network").exists()
 
     def test_allow_missing_tools_writes_stubs(self, tmp_path):
-        """Test that allow_missing_tools writes stubs for missing tools"""
-        iac_file = tmp_path / "main.tf"
-        iac_file.write_text('resource "aws_s3_bucket" "test" {}')
-
-        def mock_find_tool(tool_name):
-            return None  # No tools found
-
         stub_calls = []
 
         def mock_write_stub(tool_name, output_path):
             stub_calls.append((tool_name, str(output_path)))
             output_path.write_text("{}")
 
-        with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-            mock_runner.run_all_parallel.return_value = []
+        _, rows, _ = _scan(
+            tmp_path,
+            [],
+            ["checkov", "trivy"],
+            find=lambda t: None,
+            allow_missing_tools=True,
+            write_stub_func=mock_write_stub,
+        )
 
-            iac_path, statuses = scan_iac_file(
-                iac_type="terraform",
-                iac_path=iac_file,
-                results_dir=tmp_path,
-                tools=["checkov", "trivy"],
-                timeout=600,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=True,
-                find_tool_func=mock_find_tool,
-                write_stub_func=mock_write_stub,
-            )
-
-            # Both tools should have stubs written
-            assert len(stub_calls) == 2
-            assert any("checkov" in path for _, path in stub_calls)
-            assert any("trivy" in path for _, path in stub_calls)
-            # Both stubbed, so neither succeeded. These read `is True`, which
-            # encoded the defect as the contract -- the same correction this
-            # file's `test_scan_url_tool_not_found_error` sibling records (#825).
-            assert statuses["checkov"] is False
-            assert statuses["trivy"] is False
-            assert not_attempted_tools(statuses) == ["checkov", "trivy"]
+        assert len(stub_calls) == 2
+        assert rows["checkov"].label == "skipped:not installed"
+        assert rows["trivy"].label == "skipped:not installed"
 
     def test_per_tool_flags_applied(self, tmp_path):
-        """Test that per_tool_config flags are correctly applied"""
         iac_file = tmp_path / "stack.yaml"
         iac_file.write_text("AWSTemplateFormatVersion: 2010-09-09")
 
-        def mock_find_tool(tool_name):
-            if tool_name in ["checkov", "trivy"]:
-                return f"/usr/bin/{tool_name}"
-            return None
-
-        with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-
-            from scripts.core.tool_runner import ToolResult
-
-            mock_runner.run_all_parallel.return_value = [
+        _, _, MockRunner = _scan(
+            tmp_path,
+            [
                 ToolResult(tool="checkov", status="success", attempts=1),
                 ToolResult(tool="trivy", status="success", attempts=1),
-            ]
-
-            per_tool_config = {
+            ],
+            ["checkov", "trivy"],
+            iac_path=iac_file,
+            iac_type="cloudformation",
+            per_tool_config={
                 "checkov": {"flags": ["--framework", "cloudformation"]},
                 "trivy": {"flags": ["--severity", "HIGH,CRITICAL"]},
-            }
+            },
+        )
 
-            scan_iac_file(
-                iac_type="cloudformation",
-                iac_path=iac_file,
-                results_dir=tmp_path,
-                tools=["checkov", "trivy"],
-                timeout=600,
-                retries=0,
-                per_tool_config=per_tool_config,
-                allow_missing_tools=False,
-                find_tool_func=mock_find_tool,
-            )
+        defs = _defs(MockRunner)
+        checkov_def = next((t for t in defs if t.name == "checkov"), None)
+        assert checkov_def is not None
+        assert "--framework" in checkov_def.command
+        trivy_def = next((t for t in defs if t.name == "trivy"), None)
+        assert trivy_def is not None
+        assert "--severity" in trivy_def.command
 
-            MockRunner.assert_called_once()
-            args, kwargs = MockRunner.call_args
-            tool_defs = kwargs.get("tools") or (args[0] if args else [])
+    def test_trivy_config_drops_a_flag_it_rejects(self, tmp_path):
+        """`trivy config` rejects --no-progress at parse time (TRIVY_UNSUPPORTED_FLAGS)."""
+        _, _, MockRunner = _scan(
+            tmp_path,
+            [ToolResult(tool="trivy", status="success", attempts=1)],
+            ["trivy"],
+            per_tool_config={
+                "trivy": {"flags": ["--no-progress", "--severity", "HIGH"]}
+            },
+        )
 
-            # Verify checkov flags
-            checkov_def = next((t for t in tool_defs if t.name == "checkov"), None)
-            assert checkov_def is not None
-            assert "--framework" in checkov_def.command
-
-            # Verify trivy flags
-            trivy_def = next((t for t in tool_defs if t.name == "trivy"), None)
-            assert trivy_def is not None
-            assert "--severity" in trivy_def.command
+        (trivy_def,) = _defs(MockRunner)
+        assert "--no-progress" not in trivy_def.command
+        assert "--severity" in trivy_def.command
 
     def test_scan_iac_custom_find_tool_func(self, tmp_path):
-        """Test using custom find_tool_func"""
-        iac_file = tmp_path / "main.tf"
-        iac_file.write_text('resource "aws_s3_bucket" "test" {}')
+        _, rows, _ = _scan(
+            tmp_path,
+            [ToolResult(tool="checkov", status="success", attempts=1)],
+            ["checkov", "trivy"],
+            find=lambda t: f"/custom/{t}" if t == "checkov" else None,
+            allow_missing_tools=True,
+        )
 
-        def mock_find_tool(tool: str):
-            return f"/usr/bin/{tool}" if tool == "checkov" else None
-
-        with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-
-            from scripts.core.tool_runner import ToolResult
-
-            mock_runner.run_all_parallel.return_value = [
-                ToolResult(tool="checkov", status="success", attempts=1),
-            ]
-
-            iac_id, statuses = scan_iac_file(
-                iac_type="terraform",
-                iac_path=iac_file,
-                results_dir=tmp_path,
-                tools=["checkov", "trivy"],
-                timeout=600,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=True,
-                find_tool_func=mock_find_tool,
-            )
-
-            assert "checkov" in statuses
-            assert "trivy" in statuses
+        assert rows["checkov"].state is State.RAN
+        assert rows["trivy"].label == "skipped:not installed"
 
     def test_scan_iac_custom_write_stub_func(self, tmp_path):
-        """Test using custom write_stub_func"""
-        iac_file = tmp_path / "main.tf"
-        iac_file.write_text('resource "aws_s3_bucket" "test" {}')
-
         stub_calls = []
 
-        def mock_write_stub(tool: str, path) -> None:
-            stub_calls.append((tool, path))
+        _scan(
+            tmp_path,
+            [],
+            ["checkov", "trivy"],
+            find=lambda t: None,
+            allow_missing_tools=True,
+            write_stub_func=lambda tool, path: stub_calls.append((tool, path)),
+        )
 
-        def mock_find_tool(tool: str):
-            return None  # No tools found
-
-        with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-            mock_runner.run_all_parallel.return_value = []
-
-            scan_iac_file(
-                iac_type="terraform",
-                iac_path=iac_file,
-                results_dir=tmp_path,
-                tools=["checkov", "trivy"],
-                timeout=600,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=True,
-                find_tool_func=mock_find_tool,
-                write_stub_func=mock_write_stub,
-            )
-
-            assert len(stub_calls) == 2
+        assert len(stub_calls) == 2
 
 
 if __name__ == "__main__":

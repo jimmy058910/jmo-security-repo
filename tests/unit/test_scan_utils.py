@@ -310,21 +310,23 @@ class TestToolExclusionFlags:
             "**/venv",
         ]
 
-    def test_an_unmapped_tool_gets_nothing(self):
-        """An unlisted tool must not be handed a flag it would reject.
+    def test_a_tool_whose_exclusion_is_not_a_flag_gets_no_flag(self):
+        """trivy and semgrep fail fatally on an unknown flag, so only a
+        measured spelling is ever rendered as one.
 
-        trivy and semgrep both fail fatally at argument parsing on an unknown
-        flag, so silence is the only safe default for a tool whose exclusion
-        spelling has not been measured against the real binary.
-
-        `trufflehog` has no flag at all and takes an exclude *file*; hadolint
-        is handed its Dockerfiles as arguments and never walks the tree.
+        `trufflehog` takes an exclude *file*; hadolint is handed its
+        Dockerfiles as arguments and never walks the tree; zap reads a URL.
+        gosec has a flag now, measured (`-exclude-dir=REGEX`, any depth).
         """
-        from scripts.cli.scan_utils import tool_exclusion_flags
+        from scripts.cli.scan_utils import segment_regex, tool_exclusion_flags
 
-        assert tool_exclusion_flags("trufflehog") == []
-        assert tool_exclusion_flags("hadolint") == []
-        assert tool_exclusion_flags("gosec") == []
+        assert tool_exclusion_flags("trufflehog", results_dir_name="results") == []
+        assert tool_exclusion_flags("hadolint", results_dir_name="results") == []
+        assert tool_exclusion_flags("zap", results_dir_name="results") == []
+        # gosec's is a flag: an escaped, segment-bounded regex (INLINE_REGEX).
+        assert f"-exclude-dir={segment_regex('results')}" in tool_exclusion_flags(
+            "gosec", results_dir_name="results"
+        )
 
     def test_checkov_must_not_be_given_the_trivy_spelling(self):
         """`--skip-path` is a REGEX. `**/x` is not one, and fails in silence.
@@ -401,15 +403,21 @@ class TestToolExclusionFlags:
         `node_modules` to skip would gut it while still exiting 0 - the
         silently-inert-scanner shape this project has been bitten by before.
 
-        Asserted on `excluded_dirs_for`, where the carve-out lives: grype has no
-        exclusion flag, so `tool_exclusion_flags` returns [] for it whatever
-        the carve-out does. The results directory is still JMo's own output,
-        and reaches it.
+        grype keeps every vendored tree but a virtualenv: on this repository
+        its `.venv` findings were the dev machine's CPython (104 of them,
+        decided 2026-09-11). The results directory is JMo's own output, and
+        reaches both.
         """
         from scripts.cli.scan_utils import excluded_dirs_for
 
-        assert excluded_dirs_for("grype") == ()
-        assert excluded_dirs_for("grype", results_dir_name="results") == ("results",)
+        assert excluded_dirs_for("syft") == ()
+        assert excluded_dirs_for("syft", results_dir_name="results") == ("results",)
+        assert excluded_dirs_for("grype") == (".venv", "venv")
+        assert excluded_dirs_for("grype", results_dir_name="results") == (
+            ".venv",
+            "venv",
+            "results",
+        )
 
     def test_the_vendored_list_reaches_a_sast_tool_but_not_an_sca_one(self):
         """The carve-out is the point, so assert the difference directly.
@@ -421,23 +429,27 @@ class TestToolExclusionFlags:
         from scripts.cli.scan_utils import excluded_dirs_for
 
         sast = excluded_dirs_for("semgrep")
+        sbom = excluded_dirs_for("syft")
         sca = excluded_dirs_for("grype")
 
         assert "node_modules" in sast
         assert "node_modules" not in sca
+        assert "node_modules" not in sbom
         assert ".venv" in sast
-        assert ".venv" not in sca
+        assert ".venv" not in sbom
 
-    def test_syft_is_left_alone_entirely(self):
-        """syft is an SBOM tool and is deliberately absent from the table.
-
-        Pinned because the tempting "fix" for #1080 is a global exclusion list,
-        and syft is the measured counter-example: 282 of its 878 artifacts on
-        the repo scan came from `.venv/`.
-        """
+    def test_syft_skips_only_jmos_own_output(self):
+        """syft is an SBOM tool: vendored trees are its subject (282 of its 878
+        artifacts on the #1080 repo scan were in `.venv/`), so it is told to
+        skip nothing but the in-tree results directory (#1235). A bare name is
+        fatal to it (rc 1), so the value carries `**/`."""
         from scripts.cli.scan_utils import tool_exclusion_flags
 
         assert tool_exclusion_flags("syft") == []
+        assert tool_exclusion_flags("syft", results_dir_name="results") == [
+            "--exclude",
+            "**/results",
+        ]
 
     def test_a_name_in_both_lists_is_sent_once(self):
         """A results directory named like a vendored one is excluded once.
@@ -468,9 +480,11 @@ class TestTruffleHogExcludePatterns:
     def test_git_and_jmo_are_both_excluded(self):
         from scripts.cli.scan_utils import TRUFFLEHOG_EXCLUDE_PATTERNS
 
+        # Anchored: git mode reports repository-relative paths, where a root
+        # `.git/` has no separator in front of it (measured, trufflehog 3.97.1).
         assert TRUFFLEHOG_EXCLUDE_PATTERNS == (
-            r"[\\/]\.git[\\/]",
-            r"[\\/]\.jmo[\\/]",
+            r"(^|[\\/])\.git[\\/]",
+            r"(^|[\\/])\.jmo[\\/]",
         )
 
     def test_the_patterns_do_not_match_dot_github(self):
@@ -530,8 +544,12 @@ class TestTruffleHogExcludePatterns:
         raw = path.read_bytes()
         assert b"\r" not in raw
         assert raw.decode("utf-8").splitlines() == [
-            r"[\\/]\.git[\\/]",
-            r"[\\/]\.jmo[\\/]",
+            r"(^|[\\/])\.git[\\/]",
+            r"(^|[\\/])\.jmo[\\/]",
+            r"(^|[\\/])node_modules[\\/]",
+            r"(^|[\\/])vendor[\\/]",
+            r"(^|[\\/])\.venv[\\/]",
+            r"(^|[\\/])venv[\\/]",
         ]
 
     def test_the_exclude_file_is_dot_prefixed_scratch(self, tmp_path):
@@ -668,13 +686,13 @@ class TestTheResultsDirectoryIsExcludedWhenItIsInsideTheTree:
         path = write_trufflehog_exclude_file(tmp_path, results_dir_name="results")
         body = path.read_bytes().decode("utf-8")
 
-        assert r"[\\/]results[\\/]" in body
+        assert r"(^|[\\/])results[\\/]" in body
         # The separator class is load-bearing here exactly as it is for `.git`:
         # a bare `results` would also match `my-results.json`.
         assert "\nresults\n" not in body
         # The existing entries survive.
-        assert r"[\\/]\.git[\\/]" in body
-        assert r"[\\/]\.jmo[\\/]" in body
+        assert r"(^|[\\/])\.git[\\/]" in body
+        assert r"(^|[\\/])\.jmo[\\/]" in body
 
     def test_a_regex_metacharacter_in_the_directory_name_is_escaped(self, tmp_path):
         """`--out ./results.d` must not compile as "any character"."""
@@ -688,12 +706,40 @@ class TestTheResultsDirectoryIsExcludedWhenItIsInsideTheTree:
 
         assert r"results\.d" in body
 
-    def test_the_default_file_is_unchanged_without_a_results_dir(self, tmp_path):
+    def test_without_a_results_dir_the_file_is_the_fixed_set(self, tmp_path):
+        """JMo's internals plus the vendored trees (Phase 3: the secret scanner
+        joined that tier), and nothing else."""
         from scripts.cli.scan_utils import (
             TRUFFLEHOG_EXCLUDE_PATTERNS,
+            VENDORED_DIRS,
+            trufflehog_exclude_pattern,
             write_trufflehog_exclude_file,
         )
 
         body = write_trufflehog_exclude_file(tmp_path).read_bytes().decode("utf-8")
+        expected = list(TRUFFLEHOG_EXCLUDE_PATTERNS)
+        for name in VENDORED_DIRS:
+            if trufflehog_exclude_pattern(name) not in expected:
+                expected.append(trufflehog_exclude_pattern(name))
 
-        assert body == "\n".join(TRUFFLEHOG_EXCLUDE_PATTERNS) + "\n"
+        assert body == "\n".join(expected) + "\n"
+        assert "results" not in body
+
+
+class TestRe2Escape:
+    r"""trufflehog's and gosec's patterns are Go (RE2) regexes; a scan root is a
+    literal inside them. Python's `re.escape` writes a space as `\ `, which is
+    not an RE2 escape."""
+
+    def test_metacharacters_are_escaped_and_nothing_else(self):
+        import re
+
+        from scripts.cli.scan_utils import re2_escape
+
+        root = r"C:\odd dir-(x)\a.b+c"
+
+        escaped = re2_escape(root)
+
+        assert escaped == r"C:\\odd dir-\(x\)\\a\.b\+c"
+        assert r"\ " not in escaped
+        assert re.fullmatch(escaped, root)

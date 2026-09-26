@@ -37,6 +37,8 @@ import yaml
 from scripts.core.config import RetryConfig
 from scripts.core.scan_timings import (
     OUTCOME_FAILED_BEFORE_TOOLS,
+    Reason,
+    TargetRows,
     write_scan_timings,
 )
 from scripts.core.secure_temp import secure_temp_dir
@@ -44,6 +46,7 @@ from scripts.core.validation import sanitize_subprocess_output
 
 from .image_scanner import scan_image
 from .repository_scanner import scan_repository
+from .tool_loop import rows_without_running
 
 logger = logging.getLogger(__name__)
 
@@ -64,20 +67,15 @@ def _record_abandoned_target(
     tools: list[str],
     started: float,
     reason: str,
-) -> dict[str, bool]:
-    """Write a timings row for a target abandoned before any tool ran (#824).
+) -> TargetRows:
+    """Write the rows of a target abandoned before any tool ran (#824).
 
-    `scan-timings.json` was written by five of the six scanners; gitlab never
-    called it at all. On the success path that was masked -- `scan_gitlab_repo`
-    delegates to `scan_repository`, which writes the artifact into a temp dir,
-    and the copy loop globs `*.json` and carries it across. On the four failure
-    paths it was not masked at all, and those are the ones where it matters:
-    an absent file is indistinguishable from a target nobody asked for, so the
-    scan-phase instrumentation had a hole nothing could see from the artifact.
-
-    Returns the all-false status map every one of those paths already returned,
-    so the call reads as a single statement at each site.
+    On the four failure paths no tool reached `ToolRunner`, and an absent
+    timings file is indistinguishable from a target nobody asked for. Every
+    requested tool that reads a repository gets `failed:target not scanned`,
+    with the reason as its detail.
     """
+    rows = rows_without_running(tools, "gitlab", Reason.BEFORE_TOOLS, detail=reason)
     out_dir = _gitlab_out_dir(results_dir, full_path)
     # These paths return before any tool has written output, so the target's
     # directory does not exist yet. `write_scan_timings` deliberately does not
@@ -87,17 +85,17 @@ def _record_abandoned_target(
     except OSError as exc:
         # A diagnostic must never be the reason a scan result is lost.
         logger.warning("Could not create %s for scan timings: %s", out_dir, exc)
-        return dict.fromkeys(tools, False)
+        return rows
     write_scan_timings(
         out_dir,
-        [],
+        rows,
         target=full_path,
         target_type="gitlab",
         wall_seconds=time.perf_counter() - started,
         outcome=OUTCOME_FAILED_BEFORE_TOOLS,
         error=reason,
     )
-    return dict.fromkeys(tools, False)
+    return rows
 
 
 def _discover_container_images(repo_path: Path) -> set[str]:
@@ -207,7 +205,7 @@ def scan_gitlab_repo(
     allow_missing_tools: bool,
     tool_exists_func=None,
     write_stub_func=None,
-) -> tuple[str, dict[str, bool]]:
+) -> tuple[str, TargetRows]:
     """
     Scan a GitLab repo by cloning it and running the full repository scanner.
 
@@ -223,8 +221,7 @@ def scan_gitlab_repo(
         write_stub_func: Optional function to write stub files (for testing)
 
     Returns:
-        Tuple of (full_path, statuses_dict)
-        statuses_dict contains tool success/failure and __attempts__ metadata
+        (full_path, rows by tool)
     """
     started = time.perf_counter()
     full_path = gitlab_info["full_path"]
@@ -329,8 +326,8 @@ def scan_gitlab_repo(
                 retries=retries,
                 per_tool_config=per_tool_config,
                 allow_missing_tools=allow_missing_tools,
-                tool_exists_func=tool_exists_func,
                 write_stub_func=write_stub_func,
+                target_type="gitlab",
             )
 
             # Discover container images in cloned repo
@@ -345,7 +342,13 @@ def scan_gitlab_repo(
 
                 for image in discovered_images:
                     try:
-                        _, image_statuses = scan_image(  # type: ignore[call-arg]
+                        # TODO(issue-#1311): this has never scanned an
+                        # image. scan_image takes no tool_exists_func, so every
+                        # call raises TypeError into the except below, and the
+                        # results directory is the temporary one, deleted with
+                        # it. Its statuses were merged into this target's map
+                        # under "image:<ref>:<tool>" keys, which never ran.
+                        scan_image(  # type: ignore[call-arg]
                             image=image,
                             results_dir=temp_image_results,
                             tools=image_tools,
@@ -356,11 +359,6 @@ def scan_gitlab_repo(
                             tool_exists_func=tool_exists_func,
                             write_stub_func=write_stub_func,
                         )
-                        # Merge image statuses into main statuses
-                        for tool, status in image_statuses.items():
-                            if tool not in statuses or not statuses[tool]:
-                                # Only update if tool wasn't already successful
-                                statuses[f"image:{image}:{tool}"] = status
                     except Exception as e:
                         # Image scan failed - continue with other images
                         logger.error(
