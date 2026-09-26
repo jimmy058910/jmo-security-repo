@@ -117,11 +117,22 @@ def test_the_table_is_the_matrix() -> None:
     assert all(name == d.name for name, d in DESCRIPTORS.items())
 
 
+def test_gitleaks_joined_beside_the_other_secret_scanner() -> None:
+    """PR C (decided 2026-09-24): gitleaks is wired in Phase 3 for G1, so the
+    matrix is 13. Listed after trufflehog, so the two secret scanners read
+    together wherever the matrix is printed."""
+    assert len(DESCRIPTORS) == 13
+    names = list(DESCRIPTORS)
+    assert names[names.index("trufflehog") + 1] == "gitleaks"
+
+
 def test_target_types_differ_from_the_old_literal_only_by_the_url_tools() -> None:
     """zap left `repo` and nuclei left `gitlab`: both are URL-only (Phase 3
-    decision: "zap and nuclei on a non-URL target are skipped:needs --url")."""
+    decision: "zap and nuclei on a non-URL target are skipped:needs --url").
+    gitleaks (PR C) reads a repository, and so a GitLab clone."""
     expected = {k: set(v) for k, v in OLD_TOOL_SCAN_TYPES.items()}
     expected["repo"].discard("zap")
+    expected["repo"].add("gitleaks")
     expected["gitlab"] = set(expected["repo"])
 
     assert expected == tool_registry.TOOL_SCAN_TYPES
@@ -138,22 +149,49 @@ def test_timeout_floors_are_derived_unchanged() -> None:
 
 def test_stub_shapes_are_derived_unchanged_plus_the_three_empty_ones() -> None:
     """shellcheck, gosec and yara had no entry and fell back to `{}`; they are
-    declared now, with the value they already got."""
+    declared now, with the value they already got. gitleaks (PR C) writes
+    SARIF, so its empty result is an empty SARIF document."""
     derived = {name: d.stub for name, d in DESCRIPTORS.items()}
-    assert derived == {**OLD_STUBS, "shellcheck": {}, "gosec": {}, "yara": {}}
+    assert derived == {
+        **OLD_STUBS,
+        "shellcheck": {},
+        "gosec": {},
+        "yara": {},
+        "gitleaks": {"version": "2.1.0", "runs": []},
+    }
 
 
-@pytest.mark.parametrize("name", sorted(OLD_VERSION_PATTERNS))
+# gitleaks (PR C): `gitleaks version` prints the bare version, `8.30.1`
+# (measured, the release's windows_x64 binary).
+NEW_VERSION_PATTERNS = {"gitleaks": (r"^v?(\d+\.\d+\.\d+)$", re.MULTILINE)}
+NEW_VERSION_COMMANDS = {"gitleaks": ["gitleaks", "version"]}
+
+
+@pytest.mark.parametrize(
+    "name", sorted({**OLD_VERSION_PATTERNS, **NEW_VERSION_PATTERNS})
+)
 def test_version_patterns_are_derived_unchanged(name: str) -> None:
-    pattern, flags = OLD_VERSION_PATTERNS[name]
+    pattern, flags = {**OLD_VERSION_PATTERNS, **NEW_VERSION_PATTERNS}[name]
     got = tool_manager.VERSION_PATTERNS[name]
     assert (got.pattern, got.flags & ~re.UNICODE) == (pattern, flags)
 
 
 def test_version_tables_have_no_extra_keys() -> None:
-    assert set(tool_manager.VERSION_PATTERNS) == set(OLD_VERSION_PATTERNS)
-    assert tool_manager.VERSION_COMMANDS == OLD_VERSION_COMMANDS
+    assert set(tool_manager.VERSION_PATTERNS) == set(OLD_VERSION_PATTERNS) | set(
+        NEW_VERSION_PATTERNS
+    )
+    assert tool_manager.VERSION_COMMANDS == {
+        **OLD_VERSION_COMMANDS,
+        **NEW_VERSION_COMMANDS,
+    }
     assert tool_manager.VERSION_TIMEOUTS == OLD_VERSION_TIMEOUTS
+
+
+def test_the_gitleaks_probe_reads_what_gitleaks_version_prints() -> None:
+    pattern = tool_manager.VERSION_PATTERNS["gitleaks"]
+    assert pattern.search("8.30.1\n").group(1) == "8.30.1"
+    # Not a version buried in some other line: the whole line is the version.
+    assert pattern.search("built with go1.24.6\n") is None
 
 
 def test_exclusions_old_flags_survive_and_the_new_tools_gain_one() -> None:
@@ -183,6 +221,8 @@ def test_vendored_tier_is_the_old_set_plus_the_readers_that_walked_anyway() -> N
             "shellcheck",
             "gosec",
             "yara",
+            # PR C: the second secret scanner, for the same reason as the first.
+            "gitleaks",
         }
         == scan_utils.VENDOR_NOISE_TOOLS
     )
@@ -198,6 +238,7 @@ def test_every_descriptor_declares_an_exclusion_style() -> None:
             ExclusionStyle.INLINE,
             ExclusionStyle.SEPARATE,
             ExclusionStyle.REGEX,
+            ExclusionStyle.CONFIG_FILE,
         ):
             assert d.exclusion_flag, d.name
         if "repo" in d.target_types:

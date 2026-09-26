@@ -48,6 +48,13 @@ class Finding:
     risk: dict[str, Any] | None = None
     compliance: dict[str, Any] | None = None
     context: dict[str, Any] | None = None
+    # Secret scanners: commit, author and date of a record from git history.
+    # Never the secret itself.
+    secretContext: dict[str, Any] | None = None
+    # Transient: a keyed digest of the secret (common_finding.secret_digest),
+    # which the report phase pairs tree and history records by and then
+    # removes. Nothing writes it.
+    secretDigest: str | None = None
     raw: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:

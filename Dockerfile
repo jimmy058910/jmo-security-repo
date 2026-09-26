@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Download TruffleHog (Secrets - Verified)
+# Download TruffleHog (Secrets - working tree and git history)
 RUN TRUFFLEHOG_VERSION="3.97.1" && \
     TRUFFLEHOG_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_${TRUFFLEHOG_ARCH}.tar.gz" \
@@ -26,6 +26,15 @@ RUN TRUFFLEHOG_VERSION="3.97.1" && \
     tar -xzf /tmp/trufflehog.tar.gz -C /tmp && \
     mv /tmp/trufflehog /usr/local/bin/trufflehog && \
     chmod +x /usr/local/bin/trufflehog
+
+# Download Gitleaks (Secrets - working tree and git history); amd64 is "x64"
+RUN GITLEAKS_VERSION="8.30.1" && \
+    GITLEAKS_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "x64") && \
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_${GITLEAKS_ARCH}.tar.gz" \
+    -o /tmp/gitleaks.tar.gz && \
+    gzip -t /tmp/gitleaks.tar.gz && \
+    tar -xzf /tmp/gitleaks.tar.gz -C /usr/local/bin gitleaks && \
+    chmod +x /usr/local/bin/gitleaks
 
 # Download Syft (SBOM)
 RUN SYFT_VERSION="1.51.1" && \
@@ -146,6 +155,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
+# Git history (G1): a mounted repository belongs to another UID (a CI runner's
+# 1001; this image runs as 1000), and git refuses it as "dubious ownership", so
+# every scan here skipped the secrets in its history. Trust every directory:
+# the image reads what it is handed, and git then honours that repository's
+# own .git/config (decided 2026-09-26; docs/KNOWN_LIMITATIONS.md).
+RUN git config --system --add safe.directory '*'
+
 # Clean Java runtime (Phase 1 optimization: 30 MB savings)
 RUN rm -rf /usr/lib/jvm/java-17-openjdk-*/man \
     /usr/lib/jvm/java-17-openjdk-*/legal \
@@ -187,6 +203,7 @@ RUN apt-get update && apt-get purge -y gcc g++ python3-dev libffi-dev libssl-dev
 
 # Copy compiled binaries from builder stage
 COPY --from=builder /usr/local/bin/trufflehog /usr/local/bin/trufflehog
+COPY --from=builder /usr/local/bin/gitleaks /usr/local/bin/gitleaks
 COPY --from=builder /usr/local/bin/syft /usr/local/bin/syft
 COPY --from=builder /usr/local/bin/trivy /usr/local/bin/trivy
 COPY --from=builder /usr/local/bin/hadolint /usr/local/bin/hadolint

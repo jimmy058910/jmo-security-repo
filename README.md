@@ -11,7 +11,7 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/jmogaming/jmo-security)](https://hub.docker.com/r/jmogaming/jmo-security)
 [![GitHub Stars](https://img.shields.io/github/stars/jimmy058910/jmo-security-repo?style=social)](https://github.com/jimmy058910/jmo-security-repo)
 
-**v1.1.1** | A terminal-first security audit toolkit orchestrating 12 scanners with unified CLI, normalized outputs, and interactive HTML dashboard.
+**v1.1.1** | A terminal-first security audit toolkit orchestrating 13 scanners with unified CLI, normalized outputs, and interactive HTML dashboard.
 
 [![Newsletter](https://img.shields.io/badge/Newsletter-Subscribe-667eea)](https://jmotools.com/subscribe.html)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/jmogaming)
@@ -30,7 +30,7 @@ JMo Security is an automated security audit framework for scanning code reposito
 
 ## Key Features
 
-- **12 Security Scanners** - Secrets, SAST, SBOM, SCA, IaC, DAST, and more
+- **13 Security Scanners** - Secrets, SAST, SBOM, SCA, IaC, DAST, and more
 - **6 Target Types** - Repos, images, IaC files, URLs, GitLab, Kubernetes
 - **Unified Output** - JSON, SARIF, Markdown, CSV export, dual-mode HTML dashboard
 - **Cross-Tool Deduplication** - Findings several tools report for the same issue collapse into one consensus finding
@@ -81,11 +81,11 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
 
 ## Security Tools
 
-12 scanners, one list. `jmo scan` considers all of them, and the target's content decides which run:
+13 scanners, one list. `jmo scan` considers all of them, and the target's content decides which run:
 
 | Category | Tools |
 |----------|-------|
-| **Secrets** | TruffleHog (verified) |
+| **Secrets** | TruffleHog, Gitleaks (working tree and git history) |
 | **SAST** | Semgrep, Gosec |
 | **SBOM** | Syft |
 | **SCA** | Trivy, Grype |
@@ -347,7 +347,8 @@ Dual licensed under [MIT](LICENSE-MIT) OR [Apache 2.0](LICENSE-APACHE).
 
 ## Related Resources
 
-- [TruffleHog](https://github.com/trufflesecurity/trufflehog) - Verified secrets scanning
+- [TruffleHog](https://github.com/trufflesecurity/trufflehog) - Secrets scanning
+- [Gitleaks](https://github.com/gitleaks/gitleaks) - Secrets scanning
 - [Semgrep](https://semgrep.dev) - Multi-language SAST
 - [Trivy](https://aquasecurity.github.io/trivy/) - Vulnerability scanning
 - [OWASP ZAP](https://www.zaproxy.org/) - DAST scanning

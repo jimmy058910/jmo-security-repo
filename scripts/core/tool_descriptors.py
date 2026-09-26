@@ -24,12 +24,14 @@ from __future__ import annotations
 import json
 import logging
 import re
+import subprocess
 import sys
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from scripts.core.scan_timings import Reason
 
@@ -103,6 +105,9 @@ class ExclusionStyle(StrEnum):
     SEPARATE = "separate"  # one `--flag **/NAME` pair per directory
     REGEX = "regex"  # one `--flag NAME` pair per directory
     PATTERN_FILE = "pattern_file"  # a generated file of regexes, one flag
+    # A generated config file, one flag: gitleaks has no exclude flag at all,
+    # only a config's `[[allowlists]] paths`.
+    CONFIG_FILE = "config_file"
     WALK = "walk"  # JMo walks the tree and hands the tool its files
     NOT_FILESYSTEM = "not_filesystem"  # reads a URL, never a directory
 
@@ -119,6 +124,13 @@ class ScanContext:
     flags: tuple[str, ...] = ()
     tool_config: Mapping[str, Any] = field(default_factory=dict)
     exclusion_args: tuple[str, ...] = ()
+    # The same exclusions for a git-history invocation, where they differ:
+    # trufflehog's git mode reports repository-relative paths, so its patterns
+    # cannot be anchored below the scan root (G1).
+    history_exclusion_args: tuple[str, ...] = ()
+    # Whether this target's git history is read (`read_history`, once per
+    # target by the scan loop).
+    history: bool = False
     files: tuple[str, ...] = ()
     iter_files: Callable[[], Iterator[Path]] | None = None
 
@@ -126,11 +138,66 @@ class ScanContext:
     def output(self) -> Path:
         return self.out_dir / f"{self.tool}.json"
 
+    @property
+    def history_output(self) -> Path:
+        """A git-history invocation's file. The report maps an output to its
+        tool by the name before the first dot, so it reaches the same adapter."""
+        return self.out_dir / f"{self.tool}.git.json"
+
     def any_file(self, predicate: Callable[[Path], bool]) -> bool:
         """Stop at the first file of the pruned walk that satisfies `predicate`."""
         if self.iter_files is None:
             return False
         return any(predicate(p) for p in self.iter_files())
+
+
+def read_history(root: Path) -> tuple[bool, str]:
+    """Whether a target's git history can be read, and if not, why.
+
+    ``(False, "")`` when there is no `.git` at all: nothing to say. Otherwise
+    one git probe decides, since both ways it goes wrong are silent:
+
+    - **A shallow clone.** Its oldest commit holds the whole tree, so both
+      tools name that commit, and its author, as having added every secret in
+      it (measured: a `--depth 1` clone blamed whoever wrote HEAD). GitLab
+      targets and `actions/checkout` both clone with depth 1.
+    - **A git that cannot read it** ("dubious ownership" in a container, a
+      worktree whose gitdir is not mounted). gitleaks' git mode then exits 0
+      with "0 commits scanned", and its row read `ran` (measured).
+
+    `.git` is a file in a worktree or a submodule. Python 3.12 raises from
+    `exists()` where 3.11 returned False (#1163), hence the guard.
+    """
+    try:
+        if not (Path(root) / ".git").exists():
+            return False, ""
+    except OSError as exc:
+        return False, f"its .git could not be checked: {exc}"
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--is-shallow-repository"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return False, f"git could not run: {exc}"
+    answer = result.stdout.strip()
+    if result.returncode != 0:
+        lines = [line for line in result.stderr.splitlines() if line.strip()]
+        return False, "git cannot read it: " + (
+            lines[-1] if lines else f"exit {result.returncode}"
+        )
+    if answer == "true":
+        return False, (
+            "a shallow clone, whose oldest commit would be named as adding "
+            "every secret in it; fetch its full history to read it"
+        )
+    if answer != "false":
+        return False, f"git could not tell whether it is a shallow clone: {answer!r}"
+    return True, ""
 
 
 @dataclass(frozen=True)
@@ -144,6 +211,8 @@ class Invocation:
     # zap.bat resolves its jar against the working directory: run from anywhere
     # else, it fails with "Unable to access jarfile zap-2.17.0.jar" (measured).
     cwd: Path | None = None
+    # Which of a tool's invocations this is, for a failed row to name.
+    label: str = ""
 
 
 @dataclass(frozen=True)
@@ -180,6 +249,8 @@ class ToolDescriptor:
     off_target_reason: Reason = Reason.NOT_FOR_TARGET
     timeout_floor: int = 0
     binary: str | None = None  # executable name, where it differs from `name`
+    # Reads a repository's git history too, when `read_history` allows (G1).
+    reads_history: bool = False
     execution_commands: tuple[str, ...] = ()  # what must exist to execute it
     stub: Any = field(default_factory=dict)  # empty-result shape of its output
     # Files examined, read from the output file; None when it cannot tell.
@@ -284,22 +355,112 @@ def scan_root(target: Any) -> str:
     return str(Path(target).resolve())
 
 
+def _asks_for_verified_results(flags: tuple[str, ...]) -> bool:
+    """`--only-verified`, or `--results` naming `verified`. Unverified secrets
+    are all there is under `--no-verification`, so either filter would report
+    nothing, rc 0, row `ran` (measured, 3.97.1)."""
+    for i, flag in enumerate(flags):
+        if flag == "--only-verified":
+            return True
+        value = None
+        if flag.startswith("--results="):
+            value = flag.split("=", 1)[1]
+        elif flag == "--results" and i + 1 < len(flags):
+            value = flags[i + 1]
+        if value is not None and "verified" in value.split(","):
+            return True
+    return False
+
+
 def _trufflehog_repo(ctx: ScanContext) -> list[Invocation]:
-    return [
+    # Verification sends each candidate secret to its issuer, and git mode
+    # multiplies the candidates: off unless `per_tool.trufflehog.verify` is
+    # true (decided 2026-09-26), or the user's flags ask for verified results.
+    # An unverified finding is graded MEDIUM.
+    verify = ctx.tool_config.get("verify") is True or _asks_for_verified_results(
+        ctx.flags
+    )
+    verification = () if verify else ("--no-verification",)
+    root = scan_root(ctx.target)
+    invocations = [
         Invocation(
             command=(
                 ctx.binary,
                 "filesystem",
-                scan_root(ctx.target),
+                root,
                 "--json",
                 "--no-update",
+                *verification,
                 *ctx.exclusion_args,
                 *ctx.flags,
             ),
             output_file=ctx.output,
             capture_stdout=True,
             ok_return_codes=(0, 1),
+            label="filesystem",
         )
+    ]
+    if ctx.history:
+        # G1: history names the commit, so #1134's objection to a hit inside
+        # `.git/objects` (no commit) does not apply. `file://C:/x` on Windows:
+        # `file:///C:/x` doubles the drive (measured, 3.97.1). Escaped, since
+        # a URL reads `#` as the end of its path and `%41` as `A`: unescaped,
+        # the history run failed on every scan of such a directory (measured).
+        invocations.append(
+            Invocation(
+                command=(
+                    ctx.binary,
+                    "git",
+                    "file://" + quote(Path(root).as_posix(), safe="/:"),
+                    "--json",
+                    "--no-update",
+                    *verification,
+                    *ctx.history_exclusion_args,
+                    *ctx.flags,
+                ),
+                output_file=ctx.history_output,
+                capture_stdout=True,
+                ok_return_codes=(0, 1),
+                label="git",
+            )
+        )
+    return invocations
+
+
+def _gitleaks_repo(ctx: ScanContext) -> list[Invocation]:
+    # Target `.`, run from the repository: given an absolute target, gitleaks
+    # writes that path into every message, and a finding's id hashes the
+    # message, so the same secret had a different id in every checkout
+    # (measured, 8.30.1). This is also how the Phase 1 golden was made. Every
+    # other path is absolute, since the working directory moves. History (G1)
+    # reads the same config: its paths are repository-relative too.
+    modes = [("dir", ctx.output)]
+    if ctx.history:
+        modes.append(("git", ctx.history_output))
+    return [
+        Invocation(
+            command=(
+                ctx.binary,
+                mode,
+                ".",
+                "--report-format",
+                "sarif",
+                "--report-path",
+                str(output.resolve()),
+                "--no-banner",
+                # A leak is not an error; anything nonzero is.
+                "--exit-code",
+                "0",
+                *ctx.exclusion_args,
+                *ctx.flags,
+            ),
+            output_file=output,
+            capture_stdout=False,
+            ok_return_codes=(0,),
+            cwd=Path(scan_root(ctx.target)),
+            label=mode,
+        )
+        for mode, output in modes
     ]
 
 
@@ -576,6 +737,20 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             exclusion_style=ExclusionStyle.PATTERN_FILE,
             exclusion_flag="--exclude-paths",
             stub=[],
+            reads_history=True,
+        ),
+        ToolDescriptor(
+            name="gitleaks",
+            invocations={"repo": _gitleaks_repo},
+            # `gitleaks version` prints the bare version (measured, 8.30.1).
+            version_probe=VersionProbe(
+                re.compile(r"^v?(\d+\.\d+\.\d+)$", re.MULTILINE),
+                command=["gitleaks", "version"],
+            ),
+            exclusion_style=ExclusionStyle.CONFIG_FILE,
+            exclusion_flag="--config",
+            stub={"version": "2.1.0", "runs": []},
+            reads_history=True,
         ),
         ToolDescriptor(
             name="semgrep",

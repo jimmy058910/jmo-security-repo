@@ -9,8 +9,26 @@ All notable changes to JMo Security will be documented in this file.
 - A generic SARIF 2.1.0 importer (`scripts/core/adapters/sarif_common.py`) and three
   adapters bound through it: `zizmor`, `gitleaks` and `osv_scanner`. A `zizmor.json`,
   `gitleaks.json` or `osv-scanner.json` written in SARIF form into a results directory is
-  parsed, normalised, deduplicated and reported like any other tool output. None of the
-  three runs in a scan yet: `TOOL_MATRIX` gains them in Phase 4 of the v2.0.0 program.
+  parsed, normalised, deduplicated and reported like any other tool output. gitleaks
+  runs in scans since Phase 3 (below); zizmor and osv-scanner join the matrix in Phase 4.
+- **gitleaks joins the matrix, and secrets are read from git history.** A scan runs 13
+  tools. When the scanned repository has a `.git` of its own, and is not a shallow clone
+  (whose oldest commit would be blamed for every secret in it), TruffleHog and gitleaks
+  also read its history, with the same exclusions as the tree, so a secret that was
+  committed and later removed is reported, with the commit that added it and that
+  commit's author and date in `secretContext`. A secret still in the tree is reported
+  once per tool, not twice: the two records are paired by the secret itself (never
+  stored) and the tree finding gains the commit. Each tool's history run writes
+  `<tool>.git.json` beside its tree output, and each tool keeps one accounting row,
+  `invocations: 2`, whose detail names the run that failed. On this repository (1,258
+  commits) the two secret scanners took 4 s without history and 17 s with it. gitleaks
+  runs from inside the repository, so its paths and ids do not depend on where the
+  checkout lives, and its matched text never reaches a report or history: gitleaks'
+  SARIF carries it in `region.snippet`, which is dropped. A shallow clone, or a repository
+  git cannot read, is scanned without its history, with a WARNING and `history not read`
+  on both rows. The Docker image sets git's `safe.directory '*'`, since a mounted
+  repository always belongs to another UID there and git refused it as "dubious
+  ownership".
 - **`jmo scan --tsv FILE --dest DIR`**, and the same on `jmo ci`: clone every repository
   a TSV lists into `<dest>/<owner>/<repo>`, then scan the clones. A second run
   fast-forwards an existing clone of the same URL, so it scans current code. Only
@@ -55,6 +73,14 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Changed
 
+- **Breaking. TruffleHog no longer verifies secrets unless asked.** Verification sends
+  each candidate secret to the service that issued it, and git history multiplies the
+  candidates, so both TruffleHog runs pass `--no-verification`.
+  `per_tool.trufflehog.verify: true` in `jmo.yml` turns it back on, as does
+  `--only-verified` in its flags. **An unverified secret is graded HIGH now, not MEDIUM**,
+  and so is every gitleaks finding, so `--fail-on HIGH` stops on a leaked secret, verified
+  or not; the tags and `risk.confidence` say which. The built-in `zero-secrets` policy
+  blocks verified secrets only, so without verification it blocks nothing.
 - **Breaking. The history database drops `scans.profile`.** The first store after
   upgrading removes the column in place, in one transaction. That includes databases
   from before v1.2.0, whose `CHECK(profile IN ...)` constraint SQLite otherwise refuses

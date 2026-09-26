@@ -466,7 +466,11 @@ def trufflehog_exclude_pattern(name: str, root: str | None = None) -> str:
 
 
 def write_trufflehog_exclude_file(
-    out_dir: Path, *, results_dir_name: str | None = None, root: str | None = None
+    out_dir: Path,
+    *,
+    results_dir_name: str | None = None,
+    root: str | None = None,
+    name: str = ".trufflehog-exclude",
 ) -> Path:
     """Write TruffleHog's ``--exclude-paths`` file and return its path.
 
@@ -509,8 +513,49 @@ def write_trufflehog_exclude_file(
         *excluded_dirs_for("trufflehog", results_dir_name=results_dir_name),
     )
     patterns = list(dict.fromkeys(trufflehog_exclude_pattern(n, root) for n in names))
-    path = out_dir / ".trufflehog-exclude"
+    path = out_dir / name
     path.write_bytes(("\n".join(patterns) + "\n").encode("utf-8"))
+    return path
+
+
+def write_gitleaks_config(
+    out_dir: Path, *, results_dir_name: str | None = None
+) -> Path:
+    """Write gitleaks' ``--config`` file and return its absolute path.
+
+    gitleaks has no exclude flag: exclusions are ``[[allowlists]] paths`` in a
+    config, and ``[extend] useDefault = true`` keeps its own rules. The names
+    are trufflehog's (``.git``, ``.jmo`` and the vendored tier, plus the
+    results directory inside the tree), as whole-segment Go regexes at any
+    depth: gitleaks runs from the repository, so in both modes a path is
+    repository-relative and a pattern never meets the scan root's own path.
+
+    Each pattern is a TOML basic string written by ``json.dumps``, whose
+    escapes TOML shares, so a quote in a results directory's name cannot end
+    the string early. Dot-prefixed scratch beside the outputs, written as
+    bytes (LF); absolute, because gitleaks' working directory is the
+    repository, not the caller's.
+    """
+    names = dict.fromkeys(
+        (
+            ".git",
+            ".jmo",
+            *excluded_dirs_for("gitleaks", results_dir_name=results_dir_name),
+        )
+    )
+    lines = [
+        "# Written by JMo for one scan: its exclusion list, in gitleaks' grammar.",
+        "[extend]",
+        "useDefault = true",
+        "",
+        "[[allowlists]]",
+        'description = "JMo: vendored trees and its own output"',
+        "paths = [",
+        *(f"  {json.dumps(segment_regex(n))}," for n in names),
+        "]",
+    ]
+    path = (out_dir / ".gitleaks.toml").resolve()
+    path.write_bytes(("\n".join(lines) + "\n").encode("utf-8"))
     return path
 
 

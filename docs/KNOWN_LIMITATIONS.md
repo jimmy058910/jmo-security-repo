@@ -140,18 +140,15 @@ are write-once, so the risk is low — but it is untested, not proven.
 
 ### Secret scanning skips `.git/`, `.jmo/` and vendored trees
 
-TruffleHog runs over the working tree with `.git/` and `.jmo/` excluded, so a
-secret that exists **only** in git history — committed and later removed, or
-sitting in a dangling blob — is not reported.
+TruffleHog and Gitleaks read the working tree with `.git/` and `.jmo/` excluded,
+and the vendored trees every source reader skips: `node_modules/`, `vendor/`,
+`.venv/` and `venv/`, at any depth. They also skip the results directory when it
+sits inside the scanned tree. A key committed inside a vendored package is
+therefore not reported. This was measured on a real Next.js application: 253
+TruffleHog findings before, 222 of them in `node_modules`, and a run of 281 s; 31
+findings after, none in `node_modules`, in 12 s.
 
-Since v2.0.0 it also skips the vendored trees every source reader skips:
-`node_modules/`, `vendor/`, `.venv/` and `venv/`, at any depth. It also skips the
-results directory when it sits inside the scanned tree. A key committed inside a
-vendored package is therefore not reported. This was measured on a real Next.js
-application: 253 findings before, 222 of them in `node_modules`, and a run of 281 s;
-31 findings after, none in `node_modules`, in 12 s.
-
-Both exclusions are deliberate. A finding at `.git/objects/03/f8eab...` or
+These exclusions are deliberate. A finding at `.git/objects/03/f8eab...` or
 `.git/logs/HEAD` names no commit and no source file, so there is nothing to act
 on, and the reflog's 40-character commit ids trip detectors that look for 40
 characters of `[A-Za-z0-9_-]` — measured as 41 findings across five
@@ -160,13 +157,56 @@ directory: `history.db` stores raw findings, so scanning it re-reports every
 secret JMo has previously recorded, and each scan feeds the next. On this
 repository that was 394 of 773 findings.
 
-Secrets in files that are tracked but uncommitted, or committed and still
-present, are scanned normally. `.github/` is **not** excluded.
+Git history is read separately, and it names the commit (v2.0.0). When the scanned
+repository has a `.git` of its own, both tools also run in git mode, with the same
+exclusions. A secret that was committed and later removed is reported with the
+commit that added it, its author and its date. A secret still in the tree is
+reported once per tool, not twice: its history record is folded into the tree
+finding, which gains the commit. Measured on this repository (1,258 commits), the
+two secret scanners took 4 s without history and 17 s with it.
 
-**What to do:** to audit history, run TruffleHog's git mode directly —
-`trufflehog git file://<repo>` — which reports the commit and file for each
-finding. JMo does not run it for you. To audit a vendored tree, run TruffleHog on
-that directory directly.
+What history mode does not see:
+
+- **A directory that is not a repository's root.** History is read only when the
+  target itself holds `.git`, so `--repo some/subdir` scans that tree alone.
+- **A shallow clone's history, at all.** Its oldest commit holds the whole tree, so both
+  tools would name that commit, and its author, as having added every secret in it:
+  whoever wrote the latest commit of a `--depth 1` clone. The scan reads the tree, logs a
+  WARNING, and says `history not read` on the two tools' rows. GitLab targets are
+  cloned with `--depth 1`, and `actions/checkout` fetches one commit unless told
+  otherwise (`fetch-depth: 0`).
+- **A repository git cannot read**: for example a worktree whose gitdir is not mounted,
+  or, outside JMo's image, "dubious ownership" of a repository another user owns. The
+  same WARNING and row detail name git's own message. JMo's Docker image sets
+  `safe.directory '*'`, because a mounted repository always belongs to another UID
+  there. So in the image git trusts every repository it is given, and honours that
+  repository's own `.git/config`. Scan repositories you trust.
+- **A multi-line key replaced in place.** Replacing a PEM key's body leaves its
+  `BEGIN` and `END` lines unchanged, so the commit's diff never holds a whole key.
+  The old key is reported from history, at the commit that added it; the new one
+  is reported from the tree, with no commit (measured with both tools).
+
+`.github/` is **not** excluded.
+
+**What to do:** to audit a vendored tree, run TruffleHog or Gitleaks on that
+directory directly. To read history for a subdirectory, scan the repository's
+root. To read a shallow clone's history, fetch all of it first
+(`git fetch --unshallow`).
+
+### TruffleHog does not verify secrets by default
+
+Verification sends each candidate secret to the service that issued it, to ask
+whether it is live. Since v2.0.0, JMo passes `--no-verification`: a scan should
+not send what it finds to third parties unasked, and git history multiplies the
+candidates. A secret is graded HIGH whether or not it was verified, as a Gitleaks
+one is, so `--fail-on HIGH` stops on any of them; the tags (`verified` or
+`unverified`) and `risk.confidence` say which. The built-in `zero-secrets`
+policy blocks **verified** secrets only, so without verification it blocks
+nothing.
+
+**What to do:** set `per_tool.trufflehog.verify: true` in `jmo.yml` to verify,
+and `zero-secrets` then blocks the live ones. `--only-verified`, or `--results`
+naming `verified`, in TruffleHog's flags counts as asking to verify.
 
 ### Semgrep also skips tests, build output and vendored code
 

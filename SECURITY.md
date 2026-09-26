@@ -16,7 +16,7 @@ JMo Security is a **security audit tool suite** that bundles multiple third-part
 
 ### Current Status (v1.1.1)
 
-JMo Security ships one Docker image that bundles 12 scanners plus OPA, the policy engine. Its vulnerability count comes from those tools and their dependencies.
+JMo Security ships one Docker image that bundles 13 scanners plus OPA, the policy engine. Its vulnerability count comes from those tools and their dependencies.
 
 **Important:** Vulnerabilities reported in our Docker images are **NOT in our Python code** — they exist in the bundled security tools we orchestrate.
 

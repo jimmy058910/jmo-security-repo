@@ -20,7 +20,7 @@ JMo Security supports 6 target types. This directory provides safe, ethical test
 ### Goals
 
 1. **No public app exposure** - All tests use public/local resources
-2. **Comprehensive coverage** - Test all 6 target types and all 12 scanners
+2. **Comprehensive coverage** - Test all 6 target types and all 13 scanners
 3. **Reproducible** - Anyone can run the same benchmarks
 4. **Ethical** - Only scan resources we own or have permission to test
 

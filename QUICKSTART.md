@@ -30,7 +30,7 @@ macOS users with Homebrew: install pipx via `brew install pipx`, then `pipx inst
 
 ### Option 2: Docker (60 seconds)
 
-**No tool installation required - all 12 scanners included.**
+**No tool installation required - all 13 scanners included.**
 
 ```bash
 # Pull image (one-time)
@@ -123,7 +123,7 @@ jmo scan --image nginx:latest --results-dir ./image-scan
 jmo ci --repo . --fail-on HIGH
 ```
 
-**Narrow the tool list:** `jmo scan` considers all 12 scanners and the target's content decides which run. Use `--tools trivy semgrep` or `--skip-tools zap` to narrow it. See [docs/TOOLS.md](docs/TOOLS.md).
+**Narrow the tool list:** `jmo scan` considers all 13 scanners and the target's content decides which run. Use `--tools trivy semgrep` or `--skip-tools zap` to narrow it. See [docs/TOOLS.md](docs/TOOLS.md).
 
 ---
 

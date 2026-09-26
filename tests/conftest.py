@@ -1064,3 +1064,57 @@ def iter_repo_files(
                 continue
             found.append(path)
     return found
+
+
+# ---------------------------------------------------------------------------
+# Secrets in a git history, built at test time (v2.0.0 Phase 3, G1).
+# ---------------------------------------------------------------------------
+
+
+def generated_rsa_pem() -> bytes:
+    """A private key made now. Never check a real-looking key into the tree:
+    Defender deletes files it recognises, and the repository's own secret
+    scanning flags them."""
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    return key.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.TraditionalOpenSSL,
+        serialization.NoEncryption(),
+    )
+
+
+def git_commit_all(repo: Path, message: str, when: str) -> str:
+    """Commit everything in ``repo`` (initialising it the first time) as a
+    fixed author at ``when`` (ISO 8601), and return the commit's sha."""
+    import os
+
+    env = {
+        **os.environ,
+        "GIT_AUTHOR_DATE": when,
+        "GIT_COMMITTER_DATE": when,
+        "GIT_CONFIG_GLOBAL": os.devnull,
+        "GIT_CONFIG_NOSYSTEM": "1",
+    }
+
+    def git(*args: str) -> str:
+        return subprocess.run(
+            ["git", "-C", str(repo), *args],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env=env,
+        ).stdout.strip()
+
+    if not (repo / ".git").exists():
+        git("init", "-q", "-b", "main")
+        git("config", "user.name", "Fixture Author")
+        git("config", "user.email", "fixture@example.invalid")
+        git("config", "core.autocrlf", "false")
+        git("config", "commit.gpgsign", "false")
+    git("add", "-A")
+    git("commit", "-q", "--allow-empty", "-m", message)
+    return git("rev-parse", "HEAD")

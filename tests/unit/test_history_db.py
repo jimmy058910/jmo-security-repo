@@ -2084,6 +2084,42 @@ class TestSecretRedaction:
         assert raw_data["Raw"] == "[REDACTED]"
         assert raw_data["RawV2"] == "[REDACTED]"
 
+    def test_redact_gitleaks_snippet(self):
+        """gitleaks puts the matched secret in SARIF's `region.snippet`. Its
+        binding scrubs it; history redacts again, as it does for trufflehog,
+        in case a finding reaches it by another road."""
+        from scripts.core.history_db import redact_secrets
+
+        finding = {
+            "id": "fp1",
+            "severity": "MEDIUM",
+            "tool": {"name": "gitleaks", "version": "8.30.1"},
+            "raw": {
+                "ruleId": "private-key",
+                "locations": [
+                    {
+                        "physicalLocation": {
+                            "artifactLocation": {"uri": "keys/live.pem"},
+                            "region": {
+                                "startLine": 1,
+                                # Made up: a real key header here trips the
+                                # repository's own detect-private-key hook.
+                                "snippet": {"text": "not-a-secret-7f3a9c"},
+                            },
+                        }
+                    }
+                ],
+            },
+        }
+
+        result = redact_secrets(finding, store_raw=True)
+
+        raw_data = json.loads(result["raw_finding"])
+        region = raw_data["locations"][0]["physicalLocation"]["region"]
+        assert region["snippet"] == "[REDACTED]"
+        assert region["startLine"] == 1
+        assert "not-a-secret-7f3a9c" not in result["raw_finding"]
+
     def test_redact_trufflehog_secrets_nested(self):
         """Test TruffleHog secret redaction with nested structures."""
         from scripts.core.history_db import redact_secrets

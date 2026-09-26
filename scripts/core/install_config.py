@@ -130,6 +130,7 @@ YARA_RULES_BUNDLE: dict[str, str] = {
 #   {arch_amd}   - "amd64", "arm64" (for Go tools)
 #   {arch_aarch} - "x86_64", "aarch64" (for shellcheck)
 #   {trivy_arch} - "64bit", "ARM64" (trivy's unique format)
+#   {arch_x64}   - "x64", "arm64" (gitleaks)
 
 BINARY_URLS: dict[str, str | dict[str, str]] = {
     # trivy: Windows uses lowercase "windows-64bit.zip", Linux uses "Linux-64bit.tar.gz"
@@ -165,6 +166,12 @@ BINARY_URLS: dict[str, str | dict[str, str]] = {
     "trufflehog": {
         "windows": "https://github.com/trufflesecurity/trufflehog/releases/download/v{version}/trufflehog_{version}_windows_{arch_amd}.tar.gz",
         "default": "https://github.com/trufflesecurity/trufflehog/releases/download/v{version}/trufflehog_{version}_{os_lower}_{arch_amd}.tar.gz",
+    },
+    # gitleaks: amd64 is "x64"; .zip on Windows, .tar.gz elsewhere (v8.30.1's
+    # assets, listed 2026-09-26)
+    "gitleaks": {
+        "windows": "https://github.com/gitleaks/gitleaks/releases/download/v{version}/gitleaks_{version}_windows_{arch_x64}.zip",
+        "default": "https://github.com/gitleaks/gitleaks/releases/download/v{version}/gitleaks_{version}_{os_lower}_{arch_x64}.tar.gz",
     },
     "nuclei": "https://github.com/projectdiscovery/nuclei/releases/download/v{version}/nuclei_{version}_{os_lower}_{arch_amd}.zip",
     "gosec": "https://github.com/securego/gosec/releases/download/v{version}/gosec_{version}_{os_lower}_{arch_amd}.tar.gz",

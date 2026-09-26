@@ -39,6 +39,7 @@ DIFF_WIZARD_TOTAL_STEPS = 5  # Mode, Directories, Filters, Format, Execute
 TOOL_TIME_ESTIMATES: dict[str, int] = {
     # Fast tools (< 30s)
     "trufflehog": 15,
+    "gitleaks": 10,
     "semgrep": 25,
     "hadolint": 5,
     "shellcheck": 10,

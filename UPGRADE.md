@@ -8,7 +8,7 @@ v2.0.0 removes scan profiles, 16 tools and all but one Docker image. There are n
 
 ### Scan profiles are removed
 
-`jmo scan` and `jmo ci` consider one tool list, the 12 scanners in [docs/TOOLS.md](docs/TOOLS.md), and the target's content decides which of them run. To narrow the list:
+`jmo scan` and `jmo ci` consider one tool list, the 13 scanners in [docs/TOOLS.md](docs/TOOLS.md), and the target's content decides which of them run. To narrow the list:
 
 - `--tools trivy semgrep` or `--skip-tools zap` on the command line
 - a top-level `tools:` list in `jmo.yml`
@@ -35,7 +35,7 @@ jmo ci --repo . --tools trufflehog semgrep trivy --fail-on HIGH
 jmo tools install
 ```
 
-`jmo tools install` installs the 12 scanners plus OPA, the policy engine. `jmo tools check` lists the scanners in its table and OPA on its own "Policy engine" line below it.
+`jmo tools install` installs the 13 scanners plus OPA, the policy engine. `jmo tools check` lists the scanners in its table and OPA on its own "Policy engine" line below it.
 
 ### `jmo.yml`: profile settings move to the top level
 
@@ -99,9 +99,28 @@ Two outcomes changed with it. A repository with no files outside the excluded di
 
 ### One Docker image
 
-There is one image, built from `Dockerfile`: `ghcr.io/jimmy058910/jmo-security:latest` and version tags such as `:2.0.0` (Docker Hub: `jmogaming/jmo-security`). It carries the 12 scanners plus OPA.
+There is one image, built from `Dockerfile`: `ghcr.io/jimmy058910/jmo-security:latest` and version tags such as `:2.0.0` (Docker Hub: `jmogaming/jmo-security`). It carries the 13 scanners plus OPA.
 
 The `:fast`, `:slim`, `:balanced`, `:deep` and `:full` tags, and the tags with a variant suffix, are no longer built. Existing tags are not deleted, but they will never receive another update. Switch to `:latest` or a version tag.
+
+### TruffleHog no longer verifies secrets
+
+TruffleHog used to send each candidate secret to the service that issued it, to ask whether it
+was live, and graded a live one HIGH. It no longer does unless `jmo.yml` asks:
+
+```yaml
+per_tool:
+  trufflehog:
+    verify: true
+```
+
+Every secret TruffleHog or Gitleaks reports is graded HIGH either way, so `--fail-on HIGH` still
+stops on a leaked secret, verified or not; the tags say which. The `zero-secrets` policy blocks
+verified secrets only, so without `verify: true` it passes.
+
+Both secret scanners also read the repository's git history now, when it has a `.git` of its own
+and is not a shallow clone. In CI, fetch the full history (`actions/checkout` with
+`fetch-depth: 0`) to have secrets in deleted commits reported.
 
 ### History database
 

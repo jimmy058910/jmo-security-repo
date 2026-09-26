@@ -3,10 +3,10 @@
     "schemaVersion": "1.2.0",
     "id": "4859273c40ad183c",
     "ruleId": "jwt",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "frontend/src/app/app.guard.spec.ts",
@@ -28,6 +28,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "jwt has detected secret for file frontend/src/app/app.guard.spec.ts."
@@ -43,10 +44,7 @@
               "startLine": 46,
               "startColumn": 41,
               "endLine": 46,
-              "endColumn": 196,
-              "snippet": {
-                "text": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
-              }
+              "endColumn": 196
             }
           }
         }
@@ -67,10 +65,10 @@
     "schemaVersion": "1.2.0",
     "id": "0fd1b36fe990245e",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "data/static/users.yml",
@@ -92,6 +90,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file data/static/users.yml."
@@ -107,10 +106,7 @@
               "startLine": 88,
               "startColumn": 4,
               "endLine": 88,
-              "endColumn": 51,
-              "snippet": {
-                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
-              }
+              "endColumn": 51
             }
           }
         }
@@ -131,10 +127,10 @@
     "schemaVersion": "1.2.0",
     "id": "e406ebd7864f35c5",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "data/static/users.yml",
@@ -156,6 +152,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file data/static/users.yml."
@@ -171,10 +168,7 @@
               "startLine": 151,
               "startColumn": 4,
               "endLine": 151,
-              "endColumn": 48,
-              "snippet": {
-                "text": "IFTXE3SPOEYVURT2MRYGI52TKJ4HC3KH"
-              }
+              "endColumn": 48
             }
           }
         }
@@ -195,10 +189,10 @@
     "schemaVersion": "1.2.0",
     "id": "943290c9012cdbb1",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "frontend/src/app/oauth/oauth.component.spec.ts",
@@ -220,6 +214,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file frontend/src/app/oauth/oauth.component.spec.ts."
@@ -235,10 +230,7 @@
               "startLine": 91,
               "startColumn": 82,
               "endLine": 91,
-              "endColumn": 113,
-              "snippet": {
-                "text": "bW9jLnRzZXRAdHNldA=="
-              }
+              "endColumn": 113
             }
           }
         }
@@ -259,10 +251,10 @@
     "schemaVersion": "1.2.0",
     "id": "db427e5b75c02ae0",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "frontend/src/app/oauth/oauth.component.spec.ts",
@@ -284,6 +276,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file frontend/src/app/oauth/oauth.component.spec.ts."
@@ -299,10 +292,7 @@
               "startLine": 91,
               "startColumn": 116,
               "endLine": 91,
-              "endColumn": 153,
-              "snippet": {
-                "text": "bW9jLnRzZXRAdHNldA=="
-              }
+              "endColumn": 153
             }
           }
         }
@@ -323,10 +313,10 @@
     "schemaVersion": "1.2.0",
     "id": "e198ff6dded4abff",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "frontend/src/app/oauth/oauth.component.spec.ts",
@@ -348,6 +338,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file frontend/src/app/oauth/oauth.component.spec.ts."
@@ -363,10 +354,7 @@
               "startLine": 98,
               "startColumn": 83,
               "endLine": 98,
-              "endColumn": 114,
-              "snippet": {
-                "text": "bW9jLnRzZXRAdHNldA=="
-              }
+              "endColumn": 114
             }
           }
         }
@@ -387,10 +375,10 @@
     "schemaVersion": "1.2.0",
     "id": "cb9f7115e2305fa8",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "frontend/src/app/faucet/faucet.component.ts",
@@ -412,6 +400,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file frontend/src/app/faucet/faucet.component.ts."
@@ -427,10 +416,7 @@
               "startLine": 34,
               "startColumn": 8,
               "endLine": 34,
-              "endColumn": 69,
-              "snippet": {
-                "text": "0x36435796Ca9be2bf150CE0dECc2D8Fab5C4d6E13"
-              }
+              "endColumn": 69
             }
           }
         }
@@ -451,10 +437,10 @@
     "schemaVersion": "1.2.0",
     "id": "6855f1789cf75973",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "frontend/src/app/last-login-ip/last-login-ip.component.spec.ts",
@@ -476,6 +462,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file frontend/src/app/last-login-ip/last-login-ip.component.spec.ts."
@@ -491,10 +478,7 @@
               "startLine": 78,
               "startColumn": 32,
               "endLine": 78,
-              "endColumn": 137,
-              "snippet": {
-                "text": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkYXRhIjp7fX0.bVBhvll6IaeR3aUdoOeyR8YZe2S2DfhGAxTGfd9enLw"
-              }
+              "endColumn": 137
             }
           }
         }
@@ -515,10 +499,10 @@
     "schemaVersion": "1.2.0",
     "id": "b3349fe7d9760852",
     "ruleId": "jwt",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "frontend/src/app/last-login-ip/last-login-ip.component.spec.ts",
@@ -540,6 +524,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "jwt has detected secret for file frontend/src/app/last-login-ip/last-login-ip.component.spec.ts."
@@ -555,10 +540,7 @@
               "startLine": 72,
               "startColumn": 41,
               "endLine": 72,
-              "endColumn": 168,
-              "snippet": {
-                "text": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkYXRhIjp7Imxhc3RMb2dpbklwIjoiMS4yLjMuNCJ9fQ.RAkmdqwNypuOxv3SDjPO4xMKvd1CddKvDFYDBfUt3bg"
-              }
+              "endColumn": 168
             }
           }
         }
@@ -579,10 +561,10 @@
     "schemaVersion": "1.2.0",
     "id": "897876956691a1c6",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/basket.test.ts",
@@ -604,6 +586,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/basket.test.ts."
@@ -619,10 +602,7 @@
               "startLine": 114,
               "startColumn": 8,
               "endLine": 114,
-              "endColumn": 55,
-              "snippet": {
-                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
-              }
+              "endColumn": 55
             }
           }
         }
@@ -643,10 +623,10 @@
     "schemaVersion": "1.2.0",
     "id": "93b1bf9b329fe78b",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/basket.test.ts",
@@ -668,6 +648,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/basket.test.ts."
@@ -683,10 +664,7 @@
               "startLine": 170,
               "startColumn": 82,
               "endLine": 170,
-              "endColumn": 129,
-              "snippet": {
-                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
-              }
+              "endColumn": 129
             }
           }
         }
@@ -707,10 +685,10 @@
     "schemaVersion": "1.2.0",
     "id": "bcfb7c19bdba6786",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/erasure-request.test.ts",
@@ -732,6 +710,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/erasure-request.test.ts."
@@ -747,10 +726,7 @@
               "startLine": 36,
               "startColumn": 80,
               "endLine": 36,
-              "endColumn": 127,
-              "snippet": {
-                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
-              }
+              "endColumn": 127
             }
           }
         }
@@ -771,10 +747,10 @@
     "schemaVersion": "1.2.0",
     "id": "d27d3ce81826583c",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/erasure-request.test.ts",
@@ -796,6 +772,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/erasure-request.test.ts."
@@ -811,10 +788,7 @@
               "startLine": 55,
               "startColumn": 80,
               "endLine": 55,
-              "endColumn": 127,
-              "snippet": {
-                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
-              }
+              "endColumn": 127
             }
           }
         }
@@ -835,10 +809,10 @@
     "schemaVersion": "1.2.0",
     "id": "cdd8e90201530fc9",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/erasure-request.test.ts",
@@ -860,6 +834,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/erasure-request.test.ts."
@@ -875,10 +850,7 @@
               "startLine": 68,
               "startColumn": 53,
               "endLine": 68,
-              "endColumn": 100,
-              "snippet": {
-                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
-              }
+              "endColumn": 100
             }
           }
         }
@@ -899,10 +871,10 @@
     "schemaVersion": "1.2.0",
     "id": "85bf7f3dd727e2a7",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/erasure-request.test.ts",
@@ -924,6 +896,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/erasure-request.test.ts."
@@ -939,10 +912,7 @@
               "startLine": 82,
               "startColumn": 80,
               "endLine": 82,
-              "endColumn": 127,
-              "snippet": {
-                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
-              }
+              "endColumn": 127
             }
           }
         }
@@ -963,10 +933,10 @@
     "schemaVersion": "1.2.0",
     "id": "415c3a17e1e8fc38",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/erasure-request.test.ts",
@@ -988,6 +958,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/erasure-request.test.ts."
@@ -1003,10 +974,7 @@
               "startLine": 94,
               "startColumn": 82,
               "endLine": 94,
-              "endColumn": 129,
-              "snippet": {
-                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
-              }
+              "endColumn": 129
             }
           }
         }
@@ -1027,10 +995,10 @@
     "schemaVersion": "1.2.0",
     "id": "12e152e5ea503d08",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/erasure-request.test.ts",
@@ -1052,6 +1020,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/erasure-request.test.ts."
@@ -1067,10 +1036,7 @@
               "startLine": 106,
               "startColumn": 82,
               "endLine": 106,
-              "endColumn": 129,
-              "snippet": {
-                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
-              }
+              "endColumn": 129
             }
           }
         }
@@ -1091,10 +1057,10 @@
     "schemaVersion": "1.2.0",
     "id": "70f5b3e5850ce09c",
     "ruleId": "private-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "terraform/networking.tf",
@@ -1116,6 +1082,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "private-key has detected secret for file terraform/networking.tf."
@@ -1131,10 +1098,7 @@
               "startLine": 171,
               "startColumn": 24,
               "endLine": 171,
-              "endColumn": 923,
-              "snippet": {
-                "text": "-----BEGIN RSA PRIVATE KEY-----\\nMIICXAIBAAKBgQDNwqLEe9wgTXCbC7+RPdDbBbeqjdbs4kOPOIGzqLpXvJXlxxW8\\niMz0EaM4BKUqYsIa+ndv3NAn2RxCd5ubVdJJcX43zO6Ko0TFEZx/65gY3BE0O6sy\\nCEmUP4qbSd6exou/F+WTISzbQ5FBVPVmhnYhG/kpwt/cIxK5iUn5hm+4tQIDAQAB\\nAoGBAI+8xiPoOrA+KMnG/T4jJsG6TsHQcDHvJi7o1IKC/hnIXha0atTX5AUkRRce\\n95qSfvKFweXdJXSQ0JMGJyfuXgU6dI0TcseFRfewXAa/ssxAC+iUVR6KUMh1PE2w\\nXLitfeI6JLvVtrBYswm2I7CtY0q8n5AGimHWVXJPLfGV7m0BAkEA+fqFt2LXbLty\\ng6wZyxMA/cnmt5Nt3U2dAu77MzFJvibANUNHE4HPLZxjGNXN+a6m0K6TD4kDdh5H\\nfUYLWWRBYQJBANK3carmulBwqzcDBjsJ0YrIONBpCAsXxk8idXb8jL9aNIg15Wum\\nm2enqqObahDHB5jnGOLmbasizvSVqypfM9UCQCQl8xIqy+YgURXzXCN+kwUgHinr\\nutZms87Jyi+D8Br8NY0+Nlf+zHvXAomD2W5CsEK7C+8SLBr3k/TsnRWHJuECQHFE\\n9RA2OP8WoaLPuGCyFXaxzICThSRZYluVnWkZtxsBhW2W8z1b8PvWUE7kMy7Tnkze\\nJS2LSnaNHoyxi7IaPQUCQCwWU4U+v4lD7uYBw00Ga/xt+7+UqFPlPVdz1yyr4q24\\nZxaw0LgmuEvgU5dycq8N7JxjTubX0MIRR+G9fmDBBl8=\\n-----END RSA PRIVATE KEY-----"
-              }
+              "endColumn": 923
             }
           }
         }
@@ -1155,10 +1119,10 @@
     "schemaVersion": "1.2.0",
     "id": "70564fb018a202ea",
     "ruleId": "private-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "infrastructure/terraform/networking.tf",
@@ -1180,6 +1144,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "private-key has detected secret for file infrastructure/terraform/networking.tf."
@@ -1195,10 +1160,7 @@
               "startLine": 171,
               "startColumn": 24,
               "endLine": 171,
-              "endColumn": 923,
-              "snippet": {
-                "text": "-----BEGIN RSA PRIVATE KEY-----\\nMIICXAIBAAKBgQDNwqLEe9wgTXCbC7+RPdDbBbeqjdbs4kOPOIGzqLpXvJXlxxW8\\niMz0EaM4BKUqYsIa+ndv3NAn2RxCd5ubVdJJcX43zO6Ko0TFEZx/65gY3BE0O6sy\\nCEmUP4qbSd6exou/F+WTISzbQ5FBVPVmhnYhG/kpwt/cIxK5iUn5hm+4tQIDAQAB\\nAoGBAI+8xiPoOrA+KMnG/T4jJsG6TsHQcDHvJi7o1IKC/hnIXha0atTX5AUkRRce\\n95qSfvKFweXdJXSQ0JMGJyfuXgU6dI0TcseFRfewXAa/ssxAC+iUVR6KUMh1PE2w\\nXLitfeI6JLvVtrBYswm2I7CtY0q8n5AGimHWVXJPLfGV7m0BAkEA+fqFt2LXbLty\\ng6wZyxMA/cnmt5Nt3U2dAu77MzFJvibANUNHE4HPLZxjGNXN+a6m0K6TD4kDdh5H\\nfUYLWWRBYQJBANK3carmulBwqzcDBjsJ0YrIONBpCAsXxk8idXb8jL9aNIg15Wum\\nm2enqqObahDHB5jnGOLmbasizvSVqypfM9UCQCQl8xIqy+YgURXzXCN+kwUgHinr\\nutZms87Jyi+D8Br8NY0+Nlf+zHvXAomD2W5CsEK7C+8SLBr3k/TsnRWHJuECQHFE\\n9RA2OP8WoaLPuGCyFXaxzICThSRZYluVnWkZtxsBhW2W8z1b8PvWUE7kMy7Tnkze\\nJS2LSnaNHoyxi7IaPQUCQCwWU4U+v4lD7uYBw00Ga/xt+7+UqFPlPVdz1yyr4q24\\nZxaw0LgmuEvgU5dycq8N7JxjTubX0MIRR+G9fmDBBl8=\\n-----END RSA PRIVATE KEY-----"
-              }
+              "endColumn": 923
             }
           }
         }
@@ -1219,10 +1181,10 @@
     "schemaVersion": "1.2.0",
     "id": "dd2a4a7b663f91a5",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "routes/login.ts",
@@ -1244,6 +1206,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file routes/login.ts."
@@ -1259,10 +1222,7 @@
               "startLine": 64,
               "startColumn": 134,
               "endLine": 64,
-              "endColumn": 193,
-              "snippet": {
-                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
-              }
+              "endColumn": 193
             }
           }
         }
@@ -1283,10 +1243,10 @@
     "schemaVersion": "1.2.0",
     "id": "e3041e05138bf27e",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/checkKeys.test.ts",
@@ -1308,6 +1268,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/checkKeys.test.ts."
@@ -1323,10 +1284,7 @@
               "startLine": 46,
               "startColumn": 18,
               "endLine": 46,
-              "endColumn": 99,
-              "snippet": {
-                "text": "0x02c7a2a93289c9fbda5990bac6596993e9bb0a8d3f178175a80b7cfd983983f506"
-              }
+              "endColumn": 99
             }
           }
         }
@@ -1347,10 +1305,10 @@
     "schemaVersion": "1.2.0",
     "id": "b7088c26107fa251",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/checkKeys.test.ts",
@@ -1372,6 +1330,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/checkKeys.test.ts."
@@ -1387,10 +1346,7 @@
               "startLine": 57,
               "startColumn": 18,
               "endLine": 57,
-              "endColumn": 73,
-              "snippet": {
-                "text": "0x8343d2eb2B13A2495De435a1b15e85b98115Ce05"
-              }
+              "endColumn": 73
             }
           }
         }
@@ -1411,10 +1367,10 @@
     "schemaVersion": "1.2.0",
     "id": "ada44bb9ef26d93d",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/checkKeys.test.ts",
@@ -1436,6 +1392,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/checkKeys.test.ts."
@@ -1451,10 +1408,7 @@
               "startLine": 68,
               "startColumn": 18,
               "endLine": 68,
-              "endColumn": 97,
-              "snippet": {
-                "text": "0x5bcc3e9d38baa06e7bfaab80ae5957bbe8ef059e640311d7d6d465e6bc948e3e"
-              }
+              "endColumn": 97
             }
           }
         }
@@ -1475,10 +1429,10 @@
     "schemaVersion": "1.2.0",
     "id": "be89af3697c92139",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/feedback.test.ts",
@@ -1500,6 +1454,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/feedback.test.ts."
@@ -1515,10 +1470,7 @@
               "startLine": 117,
               "startColumn": 8,
               "endLine": 117,
-              "endColumn": 55,
-              "snippet": {
-                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
-              }
+              "endColumn": 55
             }
           }
         }
@@ -1539,10 +1491,10 @@
     "schemaVersion": "1.2.0",
     "id": "2f20694de909e0fd",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/feedback.test.ts",
@@ -1564,6 +1516,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/feedback.test.ts."
@@ -1579,10 +1532,7 @@
               "startLine": 143,
               "startColumn": 8,
               "endLine": 143,
-              "endColumn": 55,
-              "snippet": {
-                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
-              }
+              "endColumn": 55
             }
           }
         }
@@ -1603,10 +1553,10 @@
     "schemaVersion": "1.2.0",
     "id": "d4c6c8d1f4058c6b",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/chat.test.ts",
@@ -1628,6 +1578,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/chat.test.ts."
@@ -1643,10 +1594,7 @@
               "startLine": 261,
               "startColumn": 80,
               "endLine": 261,
-              "endColumn": 127,
-              "snippet": {
-                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
-              }
+              "endColumn": 127
             }
           }
         }
@@ -1667,10 +1615,10 @@
     "schemaVersion": "1.2.0",
     "id": "0f256247d7e30c37",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/cypress/e2e/totpSetup.spec.ts",
@@ -1692,6 +1640,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/cypress/e2e/totpSetup.spec.ts."
@@ -1707,10 +1656,7 @@
               "startLine": 7,
               "startColumn": 10,
               "endLine": 7,
-              "endColumn": 55,
-              "snippet": {
-                "text": "IFTXE3SPOEYVURT2MRYGI52TKJ4HC3KH"
-              }
+              "endColumn": 55
             }
           }
         }
@@ -1731,10 +1677,10 @@
     "schemaVersion": "1.2.0",
     "id": "bbfb8ec96da144a5",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/data-export.test.ts",
@@ -1756,6 +1702,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/data-export.test.ts."
@@ -1771,10 +1718,7 @@
               "startLine": 53,
               "startColumn": 80,
               "endLine": 53,
-              "endColumn": 127,
-              "snippet": {
-                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
-              }
+              "endColumn": 127
             }
           }
         }
@@ -1795,10 +1739,10 @@
     "schemaVersion": "1.2.0",
     "id": "65b3b27da734b248",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/data-export.test.ts",
@@ -1820,6 +1764,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/data-export.test.ts."
@@ -1835,10 +1780,7 @@
               "startLine": 73,
               "startColumn": 80,
               "endLine": 73,
-              "endColumn": 127,
-              "snippet": {
-                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
-              }
+              "endColumn": 127
             }
           }
         }
@@ -1859,10 +1801,10 @@
     "schemaVersion": "1.2.0",
     "id": "f088d91fc03e571a",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/data-export.test.ts",
@@ -1884,6 +1826,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/data-export.test.ts."
@@ -1899,10 +1842,7 @@
               "startLine": 90,
               "startColumn": 80,
               "endLine": 90,
-              "endColumn": 127,
-              "snippet": {
-                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
-              }
+              "endColumn": 127
             }
           }
         }
@@ -1923,10 +1863,10 @@
     "schemaVersion": "1.2.0",
     "id": "8be0a3c31b5b9455",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/data-export.test.ts",
@@ -1948,6 +1888,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/data-export.test.ts."
@@ -1963,10 +1904,7 @@
               "startLine": 110,
               "startColumn": 80,
               "endLine": 110,
-              "endColumn": 127,
-              "snippet": {
-                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
-              }
+              "endColumn": 127
             }
           }
         }
@@ -1987,10 +1925,10 @@
     "schemaVersion": "1.2.0",
     "id": "69460b67dc9cf3e2",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/product-review.test.ts",
@@ -2012,6 +1950,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/product-review.test.ts."
@@ -2027,10 +1966,7 @@
               "startLine": 101,
               "startColumn": 8,
               "endLine": 101,
-              "endColumn": 55,
-              "snippet": {
-                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
-              }
+              "endColumn": 55
             }
           }
         }
@@ -2051,10 +1987,10 @@
     "schemaVersion": "1.2.0",
     "id": "94865d3d341c664a",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/product-review.test.ts",
@@ -2076,6 +2012,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/product-review.test.ts."
@@ -2091,10 +2028,7 @@
               "startLine": 115,
               "startColumn": 8,
               "endLine": 115,
-              "endColumn": 55,
-              "snippet": {
-                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
-              }
+              "endColumn": 55
             }
           }
         }
@@ -2115,10 +2049,10 @@
     "schemaVersion": "1.2.0",
     "id": "6cbc141dbd306a89",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/cypress/e2e/login.spec.ts",
@@ -2140,6 +2074,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/cypress/e2e/login.spec.ts."
@@ -2155,10 +2090,7 @@
               "startLine": 126,
               "startColumn": 25,
               "endLine": 126,
-              "endColumn": 82,
-              "snippet": {
-                "text": "IFTXE3SPOEYVURT2MRYGI52TKJ4HC3KH"
-              }
+              "endColumn": 82
             }
           }
         }
@@ -2179,10 +2111,10 @@
     "schemaVersion": "1.2.0",
     "id": "f514898cbfb780a0",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/login.test.ts",
@@ -2204,6 +2136,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/login.test.ts."
@@ -2219,10 +2152,7 @@
               "startLine": 147,
               "startColumn": 10,
               "endLine": 147,
-              "endColumn": 57,
-              "snippet": {
-                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
-              }
+              "endColumn": 57
             }
           }
         }
@@ -2243,10 +2173,10 @@
     "schemaVersion": "1.2.0",
     "id": "b26bec30c5beae02",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/login.test.ts",
@@ -2268,6 +2198,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/login.test.ts."
@@ -2283,10 +2214,7 @@
               "startLine": 245,
               "startColumn": 10,
               "endLine": 245,
-              "endColumn": 57,
-              "snippet": {
-                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
-              }
+              "endColumn": 57
             }
           }
         }
@@ -2307,10 +2235,10 @@
     "schemaVersion": "1.2.0",
     "id": "02105d5a63726337",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/login.test.ts",
@@ -2332,6 +2260,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/login.test.ts."
@@ -2347,10 +2276,7 @@
               "startLine": 267,
               "startColumn": 10,
               "endLine": 267,
-              "endColumn": 57,
-              "snippet": {
-                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
-              }
+              "endColumn": 57
             }
           }
         }
@@ -2371,10 +2297,10 @@
     "schemaVersion": "1.2.0",
     "id": "4dd4e0b68c733c8b",
     "ruleId": "private-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "lib/insecurity.ts",
@@ -2396,6 +2322,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "private-key has detected secret for file lib/insecurity.ts."
@@ -2411,10 +2338,7 @@
               "startLine": 21,
               "startColumn": 22,
               "endLine": 21,
-              "endColumn": 901,
-              "snippet": {
-                "text": "-----BEGIN RSA PRIVATE KEY-----\\r\\nMIICXAIBAAKBgQDNwqLEe9wgTXCbC7+RPdDbBbeqjdbs4kOPOIGzqLpXvJXlxxW8iMz0EaM4BKUqYsIa+ndv3NAn2RxCd5ubVdJJcX43zO6Ko0TFEZx/65gY3BE0O6syCEmUP4qbSd6exou/F+WTISzbQ5FBVPVmhnYhG/kpwt/cIxK5iUn5hm+4tQIDAQABAoGBAI+8xiPoOrA+KMnG/T4jJsG6TsHQcDHvJi7o1IKC/hnIXha0atTX5AUkRRce95qSfvKFweXdJXSQ0JMGJyfuXgU6dI0TcseFRfewXAa/ssxAC+iUVR6KUMh1PE2wXLitfeI6JLvVtrBYswm2I7CtY0q8n5AGimHWVXJPLfGV7m0BAkEA+fqFt2LXbLtyg6wZyxMA/cnmt5Nt3U2dAu77MzFJvibANUNHE4HPLZxjGNXN+a6m0K6TD4kDdh5HfUYLWWRBYQJBANK3carmulBwqzcDBjsJ0YrIONBpCAsXxk8idXb8jL9aNIg15Wumm2enqqObahDHB5jnGOLmbasizvSVqypfM9UCQCQl8xIqy+YgURXzXCN+kwUgHinrutZms87Jyi+D8Br8NY0+Nlf+zHvXAomD2W5CsEK7C+8SLBr3k/TsnRWHJuECQHFE9RA2OP8WoaLPuGCyFXaxzICThSRZYluVnWkZtxsBhW2W8z1b8PvWUE7kMy7TnkzeJS2LSnaNHoyxi7IaPQUCQCwWU4U+v4lD7uYBw00Ga/xt+7+UqFPlPVdz1yyr4q24Zxaw0LgmuEvgU5dycq8N7JxjTubX0MIRR+G9fmDBBl8=\\r\\n-----END RSA PRIVATE KEY-----"
-              }
+              "endColumn": 901
             }
           }
         }
@@ -2435,10 +2359,10 @@
     "schemaVersion": "1.2.0",
     "id": "cb4a56d9690871ca",
     "ruleId": "jwt",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/server/currentUser.unit.test.ts",
@@ -2460,6 +2384,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "jwt has detected secret for file test/server/currentUser.unit.test.ts."
@@ -2475,10 +2400,7 @@
               "startLine": 31,
               "startColumn": 27,
               "endLine": 31,
-              "endColumn": 390,
-              "snippet": {
-                "text": "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJkYXRhIjp7ImlkIjoxLCJlbWFpbCI6ImFkbWluQGp1aWNlLXNoLm9wIiwibGFzdExvZ2luSXAiOiIwLjAuMC4wIiwicHJvZmlsZUltYWdlIjoiZGVmYXVsdC5zdmcifSwiaWF0IjoxNTgyMjIyMzY0fQ.CHiFQieZudYlrd1o8Ih-Izv7XY_WZupt8Our-CP9HqsczyEKqrWC7wWguOgVuSGDN_S3mP4FyuEFN8l60aAhVsUbqzFetvJkFwe5nKVhc9dHuen6cujQLMcTlHLKassOSDP41Q-MkKWcUOQu0xUkTMfEq2hPMHpMosDb4benzH0"
-              }
+              "endColumn": 390
             }
           }
         }
@@ -2499,10 +2421,10 @@
     "schemaVersion": "1.2.0",
     "id": "38bacacac5357fa5",
     "ruleId": "jwt",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/server/currentUser.unit.test.ts",
@@ -2524,6 +2446,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "jwt has detected secret for file test/server/currentUser.unit.test.ts."
@@ -2539,10 +2462,7 @@
               "startLine": 34,
               "startColumn": 9,
               "endLine": 34,
-              "endColumn": 372,
-              "snippet": {
-                "text": "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJkYXRhIjp7ImlkIjoxLCJlbWFpbCI6ImFkbWluQGp1aWNlLXNoLm9wIiwibGFzdExvZ2luSXAiOiIwLjAuMC4wIiwicHJvZmlsZUltYWdlIjoiZGVmYXVsdC5zdmcifSwiaWF0IjoxNTgyMjIyMzY0fQ.CHiFQieZudYlrd1o8Ih-Izv7XY_WZupt8Our-CP9HqsczyEKqrWC7wWguOgVuSGDN_S3mP4FyuEFN8l60aAhVsUbqzFetvJkFwe5nKVhc9dHuen6cujQLMcTlHLKassOSDP41Q-MkKWcUOQu0xUkTMfEq2hPMHpMosDb4benzH0"
-              }
+              "endColumn": 372
             }
           }
         }
@@ -2563,10 +2483,10 @@
     "schemaVersion": "1.2.0",
     "id": "91816b0ff9879f02",
     "ruleId": "jwt",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/cypress/e2e/forgedJwt.spec.ts",
@@ -2588,6 +2508,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "jwt has detected secret for file test/cypress/e2e/forgedJwt.spec.ts."
@@ -2603,10 +2524,7 @@
               "startLine": 7,
               "startColumn": 13,
               "endLine": 7,
-              "endColumn": 148,
-              "snippet": {
-                "text": "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJkYXRhIjp7ImVtYWlsIjoiand0bjNkQGp1aWNlLXNoLm9wIn0sImlhdCI6MTUwODYzOTYxMiwiZXhwIjo5OTk5OTk5OTk5fQ."
-              }
+              "endColumn": 148
             }
           }
         }
@@ -2627,10 +2545,10 @@
     "schemaVersion": "1.2.0",
     "id": "f9376538580070a1",
     "ruleId": "jwt",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/cypress/e2e/forgedJwt.spec.ts",
@@ -2652,6 +2570,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "jwt has detected secret for file test/cypress/e2e/forgedJwt.spec.ts."
@@ -2667,10 +2586,7 @@
               "startLine": 22,
               "startColumn": 17,
               "endLine": 22,
-              "endColumn": 176,
-              "snippet": {
-                "text": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkYXRhIjp7ImVtYWlsIjoicnNhX2xvcmRAanVpY2Utc2gub3AifSwiaWF0IjoxNTgzMDM3NzExfQ.gShXDT5TrE5736mpIbfVDEcQbLfteJaQUG7Z0PH8Xc8"
-              }
+              "endColumn": 176
             }
           }
         }
@@ -2691,10 +2607,10 @@
     "schemaVersion": "1.2.0",
     "id": "0b62c51e130fca72",
     "ruleId": "jwt",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/cypress/e2e/forgedJwt.spec.ts",
@@ -2716,6 +2632,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "jwt has detected secret for file test/cypress/e2e/forgedJwt.spec.ts."
@@ -2731,10 +2648,7 @@
               "startLine": 38,
               "startColumn": 13,
               "endLine": 38,
-              "endColumn": 304,
-              "snippet": {
-                "text": "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJkYXRhIjp7ImVtYWlsIjoiY2xvdWQtYWRtaW5AanVpY2Utc2gub3AifSwiaWF0IjoxNzgzNTg3MDc1fQ.o1ghEUyLemmv982A2CW_w_RLh9FDYOx1GxU-_GeyEwfO8vBKIa-Ubh1bmdmP_WmySrekzy_0zfII-wjmj_e_6hKvZz0IDR_EyfDjCmYVzu8YdgQSNNZXu3_kLdXEKjJirXU5bPUdUIiR2GoMcOAXQouna3RAn4rkR90rDJeNblU"
-              }
+              "endColumn": 304
             }
           }
         }
@@ -2755,10 +2669,10 @@
     "schemaVersion": "1.2.0",
     "id": "f117c09e2383026f",
     "ruleId": "jwt",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/server/verify.unit.test.ts",
@@ -2780,6 +2694,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "jwt has detected secret for file test/server/verify.unit.test.ts."
@@ -2795,10 +2710,7 @@
               "startLine": 283,
               "startColumn": 47,
               "endLine": 283,
-              "endColumn": 182,
-              "snippet": {
-                "text": "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJkYXRhIjp7ImVtYWlsIjoiand0bjNkQGp1aWNlLXNoLm9wIn0sImlhdCI6MTUwODYzOTYxMiwiZXhwIjo5OTk5OTk5OTk5fQ."
-              }
+              "endColumn": 182
             }
           }
         }
@@ -2819,10 +2731,10 @@
     "schemaVersion": "1.2.0",
     "id": "40737fa75c1ce188",
     "ruleId": "jwt",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/server/verify.unit.test.ts",
@@ -2844,6 +2756,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "jwt has detected secret for file test/server/verify.unit.test.ts."
@@ -2859,10 +2772,7 @@
               "startLine": 291,
               "startColumn": 47,
               "endLine": 291,
-              "endColumn": 167,
-              "snippet": {
-                "text": "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJkYXRhIjp7ImVtYWlsIjoiand0bjNkQCJ9LCJpYXQiOjE1MDg2Mzk2MTIsImV4cCI6OTk5OTk5OTk5OX0."
-              }
+              "endColumn": 167
             }
           }
         }
@@ -2883,10 +2793,10 @@
     "schemaVersion": "1.2.0",
     "id": "0bd8fc4062cce5a0",
     "ruleId": "jwt",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/server/verify.unit.test.ts",
@@ -2908,6 +2818,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "jwt has detected secret for file test/server/verify.unit.test.ts."
@@ -2923,10 +2834,7 @@
               "startLine": 308,
               "startColumn": 47,
               "endLine": 308,
-              "endColumn": 206,
-              "snippet": {
-                "text": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkYXRhIjp7ImVtYWlsIjoicnNhX2xvcmRAanVpY2Utc2gub3AifSwiaWF0IjoxNTgyMjIxNTc1fQ.ycFwtqh4ht4Pq9K5rhiPPY256F9YCTIecd4FHFuSEAg"
-              }
+              "endColumn": 206
             }
           }
         }
@@ -2947,10 +2855,10 @@
     "schemaVersion": "1.2.0",
     "id": "08084382ab135c28",
     "ruleId": "jwt",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/server/verify.unit.test.ts",
@@ -2972,6 +2880,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "jwt has detected secret for file test/server/verify.unit.test.ts."
@@ -2987,10 +2896,7 @@
               "startLine": 316,
               "startColumn": 47,
               "endLine": 316,
-              "endColumn": 191,
-              "snippet": {
-                "text": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkYXRhIjp7ImVtYWlsIjoicnNhX2xvcmRAIn0sImlhdCI6MTU4MjIyMTY3NX0.50f6VAIQk2Uzpf3sgH-1JVrrTuwudonm2DKn2ec7Tg8"
-              }
+              "endColumn": 191
             }
           }
         }
@@ -3011,10 +2917,10 @@
     "schemaVersion": "1.2.0",
     "id": "264cff7258ad67a6",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/2fa.test.ts",
@@ -3036,6 +2942,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/2fa.test.ts."
@@ -3051,10 +2958,7 @@
               "startLine": 42,
               "startColumn": 39,
               "endLine": 42,
-              "endColumn": 80,
-              "snippet": {
-                "text": "IFTXE3SPOEYVURT2MRYGI52TKJ4HC3KH"
-              }
+              "endColumn": 80
             }
           }
         }
@@ -3075,10 +2979,10 @@
     "schemaVersion": "1.2.0",
     "id": "bec57198165c23ce",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/2fa.test.ts",
@@ -3100,6 +3004,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/2fa.test.ts."
@@ -3115,10 +3020,7 @@
               "startLine": 66,
               "startColumn": 39,
               "endLine": 66,
-              "endColumn": 80,
-              "snippet": {
-                "text": "BI6KJAURX3LL5VQI2ZBFVLUWSBYBDX4H"
-              }
+              "endColumn": 80
             }
           }
         }
@@ -3139,10 +3041,10 @@
     "schemaVersion": "1.2.0",
     "id": "350e3026af1eb588",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/2fa.test.ts",
@@ -3164,6 +3066,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/2fa.test.ts."
@@ -3179,10 +3082,7 @@
               "startLine": 85,
               "startColumn": 39,
               "endLine": 85,
-              "endColumn": 80,
-              "snippet": {
-                "text": "IFTXE3SPOEYVURT2MRYGI52TKJ4HC3KH"
-              }
+              "endColumn": 80
             }
           }
         }
@@ -3203,10 +3103,10 @@
     "schemaVersion": "1.2.0",
     "id": "094ca7071ba148ee",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/2fa.test.ts",
@@ -3228,6 +3128,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/2fa.test.ts."
@@ -3243,10 +3144,7 @@
               "startLine": 104,
               "startColumn": 39,
               "endLine": 104,
-              "endColumn": 80,
-              "snippet": {
-                "text": "IFTXE3SPOEYVURT2MRYGI52TKJ4HC3KH"
-              }
+              "endColumn": 80
             }
           }
         }
@@ -3267,10 +3165,10 @@
     "schemaVersion": "1.2.0",
     "id": "4655a25c7dca2bb9",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/2fa.test.ts",
@@ -3292,6 +3190,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/2fa.test.ts."
@@ -3307,10 +3206,7 @@
               "startLine": 123,
               "startColumn": 39,
               "endLine": 123,
-              "endColumn": 80,
-              "snippet": {
-                "text": "IFTXE3SPOEYVURT2MRYGI52TKJ4HC3KH"
-              }
+              "endColumn": 80
             }
           }
         }
@@ -3331,10 +3227,10 @@
     "schemaVersion": "1.2.0",
     "id": "e7969501b24b5b67",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/2fa.test.ts",
@@ -3356,6 +3252,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/2fa.test.ts."
@@ -3371,10 +3268,7 @@
               "startLine": 142,
               "startColumn": 8,
               "endLine": 142,
-              "endColumn": 53,
-              "snippet": {
-                "text": "IFTXE3SPOEYVURT2MRYGI52TKJ4HC3KH"
-              }
+              "endColumn": 53
             }
           }
         }
@@ -3395,10 +3289,10 @@
     "schemaVersion": "1.2.0",
     "id": "a5dc42272c1a8a13",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/2fa.test.ts",
@@ -3420,6 +3314,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/2fa.test.ts."
@@ -3435,10 +3330,7 @@
               "startLine": 182,
               "startColumn": 12,
               "endLine": 182,
-              "endColumn": 54,
-              "snippet": {
-                "text": "KDR5FXSOLNV6A5UAQYCKROSJZF7SVML7"
-              }
+              "endColumn": 54
             }
           }
         }
@@ -3459,10 +3351,10 @@
     "schemaVersion": "1.2.0",
     "id": "22a3ba4d70f70d0c",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/2fa.test.ts",
@@ -3484,6 +3376,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/2fa.test.ts."
@@ -3499,10 +3392,7 @@
               "startLine": 214,
               "startColumn": 12,
               "endLine": 214,
-              "endColumn": 54,
-              "snippet": {
-                "text": "KDR5FXSOLNV6A5UAQYCKROSJZF7SVML7"
-              }
+              "endColumn": 54
             }
           }
         }
@@ -3523,10 +3413,10 @@
     "schemaVersion": "1.2.0",
     "id": "fcc4c037c35f912d",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/2fa.test.ts",
@@ -3548,6 +3438,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/2fa.test.ts."
@@ -3563,10 +3454,7 @@
               "startLine": 240,
               "startColumn": 12,
               "endLine": 240,
-              "endColumn": 54,
-              "snippet": {
-                "text": "KDR5FXSOLNV6A5UAQYCKROSJZF7SVML7"
-              }
+              "endColumn": 54
             }
           }
         }
@@ -3587,10 +3475,10 @@
     "schemaVersion": "1.2.0",
     "id": "986b059bd27b69f6",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/2fa.test.ts",
@@ -3612,6 +3500,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/2fa.test.ts."
@@ -3627,10 +3516,7 @@
               "startLine": 257,
               "startColumn": 39,
               "endLine": 257,
-              "endColumn": 80,
-              "snippet": {
-                "text": "OJQOJNTB46VLWUO4TVKXIULU2WLPFQOJ"
-              }
+              "endColumn": 80
             }
           }
         }
@@ -3651,10 +3537,10 @@
     "schemaVersion": "1.2.0",
     "id": "4dd50e1b9ce0cd95",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/2fa.test.ts",
@@ -3676,6 +3562,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/2fa.test.ts."
@@ -3691,10 +3578,7 @@
               "startLine": 266,
               "startColumn": 12,
               "endLine": 266,
-              "endColumn": 54,
-              "snippet": {
-                "text": "KDR5FXSOLNV6A5UAQYCKROSJZF7SVML7"
-              }
+              "endColumn": 54
             }
           }
         }
@@ -3715,10 +3599,10 @@
     "schemaVersion": "1.2.0",
     "id": "8ea6879f7a4a3be0",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/2fa.test.ts",
@@ -3740,6 +3624,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/2fa.test.ts."
@@ -3755,10 +3640,7 @@
               "startLine": 292,
               "startColumn": 12,
               "endLine": 292,
-              "endColumn": 58,
-              "snippet": {
-                "text": "IFTXE3SPOEYVURT2MRYGI52TKJ4HC3KH"
-              }
+              "endColumn": 58
             }
           }
         }
@@ -3779,10 +3661,10 @@
     "schemaVersion": "1.2.0",
     "id": "082e45ebfa92681f",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/2fa.test.ts",
@@ -3804,6 +3686,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/2fa.test.ts."
@@ -3819,10 +3702,7 @@
               "startLine": 317,
               "startColumn": 12,
               "endLine": 317,
-              "endColumn": 54,
-              "snippet": {
-                "text": "KDR5FXSOLNV6A5UAQYCKROSJZF7SVML7"
-              }
+              "endColumn": 54
             }
           }
         }
@@ -3843,10 +3723,10 @@
     "schemaVersion": "1.2.0",
     "id": "40dff8b3a01670d1",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/2fa.test.ts",
@@ -3868,6 +3748,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/2fa.test.ts."
@@ -3883,10 +3764,7 @@
               "startLine": 352,
               "startColumn": 12,
               "endLine": 352,
-              "endColumn": 58,
-              "snippet": {
-                "text": "KDR5FXSOLNV6A5UAQYCKROSJZF7SVML7"
-              }
+              "endColumn": 58
             }
           }
         }
@@ -3907,10 +3785,10 @@
     "schemaVersion": "1.2.0",
     "id": "37707aa8ba619ec4",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/2fa.test.ts",
@@ -3932,6 +3810,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/2fa.test.ts."
@@ -3947,10 +3826,7 @@
               "startLine": 379,
               "startColumn": 12,
               "endLine": 379,
-              "endColumn": 58,
-              "snippet": {
-                "text": "KDR5FXSOLNV6A5UAQYCKROSJZF7SVML7"
-              }
+              "endColumn": 58
             }
           }
         }
@@ -3971,10 +3847,10 @@
     "schemaVersion": "1.2.0",
     "id": "5d704ce8df44b186",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/2fa.test.ts",
@@ -3996,6 +3872,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/2fa.test.ts."
@@ -4011,10 +3888,7 @@
               "startLine": 412,
               "startColumn": 10,
               "endLine": 412,
-              "endColumn": 55,
-              "snippet": {
-                "text": "KDR5FXSOLNV6A5UAQYCKROSJZF7SVML7"
-              }
+              "endColumn": 55
             }
           }
         }
@@ -4035,10 +3909,10 @@
     "schemaVersion": "1.2.0",
     "id": "840a0529e2b2b113",
     "ruleId": "jwt",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/user.test.ts",
@@ -4060,6 +3934,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "jwt has detected secret for file test/api/user.test.ts."
@@ -4075,10 +3950,7 @@
               "startLine": 280,
               "startColumn": 31,
               "endLine": 280,
-              "endColumn": 727,
-              "snippet": {
-                "text": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdGF0dXMiOiJzdWNjZXNzIiwiZGF0YSI6eyJpZCI6MSwidXNlcm5hbWUiOiIiLCJlbWFpbCI6ImFkbWluQGp1aWNlLXNoLm9wIiwicGFzc3dvcmQiOiIwMTkyMDIzYTdiYmQ3MzI1MDUxNmYwNjlkZjE4YjUwMCIsInJvbGUiOiJhZG1pbiIsImxhc3RMb2dpbklwIjoiMC4wLjAuMCIsInByb2ZpbGVJbWFnZSI6ImRlZmF1bHQuc3ZnIiwidG90cFNlY3JldCI6IiIsImlzQWN0aXZlIjp0cnVlLCJjcmVhdGVkQXQiOiIyMDE5LTA4LTE5IDE1OjU2OjE1LjYyOSArMDA6MDAiLCJ1cGRhdGVkQXQiOiIyMDE5LTA4LTE5IDE1OjU2OjE1LjYyOSArMDA6MDAiLCJkZWxldGVkQXQiOm51bGx9LCJpYXQiOjE1NjYyMzAyMjQsImV4cCI6MTU2NjI0ODIyNH0.FL0kkcInY5sDMGKeLHfEOYDTQd3BjR6_mK7Tcm_RH6iCLotTSRRoRxHpLkbtIQKqBFIt14J4BpLapkzG7ppRWcEley5nego-4iFOmXQvCBz5ISS3HdtM0saJnOe0agyVUen3huFp4F2UCth_y2ScjMn_4AgW66cz8NSFPRVpC8g"
-              }
+              "endColumn": 727
             }
           }
         }
@@ -4099,10 +3971,10 @@
     "schemaVersion": "1.2.0",
     "id": "173af5fbddfd0f53",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/user.test.ts",
@@ -4124,6 +3996,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/user.test.ts."
@@ -4139,10 +4012,7 @@
               "startLine": 240,
               "startColumn": 8,
               "endLine": 240,
-              "endColumn": 55,
-              "snippet": {
-                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
-              }
+              "endColumn": 55
             }
           }
         }
@@ -4163,10 +4033,10 @@
     "schemaVersion": "1.2.0",
     "id": "fa1a13edfb51c2fc",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/user.test.ts",
@@ -4188,6 +4058,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/user.test.ts."
@@ -4203,10 +4074,7 @@
               "startLine": 289,
               "startColumn": 8,
               "endLine": 289,
-              "endColumn": 55,
-              "snippet": {
-                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
-              }
+              "endColumn": 55
             }
           }
         }
@@ -4227,10 +4095,10 @@
     "schemaVersion": "1.2.0",
     "id": "03c67c9533d46ce1",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/user.test.ts",
@@ -4252,6 +4120,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/user.test.ts."
@@ -4267,10 +4136,7 @@
               "startLine": 304,
               "startColumn": 8,
               "endLine": 304,
-              "endColumn": 55,
-              "snippet": {
-                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
-              }
+              "endColumn": 55
             }
           }
         }
@@ -4291,10 +4157,10 @@
     "schemaVersion": "1.2.0",
     "id": "4790c306fa0ddcbe",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/user.test.ts",
@@ -4316,6 +4182,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/user.test.ts."
@@ -4331,10 +4198,7 @@
               "startLine": 318,
               "startColumn": 8,
               "endLine": 318,
-              "endColumn": 55,
-              "snippet": {
-                "text": "bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI="
-              }
+              "endColumn": 55
             }
           }
         }
@@ -4355,10 +4219,10 @@
     "schemaVersion": "1.2.0",
     "id": "f73b6f41f8442f9b",
     "ruleId": "generic-api-key",
-    "severity": "MEDIUM",
+    "severity": "HIGH",
     "tool": {
       "name": "gitleaks",
-      "version": "v8.0.0"
+      "version": "8.30.1"
     },
     "location": {
       "path": "test/api/user.test.ts",
@@ -4380,6 +4244,7 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
     "raw": {
       "message": {
         "text": "generic-api-key has detected secret for file test/api/user.test.ts."
@@ -4395,10 +4260,7 @@
               "startLine": 280,
               "startColumn": 68,
               "endLine": 280,
-              "endColumn": 554,
-              "snippet": {
-                "text": "0192023a7bbd73250516f069df18b500"
-              }
+              "endColumn": 554
             }
           }
         }

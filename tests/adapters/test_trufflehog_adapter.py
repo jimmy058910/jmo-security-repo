@@ -122,8 +122,11 @@ class TestTruffleHogVerification:
         assert findings[0].severity == "HIGH"
         assert "verified" in findings[0].tags
 
-    def test_unverified_secret_medium_severity(self, tmp_path: Path):
-        """Test unverified secrets have MEDIUM severity."""
+    def test_an_unverified_secret_is_high_too(self, tmp_path: Path):
+        """Unverified is HIGH as well (decided 2026-09-26). Verification is
+        off by default, so grading unverified MEDIUM made `--fail-on HIGH`
+        stop on no leaked secret at all. Verified-or-not lives in the tags and
+        the confidence."""
         sample = [
             {
                 "DetectorName": "AWS",
@@ -136,8 +139,9 @@ class TestTruffleHogVerification:
         adapter = TruffleHogAdapter()
         findings = adapter.parse(path)
         assert len(findings) == 1
-        assert findings[0].severity == "MEDIUM"
+        assert findings[0].severity == "HIGH"
         assert "unverified" in findings[0].tags
+        assert findings[0].risk["confidence"] == "MEDIUM"
 
     def test_mixed_verification_status(self, tmp_path: Path):
         """Test handling of mixed verified/unverified secrets."""
@@ -157,10 +161,10 @@ class TestTruffleHogVerification:
         adapter = TruffleHogAdapter()
         findings = adapter.parse(path)
         assert len(findings) == 2
-        verified_count = sum(1 for f in findings if f.severity == "HIGH")
-        unverified_count = sum(1 for f in findings if f.severity == "MEDIUM")
-        assert verified_count == 1
-        assert unverified_count == 1
+        # Both HIGH; the tags and the confidence tell them apart.
+        assert {f.severity for f in findings} == {"HIGH"}
+        by_tag = {("verified" in f.tags): f.risk["confidence"] for f in findings}
+        assert by_tag == {True: "HIGH", False: "MEDIUM"}
 
     def test_verification_metadata_preserved(self, tmp_path: Path):
         """Test verification metadata is preserved in raw field."""

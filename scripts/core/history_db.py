@@ -642,6 +642,7 @@ def redact_secrets(finding: dict, store_raw: bool = True) -> dict:
 
     Redaction Strategy:
         - trufflehog: Replace 'Raw', 'RawV2' fields with '[REDACTED]'
+        - gitleaks: Replace SARIF's 'snippet' (the matched secret) the same way
         - Other tools: No redaction (trivy, semgrep, etc. don't contain secrets)
 
     Example:
@@ -669,10 +670,15 @@ def redact_secrets(finding: dict, store_raw: bool = True) -> dict:
     tool_info = finding.get("tool", {})
     tool_name = tool_info.get("name") if isinstance(tool_info, dict) else str(tool_info)
 
-    # Secret scanner tools that need redaction
-    SECRET_TOOLS = ["trufflehog"]
+    # Secret scanner tools, and the raw keys that hold the secret itself.
+    # Each adapter already drops these; this is the second layer, for a
+    # finding that reaches history by another road.
+    SECRET_KEYS = {
+        "trufflehog": ("Raw", "RawV2"),
+        "gitleaks": ("snippet",),  # SARIF region.snippet: the match
+    }
 
-    if tool_name not in SECRET_TOOLS:
+    if tool_name not in SECRET_KEYS:
         # Non-secret tools: store raw data unchanged
         result["raw_finding"] = json.dumps(raw_data)
         return result
@@ -682,30 +688,30 @@ def redact_secrets(finding: dict, store_raw: bool = True) -> dict:
 
     redacted_raw = copy.deepcopy(raw_data)
 
-    # Recursively redact trufflehog's 'Raw' and 'RawV2' fields
-    _redact_trufflehog_secrets(redacted_raw)
+    _redact_secret_keys(redacted_raw, SECRET_KEYS[tool_name])
 
     result["raw_finding"] = json.dumps(redacted_raw)
     return result
 
 
-def _redact_trufflehog_secrets(data: dict | list) -> None:
+def _redact_secret_keys(data: dict | list, keys: tuple[str, ...]) -> None:
     """
-    Recursively redact 'Raw' and 'RawV2' fields in trufflehog findings.
+    Recursively replace every value under one of ``keys`` with '[REDACTED]'.
 
     Args:
         data: Dictionary or list to recursively process (modified in-place)
+        keys: The keys whose values are secrets
     """
     if isinstance(data, dict):
         for key in data:
-            if key in ("Raw", "RawV2"):
+            if key in keys:
                 data[key] = "[REDACTED]"
             elif isinstance(data[key], (dict, list)):
-                _redact_trufflehog_secrets(data[key])
+                _redact_secret_keys(data[key], keys)
     elif isinstance(data, list):
         for item in data:
             if isinstance(item, (dict, list)):
-                _redact_trufflehog_secrets(item)
+                _redact_secret_keys(item, keys)
 
 
 def encrypt_raw_finding(raw_json: str) -> str:

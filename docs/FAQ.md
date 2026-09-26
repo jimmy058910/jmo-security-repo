@@ -23,7 +23,7 @@ You can mix — use `pip` locally for development and Docker in CI. See [docs/DO
 - **Docker:** 24.0+ recommended (for the Docker image)
 - **Disk:** ~200 MB for `pip install jmo-security`; a few GB for the Docker image
 - **OS:** Linux (primary), macOS, Windows 10/11 (tested)
-- **Tools (pip install only):** `jmo tools install` fetches the 12 scanners and the OPA policy engine on demand
+- **Tools (pip install only):** `jmo tools install` fetches the 13 scanners and the OPA policy engine on demand
 
 ### Is JMo Security available on Homebrew or WinGet?
 
@@ -41,7 +41,7 @@ The tool installer uses isolated virtualenvs for pip-based tools (avoids conflic
 
 Docker users skip this step — all scanners are pre-installed in the image.
 
-### Do I need all 12 scanners?
+### Do I need all 13 scanners?
 
 No, and you rarely run them all. `jmo scan` considers every scanner, but the target's content decides which ones run: hadolint needs Dockerfiles, shellcheck needs shell scripts, gosec needs Go sources, and zap and nuclei only run on `--url` targets. To narrow the list yourself, use `--tools` (for example `jmo scan --repo . --tools trufflehog semgrep trivy`), `--skip-tools`, or a top-level `tools:` list in `jmo.yml`.
 

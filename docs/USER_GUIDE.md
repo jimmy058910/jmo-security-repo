@@ -173,7 +173,8 @@ Not every tool produces findings for every project. JMo uses content-triggered e
 
 | Tool | Why it runs |
 |------|-------------|
-| **TruffleHog** | Scans for leaked secrets (API keys, tokens) |
+| **TruffleHog** | Scans for leaked secrets (API keys, tokens), in the tree and in git history |
+| **Gitleaks** | A second secret scanner with its own rules, in the tree and in git history |
 | **Semgrep** | Static analysis for Python security issues (SQL injection, insecure deserialization, etc.) |
 | **Syft** | Generates a Software Bill of Materials (SBOM) from `requirements.txt` / `pyproject.toml` |
 | **Trivy** | Checks Python dependencies for known CVEs |
@@ -547,7 +548,7 @@ https://staging.example.com
 - `--gitlab-group GROUP`: Scan all repositories in a group
 - `--gitlab-repo REPO`: Single GitLab repository (format: `group/repo`)
 
-**Tools used:** Full repository scanner (TruffleHog, Semgrep, Syft, Trivy, Checkov, YARA, Grype, plus Hadolint, ShellCheck and Gosec when their content is present)
+**Tools used:** Full repository scanner (TruffleHog, Gitleaks, Semgrep, Syft, Trivy, Checkov, YARA, Grype, plus Hadolint, ShellCheck and Gosec when their content is present)
 
 **Architecture:** GitLab repos are cloned temporarily and scanned using the same repository scanner as local repos, providing comprehensive coverage instead of secrets-only scanning
 
@@ -1183,6 +1184,8 @@ exclude: ["big-monorepo*"]
 per_tool:
   semgrep:
     flags: ["--exclude", "node_modules", "--exclude", ".git"]
+  trufflehog:
+    verify: true  # off by default: ask each issuer whether a secret is live
   trivy:
     flags: ["--no-progress"]
   zap:
@@ -2272,6 +2275,11 @@ Press Enter to continue after verifying, or Ctrl+C to cancel...
 ```bash
 jmo ci --repos-dir ~/repos --fail-on HIGH --profile
 ```
+
+A leaked secret is graded HIGH, verified or not, so `--fail-on HIGH` stops on it. TruffleHog
+verifies only with `per_tool.trufflehog.verify: true`. Secrets in git history are read only from
+a full clone, so check out with `fetch-depth: 0` in CI. See
+[Known limitations](KNOWN_LIMITATIONS.md#trufflehog-does-not-verify-secrets-by-default).
 
 Outputs include: `summaries/findings.json`, `SUMMARY.md`, `findings.yaml`, `findings.sarif`, `dashboard.html`, and `timings.json` (when profiling).
 

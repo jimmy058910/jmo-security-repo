@@ -6,7 +6,9 @@ CommonFinding helpers: severity mapping and fingerprinting.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import logging
+import os
 from enum import Enum
 from typing import Any
 
@@ -16,6 +18,23 @@ logger = logging.getLogger(__name__)
 # Fingerprinting constants
 FINGERPRINT_LENGTH = 16  # Hex chars for stable, readable IDs
 MESSAGE_SNIPPET_LENGTH = 120  # Chars to include in fingerprint calculation
+
+# Keys `secret_digest` for this process only: a digest that escaped the report
+# phase could not be compared with any other run's, or guessed from a
+# dictionary of likely secrets.
+_SECRET_DIGEST_KEY = os.urandom(32)
+
+
+def secret_digest(secret: str) -> str:
+    """A keyed digest of ``secret``, for telling whether two records hold the
+    same one without holding it.
+
+    A secret in the working tree is in git history too, and each secret
+    scanner reports it once per mode; the report phase pairs the two by this
+    digest (v2.0.0 Phase 3, G1). The adapters compute it and the report phase
+    removes it before anything is written.
+    """
+    return hmac.new(_SECRET_DIGEST_KEY, secret.encode("utf-8"), "sha256").hexdigest()
 
 
 class Severity(str, Enum):
@@ -187,6 +206,7 @@ def fingerprint(
     start_line: int | None,
     message: str | None,
     start_column: int | None = None,
+    commit: str | None = None,
 ) -> str:
     """Generate stable fingerprint ID for deduplication.
 
@@ -198,6 +218,13 @@ def fingerprint(
     secrets at columns 82 and 116 collapsing to one id, and deduplication
     dropping the second.
 
+    ``|@commit`` is appended the same way, by a secret scanner's record from
+    git history (v2.0.0 Phase 3, G1): a key rotated in place leaves the old
+    one in history at the new one's file and line, and without the commit the
+    two share an id and deduplication drops one. The message cannot carry it:
+    only its first 120 characters are hashed, and gitleaks puts the commit
+    after the path.
+
     Args:
         tool: Tool name (e.g., "trufflehog", "semgrep")
         rule_id: Rule or vulnerability ID
@@ -207,6 +234,8 @@ def fingerprint(
         start_column: Column number when the tool reports one; ``None`` (the
             default) leaves the five-component form untouched. ``0`` is a
             column, not an absence.
+        commit: The commit a record from git history names; ``None`` for
+            everything else.
 
     Returns:
         Hex string of length FINGERPRINT_LENGTH for stable deduplication
@@ -215,6 +244,8 @@ def fingerprint(
     base = f"{tool}|{rule_id or ''}|{path or ''}|{start_line or 0}|{snippet}"
     if start_column is not None:
         base = f"{base}|{start_column}"
+    if commit:
+        base = f"{base}|@{commit}"
     return hashlib.sha256(base.encode("utf-8")).hexdigest()[:FINGERPRINT_LENGTH]
 
 
