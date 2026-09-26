@@ -350,6 +350,8 @@ def cmd_history_show(args) -> int:
             sys.stdout.write(f"  TOTAL:         {scan['total_findings']}\n")
             sys.stdout.write("\n")
 
+            # TODO(issue-#1316): off-target rows (`needs --url`, `not for this
+            # target type`) belong in --json only.
             if tool_runs:
                 sys.stdout.write("Tool Runs:\n")
                 for run in tool_runs:

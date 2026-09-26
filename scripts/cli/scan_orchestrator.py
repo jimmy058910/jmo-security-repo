@@ -384,6 +384,7 @@ def repo_result_names(repos: list[Path]) -> list[str]:
     numeric suffix settles a collision that survives that. A name that does not
     collide is unchanged.
     """
+    # TODO(issue-#1315): `--repo .` has `.name == ""`, so it is named "unknown".
     base = [_sanitize_path_component(repo.name) for repo in repos]
     counts: dict[str, int] = {}
     for name in base:
@@ -1262,6 +1263,8 @@ class ScanOrchestrator:
                     logger.error(
                         f"Scan failed for {target_type} {target_id}: {e}", exc_info=True
                     )
+                    # TODO(issue-#1315): `target_id` is not always the name the job
+                    # records (an IaC path here, `terraform:main.tf` on success).
                     # Still a row per tool, so this target is counted as having
                     # produced nothing (TARGET_FAILED) rather than vanishing, and
                     # reaches history with the reason.

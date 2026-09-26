@@ -903,8 +903,10 @@ red before green:
   finding resolved. It is not stored now.
 
 Routed, not fixed: #1312 (URL and IaC folder collisions, #1303's class) and #1313
-(checkov's `--skip-path` substrings, unmeasured). Measured false and closed: semgrep on
-a docs-only repository scans both files (`paths.scanned` 2). Suite 8960 / 98 / 0.
+(checkov's `--skip-path` substrings, unmeasured). The deferred minors are filed and
+rostered in Phase 3 as #1315 (target names), #1316 (surfacing), #1317 (messages),
+and #1318 (test gaps). Measured false and closed: semgrep on a docs-only repository
+scans both files (`paths.scanned` 2). Suite 8960 / 98 / 0.
 - [ ] Suite ID-set diff; `windows-2022` log line; both CI events.
 
 ---

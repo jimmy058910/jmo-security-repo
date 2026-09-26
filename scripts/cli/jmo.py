@@ -3058,6 +3058,7 @@ def cmd_scan(args) -> int:
             # Either the user cancelled at the prompt (logged there), or the
             # request was empty to begin with (`--skip-tools` naming every
             # tool, or `tools: []`), which is still silent, as it was before.
+            # TODO(issue-#1317): say so, and consider exit 2.
             return 1
         if getattr(args, "allow_missing_tools", False) and set(tools) <= set(
             missing_tools
