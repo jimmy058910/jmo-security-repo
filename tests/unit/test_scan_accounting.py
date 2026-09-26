@@ -37,14 +37,21 @@ DECLARED = ["trivy", "hadolint", "semgrep"]
 
 
 def _scan(
-    tmp_path: Path, rows=(RAN, SKIPPED, FAILED), *, meta_rows=None, outputs=None
+    tmp_path: Path,
+    rows=(RAN, SKIPPED, FAILED),
+    *,
+    meta_rows=None,
+    outputs=None,
+    doc_target="proj",
 ) -> Path:
     """A results directory with one repository target."""
     results = tmp_path / "results"
     target = results / "individual-repos" / "proj"
     target.mkdir(parents=True)
     by_tool = {r.tool: r for r in rows}
-    doc = build_scan_timings(by_tool, target="proj", target_type="repo", wall_seconds=1)
+    doc = build_scan_timings(
+        by_tool, target=doc_target, target_type="repo", wall_seconds=1
+    )
     doc["tools"] = [r.to_dict() for r in rows]  # keep duplicates if a test wants them
     (target / SCAN_TIMINGS_FILENAME).write_bytes(json.dumps(doc).encode("utf-8"))
     for tool, body in (outputs if outputs is not None else {"trivy": "{}"}).items():
@@ -149,6 +156,51 @@ def test_timings_for_a_target_the_metadata_does_not_know_disagree(tmp_path) -> N
 
     assert not result.ok
     assert result.timings_disagree
+
+
+def test_a_row_the_timings_record_differently_disagrees(tmp_path) -> None:
+    """#1316: the docstring promised each document "agrees with the metadata's
+    rows" while only the number of documents was compared."""
+    timed_out = ToolRun("trivy", State.FAILED, Reason.TIMED_OUT)
+
+    result = reconcile(_scan(tmp_path, meta_rows=(timed_out, SKIPPED, FAILED)))
+
+    assert not result.ok
+    assert result.timings_disagree == [
+        "individual-repos/proj: trivy is ran here, failed:timed out in "
+        ".scan_metadata.json"
+    ]
+
+
+def test_timings_naming_the_target_differently_disagree(tmp_path) -> None:
+    """#1315's shape: one target, a GitLab clone recorded as `app` in its
+    timings and `group/app` in the metadata. One document and one target, so a
+    count cannot see it."""
+    result = reconcile(_scan(tmp_path, doc_target="app"))
+
+    assert not result.ok
+    assert result.timings_disagree == [
+        "individual-repos/proj: names repo app, which .scan_metadata.json has no "
+        "rows for"
+    ]
+
+
+def test_two_documents_naming_one_target_disagree(tmp_path) -> None:
+    """Two folders for one name: #1312's duplicate target."""
+    results = _scan(tmp_path)
+    twin = results / "individual-repos" / "proj-2"
+    twin.mkdir()
+    for name in (SCAN_TIMINGS_FILENAME, "trivy.json"):
+        (twin / name).write_bytes(
+            (results / "individual-repos/proj" / name).read_bytes()
+        )
+
+    result = reconcile(results)
+
+    assert not result.ok
+    assert result.timings_disagree == [
+        "individual-repos/proj-2: names repo proj, as individual-repos/proj does"
+    ]
 
 
 def test_main_exits_non_zero_on_a_broken_scan(tmp_path, capsys) -> None:

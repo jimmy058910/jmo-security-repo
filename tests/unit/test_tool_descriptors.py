@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import re
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -26,6 +27,7 @@ from scripts.core.tool_descriptors import (
     REMOVED_TOOLS,
     VENDORED_DIRS,
     ExclusionStyle,
+    ScanContext,
     UnknownToolError,
     parse_tool_names,
 )
@@ -246,3 +248,95 @@ class TestToolNames:
         falcoctl is accepted as a spelling of the same removal."""
         assert len(REMOVED_TOOLS - {"falcoctl"}) == 16
         assert not REMOVED_TOOLS & set(DESCRIPTORS)
+
+
+# --- exclusions reach only a tree (#1318) -------------------------------------
+#
+# `--skip-dirs **/vendor` on an image scan drops the image's vulnerabilities
+# under any `vendor` path; a `--skip-path` on checkov's file mode is meaningless
+# at best. Two layers keep them off: `run_tools` hands exclusion arguments only
+# to a repository target, and each non-repository builder ignores what it is
+# handed (`excl=False`). Either alone suffices, so each is tested alone: a
+# mutation of one layer is invisible through the other (measured: with `excl`
+# flipped on `_trivy("image")`, `run_tools` still built no `--skip-dirs`).
+
+NOT_A_TREE = {
+    "image": "nginx:latest",
+    "iac": Path("main.tf"),
+    "url": "http://a.test/app",
+    "k8s": {"context": "ctx", "namespace": "ns"},
+}
+NON_TREE_INVOCATIONS = sorted(
+    (name, key)
+    for name, d in DESCRIPTORS.items()
+    for key in d.invocations
+    if key != "repo"
+)
+
+
+def test_the_non_tree_invocations_include_the_two_with_an_excl_switch() -> None:
+    assert ("trivy", "image") in NON_TREE_INVOCATIONS
+    assert ("checkov", "iac") in NON_TREE_INVOCATIONS
+    assert {key for _, key in NON_TREE_INVOCATIONS} == set(NOT_A_TREE)
+
+
+@pytest.mark.parametrize(("tool", "key"), NON_TREE_INVOCATIONS)
+def test_a_builder_for_a_non_tree_drops_exclusions_it_is_handed(
+    tool, key, tmp_path
+) -> None:
+    ctx = ScanContext(
+        tool=tool,
+        target_type=key,
+        target=NOT_A_TREE[key],
+        out_dir=tmp_path,
+        binary=tool,
+        exclusion_args=("--EXCLUDED", "sentinel"),
+    )
+
+    for invocation in DESCRIPTORS[tool].invocations[key](ctx):
+        assert "--EXCLUDED" not in invocation.command, invocation.command
+
+
+@pytest.mark.parametrize(
+    ("target_type", "target"), [*NOT_A_TREE.items(), ("repo", None)]
+)
+def test_run_tools_hands_exclusions_to_a_repository_only(
+    tmp_path, monkeypatch, target_type, target
+) -> None:
+    """A builder that would render whatever it is handed. The repository is
+    the positive control: without it, "never hand exclusions to anything"
+    passes too."""
+    from scripts.cli.scan_jobs import tool_loop
+
+    handed: list[tuple[str, ...]] = []
+
+    def recording_builder(ctx: ScanContext) -> list:
+        handed.append(ctx.exclusion_args)
+        return []
+
+    monkeypatch.setitem(
+        DESCRIPTORS["trivy"].invocations, target_type, recording_builder
+    )
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "a.py").write_bytes(b"x = 1\n")
+    out = tmp_path / "out"
+    out.mkdir()
+
+    tool_loop.run_tools(
+        tools=["trivy"],
+        target_type=target_type,
+        target=repo if target is None else target,
+        target_label="t",
+        out_dir=out,
+        timeout=60,
+        retries=0,
+        per_tool_config={},
+        allow_missing_tools=False,
+        runner_cls=lambda **kw: type("R", (), {"run_all_parallel": lambda s: []})(),
+        find_tool_func=lambda name: "/usr/bin/" + name,
+        repo_root=repo if target is None else None,
+    )
+
+    assert len(handed) == 1
+    assert bool(handed[0]) is (target_type == "repo"), handed

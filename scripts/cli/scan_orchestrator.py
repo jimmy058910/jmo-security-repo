@@ -25,7 +25,7 @@ from typing import Any
 
 from scripts.cli.path_sanitizers import _sanitize_path_component
 from scripts.core.config import RetryConfig
-from scripts.core.scan_timings import Reason, State, ToolRun
+from scripts.core.scan_timings import OFF_TARGET_REASONS, Reason, State, ToolRun
 from scripts.core.tool_registry import TOOL_SCAN_TYPES
 from scripts.core.validation import validate_container_image, validate_url
 
@@ -311,9 +311,6 @@ TARGET_FAILED = "failed"
 # scanner that never ran satisfies a zero-secrets policy (#825).
 TARGET_NOT_ATTEMPTED = "not-attempted"
 
-# Reasons that say the tool does not read this kind of target at all.
-_OFF_TARGET = frozenset({Reason.NEEDS_URL, Reason.NOT_FOR_TARGET})
-
 
 def classify_target_outcome(rows: Mapping[str, ToolRun] | None) -> str:
     """Classify one target's scan from its rows.
@@ -332,7 +329,7 @@ def classify_target_outcome(rows: Mapping[str, ToolRun] | None) -> str:
     """
     if not rows:
         return TARGET_FAILED
-    in_scope = [r for r in rows.values() if r.reason not in _OFF_TARGET]
+    in_scope = [r for r in rows.values() if r.reason not in OFF_TARGET_REASONS]
     if not in_scope:
         return TARGET_FAILED
     ran = sum(r.state is State.RAN for r in in_scope)
@@ -368,9 +365,35 @@ def summarize_target(rows: Mapping[str, ToolRun] | None) -> TargetSummary:
         skipped=sorted(
             f"{r.tool} ({r.reason})"
             for r in rows.values()
-            if r.state is State.SKIPPED and r.reason not in _OFF_TARGET
+            if r.state is State.SKIPPED and r.reason not in OFF_TARGET_REASONS
         ),
     )
+
+
+def unique_names(names: list[str], prefixes: list[str] | None = None) -> list[str]:
+    """Make each results folder name unique within one target type's folder.
+
+    Two targets sharing a folder are scanned concurrently into it, and the last
+    writer's findings stand for both (#1303, #1312). A name that collides,
+    case-insensitively as Windows does, takes its prefix when there is one
+    (``alice__app``), and a numeric suffix settles a collision that survives
+    that. A name that does not collide is unchanged.
+    """
+    counts: dict[str, int] = {}
+    for name in names:
+        counts[name.casefold()] = counts.get(name.casefold(), 0) + 1
+    unique: list[str] = []
+    used: set[str] = set()
+    for i, name in enumerate(names):
+        if prefixes is not None and counts[name.casefold()] > 1:
+            name = f"{prefixes[i]}__{name}"
+        candidate, n = name, 2
+        while candidate.casefold() in used:
+            candidate = f"{name}-{n}"
+            n += 1
+        used.add(candidate.casefold())
+        unique.append(candidate)
+    return unique
 
 
 def repo_result_names(repos: list[Path]) -> list[str]:
@@ -378,29 +401,17 @@ def repo_result_names(repos: list[Path]) -> list[str]:
 
     Results land in ``individual-repos/<name>``, and two repositories with one
     folder name (``~/work/app`` and ``~/oss/app``, or two forks cloned from a
-    TSV) shared one folder: scanned concurrently, the last writer's findings
-    stood for both. A name that collides, case-insensitively as Windows does,
-    takes its parent's name as a prefix (``alice__app``, ``bob__app``), and a
-    numeric suffix settles a collision that survives that. A name that does not
-    collide is unchanged.
+    TSV) shared one folder. A collision takes the parent's name as its prefix
+    (``alice__app``, ``bob__app``). The name is also the repository's name in
+    every accounting record.
     """
-    # TODO(issue-#1315): `--repo .` has `.name == ""`, so it is named "unknown".
-    base = [_sanitize_path_component(repo.name) for repo in repos]
-    counts: dict[str, int] = {}
-    for name in base:
-        counts[name.casefold()] = counts.get(name.casefold(), 0) + 1
-    names: list[str] = []
-    used: set[str] = set()
-    for repo, name in zip(repos, base, strict=True):
-        if counts[name.casefold()] > 1:
-            name = f"{_sanitize_path_component(repo.parent.name)}__{name}"
-        candidate, n = name, 2
-        while candidate.casefold() in used:
-            candidate = f"{name}-{n}"
-            n += 1
-        used.add(candidate.casefold())
-        names.append(candidate)
-    return names
+    # `Path(".").name` is "", which sanitized to "unknown" (#1315). `abspath`,
+    # not `resolve`: a symlinked repository keeps the name it was given.
+    paths = [Path(os.path.abspath(repo)) for repo in repos]
+    return unique_names(
+        [_sanitize_path_component(p.name) for p in paths],
+        [_sanitize_path_component(p.parent.name) for p in paths],
+    )
 
 
 def _run_timed(scan_job, *args: Any, **kwargs: Any) -> tuple[str, dict, float]:
@@ -703,7 +714,9 @@ class ScanOrchestrator:
                             "not a valid container image reference",
                         )
 
-        return images
+        # An image listed twice is scanned once: two targets with one name put
+        # two rows per tool under it (#1312).
+        return list(dict.fromkeys(images))
 
     def _discover_iac_files(self, args) -> list[tuple[str, Path]]:
         """
@@ -791,7 +804,8 @@ class ScanOrchestrator:
                 else:
                     urls.append(f"file://{p.absolute()}")
 
-        return urls
+        # A URL listed twice is scanned once, as a TSV row is (#1312).
+        return list(dict.fromkeys(urls))
 
     def _discover_gitlab_repos(self, args) -> list[dict[str, str]]:
         """
@@ -898,7 +912,8 @@ class ScanOrchestrator:
         Returns:
             Filtered list of repositories
         """
-        return [r for r in repos if self._passes_filters(r.name)]
+        # The name the repository is recorded under: `--repo .` is not "".
+        return [r for r in repos if self._passes_filters(Path(os.path.abspath(r)).name)]
 
     def _passes_filters(self, name: str) -> bool:
         """Whether a repository folder name survives `include` and `exclude`."""
@@ -1052,7 +1067,9 @@ class ScanOrchestrator:
             scan_repository,
             scan_url,
         )
+        from scripts.cli.scan_jobs.iac_scanner import iac_target_name
         from scripts.cli.scan_jobs.tool_loop import rows_without_running
+        from scripts.cli.scan_jobs.url_scanner import url_folder_name
 
         all_results: list[tuple[str, str, dict[str, ToolRun]]] = []
         futures = []
@@ -1109,6 +1126,17 @@ class ScanOrchestrator:
 
         skipped_count = 0
         repo_names = targets.repo_names or repo_result_names(targets.repos)
+        # Each target's folder, unique within its type (#1312). Assigned over
+        # every target, completed or not, so a resumed scan assigns the same.
+        # One file per IaC flag, so a shared stem is two types: `k8s__main`.
+        image_folders = unique_names(
+            [_sanitize_path_component(image) for image in targets.images]
+        )
+        iac_folders = unique_names(
+            [_sanitize_path_component(path.stem) for _, path in targets.iac_files],
+            [iac_type for iac_type, _ in targets.iac_files],
+        )
+        url_folders = unique_names([url_folder_name(url) for url in targets.urls])
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             for repo, result_name in zip(targets.repos, repo_names, strict=True):
@@ -1131,7 +1159,7 @@ class ScanOrchestrator:
                 )
                 futures.append(("repo", result_name, future))
 
-            for image in targets.images:
+            for image, folder in zip(targets.images, image_folders, strict=True):
                 if _is_completed(image):
                     skipped_count += 1
                     _resumed("image", image)
@@ -1146,11 +1174,16 @@ class ScanOrchestrator:
                     self.config.retries,
                     per_tool_config,
                     self.config.allow_missing_tools,
+                    result_name=folder,
                 )
                 futures.append(("image", image, future))
 
-            for iac_type, iac_path in targets.iac_files:
-                iac_id = str(iac_path)
+            for (iac_type, iac_path), folder in zip(
+                targets.iac_files, iac_folders, strict=True
+            ):
+                # The name its job records, so a scanner that raises is
+                # recorded under the name success would have used (#1315).
+                iac_id = iac_target_name(iac_type, iac_path)
                 if _is_completed(iac_id):
                     skipped_count += 1
                     _resumed("iac", iac_id)
@@ -1166,10 +1199,11 @@ class ScanOrchestrator:
                     self.config.retries,
                     per_tool_config,
                     self.config.allow_missing_tools,
+                    result_name=folder,
                 )
                 futures.append(("iac", iac_id, future))
 
-            for url in targets.urls:
+            for url, folder in zip(targets.urls, url_folders, strict=True):
                 if _is_completed(url):
                     skipped_count += 1
                     _resumed("url", url)
@@ -1184,6 +1218,7 @@ class ScanOrchestrator:
                     self.config.retries,
                     per_tool_config,
                     self.config.allow_missing_tools,
+                    result_name=folder,
                 )
                 futures.append(("url", url, future))
 
@@ -1235,13 +1270,13 @@ class ScanOrchestrator:
                 # prints INFO, so the two logging systems have different
                 # effective floors and this line was on the quiet one.
                 #
-                # It is the only thing that tells a reader their results cover
-                # fewer targets than they asked for, and the progress display
-                # ends part-way (`[1/2] ... Progress: 50%`) with no other
-                # explanation. That is not routine chatter.
+                # It is the only thing that explains a progress display that
+                # ends part-way (`[1/2] ... Progress: 50%`). The results still
+                # cover every target: the report reads the skipped targets'
+                # folders, and their rows come back from the session (#1317).
                 logger.warning(
-                    "Resuming scan: skipped %d previously completed target(s); "
-                    "this run's results cover only the remaining ones",
+                    "Resuming scan: %d target(s) completed earlier were not "
+                    "scanned again; their earlier results are reused",
                     skipped_count,
                 )
 
@@ -1263,10 +1298,9 @@ class ScanOrchestrator:
                     logger.error(
                         f"Scan failed for {target_type} {target_id}: {e}", exc_info=True
                     )
-                    # TODO(issue-#1315): `target_id` is not always the name the job
-                    # records (an IaC path here, `terraform:main.tf` on success).
-                    # Still a row per tool, so this target is counted as having
-                    # produced nothing (TARGET_FAILED) rather than vanishing, and
+                    # `target_id` is the name the job records. Still a row per
+                    # tool, so this target is counted as having produced
+                    # nothing (TARGET_FAILED) rather than vanishing, and
                     # reaches history with the reason.
                     failed_rows = rows_without_running(
                         tools,

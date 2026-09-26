@@ -328,6 +328,7 @@ def scan_gitlab_repo(
                 allow_missing_tools=allow_missing_tools,
                 write_stub_func=write_stub_func,
                 target_type="gitlab",
+                label=full_path,
             )
 
             # Discover container images in cloned repo

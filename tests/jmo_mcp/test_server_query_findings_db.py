@@ -13,6 +13,7 @@ Coverage:
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from pathlib import Path
 
@@ -627,3 +628,54 @@ class TestTheToolNotJustTheFunctionUnderneath:
 
         # And it goes back to the repo-root database once unset.
         assert query_findings_db(query="SELECT 1")["row_count"] == 1
+
+
+class TestTheDescriptionMatchesTheSchema:
+    """#1316: an agent learns what it can query from the tool's description
+    (FastMCP publishes the docstring). It listed an `attestations` table the
+    schema has never had and left out `scan_tool_runs`, so the per-tool rows
+    were undiscoverable. Both checks derive from `init_database`, so the next
+    table fails here until the description names it."""
+
+    @staticmethod
+    def _schema(tmp_path: Path) -> Path:
+        from scripts.core.history_db import init_database
+
+        db = tmp_path / "schema.db"
+        init_database(db)
+        return db
+
+    @staticmethod
+    def _doc() -> str:
+        from scripts.jmo_mcp.jmo_server import query_findings_db
+
+        return query_findings_db.__doc__ or ""
+
+    def test_it_names_every_table_and_view(self, tmp_path):
+        con = sqlite3.connect(self._schema(tmp_path))
+        try:
+            schema = set(
+                con.execute(
+                    "SELECT type, name FROM sqlite_master "
+                    "WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%'"
+                )
+            )
+        finally:
+            con.close()
+        listed = set()
+        for line in self._doc().splitlines():
+            kind, _, names = line.strip().partition(": ")
+            if kind in ("Tables", "Views"):
+                listed |= {(kind[:-1].lower(), n.strip()) for n in names.split(",")}
+
+        assert ("table", "scan_tool_runs") in schema, "the schema lost a table"
+        assert listed == schema
+
+    def test_every_example_runs_against_the_schema(self, tmp_path):
+        db = self._schema(tmp_path)
+        examples = re.findall(r'^\s+- "(.+)"$', self._doc(), re.MULTILINE)
+
+        assert any("scan_tool_runs" in q for q in examples), examples
+        for query in examples:
+            params = ["x"] * query.count("?")
+            execute_readonly_query(db_path=db, query=query, params=params or None)

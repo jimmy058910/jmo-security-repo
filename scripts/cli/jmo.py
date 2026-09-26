@@ -36,7 +36,7 @@ from scripts.core.config import load_config
 from scripts.core.exceptions import (
     ConfigurationException,
 )
-from scripts.core.scan_timings import Reason, State, ToolRun
+from scripts.core.scan_timings import OFF_TARGET_REASONS, Reason, State, ToolRun
 from scripts.core.unicode_utils import (
     harden_console_streams,
     safe_write,
@@ -2822,7 +2822,7 @@ class ProgressTracker:
                         else "no tool ran against this target"
                     ),
                 )
-            elif outcome == TARGET_NOT_ATTEMPTED:
+            elif outcome == TARGET_NOT_ATTEMPTED and missing_tools:
                 # Not an error: --allow-missing-tools is what makes this
                 # reachable and the run still exits 0. But an empty stub from a
                 # secret scanner that never ran satisfies a zero-secrets
@@ -2832,6 +2832,15 @@ class ProgressTracker:
                     "WARN",
                     f"{message} - NO tool ran against this target, so its empty "
                     f"output is NOT a clean result: {', '.join(summary.skipped)}",
+                )
+            elif outcome == TARGET_NOT_ATTEMPTED:
+                # Every tool here had nothing of its kind to scan (`--tools
+                # hadolint`, no Dockerfile): a correct result, not #825's gap.
+                _log(
+                    self.args,
+                    "INFO",
+                    f"{message} - no tool ran, none had anything here to scan: "
+                    f"{', '.join(summary.skipped)}",
                 )
             elif outcome == TARGET_PARTIAL:
                 _log(
@@ -3005,6 +3014,22 @@ def cmd_scan(args) -> int:
     except UnknownToolError as exc:
         _log(args, "ERROR", f"{getattr(args, 'config', 'jmo.yml')} tools: {exc}")
         return 2
+    if not eff["tools"]:
+        # Decided before anything scans, so a usage error: it used to exit 1
+        # in silence after pre-flight, or raise in Docker, where pre-flight is
+        # skipped (#1317).
+        _log(
+            args,
+            "ERROR",
+            "No tool to run: "
+            + (
+                "--skip-tools removed every requested tool"
+                if eff["skip_tools"]
+                else f"`tools:` in {getattr(args, 'config', 'jmo.yml')} is empty"
+            )
+            + ". Name at least one with --tools.",
+        )
+        return 2
 
     clear_tool_warnings()
 
@@ -3055,10 +3080,8 @@ def cmd_scan(args) -> int:
     if not os.environ.get("DOCKER_CONTAINER"):
         tools, missing_tools = _check_scan_tools(args, tools)
         if not tools:
-            # Either the user cancelled at the prompt (logged there), or the
-            # request was empty to begin with (`--skip-tools` naming every
-            # tool, or `tools: []`), which is still silent, as it was before.
-            # TODO(issue-#1317): say so, and consider exit 2.
+            # The user cancelled at the prompt, which logged it. An empty
+            # request never reaches here: it is refused above.
             return 1
         if getattr(args, "allow_missing_tools", False) and set(tools) <= set(
             missing_tools
@@ -3145,6 +3168,7 @@ def cmd_scan(args) -> int:
     per_tool_config = eff.get("per_tool", {}) or {}
 
     # --- Session checkpointing ---
+    from scripts.cli.scan_jobs.iac_scanner import iac_target_name
     from scripts.cli.scan_session import (
         ScanSession,
         compute_config_hash,
@@ -3224,7 +3248,9 @@ def cmd_scan(args) -> int:
         for image in targets.images:
             scan_session.register_target("image", image, tools)
         for iac_type, iac_path in targets.iac_files:
-            scan_session.register_target("iac", str(iac_path), tools)
+            scan_session.register_target(
+                "iac", iac_target_name(iac_type, iac_path), tools
+            )
         for url in targets.urls:
             scan_session.register_target("url", url, tools)
         for gl_info in targets.gitlab_repos:
@@ -3426,7 +3452,8 @@ def cmd_scan(args) -> int:
                 f"{r.tool} ({r.reason})"
                 for r in rows.values()
                 if r.state is State.SKIPPED
-                and r.reason not in (Reason.NOT_INSTALLED, Reason.NOT_FOR_TARGET)
+                and r.reason is not Reason.NOT_INSTALLED
+                and r.reason not in OFF_TARGET_REASONS
             ]
         )
     }

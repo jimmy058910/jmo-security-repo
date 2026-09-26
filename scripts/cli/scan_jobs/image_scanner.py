@@ -27,13 +27,18 @@ def scan_image(
     allow_missing_tools: bool,
     find_tool_func: Callable[[str], str | None] | None = None,
     write_stub_func: Callable[[str, Path], None] | None = None,
+    result_name: str | None = None,
 ) -> tuple[str, TargetRows]:
     """Scan a container image (e.g. nginx:latest, registry/image:tag).
+
+    Args:
+        result_name: This image's results folder, unique within the scan
+            (#1312). Defaults to the sanitized image reference.
 
     Returns:
         (image, rows by tool)
     """
-    safe_name = _sanitize_path_component(image)
+    safe_name = result_name or _sanitize_path_component(image)
     out_dir = results_dir / safe_name
     _validate_output_path(results_dir, out_dir)
     out_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -42,7 +47,7 @@ def scan_image(
         tools=tools,
         target_type="image",
         target=image,
-        target_label=safe_name,
+        target_label=image,
         out_dir=out_dir,
         timeout=timeout,
         retries=retries,

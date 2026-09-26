@@ -150,6 +150,23 @@ class TestDiscovery:
             for r in targets.rejected
         ), targets.rejected
 
+    def test_some_rows_filtered_and_the_rest_failing_is_a_clone_failure(
+        self, git_remote, tmp_path
+    ):
+        """#1318: with one row excluded and the other refused, nothing was
+        cloned because a clone failed, not because the filters left nothing.
+        Only the all-filtered case was pinned, so the message could blame the
+        filters for a failed clone."""
+        tsv = _tsv(tmp_path, git_remote.url, "http://example.invalid/o/other.git")
+
+        targets = _discover(
+            tmp_path, tsv=str(tsv), dest=str(tmp_path / "clones"), exclude=["repo"]
+        )
+
+        assert targets.is_empty()
+        assert f"--tsv {tsv}: no listed repository could be cloned" in targets.rejected
+        assert not [r for r in targets.rejected if "left no row" in r], targets.rejected
+
     def test_two_repositories_of_one_name_are_both_scanned(self, git_remote, tmp_path):
         """#1303: forks clone to `<dest>/<owner>/<repo>`, so two rows of one
         repository name are the normal case here. PR T refused the second as a

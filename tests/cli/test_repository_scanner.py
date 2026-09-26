@@ -625,6 +625,7 @@ class TestFailedToolsAreReported:
                     ToolResult(
                         tool="checkov",
                         status="error",
+                        returncode=-1,
                         timed_out=True,
                         error_message="Timeout after 1200s",
                         failure="timeout",
@@ -634,6 +635,9 @@ class TestFailedToolsAreReported:
             )
 
         assert rows["checkov"].label == "failed:timed out"
+        # A killed process has no exit code. -1 is ToolRunner's placeholder,
+        # and history would read it as one (#1318).
+        assert rows["checkov"].exit_code is None
         assert "checkov: it timed out" in caplog.text
         assert "1200" in caplog.text
 
@@ -770,7 +774,14 @@ class TestExclusions:
             d = DESCRIPTORS[tool]
             command = defs[tool].command
             if d.exclusion_style is ExclusionStyle.WALK:
-                assert not any("old" in arg for arg in command), (tool, command)
+                # By location, not substring: macOS's temp root is
+                # /private/var/folders/..., and "folders" contains "old".
+                files = [Path(arg) for arg in command if Path(arg).is_relative_to(repo)]
+                assert files, (tool, command)
+                assert not [f for f in files if f.is_relative_to(repo / "results")], (
+                    tool,
+                    command,
+                )
             elif d.exclusion_style is ExclusionStyle.PATTERN_FILE:
                 lines = Path(command[command.index("--exclude-paths") + 1])
                 patterns = lines.read_bytes().decode("utf-8").splitlines()

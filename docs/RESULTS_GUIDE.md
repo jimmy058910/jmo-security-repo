@@ -131,6 +131,14 @@ results/
     └── timings.json           # Performance profiling (if --profile used)
 ```
 
+Each target's folder is unique within its type. When two targets would share a
+folder name, they are told apart: repositories each by their parent folder
+(`alice__app`, `bob__app`), IaC files each by their type (`cloudformation__main`,
+`k8s__main`), and images and URLs by a number on the second
+(`staging.example.com-2`). The folder's `scan-timings.json` names the
+target it holds (`nginx:latest`, `https://staging.example.com/app2`), under the
+same name `.scan_metadata.json` and `jmo history show` use.
+
 ### Which Files to Use When
 
 | Task | File to Use | Why |

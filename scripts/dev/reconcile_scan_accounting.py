@@ -16,7 +16,10 @@ out of stderr, because no artifact had them; now it checks the rows:
   none twice), and no row names an undeclared tool;
 - every row parses into a valid state and reason;
 - a ``ran`` row has an output file that parses;
-- each target's ``scan-timings.json`` agrees with the metadata's rows.
+- each ``scan-timings.json`` names a target the metadata has rows for, no
+  other document names it, and its row for every tool equals the metadata's.
+  A target with rows and no document is fine: its scanner raised before
+  writing one.
 
 The invariant is environment-independent: it holds with no tools installed
 (every row ``failed:not installed``), with a full install, and inside a Docker
@@ -130,6 +133,7 @@ def reconcile(results_dir: Path, declared: list[str] | None = None) -> Reconcili
         result.rows[key] = _check_rows(result, key[1], entries, declared)
 
     documents = sorted(results_dir.glob(f"individual-*/*/{SCAN_TIMINGS_FILENAME}"))
+    named: dict[Key, str] = {}
     for timings in documents:
         folder = timings.parent
         where = f"{folder.parent.name}/{folder.name}"
@@ -140,13 +144,40 @@ def reconcile(results_dir: Path, declared: list[str] | None = None) -> Reconcili
                 output = folder / f"{tool}.json"
                 if not output.is_file() or not _parses(output):
                     result.no_output.append(f"{where}: {tool}")
-    written = sum(bool(json.loads(t.read_bytes()).get("tools")) for t in documents)
-    if written > len(by_target):
-        result.timings_disagree.append(
-            f"{written} scan-timings.json with rows, {len(by_target)} targets in "
-            f".scan_metadata.json"
-        )
+        if rows:
+            _compare(result, where, doc, rows, named)
     return result
+
+
+def _compare(
+    result: Reconciliation,
+    where: str,
+    doc: dict,
+    rows: dict[str, ToolRun],
+    named: dict[Key, str],
+) -> None:
+    """One timings document against the metadata's rows for the target it
+    names: the same target, named once, with the same row for every tool."""
+    key: Key = (str(doc.get("target_type")), str(doc.get("target")))
+    if key in named:
+        result.timings_disagree.append(
+            f"{where}: names {key[0]} {key[1]}, as {named[key]} does"
+        )
+        return
+    named[key] = where
+    if key not in result.rows:
+        result.timings_disagree.append(
+            f"{where}: names {key[0]} {key[1]}, which .scan_metadata.json has no "
+            "rows for"
+        )
+        return
+    for tool, row in rows.items():
+        meta_row = result.rows[key].get(tool)
+        if meta_row is not None and meta_row.to_dict() != row.to_dict():
+            result.timings_disagree.append(
+                f"{where}: {tool} is {row.label} here, {meta_row.label} in "
+                ".scan_metadata.json"
+            )
 
 
 def render(result: Reconciliation, label: str) -> None:
