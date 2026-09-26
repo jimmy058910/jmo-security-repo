@@ -100,8 +100,28 @@ it through the real loader. `CONTRIBUTING.md` has the template.
   result and its real score is the rule's `security-severity`; zizmor's `Low` and
   `Informational` both map to `note`. Rank order: `security-severity`, a `severity` or
   `*/severity` property, `level`, `defaultConfiguration.level`, then MEDIUM. gitleaks has
-  no severity anywhere and resolves to MEDIUM by that default, on purpose: whether a
-  secret should outrank that is decided by the PR that wires it into scans.
+  no severity anywhere and resolves to MEDIUM by that default; its binding then sets
+  HIGH. PR C, which wired it into scans, decided (Jimmy, 2026-09-26) that a secret is
+  HIGH verified or not, TruffleHog's included, so `--fail-on HIGH` stops on a leak with
+  verification off. `tests/fixtures/golden/gitleaks/` was re-derived from its raw output
+  then, through `generate_golden.run_adapter` (it has no gitleaks entry of its own).
+- **gitleaks' binding does more than delegate.** It pops `region.snippet` (the matched
+  secret, unredacted) out of `raw`, digests it for pairing, and fills `secretContext`
+  from `partialFingerprints` when `commitSha` is set (git mode).
+
+## Secret scanners and git history (G1)
+
+- A tool with a second invocation writes `<tool>.git.json`; the report maps an output
+  to its tool by the name before the first dot (`tool_of_output`).
+- A history record's id carries its commit, so a key rotated in place (the old one at
+  the new one's line) keeps an id of its own. trufflehog's message names the commit,
+  well inside the 120 characters an id hashes. gitleaks' names it after the path, past
+  them when the path is long, so its binding passes `fingerprint(..., commit=)`,
+  appended only when given, like `start_column`; `_normalize_paths_and_ids` tries
+  that shape too. (A mutation dropping trufflehog's explicit `commit=` survived, which
+  is how the redundant copy was found and removed.)
+- `Finding.secretDigest` is transient: a keyed HMAC (per-process random key) that
+  `pair_history_with_tree` reads and removes. Never write it anywhere else.
 - **`file:` URIs are decoded in the adapter** (`file:///C:/x` -> `C:/x`) because
   `normalize_finding_path` passes anything containing `://` through unchanged, and an
   undecoded URI would ship the scanning machine's path into `findings.sarif` (#861).

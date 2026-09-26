@@ -249,7 +249,7 @@ type results\summaries\SUMMARY.md
 results/
 ├── individual-repos/
 │   └── your-project/
-│       ├── trufflehog.json    # Verified secrets scan
+│       ├── trufflehog.json    # Secrets scan (working tree)
 │       ├── semgrep.json       # SAST results
 │       ├── trivy.json         # Vulnerabilities
 │       └── ...

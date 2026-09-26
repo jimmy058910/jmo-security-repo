@@ -151,7 +151,7 @@ Each body was corrected on GitHub the same day. A detailed body is not a true on
 
 ## PR sequence
 
-Five PRs into `dev`, each green before the next is cut from it.
+Six PRs into `dev`, each green before the next is cut from it.
 
 | PR | Carries | Closes |
 |---|---|---|
@@ -160,6 +160,7 @@ Five PRs into `dev`, each green before the next is cut from it.
 | **B** | the descriptor table over the 18 blocks, the accounting record, the single exclusion list, G2, tool-name validation, `scan_tool_runs`, a results folder unique per repository | #722 #1227 #1231 #1235 #1279 #1303 |
 | **B2** | PR B's deferred review findings: one name per target in every record, a results folder unique per target of every type, the reconciler comparing rows per target, reason-worded messages, the four untested guards; the macOS-only test failure PR B left on `dev` | #1312 #1315 #1316 #1317 #1318 |
 | **C** | gitleaks wired as descriptor rows (dir and git), trufflehog's git invocation, both adapters writing `secretContext` | G1 (spec §4.3) |
+| **B3** | after C (Jimmy, 2026-09-26): the three found in B2, and the five PR C's review routed | #1319 #1320 #1321 #1323 #1324 #1325 #1326 #1327 |
 
 B precedes C because the program's rule holds inside the phase too: a new tool is a
 descriptor row, not a nineteenth block.
@@ -952,47 +953,148 @@ Gates: 44 guard mutations caught; the rest in the PR.
 
 ## Task C1: Measure first (PR C)
 
-- [ ] gitleaks 8.30.1 release assets and checksum file for each OS/arch the installer
+- [x] gitleaks 8.30.1 release assets and checksum file for each OS/arch the installer
   supports; whether `versions.yaml`'s `release_pattern` shape fits.
-- [ ] Dedup between the two modes: a secret present in the tree **and** in history,
+- [x] Dedup between the two modes: a secret present in the tree **and** in history,
   through `jmo report`. Is it one finding or two, per tool and after cross-tool dedup
   (pre-dedup ≠ post-dedup)?
-- [ ] Every consumer that globs `<out_dir>/*.json` (the report loader, the reconciler,
+- [x] Every consumer that globs `<out_dir>/*.json` (the report loader, the reconciler,
   e2e file counts, `.scan_metadata.json` readers), before choosing the git-mode file
   name (`<tool>.git.json`, loader maps the stem before its first `.`).
+
+**Measured (C1, 2026-09-26).** A repository built outside this tree, with two RSA keys
+generated at run time: `keys/live.pem` committed and still in the tree, `old/gone.pem`
+committed and then deleted. trufflehog 3.97.1, and gitleaks 8.30.1 from the evidence
+archive, which is byte-identical to the release's `windows_x64` asset. Verification off.
+
+| Claim | Measured |
+|---|---|
+| Release assets | `gitleaks_8.30.1_{linux,darwin}_{x64,arm64}.tar.gz` and `gitleaks_8.30.1_windows_{x64,arm64}.zip`, plus 32-bit and ARMv6/v7 builds. amd64 is spelled `x64`, which no installer placeholder yields (`arch_amd` is `amd64`). `versions.yaml`'s shape fits: `release_pattern: gitleaks_{version}_linux_{arch}.tar.gz` with `architectures: {amd64: x64, arm64: arm64}` |
+| Checksums | `gitleaks_8.30.1_checksums.txt` lists all ten assets, and the Windows x64 zip matches it. **JMo checks no download against a checksum**: not `binary_installer.py`, not the `Dockerfile`, not `update_versions.py`. Routed, not fixed here |
+| The four modes | trufflehog filesystem finds `live.pem`, plus 2 hits in `.git/objects` blobs when the product's exclusions are left off; those name no commit. trufflehog git finds both keys, with `file`, `line`, `commit`, `email` (`Name <addr>`) and `timestamp` (`2026-01-02 03:04:05 +0000`, which is not ISO 8601). gitleaks dir finds `live.pem`. gitleaks git finds both, with `partialFingerprints` `commitSha`, `author`, `email` and `date` (ISO) |
+| Today's pipeline: the four outputs through `jmo report`, the git ones in a second target folder | **6 raw, 5 post-dedup, 0 clusters.** trufflehog's adapter reads only `Data.Filesystem`, so both history records get path `""` and line 0. They share one id, and `gone.pem` is lost. gitleaks reports `live.pem` twice: its id hashes the message, and the git message adds `at commit <sha>`. trufflehog and gitleaks never cluster, because `rule_equivalence.py` names no gitleaks rule |
+| Tree vs history line numbers | With one comment line inserted above the committed key, the tree says L2 and history says L1 at the adding commit. **Once a file is edited, no id rule can make one secret's two records collide** |
+| The secret itself, per mode | trufflehog's `Raw` and gitleaks' `region.snippet.text` for `live.pem` hash identically in both modes |
+| gitleaks' SARIF carries the secret | `region.snippet.text` is the match, unredacted (the golden's first result: 155 characters). `sarif_common` keeps the whole result as `raw`, so wiring gitleaks as it stands writes every secret into `findings.json`, the dashboard and history. `history_db.redact_secrets` redacts only `SECRET_TOOLS = ["trufflehog"]`. `--redact` makes the snippet `REDACTED` in both modes |
+| gitleaks' message holds the path as given | Given an absolute target, the message reads `for file C:/Users/…/keys/live.pem.`, and the id hashes its first 120 characters, so a dir-mode id depends on where the checkout lives. Run from `cwd` = the repository with target `.`, URIs and messages are repository-relative, as in the golden (its metadata: `gitleaks dir .`) |
+| Consumers of `<out_dir>/*.json` | By stem: `gather_results` and `collect_tool_diagnostics` (`normalize_and_report.py`). By name: the reconciler checks `<tool>.json` for a `ran` row; so do `ScanContext.output` and `tool_loop`'s stub and `scanned_count` paths. Indifferent to the name: `gitlab_scanner`'s copy, `scan_session`'s `rglob`, and the two test helpers that read every `*.json` in a folder. `write_trufflehog_exclude_file`'s out_dir contract (a tool's output is `<tool>.json`, scratch is dot-prefixed) gains a third kind of file |
+| Progress with two invocations | Both trackers count a tool complete once (`_completed_base_tools`), so the first invocation to finish marks it done. Cosmetic: the row is the record |
+
+**Decided in C1** (Jimmy, 2026-09-26):
+
+- **A secret in the tree and in history is one finding per tool.** It is paired by the
+  secret: a history record with the tree record's rule, path and secret is folded into
+  the tree finding, which keeps its id and gains `secretContext` (the commit, author and
+  date of the earliest such commit). The history record is dropped. A history record with
+  no tree partner stays, one per (rule, path, secret), the earliest kept. Its id includes
+  its commit, so the old key of a rotation in place is not deduplicated against the new
+  one. The secret is compared as a keyed digest (HMAC with a per-process random key). The
+  adapter computes it, and the report phase removes it before anything is written. gitleaks
+  runs unredacted, so its binding can digest the snippet and then scrub it from `raw`, the
+  way trufflehog's adapter scrubs `Raw`.
+- **trufflehog verification is off by default** (Unresolved 1). Both invocations pass
+  `--no-verification`, and `per_tool.trufflehog.verify: true` turns verification back on.
+- #1319, #1320 and #1321 go to a PR B3 after C. Unresolved 3 was decided in B1; struck.
+
+**Decided in C1** (from the measurements; veto any in review):
+
+- The git-mode output is `<tool>.git.json`. One helper maps an output file to its tool (the
+  stem before its first `.`), and both stem readers use it.
+- gitleaks runs with `cwd` = the repository and target `.`, with absolute report and
+  config paths.
+- The installer gains an `{arch_x64}` placeholder.
+- A tool whose git invocation fails still writes its other invocation's output. The row is
+  `failed`, and its detail names the invocation.
+- gitleaks joins `history_db`'s `SECRET_TOOLS`: a second layer behind the binding's scrub.
 
 ## Task C2: gitleaks wired
 
 **Files:** `versions.yaml` (then `update_versions.py --sync`), `scripts/core/install_config.py`,
-`scripts/core/tool_descriptors.py`, `scripts/cli/tool_manager.py` (probe),
-`Dockerfile` (via sync only); the ~25 documents
+`scripts/cli/installers/binary_installer.py` (`{arch_x64}`),
+`scripts/core/tool_descriptors.py`, `scripts/cli/scan_jobs/tool_loop.py` (the config
+style), `scripts/core/adapters/gitleaks_adapter.py`, `scripts/core/history_db.py`,
+`Dockerfile` (the block once, the version via sync only); the ~25 documents
 `test_tool_catalogue_count_claims.py` names when `TOOL_MATRIX` reaches 13.
 
-- [ ] Descriptor: `gitleaks dir <repo> --report-format sarif --report-path <out>
-  --no-banner --exit-code 0 --config <generated>`; the config renders the single
-  exclusion list.
-- [ ] Gate through `jmo scan` on the archived juice-shop at `1618a611`: **69**, the Phase 1
-  golden. Report the post-dedup number beside it.
+- [x] Descriptor: `gitleaks dir . --report-format sarif --report-path <out> --no-banner
+  --exit-code 0 --config <generated>`, run with `cwd` = the repository. The generated
+  `.gitleaks.toml` (dot-prefixed scratch in the out_dir) renders the single exclusion list
+  as `[extend] useDefault = true` plus `[[allowlists]] paths`. Measure that the list
+  excludes at depth on Windows before relying on it.
+- [x] The binding scrubs `region.snippet` from `raw` and never writes the secret. Red first:
+  today the golden's `raw` carries it.
+- [x] Gate through `jmo scan` on the archived juice-shop at `1618a611`: **69**, the Phase 1
+  golden, and the same id set. Report the post-dedup number beside it.
+
+**Done (2026-09-26).** `jmo scan --tools gitleaks` on juice-shop: 69 raw, the id set
+equal to the golden's (69 of 69), 69 post-dedup, the row `ran` in 2.0 s, and none of
+the 69 matched texts in `findings.json`. The real installer, into a scratch directory,
+downloaded and extracted the Windows zip, and the binary hashes as the release's
+(`17157e2e…`). With the archive's gitleaks on `PATH`, a planted key under every
+excluded directory, in a repository that itself sits under `vendor/`, is skipped and
+`src/vendored/` is not. The binding's scrub was red on the golden first (69 of 69
+texts reached `raw`); history's redaction gained gitleaks as a second layer.
 
 ## Task C3: G1 — history for both secret scanners
 
 **Files:** `scripts/core/tool_descriptors.py` (a `git` invocation on trufflehog and
 gitleaks, gated on `.git`), `scripts/core/adapters/trufflehog_adapter.py`,
-`scripts/core/adapters/sarif_common.py` (+ the gitleaks spec),
-`scripts/core/plugin_loader.py` / `normalize_and_report.py` (the naming rule).
+`scripts/core/adapters/gitleaks_adapter.py`, `scripts/core/plugin_api.py`
+(`secretContext`), `scripts/core/common_finding.py` (the commit in a history record's
+id), `scripts/core/normalize_and_report.py` (the naming rule, the pairing),
+`scripts/cli/scan_jobs/tool_loop.py`, `scripts/cli/scan_utils.py` (the git-mode
+exclusion file).
 
-- [ ] Fixture helper in `tests/`: build a repository, commit a key generated at test time,
+- [x] Fixture helper in `tests/`: build a repository, commit a key generated at test time,
   delete it in the next commit. Never a checked-in key: Defender and the repository's
   own secret scanning both act on one.
-- [ ] Red first, through `jmo scan`: today 0 findings. After: one finding per tool with
-  `secretContext.commit` = the adding commit, plus `author` and `date`, and
+- [x] Red first, through `jmo scan`: today 0 findings. After: one finding per tool with
+  `secretContext.commit` = the adding commit, plus `author` and `date` (ISO 8601), and
   `location.path`/`startLine` from `Data.Git` / the SARIF location.
   `secretContext.secret` is never written.
-- [ ] One accounting row per tool: invocations `[dir|filesystem, git]`, `failed` if either
+- [x] Pairing, red first through `jmo scan`: a key in the tree and in history is one finding
+  per tool, carrying its commit. After a line is inserted above it, still one. A key
+  rotated in place (old in history, new in the tree, same line) is two.
+- [x] One accounting row per tool: invocations `[dir|filesystem, git]`, `failed` if either
   failed, and the reason names the invocation.
-- [ ] Exclusions apply to git mode (this repository's history is the noise case).
-- [ ] Gate: the fixture reports the commit hash through both tools; time on this
+- [x] Exclusions apply to git mode (this repository's history is the noise case).
+- [x] Gate: the fixture reports the commit hash through both tools; time on this
   repository with and without git mode recorded in the PR.
+
+**Done (2026-09-26).** Red first through `jmo scan`: today neither tool reported the
+deleted key, and nothing carried a commit. After: one finding per key per tool, each
+with its adding commit, author and ISO date; a comment line above the committed key
+leaves one; each tool keeps one row, `ran`, `invocations: 2`. Two expectations were
+measured false and corrected:
+
+- **A PEM key rotated in place** is two findings, but the new one names no commit:
+  the diff keeps the unchanged `BEGIN`/`END` lines out of the added hunk, so neither
+  tool's git mode sees a whole key. Only the first key is found in history.
+- **This repository's history is not the noise case.** A clone at `66b3ab49` has 0
+  vendored-path records in git mode, with or without exclusions (the plan's 91 came
+  from the live repository's extra refs). The exclusions are proven on a fixture with
+  both binaries instead.
+
+Timing, a clone of this repository (1,258 commits), the same tree with and without
+`.git`: 4 s and 157 raw → 134 without history; 17 s (trufflehog 16.5 s, gitleaks
+9.3 s, each summing both runs) and 433 raw → 203 with it, where 80 of 81 trufflehog
+and 121 of 122 gitleaks findings carry a commit.
+
+**The review (fresh, 2026-09-26) found four Important defects, fixed red first.**
+
+- **A shallow clone blamed the wrong commit.** Its one commit holds the whole tree, so
+  both tools named it, and its author, for every secret: juice-shop's 63 "commits" were
+  that. GitLab clones with `--depth 1`, and so does `actions/checkout` by default.
+- **gitleaks' git mode exits 0 with "0 commits scanned" when git cannot read the
+  repository** (dubious ownership, an unmounted gitdir), so its row read `ran`.
+- **An unescaped `#` or `%` in the path** broke trufflehog's history URL on every scan.
+- **`--fail-on HIGH` no longer stops on a secret** with verification off, and the docs
+  said nothing. Re-graded with it: `--only-verified` in the user's flags gave 0 findings.
+
+One git probe per target (`read_history`) now decides: a shallow clone or a git that
+cannot read it skips history with a WARNING and `history not read: <why>` on the two
+rows. juice-shop now: gitleaks 69, the golden's ids, none with a commit; with TruffleHog
+too, 76 and one cross-tool cluster.
 
 ---
 
@@ -1009,16 +1111,18 @@ wizard generates, native and Docker, parses through `build_parser()`, and `jmo s
 
 ## Unresolved
 
-1. **trufflehog verifies secrets over the network by default**, and git mode adds calls.
+1. ~~**trufflehog verifies secrets over the network by default**, and git mode adds calls.
    Spec §11's "no network call" is a program criterion. Does `--no-verification` become
-   the default (and verification a `--with` option), and in which phase?
+   the default (and verification a `--with` option), and in which phase?~~ Off by default
+   in PR C; `per_tool.trufflehog.verify: true` restores it (Jimmy, 2026-09-26).
 2. ~~**grype's `.venv` exclusion:** its own issue (as promised on #1235) or folded into
    #1235's body? Decide at PR B.~~ Folded into #1235 (Jimmy, 2026-09-25).
-3. **semgrep brings a second exclusion list.** With no `.semgrepignore`, semgrep applies
+3. ~~**semgrep brings a second exclusion list.** With no `.semgrepignore`, semgrep applies
    a built-in one (`tests/`, `test/`, `node_modules/`, …): measured in A4, a directory
    under `tests/` scanned 0 files on Windows and on Linux. B5's single list competes
    with it. Measure it in B1: what a real scan's semgrep skips, and whether B5 renders
-   an explicit `.semgrepignore`.
+   an explicit `.semgrepignore`.~~ Decided in B1 (Jimmy, 2026-09-25): the built-in list
+   stays, recorded in `docs/KNOWN_LIMITATIONS.md`.
 4. ~~The shellcheck contract sample is neutered.~~ Resolved in PR A (a rider, Jimmy
    2026-09-25): see "PR A riders".
 5. ~~The wizard's Docker branch drops four more settings.~~ Resolved in PR A under #1298

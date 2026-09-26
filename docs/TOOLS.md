@@ -14,7 +14,8 @@ To narrow the list:
 
 | Tool | What it finds | Targets | Runs on a repository when | Install |
 |------|---------------|---------|---------------------------|---------|
-| TruffleHog | Secrets: API keys, tokens, credentials | Repository, GitLab | Always | Release binary |
+| TruffleHog | Secrets: API keys, tokens, credentials, in the working tree and git history | Repository, GitLab | Always | Release binary |
+| Gitleaks | Secrets, by a second rule set, in the working tree and git history | Repository, GitLab | Always | Release binary |
 | Semgrep | Code-level flaws (SAST), many languages | Repository, GitLab | Always | Isolated Python venv |
 | Syft | Software bill of materials (SBOM) | Repository, image, GitLab | Always | Release binary or install script |
 | Trivy | Vulnerable dependencies, secrets, misconfigurations | Repository, image, IaC, Kubernetes, GitLab | Always | Release binary or install script |
@@ -64,13 +65,13 @@ ZAP and Nuclei are DAST scanners: they find vulnerabilities by exercising a **ru
 jmo scan --url https://staging.example.com
 ```
 
-The remaining repository tools (TruffleHog, Semgrep, Syft, Trivy, YARA, Grype) run on every repository scan.
+The remaining repository tools (TruffleHog, Gitleaks, Semgrep, Syft, Trivy, YARA, Grype) run on every repository scan. When the repository has a `.git` of its own, TruffleHog and Gitleaks read its history too and name the commit that added each secret; see [Known limitations](KNOWN_LIMITATIONS.md#secret-scanning-skips-git-jmo-and-vendored-trees).
 
 ## Target types
 
 | Target | Flags | Tools that run |
 |--------|-------|----------------|
-| Repository | `--repo`, `--repos-dir`, `--targets`, `--tsv` | TruffleHog, Semgrep, Syft, Trivy, YARA, Grype; Hadolint, ShellCheck, Gosec and Checkov when their content is present |
+| Repository | `--repo`, `--repos-dir`, `--targets`, `--tsv` | TruffleHog, Gitleaks, Semgrep, Syft, Trivy, YARA, Grype; Hadolint, ShellCheck, Gosec and Checkov when their content is present |
 | Container image | `--image`, `--images-file` | Trivy, Syft |
 | IaC file | `--terraform-state`, `--cloudformation`, `--k8s-manifest` | Trivy (`trivy config`), Checkov |
 | URL | `--url`, `--urls-file` | ZAP, Nuclei |
@@ -90,7 +91,7 @@ jmo tools check     # what is installed, at which version, and what is missing
 
 | Tool | How `jmo tools install` installs it | Where it goes |
 |------|-------------------------------------|---------------|
-| TruffleHog, Hadolint, ShellCheck, Gosec, Nuclei | Pinned release binary from GitHub | `~/.jmo/bin/` |
+| TruffleHog, Gitleaks, Hadolint, ShellCheck, Gosec, Nuclei | Pinned release binary from GitHub | `~/.jmo/bin/` |
 | Syft, Trivy, Grype | Windows: pinned release binary. Linux and macOS: the tool's own install script, run with the pinned version | `~/.jmo/bin/` |
 | Semgrep, Checkov | Pinned PyPI package in a virtual environment of its own, so their dependencies cannot conflict with JMo's or each other's | `~/.jmo/tools/venvs/<tool>/` |
 | YARA | Pinned `yara-python` package, installed into the Python environment JMo runs from, plus a pinned rule bundle (reversinglabs-yara-rules, MIT) | rules in `~/.jmo/yara-rules/` |

@@ -380,7 +380,7 @@ make samples-verify
 
 Before publishing Docker images to GHCR, test them locally to validate changes.
 
-There is one image, built from the repository's single `Dockerfile`. It carries the 12 scanners plus OPA, the policy engine.
+There is one image, built from the repository's single `Dockerfile`. It carries the 13 scanners plus OPA, the policy engine.
 
 ### Build local images
 

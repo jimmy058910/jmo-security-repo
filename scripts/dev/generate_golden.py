@@ -326,9 +326,12 @@ def run_adapter(
         for f in findings:
             if hasattr(f, "__dict__"):
                 # It's a dataclass or object
-                findings_dicts.append(
-                    asdict(f) if hasattr(f, "__dataclass_fields__") else vars(f)
-                )
+                found = asdict(f) if hasattr(f, "__dataclass_fields__") else vars(f)
+                # Transient: a keyed digest the report phase pairs by and
+                # removes (G1). Its key is random per process, so a fixture
+                # holding it would change on every regeneration.
+                found.pop("secretDigest", None)
+                findings_dicts.append(found)
             elif isinstance(f, dict):
                 findings_dicts.append(f)
             else:

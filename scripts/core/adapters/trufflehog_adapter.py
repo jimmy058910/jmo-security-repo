@@ -37,8 +37,8 @@ Detector Categories (700+ patterns):
 - Databases: MongoDB, Redis, PostgreSQL URIs
 
 Severity Classification:
-- HIGH: Verified secrets (confirmed active via API)
-- MEDIUM: Unverified secrets (pattern match only)
+- HIGH: every secret, verified (confirmed active via API) or not; the tags
+  and risk.confidence say which
 - CWE-798: Use of Hard-coded Credentials
 
 Example:
@@ -53,10 +53,11 @@ See Also:
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
 from scripts.core.adapters.common import safe_load_ndjson_file
-from scripts.core.common_finding import normalize_severity
+from scripts.core.common_finding import normalize_severity, secret_digest
 from scripts.core.plugin_api import (
     AdapterPlugin,
     Finding,
@@ -116,6 +117,27 @@ def _scrub_secret_fields(record: dict) -> dict:
     return {k: v for k, v in record.items() if k not in SECRET_BEARING_FIELDS}
 
 
+def _history_context(git: dict) -> dict[str, str]:
+    """`secretContext` for a record from `trufflehog git`: the commit, its
+    author (trufflehog's `email` is already `Name <address>`), and its date.
+
+    trufflehog writes `2026-01-02 03:04:05 +0000`, which is not the ISO 8601
+    date-time the schema asks for; a date that does not parse is left out
+    rather than stored in a shape readers cannot use.
+    """
+    context = {"commit": str(git["commit"])}
+    author = git.get("email")
+    if isinstance(author, str) and author:
+        context["author"] = author
+    try:
+        context["date"] = datetime.strptime(
+            str(git.get("timestamp")), "%Y-%m-%d %H:%M:%S %z"
+        ).isoformat()
+    except ValueError:
+        pass
+    return context
+
+
 def _is_pytest_name_matched_as_lob_key(detector: str, secret: object) -> bool:
     """True when a Lob "secret" is really a pytest function name.
 
@@ -135,7 +157,7 @@ def _is_pytest_name_matched_as_lob_key(detector: str, secret: object) -> bool:
         name="trufflehog",
         version="1.0.0",
         author="JMo Security",
-        description="Adapter for TruffleHog secret scanner with verification",
+        description="Adapter for TruffleHog secret scanner (working tree and git history)",
         tool_name="trufflehog",
         schema_version="1.2.0",
         output_format="json",
@@ -169,16 +191,24 @@ class TruffleHogAdapter(AdapterPlugin):
             if _is_pytest_name_matched_as_lob_key(detector, secret):
                 continue
 
-            # Try to extract file path from SourceMetadata.Data.Filesystem.file or similar
+            # The location is SourceMetadata.Data.Filesystem for a tree record
+            # and SourceMetadata.Data.Git for a history one (v2.0.0 Phase 3,
+            # G1). Reading the first alone gave every history record path ""
+            # and line 0, so two keys in two commits shared one id and one was
+            # dropped (measured before the fix).
             file_path = ""
             fs: dict = {}
+            git: dict = {}
             sm = f.get("SourceMetadata") or {}
             data = sm.get("Data") if isinstance(sm, dict) else {}
             if isinstance(data, dict):
-                candidate = data.get("Filesystem") or {}
-                if isinstance(candidate, dict):
-                    fs = candidate
-                    file_path = fs.get("file") or fs.get("path") or ""
+                for key in ("Filesystem", "Git"):
+                    candidate = data.get(key) or {}
+                    if isinstance(candidate, dict) and candidate:
+                        fs = candidate
+                        git = candidate if key == "Git" else {}
+                        file_path = fs.get("file") or fs.get("path") or ""
+                        break
             # Some variants include Filename / Raw etc.
             file_path = file_path or f.get("Filename") or f.get("Path") or ""
 
@@ -217,7 +247,14 @@ class TruffleHogAdapter(AdapterPlugin):
             # cites it is real key material. A secret scanner's finding says
             # WHERE the secret is; the file and line are what the user needs.
             msg = f"{detector} secret detected"
-            sev = "HIGH" if verified else "MEDIUM"
+            commit = str(git.get("commit") or "")
+            if commit:
+                msg = f"{msg} at commit {commit}"
+            # HIGH either way (decided 2026-09-26). Verification is off by
+            # default, and grading an unverified secret MEDIUM meant
+            # `--fail-on HIGH` stopped on no leaked secret at all. Verified or
+            # not is in the tags and the confidence.
+            sev = "HIGH"
             severity = normalize_severity(sev)
             rule_id = detector
 
@@ -244,9 +281,17 @@ class TruffleHogAdapter(AdapterPlugin):
                     "impact": "HIGH",
                 },
                 raw=_scrub_secret_fields(f),
+                secretContext=_history_context(git) if commit else None,
+                secretDigest=(
+                    secret_digest(secret)
+                    if isinstance(secret, str) and secret
+                    else None
+                ),
             )
 
-            # Generate fingerprint
+            # Generate fingerprint. A history record's message names its
+            # commit, within the characters an id hashes, so a key rotated in
+            # place (the old one at the new one's line) keeps an id of its own.
             finding.id = self.get_fingerprint(finding)
 
             findings.append(finding)

@@ -34,11 +34,14 @@ V2_PHASE_2_MATRIX = {
     "grype",
     "zap",
     "nuclei",
+    # Phase 3, PR C: wired for G1 (git history), decided 2026-09-24.
+    "gitleaks",
 }
 
 
 def test_tool_matrix_is_the_phase_2_set():
-    """TOOL_MATRIX is the v2.0.0 Phase 2 scanner set, with no duplicates."""
+    """TOOL_MATRIX is the v2.0.0 Phase 2 scanner set plus Phase 3's gitleaks,
+    with no duplicates."""
     assert set(TOOL_MATRIX) == V2_PHASE_2_MATRIX
     assert len(TOOL_MATRIX) == len(set(TOOL_MATRIX))
 

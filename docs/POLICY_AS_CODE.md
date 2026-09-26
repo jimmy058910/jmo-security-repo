@@ -86,6 +86,10 @@ JMo Security includes **5 built-in policies** for common security scenarios:
 - ❌ FAIL: Any verified secret detected by TruffleHog
 - ✅ PASS: Zero verified secrets found
 
+Since v2.0.0 TruffleHog does not verify unless `jmo.yml` asks it to, so without
+`per_tool.trufflehog.verify: true` nothing is verified and this policy passes. See
+[Known limitations](KNOWN_LIMITATIONS.md#trufflehog-does-not-verify-secrets-by-default).
+
 **Use Case:** Pre-commit hooks, CI/CD gate, production deployments
 
 **Example Violation:**

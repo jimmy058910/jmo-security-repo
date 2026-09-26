@@ -8,6 +8,7 @@ with its own tags.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from scripts.core.adapters.gitleaks_adapter import GitleaksAdapter
@@ -31,10 +32,34 @@ def test_parses_the_golden_document_with_the_binding_tags():
     findings = GitleaksAdapter().parse(GOLDEN)
     assert len(findings) == 69
     assert all(f.tool["name"] == "gitleaks" for f in findings)
-    # Measured: gitleaks 8.30.1 writes no driver.version, only
-    # semanticVersion "v8.0.0", and versions.yaml has no gitleaks row yet.
-    assert all(f.tool["version"] == "v8.0.0" for f in findings)
+    # gitleaks 8.30.1 writes no driver.version, only semanticVersion "v8.0.0"
+    # (measured); versions.yaml's row, added with the descriptor, wins.
+    assert all(f.tool["version"] == "8.30.1" for f in findings)
     assert all({"secrets", "sarif"} <= set(f.tags) for f in findings)
     assert all("://" not in f.location["path"] for f in findings)
-    # No level, no severity property: SARIF's documented default, MEDIUM.
-    assert {f.severity for f in findings} == {"MEDIUM"}
+    # gitleaks gives no severity at all, and verifies nothing: HIGH, like an
+    # unverified TruffleHog secret (decided 2026-09-26), so `--fail-on HIGH`
+    # stops on a leaked secret. SARIF's own default would be MEDIUM.
+    assert {f.severity for f in findings} == {"HIGH"}
+
+
+def test_the_secret_never_reaches_a_finding():
+    """gitleaks' SARIF carries each matched secret, unredacted, in
+    `region.snippet.text` (measured on the golden: 69 of 69, 20 to 1,674
+    characters), and the importer keeps the whole result as `raw`. Before the
+    scrub every one of them reached findings.json, the dashboard and history:
+    the defect trufflehog's adapter fixed for `Raw` (juice-shop's RSA key)."""
+    document = json.loads(GOLDEN.read_bytes())
+    secrets = [
+        r["locations"][0]["physicalLocation"]["region"]["snippet"]["text"]
+        for r in document["runs"][0]["results"]
+    ]
+    assert len(secrets) == 69 and all(secrets)
+
+    findings = GitleaksAdapter().parse(GOLDEN)
+    written = json.dumps([f.to_dict() for f in findings])
+
+    assert [s for s in secrets if s in written] == []
+    # The rest of the location survives: only the snippet goes.
+    region = findings[0].raw["locations"][0]["physicalLocation"]["region"]
+    assert "startLine" in region and "snippet" not in region

@@ -22,7 +22,7 @@ binary_tools:
   trufflehog:
     version: 3.97.1
     github_repo: trufflesecurity/trufflehog
-    description: Verified secrets scanner (primary)
+    description: Secrets scanner (working tree and git history)
     release_pattern: trufflehog_{version}_linux_{arch}.tar.gz
     architectures:
       amd64: amd64
@@ -30,6 +30,17 @@ binary_tools:
     update_check: gh api repos/trufflesecurity/trufflehog/releases/latest
     critical: true
     brew_package: trufflehog
+  gitleaks:
+    version: 8.30.1
+    github_repo: gitleaks/gitleaks
+    description: Secrets scanner (working tree and git history)
+    release_pattern: gitleaks_{version}_linux_{arch}.tar.gz
+    architectures:
+      amd64: x64
+      arm64: arm64
+    update_check: gh api repos/gitleaks/gitleaks/releases/latest
+    critical: true
+    brew_package: gitleaks
   syft:
     version: 1.51.1
     github_repo: anchore/syft

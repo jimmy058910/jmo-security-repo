@@ -23,6 +23,7 @@ import logging
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -263,13 +264,25 @@ def _normalize_paths_and_ids(
         # finding that carries a column but was keyed without one keeps its
         # shape rather than being silently promoted.
         column = location.get("startColumn")
-        shapes = (None, column) if column is not None else (None,)
-        for col in shapes:
+        columns = (None, column) if column is not None else (None,)
+        # A secret scanner's record from git history is keyed on its commit
+        # too (G1), and is re-keyed with it.
+        context = finding.get("secretContext")
+        commit = context.get("commit") if isinstance(context, dict) else None
+        commits = (None, commit) if commit else (None,)
+        shapes = [(col, c) for c in commits for col in columns]
+        for col, c in shapes:
             if current == fingerprint(
-                tool, rule_id, original, start_line, message, start_column=col
+                tool, rule_id, original, start_line, message, start_column=col, commit=c
             ):
                 finding["id"] = fingerprint(
-                    tool, rule_id, normalized, start_line, message, start_column=col
+                    tool,
+                    rule_id,
+                    normalized,
+                    start_line,
+                    message,
+                    start_column=col,
+                    commit=c,
                 )
                 ids_rekeyed += 1
                 break
@@ -302,9 +315,85 @@ def collect_tool_diagnostics(results_dir: Path) -> list[ToolDiagnostic]:
             for tool_output in target.glob("*.json"):
                 if tool_output.name == SCAN_TIMINGS_FILENAME:
                     continue
-                adapter_name = loader._tool_to_adapter_name(tool_output.stem)
+                adapter_name = loader._tool_to_adapter_name(tool_of_output(tool_output))
                 out.extend(extract_tool_diagnostics(adapter_name, tool_output, roots))
     return out
+
+
+def tool_of_output(path: Path) -> str:
+    """The tool a scan output belongs to: its name before the first dot.
+
+    A tool with more than one invocation writes more than one file, and each
+    is read by the tool's adapter: `trufflehog.json` from the working tree,
+    `trufflehog.git.json` from git history (v2.0.0 Phase 3, G1).
+    """
+    return path.name.split(".", 1)[0]
+
+
+def _commit_date(finding: dict[str, Any]) -> tuple[datetime, str]:
+    """A history record's sort key: its commit's time, then the commit.
+
+    Compared as times, not strings: `2026-01-03T01:00:00+05:00` (20:00 UTC on
+    the 2nd) is earlier than `2026-01-02T22:00:00+00:00`. A date with no
+    offset is read as UTC, and one that does not parse sorts last.
+    """
+    context = finding.get("secretContext") or {}
+    try:
+        when = datetime.fromisoformat(str(context.get("date")))
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=UTC)
+    except ValueError:
+        when = datetime.max.replace(tzinfo=UTC)
+    return when, str(context.get("commit") or "")
+
+
+def pair_history_with_tree(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Fold each secret's git-history records into its working-tree finding.
+
+    A secret still in the tree is in history too, and trufflehog and gitleaks
+    each report it once per mode. Records are paired **by the secret**, within
+    one tool, rule and path (decided 2026-09-26). Pairing by location cannot
+    work: once a line is inserted above a committed key, the tree says line 2
+    and history line 1 (measured).
+
+    - A tree finding keeps its id and location, and takes the `secretContext`
+      of the earliest commit that added its secret. Its history records go.
+    - History records with no tree finding are a secret that is gone from the
+      tree. One stays per (tool, rule, path, secret): the earliest.
+    - A key rotated in place is two secrets, so it stays two findings.
+
+    Every finding leaves without its `secretDigest`: this is the one place it
+    is read, and nothing writes it.
+    """
+    groups: dict[tuple[str, str, str, str], list[dict[str, Any]]] = {}
+    for finding in findings:
+        digest = finding.pop("secretDigest", None)
+        if not digest:
+            continue
+        tool = finding.get("tool") or {}
+        key = (
+            str(tool.get("name") if isinstance(tool, dict) else tool),
+            str(finding.get("ruleId") or ""),
+            str((finding.get("location") or {}).get("path") or ""),
+            str(digest),
+        )
+        groups.setdefault(key, []).append(finding)
+
+    dropped: set[int] = set()
+    for members in groups.values():
+        history = sorted(
+            (f for f in members if (f.get("secretContext") or {}).get("commit")),
+            key=_commit_date,
+        )
+        if not history:
+            continue
+        tree = [f for f in members if not (f.get("secretContext") or {}).get("commit")]
+        for finding in tree:
+            finding["secretContext"] = dict(history[0]["secretContext"])
+        # By identity: two history records can be equal dicts.
+        kept = set() if tree else {id(history[0])}
+        dropped.update(id(f) for f in history if id(f) not in kept)
+    return [f for f in findings if id(f) not in dropped]
 
 
 def _target_dirs(results_dir: Path) -> list[Path]:
@@ -384,7 +473,9 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
                     if tool_output.name == SCAN_TIMINGS_FILENAME:
                         continue
 
-                    tool_name = tool_output.stem  # e.g., "trivy", "osv-scanner"
+                    # e.g. "trivy", "osv-scanner"; "trufflehog" for
+                    # trufflehog.git.json as well
+                    tool_name = tool_of_output(tool_output)
 
                     # Hyphenated tool names map to underscored adapters
                     adapter_name = loader._tool_to_adapter_name(tool_name)
@@ -440,6 +531,18 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
             "(%d finding id(s) re-keyed)",
             paths_changed,
             ids_rekeyed,
+        )
+
+    # After the paths are normalised, since a tree record's absolute path and
+    # a history record's relative one must compare equal; before dedup, which
+    # would otherwise keep whichever of a secret's records a thread finished
+    # first.
+    paired = len(findings)
+    findings = pair_history_with_tree(findings)
+    if paired != len(findings):
+        logger.info(
+            "Folded %d git-history record(s) into the findings for the same secret",
+            paired - len(findings),
         )
 
     # Dedupe by id (fingerprint) - memory-efficient approach

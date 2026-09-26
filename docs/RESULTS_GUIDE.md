@@ -101,6 +101,9 @@ results/
 │       ├── trivy.json
 │       ├── semgrep.json
 │       ├── trufflehog.json
+│       ├── trufflehog.git.json   # git history, when the repository has a .git
+│       ├── gitleaks.json
+│       ├── gitleaks.git.json
 │       └── ...
 ├── individual-images/         # Raw outputs per container image (v0.6.0+)
 │   └── <image-name>/
