@@ -475,15 +475,16 @@ Metadata:
 **Which tool made the scan slow.** After the summary, `show` prints a `Tool Runs:`
 section with one line per target and tool: the target, the tool, its seconds, and what
 it recorded (`ran`, `skipped:<reason>` or `failed:<reason>`, as in
-[What a scan records](TOOLS.md#what-a-scan-records)). `--json` carries the same rows as
-`tool_runs`. A skipped tool shows no seconds.
+[What a scan records](TOOLS.md#what-a-scan-records)). A skipped tool shows no seconds.
+A tool that does not read that kind of target (`needs --url`, `not for this target
+type`) is counted rather than listed; `--json` carries every row as `tool_runs`.
 
 ```text
 Tool Runs:
   myapp                    hadolint               skipped:no Dockerfiles
   myapp                    semgrep        412.3s  ran
   myapp                    trivy           38.1s  ran
-  myapp                    zap                    skipped:needs --url
+  (2 row(s) for tools that do not read their target; --json lists them)
 ```
 
 Scans stored before v2.0.0 have no rows, and the section is omitted.

@@ -235,6 +235,7 @@ def test_history_show_prints_each_tools_state_and_seconds(tmp_path, capsys):
     assert "semgrep" in tools and "900.0s" in tools and "failed:timed out" in tools
     assert "trivy" in tools and "12.5s" in tools
     assert "skipped:no Dockerfiles" in tools
+    assert "--json" not in tools, "a note about hidden rows when none were hidden"
 
     rc, out = _show(db, scan_id, as_json=True, capsys=capsys)
     assert rc == 0
@@ -243,6 +244,39 @@ def test_history_show_prints_each_tools_state_and_seconds(tmp_path, capsys):
         "semgrep",
         "trivy",
     ]
+
+
+def test_history_show_hides_tools_that_do_not_read_the_target(tmp_path, capsys):
+    """#1316: every requested tool has a row on every target, so an image
+    target showed 12 lines, 10 of them tools that never read images. The text
+    view keeps the rows about the target and counts the rest; --json keeps
+    every row."""
+    db = tmp_path / "h.db"
+    repo = [
+        ROWS[0],
+        ToolRun("zap", State.SKIPPED, Reason.NEEDS_URL),
+        ToolRun("nuclei", State.SKIPPED, Reason.NEEDS_URL),
+    ]
+    url = [
+        ToolRun("zap", State.RAN, seconds=18.9, exit_code=0, attempts=1, invocations=1),
+        ToolRun("trivy", State.SKIPPED, Reason.NOT_FOR_TARGET),
+    ]
+    entries = _entries(repo, "proj", "repo") + _entries(url, "https://a.test", "url")
+    scan_id = store_scan(_results_dir(tmp_path, entries), tools=["trivy"], db_path=db)
+
+    rc, out = _show(db, scan_id, as_json=False, capsys=capsys)
+
+    assert rc == 0
+    lines = out.split("Tool Runs:\n", 1)[1].split("\n\n", 1)[0].splitlines()
+    shown = [ln.split()[:2] for ln in lines if not ln.lstrip().startswith("(")]
+    assert sorted(shown) == [["https://a.test", "zap"], ["proj", "trivy"]]
+    assert not [ln for ln in lines if "needs --url" in ln or "not for this" in ln]
+    hidden = [ln for ln in lines if ln.lstrip().startswith("(")]
+    assert len(hidden) == 1 and "3 " in hidden[0] and "--json" in hidden[0], lines
+
+    rc, out = _show(db, scan_id, as_json=True, capsys=capsys)
+    assert rc == 0
+    assert len(json.loads(out)["tool_runs"]) == 5
 
 
 def test_history_show_reads_a_database_that_has_no_table(tmp_path, capsys):

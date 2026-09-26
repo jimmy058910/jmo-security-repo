@@ -42,6 +42,7 @@ from scripts.core.history_db import (
 )
 from scripts.core.history_integrity import recover_database, verify_database_integrity
 from scripts.core.history_migrations import get_current_version, run_migrations
+from scripts.core.scan_timings import OFF_TARGET_REASONS
 from scripts.core.unicode_utils import safe_write
 
 logger = logging.getLogger(__name__)
@@ -350,11 +351,15 @@ def cmd_history_show(args) -> int:
             sys.stdout.write(f"  TOTAL:         {scan['total_findings']}\n")
             sys.stdout.write("\n")
 
-            # TODO(issue-#1316): off-target rows (`needs --url`, `not for this
-            # target type`) belong in --json only.
+            # A tool that does not read a target still has a row there: an
+            # image showed ten such lines of twelve. They are counted here and
+            # listed in --json (#1316).
+            on_target = [
+                run for run in tool_runs if run["reason"] not in OFF_TARGET_REASONS
+            ]
             if tool_runs:
                 sys.stdout.write("Tool Runs:\n")
-                for run in tool_runs:
+                for run in on_target:
                     state = run["state"] + (
                         f":{run['reason']}" if run["reason"] else ""
                     )
@@ -365,6 +370,12 @@ def cmd_history_show(args) -> int:
                     )
                     sys.stdout.write(
                         f"  {run['target']:<24} {run['tool']:<11} {seconds}  {state}\n"
+                    )
+                hidden = len(tool_runs) - len(on_target)
+                if hidden:
+                    sys.stdout.write(
+                        f"  ({hidden} row(s) for tools that do not read their "
+                        "target; --json lists them)\n"
                     )
                 sys.stdout.write("\n")
 

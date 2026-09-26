@@ -41,6 +41,7 @@ def scan_repository(
     progress_callback: Callable[[str, str, int], None] | None = None,
     result_name: str | None = None,
     target_type: str = "repo",
+    label: str | None = None,
 ) -> tuple[str, TargetRows]:
     """Scan a repository with every requested tool.
 
@@ -59,6 +60,8 @@ def scan_repository(
         result_name: This repository's results folder, unique within the scan
             (#1303). Defaults to the sanitized folder name.
         target_type: 'repo', or 'gitlab' for a GitLab clone.
+        label: The name the timings document records, when it is not the
+            folder's: a GitLab clone is recorded as its project path (#1315).
 
     Returns:
         (results folder name, rows by tool)
@@ -93,7 +96,7 @@ def scan_repository(
         tools=tools,
         target_type=target_type,
         target=repo,
-        target_label=name,
+        target_label=label or name,
         out_dir=out_dir,
         timeout=timeout,
         retries=retries,

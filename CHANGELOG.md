@@ -103,10 +103,24 @@ All notable changes to JMo Security will be documented in this file.
   GitHub Actions workflow. It used to run on every repository. **zap and nuclei are
   URL-only**, and on any other target their row is `skipped:needs --url`. A tool you did
   not name never produces the "applicable to no target type" warning.
-- **Repositories with the same folder name each get their own results folder**
-  (`alice__app`, `bob__app`). Two `app` repositories scanned together used to share one,
-  and the last writer's findings stood for both: 2 findings reported where there were 4
-  (#1303).
+- **Every target gets its own results folder.** Two `app` repositories scanned together
+  used to share one, and the last writer's findings stood for both: 2 findings reported
+  where there were 4. They are now `alice__app` and `bob__app` (#1303). The same held
+  for two URLs on one host, two IaC files with one stem (`main.json`, `main.yaml`), and
+  two images whose references sanitize alike; they are now `staging.example.com-2`,
+  `cloudformation__main` and `k8s__main`, and `registry_app_1-2`. A URL or image listed
+  twice is scanned once (#1312).
+- **One target, one name.** `scan-timings.json`, `.scan_metadata.json` and history's
+  `scan_tool_runs` name a target alike: an image is `nginx:latest` in all three, where
+  its timings said `nginx_latest`; a GitLab project is `group/app`, not its clone's
+  folder; an IaC file whose scanner raised is `terraform:main.tf`, as when it ran.
+  `--repo .` is named after its directory, where it was `unknown`, and `include` and
+  `exclude` match that name (#1315).
+- **A scan left with no tool exits 2, saying why.** `--skip-tools` naming every tool, or
+  `tools: []`, exited 1 with no message, and raised a traceback in the image (#1317).
+- **`jmo history show` lists the rows about each target** and counts the rest, the
+  tools that do not read that kind of target. An image showed twelve rows, ten of them
+  such tools. `--json` lists every row (#1316).
 
 ### Fixed
 
@@ -171,6 +185,15 @@ All notable changes to JMo Security will be documented in this file.
   The wizard, and the GitHub Actions workflow it generates, now emit `jmo ci`, which has
   the threshold. Found by feeding the wizard's real `build_command_parts` output to the
   real parser, not a hand-typed copy of it.
+- **A target with nothing for its tools to scan is not a warning.** `--tools hadolint`
+  on a repository without a Dockerfile is a correct result, and was announced as "NOT a
+  clean result", the words for a scanner that is not installed. The end-of-scan note no
+  longer lists zap and nuclei as having nothing to scan on a repository. The `--resume`
+  notice no longer says the results cover only the targets scanned again: the earlier
+  targets' results are reused (#1317).
+- **The MCP `query_findings_db` tool names the tables that exist.** Its description
+  listed an `attestations` table the database has never had and left out
+  `scan_tool_runs`, so an agent could not find the per-tool rows (#1316).
 - **hadolint output parses in milliseconds, not a minute.** The adapter looked up
   hadolint's version once per finding, and each lookup re-parsed `versions.yaml` (about
   200 ms). 1,000 findings took 61 s; the lookup is now once per parse, under 0.1 s, with

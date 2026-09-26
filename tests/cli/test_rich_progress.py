@@ -469,6 +469,29 @@ class TestUpdateOnlyWarnsAboutRealGaps:
         assert "1 tool(s) were stubbed and did NOT run" in msg
         assert "gosec" in msg
 
+    def test_a_target_with_nothing_for_any_tool_is_not_warned_about(self, monkeypatch):
+        """#1317: `--tools hadolint` on a repository with no Dockerfile is a
+        correct result, and was announced as "NOT a clean result"."""
+        statuses = _rows(hadolint="skipped:no Dockerfiles", zap="skipped:needs --url")
+
+        assert self._logged(monkeypatch, statuses) == []
+
+    def test_a_target_whose_only_tool_is_missing_is_not_a_clean_result(
+        self, monkeypatch
+    ):
+        """#825's case, which that wording was written for, keeps it."""
+        statuses = _rows(
+            trufflehog="skipped:not installed", gosec="skipped:no Go sources"
+        )
+
+        logged = self._logged(monkeypatch, statuses)
+
+        assert len(logged) == 1, f"expected exactly one line: {logged}"
+        level, msg = logged[0]
+        assert level == "WARN"
+        assert "NOT a clean result" in msg
+        assert "trufflehog (not installed)" in msg
+
     def test_a_mixed_target_names_only_the_missing_tool(self, monkeypatch):
         """The discriminating case. With one of each reason, a reason-blind
         implementation names both and reports the count as 2."""

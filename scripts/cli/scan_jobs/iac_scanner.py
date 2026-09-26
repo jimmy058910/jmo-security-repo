@@ -18,6 +18,12 @@ from ..path_sanitizers import _sanitize_path_component, _validate_output_path
 from .tool_loop import run_tools
 
 
+def iac_target_name(iac_type: str, iac_path: Path) -> str:
+    """The name an IaC target is recorded under, whether its scan ran or
+    raised (#1315). Unique within a scan: each IaC flag takes one file."""
+    return f"{iac_type}:{iac_path.name}"
+
+
 def scan_iac_file(
     iac_type: str,
     iac_path: Path,
@@ -29,14 +35,20 @@ def scan_iac_file(
     allow_missing_tools: bool,
     find_tool_func: Callable[[str], str | None] | None = None,
     write_stub_func: Callable[[str, Path], None] | None = None,
+    result_name: str | None = None,
 ) -> tuple[str, TargetRows]:
     """Scan an IaC file (terraform, cloudformation, k8s manifest).
 
+    Args:
+        result_name: This file's results folder, unique within the scan
+            (#1312). Defaults to the file's stem, sanitized against path
+            traversal.
+
     Returns:
-        ("<iac_type>:<file name>", rows by tool)
+        (`iac_target_name`, rows by tool)
     """
-    # The file's stem names the folder (sanitized against path traversal).
-    safe_name = _sanitize_path_component(iac_path.stem)
+    name = iac_target_name(iac_type, iac_path)
+    safe_name = result_name or _sanitize_path_component(iac_path.stem)
     out_dir = results_dir / safe_name
     _validate_output_path(results_dir, out_dir)
     out_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -45,7 +57,7 @@ def scan_iac_file(
         tools=tools,
         target_type="iac",
         target=iac_path,
-        target_label=safe_name,
+        target_label=name,
         out_dir=out_dir,
         timeout=timeout,
         retries=retries,
@@ -55,4 +67,4 @@ def scan_iac_file(
         find_tool_func=find_tool_func,
         write_stub_func=write_stub_func,
     )
-    return f"{iac_type}:{iac_path.name}", rows
+    return name, rows

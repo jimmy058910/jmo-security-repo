@@ -288,7 +288,9 @@ class RichScanProgressTracker:
                     else "no tool ran against this target"
                 ),
             )
-        elif outcome == TARGET_NOT_ATTEMPTED:
+        elif outcome == TARGET_NOT_ATTEMPTED and missing_tools:
+            # A target whose tools all had nothing to scan is a correct
+            # result, and says nothing here, as a clean one does (#1317).
             self.log(
                 "WARN",
                 f"{target_type}: {target_name} - NO tool ran against this "

@@ -151,13 +151,14 @@ Each body was corrected on GitHub the same day. A detailed body is not a true on
 
 ## PR sequence
 
-Four PRs into `dev`, each green before the next is cut from it.
+Five PRs into `dev`, each green before the next is cut from it.
 
 | PR | Carries | Closes |
 |---|---|---|
 | **A** | this plan; program-plan and spec text; both new issues, filed and rostered; riders that touch no engine code (see "PR A riders") | #1073 #1237 #1277 #1283 #1298 |
 | **T** | `jmo scan --tsv/--dest`: parser flags, target collection, the hardened clone path, the wizard's tsv mode native and Docker | #1299 |
 | **B** | the descriptor table over the 18 blocks, the accounting record, the single exclusion list, G2, tool-name validation, `scan_tool_runs`, a results folder unique per repository | #722 #1227 #1231 #1235 #1279 #1303 |
+| **B2** | PR B's deferred review findings: one name per target in every record, a results folder unique per target of every type, the reconciler comparing rows per target, reason-worded messages, the four untested guards; the macOS-only test failure PR B left on `dev` | #1312 #1315 #1316 #1317 #1318 |
 | **C** | gitleaks wired as descriptor rows (dir and git), trufflehog's git invocation, both adapters writing `secretContext` | G1 (spec §4.3) |
 
 B precedes C because the program's rule holds inside the phase too: a new tool is a
@@ -907,7 +908,45 @@ Routed, not fixed: #1312 (URL and IaC folder collisions, #1303's class) and #131
 rostered in Phase 3 as #1315 (target names), #1316 (surfacing), #1317 (messages),
 and #1318 (test gaps). Measured false and closed: semgrep on a docs-only repository
 scans both files (`paths.scanned` 2). Suite 8960 / 98 / 0.
-- [ ] Suite ID-set diff; `windows-2022` log line; both CI events.
+- [x] Suite ID-set diff; `windows-2022` log line; both CI events. The PR event was
+  19/19 (`windows-2022` 8941 / 91 / 181). The push event after the merge
+  (`b451dc31`) failed on macOS, a shard only push runs: a test checked for the
+  substring `old`, and macOS's temp root is `/var/folders`. Fixed in PR B2.
+
+## PR B2: the review's deferred findings (#1312 #1315-#1318)
+
+Measured before building, each changing the issue's plan:
+
+- **The name split is every non-repository type, not GitLab alone.** Each job
+  handed `run_tools` its folder label (`nginx_latest`) and returned the
+  identity (`nginx:latest`). Every job now records the identity; the except
+  path and the resume session use the same name (`iac_target_name`).
+- **#1312's IaC example cannot happen.** Each IaC flag takes one file, so two
+  `main.tf` never share a scan. Two types with one stem do (`main.json`,
+  `main.yaml`): a collision takes the type as its prefix (`k8s__main`). Two
+  URLs on a host, or two images that sanitize alike, take a number. A URL or
+  image listed twice is scanned once.
+- **#1318's `excl` premise is false.** With `excl` flipped on `_trivy("image")`,
+  `run_tools` still built no `--skip-dirs`: it hands exclusions to repositories
+  only. Each layer is now tested alone.
+- **The reconciler compares rows per target.** It passed the #1315 shape
+  (one document, one target, two names), since it compared counts.
+- **An empty tool request raised in Docker** (`ValueError` from `ScanConfig`)
+  as well as exiting 1 silently natively. It is exit 2 with its cause.
+
+- **A fresh review (with fixes, 0 Critical):** it added the CHANGELOG and the
+  `history show` docs, and three fixes red first: `include`/`exclude` matched
+  `--repo .` as `""`, the end-of-scan note kept its own off-target set without
+  `needs --url`, and the `abspath` naming had no test (a symlinked repository,
+  Unix only).
+
+Filed and rostered in Phase 3, each measured through `jmo scan`:
+
+- #1319: `--gitlab-repo` without `--gitlab-url` raises.
+- #1320: a local `--api-spec` never reaches a scanner.
+- #1321: history types every scan `repo`, listing repositories only.
+
+Gates: 44 guard mutations caught; the rest in the PR.
 
 ---
 

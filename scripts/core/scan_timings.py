@@ -92,6 +92,11 @@ SKIP_REASONS: frozenset[Reason] = frozenset(
         Reason.NO_IAC,
     }
 )
+# The target is not one this tool reads: the row says so, and says nothing
+# about this target.
+OFF_TARGET_REASONS: frozenset[Reason] = frozenset(
+    {Reason.NEEDS_URL, Reason.NOT_FOR_TARGET}
+)
 FAIL_REASONS: frozenset[Reason] = frozenset(
     {
         Reason.NOT_INSTALLED,

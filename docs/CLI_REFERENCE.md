@@ -61,7 +61,7 @@ fourth.
 |-----:|---------|----------|
 | `0` | Success. The command ran and the answer is affirmative. | Scan completed; `validate` verdict GO; policy passed; `--help`; `--version` |
 | `1` | The command ran, and the answer is negative — **or** it hit a runtime error. | Findings at or above `--fail-on`; `validate` verdict NO-GO; a policy FAILED; verification failed; `opa` not installed |
-| `2` | **Usage error.** The command was invoked incorrectly and did not run. | Unknown flag or subcommand; missing required argument; mutually exclusive flags; an unknown name or a path that does not exist |
+| `2` | **Usage error.** The command was invoked incorrectly and did not run. | Unknown flag or subcommand; missing required argument; mutually exclusive flags; an unknown name or a path that does not exist; a scan left with no tool (`--skip-tools` naming every one, or `tools: []`) |
 
 The distinction that matters is **1 vs 2**. `1` means the check ran and
 reported a problem; `2` means nothing was checked. A CI gate that treats every
@@ -505,7 +505,8 @@ Manually store a completed scan.
 **jmo history show**
 
 Prints the scan's summary, then a "Tool Runs" section: each target's tools with their
-seconds and `ran`, `skipped:<reason>` or `failed:<reason>` (`--json`: `tool_runs`).
+seconds and `ran`, `skipped:<reason>` or `failed:<reason>`. Tools that do not read that
+kind of target are counted, not listed; `--json` lists every row as `tool_runs`.
 Scans stored before v2.0.0 have no rows.
 
 | Flag | Description |

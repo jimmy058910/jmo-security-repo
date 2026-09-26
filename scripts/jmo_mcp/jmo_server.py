@@ -813,8 +813,11 @@ def query_findings_db(
     Use this tool for ad-hoc analysis of historical scan data stored in SQLite.
     Only SELECT, EXPLAIN, WITH, and safe PRAGMA queries are allowed.
 
-    Tables: scans, findings, scan_metadata, schema_version, attestations
+    Tables: scans, findings, scan_metadata, scan_tool_runs, schema_version
     Views: latest_scan_by_branch, finding_history
+
+    `scan_tool_runs` has one row per scan, target and requested tool: its
+    `state` (ran, skipped, failed), `reason`, `seconds` and `exit_code`.
 
     Args:
         query: Read-only SQL query string.
@@ -832,6 +835,7 @@ def query_findings_db(
         - "SELECT severity, COUNT(*) FROM findings WHERE scan_id = ? GROUP BY severity"
         - "SELECT sql FROM sqlite_master WHERE type='table'"
         - "PRAGMA table_info(findings)"
+        - "SELECT tool, COUNT(*) AS runs, SUM(reason IS 'timed out') AS timeouts FROM scan_tool_runs WHERE state != 'skipped' GROUP BY tool"
     """
     from scripts.core.history_db import (
         DEFAULT_DB_PATH,

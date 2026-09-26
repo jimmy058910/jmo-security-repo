@@ -21,6 +21,12 @@ from .tool_loop import run_tools
 ALLOWED_SCHEMES = frozenset({"http", "https"})
 
 
+def url_folder_name(url: str) -> str:
+    """The folder a URL's results land in: its host, sanitized. Two URLs on
+    one host share it, so a scan makes each unique (#1312)."""
+    return re.sub(r"[^a-zA-Z0-9._-]", "_", urlparse(url).netloc or "unknown")
+
+
 def scan_url(
     url: str,
     results_dir: Path,
@@ -31,8 +37,13 @@ def scan_url(
     allow_missing_tools: bool,
     find_tool_func: Callable[[str], str | None] | None = None,
     write_stub_func: Callable[[str, Path], None] | None = None,
+    result_name: str | None = None,
 ) -> tuple[str, TargetRows]:
     """Scan a live URL (http:// or https://).
+
+    Args:
+        result_name: This URL's results folder, unique within the scan
+            (#1312). Defaults to `url_folder_name`.
 
     Returns:
         (url, rows by tool)
@@ -45,8 +56,7 @@ def scan_url(
             f"Use --repo for local filesystem scanning."
         )
 
-    # The folder is the host, sanitized.
-    safe_name = re.sub(r"[^a-zA-Z0-9._-]", "_", parsed.netloc or "unknown")
+    safe_name = result_name or url_folder_name(url)
     out_dir = results_dir / safe_name
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -54,7 +64,7 @@ def scan_url(
         tools=tools,
         target_type="url",
         target=url,
-        target_label=safe_name,
+        target_label=url,
         out_dir=out_dir,
         timeout=timeout,
         retries=retries,

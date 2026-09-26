@@ -175,6 +175,7 @@ class TestSkippedToolIsNotASuccess:
         line = progress[0]
         assert '"level": "WARN"' in line, "the progress line was logged at INFO"
         assert "NO tool ran against this target" in line
+        assert "NOT a clean result" in line, line
         assert "trufflehog (not installed)" in line, line
         # `_log` emits JSON; json.dumps renders U+25CB as `○`.
         assert "\\u25cb" in line, "the progress line still shows a pass/fail glyph"
@@ -597,6 +598,66 @@ class TestPreflightNoLongerDropsTools:
         assert jmo.cmd_scan(scan_env) == 1
         assert not (Path(scan_env.results_dir) / ".scan_metadata.json").exists()
 
+    @pytest.mark.parametrize("how", ["skip-tools", "config", "docker"])
+    def test_an_empty_request_is_a_usage_error_that_says_so(
+        self, scan_env, tmp_path, monkeypatch, capsys, how
+    ):
+        """#1317: `--skip-tools` naming every tool, or `tools: []`, exited 1
+        with no message after pre-flight, which a CI job asserting `rc != 0`
+        cannot tell from a real failure. It is decided before anything scans:
+        a usage error. In Docker, where pre-flight is skipped, it reached
+        `ScanConfig`, which raises."""
+        import sys
+
+        from scripts.core.tool_descriptors import DESCRIPTORS
+
+        cfg = tmp_path / "jmo.yml"
+        cfg.write_text(
+            yaml.safe_dump(
+                {
+                    "tools": [] if how == "config" else ["trufflehog"],
+                    "outputs": ["json"],
+                }
+            ),
+            encoding="utf-8",
+        )
+        argv = [
+            "jmo",
+            "scan",
+            "--repos-dir",
+            scan_env.repos_dir,
+            "--results-dir",
+            str(tmp_path / "results"),
+            "--config",
+            str(cfg),
+            "--history-db",
+            str(tmp_path / "h.db"),
+        ]
+        if how != "config":
+            argv += ["--skip-tools", ",".join(sorted(DESCRIPTORS))]
+        if how == "docker":
+            monkeypatch.setenv("DOCKER_CONTAINER", "1")
+        with patch.object(sys, "argv", argv):
+            args = jmo.parse_args()
+
+        rc = jmo.cmd_scan(args)
+        err = capsys.readouterr().err
+
+        assert rc == 2
+        messages = [
+            json.loads(line)["msg"]
+            for line in err.splitlines()
+            if line.startswith("{") and "No tool to run" in line
+        ]
+        assert len(messages) == 1, err
+        cause = (
+            f"`tools:` in {cfg} is empty"
+            if how == "config"
+            else "--skip-tools removed every requested tool"
+        )
+        assert cause in messages[0], messages
+        assert not (tmp_path / "results" / ".scan_metadata.json").exists()
+
 
 class TestReportDoesNotWarnAboutItsOwnArtifact:
     """#784(3): a warning that fires every run trains the reader to ignore it."""
@@ -674,7 +735,13 @@ class TestResumeSkipIsVisibleAtDefaultVerbosity:
         visible = [
             r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING
         ]
-        assert any("skipped 1 previously completed" in m for m in visible), visible
+        notice = [m for m in visible if "Resuming scan" in m]
+        assert len(notice) == 1, visible
+        assert "1 target(s) completed earlier" in notice[0], notice
+        # #1317: the results cover alpha too (asserted above), and the notice
+        # used to say they covered "only the remaining ones".
+        assert "reused" in notice[0], notice
+        assert "only the remaining" not in notice[0], notice
 
 
 class TestCrashedTargetIsStillAccounted:
@@ -822,6 +889,34 @@ class TestTheSkipReasonsReadDifferently:
         assert "gosec (no Go sources)" in skipped[0]
         assert '"level": "INFO"' in skipped[0], "a benign outcome was raised to WARN"
 
+    def test_a_tool_that_reads_no_repository_is_not_listed(
+        self, scan_env, tmp_path, monkeypatch, capsys
+    ):
+        """The line leaves out tools that do not read the target, as its
+        comment says, but built its own set without `needs --url`: every
+        default repository scan said zap and nuclei had nothing to scan."""
+        cfg = tmp_path / "jmo.yml"
+        cfg.write_text(
+            yaml.safe_dump({"tools": ["gosec", "zap"], "outputs": ["json"]}),
+            encoding="utf-8",
+        )
+        scan_env.config = str(cfg)
+        scan_env.tools = ["gosec", "zap"]
+        monkeypatch.setattr(
+            "scripts.cli.scan_jobs.tool_loop.find_tool",
+            lambda name, *a, **k: "/usr/bin/" + name,
+        )
+
+        jmo.cmd_scan(scan_env)
+        err = capsys.readouterr().err
+
+        skipped = [
+            ln for ln in err.splitlines() if "SKIPPED with nothing to scan" in ln
+        ]
+        assert len(skipped) == 1, err
+        assert "gosec (no Go sources)" in skipped[0]
+        assert "zap" not in skipped[0], skipped[0]
+
     def test_a_missing_binary_is_still_reported_as_a_stub(
         self, scan_env, tmp_path, monkeypatch, capsys
     ):
@@ -897,6 +992,31 @@ class TestThePerTargetLineOnlyWarnsAboutRealGaps:
         assert "1 tool(s) were stubbed and did NOT run" in line, line
         assert "gosec" in line
         assert '"level": "WARN"' in line
+
+    def test_a_target_with_nothing_for_its_only_tool_is_not_a_warning(
+        self, scan_env, tmp_path, monkeypatch, capsys
+    ):
+        """#1317: `--tools hadolint` on a repository with no Dockerfile. No
+        tool ran and none should have; the result is right, and was announced
+        as "NOT a clean result", the words for #825's missing scanner."""
+        cfg = tmp_path / "jmo.yml"
+        cfg.write_text(
+            yaml.safe_dump({"tools": ["hadolint"], "outputs": ["json"]}),
+            encoding="utf-8",
+        )
+        scan_env.config = str(cfg)
+        scan_env.tools = ["hadolint"]
+        monkeypatch.setattr(
+            "scripts.cli.scan_jobs.tool_loop.find_tool",
+            lambda name, *a, **k: "/usr/bin/" + name,
+        )
+
+        assert jmo.cmd_scan(scan_env) == 0
+        line = self._progress_line(capsys.readouterr().err)
+
+        assert "NOT a clean result" not in line, line
+        assert '"level": "INFO"' in line, line
+        assert "hadolint (no Dockerfiles)" in line, line
 
 
 class TestResumedTargetsKeepTheirRows:

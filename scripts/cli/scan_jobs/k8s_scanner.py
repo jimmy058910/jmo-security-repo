@@ -35,6 +35,7 @@ def scan_k8s_resource(
     """
     context = k8s_info["context"]
     namespace = k8s_info["namespace"]
+    name = f"{context}:{namespace}"
     safe_name = f"{context}_{namespace}".replace("/", "_").replace("*", "all")
     out_dir = results_dir / safe_name
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -43,7 +44,7 @@ def scan_k8s_resource(
         tools=tools,
         target_type="k8s",
         target=k8s_info,
-        target_label=safe_name,
+        target_label=name,
         out_dir=out_dir,
         timeout=timeout,
         retries=retries,
@@ -53,4 +54,4 @@ def scan_k8s_resource(
         find_tool_func=find_tool_func,
         write_stub_func=write_stub_func,
     )
-    return f"{context}:{namespace}", rows
+    return name, rows
