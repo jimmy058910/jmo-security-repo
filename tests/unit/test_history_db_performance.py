@@ -712,10 +712,10 @@ def _insert_scan_row(conn, scan_id: str) -> None:
     conn.execute(
         """
         INSERT INTO scans (
-            id, timestamp, timestamp_iso, tools, targets, target_type,
+            id, timestamp, timestamp_iso, tools, targets,
             total_findings, critical_count, high_count, medium_count, low_count,
             info_count, jmo_version
-        ) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
+        ) VALUES (?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
         """,
         (
             scan_id,
@@ -723,7 +723,6 @@ def _insert_scan_row(conn, scan_id: str) -> None:
             "2025-01-01T00:00:00Z",
             "[]",
             "[]",
-            "repo",
             "1.0.0",
         ),
     )
@@ -752,10 +751,10 @@ def test_batch_insert_findings_optimized_performance(perf_db, tmp_path):
     conn.execute(
         """
         INSERT INTO scans (
-            id, timestamp, timestamp_iso, tools, targets, target_type,
+            id, timestamp, timestamp_iso, tools, targets,
             total_findings, critical_count, high_count, medium_count, low_count, info_count,
             jmo_version
-        ) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
+        ) VALUES (?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
         """,
         (
             scan_id,
@@ -763,7 +762,6 @@ def test_batch_insert_findings_optimized_performance(perf_db, tmp_path):
             "2025-01-01T00:00:00Z",
             "[]",
             "[]",
-            "repo",
             "1.0.0",
         ),
     )
@@ -852,10 +850,10 @@ def test_upsert_findings_batch_performance(perf_db, tmp_path):
     conn.execute(
         """
         INSERT INTO scans (
-            id, timestamp, timestamp_iso, tools, targets, target_type,
+            id, timestamp, timestamp_iso, tools, targets,
             total_findings, critical_count, high_count, medium_count, low_count, info_count,
             jmo_version
-        ) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
+        ) VALUES (?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
         """,
         (
             scan_id,
@@ -863,7 +861,6 @@ def test_upsert_findings_batch_performance(perf_db, tmp_path):
             "2025-01-01T00:00:00Z",
             "[]",
             "[]",
-            "repo",
             "1.0.0",
         ),
     )
@@ -977,10 +974,10 @@ def test_recalculate_scan_counts_performance(perf_db):
     conn.execute(
         """
         INSERT INTO scans (
-            id, timestamp, timestamp_iso, tools, targets, target_type,
+            id, timestamp, timestamp_iso, tools, targets,
             total_findings, critical_count, high_count, medium_count, low_count, info_count,
             jmo_version
-        ) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
+        ) VALUES (?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
         """,
         (
             scan_id,
@@ -988,7 +985,6 @@ def test_recalculate_scan_counts_performance(perf_db):
             "2025-01-01T00:00:00Z",
             "[]",
             "[]",
-            "repo",
             "1.0.0",
         ),
     )
@@ -1090,10 +1086,10 @@ def test_batch_vs_optimized_performance_comparison(perf_db):
     conn.execute(
         """
         INSERT INTO scans (
-            id, timestamp, timestamp_iso, tools, targets, target_type,
+            id, timestamp, timestamp_iso, tools, targets,
             total_findings, critical_count, high_count, medium_count, low_count, info_count,
             jmo_version
-        ) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
+        ) VALUES (?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
         """,
         (
             scan_id_std,
@@ -1101,7 +1097,6 @@ def test_batch_vs_optimized_performance_comparison(perf_db):
             "2025-01-01T00:00:00Z",
             "[]",
             "[]",
-            "repo",
             "1.0.0",
         ),
     )
@@ -1116,10 +1111,10 @@ def test_batch_vs_optimized_performance_comparison(perf_db):
     conn.execute(
         """
         INSERT INTO scans (
-            id, timestamp, timestamp_iso, tools, targets, target_type,
+            id, timestamp, timestamp_iso, tools, targets,
             total_findings, critical_count, high_count, medium_count, low_count, info_count,
             jmo_version
-        ) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
+        ) VALUES (?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
         """,
         (
             scan_id_opt,
@@ -1127,7 +1122,6 @@ def test_batch_vs_optimized_performance_comparison(perf_db):
             "2025-01-01T00:00:00Z",
             "[]",
             "[]",
-            "repo",
             "1.0.0",
         ),
     )

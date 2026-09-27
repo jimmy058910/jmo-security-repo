@@ -278,8 +278,7 @@ class TestRunDiffWizardHistoryMode:
                 branch TEXT,
                 total_findings INTEGER,
                 tools TEXT NOT NULL,
-                targets TEXT NOT NULL,
-                target_type TEXT NOT NULL
+                targets TEXT NOT NULL
             )
         """)
 
@@ -293,7 +292,6 @@ class TestRunDiffWizardHistoryMode:
                 10,
                 "semgrep,trivy",
                 "/repo",
-                "repo",
             ),
             (
                 "scan-002-def",
@@ -303,7 +301,6 @@ class TestRunDiffWizardHistoryMode:
                 8,
                 "semgrep,trivy",
                 "/repo",
-                "repo",
             ),
             (
                 "scan-003-ghi",
@@ -313,13 +310,12 @@ class TestRunDiffWizardHistoryMode:
                 12,
                 "semgrep,trivy",
                 "/repo",
-                "repo",
             ),
         ]
         cursor.executemany(
             """INSERT INTO scans
-            (id, timestamp, timestamp_iso, branch, total_findings, tools, targets, target_type)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (id, timestamp, timestamp_iso, branch, total_findings, tools, targets)
+            VALUES (?, ?, ?, ?, ?, ?, ?)""",
             test_scans,
         )
 
@@ -466,14 +462,13 @@ class TestRunDiffWizardErrorHandling:
                 branch TEXT,
                 total_findings INTEGER,
                 tools TEXT NOT NULL,
-                targets TEXT NOT NULL,
-                target_type TEXT NOT NULL
+                targets TEXT NOT NULL
             )
         """)
         cursor.executemany(
             """INSERT INTO scans
-            (id, timestamp, timestamp_iso, branch, total_findings, tools, targets, target_type)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (id, timestamp, timestamp_iso, branch, total_findings, tools, targets)
+            VALUES (?, ?, ?, ?, ?, ?, ?)""",
             [
                 (
                     "scan-001",
@@ -483,7 +478,6 @@ class TestRunDiffWizardErrorHandling:
                     10,
                     "semgrep",
                     "/repo",
-                    "repo",
                 ),
                 (
                     "scan-002",
@@ -493,7 +487,6 @@ class TestRunDiffWizardErrorHandling:
                     8,
                     "semgrep",
                     "/repo",
-                    "repo",
                 ),
             ],
         )
@@ -808,14 +801,13 @@ class TestRunDiffWizardExceptionHandling:
                 branch TEXT,
                 total_findings INTEGER,
                 tools TEXT NOT NULL,
-                targets TEXT NOT NULL,
-                target_type TEXT NOT NULL
+                targets TEXT NOT NULL
             )
         """)
         cursor.executemany(
             """INSERT INTO scans
-            (id, timestamp, timestamp_iso, branch, total_findings, tools, targets, target_type)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (id, timestamp, timestamp_iso, branch, total_findings, tools, targets)
+            VALUES (?, ?, ?, ?, ?, ?, ?)""",
             [
                 (
                     "scan-001",
@@ -825,7 +817,6 @@ class TestRunDiffWizardExceptionHandling:
                     10,
                     "semgrep",
                     "/repo",
-                    "repo",
                 ),
                 (
                     "scan-002",
@@ -835,7 +826,6 @@ class TestRunDiffWizardExceptionHandling:
                     8,
                     "semgrep",
                     "/repo",
-                    "repo",
                 ),
             ],
         )

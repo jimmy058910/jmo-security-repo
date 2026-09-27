@@ -378,8 +378,8 @@ class TestConcurrentOperations:
                 conn.execute(
                     """
                     INSERT INTO scans
-                    (id, timestamp, timestamp_iso, tools, targets, target_type, jmo_version)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    (id, timestamp, timestamp_iso, tools, targets, jmo_version)
+                    VALUES (?, ?, ?, ?, ?, ?)
                     """,
                     (
                         f"scan-{scan_id}",
@@ -387,7 +387,6 @@ class TestConcurrentOperations:
                         "2024-01-01T00:00:00",
                         "[]",
                         f'["/repo-{scan_id}"]',
-                        "repo",
                         "1.0.0",
                     ),
                 )
@@ -510,8 +509,8 @@ class TestDatabaseStress:
             conn.execute(
                 """
                 INSERT INTO scans
-                (id, timestamp, timestamp_iso, tools, targets, target_type, jmo_version)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (id, timestamp, timestamp_iso, tools, targets, jmo_version)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 (
                     f"scan-{i:05d}",
@@ -519,7 +518,6 @@ class TestDatabaseStress:
                     f"2024-01-{(i % 28) + 1:02d}T00:00:00",
                     "[]",
                     f'["/repo-{i % 100}"]',
-                    "repo",
                     "1.0.0",
                 ),
             )
@@ -596,8 +594,8 @@ class TestDatabaseStress:
             conn.execute(
                 """
                 INSERT INTO scans
-                (id, timestamp, timestamp_iso, tools, targets, target_type, jmo_version)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (id, timestamp, timestamp_iso, tools, targets, jmo_version)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 (
                     f"scan-{i}",
@@ -605,7 +603,6 @@ class TestDatabaseStress:
                     "2024-01-01",
                     "[]",
                     "[]",
-                    "repo",
                     "1.0.0",
                 ),
             )

@@ -11,7 +11,6 @@ Tests cover:
 - Database statistics (get_database_stats)
 - Scan deletion and pruning (delete_scan, prune_old_scans)
 - Git context extraction (get_git_context)
-- Target type detection (detect_target_type)
 - Error handling and edge cases
 
 Target Coverage: ≥90%
@@ -30,9 +29,7 @@ from scripts.core.history_db import (
     QuerySecurityError,
     QueryTimeoutError,
     _validate_readonly_query,
-    collect_targets,
     delete_scan,
-    detect_target_type,
     execute_readonly_query,
     get_connection,
     get_database_stats,
@@ -713,46 +710,6 @@ class TestScanDeletion:
 class TestHelperFunctions:
     """Test helper functions."""
 
-    def test_detect_target_type_repo(self, tmp_path):
-        """Test detecting repository target type."""
-        results_dir = tmp_path / "results"
-        repo_dir = results_dir / "individual-repos"
-        repo_dir.mkdir(parents=True)
-
-        target_type = detect_target_type(results_dir)
-        assert target_type == "repo"
-
-    def test_detect_target_type_image(self, tmp_path):
-        """Test detecting container image target type."""
-        results_dir = tmp_path / "results"
-        image_dir = results_dir / "individual-images"
-        image_dir.mkdir(parents=True)
-
-        target_type = detect_target_type(results_dir)
-        assert target_type == "image"
-
-    def test_detect_target_type_unknown(self, tmp_path):
-        """Test detecting unknown target type."""
-        results_dir = tmp_path / "results"
-        results_dir.mkdir()
-
-        target_type = detect_target_type(results_dir)
-        assert target_type == "unknown"
-
-    def test_collect_targets_repo(self, tmp_path):
-        """Test collecting repository targets."""
-        results_dir = tmp_path / "results"
-        repo_dir = results_dir / "individual-repos"
-        repo_dir.mkdir(parents=True)
-
-        (repo_dir / "myrepo").mkdir()
-        (repo_dir / "another-repo").mkdir()
-
-        targets = collect_targets(results_dir)
-        assert len(targets) == 2
-        assert "myrepo" in targets
-        assert "another-repo" in targets
-
     @patch("scripts.core.history_db.subprocess.run")
     def test_get_git_context_success(self, mock_run, tmp_path):
         """Test extracting Git context successfully.
@@ -867,22 +824,6 @@ class TestEdgeCases:
         assert len(recent_scans) == 1
         assert recent_scans[0]["id"] == scan_id_2
 
-    def test_collect_targets_multiple_types(self, tmp_path):
-        """Test collecting targets from multiple target type directories."""
-        results_dir = tmp_path / "results"
-
-        # Create multiple target directories with subdirectories
-        (results_dir / "individual-repos" / "myapp").mkdir(parents=True)
-        (results_dir / "individual-repos" / "backend").mkdir(parents=True)
-        (results_dir / "individual-images" / "nginx_latest").mkdir(parents=True)
-
-        targets = collect_targets(results_dir)
-
-        # Should collect from repos (primary target type)
-        assert len(targets) >= 2
-        assert any("myapp" in t for t in targets)
-        assert any("backend" in t for t in targets)
-
     def test_get_scan_by_id_with_findings(self, tmp_path):
         """Test retrieving a scan with its findings."""
         db_path = tmp_path / "test.db"
@@ -983,57 +924,6 @@ class TestEdgeCases:
 
         assert scan_row["ci_provider"] == "jenkins"
         assert scan_row["ci_build_id"] == "456"
-
-    def test_collect_targets_images(self, tmp_path):
-        """Test collecting targets from individual-images directory."""
-        results_dir = tmp_path / "results"
-        (results_dir / "individual-images" / "nginx_latest").mkdir(parents=True)
-        (results_dir / "individual-images" / "postgres_14").mkdir(parents=True)
-
-        targets = collect_targets(results_dir)
-
-        assert len(targets) >= 2
-        assert any("nginx_latest" in t for t in targets)
-
-    def test_collect_targets_iac(self, tmp_path):
-        """Test collecting targets from individual-iac directory."""
-        results_dir = tmp_path / "results"
-        (results_dir / "individual-iac" / "terraform_tfstate").mkdir(parents=True)
-
-        targets = collect_targets(results_dir)
-
-        assert len(targets) >= 1
-        assert any("terraform_tfstate" in t for t in targets)
-
-    def test_collect_targets_web(self, tmp_path):
-        """Test collecting targets from individual-web directory."""
-        results_dir = tmp_path / "results"
-        (results_dir / "individual-web" / "example_com").mkdir(parents=True)
-
-        targets = collect_targets(results_dir)
-
-        assert len(targets) >= 1
-        assert any("example_com" in t for t in targets)
-
-    def test_collect_targets_gitlab(self, tmp_path):
-        """Test collecting targets from individual-gitlab directory."""
-        results_dir = tmp_path / "results"
-        (results_dir / "individual-gitlab" / "mygroup_myrepo").mkdir(parents=True)
-
-        targets = collect_targets(results_dir)
-
-        assert len(targets) >= 1
-        assert any("mygroup_myrepo" in t for t in targets)
-
-    def test_collect_targets_k8s(self, tmp_path):
-        """Test collecting targets from individual-k8s directory."""
-        results_dir = tmp_path / "results"
-        (results_dir / "individual-k8s" / "prod_default").mkdir(parents=True)
-
-        targets = collect_targets(results_dir)
-
-        assert len(targets) >= 1
-        assert any("prod_default" in t for t in targets)
 
     def test_get_findings_for_scan_with_severity_filter(self, tmp_path):
         """Test retrieving findings filtered by severity."""

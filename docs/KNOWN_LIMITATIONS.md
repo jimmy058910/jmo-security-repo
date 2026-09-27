@@ -191,7 +191,31 @@ What history mode does not see:
 **What to do:** to audit a vendored tree, run TruffleHog or Gitleaks on that
 directory directly. To read history for a subdirectory, scan the repository's
 root. To read a shallow clone's history, fetch all of it first
-(`git fetch --unshallow`).
+(`git fetch --unshallow`). A history too large or too noisy to read can be
+bounded with `per_tool.<tool>.history_flags` (TruffleHog's `--since-commit`,
+Gitleaks' `--log-opts`), or skipped with `per_tool.<tool>.history: false`.
+
+### Gitleaks extends a repository's own `.gitleaks.toml`
+
+JMo passes Gitleaks a config of its own, to carry its exclusions, and Gitleaks
+then reads no other. When the scanned repository has a `.gitleaks.toml`, JMo's
+config extends it, so its rules and allowlists apply as they do when Gitleaks
+runs alone (and the default rules, if it asks for them). Two consequences:
+
+- **A repository's config narrows the audit.** A path or secret it allowlists
+  is not reported by Gitleaks, and a config that does not ask for the default
+  rules (`[extend] useDefault = true`) runs only its own. TruffleHog still reads
+  everything. `.gitleaksignore` and inline `gitleaks:allow` comments already
+  worked this way. JMo logs at INFO that it extended the repository's config,
+  and a WARNING when that config leaves the default rules out.
+- **One level of extension is lost.** Gitleaks follows `[extend]` only so deep,
+  and JMo's config is one level above the repository's. If the repository's
+  config extends another file that itself extends further (the default rules, or
+  a third file), that last level is not loaded, with no error (measured, 8.30.1).
+  JMo logs a WARNING naming the file when it sees this.
+
+`--config` in `per_tool.gitleaks.flags` is dropped with a warning: it would
+replace the config that carries JMo's exclusions.
 
 ### TruffleHog does not verify secrets by default
 
@@ -202,7 +226,9 @@ candidates. A secret is graded HIGH whether or not it was verified, as a Gitleak
 one is, so `--fail-on HIGH` stops on any of them; the tags (`verified` or
 `unverified`) and `risk.confidence` say which. The built-in `zero-secrets`
 policy blocks **verified** secrets only, so without verification it blocks
-nothing.
+nothing. Gitleaks never verifies. The policy says so: its message, a warning in
+`POLICY_REPORT.md`, and the report's log line count the secrets it passed
+because nothing verified them.
 
 **What to do:** set `per_tool.trufflehog.verify: true` in `jmo.yml` to verify,
 and `zero-secrets` then blocks the live ones. `--only-verified`, or `--results`

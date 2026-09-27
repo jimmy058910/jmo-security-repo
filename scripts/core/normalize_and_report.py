@@ -22,7 +22,8 @@ import json
 import logging
 import os
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections.abc import Mapping
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -188,23 +189,33 @@ def scan_roots(results_dir: Path) -> tuple[str, ...]:
     """Absolute directories this scan visited, for #861 path normalization.
 
     Read from ``repo_paths`` in ``.scan_metadata.json``, the same key
-    ``history_db._scanned_repo_paths`` uses. Returns an empty tuple when the
-    file is absent or unreadable -- a results directory produced by something
-    other than `jmo scan` still normalizes separators and leading separators,
-    it just cannot strip a host prefix it was never told about.
+    ``history_db._scanned_repo_paths`` uses, and from the ``root`` each
+    tree's ``scan-timings.json`` records. ``repo_paths`` holds ``--repo``
+    targets only, so a GitLab clone, scanned in a random temporary directory,
+    reached no root and its findings kept that path (#1332).
+
+    Empty when neither is readable -- a results directory produced by
+    something other than `jmo scan` still normalizes separators and leading
+    separators, it just cannot strip a host prefix it was never told about.
     """
+    roots: list[str] = []
     try:
         meta = json.loads(
             (results_dir / ".scan_metadata.json").read_text(encoding="utf-8")
         )
     except (OSError, json.JSONDecodeError):
-        return ()
-    if not isinstance(meta, dict):
-        return ()
-    raw = meta.get("repo_paths")
-    if not isinstance(raw, list):
-        return ()
-    return tuple(entry for entry in raw if isinstance(entry, str) and entry)
+        meta = None
+    raw = meta.get("repo_paths") if isinstance(meta, dict) else None
+    if isinstance(raw, list):
+        roots.extend(entry for entry in raw if isinstance(entry, str) and entry)
+    for timings in sorted(results_dir.glob(f"individual-*/*/{SCAN_TIMINGS_FILENAME}")):
+        try:
+            root = json.loads(timings.read_bytes()).get("root")
+        except (OSError, json.JSONDecodeError, AttributeError):
+            continue
+        if isinstance(root, str) and root:
+            roots.append(root)
+    return tuple(dict.fromkeys(roots))
 
 
 def _normalize_paths_and_ids(
@@ -347,14 +358,21 @@ def _commit_date(finding: dict[str, Any]) -> tuple[datetime, str]:
     return when, str(context.get("commit") or "")
 
 
-def pair_history_with_tree(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def pair_history_with_tree(
+    findings: list[dict[str, Any]], target_of: Mapping[int, str] | None = None
+) -> list[dict[str, Any]]:
     """Fold each secret's git-history records into its working-tree finding.
 
     A secret still in the tree is in history too, and trufflehog and gitleaks
     each report it once per mode. Records are paired **by the secret**, within
-    one tool, rule and path (decided 2026-09-26). Pairing by location cannot
-    work: once a line is inserted above a committed key, the tree says line 2
-    and history line 1 (measured).
+    one target, tool, rule and path (decided 2026-09-26). Pairing by location
+    cannot work: once a line is inserted above a committed key, the tree says
+    line 2 and history line 1 (measured).
+
+    `target_of` maps each finding (by `id()`) to the results folder it was
+    read from. Without the target in the key, two repositories in one scan
+    paired with each other: one's tree finding took the other's commit, and
+    the other's record was dropped (#1323).
 
     - A tree finding keeps its id and location, and takes the `secretContext`
       of the earliest commit that added its secret. Its history records go.
@@ -365,13 +383,14 @@ def pair_history_with_tree(findings: list[dict[str, Any]]) -> list[dict[str, Any
     Every finding leaves without its `secretDigest`: this is the one place it
     is read, and nothing writes it.
     """
-    groups: dict[tuple[str, str, str, str], list[dict[str, Any]]] = {}
+    groups: dict[tuple[str, str, str, str, str], list[dict[str, Any]]] = {}
     for finding in findings:
         digest = finding.pop("secretDigest", None)
         if not digest:
             continue
         tool = finding.get("tool") or {}
         key = (
+            (target_of or {}).get(id(finding), ""),
             str(tool.get("name") if isinstance(tool, dict) else tool),
             str(finding.get("ruleId") or ""),
             str((finding.get("location") or {}).get("path") or ""),
@@ -420,7 +439,10 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
     registry = get_plugin_registry()
     loader = get_plugin_loader()
 
-    jobs = []
+    # Each load job, and the results folder it reads: the pairing keeps two
+    # targets' records apart (#1323).
+    jobs: dict[Future[list[dict[str, Any]]], str] = {}
+    target_of: dict[int, str] = {}
     max_workers = 8
     try:
         # Allow override via env, else default to min(8, cpu_count or 4)
@@ -489,14 +511,16 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
                         continue
 
                     # Submit job to load findings using plugin
-                    jobs.append(
-                        ex.submit(
-                            _safe_load_plugin, plugin_class, tool_output, profiling
-                        )
+                    future = ex.submit(
+                        _safe_load_plugin, plugin_class, tool_output, profiling
                     )
+                    jobs[future] = f"{target_dir.name}/{target.name}"
         for fut in as_completed(jobs):
             try:
-                findings.extend(fut.result())
+                loaded = fut.result()
+                for finding in loaded:
+                    target_of[id(finding)] = jobs[fut]
+                findings.extend(loaded)
             except (
                 Exception
             ) as e:  # Acceptable: a broken future must not abort aggregation
@@ -538,7 +562,7 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
     # would otherwise keep whichever of a secret's records a thread finished
     # first.
     paired = len(findings)
-    findings = pair_history_with_tree(findings)
+    findings = pair_history_with_tree(findings, target_of)
     if paired != len(findings):
         logger.info(
             "Folded %d git-history record(s) into the findings for the same secret",

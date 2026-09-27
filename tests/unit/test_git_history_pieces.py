@@ -12,10 +12,13 @@ from __future__ import annotations
 import json
 import logging
 import subprocess
+import sys
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
+from scripts.cli import jmo
 from scripts.cli.scan_jobs import tool_loop
 from scripts.cli.scan_utils import trufflehog_exclude_pattern
 from scripts.core.adapters.gitleaks_adapter import GitleaksAdapter
@@ -155,6 +158,9 @@ class TestTrufflehogInvocations:
         assert not any("--no-verification" in d.command for d in definitions)
 
     @pytest.mark.parametrize(
+        ("key", "mode"), [("flags", "filesystem"), ("history_flags", "git")]
+    )
+    @pytest.mark.parametrize(
         "flags",
         [
             ["--only-verified"],
@@ -163,15 +169,23 @@ class TestTrufflehogInvocations:
         ],
     )
     def test_flags_asking_for_verified_results_keep_verification(
-        self, tmp_path, flags
+        self, tmp_path, flags, key, mode
     ) -> None:
         """With `--no-verification`, nothing is verified, so a filter to
         verified results reports nothing, rc 0, row `ran` (measured). A user
-        who asks for verified results has asked for verification."""
+        who asks for verified results has asked for verification: for the run
+        those flags reach (#1327: `flags` the tree's, `history_flags`
+        history's)."""
         definitions, _, _, _ = _definitions(
-            tmp_path, "trufflehog", per_tool={"trufflehog": {"flags": flags}}
+            tmp_path, "trufflehog", per_tool={"trufflehog": {key: flags}}
         )
-        assert not any("--no-verification" in d.command for d in definitions)
+        verifies = {
+            d.command[1]: "--no-verification" not in d.command for d in definitions
+        }
+        assert verifies == {
+            "filesystem": mode == "filesystem",
+            "git": mode == "git",
+        }
 
     def test_unverified_results_do_not_ask_for_verification(self, tmp_path) -> None:
         definitions, _, _, _ = _definitions(
@@ -699,6 +713,69 @@ class TestPairing:
         kept = pair_history_with_tree(findings)
         assert len(kept) == 3
         assert not any("secretDigest" in f for f in kept)
+
+
+def _report(results: Path) -> list[dict]:
+    """`jmo report` on a results tree; the findings it wrote."""
+    with patch.object(sys, "argv", ["jmo", "report", str(results)]):
+        args = jmo.parse_args()
+    assert jmo.cmd_report(args) == 0
+    document = json.loads((results / "summaries" / "findings.json").read_bytes())
+    return document["findings"]
+
+
+def _commits(findings: list[dict]) -> list[str | None]:
+    return sorted(
+        ((f.get("secretContext") or {}).get("commit") for f in findings),
+        key=lambda c: c or "",
+    )
+
+
+class TestPairingThroughTheReport:
+    """#1323: two ways the pairing folded records of different secrets."""
+
+    def test_two_repositories_keep_their_own_history(self, tmp_path, monkeypatch):
+        """The group key had no target. Repository `a` deleted a key in a
+        commit; repository `b` still holds the same key at the same path. `b`'s
+        tree finding took `a`'s commit, and `a`'s record was gone."""
+        monkeypatch.chdir(tmp_path)
+        results = tmp_path / "results"
+        a = results / "individual-repos" / "a"
+        b = results / "individual-repos" / "b"
+        a.mkdir(parents=True)
+        b.mkdir(parents=True)
+        (a / "trufflehog.git.json").write_bytes(
+            (json.dumps(_trufflehog_git_record(SECRET)) + "\n").encode()
+        )
+        (b / "trufflehog.json").write_bytes(
+            (json.dumps(_trufflehog_fs_record(SECRET)) + "\n").encode()
+        )
+
+        findings = _report(results)
+
+        # `a`'s history record, with its commit; `b`'s tree finding, without.
+        assert _commits(findings) == [None, COMMIT], findings
+
+    def test_redacted_snippets_are_not_paired(self, tmp_path, monkeypatch):
+        """gitleaks `--redact` writes `REDACTED` as every snippet, so every
+        secret had one digest (measured: a key rotated in place gave the new
+        key the old key's commit, and the old key was gone). JMo no longer
+        passes `--redact` (#1325's reserved flags); an output made with it
+        pairs nothing rather than the wrong records."""
+        monkeypatch.chdir(tmp_path)
+        results = tmp_path / "results"
+        target = results / "individual-repos" / "a"
+        target.mkdir(parents=True)
+        (target / "gitleaks.json").write_bytes(
+            json.dumps(_sarif(_gitleaks_result("REDACTED"))).encode()
+        )
+        (target / "gitleaks.git.json").write_bytes(
+            json.dumps(_sarif(_gitleaks_result("REDACTED", COMMIT))).encode()
+        )
+
+        findings = _report(results)
+
+        assert _commits(findings) == [None, COMMIT], findings
 
 
 # --- a history record's id --------------------------------------------------------

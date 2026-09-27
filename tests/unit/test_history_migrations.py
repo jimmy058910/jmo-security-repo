@@ -24,6 +24,7 @@ from scripts.core.history_migrations import (
     get_current_version,
     run_migrations,
 )
+from tests.unit.test_history_legacy_scans_columns import LEGACY_SCANS_DDL
 
 
 def test_discover_migrations_finds_all(tmp_path: Path):
@@ -200,24 +201,16 @@ def test_migration_idempotent(tmp_path: Path):
 def _build_legacy_scans_table(db_path: Path) -> None:
     """Recreate `scans` as a pre-#721 database has it.
 
-    Derived from the live DDL so that unrelated column changes stay in sync;
-    only what later versions removed is added back: the `profile` column and
-    its index (dropped in v2.0.0) and the CHECK that enumerated 3 profiles
-    (removed by #721).
+    The historical DDL, frozen (it cannot be derived from the live one, which
+    has lost what these tests need): the `profile` column and its index
+    (dropped in v2.0.0), the CHECK that enumerated 3 profiles (removed by
+    #721), and `target_type` with its CHECK and index (dropped by #1321).
     """
-    from scripts.core.history_db import CREATE_SCANS_TABLE
-
-    legacy_ddl = CREATE_SCANS_TABLE.replace(
-        "    tools TEXT NOT NULL,",
-        "    profile TEXT NOT NULL,\n    tools TEXT NOT NULL,",
-    ).replace(
-        "CHECK (target_type IN",
-        "CHECK (profile IN ('fast', 'balanced', 'deep')),\n    CHECK (target_type IN",
-    )
+    legacy_ddl = LEGACY_SCANS_DDL["1.1.0"]
     assert "profile TEXT NOT NULL" in legacy_ddl, (
-        "legacy fixture failed to inject the profile column"
+        "legacy fixture lost the profile column"
     )
-    assert "CHECK (profile IN" in legacy_ddl, "legacy fixture failed to inject CHECK"
+    assert "CHECK (profile IN" in legacy_ddl, "legacy fixture lost its profile CHECK"
 
     conn = get_connection(db_path)
 
@@ -237,6 +230,7 @@ def _build_legacy_scans_table(db_path: Path) -> None:
     for ddl in index_ddl:
         conn.execute(ddl)
     conn.execute("CREATE INDEX idx_scans_profile ON scans(profile)")
+    conn.execute("CREATE INDEX idx_scans_target_type ON scans(target_type)")
     conn.commit()
 
 
@@ -255,16 +249,16 @@ def _insert_legacy_scan(conn, scan_id: str, profile: str) -> None:
 
 
 def _insert_scan(conn, scan_id: str) -> None:
-    """Insert a scan row into the current schema, which has no profile."""
+    """Insert a scan row into the current schema: no profile, no target_type."""
     conn.execute(
         """
         INSERT INTO scans (
             id, timestamp, timestamp_iso, tools, targets,
-            target_type, total_findings, critical_count, high_count,
+            total_findings, critical_count, high_count,
             medium_count, low_count, info_count, jmo_version
-        ) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
+        ) VALUES (?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
         """,
-        (scan_id, 0, "1970-01-01T00:00:00", "[]", "[]", "repo", "test"),
+        (scan_id, 0, "1970-01-01T00:00:00", "[]", "[]", "test"),
     )
 
 

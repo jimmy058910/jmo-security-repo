@@ -1440,8 +1440,9 @@ jobs:
   # This job is a required status check for PRs labeled dependencies+automated
   # (see docs/RELEASE.md -> "Tool-Version Auto-Merge"). It must ALWAYS run
   # (so the required-check name stays stable for branch protection) but only
-  # does real work when versions.yaml or Dockerfile changed — other PRs get
-  # a trivial pass via the paths-filter step.
+  # does real work when versions.yaml, Dockerfile or the files the real-binary
+  # tests prove changed (the filter lists them) — other PRs get a trivial pass
+  # via the paths-filter step.
   #
   # Both the job key AND `name:` are pinned to `tool-contract-tests` so branch
   # protection can match the exact string without surprises.
@@ -1460,11 +1461,22 @@ jobs:
         id: changes
         uses: dorny/paths-filter@v4
         with:
+          # Beyond the versions: the git-history (G1) tests and the files where
+          # only a real binary can catch a regression. Those are the command
+          # lines each tool is given, the exclusions rendered in its grammar,
+          # and how the two secret scanners' output is read (#1326). The
+          # pairing and the row accounting have unit tests on every shard.
           filters: |
             versions:
               - 'versions.yaml'
               - 'Dockerfile'
               - 'tests/integration/test_tool_contracts.py'
+              - 'tests/integration/test_git_history_secrets.py'
+              - 'tests/unit/test_gitleaks_wiring.py'
+              - 'scripts/core/tool_descriptors.py'
+              - 'scripts/cli/scan_utils.py'
+              - 'scripts/core/adapters/trufflehog_adapter.py'
+              - 'scripts/core/adapters/gitleaks_adapter.py'
 
       - name: Set up uv
         if: steps.changes.outputs.versions == 'true'
@@ -1498,6 +1510,7 @@ jobs:
           HADOLINT_VERSION: "2.15.1"
           GRYPE_VERSION: "0.118.0"
           SYFT_VERSION: "1.51.1"
+          GITLEAKS_VERSION: "8.30.1"
         run: |
           # Same install block as scheduled.yml:tool-contract-tests — kept in
           # sync manually. Any drift means the weekly and PR gates disagree.
@@ -1521,6 +1534,15 @@ jobs:
           gzip -t /tmp/trufflehog.tar.gz
           tar -xzf /tmp/trufflehog.tar.gz -C /usr/local/bin trufflehog
           chmod +x /usr/local/bin/trufflehog
+          # Gitleaks: no job installed it, so the git-history tests (G1) had
+          # only ever skipped in CI (#1326). amd64 is spelled x64.
+          v="$GITLEAKS_VERSION"  # short alias to keep URL line under 140 chars
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${v}/gitleaks_${v}_linux_x64.tar.gz" \
+            -o /tmp/gitleaks.tar.gz
+          gzip -t /tmp/gitleaks.tar.gz
+          tar -xzf /tmp/gitleaks.tar.gz -C /usr/local/bin gitleaks
+          chmod +x /usr/local/bin/gitleaks
           # Grype and Syft: their contracts had no install line, so neither
           # had ever run in CI (#1073).
           for t in grype syft; do
@@ -1539,6 +1561,7 @@ jobs:
           semgrep --version || echo "semgrep not available"
           hadolint --version || echo "hadolint not available"
           trufflehog --version || echo "trufflehog not available"
+          gitleaks version || echo "gitleaks not available"
           checkov --version || echo "checkov not available"
           shellcheck --version || echo "shellcheck not available"
           grype version || echo "grype not available"
@@ -1549,7 +1572,12 @@ jobs:
         env:
           CI: "true"
         run: |
+          # The git-history tests (G1) run trufflehog and gitleaks for real,
+          # so they are requires_tools and ran in no job until this one
+          # installed gitleaks (#1326). They skip without either binary.
           pytest tests/integration/test_tool_contracts.py \
+            tests/integration/test_git_history_secrets.py \
+            tests/unit/test_gitleaks_wiring.py \
             -v \
             -m "requires_tools" \
             --tb=short \
@@ -1559,7 +1587,7 @@ jobs:
         if: steps.changes.outputs.versions != 'true'
         run: |
           echo "No version-affecting files changed — contract tests not required."
-          echo "Paths watched: versions.yaml, Dockerfile, tests/integration/test_tool_contracts.py"
+          echo "Paths watched: versions.yaml, Dockerfile, the contract and G1 tests, and the code G1 exercises"
 
   # ==========================================================================
   # phase-audit -- is every open issue scheduled, and do the labels agree?

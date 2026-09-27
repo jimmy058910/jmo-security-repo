@@ -47,6 +47,9 @@ EXPECTED_TOP_LEVEL_KEYS = {
     "outcome",
     "error",
     "tools",
+    # Schema 3, before any release (#1332): the directory a tree's tools
+    # scanned, which the report makes paths relative to.
+    "root",
 }
 EXPECTED_ROW_KEYS = {
     "tool",
@@ -101,7 +104,7 @@ def test_schema_version_is_pinned_to_a_literal() -> None:
     """The version is only useful if it moves when the shape does. Version 3
     (v2.0.0 Phase 3) replaced ToolRunner's result fields with the row."""
     assert SCAN_TIMINGS_SCHEMA_VERSION == 3
-    assert len(EXPECTED_TOP_LEVEL_KEYS) == 7
+    assert len(EXPECTED_TOP_LEVEL_KEYS) == 8
     assert len(EXPECTED_ROW_KEYS) == 8
 
 

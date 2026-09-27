@@ -26,7 +26,7 @@ import logging
 import re
 import subprocess
 import sys
-from collections.abc import Callable, Iterable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
@@ -121,7 +121,12 @@ class ScanContext:
     target: Any  # Path (repo, iac), str (image, url), Mapping (k8s)
     out_dir: Path
     binary: str = ""
+    # `per_tool.<tool>.flags` reach the tree's run and `history_flags` git
+    # history's: each mode rejects flags the other needs (#1327, measured:
+    # trufflehog filesystem exits 1 on `--since-commit`, gitleaks git 126 on
+    # `--follow-symlinks`).
     flags: tuple[str, ...] = ()
+    history_flags: tuple[str, ...] = ()
     tool_config: Mapping[str, Any] = field(default_factory=dict)
     exclusion_args: tuple[str, ...] = ()
     # The same exclusions for a git-history invocation, where they differ:
@@ -239,6 +244,11 @@ class ToolDescriptor:
     version_probe: VersionProbe
     exclusion_style: ExclusionStyle
     exclusion_flag: str | None = None
+    # Flags a user's `per_tool` flags may not repeat, beside the shared
+    # `RESERVED_OUTPUT_FLAGS`: this tool's own spellings of what decides where
+    # and how it writes. Per tool, since one tool's report flag is another's
+    # option (gitleaks' `-r` is nuclei's `-resolvers`).
+    reserved_flags: frozenset[str] = frozenset()
     # VENDORED_DIRS entries this tool is told to skip (the results directory
     # is excluded for every filesystem tool regardless).
     excluded_vendored: tuple[str, ...] = VENDORED_DIRS
@@ -355,7 +365,7 @@ def scan_root(target: Any) -> str:
     return str(Path(target).resolve())
 
 
-def _asks_for_verified_results(flags: tuple[str, ...]) -> bool:
+def _asks_for_verified_results(flags: Sequence[str]) -> bool:
     """`--only-verified`, or `--results` naming `verified`. Unverified secrets
     are all there is under `--no-verification`, so either filter would report
     nothing, rc 0, row `ran` (measured, 3.97.1)."""
@@ -372,15 +382,19 @@ def _asks_for_verified_results(flags: tuple[str, ...]) -> bool:
     return False
 
 
+def _verification(ctx: ScanContext, flags: Sequence[str]) -> tuple[str, ...]:
+    """One trufflehog run's verification switch.
+
+    Verification sends each candidate secret to its issuer, and git mode
+    multiplies the candidates: off unless `per_tool.trufflehog.verify` is
+    true (decided 2026-09-26), or that run's own flags ask for verified
+    results (#1327: each run has its own).
+    """
+    verify = ctx.tool_config.get("verify") is True or _asks_for_verified_results(flags)
+    return () if verify else ("--no-verification",)
+
+
 def _trufflehog_repo(ctx: ScanContext) -> list[Invocation]:
-    # Verification sends each candidate secret to its issuer, and git mode
-    # multiplies the candidates: off unless `per_tool.trufflehog.verify` is
-    # true (decided 2026-09-26), or the user's flags ask for verified results.
-    # An unverified finding is graded MEDIUM.
-    verify = ctx.tool_config.get("verify") is True or _asks_for_verified_results(
-        ctx.flags
-    )
-    verification = () if verify else ("--no-verification",)
     root = scan_root(ctx.target)
     invocations = [
         Invocation(
@@ -390,7 +404,7 @@ def _trufflehog_repo(ctx: ScanContext) -> list[Invocation]:
                 root,
                 "--json",
                 "--no-update",
-                *verification,
+                *_verification(ctx, ctx.flags),
                 *ctx.exclusion_args,
                 *ctx.flags,
             ),
@@ -414,9 +428,9 @@ def _trufflehog_repo(ctx: ScanContext) -> list[Invocation]:
                     "file://" + quote(Path(root).as_posix(), safe="/:"),
                     "--json",
                     "--no-update",
-                    *verification,
+                    *_verification(ctx, ctx.history_flags),
                     *ctx.history_exclusion_args,
-                    *ctx.flags,
+                    *ctx.history_flags,
                 ),
                 output_file=ctx.history_output,
                 capture_stdout=True,
@@ -434,9 +448,9 @@ def _gitleaks_repo(ctx: ScanContext) -> list[Invocation]:
     # (measured, 8.30.1). This is also how the Phase 1 golden was made. Every
     # other path is absolute, since the working directory moves. History (G1)
     # reads the same config: its paths are repository-relative too.
-    modes = [("dir", ctx.output)]
+    modes = [("dir", ctx.output, ctx.flags)]
     if ctx.history:
-        modes.append(("git", ctx.history_output))
+        modes.append(("git", ctx.history_output, ctx.history_flags))
     return [
         Invocation(
             command=(
@@ -452,7 +466,7 @@ def _gitleaks_repo(ctx: ScanContext) -> list[Invocation]:
                 "--exit-code",
                 "0",
                 *ctx.exclusion_args,
-                *ctx.flags,
+                *flags,
             ),
             output_file=output,
             capture_stdout=False,
@@ -460,7 +474,7 @@ def _gitleaks_repo(ctx: ScanContext) -> list[Invocation]:
             cwd=Path(scan_root(ctx.target)),
             label=mode,
         )
-        for mode, output in modes
+        for mode, output, flags in modes
     ]
 
 
@@ -749,6 +763,27 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             ),
             exclusion_style=ExclusionStyle.CONFIG_FILE,
             exclusion_flag="--config",
+            # Its report flags (#1325, measured: `--report-format json` lost
+            # every finding with the row `ran`; `--exit-code 1` failed a run
+            # whose findings then reached the report). `--redact` makes every
+            # snippet `REDACTED`, and the pairing digests the snippet (#1323).
+            # `--config` would replace the one carrying JMo's exclusions; a
+            # repository's own `.gitleaks.toml` is extended instead (#1327).
+            # `-f` is in the shared set too; listed here so its attached form,
+            # `-fjson`, is refused as `-cmine.toml` is.
+            reserved_flags=frozenset(
+                {
+                    "-f",
+                    "--report-format",
+                    "-r",
+                    "--report-path",
+                    "--report-template",
+                    "--exit-code",
+                    "--redact",
+                    "-c",
+                    "--config",
+                }
+            ),
             stub={"version": "2.1.0", "runs": []},
             reads_history=True,
         ),

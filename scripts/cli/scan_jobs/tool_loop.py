@@ -51,6 +51,7 @@ from ...core.tool_descriptors import (
 from ...core.tool_runner import ToolDefinition, ToolResult
 from ..scan_utils import (
     find_tool,
+    gitleaks_config_warning,
     report_tool_failure,
     tool_exclusion_flags,
     tool_flags,
@@ -192,6 +193,25 @@ def _resolve(d: ToolDescriptor, find: Callable[[str], str | None]) -> str | None
     return None
 
 
+def _history_off(per_tool_config: Mapping[str, Any], tool: str) -> bool:
+    """`per_tool.<tool>.history: false`: keep the tree's scan, skip git
+    history, for a repository whose history is too large or too noisy
+    (#1327)."""
+    config = per_tool_config.get(tool)
+    return isinstance(config, dict) and config.get("history") is False
+
+
+def _repository_gitleaks_config(root: Path) -> Path | None:
+    """The repository's own `.gitleaks.toml`, which gitleaks reads when run
+    alone and JMo's config extends (#1327). Python 3.12 raises from a probe
+    where 3.11 returned False (#1163), hence the guard."""
+    own = root / ".gitleaks.toml"
+    try:
+        return own if own.is_file() else None
+    except OSError:
+        return None
+
+
 def _exclusions(
     d: ToolDescriptor, out_dir: Path, results_name: str | None, target: Any
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
@@ -211,24 +231,36 @@ def _exclusions(
         )
         return (d.exclusion_flag, str(tree)), (d.exclusion_flag, str(history))
     if d.exclusion_style is ExclusionStyle.CONFIG_FILE and d.exclusion_flag:
-        path = write_gitleaks_config(out_dir, results_dir_name=results_name)
+        root = Path(scan_root(target))
+        repo_config = _repository_gitleaks_config(root)
+        if repo_config is not None:
+            # The scanned repository's config now shapes gitleaks' run: its
+            # rules and allowlists apply, as when gitleaks runs alone. Said,
+            # since the repository decides part of its own audit (#1327).
+            logger.info(
+                "%s: gitleaks extends its .gitleaks.toml (its rules and "
+                "allowlists apply)",
+                root.name,
+            )
+            warning = gitleaks_config_warning(repo_config, root)
+            if warning:
+                logger.warning("%s: %s", root.name, warning)
+        path = write_gitleaks_config(
+            out_dir, results_dir_name=results_name, repo_config=repo_config
+        )
         args = (d.exclusion_flag, str(path))
         return args, args
     flags = tuple(tool_exclusion_flags(d.name, results_dir_name=results_name))
     return flags, flags
 
 
-def _failed_row(
+def _failure(
     tool: str,
     result: ToolResult,
-    seconds: float,
-    attempts: int,
-    invocations: int,
     out_dir: Path,
     stub: Callable[[str, Path], None],
-    label: str = "",
-) -> ToolRun:
-    """Map one failed invocation to a row, and say so on a durable stream.
+) -> tuple[Reason, str]:
+    """One failed invocation's reason and words, said on a durable stream.
 
     The log line matters: the Rich progress glyph is the only other trace, and
     a non-TTY run (CI, cron, a detached scan) never renders one.
@@ -258,21 +290,7 @@ def _failed_row(
     else:
         reason, words = Reason.COULD_NOT_RUN, "it failed"
     report_tool_failure(result, words)
-    detail = result.error_message or None
-    if label:
-        # One row covers every invocation (G1: the tree and git history), so
-        # the reason alone cannot say which one failed.
-        detail = f"{label}: {detail or words}"
-    return ToolRun(
-        tool,
-        State.FAILED,
-        reason,
-        seconds=seconds,
-        exit_code=None if result.returncode == -1 else result.returncode,
-        attempts=attempts,
-        invocations=invocations,
-        detail=detail,
-    )
+    return reason, words
 
 
 def _row_from_results(
@@ -300,22 +318,46 @@ def _row_from_results(
         # away the tree's findings, which ran fine.
         if r.status == "success" and r.output_file and r.capture_stdout:
             r.output_file.write_text(r.stdout or "", encoding="utf-8")
+    labels = labels or {}
     failed = [r for r in results if r.status != "success"]
     if failed:
-        output = failed[0].output_file
-        return _failed_row(
-            tool,
-            failed[0],
-            seconds,
-            attempts,
-            invocations,
-            out_dir,
-            stub,
-            label=(labels or {}).get(output, "") if output else "",
+        # One row covers every invocation (G1: the tree and git history), so
+        # each failed one is named, in the order the builder made them: two
+        # failures have two causes, and naming only the first hid the other
+        # (#1324).
+        order = list(labels)
+        failed.sort(
+            key=lambda r: (
+                order.index(r.output_file) if r.output_file in order else len(order)
+            )
         )
-    exit_code = results[-1].returncode
+        causes = [_failure(tool, r, out_dir, stub) for r in failed]
+        parts: list[str] = []
+        for r, (_reason, words) in zip(failed, causes, strict=True):
+            label = labels.get(r.output_file, "") if r.output_file else ""
+            if label:
+                parts.append(f"{label}: {r.error_message or words}")
+            elif r.error_message:
+                parts.append(r.error_message)
+        return ToolRun(
+            tool,
+            State.FAILED,
+            causes[0][0],
+            seconds=seconds,
+            exit_code=None if failed[0].returncode == -1 else failed[0].returncode,
+            attempts=attempts,
+            invocations=invocations,
+            detail="; ".join(parts) or None,
+        )
+    # The tree's run writes the tool's own `<tool>.json`; history's writes
+    # another. The tree's exit code and examined count speak for the row, not
+    # whichever run the runner happened to finish first or last (#1324).
+    primary = next(
+        (r for r in results if r.output_file == out_dir / f"{tool}.json"), results[0]
+    )
+    exit_code = primary.returncode
     if d.scanned_count is not None:
-        examined = d.scanned_count(results[0].output_file or out_dir / f"{tool}.json")
+        examined = d.scanned_count(primary.output_file or out_dir / f"{tool}.json")
         if examined == 0:
             # "Scanned 4 files, found nothing" and "scanned 0 files" were
             # indistinguishable in every artifact (#1231).
@@ -413,9 +455,15 @@ def run_tools(
         )
         return empty
 
-    # One git probe per repository, for the tools that read its history (G1).
+    # One git probe per repository, for the tools that read its history (G1)
+    # and were not told not to (#1327).
     history, history_gap = False, ""
-    if key == "repo" and any(_descriptor(t).reads_history for t in ordered):
+    readers = [
+        t
+        for t in ordered
+        if _descriptor(t).reads_history and not _history_off(per_tool_config, t)
+    ]
+    if key == "repo" and readers:
         history, history_gap = read_history(Path(scan_root(target)))
         if history_gap:
             logger.warning(
@@ -472,10 +520,11 @@ def run_tools(
             out_dir=out_dir,
             binary=binary,
             flags=tuple(tool_flags(per_tool_config, tool)),
+            history_flags=tuple(tool_flags(per_tool_config, tool, "history_flags")),
             tool_config=tool_config if isinstance(tool_config, dict) else {},
             exclusion_args=tree_excl,
             history_exclusion_args=history_excl,
-            history=history and d.reads_history,
+            history=history and tool in readers,
             files=files,
             iter_files=walk,
         )
@@ -525,13 +574,24 @@ def run_tools(
         row = _row_from_results(
             d, by_tool.get(tool, []), len(invocations), out_dir, stub, labels
         )
-        if d.reads_history and history_gap and row.state is State.RAN:
+        if d.reads_history and row.state is State.RAN:
             # The tree ran, so the row is `ran`; the record says history did not.
-            row = replace(row, detail=f"history not read: {history_gap}")
+            if tool not in readers:
+                row = replace(
+                    row,
+                    detail=f"history not read: per_tool.{tool}.history is false",
+                )
+            elif history_gap:
+                row = replace(row, detail=f"history not read: {history_gap}")
         rows[tool] = row
 
     rows = {tool: rows[tool] for tool in ordered}
     write_scan_timings(
-        out_dir, rows, target=target_label, target_type=target_type, wall_seconds=wall
+        out_dir,
+        rows,
+        target=target_label,
+        target_type=target_type,
+        wall_seconds=wall,
+        root=str(Path(scan_root(target)).resolve()) if key == "repo" else None,
     )
     return rows

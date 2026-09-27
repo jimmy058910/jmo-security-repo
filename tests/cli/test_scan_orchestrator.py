@@ -1165,15 +1165,19 @@ class TestApiSpecIsDiscovered:
         assert targets.urls == ["https://example.com/openapi.json"]
         assert not targets.is_empty()
 
-    def test_local_spec_becomes_a_file_url(self, tmp_path):
+    def test_local_spec_is_refused_until_zap_can_import_one(self, tmp_path):
+        """It became a `file://` URL the URL job rejects (#1320); zap cannot
+        import a spec until #1331."""
         spec = tmp_path / "openapi.json"
         spec.write_text('{"openapi": "3.0.0"}', encoding="utf-8")
 
         orch = self._orchestrator(tmp_path)
         targets = orch.discover_targets(self._args(api_spec=str(spec)))
 
-        assert len(targets.urls) == 1
-        assert targets.urls[0].startswith("file://")
+        assert targets.urls == []
+        assert targets.is_empty()
+        assert len(targets.rejected) == 1
+        assert "#1331" in targets.rejected[0]
 
     def test_missing_local_spec_is_rejected_rather_than_ignored(self, tmp_path):
         orch = self._orchestrator(tmp_path)

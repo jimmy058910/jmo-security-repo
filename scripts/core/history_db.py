@@ -84,7 +84,6 @@ CREATE TABLE IF NOT EXISTS scans (
     -- Scan Configuration
     tools TEXT NOT NULL,
     targets TEXT NOT NULL,
-    target_type TEXT NOT NULL,
 
     -- Results Summary
     total_findings INTEGER NOT NULL DEFAULT 0,
@@ -102,13 +101,13 @@ CREATE TABLE IF NOT EXISTS scans (
     ci_build_id TEXT,
 
     -- Performance
-    duration_seconds REAL,
+    duration_seconds REAL
 
-    -- Constraints
-    -- There is no `profile` column: scan profiles left in v2.0.0, and
-    -- init_database drops the column from databases written before that
-    -- (see _drop_legacy_profile_column).
-    CHECK (target_type IN ('repo', 'image', 'iac', 'url', 'gitlab', 'k8s', 'unknown'))
+    -- There is no `profile` column: scan profiles left in v2.0.0. There is
+    -- no `target_type` either: one column cannot type a scan of two target
+    -- types, and it recorded `repo` for every scan (#1321); `scan_tool_runs`
+    -- types each target. init_database drops both from databases written
+    -- before (see _drop_legacy_profile_column, _drop_legacy_target_type_column).
 );
 """
 
@@ -201,7 +200,6 @@ CREATE_INDICES = [
     "CREATE INDEX IF NOT EXISTS idx_scans_branch ON scans(branch) WHERE branch IS NOT NULL;",
     "CREATE INDEX IF NOT EXISTS idx_scans_tag ON scans(tag) WHERE tag IS NOT NULL;",
     "CREATE INDEX IF NOT EXISTS idx_scans_commit ON scans(commit_hash) WHERE commit_hash IS NOT NULL;",
-    "CREATE INDEX IF NOT EXISTS idx_scans_target_type ON scans(target_type);",
     "CREATE INDEX IF NOT EXISTS idx_findings_scan_id ON findings(scan_id);",
     "CREATE INDEX IF NOT EXISTS idx_findings_fingerprint ON findings(fingerprint);",
     "CREATE INDEX IF NOT EXISTS idx_findings_severity ON findings(severity);",
@@ -412,6 +410,88 @@ def _drop_legacy_profile_column(conn: sqlite3.Connection) -> bool:
     return True
 
 
+# The table-level CHECK every database written before PR B3 has on
+# `scans.target_type`. In every released shape it is the table's LAST
+# constraint, so the comma that has to go with it is the one BEFORE it, and
+# comment lines (with commas of their own) can sit between the two. The gap
+# between them is kept; the comma is not.
+_TARGET_TYPE_CHECK = re.compile(
+    r",(?P<gap>(?:\s|--[^\n]*)*)CHECK\s*\(\s*target_type\s+IN\s*\([^)]*\)\s*\)",
+    re.IGNORECASE,
+)
+
+
+def _rewrite_scans_ddl(conn: sqlite3.Connection, new_sql: str) -> None:
+    """Replace the stored `CREATE TABLE scans` statement, moving no data.
+
+    SQLite cannot drop a CHECK constraint, and the usual create-copy-drop-rename
+    rebuild deletes every finding (the ON DELETE CASCADE trap v1_2_0.py
+    documents), so a CHECK is removed by editing the stored DDL. The edit is
+    parsed on its own first: a statement that does not parse, once written to
+    sqlite_master, leaves a database no connection can open, where refusing
+    here leaves it as it was.
+    """
+    probe = sqlite3.connect(":memory:")
+    try:
+        probe.execute(new_sql)
+    except sqlite3.Error as exc:
+        raise RuntimeError(f"the edited scans DDL does not parse: {exc}") from exc
+    finally:
+        probe.close()
+
+    schema_version = conn.execute("PRAGMA schema_version").fetchone()[0]
+    conn.execute("PRAGMA writable_schema=ON")
+    try:
+        conn.execute(
+            "UPDATE sqlite_master SET sql=? WHERE type='table' AND name='scans'",
+            (new_sql,),
+        )
+        # Bump so every connection reloads the edited schema.
+        conn.execute(f"PRAGMA schema_version={schema_version + 1}")
+    finally:
+        conn.execute("PRAGMA writable_schema=OFF")
+
+    integrity = conn.execute("PRAGMA integrity_check").fetchone()[0]
+    if integrity != "ok":
+        raise RuntimeError(f"integrity_check failed after migration: {integrity}")
+    violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+    if violations:
+        raise RuntimeError(f"foreign_key_check failed after migration: {violations}")
+
+
+def _drop_legacy_target_type_column(conn: sqlite3.Connection) -> bool:
+    """Drop `scans.target_type` from a database written before PR B3, in place.
+
+    One column cannot type a scan of two target types, and it held `repo` for
+    every scan: it was the first `individual-*` folder that existed, and every
+    scan creates `individual-repos` (#1321). `scan_tool_runs` types each
+    target, so nothing reads it.
+
+    Every such database has `CHECK (target_type IN (...))`, and SQLite refuses
+    to drop a column a table CHECK names, so the CHECK is edited out of the
+    stored DDL first, then the index goes, then the column. `init_database`
+    calls this after the profile drop and inside the same transaction, so a
+    drop SQLite refuses leaves the database exactly as it was.
+
+    Returns:
+        True when the column was present and has been dropped.
+    """
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(scans)")}
+    if "target_type" not in columns:
+        return False
+    if not conn.in_transaction:
+        conn.execute("BEGIN")
+    old_sql = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='scans'"
+    ).fetchone()[0]
+    new_sql = _TARGET_TYPE_CHECK.sub(r"\g<gap>", old_sql, count=1)
+    if new_sql != old_sql:
+        _rewrite_scans_ddl(conn, new_sql)
+    conn.execute("DROP INDEX IF EXISTS idx_scans_target_type")
+    conn.execute("ALTER TABLE scans DROP COLUMN target_type")
+    return True
+
+
 def init_database(db_path: Path = DEFAULT_DB_PATH) -> None:
     """
     Initialize database schema.
@@ -452,8 +532,10 @@ def init_database(db_path: Path = DEFAULT_DB_PATH) -> None:
             for view_sql in CREATE_VIEWS:
                 conn.execute(view_sql)
 
-            # A pre-v2.0.0 database still has the profile column
+            # A database written before v2.0.0 still has the profile column,
+            # and one written before PR B3 still has target_type.
             _drop_legacy_profile_column(conn)
+            _drop_legacy_target_type_column(conn)
 
             # Record schema version
             cursor = conn.cursor()
@@ -563,64 +645,6 @@ def get_git_context(repo_path: Path) -> dict[str, Any]:
             "tag": None,
             "is_dirty": 0,
         }
-
-
-def detect_target_type(results_dir: Path) -> str:
-    """
-    Detect primary target type based on results directory structure.
-
-    Args:
-        results_dir: Path to scan results directory
-
-    Returns:
-        Target type: "repo" | "image" | "iac" | "url" | "gitlab" | "k8s" | "unknown"
-    """
-    if (results_dir / "individual-repos").exists():
-        return "repo"
-    elif (results_dir / "individual-images").exists():
-        return "image"
-    elif (results_dir / "individual-iac").exists():
-        return "iac"
-    elif (results_dir / "individual-web").exists():
-        return "url"
-    elif (results_dir / "individual-gitlab").exists():
-        return "gitlab"
-    elif (results_dir / "individual-k8s").exists():
-        return "k8s"
-    else:
-        return "unknown"
-
-
-def collect_targets(results_dir: Path) -> list[str]:
-    """
-    Collect target names from results directory.
-
-    Args:
-        results_dir: Path to scan results directory
-
-    Returns:
-        List of target names (e.g., ["myrepo", "nginx:latest"])
-    """
-    targets: list[str] = []
-    target_type = detect_target_type(results_dir)
-
-    if target_type == "unknown":
-        return targets
-
-    target_dir_map = {
-        "repo": "individual-repos",
-        "image": "individual-images",
-        "iac": "individual-iac",
-        "url": "individual-web",
-        "gitlab": "individual-gitlab",
-        "k8s": "individual-k8s",
-    }
-
-    target_dir = results_dir / target_dir_map[target_type]
-    if target_dir.exists():
-        targets = [d.name for d in target_dir.iterdir() if d.is_dir()]
-
-    return targets
 
 
 def redact_secrets(finding: dict, store_raw: bool = True) -> dict:
@@ -1139,14 +1163,19 @@ def store_scan(
     now = int(time.time())
     now_iso = datetime.fromtimestamp(now, tz=UTC).isoformat()
 
-    # Detect target type
-    target_type = detect_target_type(results_dir)
-    targets = collect_targets(results_dir)
+    # The scan's accounting rows (#722), and the targets they name. `targets`
+    # was the folders under `individual-repos`, which every scan creates, so an
+    # image or URL scan listed none and a repository was named by its folder
+    # (#1321). A results directory from before the rows names no target.
+    tool_runs = _scan_tool_runs(results_dir)
+    targets = list(dict.fromkeys(target for target, *_ in tool_runs))
 
-    # Get Git context (if repo target and not provided).
+    # Get Git context (if not provided).
     #
     # This reads the paths the scan actually visited, recorded as `repo_paths`
-    # in `.scan_metadata.json`. It used to walk up from
+    # in `.scan_metadata.json`, which only a repository target writes: a scan
+    # with none has nothing to read, so no target type is consulted. It used
+    # to walk up from
     # `results_dir/individual-repos/<name>` looking for a `.git` -- but that is
     # an OUTPUT directory, so the walk found whatever repository happened to
     # contain the results folder and recorded ITS branch and commit (#780).
@@ -1161,7 +1190,7 @@ def store_scan(
     # recorded", which is true; a branch copied from an unrelated repository is
     # not, and is worse than missing because it looks like data.
     git_ctx = {}
-    if target_type == "repo" and not all([commit_hash, branch]):
+    if not all([commit_hash, branch]):
         for scanned in _scanned_repo_paths(results_dir):
             if (scanned / ".git").exists():
                 git_ctx = get_git_context(scanned)
@@ -1236,14 +1265,14 @@ def store_scan(
                 INSERT INTO scans (
                     id, timestamp, timestamp_iso,
                     commit_hash, commit_short, branch, tag, is_dirty,
-                    tools, targets, target_type,
+                    tools, targets,
                     total_findings, critical_count, high_count, medium_count, low_count, info_count,
                     jmo_version, hostname, username, ci_provider, ci_build_id,
                     duration_seconds
                 ) VALUES (
                     ?, ?, ?,
                     ?, ?, ?, ?, ?,
-                    ?, ?, ?,
+                    ?, ?,
                     ?, ?, ?, ?, ?, ?,
                     ?, ?, ?, ?, ?,
                     ?
@@ -1260,7 +1289,6 @@ def store_scan(
                     is_dirty,
                     json.dumps(tools),
                     json.dumps(targets),
-                    target_type,
                     0,  # total_findings - will be updated by trigger
                     0,  # critical_count - will be updated by trigger
                     0,  # high_count - will be updated by trigger
@@ -1444,7 +1472,6 @@ def store_scan(
             )
 
             # Per-tool accounting (#722), in the same transaction as the scan.
-            tool_runs = _scan_tool_runs(results_dir)
             if tool_runs:
                 conn.executemany(
                     """

@@ -46,6 +46,7 @@ if __package__ in (None, ""):  # pragma: no cover - only on direct execution
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from scripts.core.scan_timings import SCAN_TIMINGS_FILENAME, State, ToolRun
+from scripts.core.tool_descriptors import ScanContext
 
 Key = tuple[str, str]  # (target_type, target)
 
@@ -88,6 +89,15 @@ def _parses(path: Path) -> bool:
         except json.JSONDecodeError:
             return False
         return True
+
+
+def _outputs(folder: Path, tool: str, invocations: int) -> list[Path]:
+    """The files a `ran` row's invocations wrote: the tool's own, and git
+    history's when it ran twice (G1). Named by the scan's own rule, not
+    restated here. Checking the first alone passed a row whose history
+    output was missing or did not parse (#1324)."""
+    ctx = ScanContext(tool=tool, target_type="repo", target=None, out_dir=folder)
+    return [ctx.output, ctx.history_output][: max(1, invocations)]
 
 
 def _check_rows(
@@ -140,10 +150,11 @@ def reconcile(results_dir: Path, declared: list[str] | None = None) -> Reconcili
         doc = json.loads(timings.read_bytes())
         rows = _check_rows(result, where, doc.get("tools") or [], declared)
         for tool, row in rows.items():
-            if row.state is State.RAN:
-                output = folder / f"{tool}.json"
+            if row.state is not State.RAN:
+                continue
+            for output in _outputs(folder, tool, row.invocations):
                 if not output.is_file() or not _parses(output):
-                    result.no_output.append(f"{where}: {tool}")
+                    result.no_output.append(f"{where}: {tool} ({output.name})")
         if rows:
             _compare(result, where, doc, rows, named)
     return result

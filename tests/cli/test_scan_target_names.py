@@ -172,6 +172,17 @@ def _history(db: Path) -> list[tuple[str, str, str]]:
         con.close()
 
 
+def _scan_row(db: Path) -> tuple[list[str], set[str], str | None]:
+    """History's one `scans` row: its targets, the table's columns, its branch."""
+    con = sqlite3.connect(f"file:{db.as_posix()}?mode=ro", uri=True)
+    try:
+        targets, branch = con.execute("SELECT targets, branch FROM scans").fetchone()
+        columns = {row[1] for row in con.execute("PRAGMA table_info(scans)")}
+    finally:
+        con.close()
+    return json.loads(targets), columns, branch
+
+
 class TestOneTargetOneName:
     """#1315: scan-timings.json, tool_runs and scan_tool_runs agree."""
 
@@ -297,6 +308,63 @@ class TestOneTargetOneName:
         ]
         assert _tool_runs(env.results) == expected
         assert _history(env.db) == expected
+
+
+class TestHistoryListsEveryTarget:
+    """#1321: the fourth record. History's `scans` row typed every scan `repo`
+    and listed only `individual-repos`' folders, since
+    `setup_results_directories` always creates that folder: an image scan was
+    `repo` with no targets. The row now lists the targets its own rows name,
+    and `scans.target_type` is gone: a scan of two types has no one type, and
+    `scan_tool_runs` types each target."""
+
+    @pytest.mark.parametrize(
+        ("argv", "expected"),
+        [
+            pytest.param(
+                ["--image", "nginx:latest", "--tools", "trivy"],
+                ["nginx:latest"],
+                id="image",
+            ),
+            pytest.param(
+                ["--url", "http://h.test/b", "--tools", "zap"],
+                ["http://h.test/b"],
+                id="url",
+            ),
+            pytest.param(
+                ["--repo", "myproj", "--image", "nginx:latest", "--tools", "trivy"],
+                ["myproj", "nginx:latest"],
+                id="mixed",
+            ),
+        ],
+    )
+    def test_the_scan_row_names_every_target(self, env, argv, expected):
+        assert env.run(*argv) == 0
+
+        targets, columns, _ = _scan_row(env.db)
+        assert sorted(targets) == expected
+        assert sorted({target for _t, target, _tool in _history(env.db)}) == expected
+        assert "target_type" not in columns
+
+    def test_a_repository_among_other_types_still_records_its_branch(self, env):
+        """The git context was read only when the scan was typed `repo`. It
+        reads the repositories the scan visited, which only a repository
+        target records."""
+        git = ["git", "-C", str(env.project)]
+        identity = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
+        for cmd in (
+            [*git, "init", "-q", "-b", "b3-branch"],
+            [*git, "add", "-A"],
+            [*git, *identity, "commit", "-q", "-m", "init"],
+        ):
+            subprocess.run(cmd, check=True, capture_output=True, timeout=60)
+
+        assert (
+            env.run("--repo", "myproj", "--image", "nginx:latest", "--tools", "trivy")
+            == 0
+        )
+
+        assert _scan_row(env.db)[2] == "b3-branch"
 
 
 class TestOneTargetOneFolder:
@@ -449,3 +517,130 @@ class TestTheSessionKnowsEveryTarget:
             "ctx:ns": True,
         }
         assert {target for _type, target, _tool in _tool_runs(env.results)} == set(last)
+
+
+class TestAGitLabCloneIsNormalisedLikeARepository:
+    """#1332: the report makes paths repository-relative against the roots
+    the scan recorded, and only `--repo` targets were recorded. A GitLab
+    target is cloned into a random temporary directory, so its findings kept
+    the host's temp path, and their ids changed on every scan."""
+
+    class _TrufflehogRunner(_WritingRunner):
+        """Writes what trufflehog filesystem does: the absolute path under
+        the root it was given."""
+
+        def run_all_parallel(self) -> list[ToolResult]:
+            results = []
+            for d in self._definitions:
+                record = {
+                    "SourceMetadata": {
+                        "Data": {"Filesystem": {"file": f"{d.command[2]}/secret.txt"}}
+                    },
+                    "DetectorName": "Generic",
+                    "Verified": False,
+                    "Raw": "not-a-secret-1332",
+                }
+                d.output_file.write_bytes((json.dumps(record) + "\n").encode())
+                results.append(
+                    ToolResult(
+                        tool=d.name,
+                        status="success",
+                        returncode=0,
+                        output_file=d.output_file,
+                    )
+                )
+            return results
+
+    def test_its_findings_are_relative_and_keep_their_id(self, env, monkeypatch):
+        monkeypatch.setattr(
+            "scripts.cli.scan_jobs.repository_scanner.ToolRunner",
+            self._TrufflehogRunner,
+        )
+        seen = []
+        for _ in range(2):
+            assert (
+                env.run(
+                    "--gitlab-repo",
+                    "group/app",
+                    "--gitlab-token",
+                    "t",
+                    "--gitlab-url",
+                    "https://gitlab.example.com",
+                    "--tools",
+                    "trufflehog",
+                )
+                == 0
+            )
+            document = json.loads(
+                (env.results / "summaries" / "findings.json").read_bytes()
+            )
+            (finding,) = document["findings"]
+            seen.append((finding["location"]["path"], finding["id"]))
+
+        assert seen[0][0] == "secret.txt", seen
+        assert seen[0] == seen[1], seen
+
+
+class TestDiscoveryHandsEachJobWhatItCanScan:
+    """Two flags whose targets discovery accepted and the job then could not
+    scan: the scan failed after the fact instead of refusing up front."""
+
+    def test_a_gitlab_repo_without_a_url_is_cloned_from_gitlab_com(
+        self, env, monkeypatch
+    ):
+        """#1319: `--gitlab-url` has no parser default, so `args.gitlab_url`
+        is None and a `getattr` default never applied. The job called
+        `None.rstrip` before cloning anything."""
+        clones: list[list[str]] = []
+
+        def recording(cmd, *args, **kwargs):
+            if list(cmd[:2]) == ["git", "clone"]:
+                clones.append(list(cmd))
+            return _clone_or_run(cmd, *args, **kwargs)
+
+        monkeypatch.setattr(
+            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run", recording
+        )
+
+        rc = env.run(
+            "--gitlab-repo", "group/app", "--gitlab-token", "t", "--tools", "trufflehog"
+        )
+
+        assert rc == 0
+        assert [cmd[-2] for cmd in clones] == ["https://gitlab.com/group/app.git"]
+
+    def test_a_local_api_spec_is_refused_with_its_reason(self, env, tmp_path, caplog):
+        """#1320: a local spec became `file://C:\\...` (malformed on Windows),
+        which the URL job rejects for its scheme after the scan started. zap
+        runs a URL scan and cannot import a spec until #1331, so discovery
+        refuses the file and says why."""
+        (tmp_path / "openapi.yaml").write_bytes(b"openapi: 3.0.0\n")
+
+        rc = env.run("--api-spec", "openapi.yaml", "--tools", "zap")
+
+        assert rc == 1
+        refusals = [
+            r.getMessage()
+            for r in caplog.records
+            if "--api-spec openapi.yaml" in r.getMessage()
+        ]
+        assert refusals, [r.getMessage() for r in caplog.records]
+        assert all("#1331" in message for message in refusals), refusals
+        assert not (env.results / "individual-web").exists()
+
+    def test_a_remote_api_spec_is_scanned_as_a_url_and_says_so(self, env, caplog):
+        """An http(s) spec is still scanned, as the plain URL it is: zap
+        crawls the document's address, not the API it describes (#1331)."""
+        spec = "http://h.test/openapi.json"
+
+        assert env.run("--api-spec", spec, "--tools", "zap") == 0
+
+        assert _tool_runs(env.results) == [("url", spec, "zap")]
+        warnings = [
+            r.getMessage()
+            for r in caplog.records
+            if r.levelname == "WARNING" and spec in r.getMessage()
+        ]
+        assert len(warnings) == 1, [r.getMessage() for r in caplog.records]
+        assert "plain URL" in warnings[0]
+        assert "#1331" in warnings[0]

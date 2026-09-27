@@ -25,11 +25,10 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlsplit
 
-from scripts.core.adapters.common import safe_load_json_file
+from scripts.core.adapters.common import pinned_version, safe_load_json_file
 from scripts.core.common_finding import fingerprint, normalize_severity
 from scripts.core.exceptions import AdapterParseException
 from scripts.core.plugin_api import Finding
-from scripts.core.tool_registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -96,14 +95,10 @@ def parse_sarif(output_path: Path, spec: SarifToolSpec) -> list[Finding]:
 # --- tool version ------------------------------------------------------------
 
 
-def _registry_version(tool: str) -> str | None:
-    """versions.yaml first; the document's own version claim is a fallback
-    (gitleaks 8.30.1 reports ``semanticVersion: v8.0.0``, section 2.4)."""
-    try:
-        info = ToolRegistry().get_tool(tool)
-    except Exception:  # Acceptable: version detection fallback, registry may not load
-        return None
-    return info.version if info else None
+# versions.yaml first; the document's own version claim is a fallback (gitleaks
+# 8.30.1 reports ``semanticVersion: v8.0.0``, section 2.4). A module name of its
+# own, looked up at call time, so a test can pin it.
+_registry_version = pinned_version
 
 
 def _tool_version(tool: str, runs: list[dict[str, Any]]) -> str:

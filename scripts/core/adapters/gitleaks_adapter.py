@@ -15,6 +15,9 @@ from scripts.core.plugin_api import (
 
 _SPEC = SarifToolSpec(tool="gitleaks", tags=("secrets", "sarif"))
 
+# What `gitleaks --redact` writes in place of each secret (measured, 8.30.1).
+_REDACTED = "REDACTED"
+
 
 @adapter_plugin(
     PluginMetadata(
@@ -39,7 +42,11 @@ class GitleaksAdapter(AdapterPlugin):
             # leaked secret (decided 2026-09-26). SARIF's default is MEDIUM.
             finding.severity = "HIGH"
             snippets = _pop_snippets(finding.raw)
-            if snippets:
+            # `--redact` writes this marker as every snippet, so every secret
+            # would share one digest and pair with any other at its path and
+            # rule (#1323, measured). JMo never passes it (a reserved flag);
+            # an output made with it pairs nothing rather than wrongly.
+            if snippets and set(snippets) != {_REDACTED}:
                 finding.secretDigest = secret_digest("\n".join(snippets))
             context = _history_context(finding.raw)
             if context:

@@ -792,17 +792,30 @@ class ScanOrchestrator:
         # handled only by jmo.py's _iter_urls, which nothing had called since
         # discovery moved here - so the flag was silently accepted and dropped
         # (#807). That dead helper has since been deleted (#808).
+        #
+        # zap runs a URL scan (`-quickurl`) and is never told the target is an
+        # OpenAPI definition, so a spec is only ever a URL (#1331). A remote
+        # one is scanned as that URL and says so. A local one became a
+        # `file://` URL that the URL job then rejected for its scheme, after
+        # the scan had started (#1320): it is refused here instead.
         if getattr(args, "api_spec", None):
             spec = args.api_spec
             if spec.startswith(("http://", "https://")):
+                logger.warning(
+                    "--api-spec %s is scanned as a plain URL: zap is not told it "
+                    "is an OpenAPI definition, so the API's endpoints are not "
+                    "requested (#1331)",
+                    spec,
+                )
                 urls.append(spec)
             else:
                 p = _user_path(spec)
-                why = _probe(p.exists, "spec file does not exist")
-                if why:
-                    self._reject("--api-spec", spec, why)
-                else:
-                    urls.append(f"file://{p.absolute()}")
+                why = _probe(p.exists, "spec file does not exist") or (
+                    "a local OpenAPI file is not scanned: zap runs a URL scan and "
+                    "cannot import a spec yet (#1331); pass the running API's "
+                    "address with --url"
+                )
+                self._reject("--api-spec", spec, why)
 
         # A URL listed twice is scanned once, as a TSV row is (#1312).
         return list(dict.fromkeys(urls))
@@ -819,6 +832,10 @@ class ScanOrchestrator:
             List of dicts with keys: full_path, url, token, repo, group, name
         """
         gitlab_repos: list[dict[str, str]] = []
+        # `or`, not a getattr default: argparse always sets the attribute (None
+        # without --gitlab-url), so the default never applied and the job
+        # called None.rstrip before cloning anything (#1319).
+        url = getattr(args, "gitlab_url", None) or "https://gitlab.com"
 
         # Single GitLab repository
         if getattr(args, "gitlab_repo", None):
@@ -830,7 +847,7 @@ class ScanOrchestrator:
             gitlab_repos.append(
                 {
                     "full_path": full_path,
-                    "url": getattr(args, "gitlab_url", "https://gitlab.com"),
+                    "url": url,
                     "token": getattr(args, "gitlab_token", ""),
                     "repo": repo,
                     "group": group,
@@ -846,7 +863,7 @@ class ScanOrchestrator:
             gitlab_repos.append(
                 {
                     "full_path": f"group:{group}",
-                    "url": getattr(args, "gitlab_url", "https://gitlab.com"),
+                    "url": url,
                     "token": getattr(args, "gitlab_token", ""),
                     "repo": "",
                     "group": group,

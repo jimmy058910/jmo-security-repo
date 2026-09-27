@@ -42,6 +42,21 @@ All notable changes to JMo Security will be documented in this file.
   always emitted this command, and `jmo scan` rejected it (exit 2) natively and in
   Docker; it runs in both now (#1299). `scripts/cli/clone_from_tsv.py` no longer runs
   as a script of its own.
+- **Each secret scanner's history run has its own flags, and can be turned off.**
+  `per_tool.<tool>.history_flags` reach TruffleHog's and gitleaks' git-history run, and
+  `flags` their working-tree run only: each mode rejects flags the other needs
+  (TruffleHog's filesystem mode exits 1 on `--since-commit`; gitleaks' git mode exits 126
+  on `--follow-symlinks`). `per_tool.<tool>.history: false` keeps the tree's scan and
+  skips history; the row says `history not read: per_tool.<tool>.history is false`, and
+  with history off for both tools, git is not asked about the repository at all (#1327).
+- **gitleaks reads a repository's own `.gitleaks.toml`.** JMo's config, which carries its
+  exclusions, now extends it, so its rules and allowlists apply as they do when gitleaks
+  runs alone; before, a custom rule found nothing and an allowlisted key was reported.
+  JMo says so at INFO, and warns when the repository's config does not ask for gitleaks'
+  default rules (only its own then run, as with gitleaks alone) or extends another that
+  extends further (gitleaks' depth limit, one level shallower under JMo, drops that
+  last level). A config the warning cannot read never stops the scan; gitleaks reports
+  it (#1327).
 
 ### Removed
 
@@ -147,8 +162,56 @@ All notable changes to JMo Security will be documented in this file.
 - **`jmo history show` lists the rows about each target** and counts the rest, the
   tools that do not read that kind of target. An image showed twelve rows, ten of them
   such tools. `--json` lists every row (#1316).
+- **`--api-spec` takes a URL, and says what it does with it.** zap runs a URL scan and is
+  never told a spec is one, so a spec's URL is scanned as a plain URL, with a warning that
+  says so. A local spec file became a `file://` URL that the URL job rejected after the
+  scan started; it is refused up front, with that reason. The wizard's API mode asks for
+  a URL (its default was `./openapi.yaml`). The OpenAPI import is #1331 (#1320).
+- **History's `scans` row lists every target, and `scans.target_type` is gone.** Every
+  scan was typed `repo` and listed only repositories, by folder name: an image scan read
+  `repo` with no targets. The row now lists the targets the scan's own rows name, as
+  `scan_tool_runs` names them, and each row there carries its target's type; a scan of
+  two types had no one type to record. The column, its CHECK and its index are dropped
+  in place from an existing database, as `profile` was. `jmo history repair` copies
+  only the columns both schemas have, in `scans` and `findings`, and names what it
+  leaves behind: it failed on every database v1.1.0's migration had run on, whose
+  `findings.finding_status` the current schema lacks, and on a pre-v2 `profile`.
+  A results directory from before the per-tool rows existed (#722) stores no targets,
+  where it stored its `individual-repos` folder names (#1321).
+- `scan-timings.json` records the `root` a repository target's tools scanned.
+- `jmo report` logs each policy's verdict with its message.
 
 ### Fixed
+
+- **A GitLab target's findings are repository-relative, and keep their id.** The clone
+  lives in a random temporary directory the report was never told about, so a finding
+  carried the host's temporary path, and every scan of the repository read as new
+  findings in history and `jmo diff` (#1332).
+- **`jmo scan --gitlab-repo` without `--gitlab-url` scans gitlab.com.** It failed
+  before cloning, calling `None.rstrip` (#1319).
+- **Two repositories in one scan keep their own secret history.** The pairing of a
+  secret's history record with its tree finding ignored which target each came from:
+  a repository still holding a key took the commit of another repository that had
+  deleted it, and that repository's record was dropped (#1323).
+- **A failed secret-scanner run is named on its row.** Only a run that wrote no output
+  said which of the two (tree or history) failed; an exit code, a timeout or an
+  exception did not, and when both failed only the first was named. A row's exit code
+  now comes from the tree's run, not whichever finished last. The accounting reconciler
+  checks `<tool>.git.json` as well as `<tool>.json` (#1324).
+- **gitleaks' report flags cannot be overridden.** `per_tool.gitleaks.flags` could
+  reformat or redirect its output: `--report-format json` lost every finding with the
+  row `ran`. `--report-format`, `--report-path`/`-r`, `--report-template`, `--exit-code`,
+  `--redact` and `--config`/`-c` are dropped with a warning, per tool, since gitleaks'
+  `-r` is nuclei's `-resolvers`, and so is a short flag with its value attached
+  (`-cmine.toml`), which gitleaks reads as `-c mine.toml` (#1325). An output made with `--redact` elsewhere no
+  longer pairs different secrets by their shared `REDACTED` snippet (#1323).
+- **`zero-secrets` says what it did not block.** It blocks verified secrets only, and
+  with TruffleHog's verification off (the default) and gitleaks never verifying, it
+  passed every secret while saying "No verified secrets detected". Its message, a
+  warning and the report's log line now count the unverified secrets it passed (#1327).
+- **TruffleHog and syft findings name their tool's version**, where every one said
+  `unknown`. syft's comes from its own output (`descriptor.version`); TruffleHog's
+  output carries none, so it is the version `versions.yaml` pins (#1333).
 
 - **nuclei and ZAP produce findings on URL scans.** nuclei 3 rejects `-json` on every
   platform (exit 2); it now gets `-jsonl`. On Windows, `zap.bat` looks for its jar in the

@@ -27,7 +27,7 @@ import pytest
 from scripts.cli.history_commands import cmd_history_show
 from scripts.core.history_db import get_connection, get_scan_tool_runs, store_scan
 from scripts.core.scan_timings import Reason, State, ToolRun
-from tests.unit.test_history_profile_column_drop import (
+from tests.unit.test_history_legacy_scans_columns import (
     LEGACY_SHAPES,
     _build_pre_v2_database,
 )
@@ -135,6 +135,43 @@ def test_a_repo_and_an_image_of_one_name_keep_a_row_each(tmp_path):
     ]
 
 
+def _scan_targets(db: Path, scan_id: str) -> list[str]:
+    con = sqlite3.connect(f"file:{db.as_posix()}?mode=ro", uri=True)
+    try:
+        (targets,) = con.execute(
+            "SELECT targets FROM scans WHERE id = ?", (scan_id,)
+        ).fetchone()
+    finally:
+        con.close()
+    return json.loads(targets)
+
+
+def test_the_scan_row_lists_the_targets_its_rows_name(tmp_path):
+    """#1321: `scans.targets` listed `individual-repos`' folders, which every
+    scan creates and an image scan leaves empty, and named a folder where the
+    rows name a target. It is each target the rows name, once, in order."""
+    db = tmp_path / "h.db"
+    entries = _entries(target="proj") + _entries(
+        target="nginx:latest", target_type="image"
+    )
+    results = _results_dir(tmp_path, entries)
+    (results / "individual-repos" / "a-stale-folder").mkdir(parents=True)
+
+    scan_id = store_scan(results, tools=["trivy"], db_path=db)
+
+    assert _scan_targets(db, scan_id) == ["proj", "nginx:latest"]
+
+
+def test_a_results_dir_from_before_the_rows_names_no_target(tmp_path):
+    db = tmp_path / "h.db"
+    results = _results_dir(tmp_path, None)
+    (results / "individual-repos" / "a-folder").mkdir(parents=True)
+
+    scan_id = store_scan(results, tools=["trivy"], db_path=db)
+
+    assert _scan_targets(db, scan_id) == []
+
+
 def test_a_repeated_row_keeps_the_scan(tmp_path):
     """Two rows for one key cannot come from a scan (#1303 made names unique),
     but a hand-edited or merged metadata file must not fail the whole store."""
@@ -181,16 +218,13 @@ def test_the_state_and_reason_are_checked_by_the_database(tmp_path):
     conn.close()
 
 
-@pytest.mark.parametrize("shape", [*LEGACY_SHAPES, "2.0.0"])
+@pytest.mark.parametrize("shape", LEGACY_SHAPES)
 def test_a_database_from_before_the_table_gains_it_on_the_next_store(tmp_path, shape):
     """Every historical shape: the table is created, the rows stored, and the
     old scan's findings survive (a rebuild of `scans` would cascade them away)."""
     db = tmp_path / "old.db"
-    _build_pre_v2_database(db, shape if shape != "2.0.0" else "1.2.0")
+    _build_pre_v2_database(db, shape)
     conn = get_connection(db)
-    if shape == "2.0.0":  # 1.2.0 after the v2 migration: no profile column
-        conn.execute("DROP INDEX IF EXISTS idx_scans_profile")
-        conn.execute("ALTER TABLE scans DROP COLUMN profile")
     conn.execute("DROP TABLE scan_tool_runs")  # as every database before Phase 3
     conn.commit()
     tables = {

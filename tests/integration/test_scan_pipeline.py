@@ -8,8 +8,13 @@ These tests validate the complete scan workflow:
 - Output generation
 - Deduplication effectiveness
 
-Requires: Real security tools installed (semgrep, trivy at minimum)
-Runtime: ~5-15 minutes depending on which tools are installed
+Requires: semgrep, the tool that reports on this fixture (measured
+2026-09-26: semgrep 3 findings; trufflehog, if installed, 0).
+Runtime: ~15 seconds per scan with semgrep and trufflehog installed
+
+Until #1334 these asserted nothing: they read `findings.json`, `summary.md`
+and `individual-sast/` at the results root, where no scan writes, and each
+assertion sat behind an `if ... exists()` that never held.
 """
 
 from __future__ import annotations
@@ -97,43 +102,52 @@ def run_scan(
     if extra_args:
         cmd.extend(extra_args)
 
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    # UTF-8, not the locale codec: the scan's log carries non-ASCII, and on
+    # Windows a cp1252 decode error loses the capture the assertions print.
+    return subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=600,
+    )
+
+
+def assert_scanned(result: subprocess.CompletedProcess, results_dir: Path) -> None:
+    """The scan exited 0, and semgrep, the tool that reports on this fixture,
+    ran. A semgrep that is not installed skips the test rather than failing
+    it; one that ran and failed shows in the return code first."""
+    assert result.returncode == 0, result.stderr[-3000:]
+    meta = json.loads((results_dir / ".scan_metadata.json").read_bytes())
+    semgrep = next(row for row in meta["tool_runs"] if row["tool"] == "semgrep")
+    if semgrep["state"] == "skipped" and semgrep["reason"] == "not installed":
+        pytest.skip("semgrep is not installed: it is the tool that reports here")
+    assert semgrep["state"] == "ran", semgrep
 
 
 def load_findings(results_dir: Path) -> list[dict[str, Any]]:
-    """Load findings from scan results."""
-    findings_file = results_dir / "findings.json"
-
-    if not findings_file.exists():
-        return []
-
-    with open(findings_file, encoding="utf-8") as f:
-        data = json.load(f)
-
-    if isinstance(data, list):
-        return data
-    elif isinstance(data, dict) and "findings" in data:
-        return data["findings"]
-    return []
+    """The report's findings, from `summaries/findings.json`, where the scan's
+    own report phase writes them. Missing is an error, not an empty list."""
+    data = json.loads((results_dir / "summaries" / "findings.json").read_bytes())
+    return data["findings"]
 
 
 def count_raw_findings(results_dir: Path) -> int:
-    """Count findings from individual tool outputs before deduplication."""
+    """Findings before deduplication: every tool output in each target's own
+    folder, parsed by that tool's adapter, as the report reads them."""
+    from scripts.core.normalize_and_report import tool_of_output
+    from scripts.core.plugin_loader import get_plugin_registry
+    from scripts.core.scan_timings import SCAN_TIMINGS_FILENAME
+
+    registry = get_plugin_registry()
     total = 0
-    individual_dir = results_dir / "individual-sast"
-
-    if individual_dir.exists():
-        for json_file in individual_dir.glob("*.json"):
-            try:
-                with open(json_file, encoding="utf-8") as f:
-                    data = json.load(f)
-                if isinstance(data, list):
-                    total += len(data)
-                elif isinstance(data, dict) and "findings" in data:
-                    total += len(data["findings"])
-            except (json.JSONDecodeError, OSError):
-                continue
-
+    for output in results_dir.glob("individual-*/*/*.json"):
+        if output.name == SCAN_TIMINGS_FILENAME:
+            continue
+        adapter = registry.get(tool_of_output(output).replace("-", "_"))
+        if adapter is not None:
+            total += len(adapter().parse(output))
     return total
 
 
@@ -204,36 +218,24 @@ class TestScanPipeline:
         """Scan should produce valid JSON output with findings."""
         results_dir = tmp_path / "results"
 
-        run_scan(sample_vulnerable_repo, results_dir)
+        assert_scanned(run_scan(sample_vulnerable_repo, results_dir), results_dir)
 
-        # Scan should complete (may have non-zero exit for findings)
-        assert results_dir.exists(), "Results directory not created"
-
-        findings_file = results_dir / "findings.json"
-        if findings_file.exists():
-            findings = load_findings(results_dir)
-            # Validate each finding has required fields
-            for finding in findings:
-                assert "severity" in finding, "Finding missing severity"
-                assert "message" in finding or "title" in finding, (
-                    "Finding missing message/title"
-                )
+        findings = load_findings(results_dir)
+        assert findings, "semgrep ran and the report holds nothing"
+        for finding in findings:
+            assert finding.get("severity"), finding
+            assert finding.get("message") or finding.get("title"), finding
+            assert finding.get("tool", {}).get("name"), finding
 
     def test_scan_output_formats(self, sample_vulnerable_repo: Path, tmp_path: Path):
-        """Scan should produce all expected output files."""
+        """The report writes its JSON and Markdown under `summaries/`."""
         results_dir = tmp_path / "results"
 
-        run_scan(sample_vulnerable_repo, results_dir)
+        assert_scanned(run_scan(sample_vulnerable_repo, results_dir), results_dir)
 
-        # Check for expected output files (some may not exist if no findings)
-        possible_outputs = [
-            "findings.json",
-            "summary.md",
-        ]
-
-        # At least one output should exist
-        outputs_exist = any((results_dir / f).exists() for f in possible_outputs)
-        assert outputs_exist or results_dir.exists(), "No output files created"
+        for name in ("findings.json", "SUMMARY.md"):
+            output = results_dir / "summaries" / name
+            assert output.is_file() and output.stat().st_size > 0, output
 
 
 @pytest.mark.integration
@@ -245,24 +247,22 @@ class TestDeduplicationEffectiveness:
     def test_dedup_reduces_findings_count(
         self, sample_vulnerable_repo: Path, tmp_path: Path
     ):
-        """Deduplication should reduce total findings by 20-50%."""
+        """The report neither invents findings nor drops them all.
+
+        This fixture has no duplicates to remove (measured 2026-09-26: 3 raw,
+        3 reported), so the 20-50% reduction this test used to promise was
+        never observable here: the relation, not a ratio, is what holds.
+        """
         results_dir = tmp_path / "results"
 
-        run_scan(sample_vulnerable_repo, results_dir)
+        assert_scanned(run_scan(sample_vulnerable_repo, results_dir), results_dir)
 
-        # Load deduplicated findings
         findings = load_findings(results_dir)
-        deduped_count = len(findings)
-
-        # Load raw findings from individual directories
         raw_count = count_raw_findings(results_dir)
 
-        if raw_count > 0 and deduped_count > 0:
-            reduction = (raw_count - deduped_count) / raw_count
-
-            # We expect some reduction but not too aggressive
-            # This is a soft assertion - depends on the sample code
-            assert reduction >= 0, "Deduplication increased findings (unexpected)"
+        assert 0 < len(findings) <= raw_count, (len(findings), raw_count)
+        ids = [finding["id"] for finding in findings]
+        assert len(ids) == len(set(ids)), "the report kept a duplicate id"
 
 
 @pytest.mark.integration
@@ -274,27 +274,22 @@ class TestScanReporting:
         """JSON output should be valid and parseable."""
         results_dir = tmp_path / "results"
 
-        run_scan(sample_vulnerable_repo, results_dir)
+        assert_scanned(run_scan(sample_vulnerable_repo, results_dir), results_dir)
 
-        findings_file = results_dir / "findings.json"
-        if findings_file.exists():
-            # Should be valid JSON
-            with open(findings_file, encoding="utf-8") as f:
-                data = json.load(f)
-
-            # Should be list or dict with findings
-            assert isinstance(data, (list, dict)), "Invalid findings structure"
+        data = json.loads((results_dir / "summaries" / "findings.json").read_bytes())
+        assert isinstance(data, dict), type(data)
+        assert data["meta"]["finding_count"] == len(data["findings"]), data["meta"]
 
     def test_markdown_summary_generated(
         self, sample_vulnerable_repo: Path, tmp_path: Path
     ):
-        """Markdown summary should be generated."""
+        """The Markdown summary counts what the JSON report holds."""
         results_dir = tmp_path / "results"
 
-        run_scan(sample_vulnerable_repo, results_dir)
+        assert_scanned(run_scan(sample_vulnerable_repo, results_dir), results_dir)
 
-        summary_file = results_dir / "summary.md"
-        if summary_file.exists():
-            content = summary_file.read_text()
-            # Should have basic structure
-            assert "Summary" in content or "Findings" in content or "#" in content
+        summary = (results_dir / "summaries" / "SUMMARY.md").read_bytes()
+        text = summary.decode("utf-8")
+        assert text.startswith("# Security Summary"), text[:200]
+        total = len(load_findings(results_dir))
+        assert f"Total findings: {total} " in text, text[:300]

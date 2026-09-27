@@ -840,8 +840,8 @@ def test_get_scans_with_days_filter(trend_temp_db, tmp_path, seed_conn):
         cursor.execute(
             """
             INSERT INTO scans (id, timestamp, timestamp_iso, commit_hash, branch, tools,
-                             targets, target_type, jmo_version, critical_count, high_count, medium_count, low_count, info_count)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             targets, jmo_version, critical_count, high_count, medium_count, low_count, info_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 "old_scan",
@@ -851,7 +851,6 @@ def test_get_scans_with_days_filter(trend_temp_db, tmp_path, seed_conn):
                 "main",
                 '["trivy"]',
                 '["test-repo"]',
-                "repo",
                 "1.0.0",
                 1,
                 2,
@@ -922,8 +921,8 @@ def test_detect_regressions_high_threshold(trend_temp_db, tmp_path, seed_conn):
         cursor.execute(
             """
             INSERT INTO scans (id, timestamp, timestamp_iso, commit_hash, branch, tools,
-                             targets, target_type, jmo_version, critical_count, high_count, medium_count, low_count, info_count)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             targets, jmo_version, critical_count, high_count, medium_count, low_count, info_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 "scan1",
@@ -933,7 +932,6 @@ def test_detect_regressions_high_threshold(trend_temp_db, tmp_path, seed_conn):
                 "main",
                 '["trivy"]',
                 '["test-repo"]',
-                "repo",
                 "1.0.0",
                 0,
                 2,
@@ -948,8 +946,8 @@ def test_detect_regressions_high_threshold(trend_temp_db, tmp_path, seed_conn):
         cursor.execute(
             """
             INSERT INTO scans (id, timestamp, timestamp_iso, commit_hash, branch, tools,
-                             targets, target_type, jmo_version, critical_count, high_count, medium_count, low_count, info_count)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             targets, jmo_version, critical_count, high_count, medium_count, low_count, info_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 "scan2",
@@ -959,7 +957,6 @@ def test_detect_regressions_high_threshold(trend_temp_db, tmp_path, seed_conn):
                 "main",
                 '["trivy"]',
                 '["test-repo"]',
-                "repo",
                 "1.0.0",
                 0,
                 5,
@@ -1012,7 +1009,6 @@ def test_generate_insights_low_scan_frequency(trend_temp_db, seed_conn):
                     "main",
                     '["trivy"]',
                     '["test-repo"]',
-                    "repo",
                     "1.0.0",
                     0,
                     1,
@@ -1026,8 +1022,8 @@ def test_generate_insights_low_scan_frequency(trend_temp_db, seed_conn):
             cursor.execute(
                 """
                 INSERT INTO scans (id, timestamp, timestamp_iso, commit_hash, branch, tools,
-                                 targets, target_type, jmo_version, critical_count, high_count, medium_count, low_count, info_count)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                 targets, jmo_version, critical_count, high_count, medium_count, low_count, info_count)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 scan,
             )
@@ -1075,8 +1071,8 @@ def test_calculate_security_score_all_grades(trend_temp_db, seed_conn):
             cursor.execute(
                 """
                 INSERT INTO scans (id, timestamp, timestamp_iso, commit_hash, branch, tools,
-                                 targets, target_type, jmo_version, critical_count, high_count, medium_count, low_count, info_count)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                 targets, jmo_version, critical_count, high_count, medium_count, low_count, info_count)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     f"scan_{expected_grade}",
@@ -1086,7 +1082,6 @@ def test_calculate_security_score_all_grades(trend_temp_db, seed_conn):
                     "main",
                     '["trivy"]',
                     '["test-repo"]',
-                    "repo",
                     "1.0.0",
                     critical,
                     high,
@@ -1224,8 +1219,8 @@ def test_format_trend_summary_with_many_regressions(trend_temp_db, seed_conn):
         cursor.execute(
             """
             INSERT INTO scans (id, timestamp, timestamp_iso, commit_hash, branch, tools,
-                             targets, target_type, jmo_version, critical_count, high_count, medium_count, low_count, info_count)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             targets, jmo_version, critical_count, high_count, medium_count, low_count, info_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 "baseline",
@@ -1235,7 +1230,6 @@ def test_format_trend_summary_with_many_regressions(trend_temp_db, seed_conn):
                 "main",
                 '["trivy"]',
                 '["test-repo"]',
-                "repo",
                 "1.0.0",
                 0,
                 0,
@@ -1252,8 +1246,8 @@ def test_format_trend_summary_with_many_regressions(trend_temp_db, seed_conn):
             cursor.execute(
                 """
                 INSERT INTO scans (id, timestamp, timestamp_iso, commit_hash, branch, tools,
-                                 targets, target_type, jmo_version, critical_count, high_count, medium_count, low_count, info_count)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                 targets, jmo_version, critical_count, high_count, medium_count, low_count, info_count)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     f"reg{i}",
@@ -1263,7 +1257,6 @@ def test_format_trend_summary_with_many_regressions(trend_temp_db, seed_conn):
                     "main",
                     '["trivy"]',
                     '["test-repo"]',
-                    "repo",
                     "1.0.0",
                     i * 2,
                     0,

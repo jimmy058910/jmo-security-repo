@@ -81,9 +81,9 @@ def db_with_sample_scans(temp_db):
             """
             INSERT INTO scans (
                 id, timestamp, timestamp_iso, branch,
-                jmo_version, tools, targets, target_type, total_findings,
+                jmo_version, tools, targets, total_findings,
                 critical_count, high_count, medium_count, low_count, info_count
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 scan_id,
@@ -93,7 +93,6 @@ def db_with_sample_scans(temp_db):
                 "1.0.0",
                 json.dumps(["trivy", "semgrep", "checkov"]),
                 json.dumps(["repo-test"]),  # targets
-                "repo",  # target_type
                 50 - (i * 5),  # Decreasing findings (trend improving)
                 5 - i,  # CRITICAL
                 10 - i,  # HIGH
@@ -183,9 +182,9 @@ def db_with_recurring_findings(temp_db):
             """
             INSERT INTO scans (
                 id, timestamp, timestamp_iso, branch,
-                jmo_version, tools, targets, target_type, total_findings,
+                jmo_version, tools, targets, total_findings,
                 critical_count, high_count, medium_count, low_count, info_count
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 scan_id,
@@ -195,7 +194,6 @@ def db_with_recurring_findings(temp_db):
                 "1.0.0",
                 json.dumps(["trivy", "semgrep"]),
                 json.dumps(["repo-recurring"]),  # targets
-                "repo",  # target_type
                 10,
                 2,
                 3,
@@ -423,8 +421,8 @@ class TestReactDashboardHelpers:
             """
             INSERT INTO scans (
                 id, timestamp, timestamp_iso, branch,
-                jmo_version, tools, targets, target_type, total_findings
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                jmo_version, tools, targets, total_findings
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 "scan-feature",
@@ -434,7 +432,6 @@ class TestReactDashboardHelpers:
                 "1.0.0",
                 json.dumps(["trivy"]),
                 json.dumps(["repo-test"]),
-                "repo",
                 1,
             ),
         )
@@ -752,9 +749,9 @@ class TestComplianceHelpers:
             """
             INSERT INTO scans (
                 id, timestamp, timestamp_iso, branch,
-                jmo_version, tools, targets, target_type, total_findings,
+                jmo_version, tools, targets, total_findings,
                 critical_count, high_count, medium_count, low_count, info_count
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 "single-scan",
@@ -764,7 +761,6 @@ class TestComplianceHelpers:
                 "1.0.0",
                 json.dumps(["trivy"]),
                 json.dumps(["repo-single"]),  # targets
-                "repo",  # target_type
                 10,
                 2,
                 3,
