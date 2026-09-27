@@ -782,7 +782,7 @@ def test_trivy_hadolint_latest_tag_clustering():
             "tool": {"name": "trivy", "version": "0.50.0"},
             "severity": "MEDIUM",
             "message": "':latest' tag used",
-            "ruleId": ":latest tag used",
+            "ruleId": "DS-0001",  # trivy 0.74.0's id for this check (#1221)
             "location": {"path": "Dockerfile", "startLine": 22, "endLine": 22},
             "raw": {},
         },
@@ -819,7 +819,7 @@ def test_trivy_hadolint_checkov_latest_tag_clustering():
             "tool": {"name": "trivy"},
             "severity": "MEDIUM",
             "message": "Using :latest tag",
-            "ruleId": "DS001",
+            "ruleId": "DS-0001",
             "location": {"path": "Dockerfile", "startLine": 1},
             "raw": {},
         },
@@ -924,7 +924,7 @@ def test_metadata_similarity_with_rule_equivalence(calc):
         raw1={},
         raw2={},
         rule_id1="DL3006",
-        rule_id2=":latest tag used",
+        rule_id2="DS-0001",
         tool1="hadolint",
         tool2="trivy",
     )

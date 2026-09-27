@@ -270,8 +270,8 @@ judgment about that tool's own output.
 Composite similarity is weighted **toward location** — `0.50` location, `0.25`
 message, `0.25` metadata — so two tools agreeing on a `path:line` are most of
 the way to the `0.65` default threshold before their wording is considered.
-Trivy's `:latest tag used` and Hadolint's `DL3006` on the same Dockerfile line
-score `0.82` and do cluster, via the rule-equivalence table in
+Trivy's `DS-0001` (`':latest' tag used`) and Hadolint's `DL3006` on the same
+Dockerfile line score `0.82` and do cluster, via the rule-equivalence table in
 `scripts/core/rule_equivalence.py`.
 
 No findings are lost — anything not clustered is reported separately.

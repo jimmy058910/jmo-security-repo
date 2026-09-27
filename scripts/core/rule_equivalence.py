@@ -5,8 +5,9 @@ different security scanning tools. When two tools report the same issue
 using different rule IDs, this mapping helps identify them as duplicates.
 
 Example:
-    Trivy reports `:latest tag used` and Hadolint reports `DL3006` for the
-    same issue on the same line. This mapping recognizes them as equivalent.
+    Trivy reports `DS-0001` (`':latest' tag used`) and Hadolint reports
+    `DL3006` for the same issue on the same line. This mapping recognizes them
+    as equivalent.
 
 Usage:
     from scripts.core.rule_equivalence import get_canonical_rule_id
@@ -36,76 +37,77 @@ from __future__ import annotations
 # under that id is "Ensure all data stored in RDS is not publicly accessible".
 #
 #   `# alias:` one tool reporting one check under more than one id
-#             (trivy `:latest tag used` and `DS001`; hadolint DL3018/DL3019)
+#             (hadolint DL3018/DL3019)
 #   `# cross:` different tools reporting the SAME issue -- what the table is
 #             for, and the only relationship that should span tool names
 #
 # When adding an entry, quote the tool's own rule description rather than
 # paraphrasing it. Three groups were measured wrong in #846 and every one was
 # caught by comparing against `check_name` from a real scan.
+#
+# TRIVY KEYS (#1221) are the `ID` trivy 0.74.0 prints, each commented with the
+# `Title` it prints beside it, both read from its own output
+# (tests/fixtures/samples/trivy/misconfig-0.74.json) -- one id per group, the
+# check the group names. The adapter used to make a misconfiguration's Title
+# its rule id, so this table keyed trivy by Titles and by old ids (`DS001`).
+# On 0.74.0's output no old id matched anything and three Titles did, and
+# eight old ids named another check entirely (`DS031` sat here as "open
+# ingress": it is the Dockerfile secrets check). Where 0.74.0 has no check for
+# a group, the trivy key was dropped, not translated: `DS013` is "'RUN cd ...'
+# to change directory", `DS015` is "'yum clean all' missing", and 0.74.0 ships
+# `DS-0024` ("'apt-get dist-upgrade' used") deprecated, so it never fires. That
+# left `dockerfile-apt-get-upgrade` (hadolint DL3005) and
+# `dockerfile-missing-version-pin` (hadolint DL3008) with one tool each, and a
+# one-tool group cannot deduplicate across tools, so both groups are gone.
 RULE_EQUIVALENCE: dict[str, list[tuple[str, str]]] = {
     # ===== Dockerfile Best Practices =====
     "dockerfile-latest-tag": [
-        ("trivy", ":latest tag used"),
-        ("trivy", "DS001"),
+        ("trivy", "DS-0001"),  # "':latest' tag used"
         ("hadolint", "DL3006"),
         ("hadolint", "DL3007"),  # Using latest is prone to errors
         ("checkov", "CKV_DOCKER_1"),
         ("checkov", "CKV_DOCKER_7"),  # Ensure base image uses a non-latest tag
     ],
     "dockerfile-no-healthcheck": [
-        ("trivy", "No HEALTHCHECK defined"),
-        ("trivy", "DS026"),
+        ("trivy", "DS-0026"),  # "No HEALTHCHECK defined"
         ("hadolint", "DL3055"),
         ("checkov", "CKV_DOCKER_2"),
     ],
     "dockerfile-no-user": [
-        ("trivy", "Image user should not be 'root'"),
-        ("trivy", "DS002"),
-        ("trivy", "Running as root"),
+        ("trivy", "DS-0002"),  # "Image user should not be 'root'"
         ("hadolint", "DL3002"),
         ("checkov", "CKV_DOCKER_3"),
         ("checkov", "CKV_DOCKER_8"),  # Ensure the last USER is not root
     ],
     "dockerfile-add-instead-of-copy": [
-        ("trivy", "Consider using COPY instead of ADD"),
-        ("trivy", "DS005"),
+        ("trivy", "DS-0005"),  # "ADD instead of COPY"
         ("hadolint", "DL3010"),
         ("checkov", "CKV_DOCKER_4"),
     ],
     "dockerfile-hardcoded-secret": [
-        ("trivy", "Potential secret in ENV"),
-        ("trivy", "DS017"),
+        # "Secrets passed via `build-args` or envs or copied secret files"
+        ("trivy", "DS-0031"),
         ("hadolint", "DL3059"),  # Multiple consecutive RUN with secrets
         ("checkov", "CKV_DOCKER_5"),
         ("checkov", "CKV_DOCKER_11"),  # Ensure secret args are not hard-coded
     ],
     "dockerfile-sudo": [
-        ("trivy", "DS011"),  # sudo detected
+        ("trivy", "DS-0010"),  # "RUN using 'sudo'"
         ("hadolint", "DL3004"),
         ("checkov", "CKV2_DOCKER_1"),
     ],
-    "dockerfile-apt-get-upgrade": [
-        ("trivy", "DS016"),  # apt-get upgrade
-        ("hadolint", "DL3005"),
-    ],
     "dockerfile-missing-apk-no-cache": [
-        ("trivy", "DS014"),  # Missing --no-cache
+        ("trivy", "DS-0025"),  # "'apk add' is missing '--no-cache'"
         ("hadolint", "DL3018"),  # Pin versions in apk add
         ("hadolint", "DL3019"),  # Use --no-cache
     ],
     "dockerfile-curl-pipe-bash": [
-        ("trivy", "DS013"),  # curl pipe to bash
         ("hadolint", "DL4006"),  # Set SHELL option pipefail
         ("checkov", "CKV_DOCKER_6"),
     ],
-    "dockerfile-missing-version-pin": [
-        ("trivy", "DS015"),  # Missing version pin in apt-get
-        ("hadolint", "DL3008"),  # Pin versions in apt-get
-    ],
     # ===== Infrastructure as Code =====
     "iac-public-s3-bucket": [
-        ("trivy", "Public S3 bucket"),
+        ("trivy", "AWS-0092"),  # "S3 Buckets not publicly accessible through ACL."
         # cross: "S3 Bucket has an ACL defined which allows public READ access."
         ("checkov", "CKV_AWS_20"),
         # REMOVED (#846), measured against checkov's own `check_name`:
@@ -117,7 +119,7 @@ RULE_EQUIVALENCE: dict[str, list[tuple[str, str]]] = {
         # than relocated. A group is for one issue reported by several tools.
     ],
     "iac-unencrypted-storage": [
-        ("trivy", "Unencrypted storage"),
+        ("trivy", "AWS-0026"),  # "EBS volumes must be encrypted"
         ("checkov", "CKV_AWS_3"),  # cross: EBS volume encryption
         # REMOVED (#846): CKV_AWS_17. Its inline comment here said "RDS
         # encryption"; checkov's own `check_name`, measured on a real scan, is
@@ -126,8 +128,9 @@ RULE_EQUIVALENCE: dict[str, list[tuple[str, str]]] = {
         # a public-access control ended up in an encryption group.
     ],
     "iac-security-group-open-ingress": [
-        ("trivy", "Security group allows open ingress"),
-        ("trivy", "DS031"),  # alias: same trivy check, id form
+        # "Security groups should not allow unrestricted ingress to SSH or RDP
+        # from any IP address."
+        ("trivy", "AWS-0107"),
         # cross: both are "ingress from 0.0.0.0:0", to port 22 and 3389
         ("checkov", "CKV_AWS_24"),
         ("checkov", "CKV_AWS_25"),
@@ -137,24 +140,21 @@ RULE_EQUIVALENCE: dict[str, list[tuple[str, str]]] = {
     ],
     # ===== Kubernetes Security =====
     "k8s-privileged-container": [
-        ("trivy", "Privileged container"),
-        ("trivy", "KSV001"),
+        # "Privileged"; the old key KSV001 is "Can elevate its own privileges"
+        ("trivy", "KSV-0017"),
         ("checkov", "CKV_K8S_1"),
     ],
     "k8s-root-container": [
-        ("trivy", "Container running as root"),
-        ("trivy", "KSV012"),
+        ("trivy", "KSV-0012"),  # "Runs as root user"
         ("checkov", "CKV_K8S_6"),
         ("checkov", "CKV_K8S_20"),
     ],
     "k8s-host-network": [
-        ("trivy", "Host network enabled"),
-        ("trivy", "KSV009"),
+        ("trivy", "KSV-0009"),  # "Access to host network"
         ("checkov", "CKV_K8S_19"),
     ],
     "k8s-no-resource-limits": [
-        ("trivy", "No resource limits"),
-        ("trivy", "KSV011"),
+        ("trivy", "KSV-0011"),  # "CPU not limited"
         ("checkov", "CKV_K8S_11"),
         ("checkov", "CKV_K8S_12"),
         ("checkov", "CKV_K8S_13"),
@@ -204,7 +204,7 @@ def get_canonical_rule_id(tool: str, rule_id: str) -> str | None:
 
     Args:
         tool: Name of the security tool (e.g., "trivy", "hadolint")
-        rule_id: Rule ID from the tool (e.g., "DL3006", ":latest tag used")
+        rule_id: Rule ID from the tool (e.g., "DL3006", "DS-0001")
 
     Returns:
         Canonical rule ID if found in equivalence mapping, None otherwise.
@@ -212,7 +212,7 @@ def get_canonical_rule_id(tool: str, rule_id: str) -> str | None:
     Example:
         >>> get_canonical_rule_id("hadolint", "DL3006")
         "dockerfile-latest-tag"
-        >>> get_canonical_rule_id("trivy", ":latest tag used")
+        >>> get_canonical_rule_id("trivy", "DS-0001")
         "dockerfile-latest-tag"
         >>> get_canonical_rule_id("unknown", "RULE123")
         None
@@ -303,7 +303,7 @@ def are_rules_equivalent(
         If not equivalent, canonical_id is None.
 
     Example:
-        >>> are_rules_equivalent("hadolint", "DL3006", "trivy", ":latest tag used")
+        >>> are_rules_equivalent("hadolint", "DL3006", "trivy", "DS-0001")
         (True, "dockerfile-latest-tag")
 
     """

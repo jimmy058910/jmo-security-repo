@@ -8,12 +8,98 @@ Tests cover:
 - Edge cases (empty input, malformed JSON, missing fields)
 - Code context extraction for misconfigurations
 - Schema version and compliance enrichment
+- trivy 0.74.0's own output (``TestTrivy074RecordedOutput``), recorded below
+
+Recorded fixture ``tests/fixtures/samples/trivy/misconfig-0.74.json``: trivy
+**0.74.0**'s JSON, byte for byte, recorded 2026-09-27 on Windows by running,
+from inside a scratch directory holding only the three files listed below::
+
+    trivy fs -q -f json --scanners vuln,secret,misconfig \\
+        --skip-db-update --skip-check-update . -o misconfig-0.74.json
+
+``--scanners`` is what JMo's repository descriptor passes
+(``tool_descriptors._trivy``); scanning ``.`` from inside the directory keeps
+``ArtifactName`` and every ``Target`` relative, so no machine path is
+recorded. ``--skip-db-update --skip-check-update`` used the vulnerability DB
+and check bundle already cached. Result: 43 misconfigurations, 0
+vulnerabilities, 0 secrets. To re-record, recreate the three files verbatim::
+
+    Dockerfile
+        FROM alpine:latest AS build
+        RUN apk add curl
+        RUN sudo apk add bash
+
+        FROM alpine:latest
+        ENV DB_PASSWORD=example
+        RUN apt-get update && apt-get -y dist-upgrade
+        ADD app.py /app/app.py
+        RUN cd /app && make
+        CMD ["python3", "/app/app.py"]
+
+    pod.yaml
+        apiVersion: v1
+        kind: Pod
+        metadata:
+          name: insecure-pod
+        spec:
+          hostNetwork: true
+          containers:
+            - name: app
+              image: nginx:latest
+              securityContext:
+                privileged: true
+                runAsUser: 0
+
+    main.tf
+        resource "aws_s3_bucket" "public" {
+          bucket = "example-public-bucket"
+          acl    = "public-read"
+        }
+
+        resource "aws_ebs_volume" "data" {
+          availability_zone = "us-east-1a"
+          size              = 10
+          encrypted         = false
+        }
+
+        resource "aws_security_group" "open" {
+          name        = "open"
+          description = "open ingress"
+
+          ingress {
+            description = "ssh"
+            from_port   = 22
+            to_port     = 22
+            protocol    = "tcp"
+            cidr_blocks = ["0.0.0.0/0"]
+          }
+
+          ingress {
+            description = "rdp"
+            from_port   = 3389
+            to_port     = 3389
+            protocol    = "tcp"
+            cidr_blocks = ["0.0.0.0/0"]
+          }
+        }
+
+The two ``FROM ...:latest`` lines and the two open ingress rules are there on
+purpose: each makes trivy report one check twice in one file, which is the
+case that lost its lines (#1221's line defect).
 """
 
 import json
 from pathlib import Path
 
 from scripts.core.adapters.trivy_adapter import TrivyAdapter
+
+RECORDED_074 = (
+    Path(__file__).resolve().parents[1]
+    / "fixtures"
+    / "samples"
+    / "trivy"
+    / "misconfig-0.74.json"
+)
 
 
 def write(tmp_path: Path, name: str, content: str) -> Path:
@@ -51,6 +137,8 @@ class TestTrivyBasicParsing:
         assert len(findings) == 1
         item = findings[0]
         assert item.ruleId == "CVE-2023-1234"
+        # The advisory's Title is the title; the CVE stays the rule id.
+        assert item.title == "Remote Code Execution"
         assert item.severity == "CRITICAL"
         assert item.tool["name"] == "trivy"
         assert item.tool["version"] == "0.45.0"
@@ -102,8 +190,10 @@ class TestTrivyBasicParsing:
         adapter = TrivyAdapter()
         findings = adapter.parse(path)
         assert len(findings) == 1
-        # Note: Adapter prioritizes Title over RuleID for rule identification
-        assert findings[0].ruleId == "User not specified"
+        # The rule's id is the id, and its Title is the title (#1221). This
+        # test used to pin the defect: Title ranked above RuleID.
+        assert findings[0].ruleId == "DS002"
+        assert findings[0].title == "User not specified"
         assert findings[0].severity == "MEDIUM"
         assert "misconfig" in findings[0].tags
 
@@ -614,3 +704,211 @@ class TestTrivyMisconfigurationDetails:
         secret_finding = [f for f in findings if "secret" in f.tags][0]
         assert vuln_finding.ruleId == "CVE-V"
         assert secret_finding.ruleId == "API Key"
+
+
+def _recorded_misconfigs() -> list[tuple[str, dict]]:
+    """(Target, item) for every misconfiguration trivy 0.74.0 recorded."""
+    data = json.loads(RECORDED_074.read_bytes())
+    pairs = [
+        (result["Target"], item)
+        for result in data["Results"]
+        for item in result.get("Misconfigurations") or []
+    ]
+    # Meta-guard: a fixture that silently parses to nothing satisfies every
+    # "for each finding" assertion below.
+    assert len(pairs) == 43, len(pairs)
+    return pairs
+
+
+class TestTrivy074RecordedOutput:
+    """#1221 and the line defect, asserted on trivy 0.74.0's own output.
+
+    0.74.0 names a misconfiguration's rule in ``ID`` (``DS-0001``), not
+    ``RuleID`` or ``AVDID``, puts its lines in ``CauseMetadata``, not at the
+    top level, and writes its version at ``Trivy.Version``, not ``Version``.
+    Before this was fixed every one of the 43 findings below had its Title as
+    its rule id, line 0, and tool version ``unknown`` -- and the two findings
+    of one check in one file shared an id, so deduplication kept one.
+    """
+
+    def _parse(self):
+        findings = TrivyAdapter().parse(RECORDED_074)
+        misconfigs = [f for f in findings if "misconfig" in f.tags]
+        assert len(misconfigs) == len(findings) == 43
+        return misconfigs
+
+    def test_rule_id_is_trivys_id_and_title_is_its_title(self):
+        misconfigs = self._parse()
+        for f in misconfigs:
+            assert f.ruleId == f.raw["ID"], (f.ruleId, f.raw["ID"])
+            assert f.title == f.raw["Title"], (f.title, f.raw["Title"])
+        ids = {f.ruleId for f in misconfigs}
+        # One id per provider family, spelled as 0.74.0 prints it.
+        assert {"DS-0001", "KSV-0017", "AWS-0086"} <= ids
+        assert "':latest' tag used" not in ids
+
+    def test_lines_come_from_cause_metadata(self):
+        misconfigs = self._parse()
+        for f in misconfigs:
+            cause = f.raw.get("CauseMetadata") or {}
+            assert f.location["startLine"] == (cause.get("StartLine") or 0), f.ruleId
+            assert f.location.get("endLine") == cause.get("EndLine"), f.ruleId
+        lines = {
+            (f.location["path"], f.ruleId, f.location["startLine"]) for f in misconfigs
+        }
+        assert ("Dockerfile", "DS-0001", 1) in lines
+        assert ("Dockerfile", "DS-0001", 5) in lines
+        assert ("main.tf", "AWS-0107", 21) in lines
+        assert ("main.tf", "AWS-0107", 29) in lines
+        # Whole-file checks carry no line in 0.74.0 and stay at 0.
+        assert ("Dockerfile", "DS-0026", 0) in lines
+
+    def test_one_check_twice_in_one_file_keeps_two_ids(self):
+        """The juice-shop loss: same-rule findings in one file shared an id."""
+        misconfigs = self._parse()
+        by_id: dict[str, list] = {}
+        for f in misconfigs:
+            by_id.setdefault(f.id, []).append((f.ruleId, f.location["startLine"]))
+        shared = {k: v for k, v in by_id.items() if len(v) > 1}
+        assert not shared, shared
+        assert len(by_id) == 43
+
+    def test_tool_version_is_trivy_version(self):
+        misconfigs = self._parse()
+        assert {f.tool["version"] for f in misconfigs} == {"0.74.0"}
+
+
+class TestTrivyRuleIdLineAndVersionChain:
+    """The fallbacks behind the 0.74.0 shape, on hand-built input.
+
+    Secrets are hand-built on purpose: a recorded secret finding would commit
+    a token-shaped string. ``Match`` below is the masked form trivy writes.
+    """
+
+    def test_secret_rule_id_is_rule_id_not_title(self, tmp_path: Path):
+        sample = {
+            "Trivy": {"Version": "0.74.0"},
+            "Results": [
+                {
+                    "Target": "app/config.py",
+                    "Class": "secret",
+                    "Secrets": [
+                        {
+                            "RuleID": "github-pat",
+                            "Category": "GitHub",
+                            "Severity": "CRITICAL",
+                            "Title": "GitHub Personal Access Token",
+                            "StartLine": 4,
+                            "EndLine": 4,
+                            "Match": "TOKEN = ****************",
+                        }
+                    ],
+                }
+            ],
+        }
+        findings = TrivyAdapter().parse(
+            write(tmp_path, "trivy.json", json.dumps(sample))
+        )
+        assert len(findings) == 1
+        f = findings[0]
+        assert f.ruleId == "github-pat"
+        assert f.title == "GitHub Personal Access Token"
+        # Secrets keep their lines at the top level; nothing to fall back past.
+        assert f.location["startLine"] == 4
+        assert f.location["endLine"] == 4
+
+    def test_cause_metadata_line_wins_over_top_level(self, tmp_path: Path):
+        sample = {
+            "Results": [
+                {
+                    "Target": "Dockerfile",
+                    "Misconfigurations": [
+                        {
+                            "ID": "DS-0001",
+                            "Title": "':latest' tag used",
+                            "Severity": "MEDIUM",
+                            "StartLine": 3,
+                            "EndLine": 3,
+                            "CauseMetadata": {"StartLine": 7, "EndLine": 8},
+                        }
+                    ],
+                }
+            ]
+        }
+        f = TrivyAdapter().parse(write(tmp_path, "t.json", json.dumps(sample)))[0]
+        assert (f.location["startLine"], f.location["endLine"]) == (7, 8)
+
+    def test_top_level_line_when_cause_metadata_has_none(self, tmp_path: Path):
+        """Older trivy wrote the line at the top level; keep reading it there."""
+        sample = {
+            "Results": [
+                {
+                    "Target": "Dockerfile",
+                    "Misconfigurations": [
+                        {
+                            "ID": "DS002",
+                            "Title": "Image user should not be 'root'",
+                            "Severity": "HIGH",
+                            "StartLine": 12,
+                            "EndLine": 14,
+                            "CauseMetadata": {"Provider": "Dockerfile"},
+                        }
+                    ],
+                }
+            ]
+        }
+        f = TrivyAdapter().parse(write(tmp_path, "t.json", json.dumps(sample)))[0]
+        assert f.ruleId == "DS002"
+        assert (f.location["startLine"], f.location["endLine"]) == (12, 14)
+
+    def test_context_is_read_under_the_scanned_root_not_the_cwd(
+        self, tmp_path: Path, monkeypatch
+    ):
+        """``Target`` is relative to ``ArtifactName``, the directory trivy scanned.
+
+        A real line makes the adapter read code context, and ``jmo scan`` runs
+        trivy on an absolute target from some other working directory. Read
+        relative to the cwd, a juice-shop ``Dockerfile`` finding would carry
+        the lines of whatever ``Dockerfile`` the cwd happens to hold.
+        """
+        scanned = tmp_path / "scanned"
+        scanned.mkdir()
+        (scanned / "Dockerfile").write_bytes(b"# scanned\nFROM alpine:latest\n")
+        elsewhere = tmp_path / "elsewhere"
+        elsewhere.mkdir()
+        (elsewhere / "Dockerfile").write_bytes(b"# decoy\nFROM decoy:latest\n")
+        monkeypatch.chdir(elsewhere)
+        sample = {
+            "ArtifactName": str(scanned),
+            "Results": [
+                {
+                    "Target": "Dockerfile",
+                    "Misconfigurations": [
+                        {
+                            "ID": "DS-0001",
+                            "Title": "':latest' tag used",
+                            "Severity": "MEDIUM",
+                            "CauseMetadata": {"StartLine": 2, "EndLine": 2},
+                        }
+                    ],
+                }
+            ],
+        }
+        f = TrivyAdapter().parse(write(tmp_path, "t.json", json.dumps(sample)))[0]
+        assert f.location["path"] == "Dockerfile"
+        assert f.context is not None
+        assert "FROM alpine:latest" in f.context["snippet"]
+        assert "decoy" not in f.context["snippet"]
+
+    def test_version_falls_back_to_top_level_then_unknown(self, tmp_path: Path):
+        item = {"VulnerabilityID": "CVE-1", "Severity": "LOW"}
+        cases = [
+            ({"Trivy": {"Version": "0.74.0"}, "Version": "0.1.0"}, "0.74.0"),
+            ({"Version": "0.50.0"}, "0.50.0"),
+            ({"Trivy": "not a mapping", "Version": "0.50.0"}, "0.50.0"),
+            ({"Trivy": {}}, "unknown"),
+        ]
+        for n, (top, expected) in enumerate(cases):
+            sample = {**top, "Results": [{"Target": "x", "Vulnerabilities": [item]}]}
+            path = write(tmp_path, f"v{n}.json", json.dumps(sample))
+            assert TrivyAdapter().parse(path)[0].tool["version"] == expected, top

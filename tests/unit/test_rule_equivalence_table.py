@@ -120,7 +120,12 @@ def test_rules_that_are_a_different_control_are_not_grouped(tool, rule_id, reaso
         ("checkov", "CKV_AWS_25", "iac-security-group-open-ingress"),
         ("checkov", "CKV_AWS_20", "iac-public-s3-bucket"),
         ("checkov", "CKV_AWS_3", "iac-unencrypted-storage"),
-        ("trivy", "DS031", "iac-security-group-open-ingress"),
+        # trivy 0.74.0's ids (#1221). `DS031` stood here until then: it is the
+        # Dockerfile secrets check, not open ingress.
+        ("trivy", "AWS-0107", "iac-security-group-open-ingress"),
+        ("trivy", "AWS-0092", "iac-public-s3-bucket"),
+        ("trivy", "AWS-0026", "iac-unencrypted-storage"),
+        ("trivy", "DS-0031", "dockerfile-hardcoded-secret"),
     ],
 )
 def test_the_genuinely_equivalent_rules_are_still_grouped(tool, rule_id, canonical):
@@ -143,29 +148,34 @@ def test_the_repaired_groups_no_longer_merge_different_controls():
     # `assert are_rules_equivalent(...)` passes on every non-empty tuple, so it
     # would hold with the table emptied - the positive half of this test would
     # have been vacuous. Unpack, and assert the canonical id too.
+    # The trivy side is the id trivy 0.74.0 prints (#1221): AWS-0092 "S3
+    # Buckets not publicly accessible through ACL.", AWS-0107 "Security groups
+    # should not allow unrestricted ingress to SSH or RDP from any IP
+    # address.", AWS-0026 "EBS volumes must be encrypted".
     merged, canonical = are_rules_equivalent(
-        "checkov", "CKV_AWS_21", "trivy", "Public S3 bucket"
+        "checkov", "CKV_AWS_21", "trivy", "AWS-0092"
     )
     assert (merged, canonical) == (False, None), "versioning is not public access"
 
-    assert are_rules_equivalent(
-        "checkov", "CKV_AWS_23", "trivy", "Security group allows open ingress"
-    ) == (False, None), "a description check is not an open-ingress finding"
+    assert are_rules_equivalent("checkov", "CKV_AWS_23", "trivy", "AWS-0107") == (
+        False,
+        None,
+    ), "a description check is not an open-ingress finding"
 
-    assert are_rules_equivalent(
-        "checkov", "CKV_AWS_17", "trivy", "Unencrypted storage"
-    ) == (False, None), "RDS public access is not an encryption finding"
+    assert are_rules_equivalent("checkov", "CKV_AWS_17", "trivy", "AWS-0026") == (
+        False,
+        None,
+    ), "RDS public access is not an encryption finding"
 
     # ...while the real cross-tool pairs still are.
-    assert are_rules_equivalent(
-        "checkov", "CKV_AWS_20", "trivy", "Public S3 bucket"
-    ) == (
+    assert are_rules_equivalent("checkov", "CKV_AWS_20", "trivy", "AWS-0092") == (
         True,
         "iac-public-s3-bucket",
     )
-    assert are_rules_equivalent(
-        "checkov", "CKV_AWS_24", "trivy", "Security group allows open ingress"
-    ) == (True, "iac-security-group-open-ingress")
+    assert are_rules_equivalent("checkov", "CKV_AWS_24", "trivy", "AWS-0107") == (
+        True,
+        "iac-security-group-open-ingress",
+    )
 
 
 def test_no_group_is_left_with_a_single_tool():

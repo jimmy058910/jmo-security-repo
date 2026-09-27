@@ -35,6 +35,23 @@ Supported Package Ecosystems:
 - OS: Alpine, Debian, Ubuntu, RHEL, CentOS, Amazon Linux
 - Languages: npm, pip, Go, Ruby, Rust, NuGet, Java (JAR/WAR)
 
+Field mapping (measured on trivy 0.74.0's own JSON, #1221):
+- ruleId: VulnerabilityID -> ID -> RuleID -> Title -> the finding class.
+  0.74.0 names a misconfiguration's rule in ``ID`` (``DS-0001``,
+  ``KSV-0017``, ``AWS-0086``) and a secret's in ``RuleID`` (``github-pat``);
+  ranking ``Title`` above them made every misconfiguration and secret carry
+  its title as its id.
+- title: ``Title`` when trivy writes one, else the ruleId.
+- startLine/endLine: ``CauseMetadata.StartLine``/``EndLine``, else the
+  top-level ``StartLine``/``EndLine`` (secrets; older trivy). 0.74.0 writes a
+  misconfiguration's lines only in ``CauseMetadata``, so reading the top level
+  alone put every one at line 0, and two findings of one check in one file
+  shared an id: juice-shop's 87 became 47.
+- tool.version: ``Trivy.Version``, else the top-level ``Version`` (older
+  trivy), else ``unknown``.
+- A ``Target`` is relative to ``ArtifactName``, the directory trivy scanned,
+  so code context is read under it rather than under the working directory.
+
 Severity Mapping (Trivy -> CommonFinding):
 - CRITICAL: CRITICAL
 - HIGH: HIGH
@@ -59,6 +76,7 @@ See Also:
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from scripts.core.adapters.common import safe_load_json_file
 from scripts.core.common_finding import (
@@ -71,6 +89,34 @@ from scripts.core.plugin_api import (
     PluginMetadata,
     adapter_plugin,
 )
+
+
+def _line(value: Any) -> int | None:
+    """A 1-based line number, or None (``bool`` is an ``int`` in Python)."""
+    if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+        return value
+    return None
+
+
+def _lines(item: dict[str, Any]) -> tuple[int, int | None]:
+    """(startLine, endLine) from ``CauseMetadata`` first, then the top level.
+
+    Both come from the same place, so an end line is never paired with
+    another source's start.
+    """
+    cause = item.get("CauseMetadata")
+    for source in (cause if isinstance(cause, dict) else {}, item):
+        start = _line(source.get("StartLine"))
+        if start is not None:
+            return start, _line(source.get("EndLine"))
+    return 0, None
+
+
+def _tool_version(data: dict[str, Any]) -> str:
+    """``Trivy.Version`` (0.74.0), else the top-level ``Version`` (older)."""
+    meta = data.get("Trivy")
+    version = meta.get("Version") if isinstance(meta, dict) else None
+    return str(version or data.get("Version") or "unknown")
 
 
 @adapter_plugin(
@@ -111,7 +157,8 @@ class TrivyAdapter(AdapterPlugin):
             return []
 
         findings: list[Finding] = []
-        tool_version = str(data.get("Version") or "unknown")
+        tool_version = _tool_version(data)
+        scanned_root = data.get("ArtifactName")
 
         for r in results:
             target = r.get("Target") or ""
@@ -130,21 +177,35 @@ class TrivyAdapter(AdapterPlugin):
                 for item in arr:
                     rule_id = (
                         item.get("VulnerabilityID")
-                        or item.get("Title")
+                        or item.get("ID")
                         or item.get("RuleID")
+                        or item.get("Title")
                         or tag
                     )
                     msg = item.get("Title") or item.get("Description") or tag
                     severity = normalize_severity(item.get("Severity"))
                     path_str = item.get("Target") or target or ""
-                    line = item.get("StartLine") or 0
+                    line, end_line = _lines(item)
 
-                    # Code context (for misconfigurations)
+                    # Code context (for misconfigurations), read under the
+                    # scanned root: jmo runs trivy from another directory.
                     context = None
                     if tag == "misconfig" and path_str and line:
-                        context = extract_code_snippet(
-                            str(path_str), int(line), context_lines=2
+                        source = (
+                            Path(scanned_root) / str(path_str)
+                            if isinstance(scanned_root, str) and scanned_root
+                            else Path(str(path_str))
                         )
+                        context = extract_code_snippet(
+                            str(source), line, context_lines=2
+                        )
+
+                    location: dict[str, Any] = {
+                        "path": str(path_str),
+                        "startLine": line,
+                    }
+                    if end_line is not None:
+                        location["endLine"] = end_line
 
                     # Risk metadata for vulnerabilities
                     risk = None
@@ -158,15 +219,12 @@ class TrivyAdapter(AdapterPlugin):
                         schemaVersion="1.2.0",
                         id="",  # Will be set by fingerprint
                         ruleId=str(rule_id),
-                        title=str(rule_id),
+                        title=str(item.get("Title") or rule_id),
                         message=str(msg),
                         description=str(item.get("Description") or msg),
                         severity=severity,
                         tool={"name": "trivy", "version": tool_version},
-                        location={
-                            "path": str(path_str),
-                            "startLine": int(line) if isinstance(line, int) else 0,
-                        },
+                        location=location,
                         remediation=str(item.get("PrimaryURL") or "See advisory"),
                         tags=[tag],
                         context=context,

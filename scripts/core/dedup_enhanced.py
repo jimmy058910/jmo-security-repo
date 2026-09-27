@@ -25,7 +25,7 @@ Threshold: 0.65 (lowered from 0.75 for better cross-tool clustering)
 
 Rule Equivalence:
     Known equivalent rules across tools are mapped in rule_equivalence.py.
-    Example: Trivy ":latest tag used" = Hadolint "DL3006" = Checkov "CKV_DOCKER_1"
+    Example: Trivy "DS-0001" = Hadolint "DL3006" = Checkov "CKV_DOCKER_1"
 
 Performance:
     - Greedy: O(n×k), best for small datasets (<500 findings)

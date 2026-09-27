@@ -4,12 +4,14 @@ This module tests the cross-tool rule equivalence mapping that enables
 better deduplication of findings from different security tools.
 
 Example:
-    Trivy ":latest tag used" and Hadolint "DL3006" report the same issue
-    and should be recognized as equivalent.
+    Trivy "DS-0001" ("':latest' tag used") and Hadolint "DL3006" report the
+    same issue and should be recognized as equivalent.
 
 Author: JMo Security
 Version: 1.0.0
 """
+
+from pathlib import Path
 
 import pytest
 
@@ -18,6 +20,25 @@ from scripts.core.rule_equivalence import (
     are_rules_equivalent,
     get_canonical_rule_id,
 )
+
+# trivy 0.74.0's own output; how it was recorded is in the docstring of
+# tests/adapters/test_trivy_adapter.py.
+RECORDED_TRIVY_074 = (
+    Path(__file__).resolve().parents[1]
+    / "fixtures"
+    / "samples"
+    / "trivy"
+    / "misconfig-0.74.json"
+)
+
+
+def _trivy_074_findings():
+    """The recorded output, through the real adapter (43 misconfigurations)."""
+    from scripts.core.adapters.trivy_adapter import TrivyAdapter
+
+    findings = TrivyAdapter().parse(RECORDED_TRIVY_074)
+    assert len(findings) == 43, len(findings)
+    return findings
 
 
 class TestRuleEquivalenceMapping:
@@ -32,7 +53,7 @@ class TestRuleEquivalenceMapping:
         notice a canonical id losing the very tools it exists to equate.
         """
         latest_tag = RULE_EQUIVALENCE["dockerfile-latest-tag"]
-        assert ("trivy", ":latest tag used") in latest_tag
+        assert ("trivy", "DS-0001") in latest_tag
         assert ("hadolint", "DL3006") in latest_tag
         # An equivalence naming one tool cannot dedupe anything across tools.
         assert len({tool for tool, _ in latest_tag}) >= 2
@@ -76,8 +97,8 @@ class TestGetCanonicalRuleId:
         assert canonical == "dockerfile-latest-tag"
 
     def test_trivy_latest_tag(self):
-        """Test Trivy :latest tag message maps to dockerfile-latest-tag."""
-        canonical = get_canonical_rule_id("trivy", ":latest tag used")
+        """Test Trivy's :latest tag check (DS-0001) maps to dockerfile-latest-tag."""
+        canonical = get_canonical_rule_id("trivy", "DS-0001")
         assert canonical == "dockerfile-latest-tag"
 
     def test_checkov_docker_1(self):
@@ -91,8 +112,8 @@ class TestGetCanonicalRuleId:
         assert canonical == "dockerfile-no-healthcheck"
 
     def test_trivy_no_healthcheck(self):
-        """Test Trivy HEALTHCHECK message maps correctly."""
-        canonical = get_canonical_rule_id("trivy", "No HEALTHCHECK defined")
+        """Test Trivy's HEALTHCHECK check (DS-0026) maps correctly."""
+        canonical = get_canonical_rule_id("trivy", "DS-0026")
         assert canonical == "dockerfile-no-healthcheck"
 
     def test_case_insensitive_tool(self):
@@ -125,7 +146,7 @@ class TestAreRulesEquivalent:
     def test_trivy_hadolint_latest_tag(self):
         """Test Trivy and Hadolint :latest tag rules are equivalent."""
         is_equiv, canonical = are_rules_equivalent(
-            "trivy", ":latest tag used", "hadolint", "DL3006"
+            "trivy", "DS-0001", "hadolint", "DL3006"
         )
         assert is_equiv is True
         assert canonical == "dockerfile-latest-tag"
@@ -208,26 +229,83 @@ class TestKubernetesEquivalence:
 
     def test_privileged_container(self):
         """Test privileged container detection across tools."""
-        canonical1 = get_canonical_rule_id("trivy", "KSV001")
+        canonical1 = get_canonical_rule_id("trivy", "KSV-0017")
         canonical2 = get_canonical_rule_id("checkov", "CKV_K8S_1")
 
         assert canonical1 == canonical2 == "k8s-privileged-container"
+        # KSV-0001 is "Can elevate its own privileges", a different control;
+        # the table listed its old id, KSV001, here until #1221.
+        assert get_canonical_rule_id("trivy", "KSV-0001") is None
 
     def test_root_container(self):
         """Test root container detection across tools."""
-        canonical1 = get_canonical_rule_id("trivy", "KSV012")
+        canonical1 = get_canonical_rule_id("trivy", "KSV-0012")
         canonical2 = get_canonical_rule_id("checkov", "CKV_K8S_6")
 
         assert canonical1 == canonical2 == "k8s-root-container"
+
+
+class TestTrivyKeysAreWhatTrivyPrints:
+    """The trivy keys, checked against trivy 0.74.0's recorded output.
+
+    Until #1221 the adapter made a misconfiguration's ``Title`` its rule id,
+    so the table keyed trivy by Titles and by old ids (``DS001``,
+    ``KSV001``). 0.74.0 prints ``DS-0001``: measured on the recorded output,
+    no old id and only three Titles still matched anything, and eight old ids
+    named a different check than their group (``DS031`` sat in the open
+    security-group group; it is the Dockerfile secrets check).
+    """
+
+    def test_hadolint_dl3006_and_trivys_latest_tag_finding_are_one_issue(self):
+        latest = [f for f in _trivy_074_findings() if f.title == "':latest' tag used"]
+        # Both FROM lines of the recorded Dockerfile.
+        assert [f.location["startLine"] for f in latest] == [1, 5]
+        for f in latest:
+            assert are_rules_equivalent("hadolint", "DL3006", "trivy", f.ruleId) == (
+                True,
+                "dockerfile-latest-tag",
+            )
+
+    def test_every_trivy_key_is_an_id_trivy_prints(self):
+        """Derived from the recorded output, so a Title or old-form key fails."""
+        printed = {f.ruleId for f in _trivy_074_findings()}
+        keys = {
+            rule
+            for members in RULE_EQUIVALENCE.values()
+            for tool, rule in members
+            if tool == "trivy"
+        }
+        assert len(keys) >= 10, sorted(keys)
+        assert keys <= printed, f"no 0.74.0 finding carries {sorted(keys - printed)}"
+
+    def test_what_matched_by_title_still_matches_by_id(self):
+        """Measured before the fix: ruleId = Title reached exactly three groups."""
+        canonical = {
+            f.ruleId: get_canonical_rule_id("trivy", f.ruleId)
+            for f in _trivy_074_findings()
+        }
+        assert canonical["DS-0002"] == "dockerfile-no-user"
+        assert canonical["DS-0026"] == "dockerfile-no-healthcheck"
+        assert canonical["KSV-0017"] == "k8s-privileged-container"
+
+    def test_no_recorded_id_reaches_a_group_it_is_not_listed_in(self):
+        """The substring fallback must not carry one id into another's group."""
+        for f in _trivy_074_findings():
+            got = get_canonical_rule_id("trivy", f.ruleId)
+            if got is not None:
+                assert ("trivy", f.ruleId) in RULE_EQUIVALENCE[got], (f.ruleId, got)
 
 
 class TestEdgeCases:
     """Test edge cases and error handling."""
 
     def test_substring_matching(self):
-        """Test that substring matching works for variable messages."""
-        # Trivy may report slightly different messages
-        canonical = get_canonical_rule_id("trivy", "DS001")
+        """A delimited id carrying a mapped id still resolves.
+
+        trivy's ``AVD-DS-0001`` spelling (its ``aliases``) holds ``DS-0001``
+        between delimiters, so the boundary fallback reaches the same group.
+        """
+        canonical = get_canonical_rule_id("trivy", "AVD-DS-0001")
         assert canonical == "dockerfile-latest-tag"
 
     def test_reverse_map_caching(self):
