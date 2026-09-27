@@ -114,7 +114,6 @@ def large_database(tmp_path: Path) -> Path:
 
     # Generate 10k scans
     branches = ["main", "dev", "feature/auth", "feature/api"]
-    target_types = ["repo", "image", "iac", "url", "gitlab", "k8s"]
     tools_list = [
         '["trivy", "semgrep"]',
         '["trufflehog", "semgrep", "trivy"]',
@@ -157,7 +156,6 @@ def large_database(tmp_path: Path) -> Path:
             random.choice([0, 0, 0, 1]),  # is_dirty (mostly clean)
             random.choice(tools_list),
             f'["/test/repo-{i % 100}"]',
-            random.choice(target_types),
             total_findings,
             critical_count,
             high_count,
@@ -206,10 +204,10 @@ def large_database(tmp_path: Path) -> Path:
             """
             INSERT INTO scans (
                 id, timestamp, timestamp_iso, commit_hash, commit_short, branch, tag, is_dirty,
-                tools, targets, target_type, total_findings, critical_count, high_count,
+                tools, targets, total_findings, critical_count, high_count,
                 medium_count, low_count, info_count, jmo_version, hostname, username, ci_provider,
                 ci_build_id, duration_seconds
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             scan_rows,
         )

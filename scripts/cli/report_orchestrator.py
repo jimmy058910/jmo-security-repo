@@ -404,6 +404,13 @@ def cmd_report(args, _log_fn) -> int:
                 passed = sum(1 for r in policy_results.values() if r.passed)
                 failed = len(policy_results) - passed
 
+                # Each policy's own words, at run time: zero-secrets' says how
+                # many secrets it passes unverified, which only the report
+                # file said before (#1327).
+                for name, result in sorted(policy_results.items()):
+                    verdict = "PASSED" if result.passed else "FAILED"
+                    _log_fn(args, "INFO", f"{name}: {verdict} - {result.message}")
+
                 _log_fn(
                     args,
                     "INFO",

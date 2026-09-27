@@ -100,6 +100,21 @@ class TestReservedFlagsAreRefused:
             "secret",
         ]
 
+    def test_an_attached_value_is_read_only_where_the_tool_reads_it(self):
+        """gitleaks' flag parser reads `-cmine.toml` as `-c mine.toml`, so the
+        attached form of its reserved short flags is dropped too (review of
+        #1325). nuclei's single-dash flags merely start like one: `-fr` is
+        `-follow-redirects`, and `-omit-raw` is not `-o`."""
+        cfg = {
+            "gitleaks": {"flags": ["-cmine.toml", "-rout.json", "-fjson", "-v"]},
+            "nuclei": {"flags": ["-fr", "-omit-raw"]},
+        }
+        assert tool_flags(cfg, "gitleaks") == ["-v"]
+        assert tool_flags(cfg, "nuclei") == ["-fr", "-omit-raw"]
+        # Its value is attached, so the next token is not taken as it.
+        kept = {"gitleaks": {"flags": ["-fjson", "stays"]}}
+        assert tool_flags(kept, "gitleaks") == ["stays"]
+
     @pytest.mark.parametrize("junk", [None, "not-a-dict", 42, []])
     def test_degenerate_config_is_not_a_crash(self, junk):
         assert tool_flags({"trivy": junk}, "trivy") == []

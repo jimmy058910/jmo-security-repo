@@ -160,7 +160,7 @@ Six PRs into `dev`, each green before the next is cut from it.
 | **B** | the descriptor table over the 18 blocks, the accounting record, the single exclusion list, G2, tool-name validation, `scan_tool_runs`, a results folder unique per repository | #722 #1227 #1231 #1235 #1279 #1303 |
 | **B2** | PR B's deferred review findings: one name per target in every record, a results folder unique per target of every type, the reconciler comparing rows per target, reason-worded messages, the four untested guards; the macOS-only test failure PR B left on `dev` | #1312 #1315 #1316 #1317 #1318 |
 | **C** | gitleaks wired as descriptor rows (dir and git), trufflehog's git invocation, both adapters writing `secretContext` | G1 (spec §4.3) |
-| **B3** | after C (Jimmy, 2026-09-26): the three found in B2, and the five PR C's review routed | #1319 #1320 #1321 #1323 #1324 #1325 #1326 #1327 |
+| **B3** | after C (Jimmy, 2026-09-26): the three found in B2, the five PR C's review routed, and three found after C merged | #1319 #1320 #1321 #1323 #1324 #1325 #1326 #1327 #1332 #1333 #1334 |
 
 B precedes C because the program's rule holds inside the phase too: a new tool is a
 descriptor row, not a nineteenth block.
@@ -1095,6 +1095,72 @@ One git probe per target (`read_history`) now decides: a shallow clone or a git 
 cannot read it skips history with a WARNING and `history not read: <why>` on the two
 rows. juice-shop now: gitleaks 69, the golden's ids, none with a commit; with TruffleHog
 too, 76 and one cross-tool cluster.
+
+## PR B3: the B2 findings, PR C's review, and three found after it
+
+**Decided** (Jimmy, 2026-09-26):
+
+- #1320: a local `--api-spec` is refused at discovery with its reason; an http(s) one is
+  scanned as a plain URL with a WARNING saying so; the wizard's API mode asks for a URL.
+  The OpenAPI import is #1331, rostered in Phase 4: it needs an explicit target URL
+  (never the spec's `servers`, which can name production) and a new zap invocation.
+- #1321: `scans.target_type` is dropped (its CHECK and index too); `scans.targets` is the
+  targets the scan's rows name; readers use `scan_tool_runs`.
+- #1327: `history_flags` (with `flags` reaching the tree run only), `history: false`,
+  and `[extend]` to the repository's `.gitleaks.toml`.
+- The handoff's three unfiled findings: measured, filed as #1332 #1333 #1334, fixed here.
+
+**Measured before building** (each premise; the issue bodies carry the detail):
+
+| Issue | Verdict |
+|---|---|
+| #1319 #1320 #1321 | hold, through `jmo scan`. #1320's "unverified" line: zap is never told a spec is one (`-quickurl` only) |
+| #1323 | holds; `--redact` reproduced: a key rotated in place took the old key's commit (5 findings became 4) |
+| #1324 | **wider**: only a success and a `no_output` result carried `output_file`, so a crash, a timeout, an OSError or an exception lost the invocation's label; PR C's test built its crash result by hand, with the file set. The reconciler passed with `<tool>.git.json` deleted |
+| #1325 | holds, per tool: `-r` is also nuclei's `-resolvers` |
+| #1326 | **wider**: no workflow installs gitleaks; the PR job is paths-filtered |
+| #1327 | item 3 **moved**: gitleaks refuses `path` with `useDefault` (rc 1), and one repository-side extension loses its own extension silently (depth limit) |
+| #1332 #1333 #1334 | filed from the handoff; #1332 leaks the host's temp path and changes ids per scan; syft's JSON does carry its version (`descriptor.version`), against the adapter's comment; all five pipeline tests were vacuous |
+
+**Decided from measurement** (veto any in review):
+
+- gitleaks' reserved flags include `--config`/`-c` (it would replace the config that
+  carries JMo's exclusions; the repository's `.gitleaks.toml` is the way in) and
+  `--redact`; the binding also skips the digest of a `REDACTED` snippet, so an output
+  made elsewhere pairs nothing rather than wrongly.
+- The zero-secrets hint counts the secrets the policy passes unverified, from the
+  findings, rather than recording whether TruffleHog verified: it is then true with
+  verification on or off, and silent on a scan with no secrets, where passing is true.
+- A GitLab clone's root reaches the report through `scan-timings.json`'s new `root`
+  (schema 3, unreleased), which `scan_roots` reads beside `repo_paths`.
+- With `history: false` on every history-reading tool, git is not probed at all.
+
+**The review (fresh, 2026-09-26)** found two Important, fixed red first: a scanned
+repository's `.gitleaks.toml` whose `extend` was not a table (or whose base path held
+a NUL) raised before any tool ran, failing every tool on the target; and a
+repository config without `useDefault` turned gitleaks' default rules off with
+nothing said (now a WARNING, and an INFO that the config was extended). Minor, fixed:
+an emoji in a path made the generated TOML unloadable (`ensure_ascii=False`); an
+attached short value (`-cmine.toml`) bypassed the reserved flags, now refused for the
+tool's own short flags only (nuclei's `-fr` is a flag of its own). Declined: widening
+the CI paths filter to `tool_loop.py` (its wiring is unit-tested on every shard, and
+the nightly runs the real binaries), and refusing a symlinked `.gitleaks.toml`
+(gitleaks alone follows it too).
+
+Freezing the maintainer's own database shape ("1.1.0-live": v1.1.0's ALTER TABLE,
+then the profile drop) as a fixture found a pre-existing defect: `jmo history
+repair` copied `findings` by the old column list, and `findings.finding_status`
+(added by v1.1.0's migration) is not in the current schema, so repair failed on
+every database that migration ran on. It now copies the shared columns of both
+tables and names what it leaves behind.
+
+Mutation: 62 guards in the main session, all caught (two survived first, and each
+exposed a test gap now closed); 10 and 9 in the two implementers' units.
+
+Filed from the gates (Jimmy, 2026-09-26): #1335 in Phase 4 (an attached `-fjson`
+passes the shared reserved flags; measured with trivy 0.74.0) and #1337 in Phase 9
+(the two vestigial v1.1.0 columns). The temp-directory flake was #1306 already, in a
+sibling test; its occurrence is on that issue.
 
 ---
 

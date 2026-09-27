@@ -903,9 +903,10 @@ for f in findings:
 
 ### Schema Overview
 
-The DB has three primary tables:
+The DB has four primary tables:
 
-- `scans` — one row per scan invocation (id, timestamp, branch, target_type, tool counts)
+- `scans` — one row per scan invocation (id, timestamp, branch, tools, targets, severity counts)
+- `scan_tool_runs` — one row per target and tool (target, target_type, tool, state, reason, seconds)
 - `findings` — normalized findings from each scan (scan_id FK, severity, rule_id, fingerprint, location, raw_finding JSON blob)
 - `scan_metadata` — key-value metadata per scan (git SHA, author, CI run ID, etc.)
 

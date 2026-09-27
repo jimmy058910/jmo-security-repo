@@ -39,6 +39,29 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 SAMPLES_DIR = PROJECT_ROOT / "tests" / "fixtures" / "samples"
 
 
+def _gitleaks_findings(out: dict[str, Any]) -> list[dict[str, Any]]:
+    """The SARIF results the gitleaks binding can use: each needs its rule,
+    its path and line, and the matched text (`region.snippet`), which the
+    binding digests to pair a secret's tree and history records and then
+    scrubs. A result missing any of them is not counted, so a shape change
+    reads as "reported nothing"."""
+    usable = []
+    for run in out.get("runs") or []:
+        for result in run.get("results") or []:
+            location = (
+                ((result.get("locations") or [{}])[0]).get("physicalLocation") or {}
+            )
+            region = location.get("region") or {}
+            if (
+                result.get("ruleId")
+                and (location.get("artifactLocation") or {}).get("uri")
+                and region.get("startLine")
+                and (region.get("snippet") or {}).get("text")
+            ):
+                usable.append(result)
+    return usable
+
+
 # Required fields per tool (minimal contract)
 # These define the structural requirements adapters depend on
 #
@@ -117,6 +140,30 @@ TOOL_CONTRACTS: dict[str, dict[str, Any]] = {
             "AWS's documented example key and the placeholder patterns"
         ),
         "description": "Secrets scanner with NDJSON output",
+    },
+    "gitleaks": {
+        "required_keys": ["runs"],
+        "result_item_keys": ["tool", "results"],
+        "sample_target": "credential-patterns",
+        # SARIF on stdout (`--report-path -`), which is what the harness reads;
+        # JMo writes it to a file. A leak is not an error, hence `--exit-code 0`.
+        "command": [
+            "gitleaks",
+            "dir",
+            "{target}",
+            "--report-format",
+            "sarif",
+            "--report-path",
+            "-",
+            "--no-banner",
+            "--exit-code",
+            "0",
+        ],
+        "ok_return_codes": (0,),
+        # Measured 2026-09-26 with 8.30.1: 3 results on the sample, 2
+        # generic-api-key and 1 private-key, each with a snippet.
+        "findings": _gitleaks_findings,
+        "description": "Secrets scanner with SARIF output",
     },
     "grype": {
         "required_keys": ["matches"],
@@ -578,6 +625,30 @@ class TestSanityCheckBites:
         violations = check_run(tool_name, TOOL_CONTRACTS[tool_name], output, returncode)
 
         assert violations == [f"{tool_name}: reported nothing on its sample"]
+
+    def test_a_gitleaks_result_without_its_snippet_is_not_a_finding(self):
+        """The binding pairs a secret's records by digesting `region.snippet`,
+        so SARIF without it reports nothing the binding can use."""
+        region: dict[str, Any] = {"startLine": 3, "snippet": {"text": "k"}}
+        result = {
+            "ruleId": "private-key",
+            "locations": [
+                {
+                    "physicalLocation": {
+                        "artifactLocation": {"uri": "a"},
+                        "region": region,
+                    }
+                }
+            ],
+        }
+        report = {"runs": [{"tool": {}, "results": [result]}]}
+        contract = TOOL_CONTRACTS["gitleaks"]
+
+        assert check_run("gitleaks", contract, report, 0) == []
+        del region["snippet"]
+        assert check_run("gitleaks", contract, report, 0) == [
+            "gitleaks: reported nothing on its sample"
+        ]
 
     def test_a_dict_contract_with_no_required_keys_is_not_indexed(self):
         """`required_keys: []` on a dict root used to raise IndexError."""

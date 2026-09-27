@@ -5,7 +5,7 @@ import future.keywords.in
 
 metadata := {
 	"name": "Zero Secrets Policy",
-	"version": "1.1.0",
+	"version": "1.2.0",
 	"description": "Blocks all verified secrets (zero tolerance)",
 	"author": "JMo Security",
 	"tags": ["secrets", "credentials", "zero-trust"],
@@ -58,6 +58,25 @@ verified_secrets contains finding if {
 	finding.raw.Verified == true
 }
 
+# The secrets this policy passes: every one no tool verified. TruffleHog
+# verifies only with `per_tool.trufflehog.verify: true`, off by default since
+# v2.0.0, and gitleaks never does. So without that setting every secret passes
+# here, and the message said only "No verified secrets detected", with no hint
+# why (#1327). Said in the message and as a warning; the verdict is unchanged.
+unverified_secrets contains finding if {
+	finding := input.findings[_]
+	"secrets" in finding.tags
+	not finding in verified_secrets
+}
+
+warnings contains warning if {
+	count(unverified_secrets) > 0
+	warning := sprintf(
+		"%d secret(s) are not verified, and this policy blocks verified secrets only: TruffleHog verifies with per_tool.trufflehog.verify: true, gitleaks never does",
+		[count(unverified_secrets)],
+	)
+}
+
 violations contains violation if {
 	finding := verified_secrets[_]
 	violation := {
@@ -78,4 +97,10 @@ violations contains violation if {
 message := msg if {
 	count(violations) > 0
 	msg := sprintf("🚨 CRITICAL: Found %d verified secrets - IMMEDIATE ACTION REQUIRED", [count(violations)])
+} else := msg if {
+	count(unverified_secrets) > 0
+	msg := sprintf(
+		"✅ No verified secrets detected; %d secret(s) are not verified, so not blocked (per_tool.trufflehog.verify: true verifies TruffleHog's)",
+		[count(unverified_secrets)],
+	)
 } else := "✅ No verified secrets detected"

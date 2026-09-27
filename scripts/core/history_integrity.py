@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import logging
 import shutil
+import sqlite3
 import time
 from pathlib import Path
 from typing import Any
@@ -168,6 +169,22 @@ def verify_database_integrity(db_path: Path) -> dict[str, Any]:
     return result
 
 
+def _shared_columns(
+    conn: sqlite3.Connection,
+    table: str,
+    columns: list[str],
+    rows: list[Any],
+) -> tuple[list[str], list[tuple[Any, ...]], list[str]]:
+    """The columns of `table` in both schemas, each row cut to them, and the
+    old columns left behind."""
+    # `table` is a literal at the call sites, never user input.
+    current = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+    keep = [i for i, name in enumerate(columns) if name in current]
+    left = [f"{table}.{name}" for name in columns if name not in current]
+    kept_rows = [tuple(row[i] for i in keep) for row in rows]
+    return [columns[i] for i in keep], kept_rows, left
+
+
 def recover_database(db_path: Path) -> dict[str, Any]:
     """
     Recover corrupted database by dump/reimport.
@@ -278,6 +295,27 @@ def recover_database(db_path: Path) -> dict[str, Any]:
 
         # Disable foreign keys during import for flexibility
         conn_new.execute("PRAGMA foreign_keys = OFF")
+
+        # The fresh database has the current schema, and an old database can
+        # hold columns it dropped (`profile` and `target_type` in v2.0.0), so
+        # copying every old column failed ("table scans has no column named
+        # ...") after the old file was already gone. Only the columns both
+        # schemas have are copied, in `findings` too: v1.1.0's migration added
+        # `scans.scan_notes` and `findings.finding_status` by ALTER TABLE, and
+        # the current schema has neither, so every database that migration ran
+        # on failed to repair (review of #1321). What is left behind is said.
+        scans_columns, scans, left = _shared_columns(
+            conn_new, "scans", scans_columns, scans
+        )
+        findings_columns, findings, left_findings = _shared_columns(
+            conn_new, "findings", findings_columns, findings
+        )
+        left += left_findings
+        if left:
+            logger.warning(
+                "Repair: not in the current schema, so not carried over: %s",
+                ", ".join(left),
+            )
 
         # Import scans
         # Security: scans_columns from PRAGMA table_info (internal schema metadata),

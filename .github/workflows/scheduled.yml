@@ -1140,6 +1140,7 @@ jobs:
           HADOLINT_VERSION: "2.15.1"
           GRYPE_VERSION: "0.118.0"
           SYFT_VERSION: "1.51.1"
+          GITLEAKS_VERSION: "8.30.1"
         run: |
           # Install tools needed for contract validation
           # Trivy - vulnerability scanner
@@ -1167,6 +1168,16 @@ jobs:
           tar -xzf /tmp/trufflehog.tar.gz -C /usr/local/bin trufflehog
           chmod +x /usr/local/bin/trufflehog
 
+          # Gitleaks - secrets scanner, working tree and git history. No job
+          # installed it, so the G1 tests had only ever skipped (#1326).
+          v="$GITLEAKS_VERSION"  # short alias to keep URL line under 140 chars
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${v}/gitleaks_${v}_linux_x64.tar.gz" \
+            -o /tmp/gitleaks.tar.gz
+          gzip -t /tmp/gitleaks.tar.gz
+          tar -xzf /tmp/gitleaks.tar.gz -C /usr/local/bin gitleaks
+          chmod +x /usr/local/bin/gitleaks
+
           # Checkov - IaC scanner
           pip install checkov
 
@@ -1190,6 +1201,7 @@ jobs:
           semgrep --version || echo "semgrep not available"
           hadolint --version || echo "hadolint not available"
           trufflehog --version || echo "trufflehog not available"
+          gitleaks version || echo "gitleaks not available"
           checkov --version || echo "checkov not available"
           shellcheck --version || echo "shellcheck not available"
           grype version || echo "grype not available"
@@ -1198,8 +1210,12 @@ jobs:
       - name: Run tool contract tests
         run: |
           # Contract tests verify tool output formats match adapter expectations
-          # This catches upstream breaking changes before they cause silent failures
+          # This catches upstream breaking changes before they cause silent failures.
+          # The git-history tests (G1) run trufflehog and gitleaks for real;
+          # they skip without either binary (#1326).
           pytest tests/integration/test_tool_contracts.py \
+            tests/integration/test_git_history_secrets.py \
+            tests/unit/test_gitleaks_wiring.py \
             -v \
             -m "requires_tools" \
             --tb=short \

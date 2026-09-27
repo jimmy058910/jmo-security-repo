@@ -34,12 +34,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 
+from scripts.cli import jmo
 from scripts.cli.policy_commands import cmd_policy_test
 from scripts.core.adapters.nuclei_adapter import NucleiAdapter
 from scripts.core.adapters.semgrep_adapter import SemgrepAdapter
@@ -419,3 +422,58 @@ def test_hipaa_detects_a_cwe_carrying_its_description(violating_findings):
     )
     assert result.violations[0]["cwe"] == "CWE-79", result.violations
     assert "164.312" in result.violations[0]["safeguard"], result.violations
+
+
+def test_zero_secrets_counts_no_verified_secret_as_unverified(violating_findings):
+    """The negative control for the hint: a verified secret is blocked, not
+    counted among the ones passed, on either verification signal."""
+    results = evaluate_policies(
+        violating_findings, ["zero-secrets"], BUILTIN_DIR, USER_DIR
+    )
+    result = results["zero-secrets"]
+
+    assert not result.passed
+    assert result.warnings == [], result.warnings
+    assert "not verified" not in result.message, result.message
+
+
+def test_zero_secrets_says_what_it_does_not_block(tmp_path, monkeypatch, capsys):
+    """#1327 item 4: zero-secrets blocks verified secrets only. TruffleHog
+    verifies only with `per_tool.trufflehog.verify: true` (off by default since
+    v2.0.0) and gitleaks never does, so it passed every secret and said "No
+    verified secrets detected", with no hint why at run time or in the report.
+
+    Through `jmo report`, with a real TruffleHog record through the real
+    adapter and the real OPA. The verdict stays PASS: an unverified secret is
+    not what this policy blocks, and `--fail-on HIGH` is what stops on it."""
+    target = tmp_path / "results" / "individual-repos" / "proj"
+    target.mkdir(parents=True)
+    record = {
+        "SourceMetadata": {"Data": {"Filesystem": {"file": "config/prod.env"}}},
+        "DetectorName": "AWS",
+        "Verified": False,
+        "Raw": "AKIAIOSFODNN7EXAMPLE",
+        "StartLine": 3,
+    }
+    (target / "trufflehog.json").write_bytes((json.dumps(record) + "\n").encode())
+    monkeypatch.chdir(tmp_path)
+    argv = ["jmo", "report", str(tmp_path / "results"), "--policy", "zero-secrets"]
+    with patch.object(sys, "argv", argv):
+        args = jmo.parse_args()
+
+    assert jmo.cmd_report(args) == 0
+
+    report = (tmp_path / "results" / "summaries" / "POLICY_REPORT.md").read_text(
+        encoding="utf-8"
+    )
+    assert "zero-secrets | ✅ PASSED" in report, report
+    # In the summary's message, and as the policy's one warning.
+    assert "; 1 secret(s) are not verified, so not blocked" in report, report
+    assert "### Warnings (1)" in report, report
+    assert "per_tool.trufflehog.verify" in report, report
+    said = [
+        line
+        for line in capsys.readouterr().err.splitlines()
+        if "zero-secrets" in line and "not verified" in line
+    ]
+    assert len(said) == 1, said

@@ -34,6 +34,24 @@ logger = logging.getLogger(__name__)
 _URL_SCHEME_SEPARATOR = "://"
 
 
+def pinned_version(tool: str) -> str | None:
+    """The version versions.yaml pins for `tool`, or None.
+
+    For a tool whose output does not say its own version (trufflehog), and as
+    the SARIF bindings' first choice (gitleaks 8.30.1 reports `semanticVersion:
+    v8.0.0`). Shared, since a finding that says `unknown` names nothing to
+    re-run or upgrade (#1333).
+    """
+    # Local: the registry loads versions.yaml, which no adapter needs to import.
+    from scripts.core.tool_registry import ToolRegistry
+
+    try:
+        info = ToolRegistry().get_tool(tool)
+    except Exception:  # Acceptable: version detection fallback, registry may not load
+        return None
+    return info.version if info and info.version else None
+
+
 def safe_load_json_file(
     path: str | Path,
     default: Any = None,

@@ -56,7 +56,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from scripts.core.adapters.common import safe_load_ndjson_file
+from scripts.core.adapters.common import pinned_version, safe_load_ndjson_file
 from scripts.core.common_finding import normalize_severity, secret_digest
 from scripts.core.plugin_api import (
     AdapterPlugin,
@@ -182,6 +182,10 @@ class TruffleHogAdapter(AdapterPlugin):
             List of Finding objects following CommonFinding schema v1.2.0
         """
         findings: list[Finding] = []
+        # A record carries no version (3.97.1's keys have none; it is only in
+        # the stderr log), so every finding said "unknown" (#1333). The pinned
+        # one, as the SARIF bindings take theirs.
+        version = pinned_version("trufflehog") or "unknown"
 
         for f in safe_load_ndjson_file(output_path):
             detector = str(f.get("DetectorName") or f.get("Detector") or "Unknown")
@@ -269,7 +273,7 @@ class TruffleHogAdapter(AdapterPlugin):
                 severity=severity,
                 tool={
                     "name": "trufflehog",
-                    "version": str(f.get("Version") or "unknown"),
+                    "version": str(f.get("Version") or version),
                 },
                 location={"path": file_path, "startLine": start_line or 0},
                 remediation="Rotate credentials and purge from history.",

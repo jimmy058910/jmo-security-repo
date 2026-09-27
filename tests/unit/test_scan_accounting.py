@@ -115,14 +115,14 @@ def test_ran_with_no_output_file_fails(tmp_path) -> None:
     result = reconcile(_scan(tmp_path, outputs={}))
 
     assert not result.ok
-    assert result.no_output == ["individual-repos/proj: trivy"]
+    assert result.no_output == ["individual-repos/proj: trivy (trivy.json)"]
 
 
 def test_ran_with_unparseable_output_fails(tmp_path) -> None:
     result = reconcile(_scan(tmp_path, outputs={"trivy": "{not json"}))
 
     assert not result.ok
-    assert result.no_output == ["individual-repos/proj: trivy"]
+    assert result.no_output == ["individual-repos/proj: trivy (trivy.json)"]
 
 
 def test_ndjson_output_parses(tmp_path) -> None:

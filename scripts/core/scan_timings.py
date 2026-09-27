@@ -190,16 +190,23 @@ def build_scan_timings(
     wall_seconds: float,
     outcome: str = OUTCOME_COMPLETED,
     error: str | None = None,
+    root: str | None = None,
 ) -> dict[str, Any]:
     """The scan-timings document for one target.
 
     `wall_seconds` is recorded rather than derived because tools run
     concurrently: the per-tool seconds sum to more than the elapsed time.
+
+    `root` is the absolute directory a tree's tools scanned (None for an
+    image, a URL, an IaC file, a cluster). The report makes paths relative to
+    it: a GitLab clone's root is a random temporary directory recorded nowhere
+    else, so its findings kept that path and changed id on every scan (#1332).
     """
     return {
         "schema_version": SCAN_TIMINGS_SCHEMA_VERSION,
         "target": target,
         "target_type": target_type,
+        "root": root,
         "wall_seconds": round(wall_seconds, 3),
         "outcome": outcome,
         "error": error,
@@ -216,6 +223,7 @@ def write_scan_timings(
     wall_seconds: float,
     outcome: str = OUTCOME_COMPLETED,
     error: str | None = None,
+    root: str | None = None,
 ) -> Path | None:
     """Write `scan-timings.json` into a target's output directory.
 
@@ -232,6 +240,7 @@ def write_scan_timings(
         wall_seconds=wall_seconds,
         outcome=outcome,
         error=error,
+        root=root,
     )
     try:
         path.write_bytes(json.dumps(document, indent=2).encode("utf-8"))

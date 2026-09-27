@@ -237,7 +237,11 @@ class ToolResult:
         stderr: Standard error output
         attempts: Number of execution attempts made
         duration: Execution time in seconds
-        output_file: Path to output file (if any)
+        output_file: The output file its definition names (if any), on every
+            result, failed or not: a tool with two invocations (G1: the tree
+            and git history) tells them apart by it. Only a success and a
+            ``no_output`` carried it, so a crash, a timeout or an exception
+            could not say which run it was (#1324).
         capture_stdout: Whether stdout was captured (if False, tool writes its own file)
         error_message: Error message (if status != "success")
     """
@@ -634,6 +638,8 @@ class ToolRunner:
                     returncode=-1,
                     attempts=attempt,
                     duration=duration,
+                    output_file=tool.output_file,
+                    capture_stdout=tool.capture_stdout,
                     error_message=f"Tool not found: {tool.command[0]}",
                     failure="missing_tool",
                 )
@@ -680,6 +686,8 @@ class ToolRunner:
             returncode=last_returncode,
             attempts=attempt,
             duration=duration,
+            output_file=tool.output_file,
+            capture_stdout=tool.capture_stdout,
             error_message=last_error,
             timed_out=last_failure_was_timeout,
             failure=last_failure,
@@ -738,6 +746,8 @@ class ToolRunner:
                         returncode=e.return_code,
                         attempts=1,
                         duration=0.0,
+                        output_file=tool.output_file,
+                        capture_stdout=tool.capture_stdout,
                         error_message=str(e),
                     )
                     results.append(error_result)
@@ -760,6 +770,8 @@ class ToolRunner:
                         tool=tool.name,
                         status="error",
                         returncode=-1,
+                        output_file=tool.output_file,
+                        capture_stdout=tool.capture_stdout,
                         error_message=f"Unexpected error: {e}",
                     )
                     results.append(error_result)

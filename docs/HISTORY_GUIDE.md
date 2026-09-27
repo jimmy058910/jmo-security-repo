@@ -798,7 +798,7 @@ The history database uses SQLite with the following schema:
 
 **Tables:**
 
-- `scans` - Scan metadata (timestamp, branch, tools, severity counts, CI metadata)
+- `scans` - Scan metadata (timestamp, branch, tools, the targets scanned, severity counts, CI metadata). Each target's type is on its `scan_tool_runs` rows: a scan can hold several types
 - `findings` - Individual findings (fingerprint, severity, rule, location, message, full CommonFinding JSON)
 - `scan_tool_runs` - One row per target and tool: state (`ran` / `skipped` / `failed`), reason, seconds, exit code, attempts. Keyed by scan, target type, target and tool; created on the first store into an older database
 - `compliance_mappings` - Framework mappings (OWASP, CWE, CIS, NIST, PCI-DSS, MITRE ATT&CK)
@@ -822,11 +822,15 @@ The history database uses SQLite with the following schema:
 
 **Upgrading a pre-v2.0.0 database:**
 
-v2.0.0 removed scan profiles, so `scans` no longer has a `profile` column. `jmo history migrate`
-drops that column and its `idx_scans_profile` index from an older database in place, without
-rebuilding the table, so every stored scan and finding is kept. You do not have to run it by
-hand: the next scan stored with `--store-history` (or `jmo history store`) performs the same
-drop before it inserts.
+v2.0.0 removed scan profiles, so `scans` no longer has a `profile` column. It has no
+`target_type` column either: one column could not type a scan of two target types, and it
+recorded `repo` for every scan. `jmo history migrate` drops both columns, their CHECK
+constraints and their `idx_scans_profile` / `idx_scans_target_type` indexes from an older
+database in place, without rebuilding the table, so every stored scan and finding is kept.
+You do not have to run it by hand: the next scan stored with `--store-history` (or
+`jmo history store`) performs the same drops before it inserts. A database a v2.0.0
+development build already recorded as 2.0.0 is not migrated again, and loses
+`target_type` at its next store instead.
 
 ```bash
 jmo history migrate

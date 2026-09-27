@@ -196,7 +196,11 @@ def _add_target_args(parser: argparse.ArgumentParser, target_group: Any = None) 
     # Live web app/API scanning
     parser.add_argument("--url", help="Web application URL to scan")
     parser.add_argument("--urls-file", help="File with URLs (one per line)")
-    parser.add_argument("--api-spec", help="OpenAPI/Swagger spec URL or file")
+    parser.add_argument(
+        "--api-spec",
+        help="OpenAPI/Swagger spec URL, scanned as a plain URL: zap cannot import "
+        "a spec yet, and a local file is refused (#1331)",
+    )
 
     # GitLab integration
     parser.add_argument(

@@ -514,7 +514,7 @@ ghcr.io/myorg/api:main
 
 - `--url URL`: Single web application URL to scan
 - `--urls-file FILE`: File with URLs (one per line, supports `#` comments)
-- `--api-spec FILE_OR_URL`: OpenAPI/Swagger spec (local file or URL)
+- `--api-spec URL`: an OpenAPI/Swagger spec's http(s) URL. It is scanned as a plain URL: zap is not told it is a spec, so the API's endpoints are not requested, and a local spec file is refused. The OpenAPI import is [#1331](https://github.com/jimmy058910/jmo-security-repo/issues/1331).
 
 **Example urls.txt:**
 
@@ -817,7 +817,7 @@ The full mapping for every tool is in [TOOLS.md](TOOLS.md#target-types).
 
 - Increase timeout: `--timeout 1200` or in `jmo.yml` per_tool override
 - Reduce spider duration: `zap.flags: ["-config", "spider.maxDuration=3"]`
-- Use targeted scanning with `--api-spec` instead of full crawl
+- `--api-spec` does not narrow the scan yet: zap crawls the spec's own URL ([#1331](https://github.com/jimmy058910/jmo-security-repo/issues/1331))
 
 **Nuclei scan issues:**
 
@@ -1167,6 +1167,15 @@ This reverts to Phase 1 deduplication only (same tool, same location).
 - log_level: DEBUG|INFO|WARN|ERROR (defaults to INFO)
 - retries: global retry count for flaky tool invocations (0 by default)
 - per_tool: per‑tool overrides (`flags`, `timeout`, and tool-specific keys)
+  - A flag that decides where a tool writes or in what format is JMo's, and is dropped with a
+    warning: `-o`, `--output`, `-f`, `--format` and their kin for every tool, and Gitleaks'
+    `--report-format`, `--report-path`/`-r`, `--report-template`, `--exit-code`, `--redact` and
+    `--config`/`-c` (a repository's own `.gitleaks.toml` is read instead; see
+    [Known limitations](KNOWN_LIMITATIONS.md#gitleaks-extends-a-repositorys-own-gitleakstoml))
+  - TruffleHog and Gitleaks run twice on a repository with history. `flags` reach the
+    working-tree run and `history_flags` the git-history run, since each mode rejects flags the
+    other needs (TruffleHog's `--since-commit` and `--branch` are history's). `history: false`
+    keeps the tree's scan and skips history, and the tool's row says so
 - policy: policy-as-code settings (see [POLICY_AS_CODE.md](POLICY_AS_CODE.md))
 
 Example:
@@ -1186,6 +1195,9 @@ per_tool:
     flags: ["--exclude", "node_modules", "--exclude", ".git"]
   trufflehog:
     verify: true  # off by default: ask each issuer whether a secret is live
+    history_flags: ["--since-commit", "main"]  # the git-history run only
+  gitleaks:
+    history: false  # read the working tree, not the history
   trivy:
     flags: ["--no-progress"]
   zap:

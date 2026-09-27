@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import tomllib
 from collections.abc import Collection, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -352,11 +353,17 @@ def tool_timeout(per_tool_config: Mapping[str, Any], tool: str, default: int) ->
     return max(default, TOOL_TIMEOUT_DEFAULTS.get(tool, 0))
 
 
-def tool_flags(per_tool_config: Mapping[str, Any], tool: str) -> list[str]:
+def tool_flags(
+    per_tool_config: Mapping[str, Any], tool: str, key: str = "flags"
+) -> list[str]:
     """Return a tool's configured extra flags, minus any JMo must own.
 
     Shared by all five scanners, which each carried an identical copy that did
-    no filtering.
+    no filtering. `key` is `flags` for the tool's run, or `history_flags` for
+    its git-history run (#1327); both are filtered alike.
+
+    The reserved set is `RESERVED_OUTPUT_FLAGS` plus the tool's own spellings
+    (its descriptor's `reserved_flags`, #1325).
 
     A dropped flag takes its **value** with it. Removing only the flag from
     `["-f", "table"]` would leave a bare `table` in the argv, and trivy reads a
@@ -367,17 +374,29 @@ def tool_flags(per_tool_config: Mapping[str, Any], tool: str) -> list[str]:
     tool_cfg = per_tool_config.get(tool, {})
     if not isinstance(tool_cfg, dict):
         return []
-    raw = tool_cfg.get("flags", [])
+    raw = tool_cfg.get(key, [])
     if not isinstance(raw, list):
         return []
     flags = [str(f) for f in raw]
+    own = (
+        descriptor.reserved_flags
+        if (descriptor := DESCRIPTORS.get(tool))
+        else frozenset()
+    )
+    reserved = RESERVED_OUTPUT_FLAGS | own
+    # A tool's own reserved short flags also take a value attached
+    # (`-cmine.toml`): gitleaks' parser reads that as `-c mine.toml`. Only its
+    # own, since elsewhere a single-dash flag can merely start like one
+    # (nuclei's `-fr`, `-omit-raw`).
+    attached = {flag for flag in own if len(flag) == 2}
 
     kept: list[str] = []
     dropped: list[str] = []
     i = 0
     while i < len(flags):
         token = flags[i]
-        if token.split("=", 1)[0] not in RESERVED_OUTPUT_FLAGS:
+        joined = len(token) > 2 and token[:2] in attached
+        if token.split("=", 1)[0] not in reserved and not joined:
             kept.append(token)
             i += 1
             continue
@@ -385,18 +404,24 @@ def tool_flags(per_tool_config: Mapping[str, Any], tool: str) -> list[str]:
         dropped.append(token)
         # `--format=json` carries its value inline; `-f json` does not. Only
         # consume a following token when it is a value rather than the next flag.
-        if "=" not in token and i + 1 < len(flags) and not flags[i + 1].startswith("-"):
+        if (
+            not joined
+            and "=" not in token
+            and i + 1 < len(flags)
+            and not flags[i + 1].startswith("-")
+        ):
             dropped.append(flags[i + 1])
             i += 1
         i += 1
 
     if dropped:
         logging.getLogger(__name__).warning(
-            "Ignoring %s flag(s) for %s that JMo must control -- they decide "
-            "where it writes and in what format, and the report phase cannot "
-            "read the output otherwise: %s",
+            "Ignoring %s flag(s) in per_tool.%s.%s that JMo must control -- they "
+            "decide where it writes and in what format, and the report phase "
+            "cannot read the output otherwise: %s",
             len(dropped),
             tool,
+            key,
             " ".join(dropped),
         )
     return kept
@@ -519,23 +544,40 @@ def write_trufflehog_exclude_file(
 
 
 def write_gitleaks_config(
-    out_dir: Path, *, results_dir_name: str | None = None
+    out_dir: Path,
+    *,
+    results_dir_name: str | None = None,
+    repo_config: Path | None = None,
 ) -> Path:
     """Write gitleaks' ``--config`` file and return its absolute path.
 
     gitleaks has no exclude flag: exclusions are ``[[allowlists]] paths`` in a
-    config, and ``[extend] useDefault = true`` keeps its own rules. The names
+    config, and ``[extend] useDefault = true`` keeps its own rules.
+
+    Given a ``--config``, gitleaks never reads the repository's own
+    ``.gitleaks.toml`` (#1327, measured: a repository-allowlisted key 0
+    alone and 1 under JMo). So with ``repo_config`` this extends that file
+    instead of the defaults: gitleaks refuses ``path`` and ``useDefault``
+    together (rc 1), and ``path`` alone behaves as gitleaks run alone, the
+    defaults included when the repository's config asks for them. The names
     are trufflehog's (``.git``, ``.jmo`` and the vendored tier, plus the
     results directory inside the tree), as whole-segment Go regexes at any
     depth: gitleaks runs from the repository, so in both modes a path is
     repository-relative and a pattern never meets the scan root's own path.
 
-    Each pattern is a TOML basic string written by ``json.dumps``, whose
-    escapes TOML shares, so a quote in a results directory's name cannot end
-    the string early. Dot-prefixed scratch beside the outputs, written as
-    bytes (LF); absolute, because gitleaks' working directory is the
-    repository, not the caller's.
+    Each string is a TOML basic string written by ``json.dumps``, whose
+    escapes TOML shares, so a quote in a name cannot end the string early.
+    ``ensure_ascii=False``: an ASCII-only dump escapes a character outside
+    the Basic Multilingual Plane (an emoji) as a surrogate pair, which TOML
+    rejects, and gitleaks could not load the file (review of #1327).
+    Dot-prefixed scratch beside the outputs, written as bytes (LF, UTF-8);
+    absolute, because gitleaks' working directory is the repository, not the
+    caller's.
     """
+
+    def toml_string(text: str) -> str:
+        return json.dumps(text, ensure_ascii=False)
+
     names = dict.fromkeys(
         (
             ".git",
@@ -543,20 +585,90 @@ def write_gitleaks_config(
             *excluded_dirs_for("gitleaks", results_dir_name=results_dir_name),
         )
     )
+    extend = (
+        f"path = {toml_string(str(repo_config.resolve()))}"
+        if repo_config is not None
+        else "useDefault = true"
+    )
     lines = [
         "# Written by JMo for one scan: its exclusion list, in gitleaks' grammar.",
         "[extend]",
-        "useDefault = true",
+        extend,
         "",
         "[[allowlists]]",
         'description = "JMo: vendored trees and its own output"',
         "paths = [",
-        *(f"  {json.dumps(segment_regex(n))}," for n in names),
+        *(f"  {toml_string(segment_regex(n))}," for n in names),
         "]",
     ]
     path = (out_dir / ".gitleaks.toml").resolve()
     path.write_bytes(("\n".join(lines) + "\n").encode("utf-8"))
     return path
+
+
+def _extend_table(path: Path) -> dict[str, Any] | None:
+    """A gitleaks config's `[extend]` table: {} when it has none, None when
+    the file cannot be read as TOML at all.
+
+    The file is the scanned repository's, so untrusted: any value can be any
+    type, and a path can hold a NUL (ValueError from `open`). Nothing here may
+    raise, since this runs before any tool, and a raise failed every tool on
+    the target (review of #1327). gitleaks reports what it cannot load.
+    """
+    try:
+        document = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):  # TOMLDecodeError, UnicodeDecodeError, a NUL
+        return None
+    extend = document.get("extend")
+    return extend if isinstance(extend, dict) else {}
+
+
+def gitleaks_config_warning(repo_config: Path, root: Path) -> str | None:
+    """What gitleaks will not load under JMo's config, when that matters.
+
+    Two cases, both silent in gitleaks itself (measured, 8.30.1):
+
+    - **The defaults are not asked for.** A repository config whose chain has
+      no ``useDefault = true`` runs only its own rules, as gitleaks alone
+      does, so the scanned repository decides gitleaks' defaults do not run.
+    - **One level is lost.** gitleaks follows ``[extend]`` only so deep, and
+      JMo's config, extending the repository's, adds a level. When the
+      repository's config extends a file that itself extends further (the
+      defaults, or another file), that last extension is dropped: the
+      default rules vanished, rc 0, nothing said even at debug level.
+
+    A relative path resolves against gitleaks' working directory, which JMo
+    sets to ``root``. None for a file that is not TOML: gitleaks fails the
+    run and says why.
+    """
+    extend = _extend_table(repo_config)
+    if extend is None or extend.get("useDefault") is True:
+        return None
+    name = repo_config.name
+    base = extend.get("path")
+    if not isinstance(base, str) or not base:
+        return (
+            f"{name} does not ask for gitleaks' default rules (`[extend] "
+            "useDefault = true`), so only the rules it defines run, as with "
+            "gitleaks alone"
+        )
+    further = _extend_table(Path(base) if Path(base).is_absolute() else root / base)
+    if further is None:
+        return None
+    if further.get("useDefault") is True:
+        lost = "its default rules"
+    elif isinstance(further.get("path"), str) and further["path"]:
+        lost = f"the rules in {further['path']}"
+    else:
+        return (
+            f"{name} extends {base}, and neither asks for gitleaks' default "
+            "rules, so only the rules they define run, as with gitleaks alone"
+        )
+    return (
+        f"{name} extends {base}, which extends further; under JMo's config "
+        f"that is past the depth gitleaks follows, so {lost} are NOT loaded "
+        "(gitleaks run alone loads them)"
+    )
 
 
 def in_tree_results_name(repo: Path, results_dir: Path) -> str | None:

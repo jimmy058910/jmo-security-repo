@@ -271,10 +271,29 @@ def configure_url_target(
             print(_prompter.colorize(f"File not found: {path}", "red"))
 
     else:  # api
-        config.api_spec = _prompt_text(
-            "OpenAPI spec URL or file path", default="./openapi.yaml"
+        # zap runs a URL scan and cannot import a spec yet (#1331), so a spec
+        # is scanned as the URL it is served from, and `jmo scan` refuses a
+        # local file (#1320). This asked for a file by default.
+        while True:
+            spec = _prompt_text("OpenAPI spec URL (http/https)")
+            if spec.startswith(("http://", "https://")):
+                config.api_spec = spec
+                break
+            print(
+                _prompter.colorize(
+                    "A local spec file is not scanned yet (#1331): zap runs a URL "
+                    "scan. Enter the URL the spec is served from, or choose "
+                    "'single' with the API's address.",
+                    "yellow",
+                )
+            )
+        print(
+            _prompter.colorize(
+                f"Will scan {config.api_spec} as a plain URL: zap is not told it "
+                "is an OpenAPI definition (#1331)",
+                "yellow",
+            )
         )
-        print(_prompter.colorize(f"Will scan API spec: {config.api_spec}", "green"))
 
     return config
 

@@ -37,6 +37,7 @@ from __future__ import annotations
 import re
 import sqlite3
 
+from scripts.core.history_db import _rewrite_scans_ddl
 from scripts.core.history_migrations import Migration
 
 # Matches the legacy constraint with or without a trailing comma, tolerating
@@ -69,28 +70,9 @@ class Migration_1_1_0_to_1_2_0(Migration):
         if "CHECK" in old_sql.upper() and new_sql == old_sql:
             raise RuntimeError("failed to remove the profile CHECK from scans DDL")
 
-        schema_version = conn.execute("PRAGMA schema_version").fetchone()[0]
-
-        conn.execute("PRAGMA writable_schema=ON")
-        try:
-            conn.execute(
-                "UPDATE sqlite_master SET sql=? WHERE type='table' AND name='scans'",
-                (new_sql,),
-            )
-            # Bump so every connection reloads the edited schema.
-            conn.execute(f"PRAGMA schema_version={schema_version + 1}")
-        finally:
-            conn.execute("PRAGMA writable_schema=OFF")
-
-        integrity = conn.execute("PRAGMA integrity_check").fetchone()[0]
-        if integrity != "ok":
-            raise RuntimeError(f"integrity_check failed after migration: {integrity}")
-
-        violations = conn.execute("PRAGMA foreign_key_check").fetchall()
-        if violations:
-            raise RuntimeError(
-                f"foreign_key_check failed after migration: {violations}"
-            )
+        # Parses the edit, writes it, and runs integrity_check and
+        # foreign_key_check before the migration may commit.
+        _rewrite_scans_ddl(conn, new_sql)
 
     def migrate_down(self, conn: sqlite3.Connection) -> None:
         """Rollback is intentionally a no-op.

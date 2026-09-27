@@ -133,6 +133,56 @@ class TestConfig:
     def test_it_is_written_with_lf_endings(self, tmp_path) -> None:
         assert b"\r\n" not in write_gitleaks_config(tmp_path).read_bytes()
 
+    def test_it_extends_the_repositorys_config_instead_of_the_defaults(
+        self, tmp_path
+    ) -> None:
+        """gitleaks refuses `path` and `useDefault` together (rc 1, measured),
+        so the repository's config replaces the defaults in `[extend]`; it
+        asks for them itself when it wants them (#1327). The path is a TOML
+        string: a Windows path's backslashes must survive the round trip."""
+        own = tmp_path / "my repo" / ".gitleaks.toml"
+        own.parent.mkdir()
+        own.write_bytes(b"[extend]\nuseDefault = true\n")
+
+        path = write_gitleaks_config(tmp_path, repo_config=own)
+
+        config = tomllib.loads(path.read_text(encoding="utf-8"))
+        assert config["extend"] == {"path": str(own.resolve())}
+        assert config["allowlists"][0]["paths"], config
+
+    def test_a_character_outside_the_bmp_survives_as_toml(self, tmp_path) -> None:
+        """`json.dumps` escapes an emoji as a surrogate pair, which TOML
+        rejects ("not a Unicode scalar value"), so gitleaks could not load the
+        config and both runs failed (review of #1327)."""
+        emoji = chr(0x1F4A5)
+        own = tmp_path / f"repo{emoji}" / ".gitleaks.toml"
+        own.parent.mkdir()
+        own.write_bytes(b"[extend]\nuseDefault = true\n")
+
+        path = write_gitleaks_config(
+            tmp_path, results_dir_name=f"out{emoji}", repo_config=own
+        )
+
+        config = tomllib.loads(path.read_text(encoding="utf-8"))
+        assert config["extend"] == {"path": str(own.resolve())}
+        assert config["allowlists"][0]["paths"][-1] == segment_regex(f"out{emoji}")
+
+
+def test_a_repository_config_that_cannot_be_checked_is_not_extended(
+    tmp_path, monkeypatch
+) -> None:
+    """Python 3.12 raises from a probe where 3.11 answered False (#1163): a
+    `.gitleaks.toml` the scan cannot stat is not extended, and the scan
+    goes on."""
+    (tmp_path / ".gitleaks.toml").write_bytes(b"")
+
+    def denied(self: Path) -> bool:
+        raise PermissionError("denied")
+
+    monkeypatch.setattr(Path, "is_file", denied)
+
+    assert tool_loop._repository_gitleaks_config(tmp_path) is None
+
 
 def test_the_descriptor_declares_the_config_style() -> None:
     d = DESCRIPTORS["gitleaks"]
@@ -276,6 +326,69 @@ def test_real_gitleaks_skips_every_excluded_directory_at_any_depth(tmp_path) -> 
         for r in sarif["runs"][0]["results"]
     )
     assert found == sorted(rel for rel, kept in planted.items() if kept)
+
+
+@pytest.mark.requires_tools
+def test_real_gitleaks_applies_the_repositorys_own_config(tmp_path) -> None:
+    """#1327 item 3, against the binary. Given JMo's `--config`, gitleaks
+    never read the repository's `.gitleaks.toml` (measured: its custom rule
+    found nothing, its allowlisted key was reported). JMo's config extends it
+    now: its rule and allowlist apply, the defaults it asks for still fire,
+    and JMo's own exclusions still hold."""
+    import secrets
+
+    from scripts.core.tool_runner import ToolRunner
+
+    if shutil.which("gitleaks") is None:
+        pytest.skip("gitleaks is not on PATH")
+    repo = tmp_path / "app"
+    repo.mkdir()
+    (repo / ".gitleaks.toml").write_bytes(
+        b"[extend]\n"
+        b"useDefault = true\n\n"
+        b"[[rules]]\n"
+        b'id = "jmo-custom-token"\n'
+        b"regex = '''jmotok_[0-9a-f]{32}'''\n\n"
+        b"[[allowlists]]\n"
+        b"paths = ['''(^|/)allowed/''']\n"
+    )
+    planted = {
+        "kept.pem": True,  # a default rule
+        "allowed/k.pem": False,  # the repository's allowlist
+        ".jmo/k.pem": False,  # JMo's exclusions
+    }
+    for rel in planted:
+        (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+        (repo / rel).write_bytes(_rsa_pem())
+    (repo / "src").mkdir()
+    (repo / "src" / "custom.txt").write_bytes(
+        f"marker jmotok_{secrets.token_hex(16)}\n".encode()
+    )
+    out = tmp_path / "out"
+    out.mkdir()
+
+    rows = tool_loop.run_tools(
+        tools=["gitleaks"],
+        target_type="repo",
+        target=repo,
+        target_label="app",
+        out_dir=out,
+        timeout=120,
+        retries=0,
+        per_tool_config={},
+        allow_missing_tools=False,
+        runner_cls=ToolRunner,
+        repo_root=repo,
+    )
+
+    assert rows["gitleaks"].state.value == "ran", rows["gitleaks"]
+    results = json.loads((out / "gitleaks.json").read_bytes())["runs"][0]["results"]
+    found = {
+        r["locations"][0]["physicalLocation"]["artifactLocation"]["uri"]: r["ruleId"]
+        for r in results
+    }
+    assert set(found) == {"kept.pem", "src/custom.txt"}, found
+    assert found["src/custom.txt"] == "jmo-custom-token", found
 
 
 @pytest.mark.requires_tools
