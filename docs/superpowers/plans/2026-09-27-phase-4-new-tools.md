@@ -281,9 +281,9 @@ summary table), this file.
 - [x] Phase 3's summary row: `on dev as 3d1a4bf8 025edd01 b451dc31 66b3ab49 2fc7fc30
   dda79bde + a2d4010a; on main at 292d3cff`; the Phase 3 task plan's Acceptance gains
   its measured table (the 13-row clause re-run at `292d3cff`).
-- [ ] § Phase 4 "Acceptance": the corrected gates above. "Measure first": done, this file.
+- [x] § Phase 4 "Acceptance": the corrected gates above. "Measure first": done, this file.
   Remove the `jmo.yml:45-46` citation. Record decisions 1-7 in its "Why here".
-- [ ] § Phase 5 "Measure first" gains the two measured traps (Defender quarantines two
+- [x] § Phase 5 "Measure first" gains the two measured traps (Defender quarantines two
   opengrep-rules test files; `generic/secrets` trips secret scanning). § Phase 6 gains
   the answer-key targets (decision 9).
 - [ ] Search again, then file six issues **immediately before pushing** (decision 8),
