@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import os
+import site
 import subprocess
 import sys
 from pathlib import Path
@@ -59,6 +60,13 @@ def isolated_jmo_state(tmp_path_factory, monkeypatch):
     home is exactly the "first run" that triggers it.
     """
     sandbox = tmp_path_factory.mktemp("jmo-sandbox")
+    # The real user base, read before HOME moves: on Linux a `pip --user`
+    # scanner (semgrep, as the nightly installs it) finds its packages through
+    # HOME, so under the sandbox it died with "No module named 'semgrep'",
+    # rc 1 and no output, and semgrep's row read `failed` (measured in WSL
+    # and in the nightly). Windows keeps the user site under APPDATA, which is
+    # why only Linux showed it.
+    monkeypatch.setenv("PYTHONUSERBASE", site.getuserbase())
     monkeypatch.setenv("HOME", str(sandbox))
     monkeypatch.setenv("USERPROFILE", str(sandbox))
     monkeypatch.setenv("JMO_NON_INTERACTIVE", "1")
@@ -123,7 +131,11 @@ def assert_scanned(result: subprocess.CompletedProcess, results_dir: Path) -> No
     semgrep = next(row for row in meta["tool_runs"] if row["tool"] == "semgrep")
     if semgrep["state"] == "skipped" and semgrep["reason"] == "not installed":
         pytest.skip("semgrep is not installed: it is the tool that reports here")
-    assert semgrep["state"] == "ran", semgrep
+    # The reason and detail, spelled out: pytest cuts a dict repr to `...`
+    # before them, and the nightly's failure said nothing but `failed`.
+    assert semgrep["state"] == "ran", (
+        f"semgrep {semgrep['state']}: {semgrep.get('reason')}: {semgrep.get('detail')}"
+    )
 
 
 def load_findings(results_dir: Path) -> list[dict[str, Any]]:
