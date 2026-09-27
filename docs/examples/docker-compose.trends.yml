@@ -25,7 +25,6 @@
 #   - Bind mounts for source code and results
 #   - Service dependencies for multi-stage workflows
 #   - Environment variable configuration
-#   - Multiple scan profiles (fast, balanced, deep)
 
 version: '3.8'
 
@@ -49,7 +48,6 @@ services:
       scan
       --repo /scan
       --results-dir /results/baseline
-      --profile-name balanced
       --human-logs
     environment:
       - JMO_HISTORY_DB_PATH=/root/.jmo/history.db
@@ -72,7 +70,6 @@ services:
       scan
       --repo /scan
       --results-dir /results/current
-      --profile-name balanced
       --human-logs
     environment:
       - JMO_HISTORY_DB_PATH=/root/.jmo/history.db
@@ -310,7 +307,7 @@ services:
     entrypoint: /bin/bash
     command: >
       -c "
-      jmo scan --repo /scan --results-dir /results/latest --profile-name balanced --human-logs &&
+      jmo scan --repo /scan --results-dir /results/latest --human-logs &&
       jmo trends analyze --days 30 --format text &&
       jmo trends export html --output /results/trends-report.html &&
       jmo trends export json --output /results/trends-data.json &&

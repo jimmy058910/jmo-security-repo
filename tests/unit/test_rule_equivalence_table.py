@@ -50,14 +50,18 @@ def _adapter_names() -> set[str]:
     The authority for "does this tool exist" is whether something can parse its
     output. Derived rather than listed so it cannot drift.
     """
+    from scripts.core.validators.scan_validator import EXPECTED_ADAPTERS
+
     names = {
         p.name[: -len("_adapter.py")].replace("_", "-")
         for p in ADAPTER_DIR.glob("*_adapter.py")
     }
     # Meta-guard: an extractor that silently finds nothing satisfies every
-    # assertion built on it (testing.rules.md).
-    assert len(names) >= 25, f"adapter discovery found only {len(names)}: {names}"
-    assert {"trivy", "checkov", "semgrep", "bandit"} <= names, sorted(names)
+    # assertion built on it (testing.rules.md). Checked against the validator's
+    # list, which tests/core/test_scan_validator.py pins to the same directory,
+    # rather than a floor that a cut to the matrix drops below.
+    assert names == {a.replace("_", "-") for a in EXPECTED_ADAPTERS}, sorted(names)
+    assert {"trivy", "checkov", "semgrep"} <= names, sorted(names)
     return names
 
 

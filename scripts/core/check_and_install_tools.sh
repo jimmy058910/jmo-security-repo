@@ -204,15 +204,11 @@ TOOLS["trufflehog"]="TruffleHog (Secret Scanner)"
 CHECK_CMDS["trufflehog"]="trufflehog --version"
 INSTALL_CMDS_MANUAL["trufflehog"]="curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b ~/.local/bin"
 
-TOOLS["noseyparker"]="Nosey Parker (Secret Scanner)"
-CHECK_CMDS["noseyparker"]="noseyparker --version"
-INSTALL_CMDS_MANUAL["noseyparker"]="echo 'Download from: https://github.com/praetorian-inc/noseyparker/releases'"
-
 # Check each tool
 echo -e "${BLUE}Checking tool installation status...${NC}"
 echo "=================================================="
 
-for tool in bash git jq cloc python3 pipx semgrep trufflehog noseyparker; do
+for tool in bash git jq cloc python3 pipx semgrep trufflehog; do
   tool_name="${TOOLS[$tool]}"
   check_cmd="${CHECK_CMDS[$tool]}"
 
@@ -377,7 +373,7 @@ if [ "$MODE" = "auto-install" ]; then
 
   # Re-check all tools
   final_check=true
-  for tool in bash git jq cloc python3 pipx semgrep trufflehog noseyparker; do
+  for tool in bash git jq cloc python3 pipx semgrep trufflehog; do
     tool_name="${TOOLS[$tool]}"
     check_cmd="${CHECK_CMDS[$tool]}"
 

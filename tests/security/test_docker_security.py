@@ -17,6 +17,24 @@ from pathlib import Path
 
 import pytest
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _dockerfiles() -> list[Path]:
+    """Every Dockerfile at the repository root, never an empty list.
+
+    Globbed and anchored to the repository. Each test used to list its own
+    names relative to the working directory -- including `Dockerfile.slim` and
+    `Dockerfile.alpine`, which v2.0.0 does not have -- and skip any that did
+    not exist, so run from anywhere but the repository root they read no file
+    and passed. An empty result would pass every check below, so it fails.
+    """
+    found = sorted(p for p in REPO_ROOT.glob("Dockerfile*") if p.is_file())
+    assert "Dockerfile" in [p.name for p in found], (
+        f"no production Dockerfile found at {REPO_ROOT}: {found}"
+    )
+    return found
+
 
 class TestDockerSecurity:
     """Test Docker security configurations."""
@@ -27,17 +45,8 @@ class TestDockerSecurity:
         Security best practice: Containers should not run as root to minimize
         privilege escalation risks.
         """
-        dockerfiles = [
-            Path("Dockerfile"),
-            Path("Dockerfile.slim"),
-            Path("Dockerfile.alpine"),
-        ]
-
-        for dockerfile in dockerfiles:
-            if not dockerfile.exists():
-                continue
-
-            content = dockerfile.read_text()
+        for dockerfile in _dockerfiles():
+            content = dockerfile.read_text(encoding="utf-8")
 
             # Should specify USER directive (not root)
             has_user_directive = re.search(r"^USER\s+(?!root)", content, re.MULTILINE)
@@ -51,17 +60,8 @@ class TestDockerSecurity:
         Security best practice: Pin base image versions for reproducibility
         and security.
         """
-        dockerfiles = [
-            Path("Dockerfile"),
-            Path("Dockerfile.slim"),
-            Path("Dockerfile.alpine"),
-        ]
-
-        for dockerfile in dockerfiles:
-            if not dockerfile.exists():
-                continue
-
-            content = dockerfile.read_text()
+        for dockerfile in _dockerfiles():
+            content = dockerfile.read_text(encoding="utf-8")
             lines = content.split("\n")
 
             for line_num, line in enumerate(lines, 1):
@@ -81,12 +81,6 @@ class TestDockerSecurity:
 
         Security best practice: No API keys, tokens, or credentials in Dockerfiles.
         """
-        dockerfiles = [
-            Path("Dockerfile"),
-            Path("Dockerfile.slim"),
-            Path("Dockerfile.alpine"),
-        ]
-
         secret_patterns = [
             r"api_key\s*=\s*['\"][^'\"]+['\"]",
             r"token\s*=\s*['\"][^'\"]+['\"]",
@@ -97,11 +91,8 @@ class TestDockerSecurity:
 
         findings = []
 
-        for dockerfile in dockerfiles:
-            if not dockerfile.exists():
-                continue
-
-            content = dockerfile.read_text()
+        for dockerfile in _dockerfiles():
+            content = dockerfile.read_text(encoding="utf-8")
             lines = content.split("\n")
 
             for line_num, line in enumerate(lines, 1):
@@ -126,16 +117,8 @@ class TestDockerSecurity:
 
         Security best practice: Smaller images = smaller attack surface.
         """
-        dockerfiles = [
-            Path("Dockerfile"),
-            Path("Dockerfile.slim"),
-        ]
-
-        for dockerfile in dockerfiles:
-            if not dockerfile.exists():
-                continue
-
-            content = dockerfile.read_text()
+        for dockerfile in _dockerfiles():
+            content = dockerfile.read_text(encoding="utf-8")
 
             # Count number of FROM statements (multi-stage has multiple)
             from_count = len(re.findall(r"^FROM\s+", content, re.MULTILINE))
@@ -149,12 +132,6 @@ class TestDockerSecurity:
 
         Security best practice: Avoid --privileged, CAP_SYS_ADMIN, etc.
         """
-        dockerfiles = [
-            Path("Dockerfile"),
-            Path("Dockerfile.slim"),
-            Path("Dockerfile.alpine"),
-        ]
-
         dangerous_patterns = [
             r"--privileged",
             r"CAP_SYS_ADMIN",
@@ -163,11 +140,8 @@ class TestDockerSecurity:
 
         findings = []
 
-        for dockerfile in dockerfiles:
-            if not dockerfile.exists():
-                continue
-
-            content = dockerfile.read_text()
+        for dockerfile in _dockerfiles():
+            content = dockerfile.read_text(encoding="utf-8")
             lines = content.split("\n")
 
             for line_num, line in enumerate(lines, 1):
@@ -188,12 +162,6 @@ class TestDockerSecurity:
 
         Security best practice: Don't include .env, secrets, keys in images.
         """
-        dockerfiles = [
-            Path("Dockerfile"),
-            Path("Dockerfile.slim"),
-            Path("Dockerfile.alpine"),
-        ]
-
         sensitive_patterns = [
             r"COPY.*\.env",
             r"COPY.*secret",
@@ -204,11 +172,8 @@ class TestDockerSecurity:
 
         findings = []
 
-        for dockerfile in dockerfiles:
-            if not dockerfile.exists():
-                continue
-
-            content = dockerfile.read_text()
+        for dockerfile in _dockerfiles():
+            content = dockerfile.read_text(encoding="utf-8")
             lines = content.split("\n")
 
             for line_num, line in enumerate(lines, 1):

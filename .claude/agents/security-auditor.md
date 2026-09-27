@@ -34,7 +34,7 @@ You have access to all security analysis tools:
 
 **2. External Tool Invocations:**
 
-- 28 security tools invoked via subprocess
+- The scanners in `TOOL_MATRIX` (plus opa, the policy engine) invoked via subprocess
 - Docker container execution
 - Git operations
 

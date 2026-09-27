@@ -57,7 +57,7 @@ jobs:
 ```yaml
 jobs:
   pypi-publish:      # 3-5 min - Build wheel/sdist, publish via Trusted Publishers (OIDC)
-  docker-build:      # 15-20 min - Multi-arch images (amd64, arm64), 3 variants
+  docker-build:      # 15-20 min - Multi-arch image (amd64, arm64), one Dockerfile
   docker-scan:       # 5-10 min - Trivy scanning, SARIF upload
   docker-hub-readme: # 1-2 min - Gated by DOCKERHUB_ENABLED variable
 ```

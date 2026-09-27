@@ -14,6 +14,8 @@ from pathlib import Path
 
 import pytest
 
+from scripts.core.tool_registry import TOOL_MATRIX
+
 
 def write_yaml_file(tmp_path: Path, filename: str, content: str) -> Path:
     """Helper to write YAML config files for testing."""
@@ -227,135 +229,6 @@ policy:
     assert config.policy.enabled is False
 
 
-# ========== Category 4: Profile-Specific Policy Overrides ==========
-
-
-def test_load_config_profile_policy_override(tmp_path):
-    """Test profile-specific policy overrides work correctly."""
-    from scripts.core.config import load_config
-
-    config_file = write_yaml_file(
-        tmp_path,
-        "jmo.yml",
-        """
-default_profile: balanced
-
-policy:
-  default_policies:
-    - zero-secrets
-
-profiles:
-  fast:
-    policy:
-      default_policies:
-        - zero-secrets
-  balanced:
-    policy:
-      default_policies:
-        - owasp-top-10
-        - zero-secrets
-  deep:
-    policy:
-      default_policies:
-        - owasp-top-10
-        - zero-secrets
-        - pci-dss
-        - production-hardening
-        - hipaa-compliance
-      fail_on_violation: true
-""",
-    )
-
-    config = load_config(str(config_file))
-
-    # Default profile is balanced, should use balanced policies
-    assert config.policy.default_policies == ["owasp-top-10", "zero-secrets"]
-    assert config.policy.fail_on_violation is False
-
-
-def test_load_config_deep_profile_policy_override(tmp_path):
-    """Test deep profile policy overrides include fail_on_violation."""
-    from scripts.core.config import load_config
-
-    config_file = write_yaml_file(
-        tmp_path,
-        "jmo.yml",
-        """
-default_profile: deep
-
-profiles:
-  deep:
-    policy:
-      default_policies:
-        - owasp-top-10
-        - zero-secrets
-        - pci-dss
-        - production-hardening
-        - hipaa-compliance
-      fail_on_violation: true
-""",
-    )
-
-    config = load_config(str(config_file))
-
-    assert len(config.policy.default_policies) == 5
-    assert "owasp-top-10" in config.policy.default_policies
-    assert "hipaa-compliance" in config.policy.default_policies
-    assert config.policy.fail_on_violation is True
-
-
-def test_load_config_fast_profile_minimal_policies(tmp_path):
-    """Test fast profile uses minimal policy set."""
-    from scripts.core.config import load_config
-
-    config_file = write_yaml_file(
-        tmp_path,
-        "jmo.yml",
-        """
-default_profile: fast
-
-profiles:
-  fast:
-    policy:
-      default_policies:
-        - zero-secrets
-""",
-    )
-
-    config = load_config(str(config_file))
-
-    assert config.policy.default_policies == ["zero-secrets"]
-    assert config.policy.fail_on_violation is False
-
-
-def test_load_config_profile_without_policy_override(tmp_path):
-    """Test profile without policy section uses global policy defaults."""
-    from scripts.core.config import load_config
-
-    config_file = write_yaml_file(
-        tmp_path,
-        "jmo.yml",
-        """
-default_profile: custom
-
-policy:
-  default_policies:
-    - owasp-top-10
-
-profiles:
-  custom:
-    tools:
-      - semgrep
-      - trivy
-""",
-    )
-
-    config = load_config(str(config_file))
-
-    # Should use global policy config (no profile override)
-    assert config.policy.default_policies == ["owasp-top-10"]
-
-
 # ========== Category 5: Environment Variable Overrides ==========
 
 
@@ -489,33 +362,6 @@ def test_environment_variables_without_config_file(monkeypatch):
     assert config.policy.enabled is True
     assert config.policy.default_policies == ["zero-secrets"]
     assert config.policy.fail_on_violation is True
-
-
-def test_environment_variable_precedence_over_profile(monkeypatch, tmp_path):
-    """Test environment variables take precedence over profile defaults."""
-    from scripts.core.config import load_config_with_env_overrides
-
-    config_file = write_yaml_file(
-        tmp_path,
-        "jmo.yml",
-        """
-default_profile: balanced
-
-profiles:
-  balanced:
-    policy:
-      default_policies:
-        - owasp-top-10
-        - zero-secrets
-""",
-    )
-
-    monkeypatch.setenv("JMO_POLICY_DEFAULT_POLICIES", "pci-dss")
-
-    config = load_config_with_env_overrides(str(config_file))
-
-    # Env var should override profile default
-    assert config.policy.default_policies == ["pci-dss"]
 
 
 # ========== Category 6: Edge Cases and Error Handling ==========
@@ -717,34 +563,6 @@ policy: null
     assert config.policy.default_policies == []
 
 
-def test_load_config_profile_override_with_no_fail_on_violation(tmp_path):
-    """Test profile override doesn't set fail_on_violation if not specified."""
-    from scripts.core.config import load_config
-
-    config_file = write_yaml_file(
-        tmp_path,
-        "jmo.yml",
-        """
-default_profile: custom
-
-policy:
-  fail_on_violation: false
-
-profiles:
-  custom:
-    policy:
-      default_policies:
-        - owasp-top-10
-""",
-    )
-
-    config = load_config(str(config_file))
-
-    # Profile should override policies but keep global fail_on_violation
-    assert config.policy.default_policies == ["owasp-top-10"]
-    assert config.policy.fail_on_violation is False
-
-
 def test_environment_variable_negative_timeout_ignored(monkeypatch):
     """Test that negative OPA timeout from env var is ignored."""
     from scripts.core.config import load_config_with_env_overrides
@@ -767,137 +585,6 @@ def test_environment_variable_zero_timeout_ignored(monkeypatch):
 
     # Zero timeout should be ignored, keep default
     assert config.policy.opa["timeout"] == 30
-
-
-def test_load_config_profile_nonexistent_profile(tmp_path):
-    """Test that nonexistent profile doesn't cause errors."""
-    from scripts.core.config import load_config
-
-    config_file = write_yaml_file(
-        tmp_path,
-        "jmo.yml",
-        """
-default_profile: nonexistent
-
-policy:
-  default_policies:
-    - owasp-top-10
-""",
-    )
-
-    config = load_config(str(config_file))
-
-    # Should use global policy defaults when profile doesn't exist
-    assert config.policy.default_policies == ["owasp-top-10"]
-
-
-def test_load_config_profile_no_policy_section(tmp_path):
-    """Test profile without policy section uses global defaults."""
-    from scripts.core.config import load_config
-
-    config_file = write_yaml_file(
-        tmp_path,
-        "jmo.yml",
-        """
-default_profile: minimal
-
-policy:
-  default_policies:
-    - zero-secrets
-
-profiles:
-  minimal:
-    tools:
-      - trufflehog
-""",
-    )
-
-    config = load_config(str(config_file))
-
-    # Should use global policy defaults
-    assert config.policy.default_policies == ["zero-secrets"]
-
-
-def test_load_config_profile_override_fail_on_violation_only(tmp_path):
-    """Test profile can override fail_on_violation without overriding policies."""
-    from scripts.core.config import load_config
-
-    config_file = write_yaml_file(
-        tmp_path,
-        "jmo.yml",
-        """
-default_profile: strict
-
-policy:
-  default_policies:
-    - zero-secrets
-  fail_on_violation: false
-
-profiles:
-  strict:
-    policy:
-      fail_on_violation: true
-""",
-    )
-
-    config = load_config(str(config_file))
-
-    # Profile should override fail_on_violation but keep global policies
-    # Note: Profile overrides default_policies too if not specified (empty list)
-    assert config.policy.fail_on_violation is True
-
-
-def test_load_config_profile_policy_non_list_default_policies(tmp_path):
-    """Test profile with non-list default_policies doesn't override."""
-    from scripts.core.config import load_config
-
-    config_file = write_yaml_file(
-        tmp_path,
-        "jmo.yml",
-        """
-default_profile: broken
-
-policy:
-  default_policies:
-    - owasp-top-10
-
-profiles:
-  broken:
-    policy:
-      default_policies: "not_a_list"
-""",
-    )
-
-    config = load_config(str(config_file))
-
-    # Should keep global policies when profile has invalid type
-    assert config.policy.default_policies == ["owasp-top-10"]
-
-
-def test_load_config_profile_policy_dict_not_dict(tmp_path):
-    """Test profile with non-dict policy section doesn't cause errors."""
-    from scripts.core.config import load_config
-
-    config_file = write_yaml_file(
-        tmp_path,
-        "jmo.yml",
-        """
-default_profile: broken
-
-policy:
-  default_policies:
-    - zero-secrets
-
-profiles:
-  broken:
-    policy: "invalid_string"
-""",
-    )
-
-    config = load_config(str(config_file))
-
-    # Should use global policies when profile policy is invalid
-    assert config.policy.default_policies == ["zero-secrets"]
 
 
 # ========== NON-POLICY COVERAGE TESTS (LINES 95-146) ====================
@@ -928,16 +615,9 @@ outputs:
     try:
         config = load_config(str(config_file))
 
-        # Should return default Config when yaml unavailable
-        assert config.tools == [
-            "trufflehog",
-            "semgrep",
-            "syft",
-            "trivy",
-            "checkov",
-            "hadolint",
-            "zap",
-        ]
+        # Should return default Config when yaml unavailable (the file's
+        # `tools: [trivy]` was not read)
+        assert config.tools == list(TOOL_MATRIX)
         assert config.outputs == [
             "json",
             "md",

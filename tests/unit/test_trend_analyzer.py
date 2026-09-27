@@ -80,7 +80,6 @@ def sample_scans_data():
             ).isoformat(),
             "branch": "main",
             "commit_hash": f"abc{i}",
-            "profile": "balanced",
             "tools": ["trivy", "semgrep"],
             "total_findings": max(
                 100 - (i * 5), 10
@@ -107,7 +106,6 @@ def degrading_scans_data():
             ).isoformat(),
             "branch": "main",
             "commit_hash": f"abc{i}",
-            "profile": "balanced",
             "tools": ["trivy", "semgrep"],
             "total_findings": 50 + (i * 5),  # Increasing: 50, 55, 60, ..., 95
             "critical_count": i,  # Increasing: 0, 1, 2, ..., 9
@@ -243,7 +241,6 @@ def test_trend_analyzer_improvement_trend(trend_temp_db, sample_scans_data):
 
             store_scan(
                 results_dir=results_dir,
-                profile=scan_data["profile"],
                 tools=scan_data["tools"],
                 db_path=trend_temp_db,
                 commit_hash=scan_data["commit_hash"],
@@ -332,7 +329,6 @@ def test_trend_analyzer_degrading_trend(trend_temp_db, degrading_scans_data):
 
             store_scan(
                 results_dir=results_dir,
-                profile=scan_data["profile"],
                 tools=scan_data["tools"],
                 db_path=trend_temp_db,
                 commit_hash=scan_data["commit_hash"],
@@ -413,7 +409,6 @@ def test_regression_detection(trend_temp_db, degrading_scans_data):
 
             store_scan(
                 results_dir=results_dir,
-                profile=scan_data["profile"],
                 tools=scan_data["tools"],
                 db_path=trend_temp_db,
                 commit_hash=scan_data["commit_hash"],
@@ -659,7 +654,6 @@ def test_single_scan_insufficient_data(trend_temp_db):
 
         store_scan(
             results_dir=results_dir,
-            profile="balanced",
             tools=["trivy"],
             db_path=trend_temp_db,
             commit_hash="abc123",
@@ -771,7 +765,6 @@ def _create_test_scan(tmp_path, trend_temp_db, commit_hash, tools_list, counts=N
 
     return store_scan(
         results_dir=results_dir,
-        profile="balanced",
         tools=tools_list,
         db_path=trend_temp_db,
         commit_hash=commit_hash,
@@ -802,7 +795,6 @@ def test_get_scans_with_scan_ids(trend_temp_db, tmp_path):
 
         return store_scan(
             results_dir=results_dir,
-            profile="balanced",
             tools=tools_list,
             db_path=trend_temp_db,
             commit_hash=commit_hash,
@@ -847,9 +839,9 @@ def test_get_scans_with_days_filter(trend_temp_db, tmp_path, seed_conn):
         cursor = conn.cursor()
         cursor.execute(
             """
-            INSERT INTO scans (id, timestamp, timestamp_iso, commit_hash, branch, profile, tools,
-                             targets, target_type, jmo_version, critical_count, high_count, medium_count, low_count, info_count)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO scans (id, timestamp, timestamp_iso, commit_hash, branch, tools,
+                             targets, jmo_version, critical_count, high_count, medium_count, low_count, info_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 "old_scan",
@@ -857,10 +849,8 @@ def test_get_scans_with_days_filter(trend_temp_db, tmp_path, seed_conn):
                 old_timestamp_iso,
                 "abc123",
                 "main",
-                "balanced",
                 '["trivy"]',
                 '["test-repo"]',
-                "repo",
                 "1.0.0",
                 1,
                 2,
@@ -881,7 +871,6 @@ def test_get_scans_with_days_filter(trend_temp_db, tmp_path, seed_conn):
 
         recent_scan_id = store_scan(
             results_dir=results_dir,
-            profile="balanced",
             tools=["semgrep"],
             db_path=trend_temp_db,
             commit_hash="recent123",
@@ -931,9 +920,9 @@ def test_detect_regressions_high_threshold(trend_temp_db, tmp_path, seed_conn):
         baseline_iso = datetime.fromtimestamp(1000, tz=UTC).isoformat()
         cursor.execute(
             """
-            INSERT INTO scans (id, timestamp, timestamp_iso, commit_hash, branch, profile, tools,
-                             targets, target_type, jmo_version, critical_count, high_count, medium_count, low_count, info_count)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO scans (id, timestamp, timestamp_iso, commit_hash, branch, tools,
+                             targets, jmo_version, critical_count, high_count, medium_count, low_count, info_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 "scan1",
@@ -941,10 +930,8 @@ def test_detect_regressions_high_threshold(trend_temp_db, tmp_path, seed_conn):
                 baseline_iso,
                 "baseline",
                 "main",
-                "balanced",
                 '["trivy"]',
                 '["test-repo"]',
-                "repo",
                 "1.0.0",
                 0,
                 2,
@@ -958,9 +945,9 @@ def test_detect_regressions_high_threshold(trend_temp_db, tmp_path, seed_conn):
         current_iso = datetime.fromtimestamp(2000, tz=UTC).isoformat()
         cursor.execute(
             """
-            INSERT INTO scans (id, timestamp, timestamp_iso, commit_hash, branch, profile, tools,
-                             targets, target_type, jmo_version, critical_count, high_count, medium_count, low_count, info_count)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO scans (id, timestamp, timestamp_iso, commit_hash, branch, tools,
+                             targets, jmo_version, critical_count, high_count, medium_count, low_count, info_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 "scan2",
@@ -968,10 +955,8 @@ def test_detect_regressions_high_threshold(trend_temp_db, tmp_path, seed_conn):
                 current_iso,
                 "current",
                 "main",
-                "balanced",
                 '["trivy"]',
                 '["test-repo"]',
-                "repo",
                 "1.0.0",
                 0,
                 5,
@@ -1022,10 +1007,8 @@ def test_generate_insights_low_scan_frequency(trend_temp_db, seed_conn):
                     ts_iso,
                     f"commit{i + 1}",
                     "main",
-                    "balanced",
                     '["trivy"]',
                     '["test-repo"]',
-                    "repo",
                     "1.0.0",
                     0,
                     1,
@@ -1038,9 +1021,9 @@ def test_generate_insights_low_scan_frequency(trend_temp_db, seed_conn):
         for scan in scans_data:
             cursor.execute(
                 """
-                INSERT INTO scans (id, timestamp, timestamp_iso, commit_hash, branch, profile, tools,
-                                 targets, target_type, jmo_version, critical_count, high_count, medium_count, low_count, info_count)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO scans (id, timestamp, timestamp_iso, commit_hash, branch, tools,
+                                 targets, jmo_version, critical_count, high_count, medium_count, low_count, info_count)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 scan,
             )
@@ -1087,9 +1070,9 @@ def test_calculate_security_score_all_grades(trend_temp_db, seed_conn):
             timestamp_iso = datetime.fromtimestamp(1000, tz=UTC).isoformat()
             cursor.execute(
                 """
-                INSERT INTO scans (id, timestamp, timestamp_iso, commit_hash, branch, profile, tools,
-                                 targets, target_type, jmo_version, critical_count, high_count, medium_count, low_count, info_count)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO scans (id, timestamp, timestamp_iso, commit_hash, branch, tools,
+                                 targets, jmo_version, critical_count, high_count, medium_count, low_count, info_count)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     f"scan_{expected_grade}",
@@ -1097,10 +1080,8 @@ def test_calculate_security_score_all_grades(trend_temp_db, seed_conn):
                     timestamp_iso,
                     f"test_{expected_grade}",
                     "main",
-                    "balanced",
                     '["trivy"]',
                     '["test-repo"]',
-                    "repo",
                     "1.0.0",
                     critical,
                     high,
@@ -1172,7 +1153,6 @@ def test_format_trend_summary_with_date_range(
 
         store_scan(
             results_dir=results_dir,
-            profile=scan_data["profile"],
             tools=scan_data["tools"],
             db_path=trend_temp_db,
             commit_hash=scan_data["commit_hash"],
@@ -1207,7 +1187,6 @@ def test_format_trend_summary_with_security_score(
 
         store_scan(
             results_dir=results_dir,
-            profile=scan_data["profile"],
             tools=scan_data["tools"],
             db_path=trend_temp_db,
             commit_hash=scan_data["commit_hash"],
@@ -1239,9 +1218,9 @@ def test_format_trend_summary_with_many_regressions(trend_temp_db, seed_conn):
         baseline_iso = datetime.fromtimestamp(1000, tz=UTC).isoformat()
         cursor.execute(
             """
-            INSERT INTO scans (id, timestamp, timestamp_iso, commit_hash, branch, profile, tools,
-                             targets, target_type, jmo_version, critical_count, high_count, medium_count, low_count, info_count)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO scans (id, timestamp, timestamp_iso, commit_hash, branch, tools,
+                             targets, jmo_version, critical_count, high_count, medium_count, low_count, info_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 "baseline",
@@ -1249,10 +1228,8 @@ def test_format_trend_summary_with_many_regressions(trend_temp_db, seed_conn):
                 baseline_iso,
                 "baseline",
                 "main",
-                "balanced",
                 '["trivy"]',
                 '["test-repo"]',
-                "repo",
                 "1.0.0",
                 0,
                 0,
@@ -1268,9 +1245,9 @@ def test_format_trend_summary_with_many_regressions(trend_temp_db, seed_conn):
             timestamp_iso = datetime.fromtimestamp(timestamp, tz=UTC).isoformat()
             cursor.execute(
                 """
-                INSERT INTO scans (id, timestamp, timestamp_iso, commit_hash, branch, profile, tools,
-                                 targets, target_type, jmo_version, critical_count, high_count, medium_count, low_count, info_count)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO scans (id, timestamp, timestamp_iso, commit_hash, branch, tools,
+                                 targets, jmo_version, critical_count, high_count, medium_count, low_count, info_count)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     f"reg{i}",
@@ -1278,10 +1255,8 @@ def test_format_trend_summary_with_many_regressions(trend_temp_db, seed_conn):
                     timestamp_iso,
                     f"regression{i}",
                     "main",
-                    "balanced",
                     '["trivy"]',
                     '["test-repo"]',
-                    "repo",
                     "1.0.0",
                     i * 2,
                     0,
@@ -1315,7 +1290,6 @@ def test_format_trend_summary_with_insights(trend_temp_db, sample_scans_data, tm
 
         store_scan(
             results_dir=results_dir,
-            profile=scan_data["profile"],
             tools=scan_data["tools"],
             db_path=trend_temp_db,
             commit_hash=scan_data["commit_hash"],
@@ -1350,7 +1324,6 @@ def test_format_trend_summary_verbose_mode(
 
         store_scan(
             results_dir=results_dir,
-            profile=scan_data["profile"],
             tools=scan_data["tools"],
             db_path=trend_temp_db,
             commit_hash=scan_data["commit_hash"],

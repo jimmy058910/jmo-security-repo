@@ -2,20 +2,11 @@
 
 Scanning a monorepo — one repository containing multiple applications and shared
 packages — with JMo Security. This guide shows the two multi-target entry points
-(`--repos-dir` and `--targets`) and how to pair them with scan profiles.
+(`--repos-dir` and `--targets`) and how to narrow the tool list with `--tools`.
 
 > Resolves [#83](https://github.com/jimmy058910/jmo-security-repo/issues/83).
 > For single-package scans see the [User Guide](../USER_GUIDE.md); for the full
-> tool/profile matrix see [PROFILES_AND_TOOLS.md](../PROFILES_AND_TOOLS.md).
-
-## Profiles at a glance
-
-| Profile | Tools | Time | Typical monorepo use |
-|---------|-------|------|----------------------|
-| `fast` | 9 | 5-10 min | Pre-commit / PR validation across changed apps |
-| `slim` | 13 | 12-18 min | Cloud / IaC-heavy monorepos (AWS/Azure/GCP/K8s) |
-| `balanced` | 17 | 18-25 min | CI/CD gate covering all apps |
-| `deep` | 29 | 40-70 min | Pre-release / compliance review of the whole repo |
+> tool matrix see [TOOLS.md](../TOOLS.md).
 
 ## Approach 1 — `--repos-dir` (scan every subfolder)
 
@@ -30,12 +21,12 @@ monorepo's apps live side by side under one parent.
 #   ├── app-web/
 #   └── packages/shared/
 
-# Fast pass over every immediate subfolder (app-api, app-web, packages) —
-# good for a quick pre-push check.
-jmo scan --repos-dir ~/work/acme-monorepo --profile fast
+# Quick pass over every immediate subfolder (app-api, app-web, packages) —
+# good for a pre-push check.
+jmo scan --repos-dir ~/work/acme-monorepo --tools trufflehog semgrep trivy
 
-# Balanced pass for a CI gate covering all apps.
-jmo scan --repos-dir ~/work/acme-monorepo --profile balanced
+# Full pass for a CI gate covering all apps: every applicable tool runs.
+jmo scan --repos-dir ~/work/acme-monorepo
 ```
 
 > Note: `--repos-dir` enumerates only the *immediate* children of the directory.
@@ -55,8 +46,8 @@ cat > monorepo-targets.txt <<'EOF'
 ~/work/acme-monorepo/packages/shared
 EOF
 
-# Deep scan of just those three targets — typical before a release.
-jmo scan --targets monorepo-targets.txt --profile deep
+# Full scan of just those three targets — typical before a release.
+jmo scan --targets monorepo-targets.txt
 ```
 
 Lines are plain paths; there is no inline comma-separated form — each target
@@ -75,20 +66,18 @@ Open the generated `results/dashboard.html` to browse findings grouped by target
 
 ## Tips
 
-- **Start `fast`, escalate as needed.** Run `fast` locally for the pre-push loop;
-  reserve `deep` for release gates — a 28-tool deep pass over a large monorepo
-  can take well over an hour.
-- **Exclude apps you don't want scanned.** Each profile in `jmo.yml` takes an
+- **Start narrow, widen as needed.** Run a `--tools` subset locally for the
+  pre-push loop; reserve the full matrix for CI and release gates — a full pass
+  over a large monorepo can take well over an hour.
+- **Exclude apps you don't want scanned.** `jmo.yml` takes a top-level
   `exclude:` list of glob patterns matched against target names, e.g.:
 
   ```yaml
-  profiles:
-    fast:
-      include: ["*"]
-      exclude: ["legacy-app*", "vendored-*"]
+  include: ["*"]
+  exclude: ["legacy-app*", "vendored-*"]
   ```
 
 - **Content-triggered tools.** Some tools run only against targets whose contents
-  match — `prowler` on `*.tf`/CloudFormation, `zap` on HTML/JS, `trivy-rbac` on
-  K8s manifests (see [PROFILES_AND_TOOLS.md](../PROFILES_AND_TOOLS.md#content-triggered-tool-execution)).
+  match — `hadolint` on Dockerfiles, `shellcheck` on shell scripts, `gosec` on Go
+  sources (see [TOOLS.md](../TOOLS.md#when-each-tool-runs)).
   A polyglot monorepo automatically gets the relevant scanners per subfolder.

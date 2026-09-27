@@ -31,7 +31,6 @@ All v1.0.0+ outputs use a standardized metadata wrapper:
     "schema_version": "1.2.0",
     "timestamp": "2025-12-22T10:30:00Z",
     "scan_id": "abc123",
-    "profile": "balanced",
     "tools": ["trivy", "semgrep", "checkov", "..."],
     "target_count": 1,
     "finding_count": 68,
@@ -106,7 +105,6 @@ Total findings: 68 | CRITICAL: 3 | HIGH: 38 | MEDIUM: 9 | LOW: 16
 | hadolint | 4 | Dockerfile linting (package pinning, non-root user) |
 | semgrep | 3 | Dockerfile USER, K8s runAsNonRoot, allowPrivilegeEscalation |
 | trufflehog | 32 | Verified secrets detection |
-| noseyparker | 0 | No additional secrets detected |
 | syft | 0 | No SBOM artifacts (minimal fixture) |
 
 ---
@@ -129,7 +127,6 @@ Interactive React dashboard with:
 # JMo Security Scan Results
 # Version: 1.0.0
 # Timestamp: 2025-12-22T10:30:00Z
-# Profile: balanced
 # Finding Count: 68
 
 severity,ruleId,message,path,startLine,tool,category

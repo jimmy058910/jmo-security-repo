@@ -197,7 +197,6 @@ class TestAttestCommandExecution:
         findings = {
             "meta": {
                 "jmo_version": "1.0.0",
-                "profile": "balanced",
                 "tools": ["trivy", "semgrep"],
                 "target_count": 1,
             },
@@ -319,7 +318,6 @@ class TestAttestCommandExecution:
 
         # Create scan args file
         scan_args = {
-            "profile_name": "balanced",
             "tools": ["trivy", "semgrep", "trufflehog"],
             "threads": 4,
             "repos": ["repo1", "repo2"],
@@ -345,16 +343,10 @@ class TestAttestCommandExecution:
         attestation_path = Path(str(sample_findings) + ".att.json")
         attestation = json.loads(attestation_path.read_text(encoding="utf-8"))
 
-        assert (
-            attestation["predicate"]["buildDefinition"]["externalParameters"]["profile"]
-            == "balanced"
-        )
-        assert (
-            "trivy"
-            in attestation["predicate"]["buildDefinition"]["externalParameters"][
-                "tools"
-            ]
-        )
+        build_def = attestation["predicate"]["buildDefinition"]
+        assert "trivy" in build_def["externalParameters"]["tools"]
+        assert build_def["externalParameters"]["targets"] == ["repo1", "repo2"]
+        assert build_def["internalParameters"]["threads"] == 4
 
     def test_attest_includes_provenance_structure(self, sample_findings):
         """Test that attestation has correct SLSA provenance structure."""
@@ -406,7 +398,6 @@ class TestVerifyCommandExecution:
         generator = ProvenanceGenerator()
         statement = generator.generate(
             findings_path=subject_path,
-            profile="balanced",
             tools=["trivy"],
             targets=["repo1"],
         )
@@ -637,7 +628,6 @@ class TestWizardIntegration:
     def test_wizard_generates_attestation_metadata(self):
         """Test that wizard captures scan metadata for attestation."""
         # This test will verify wizard stores:
-        # - Profile used
         # - Tools executed
         # - Targets scanned
         # - Execution context
@@ -804,7 +794,7 @@ class TestVerifyReportsWhatItDidNotCheck:
         attestation.write_text(
             json.dumps(
                 ProvenanceGenerator().generate(
-                    findings_path=subject, profile="fast", tools=[], targets=[]
+                    findings_path=subject, tools=[], targets=[]
                 )
             ),
             encoding="utf-8",

@@ -5,7 +5,6 @@ Covers:
 - Context manager (__enter__/__exit__)
 - update() for target completion
 - update_tool() for tool status callbacks
-- Multi-phase tool handling (_get_base_tool_name)
 - _format_elapsed() time formatting
 - _make_display() panel rendering
 - log() method
@@ -100,38 +99,6 @@ class TestContextManager:
         tracker.__exit__(None, None, None)
 
 
-# ========== Category 3: Tool Name Handling ==========
-
-
-class TestGetBaseToolName:
-    """Tests for _get_base_tool_name() multi-phase tool handling."""
-
-    def test_plain_tool_name(self):
-        """Test tool name without phase suffix."""
-        tracker = make_tracker()
-        assert tracker._get_base_tool_name("trivy") == "trivy"
-
-    def test_init_suffix(self):
-        """Test -init suffix stripping."""
-        tracker = make_tracker()
-        assert tracker._get_base_tool_name("noseyparker-init") == "noseyparker"
-
-    def test_scan_suffix(self):
-        """Test -scan suffix stripping."""
-        tracker = make_tracker()
-        assert tracker._get_base_tool_name("noseyparker-scan") == "noseyparker"
-
-    def test_report_suffix(self):
-        """Test -report suffix stripping."""
-        tracker = make_tracker()
-        assert tracker._get_base_tool_name("noseyparker-report") == "noseyparker"
-
-    def test_non_phase_hyphen(self):
-        """Test that non-phase hyphens are preserved."""
-        tracker = make_tracker()
-        assert tracker._get_base_tool_name("dependency-check") == "dependency-check"
-
-
 # ========== Category 4: Time Formatting ==========
 
 
@@ -206,18 +173,25 @@ class TestUpdateTool:
         assert tracker.tools_completed == 0
         assert "flaky" in tracker.tools_in_progress
 
-    def test_multi_phase_tool_counted_once(self):
-        """Test multi-phase tool is counted as single completion."""
+    def test_a_tool_that_completes_twice_is_counted_once(self):
+        """A second completion for the same tool must not advance the count.
+
+        The tool bar reads `[completed/total]`; a repeated completion would
+        push it past the total.
+        """
         tracker = make_tracker()
-        # noseyparker has 3 phases: init, scan, report
-        tracker.update_tool("noseyparker-init", "start")
-        tracker.update_tool("noseyparker-init", "success")
+        tracker.update_tool("trivy", "start")
+        tracker.update_tool("trivy", "success")
         assert tracker.tools_completed == 1
 
-        tracker.update_tool("noseyparker-scan", "start")
-        tracker.update_tool("noseyparker-scan", "success")
-        # Still 1, not 2 - same base tool
+        tracker.update_tool("trivy", "start")
+        tracker.update_tool("trivy", "success")
         assert tracker.tools_completed == 1
+
+        # A different tool still counts.
+        tracker.update_tool("semgrep", "start")
+        tracker.update_tool("semgrep", "success")
+        assert tracker.tools_completed == 2
 
     def test_kwargs_accepted(self):
         """Test forward-compatibility **kwargs don't cause errors."""
@@ -476,13 +450,7 @@ class TestUpdateOnlyWarnsAboutRealGaps:
         return seen
 
     def test_a_tool_with_nothing_to_scan_is_not_warned_about(self, monkeypatch):
-        from scripts.cli.scan_utils import (
-            NOT_ATTEMPTED_NOTHING_APPLICABLE,
-            record_not_attempted,
-        )
-
-        statuses: dict = {"trufflehog": True}
-        record_not_attempted(statuses, "gosec", NOT_ATTEMPTED_NOTHING_APPLICABLE)
+        statuses = _rows(trufflehog="ran", gosec="skipped:no Go sources")
 
         assert self._logged(monkeypatch, statuses) == [], (
             "a correct skip produced a warning on the target line"
@@ -491,10 +459,7 @@ class TestUpdateOnlyWarnsAboutRealGaps:
     def test_a_missing_tool_is_still_warned_about(self, monkeypatch):
         """Narrowed, not deleted: an empty stub from a scanner that never ran
         still satisfies a `zero-secrets` policy (#825)."""
-        from scripts.cli.scan_utils import NOT_ATTEMPTED_MISSING, record_not_attempted
-
-        statuses: dict = {"trufflehog": True}
-        record_not_attempted(statuses, "gosec", NOT_ATTEMPTED_MISSING)
+        statuses = _rows(trufflehog="ran", gosec="skipped:not installed")
 
         logged = self._logged(monkeypatch, statuses)
 
@@ -504,18 +469,37 @@ class TestUpdateOnlyWarnsAboutRealGaps:
         assert "1 tool(s) were stubbed and did NOT run" in msg
         assert "gosec" in msg
 
+    def test_a_target_with_nothing_for_any_tool_is_not_warned_about(self, monkeypatch):
+        """#1317: `--tools hadolint` on a repository with no Dockerfile is a
+        correct result, and was announced as "NOT a clean result"."""
+        statuses = _rows(hadolint="skipped:no Dockerfiles", zap="skipped:needs --url")
+
+        assert self._logged(monkeypatch, statuses) == []
+
+    def test_a_target_whose_only_tool_is_missing_is_not_a_clean_result(
+        self, monkeypatch
+    ):
+        """#825's case, which that wording was written for, keeps it."""
+        statuses = _rows(
+            trufflehog="skipped:not installed", gosec="skipped:no Go sources"
+        )
+
+        logged = self._logged(monkeypatch, statuses)
+
+        assert len(logged) == 1, f"expected exactly one line: {logged}"
+        level, msg = logged[0]
+        assert level == "WARN"
+        assert "NOT a clean result" in msg
+        assert "trufflehog (not installed)" in msg
+
     def test_a_mixed_target_names_only_the_missing_tool(self, monkeypatch):
         """The discriminating case. With one of each reason, a reason-blind
         implementation names both and reports the count as 2."""
-        from scripts.cli.scan_utils import (
-            NOT_ATTEMPTED_MISSING,
-            NOT_ATTEMPTED_NOTHING_APPLICABLE,
-            record_not_attempted,
+        statuses = _rows(
+            trufflehog="ran",
+            semgrep="skipped:not installed",
+            gosec="skipped:no Go sources",
         )
-
-        statuses: dict = {"trufflehog": True}
-        record_not_attempted(statuses, "semgrep", NOT_ATTEMPTED_MISSING)
-        record_not_attempted(statuses, "gosec", NOT_ATTEMPTED_NOTHING_APPLICABLE)
 
         logged = self._logged(monkeypatch, statuses)
 
@@ -528,13 +512,11 @@ class TestUpdateOnlyWarnsAboutRealGaps:
     def test_a_failed_tool_is_unaffected(self, monkeypatch):
         """The narrowing must not reach the failure path: a tool that ran and
         failed is neither reason and still has to be reported."""
-        from scripts.cli.scan_utils import (
-            NOT_ATTEMPTED_NOTHING_APPLICABLE,
-            record_not_attempted,
+        statuses = _rows(
+            trufflehog="ran",
+            semgrep="failed:unaccepted exit code",
+            gosec="skipped:no Go sources",
         )
-
-        statuses: dict = {"trufflehog": True, "semgrep": False}
-        record_not_attempted(statuses, "gosec", NOT_ATTEMPTED_NOTHING_APPLICABLE)
 
         logged = self._logged(monkeypatch, statuses)
 
@@ -543,3 +525,17 @@ class TestUpdateOnlyWarnsAboutRealGaps:
         assert level == "WARN"
         assert "findings MISSING from 1 failed tool(s)" in msg
         assert "semgrep" in msg
+
+
+def _rows(**labels: str):
+    """`ran`, or `<state>:<reason value>`, by tool."""
+    from scripts.core.scan_timings import Reason, State, ToolRun
+
+    rows = {}
+    for tool, label in labels.items():
+        if label == "ran":
+            rows[tool] = ToolRun(tool, State.RAN)
+        else:
+            state, _, reason = label.partition(":")
+            rows[tool] = ToolRun(tool, State(state), Reason(reason))
+    return rows

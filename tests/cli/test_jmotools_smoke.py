@@ -2,7 +2,8 @@
 Smoke tests for jmo CLI (consolidated from jmotools in v0.9.0).
 
 Note: jmotools was consolidated into jmo in v0.9.0 Feature #1.
-All beginner-friendly commands (wizard, fast, balanced, full, setup) are now under jmo.
+All beginner-friendly commands (wizard, setup) are now under jmo; the
+fast/balanced/full profile shortcuts were removed in v2.0.0.
 """
 
 import subprocess
@@ -29,9 +30,9 @@ def test_help_top_level():
     assert "scan" in output
 
 
-def test_help_fast():
-    """Test jmo fast --help (beginner-friendly command)."""
-    cp = run(["fast", "--help"])  # help should work without tools
+def test_help_scan():
+    """Test jmo scan --help, the command the removed shortcuts wrapped."""
+    cp = run(["scan", "--help"])  # help should work without tools
     assert cp.returncode == 0
     assert "--repos-dir" in (cp.stdout + cp.stderr)
 

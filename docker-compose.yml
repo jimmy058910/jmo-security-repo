@@ -3,10 +3,10 @@
 # Usage:
 #   docker-compose run --rm jmo-scan          # Run scan on current directory
 #   docker-compose run --rm jmo-ci            # Run CI mode with failure threshold
-#   docker-compose run --rm jmo-custom        # Custom scan with flags
+#   docker-compose run --rm jmo-shell         # Interactive shell for debugging
 
 services:
-  # Full image with all tools
+  # Scan the current directory
   jmo-scan:
     image: ghcr.io/jimmy058910/jmo-security:latest
     volumes:
@@ -18,8 +18,6 @@ services:
       - /scan
       - --results
       - /scan/results
-      - --profile
-      - balanced
       - --human-logs
     environment:
       - PYTHONUNBUFFERED=1
@@ -39,43 +37,7 @@ services:
       - /scan/results
       - --fail-on
       - HIGH
-      - --profile
-      - balanced
       - --human-logs
-    environment:
-      - PYTHONUNBUFFERED=1
-
-  # Slim variant (smaller image, fewer tools)
-  jmo-slim:
-    image: ghcr.io/jimmy058910/jmo-security:slim
-    volumes:
-      - .:/scan:ro
-      - ./results:/scan/results
-    command:
-      - scan
-      - --repo
-      - /scan
-      - --results
-      - /scan/results
-      - --profile
-      - fast
-    environment:
-      - PYTHONUNBUFFERED=1
-
-  # Balanced variant (recommended for most use cases)
-  jmo-balanced:
-    image: ghcr.io/jimmy058910/jmo-security:balanced
-    volumes:
-      - .:/scan:ro
-      - ./results:/scan/results
-    command:
-      - scan
-      - --repo
-      - /scan
-      - --results
-      - /scan/results
-      - --profile
-      - balanced
     environment:
       - PYTHONUNBUFFERED=1
 
@@ -102,8 +64,6 @@ services:
       - /repos
       - --results
       - /results
-      - --profile
-      - balanced
       - --allow-missing-tools
     environment:
       - PYTHONUNBUFFERED=1
@@ -129,5 +89,5 @@ services:
 # 5. Generate report only (after scan):
 #    docker-compose run --rm jmo-scan report /scan/results --profile --human-logs
 #
-# 6. Custom profile:
-#    docker-compose run --rm jmo-scan scan --repo /scan --profile deep --timeout 900
+# 6. Narrow the tool list:
+#    docker-compose run --rm jmo-scan scan --repo /scan --tools trivy semgrep --timeout 900

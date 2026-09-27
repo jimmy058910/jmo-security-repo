@@ -98,16 +98,14 @@ class TestDatabaseRecovery:
             conn = get_connection(db_path)
             conn.execute("BEGIN")
             conn.execute(
-                "INSERT INTO scans (id, timestamp, timestamp_iso, profile, tools, targets, target_type, jmo_version) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO scans (id, timestamp, timestamp_iso, tools, targets, jmo_version) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
                 (
                     "test-scan",
                     1704067200,
                     "2024-01-01T00:00:00",
-                    "fast",
                     "[]",
                     "[]",
-                    "repo",
                     "1.0.0",
                 ),
             )
@@ -366,16 +364,14 @@ class TestConcurrentAccessRecovery:
                 conn = get_connection(db_path)
                 try:
                     conn.execute(
-                        "INSERT INTO scans (id, timestamp, timestamp_iso, profile, tools, targets, target_type, jmo_version) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        "INSERT INTO scans (id, timestamp, timestamp_iso, tools, targets, jmo_version) "
+                        "VALUES (?, ?, ?, ?, ?, ?)",
                         (
                             scan_id,
                             1704067200,
                             "2024-01-01T00:00:00",
-                            "fast",
                             "[]",
                             "[]",
-                            "repo",
                             "1.0.0",
                         ),
                     )

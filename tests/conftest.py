@@ -8,6 +8,7 @@ This module provides:
 - Common test utilities
 """
 
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -191,6 +192,32 @@ def is_command_not_found_error(stderr: str) -> bool:
     return any(pattern in stderr_lower for pattern in COMMAND_NOT_FOUND_PATTERNS)
 
 
+# A traceback frame from JMo's own package, raw (`File "/x/scripts/cli/jmo.py"`)
+# or JSON-escaped inside a log line (`File \"C:\\x\\scripts\\core\\y.py\"`).
+# `jmo tools debug` exists to relay a broken tool's stderr, and a scan logs a
+# failed tool's stderr, so the word "traceback" in JMo's output does not mean
+# JMo crashed: measured 2026-09-24, a `pip --user` semgrep under a test's
+# redirected HOME printed its own ModuleNotFoundError traceback and failed three
+# Linux e2e tests that assert only "traceback" not in the output. A JMo crash
+# always passes through `scripts/cli/jmo.py`, so it always has such a frame.
+_JMO_TRACEBACK_FRAME = re.compile(
+    r'file \\?"[^"\n]*[\\/]scripts[\\/]+(?:cli|core|jmo_mcp)[\\/]', re.IGNORECASE
+)
+
+
+def assert_no_jmo_traceback(output: str) -> None:
+    """Fail if `output` holds a traceback raised inside JMo itself.
+
+    A traceback belonging to a scanner JMo ran or relayed is not a JMo crash
+    and does not fail this. Callers pass the combined stdout + stderr.
+    """
+    frames = _JMO_TRACEBACK_FRAME.findall(output)
+    assert not frames, (
+        f"JMo raised a traceback ({len(frames)} frame(s) in its own package, "
+        f"first: {frames[0]!r}). Output tail:\n{output[-3000:]}"
+    )
+
+
 # ============================================================================
 # Integration Test Fixtures
 # ============================================================================
@@ -251,7 +278,7 @@ def _guard_real_jmo_install():
             "    monkeypatch.setattr(Path, 'home', staticmethod(lambda: tmp_path))\n"
             "and NOT monkeypatch.setenv('HOME', ...), which does not affect "
             "Path.home() on Windows.\n"
-            "Recover with: jmo tools install --profile fast --yes",
+            "Recover with: jmo tools install --yes",
             pytrace=False,
         )
 
@@ -513,18 +540,10 @@ _ALLOWED_OFFLINE_SCANNER_SPAWNS = {
     # test entirely (skip-tools) would just make it assert nothing about
     # the tool it's most likely to regress on. Fixed via
     # `per_tool.semgrep.configs` pointing at a local rule file (task-8-report.md).
-    "tests/integration/test_cli_profiles.py::test_scan_startup_probes_each_tool_at_most_once",
+    "tests/integration/test_cli_per_tool_config.py::test_scan_startup_probes_each_tool_at_most_once",
     #
-    # The four below were invisible until the recorder stopped watching only
+    # The three below were invisible until the recorder stopped watching only
     # semgrep (#994). Each was read individually; none reaches the network.
-    #
-    # `bandit -r <tmp repo>`. The test's whole point is that an *available*
-    # tool runs while missing ones are skipped, and bandit is a dev dependency
-    # so it is available on every machine and in CI alike -- marking this
-    # `requires_tools` would exclude it from the shards where it currently
-    # passes, which is a coverage loss for no safety gain. Offline: bandit
-    # fetches nothing.
-    "tests/integration/test_cli_scan_ci.py::test_scan_skips_missing_tools_and_runs_available",
     #
     # `trufflehog --version`, three times. These are target-discovery tests --
     # they patch `_check_scan_tools` precisely so the tool pre-flight stops
@@ -533,26 +552,6 @@ _ALLOWED_OFFLINE_SCANNER_SPAWNS = {
     "tests/cli/test_jmo.py::TestScanExitsNonZeroWhenNothingWasScanned::test_missing_repo_path_fails",
     "tests/cli/test_jmo.py::TestScanExitsNonZeroWhenNothingWasScanned::test_no_target_flag_at_all_fails",
     "tests/cli/test_jmo.py::TestScanExitsNonZeroWhenNothingWasScanned::test_the_rejected_target_is_named_in_the_log",
-    #
-    # `.venv/bin/bandit` during a real end-to-end scan, one entry per platform.
-    #
-    # Found by CI, not locally, and that is the point worth recording: these are
-    # platform-gated (`skipif(sys.platform != ...)`), so a Windows box cannot run
-    # any of them and a clean local suite says nothing about them. **A change to
-    # the recorder's scope must be verified on CI**, because widening it newly
-    # covers tests the local platform never executes. Same shape as Phase 0's
-    # "CI found 45 real-state writers a Windows box cannot see".
-    #
-    # Allowlisted rather than marked `requires_tools`: bandit is a dev
-    # dependency, so it is present in the venv on every runner, and these are
-    # the only end-to-end full-scan coverage each platform has. Marking them
-    # would remove that from the shards where it currently runs, for no safety
-    # gain. The spawn is offline. The WSL sibling is included pre-emptively --
-    # it fires under `/mnt/c` and neither CI nor this machine's default shell
-    # reaches it.
-    "tests/e2e/test_cross_platform.py::TestCrossPlatformCompatibility::test_linux_full_scan",
-    "tests/e2e/test_cross_platform.py::TestCrossPlatformCompatibility::test_macos_full_scan",
-    "tests/e2e/test_cross_platform.py::TestCrossPlatformCompatibility::test_windows_wsl_full_scan",
     #
     # `trufflehog filesystem scripts/ tests/ .github/ --json --no-update`.
     #
@@ -594,9 +593,11 @@ _ALLOWED_OFFLINE_SCANNER_SPAWNS = {
     # allowlist is what keeps that honest: putting the inert patch back makes
     # the recorder fire here rather than passing quietly.
     #
-    # `/usr/local/bin/trufflehog --version`, eighteen times. Added 2026-08-28
-    # from nightly run 33177110349 (#1039), where every one of the run's 18
-    # errors was this same probe.
+    # `/usr/local/bin/trufflehog --version`. Added 2026-08-28 from nightly run
+    # 33177110349 (#1039), where all 18 of the run's errors were this probe.
+    # The v2.0.0 cut took 4 off (it deleted the `jmo fast` history tests and
+    # made the include/exclude port hermetic); #1237 removed 10 more (below);
+    # these 4 remain.
     #
     # **They are green on every PR because only the nightly installs the real
     # security tools.** The PR shards have no trufflehog on PATH, so
@@ -604,39 +605,37 @@ _ALLOWED_OFFLINE_SCANNER_SPAWNS = {
     # THIRD environment, after the local box and PR CI, and a guard-scope
     # change is not finished being measured until it has run in all three --
     # #994 widened this recorder, verified locally and on PR CI, and these
-    # eighteen were still invisible to both.
+    # were still invisible to both.
     #
-    # Same reason as the three `test_jmo.py` entries above, at larger scale:
-    # each runs a real `jmo scan` or `jmo ci` whose pre-flight version-checks
-    # the tools it was asked for, and trufflehog is the tool these tests use.
-    # The probe is the PRODUCT behaving correctly; the tests' invariants are
-    # about scan accounting, exit codes and history, not about whether
-    # trufflehog exists. `test_scan_startup_does_not_version_check_unrequested_tools`
-    # is the clearest case: its subject IS the version check.
+    # The probe is NOT the tool pre-flight. Measured 2026-09-25 with a fake
+    # trufflehog on PATH and the Python stack of every spawn recorded: each
+    # `--version` comes from the startup version check, `cmd_scan` ->
+    # `_warn_critical_updates` -> `ToolManager.get_critical_outdated` ->
+    # `_get_tool_version`, which runs before `_check_scan_tools` and resolves
+    # through `ToolManager._find_binary`. The three measured here (the
+    # per-tool-config test and both `test_cli_scan_ci.py` tests) also run the
+    # real `trufflehog filesystem ... --no-update` scan through
+    # `tool_runner.run_tool`, because they do not stub the scan.
+    # `test_signal_handling.py` skips on Windows and was not measured.
     #
-    # `--version` fetches nothing. `requires_tools` is wrong for all of them:
-    # it would remove the only end-to-end scan-accounting coverage the shards
-    # have, on every runner, to silence a probe that is already offline.
+    # The probe is the PRODUCT behaving correctly, and `--version` fetches
+    # nothing. The real scan is offline too: each of the three points it at a
+    # directory it has just `mkdir`-ed and left empty, so trufflehog finds
+    # nothing to verify, and `--no-update` skips its update check.
+    # `test_scan_startup_does_not_version_check_unrequested_tools` is the
+    # clearest case: its subject IS the version check. `requires_tools` is
+    # wrong for all of them: it would remove end-to-end coverage the shards
+    # have, on every runner, to silence a spawn that is already offline.
     #
-    # The durable alternative, if this list grows again: `_check_scan_tools`
-    # reads `args._startup_tool_manager`, so a stub manager set there skips
-    # the real resolver entirely. That is a change to eighteen call sites
-    # rather than one, which is why it is recorded here instead of taken.
-    "tests/cli/test_scan_runtime_accounting.py::TestAllowMissingToolsSaysWhatHappened::test_nothing_left_to_run_is_explained",
-    "tests/cli/test_scan_runtime_accounting.py::TestProfileShortcutsStoreHistory::test_a_matching_profile_name_is_accepted",
-    "tests/cli/test_scan_runtime_accounting.py::TestProfileShortcutsStoreHistory::test_jmo_fast_records_the_scan_in_history",
-    "tests/cli/test_scan_runtime_accounting.py::TestProfileShortcutsStoreHistory::test_no_store_history_now_turns_it_off",
-    "tests/cli/test_scan_runtime_accounting.py::TestScanExitCodeReflectsTargetOutcome::test_partial_target_exits_zero_but_says_so",
-    "tests/cli/test_scan_runtime_accounting.py::TestScanExitCodeReflectsTargetOutcome::test_successful_target_still_exits_zero",
-    "tests/cli/test_scan_runtime_accounting.py::TestScanExitCodeReflectsTargetOutcome::test_target_where_every_tool_failed_exits_non_zero",
-    "tests/cli/test_scan_runtime_accounting.py::TestScanRecordsItsOwnDuration::test_a_scan_stores_a_duration_a_user_can_read",
-    "tests/cli/test_scan_runtime_accounting.py::TestStubbedToolIsNotASuccess::test_a_fully_stubbed_target_still_exits_zero",
-    "tests/cli/test_scan_runtime_accounting.py::TestStubbedToolIsNotASuccess::test_a_real_scan_reports_no_stubs",
-    "tests/cli/test_scan_runtime_accounting.py::TestStubbedToolIsNotASuccess::test_the_end_of_scan_summary_names_the_stubbed_tools",
-    "tests/cli/test_scan_runtime_accounting.py::TestStubbedToolIsNotASuccess::test_the_per_target_line_says_no_tool_ran",
-    "tests/cli/test_scan_runtime_accounting.py::TestStubbedToolIsNotASuccess::test_the_scan_metadata_carries_which_tools_were_stubbed",
-    "tests/integration/test_cli_profiles.py::test_scan_profile_include_exclude_only_scans_included",
-    "tests/integration/test_cli_profiles.py::test_scan_startup_does_not_version_check_unrequested_tools",
+    # REMOVED (#1237): the 10 `tests/cli/test_scan_runtime_accounting.py`
+    # entries. Their tests' invariants are scan accounting, not whether
+    # trufflehog exists, and all of them use `scan_env`, which now pins
+    # `ToolManager._find_binary`. Measured with a fake trufflehog on PATH:
+    # without the pin, 10 teardown errors; with it, 39 passed and 0 spawns.
+    # That pin is the way to keep a test off this list. A stub manager on
+    # `args._startup_tool_manager` is NOT: `cmd_scan` overwrites that attribute
+    # before either probe runs, and `_warn_critical_updates` never reads it.
+    "tests/integration/test_cli_per_tool_config.py::test_scan_startup_does_not_version_check_unrequested_tools",
     "tests/integration/test_cli_scan_ci.py::test_ci_composes_scan_and_report",
     "tests/integration/test_cli_scan_ci.py::test_ci_runs_the_report_phase_exactly_once",
     "tests/unit/test_signal_handling.py::test_cmd_scan_signal_stop",
@@ -654,8 +653,8 @@ def _basename(argv0: object) -> str:
     return str(argv0).replace("\\", "/").rsplit("/", 1)[-1].lower()
 
 
-def _profile_scanner_binaries() -> tuple[str, ...]:
-    """Every binary a profile can invoke, derived from the tool registry.
+def _matrix_scanner_binaries() -> tuple[str, ...]:
+    """Every binary a scan can invoke, derived from the tool registry.
 
     Was the literal ``("semgrep",)`` -- #907's subject -- and that scope was
     itself the blind spot #994 is about. #976 item 2 reported
@@ -669,27 +668,29 @@ def _profile_scanner_binaries() -> tuple[str, ...]:
     from a unit test. **"No guard fired" was read as "nothing spawned", and the
     guard's scope made that reading wrong.**
 
-    Derived from `PROFILE_TOOLS` and `TOOL_BINARY_NAMES` rather than listed, so
-    a tool added to a profile is covered without a second edit. A hand-kept list
-    is the same failure mode one level up: it is always missing whatever nobody
-    thought of.
+    Derived from `TOOL_MATRIX`, `POLICY_ENGINE` and `TOOL_BINARY_NAMES` rather
+    than listed, so a tool added to the matrix is covered without a second
+    edit. A hand-kept list is the same failure mode one level up: it is always
+    missing whatever nobody thought of.
     """
-    from scripts.core.tool_registry import PROFILE_TOOLS, TOOL_BINARY_NAMES
+    from scripts.core.tool_registry import (
+        POLICY_ENGINE,
+        TOOL_BINARY_NAMES,
+        TOOL_MATRIX,
+    )
 
     names: set[str] = set()
-    for tools in PROFILE_TOOLS.values():
-        for tool in tools:
-            binary = TOOL_BINARY_NAMES.get(tool, tool)
-            # Strip a wrapper-script suffix: the registry records
-            # `dependency-check.sh` and `zap.sh`, but the images symlink the
-            # bare name too, and either form is a real spawn.
-            names.add(binary)
-            if "." in binary:
-                names.add(binary.rsplit(".", 1)[0])
+    for tool in (*TOOL_MATRIX, POLICY_ENGINE):
+        binary = TOOL_BINARY_NAMES.get(tool, tool)
+        # Strip a wrapper-script suffix: the registry records `zap.sh`, but the
+        # image symlinks the bare name too, and either form is a real spawn.
+        names.add(binary)
+        if "." in binary:
+            names.add(binary.rsplit(".", 1)[0])
     return tuple(sorted(names))
 
 
-SCANNER_BINARY_NAMES = _profile_scanner_binaries()
+SCANNER_BINARY_NAMES = _matrix_scanner_binaries()
 
 # The property, not a binary list: no test may spawn a process that installs a
 # package or downloads a payload. A list of scanner names will always be
@@ -1063,3 +1064,57 @@ def iter_repo_files(
                 continue
             found.append(path)
     return found
+
+
+# ---------------------------------------------------------------------------
+# Secrets in a git history, built at test time (v2.0.0 Phase 3, G1).
+# ---------------------------------------------------------------------------
+
+
+def generated_rsa_pem() -> bytes:
+    """A private key made now. Never check a real-looking key into the tree:
+    Defender deletes files it recognises, and the repository's own secret
+    scanning flags them."""
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    return key.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.TraditionalOpenSSL,
+        serialization.NoEncryption(),
+    )
+
+
+def git_commit_all(repo: Path, message: str, when: str) -> str:
+    """Commit everything in ``repo`` (initialising it the first time) as a
+    fixed author at ``when`` (ISO 8601), and return the commit's sha."""
+    import os
+
+    env = {
+        **os.environ,
+        "GIT_AUTHOR_DATE": when,
+        "GIT_COMMITTER_DATE": when,
+        "GIT_CONFIG_GLOBAL": os.devnull,
+        "GIT_CONFIG_NOSYSTEM": "1",
+    }
+
+    def git(*args: str) -> str:
+        return subprocess.run(
+            ["git", "-C", str(repo), *args],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env=env,
+        ).stdout.strip()
+
+    if not (repo / ".git").exists():
+        git("init", "-q", "-b", "main")
+        git("config", "user.name", "Fixture Author")
+        git("config", "user.email", "fixture@example.invalid")
+        git("config", "core.autocrlf", "false")
+        git("config", "commit.gpgsign", "false")
+    git("add", "-A")
+    git("commit", "-q", "--allow-empty", "-m", message)
+    return git("rev-parse", "HEAD")

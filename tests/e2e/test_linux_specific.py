@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.conftest import IS_LINUX
+from tests.conftest import IS_LINUX, assert_no_jmo_traceback
 
 linux_only = pytest.mark.skipif(not IS_LINUX, reason="Linux-only test")
 
@@ -30,14 +30,14 @@ class TestLinuxPathHandling:
 
         assert result.returncode in (0, 1)
         combined = result.stdout.lower() + result.stderr.lower()
-        assert "traceback" not in combined
+        assert_no_jmo_traceback(combined)
 
     def test_usr_local_bin_tools(self, jmo_runner):
         """Verify tools in /usr/local/bin are discovered."""
         result = jmo_runner(["tools", "debug", "trivy"], timeout=30)
 
         combined = result.stdout.lower() + result.stderr.lower()
-        assert "traceback" not in combined
+        assert_no_jmo_traceback(combined)
 
     def test_home_local_bin_tools(self, jmo_runner, tmp_path, monkeypatch):
         """Verify tools in ~/.local/bin are discovered."""
@@ -74,7 +74,7 @@ class TestLinuxPathHandling:
         )
 
         combined = result.stdout.lower() + result.stderr.lower()
-        assert "traceback" not in combined
+        assert_no_jmo_traceback(combined)
 
 
 @linux_only
@@ -123,7 +123,7 @@ class TestLinuxPermissions:
 
         # Should handle non-executable scripts
         combined = result.stdout.lower() + result.stderr.lower()
-        assert "traceback" not in combined
+        assert_no_jmo_traceback(combined)
 
 
 @linux_only
@@ -137,7 +137,7 @@ class TestLinuxContainerIntegration:
 
         # Should report Docker availability
         combined = result.stdout.lower() + result.stderr.lower()
-        assert "traceback" not in combined
+        assert_no_jmo_traceback(combined)
 
     def test_podman_alternative(self, jmo_runner):
         """Verify Podman can be used as Docker alternative."""
@@ -200,21 +200,14 @@ class TestLinuxPackageManagers:
 
     def test_pip_installed_tools(self, jmo_runner):
         """Verify pip-installed tools are found."""
-        result = jmo_runner(["tools", "debug", "bandit"], timeout=30)
+        result = jmo_runner(["tools", "debug", "semgrep"], timeout=30)
 
         combined = result.stdout.lower() + result.stderr.lower()
-        assert "traceback" not in combined
-
-    def test_npm_installed_tools(self, jmo_runner):
-        """Verify npm-installed tools are found."""
-        result = jmo_runner(["tools", "check"], timeout=60)
-
-        # Should check npm global and local paths
-        assert result.returncode in (0, 1)
+        assert_no_jmo_traceback(combined)
 
     def test_go_installed_tools(self, jmo_runner):
         """Verify Go-installed tools are found."""
         result = jmo_runner(["tools", "debug", "gosec"], timeout=30)
 
         combined = result.stdout.lower() + result.stderr.lower()
-        assert "traceback" not in combined
+        assert_no_jmo_traceback(combined)

@@ -663,8 +663,7 @@ def export_for_dashboard(analysis: Dict[str, Any], output_path: Path) -> None
   "summary": {
     "scan_count": 12,
     "date_range": ["2025-10-01", "2025-11-05"],
-    "branch": "main",
-    "profile": "balanced"
+    "branch": "main"
   },
   "current_scan": {
     "scan_id": "abc123",
@@ -904,9 +903,10 @@ for f in findings:
 
 ### Schema Overview
 
-The DB has three primary tables:
+The DB has four primary tables:
 
-- `scans` — one row per scan invocation (id, timestamp, branch, profile, target_type, tool counts)
+- `scans` — one row per scan invocation (id, timestamp, branch, tools, targets, severity counts)
+- `scan_tool_runs` — one row per target and tool (target, target_type, tool, state, reason, seconds)
 - `findings` — normalized findings from each scan (scan_id FK, severity, rule_id, fingerprint, location, raw_finding JSON blob)
 - `scan_metadata` — key-value metadata per scan (git SHA, author, CI run ID, etc.)
 
@@ -1104,7 +1104,7 @@ if __name__ == "__main__":
 1. **Use Context Managers**: Always use `with TrendAnalyzer() as analyzer:` to ensure proper resource cleanup
 2. **Error Handling**: Wrap API calls in try/except blocks to handle database errors gracefully
 3. **Minimum Scans**: Require at least 5-7 scans for statistically meaningful trend detection
-4. **Consistent Profiles**: Only compare scans using the same profile (balanced vs balanced)
+4. **Consistent Tool Sets**: Only compare scans run with the same tools (the same `--tools` or `jmo.yml` `tools:` list)
 5. **Branch Isolation**: Track trends separately per branch (main, staging, dev)
 6. **Database Backups**: Back up `.jmo/history.db` before major schema changes
 7. **Statistical Validation**: Always check `p_value < 0.05` before trusting trend classifications

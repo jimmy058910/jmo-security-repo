@@ -4,6 +4,299 @@ All notable changes to JMo Security will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- A generic SARIF 2.1.0 importer (`scripts/core/adapters/sarif_common.py`) and three
+  adapters bound through it: `zizmor`, `gitleaks` and `osv_scanner`. A `zizmor.json`,
+  `gitleaks.json` or `osv-scanner.json` written in SARIF form into a results directory is
+  parsed, normalised, deduplicated and reported like any other tool output. gitleaks
+  runs in scans since Phase 3 (below); zizmor and osv-scanner join the matrix in Phase 4.
+- **gitleaks joins the matrix, and secrets are read from git history.** A scan runs 13
+  tools. When the scanned repository has a `.git` of its own, and is not a shallow clone
+  (whose oldest commit would be blamed for every secret in it), TruffleHog and gitleaks
+  also read its history, with the same exclusions as the tree, so a secret that was
+  committed and later removed is reported, with the commit that added it and that
+  commit's author and date in `secretContext`. A secret still in the tree is reported
+  once per tool, not twice: the two records are paired by the secret itself (never
+  stored) and the tree finding gains the commit. Each tool's history run writes
+  `<tool>.git.json` beside its tree output, and each tool keeps one accounting row,
+  `invocations: 2`, whose detail names the run that failed. On this repository (1,258
+  commits) the two secret scanners took 4 s without history and 17 s with it. gitleaks
+  runs from inside the repository, so its paths and ids do not depend on where the
+  checkout lives, and its matched text never reaches a report or history: gitleaks'
+  SARIF carries it in `region.snippet`, which is dropped. A shallow clone, or a repository
+  git cannot read, is scanned without its history, with a WARNING and `history not read`
+  on both rows. The Docker image sets git's `safe.directory '*'`, since a mounted
+  repository always belongs to another UID there and git refused it as "dubious
+  ownership".
+- **`jmo scan --tsv FILE --dest DIR`**, and the same on `jmo ci`: clone every repository
+  a TSV lists into `<dest>/<owner>/<repo>`, then scan the clones. A second run
+  fast-forwards an existing clone of the same URL, so it scans current code. Only
+  `https://`, `ssh://` and `git@host:` URLs clone, never to a path outside `--dest` and
+  never over a directory that is not a clone of that URL; each refused or failed row is
+  named, and a TSV none of whose rows cloned exits 1. Two repositories with one name
+  (`alice/app`, `bob/app`) are both scanned, each into a results folder of its own.
+  `include`/`exclude` drop a row before it is cloned. `--dest` has no default, and
+  without `--tsv` it is a usage error (exit 2). No row waits on a prompt: one that needs a password,
+  a key's passphrase or a new ssh host key fails by name. The wizard's tsv mode had
+  always emitted this command, and `jmo scan` rejected it (exit 2) natively and in
+  Docker; it runs in both now (#1299). `scripts/cli/clone_from_tsv.py` no longer runs
+  as a script of its own.
+- **Each secret scanner's history run has its own flags, and can be turned off.**
+  `per_tool.<tool>.history_flags` reach TruffleHog's and gitleaks' git-history run, and
+  `flags` their working-tree run only: each mode rejects flags the other needs
+  (TruffleHog's filesystem mode exits 1 on `--since-commit`; gitleaks' git mode exits 126
+  on `--follow-symlinks`). `per_tool.<tool>.history: false` keeps the tree's scan and
+  skips history; the row says `history not read: per_tool.<tool>.history is false`, and
+  with history off for both tools, git is not asked about the repository at all (#1327).
+- **gitleaks reads a repository's own `.gitleaks.toml`.** JMo's config, which carries its
+  exclusions, now extends it, so its rules and allowlists apply as they do when gitleaks
+  runs alone; before, a custom rule found nothing and an allowlisted key was reported.
+  JMo says so at INFO, and warns when the repository's config does not ask for gitleaks'
+  default rules (only its own then run, as with gitleaks alone) or extends another that
+  extends further (gitleaks' depth limit, one level shallower under JMo, drops that
+  last level). A config the warning cannot read never stops the scan; gitleaks reports
+  it (#1327).
+
+### Removed
+
+- **Breaking. 16 scanners leave; a scan runs 12.** noseyparker, semgrep-secrets, bandit,
+  trivy-rbac, prowler, kubescape, akto, scancode, cdxgen, dependency-check, horusec, falco,
+  falcoctl, afl++, mobsf and lynis are gone, with their adapters, installer entries,
+  `versions.yaml` rows and docs. `TOOL_MATRIX` is trufflehog, semgrep, syft, trivy,
+  checkov, hadolint, shellcheck, gosec, yara, grype, zap and nuclei. opa is the policy
+  engine: installed and checked by `jmo tools check`, not a scanner. checkov-cicd folds
+  into checkov. Naming a removed tool in `--tools`, `--skip-tools` or `tools:` is a
+  usage error (exit 2) that says it was removed (#1088, #1099, #1152, #1164, #1217,
+  #1219, #1222, #1225).
+- **Breaking. Scan profiles are gone.** `--profile-name`, the `jmo fast`, `jmo balanced`
+  and `jmo full` subcommands, and `--profile` on `jmo tools`, `jmo wizard`,
+  `jmo schedule` and `jmo history` no longer exist; every scan resolves to
+  `TOOL_MATRIX`, narrowed with `--tools` / `--skip-tools`. A `jmo.yml` that still sets
+  `profiles:` or `default_profile:` loads with a warning naming both keys ("they configure
+  nothing and are ignored"), and the rest of the file still applies. `jmo report
+  --profile` and `jmo ci --profile` stay: they were always the timing flag.
+- **Breaking. One Docker image.** `Dockerfile.fast`, `.slim` and `.balanced` are deleted
+  and `Dockerfile.deep` is now `Dockerfile`. A release publishes `:latest`, `:<version>`,
+  `:<major>.<minor>` and `:<major>`; the variant tags (`:fast`, `:slim`, `:balanced`,
+  `:deep` and their `-<variant>`-suffixed versions) are no longer built. The ones already
+  on GHCR stay there, frozen at v1.x, so pulling `:balanced` keeps working and keeps
+  giving you v1: switch to `:latest`. `jmo validate` was caught by exactly that. It ran
+  `:balanced --help`, which validated the frozen image, and it now checks `:latest`.
+  Built locally the image is 1,220.6 MiB, against 2,033 MiB for v1.0.8's published
+  `:latest`.
+
+### Changed
+
+- **Breaking. TruffleHog no longer verifies secrets unless asked.** Verification sends
+  each candidate secret to the service that issued it, and git history multiplies the
+  candidates, so both TruffleHog runs pass `--no-verification`.
+  `per_tool.trufflehog.verify: true` in `jmo.yml` turns it back on, as does
+  `--only-verified` in its flags. **An unverified secret is graded HIGH now, not MEDIUM**,
+  and so is every gitleaks finding, so `--fail-on HIGH` stops on a leaked secret, verified
+  or not; the tags and `risk.confidence` say which. The built-in `zero-secrets` policy
+  blocks verified secrets only, so without verification it blocks nothing.
+- **Breaking. The history database drops `scans.profile`.** The first store after
+  upgrading removes the column in place, in one transaction. That includes databases
+  from before v1.2.0, whose `CHECK(profile IN ...)` constraint SQLite otherwise refuses
+  to drop the column past. Every scan and finding is kept; the profile each scan ran
+  under is not.
+  Copy `.jmo/history.db` before upgrading if you want it. Measured on a real
+  1.1.0-shaped database: 2,492 scans and 215,761 findings in, all 215,761 findings out.
+- **Breaking. Every requested tool gets one row per target.** Each row is `ran`,
+  `skipped:<reason>` or `failed:<reason>`, with its seconds, exit code and attempts. The
+  rows are in each target's `scan-timings.json` (schema 3), in `.scan_metadata.json`'s
+  `tool_runs` (replacing `stubbed_tools`), and in a new history table, `scan_tool_runs`,
+  which `jmo history show` prints. A tool used to vanish from every artifact when it had
+  nothing to read: on a repository without Dockerfiles or shell scripts, hadolint and
+  shellcheck left no row, no file and no log line (#1227). "Which tool made my scan slow"
+  is now answerable from history (#722). The six scan jobs run one loop over a per-tool
+  descriptor table, where there were eighteen hand-written blocks.
+- **Breaking. A scan of nothing fails.** A repository with no file outside the excluded
+  directories fails every tool that reads it (`failed:no files to scan`, exit 1). On an
+  empty tree, trivy and semgrep used to be graded a success. A tool whose own output
+  reports 0 files examined is `failed:examined 0 files`: semgrep (`paths.scanned`) and
+  gosec (`Stats.files`). gosec reads 0 on every machine without a Go toolchain, the image
+  included, so on a Go repository it now fails where it used to pass (#1231, #1310).
+- **Breaking. Tool names are checked.** `--tools`, `--skip-tools` and `tools:` split on
+  commas and spaces, so `--tools trivy,syft` selects two tools. It used to be one tool
+  named `trivy,syft`, which ran nowhere. An unknown name is a usage error, exit 2, naming
+  it, and `jmo ci` stops there too, before its report reads an earlier run's results
+  (#1279).
+- **One exclusion list, rendered for every tool.** `.git`, `node_modules`, `vendor`,
+  `.venv` and `venv`, and the results directory when it sits inside the scanned tree,
+  reach each tool in its own syntax. syft and grype now skip the results directory, where
+  they used to read a previous scan's `requirements.txt`. They still read vendored trees,
+  which are an SBOM's subject, except that grype skips a virtualenv. trufflehog joins the
+  vendored tier: on a real Next.js application it went from 281 s and 253 findings, 222
+  of them in `node_modules`, to 12 s and 31. Its patterns are anchored below the scan
+  root, so a repository that itself lives under a `vendor/` or `node_modules/`
+  directory is still read. gosec gains `-exclude-dir`, as whole path segments, and
+  yara's runner `--exclude-dir` (#1235).
+- **Missing tools stay in the scan.** Pre-flight used to drop a missing tool, which then
+  had no record anywhere. Each now gets `failed:not installed`, or `skipped:not installed`
+  under `--allow-missing-tools`, on every target it reads. With every tool stripped from
+  `PATH`, a scan writes 12 rows per target, where it used to exit 1 before scanning.
+  `--allow-missing-tools` with nothing installed still exits 1 (#811). A scan in which
+  no tool ran on any target is not stored in history, where its 0 findings would read
+  as every earlier finding resolved.
+- **checkov runs only when there is IaC**: Terraform, CloudFormation, a Helm chart or a
+  GitHub Actions workflow. It used to run on every repository. **zap and nuclei are
+  URL-only**, and on any other target their row is `skipped:needs --url`. A tool you did
+  not name never produces the "applicable to no target type" warning.
+- **Every target gets its own results folder.** Two `app` repositories scanned together
+  used to share one, and the last writer's findings stood for both: 2 findings reported
+  where there were 4. They are now `alice__app` and `bob__app` (#1303). The same held
+  for two URLs on one host, two IaC files with one stem (`main.json`, `main.yaml`), and
+  two images whose references sanitize alike; they are now `staging.example.com-2`,
+  `cloudformation__main` and `k8s__main`, and `registry_app_1-2`. A URL or image listed
+  twice is scanned once (#1312).
+- **One target, one name.** `scan-timings.json`, `.scan_metadata.json` and history's
+  `scan_tool_runs` name a target alike: an image is `nginx:latest` in all three, where
+  its timings said `nginx_latest`; a GitLab project is `group/app`, not its clone's
+  folder; an IaC file whose scanner raised is `terraform:main.tf`, as when it ran.
+  `--repo .` is named after its directory, where it was `unknown`, and `include` and
+  `exclude` match that name (#1315).
+- **A scan left with no tool exits 2, saying why.** `--skip-tools` naming every tool, or
+  `tools: []`, exited 1 with no message, and raised a traceback in the image (#1317).
+- **`jmo history show` lists the rows about each target** and counts the rest, the
+  tools that do not read that kind of target. An image showed twelve rows, ten of them
+  such tools. `--json` lists every row (#1316).
+- **`--api-spec` takes a URL, and says what it does with it.** zap runs a URL scan and is
+  never told a spec is one, so a spec's URL is scanned as a plain URL, with a warning that
+  says so. A local spec file became a `file://` URL that the URL job rejected after the
+  scan started; it is refused up front, with that reason. The wizard's API mode asks for
+  a URL (its default was `./openapi.yaml`). The OpenAPI import is #1331 (#1320).
+- **History's `scans` row lists every target, and `scans.target_type` is gone.** Every
+  scan was typed `repo` and listed only repositories, by folder name: an image scan read
+  `repo` with no targets. The row now lists the targets the scan's own rows name, as
+  `scan_tool_runs` names them, and each row there carries its target's type; a scan of
+  two types had no one type to record. The column, its CHECK and its index are dropped
+  in place from an existing database, as `profile` was. `jmo history repair` copies
+  only the columns both schemas have, in `scans` and `findings`, and names what it
+  leaves behind: it failed on every database v1.1.0's migration had run on, whose
+  `findings.finding_status` the current schema lacks, and on a pre-v2 `profile`.
+  A results directory from before the per-tool rows existed (#722) stores no targets,
+  where it stored its `individual-repos` folder names (#1321).
+- `scan-timings.json` records the `root` a repository target's tools scanned.
+- `jmo report` logs each policy's verdict with its message.
+
+### Fixed
+
+- **A GitLab target's findings are repository-relative, and keep their id.** The clone
+  lives in a random temporary directory the report was never told about, so a finding
+  carried the host's temporary path, and every scan of the repository read as new
+  findings in history and `jmo diff` (#1332).
+- **`jmo scan --gitlab-repo` without `--gitlab-url` scans gitlab.com.** It failed
+  before cloning, calling `None.rstrip` (#1319).
+- **Two repositories in one scan keep their own secret history.** The pairing of a
+  secret's history record with its tree finding ignored which target each came from:
+  a repository still holding a key took the commit of another repository that had
+  deleted it, and that repository's record was dropped (#1323).
+- **A failed secret-scanner run is named on its row.** Only a run that wrote no output
+  said which of the two (tree or history) failed; an exit code, a timeout or an
+  exception did not, and when both failed only the first was named. A row's exit code
+  now comes from the tree's run, not whichever finished last. The accounting reconciler
+  checks `<tool>.git.json` as well as `<tool>.json` (#1324).
+- **gitleaks' report flags cannot be overridden.** `per_tool.gitleaks.flags` could
+  reformat or redirect its output: `--report-format json` lost every finding with the
+  row `ran`. `--report-format`, `--report-path`/`-r`, `--report-template`, `--exit-code`,
+  `--redact` and `--config`/`-c` are dropped with a warning, per tool, since gitleaks'
+  `-r` is nuclei's `-resolvers`, and so is a short flag with its value attached
+  (`-cmine.toml`), which gitleaks reads as `-c mine.toml` (#1325). An output made with `--redact` elsewhere no
+  longer pairs different secrets by their shared `REDACTED` snippet (#1323).
+- **`zero-secrets` says what it did not block.** It blocks verified secrets only, and
+  with TruffleHog's verification off (the default) and gitleaks never verifying, it
+  passed every secret while saying "No verified secrets detected". Its message, a
+  warning and the report's log line now count the unverified secrets it passed (#1327).
+- **TruffleHog and syft findings name their tool's version**, where every one said
+  `unknown`. syft's comes from its own output (`descriptor.version`); TruffleHog's
+  output carries none, so it is the version `versions.yaml` pins (#1333).
+
+- **nuclei and ZAP produce findings on URL scans.** nuclei 3 rejects `-json` on every
+  platform (exit 2); it now gets `-jsonl`. On Windows, `zap.bat` looks for its jar in the
+  working directory, which was never its own ("Unable to access jarfile"); it now runs
+  from its own directory. Measured through `jmo scan --url` against a local server: zap
+  ran in 18.9 s and nuclei in 113 s, where both used to fail.
+- **The wizard's Docker mode creates the directories the container writes to** before
+  it starts one. Under a Linux Docker engine, a missing bind-mount source is created as
+  root, and the image's user (uid 1000) could not write into it.
+- **`jmo tools check` reads zap's own version.** It misread it two ways. In the image,
+  the JVM prints a four-part Java version first, and `17.0.20.1` read as zap `0.20.1`,
+  outdated. On a host, the version probe ran `zap.bat` from the wrong directory; it could
+  not find its jar, echoed the jar's name, and `zap-2.17.0.jar` read as a healthy
+  `2.17.0` for a zap that could not start. The probe now runs from zap's install
+  directory, and neither line is read as zap's version (#1283).
+- **Exported schedules with a severity threshold run.** The GitHub Actions and GitLab CI
+  exporters and the cron installer appended `--fail-on X` to `jmo scan`, which exits 2
+  before scanning. A schedule with a threshold now exports `jmo ci ... --fail-on X`, and
+  one without stays `jmo scan`. The test meant to catch this passed for every schedule,
+  because it handed the parser `jmo` as the subcommand, which also exits 2 (#1277).
+- **Cron-installed schedules run.** No job the installer wrote ever started. cron ends a
+  command at the first unescaped `%` and sends the rest to stdin, and every line
+  carried `$(date +%Y-%m-%d)`, so the shell received `... $(date +` and stopped on a
+  syntax error. Every `%` is now escaped. The default results directory, written as a
+  quoted `'~/jmo-results'` that no shell expands, is now `"$HOME"/jmo-results`, and a
+  base directory in another user's home (`~bob/...`) is refused (#1277).
+- **Every exporter carries a schedule's timeout.** GitHub Actions and cron dropped it;
+  GitLab CI carried it. GitLab now also quotes `--threads` and `--timeout` like every
+  other value on its command line (#1277).
+- **`GITLAB_TOKEN` is read when `--gitlab-token` is not given**, as `--help` says. It
+  never was: the scan always passed the option's empty value, which hid the variable.
+- **The wizard's Docker mode scans what you chose.** A single repository was mounted
+  and passed as `--repos-dir /scan`, which scans each subdirectory as its own repository
+  and never the repository's own files; it is now `--repo /scan`. A targets file lists
+  paths on your machine that the container cannot see, so Docker mode now refuses it
+  with that reason instead of mounting the file where a directory belongs. Docker mode
+  also dropped the severity threshold, `--threads`, `--timeout`, `--allow-missing-tools`
+  and `--human-logs`; it now carries them, and a threshold makes the command
+  `jmo ci --fail-on X` (#1298, #1277).
+- **The wizard's generated workflow, script and Makefile.** The native GitHub Actions
+  workflow set up Python 3.11 for a package that requires 3.12, so its `pip install`
+  failed; its "Install Security Tools" step held only comments, so no scanner was
+  installed; and for a directory of repositories it scanned `--repos-dir .`, each
+  subdirectory of the checkout as its own repository. It now installs Python 3.12,
+  runs `jmo tools install --yes`, and scans its own checkout, `--repo .`, in every
+  mode. `--emit-script` and `--emit-make` quote the command, so a path with a space or
+  a `$` survives, and write Unix line endings: a script generated on Windows stopped
+  Linux bash at `set: pipefail: invalid option name` (#1298).
+- **The wizard no longer prints or writes a GitLab token.** It put the token on the
+  command line, which the wizard displays and `--emit-script`/`--emit-make` save to
+  disk. The scan now receives it as `GITLAB_TOKEN` in its environment, and Docker mode
+  forwards it by name (`-e GITLAB_TOKEN`) (#1298).
+- `ScanSchedule.from_simple_args` and `MetadataCapture.from_scan_args` reject a keyword
+  they do not read, such as a typo or `profile=`, instead of dropping it or, for
+  `from_scan_args`, copying it into attestation metadata. Nothing in the product calls
+  `from_scan_args`, so no attestation ever carried one (#1277).
+- **Wizard commands with a severity threshold ran.** Every one the wizard built was
+  `jmo scan ... --fail-on X`. `jmo scan` has no `--fail-on`, so argparse read it as an
+  abbreviation of `--fail-on-store-error`, rejected the value and exited 2 before scanning.
+  The wizard, and the GitHub Actions workflow it generates, now emit `jmo ci`, which has
+  the threshold. Found by feeding the wizard's real `build_command_parts` output to the
+  real parser, not a hand-typed copy of it.
+- **A target with nothing for its tools to scan is not a warning.** `--tools hadolint`
+  on a repository without a Dockerfile is a correct result, and was announced as "NOT a
+  clean result", the words for a scanner that is not installed. The end-of-scan note no
+  longer lists zap and nuclei as having nothing to scan on a repository. The `--resume`
+  notice no longer says the results cover only the targets scanned again: the earlier
+  targets' results are reused (#1317).
+- **The MCP `query_findings_db` tool names the tables that exist.** Its description
+  listed an `attestations` table the database has never had and left out
+  `scan_tool_runs`, so an agent could not find the per-tool rows (#1316).
+- **hadolint output parses in milliseconds, not a minute.** The adapter looked up
+  hadolint's version once per finding, and each lookup re-parsed `versions.yaml` (about
+  200 ms). 1,000 findings took 61 s; the lookup is now once per parse, under 0.1 s, with
+  identical output.
+
+- Two findings of one rule on one line at different columns no longer collapse to one
+  id, so deduplication no longer drops the second. shellcheck and the SARIF adapters key
+  on the column; measured on gitleaks against juice-shop, two different secrets at
+  columns 82 and 116 both survive where one used to be lost (#1242).
+- One fingerprint formula. `AdapterPlugin.get_fingerprint` (trivy, trufflehog, semgrep)
+  delegates to `common_finding.fingerprint` instead of carrying a copy that rendered a
+  missing line and a padded message differently. **Behaviour change:** ids for those three
+  tools' findings with no line number or a padded message differ from v1.1.1 (#1010).
+
 ## [1.1.1] - 2026-09-11
 
 A patch release continuing v1.1.0's theme: a scan must not report success for work it did not do. Three tools in the default profiles were contributing nothing while reading as healthy — kubescape and trivy-rbac produced zero findings on every Kubernetes repository, each for more than one independent reason, and ZAP could not run against a repository target in any configuration. Two others were wrong in the opposite direction, reporting an ERROR on every repository that merely had nothing for them to scan. Separately, scans no longer walk vendored dependency trees or JMo's own results directory, both of which were being read back as findings.

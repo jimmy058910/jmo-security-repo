@@ -44,16 +44,16 @@ def test_<tool>_basic(tmp_path: Path):
     assert item["location"]["startLine"] == 42
 
     # Verify schema version. `Finding.schemaVersion` defaults to "1.2.0"
-    # (scripts/core/plugin_api.py:34) and no adapter overrides it, so this is
+    # (scripts/core/plugin_api.py:35) and no adapter overrides it, so this is
     # an equality, not a membership test - accepting "1.0.0" or "1.1.0" would
     # pass a finding that was never built as a `Finding` at all.
     assert item["schemaVersion"] == "1.2.0"
 
     # Verify fingerprint ID. It is a SHA256 truncated to 16 hex characters by
     # both live paths: `common_finding.fingerprint()` via FINGERPRINT_LENGTH
-    # (common_finding.py:17), used by 24 adapters, and
-    # `AdapterPlugin.get_fingerprint()` (plugin_api.py:164), used by the other
-    # three. `len(...) > 20` was wrong in the failing direction: a real
+    # (common_finding.py:16), used by most adapters, and
+    # `AdapterPlugin.get_fingerprint()` (plugin_api.py:145), used by semgrep,
+    # trivy and trufflehog. `len(...) > 20` was wrong in the failing direction: a real
     # 16-character fingerprint fails it, so the generated test could never pass.
     assert "id" in item
     assert len(item["id"]) == 16, f"expected a 16-char fingerprint, got {item['id']!r}"
@@ -84,7 +84,7 @@ def test_<tool>_basic(tmp_path: Path):
 **Variants for Different Tools:**
 
 ```python
-# Secrets tool (trufflehog, noseyparker)
+# Secrets tool (trufflehog)
 def test_trufflehog_basic(tmp_path: Path):
     sample = [
         {
@@ -103,7 +103,7 @@ def test_trufflehog_basic(tmp_path: Path):
     assert out[0]["location"]["path"] == "config.yaml"
 
 
-# SAST tool (semgrep, bandit)
+# SAST tool (semgrep, gosec)
 def test_semgrep_basic(tmp_path: Path):
     sample = {
         "results": [
@@ -523,10 +523,10 @@ and any CWE the tool itself reported.
 > by `if "compliance" in item:`, asserts nothing at all. Test the mapping
 > itself at the reporting boundary.
 >
-> The repository's own `TestBanditCompliance`
-> (`tests/adapters/test_bandit_adapter.py:365`) is named for compliance and
-> asserts `schemaVersion`, tool name and remediation. That is the shape to
-> copy.
+> The repository's own `TestTrivyCompliance`
+> (`tests/adapters/test_trivy_adapter.py:382`) is named for compliance and
+> asserts `schemaVersion`, tool version and the remediation URL. That is the
+> shape to copy.
 
 **Purpose:** Verify `load()`/`parse()` set `schemaVersion` and tool metadata,
 and that a CWE the tool emitted survives into the finding.

@@ -170,7 +170,7 @@ pytest tests/e2e/test_dashboard_visual.py --timeout=120 -v \
 ```bash
 # Run a real scan against the Python fixtures dir, capture output only
 jmo ci --repo tests/e2e/fixtures/python/ \
-  --profile fast --allow-missing-tools \
+  --tools trufflehog semgrep trivy --allow-missing-tools \
   --results-dir /tmp/jmo-e2e-verify-scan/ \
   --human-logs 2>&1 | tee .e2e-output.txt
 ```

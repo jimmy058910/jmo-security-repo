@@ -27,7 +27,7 @@ JMo Security Suite uses a **5-layer version management system** to ensure Docker
 **Real-world impact:**
 
 - **Before:** Docker Trivy v0.58.1 (9 weeks old) missed 1 CRITICAL + 7 HIGH CVEs
-- **After:** Automated checks prevent version drift across 3 Dockerfiles + install scripts
+- **After:** Automated checks prevent version drift between the `Dockerfile` and the install scripts
 
 ### Key Components
 
@@ -35,7 +35,7 @@ JMo Security Suite uses a **5-layer version management system** to ensure Docker
 2. **[update_versions.py](../scripts/dev/update_versions.py)** — Automation script for updates
 3. **[maintenance.yml](../.github/workflows/maintenance.yml) (`check-versions` job)** — Weekly CI checks + issue creation
 4. **[dependabot.yml](../.github/dependabot.yml)** — Python/Docker/Actions dependency updates
-5. **Dockerfile sync** — Automated version propagation across 3 Docker variants
+5. **Dockerfile sync** — Automated version propagation into the `Dockerfile`
 
 ---
 
@@ -77,13 +77,13 @@ binary_tools:
 Runs weekly (Sunday 00:00 UTC) to:
 
 - ✅ Check for latest tool versions via GitHub/PyPI APIs
-- ✅ Detect Trivy version mismatches across Dockerfiles (critical)
+- ✅ Detect Trivy version mismatches between the `Dockerfile` and `versions.yaml` (critical)
 - ✅ Create GitHub issues for outdated CRITICAL tools (auto-labeled)
 - ✅ Validate Dockerfile consistency (no hardcoded versions)
 
 ### Layer 3: Dockerfile Build-Time Variables
 
-All Dockerfiles use parameterized versions:
+The `Dockerfile` uses parameterized versions:
 
 ```dockerfile
 # ✅ CORRECT: Read from ARG/ENV
@@ -94,7 +94,7 @@ RUN TRIVY_VERSION="0.69.3" && \
 RUN curl -sSL "https://github.com/aquasecurity/trivy/releases/download/v0.67.2/..."
 ```
 
-**Benefit:** Single command updates all 3 Dockerfiles (full, slim, alpine)
+**Benefit:** Single command updates every pinned version in the `Dockerfile`
 
 ### Layer 4: Update Automation Script
 
@@ -107,7 +107,7 @@ python3 scripts/dev/update_versions.py --check-latest
 # Update specific tool
 python3 scripts/dev/update_versions.py --tool trivy --version 0.68.0
 
-# Sync all Dockerfiles
+# Sync the Dockerfile
 python3 scripts/dev/update_versions.py --sync
 
 # Generate report
@@ -121,13 +121,12 @@ python3 scripts/dev/update_versions.py --report
 Tracks:
 
 - ✅ Python packages (via `pip` ecosystem)
-- ✅ Docker base images (`ubuntu:22.04`, `alpine:3.18`)
+- ✅ Docker base images (`ubuntu:22.04`)
 - ✅ GitHub Actions versions
 
 **Does NOT track:**
 
 - ❌ Binary tools (trivy, trufflehog, syft) — use `update_versions.py` instead
-- ❌ Custom installations (AFL++, Falco) — manual updates required
 
 ---
 
@@ -157,7 +156,7 @@ JMo now detects when installed tool versions don't match `versions.yaml`:
 
 ```bash
 # Check version status
-jmo tools check --profile balanced
+jmo tools check
 
 # View drift details
 jmo tools outdated
@@ -211,13 +210,13 @@ If you installed tools before v1.0.0:
 
 ```bash
 # Step 1: Check current state
-jmo tools check --profile balanced
+jmo tools check
 
 # Step 2: Update all tools to versions.yaml
 jmo tools update
 
 # Step 3: Verify
-jmo tools check --profile balanced
+jmo tools check
 ```
 
 ---
@@ -240,17 +239,17 @@ python3 scripts/dev/update_versions.py --check-latest
 # 1. Update versions.yaml
 python3 scripts/dev/update_versions.py --tool trivy --version 0.68.0
 
-# 2. Sync all Dockerfiles
+# 2. Sync the Dockerfile
 python3 scripts/dev/update_versions.py --sync
 
 # 3. Verify changes
-git diff Dockerfile Dockerfile.slim Dockerfile.alpine
+git diff Dockerfile
 
 # 4. Test locally
 make docker-build
 
 # 5. Commit
-git add versions.yaml Dockerfile*
+git add versions.yaml Dockerfile
 git commit -m "deps(tools): update trivy to v0.68.0"
 ```
 
@@ -277,7 +276,6 @@ schema_version: "1.0"
 
 # Python packages installed via pip/pipx
 python_tools:
-  bandit: { version: "1.7.10", pypi_package: "bandit", critical: false }
   semgrep: { version: "1.94.0", pypi_package: "semgrep", critical: true }
   checkov: { version: "3.2.255", pypi_package: "checkov", critical: true }
   ruff: { version: "0.14.0", pypi_package: "ruff", critical: false }
@@ -301,9 +299,7 @@ binary_tools:
 
   syft: { version: "1.18.1", github_repo: "anchore/syft", critical: true }
   hadolint: { version: "2.12.0", github_repo: "hadolint/hadolint", critical: false }
-  noseyparker: { version: "0.24.0", github_repo: "praetorian-inc/noseyparker", critical: false }
   shfmt: { version: "3.8.0", github_repo: "mvdan/sh", critical: false }
-  falcoctl: { version: "0.11.0", github_repo: "falcosecurity/falcoctl", critical: false }
 
 # Special installation tools
 special_tools:
@@ -314,16 +310,9 @@ special_tools:
     critical: true
     installation: "tar.gz with Java dependency"
 
-  aflplusplus:
-    version: "4.21c"
-    github_repo: "AFLplusplus/AFLplusplus"
-    critical: false
-    installation: "Source build required"
-
 # Docker base images
 docker_images:
   ubuntu: { version: "22.04", registry: "docker.io", image: "ubuntu" }
-  alpine: { version: "3.18", registry: "docker.io", image: "alpine" }
 
 # Update policies
 update_policies:
@@ -349,8 +338,7 @@ version_history:
 
 **Non-critical tools** (update monthly):
 
-- Linters: bandit, ruff, hadolint, shfmt
-- Optional: noseyparker, falcoctl, aflplusplus
+- Linters: ruff, hadolint, shfmt
 - Impact: Lower risk if outdated
 
 ---
@@ -378,11 +366,11 @@ python3 scripts/dev/update_versions.py --tool trivy --version 0.68.0
 python3 scripts/dev/update_versions.py --tool semgrep --version 1.95.0
 python3 scripts/dev/update_versions.py --tool checkov --version 3.2.260
 
-# === Syncing Dockerfiles ===
+# === Syncing the Dockerfile ===
 
-# Apply versions.yaml to all Dockerfiles
+# Apply versions.yaml to the Dockerfile
 python3 scripts/dev/update_versions.py --sync
-# Output: Updated Dockerfile, Dockerfile.slim, Dockerfile.alpine
+# Output: Updated Dockerfile
 
 # Dry-run check (CI validation)
 python3 scripts/dev/update_versions.py --sync --dry-run
@@ -403,8 +391,6 @@ JMo Security Suite - Version Consistency Report
 
 Python Tools:
 --------------------------------------------------------------------------------
-  bandit          v1.7.10       ⚪ Normal
-                → Python security linter
   semgrep         v1.94.0       🔴 CRITICAL
                 → Multi-language SAST scanner
   checkov         v3.2.255      🔴 CRITICAL
@@ -449,12 +435,12 @@ Binary Tools:
    - Validates Dockerfile sync with versions.yaml
 
 2. **check-dockerfile-consistency**
-   - Scans for hardcoded versions in Dockerfiles
-   - Checks Trivy version across all 3 Dockerfiles (critical)
+   - Scans for hardcoded versions in the `Dockerfile`
+   - Checks the Trivy version in the `Dockerfile` (critical)
    - Fails on mismatch
 
 3. **check-python-deps**
-   - Checks PyPI for security tool updates (bandit, semgrep, checkov, ruff)
+   - Checks PyPI for security tool updates (semgrep, checkov, ruff)
    - Creates notices for available updates
 
 ### Manual Trigger
@@ -483,7 +469,7 @@ For reproducible CI builds, use `--strict-versions`:
 # .github/workflows/security-scan.yml
 - name: Security Scan (Reproducible)
   run: |
-    jmo tools check --profile balanced
+    jmo tools check
     jmo ci --repo . --strict-versions --fail-on HIGH
 ```
 
@@ -510,7 +496,7 @@ This ensures scans use exactly the versions specified in `versions.yaml`.
 ```
 
 **Tracks:** `pyproject.toml` + `uv.lock` (pytest, coverage, ruff, etc.)
-**Does NOT track:** Security tools in Dockerfiles (use update_versions.py)
+**Does NOT track:** Security tools in the `Dockerfile` (use update_versions.py)
 
 ### Docker Base Images
 
@@ -522,7 +508,7 @@ This ensures scans use exactly the versions specified in `versions.yaml`.
     day: "monday"
 ```
 
-**Tracks:** `ubuntu:22.04`, `alpine:3.18` in FROM statements
+**Tracks:** `ubuntu:22.04` in FROM statements
 **Does NOT track:** Binary tools installed in RUN layers
 
 ### GitHub Actions
@@ -594,7 +580,7 @@ pip show checkov  # Check changelog URL
 python3 scripts/dev/update_versions.py --tool trivy --version 0.68.0
 python3 scripts/dev/update_versions.py --tool semgrep --version 1.95.1
 
-# Sync Dockerfiles
+# Sync the Dockerfile
 python3 scripts/dev/update_versions.py --sync
 
 # Build and test locally
@@ -607,14 +593,14 @@ docker run --rm ghcr.io/jimmy058910/jmo-security:latest scan --help
 # Test actual scanning
 docker run --rm -v $(pwd):/scan \
   ghcr.io/jimmy058910/jmo-security:latest \
-  scan --repo /scan --results /scan/results --profile fast
+  scan --repo /scan --results /scan/results --tools trivy semgrep
 ```
 
 ### Step 4: Commit and Release
 
 ```bash
 # Commit version updates
-git add versions.yaml Dockerfile*
+git add versions.yaml Dockerfile
 git commit -m "deps(tools): update trivy v0.68.0, semgrep v1.95.1
 
 - trivy: 0.67.2 → 0.68.0 (CVE database updates)
@@ -639,9 +625,9 @@ Wait for:
 
 ## Troubleshooting
 
-### "Dockerfiles are out of sync with versions.yaml"
+### "Dockerfile is out of sync with versions.yaml"
 
-**Cause:** Manual edits to Dockerfiles without updating versions.yaml
+**Cause:** Manual edits to the `Dockerfile` without updating versions.yaml
 
 **Fix:**
 
@@ -649,28 +635,28 @@ Wait for:
 # Check what's out of sync
 python3 scripts/dev/update_versions.py --sync --dry-run
 
-# Apply versions.yaml to Dockerfiles
+# Apply versions.yaml to the Dockerfile
 python3 scripts/dev/update_versions.py --sync
 ```
 
 ### "CRITICAL: Trivy version mismatch detected"
 
-**Cause:** Inconsistent Trivy versions across Dockerfile variants
+**Cause:** The Trivy version in the `Dockerfile` differs from `versions.yaml`
 
 **Fix:**
 
 ```bash
 # Check current state
-grep "TRIVY_VERSION" Dockerfile Dockerfile.slim Dockerfile.alpine
+grep "TRIVY_VERSION" Dockerfile
 
 # Update versions.yaml
 python3 scripts/dev/update_versions.py --tool trivy --version 0.68.0
 
-# Sync all Dockerfiles
+# Sync the Dockerfile
 python3 scripts/dev/update_versions.py --sync
 
 # Verify
-grep "TRIVY_VERSION" Dockerfile Dockerfile.slim Dockerfile.alpine
+grep "TRIVY_VERSION" Dockerfile
 ```
 
 ### "Failed to check latest version"
@@ -704,7 +690,7 @@ gh pr merge <PR-number> --squash
 # Update versions.yaml to match
 python3 scripts/dev/update_versions.py --tool semgrep --version 1.95.0
 
-# Sync Dockerfiles
+# Sync the Dockerfile
 python3 scripts/dev/update_versions.py --sync
 ```
 
@@ -727,14 +713,14 @@ python3 scripts/dev/update_versions.py --report          # View current versions
 python3 scripts/dev/update_versions.py --check-latest    # Check for updates
 
 # === CLI Tool Management (v1.0.0) ===
-jmo tools check --profile balanced                       # Check tool status
+jmo tools check                                          # Check tool status
 jmo tools outdated                                       # View version drift
 jmo tools update                                         # Update to versions.yaml
 
 # === Update Workflow ===
 python3 scripts/dev/update_versions.py --tool <name> --version <X.Y.Z>
 python3 scripts/dev/update_versions.py --sync
-git add versions.yaml Dockerfile*
+git add versions.yaml Dockerfile
 git commit -m "deps(tools): update <name> to vX.Y.Z"
 
 # === CI Validation ===

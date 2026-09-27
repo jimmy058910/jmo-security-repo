@@ -275,12 +275,10 @@ class TestRunDiffWizardHistoryMode:
                 id TEXT PRIMARY KEY,
                 timestamp INTEGER NOT NULL,
                 timestamp_iso TEXT NOT NULL,
-                profile TEXT NOT NULL,
                 branch TEXT,
                 total_findings INTEGER,
                 tools TEXT NOT NULL,
-                targets TEXT NOT NULL,
-                target_type TEXT NOT NULL
+                targets TEXT NOT NULL
             )
         """)
 
@@ -290,40 +288,34 @@ class TestRunDiffWizardHistoryMode:
                 "scan-001-abc",
                 1730455200,  # 2025-11-01 10:00:00 UTC
                 "2025-11-01T10:00:00",
-                "balanced",
                 "main",
                 10,
                 "semgrep,trivy",
                 "/repo",
-                "repo",
             ),
             (
                 "scan-002-def",
                 1730541600,  # 2025-11-02 10:00:00 UTC
                 "2025-11-02T10:00:00",
-                "balanced",
                 "main",
                 8,
                 "semgrep,trivy",
                 "/repo",
-                "repo",
             ),
             (
                 "scan-003-ghi",
                 1730628000,  # 2025-11-03 10:00:00 UTC
                 "2025-11-03T10:00:00",
-                "balanced",
                 "feature-x",
                 12,
                 "semgrep,trivy",
                 "/repo",
-                "repo",
             ),
         ]
         cursor.executemany(
             """INSERT INTO scans
-            (id, timestamp, timestamp_iso, profile, branch, total_findings, tools, targets, target_type)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (id, timestamp, timestamp_iso, branch, total_findings, tools, targets)
+            VALUES (?, ?, ?, ?, ?, ?, ?)""",
             test_scans,
         )
 
@@ -391,14 +383,13 @@ class TestRunDiffWizardHistoryMode:
             CREATE TABLE scans (
                 id TEXT PRIMARY KEY,
                 timestamp_iso TEXT,
-                profile TEXT,
                 branch TEXT,
                 total_findings INTEGER
             )
         """)
         cursor.execute(
-            "INSERT INTO scans VALUES (?, ?, ?, ?, ?)",
-            ("scan-001", "2025-11-01T10:00:00", "balanced", "main", 10),
+            "INSERT INTO scans VALUES (?, ?, ?, ?)",
+            ("scan-001", "2025-11-01T10:00:00", "main", 10),
         )
         conn.commit()
         conn.close()
@@ -468,40 +459,34 @@ class TestRunDiffWizardErrorHandling:
                 id TEXT PRIMARY KEY,
                 timestamp INTEGER NOT NULL,
                 timestamp_iso TEXT NOT NULL,
-                profile TEXT NOT NULL,
                 branch TEXT,
                 total_findings INTEGER,
                 tools TEXT NOT NULL,
-                targets TEXT NOT NULL,
-                target_type TEXT NOT NULL
+                targets TEXT NOT NULL
             )
         """)
         cursor.executemany(
             """INSERT INTO scans
-            (id, timestamp, timestamp_iso, profile, branch, total_findings, tools, targets, target_type)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (id, timestamp, timestamp_iso, branch, total_findings, tools, targets)
+            VALUES (?, ?, ?, ?, ?, ?, ?)""",
             [
                 (
                     "scan-001",
                     1730455200,
                     "2025-11-01T10:00:00",
-                    "balanced",
                     "main",
                     10,
                     "semgrep",
                     "/repo",
-                    "repo",
                 ),
                 (
                     "scan-002",
                     1730541600,
                     "2025-11-02T10:00:00",
-                    "balanced",
                     "main",
                     8,
                     "semgrep",
                     "/repo",
-                    "repo",
                 ),
             ],
         )
@@ -813,40 +798,34 @@ class TestRunDiffWizardExceptionHandling:
                 id TEXT PRIMARY KEY,
                 timestamp INTEGER NOT NULL,
                 timestamp_iso TEXT NOT NULL,
-                profile TEXT NOT NULL,
                 branch TEXT,
                 total_findings INTEGER,
                 tools TEXT NOT NULL,
-                targets TEXT NOT NULL,
-                target_type TEXT NOT NULL
+                targets TEXT NOT NULL
             )
         """)
         cursor.executemany(
             """INSERT INTO scans
-            (id, timestamp, timestamp_iso, profile, branch, total_findings, tools, targets, target_type)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (id, timestamp, timestamp_iso, branch, total_findings, tools, targets)
+            VALUES (?, ?, ?, ?, ?, ?, ?)""",
             [
                 (
                     "scan-001",
                     1730455200,
                     "2025-11-01T10:00:00",
-                    "balanced",
                     "main",
                     10,
                     "semgrep",
                     "/repo",
-                    "repo",
                 ),
                 (
                     "scan-002",
                     1730541600,
                     "2025-11-02T10:00:00",
-                    "balanced",
                     "main",
                     8,
                     "semgrep",
                     "/repo",
-                    "repo",
                 ),
             ],
         )

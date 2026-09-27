@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.conftest import IS_MACOS
+from tests.conftest import IS_MACOS, assert_no_jmo_traceback
 
 macos_only = pytest.mark.skipif(not IS_MACOS, reason="macOS-only test")
 
@@ -33,7 +33,7 @@ class TestMacOSPathHandling:
 
         # May mention Homebrew paths
         combined = result.stdout.lower() + result.stderr.lower()
-        assert "traceback" not in combined
+        assert_no_jmo_traceback(combined)
 
     def test_home_tilde_expansion(self, jmo_runner, tmp_path, monkeypatch):
         """Verify ~ expands correctly on macOS."""
@@ -58,7 +58,7 @@ class TestMacOSPathHandling:
         )
 
         combined = result.stdout.lower() + result.stderr.lower()
-        assert "traceback" not in combined
+        assert_no_jmo_traceback(combined)
 
     def test_case_insensitive_filesystem(self, jmo_runner, tmp_path):
         """Verify handling of macOS case-insensitive filesystem."""
@@ -80,7 +80,7 @@ class TestMacOSPathHandling:
 
         # Either finds it or reports not found cleanly
         combined = result.stdout.lower() + result.stderr.lower()
-        assert "traceback" not in combined
+        assert_no_jmo_traceback(combined)
 
 
 @macos_only
@@ -93,7 +93,7 @@ class TestMacOSToolDiscovery:
 
         # Should show path information
         combined = result.stdout.lower() + result.stderr.lower()
-        assert "traceback" not in combined
+        assert_no_jmo_traceback(combined)
 
     def test_usr_local_path(self, jmo_runner):
         """Verify /usr/local (Intel Mac) paths are checked."""
@@ -101,7 +101,7 @@ class TestMacOSToolDiscovery:
 
         assert result.returncode in (0, 1)
         combined = result.stdout.lower() + result.stderr.lower()
-        assert "traceback" not in combined
+        assert_no_jmo_traceback(combined)
 
 
 @macos_only
@@ -127,7 +127,7 @@ class TestMacOSPermissions:
 
         # Should handle tools even if quarantined (will be missing)
         combined = result.stdout.lower() + result.stderr.lower()
-        assert "traceback" not in combined
+        assert_no_jmo_traceback(combined)
 
     def test_system_directory_access(self, jmo_runner):
         """Verify tools in system directories are accessible."""
@@ -162,4 +162,4 @@ class TestMacOSExtendedAttributes:
         # Should create results without xattr errors
         combined = result.stdout.lower() + result.stderr.lower()
         assert "operation not permitted" not in combined
-        assert "traceback" not in combined
+        assert_no_jmo_traceback(combined)

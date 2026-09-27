@@ -221,19 +221,34 @@ def cmd_report(args, _log_fn) -> int:
     # Collect scan metadata
     scan_id = str(uuid.uuid4())
 
-    # Read profile from scan metadata if available (Bug #3 fix)
+    # Read the tools the scan ran from its metadata, if available
     scan_metadata_path = results_dir / ".scan_metadata.json"
-    profile = ""
     tools_from_scan: list[str] = []
+    # True when the scan's rows say no tool ran on any target. Such a run is
+    # not stored in history: a scan of 0 findings reads, to `jmo trends` and
+    # `jmo diff`, as every earlier finding resolved.
+    nothing_ran = False
     if scan_metadata_path.exists():
         try:
             scan_meta = json.loads(scan_metadata_path.read_text(encoding="utf-8"))
-            profile = scan_meta.get("profile", "")
             tools_from_scan = scan_meta.get("tools", [])
+            # The tools that ran on at least one target (#787). `tools` is the
+            # request, which since v2.0.0 keeps a tool that is not installed
+            # (its row says `failed:not installed`); the rows say what ran.
+            runs = scan_meta.get("tool_runs")
+            if isinstance(runs, list):
+                tools_from_scan = list(
+                    dict.fromkeys(
+                        r["tool"]
+                        for r in runs
+                        if isinstance(r, dict)
+                        and r.get("state") == "ran"
+                        and "tool" in r
+                    )
+                )
+                nothing_ran = bool(runs) and not tools_from_scan
         except (json.JSONDecodeError, OSError):
             pass
-    if not profile:
-        profile = getattr(cfg, "default_profile", "") or ""
 
     # Use tools from scan metadata if available, else infer from findings (Bug #5 fix)
     tools_used: list[str] = tools_from_scan.copy() if tools_from_scan else []
@@ -261,7 +276,6 @@ def cmd_report(args, _log_fn) -> int:
     metadata = _generate_metadata(
         findings,
         scan_id=scan_id,
-        profile=profile,
         tools=sorted(tools_used),
         target_count=target_count,
     )
@@ -390,6 +404,13 @@ def cmd_report(args, _log_fn) -> int:
                 passed = sum(1 for r in policy_results.values() if r.passed)
                 failed = len(policy_results) - passed
 
+                # Each policy's own words, at run time: zero-secrets' says how
+                # many secrets it passes unverified, which only the report
+                # file said before (#1327).
+                for name, result in sorted(policy_results.items()):
+                    verdict = "PASSED" if result.passed else "FAILED"
+                    _log_fn(args, "INFO", f"{name}: {verdict} - {result.message}")
+
                 _log_fn(
                     args,
                     "INFO",
@@ -504,19 +525,25 @@ def cmd_report(args, _log_fn) -> int:
     history_db_path = (
         Path(_configured_db) if _configured_db else Path(".jmo/history.db")
     )
-    if getattr(args, "store_history", False):
+    if getattr(args, "store_history", False) and nothing_ran:
+        _log_fn(
+            args,
+            "WARN",
+            "No tool ran on any target, so this scan was not stored in the "
+            "history database: stored, its 0 findings would read as every "
+            "earlier finding resolved.",
+        )
+    elif getattr(args, "store_history", False):
         try:
             from scripts.core.history_db import store_scan as db_store_scan
 
             # Record what the scan actually did, not what the config asks for.
-            # `profile` and `tools_used` were resolved above from
-            # .scan_metadata.json (written by the scan) with a findings-derived
-            # fallback, and `tools_used` is what findings.json's metadata
-            # already reports. Reading cfg.tools here instead made every stored
-            # row claim jmo.yml's top-level `tools:` list regardless of profile
-            # -- 1790 of 1833 rows named the same 8 tools, including one that
-            # was not installed and so cannot have run (#787).
-            profile_name = getattr(args, "profile_name", None) or profile or "balanced"
+            # `tools_used` was resolved above from .scan_metadata.json (written
+            # by the scan) with a findings-derived fallback, and is what
+            # findings.json's metadata already reports. Reading cfg.tools here
+            # instead made every stored row claim jmo.yml's top-level `tools:`
+            # list -- 1790 of 1833 rows named the same 8 tools, including one
+            # that was not installed and so cannot have run (#787).
             tools = sorted(tools_used)
 
             # Get security flags (Phase 6 Step 6.1, 6.2, 6.3)
@@ -527,7 +554,6 @@ def cmd_report(args, _log_fn) -> int:
             # Store scan in history database
             scan_id = db_store_scan(
                 results_dir=results_dir,
-                profile=profile_name,
                 tools=tools,
                 db_path=history_db_path,
                 no_store_raw=no_store_raw,
@@ -581,6 +607,8 @@ def cmd_report(args, _log_fn) -> int:
     # severity code while the function returned something else.
     if not getattr(args, "store_history", False):
         history_state = "off"
+    elif nothing_ran:
+        history_state = "not stored, no tool ran"
     elif stored_ok:
         history_state = "stored"
     else:

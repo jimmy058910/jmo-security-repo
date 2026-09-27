@@ -307,14 +307,14 @@ jobs:
         run: git checkout main
 
       - name: Scan main branch
-        run: jmo scan --repo . --profile balanced --results-dir baseline-results
+        run: jmo scan --repo . --results-dir baseline-results
 
       # Scan current PR
       - name: Checkout PR
         run: git checkout ${{ github.event.pull_request.head.sha }}
 
       - name: Scan PR branch
-        run: jmo scan --repo . --profile balanced --results-dir current-results
+        run: jmo scan --repo . --results-dir current-results
 
       # Generate diff
       - name: Generate diff
@@ -353,11 +353,11 @@ security-diff:
   script:
     # Scan baseline
     - git checkout $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
-    - jmo scan --repo . --profile balanced --results-dir baseline/
+    - jmo scan --repo . --results-dir baseline/
 
     # Scan current
     - git checkout $CI_COMMIT_SHA
-    - jmo scan --repo . --profile balanced --results-dir current/
+    - jmo scan --repo . --results-dir current/
 
     # Generate diff
     - jmo diff baseline/ current/ --format md --output diff.md

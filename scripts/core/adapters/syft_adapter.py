@@ -51,7 +51,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from scripts.core.adapters.common import normalize_finding_path, safe_load_json_file
+from scripts.core.adapters.common import (
+    normalize_finding_path,
+    pinned_version,
+    safe_load_json_file,
+)
 from scripts.core.common_finding import fingerprint, normalize_severity
 from scripts.core.plugin_api import (
     AdapterPlugin,
@@ -126,6 +130,12 @@ def _load_syft_internal(path: str | Path) -> list[dict[str, Any]]:
         return []
 
     out: list[dict[str, Any]] = []
+    # syft names itself in `descriptor` (1.51.1, measured). This was hard-coded
+    # "unknown" under a comment saying syft does not (#1333).
+    descriptor = data.get("descriptor")
+    tool_version = descriptor.get("version") if isinstance(descriptor, dict) else None
+    if not isinstance(tool_version, str) or not tool_version:
+        tool_version = pinned_version("syft") or "unknown"
     artifacts = data.get("artifacts")
     if isinstance(artifacts, list):
         for a in artifacts:
@@ -171,7 +181,7 @@ def _load_syft_internal(path: str | Path) -> list[dict[str, Any]]:
                 "severity": "INFO",
                 "tool": {
                     "name": "syft",
-                    "version": "unknown",  # Syft doesn't embed version in JSON output
+                    "version": tool_version,
                 },
                 "location": {"path": location, "startLine": 0},
                 "remediation": "Track and scan dependencies.",
@@ -211,7 +221,7 @@ def _load_syft_internal(path: str | Path) -> list[dict[str, Any]]:
                 "severity": sev,
                 "tool": {
                     "name": "syft",
-                    "version": "unknown",  # Syft doesn't embed version in JSON output
+                    "version": tool_version,
                 },
                 "location": {"path": location, "startLine": 0},
                 "remediation": str(v.get("url") or "See advisory"),

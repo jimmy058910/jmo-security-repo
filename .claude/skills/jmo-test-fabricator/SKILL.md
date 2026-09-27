@@ -149,7 +149,7 @@ def test_tool_nested_paths(tmp_path: Path): ...
 **Integration Test Categories:**
 
 ```python
-# ========== Test Category: Profile Validation ==========
+# ========== Test Category: Tool Selection ==========
 # ========== Test Category: Multi-Target Deduplication ==========
 # ========== Test Category: Error Handling ==========
 ```
@@ -218,16 +218,16 @@ See [detailed required test functions](references/required-test-functions.md) fo
 > (`scripts/core/normalize_and_report.py:234`), so a `parse()` result never
 > carries them and an adapter-level assertion would either fail or assert
 > nothing. Test the mapping itself at the reporting boundary. The repository's
-> own `TestBanditCompliance`
-> (`tests/adapters/test_bandit_adapter.py:365`) shows the real shape: despite
-> the name it asserts `schemaVersion`, tool name and remediation text.
+> own `TestTrivyCompliance`
+> (`tests/adapters/test_trivy_adapter.py:382`) shows the real shape: despite
+> the name it asserts `schemaVersion`, tool version and the remediation URL.
 
 ---
 
 ## Integration Testing Patterns
 
-Multi-component workflow tests (scan -> report -> CI), profile validation, and graceful degradation.
-See [detailed integration patterns](references/integration-patterns.md) for complete examples including profile validation, multi-target deduplication, config inheritance, and flexible assertions.
+Multi-component workflow tests (scan -> report -> CI), tool selection, and graceful degradation.
+See [detailed integration patterns](references/integration-patterns.md) for complete examples including tool selection, multi-target deduplication, per-tool config, and flexible assertions.
 
 ---
 

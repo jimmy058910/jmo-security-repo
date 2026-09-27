@@ -56,9 +56,9 @@ def test_scanner_binary_match_detects_semgrep_variants(argv0):
     "argv0",
     [
         # `trufflehog` used to be here, asserting the narrow scope. It IS a
-        # profile scanner, and the recorder watching only semgrep is the defect
+        # matrix scanner, and the recorder watching only semgrep is the defect
         # #994 fixed -- so a test pinning its absence pinned the bug. The
-        # watched set is now derived from PROFILE_TOOLS; see
+        # watched set is now derived from TOOL_MATRIX; see
         # tests/unit/test_spawn_guard_scope.py.
         "black",
         "python",

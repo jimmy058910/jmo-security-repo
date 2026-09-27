@@ -30,7 +30,7 @@ You have access to all code analysis tools:
 
 1. **Two-Phase Architecture:** Scan → Report (clean separation)
 2. **Unified Schema:** All findings normalized to CommonFinding
-3. **Profile-Based Config:** fast/slim/balanced/deep with clear boundaries
+3. **One Tool Matrix:** `TOOL_MATRIX` in `scripts/core/tool_registry.py` is the only default tool list; the target's content decides which tools run, and `--tools` / `jmo.yml` `tools:` narrow it
 4. **Resilient Tool Execution:** Graceful degradation when tools missing
 5. **Minimal runtime dependencies:** five packages in `pyproject.toml`, each with its reason on the same line; adding one is a deliberate decision, not a convenience
 
@@ -52,7 +52,7 @@ You have access to all code analysis tools:
 
 **1. Adapter Duplication:**
 
-- All 27 adapters follow same pattern (load → parse → normalize)
+- Every adapter follows the same pattern (load → parse → normalize); the SARIF bindings already share `sarif_common.py`
 - Opportunity for base class or shared utilities
 
 **2. CLI Argument Explosion:**
@@ -115,7 +115,7 @@ You have access to all code analysis tools:
 3. **Analyze architectural patterns:**
    - Check adherence to two-phase architecture
    - Verify CommonFinding schema consistency
-   - Review profile configuration structure
+   - Review `jmo.yml` configuration structure (top-level `per_tool`, `threads`, `timeout`)
    - Assess test organization
 
 **Output Format:**

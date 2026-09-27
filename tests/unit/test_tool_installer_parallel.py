@@ -3,7 +3,7 @@ Tests for parallel tool installation functionality.
 
 Tests cover:
 - ParallelInstallProgress thread safety
-- Batch pip/npm installation
+- Batch pip installation
 - Concurrent binary downloads
 - Signal handling and cancellation
 """
@@ -280,60 +280,6 @@ class TestBatchPipInstall:
         assert installer.install_tool.call_count == 2
 
 
-class TestBatchNpmInstall:
-    """Tests for batch npm installation."""
-
-    @patch("scripts.cli.tool_installer.shutil.which")
-    def test_batch_npm_install_no_npm(self, mock_which):
-        """Test handling when npm is not installed."""
-        from scripts.cli.tool_installer import ToolInstaller
-
-        mock_which.return_value = None  # npm not found
-
-        # Create mock installer
-        mock_registry = MagicMock()
-        installer = ToolInstaller.__new__(ToolInstaller)
-        installer._registry = mock_registry
-
-        progress = ParallelInstallProgress(total=2)
-        results = installer._batch_npm_install(["tool1", "tool2"], progress)
-
-        assert len(results) == 2
-        assert all(not r.success for r in results)
-        assert all("npm not installed" in r.message for r in results)
-
-    @patch("scripts.cli.tool_installer.shutil.which")
-    @patch("scripts.cli.tool_installer.subprocess.run")
-    def test_batch_npm_install_success(self, mock_run, mock_which):
-        """Test successful batch npm install."""
-        from scripts.cli.tool_installer import ToolInstaller
-
-        mock_which.return_value = "/usr/bin/npm"
-        mock_run.return_value = MagicMock(returncode=0)
-
-        # Create mock installer
-        mock_registry = MagicMock()
-        mock_manager = MagicMock()
-
-        tool_info = MagicMock()
-        tool_info.npm_package = "@scope/package"
-        mock_registry.get_tool.return_value = tool_info
-
-        status = MagicMock()
-        status.installed_version = "1.0.0"
-        mock_manager.check_tool.return_value = status
-
-        installer = ToolInstaller.__new__(ToolInstaller)
-        installer._registry = mock_registry
-        installer._manager = mock_manager
-
-        progress = ParallelInstallProgress(total=2)
-        results = installer._batch_npm_install(["tool1", "tool2"], progress)
-
-        assert len(results) == 2
-        assert all(r.success for r in results)
-
-
 class TestInstallToolThreadsafe:
     """Tests for thread-safe tool installation wrapper."""
 
@@ -427,12 +373,25 @@ class TestDownloadWithRequests:
             assert not success
 
 
-class TestInstallProfileParallel:
+def _installed_status() -> MagicMock:
+    """A ToolStatus stand-in that install_tools_parallel will skip.
+
+    The skip needs `installed` AND no `version_error`; a bare MagicMock's
+    `version_error` is itself a truthy MagicMock, which would send the tool on
+    to a real install instead.
+    """
+    status = MagicMock()
+    status.installed = True
+    status.installed_version = "1.0.0"
+    status.version_error = None
+    return status
+
+
+class TestInstallToolsParallel:
     """Tests for the main parallel installation function."""
 
-    @patch("scripts.core.tool_registry.PROFILE_TOOLS", {"other": ["tool1"]})
-    def test_empty_profile(self):
-        """Test handling of empty/unknown profile."""
+    def test_empty_tool_list(self):
+        """An empty tool list installs nothing."""
         from scripts.cli.tool_installer import ToolInstaller
 
         # Create mock installer
@@ -443,16 +402,11 @@ class TestInstallProfileParallel:
         installer._registry = mock_registry
         installer._manager = mock_manager
 
-        progress = installer.install_profile_parallel(
-            profile="unknown", show_progress=False
-        )
+        progress = installer.install_tools_parallel([], show_progress=False)
 
         assert progress.total == 0
+        mock_manager.check_tool.assert_not_called()
 
-    @patch(
-        "scripts.core.tool_registry.PROFILE_TOOLS",
-        {"test": ["tool1", "tool1", "tool2", "tool1"]},
-    )
     def test_deduplication(self):
         """Test that duplicate tools are deduplicated."""
         from scripts.cli.tool_installer import ToolInstaller
@@ -462,25 +416,22 @@ class TestInstallProfileParallel:
         mock_manager = MagicMock()
 
         # All tools already installed
-        status = MagicMock()
-        status.installed = True
-        status.installed_version = "1.0.0"
-        mock_manager.check_tool.return_value = status
+        mock_manager.check_tool.return_value = _installed_status()
 
         installer = ToolInstaller.__new__(ToolInstaller)
         installer._registry = mock_registry
         installer._manager = mock_manager
 
-        _progress = installer.install_profile_parallel(
-            profile="test",
+        progress = installer.install_tools_parallel(
+            ["tool1", "tool1", "tool2", "tool1"],
             skip_installed=True,
             show_progress=False,
         )
 
         # Should only check 2 unique tools
         assert mock_manager.check_tool.call_count == 2
+        assert progress.total == 2
 
-    @patch("scripts.core.tool_registry.PROFILE_TOOLS", {"test": ["tool1", "tool2"]})
     def test_all_tools_skipped(self):
         """Test when all tools are already installed."""
         from scripts.cli.tool_installer import ToolInstaller
@@ -489,17 +440,14 @@ class TestInstallProfileParallel:
         mock_registry = MagicMock()
         mock_manager = MagicMock()
 
-        status = MagicMock()
-        status.installed = True
-        status.installed_version = "1.0.0"
-        mock_manager.check_tool.return_value = status
+        mock_manager.check_tool.return_value = _installed_status()
 
         installer = ToolInstaller.__new__(ToolInstaller)
         installer._registry = mock_registry
         installer._manager = mock_manager
 
-        progress = installer.install_profile_parallel(
-            profile="test",
+        progress = installer.install_tools_parallel(
+            ["tool1", "tool2"],
             skip_installed=True,
             show_progress=False,
         )
@@ -512,7 +460,6 @@ class TestInstallProfileParallel:
 class TestMaxWorkersLimit:
     """Tests for max_workers limit enforcement."""
 
-    @patch("scripts.core.tool_registry.PROFILE_TOOLS", {"test": ["tool1"]})
     def test_max_workers_capped_at_8(self):
         """Test that max_workers is capped at 8."""
         from scripts.cli.tool_installer import ToolInstaller
@@ -521,22 +468,26 @@ class TestMaxWorkersLimit:
         mock_registry = MagicMock()
         mock_manager = MagicMock()
 
-        # Return installed for all tools
-        status = MagicMock()
-        status.installed = True
-        status.installed_version = "1.0.0"
-        mock_manager.check_tool.return_value = status
+        # A binary tool (no PyPI package), so it reaches the install stage
+        tool_info = MagicMock()
+        tool_info.pypi_package = None
+        mock_registry.get_tool.return_value = tool_info
 
         installer = ToolInstaller.__new__(ToolInstaller)
         installer._registry = mock_registry
         installer._manager = mock_manager
+        installer._install_without_progress = MagicMock()
 
         # Even if user requests 100 workers, it should be capped
-        progress = installer.install_profile_parallel(
-            profile="test",
+        installer.install_tools_parallel(
+            ["tool1"],
             max_workers=100,  # Should be capped to 8
             show_progress=False,
         )
 
-        # Function should complete without error
-        assert progress is not None
+        installer._install_without_progress.assert_called_once()
+        pip_tools, other_tools, _progress, max_workers = (
+            installer._install_without_progress.call_args.args
+        )
+        assert (pip_tools, other_tools) == ([], ["tool1"])
+        assert max_workers == 8

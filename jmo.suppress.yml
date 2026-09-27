@@ -13,9 +13,9 @@
 # An entry using any other key, or no selector at all, is reported at WARNING
 # and ignored -- it is never silently dropped.
 #
-# Rule identifiers differ sharply between tools: bandit emits `B101`, checkov
-# `CKV_AWS_23`, horusec a UUID, and semgrep a long dotted path. Use a glob
-# unless you have copied the exact id out of a report.
+# Rule identifiers differ sharply between tools: checkov emits `CKV_AWS_23`,
+# hadolint `DL3008`, trivy `AVD-DS-0002`, and semgrep a long dotted path. Use a
+# glob unless you have copied the exact id out of a report.
 #
 # See: docs/USER_GUIDE.md#handling-false-positives
 
@@ -75,23 +75,6 @@ suppressions:
     ruleId: "*run-shell-injection*"
     line: [74, 86]
     reason: "Read-only display of commit messages in CI logs (sandboxed environment)"
-
-  # =============================================================================
-  # Bandit Test File Patterns (B101 - Assert Statements)
-  # =============================================================================
-  # Assert statements in test files are expected and safe (used for test assertions).
-
-  - path: "tests/*"
-    ruleId: "B101"
-    reason: "Assert statements are expected in test files for test validation"
-
-  - path: "test_*.py"
-    ruleId: "B101"
-    reason: "Assert statements in test files"
-
-  - path: "*_test.py"
-    ruleId: "B101"
-    reason: "Assert statements in test files"
 
   # =============================================================================
   # Future: Add Production Suppressions Here

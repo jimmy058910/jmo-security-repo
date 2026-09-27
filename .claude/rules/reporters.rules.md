@@ -42,7 +42,7 @@ Diff reporters compare two scan results and highlight changes:
 All reporters receive:
 
 1. **findings:** List of CommonFinding objects (normalized, already deduplicated).
-2. **metadata:** Scan metadata (`scan_id`, `timestamp`, `profile`, `target`, etc.).
+2. **metadata:** Scan metadata (`scan_id`, `timestamp`, `target`, etc.).
 3. **options:** Reporter-specific config dict (e.g., `include_compliance=true`, `threshold=HIGH`).
 
 ## Output Contract

@@ -39,7 +39,7 @@ cat .jmo/memory/debugging/semgrep-exit-codes.json | jq '.exit_codes'
   "frequency": 5,
   "success_rate": 1.0,
   "last_encountered": "2025-10-20",
-  "related_patterns": ["trivy-timeout", "bandit-timeout"]
+  "related_patterns": ["trivy-timeout", "checkov-timeout"]
 }
 ```
 
@@ -74,4 +74,4 @@ cat .jmo/memory/debugging/semgrep-exit-codes.json | jq '.exit_codes'
 
 - `.jmo/memory/ci-fixes/` - CI-specific debugging patterns (jmo-ci-debugger skill)
 - `.jmo/memory/adapters/` - Tool adapter patterns (jmo-adapter-generator skill)
-- `.jmo/memory/profiles/` - Performance optimization patterns (jmo-profile-optimizer skill)
+- `.jmo/memory/timings/` - Per-tool timing baselines (jmo-profile-optimizer skill)

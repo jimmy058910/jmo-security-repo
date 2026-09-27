@@ -1,9 +1,16 @@
 """
 Tests for Repository Scanner
 
-Tests the repository_scanner module with various scenarios.
+Tests `scan_repository` and the tool loop it runs through. Each test resolves
+its tools explicitly (the loop only reads a result for a tool it planned), and
+each repository fixture holds at least one file: an empty tree fails every row
+before any tool runs (G2), which has its own tests below.
 """
 
+import json
+import logging
+import os
+import re
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -13,2631 +20,996 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 
 from scripts.cli.scan_jobs.repository_scanner import scan_repository
-from scripts.cli.scan_utils import (
-    NOT_ATTEMPTED_KEY,
-    NOT_ATTEMPTED_MISSING,
-    NOT_ATTEMPTED_NOTHING_APPLICABLE,
-    not_attempted_tools,
-)
+from scripts.cli.scan_jobs.tool_loop import collect_files, iter_repo_files
+from scripts.cli.scan_utils import tool_exclusion_flags
+from scripts.core.scan_timings import Reason, State
+from scripts.core.tool_descriptors import DESCRIPTORS, ExclusionStyle
+from scripts.core.tool_registry import TOOL_MATRIX, TOOL_SCAN_TYPES
+from scripts.core.tool_runner import ToolResult
+
+REPO_TOOLS = [t for t in TOOL_MATRIX if t in TOOL_SCAN_TYPES["repo"]]
+
+
+def _found(tool_name):
+    return f"/usr/bin/{tool_name}"
+
+
+def _repo(tmp_path, name="repo", files=None):
+    """A repository holding `files` ({relative path: text}), or one README."""
+    repo = tmp_path / name
+    repo.mkdir(parents=True, exist_ok=True)
+    for rel, text in (files or {"README.md": "# repo\n"}).items():
+        path = repo / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(text.encode("utf-8"))
+    return repo
+
+
+def _scan(repo, results_dir, tools, results=None, find=_found, **kw):
+    """Run `scan_repository` with ToolRunner patched.
+
+    `results` is a list of ToolResult, or None to succeed exactly the
+    definitions the loop built. Returns (name, rows, commands by tool, runner).
+    """
+    runner_calls = []
+
+    def runner_for(tools, **_kwargs):
+        runner_calls.append(tools)
+        runner = MagicMock()
+        runner.run_all_parallel.return_value = (
+            results
+            if results is not None
+            else [ToolResult(tool=d.name, status="success", attempts=1) for d in tools]
+        )
+        return runner
+
+    with patch(
+        "scripts.cli.scan_jobs.repository_scanner.ToolRunner", side_effect=runner_for
+    ):
+        name, rows = scan_repository(
+            repo=repo,
+            results_dir=results_dir,
+            tools=tools,
+            timeout=kw.pop("timeout", 600),
+            retries=kw.pop("retries", 0),
+            per_tool_config=kw.pop("per_tool_config", {}),
+            allow_missing_tools=kw.pop("allow_missing_tools", False),
+            find_tool_func=find,
+            **kw,
+        )
+    defs = runner_calls[0] if runner_calls else []
+    return name, rows, {d.name: d for d in defs}
 
 
 class TestRepositoryScanner:
     """Test repository scanner functionality"""
 
     def test_scan_repository_basic(self, tmp_path):
-        """Test basic repository scanning with trufflehog and semgrep"""
-        repo = tmp_path / "test-repo"
-        repo.mkdir()
-        (repo / ".git").mkdir()
-        (repo / "README.md").write_text("# Test Repo")
+        repo = _repo(tmp_path, "test-repo")
 
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
+        name, rows, _ = _scan(repo, tmp_path / "out", ["trufflehog", "semgrep"])
 
-            from scripts.core.tool_runner import ToolResult
-
-            mock_runner.run_all_parallel.return_value = [
-                ToolResult(tool="trufflehog", status="success", attempts=1),
-                ToolResult(tool="semgrep", status="success", attempts=1),
-            ]
-
-            name, statuses = scan_repository(
-                repo=repo,
-                results_dir=tmp_path,
-                tools=["trufflehog", "semgrep"],
-                timeout=600,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-            )
-
-            assert name == "test-repo"
-            assert statuses["trufflehog"] is True
-            assert statuses["semgrep"] is True
+        assert name == "test-repo"
+        assert rows["trufflehog"].state is State.RAN
+        assert rows["semgrep"].state is State.RAN
 
     def test_scan_repository_with_timeout_override(self, tmp_path):
-        """Test per-tool timeout overrides"""
-        repo = tmp_path / "my-app"
-        repo.mkdir()
+        repo = _repo(tmp_path, "my-app")
 
-        # Mock tool_exists to return True for trivy
-        def mock_find_tool(tool_name):
-            if tool_name == "trivy":
-                return "/usr/bin/trivy"
-            return None
-
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-
-            from scripts.core.tool_runner import ToolResult
-
-            mock_runner.run_all_parallel.return_value = [
-                ToolResult(tool="trivy", status="success", attempts=1),
-            ]
-
-            per_tool_config = {
+        _, _, defs = _scan(
+            repo,
+            tmp_path / "out",
+            ["trivy"],
+            find=lambda t: "/usr/bin/trivy" if t == "trivy" else None,
+            per_tool_config={
                 "trivy": {"timeout": 1200, "flags": ["--severity", "HIGH,CRITICAL"]}
-            }
+            },
+        )
 
-            scan_repository(
-                repo=repo,
-                results_dir=tmp_path,
-                tools=["trivy"],
-                timeout=600,
-                retries=0,
-                per_tool_config=per_tool_config,
-                allow_missing_tools=False,
-                find_tool_func=mock_find_tool,
-            )
-
-            MockRunner.assert_called_once()
-            args, kwargs = MockRunner.call_args
-            tool_defs = kwargs.get("tools") or (args[0] if args else [])
-            trivy_def = next((t for t in tool_defs if t.name == "trivy"), None)
-            assert trivy_def is not None, "trivy tool definition not found"
-            assert trivy_def.timeout == 1200
-            assert "--severity" in trivy_def.command
+        assert defs["trivy"].timeout == 1200
+        assert "--severity" in defs["trivy"].command
 
     def test_scan_repository_multiple_tools(self, tmp_path):
-        """Test scanning with multiple tools"""
-        repo = tmp_path / "multi-tool-repo"
-        repo.mkdir()
+        repo = _repo(tmp_path, "multi-tool-repo")
+        tools = ["trufflehog", "semgrep", "trivy", "syft"]
 
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
+        _, rows, _ = _scan(repo, tmp_path / "out", tools)
 
-            from scripts.core.tool_runner import ToolResult
-
-            mock_runner.run_all_parallel.return_value = [
-                ToolResult(tool="trufflehog", status="success", attempts=1),
-                ToolResult(tool="semgrep", status="success", attempts=1),
-                ToolResult(tool="trivy", status="success", attempts=1),
-                ToolResult(tool="syft", status="success", attempts=1),
-            ]
-
-            name, statuses = scan_repository(
-                repo=repo,
-                results_dir=tmp_path,
-                tools=["trufflehog", "semgrep", "trivy", "syft"],
-                timeout=600,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-            )
-
-            assert len(statuses) == 4
-            assert all(
-                statuses[tool] for tool in ["trufflehog", "semgrep", "trivy", "syft"]
-            )
+        assert list(rows) == tools
+        assert all(rows[t].state is State.RAN for t in tools)
 
     def test_scan_repository_with_retries(self, tmp_path):
-        """Test repository scanning with retries"""
-        repo = tmp_path / "retry-repo"
-        repo.mkdir()
+        repo = _repo(tmp_path, "retry-repo")
 
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
+        _, rows, _ = _scan(
+            repo,
+            tmp_path / "out",
+            ["semgrep"],
+            results=[ToolResult(tool="semgrep", status="success", attempts=3)],
+            retries=2,
+        )
 
-            from scripts.core.tool_runner import ToolResult
-
-            mock_runner.run_all_parallel.return_value = [
-                ToolResult(tool="semgrep", status="success", attempts=3),
-            ]
-
-            name, statuses = scan_repository(
-                repo=repo,
-                results_dir=tmp_path,
-                tools=["semgrep"],
-                timeout=600,
-                retries=2,
-                per_tool_config={},
-                allow_missing_tools=False,
-            )
-
-            assert statuses["semgrep"] is True
-            assert "__attempts__" in statuses
-            assert statuses["__attempts__"]["semgrep"] == 3
+        assert rows["semgrep"].state is State.RAN
+        assert rows["semgrep"].attempts == 3
 
     def test_scan_repository_creates_output_directory(self, tmp_path):
-        """Test that output directories are created"""
-        repo = tmp_path / "output-test"
-        repo.mkdir()
+        repo = _repo(tmp_path, "output-test")
 
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
+        _scan(repo, tmp_path, ["trufflehog"])
 
-            from scripts.core.tool_runner import ToolResult
+        assert (tmp_path / "output-test").exists()
 
-            mock_runner.run_all_parallel.return_value = [
-                ToolResult(tool="trufflehog", status="success", attempts=1),
-            ]
+    def test_a_unique_result_name_is_the_folder(self, tmp_path):
+        """#1303: the orchestrator names each repository's folder uniquely."""
+        repo = _repo(tmp_path / "alice", "app")
 
-            scan_repository(
-                repo=repo,
-                results_dir=tmp_path,
-                tools=["trufflehog"],
-                timeout=600,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-            )
+        name, _, _ = _scan(repo, tmp_path / "out", ["trivy"], result_name="alice__app")
 
-            # Check directory was created with repo name
-            assert (tmp_path / "output-test").exists()
+        assert name == "alice__app"
+        assert (tmp_path / "out" / "alice__app" / "scan-timings.json").is_file()
+        assert not (tmp_path / "out" / "app").exists()
 
-    def test_noseyparker_multi_phase_execution(self, tmp_path):
-        """noseyparker runs as scan-then-report, in that order.
-
-        This test previously asserted a `noseyparker-init` phase existed and
-        mocked all three phases to success. Both halves described something
-        that could not happen: `datastore init` fails with "File exists
-        (os error 17)" against the directory this scanner pre-created, so the
-        local-binary path had never produced a finding (#1127). Asserting the
-        phase list while mocking its outcome cannot see that.
-        """
-        repo = tmp_path / "noseyparker-repo"
-        repo.mkdir()
-        (repo / ".git").mkdir()
-
-        def mock_find_tool(tool_name):
-            if tool_name == "noseyparker":
-                return "/usr/bin/noseyparker"
-            return None
-
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            from scripts.core.tool_runner import ToolResult
-
-            waves: list[list[str]] = []
-
-            def make_runner(*args, **kwargs):
-                defs = kwargs.get("tools") or (args[0] if args else [])
-                names = [t.name for t in defs]
-                waves.append(names)
-                runner = MagicMock()
-                if "noseyparker-report" in names:
-                    runner.run_all_parallel.return_value = [
-                        ToolResult(
-                            tool="noseyparker-report",
-                            status="success",
-                            attempts=1,
-                            output_file=repo_out / "noseyparker.json",
-                            stdout='{"matches": []}',
-                            capture_stdout=True,
-                        )
-                    ]
-                else:
-                    runner.run_all_parallel.return_value = [
-                        ToolResult(
-                            tool="noseyparker-scan", status="success", attempts=1
-                        )
-                    ]
-                return runner
-
-            repo_out = tmp_path / "noseyparker-repo"
-            MockRunner.side_effect = make_runner
-
-            name, statuses = scan_repository(
-                repo=repo,
-                results_dir=tmp_path,
-                tools=["noseyparker"],
-                timeout=900,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-                find_tool_func=mock_find_tool,
-            )
-
-            assert statuses["noseyparker"] is True
-
-            # `datastore init` is gone: `scan` creates the datastore itself,
-            # and init cannot succeed twice against one results directory.
-            all_names = [n for wave in waves for n in wave]
-            assert "noseyparker-init" not in all_names
-
-            # report must not be submitted alongside scan. run_all_parallel
-            # gives no ordering, and `report` against an unpopulated datastore
-            # exits 2 with "unable to open database file".
-            assert len(waves) == 2, f"expected two waves, got {waves}"
-            assert "noseyparker-scan" in waves[0]
-            assert "noseyparker-report" not in waves[0]
-            assert waves[1] == ["noseyparker-report"]
-
-    def test_noseyparker_datastore_root_is_not_pre_created(self, tmp_path):
-        """noseyparker creates the datastore root and refuses an existing one.
-
-        Measured with noseyparker 0.24.0: `datastore init` against a directory
-        that already exists exits 2 with "Failed to create datastore root
-        directory ...: File exists (os error 17)", and `scan` against a
-        pre-created empty one exits 2 with "Unsupported schema version 0".
-        The parent must exist; the root must not.
-        """
-        repo = tmp_path / "np-repo"
-        repo.mkdir()
-        (repo / ".git").mkdir()
-
-        def mock_find_tool(tool_name):
-            return "/usr/bin/noseyparker" if tool_name == "noseyparker" else None
-
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            MockRunner.return_value.run_all_parallel.return_value = []
-
-            scan_repository(
-                repo=repo,
-                results_dir=tmp_path,
-                tools=["noseyparker"],
-                timeout=900,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-                find_tool_func=mock_find_tool,
-            )
-
-        datastore = tmp_path / "np-repo" / ".noseyparker_datastore"
-        assert not datastore.exists(), (
-            "the datastore root was pre-created; noseyparker will refuse it "
-            "with 'File exists (os error 17)' and contribute no findings"
-        )
-        assert datastore.parent.exists(), (
-            "the datastore's parent must exist -- noseyparker does not create "
-            "parents and fails with 'No such file or directory (os error 2)'"
+    def test_every_repo_tool_in_the_matrix_runs(self, tmp_path):
+        """With content for every trigger, every repository tool runs; zap and
+        nuclei are `skipped:needs --url` (they read URLs)."""
+        repo = _repo(
+            tmp_path,
+            "matrix-repo",
+            {
+                "Dockerfile": "FROM ubuntu\n",
+                "build.sh": "#!/bin/sh\necho hi\n",
+                "main.go": "package main\n",
+                "main.tf": 'resource "aws_s3_bucket" "b" {}\n',
+            },
         )
 
-    def test_a_failed_noseyparker_phase_says_why(self, tmp_path):
-        """A failing phase must report like every other tool.
-
-        The phase branch `continue`d before the failure reporting the rest of
-        the loop does, so a failed phase left only "Return code 2 not in
-        (0,)" in scan-timings and nothing in the log. That is why the
-        datastore error stayed invisible.
-        """
-        repo = tmp_path / "np-repo"
-        repo.mkdir()
-        (repo / ".git").mkdir()
-
-        def mock_find_tool(tool_name):
-            return "/usr/bin/noseyparker" if tool_name == "noseyparker" else None
-
-        from scripts.core.tool_runner import ToolResult
-
-        with (
-            patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner,
-            patch(
-                "scripts.cli.scan_jobs.repository_scanner.report_tool_failure"
-            ) as mock_report,
-        ):
-            MockRunner.return_value.run_all_parallel.return_value = [
-                ToolResult(
-                    tool="noseyparker-scan",
-                    status="error",
-                    returncode=2,
-                    attempts=1,
-                    error_message="Return code 2 not in (0, 1)",
-                )
-            ]
-
-            scan_repository(
-                repo=repo,
-                results_dir=tmp_path,
-                tools=["noseyparker"],
-                timeout=900,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-                find_tool_func=mock_find_tool,
-            )
-
-        assert mock_report.called, (
-            "a failed noseyparker phase was swallowed; nothing in the log or "
-            "the scan summary says the tool did not run"
-        )
-        reported = [c.args[0].tool for c in mock_report.call_args_list]
-        assert "noseyparker-scan" in reported
-
-    def test_noseyparker_docker_fallback(self, tmp_path):
-        """Test noseyparker Docker fallback when local binary missing"""
-        repo = tmp_path / "docker-fallback-repo"
-        repo.mkdir()
-
-        def mock_find_tool(tool_name):
-            # noseyparker not available, but docker is
-            if tool_name == "docker":
-                return "/usr/bin/docker"
-            return None
-
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-
-            from scripts.core.tool_runner import ToolResult
-
-            mock_runner.run_all_parallel.return_value = [
-                ToolResult(tool="noseyparker", status="success", attempts=1),
-            ]
-
-            scan_repository(
-                repo=repo,
-                results_dir=tmp_path,
-                tools=["noseyparker"],
-                timeout=900,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-                find_tool_func=mock_find_tool,
-            )
-
-            # Verify Docker fallback was used
-            MockRunner.assert_called_once()
-            args, kwargs = MockRunner.call_args
-            tool_defs = kwargs.get("tools") or (args[0] if args else [])
-            np_def = next((t for t in tool_defs if t.name == "noseyparker"), None)
-            assert np_def is not None
-            # Docker command should include bash and run_noseyparker_docker.sh
-            assert "bash" in np_def.command
-
-    def test_zap_builds_no_command_even_with_web_files_and_its_helper(self, tmp_path):
-        """ZAP takes no repository target, however inviting the tree looks.
-
-        This asserted the opposite until #1159. The invocation it verified --
-        `zap-baseline.py -t <a file path>` -- exits 3 on every real run, because
-        `-t` takes a URL. Kept rather than deleted, and inverted, because this
-        is the exact input that used to build the broken command: web files
-        present AND `zap-baseline.py` resolvable.
-        """
-        repo = tmp_path / "web-app-repo"
-        repo.mkdir()
-        (repo / "index.html").write_text("<html><body>Test</body></html>")
-        (repo / "app.js").write_text("console.log('test');")
-
-        def mock_tool_exists(tool_name):
-            # ZAP requires either zap-baseline.py OR docker to be available
-            return tool_name in ("zap-baseline.py", "docker")
-
-        def mock_find_tool(tool_name):
-            # Return a fake path for zap-baseline.py
-            if tool_name == "zap-baseline.py":
-                return "/usr/bin/zap-baseline.py"
-            return None
-
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-
-            # No ToolResult for zap: it is not scheduled on a repository
-            # target, so a runner that returns one is asserting something the
-            # scanner cannot produce -- and it would write statuses["zap"] =
-            # True over the False record_not_attempted just made.
-            mock_runner.run_all_parallel.return_value = []
-
-            name, statuses = scan_repository(
-                repo=repo,
-                results_dir=tmp_path,
-                tools=["zap"],
-                timeout=600,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-                find_tool_func=mock_find_tool,
-            )
-
-            MockRunner.assert_called_once()
-            args, kwargs = MockRunner.call_args
-            tool_defs = kwargs.get("tools") or (args[0] if args else [])
-            zap_def = next((t for t in tool_defs if t.name == "zap"), None)
-
-            assert zap_def is None, "zap must not be given a repository target"
-            assert statuses.get("zap") is not True, (
-                "a tool that never ran must not be recorded as a success (#825)"
-            )
-            assert (statuses.get(NOT_ATTEMPTED_KEY) or {}).get("zap") == (
-                NOT_ATTEMPTED_NOTHING_APPLICABLE
-            )
-
-    def test_zap_stub_when_no_web_files(self, tmp_path):
-        """Test ZAP writes stub when no web files found"""
-        repo = tmp_path / "non-web-repo"
-        repo.mkdir()
-        (repo / "main.py").write_text("print('hello')")
-
-        def mock_find_tool(tool_name):
-            if tool_name == "zap-baseline.py":
-                return "/usr/bin/zap-baseline.py"
-            return None
-
-        def mock_write_stub(tool_name, output_path):
-            output_path.write_text("{}")
-
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-
-            mock_runner.run_all_parallel.return_value = []
-
-            name, statuses = scan_repository(
-                repo=repo,
-                results_dir=tmp_path,
-                tools=["zap"],
-                timeout=600,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=True,
-                find_tool_func=mock_find_tool,
-                write_stub_func=mock_write_stub,
-            )
-
-            # Stubbed, not run. `False` plus a `__not_attempted__` record is
-            # the point of #825: an empty zap report from a scan that never
-            # looked is not a clean web scan. This assertion read `is True`,
-            # which pinned the defect as the contract.
-            assert statuses["zap"] is False
-            assert not_attempted_tools(statuses) == ["zap"]
-            # No tool definitions should be created (stub written directly)
-            MockRunner.assert_called_once()
-            args, kwargs = MockRunner.call_args
-            tool_defs = kwargs.get("tools") or (args[0] if args else [])
-            assert not any(t.name == "zap" for t in tool_defs)
-
-    def test_falco_validates_rule_files(self, tmp_path):
-        """Test Falco validates rule files when present"""
-        repo = tmp_path / "falco-repo"
-        repo.mkdir()
-        (repo / "custom-falco-rules.yaml").write_text("""
-- rule: Detect Shell in Container
-  desc: Alert on shell execution
-  condition: spawned_process and container
-  output: "Shell spawned in container"
-  priority: WARNING
-""")
-
-        def mock_find_tool(tool_name):
-            if tool_name == "falco":
-                return "/usr/bin/falco"
-            return None
-
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-
-            from scripts.core.tool_runner import ToolResult
-
-            mock_runner.run_all_parallel.return_value = [
-                ToolResult(tool="falco", status="success", attempts=1),
-            ]
-
-            name, statuses = scan_repository(
-                repo=repo,
-                results_dir=tmp_path,
-                tools=["falco"],
-                timeout=600,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-                find_tool_func=mock_find_tool,
-            )
-
-            assert statuses["falco"] is True
-            # Verify Falco validation was invoked
-            MockRunner.assert_called_once()
-            args, kwargs = MockRunner.call_args
-            tool_defs = kwargs.get("tools") or (args[0] if args else [])
-            falco_def = next((t for t in tool_defs if t.name == "falco"), None)
-            assert falco_def is not None
-            assert "--validate" in falco_def.command
-
-    def test_falco_stub_when_no_rules(self, tmp_path):
-        """Test Falco writes stub when no rule files found"""
-        repo = tmp_path / "no-falco-repo"
-        repo.mkdir()
-        (repo / "README.md").write_text("# No Falco rules")
-
-        def mock_find_tool(tool_name):
-            if tool_name == "falco":
-                return "/usr/bin/falco"
-            return None
-
-        def mock_write_stub(tool_name, output_path):
-            output_path.write_text("{}")
-
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-
-            mock_runner.run_all_parallel.return_value = []
-
-            name, statuses = scan_repository(
-                repo=repo,
-                results_dir=tmp_path,
-                tools=["falco"],
-                timeout=600,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=True,
-                find_tool_func=mock_find_tool,
-                write_stub_func=mock_write_stub,
-            )
-
-            assert statuses["falco"] is False
-            assert not_attempted_tools(statuses) == ["falco"]
-
-    @pytest.mark.skipif(
-        sys.platform == "win32",
-        reason="Windows doesn't have Unix-style execute bits for binary detection",
-    )
-    def test_aflplusplus_fuzzes_binaries(self, tmp_path):
-        """Test AFL++ fuzzes binaries when found"""
-        repo = tmp_path / "afl-repo"
-        repo.mkdir()
-        bin_dir = repo / "bin"
-        bin_dir.mkdir()
-        binary = bin_dir / "test-fuzzer"
-        binary.write_bytes(b"\x7fELF")  # Minimal ELF header
-        binary.chmod(0o755)
-
-        def mock_find_tool(tool_name):
-            tool_paths = {
-                "afl-fuzz": "/usr/bin/afl-fuzz",
-                "afl-analyze": "/usr/bin/afl-analyze",
-            }
-            return tool_paths.get(tool_name)
-
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-
-            from scripts.core.tool_runner import ToolResult
-
-            mock_runner.run_all_parallel.return_value = [
-                ToolResult(tool="afl++", status="success", attempts=1),
-            ]
-
-            name, statuses = scan_repository(
-                repo=repo,
-                results_dir=tmp_path,
-                tools=["afl++"],
-                timeout=1800,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-                find_tool_func=mock_find_tool,
-            )
-
-            assert statuses["afl++"] is True
-            # Verify AFL++ was invoked
-            MockRunner.assert_called_once()
-            args, kwargs = MockRunner.call_args
-            tool_defs = kwargs.get("tools") or (args[0] if args else [])
-            afl_def = next((t for t in tool_defs if t.name == "afl++"), None)
-            assert afl_def is not None
-            # command is a list, check if afl-fuzz is in any element
-            assert any("afl-fuzz" in str(c) for c in afl_def.command)
-
-    def test_aflplusplus_stub_when_no_binaries(self, tmp_path):
-        """Test AFL++ writes stub when no binaries found"""
-        repo = tmp_path / "no-binaries-repo"
-        repo.mkdir()
-        (repo / "source.c").write_text("#include <stdio.h>\nint main() {}")
-
-        def mock_find_tool(tool_name):
-            tool_paths = {
-                "afl-fuzz": "/usr/bin/afl-fuzz",
-                "afl-analyze": "/usr/bin/afl-analyze",
-            }
-            return tool_paths.get(tool_name)
-
-        def mock_write_stub(tool_name, output_path):
-            output_path.write_text("{}")
-
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-
-            mock_runner.run_all_parallel.return_value = []
-
-            name, statuses = scan_repository(
-                repo=repo,
-                results_dir=tmp_path,
-                tools=["afl++"],
-                timeout=1800,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=True,
-                find_tool_func=mock_find_tool,
-                write_stub_func=mock_write_stub,
-            )
-
-            assert statuses["afl++"] is False
-            assert not_attempted_tools(statuses) == ["afl++"]
-
-    def test_deep_profile_all_11_tools(self, tmp_path):
-        """Test deep profile executes all 11 tools correctly"""
-        repo = tmp_path / "deep-profile-repo"
-        repo.mkdir()
-        (repo / ".git").mkdir()
-        (repo / "index.html").write_text("<html></html>")
-        (repo / "falco-rules.yaml").write_text("rules: []")
-        bin_dir = repo / "bin"
-        bin_dir.mkdir()
-        binary = bin_dir / "app"
-        binary.write_bytes(b"\x7fELF")
-        binary.chmod(0o755)
-        (repo / "Dockerfile").write_text("FROM ubuntu")
-
-        def mock_find_tool(tool_name):
-            tool_paths = {
-                "trufflehog": "/usr/bin/trufflehog",
-                "noseyparker": "/usr/bin/noseyparker",
-                "semgrep": "/usr/bin/semgrep",
-                "bandit": "/usr/bin/bandit",
-                "syft": "/usr/bin/syft",
-                "trivy": "/usr/bin/trivy",
-                "checkov": "/usr/bin/checkov",
-                "hadolint": "/usr/bin/hadolint",
-                "zap-baseline.py": "/usr/bin/zap-baseline.py",
-                "falco": "/usr/bin/falco",
-                "afl-fuzz": "/usr/bin/afl-fuzz",
-                "afl-analyze": "/usr/bin/afl-analyze",
-                "": "/usr/bin/",
-            }
-            return tool_paths.get(tool_name)
-
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-
-            from scripts.core.tool_runner import ToolResult
-
-            # Simulate success for all 11 tools (noseyparker has 3 phases)
-            mock_runner.run_all_parallel.return_value = [
-                ToolResult(tool="trufflehog", status="success", attempts=1),
-                ToolResult(tool="noseyparker-init", status="success", attempts=1),
-                ToolResult(tool="noseyparker-scan", status="success", attempts=1),
-                ToolResult(
-                    tool="noseyparker-report",
-                    status="success",
-                    attempts=1,
-                    output_file=tmp_path / "deep-profile-repo" / "noseyparker.json",
-                    stdout='{"matches": []}',
-                    capture_stdout=True,
-                ),
-                ToolResult(tool="semgrep", status="success", attempts=1),
-                ToolResult(tool="bandit", status="success", attempts=1),
-                ToolResult(tool="syft", status="success", attempts=1),
-                ToolResult(tool="trivy", status="success", attempts=1),
-                ToolResult(tool="checkov", status="success", attempts=1),
-                ToolResult(tool="hadolint", status="success", attempts=1),
-                ToolResult(tool="zap", status="success", attempts=1),
-                ToolResult(tool="falco", status="success", attempts=1),
-                ToolResult(tool="afl++", status="success", attempts=1),
-            ]
-
-            deep_profile_tools = [
-                "trufflehog",
-                "noseyparker",
-                "semgrep",
-                "bandit",
-                "syft",
-                "trivy",
-                "checkov",
-                "hadolint",
-                "zap",
-                "falco",
-                "afl++",
-            ]
-
-            name, statuses = scan_repository(
-                repo=repo,
-                results_dir=tmp_path,
-                tools=deep_profile_tools,
-                timeout=900,
-                retries=1,
-                per_tool_config={},
-                allow_missing_tools=False,
-                find_tool_func=mock_find_tool,
-            )
-
-            assert name == "deep-profile-repo"
-            # Verify all 11 tools succeeded
-            for tool in deep_profile_tools:
-                assert statuses.get(tool) is True, f"Tool {tool} failed or not executed"
+        name, rows, defs = _scan(repo, tmp_path / "out", list(TOOL_MATRIX), timeout=900)
+
+        assert name == "matrix-repo"
+        assert list(rows) == list(TOOL_MATRIX)
+        for tool in REPO_TOOLS:
+            assert rows[tool].state is State.RAN, f"{tool}: {rows[tool].label}"
+        assert rows["zap"].label == "skipped:needs --url"
+        assert rows["nuclei"].label == "skipped:needs --url"
+        assert set(defs) == set(REPO_TOOLS)
 
     def test_allow_missing_tools_writes_stubs(self, tmp_path):
-        """Test that allow_missing_tools writes stubs for all missing tools"""
-        repo = tmp_path / "missing-tools-repo"
-        repo.mkdir()
-        (repo / ".git").mkdir()
-
-        # Mock tool_exists to return False for all tools
-        def mock_tool_exists(tool_name):
-            return False
-
+        repo = _repo(tmp_path, "missing-tools-repo")
         stub_calls = []
 
         def mock_write_stub(tool_name, output_path):
             stub_calls.append((tool_name, output_path))
             output_path.write_text('{"results": []}')
 
-        def mock_find_tool_none(tool_name):
-            # No tools available
-            return None
+        _, rows, _ = _scan(
+            repo,
+            tmp_path / "out",
+            ["trufflehog", "semgrep", "trivy"],
+            find=lambda t: None,
+            allow_missing_tools=True,
+            write_stub_func=mock_write_stub,
+        )
 
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-            mock_runner.run_all_parallel.return_value = []
-
-            name, statuses = scan_repository(
-                repo=repo,
-                results_dir=tmp_path,
-                tools=["trufflehog", "semgrep", "trivy"],
-                timeout=600,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=True,
-                find_tool_func=mock_find_tool_none,
-                write_stub_func=mock_write_stub,
-            )
-
-            # All 3 tools should have stubs written
-            assert len(stub_calls) == 3
-            assert any("trufflehog" in str(call[1]) for call in stub_calls)
-            assert any("semgrep" in str(call[1]) for call in stub_calls)
-            assert any("trivy" in str(call[1]) for call in stub_calls)
-
-            # All three were stubbed, so none of them succeeded (#825).
-            for tool in ("trufflehog", "semgrep", "trivy"):
-                assert statuses[tool] is False, f"{tool} was stubbed, not run"
-            assert not_attempted_tools(statuses) == [
-                "semgrep",
-                "trivy",
-                "trufflehog",
-            ]
+        assert sorted(t for t, _ in stub_calls) == ["semgrep", "trivy", "trufflehog"]
+        for tool in ("trufflehog", "semgrep", "trivy"):
+            assert rows[tool].label == "skipped:not installed", tool
 
     def test_allow_missing_tools_all_scanners(self, tmp_path):
-        """Test allow_missing_tools for all 11 deep profile tools"""
-        repo = tmp_path / "all-missing-repo"
-        repo.mkdir()
-
-        def mock_find_tool_none(tool_name):
-            # No tools available
-            return None
-
+        """Every repository tool is stubbed; the URL tools get no file at all."""
+        repo = _repo(tmp_path, "all-missing-repo")
         stub_calls = []
 
         def mock_write_stub(tool_name, output_path):
-            stub_calls.append((tool_name, str(output_path)))
+            stub_calls.append(tool_name)
             output_path.write_text("{}")
 
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-            mock_runner.run_all_parallel.return_value = []
+        _, rows, _ = _scan(
+            repo,
+            tmp_path / "out",
+            list(TOOL_MATRIX),
+            find=lambda t: None,
+            allow_missing_tools=True,
+            write_stub_func=mock_write_stub,
+        )
 
-            all_tools = [
-                "trufflehog",
-                "noseyparker",
-                "semgrep",
-                "bandit",
-                "syft",
-                "trivy",
-                "checkov",
-                "hadolint",
-                "zap",
-                "falco",
-                "afl++",
-            ]
+        assert sorted(stub_calls) == sorted(REPO_TOOLS)
+        for tool in REPO_TOOLS:
+            assert rows[tool].label == "skipped:not installed", tool
+        assert rows["zap"].label == "skipped:needs --url"
 
-            name, statuses = scan_repository(
-                repo=repo,
-                results_dir=tmp_path,
-                tools=all_tools,
-                timeout=600,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=True,
-                find_tool_func=mock_find_tool_none,
-                write_stub_func=mock_write_stub,
-            )
+    def test_missing_without_the_flag_is_a_failed_row_and_says_so(
+        self, tmp_path, caplog
+    ):
+        """A dropped tool used to have no status at all and the scan exited 0."""
+        repo = _repo(tmp_path)
 
-            # All 11 tools should have stubs written
-            assert len(stub_calls) == 11
-            for tool in all_tools:
-                assert statuses[tool] is False, f"{tool} was stubbed, not run"
-                assert tool in not_attempted_tools(statuses), (
-                    f"{tool} was stubbed but not recorded as not-attempted"
-                )
-                # For afl++, check for "aflplusplus" in path (++ is sanitized)
-                search_term = "aflplusplus" if tool == "afl++" else tool
-                assert any(search_term in path for _, path in stub_calls), (
-                    f"Stub should be written for {tool} (searched for '{search_term}')"
-                )
+        with caplog.at_level(logging.ERROR):
+            _, rows, _ = _scan(repo, tmp_path / "out", ["semgrep"], find=lambda t: None)
+
+        assert rows["semgrep"].state is State.FAILED
+        assert rows["semgrep"].reason is Reason.NOT_INSTALLED
+        assert "semgrep: requested but its executable could not be found" in caplog.text
 
     def test_per_tool_flags_applied(self, tmp_path):
-        """Test that per_tool_config flags are correctly applied"""
-        repo = tmp_path / "flags-test-repo"
-        repo.mkdir()
+        repo = _repo(tmp_path, "flags-test-repo")
 
-        def mock_find_tool(tool_name):
-            tool_paths = {"semgrep": "/usr/bin/semgrep", "trivy": "/usr/bin/trivy"}
-            return tool_paths.get(tool_name)
+        _, _, defs = _scan(
+            repo,
+            tmp_path / "out",
+            ["semgrep", "trivy"],
+            per_tool_config={
+                "semgrep": {"flags": ["--exclude", "node_modules"]},
+                "trivy": {"flags": ["--severity", "HIGH,CRITICAL"]},
+            },
+        )
 
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-
-            from scripts.core.tool_runner import ToolResult
-
-            mock_runner.run_all_parallel.return_value = [
-                ToolResult(tool="semgrep", status="success", attempts=1),
-                ToolResult(tool="trivy", status="success", attempts=1),
-            ]
-
-            per_tool_config = {
-                "semgrep": {
-                    "flags": ["--exclude", "node_modules", "--exclude", ".git"]
-                },
-                "trivy": {"flags": ["--severity", "HIGH,CRITICAL", "--no-progress"]},
-            }
-
-            scan_repository(
-                repo=repo,
-                results_dir=tmp_path,
-                tools=["semgrep", "trivy"],
-                timeout=600,
-                retries=0,
-                per_tool_config=per_tool_config,
-                allow_missing_tools=False,
-                find_tool_func=mock_find_tool,
-            )
-
-            MockRunner.assert_called_once()
-            args, kwargs = MockRunner.call_args
-            tool_defs = kwargs.get("tools") or (args[0] if args else [])
-
-            # Verify semgrep flags
-            semgrep_def = next((t for t in tool_defs if t.name == "semgrep"), None)
-            assert semgrep_def is not None
-            assert "--exclude" in semgrep_def.command
-            assert "node_modules" in semgrep_def.command
-
-            # Verify trivy flags
-            trivy_def = next((t for t in tool_defs if t.name == "trivy"), None)
-            assert trivy_def is not None
-            assert "--severity" in trivy_def.command
-            assert "HIGH,CRITICAL" in trivy_def.command
+        assert "node_modules" in defs["semgrep"].command
+        assert "HIGH,CRITICAL" in defs["trivy"].command
 
     def test_per_tool_timeout_overrides(self, tmp_path):
-        """Test that per_tool_config timeout overrides work for multiple tools"""
-        repo = tmp_path / "timeout-override-repo"
-        repo.mkdir()
+        repo = _repo(tmp_path, "timeout-override-repo")
 
-        def mock_find_tool(tool_name):
-            tool_paths = {
-                "trufflehog": "/usr/bin/trufflehog",
-                "semgrep": "/usr/bin/semgrep",
-                "trivy": "/usr/bin/trivy",
-            }
-            return tool_paths.get(tool_name)
-
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-
-            from scripts.core.tool_runner import ToolResult
-
-            mock_runner.run_all_parallel.return_value = [
-                ToolResult(tool="trufflehog", status="success", attempts=1),
-                ToolResult(tool="semgrep", status="success", attempts=1),
-                ToolResult(tool="trivy", status="success", attempts=1),
-            ]
-
-            per_tool_config = {
+        _, _, defs = _scan(
+            repo,
+            tmp_path / "out",
+            ["trufflehog", "semgrep", "trivy"],
+            per_tool_config={
                 "trufflehog": {"timeout": 300},
                 "semgrep": {"timeout": 900},
                 "trivy": {"timeout": 1200},
-            }
+            },
+        )
 
-            scan_repository(
-                repo=repo,
-                results_dir=tmp_path,
-                tools=["trufflehog", "semgrep", "trivy"],
-                timeout=600,  # Default timeout
-                retries=0,
-                per_tool_config=per_tool_config,
-                allow_missing_tools=False,
-                find_tool_func=mock_find_tool,
-            )
-
-            MockRunner.assert_called_once()
-            args, kwargs = MockRunner.call_args
-            tool_defs = kwargs.get("tools") or (args[0] if args else [])
-
-            # Verify each tool has its override timeout
-            trufflehog_def = next(
-                (t for t in tool_defs if t.name == "trufflehog"), None
-            )
-            assert trufflehog_def.timeout == 300
-
-            semgrep_def = next((t for t in tool_defs if t.name == "semgrep"), None)
-            assert semgrep_def.timeout == 900
-
-            trivy_def = next((t for t in tool_defs if t.name == "trivy"), None)
-            assert trivy_def.timeout == 1200
+        assert defs["trufflehog"].timeout == 300
+        assert defs["semgrep"].timeout == 900
+        assert defs["trivy"].timeout == 1200
 
     def test_mixed_available_and_missing_tools(self, tmp_path):
-        """Test scanning with mix of available and missing tools"""
-        repo = tmp_path / "mixed-tools-repo"
-        repo.mkdir()
-
-        def mock_find_tool(tool_name):
-            # Only trufflehog and trivy available
-            if tool_name in ["trufflehog", "trivy"]:
-                return f"/usr/bin/{tool_name}"
-            return None
-
+        """trufflehog and trivy really ran, so their `ran` and the others'
+        `skipped` cannot both come from a constant (#825)."""
+        repo = _repo(tmp_path, "mixed-tools-repo", {"main.tf": "x = 1\n"})
         stub_calls = []
 
-        def mock_write_stub(tool_name, output_path):
-            stub_calls.append(tool_name)
-            output_path.write_text("{}")
+        _, rows, _ = _scan(
+            repo,
+            tmp_path / "out",
+            ["trufflehog", "semgrep", "trivy", "checkov"],
+            find=lambda t: f"/usr/bin/{t}" if t in ("trufflehog", "trivy") else None,
+            allow_missing_tools=True,
+            write_stub_func=lambda tool, path: stub_calls.append(tool),
+        )
 
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-
-            from scripts.core.tool_runner import ToolResult
-
-            mock_runner.run_all_parallel.return_value = [
-                ToolResult(tool="trufflehog", status="success", attempts=1),
-                ToolResult(tool="trivy", status="success", attempts=1),
-            ]
-
-            name, statuses = scan_repository(
-                repo=repo,
-                results_dir=tmp_path,
-                tools=["trufflehog", "semgrep", "trivy", "bandit"],
-                timeout=600,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=True,
-                find_tool_func=mock_find_tool,
-                write_stub_func=mock_write_stub,
-            )
-
-            # Available tools should run
-            assert statuses["trufflehog"] is True
-            assert statuses["trivy"] is True
-
-            # Missing tools should have stubs, and a stub is not a success.
-            # This is the discriminating case: trufflehog and trivy really ran,
-            # so the True above and the False here cannot both come from a
-            # constant (#825).
-            assert statuses["semgrep"] is False
-            assert statuses["bandit"] is False
-            assert not_attempted_tools(statuses) == ["bandit", "semgrep"]
-
-            # Stubs should be written for missing tools only
-            assert "semgrep" in list(stub_calls)
-            assert "bandit" in list(stub_calls)
-            assert len(stub_calls) == 2  # Only semgrep and bandit
+        assert rows["trufflehog"].state is State.RAN
+        assert rows["trivy"].state is State.RAN
+        assert rows["semgrep"].label == "skipped:not installed"
+        assert rows["checkov"].label == "skipped:not installed"
+        assert sorted(stub_calls) == ["checkov", "semgrep"]
 
     def test_timeout_writes_stub_file(self, tmp_path):
-        """Test that tools that timeout get stub files written"""
-        repo = tmp_path / "timeout-repo"
-        repo.mkdir()
-        (repo / ".git").mkdir()
-
-        def mock_find_tool(tool_name):
-            tool_paths = {
-                "semgrep": "/usr/bin/semgrep",
-                "semgrep-secrets": "/usr/bin/semgrep-secrets",
-            }
-            return tool_paths.get(tool_name)
-
+        repo = _repo(tmp_path, "timeout-repo")
         stub_calls = []
 
         def mock_write_stub(tool_name, output_path):
             stub_calls.append(tool_name)
             output_path.write_text("{}")
 
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-
-            from scripts.core.tool_runner import ToolResult
-
-            # Simulate semgrep-secrets timing out
-            mock_runner.run_all_parallel.return_value = [
+        _, rows, _ = _scan(
+            repo,
+            tmp_path / "out",
+            ["semgrep", "trivy"],
+            results=[
                 ToolResult(tool="semgrep", status="success", attempts=1),
                 ToolResult(
-                    tool="semgrep-secrets",
+                    tool="trivy",
                     status="error",
                     attempts=2,
                     timed_out=True,
                     error_message="Timeout after 900s",
+                    failure="timeout",
                 ),
-            ]
+            ],
+            timeout=900,
+            retries=1,
+            write_stub_func=mock_write_stub,
+        )
 
-            name, statuses = scan_repository(
-                repo=repo,
-                results_dir=tmp_path,
-                tools=["semgrep", "semgrep-secrets"],
-                timeout=900,
-                retries=1,
-                per_tool_config={},
-                allow_missing_tools=False,
-                find_tool_func=mock_find_tool,
-                write_stub_func=mock_write_stub,
-            )
-
-            # semgrep should succeed
-            assert statuses["semgrep"] is True
-
-            # semgrep-secrets should fail but have stub written
-            assert statuses["semgrep-secrets"] is False
-
-            # Stub should be written for timed out tool
-            assert "semgrep-secrets" in stub_calls
-
-    def test_timeout_records_attempts(self, tmp_path):
-        """Test that timed out tools record their attempt counts"""
-        repo = tmp_path / "timeout-attempts-repo"
-        repo.mkdir()
-
-        def mock_find_tool(tool_name):
-            if tool_name == "semgrep-secrets":
-                return "/usr/bin/semgrep-secrets"
-            return None
-
-        def mock_write_stub(tool_name, output_path):
-            output_path.write_text("{}")
-
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-
-            from scripts.core.tool_runner import ToolResult
-
-            # Simulate tool timing out after 3 attempts
-            mock_runner.run_all_parallel.return_value = [
-                ToolResult(
-                    tool="semgrep-secrets",
-                    status="retry_exhausted",
-                    attempts=3,
-                    timed_out=True,
-                    error_message="Timeout after 900s",
-                ),
-            ]
-
-            name, statuses = scan_repository(
-                repo=repo,
-                results_dir=tmp_path,
-                tools=["semgrep-secrets"],
-                timeout=900,
-                retries=2,
-                per_tool_config={},
-                allow_missing_tools=False,
-                find_tool_func=mock_find_tool,
-                write_stub_func=mock_write_stub,
-            )
-
-            # Tool should be marked as failed
-            assert statuses["semgrep-secrets"] is False
-
-            # Attempts should be recorded in metadata
-            assert "__attempts__" in statuses
-            assert statuses["__attempts__"]["semgrep-secrets"] == 3
-
-    def test_scan_repository_checkov_cicd_directory_handling(self, tmp_path):
-        """Test checkov-cicd special directory handling (temp dir + file move)"""
-        repo = tmp_path / "test-repo"
-        repo.mkdir()
-        (repo / "app.py").write_text("print('hello')")
-        workflows = repo / ".github" / "workflows"
-        workflows.mkdir(parents=True)
-        (workflows / "ci.yml").write_text("name: CI\non: [push]")
-
-        def mock_find_tool(tool: str):
-            return "/usr/bin/checkov" if tool == "checkov" else None
-
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-
-            from scripts.core.tool_runner import ToolResult
-
-            # Create the temp file that checkov would create
-            temp_dir = tmp_path / "test-repo" / "checkov-cicd-temp"
-            temp_dir.mkdir(parents=True)
-            temp_file = temp_dir / "results_json.json"
-            temp_file.write_text("{}")
-
-            mock_runner.run_all_parallel.return_value = [
-                ToolResult(
-                    tool="checkov-cicd",
-                    status="success",
-                    stdout="",
-                    stderr="",
-                    returncode=0,
-                    duration=5.0,
-                    attempts=1,
-                    output_file=temp_file,
-                    capture_stdout=False,
-                    error_message="",
-                ),
-            ]
-
-            name, statuses = scan_repository(
-                repo=repo,
-                results_dir=tmp_path,
-                tools=["checkov-cicd"],
-                timeout=600,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-                find_tool_func=mock_find_tool,
-            )
-
-            assert statuses["checkov-cicd"] is True
-            # Verify final checkov-cicd.json exists after file move
-            final_file = tmp_path / "test-repo" / "checkov-cicd.json"
-            assert final_file.exists()
-
-    def test_scan_repository_custom_find_tool_func(self, tmp_path):
-        """Test using custom find_tool_func for testing"""
-        repo = tmp_path / "test-repo"
-        repo.mkdir()
-
-        def mock_find_tool(tool: str):
-            return "/usr/bin/trivy" if tool == "trivy" else None
-
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-
-            from scripts.core.tool_runner import ToolResult
-
-            mock_runner.run_all_parallel.return_value = [
-                ToolResult(tool="trivy", status="success", attempts=1),
-            ]
-
-            name, statuses = scan_repository(
-                repo=repo,
-                results_dir=tmp_path,
-                tools=["trivy", "semgrep"],
-                timeout=600,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=True,
-                find_tool_func=mock_find_tool,
-            )
-
-            # Only trivy should run; semgrep should have stub written
-            assert "trivy" in statuses
-            assert "semgrep" in statuses
+        assert rows["semgrep"].state is State.RAN
+        assert rows["trivy"].label == "failed:timed out"
+        assert rows["trivy"].attempts == 2
+        assert stub_calls == ["trivy"]
 
     def test_scan_repository_custom_write_stub_func(self, tmp_path):
-        """Test using custom write_stub_func for testing"""
-        repo = tmp_path / "test-repo"
-        repo.mkdir()
-
+        repo = _repo(tmp_path, "test-repo")
         stub_calls = []
 
-        def mock_write_stub(tool: str, path) -> None:
-            stub_calls.append((tool, path))
-
-        def mock_find_tool(tool: str):
-            return None  # No tools found
-
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-            mock_runner.run_all_parallel.return_value = []
-
-            scan_repository(
-                repo=repo,
-                results_dir=tmp_path,
-                tools=["trivy", "semgrep"],
-                timeout=600,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=True,
-                find_tool_func=mock_find_tool,
-                write_stub_func=mock_write_stub,
-            )
-
-            assert len(stub_calls) == 2
-            assert any("trivy" in str(p) for _, p in stub_calls)
-            assert any("semgrep" in str(p) for _, p in stub_calls)
-
-
-class TestAccountingNamesProfileToolsOnly:
-    """The three accounting diagnostics must speak in profile-tool names.
-
-    `_find_tool` records whatever binary it was asked to resolve, but several
-    blocks resolve a binary that is not the tool the user asked for:
-    checkov-cicd runs `checkov`, trivy-rbac runs `trivy`, semgrep-secrets runs
-    `semgrep`, zap runs `zap-baseline.py` plus `docker`, afl++ runs `afl-fuzz`.
-
-    Two consequences, both measured on terragoat with `--profile-name deep`:
-
-      Requested but not applicable to repository targets (no repository
-      implementation): checkov-cicd, opa, semgrep-secrets, trivy-rbac, zap
-
-    three of those five wrote output files in the same run - because
-    `not_implemented` is `set(tools) - considered` and `considered` only ever
-    saw the binary names. And:
-
-      docker: requested but its executable could not be found - it did NOT run
-      and its findings are MISSING from this scan
-
-    `docker` is not a tool in any profile; it is a dependency of one.
-    """
-
-    def _scan(self, tmp_path, tools, resolvable, caplog):
-        import logging
-
-        repo = tmp_path / "test-repo"
-        repo.mkdir()
-        (repo / "main.tf").write_text('resource "aws_s3_bucket" "b" {}')
-        (repo / "index.html").write_text("<html></html>")
-
-        with (
-            patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner,
-            caplog.at_level(logging.DEBUG),
-        ):
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-            mock_runner.run_all_parallel.return_value = []
-            scan_repository(
-                repo=repo,
-                results_dir=tmp_path,
-                tools=tools,
-                timeout=600,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-                find_tool_func=lambda t: f"/usr/bin/{t}" if t in resolvable else None,
-            )
-        return caplog.text
-
-    def test_variant_tool_is_not_called_unimplemented(self, tmp_path, caplog):
-        """checkov-cicd is implemented; it must not be reported otherwise."""
-        text = self._scan(
-            tmp_path,
-            tools=["checkov-cicd"],
-            resolvable={"checkov"},
-            caplog=caplog,
+        _scan(
+            repo,
+            tmp_path / "out",
+            ["trivy", "semgrep"],
+            find=lambda t: None,
+            allow_missing_tools=True,
+            write_stub_func=lambda tool, path: stub_calls.append((tool, path)),
         )
-        assert "no repository implementation" not in text or "checkov-cicd" not in (
-            text.split("no repository implementation")[1]
-            if "no repository implementation" in text
-            else ""
-        ), f"checkov-cicd was called unimplemented while its block ran:\n{text}"
 
-    def test_missing_dependency_is_reported_against_its_own_tool(
-        self, tmp_path, caplog
+        assert len(stub_calls) == 2
+        assert any("trivy" in str(p) for _, p in stub_calls)
+        assert any("semgrep" in str(p) for _, p in stub_calls)
+
+    def test_the_timings_document_carries_every_row(self, tmp_path):
+        """#722: every requested tool has a row in scan-timings.json, including
+        the ones that did not run. v2 had rows only for tools that ran."""
+        repo = _repo(tmp_path, "rows-repo")
+
+        _scan(repo, tmp_path / "out", list(TOOL_MATRIX))
+        doc = json.loads(
+            (tmp_path / "out" / "rows-repo" / "scan-timings.json").read_bytes()
+        )
+
+        assert doc["schema_version"] == 3
+        assert [r["tool"] for r in doc["tools"]] == list(TOOL_MATRIX)
+        by_tool = {r["tool"]: r for r in doc["tools"]}
+        assert by_tool["hadolint"]["state"] == "skipped"
+        assert by_tool["hadolint"]["reason"] == "no Dockerfiles"
+        assert by_tool["trivy"]["state"] == "ran"
+        assert by_tool["trivy"]["reason"] is None
+
+
+class TestContentDecidesWhoRuns:
+    """#1227: hadolint and shellcheck with nothing to read vanished from the
+    scan: no stub, no record, no log line. Every content skip is now a row."""
+
+    @pytest.mark.parametrize(
+        ("tool", "reason", "content"),
+        [
+            ("hadolint", Reason.NO_DOCKERFILES, {"Dockerfile": "FROM alpine\n"}),
+            ("shellcheck", Reason.NO_SHELL_SCRIPTS, {"run.sh": "#!/bin/sh\n"}),
+            ("gosec", Reason.NO_GO_SOURCES, {"main.go": "package main\n"}),
+            # A module whose sources are generated at build time (#1081).
+            ("gosec", Reason.NO_GO_SOURCES, {"go.mod": "module example.com/x\n"}),
+            ("checkov", Reason.NO_IAC, {"main.tf": 'resource "x" "y" {}\n'}),
+        ],
+    )
+    def test_skipped_without_content_and_run_with_it(
+        self, tmp_path, tool, reason, content
     ):
-        """noseyparker's missing helper must be reported as noseyparker.
+        stub_calls = []
+        without = _repo(tmp_path, "without", {"lib.py": "x = 1\n"})
+        _, rows, defs = _scan(
+            without,
+            tmp_path / "out",
+            [tool],
+            write_stub_func=lambda t, p: stub_calls.append(t),
+        )
 
-        This used to be spelled with zap, whose repository mode was removed in
-        #1159 -- so it no longer resolves any binary here and cannot exercise
-        the mechanism. noseyparker is the same shape and the reason the
-        assertion is worth keeping: it shells out to `docker`, which is a
-        dependency and not a profile tool, so reporting it by that name accuses
-        a tool nobody asked for.
-        """
-        text = self._scan(
+        assert rows[tool].state is State.SKIPPED
+        assert rows[tool].reason is reason
+        assert tool not in defs, f"{tool} must not run with nothing to read"
+        assert stub_calls == [tool]
+
+        with_content = _repo(tmp_path, "with", content)
+        _, rows, defs = _scan(with_content, tmp_path / "out2", [tool])
+
+        assert rows[tool].state is State.RAN
+        assert tool in defs
+
+    @pytest.mark.parametrize(
+        "files",
+        [
+            {".github/workflows/ci.yml": "on: push\n"},
+            {"charts/app/Chart.yaml": "name: app\n"},
+            {"stack.yaml": "AWSTemplateFormatVersion: 2010-09-09\n"},
+            {"infra/net.json": '{"Resources": {"V": {"Type": "AWS::EC2::VPC"}}}'},
+            {"main.tf.json": "{}"},
+        ],
+    )
+    def test_checkov_reads_every_kind_of_iac_it_is_triggered_by(self, tmp_path, files):
+        """The Phase 3 decision: Terraform, CloudFormation, Helm, and the
+        workflows checkov-cicd used to cover."""
+        _, rows, _ = _scan(_repo(tmp_path, files=files), tmp_path / "out", ["checkov"])
+
+        assert rows["checkov"].state is State.RAN
+
+    @pytest.mark.parametrize(
+        "files",
+        [
+            {"workflows/ci.yml": "on: push\n"},  # not under .github
+            {"config.yaml": "resources: {}\n"},  # no AWS marker
+            {"Dockerfile": "FROM alpine\n", "k8s/pod.yaml": "kind: Pod\n"},
+        ],
+    )
+    def test_checkov_is_not_triggered_by_other_yaml(self, tmp_path, files):
+        _, rows, _ = _scan(_repo(tmp_path, files=files), tmp_path / "out", ["checkov"])
+
+        assert rows["checkov"].label == "skipped:no IaC or workflow files"
+
+    def test_a_missing_binary_is_reported_before_content_is_looked_at(self, tmp_path):
+        """A repository with Go and no gosec is an environment gap, not a
+        content skip: the reasons must stay distinct (#1081)."""
+        repo = _repo(tmp_path, files={"main.go": "package main\n"})
+
+        _, rows, _ = _scan(
+            repo,
+            tmp_path / "out",
+            ["gosec"],
+            find=lambda t: None,
+            allow_missing_tools=True,
+        )
+
+        assert rows["gosec"].label == "skipped:not installed"
+
+    def test_go_inside_a_vendored_tree_does_not_trigger_gosec(self, tmp_path):
+        """pre-commit ships `resources/empty_template_main.go`; counting .venv
+        would trigger gosec on every Python repository with a virtualenv."""
+        repo = _repo(
             tmp_path,
-            tools=["noseyparker"],
-            resolvable=set(),  # neither noseyparker nor docker resolve
-            caplog=caplog,
+            files={"node_modules/pkg/helper.go": "package main\n", "index.js": "1\n"},
         )
-        assert "docker: requested but" not in text, (
-            f"`docker` is a dependency, not a profile tool, and was reported as "
-            f"a tool whose findings are missing:\n{text}"
+
+        _, rows, _ = _scan(repo, tmp_path / "out", ["gosec"])
+
+        assert rows["gosec"].label == "skipped:no Go sources"
+
+    def test_zap_and_nuclei_read_urls_not_repositories(self, tmp_path, caplog):
+        """#1159: zap's repository mode never worked (`-t` takes a URL). Both
+        URL tools are off-target here: no command, no stub, no "did NOT run"
+        line even with nothing resolvable (#1136 stays unreachable)."""
+        repo = _repo(tmp_path, files={"index.html": "<html></html>"})
+
+        with caplog.at_level(logging.INFO):
+            _, rows, defs = _scan(
+                repo, tmp_path / "out", ["zap", "nuclei"], find=lambda t: None
+            )
+
+        assert rows["zap"].label == "skipped:needs --url"
+        assert rows["nuclei"].label == "skipped:needs --url"
+        assert defs == {}
+        assert not (tmp_path / "out" / "repo" / "zap.json").exists()
+        assert "did NOT run" not in caplog.text
+
+
+class TestNothingExaminedIsFailed:
+    """G2 (#1231): a scan of zero files is `failed`, at both levels."""
+
+    def test_a_tree_with_no_files_fails_every_tool_that_reads_it(self, tmp_path):
+        repo = tmp_path / "empty"
+        (repo / "node_modules" / "pkg").mkdir(parents=True)
+        (repo / "node_modules" / "pkg" / "index.js").write_bytes(b"1\n")
+
+        _, rows, defs = _scan(repo, tmp_path / "out", ["trivy", "semgrep", "zap"])
+
+        assert rows["trivy"].label == "failed:no files to scan"
+        assert rows["semgrep"].label == "failed:no files to scan"
+        assert rows["zap"].label == "skipped:needs --url"
+        assert defs == {}, "no tool may run against an empty tree"
+        doc = json.loads(
+            (tmp_path / "out" / "empty" / "scan-timings.json").read_bytes()
         )
-        assert "noseyparker" in text, (
-            f"noseyparker's own failure went unreported:\n{text}"
-        )
+        assert doc["outcome"] == "failed-before-tools"
+
+    @pytest.mark.parametrize(
+        ("scanned", "label"), [(0, "failed:examined 0 files"), (4, "ran")]
+    )
+    def test_semgrep_reporting_zero_paths_scanned_is_failed(
+        self, tmp_path, scanned, label
+    ):
+        """#1231's case: semgrep ran 2930 rules on 0 files, exited 0, and was
+        recorded as success. Its own `paths.scanned` says so."""
+        repo = _repo(tmp_path)
+        out = tmp_path / "out" / "repo" / "semgrep.json"
+
+        def runner_writes(tools, **_kwargs):
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(
+                json.dumps({"results": [], "paths": {"scanned": ["a.py"] * scanned}}),
+                encoding="utf-8",
+            )
+            runner = MagicMock()
+            runner.run_all_parallel.return_value = [
+                ToolResult(
+                    tool="semgrep", status="success", returncode=0, output_file=out
+                )
+            ]
+            return runner
+
+        with patch(
+            "scripts.cli.scan_jobs.repository_scanner.ToolRunner",
+            side_effect=runner_writes,
+        ):
+            _, rows = scan_repository(
+                repo,
+                tmp_path / "out",
+                ["semgrep"],
+                600,
+                0,
+                {},
+                False,
+                find_tool_func=_found,
+            )
+
+        assert rows["semgrep"].label == label
+
+    def test_gosec_without_a_go_toolchain_is_failed(self, tmp_path):
+        """Measured on Windows and in the image: without `go`, gosec cannot
+        load a package, reports `Stats.files` 0, exits 1, and was graded
+        success on every Go repository."""
+        repo = _repo(tmp_path, files={"main.go": "package main\n"})
+        out = tmp_path / "out" / "repo" / "gosec.json"
+
+        def runner_writes(tools, **_kwargs):
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(
+                json.dumps(
+                    {"Issues": [], "Stats": {"files": 0}, "Golang errors": {"x": []}}
+                ),
+                encoding="utf-8",
+            )
+            runner = MagicMock()
+            runner.run_all_parallel.return_value = [
+                ToolResult(
+                    tool="gosec", status="success", returncode=1, output_file=out
+                )
+            ]
+            return runner
+
+        with patch(
+            "scripts.cli.scan_jobs.repository_scanner.ToolRunner",
+            side_effect=runner_writes,
+        ):
+            _, rows = scan_repository(
+                repo,
+                tmp_path / "out",
+                ["gosec"],
+                600,
+                0,
+                {},
+                False,
+                find_tool_func=_found,
+            )
+
+        assert rows["gosec"].label == "failed:examined 0 files"
+        assert rows["gosec"].exit_code == 1
+
+    def test_an_unreadable_count_is_not_a_zero(self, tmp_path):
+        """No output to read: the count is unknown, not 0, so the row is
+        decided by the run alone."""
+        repo = _repo(tmp_path)
+
+        _, rows, _ = _scan(repo, tmp_path / "out", ["semgrep"])
+
+        assert rows["semgrep"].state is State.RAN
 
 
 class TestFailedToolsAreReported:
     """A tool that does not deliver findings must say so on a durable stream.
 
-    Measured against bridgecrewio/terragoat with the `deep` profile: prowler,
-    yara and dependency-check (Windows) and prowler, noseyparker and cdxgen
-    (Linux) each ended as a transient `✗` glyph in the progress display and
-    nothing else. No message on any stream, no artifact, no exit code. A
-    non-TTY run - CI, cron, a detached scan - renders no progress bar at all,
-    so the failure left no trace whatsoever.
-
-    What that costs: a `--tools prowler yara dependency-check` scan of that
-    deliberately-vulnerable repository produced zero output files, zero
-    findings, `Policy evaluation complete: 2/2 passed`, and exit code 0.
-
-    Which tools land in the silent branch is platform-dependent, so a
-    single-platform run "confirms" the honest path for a different subset each
-    time. These tests pin the contract instead: every non-success result names
-    itself and its reason.
+    Measured against bridgecrewio/terragoat: tools that failed ended as a
+    transient `✗` glyph and nothing else, and a non-TTY run renders none, so
+    the failure left no trace. These pin the contract: every non-success names
+    itself and its reason, in the log and in its row.
     """
 
     def _run(self, tmp_path, results, tools):
-        """Scan with ToolRunner stubbed to return `results`, tools resolvable.
-
-        find_tool must succeed: an unresolvable tool takes the `unresolved`
-        branch, which already logs. Letting that happen would make these tests
-        pass without the fix under test.
-        """
-        repo = tmp_path / "test-repo"
-        repo.mkdir()
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-            mock_runner.run_all_parallel.return_value = results
-            return scan_repository(
-                repo=repo,
-                results_dir=tmp_path,
-                tools=tools,
-                timeout=600,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-                find_tool_func=lambda t: f"/usr/bin/{t}",
-            )
+        repo = _repo(
+            tmp_path, "test-repo", {"main.tf": "x\n", "main.go": "package m\n"}
+        )
+        return _scan(repo, tmp_path / "out", tools, results=results)[1]
 
     def test_non_zero_exit_reports_tool_and_reason(self, tmp_path, caplog):
-        """The generic error branch must not discard result.error_message."""
-        import logging
-
-        from scripts.core.tool_runner import ToolResult
-
         with caplog.at_level(logging.ERROR):
-            _, statuses = self._run(
+            rows = self._run(
                 tmp_path,
                 [
                     ToolResult(
-                        tool="prowler",
+                        tool="semgrep",
                         status="error",
                         returncode=3,
-                        error_message="exited with return code 3",
-                        attempts=1,
+                        error_message="Return code 3 not in (0, 1, 2)",
+                        failure="crash",
                     )
                 ],
-                ["prowler"],
+                ["semgrep"],
             )
 
-        assert statuses["prowler"] is False
-        assert "prowler" in caplog.text
-        assert "exited with return code 3" in caplog.text
+        assert rows["semgrep"].label == "failed:unaccepted exit code"
+        assert rows["semgrep"].exit_code == 3
+        assert "semgrep" in caplog.text
+        assert "Return code 3" in caplog.text
 
     def test_timeout_reports_tool_and_reason(self, tmp_path, caplog):
-        """A timed-out tool wrote a stub; the stub must not be the only signal.
-
-        A stub file is indistinguishable from a genuinely empty result once the
-        report phase reads it, so the timeout has to be stated at scan time.
-        """
-        import logging
-
-        from scripts.core.tool_runner import ToolResult
-
+        """A stub is indistinguishable from an empty result once read, so the
+        timeout has to be stated at scan time."""
         with caplog.at_level(logging.ERROR):
-            _, statuses = self._run(
+            rows = self._run(
                 tmp_path,
                 [
                     ToolResult(
-                        tool="dependency-check",
+                        tool="checkov",
                         status="error",
+                        returncode=-1,
                         timed_out=True,
                         error_message="Timeout after 1200s",
-                        attempts=1,
+                        failure="timeout",
                     )
                 ],
-                ["dependency-check"],
+                ["checkov"],
             )
 
-        assert statuses["dependency-check"] is False
-        assert "dependency-check" in caplog.text
+        assert rows["checkov"].label == "failed:timed out"
+        # A killed process has no exit code. -1 is ToolRunner's placeholder,
+        # and history would read it as one (#1318).
+        assert rows["checkov"].exit_code is None
+        assert "checkov: it timed out" in caplog.text
         assert "1200" in caplog.text
 
-    def test_missing_binary_reports_tool_and_reason(self, tmp_path, caplog):
-        """`Tool not found` at run time, without --allow-missing-tools."""
-        import logging
-
-        from scripts.core.tool_runner import ToolResult
-
+    def test_missing_binary_at_run_time_is_its_own_reason(self, tmp_path, caplog):
+        """It resolved, then could not be executed: a defect, never something
+        --allow-missing-tools consents to."""
         with caplog.at_level(logging.ERROR):
-            _, statuses = self._run(
+            rows = self._run(
                 tmp_path,
                 [
                     ToolResult(
                         tool="yara",
                         status="error",
                         error_message="Tool not found: yara",
-                        attempts=1,
+                        failure="missing_tool",
                     )
                 ],
                 ["yara"],
             )
 
-        assert statuses["yara"] is False
-        assert "yara" in caplog.text
+        assert rows["yara"].label == "failed:not found at run time"
+        assert "yara: its executable was not found at run time" in caplog.text
 
     def test_no_output_is_reported_durably(self, tmp_path, caplog):
-        """An accepted return code with nothing written must reach the log.
-
-        This status is also announced by the progress tracker in jmo.py, which
-        is easy to mistake for "already reported". It is not: that is a UI
-        surface - bare text rather than the log stream, and overwritten in
-        place on a TTY - so suppressing the log line here would leave the #700
-        failure class (tool returns 0, writes nothing) with no durable record
-        at all, which is the exact bug this whole area exists to prevent.
-        """
-        import logging
-
-        from scripts.core.tool_runner import ToolResult
-
+        """The #700 class (an accepted code, nothing written) must reach the
+        log: the progress tracker's line is a UI surface, overwritten on a TTY."""
         with caplog.at_level(logging.ERROR):
-            _, statuses = self._run(
+            rows = self._run(
                 tmp_path,
                 [
                     ToolResult(
-                        tool="gosec",
+                        tool="trivy",
                         status="no_output",
                         returncode=1,
                         error_message="Exited 1 (an accepted code) but wrote no output",
-                        attempts=1,
                     )
                 ],
-                ["gosec"],
-            )
-
-        assert statuses["gosec"] is False
-        assert "gosec" in caplog.text, (
-            "a tool that exited 0 and wrote nothing left no durable record:\n"
-            f"{caplog.text}"
-        )
-        assert "wrote no output" in caplog.text
-
-    def test_successful_tool_is_not_reported_as_failed(self, tmp_path, caplog):
-        """The guard must stay silent on success, or it is just noise."""
-        import logging
-
-        from scripts.core.tool_runner import ToolResult
-
-        with caplog.at_level(logging.ERROR):
-            _, statuses = self._run(
-                tmp_path,
-                [ToolResult(tool="trivy", status="success", attempts=1)],
                 ["trivy"],
             )
 
-        assert statuses["trivy"] is True
+        assert rows["trivy"].label == "failed:no output"
+        assert "wrote no output" in caplog.text
+
+    def test_successful_tool_is_not_reported_as_failed(self, tmp_path, caplog):
+        with caplog.at_level(logging.ERROR):
+            rows = self._run(
+                tmp_path, [ToolResult(tool="trivy", status="success")], ["trivy"]
+            )
+
+        assert rows["trivy"].state is State.RAN
         assert "trivy" not in caplog.text
 
+    def test_a_planned_tool_with_no_result_is_not_silently_clean(self, tmp_path):
+        rows = self._run(tmp_path, [], ["trivy"])
 
-class TestScancodeIsAskedToDetectSomething:
-    """#835: scancode ran for up to 20 minutes and could not produce a finding.
+        assert rows["trivy"].label == "failed:scanner error"
 
-    ScanCode emits detection data only for the detectors it is asked for. JMo
-    asked for none, so it walked the tree and wrote structure only -- `path`,
-    `type`, `scan_errors` -- while `scancode_adapter` reads `license_detections`
-    and `copyrights`. Neither key could exist in output produced that way.
 
-    Measured against the real scancode 32.5.0 rather than its documentation,
-    which is what the issue asked for before shipping:
+class TestExclusions:
+    """#1080, #1132, #1235: each tool is told to skip what it should not read,
+    in its own spelling. The spellings are pinned in tests/unit/test_scan_utils.py;
+    these assert they reach the argv."""
 
-    | invocation | keys/entry | license_detections | adapter findings |
-    |---|---|---|---|
-    | as JMo invoked it | 3 | 0 | **0** |
-    | `--license --copyright` | 11 | 2 | **2** |
-    | + `--package --info` | 34 | 2 | **2** |
+    def test_semgrep_is_told_to_skip_vendored_trees(self, tmp_path):
+        _, _, defs = _scan(_repo(tmp_path), tmp_path / "out", ["semgrep"])
 
-    The last row is why the flag set is two and not the four the issue
-    suggested: the extra pair adds 23 keys per entry that nothing reads, on a
-    tree that ran to 30,496 entries in the recorded juice-shop scan.
-    """
+        assert "--exclude=node_modules" in defs["semgrep"].command
 
-    def _scancode_command(self, tmp_path) -> list[str]:
-        """The argv `scan_repository` builds for scancode, captured."""
-        from scripts.core.tool_runner import ToolResult
+    def test_trivy_is_told_to_skip_them_at_any_depth(self, tmp_path):
+        _, _, defs = _scan(_repo(tmp_path), tmp_path / "out", ["trivy"])
+        command = defs["trivy"].command
 
-        repo = tmp_path / "repo"
-        repo.mkdir()
-        (repo / "LICENSE").write_text("MIT License\n")
-
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-            mock_runner.run_all_parallel.return_value = [
-                ToolResult(tool="scancode", status="success", attempts=1)
-            ]
-            scan_repository(
-                repo=repo,
-                results_dir=tmp_path,
-                tools=["scancode"],
-                timeout=600,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-                # `_find_tool` is a closure over `scan_repository`, so it cannot
-                # be patched on the module. The function takes this injection
-                # point for exactly this reason.
-                find_tool_func=lambda name: (
-                    "/usr/bin/scancode" if name == "scancode" else None
-                ),
-            )
-            args, kwargs = MockRunner.call_args
-            tool_defs = kwargs.get("tools") or (args[0] if args else [])
-
-        scancode_defs = [d for d in tool_defs if d.name == "scancode"]
-        assert len(scancode_defs) == 1, (
-            f"expected exactly one scancode invocation, got {len(scancode_defs)}"
-        )
-        return list(scancode_defs[0].command)
-
-    def test_the_detectors_the_adapter_reads_are_requested(self, tmp_path):
-        cmd = self._scancode_command(tmp_path)
-        assert "--license" in cmd, (
-            "scancode is invoked with no license detector, so "
-            "`license_detections` cannot appear in its output and the adapter "
-            f"cannot produce a finding: {cmd}"
-        )
-        assert "--copyright" in cmd, f"no copyright detector requested: {cmd}"
-
-    def test_the_flag_set_stays_minimal(self, tmp_path):
-        """Negative control, and the reason it is two flags and not four.
-
-        Without this, adding every detector scancode offers would pass the test
-        above while making a `deep` scan slower and its output larger for data
-        no adapter reads.
-        """
-        cmd = self._scancode_command(tmp_path)
-        unread_detectors = [
-            f for f in ("--package", "--info", "--email", "--url") if f in cmd
+        assert "**/node_modules" in [
+            command[i + 1] for i, tok in enumerate(command) if tok == "--skip-dirs"
         ]
-        assert not unread_detectors, (
-            "these detectors produce keys `scancode_adapter` never reads, at a "
-            f"cost paid on every entry of the scanned tree: {unread_detectors}"
+
+    def test_checkov_gets_bare_names(self, tmp_path):
+        """`--skip-path` is a regex and checkov drops an unparseable one in
+        silence, so `**/node_modules` would exclude nothing."""
+        _, _, defs = _scan(
+            _repo(tmp_path, files={"main.tf": "x\n"}), tmp_path / "out", ["checkov"]
+        )
+        command = defs["checkov"].command
+        values = [
+            command[i + 1] for i, tok in enumerate(command) if tok == "--skip-path"
+        ]
+
+        assert "node_modules" in values
+        assert ".venv" in values
+        assert not any(v.startswith("**") for v in values), values
+
+    def test_exclusions_precede_the_users_flags(self, tmp_path):
+        _, _, defs = _scan(
+            _repo(tmp_path, files={"main.tf": "x\n"}),
+            tmp_path / "out",
+            ["checkov"],
+            per_tool_config={"checkov": {"flags": ["--compact"]}},
+        )
+        command = defs["checkov"].command
+
+        assert command.index("--skip-path") < command.index("--compact")
+
+    def test_syft_reads_vendored_trees_and_grype_reads_all_but_a_virtualenv(
+        self, tmp_path
+    ):
+        """#1205: a vendored tree is syft's subject. grype's .venv/venv was
+        decided 2026-09-11 (104 findings were the dev machine's CPython)."""
+        _, _, defs = _scan(_repo(tmp_path), tmp_path / "out", ["syft", "grype"])
+
+        assert "--exclude" not in defs["syft"].command
+        grype = defs["grype"].command
+        excluded = [grype[i + 1] for i, tok in enumerate(grype) if tok == "--exclude"]
+        assert excluded == ["**/.venv", "**/venv"]
+
+    def test_every_descriptor_keeps_an_in_tree_results_directory_out(self, tmp_path):
+        """B5 (#1235): the rendered command for every repository tool excludes
+        an in-tree `results/`, syft included; the walk-fed tools do it in the
+        walk. syft, grype and yara got nothing at all before Phase 3."""
+        repo = _repo(
+            tmp_path,
+            files={
+                "Dockerfile": "FROM alpine\n",
+                "run.sh": "#!/bin/sh\n",
+                "main.go": "package main\n",
+                "main.tf": "x\n",
+                "results/individual-repos/old/Dockerfile": "FROM alpine\n",
+                "results/individual-repos/old/old.sh": "#!/bin/sh\n",
+            },
         )
 
-    def test_per_tool_flags_are_still_appended(self, tmp_path):
-        """The defaults must not displace configuration.
+        _, _, defs = _scan(repo, repo / "results" / "individual-repos", REPO_TOOLS)
 
-        `get_tool_flags("scancode")` resolves `per_tool.scancode.flags`, and a
-        user who adds a detector must still get it.
-        """
-        from scripts.core.tool_runner import ToolResult
+        for tool in REPO_TOOLS:
+            d = DESCRIPTORS[tool]
+            command = defs[tool].command
+            if d.exclusion_style is ExclusionStyle.WALK:
+                # By location, not substring: macOS's temp root is
+                # /private/var/folders/..., and "folders" contains "old".
+                files = [Path(arg) for arg in command if Path(arg).is_relative_to(repo)]
+                assert files, (tool, command)
+                assert not [f for f in files if f.is_relative_to(repo / "results")], (
+                    tool,
+                    command,
+                )
+            elif d.exclusion_style is ExclusionStyle.PATTERN_FILE:
+                lines = Path(command[command.index("--exclude-paths") + 1])
+                patterns = lines.read_bytes().decode("utf-8").splitlines()
+                inside = os.sep.join([command[2], "results", "individual-repos", "x"])
+                assert any(re.search(p, inside) for p in patterns), patterns
+            else:
+                # A bare name, a `**/` glob, or gosec's segment regex.
+                assert any("results" in arg for arg in command), (tool, command)
 
-        repo = tmp_path / "repo"
-        repo.mkdir()
+    def test_yara_is_told_to_skip_the_results_directory(self, tmp_path):
+        repo = _repo(tmp_path, files={"a.py": "x\n"})
 
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-            mock_runner.run_all_parallel.return_value = [
-                ToolResult(tool="scancode", status="success", attempts=1)
-            ]
-            scan_repository(
-                repo=repo,
-                results_dir=tmp_path,
-                tools=["scancode"],
-                timeout=600,
-                retries=0,
-                per_tool_config={"scancode": {"flags": ["--max-depth", "3"]}},
-                allow_missing_tools=False,
-                find_tool_func=lambda name: (
-                    "/usr/bin/scancode" if name == "scancode" else None
-                ),
+        _, _, defs = _scan(repo, repo / "results" / "individual-repos", ["yara"])
+
+        assert "--exclude-dir=results" in defs["yara"].command
+
+    def test_jmos_own_file_walk_skips_a_vendored_tree(self, tmp_path):
+        repo = _repo(
+            tmp_path,
+            files={
+                "docker/Dockerfile": "FROM alpine\n",
+                "node_modules/some-pkg/docker/Dockerfile": "FROM alpine\n",
+            },
+        )
+
+        found = collect_files(repo, ("**/Dockerfile",), "hadolint")
+
+        assert len(found) == 1, f"the vendored copy was collected too: {found}"
+        assert "node_modules" not in found[0]
+
+
+class TestTruffleHogExcludeFile:
+    """#1134, #1235: trufflehog's --exclude-paths file."""
+
+    @staticmethod
+    def _command(tmp_path, per_tool_config=None):
+        _, _, defs = _scan(
+            _repo(tmp_path),
+            tmp_path / "out",
+            ["trufflehog"],
+            per_tool_config=per_tool_config or {},
+        )
+        return defs["trufflehog"].command
+
+    def test_the_command_carries_an_exclude_paths_file(self, tmp_path):
+        command = self._command(tmp_path)
+
+        exclude_file = Path(command[command.index("--exclude-paths") + 1])
+        assert exclude_file.is_file(), "the flag names a file that was not written"
+
+    def test_the_file_excludes_git_jmo_and_the_vendored_trees(self, tmp_path):
+        """Each anchored below the absolute root trufflehog is given: it matches
+        the root's own path too, so an unanchored `vendor` excluded a whole
+        repository living under a `vendor/` (measured 2026-09-25)."""
+        from scripts.cli.scan_utils import re2_escape
+
+        command = self._command(tmp_path)
+        exclude_file = Path(command[command.index("--exclude-paths") + 1])
+
+        patterns = exclude_file.read_bytes().decode("utf-8").splitlines()
+
+        root = command[2]
+        assert Path(root).is_absolute()
+        assert patterns == [
+            rf"^{re2_escape(root)}[\\/](.*[\\/])?{name}[\\/]"
+            for name in (
+                r"\.git",
+                r"\.jmo",
+                "node_modules",
+                "vendor",
+                r"\.venv",
+                "venv",
             )
-            args, kwargs = MockRunner.call_args
-            defs = kwargs.get("tools") or (args[0] if args else [])
+        ]
 
-        cmd = next(d.command for d in defs if d.name == "scancode")
-        assert "--max-depth" in cmd and "3" in cmd, f"per-tool flags dropped: {cmd}"
-        assert "--license" in cmd, f"defaults dropped by per-tool config: {cmd}"
+    def test_user_flags_still_come_last(self, tmp_path):
+        command = self._command(
+            tmp_path, {"trufflehog": {"flags": ["--results", "verified"]}}
+        )
+
+        assert command.index("--exclude-paths") < command.index("--results")
+
+
+class TestTheInTreeResultsDirectoryIsKeptOutOfTheScan:
+    """#1156, at the scanner. The scanners are handed
+    `<results_root>/individual-<type>`, NOT the root: excluding what the
+    function receives left `summaries/` (each file embedding every finding)
+    in the walk."""
+
+    def test_the_results_ROOT_is_excluded_not_the_per_type_subdirectory(self, tmp_path):
+        repo = _repo(tmp_path, files={"main.tf": "x\n"})
+
+        _, _, defs = _scan(repo, repo / "results" / "individual-repos", ["checkov"])
+        cmd = " ".join(defs["checkov"].command)
+
+        assert "--skip-path results" in cmd, cmd
+        assert "individual-repos" not in cmd.split("--skip-path")[-1]
+
+    def test_a_results_dir_outside_the_repo_adds_no_exclusion(self, tmp_path):
+        repo = _repo(tmp_path, files={"main.tf": "x\n"})
+
+        _, _, defs = _scan(repo, tmp_path / "outside" / "individual-repos", ["checkov"])
+        command = defs["checkov"].command
+
+        skipped = [
+            command[i + 1] for i, tok in enumerate(command) if tok == "--skip-path"
+        ]
+        assert "results" not in skipped, skipped
+
+    def test_the_content_walk_ignores_a_previous_scans_output(self, tmp_path):
+        """A `.go` file inside `results/` is not the repository's code."""
+        repo = _repo(
+            tmp_path,
+            files={
+                "results/individual-repos/vendored.go": "package main\n",
+                "app.js": "1\n",
+            },
+        )
+
+        found = {p.name for p in iter_repo_files(repo)}
+        pruned = {p.name for p in iter_repo_files(repo, (repo / "results").resolve())}
+
+        assert "vendored.go" in found, "control: found without the skip"
+        assert "vendored.go" not in pruned
+        _, rows, _ = _scan(repo, repo / "results" / "individual-repos", ["gosec"])
+        assert rows["gosec"].label == "skipped:no Go sources"
+
+    def test_the_file_walk_skips_by_PATH_not_by_name(self, tmp_path):
+        """A user directory that merely shares the results directory's name
+        must still be scanned."""
+        repo = _repo(
+            tmp_path,
+            files={
+                "results/own.sh": "#!/bin/sh\n",
+                "src/results/theirs.sh": "#!/bin/sh\n",
+            },
+        )
+
+        found = collect_files(
+            repo, ("**/*.sh",), "shellcheck", (repo / "results").resolve()
+        )
+
+        assert any("theirs.sh" in f for f in found), (
+            "the user's src/results/ was skipped"
+        )
+        assert not any("own.sh" in f for f in found), "JMo's output was scanned"
 
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
 
 
-class TestHorusecStagingDirIsExcluded:
-    """#1132: horusec stages a copy of the whole repository at
-    `<repo>/.horusec/<uuid>` and deletes it while every other scanner is still
-    walking the tree. There is no horusec flag to relocate it - measured against
-    `horusec start --help` - so the defence is to exclude it everywhere else.
-    """
+class TestARepositorysOwnPathIsNeverExcluded:
+    r"""Exclusions name directories INSIDE the scanned tree. A repository that
+    itself lives under `vendor/`, `node_modules/` or `.venv/` (`--repos-dir
+    node_modules`, `--tsv --dest vendor`) must still be read. Measured with
+    trufflehog 3.97.1 (review of PR B, Important #3): the planted secret was
+    found with no pattern and not at all with `(^|[\\/])vendor[\\/]`, because
+    trufflehog matches the scan root's own path too."""
 
     @staticmethod
-    def _built_commands(tmp_path, tools):
-        """Build the real argv for `tools` without needing a tool installed."""
-        repo = tmp_path / "repo"
-        (repo / "k8s").mkdir(parents=True)
-        # trivy-rbac only builds a command when the repo has K8s manifests, and
-        # since #1212 that is decided by `apiVersion:` in the file's CONTENT
-        # rather than by its name. `kind: Deployment` alone satisfied the old
-        # three globs and satisfies nothing now -- the helper planted a file
-        # shaped by the assumption it was testing.
-        (repo / "k8s" / "deployment.yaml").write_text(
-            "apiVersion: apps/v1\nkind: Deployment\n", encoding="utf-8"
-        )
-
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-            mock_runner.run_all_parallel.return_value = []
-
-            scan_repository(
-                repo=repo,
-                results_dir=tmp_path / "out",
-                tools=tools,
-                timeout=600,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-                find_tool_func=lambda name: "/usr/bin/" + name,
-            )
-
-            args, kwargs = MockRunner.call_args
-            tool_defs = kwargs.get("tools") or (args[0] if args else [])
-            return {t.name: t.command for t in tool_defs}
-
-    def test_semgrep_is_told_to_skip_it(self, tmp_path):
-        commands = self._built_commands(tmp_path, ["semgrep"])
-
-        assert "--exclude=.horusec" in commands["semgrep"]
-
-    def test_semgrep_secrets_is_told_to_skip_it(self, tmp_path):
-        """semgrep-secrets is where the 346 measured errors came from.
-
-        It is a separate profile entry with a separate command builder, so
-        covering only the tool the binary is named after would have left the
-        measured defect exactly where it was.
-        """
-        commands = self._built_commands(tmp_path, ["semgrep-secrets"])
-
-        assert "--exclude=.horusec" in commands["semgrep-secrets"]
-
-    def test_trivy_is_told_to_skip_it(self, tmp_path):
-        commands = self._built_commands(tmp_path, ["trivy"])
-        command = commands["trivy"]
-
-        assert "--skip-dirs" in command
-        assert command[command.index("--skip-dirs") + 1] == "**/.horusec"
-
-    def test_trivy_rbac_is_told_to_skip_it(self, tmp_path):
-        commands = self._built_commands(tmp_path, ["trivy-rbac"])
-        command = commands["trivy-rbac"]
-
-        assert "--skip-dirs" in command
-        assert command[command.index("--skip-dirs") + 1] == "**/.horusec"
-
-    def test_bandit_is_told_to_skip_it_without_losing_its_defaults(self, tmp_path):
-        """bandit's -x replaces upstream's list, so JMo has to re-send it.
-
-        The expected value is spelled out rather than derived from the source
-        constant: a guard that reads its expectation from the thing it guards
-        cannot fail when that thing empties (#1061).
-        """
-        commands = self._built_commands(tmp_path, ["bandit"])
-        command = commands["bandit"]
-
-        assert "-x" in command
-        assert command[command.index("-x") + 1] == (
-            ".svn,CVS,.bzr,.hg,.git,__pycache__,.tox,.eggs,*.egg,"
-            ".horusec,node_modules,vendor,.venv,venv"
-        )
-
-    def test_dependency_check_is_told_to_skip_it(self, tmp_path):
-        """ODC was the loudest casualty: 8499 non-fatal analysis exceptions on
-        jmoadaptivegolf, almost all naming a vanished `.horusec/<uuid>/` path.
-
-        It takes an Ant pattern, so a bare directory name would not match.
-        """
-        commands = self._built_commands(tmp_path, ["dependency-check"])
-        command = commands["dependency-check"]
-
-        assert "--exclude" in command
-        assert command[command.index("--exclude") + 1] == "**/.horusec/**"
-
-    def test_checkov_is_told_to_skip_the_vendored_trees(self, tmp_path):
-        """#1080: checkov got no exclusion flags at all, and timed out.
-
-        Measured on this repository at 3ffc73a8, `--profile-name` unset,
-        300 s cap: checkov, trivy and semgrep each hit the cap and contributed
-        nothing, against 36,705 files on disk for 985 tracked ones.
-
-        The value must be bare. `--skip-path` is a regex and checkov drops an
-        unparseable one in silence, so `**/node_modules` would leave the
-        command looking correct and excluding nothing - see
-        test_checkov_must_not_be_given_the_trivy_spelling in
-        tests/unit/test_scan_utils.py for the measurement.
-        """
-        commands = self._built_commands(tmp_path, ["checkov"])
-        command = commands["checkov"]
-
-        assert "--skip-path" in command
-        values = [
-            command[i + 1] for i, tok in enumerate(command) if tok == "--skip-path"
-        ]
-        assert "node_modules" in values
-        assert ".venv" in values
-        assert not any(v.startswith("**") for v in values), values
-
-    def test_checkovs_exclusions_precede_the_users_flags(self, tmp_path):
-        """An explicit per_tool entry has to be able to win.
-
-        `--skip-path` accumulates, so ordering does not change the result
-        today; it is asserted because the ordering convention is what makes
-        bandit's last-wins `-x` behave, and a later tool copying this call site
-        would inherit whichever order it finds (#1132).
-        """
-        repo = tmp_path / "repo"
-        repo.mkdir()
-
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-            mock_runner.run_all_parallel.return_value = []
-
-            scan_repository(
-                repo=repo,
-                results_dir=tmp_path / "out",
-                tools=["checkov"],
-                timeout=600,
-                retries=0,
-                per_tool_config={"checkov": {"flags": ["--compact"]}},
-                allow_missing_tools=False,
-                find_tool_func=lambda name: "/usr/bin/" + name,
-            )
-            args, kwargs = MockRunner.call_args
-            tool_defs = kwargs.get("tools") or (args[0] if args else [])
-            command = {t.name: t.command for t in tool_defs}["checkov"]
-
-        assert "--compact" in command
-        assert command.index("--skip-path") < command.index("--compact")
-
-    def test_jmos_own_file_walk_skips_the_staging_copy(self, tmp_path):
-        """hadolint and shellcheck take explicit file arguments, so JMo's own
-        enumeration is a walk like any other.
-
-        Without this, every Dockerfile and shell script is collected twice -
-        once at its real path and once inside the staged copy, which may be
-        deleted before the tool opens it - and the duplicates count against
-        MAX_FILE_ARGS, evicting real files from a large repository.
-        """
-        from scripts.cli.scan_jobs.repository_scanner import _collect_files
-
-        repo = tmp_path / "repo"
-        (repo / "docker").mkdir(parents=True)
-        (repo / "docker" / "Dockerfile").write_text("FROM alpine:3.19\n")
-        staged = repo / ".horusec" / "8317cf15-dead-beef" / "docker"
-        staged.mkdir(parents=True)
-        (staged / "Dockerfile").write_text("FROM alpine:3.19\n")
-
-        found = _collect_files(repo, ("**/Dockerfile",), "hadolint")
-
-        assert len(found) == 1, f"staged copy was collected too: {found}"
-        assert ".horusec" not in found[0]
-
-
-class TestTruffleHogSkipsVcsAndJmoInternals:
-    """#1134: the scan phase has to hand TruffleHog the exclude file."""
-
-    @staticmethod
-    def _run(tmp_path):
-        repo = tmp_path / "repo"
-        repo.mkdir()
-        out_root = tmp_path / "out"
-
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-            mock_runner.run_all_parallel.return_value = []
-
-            scan_repository(
-                repo=repo,
-                results_dir=out_root,
-                tools=["trufflehog"],
-                timeout=600,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-                find_tool_func=lambda name: "/usr/bin/" + name,
-            )
-
-            args, kwargs = MockRunner.call_args
-            tool_defs = kwargs.get("tools") or (args[0] if args else [])
-            return next(t for t in tool_defs if t.name == "trufflehog")
-
-    def test_the_command_carries_an_exclude_paths_file(self, tmp_path):
-        definition = self._run(tmp_path)
-        command = definition.command
-
-        assert "--exclude-paths" in command
+    def _trufflehog(tmp_path, repo):
+        _, _, defs = _scan(repo, tmp_path / "out", ["trufflehog"])
+        command = defs["trufflehog"].command
         exclude_file = Path(command[command.index("--exclude-paths") + 1])
-        assert exclude_file.is_file(), "the flag names a file that was not written"
-
-    def test_the_written_file_excludes_git_and_jmo(self, tmp_path):
-        """The flag is worthless if the file it names is empty or wrong, so
-        assert the contents rather than only the flag's presence."""
-        definition = self._run(tmp_path)
-        command = definition.command
-        exclude_file = Path(command[command.index("--exclude-paths") + 1])
-
-        patterns = exclude_file.read_bytes().decode("utf-8").splitlines()
-
-        assert patterns == [r"[\\/]\.git[\\/]", r"[\\/]\.jmo[\\/]"]
-
-    def test_user_flags_still_come_last(self, tmp_path):
-        """JMo's exclusion precedes per_tool flags so an explicit user
-        --exclude-paths overrides it, matching the exclusion table's rule."""
-        repo = tmp_path / "repo"
-        repo.mkdir()
-
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-            mock_runner.run_all_parallel.return_value = []
-
-            scan_repository(
-                repo=repo,
-                results_dir=tmp_path / "out",
-                tools=["trufflehog"],
-                timeout=600,
-                retries=0,
-                per_tool_config={"trufflehog": {"flags": ["--results", "verified"]}},
-                allow_missing_tools=False,
-                find_tool_func=lambda name: "/usr/bin/" + name,
-            )
-
-            args, kwargs = MockRunner.call_args
-            tool_defs = kwargs.get("tools") or (args[0] if args else [])
-            command = next(t for t in tool_defs if t.name == "trufflehog").command
-
-        assert command.index("--exclude-paths") < command.index("--results")
-
-
-class TestDependencyCheckExitCodes:
-    """#1133: the scan phase called dependency-check a failure while the report
-    phase counted its findings.
-
-    ODC's codes, from its own App.java: 0 success, 1 a named file was not
-    found, 13 fatal exceptions, 14 non-fatal exceptions, 15 the --failOnCVSS
-    threshold was met. 14 and 15 both write a complete report; 1 and 13 do not.
-    The old `(0, 1)` had it backwards - it accepted a genuine failure and
-    rejected the two codes that mean "results are on disk".
-
-    Measured on the 2026-09-02 dogfood: all three repositories returned 14, all
-    three wrote valid JSON, and jmoadaptivegolf's held 65 findings (4 CRITICAL)
-    that the scan phase reported as "did NOT contribute findings to this scan".
-    """
-
-    @staticmethod
-    def _definition(tmp_path):
-        repo = tmp_path / "repo"
-        repo.mkdir()
-
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-            mock_runner.run_all_parallel.return_value = []
-
-            scan_repository(
-                repo=repo,
-                results_dir=tmp_path / "out",
-                tools=["dependency-check"],
-                timeout=600,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-                find_tool_func=lambda name: "/usr/bin/" + name,
-            )
-
-            args, kwargs = MockRunner.call_args
-            tool_defs = kwargs.get("tools") or (args[0] if args else [])
-            return next(t for t in tool_defs if t.name == "dependency-check")
-
-    def test_non_fatal_analysis_exceptions_count_as_a_run(self, tmp_path):
-        """Exit 14 is the code every dogfood repository actually returned."""
-        assert 14 in self._definition(tmp_path).ok_return_codes
-
-    def test_the_cvss_threshold_code_counts_as_a_run(self, tmp_path):
-        """A user who sets --failOnCVSS via per_tool flags gets 15 on a
-        successful scan that found something. Rejecting it would recreate this
-        exact bug through a different code."""
-        assert 15 in self._definition(tmp_path).ok_return_codes
-
-    def test_fatal_exceptions_are_still_a_failure(self, tmp_path):
-        """13 means the scan aborted; its report is incomplete or absent."""
-        assert 13 not in self._definition(tmp_path).ok_return_codes
-
-    def test_file_not_found_is_still_a_failure(self, tmp_path):
-        """1 is ODC's 'a file named on the command line was not found', not
-        'vulnerabilities found' - the meaning the old tuple assumed."""
-        assert 1 not in self._definition(tmp_path).ok_return_codes
-
-    def test_success_is_still_a_success(self, tmp_path):
-        assert 0 in self._definition(tmp_path).ok_return_codes
-
-
-class TestZapDoesNotTakeARepositoryTarget:
-    """#1159: zap's repository mode could not work, in any configuration.
-
-    `zap-baseline.py -t` takes a URL. JMo passed it `web_files[0]` -- the first
-    `.html`, `.js` or `.php` file in the tree -- and the dogfood measured the
-    result: `Return code 3 not in (0, 1, 2)`, `retry_exhausted`, no `zap.json`.
-    Compounding it, `zap-baseline.py` is not in the package `jmo tools install
-    zap` lays down at all; it ships in the ZAP Docker image. So without Docker
-    the tool never started, and with it the tool started and exited 3.
-
-    **This supersedes TestZapIsNotReportedBothWays (#1136).** That class guarded
-    a scan reporting zap as never started AND as failed, which came from probing
-    two binaries and recording an unresolved entry on the first miss. Nothing
-    probes a binary for zap on a repository target now, so the defect is
-    unreachable by construction rather than by bookkeeping -- and
-    `test_the_1136_defect_is_unreachable` below is the negative control saying
-    so, because "we deleted the code that reported it" and "we deleted the
-    report" look identical from the outside.
-
-    zap is untouched on **url** targets, where it works.
-    """
-
-    @staticmethod
-    def _scan(tmp_path, repo, resolvable, caplog):
-        import logging
-
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-            mock_runner.run_all_parallel.return_value = []
-
-            with caplog.at_level(
-                logging.INFO, logger="scripts.cli.scan_jobs.repository_scanner"
-            ):
-                _name, statuses = scan_repository(
-                    repo=repo,
-                    results_dir=tmp_path / "out",
-                    tools=["zap"],
-                    timeout=600,
-                    retries=0,
-                    per_tool_config={},
-                    allow_missing_tools=False,
-                    find_tool_func=(
-                        lambda n: ("/usr/bin/" + n) if n in resolvable else None
-                    ),
-                )
-
-            args, kwargs = MockRunner.call_args
-            tool_defs = kwargs.get("tools") or (args[0] if args else [])
-            return [t.name for t in tool_defs], statuses, caplog.text
-
-    @staticmethod
-    def _web_repo(tmp_path):
-        repo = tmp_path / "repo"
-        repo.mkdir()
-        (repo / "index.html").write_text("<html></html>", encoding="utf-8")
-        (repo / "app.js").write_text("const x = 1;\n", encoding="utf-8")
-        return repo
-
-    # ---- the new contract --------------------------------------------------
-
-    def test_zap_builds_no_command_for_a_repository(self, tmp_path, caplog):
-        """Even with both binaries resolvable, which is the case that used to
-        exit 3."""
-        names, _statuses, _log = self._scan(
-            tmp_path, self._web_repo(tmp_path), {"zap-baseline.py", "docker"}, caplog
-        )
-
-        assert "zap" not in names
-
-    def test_the_reason_is_nothing_to_scan_not_missing(self, tmp_path, caplog):
-        """The distinction #1081 exists to preserve.
-
-        Asserting only that zap did not run would read identically for "the
-        binary is absent", which is a gap the user can close and this is not.
-        """
-        _names, statuses, _log = self._scan(
-            tmp_path, self._web_repo(tmp_path), {"zap-baseline.py", "docker"}, caplog
-        )
-
-        assert (statuses.get(NOT_ATTEMPTED_KEY) or {}).get("zap") == (
-            NOT_ATTEMPTED_NOTHING_APPLICABLE
-        )
-
-    def test_a_stub_is_still_written(self, tmp_path, caplog):
-        """The report phase globs for one output file per requested tool."""
-        self._scan(
-            tmp_path, self._web_repo(tmp_path), {"zap-baseline.py", "docker"}, caplog
-        )
-
-        assert (tmp_path / "out" / "repo" / "zap.json").exists()
-
-    def test_html_in_the_tree_changes_nothing(self, tmp_path):
-        """The old gate was `web_files[0]`, so a repository with no `.html`,
-        `.js` or `.php` took a different branch. Both are the same branch now,
-        and a guard that only ever saw one of them could not tell."""
-        bare = tmp_path / "bare"
-        bare.mkdir()
-        (bare / "main.py").write_text("x = 1\n", encoding="utf-8")
-
-        import logging
-
-        from _pytest.logging import LogCaptureFixture  # noqa: F401
-
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-            mock_runner.run_all_parallel.return_value = []
-            _name, statuses = scan_repository(
-                repo=bare,
-                results_dir=tmp_path / "out2",
-                tools=["zap"],
-                timeout=600,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-                find_tool_func=lambda n: "/usr/bin/" + n,
-            )
-            args, kwargs = MockRunner.call_args
-            tool_defs = kwargs.get("tools") or (args[0] if args else [])
-
-        assert "zap" not in [t.name for t in tool_defs]
-        assert (statuses.get(NOT_ATTEMPTED_KEY) or {}).get("zap") == (
-            NOT_ATTEMPTED_NOTHING_APPLICABLE
-        )
-        assert logging  # keep the import meaningful under lint
-
-    # ---- the superseded defect stays gone ----------------------------------
-
-    def test_the_1136_defect_is_unreachable(self, tmp_path, caplog):
-        """zap must never be reported as a missing dependency on a repository.
-
-        #1136 was one scan saying `zap requested but its dependency
-        zap-baseline.py could not be found - it did NOT run` AND, nine seconds
-        later, that it had failed. With nothing resolvable at all -- the harshest
-        input for that message -- neither half may appear, because zap is not
-        attempted here for reasons that have nothing to do with what is
-        installed.
-        """
-        names, statuses, log = self._scan(
-            tmp_path, self._web_repo(tmp_path), set(), caplog
-        )
-
-        assert "zap" not in names
-        assert "did NOT run" not in log, log
-        assert "zap-baseline.py" not in log, log
-        assert (statuses.get(NOT_ATTEMPTED_KEY) or {}).get("zap") == (
-            NOT_ATTEMPTED_NOTHING_APPLICABLE
-        ), "an absent binary must not change the reason: zap is not attempted here"
-
-
-class TestGosecAndKubescapeOnlyRunWhenThereIsSomethingToScan:
-    """#1081: both reported ERROR "findings are MISSING" on every repo.
-
-    gosec and kubescape exit in ~100 ms with no output file when a repository
-    has no Go and no Kubernetes -- which is most repositories. `tool_runner`
-    grades an accepted return code with no output as `no_output` and logs
-
-        [ERROR] gosec: exited with an accepted code but wrote no output file
-        - its findings are MISSING from this scan
-
-    That is the line that catches a genuinely broken scanner (a Windows `.exe`
-    omission once made trufflehog scan nothing, exit 0, and pass the
-    `zero-secrets` policy). Firing it on every Node, Python, Java, Ruby or PHP
-    repository trains the reader to ignore it.
-
-    The fix is not to suppress the message: it is to never build the
-    `ToolDefinition`, so the tool never runs and `no_output` is unreachable --
-    the same shape zap, falco and afl++ already use.
-    """
-
-    @staticmethod
-    def _scan(tmp_path, repo, tools):
-        """Run `scan_repository` with every requested tool resolvable.
-
-        Returns (tool_def_names, statuses). `allow_missing_tools=False` so a
-        stub can only come from the content predicate, never from the
-        missing-binary branch.
-        """
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-            mock_runner.run_all_parallel.return_value = []
-
-            _name, statuses = scan_repository(
-                repo=repo,
-                results_dir=tmp_path / "out",
-                tools=tools,
-                timeout=600,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-                find_tool_func=lambda n: "/usr/bin/" + n,
-            )
-
-            args, kwargs = MockRunner.call_args
-            tool_defs = kwargs.get("tools") or (args[0] if args else [])
-            return [t.name for t in tool_defs], statuses
-
-    @staticmethod
-    def _reason(statuses, tool):
-        """The recorded reason, or None.
-
-        Reached through NOT_ATTEMPTED_KEY rather than `not_attempted_tools`,
-        which returns only the tool NAMES and so reads identically whether the
-        reason is "not installed" or "nothing for it to scan" -- the exact
-        distinction #1081 is about. Asserting on membership alone would pass
-        against the unfixed code.
-        """
-        return (statuses.get(NOT_ATTEMPTED_KEY) or {}).get(tool)
-
-    # ---- gosec -------------------------------------------------------------
-
-    def test_gosec_is_skipped_on_a_repo_with_no_go(self, tmp_path):
-        repo = tmp_path / "node-app"
-        (repo / "src").mkdir(parents=True)
-        (repo / "src" / "index.js").write_text("console.log(1)", encoding="utf-8")
-        (repo / "README.md").write_text("# no go here", encoding="utf-8")
-
-        names, statuses = self._scan(tmp_path, repo, ["gosec"])
-
-        assert "gosec" not in names, "gosec must not be run with nothing to load"
-        assert statuses["gosec"] is False
-        assert self._reason(statuses, "gosec") == NOT_ATTEMPTED_NOTHING_APPLICABLE
-
-    def test_gosec_runs_when_a_go_file_is_present(self, tmp_path):
-        repo = tmp_path / "go-app"
-        (repo / "cmd").mkdir(parents=True)
-        (repo / "cmd" / "main.go").write_text("package main", encoding="utf-8")
-
-        names, statuses = self._scan(tmp_path, repo, ["gosec"])
-
-        assert "gosec" in names
-        assert self._reason(statuses, "gosec") is None
-
-    def test_gosec_runs_on_a_go_mod_with_no_checked_in_sources(self, tmp_path):
-        """`go.mod` alone is enough. A module whose sources are generated at
-        build time still has one, and skipping it would drop the scanner on a
-        real Go repository -- the failure direction that matters."""
-        repo = tmp_path / "go-mod-only"
-        repo.mkdir()
-        (repo / "go.mod").write_text("module example.com/m\n", encoding="utf-8")
-
-        names, _statuses = self._scan(tmp_path, repo, ["gosec"])
-
-        assert "gosec" in names
-
-    def test_go_inside_a_vendored_tree_does_not_trigger_gosec(self, tmp_path):
-        """The predicate reads the same directory list the scan flags are built
-        from, so a `.go` under `node_modules/` is not the repo's own code.
-
-        Measurable on jmo-security-repo itself: its only `.go` outside the test
-        fixtures is `.venv/.../pre_commit/resources/empty_template_main.go`,
-        shipped by pre-commit. Counting that would trigger gosec on every
-        Python repository with a virtualenv in the tree.
-        """
-        repo = tmp_path / "js-app"
-        vendored = repo / "node_modules" / "some-pkg"
-        vendored.mkdir(parents=True)
-        (vendored / "helper.go").write_text("package main", encoding="utf-8")
-        (repo / "index.js").write_text("console.log(1)", encoding="utf-8")
-
-        names, statuses = self._scan(tmp_path, repo, ["gosec"])
-
-        assert "gosec" not in names
-        assert self._reason(statuses, "gosec") == NOT_ATTEMPTED_NOTHING_APPLICABLE
-
-    # ---- kubescape ---------------------------------------------------------
-
-    def test_kubescape_is_skipped_when_yaml_holds_no_manifest(self, tmp_path):
-        """Having YAML is not having Kubernetes.
-
-        Measured on OWASP Juice Shop, the repository #1081 was found against:
-        90 `.yaml`/`.yml` files, none containing `apiVersion:`. An
-        extension-only predicate would run kubescape on all 90 and produce the
-        ERROR the issue is about.
-        """
-        repo = tmp_path / "ci-only"
-        (repo / ".github" / "workflows").mkdir(parents=True)
-        (repo / ".github" / "workflows" / "ci.yml").write_text(
-            "name: CI\non: [push]\njobs:\n  build:\n    runs-on: ubuntu-latest\n",
-            encoding="utf-8",
-        )
-        (repo / "docker-compose.yml").write_text(
-            "services:\n  web:\n    image: nginx\n", encoding="utf-8"
-        )
-
-        names, statuses = self._scan(tmp_path, repo, ["kubescape"])
-
-        assert "kubescape" not in names
-        assert statuses["kubescape"] is False
-        assert self._reason(statuses, "kubescape") == NOT_ATTEMPTED_NOTHING_APPLICABLE
-
-    def test_kubescape_runs_when_a_manifest_is_present(self, tmp_path):
-        repo = tmp_path / "k8s-app"
-        (repo / "deploy").mkdir(parents=True)
-        (repo / "deploy" / "pod.yaml").write_text(
-            "apiVersion: v1\nkind: Pod\nmetadata:\n  name: p\n", encoding="utf-8"
-        )
-
-        names, statuses = self._scan(tmp_path, repo, ["kubescape"])
-
-        assert "kubescape" in names
-        assert self._reason(statuses, "kubescape") is None
-
-    def test_kubescape_detects_a_manifest_by_content_not_by_filename(self, tmp_path):
-        """`pod.yaml`, `ingress.yaml` and `configmap.yaml` are all manifests and
-        none of them matched the `*deployment*` / `*service*` / `k8s/**` globs
-        trivy-rbac used until #1212. Both tools share this predicate now."""
-        repo = tmp_path / "odd-names"
-        (repo / "manifests").mkdir(parents=True)
-        (repo / "manifests" / "ingress.yml").write_text(
-            "apiVersion: networking.k8s.io/v1\nkind: Ingress\n", encoding="utf-8"
-        )
-
-        names, _statuses = self._scan(tmp_path, repo, ["kubescape"])
-
-        assert "kubescape" in names
-
-    def test_an_undecodable_yaml_does_not_abort_the_predicate(self, tmp_path):
-        """A file that is not valid UTF-8 must not take the scan down, and must
-        not hide a manifest sitting beside it."""
-        repo = tmp_path / "mixed"
-        repo.mkdir()
-        (repo / "binary.yaml").write_bytes(b"\xff\xfe\x00garbage\x80\x81")
-        (repo / "svc.yaml").write_text(
-            "apiVersion: v1\nkind: Service\n", encoding="utf-8"
-        )
-
-        names, _statuses = self._scan(tmp_path, repo, ["kubescape"])
-
-        assert "kubescape" in names
-
-    # ---- the two reasons stay distinct -------------------------------------
-
-    def test_a_missing_binary_still_reports_not_installed(self, tmp_path):
-        """Suppressing the false ERROR must not suppress the true one. A repo
-        that DOES have Go, with gosec absent, is an environment gap the user can
-        close -- a different outcome, and it must keep saying so."""
-        repo = tmp_path / "go-app"
-        repo.mkdir()
-        (repo / "main.go").write_text("package main", encoding="utf-8")
-
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-            mock_runner.run_all_parallel.return_value = []
-
-            _name, statuses = scan_repository(
-                repo=repo,
-                results_dir=tmp_path / "out",
-                tools=["gosec"],
-                timeout=600,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=True,
-                find_tool_func=lambda _n: None,
-            )
-
-        assert self._reason(statuses, "gosec") == NOT_ATTEMPTED_MISSING
-
-
-class TestTheInTreeResultsDirectoryIsKeptOutOfTheScan:
-    """#1156, at the scanner. `jmo scan . --out ./results` puts JMo's output
-    inside the tree the next scan walks.
-
-    Measured end to end, scanning a two-file repository twice with the results
-    directory in the tree: **11 findings, 8 of them inside `results/`** plus 2
-    inside horusec's staging copy of it. After: 2 findings, both the real ones.
-
-    The scanners are handed `<results_root>/individual-<type>`, NOT the root.
-    Excluding what this function receives is the bug that made a first pass
-    look right and leave 5 of 8 findings behind: `summaries/findings.json`,
-    `findings.yaml` and `dashboard.html` sit beside `individual-repos/` and
-    each embeds every finding verbatim, so they are the richest source of the
-    re-reporting rather than the raw tool output.
-    """
-
-    @staticmethod
-    def _flags_for(tmp_path, tool, results_dir):
-        """The command `scan_repository` builds for `tool`, as a string."""
-        repo = tmp_path / "repo"
-        (repo / "src").mkdir(parents=True, exist_ok=True)
-        (repo / "src" / "a.py").write_text("x = 1\n", encoding="utf-8")
-
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-            mock_runner.run_all_parallel.return_value = []
-
-            scan_repository(
-                repo=repo,
-                results_dir=results_dir,
-                tools=[tool],
-                timeout=600,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-                find_tool_func=lambda n: "/usr/bin/" + n,
-            )
-            args, kwargs = MockRunner.call_args
-            defs = kwargs.get("tools") or (args[0] if args else [])
-            td = next((t for t in defs if t.name == tool), None)
-            return " ".join(str(c) for c in td.command) if td else ""
-
-    def test_the_results_ROOT_is_excluded_not_the_per_type_subdirectory(self, tmp_path):
-        """The scanner receives `<root>/individual-repos`. It must exclude
-        `results`, which also covers `summaries/`."""
-        repo_results = tmp_path / "repo" / "results"
-
-        cmd = self._flags_for(tmp_path, "checkov", repo_results / "individual-repos")
-
-        assert "--skip-path results" in cmd, cmd
-        assert "individual-repos" not in cmd.split("--skip-path")[-1], (
-            "excluded the per-type subdirectory, leaving summaries/ in the walk"
-        )
-
-    def test_a_results_dir_outside_the_repo_adds_no_exclusion(self, tmp_path):
-        """The usual CI shape. Nothing to exclude, and excluding a directory
-        named `results` anyway could hide the user's own code."""
-        cmd = self._flags_for(
-            tmp_path, "checkov", tmp_path / "outside" / "individual-repos"
-        )
-
-        # On the flag values, not the whole command line: pytest's own tmp_path
-        # is named after this test and therefore contains "results" itself -- a
-        # substring check on `cmd` fails for a reason that has nothing to do
-        # with the code under test.
-        skipped = [
-            cmd.split()[i + 1]
-            for i, tok in enumerate(cmd.split())
-            if tok == "--skip-path"
-        ]
-        assert "results" not in skipped, skipped
-
-    def test_horusec_now_receives_exclusions_at_all(self, tmp_path):
-        """horusec had no `--exclude` wiring before #1156 and was **88 of the
-        90 findings** the issue measured. The issue's own Fix section says it
-        "cannot be covered this way"; measured false -- `-i` takes globs."""
-        cmd = self._flags_for(
-            tmp_path, "horusec", tmp_path / "repo" / "results" / "individual-repos"
-        )
-
-        assert "-i " in cmd
-        assert "**/results/**" in cmd
-
-    def test_the_go_predicate_ignores_a_previous_scans_output(self, tmp_path):
-        """#1081's predicates walk the tree too, so JMo's own output can
-        satisfy them. A `.go` file inside `results/` is not the repo's code."""
-        from scripts.cli.scan_jobs.repository_scanner import _repo_has_go_sources
-
-        repo = tmp_path / "repo"
-        (repo / "results" / "individual-repos").mkdir(parents=True)
-        (repo / "results" / "individual-repos" / "vendored.go").write_text(
-            "package main", encoding="utf-8"
-        )
-        (repo / "app.js").write_text("1", encoding="utf-8")
-
-        assert _repo_has_go_sources(repo) is True, "control: found without the skip"
-        assert _repo_has_go_sources(repo, (repo / "results").resolve()) is False
-
-    def test_the_k8s_predicate_ignores_a_previous_scans_output(self, tmp_path):
-        """Not hypothetical: JMo writes `summaries/findings.yaml`, and a scan of
-        a Kubernetes repository embeds the manifests' own `apiVersion:` in it."""
-        from scripts.cli.scan_jobs.repository_scanner import _repo_has_k8s_manifests
-
-        repo = tmp_path / "repo"
-        (repo / "results" / "summaries").mkdir(parents=True)
-        (repo / "results" / "summaries" / "findings.yaml").write_text(
-            "findings:\n  - raw: 'apiVersion: v1'\n", encoding="utf-8"
-        )
-        (repo / "app.js").write_text("1", encoding="utf-8")
-
-        assert _repo_has_k8s_manifests(repo) is True, "control"
-        assert _repo_has_k8s_manifests(repo, (repo / "results").resolve()) is False
-
-    def test_the_file_walk_skips_by_PATH_not_by_name(self, tmp_path):
-        """The flags can only take a name; this side can be exact.
-
-        A user directory that merely shares the results directory's name must
-        still be scanned here, which is what makes the Python-side skip worth
-        having separately.
-        """
-        from scripts.cli.scan_jobs.repository_scanner import _collect_files
-
-        repo = tmp_path / "repo"
-        (repo / "results").mkdir(parents=True)
-        (repo / "src" / "results").mkdir(parents=True)
-        (repo / "results" / "own.sh").write_text("#!/bin/sh\n", encoding="utf-8")
-        (repo / "src" / "results" / "theirs.sh").write_text(
-            "#!/bin/sh\n", encoding="utf-8"
-        )
-
-        found = _collect_files(
-            repo, ("**/*.sh",), "shellcheck", (repo / "results").resolve()
-        )
-
-        assert any("theirs.sh" in f for f in found), (
-            "the user's own src/results/ was skipped by name"
-        )
-        assert not any("own.sh" in f for f in found), "JMo's output was scanned"
-
-
-class TestTrivyRbacCanActuallyRun:
-    """#1206 and #1212: trivy-rbac contributed nothing on every K8s repository.
-
-    Two independent defects in one block, and a third (#1215) one layer down.
-
-    `--scanners config` is not a flag `trivy config` has at the pinned 0.74.0.
-    The real binary answers `FATAL Fatal error unknown flag: --scanners`, exit
-    1, no output file -- measured, not inferred. It was redundant even where it
-    parsed, because `trivy config` IS the misconfiguration scanner; the flag
-    that does exist there is `--misconfig-scanners`, which selects config
-    FORMATS (terraform, kubernetes, helm), not scanner classes.
-
-    And the gate deciding whether to build the command at all was three
-    filename globs matching **1 of 5** real manifest names, with no `.yml`
-    pattern anywhere in any of them.
-
-    Both are argv-and-gating defects, so both are reachable from a mocked
-    runner. What is NOT reachable here is whether the binary accepts the argv
-    -- the suite mocks subprocess, which is exactly why the flag survived from
-    `b434eee1` through every test run since. That half is measured against the
-    real binary at review time, and the parse half is guarded by the captured
-    output under `tests/fixtures/golden/trivy_rbac/`.
-    """
-
-    @staticmethod
-    def _scan(tmp_path, repo, allow_missing_tools=False, resolvable=True):
-        """Return ({name: ToolDefinition}, statuses) for a trivy-rbac scan."""
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_runner = MagicMock()
-            MockRunner.return_value = mock_runner
-            mock_runner.run_all_parallel.return_value = []
-
-            _name, statuses = scan_repository(
-                repo=repo,
-                results_dir=tmp_path / "out",
-                tools=["trivy-rbac"],
-                timeout=600,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=allow_missing_tools,
-                find_tool_func=(lambda n: "/usr/bin/" + n)
-                if resolvable
-                else (lambda n: None),
-            )
-
-            args, kwargs = MockRunner.call_args
-            tool_defs = kwargs.get("tools") or (args[0] if args else [])
-            return {t.name: t for t in tool_defs}, statuses
-
-    @staticmethod
-    def _manifest(repo, relative, body="apiVersion: v1\nkind: Pod\n"):
-        path = repo / relative
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(body, encoding="utf-8")
-        return path
-
-    # ---- #1206: the flag the real binary rejects ---------------------------
-
-    def test_the_command_omits_the_flag_trivy_config_rejects(self, tmp_path):
-        """Spelled out literally rather than read from the source constant.
-
-        A guard that derives its expectation from the thing it guards cannot
-        fail when that thing empties (#1061).
-        """
-        repo = tmp_path / "repo"
-        self._manifest(repo, "manifests/pod.yaml")
-
-        defs, _ = self._scan(tmp_path, repo)
-
-        assert "--scanners" not in defs["trivy-rbac"].command
-
-    def test_the_command_still_runs_the_config_subcommand_against_the_repo(
-        self, tmp_path
+        lines = exclude_file.read_bytes().decode("utf-8").splitlines()
+        return command[2], [re.compile(line) for line in lines]
+
+    @pytest.mark.parametrize("parent", ["vendor", "node_modules", ".venv"])
+    def test_trufflehog_reads_a_repository_under_a_vendored_name(
+        self, tmp_path, parent
     ):
-        """Removing the flag must not remove the scan.
+        repo = _repo(tmp_path / parent, "app")
+        target, patterns = self._trufflehog(tmp_path, repo)
 
-        `config` and the target are what make the invocation do anything; a
-        regression that dropped either would leave `--scanners` absent and the
-        test above green.
-        """
-        repo = tmp_path / "repo"
-        self._manifest(repo, "manifests/pod.yaml")
+        def excluded(*parts):
+            path = os.sep.join([target, *parts])  # trufflehog joins root + entry
+            return [p.pattern for p in patterns if p.search(path)]
 
-        command = self._scan(tmp_path, repo)[0]["trivy-rbac"].command
+        assert not excluded("config.txt"), "the repository's own files are excluded"
+        assert not excluded("src", "app.py")
+        assert excluded("node_modules", "pkg", "a.js"), "a vendored tree is read"
+        assert excluded("sub", "vendor", "lib", "b.go")
+        assert excluded(".git", "config")
 
-        assert command[1] == "config"
-        assert command[-1] == str(repo)
+    def test_gosec_names_are_whole_segments_not_regex_substrings(self):
+        r"""gosec wraps each -exclude-dir value as `([\\/])?VALUE([\\/])?` and
+        matches paths relative to the scan root (measured 2026-09-25, 2.28.0,
+        from its `Import directory` log): `-exclude-dir=.git` also dropped
+        `.github/x`, the dot being a regex wildcard."""
+        flags = tool_exclusion_flags("gosec", results_dir_name="results")
+        wrapped = [re.compile(rf"([\\/])?{f.split('=', 1)[1]}([\\/])?") for f in flags]
 
-    # ---- #1212: detection by content, at both spellings --------------------
+        def excluded(*parts):
+            return any(w.search(os.sep.join(parts)) for w in wrapped)
 
-    def test_a_manifest_whose_filename_says_nothing_still_runs_it(self, tmp_path):
-        """`pod.yaml` matches none of the three globs this used to gate on."""
-        repo = tmp_path / "repo"
-        self._manifest(repo, "manifests/pod.yaml")
+        for parts in (
+            (".git",),
+            ("results",),
+            ("sub", "results"),
+            ("a", "vendor", "b"),
+        ):
+            assert excluded(*parts), parts
+        for parts in ((".github", "x"), ("resultsets",), ("vendorclient",), ("sub",)):
+            assert not excluded(*parts), parts
 
-        defs, statuses = self._scan(tmp_path, repo)
+    def test_file_fed_tools_find_content_in_a_repository_under_vendor(self, tmp_path):
+        repo = _repo(tmp_path / "vendor", "app", {"Dockerfile": "FROM alpine\n"})
 
-        assert "trivy-rbac" in defs
-        assert (statuses.get(NOT_ATTEMPTED_KEY) or {}).get("trivy-rbac") is None
+        _, rows, defs = _scan(repo, tmp_path / "out", ["hadolint"])
 
-    def test_a_dot_yml_manifest_runs_it(self, tmp_path):
-        """`.yml` was not globbed once, in any of the three patterns.
+        assert rows["hadolint"].state is State.RAN, rows["hadolint"].label
+        assert any(arg.endswith("Dockerfile") for arg in defs["hadolint"].command)
 
-        The spelling is a coin flip in real repositories and half of them lost.
-        """
-        repo = tmp_path / "repo"
-        self._manifest(
-            repo, "manifests/deployment.yml", "apiVersion: apps/v1\nkind: Deployment\n"
-        )
 
-        assert "trivy-rbac" in self._scan(tmp_path, repo)[0]
+def test_trufflehog_anchors_on_the_absolute_root_for_a_relative_target(
+    tmp_path, monkeypatch
+):
+    """`--repo .` hands the job a relative path. Go's `filepath.Join` cleans
+    `./sub` to `sub`, so a pattern anchored on `.` would match nothing: the
+    target trufflehog is given and the anchor are one resolved path."""
+    repo = _repo(tmp_path, "app")
+    monkeypatch.chdir(tmp_path)
 
-    def test_yaml_that_is_not_a_manifest_does_not_trigger_it(self, tmp_path):
-        """The predicate must not over-trigger, or it reproduces the #1081 ERROR.
+    _, _, defs = _scan(Path("app"), tmp_path / "out", ["trufflehog"])
 
-        Measured on OWASP Juice Shop: 90 `.yaml`/`.yml` files, none holding
-        `apiVersion:`.
-        """
-        repo = tmp_path / "repo"
-        (repo / ".github" / "workflows").mkdir(parents=True)
-        (repo / ".github" / "workflows" / "ci.yaml").write_text(
-            "name: build\non: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n",
-            encoding="utf-8",
-        )
-        (repo / "docker-compose.yml").write_text(
-            "services:\n  web:\n    image: nginx\n", encoding="utf-8"
-        )
-
-        defs, statuses = self._scan(tmp_path, repo)
-
-        assert "trivy-rbac" not in defs
-        assert (statuses.get(NOT_ATTEMPTED_KEY) or {}).get("trivy-rbac") == (
-            NOT_ATTEMPTED_NOTHING_APPLICABLE
-        )
-
-    # ---- the two skip reasons stay distinct --------------------------------
-
-    def test_a_missing_binary_reports_not_installed_not_nothing_to_scan(self, tmp_path):
-        """A repo that HAS manifests with trivy absent is an environment gap.
-
-        Asserting on membership alone would read identically for both reasons,
-        which is the distinction #1081 exists to preserve.
-        """
-        repo = tmp_path / "repo"
-        self._manifest(repo, "manifests/pod.yaml")
-
-        _defs, statuses = self._scan(
-            tmp_path, repo, allow_missing_tools=True, resolvable=False
-        )
-
-        assert (statuses.get(NOT_ATTEMPTED_KEY) or {}).get("trivy-rbac") == (
-            NOT_ATTEMPTED_MISSING
-        )
+    command = defs["trufflehog"].command
+    assert command[2] == str(repo.resolve())
+    lines = Path(command[command.index("--exclude-paths") + 1]).read_bytes()
+    nested = os.sep.join([command[2], "node_modules", "p", "a.js"])
+    assert any(re.search(p, nested) for p in lines.decode("utf-8").splitlines())

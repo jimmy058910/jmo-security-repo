@@ -183,7 +183,6 @@ def sample_sqlite_db(tmp_path):
         CREATE TABLE scans (
             id TEXT PRIMARY KEY,
             timestamp_iso TEXT,
-            profile TEXT,
             total_findings INTEGER
         )
         """)
@@ -204,8 +203,8 @@ def sample_sqlite_db(tmp_path):
 
     # Insert baseline scan
     conn.execute("""
-        INSERT INTO scans (id, timestamp_iso, profile, total_findings)
-        VALUES ('baseline123', '2025-11-04T10:00:00Z', 'balanced', 2)
+        INSERT INTO scans (id, timestamp_iso, total_findings)
+        VALUES ('baseline123', '2025-11-04T10:00:00Z', 2)
         """)
     conn.execute("""
         INSERT INTO findings (scan_id, fingerprint, severity, tool, rule_id, path, start_line, message, raw_finding)
@@ -216,8 +215,8 @@ def sample_sqlite_db(tmp_path):
 
     # Insert current scan
     conn.execute("""
-        INSERT INTO scans (id, timestamp_iso, profile, total_findings)
-        VALUES ('current456', '2025-11-05T10:00:00Z', 'balanced', 2)
+        INSERT INTO scans (id, timestamp_iso, total_findings)
+        VALUES ('current456', '2025-11-05T10:00:00Z', 2)
         """)
     conn.execute("""
         INSERT INTO findings (scan_id, fingerprint, severity, tool, rule_id, path, start_line, message, raw_finding)
@@ -503,7 +502,6 @@ def test_filter_by_severity():
         source_type="directory",
         path="baseline/",
         timestamp="2025-11-04T10:00:00Z",
-        profile="balanced",
         total_findings=3,
     )
 
@@ -511,7 +509,6 @@ def test_filter_by_severity():
         source_type="directory",
         path="current/",
         timestamp="2025-11-05T10:00:00Z",
-        profile="balanced",
         total_findings=3,
     )
 
@@ -554,7 +551,6 @@ def test_filter_by_tool():
         source_type="directory",
         path="baseline/",
         timestamp="2025-11-04T10:00:00Z",
-        profile="balanced",
         total_findings=3,
     )
 
@@ -562,7 +558,6 @@ def test_filter_by_tool():
         source_type="directory",
         path="current/",
         timestamp="2025-11-05T10:00:00Z",
-        profile="balanced",
         total_findings=3,
     )
 
@@ -605,7 +600,6 @@ def test_filter_by_category():
         source_type="directory",
         path="baseline/",
         timestamp="2025-11-04T10:00:00Z",
-        profile="balanced",
         total_findings=3,
     )
 
@@ -613,7 +607,6 @@ def test_filter_by_category():
         source_type="directory",
         path="current/",
         timestamp="2025-11-05T10:00:00Z",
-        profile="balanced",
         total_findings=3,
     )
 
@@ -1772,8 +1765,8 @@ class TestRichOutput:
             diff_module.console = None
 
             diff_result = DiffResult(
-                baseline_source=DiffSource("directory", "/baseline", "", "", 5),
-                current_source=DiffSource("directory", "/current", "", "", 10),
+                baseline_source=DiffSource("directory", "/baseline", "", 5),
+                current_source=DiffSource("directory", "/current", "", 10),
             )
 
             from scripts.cli.diff_commands import print_diff_summary_rich

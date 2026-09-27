@@ -54,7 +54,7 @@ from scripts.core.history_db import (
     store_scan,
     upsert_findings_batch,
 )
-from tests.conftest import median_seconds_with_setup
+from tests.conftest import LATENCY_SAMPLES, median_seconds_with_setup
 
 # ============================================================================
 # Fixtures
@@ -134,7 +134,6 @@ def test_large_scan_storage_performance(perf_db, large_findings_set, tmp_path):
     start = time.time()
     scan_id = store_scan(
         results_dir=results_dir,
-        profile="balanced",
         tools=["test"],
         db_path=perf_db,
         commit_hash="abc123",
@@ -170,17 +169,13 @@ def test_large_scan_storage_performance(perf_db, large_findings_set, tmp_path):
     "test_history_list_performance_10k_scans is already skipped here for the "
     "same reason. Test runs reliably on Linux/macOS CI to catch regressions.",
 )
-def test_single_scan_insert_performance(perf_db, tmp_path):
+def test_single_scan_insert_performance(tmp_path):
     """
-    Test single scan insert performance (target: <200ms).
+    Test single scan insert performance: a median over fresh databases.
 
     Performance requirement (tests/performance/__init__.py):
-    - Single scan insert: <50ms ideal, <200ms acceptable
-
-    Note: Windows and slower platforms may see 80-150ms due to:
-    - File system overhead (tmp_path creation)
-    - SQLite journaling on different file systems
-    - Anti-virus scanning on Windows
+    - Single scan insert: <50ms ideal. The asserted budget is the RUNNER's,
+      not that ideal -- see the comment above the assertion (#1256).
     """
     # Create minimal scan with 100 findings
     results_dir = tmp_path / "results_single"
@@ -203,21 +198,48 @@ def test_single_scan_insert_performance(perf_db, tmp_path):
     findings_file = summaries / "findings.json"
     findings_file.write_text(json.dumps({"findings": findings}))
 
-    # Measure insert time
-    start = time.time()
-    scan_id = store_scan(
-        results_dir=results_dir,
-        profile="fast",
-        tools=["trivy", "semgrep"],
-        db_path=perf_db,
-        commit_hash="def456",
-        branch="main",
-    )
-    elapsed = time.time() - start
+    # A MEDIAN over fresh databases, not one sample (#742, #1256).
+    #
+    # `store_scan` writes a row, so re-running it against one database measures
+    # a growing table rather than an insert into an empty one.
+    # `median_seconds_with_setup` builds a fresh database per sample and keeps
+    # that cost off the clock.
+    def _fresh_db():
+        db_path = tmp_path / f"single_{next(_counter)}.db"
+        init_database(db_path)
+        return db_path
 
-    # Assertions
-    assert scan_id is not None
-    assert elapsed < 0.2, f"Single scan insert took {elapsed:.3f}s (target: <200ms)"
+    stored: list[str | None] = []
+
+    def _store(db_path):
+        stored.append(
+            store_scan(
+                results_dir=results_dir,
+                tools=["trivy", "semgrep"],
+                db_path=db_path,
+                commit_hash="def456",
+                branch="main",
+            )
+        )
+
+    elapsed = median_seconds_with_setup(_fresh_db, _store)
+
+    # Every sample must have stored a scan, or the median timed a failure path.
+    assert len(stored) == LATENCY_SAMPLES
+    assert all(scan_id is not None for scan_id in stored)
+    # Threshold: 1.0s, and the number is the RUNNER's (#1256). The 2026-09-14
+    # nightly failed the old 200ms budget at **311ms** on ONE cold sample on
+    # ubuntu. Locally the same insert is a **15.5 / 15.6 / 15.4ms** median of
+    # LATENCY_SAMPLES (Windows, 2026-09-23): a 20x spread, because this region
+    # is fsync-bound SQLite I/O -- the sibling benchmark_1 measured 8.8x on the
+    # same insert (#1120). 1.0s is 3.2x the slowest observed value, the bar
+    # test_perf_budget_hygiene.py records; it is deliberately loose against a
+    # median, which runs below a cold sample on the same machine.
+    assert elapsed < 1.0, (
+        f"Single scan insert took {elapsed * 1000:.1f}ms (median of "
+        f"{LATENCY_SAMPLES}, expected <1000ms). Target: <50ms ideal, "
+        f"~15ms local, 311ms observed on one cold GitHub-runner sample"
+    )
 
 
 # ============================================================================
@@ -269,7 +291,6 @@ def test_history_list_performance_10k_scans(perf_db, tmp_path):
 
         store_scan(
             results_dir=results_dir,
-            profile="fast",
             tools=["trivy"],
             db_path=perf_db,
             commit_hash=f"commit_{i}",
@@ -327,7 +348,6 @@ def test_trend_analysis_query_performance(perf_db, tmp_path):
         # Store with timestamps spread over 30 days
         scan_id = store_scan(
             results_dir=results_dir,
-            profile="balanced",
             tools=["trivy"],
             db_path=perf_db,
             commit_hash=f"commit_{i}",
@@ -395,7 +415,6 @@ def test_vacuum_on_large_database(perf_db, tmp_path):
 
         scan_id = store_scan(
             results_dir=results_dir,
-            profile="fast",
             tools=["trivy"],
             db_path=perf_db,
             commit_hash=f"commit_{i}",
@@ -465,7 +484,6 @@ def test_export_pagination_for_large_datasets(perf_db, tmp_path):
 
         store_scan(
             results_dir=results_dir,
-            profile="fast",
             tools=["trivy"],
             db_path=perf_db,
             commit_hash=f"commit_{i}",
@@ -542,7 +560,6 @@ def test_finding_deduplication_across_scans(perf_db, tmp_path):
 
     scan_a_id = store_scan(
         results_dir=results_a,
-        profile="fast",
         tools=["test"],
         db_path=perf_db,
         commit_hash="scan_a",
@@ -571,7 +588,6 @@ def test_finding_deduplication_across_scans(perf_db, tmp_path):
 
     scan_b_id = store_scan(
         results_dir=results_b,
-        profile="fast",
         tools=["test"],
         db_path=perf_db,
         commit_hash="scan_b",
@@ -646,7 +662,6 @@ def test_sql_injection_resistance(perf_db, tmp_path):
 
     normal_scan_id = store_scan(
         results_dir=results_dir,
-        profile="fast",
         tools=["trivy"],
         db_path=perf_db,
         commit_hash="abc123",
@@ -692,24 +707,22 @@ def test_sql_injection_resistance(perf_db, tmp_path):
 _counter = itertools.count()
 
 
-def _insert_scan_row(conn, scan_id: str, profile: str) -> None:
+def _insert_scan_row(conn, scan_id: str) -> None:
     """The scan row both batch-insert benchmarks need before measuring."""
     conn.execute(
         """
         INSERT INTO scans (
-            id, timestamp, timestamp_iso, profile, tools, targets, target_type,
+            id, timestamp, timestamp_iso, tools, targets,
             total_findings, critical_count, high_count, medium_count, low_count,
             info_count, jmo_version
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
+        ) VALUES (?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
         """,
         (
             scan_id,
             int(time.time()),
             "2025-01-01T00:00:00Z",
-            profile,
             "[]",
             "[]",
-            "repo",
             "1.0.0",
         ),
     )
@@ -738,19 +751,17 @@ def test_batch_insert_findings_optimized_performance(perf_db, tmp_path):
     conn.execute(
         """
         INSERT INTO scans (
-            id, timestamp, timestamp_iso, profile, tools, targets, target_type,
+            id, timestamp, timestamp_iso, tools, targets,
             total_findings, critical_count, high_count, medium_count, low_count, info_count,
             jmo_version
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
+        ) VALUES (?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
         """,
         (
             scan_id,
             int(time.time()),
             "2025-01-01T00:00:00Z",
-            "balanced",
             "[]",
             "[]",
-            "repo",
             "1.0.0",
         ),
     )
@@ -782,7 +793,7 @@ def test_batch_insert_findings_optimized_performance(perf_db, tmp_path):
         db_path = tmp_path / f"opt_{next(_counter)}.db"
         init_database(db_path)
         fresh = get_connection(db_path)
-        _insert_scan_row(fresh, scan_id, "balanced")
+        _insert_scan_row(fresh, scan_id)
         return fresh
 
     inserted: list[int] = []
@@ -839,19 +850,17 @@ def test_upsert_findings_batch_performance(perf_db, tmp_path):
     conn.execute(
         """
         INSERT INTO scans (
-            id, timestamp, timestamp_iso, profile, tools, targets, target_type,
+            id, timestamp, timestamp_iso, tools, targets,
             total_findings, critical_count, high_count, medium_count, low_count, info_count,
             jmo_version
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
+        ) VALUES (?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
         """,
         (
             scan_id,
             int(time.time()),
             "2025-01-01T00:00:00Z",
-            "fast",
             "[]",
             "[]",
-            "repo",
             "1.0.0",
         ),
     )
@@ -881,7 +890,7 @@ def test_upsert_findings_batch_performance(perf_db, tmp_path):
         db_path = tmp_path / f"upsert_{next(_counter)}.db"
         init_database(db_path)
         fresh = get_connection(db_path)
-        _insert_scan_row(fresh, scan_id, "fast")
+        _insert_scan_row(fresh, scan_id)
         return fresh
 
     def _db_with_findings_already_in():
@@ -965,19 +974,17 @@ def test_recalculate_scan_counts_performance(perf_db):
     conn.execute(
         """
         INSERT INTO scans (
-            id, timestamp, timestamp_iso, profile, tools, targets, target_type,
+            id, timestamp, timestamp_iso, tools, targets,
             total_findings, critical_count, high_count, medium_count, low_count, info_count,
             jmo_version
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
+        ) VALUES (?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
         """,
         (
             scan_id,
             int(time.time()),
             "2025-01-01T00:00:00Z",
-            "deep",
             "[]",
             "[]",
-            "repo",
             "1.0.0",
         ),
     )
@@ -1079,19 +1086,17 @@ def test_batch_vs_optimized_performance_comparison(perf_db):
     conn.execute(
         """
         INSERT INTO scans (
-            id, timestamp, timestamp_iso, profile, tools, targets, target_type,
+            id, timestamp, timestamp_iso, tools, targets,
             total_findings, critical_count, high_count, medium_count, low_count, info_count,
             jmo_version
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
+        ) VALUES (?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
         """,
         (
             scan_id_std,
             int(time.time()),
             "2025-01-01T00:00:00Z",
-            "balanced",
             "[]",
             "[]",
-            "repo",
             "1.0.0",
         ),
     )
@@ -1106,19 +1111,17 @@ def test_batch_vs_optimized_performance_comparison(perf_db):
     conn.execute(
         """
         INSERT INTO scans (
-            id, timestamp, timestamp_iso, profile, tools, targets, target_type,
+            id, timestamp, timestamp_iso, tools, targets,
             total_findings, critical_count, high_count, medium_count, low_count, info_count,
             jmo_version
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
+        ) VALUES (?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
         """,
         (
             scan_id_opt,
             int(time.time()),
             "2025-01-01T00:00:00Z",
-            "balanced",
             "[]",
             "[]",
-            "repo",
             "1.0.0",
         ),
     )

@@ -207,7 +207,6 @@ def test_configure_k8s_target_delegates_correctly(mock_configure):
 def test_generate_command_list_repo_target():
     """Test command generation for repository target."""
     config = WizardConfig()
-    config.profile = "balanced"
     config.target = create_mock_target_config(
         "repo", repo_mode="repos-dir", repo_path="/test/repos"
     )
@@ -222,14 +221,12 @@ def test_generate_command_list_repo_target():
     assert result[1] == "scan"
     assert "--repos-dir" in result
     assert "/test/repos" in result
-    assert "--profile-name" in result
-    assert "balanced" in result
+    assert "--profile-name" not in result
 
 
 def test_generate_command_list_image_target():
     """Test command generation for container image target."""
     config = WizardConfig()
-    config.profile = "fast"
     config.target = create_mock_target_config("image", image_name="nginx:latest")
     config.use_docker = False
 
@@ -237,13 +234,12 @@ def test_generate_command_list_image_target():
 
     assert "--image" in result
     assert "nginx:latest" in result
-    assert "fast" in result
+    assert "--profile-name" not in result
 
 
 def test_generate_command_list_url_target():
     """Test command generation for URL target."""
     config = WizardConfig()
-    config.profile = "balanced"
     config.target = create_mock_target_config("url", url="https://example.com")
     config.use_docker = False
 
@@ -256,7 +252,6 @@ def test_generate_command_list_url_target():
 def test_generate_command_list_with_threads():
     """Test command generation with custom thread count."""
     config = WizardConfig()
-    config.profile = "balanced"
     config.target = create_mock_target_config("repo")
     config.use_docker = False
     config.threads = 8
@@ -270,7 +265,6 @@ def test_generate_command_list_with_threads():
 def test_generate_command_list_with_timeout():
     """Test command generation with custom timeout."""
     config = WizardConfig()
-    config.profile = "deep"
     config.target = create_mock_target_config("repo")
     config.use_docker = False
     config.timeout = 600
@@ -284,7 +278,6 @@ def test_generate_command_list_with_timeout():
 def test_generate_command_list_docker_mode():
     """Test command generation in Docker mode."""
     config = WizardConfig()
-    config.profile = "fast"
     config.target = create_mock_target_config("repo")
     config.use_docker = True
 
@@ -356,7 +349,6 @@ def test_target_config_to_dict_url():
 def test_wizard_config_to_dict_complete():
     """Test WizardConfig serialization with all fields."""
     config = WizardConfig()
-    config.profile = "balanced"
     config.target = create_mock_target_config("repo")
     config.use_docker = False
     config.threads = 4
@@ -364,7 +356,7 @@ def test_wizard_config_to_dict_complete():
 
     result = config.to_dict()
 
-    assert result["profile"] == "balanced"
+    assert "profile" not in result
     assert result["use_docker"] is False
     assert result["threads"] == 4
     assert result["timeout"] == 300
@@ -374,12 +366,11 @@ def test_wizard_config_to_dict_complete():
 def test_wizard_config_to_dict_minimal():
     """Test WizardConfig serialization with minimal fields."""
     config = WizardConfig()
-    config.profile = "fast"
     config.target = create_mock_target_config("repo")
 
     result = config.to_dict()
 
-    assert result["profile"] == "fast"
+    assert "profile" not in result
     assert "target" in result
 
 
@@ -391,7 +382,6 @@ def test_wizard_config_to_dict_minimal():
 def test_generate_command_list_empty_config():
     """Test command generation handles missing fields gracefully."""
     config = WizardConfig()
-    config.profile = "fast"
     config.target = TargetConfig()  # Empty target
     config.use_docker = False
 
@@ -414,13 +404,13 @@ def test_target_config_to_dict_empty():
 def test_wizard_config_no_target():
     """Test WizardConfig serialization without target set."""
     config = WizardConfig()
-    config.profile = "fast"
     # No target set
 
     result = config.to_dict()
 
-    assert result["profile"] == "fast"
     # Should handle missing target gracefully
+    assert result["target"]["type"] == "repo"
+    assert "profile" not in result
 
 
 # =============================================================================
@@ -432,7 +422,6 @@ def test_end_to_end_repo_scan_command():
     """Test complete workflow: configure target -> generate command."""
     # Create complete config
     config = WizardConfig()
-    config.profile = "balanced"
     config.use_docker = False
     config.threads = 8
     config.timeout = 600
@@ -452,15 +441,14 @@ def test_end_to_end_repo_scan_command():
     assert cmd[1] == "scan"
     assert "--repos-dir" in cmd or "repos-dir" in " ".join(cmd)
     assert "/test/repos" in cmd
-    assert "--profile-name" in cmd
-    assert "balanced" in cmd
-    assert "--threads" in cmd or "8" in cmd
+    assert "--profile-name" not in cmd
+    assert cmd[cmd.index("--threads") + 1] == "8"
+    assert cmd[cmd.index("--timeout") + 1] == "600"
 
 
 def test_end_to_end_multi_image_command():
     """Test command generation for multiple images."""
     config = WizardConfig()
-    config.profile = "fast"
     config.use_docker = False
 
     target = TargetConfig()
@@ -472,15 +460,13 @@ def test_end_to_end_multi_image_command():
 
     assert cmd[0] == "jmo"
     assert cmd[1] == "scan"
-    assert "--profile-name" in cmd
-    assert "fast" in cmd
+    assert "--profile-name" not in cmd
     assert "--images-file" in cmd or "images-file" in " ".join(cmd)
 
 
 def test_end_to_end_url_scan_with_api_spec():
     """Test command generation for URL with API spec."""
     config = WizardConfig()
-    config.profile = "balanced"
     config.use_docker = False
 
     target = TargetConfig()
@@ -493,6 +479,5 @@ def test_end_to_end_url_scan_with_api_spec():
 
     assert cmd[0] == "jmo"
     assert cmd[1] == "scan"
-    assert "--profile-name" in cmd
-    assert "balanced" in cmd
+    assert "--profile-name" not in cmd
     assert "--url" in cmd or "https://api.example.com" in " ".join(cmd)

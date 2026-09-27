@@ -8,7 +8,6 @@ Usage:
     generator = ProvenanceGenerator()
     provenance = generator.generate(
         findings_path=Path("results/findings.json"),
-        profile="balanced",
         tools=["trivy", "semgrep"],
         targets=["repo1"]
     )
@@ -22,7 +21,7 @@ import sys
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .constants import INTOTO_VERSION, JMO_BUILD_TYPE, SLSA_VERSION
 from .metadata_capture import MetadataCapture
@@ -36,6 +35,9 @@ from .models import (
     SLSAProvenance,
     Subject,
 )
+
+if TYPE_CHECKING:
+    from scripts.core.tool_registry import ToolInfo
 
 logger = logging.getLogger(__name__)
 
@@ -197,7 +199,7 @@ class ProvenanceGenerator:
 
         return resolved_deps
 
-    def _get_tool_uri(self, tool_info: Any) -> str:
+    def _get_tool_uri(self, tool_info: "ToolInfo") -> str:
         """Generate URI for a tool based on its installation source.
 
         Args:
@@ -210,8 +212,6 @@ class ProvenanceGenerator:
             return f"https://github.com/{tool_info.github_repo}"
         elif tool_info.pypi_package:
             return f"https://pypi.org/project/{tool_info.pypi_package}/"
-        elif tool_info.npm_package:
-            return f"https://www.npmjs.com/package/{tool_info.npm_package}"
         else:
             # Fallback to tool name
             return f"urn:jmo:tool:{tool_info.name}"
@@ -266,7 +266,6 @@ class ProvenanceGenerator:
 
     def _create_build_definition(
         self,
-        profile: str,
         tools: list[str],
         targets: list[str],
         threads: int | None = None,
@@ -275,7 +274,6 @@ class ProvenanceGenerator:
         """Create build definition with scan parameters.
 
         Args:
-            profile: Scan profile (fast, balanced, deep)
             tools: List of tools used
             targets: List of scan targets
             threads: Number of parallel threads, if the scan reported one
@@ -302,7 +300,6 @@ class ProvenanceGenerator:
             internal["timeout"] = timeout
 
         external: dict[str, Any] = {
-            "profile": profile,
             "tools": tools,
             "targets": targets,
         }
@@ -401,7 +398,6 @@ class ProvenanceGenerator:
     def generate(
         self,
         findings_path: Path,
-        profile: str,
         tools: list[str],
         targets: list[str],
         threads: int | None = None,
@@ -414,7 +410,6 @@ class ProvenanceGenerator:
 
         Args:
             findings_path: Path to findings.json file
-            profile: Scan profile name
             tools: List of tools used in scan
             targets: List of scan targets
             threads: Number of parallel threads, omitted from the document when
@@ -432,7 +427,6 @@ class ProvenanceGenerator:
 
         # Create build definition
         build_definition = self._create_build_definition(
-            profile=profile,
             tools=tools,
             targets=targets,
             threads=threads,

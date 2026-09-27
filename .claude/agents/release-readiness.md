@@ -37,14 +37,14 @@ You have access to all release verification tools:
    **one** tag. `git push --tags` publishes every local tag you happen to have,
    and each `v*` tag fires `release.yml`
 5. **CI auto-publishes** to PyPI using Trusted Publishers (OIDC)
-6. **CI auto-builds** Docker images (fast/slim/balanced/deep)
+6. **CI auto-builds** the Docker image (one `Dockerfile`, amd64 + arm64)
 
 ### Version File Locations
 
 ```text
 pyproject.toml:6           # [project] version = "X.Y.Z"
 versions.yaml              # Tool versions (trivy, semgrep, etc.)
-Dockerfile*                # FROM statements with tool versions
+Dockerfile                 # FROM statements with tool versions
 CHANGELOG.md               # Release history
 README.md                  # Badges, references
 docs/                      # Version mentions
@@ -101,14 +101,11 @@ docs/                      # Version mentions
 - trufflehog: 3.82.6
 (... 8 more tools)
 
-### Dockerfiles
+### Dockerfile
 
 **Status:** ✅ Consistent
 
-- Dockerfile (deep): Matches versions.yaml
-- Dockerfile.fast: Matches versions.yaml
-- Dockerfile.slim: Matches versions.yaml
-- Dockerfile.balanced: Matches versions.yaml
+- Dockerfile: Matches versions.yaml
 
 **Verification:**
 
@@ -168,8 +165,8 @@ pytest tests/adapters/ -v
 
 **Failures:**
 
-1. `test_noseyparker_adapter.py::test_noseyparker_docker_fallback` - AssertionError
-2. `test_falco_adapter.py::test_falco_priority_mapping` - KeyError
+1. `test_grype_adapter.py::test_grype_adapter_cvss_v2_fallback` - AssertionError
+2. `test_zap_adapter.py::TestZapSeverityMapping::test_informational_severity` - KeyError
 
 **Action:** Fix failing tests before release
 
@@ -327,7 +324,7 @@ git rev-list --left-right --count origin/main...HEAD
 ### Build Status
 
 ```bash
-docker build -t jmo-security:test-0.7.0 -f Dockerfile.deep .
+docker build -t jmo-security:test-0.7.0 -f Dockerfile .
 ```
 
 **Status:** Not tested
@@ -336,16 +333,12 @@ docker build -t jmo-security:test-0.7.0 -f Dockerfile.deep .
 **Recommended:**
 
 ```bash
-# Build all variants (there is no bare `Dockerfile` in this repo)
-docker build -t jmo-security:0.7.0-deep -f Dockerfile.deep .
-docker build -t jmo-security:0.7.0-fast -f Dockerfile.fast .
-docker build -t jmo-security:0.7.0-slim -f Dockerfile.slim .
-docker build -t jmo-security:0.7.0-balanced -f Dockerfile.balanced .
+# Build the one image (there is a single `Dockerfile`)
+docker build -t jmo-security:0.7.0 -f Dockerfile .
 
-# Test the deep variant — run the tag you just built.
-# There is no `full` variant; `deep` is the heavyweight image (also :latest).
-docker run --rm jmo-security:0.7.0-deep --help
-docker run --rm jmo-security:0.7.0-deep scan --help
+# Test it — run the tag you just built.
+docker run --rm jmo-security:0.7.0 --help
+docker run --rm jmo-security:0.7.0 scan --help
 ```
 
 ---
@@ -368,7 +361,7 @@ docker run --rm jmo-security:0.7.0-deep scan --help
 
 1. ❌ **pyproject.toml version not updated** (0.6.1 → 0.7.0)
 2. ❌ **CHANGELOG.md missing v0.7.0 entry**
-3. ❌ **2 failing tests** (noseyparker, falco)
+3. ❌ **2 failing tests** (grype, zap)
 4. ❌ **Coverage below 85%** (84%)
 
 ### Important Issues (SHOULD FIX)
@@ -383,8 +376,8 @@ docker run --rm jmo-security:0.7.0-deep scan --help
 1. **Fix failing tests** (30 min)
 
    ```bash
-   pytest tests/adapters/test_noseyparker_adapter.py::test_noseyparker_docker_fallback -vv
-   pytest tests/adapters/test_falco_adapter.py::test_falco_priority_mapping -vv
+   pytest tests/adapters/test_grype_adapter.py::test_grype_adapter_cvss_v2_fallback -vv
+   pytest tests/adapters/test_zap_adapter.py::TestZapSeverityMapping::test_informational_severity -vv
    # Debug and fix issues
    ```
 
@@ -489,8 +482,8 @@ open https://github.com/jimmy058910/jmo-security/pkgs/container/jmo-security
 After successful release:
 
 - [ ] Verify PyPI package published: `pip install jmo-security==0.7.0`
-- [ ] Verify Docker images built: `docker pull ghcr.io/jimmy058910/jmo-security:0.7.0-deep`
-      (there is no `-full` tag — it was removed in v1.0.5; `:latest` is the deep variant)
+- [ ] Verify the Docker image built: `docker pull ghcr.io/jimmy058910/jmo-security:0.7.0`
+      (one image, tagged semver and `:latest`; variant tags are no longer built)
 - [ ] Create GitHub Release with notes from CHANGELOG
 - [ ] Announce the release (maintainers use their own drafting workflow)
 - [ ] Update project website (if applicable)
@@ -520,7 +513,7 @@ After successful release:
 2. **Check Docker image tags:**
 
    ```bash
-   Grep: "ghcr\.io.*:0\." Dockerfile* docs/ .github/workflows/
+   Grep: "ghcr\.io.*:0\." Dockerfile docs/ .github/workflows/
    ```
 
 3. **Verify versions.yaml consistency:**
@@ -603,29 +596,25 @@ After successful release:
 
 **Your Process:**
 
-1. **Build each variant:**
+1. **Build the image:**
 
    ```bash
-   docker build -t jmo-security:test-deep -f Dockerfile.deep .
-   docker build -t jmo-security:test-fast -f Dockerfile.fast .
-   docker build -t jmo-security:test-slim -f Dockerfile.slim .
-   docker build -t jmo-security:test-balanced -f Dockerfile.balanced .
+   docker build -t jmo-security:test -f Dockerfile .
    ```
 
-2. **Test each image** — run the tags you just built, once per variant:
+2. **Test it** — run the tag you just built:
 
    ```bash
-   for v in deep fast slim balanced; do
-     docker run --rm "jmo-security:test-$v" --help
-     docker run --rm "jmo-security:test-$v" scan --help
-   done
+   docker run --rm jmo-security:test --help
+   docker run --rm jmo-security:test scan --help
+   docker run --rm jmo-security:test tools check --json
    ```
 
-   > Build and run must name the same tag. A `-full` tag is never created by
-   > these builds, so running it either fails or silently tests a stale image
-   > left over from an earlier release.
+   > Build and run must name the same tag. A tag this build did not create
+   > either fails or silently tests a stale image left over from an earlier
+   > release — including any v1.x variant tag still on the registry.
 
-3. **Check image sizes:**
+3. **Check image size:**
 
    ```bash
    docker images | grep jmo-security

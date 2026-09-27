@@ -1,7 +1,7 @@
 # JMo Security Docker Wrapper for PowerShell
 # Cross-platform script for Windows PowerShell and PowerShell Core
 #
-# Usage: .\jmo-docker.ps1 scan --repo /scan --profile fast
+# Usage: .\jmo-docker.ps1 scan --repo /scan
 #        .\jmo-docker.ps1 wizard
 #        .\jmo-docker.ps1 --help
 #

@@ -15,7 +15,7 @@ interface HistoryPanelProps {
  *
  * Displays:
  * - Dropdown to select past scans
- * - Current scan metadata (timestamp, profile, git context)
+ * - Current scan metadata (timestamp, git context)
  * - Severity summary for selected scan
  */
 export default function HistoryPanel({
@@ -66,7 +66,7 @@ export default function HistoryPanel({
           <option value="">Current Scan</option>
           {scans.map((scan) => (
             <option key={scan.scan_id} value={scan.scan_id}>
-              {formatTimestamp(scan.timestamp)} - {scan.profile}
+              {formatTimestamp(scan.timestamp)}
               {scan.git_context?.branch && ` (${scan.git_context.branch})`}
             </option>
           ))}
@@ -87,7 +87,7 @@ export default function HistoryPanel({
             <option value="">Select baseline...</option>
             {scans.map((scan) => (
               <option key={scan.scan_id} value={scan.scan_id}>
-                {formatTimestamp(scan.timestamp)} - {scan.profile}
+                {formatTimestamp(scan.timestamp)}
                 {scan.git_context?.branch && ` (${scan.git_context.branch})`}
               </option>
             ))}
@@ -100,10 +100,6 @@ export default function HistoryPanel({
         <div className="space-y-2 text-xs text-gray-600 dark:text-gray-400">
           {selectedScan && (
             <>
-              <div className="flex justify-between">
-                <span className="font-medium">Profile:</span>
-                <span>{selectedScan.profile}</span>
-              </div>
               <div className="flex justify-between">
                 <span className="font-medium">Tools:</span>
                 <span>{selectedScan.tools.length}</span>

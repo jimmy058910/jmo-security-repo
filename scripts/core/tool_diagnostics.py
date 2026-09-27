@@ -26,11 +26,14 @@ said so; here, *coverage* is lost and nobody says so.
 
 Design note -- why this is central and not per-adapter. The issue suggested
 adapters return a diagnostic alongside their findings. That means changing
-``AdapterPlugin.parse``'s return type and every one of the 29 adapters plus
-their tests, to carry data that is sitting in the tool's own output file and
-needs no adapter knowledge to read. Reading it centrally costs one extra
-``json.loads`` for the **five** tools that actually have a channel, and nothing
-at all for the other twenty-four.
+``AdapterPlugin.parse``'s return type and every adapter plus its tests, to
+carry data that is sitting in the tool's own output file and needs no adapter
+knowledge to read. Reading it centrally costs one extra ``json.loads`` for the
+tools that actually have a channel, and nothing at all for the rest.
+
+(bandit, whose run is measured above, left in v2.0.0 along with the other
+tools that had a channel -- semgrep-secrets, horusec, scancode. semgrep is the
+one that remains.)
 """
 
 from __future__ import annotations
@@ -90,11 +93,11 @@ def _file_of(entry: Any) -> str:
 
 
 def _from_errors_list(tool: str, data: Any) -> list[ToolDiagnostic]:
-    """``{"errors": [...]}`` -- bandit, semgrep, semgrep-secrets.
+    """``{"errors": [...]}`` -- semgrep.
 
-    horusec uses the same key for a **string**, which is why the value's type
-    is inspected rather than assumed. An adapter that assumed `list` here would
-    iterate the characters of that string.
+    A string value is accepted too (horusec used the same key for one), which is
+    why the value's type is inspected rather than assumed. An adapter that
+    assumed `list` here would iterate the characters of that string.
     """
     if not isinstance(data, dict):
         return []
@@ -109,32 +112,10 @@ def _from_errors_list(tool: str, data: Any) -> list[ToolDiagnostic]:
     return out
 
 
-def _from_scancode(tool: str, data: Any) -> list[ToolDiagnostic]:
-    """scancode carries a channel in two places, per-run and per-file."""
-    if not isinstance(data, dict):
-        return []
-    out: list[ToolDiagnostic] = []
-    headers = data.get("headers")
-    if isinstance(headers, list) and headers and isinstance(headers[0], dict):
-        for key in ("errors", "warnings"):
-            for entry in headers[0].get(key) or []:
-                out.append(ToolDiagnostic(tool, _as_text(entry)))
-    for entry in data.get("files") or []:
-        if not isinstance(entry, dict):
-            continue
-        for problem in entry.get("scan_errors") or []:
-            out.append(ToolDiagnostic(tool, _as_text(problem), _file_of(entry)))
-    return out
-
-
-# Only tools with a channel appear here, so the other 24 adapters cost nothing.
+# Only tools with a channel appear here, so the other adapters cost nothing.
 # Keyed by adapter name, matching `PluginMetadata.name` (underscores).
 DIAGNOSTIC_EXTRACTORS: dict[str, Callable[[str, Any], list[ToolDiagnostic]]] = {
-    "bandit": _from_errors_list,
     "semgrep": _from_errors_list,
-    "semgrep_secrets": _from_errors_list,
-    "horusec": _from_errors_list,
-    "scancode": _from_scancode,
 }
 
 

@@ -9,7 +9,7 @@ Test Coverage:
 - Auto-attestation triggering logic
 - Scan metadata capture
 - Attestation generation in CI mode
-- Docker variant support
+- Docker support
 - Error handling and graceful degradation
 """
 
@@ -182,14 +182,12 @@ class TestScanMetadataCapture:
 
         capture = MetadataCapture()
         metadata = capture.from_scan_args(
-            profile="balanced",
             tools=["trivy", "semgrep"],
             repos=["repo1"],
             threads=4,
             timeout=600,
         )
 
-        assert metadata["profile_name"] == "balanced"
         assert metadata["tools"] == ["trivy", "semgrep"]
         assert metadata["repos"] == ["repo1"]
         assert metadata["threads"] == 4
@@ -257,17 +255,15 @@ class TestScanMetadataCapture:
         from scripts.core.attestation.metadata_capture import MetadataCapture
 
         capture = MetadataCapture()
-        metadata = capture.from_scan_args(
-            profile="fast", tools=["trivy"], repos=["repo1"]
-        )
+        metadata = capture.from_scan_args(tools=["trivy"], repos=["repo1"])
 
         # Should be JSON serializable
         json_str = json.dumps(metadata)
         assert json_str is not None
 
-        # Should be deserializable
+        # Should be deserializable, and round-trip unchanged
         restored = json.loads(json_str)
-        assert restored["profile"] == "fast"
+        assert restored == {"tools": ["trivy"], "repos": ["repo1"]}
 
     def test_metadata_capture_handles_missing_git(self):
         """Test metadata capture gracefully handles missing git."""
@@ -311,7 +307,6 @@ class TestCIModeIntegration:
         generator = ProvenanceGenerator()
         statement = generator.generate(
             findings_path=findings_path,
-            profile="fast",
             tools=["trivy"],
             targets=["repo1"],
         )
@@ -345,7 +340,6 @@ class TestCIModeIntegration:
         generator = ProvenanceGenerator()
         statement = generator.generate(
             findings_path=findings_path,
-            profile="fast",
             tools=["trivy"],
             targets=["repo1"],
         )
@@ -404,7 +398,6 @@ class TestCIModeIntegration:
         generator = ProvenanceGenerator()
         statement = generator.generate(
             findings_path=findings_path,
-            profile="fast",
             tools=["trivy"],
             targets=["repo1"],
         )
@@ -435,7 +428,6 @@ class TestCIModeIntegration:
         generator = ProvenanceGenerator()
         statement = generator.generate(
             findings_path=findings_path,
-            profile="balanced",
             tools=["trivy", "semgrep"],
             targets=["repo1", "repo2"],
             threads=4,
@@ -461,7 +453,6 @@ class TestCIModeIntegration:
         generator = ProvenanceGenerator()
         statement = generator.generate(
             findings_path=findings_path,
-            profile="fast",
             tools=["trivy"],
             targets=["repo1"],
         )
@@ -473,30 +464,12 @@ class TestCIModeIntegration:
 
 
 # ============================================================================
-# Test Class 5: Docker Variant Support (5 tests)
+# Test Class 5: Docker Support (1 test)
 # ============================================================================
 
 
-class TestDockerVariantSupport:
-    """Test attestation support in Docker variants."""
-
-    def test_full_variant_includes_sigstore_binary(self):
-        """Test full Docker variant includes sigstore-python."""
-        # This would be tested in actual Docker environment
-        # Mock test just verifies the concept
-        assert True  # Placeholder
-
-    def test_balanced_variant_includes_sigstore_binary(self):
-        """Test balanced Docker variant includes sigstore-python."""
-        assert True  # Placeholder
-
-    def test_slim_variant_skips_sigstore_warns_user(self):
-        """Test slim variant doesn't include Sigstore, warns in docs."""
-        assert True  # Placeholder
-
-    def test_fast_variant_skips_sigstore_warns_user(self):
-        """Test fast variant doesn't include Sigstore, warns in docs."""
-        assert True  # Placeholder
+class TestDockerSupport:
+    """Test attestation support in the Docker image."""
 
     def test_docker_volume_mount_for_attestation_persistence(self):
         """Test Docker users can mount volume for attestation files."""
@@ -530,9 +503,9 @@ class TestCICDErrorHandling:
 
         # Invalid inputs should not crash
         try:
-            metadata = capture.from_scan_args(profile=None, tools=None, repos=None)
+            metadata = capture.from_scan_args(tools=None, repos=None, threads=None)
             # All-None input must produce no metadata at all -- not a dict of
-            # None values, which would serialise `"profile": null` into the
+            # None values, which would serialise `"tools": null` into the
             # attestation. A type check accepts that outcome.
             assert metadata == {}
         except Exception:
@@ -665,7 +638,6 @@ class TestCICDPerformance:
             generated.append(
                 generator.generate(
                     findings_path=findings_path,
-                    profile="fast",
                     tools=["trivy"],
                     targets=["repo1"],
                 )

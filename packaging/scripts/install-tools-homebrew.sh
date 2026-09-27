@@ -32,7 +32,7 @@ install_tool() {
 }
 
 # Install tools in order
-echo "Installing 12 security tools..."
+echo "Installing security tools..."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
@@ -41,7 +41,6 @@ install_tool "TruffleHog" "trufflesecurity/trufflehog/trufflehog" "Verified secr
 
 # SAST
 install_tool "Semgrep" "semgrep" "Multi-language static analysis"
-install_tool "Bandit" "bandit" "Python security linter"
 
 # SBOM + Vulnerabilities
 install_tool "Syft" "syft" "SBOM generation"
@@ -62,27 +61,17 @@ echo "   • OWASP ZAP (DAST web scanning):"
 echo "     macOS: brew install --cask owasp-zap"
 echo "     Requires Java JRE 11+"
 echo ""
-echo "   • Nosey Parker (deep secrets scanning):"
-echo "     Docker only: ghcr.io/praetorian-inc/noseyparker:latest"
-echo "     No native Homebrew formula available"
-echo ""
-echo "   • Falco (runtime security):"
-echo "     Docker/K8s only (requires Linux kernel + eBPF)"
-echo ""
-echo "   • AFL++ (fuzzing):"
-echo "     Docker only (requires Linux kernel)"
-echo ""
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "✅ Tool installation complete!"
 echo ""
 echo "Verify installation:"
-echo "  jmotools setup --check"
+echo "  jmo tools check"
 echo ""
 echo "Start scanning:"
-echo "  jmotools wizard"
+echo "  jmo wizard"
 echo ""
-echo "💡 TIP: For ALL 12 tools with zero setup, use Docker mode:"
-echo "  jmotools wizard --docker"
+echo "💡 TIP: For every tool with zero setup, use Docker mode:"
+echo "  jmo wizard --docker"
 echo ""

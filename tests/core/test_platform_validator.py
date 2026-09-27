@@ -939,12 +939,32 @@ class TestToolExistsConsistencyHasTeeth:
 
     def test_the_registry_lookup_actually_found_tools(self):
         """Meta-guard: if `_known_tool_names()` returned an empty set, every
-        assertion above would still pass and the check would flag nothing."""
+        assertion above would still pass and the check would flag nothing.
+
+        Derived, not counted (it said `>= 25` until v2.0.0 cut the registry):
+        the lookup must cover every versions.yaml entry, read here with plain
+        YAML rather than through ToolRegistry, plus each name's binary.
+        """
+        import yaml
+
+        from scripts.core.tool_registry import (
+            POLICY_ENGINE,
+            TOOL_BINARY_NAMES,
+            TOOL_MATRIX,
+        )
         from scripts.core.validators.platform_validator import _known_tool_names
 
         known = _known_tool_names()
 
-        assert len(known) >= 25, f"registry lookup looks wrong: {len(known)}"
+        versions = yaml.safe_load((_PROJECT_ROOT / "versions.yaml").read_bytes())
+        declared = {
+            tool
+            for section in ("python_tools", "binary_tools", "special_tools")
+            for tool in (versions.get(section) or {})
+        }
+        binaries = set(TOOL_BINARY_NAMES) | set(TOOL_BINARY_NAMES.values())
+        assert known == declared | binaries, f"registry lookup looks wrong: {known}"
+        assert {*TOOL_MATRIX, POLICY_ENGINE} <= known
         for tool in ("trivy", "semgrep", "trufflehog", "syft"):
             assert tool in known
         for host_dep in ("uv", "node", "java", "bash", "docker"):

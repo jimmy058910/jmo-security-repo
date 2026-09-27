@@ -2,7 +2,7 @@
 Scan Metadata Capture for Attestations.
 
 This module captures metadata about scans for inclusion in attestations:
-- Scan parameters (profile, tools, targets, threads, timeout)
+- Scan parameters (tools, targets, threads, timeout)
 - Git context (commit, branch, tag)
 - CI-specific metadata (GitHub Actions, GitLab CI)
 
@@ -26,36 +26,34 @@ class MetadataCapture:
 
     def from_scan_args(
         self,
-        profile: str | None = None,
         tools: list[str] | None = None,
         repos: list[str] | None = None,
         images: list[str] | None = None,
         urls: list[str] | None = None,
         threads: int | None = None,
         timeout: int | None = None,
-        **kwargs,
     ) -> dict[str, Any]:
         """
         Capture scan parameters from command-line arguments.
 
         Args:
-            profile: Profile name (fast/balanced/deep)
             tools: List of tools used
             repos: List of repositories scanned
             images: List of container images scanned
             urls: List of URLs scanned
             threads: Thread count
             timeout: Timeout in seconds
-            **kwargs: Additional scan parameters
 
         Returns:
             Dict of scan metadata
+
+        There is deliberately no ``**kwargs``. It used to copy every keyword
+        into the metadata, so a password or token passed beside the scan
+        arguments would have reached the attestation, and a typo vanished into
+        it. An unknown keyword is now a ``TypeError``. Nothing in the product
+        calls this yet (#1277).
         """
         metadata: dict[str, Any] = {}
-
-        if profile is not None:
-            metadata["profile"] = profile
-            metadata["profile_name"] = profile
 
         if tools is not None:
             metadata["tools"] = tools
@@ -74,9 +72,6 @@ class MetadataCapture:
 
         if timeout is not None:
             metadata["timeout"] = timeout
-
-        # Add any additional kwargs
-        metadata.update(kwargs)
 
         return metadata
 

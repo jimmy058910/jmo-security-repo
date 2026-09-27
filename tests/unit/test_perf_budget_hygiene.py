@@ -145,6 +145,11 @@ _CLOCK_READS = {"perf_counter", "monotonic", "time", "process_time"}
 # of the instrument, and it mattered: the over-match made the conversion
 # INVISIBLE, because the scan-row INSERT beside each timing site still called
 # `time.time()`. A count that cannot fall cannot ratchet.
+#
+# 46 after #1256 converted test_single_scan_insert_performance, which failed
+# the 2026-09-14 nightly at 311ms on one cold sample. The dict summed to 47
+# before it, not the 48 above: recount with `sum(SINGLE_SAMPLE_BUDGETS.values())`
+# rather than trusting a total written in prose.
 SINGLE_SAMPLE_BUDGETS: dict[str, int] = {
     "tests/cli/test_wizard_edge_cases.py": 2,
     "tests/edge_cases/test_diff_edge_cases.py": 1,
@@ -156,7 +161,7 @@ SINGLE_SAMPLE_BUDGETS: dict[str, int] = {
     "tests/unit/test_dedup_enhanced.py": 3,
     "tests/unit/test_diff_engine.py": 2,
     "tests/unit/test_history_db.py": 1,
-    "tests/unit/test_history_db_performance.py": 9,
+    "tests/unit/test_history_db_performance.py": 8,
     "tests/unit/test_normalize_and_report_more.py": 1,
     "tests/unit/test_plugin_loader.py": 1,
     "tests/unit/test_tool_runner.py": 4,

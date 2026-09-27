@@ -1,7 +1,7 @@
 """Regression tests: update_versions.py must write LF line endings, not CRLF.
 
 `update_versions.py` writes three file families — `versions.yaml`
-(`save_versions`), the `Dockerfile.*` set and the `.github/workflows/*.yml`
+(`save_versions`), the `Dockerfile` and the `.github/workflows/*.yml`
 `env:` blocks (`sync_dockerfiles`). All three used Python text-mode writes
 (`open(path, "w")` / `Path.write_text(content)`) with no `newline=` argument.
 
@@ -69,9 +69,6 @@ def test_sync_dockerfiles_writes_lf_not_crlf(tmp_path, monkeypatch):
     dockerfile = tmp_path / "Dockerfile.test"
     dockerfile.write_text('ENV TRIVY_VERSION="0.69.0"\n', newline="\n")
     monkeypatch.setattr(update_versions, "DOCKERFILE", dockerfile)
-    # Point the other Dockerfile globals at non-existent paths -> skipped.
-    for attr in ("DOCKERFILE_BALANCED", "DOCKERFILE_SLIM", "DOCKERFILE_FAST"):
-        monkeypatch.setattr(update_versions, attr, tmp_path / f"absent_{attr}")
 
     # Workflow env: block, likewise stale, to exercise the second write site.
     wf_dir = tmp_path / "workflows"

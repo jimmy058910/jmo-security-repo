@@ -9,7 +9,6 @@ Tests the new metadata wrapper structure for JSON/YAML outputs:
     "schema_version": "1.2.0",
     "timestamp": "2025-11-04T12:34:56Z",
     "scan_id": "uuid-here",
-    "profile": "balanced",
     "tools": ["trivy", "semgrep"],
     "target_count": 3,
     "finding_count": 10,
@@ -123,7 +122,6 @@ def test_generate_metadata_minimal(sample_findings):
 
     # Optional fields (defaults)
     assert metadata["scan_id"] == ""
-    assert metadata["profile"] == ""
     assert metadata["tools"] == []
     assert metadata["target_count"] == 0
 
@@ -133,14 +131,12 @@ def test_generate_metadata_full_parameters(sample_findings):
     metadata = _generate_metadata(
         sample_findings,
         scan_id="test-scan-123",
-        profile="balanced",
         tools=["trivy", "trufflehog", "semgrep"],
         target_count=5,
     )
 
     # Verify all provided parameters are used
     assert metadata["scan_id"] == "test-scan-123"
-    assert metadata["profile"] == "balanced"
     assert metadata["tools"] == ["trivy", "trufflehog", "semgrep"]
     assert metadata["target_count"] == 5
     assert metadata["finding_count"] == 2
@@ -191,7 +187,6 @@ def test_write_json_with_metadata_wrapper(tmp_path: Path, sample_findings):
     metadata = _generate_metadata(
         sample_findings,
         scan_id="test-123",
-        profile="fast",
         tools=["trivy"],
         target_count=1,
     )
@@ -210,7 +205,6 @@ def test_write_json_with_metadata_wrapper(tmp_path: Path, sample_findings):
     meta = data["meta"]
     assert meta["output_version"] == "1.0.0"
     assert meta["scan_id"] == "test-123"
-    assert meta["profile"] == "fast"
     assert meta["tools"] == ["trivy"]
     assert meta["target_count"] == 1
     assert meta["finding_count"] == 2
@@ -241,7 +235,7 @@ def test_write_json_auto_generates_metadata(tmp_path: Path, sample_findings):
     assert meta["finding_count"] == 2
     # Auto-generated defaults
     assert meta["scan_id"] == ""
-    assert meta["profile"] == ""
+    assert meta["tools"] == []
 
 
 def test_write_json_creates_parent_dirs(tmp_path: Path, sample_findings):
@@ -383,7 +377,7 @@ def test_write_json_large_finding_count(tmp_path: Path):
 
 
 def test_write_json_special_characters_in_metadata(tmp_path: Path):
-    """Test metadata handles special characters in scan_id and profile."""
+    """Test metadata handles special characters in scan_id."""
     findings = [
         {
             "schemaVersion": "1.2.0",
@@ -399,7 +393,6 @@ def test_write_json_special_characters_in_metadata(tmp_path: Path):
     metadata = _generate_metadata(
         findings,
         scan_id="scan-with-special_chars-123!@#",
-        profile="custom/profile:v2",
     )
 
     out_path = tmp_path / "special.json"
@@ -407,7 +400,6 @@ def test_write_json_special_characters_in_metadata(tmp_path: Path):
 
     data = json.loads(out_path.read_text())
     assert data["meta"]["scan_id"] == "scan-with-special_chars-123!@#"
-    assert data["meta"]["profile"] == "custom/profile:v2"
 
 
 def test_write_json_empty_tools_list(tmp_path: Path):

@@ -13,11 +13,6 @@ ignored:
   # error isolation across multi-stage Dockerfiles.
   - DL3059
 
-  # DL4006: Set the SHELL option -o pipefail before RUN with a pipe.
-  # NodeSource install script (curl | bash) is a vendor-recommended
-  # pattern used in Dockerfile.balanced and Dockerfile.deep.
-  - DL4006
-
   # SC1091: Not following sourced file (ShellCheck via hadolint).
   # ShellCheck cannot resolve dynamic/external sources inside Docker.
   - SC1091

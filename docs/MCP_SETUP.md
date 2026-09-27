@@ -8,7 +8,7 @@ This guide explains how to set up and use Model Context Protocol (MCP) servers w
 
 ```bash
 # 1. Run a scan
-jmo scan --repo . --profile-name fast
+jmo scan --repo . --tools trufflehog semgrep trivy
 
 # 2. Add config file
 cp .mcp.json.example .claude/mcp.json
@@ -431,7 +431,7 @@ pip check | grep pydantic
 **Solution:** Run a scan first to generate `results/summaries/findings.json`:
 
 ```bash
-jmo scan --repo . --profile balanced
+jmo scan --repo .
 ```
 
 **Error:** `Rate limit exceeded`
@@ -543,7 +543,7 @@ For VS Code users with GitHub Copilot, add JMo Security as an MCP server:
 # .github/workflows/security-triage.yml
 - name: Run security scan
   run: |
-    jmo scan --repo . --results-dir ./results --profile balanced
+    jmo scan --repo . --results-dir ./results
 
 - name: Start MCP server for AI triage
   run: |

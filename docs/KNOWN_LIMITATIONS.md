@@ -130,15 +130,6 @@ bound — that would be a defect, not this limitation.
 
 ## Scanning
 
-### `--repo` pointing at a path that does not exist exits 0
-
-`jmo scan --repo /nonexistent` warns `No scan targets provided` and exits **0**,
-not 2. A scan with nothing to scan is treated as a scan that found nothing, which
-is consistent with how the CLI reports an empty result elsewhere.
-
-**What to do:** in CI, check that the results directory contains the scan you
-expected rather than relying on the exit code alone to prove a target was read.
-
 ### Concurrent scans on Windows are not verified
 
 Two scans writing into the same results directory or history database at once has
@@ -147,13 +138,17 @@ are write-once, so the risk is low — but it is untested, not proven.
 
 **What to do:** on Windows, give concurrent scans separate `--results-dir` paths.
 
-### Secret scanning skips `.git/` and `.jmo/`
+### Secret scanning skips `.git/`, `.jmo/` and vendored trees
 
-TruffleHog runs over the working tree with `.git/` and `.jmo/` excluded, so a
-secret that exists **only** in git history — committed and later removed, or
-sitting in a dangling blob — is not reported.
+TruffleHog and Gitleaks read the working tree with `.git/` and `.jmo/` excluded,
+and the vendored trees every source reader skips: `node_modules/`, `vendor/`,
+`.venv/` and `venv/`, at any depth. They also skip the results directory when it
+sits inside the scanned tree. A key committed inside a vendored package is
+therefore not reported. This was measured on a real Next.js application: 253
+TruffleHog findings before, 222 of them in `node_modules`, and a run of 281 s; 31
+findings after, none in `node_modules`, in 12 s.
 
-Both exclusions are deliberate. A finding at `.git/objects/03/f8eab...` or
+These exclusions are deliberate. A finding at `.git/objects/03/f8eab...` or
 `.git/logs/HEAD` names no commit and no source file, so there is nothing to act
 on, and the reflog's 40-character commit ids trip detectors that look for 40
 characters of `[A-Za-z0-9_-]` — measured as 41 findings across five
@@ -162,12 +157,101 @@ directory: `history.db` stores raw findings, so scanning it re-reports every
 secret JMo has previously recorded, and each scan feeds the next. On this
 repository that was 394 of 773 findings.
 
-Secrets in files that are tracked but uncommitted, or committed and still
-present, are scanned normally. `.github/` is **not** excluded.
+Git history is read separately, and it names the commit (v2.0.0). When the scanned
+repository has a `.git` of its own, both tools also run in git mode, with the same
+exclusions. A secret that was committed and later removed is reported with the
+commit that added it, its author and its date. A secret still in the tree is
+reported once per tool, not twice: its history record is folded into the tree
+finding, which gains the commit. Measured on this repository (1,258 commits), the
+two secret scanners took 4 s without history and 17 s with it.
 
-**What to do:** to audit history, run TruffleHog's git mode directly —
-`trufflehog git file://<repo>` — which reports the commit and file for each
-finding. JMo does not run it for you.
+What history mode does not see:
+
+- **A directory that is not a repository's root.** History is read only when the
+  target itself holds `.git`, so `--repo some/subdir` scans that tree alone.
+- **A shallow clone's history, at all.** Its oldest commit holds the whole tree, so both
+  tools would name that commit, and its author, as having added every secret in it:
+  whoever wrote the latest commit of a `--depth 1` clone. The scan reads the tree, logs a
+  WARNING, and says `history not read` on the two tools' rows. GitLab targets are
+  cloned with `--depth 1`, and `actions/checkout` fetches one commit unless told
+  otherwise (`fetch-depth: 0`).
+- **A repository git cannot read**: for example a worktree whose gitdir is not mounted,
+  or, outside JMo's image, "dubious ownership" of a repository another user owns. The
+  same WARNING and row detail name git's own message. JMo's Docker image sets
+  `safe.directory '*'`, because a mounted repository always belongs to another UID
+  there. So in the image git trusts every repository it is given, and honours that
+  repository's own `.git/config`. Scan repositories you trust.
+- **A multi-line key replaced in place.** Replacing a PEM key's body leaves its
+  `BEGIN` and `END` lines unchanged, so the commit's diff never holds a whole key.
+  The old key is reported from history, at the commit that added it; the new one
+  is reported from the tree, with no commit (measured with both tools).
+
+`.github/` is **not** excluded.
+
+**What to do:** to audit a vendored tree, run TruffleHog or Gitleaks on that
+directory directly. To read history for a subdirectory, scan the repository's
+root. To read a shallow clone's history, fetch all of it first
+(`git fetch --unshallow`). A history too large or too noisy to read can be
+bounded with `per_tool.<tool>.history_flags` (TruffleHog's `--since-commit`,
+Gitleaks' `--log-opts`), or skipped with `per_tool.<tool>.history: false`.
+
+### Gitleaks extends a repository's own `.gitleaks.toml`
+
+JMo passes Gitleaks a config of its own, to carry its exclusions, and Gitleaks
+then reads no other. When the scanned repository has a `.gitleaks.toml`, JMo's
+config extends it, so its rules and allowlists apply as they do when Gitleaks
+runs alone (and the default rules, if it asks for them). Two consequences:
+
+- **A repository's config narrows the audit.** A path or secret it allowlists
+  is not reported by Gitleaks, and a config that does not ask for the default
+  rules (`[extend] useDefault = true`) runs only its own. TruffleHog still reads
+  everything. `.gitleaksignore` and inline `gitleaks:allow` comments already
+  worked this way. JMo logs at INFO that it extended the repository's config,
+  and a WARNING when that config leaves the default rules out.
+- **One level of extension is lost.** Gitleaks follows `[extend]` only so deep,
+  and JMo's config is one level above the repository's. If the repository's
+  config extends another file that itself extends further (the default rules, or
+  a third file), that last level is not loaded, with no error (measured, 8.30.1).
+  JMo logs a WARNING naming the file when it sees this.
+
+`--config` in `per_tool.gitleaks.flags` is dropped with a warning: it would
+replace the config that carries JMo's exclusions.
+
+### TruffleHog does not verify secrets by default
+
+Verification sends each candidate secret to the service that issued it, to ask
+whether it is live. Since v2.0.0, JMo passes `--no-verification`: a scan should
+not send what it finds to third parties unasked, and git history multiplies the
+candidates. A secret is graded HIGH whether or not it was verified, as a Gitleaks
+one is, so `--fail-on HIGH` stops on any of them; the tags (`verified` or
+`unverified`) and `risk.confidence` say which. The built-in `zero-secrets`
+policy blocks **verified** secrets only, so without verification it blocks
+nothing. Gitleaks never verifies. The policy says so: its message, a warning in
+`POLICY_REPORT.md`, and the report's log line count the secrets it passed
+because nothing verified them.
+
+**What to do:** set `per_tool.trufflehog.verify: true` in `jmo.yml` to verify,
+and `zero-secrets` then blocks the live ones. `--only-verified`, or `--results`
+naming `verified`, in TruffleHog's flags counts as asking to verify.
+
+### Semgrep also skips tests, build output and vendored code
+
+Semgrep brings its own ignore list. When the scanned directory has no
+`.semgrepignore`, it skips `tests/` and `test/` at any depth, `build/`, `dist/`,
+`node_modules/`, `vendor/` and `.venv/`. JMo's own exclusions are passed on top of
+it, so a flaw that lives only in test code is not reported by Semgrep.
+
+Measured with Semgrep 1.175.0 on a fixture with one Python file in each of those
+directories and five others: it scanned the five others and none of these, inside a
+git work tree or not. No flag or environment variable turns the list off.
+
+It is kept because the only way around it is to write a `.semgrepignore` into the
+repository being scanned, and a scanner should not change the tree it reads.
+
+**What to do:** to have Semgrep read test code, put a `.semgrepignore` at the root
+of the scanned repository. An empty one disables the built-in list (measured: all
+13 files scanned). JMo still keeps the vendored trees and its results directory out
+through its own flags.
 
 ---
 
@@ -195,7 +279,7 @@ No findings are lost — anything not clustered is reported separately.
 **What to do:** lower `deduplication.similarity_threshold` toward `0.5` if you
 would rather over-cluster than under-cluster, or raise it toward `1.0` for the
 opposite. Values outside `0.5`–`1.0` are rejected at config load. How much
-clustering you see depends heavily on how much your profile's tools overlap: a
+clustering you see depends heavily on how much the tools that ran overlap: a
 scan whose tools examine different things (SBOM, secrets, SAST) will cluster
 very little, because there is nothing for them to agree on.
 
@@ -338,32 +422,11 @@ gh issue list --repo jimmy058910/jmo-security-repo --state open --label user-rea
   enumeration is exact and skips only the real results directory, so the tools
   that take file arguments — hadolint, shellcheck — are unaffected.
   [#1156](https://github.com/jimmy058910/jmo-security-repo/issues/1156)
-- **`kubescape` currently produces no findings on any scan**, and upgrading or
-  downgrading JMo will not change that. kubescape fetches its policy bundle at
-  scan time rather than shipping it, and the bundle now served contains a
-  control the pinned 4.0.12 binary cannot evaluate — so it exits 1 and writes an
-  empty file (`rego eval failed ... no ValidatingAdmissionPolicy for control
-  "C-0207"`), on a directory holding one valid Pod manifest and across four
-  invocation shapes. The same binary worked on 2026-09-01. JMo reports it
-  (`exited with an accepted code but wrote no output`), so no scan claims
-  Kubernetes coverage it does not have. Use `trivy config` for manifest scanning
-  meanwhile.
-  [#1211](https://github.com/jimmy058910/jmo-security-repo/issues/1211)
-- **`trivy-rbac` is skipped on most repositories that do have manifests.** Its
-  detection is three filename globs that match 1 of 5 real manifest names and
-  never look at `.yml` at all, so it reports "nothing for it to scan" on a tree
-  full of Kubernetes. It also cannot currently start (#1206).
-  [#1212](https://github.com/jimmy058910/jmo-security-repo/issues/1212)
 - **Three output rough edges:** the scan progress line is written even when
   stderr is redirected, so a captured log carries `\r` frames; the history
   database flag is `--history-db` on `scan` and `ci` but `--db` on `diff` and
   `history list`; bulk tool warnings arrive as one long JSON line.
   [#1082](https://github.com/jimmy058910/jmo-security-repo/issues/1082)
-- **An interrupted scan leaves horusec's staging copy** of the scanned tree in
-  `<repo>/.horusec/<uuid>/`, gigabytes on a large repository and not cleaned
-  up on Ctrl-C or a CI timeout. Delete it by hand and add `.horusec/` to your
-  `.gitignore`.
-  [#1088](https://github.com/jimmy058910/jmo-security-repo/issues/1088)
 - **`dashboard.html` embeds the scanning user's home directory** inside each
   finding's `raw` field, which is the tool's verbatim output. Review a
   dashboard produced on a personal machine before publishing it.

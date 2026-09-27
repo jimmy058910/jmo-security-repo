@@ -7,7 +7,7 @@ ensuring that JMo Security correctly detects expected vulnerabilities in
 well-known vulnerable applications.
 
 Requires:
-- Security tools installed (profile-dependent)
+- Security tools installed (`jmo tools install`)
 - Network access to clone target repositories
 - ~45 minutes runtime for full validation
 
@@ -77,8 +77,15 @@ def clone_target(repo_url: str, dest: Path, depth: int = 1) -> None:
     )
 
 
-def run_scan(target_path: Path, results_dir: Path, profile: str) -> int:
-    """Run JMo scan on a target directory."""
+def run_scan(target_path: Path, results_dir: Path) -> int:
+    """Run JMo scan on a target directory.
+
+    Real scanners, so HOME stays real: they, JMo's ~/.jmo/bin and isolated
+    venvs, and yara's ~/.jmo/yara-rules all resolve through it. The scan's two
+    writes outside its results are contained instead: history goes to a
+    temporary database, and the counter `_show_kofi_reminder` bumps in the real
+    ~/.jmo/config.yml (it has no injection point) is put back afterwards.
+    """
     cmd = [
         sys.executable,
         "-m",
@@ -88,11 +95,19 @@ def run_scan(target_path: Path, results_dir: Path, profile: str) -> int:
         str(target_path),
         "--results-dir",
         str(results_dir),
-        "--profile",
-        profile,
+        "--history-db",
+        str(results_dir.parent / "history.db"),
     ]
 
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
+    config = Path.home() / ".jmo" / "config.yml"
+    before = config.read_bytes() if config.exists() else None
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
+    finally:
+        if before is None:
+            config.unlink(missing_ok=True)
+        else:
+            config.write_bytes(before)
     return result.returncode
 
 
@@ -237,7 +252,6 @@ class TestBaselineValidation:
 
         baseline = load_baseline(baseline_path)
         target = baseline["metadata"]["target"]
-        profile = baseline["metadata"]["profile"]
 
         # Determine repo URL from target
         if "juice-shop" in target.lower():
@@ -255,7 +269,7 @@ class TestBaselineValidation:
         clone_target(repo_url, target_path)
 
         # Run scan
-        run_scan(target_path, results_dir, profile)
+        run_scan(target_path, results_dir)
 
         # Load and compare findings
         findings = load_findings(results_dir)
@@ -323,9 +337,6 @@ class TestBaselineSchemaValidation:
             assert "target" in metadata, f"{baseline_file.name} metadata missing target"
             assert "version" in metadata, (
                 f"{baseline_file.name} metadata missing version"
-            )
-            assert "profile" in metadata, (
-                f"{baseline_file.name} metadata missing profile"
             )
 
     def test_expected_findings_have_required_fields(self):

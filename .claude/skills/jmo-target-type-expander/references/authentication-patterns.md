@@ -31,23 +31,23 @@ cmd = ["tool", "scan", str(target)]
 - Requires pre-configuration
 - Less flexible than CLI args
 
-**Example: AWS Accounts**
+**Example: npm Packages (Snyk)**
 
 ```python
-def job_aws_account(account_id: str) -> tuple[str, dict[str, bool]]:
-    """Scan AWS account using credentials from environment."""
+def job_npm_package(package: str) -> tuple[str, dict[str, bool]]:
+    """Scan an npm package with Snyk, using a token from the environment."""
 
-    # Prowler uses standard AWS credential chain:
-    # 1. Environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
-    # 2. AWS CLI config (~/.aws/credentials)
-    # 3. IAM role (if running on EC2/ECS/Lambda)
+    # The Snyk CLI reads SNYK_TOKEN from the environment itself.
+    if not os.environ.get("SNYK_TOKEN"):
+        _log(args, "WARN", f"SNYK_TOKEN not set, skipping snyk for {package}")
+        return package, {}
 
     # No explicit credential passing needed
     cmd = [
-        "prowler",
-        "aws",
-        "--profile", account_id,  # Uses AWS CLI profile
-        # Credentials come from standard AWS credential chain
+        "snyk",
+        "test",
+        "--json",
+        # Credentials come from SNYK_TOKEN, never from the command line
     ]
 ```
 

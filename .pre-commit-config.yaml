@@ -24,12 +24,16 @@ repos:
       - id: check-toml
       - id: mixed-line-ending
       - id: detect-private-key
-        # Exclude test files with mock private keys (used to test redaction/parsing)
+        # Exclude test files with mock private keys (used to test redaction/parsing).
+        # The gitleaks golden fixture is raw SARIF from a scan of juice-shop, whose
+        # lib/insecurity.ts carries an intentionally leaked RSA key; the snippet
+        # is the finding, so it cannot be redacted without changing the fixture.
         exclude: |
           (?x)^(
             tests/unit/test_validation\.py|
             tests/adapters/test_noseyparker_adapter\.py|
-            tests/fixtures/samples/credential-patterns/config\.py
+            tests/fixtures/samples/credential-patterns/config\.py|
+            tests/fixtures/golden/gitleaks/.*\.json
           )$
       # Prevent committing very large files by mistake (limit also enforced by guardrails in CI)
       - id: check-added-large-files
@@ -108,6 +112,10 @@ repos:
     hooks:
       - id: shellcheck
         args: ["-S", "error", "-e", "SC2016,SC2028"]
+        # The contract-test sample is broken on purpose: shellcheck must find
+        # its issues (tests/integration/test_tool_contracts.py). It used to
+        # carry `disable=all` to pass here, which blinded that contract.
+        exclude: ^tests/fixtures/samples/
   - repo: https://github.com/scop/pre-commit-shfmt
     rev: v3.13.1-1
     hooks:
@@ -141,6 +149,13 @@ repos:
         language: system
         files: ^\.github/(workflows|actions)/.*\.ya?ml$
         entry: python3 scripts/dev/check_yaml_env_tilde.py
+        pass_filenames: false
+      - id: eol-flips
+        name: "eol-flips (no staged file changes its line endings, renames included)"
+        language: system
+        # The whole index at once: `mixed-line-ending` passes a file converted
+        # wholesale, and a per-file check cannot pair a rename.
+        entry: python3 scripts/dev/check_eol_flips.py --cached
         pass_filenames: false
 
   # Local hook: keep uv.lock consistent with pyproject.toml.

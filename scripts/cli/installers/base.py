@@ -1,7 +1,7 @@
 """Base installer protocol and common types.
 
 This module defines the Strategy pattern infrastructure for tool installation.
-Each concrete installer class handles one installation method (pip, brew, npm, etc.)
+Each concrete installer class handles one installation method (pip, binary, etc.)
 and implements the BaseInstaller interface.
 
 The pattern enables:
@@ -34,14 +34,10 @@ class InstallMethod(Enum):
     """
 
     PIP = "pip"
-    BREW = "brew"
     APT = "apt"
-    NPM = "npm"
     BINARY = "binary"
     SCRIPT = "script"
-    GIT_CLONE = "git_clone"
     EXTRACT_APP = "extract_app"
-    DOCKER = "docker"
     MANUAL = "manual"
 
 

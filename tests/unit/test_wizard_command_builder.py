@@ -15,8 +15,12 @@ Architecture Note:
 - Verifies volume mounting for Docker mode
 """
 
+from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
+
+from scripts.cli.jmo import build_parser
 from scripts.cli.wizard_flows.command_builder import (
     build_command_parts,
     build_gitlab_args,
@@ -26,6 +30,7 @@ from scripts.cli.wizard_flows.command_builder import (
     build_repo_args,
     build_url_args,
 )
+from scripts.cli.wizard_flows.config_models import WizardConfig
 from scripts.cli.wizard_generators import JMO_DOCKER_IMAGE_FULL
 
 # ========== Category 1: Repository Arguments ==========
@@ -65,50 +70,28 @@ def test_build_repo_args_targets_mode_native():
 
 
 def test_build_repo_args_tsv_mode_native():
-    """Test build_repo_args with TSV mode in native."""
-    target = MagicMock()
-    target.repo_mode = "tsv"
-    target.tsv_path = "./repos.tsv"
-    target.tsv_dest = "repos-tsv"
+    """The tsv command, parsed by `jmo scan`'s own parser.
 
-    args = build_repo_args(target, use_docker=False)
-
-    assert "--tsv" in args
-    assert "./repos.tsv" in args
-    assert "--dest" in args
-    assert "repos-tsv" in args
-
-
-def test_build_repo_args_tsv_mode_no_dest():
-    """Test build_repo_args with TSV mode without dest."""
-    target = MagicMock()
-    target.repo_mode = "tsv"
-    target.tsv_path = "./repos.tsv"
-    target.tsv_dest = None
-
-    args = build_repo_args(target, use_docker=False)
-
-    assert "--tsv" in args
-    assert "./repos.tsv" in args
-    assert "--dest" not in args
-
-
-def test_build_repo_args_tsv_mode_no_dest_attr():
-    """Test build_repo_args with TSV mode where tsv_dest attribute doesn't exist."""
-    target = MagicMock(spec=["repo_mode", "tsv_path"])  # No tsv_dest attr
+    This asserted `"--tsv" in args` for as long as `jmo scan` rejected the
+    command outright (#1299). `--dest` is always named: `jmo scan --tsv` has no
+    default destination, and the wizard's own default is `repos-tsv`.
+    """
+    target = WizardConfig().target
+    target.type = "repo"
     target.repo_mode = "tsv"
     target.tsv_path = "./repos.tsv"
 
-    args = build_repo_args(target, use_docker=False)
+    parsed = build_parser().parse_args(
+        ["scan", *build_repo_args(target, use_docker=False)]
+    )
 
-    assert "--tsv" in args
-    assert "./repos.tsv" in args
-    assert "--dest" not in args
+    assert (parsed.tsv, parsed.dest) == ("./repos.tsv", "repos-tsv")
 
 
 def test_build_repo_args_docker_mode(tmp_path):
     """Test build_repo_args with Docker volume mounting."""
     target = MagicMock()
+    target.repo_mode = "repos-dir"
     target.repo_path = str(tmp_path / "repos")
 
     args = build_repo_args(target, use_docker=True)
@@ -276,8 +259,9 @@ def test_build_gitlab_args_repo_mode():
 
     assert "--gitlab-url" in args
     assert "https://gitlab.com" in args
-    assert "--gitlab-token" in args
-    assert "token123" in args
+    # The token travels as GITLAB_TOKEN in the environment, never in argv
+    assert "--gitlab-token" not in args
+    assert "token123" not in args
     assert "--gitlab-repo" in args
     assert "mygroup/myrepo" in args
 
@@ -293,7 +277,7 @@ def test_build_gitlab_args_group_mode():
     args = build_gitlab_args(target, use_docker=False)
 
     assert "--gitlab-url" in args
-    assert "--gitlab-token" in args
+    assert "--gitlab-token" not in args
     assert "--gitlab-group" in args
     assert "mygroup" in args
     assert "--gitlab-repo" not in args
@@ -368,7 +352,6 @@ def test_build_command_parts_native_repo(tmp_path):
     """Test build_command_parts for native repo scan."""
     config = MagicMock()
     config.use_docker = False
-    config.profile = "balanced"
     config.results_dir = str(tmp_path / "results")
     config.threads = 4
     config.timeout = 600
@@ -385,44 +368,40 @@ def test_build_command_parts_native_repo(tmp_path):
     cmd = build_command_parts(config)
 
     assert cmd[0] == "jmo"
-    assert cmd[1] == "scan"
+    # A severity threshold makes it `jmo ci`: `jmo scan` defines no --fail-on
+    # (it abbreviates to --fail-on-store-error and HIGH is left unrecognised).
+    assert cmd[1] == "ci"
     assert "--repos-dir" in cmd
     assert "--results-dir" in cmd
     assert "--threads" in cmd
     assert "--timeout" in cmd
-    assert "--fail-on" in cmd
+    assert cmd[cmd.index("--fail-on") + 1] == "HIGH"
     assert "--allow-missing-tools" in cmd
     assert "--human-logs" in cmd
+    assert "--profile-name" not in cmd
 
 
 def test_build_command_parts_docker_repo(tmp_path):
     """Test build_command_parts for Docker repo scan."""
-    config = MagicMock()
+    config = WizardConfig()  # a MagicMock's attributes are truthy: all set
     config.use_docker = True
-    config.profile = "fast"
     config.results_dir = str(tmp_path / "results")
-
-    target = MagicMock()
-    target.type = "repo"
-    target.repo_path = str(tmp_path / "myrepo")
-    config.target = target
+    config.target.type = "repo"
+    config.target.repo_mode = "repos-dir"
+    config.target.repo_path = str(tmp_path / "myrepo")
 
     cmd = build_command_parts(config)
 
-    assert cmd[0] == "docker"
-    assert "run" in cmd
-    assert "--rm" in cmd
-    assert JMO_DOCKER_IMAGE_FULL in cmd
-    assert "scan" in cmd
-    assert "--profile-name" in cmd
-    assert "fast" in cmd
+    assert cmd[:3] == ["docker", "run", "--rm"]
+    assert cmd[cmd.index(JMO_DOCKER_IMAGE_FULL) + 1] == "scan"
+    assert cmd[cmd.index("--results-dir") + 1] == "/results"
+    assert "--profile-name" not in cmd
 
 
 def test_build_command_parts_native_image():
     """Test build_command_parts for native image scan."""
     config = MagicMock()
     config.use_docker = False
-    config.profile = "balanced"
     config.results_dir = "./results"
     config.threads = None
     config.timeout = None
@@ -438,17 +417,21 @@ def test_build_command_parts_native_image():
 
     cmd = build_command_parts(config)
 
-    assert "jmo" in cmd
-    assert "balanced" in cmd
-    assert "--image" in cmd
-    assert "nginx:latest" in cmd
+    # No threshold: a plain `jmo scan`, and nothing selects a profile
+    assert cmd == [
+        "jmo",
+        "scan",
+        "--image",
+        "nginx:latest",
+        "--results-dir",
+        "./results",
+    ]
 
 
 def test_build_command_parts_docker_volumes(tmp_path):
     """Test build_command_parts includes correct volume mounts for Docker."""
     config = MagicMock()
     config.use_docker = True
-    config.profile = "balanced"
     config.results_dir = str(tmp_path / "results")
 
     target = MagicMock()
@@ -471,7 +454,6 @@ def test_build_command_parts_docker_image(tmp_path):
     """Test build_command_parts for Docker mode with image target."""
     config = MagicMock()
     config.use_docker = True
-    config.profile = "fast"
     config.results_dir = str(tmp_path / "results")
 
     target = MagicMock()
@@ -494,7 +476,6 @@ def test_build_command_parts_docker_iac(tmp_path):
     """Test build_command_parts for Docker mode with IaC target."""
     config = MagicMock()
     config.use_docker = True
-    config.profile = "balanced"
     config.results_dir = str(tmp_path / "results")
 
     target = MagicMock()
@@ -515,7 +496,6 @@ def test_build_command_parts_docker_url(tmp_path):
     """Test build_command_parts for Docker mode with URL target."""
     config = MagicMock()
     config.use_docker = True
-    config.profile = "balanced"
     config.results_dir = str(tmp_path / "results")
 
     target = MagicMock()
@@ -536,7 +516,6 @@ def test_build_command_parts_docker_gitlab(tmp_path):
     """Test build_command_parts for Docker mode with GitLab target."""
     config = MagicMock()
     config.use_docker = True
-    config.profile = "balanced"
     config.results_dir = str(tmp_path / "results")
 
     target = MagicMock()
@@ -551,7 +530,8 @@ def test_build_command_parts_docker_gitlab(tmp_path):
 
     assert cmd[0] == "docker"
     assert "--gitlab-url" in cmd
-    assert "--gitlab-token" in cmd
+    assert "--gitlab-token" not in cmd
+    assert "secret" not in cmd
     assert "--gitlab-repo" in cmd
 
 
@@ -559,7 +539,6 @@ def test_build_command_parts_docker_k8s(tmp_path):
     """Test build_command_parts for Docker mode with Kubernetes target."""
     config = MagicMock()
     config.use_docker = True
-    config.profile = "balanced"
     config.results_dir = str(tmp_path / "results")
 
     target = MagicMock()
@@ -580,7 +559,6 @@ def test_build_command_parts_docker_unknown_target_type(tmp_path):
     """Test build_command_parts for Docker mode with unknown target type."""
     config = MagicMock()
     config.use_docker = True
-    config.profile = "balanced"
     config.results_dir = str(tmp_path / "results")
 
     target = MagicMock()
@@ -598,7 +576,6 @@ def test_build_command_parts_native_no_results_dir():
     """Test build_command_parts native mode without results_dir."""
     config = MagicMock()
     config.use_docker = False
-    config.profile = "fast"
     config.results_dir = None  # No results dir
     config.threads = None
     config.timeout = None
@@ -707,3 +684,142 @@ def test_build_repo_args_unknown_mode_native():
 
     # Unknown mode should return empty args (no match in if/elif chain)
     assert args == []
+
+
+# ========== Category 10: The Docker branch, through the real parser ==========
+#
+# Every assertion here parses the argv the image's `jmo` entrypoint receives.
+# Membership checks cannot tell a flag that parses from one that does not:
+# `"--tsv" in args` passed for a command `jmo scan` never accepted, and the
+# Docker branch passed `--repos-dir /scan` for a single repository, which scans
+# each subdirectory as its own repository and never the root's own files.
+
+
+def _docker_config(tmp_path: Path, repo_mode: str, fail_on: str = "") -> WizardConfig:
+    config = WizardConfig()
+    config.use_docker = True
+    config.results_dir = str(tmp_path / "results")
+    config.fail_on = fail_on
+    config.target.type = "repo"
+    config.target.repo_mode = repo_mode
+    config.target.repo_path = str(tmp_path / "repo")
+    return config
+
+
+def _entrypoint_argv(cmd: list[str]) -> list[str]:
+    """What follows the image name: the argv `jmo` itself parses."""
+    return cmd[cmd.index(JMO_DOCKER_IMAGE_FULL) + 1 :]
+
+
+def _mounts(cmd: list[str]) -> list[str]:
+    return [cmd[i + 1] for i, arg in enumerate(cmd) if arg == "-v"]
+
+
+def test_docker_repo_mode_scans_the_mount_as_one_repository(tmp_path):
+    config = _docker_config(tmp_path, "repo")
+
+    cmd = build_command_parts(config)
+    parsed = build_parser().parse_args(_entrypoint_argv(cmd))
+
+    assert parsed.repo == "/scan"
+    assert parsed.repos_dir is None
+    assert f"{(tmp_path / 'repo').resolve()}:/scan" in _mounts(cmd)
+
+
+def test_docker_repos_dir_mode_keeps_repos_dir(tmp_path):
+    config = _docker_config(tmp_path, "repos-dir")
+
+    parsed = build_parser().parse_args(_entrypoint_argv(build_command_parts(config)))
+
+    assert parsed.repos_dir == "/scan"
+    assert parsed.repo is None
+
+
+def test_docker_targets_mode_is_refused_with_the_reason(tmp_path):
+    """A targets file lists host paths, and the container sees only its mounts."""
+    config = _docker_config(tmp_path, "targets")
+
+    with pytest.raises(ValueError, match="targets") as err:
+        build_command_parts(config)
+
+    assert "container" in str(err.value)
+
+
+def test_docker_tsv_mode_clones_into_the_asked_for_destination(tmp_path):
+    """The Docker branch passed no target at all for tsv mode (#1299).
+
+    The TSV is mounted read-only. Clones go to the destination the wizard
+    asked for, mounted at /repos-tsv, so they persist between runs and a
+    second run fast-forwards them; not under /results, which a CI job
+    uploads whole.
+    """
+    config = _docker_config(tmp_path, "tsv")
+    config.target.tsv_path = str(tmp_path / "repos.tsv")
+    config.target.tsv_dest = str(tmp_path / "clones")
+
+    cmd = build_command_parts(config)
+    parsed = build_parser().parse_args(_entrypoint_argv(cmd))
+
+    assert (parsed.tsv, parsed.dest) == ("/repos.tsv", "/repos-tsv")
+    assert f"{(tmp_path / 'repos.tsv').resolve()}:/repos.tsv:ro" in _mounts(cmd)
+    assert f"{(tmp_path / 'clones').resolve()}:/repos-tsv" in _mounts(cmd)
+
+
+def test_docker_threshold_runs_jmo_ci(tmp_path):
+    """`jmo scan` has no --fail-on; the Docker branch dropped the threshold."""
+    config = _docker_config(tmp_path, "repo", fail_on="high")
+
+    parsed = build_parser().parse_args(_entrypoint_argv(build_command_parts(config)))
+
+    assert parsed.cmd == "ci"
+    assert parsed.fail_on == "HIGH"
+    assert parsed.repo == "/scan"
+
+
+def test_docker_without_a_threshold_stays_a_scan(tmp_path):
+    config = _docker_config(tmp_path, "repo")
+
+    parsed = build_parser().parse_args(_entrypoint_argv(build_command_parts(config)))
+
+    assert parsed.cmd == "scan"
+
+
+def test_docker_carries_the_advanced_settings(tmp_path):
+    """The Docker branch dropped all four; only the native one emitted them."""
+    config = _docker_config(tmp_path, "repo")
+    config.threads = 4
+    config.timeout = 600
+    config.allow_missing_tools = True
+    config.human_logs = True
+
+    parsed = build_parser().parse_args(_entrypoint_argv(build_command_parts(config)))
+
+    assert (parsed.threads, parsed.timeout) == (4, 600)
+    assert parsed.allow_missing_tools is True
+    assert parsed.human_logs is True
+
+
+def _gitlab_config(tmp_path: Path, use_docker: bool) -> WizardConfig:
+    config = WizardConfig()
+    config.use_docker = use_docker
+    config.results_dir = str(tmp_path / "results")
+    config.target.type = "gitlab"
+    config.target.gitlab_repo = "group/project"
+    config.target.gitlab_token = "glpat-SECRET"
+    return config
+
+
+@pytest.mark.parametrize("use_docker", [False, True], ids=["native", "docker"])
+def test_the_gitlab_token_is_never_on_the_command_line(tmp_path, use_docker):
+    """The wizard printed it, and `--emit-script`/`--emit-make` wrote it to disk.
+
+    `jmo` reads GITLAB_TOKEN from the environment, so the command needs only
+    the name: Docker forwards it with a bare `-e GITLAB_TOKEN`.
+    """
+    cmd = build_command_parts(_gitlab_config(tmp_path, use_docker))
+
+    assert not any("glpat-SECRET" in part for part in cmd)
+    assert "--gitlab-token" not in cmd
+    if use_docker:
+        image = cmd.index(JMO_DOCKER_IMAGE_FULL)
+        assert ["-e", "GITLAB_TOKEN"] in [cmd[i : i + 2] for i in range(image)]

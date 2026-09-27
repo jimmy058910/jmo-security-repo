@@ -83,7 +83,6 @@ def sample_database(tmp_path):
             is_dirty INTEGER DEFAULT 0,
             branch TEXT,
             tag TEXT,
-            profile TEXT NOT NULL,
             tools TEXT NOT NULL,
             critical_count INTEGER DEFAULT 0,
             high_count INTEGER DEFAULT 0,
@@ -118,9 +117,9 @@ def sample_database(tmp_path):
 
     conn.execute(
         """
-        INSERT INTO scans (id, timestamp, timestamp_iso, commit_hash, commit_short, is_dirty, branch, tag, profile, tools,
+        INSERT INTO scans (id, timestamp, timestamp_iso, commit_hash, commit_short, is_dirty, branch, tag, tools,
                          critical_count, high_count, medium_count, low_count, info_count, total_findings, duration_seconds)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             "scan1",
@@ -131,7 +130,6 @@ def sample_database(tmp_path):
             0,
             "main",
             "v1.0.0",
-            "balanced",
             '["trivy", "semgrep"]',
             0,
             1,
@@ -145,9 +143,9 @@ def sample_database(tmp_path):
 
     conn.execute(
         """
-        INSERT INTO scans (id, timestamp, timestamp_iso, commit_hash, commit_short, is_dirty, branch, tag, profile, tools,
+        INSERT INTO scans (id, timestamp, timestamp_iso, commit_hash, commit_short, is_dirty, branch, tag, tools,
                          critical_count, high_count, medium_count, low_count, info_count, total_findings, duration_seconds)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             "scan2",
@@ -158,7 +156,6 @@ def sample_database(tmp_path):
             1,
             "develop",
             None,
-            "fast",
             '["trivy", "trufflehog"]',
             1,
             2,
@@ -294,7 +291,6 @@ class TestCmdHistoryStore:
             results_dir = str(sample_results_dir)
             db = str(db_path)
             tools = ["trivy", "semgrep"]
-            profile = "balanced"
             commit = "abc123"
             branch = "main"
             tag = "v1.0.0"
@@ -320,7 +316,6 @@ class TestCmdHistoryStore:
             results_dir = "/nonexistent/results"
             db = str(db_path)
             tools = ["trivy"]
-            profile = "balanced"
             commit = None
             branch = None
             tag = None
@@ -339,7 +334,6 @@ class TestCmdHistoryStore:
             results_dir = str(sample_results_dir)
             db = str(db_path)
             tools = None  # Auto-detect
-            profile = "balanced"
             commit = None
             branch = None
             tag = None
@@ -368,7 +362,6 @@ class TestCmdHistoryStore:
             results_dir = str(results_dir_path)
             db = str(db_path)
             tools = None  # Will try to auto-detect
-            profile = "balanced"
             commit = None
             branch = None
             tag = None
@@ -395,7 +388,6 @@ class TestCmdHistoryList:
         class Args:
             db = str(sample_database)
             branch = None
-            profile = None
             since = None
             limit = 50
             json = False
@@ -413,7 +405,6 @@ class TestCmdHistoryList:
         class Args:
             db = str(sample_database)
             branch = None
-            profile = None
             since = None
             limit = 50
             json = True
@@ -428,7 +419,6 @@ class TestCmdHistoryList:
         class Args:
             db = str(sample_database)
             branch = "main"
-            profile = None
             since = None
             limit = 50
             json = False
@@ -440,30 +430,12 @@ class TestCmdHistoryList:
         # Should only show main branch scans
         assert "main" in captured.out
 
-    def test_list_filter_by_profile(self, sample_database, capsys):
-        """Test filtering scans by profile."""
-
-        class Args:
-            db = str(sample_database)
-            branch = None
-            profile = "balanced"
-            since = None
-            limit = 50
-            json = False
-
-        result = cmd_history_list(Args())
-
-        assert result == 0
-        captured = capsys.readouterr()
-        assert "balanced" in captured.out
-
     def test_list_filter_by_since(self, sample_database, capsys):
         """Test filtering scans by time (since)."""
 
         class Args:
             db = str(sample_database)
             branch = None
-            profile = None
             since = "1h"  # Last hour only
             limit = 50
             json = False
@@ -479,7 +451,6 @@ class TestCmdHistoryList:
         class Args:
             db = str(tmp_path / "nonexistent.db")
             branch = None
-            profile = None
             since = None
             limit = 50
             json = False
@@ -505,7 +476,6 @@ class TestCmdHistoryList:
                 is_dirty INTEGER DEFAULT 0,
                 branch TEXT,
                 tag TEXT,
-                profile TEXT NOT NULL,
                 tools TEXT NOT NULL,
                 critical_count INTEGER DEFAULT 0,
                 high_count INTEGER DEFAULT 0,
@@ -522,7 +492,6 @@ class TestCmdHistoryList:
         class Args:
             db = str(db_path)
             branch = None
-            profile = None
             since = None
             limit = 50
             json = False
@@ -558,8 +527,9 @@ class TestCmdHistoryShow:
         assert "scan1" in captured.out
         assert "Scan:" in captured.out
         assert "Timestamp:" in captured.out
-        assert "Profile:" in captured.out
-        assert "balanced" in captured.out
+        assert "Tools:" in captured.out
+        assert "trivy" in captured.out
+        assert "Profile:" not in captured.out
 
     def test_show_success_json_format(self, sample_database, capsys):
         """Test showing scan details in JSON format."""
@@ -576,7 +546,7 @@ class TestCmdHistoryShow:
         captured = capsys.readouterr()
         data = json.loads(captured.out)
         assert data["id"] == "scan1"
-        assert data["profile"] == "balanced"
+        assert data["branch"] == "main"
 
     def test_show_with_findings(self, sample_database, capsys):
         """Test showing scan with findings included."""
@@ -654,7 +624,7 @@ class TestCmdHistoryQuery:
 
         class Args:
             db = str(sample_database)
-            query = "SELECT id, branch, profile FROM scans"
+            query = "SELECT id, branch, tools FROM scans"
             format = "table"
 
         result = cmd_history_query(Args())
@@ -1325,7 +1295,6 @@ class TestCmdHistory:
             results_dir = str(sample_results_dir)
             db = str(tmp_path / "test.db")
             tools = ["trivy"]
-            profile = "balanced"
             commit = None
             branch = None
             tag = None
@@ -1341,7 +1310,6 @@ class TestCmdHistory:
             history_command = "list"
             db = str(sample_database)
             branch = None
-            profile = None
             since = None
             limit = 50
             json = False
@@ -1500,7 +1468,6 @@ class TestListExceptionHandling:
         class Args:
             db = str(bad_db)
             limit = 10
-            profile = None
             branch = None
             json = False
 
@@ -1846,7 +1813,6 @@ class TestStoreCommand:
         class Args:
             db = str(sample_database)
             results_dir = "/nonexistent/path/to/results"
-            profile = "fast"
             tools = ["trivy"]
             commit_hash = None
             branch = None
@@ -1918,9 +1884,10 @@ class TestListJsonOnEmptyResult:
     The empty check returned before the format branch, so `--json` printed the
     prose "No scans found." with rc=0. Every consumer doing json.loads() got
     `Expecting value: line 1 column 1 (char 0)`. Reproduced against the real
-    database on three independent filters -- `--profile slim`, `--since 1d`
-    and `--branch <nonexistent>`. `history export` already returned [] here,
-    so the two halves of the same command group disagreed.
+    database on three independent filters -- `--profile slim` (a filter that
+    left with scan profiles in v2.0.0), `--since 1d` and
+    `--branch <nonexistent>`. `history export` already returned [] here, so
+    the two halves of the same command group disagreed.
     """
 
     @staticmethod
@@ -1931,7 +1898,6 @@ class TestListJsonOnEmptyResult:
         a = Args()
         a.db = str(db)
         a.branch = None
-        a.profile = None
         a.since = None
         a.limit = 50
         a.json = True
@@ -2160,7 +2126,6 @@ class TestReadPathDoesNotWriteToTheDatabase:
         args = Args()
         args.db = str(sample_database)
         args.branch = None
-        args.profile = None
         args.since = None
         args.limit = 50
         args.json = True
@@ -2362,7 +2327,7 @@ class TestStatsDisclosesWhatItLeftOut:
         conn.execute("""
             CREATE TABLE scans (
                 id TEXT PRIMARY KEY, timestamp INTEGER NOT NULL,
-                timestamp_iso TEXT NOT NULL, branch TEXT, profile TEXT NOT NULL,
+                timestamp_iso TEXT NOT NULL, branch TEXT,
                 tools TEXT NOT NULL, total_findings INTEGER DEFAULT 0
             )
             """)
@@ -2377,15 +2342,15 @@ class TestStatsDisclosesWhatItLeftOut:
         # 14 distinct branches -- more than the LIMIT 10.
         for i in range(14):
             conn.execute(
-                "INSERT INTO scans (id, timestamp, timestamp_iso, branch, profile, tools)"
-                " VALUES (?, ?, ?, ?, 'fast', 'bandit')",
+                "INSERT INTO scans (id, timestamp, timestamp_iso, branch, tools)"
+                " VALUES (?, ?, ?, ?, 'bandit')",
                 (f"b{i}", now, "2026-01-01T00:00:00+00:00", f"branch-{i:02d}"),
             )
         # 7 scans with no branch recorded -- the #780 shape.
         for i in range(7):
             conn.execute(
-                "INSERT INTO scans (id, timestamp, timestamp_iso, branch, profile, tools)"
-                " VALUES (?, ?, ?, NULL, 'fast', 'bandit')",
+                "INSERT INTO scans (id, timestamp, timestamp_iso, branch, tools)"
+                " VALUES (?, ?, ?, NULL, 'bandit')",
                 (f"n{i}", now, "2026-01-01T00:00:00+00:00"),
             )
         # 12 distinct tools -- more than the LIMIT 10.

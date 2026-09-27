@@ -29,9 +29,14 @@ _T = TypeVar("_T")
 # including if a fourth option joins it.
 #
 # Only the first two are reachable from a schedule today: no consumer emits
-# `--targets`. It is listed because the authority lists it, not because a
-# generator uses it.
-MUTUALLY_EXCLUSIVE_REPOSITORY_KEYS: tuple[str, ...] = ("repo", "repos_dir", "targets")
+# `--targets` or `--tsv`. They are listed because the authority lists them, not
+# because a generator uses them.
+MUTUALLY_EXCLUSIVE_REPOSITORY_KEYS: tuple[str, ...] = (
+    "repo",
+    "repos_dir",
+    "targets",
+    "tsv",
+)
 
 # The `targets["repositories"]` key each scan flag corresponds to. Keeping the
 # mapping explicit is what lets the test compare two vocabularies without
@@ -40,6 +45,7 @@ REPOSITORY_KEY_TO_SCAN_FLAG: dict[str, str] = {
     "repo": "--repo",
     "repos_dir": "--repos-dir",
     "targets": "--targets",
+    "tsv": "--tsv",
 }
 
 
@@ -94,7 +100,6 @@ class BackendConfig:
 class JobTemplateSpec:
     """Scan job specification."""
 
-    profile: str
     targets: dict[str, Any]
     results: dict[str, Any]
     options: dict[str, Any]
@@ -116,9 +121,7 @@ class ScheduleSpec:
         default_factory=lambda: BackendConfig(type="github-actions")
     )
     jobTemplate: JobTemplateSpec = field(
-        default_factory=lambda: JobTemplateSpec(
-            profile="balanced", targets={}, results={}, options={}
-        )
+        default_factory=lambda: JobTemplateSpec(targets={}, results={}, options={})
     )
 
 
@@ -147,7 +150,7 @@ class ScanSchedule:
     spec: ScheduleSpec = field(
         default_factory=lambda: ScheduleSpec(
             schedule="",
-            jobTemplate=JobTemplateSpec(profile="", targets={}, results={}, options={}),
+            jobTemplate=JobTemplateSpec(targets={}, results={}, options={}),
         )
     )
     status: ScheduleStatus = field(default_factory=lambda: ScheduleStatus())
@@ -161,7 +164,6 @@ class ScanSchedule:
         cls,
         name: str,
         cron: str,
-        profile: str,
         repos_dir: str | None = None,
         backend: str = "github-actions",
         labels: dict[str, str] | None = None,
@@ -174,7 +176,6 @@ class ScanSchedule:
         ScanSchedule.from_simple_args(
             name="nightly-scan",
             cron="0 2 * * *",
-            profile="balanced",
             repos_dir="~/repos",
             labels={"env": "prod"}
         )
@@ -186,7 +187,6 @@ class ScanSchedule:
             spec=ScheduleSpec(
                 schedule="0 2 * * *",
                 jobTemplate=JobTemplateSpec(
-                    profile="balanced",
                     targets={"repos_dir": "~/repos"},
                     ...
                 )
@@ -271,6 +271,19 @@ class ScanSchedule:
         if "description" in kwargs:
             annotations["description"] = kwargs.pop("description")
 
+        backend_config = kwargs.pop("backend_config", {})
+        timezone = kwargs.pop("timezone", "UTC")
+        suspend = kwargs.pop("suspend", False)
+
+        # Whatever is left was read by nothing above. It used to be dropped, so
+        # a typo, or `profile=` after v2.0.0 removed profiles, built a schedule
+        # silently missing what the caller asked for (#1277).
+        if kwargs:
+            raise TypeError(
+                "from_simple_args() got unexpected keyword argument(s): "
+                + ", ".join(sorted(kwargs))
+            )
+
         # Create nested structure
         return cls(
             metadata=ScheduleMetadata(
@@ -280,17 +293,14 @@ class ScanSchedule:
             ),
             spec=ScheduleSpec(
                 schedule=cron,
-                backend=BackendConfig(
-                    type=backend, config=kwargs.pop("backend_config", {})
-                ),
+                backend=BackendConfig(type=backend, config=backend_config),
                 jobTemplate=JobTemplateSpec(
-                    profile=profile,
                     targets=targets,
                     results=results,
                     options=options,
                 ),
-                timezone=kwargs.pop("timezone", "UTC"),
-                suspend=kwargs.pop("suspend", False),
+                timezone=timezone,
+                suspend=suspend,
             ),
         )
 
@@ -499,9 +509,14 @@ class ScheduleManager:
         backend = self._rehydrate(
             BackendConfig, data["spec"]["backend"], where="spec.backend", name=name
         )
+        # A schedule stored before v2.0.0 carries the scan profile it ran.
+        # Profiles are gone, so the key is dropped here rather than reported by
+        # _rehydrate as "written by a newer version", which it was not.
+        job_data = dict(data["spec"]["jobTemplate"])
+        job_data.pop("profile", None)
         job_template = self._rehydrate(
             JobTemplateSpec,
-            data["spec"]["jobTemplate"],
+            job_data,
             where="spec.jobTemplate",
             name=name,
         )

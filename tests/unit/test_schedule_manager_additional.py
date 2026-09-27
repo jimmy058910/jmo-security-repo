@@ -25,7 +25,6 @@ def test_schedule_manager_list_with_label_filtering(tmp_path):
     schedule1 = ScanSchedule.from_simple_args(
         name="nightly-api",
         cron="0 2 * * *",
-        profile="balanced",
         repos_dir="~/repos/api",
         backend="github-actions",
         labels={"env": "production", "team": "backend"},
@@ -33,7 +32,6 @@ def test_schedule_manager_list_with_label_filtering(tmp_path):
     schedule2 = ScanSchedule.from_simple_args(
         name="weekly-frontend",
         cron="0 3 * * 0",
-        profile="deep",
         repos_dir="~/repos/frontend",
         backend="github-actions",
         labels={"env": "staging", "team": "frontend"},
@@ -41,7 +39,6 @@ def test_schedule_manager_list_with_label_filtering(tmp_path):
     schedule3 = ScanSchedule.from_simple_args(
         name="daily-mobile",
         cron="0 4 * * *",
-        profile="fast",
         repos_dir="~/repos/mobile",
         backend="local-cron",
         labels={"env": "production", "team": "mobile"},
@@ -80,14 +77,12 @@ def test_schedule_manager_list_without_labels_returns_all(tmp_path):
     schedule1 = ScanSchedule.from_simple_args(
         name="sched1",
         cron="0 1 * * *",
-        profile="fast",
         repos_dir="~/repos",
         backend="github-actions",
     )
     schedule2 = ScanSchedule.from_simple_args(
         name="sched2",
         cron="0 2 * * *",
-        profile="balanced",
         repos_dir="~/repos",
         backend="local-cron",
     )
@@ -107,7 +102,6 @@ def test_schedule_manager_update(tmp_path):
     schedule = ScanSchedule.from_simple_args(
         name="nightly",
         cron="0 2 * * *",
-        profile="balanced",
         repos_dir="~/repos",
         backend="github-actions",
         description="Original description",
@@ -116,20 +110,20 @@ def test_schedule_manager_update(tmp_path):
 
     # Update schedule
     schedule.spec.schedule = "0 3 * * *"
-    schedule.spec.jobTemplate.profile = "deep"
+    schedule.spec.jobTemplate.options = {"threads": 8}
     # description is stored in annotations in v0.9.0
     schedule.metadata.annotations["description"] = "Updated description"
     updated = manager.update(schedule)
 
     # Verify update
     assert updated.spec.schedule == "0 3 * * *"
-    assert updated.spec.jobTemplate.profile == "deep"
+    assert updated.spec.jobTemplate.options == {"threads": 8}
     assert updated.metadata.annotations.get("description") == "Updated description"
 
     # Verify persistence
     retrieved = manager.get("nightly")
     assert retrieved.spec.schedule == "0 3 * * *"
-    assert retrieved.spec.jobTemplate.profile == "deep"
+    assert retrieved.spec.jobTemplate.options == {"threads": 8}
 
 
 def test_schedule_manager_update_nonexistent(tmp_path):
@@ -139,7 +133,6 @@ def test_schedule_manager_update_nonexistent(tmp_path):
     schedule = ScanSchedule.from_simple_args(
         name="nonexistent",
         cron="0 2 * * *",
-        profile="balanced",
         repos_dir="~/repos",
         backend="github-actions",
     )
@@ -155,7 +148,6 @@ def test_schedule_manager_delete(tmp_path):
     schedule = ScanSchedule.from_simple_args(
         name="to-delete",
         cron="0 2 * * *",
-        profile="balanced",
         repos_dir="~/repos",
         backend="github-actions",
     )
@@ -188,14 +180,12 @@ def test_schedule_manager_delete_from_multiple(tmp_path):
     schedule1 = ScanSchedule.from_simple_args(
         name="keep",
         cron="0 1 * * *",
-        profile="fast",
         repos_dir="~/repos",
         backend="github-actions",
     )
     schedule2 = ScanSchedule.from_simple_args(
         name="delete",
         cron="0 2 * * *",
-        profile="balanced",
         repos_dir="~/repos",
         backend="local-cron",
     )
@@ -217,7 +207,6 @@ def test_scan_schedule_to_dict():
     schedule = ScanSchedule.from_simple_args(
         name="test",
         cron="0 2 * * *",
-        profile="balanced",
         repos_dir="~/repos",
         backend="github-actions",
         description="Test schedule",
@@ -229,7 +218,7 @@ def test_scan_schedule_to_dict():
     # v0.9.0 uses Kubernetes-style nested structure
     assert data["metadata"]["name"] == "test"
     assert data["spec"]["schedule"] == "0 2 * * *"
-    assert data["spec"]["jobTemplate"]["profile"] == "balanced"
+    assert "profile" not in data["spec"]["jobTemplate"]
     # Nested, because that is the shape every consumer reads. This asserted the
     # flat `targets["repos_dir"]`, which no generator and no cron installer has
     # ever looked at -- so a schedule built this way exported a workflow with no
@@ -250,7 +239,6 @@ def test_schedule_manager_to_dict_from_dict_round_trip(tmp_path):
     original = ScanSchedule.from_simple_args(
         name="round-trip",
         cron="0 2 * * *",
-        profile="deep",
         repos_dir="~/repos",
         backend="local-cron",
         description="Round-trip test",
@@ -266,7 +254,7 @@ def test_schedule_manager_to_dict_from_dict_round_trip(tmp_path):
     # Verify equivalence
     assert restored.metadata.name == original.metadata.name
     assert restored.spec.schedule == original.spec.schedule
-    assert restored.spec.jobTemplate.profile == original.spec.jobTemplate.profile
+    assert restored.spec.jobTemplate == original.spec.jobTemplate
     assert restored.spec.jobTemplate.targets.get(
         "repos_dir"
     ) == original.spec.jobTemplate.targets.get("repos_dir")
@@ -282,7 +270,6 @@ def test_schedule_manager_label_filtering_with_none_labels(tmp_path):
     schedule_with_labels = ScanSchedule.from_simple_args(
         name="with-labels",
         cron="0 1 * * *",
-        profile="fast",
         repos_dir="~/repos",
         backend="github-actions",
         labels={"env": "prod"},
@@ -290,7 +277,6 @@ def test_schedule_manager_label_filtering_with_none_labels(tmp_path):
     schedule_without_labels = ScanSchedule.from_simple_args(
         name="without-labels",
         cron="0 2 * * *",
-        profile="balanced",
         repos_dir="~/repos",
         backend="local-cron",
         labels=None,
@@ -312,7 +298,6 @@ def test_schedule_manager_update_labels(tmp_path):
     schedule = ScanSchedule.from_simple_args(
         name="update-labels",
         cron="0 2 * * *",
-        profile="balanced",
         repos_dir="~/repos",
         backend="github-actions",
         labels={"env": "staging"},
@@ -338,7 +323,6 @@ def test_schedule_manager_delete_all(tmp_path):
         schedule = ScanSchedule.from_simple_args(
             name=f"sched{i}",
             cron=f"0 {i} * * *",
-            profile="fast",
             repos_dir="~/repos",
             backend="github-actions",
         )

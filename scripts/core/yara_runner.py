@@ -48,6 +48,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from scripts.core.tool_descriptors import VENDORED_DIRS
+
 EXIT_CLEAN = 0
 EXIT_MATCHES = 1
 EXIT_ERROR = 2
@@ -55,9 +57,9 @@ EXIT_ERROR = 2
 RULE_SUFFIXES = (".yar", ".yara")
 
 # Repositories vendor dependencies; scanning node_modules or a bundled venv
-# buries the repo's own findings in third-party noise. Mirrors the set in
-# scripts/cli/scan_jobs/repository_scanner.py.
-SKIP_DIRS = {".git", "node_modules", "vendor", ".venv", "venv"}
+# buries the repo's own findings in third-party noise. The one list every
+# tool's exclusions are rendered from (this was a copy of it).
+SKIP_DIRS = frozenset(VENDORED_DIRS)
 
 # yara on a multi-gigabyte artifact costs minutes and finds nothing a rule set
 # aimed at source trees would catch. Skipped files are counted and reported.
@@ -170,8 +172,14 @@ def compile_rules(
         return None, 0, rule_files
 
 
-def iter_target_files(target: Path, max_bytes: int) -> tuple[list[Path], int]:
+def iter_target_files(
+    target: Path, max_bytes: int, exclude_dirs: frozenset[str] = frozenset()
+) -> tuple[list[Path], int]:
     """Walk `target`, pruning vendored trees. Returns (files, skipped_too_large).
+
+    `exclude_dirs` adds directory names to prune: the scan passes JMo's own
+    results directory when it sits inside the tree, which yara read back on
+    every later scan (#1235).
 
     Pruning happens *during* traversal via the in-place ``dirnames[:]``
     mutation, not by filtering paths afterwards. The post-filter form stats
@@ -179,10 +187,11 @@ def iter_target_files(target: Path, max_bytes: int) -> tuple[list[Path], int]:
     farms and raised WinError 1920 on Windows while merely timing out on Linux -
     one cause, two symptoms that point nowhere near it (commit ded93df).
     """
+    skip = SKIP_DIRS | exclude_dirs
     files: list[Path] = []
     too_large = 0
     for dirpath, dirnames, filenames in os.walk(target):
-        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        dirnames[:] = [d for d in dirnames if d not in skip]
         for name in filenames:
             path = Path(dirpath) / name
             try:
@@ -238,6 +247,13 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         default=DEFAULT_MAX_FILE_BYTES,
         help=f"Skip files larger than this (default: {DEFAULT_MAX_FILE_BYTES})",
     )
+    parser.add_argument(
+        "--exclude-dir",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help="A directory name to skip at any depth (repeatable)",
+    )
     return parser.parse_args(argv)
 
 
@@ -285,7 +301,9 @@ def main(argv: list[str] | None = None) -> int:
             f"yara: compiled {compiled} rule file(s), skipped {len(skipped)} that would not build"
         )
 
-    files, unreadable = iter_target_files(target, args.max_file_bytes)
+    files, unreadable = iter_target_files(
+        target, args.max_file_bytes, frozenset(args.exclude_dir)
+    )
 
     matches: list[dict[str, Any]] = []
     errored = 0

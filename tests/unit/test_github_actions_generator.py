@@ -42,7 +42,6 @@ def basic_schedule():
             suspend=False,
             backend=BackendConfig(type="github-actions"),
             jobTemplate=JobTemplateSpec(
-                profile="balanced",
                 targets={"repositories": {"repos_dir": "~/repos"}},
                 options={},
                 results={},
@@ -88,7 +87,6 @@ def test_multi_target_support():
             suspend=False,
             backend=BackendConfig(type="github-actions"),
             jobTemplate=JobTemplateSpec(
-                profile="deep",
                 targets={
                     "repositories": {"repos_dir": "~/repos"},
                     "images": ["nginx:latest", "postgres:15"],
@@ -131,7 +129,8 @@ def test_multi_target_support():
     assert "--gitlab-token" in scan_cmd
     assert "--k8s-context prod" in scan_cmd
     assert "--k8s-namespace default" in scan_cmd
-    assert "--profile-name deep" in scan_cmd
+    # v2.0.0 has no scan profiles; `jmo scan` rejects --profile-name (exit 2).
+    assert "--profile-name" not in scan_cmd
 
 
 def test_notification_steps():
@@ -149,7 +148,6 @@ def test_notification_steps():
             suspend=False,
             backend=BackendConfig(type="github-actions"),
             jobTemplate=JobTemplateSpec(
-                profile="balanced",
                 targets={"repositories": {"repos_dir": "~/repos"}},
                 options={},
                 results={},
@@ -223,7 +221,6 @@ def test_artifact_upload_step():
             suspend=False,
             backend=BackendConfig(type="github-actions"),
             jobTemplate=JobTemplateSpec(
-                profile="balanced",
                 targets={"repositories": {"repos_dir": "~/repos"}},
                 options={},
                 results={"retention_days": 30},
@@ -263,7 +260,6 @@ def test_cron_trigger():
             suspend=False,
             backend=BackendConfig(type="github-actions"),
             jobTemplate=JobTemplateSpec(
-                profile="fast",
                 targets={"repositories": {"repos_dir": "~/repos"}},
                 options={},
                 results={},

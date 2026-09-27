@@ -29,7 +29,7 @@ Registry Rule Categories:
 - best-practices: Code quality and patterns
 - correctness: Bug detection
 - performance: Performance anti-patterns
-- secrets: Hardcoded credentials (see semgrep_secrets_adapter)
+- secrets: Hardcoded credentials
 
 Severity Mapping (Semgrep -> CommonFinding):
 - ERROR: HIGH
@@ -48,7 +48,6 @@ Example:
 See Also:
     - https://semgrep.dev/
     - Semgrep Registry (semgrep.dev/explore)
-    - semgrep_secrets_adapter.py for secrets-focused scanning
 """
 
 from __future__ import annotations

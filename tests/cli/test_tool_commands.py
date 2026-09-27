@@ -4,8 +4,8 @@
 This test suite validates CLI tool commands:
 1. Colors class and colorize function
 2. cmd_tools dispatcher
-3. cmd_tools_check for status verification
-4. cmd_tools_list for tool/profile listing
+3. cmd_tools_check for status verification (the scan matrix plus the policy engine)
+4. cmd_tools_list for tool listing
 5. cmd_tools_outdated for detecting stale tools
 6. install script generation
 7. cmd_tools_debug for version detection debugging
@@ -22,6 +22,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from scripts.cli.tool_commands import cmd_tools_uninstall
+from scripts.core.tool_registry import POLICY_ENGINE, TOOL_MATRIX
 
 # ========== Category 1: Colors Class ==========
 
@@ -247,7 +248,6 @@ def test_cmd_tools_check_specific_tools():
 
     args = argparse.Namespace(
         tools=["trivy", "semgrep"],
-        profile=None,
         json=False,
     )
 
@@ -260,32 +260,41 @@ def test_cmd_tools_check_specific_tools():
     assert result == 0
 
 
-def test_cmd_tools_check_json_output_profile_summary():
-    """Test cmd_tools_check JSON output for profile summary.
+def test_cmd_tools_check_json_output_reports_missing_matrix_tools_through_exit_code():
+    """The no-argument JSON form still fails when a matrix tool is missing.
 
     This asserted `result == 0` while mocking two *missing* tools, which pinned
     the defect fixed in #788: the no-argument form returned 0 no matter what it
-    found, so `jmo tools check || exit 1` passed with scanners missing. The
-    summary is still printed; the exit code now matches the `--profile` path.
+    found, so `jmo tools check || exit 1` passed with scanners missing. The JSON
+    is still printed; the exit code reports the missing tool.
+
+    Real ToolStatus objects, not MagicMocks: a MagicMock's `execution_ready` is
+    truthy, and its `installed` is whatever the mock says, so the exit code
+    would be an artefact of the mock rather than of the input.
     """
     from scripts.cli.tool_commands import cmd_tools_check
 
     mock_manager = MagicMock()
-    mock_manager.get_profile_summary.return_value = {"installed": 5, "missing": 2}
+    mock_manager.check_matrix.return_value = {
+        "trivy": _status("trivy"),
+        "semgrep": _status("semgrep", installed=False, installed_version=None),
+    }
+    mock_manager.check_tool.return_value = _status(POLICY_ENGINE)
 
-    args = argparse.Namespace(
-        tools=None,
-        profile=None,
-        json=True,
-    )
+    args = argparse.Namespace(tools=None, json=True)
 
+    captured: list[str] = []
     with patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager):
-        with patch("builtins.print") as mock_print:
+        with patch(
+            "builtins.print",
+            side_effect=lambda *a, **k: captured.append(" ".join(str(x) for x in a)),
+        ):
             result = cmd_tools_check(args)
 
-    # Should print JSON, and report the missing tools through the exit code
+    payload = json.loads("\n".join(captured))
+    assert payload["tools"]["semgrep"]["installed"] is False
+    assert payload["tools"]["trivy"]["installed"] is True
     assert result == 1
-    mock_print.assert_called()
 
 
 def test_cmd_tools_check_missing_tools_returns_error():
@@ -296,14 +305,12 @@ def test_cmd_tools_check_missing_tools_returns_error():
     mock_status.installed = False  # Missing
     mock_status.is_outdated = False
     mock_status.is_critical = False
-    mock_status.manual_install = False  # Real-missing, not manual
 
     mock_manager = MagicMock()
     mock_manager.check_tool.return_value = mock_status
 
     args = argparse.Namespace(
         tools=["missing-tool"],
-        profile=None,
         json=False,
     )
 
@@ -318,33 +325,22 @@ def test_cmd_tools_check_missing_tools_returns_error():
     assert result == 1
 
 
-def test_cmd_tools_check_manual_install_field_in_json():
-    """Test cmd_tools_check JSON output exposes the manual_install field."""
+def test_cmd_tools_check_json_for_named_tools_keys_each_tool_under_tools():
+    """`jmo tools check <names> --json` reports each named tool, and only those.
+
+    Named tools get no policy-engine entry: the engine is reported only when the
+    whole matrix is checked. A missing tool still fails the check.
+    """
     from scripts.cli.tool_commands import cmd_tools_check
-    from scripts.cli.tool_manager import ToolStatus
 
-    real_status = ToolStatus(
-        name="trivy",
-        installed=True,
-        installed_version="0.70.0",
-        expected_version="0.70.0",
-        manual_install=False,
-    )
-    manual_status = ToolStatus(
-        name="mobsf",
-        installed=False,
-        expected_version="4.4.2",
-        manual_install=True,
-    )
-
+    statuses = {
+        "trivy": _status("trivy", installed_version="0.70.0"),
+        "semgrep": _status("semgrep", installed=False, installed_version=None),
+    }
     mock_manager = MagicMock()
-    mock_manager.check_tool.side_effect = [real_status, manual_status]
+    mock_manager.check_tool.side_effect = lambda name: statuses[name]
 
-    args = argparse.Namespace(
-        tools=["trivy", "mobsf"],
-        profile=None,
-        json=True,
-    )
+    args = argparse.Namespace(tools=["trivy", "semgrep"], json=True)
 
     captured: list[str] = []
     with patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager):
@@ -355,100 +351,81 @@ def test_cmd_tools_check_manual_install_field_in_json():
             result = cmd_tools_check(args)
 
     payload = json.loads("\n".join(captured))
-    assert payload["trivy"]["manual_install"] is False
-    assert payload["mobsf"]["manual_install"] is True
-    assert result == 1  # mobsf still triggers rc=1 (not installed)
+    assert set(payload["tools"]) == {"trivy", "semgrep"}
+    assert payload["tools"]["trivy"]["installed_version"] == "0.70.0"
+    assert payload["tools"]["semgrep"]["installed"] is False
+    assert "policy_engine" not in payload
+    assert result == 1  # semgrep still triggers rc=1 (not installed)
 
 
-def test_cmd_tools_check_summary_distinguishes_missing_from_manual():
-    """Test cmd_tools_check summary lines distinguish auto-installable from manual."""
+def _matrix_check(capsys, json_output=False):
+    """Run `jmo tools check` over the real TOOL_MATRIX with every tool OK.
+
+    Only `ToolManager.check_tool` is stubbed, so `check_matrix` and the table
+    printer are the real ones.
+    """
     from scripts.cli.tool_commands import cmd_tools_check
-    from scripts.cli.tool_manager import ToolStatus
+    from scripts.cli.tool_manager import ToolManager
 
-    real_missing = ToolStatus(
-        name="prowler",
-        installed=False,
-        expected_version="5.18.2",
-        install_hint="pip install prowler",
-        manual_install=False,
-    )
-    manual_missing = ToolStatus(
-        name="akto",
-        installed=False,
-        expected_version="mini-testing-1.53.7",
-        manual_install=True,
-    )
+    checked: list[str] = []
 
-    mock_manager = MagicMock()
-    mock_manager.check_tool.side_effect = [real_missing, manual_missing]
+    def ok(_self, name):
+        checked.append(name)
+        return _status(name)
 
-    args = argparse.Namespace(
-        tools=["prowler", "akto"],
-        profile=None,
-        json=False,
-    )
-
-    captured: list[str] = []
-    with patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager):
-        with patch("scripts.cli.tool_commands.print_tool_status_table"):
-            with patch(
-                "scripts.cli.tool_commands.colorize", side_effect=lambda x, _: x
-            ):
-                with patch(
-                    "builtins.print",
-                    side_effect=lambda *a, **k: captured.append(
-                        " ".join(str(x) for x in a)
-                    ),
-                ):
-                    result = cmd_tools_check(args)
-
-    summary_text = "\n".join(captured)
-    assert "1 tool(s) missing" in summary_text
-    assert "1 tool(s) require manual install" in summary_text
-    assert "docs/MANUAL_INSTALLATION.md" in summary_text
-    assert result == 1  # rc=1 retained
+    with patch.object(ToolManager, "check_tool", ok):
+        result = cmd_tools_check(argparse.Namespace(tools=None, json=json_output))
+    return result, capsys.readouterr().out, checked
 
 
-def test_cmd_tools_check_only_manual_missing_returns_one_with_distinct_message():
-    """When only manual-install tools are missing, rc=1 with the manual-only summary."""
-    from scripts.cli.tool_commands import cmd_tools_check
-    from scripts.cli.tool_manager import ToolStatus
+def test_tools_check_lists_each_matrix_tool_once_and_the_policy_engine_below(capsys):
+    """The table is the scan matrix; opa gets its own line, not a row.
 
-    manual_only = ToolStatus(
-        name="falco",
-        installed=False,
-        expected_version="0.0.0",
-        manual_install=True,
-    )
+    opa evaluates policy in the report phase and scans nothing, so it is not
+    one of the scanners the table counts - but it is installed and checked, so
+    it must be reported somewhere.
+    """
+    assert TOOL_MATRIX, "an empty matrix would make every assertion below vacuous"
 
-    mock_manager = MagicMock()
-    mock_manager.check_tool.side_effect = [manual_only]
+    result, out, checked = _matrix_check(capsys)
 
-    args = argparse.Namespace(
-        tools=["falco"],
-        profile=None,
-        json=False,
-    )
+    lines = out.splitlines()
+    rule = next(i for i, line in enumerate(lines) if line and set(line) == {"-"})
+    rows = []
+    for line in lines[rule + 1 :]:
+        if not line.strip():
+            break
+        rows.append(line.split()[0])
 
-    captured: list[str] = []
-    with patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager):
-        with patch("scripts.cli.tool_commands.print_tool_status_table"):
-            with patch(
-                "scripts.cli.tool_commands.colorize", side_effect=lambda x, _: x
-            ):
-                with patch(
-                    "builtins.print",
-                    side_effect=lambda *a, **k: captured.append(
-                        " ".join(str(x) for x in a)
-                    ),
-                ):
-                    result = cmd_tools_check(args)
+    assert sorted(rows) == sorted(TOOL_MATRIX), rows
+    assert len(rows) == len(set(rows)), f"a tool is listed twice: {rows}"
+    assert POLICY_ENGINE not in rows, "the policy engine is not a scanner row"
+    assert f"Tool Status ({len(TOOL_MATRIX)} scanners)" in out
 
-    summary_text = "\n".join(captured)
-    # No "missing" line (only manual tools to report)
-    assert "1 tool(s) missing" not in summary_text
-    assert "1 tool(s) require manual install" in summary_text
-    assert result == 1
+    engine_lines = [line for line in lines if line.startswith("Policy engine:")]
+    assert len(engine_lines) == 1, out
+    assert POLICY_ENGINE in engine_lines[0]
+    assert "OK" in engine_lines[0]
+
+    assert sorted(checked) == sorted([*TOOL_MATRIX, POLICY_ENGINE])
+    assert result == 0
+    assert "All tools installed and up to date!" in out
+
+
+def test_tools_check_json_lists_each_matrix_tool_and_the_policy_engine(capsys):
+    """`--json` carries the same split: `tools` is the matrix, and the engine
+    is a separate `policy_engine` object."""
+    assert TOOL_MATRIX, "an empty matrix would make every assertion below vacuous"
+
+    result, out, _ = _matrix_check(capsys, json_output=True)
+
+    payload = json.loads(out)
+    assert sorted(payload["tools"]) == sorted(TOOL_MATRIX)
+    assert POLICY_ENGINE not in payload["tools"]
+    assert payload["policy_engine"]["name"] == POLICY_ENGINE
+    assert payload["policy_engine"]["installed"] is True
+    assert payload["policy_engine"]["execution_ready"] is True
+    assert result == 0
 
 
 # ========== Category 5: cmd_tools_list ==========
@@ -468,11 +445,7 @@ def test_cmd_tools_list_all_tools():
     mock_registry = MagicMock()
     mock_registry.get_all_tools.return_value = [mock_tool]
 
-    args = argparse.Namespace(
-        profiles=False,
-        profile=None,
-        json=False,
-    )
+    args = argparse.Namespace(json=False)
 
     with patch("scripts.cli.tool_commands.ToolRegistry", return_value=mock_registry):
         with patch("scripts.cli.tool_commands.colorize", side_effect=lambda x, _: x):
@@ -481,74 +454,6 @@ def test_cmd_tools_list_all_tools():
 
     assert result == 0
     mock_registry.get_all_tools.assert_called_once()
-
-
-def test_cmd_tools_list_profiles():
-    """Test cmd_tools_list shows profiles."""
-    from scripts.cli.tool_commands import cmd_tools_list
-
-    args = argparse.Namespace(
-        profiles=True,
-        profile=None,
-        json=False,
-    )
-
-    with patch("builtins.print") as mock_print:
-        result = cmd_tools_list(args)
-
-    assert result == 0
-    # Should print profile list
-    printed = " ".join(str(call[0][0]) for call in mock_print.call_args_list)
-    assert "fast" in printed or "balanced" in printed
-
-
-def test_cmd_tools_list_profiles_json():
-    """Test cmd_tools_list profiles with JSON output."""
-    from scripts.cli.tool_commands import cmd_tools_list
-
-    args = argparse.Namespace(
-        profiles=True,
-        profile=None,
-        json=True,
-    )
-
-    with patch("builtins.print") as mock_print:
-        result = cmd_tools_list(args)
-
-    assert result == 0
-    # Should print valid JSON
-    output = mock_print.call_args[0][0]
-    data = json.loads(output)
-    assert "fast" in data
-    assert "balanced" in data
-
-
-def test_cmd_tools_list_for_profile():
-    """Test cmd_tools_list for specific profile."""
-    from scripts.cli.tool_commands import cmd_tools_list
-
-    mock_tool = MagicMock()
-    mock_tool.name = "trivy"
-    mock_tool.version = "0.50.0"
-    mock_tool.category = "binary_tools"
-    mock_tool.critical = True
-
-    mock_registry = MagicMock()
-    mock_registry.get_tools_for_profile.return_value = [mock_tool]
-
-    args = argparse.Namespace(
-        profiles=False,
-        profile="balanced",
-        json=False,
-    )
-
-    with patch("scripts.cli.tool_commands.ToolRegistry", return_value=mock_registry):
-        with patch("scripts.cli.tool_commands.colorize", side_effect=lambda x, _: x):
-            with patch("builtins.print"):
-                result = cmd_tools_list(args)
-
-    assert result == 0
-    mock_registry.get_tools_for_profile.assert_called_once_with("balanced")
 
 
 def test_cmd_tools_list_json_output():
@@ -565,11 +470,7 @@ def test_cmd_tools_list_json_output():
     mock_registry = MagicMock()
     mock_registry.get_all_tools.return_value = [mock_tool]
 
-    args = argparse.Namespace(
-        profiles=False,
-        profile=None,
-        json=True,
-    )
+    args = argparse.Namespace(json=True)
 
     with patch("scripts.cli.tool_commands.ToolRegistry", return_value=mock_registry):
         with patch("builtins.print") as mock_print:
@@ -712,18 +613,20 @@ def test_cmd_tools_outdated_json_output():
 
 
 def test_generate_install_script_basic():
-    """Test _generate_install_script generates shell script."""
+    """A tool with neither an apt nor a pip package falls back to `jmo tools install`.
+
+    That is the pinned-binary route on every platform, macOS included: brew
+    never honoured the pinned version and is no longer suggested (v2.0.0).
+    """
     from scripts.cli.tool_commands import _generate_install_script
 
     mock_status = MagicMock()
     mock_status.name = "trivy"
-    mock_status.install_hint = "brew install trivy"
+    mock_status.install_hint = "jmo tools install trivy"
 
     mock_tool = MagicMock()
-    mock_tool.brew_package = "trivy"
     mock_tool.apt_package = None
     mock_tool.pypi_package = None
-    mock_tool.npm_package = None
 
     mock_registry = MagicMock()
     mock_registry.get_tool.return_value = mock_tool
@@ -732,7 +635,8 @@ def test_generate_install_script_basic():
         script = _generate_install_script([mock_status], "macos")
 
     assert "#!/bin/bash" in script
-    assert "brew install trivy" in script
+    assert "jmo tools install trivy" in script
+    assert "brew" not in script
 
 
 def test_generate_install_script_linux_apt():
@@ -744,10 +648,8 @@ def test_generate_install_script_linux_apt():
     mock_status.install_hint = "apt install shellcheck"
 
     mock_tool = MagicMock()
-    mock_tool.brew_package = None
     mock_tool.apt_package = "shellcheck"
     mock_tool.pypi_package = None
-    mock_tool.npm_package = None
 
     mock_registry = MagicMock()
     mock_registry.get_tool.return_value = mock_tool
@@ -763,14 +665,12 @@ def test_generate_install_script_pip():
     from scripts.cli.tool_commands import _generate_install_script
 
     mock_status = MagicMock()
-    mock_status.name = "bandit"
-    mock_status.install_hint = "pip install bandit"
+    mock_status.name = "semgrep"
+    mock_status.install_hint = "pip install semgrep"
 
     mock_tool = MagicMock()
-    mock_tool.brew_package = None
     mock_tool.apt_package = None
-    mock_tool.pypi_package = "bandit"
-    mock_tool.npm_package = None
+    mock_tool.pypi_package = "semgrep"
 
     mock_registry = MagicMock()
     mock_registry.get_tool.return_value = mock_tool
@@ -778,30 +678,7 @@ def test_generate_install_script_pip():
     with patch("scripts.cli.tool_commands.ToolRegistry", return_value=mock_registry):
         script = _generate_install_script([mock_status], "linux")
 
-    assert "pip install bandit" in script
-
-
-def test_generate_install_script_npm():
-    """Test _generate_install_script for npm packages."""
-    from scripts.cli.tool_commands import _generate_install_script
-
-    mock_status = MagicMock()
-    mock_status.name = "cdxgen"
-    mock_status.install_hint = "npm install cdxgen"
-
-    mock_tool = MagicMock()
-    mock_tool.brew_package = None
-    mock_tool.apt_package = None
-    mock_tool.pypi_package = None
-    mock_tool.npm_package = "@cyclonedx/cdxgen"
-
-    mock_registry = MagicMock()
-    mock_registry.get_tool.return_value = mock_tool
-
-    with patch("scripts.cli.tool_commands.ToolRegistry", return_value=mock_registry):
-        script = _generate_install_script([mock_status], "linux")
-
-    assert "npm install -g @cyclonedx/cdxgen" in script
+    assert "pip install semgrep" in script
 
 
 def test_generate_install_script_unknown_tool():
@@ -896,7 +773,6 @@ def test_cmd_tools_install_all_installed():
     mock_manager.get_missing_tools.return_value = []
 
     args = argparse.Namespace(
-        profile="balanced",
         tools=None,
         dry_run=False,
         print_script=False,
@@ -918,14 +794,13 @@ def test_cmd_tools_install_print_script():
     mock_status = MagicMock()
     mock_status.name = "trivy"
     mock_status.is_critical = False
-    mock_status.install_hint = "brew install trivy"
+    mock_status.install_hint = "jmo tools install trivy"
 
     mock_manager = MagicMock()
     mock_manager.get_missing_tools.return_value = [mock_status]
     mock_manager.platform = "macos"
 
     args = argparse.Namespace(
-        profile="balanced",
         tools=None,
         dry_run=False,
         print_script=True,
@@ -952,14 +827,13 @@ def test_cmd_tools_install_dry_run():
     mock_status = MagicMock()
     mock_status.name = "trivy"
     mock_status.is_critical = False
-    mock_status.install_hint = "brew install trivy"
+    mock_status.install_hint = "jmo tools install trivy"
 
     mock_manager = MagicMock()
     mock_manager.get_missing_tools.return_value = [mock_status]
     mock_manager.platform = "macos"
 
     args = argparse.Namespace(
-        profile="balanced",
         tools=None,
         dry_run=True,
         print_script=False,
@@ -1061,33 +935,30 @@ class TestGetInstalledTools:
         # Mock tool info
         mock_tool_info1 = MagicMock()
         mock_tool_info1.pypi_package = "semgrep"
-        mock_tool_info1.npm_package = None
-        mock_tool_info1.brew_package = None
 
         mock_tool_info2 = MagicMock()
         mock_tool_info2.pypi_package = None
-        mock_tool_info2.npm_package = "npm-groovy-lint"
-        mock_tool_info2.brew_package = None
 
         mock_manager = MagicMock()
         mock_manager.check_all_tools.return_value = {
             "semgrep": mock_status1,
             "trivy": mock_status2,
-            "npm-groovy-lint": mock_status3,
+            "trufflehog": mock_status3,
         }
         mock_manager.registry.get_tool.side_effect = lambda x: {
             "semgrep": mock_tool_info1,
-            "npm-groovy-lint": mock_tool_info2,
+            "trufflehog": mock_tool_info2,
         }.get(x)
 
         # Patch ToolManager in tool_manager module where it's imported from
         with patch("scripts.cli.tool_manager.ToolManager", return_value=mock_manager):
             tools = _get_installed_tools()
 
-        # Should return installed tools with their install method
+        # Should return installed tools with their install method; trivy is
+        # not installed, so it is not listed.
         assert len(tools) == 2
         assert ("semgrep", "pip") in tools
-        assert ("npm-groovy-lint", "npm") in tools
+        assert ("trufflehog", "binary") in tools
 
 
 class TestUninstallTools:
@@ -1116,8 +987,10 @@ class TestUninstallTools:
         assert len(errors) == 0
         mock_run.assert_called()
 
-    def test_uninstall_npm_tools(self, tmp_path, monkeypatch):
-        """Test uninstalling npm tools.
+    def test_uninstall_binary_tools_removes_the_bin_directory(
+        self, tmp_path, monkeypatch
+    ):
+        """Uninstalling a binary tool removes `~/.jmo/bin`, and spawns nothing.
 
         `Path.home()` is redirected. `_uninstall_tools` ends with
 
@@ -1142,10 +1015,9 @@ class TestUninstallTools:
         monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
         jmo_bin = tmp_path / ".jmo" / "bin"
         jmo_bin.mkdir(parents=True)
-        (jmo_bin / "cdxgen").write_text("binary", encoding="utf-8")
+        (jmo_bin / "trufflehog").write_text("binary", encoding="utf-8")
 
         mock_tool = MagicMock()
-        mock_tool.npm_package = "@cyclonedx/cdxgen"
         mock_tool.pypi_package = None
 
         mock_registry = MagicMock()
@@ -1158,9 +1030,11 @@ class TestUninstallTools:
             mock_run.return_value = MagicMock(returncode=0)
             with patch("builtins.print"):
                 errors = []
-                _uninstall_tools([("cdxgen", "npm")], errors)
+                _uninstall_tools([("trufflehog", "binary")], errors)
 
-        mock_run.assert_called()
+        # A binary tool has no package manager to call: removal is the rmtree.
+        mock_run.assert_not_called()
+        assert errors == []
         assert not jmo_bin.exists(), "uninstall must remove the bin directory"
 
 
@@ -1227,7 +1101,7 @@ class TestCmdToolsUninstall:
                 ):
                     with patch(
                         "scripts.cli.tool_commands._get_installed_tools",
-                        return_value=[("semgrep", "pip"), ("trivy", "brew")],
+                        return_value=[("semgrep", "pip"), ("trivy", "binary")],
                     ):
                         result = cmd_tools_uninstall(args)
 
@@ -1235,85 +1109,71 @@ class TestCmdToolsUninstall:
 
 
 class TestCmdToolsUpdate:
-    """Tests for cmd_tools_update function."""
+    """Tests for cmd_tools_update function.
+
+    `cmd_tools_update` asks `get_outdated_tools()`. These tests used to stub
+    `check_all_tools()` instead, so the real call returned an unconfigured
+    MagicMock - truthy, iterating as empty - and the command went on to build
+    a real `ToolInstaller` aimed at the developer's `~/.jmo/bin`. They passed
+    only because that empty iteration installed nothing. Every path here now
+    either stops before the installer or gets a mock one.
+    """
 
     def test_update_all_tools(self):
-        """Test updating all tools."""
+        """Every outdated tool is reinstalled with force=True."""
+        from scripts.cli.installers.models import InstallResult
         from scripts.cli.tool_commands import cmd_tools_update
 
         mock_status = MagicMock()
         mock_status.name = "trivy"
         mock_status.installed = True
         mock_status.installed_version = "0.50.0"
+        mock_status.expected_version = "0.74.0"
         mock_status.is_outdated = True
+        mock_status.is_critical = False
 
         mock_manager = MagicMock()
-        mock_manager.check_all_tools.return_value = {"trivy": mock_status}
-        mock_manager.update_tool.return_value = True
+        mock_manager.get_outdated_tools.return_value = [mock_status]
 
-        args = argparse.Namespace(
-            tools=None,
-            dry_run=False,
+        mock_installer = MagicMock()
+        mock_installer.install_tool.return_value = InstallResult(
+            tool_name="trivy", success=True, method="binary", version_installed="0.74.0"
         )
+
+        args = argparse.Namespace(tools=None, critical_only=False, yes=True)
 
         with patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager):
             with patch(
                 "scripts.cli.tool_commands.colorize", side_effect=lambda x, _: x
             ):
-                with patch("builtins.print"):
-                    result = cmd_tools_update(args)
+                with patch(
+                    "scripts.cli.tool_installer.ToolInstaller",
+                    return_value=mock_installer,
+                ):
+                    with patch("builtins.print"):
+                        result = cmd_tools_update(args)
 
-        assert result == 0
-
-    def test_update_dry_run(self):
-        """Test update dry run."""
-        from scripts.cli.tool_commands import cmd_tools_update
-
-        mock_status = MagicMock()
-        mock_status.name = "semgrep"
-        mock_status.installed = True
-        mock_status.installed_version = "1.0.0"
-        mock_status.is_outdated = True
-
-        mock_manager = MagicMock()
-        mock_manager.check_all_tools.return_value = {"semgrep": mock_status}
-
-        args = argparse.Namespace(
-            tools=None,
-            dry_run=True,
-        )
-
-        with patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager):
-            with patch(
-                "scripts.cli.tool_commands.colorize", side_effect=lambda x, _: x
-            ):
-                with patch("builtins.print"):
-                    result = cmd_tools_update(args)
-
-        # Dry run should not call update_tool
-        mock_manager.update_tool.assert_not_called()
+        mock_installer.install_tool.assert_called_once_with("trivy", force=True)
         assert result == 0
 
     def test_update_no_tools_installed(self):
-        """Test updating when no tools are installed."""
+        """Nothing outdated: the command stops before building an installer."""
         from scripts.cli.tool_commands import cmd_tools_update
 
         mock_manager = MagicMock()
-        mock_manager.check_all_tools.return_value = {}
+        mock_manager.get_outdated_tools.return_value = []
 
-        args = argparse.Namespace(
-            tools=None,
-            dry_run=False,
-        )
+        args = argparse.Namespace(tools=None, critical_only=False, yes=True)
 
         with patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager):
             with patch(
                 "scripts.cli.tool_commands.colorize", side_effect=lambda x, _: x
             ):
-                with patch("builtins.print"):
-                    result = cmd_tools_update(args)
+                with patch("scripts.cli.tool_installer.ToolInstaller") as installer_cls:
+                    with patch("builtins.print"):
+                        result = cmd_tools_update(args)
 
-        # Should return 0 even with no tools
+        installer_cls.assert_not_called()
         assert result == 0
 
 
@@ -1503,14 +1363,13 @@ class TestCmdToolsInstallAdditional:
         mock_status = MagicMock()
         mock_status.name = "trivy"
         mock_status.is_critical = False
-        mock_status.install_hint = "brew install trivy"
+        mock_status.install_hint = "jmo tools install trivy"
 
         mock_manager = MagicMock()
         mock_manager.get_missing_tools.return_value = [mock_status]
         mock_manager.platform = "macos"
 
         args = argparse.Namespace(
-            profile="balanced",
             tools=None,
             dry_run=False,
             print_script=True,
@@ -1534,7 +1393,6 @@ class TestCmdToolsInstallAdditional:
         mock_manager.get_missing_tools.return_value = []
 
         args = argparse.Namespace(
-            profile="fast",
             tools=None,
             dry_run=False,
             print_script=False,
@@ -1552,191 +1410,89 @@ class TestCmdToolsInstallAdditional:
 
 
 class TestCmdToolsCheckComprehensive:
-    """Comprehensive tests for cmd_tools_check function."""
+    """`jmo tools check` over the scan matrix: exit code and summary lines.
 
-    def test_check_profile_with_missing_tools(self):
-        """Test check with missing tools in profile."""
+    Real ToolStatus objects throughout. A MagicMock's `execution_ready` is a
+    truthy Mock, so a mocked status can never reach the not-ready branches, and
+    an unset `check_matrix` Mock iterates as empty - which let an earlier version
+    of the outdated test below pass while checking nothing at all.
+    """
+
+    @staticmethod
+    def _run(matrix, json_output=False):
         from scripts.cli.tool_commands import cmd_tools_check
 
-        mock_status_installed = MagicMock()
-        mock_status_installed.name = "trivy"
-        mock_status_installed.installed = True
-        mock_status_installed.is_outdated = False
-        mock_status_installed.is_critical = False
-
-        mock_status_missing = MagicMock()
-        mock_status_missing.name = "semgrep"
-        mock_status_missing.installed = False
-        mock_status_missing.is_critical = True
-
         mock_manager = MagicMock()
-        mock_manager.check_profile.return_value = {
-            "trivy": mock_status_installed,
-            "semgrep": mock_status_missing,
-        }
+        mock_manager.check_matrix.return_value = matrix
+        mock_manager.check_tool.return_value = _status(POLICY_ENGINE)
 
-        args = argparse.Namespace(
-            profile="fast",
-            tools=None,
-            json=False,
-        )
-
+        captured: list[str] = []
         with patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager):
             with patch(
                 "scripts.cli.tool_commands.colorize", side_effect=lambda x, _: x
             ):
-                with patch("scripts.cli.tool_commands.print_tool_status_table"):
-                    with patch("builtins.print"):
-                        result = cmd_tools_check(args)
+                with patch(
+                    "builtins.print",
+                    side_effect=lambda *a, **k: captured.append(
+                        " ".join(str(x) for x in a)
+                    ),
+                ):
+                    result = cmd_tools_check(
+                        argparse.Namespace(tools=None, json=json_output)
+                    )
 
-        # Should return 1 for missing tools
+        mock_manager.check_tool.assert_called_once_with(POLICY_ENGINE)
+        return result, "\n".join(captured)
+
+    def test_check_matrix_with_missing_tools(self):
+        """A missing matrix tool fails the check and is counted in the summary."""
+        result, out = self._run(
+            {
+                "trivy": _status("trivy"),
+                "semgrep": _status(
+                    "semgrep", installed=False, installed_version=None, is_critical=True
+                ),
+            }
+        )
+
+        assert "1 tool(s) missing" in out
         assert result == 1
 
-    def test_check_profile_with_outdated_tools(self):
-        """Test check with outdated tools in profile."""
-        from scripts.cli.tool_commands import cmd_tools_check
-
-        mock_status = MagicMock()
-        mock_status.name = "trivy"
-        mock_status.installed = True
-        mock_status.installed_version = "0.40.0"
-        mock_status.expected_version = "0.50.0"
-        mock_status.is_outdated = True
-        mock_status.is_critical = True
-
-        mock_manager = MagicMock()
-        mock_manager.check_profile.return_value = {"trivy": mock_status}
-
-        args = argparse.Namespace(
-            profile="fast",
-            tools=None,
-            json=False,
+    def test_check_matrix_with_outdated_tools(self):
+        """Outdated is a warning, not a failure: exit 0, with the notice printed."""
+        result, out = self._run(
+            {
+                "trivy": _status(
+                    "trivy",
+                    installed_version="0.40.0",
+                    expected_version="0.50.0",
+                    is_outdated=True,
+                    is_critical=True,
+                )
+            }
         )
 
-        with patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager):
-            with patch(
-                "scripts.cli.tool_commands.colorize", side_effect=lambda x, _: x
-            ):
-                with patch("scripts.cli.tool_commands.print_tool_status_table"):
-                    with patch("builtins.print"):
-                        result = cmd_tools_check(args)
-
-        # Should return 0 (outdated is warning)
+        assert "1 tool(s) outdated (1 critical)" in out
+        assert "jmo tools update" in out
         assert result == 0
 
-    def test_check_profile_json_output(self):
-        """Test check with JSON output."""
-        from scripts.cli.tool_commands import cmd_tools_check
-
-        mock_status = MagicMock()
-        mock_status.name = "trivy"
-        mock_status.installed = True
-        mock_status.installed_version = "0.50.0"
-        mock_status.expected_version = "0.50.0"
-        mock_status.is_outdated = False
-        mock_status.is_critical = False
-        mock_status.binary_path = "/usr/local/bin/trivy"
-        mock_status.manual_install = False  # v1.0.5: required for JSON serialization
-
-        mock_manager = MagicMock()
-        mock_manager.check_profile.return_value = {"trivy": mock_status}
-
-        args = argparse.Namespace(
-            profile="fast",
-            tools=None,
-            json=True,
+    def test_check_matrix_json_output(self):
+        """`--json` over the matrix prints parseable JSON with each tool's fields."""
+        result, out = self._run(
+            {
+                "trivy": _status(
+                    "trivy",
+                    installed_version="0.50.0",
+                    expected_version="0.50.0",
+                    binary_path="/usr/local/bin/trivy",
+                )
+            },
+            json_output=True,
         )
 
-        with patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager):
-            with patch("builtins.print") as mock_print:
-                result = cmd_tools_check(args)
-
-        mock_print.assert_called()
-        assert result == 0
-
-    def test_check_no_profile_shows_summary(self):
-        """Test check without profile shows summary.
-
-        The summary is what this asserts; the exit code is pinned separately by
-        tests/unit/test_config_precedence.py. `get_profile_summary` must return
-        a real dict rather than a bare Mock — since #788 the no-profile path
-        reads `missing` from it, and `Mock().get(...)` is truthy, which would
-        make the exit code an artefact of the mock rather than of the input.
-        """
-        from scripts.cli.tool_commands import cmd_tools_check
-
-        mock_manager = MagicMock()
-        mock_manager.get_profile_summary.return_value = {"installed": 7, "missing": 0}
-        mock_manager.get_critical_outdated.return_value = []
-
-        args = argparse.Namespace(
-            profile=None,
-            tools=None,
-            json=False,
-        )
-
-        with patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager):
-            with patch(
-                "scripts.cli.tool_commands.colorize", side_effect=lambda x, _: x
-            ):
-                with patch("scripts.cli.tool_commands.print_profile_summary"):
-                    with patch("builtins.print"):
-                        result = cmd_tools_check(args)
-
-        assert result == 0
-
-    def test_check_no_profile_with_critical_outdated(self):
-        """Test check without profile with critical outdated tools.
-
-        Outdated is not missing: everything is installed here, so the exit code
-        stays 0 while the critical-update notice is still printed. See the
-        sibling test for why the summary must be a real dict.
-        """
-        from scripts.cli.tool_commands import cmd_tools_check
-
-        mock_outdated = MagicMock()
-        mock_outdated.name = "trivy"
-        mock_outdated.installed_version = "0.40.0"
-        mock_outdated.expected_version = "0.50.0"
-
-        mock_manager = MagicMock()
-        mock_manager.get_profile_summary.return_value = {"installed": 7, "missing": 0}
-        mock_manager.get_critical_outdated.return_value = [mock_outdated]
-
-        args = argparse.Namespace(
-            profile=None,
-            tools=None,
-            json=False,
-        )
-
-        with patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager):
-            with patch(
-                "scripts.cli.tool_commands.colorize", side_effect=lambda x, _: x
-            ):
-                with patch("scripts.cli.tool_commands.print_profile_summary"):
-                    with patch("builtins.print"):
-                        result = cmd_tools_check(args)
-
-        assert result == 0
-
-    def test_check_no_profile_json_output(self):
-        """Test check without profile with JSON output."""
-        from scripts.cli.tool_commands import cmd_tools_check
-
-        mock_manager = MagicMock()
-        mock_manager.get_profile_summary.return_value = {"installed": 5, "total": 7}
-
-        args = argparse.Namespace(
-            profile=None,
-            tools=None,
-            json=True,
-        )
-
-        with patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager):
-            with patch("builtins.print") as mock_print:
-                result = cmd_tools_check(args)
-
-        mock_print.assert_called()
+        payload = json.loads(out)
+        assert payload["tools"]["trivy"]["installed_version"] == "0.50.0"
+        assert payload["tools"]["trivy"]["binary_path"] == "/usr/local/bin/trivy"
         assert result == 0
 
 
@@ -2320,7 +2076,6 @@ class TestCmdToolsInstallInteractive:
         mock_manager.platform = "linux"
 
         args = MagicMock()
-        args.profile = "balanced"
         args.tools = None
         args.print_script = False
         args.dry_run = False
@@ -2362,7 +2117,6 @@ class TestCmdToolsInstallInteractive:
         mock_manager.platform = "linux"
 
         args = MagicMock()
-        args.profile = "balanced"
         args.tools = ["trivy", "semgrep"]
         args.print_script = False
         args.dry_run = True
@@ -2378,33 +2132,43 @@ class TestCmdToolsInstallInteractive:
         captured = capsys.readouterr()
         assert "already installed" in captured.out
 
-    def test_install_executes_installer_for_profile(self, capsys):
-        """Test install executes ToolInstaller for profile missing tools."""
+    def test_install_executes_installer_for_the_matrix_and_policy_engine(self, capsys):
+        """A bare `jmo tools install` asks for every scanner plus the policy
+        engine, and installs what is missing in parallel.
+
+        opa is in the request because policy evaluation is on by default
+        (`jmo.yml policy.auto_evaluate`); a default install without it would
+        leave that step nothing to run.
+        """
         from scripts.cli.tool_commands import cmd_tools_install
 
         mock_status = MagicMock()
         mock_status.name = "trivy"
         mock_status.installed = False
         mock_status.is_critical = True
-        mock_status.install_hint = "brew install trivy"
+        mock_status.install_hint = "jmo tools install trivy"
 
         mock_manager = MagicMock()
         mock_manager.get_missing_tools.return_value = [mock_status]
-        mock_manager.platform = "darwin"
+        mock_manager.platform = "macos"
 
         mock_progress = MagicMock()
         mock_progress.failed = 0
         mock_progress.successful = 1
 
         mock_installer = MagicMock()
-        mock_installer.install_missing.return_value = mock_progress
+        mock_installer.install_tools_parallel.return_value = mock_progress
 
-        args = MagicMock()
-        args.profile = "balanced"
-        args.tools = None
-        args.print_script = False
-        args.dry_run = False
-        args.yes = True
+        # A Namespace, not a MagicMock: a Mock's `sequential` is truthy, which
+        # would route this into the sequential branch.
+        args = argparse.Namespace(
+            tools=None,
+            print_script=False,
+            dry_run=False,
+            yes=True,
+            sequential=False,
+            jobs=4,
+        )
 
         with patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager):
             with patch(
@@ -2418,7 +2182,11 @@ class TestCmdToolsInstallInteractive:
                         result = cmd_tools_install(args)
 
         assert result == 0
-        mock_installer.install_missing.assert_called_once()
+        mock_manager.get_missing_tools.assert_called_once_with(
+            [*TOOL_MATRIX, POLICY_ENGINE]
+        )
+        mock_installer.install_tools_parallel.assert_called_once()
+        assert mock_installer.install_tools_parallel.call_args.args[0] == ["trivy"]
 
     def test_install_executes_installer_for_specific_tools(self, capsys):
         """Test install executes ToolInstaller for specific tools."""
@@ -2446,7 +2214,6 @@ class TestCmdToolsInstallInteractive:
         mock_progress_cls.return_value = mock_progress_instance
 
         args = MagicMock()
-        args.profile = "balanced"
         args.tools = ["trivy"]
         args.print_script = False
         args.dry_run = False
@@ -2488,14 +2255,16 @@ class TestCmdToolsInstallInteractive:
         mock_progress.successful = 0
 
         mock_installer = MagicMock()
-        mock_installer.install_missing.return_value = mock_progress
+        mock_installer.install_tools_parallel.return_value = mock_progress
 
-        args = MagicMock()
-        args.profile = "balanced"
-        args.tools = None
-        args.print_script = False
-        args.dry_run = False
-        args.yes = True
+        args = argparse.Namespace(
+            tools=None,
+            print_script=False,
+            dry_run=False,
+            yes=True,
+            sequential=False,
+            jobs=4,
+        )
 
         with patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager):
             with patch(
@@ -2508,6 +2277,7 @@ class TestCmdToolsInstallInteractive:
                     with patch("scripts.cli.tool_installer.print_install_progress"):
                         result = cmd_tools_install(args)
 
+        mock_installer.install_tools_parallel.assert_called_once()
         assert result == 1
 
 
@@ -2659,36 +2429,6 @@ class TestCmdToolsUpdateInteractive:
         assert result == 1
 
 
-# ========== Category: _generate_install_script Edge Cases ==========
-
-
-class TestGenerateInstallScriptEdgeCases:
-    """Test _generate_install_script edge cases."""
-
-    def test_generate_script_manual_install(self):
-        """Test script generation for tool needing manual install."""
-        from scripts.cli.tool_commands import _generate_install_script
-
-        mock_tool = MagicMock()
-        mock_tool.apt_package = None
-        mock_tool.pypi_package = None
-        mock_tool.npm_package = None
-
-        mock_status = MagicMock()
-        mock_status.name = "custom_tool"
-        mock_status.install_hint = "Download from https://example.com"
-
-        with patch("scripts.cli.tool_commands.ToolRegistry") as mock_registry_cls:
-            mock_registry = MagicMock()
-            mock_registry.get_tool.return_value = mock_tool
-            mock_registry_cls.return_value = mock_registry
-
-            script = _generate_install_script([mock_status], "linux")
-
-        assert "Manual install required" in script
-        assert "Download from https://example.com" in script
-
-
 # ========== Category: cmd_tools_uninstall Tool Types ==========
 
 
@@ -2783,37 +2523,19 @@ class TestCmdToolsUninstallToolTypes:
         self._home(tmp_path, monkeypatch)
         monkeypatch.setattr(
             "scripts.cli.tool_commands._get_installed_tools",
-            lambda: [("eslint", "npm"), ("trivy", "binary"), ("bandit", "pip")],
+            lambda: [
+                ("trivy", "binary"),
+                ("semgrep", "pip"),
+                ("trufflehog", "binary"),
+                ("checkov", "pip"),
+            ],
         )
 
         assert cmd_tools_uninstall(self._args(all=True)) == 0
 
         out = capsys.readouterr().out
-        assert "npm: eslint" in out, out
-        assert "binary: trivy" in out, out
-        assert "pip: bandit" in out, out
-
-    def test_uninstall_all_reports_the_kubescape_directory(
-        self, capsys, tmp_path, monkeypatch
-    ):
-        """`~/.kubescape` is listed by name for the same reason `~/.jmo`'s
-        subdirectories are: it is a cache that can grow without bound, and
-        special-casing which directories are 'cheap enough' to walk is a
-        judgement the code cannot make."""
-        (tmp_path / ".jmo").mkdir()
-        (tmp_path / ".kubescape").mkdir()
-        (tmp_path / ".kubescape" / "config").write_text("x")
-        self._home(tmp_path, monkeypatch)
-        monkeypatch.setattr(
-            "scripts.cli.tool_commands._get_installed_tools",
-            lambda: [("kubescape", "binary")],
-        )
-
-        assert cmd_tools_uninstall(self._args(all=True)) == 0
-
-        out = capsys.readouterr().out
-        assert "- ~/.kubescape/" in out, out
-        assert "~/.kubescape/ (" not in out, out
+        assert "binary: trivy, trufflehog" in out, out
+        assert "pip: semgrep, checkov" in out, out
 
     def test_the_function_does_not_shadow_the_module_level_Path(self):
         """A local `from pathlib import Path` silently disables patching.
@@ -2854,14 +2576,12 @@ class TestCmdToolsUninstallToolTypes:
 class TestGetInstalledToolsTypes:
     """Test _get_installed_tools with different tool types."""
 
-    def test_get_installed_tools_brew_tool(self):
-        """Test _get_installed_tools returns brew tool type."""
+    def test_get_installed_tools_non_pip_tool_is_binary(self):
+        """A tool with no PyPI package is JMo's pinned binary download."""
         from scripts.cli.tool_commands import _get_installed_tools
 
         mock_tool_info = MagicMock()
         mock_tool_info.pypi_package = None
-        mock_tool_info.npm_package = None
-        mock_tool_info.brew_package = "trivy"
 
         mock_manager = MagicMock()
         mock_manager.check_all_tools.return_value = {"trivy": MagicMock(installed=True)}
@@ -2871,7 +2591,7 @@ class TestGetInstalledToolsTypes:
         with patch("scripts.cli.tool_manager.ToolManager", return_value=mock_manager):
             tools = _get_installed_tools()
 
-        assert ("trivy", "brew") in tools
+        assert tools == [("trivy", "binary")]
 
     def test_get_installed_tools_no_tool_info(self):
         """Test _get_installed_tools when tool info is None."""
@@ -2964,41 +2684,12 @@ class TestUninstallToolsExecution:
         assert len(errors) == 1
         assert "pip uninstall" in errors[0]
 
-    def test_uninstall_tools_npm_exception(self, capsys):
-        """Test _uninstall_tools npm uninstall with exception."""
-        import subprocess as subprocess_module
-
-        from scripts.cli.tool_commands import _uninstall_tools
-
-        mock_tool_info = MagicMock()
-        mock_tool_info.pypi_package = None
-        mock_tool_info.npm_package = "eslint"
-
-        errors = []
-
-        with patch("scripts.core.tool_registry.ToolRegistry") as mock_registry_cls:
-            mock_registry = MagicMock()
-            mock_registry.get_tool.return_value = mock_tool_info
-            mock_registry_cls.return_value = mock_registry
-
-            # Patch subprocess.run where it's actually used (global namespace after import)
-            with patch.object(
-                subprocess_module, "run", side_effect=Exception("npm error")
-            ):
-                # Mock shutil.rmtree to avoid Windows file locking on ~/.jmo/bin/
-                with patch("shutil.rmtree"):
-                    _uninstall_tools([("eslint", "npm")], errors)
-
-        assert len(errors) == 1
-        assert "npm uninstall" in errors[0]
-
     def test_uninstall_tools_binary_removal(self, capsys, tmp_path):
         """Test _uninstall_tools binary removal."""
         from scripts.cli.tool_commands import _uninstall_tools
 
         mock_tool_info = MagicMock()
         mock_tool_info.pypi_package = None
-        mock_tool_info.npm_package = None
 
         # Create mock bin directory
         bin_dir = tmp_path / ".jmo" / "bin"
@@ -3028,7 +2719,6 @@ class TestUninstallToolsExecution:
 
         mock_tool_info = MagicMock()
         mock_tool_info.pypi_package = None
-        mock_tool_info.npm_package = None
 
         errors = []
 
@@ -3050,101 +2740,10 @@ class TestUninstallToolsExecution:
         assert len(errors) == 1
         assert "binary removal" in errors[0]
 
-    def test_uninstall_tools_brew_message(self, capsys):
-        """Test _uninstall_tools shows brew manual removal message."""
-        from scripts.cli.tool_commands import _uninstall_tools
-
-        mock_tool_info = MagicMock()
-        mock_tool_info.pypi_package = None
-        mock_tool_info.npm_package = None
-
-        errors = []
-
-        with patch("scripts.cli.tool_commands.ToolRegistry") as mock_registry_cls:
-            mock_registry = MagicMock()
-            mock_registry.get_tool.return_value = mock_tool_info
-            mock_registry_cls.return_value = mock_registry
-
-            with patch("scripts.cli.tool_commands.Path") as mock_path:
-                mock_bin = MagicMock()
-                mock_bin.exists.return_value = False
-                mock_path.home.return_value.__truediv__.return_value.__truediv__.return_value = mock_bin
-
-                _uninstall_tools([("trivy", "brew")], errors)
-
-        captured = capsys.readouterr()
-        assert "Homebrew" in captured.out or "brew uninstall" in captured.out
-
-
-def _unsupported_status(name="noseyparker"):
-    """A ToolStatus for a tool with no build for this platform."""
-    from scripts.cli.tool_manager import ToolStatus
-
-    return ToolStatus(
-        name=name,
-        installed=False,
-        platform_supported=False,
-        platform_reason="Rust binary not available for Windows",
-        platform_workarounds=["docker", "wsl2"],
-    )
-
-
-def test_an_unsupported_tool_is_not_reported_as_missing():
-    """Measured on Windows, `jmo tools check --profile deep` printed:
-
-        noseyparker       MISSING     -             0.24.0
-        scancode          MISSING     -             32.5.0
-        2 tool(s) missing
-        Run `jmo tools install --profile deep` to install
-
-    Following that footer ran the installer, which asked
-    `Proceed with installation? [Y/n]` and then answered
-    `[FAIL] noseyparker - not available on windows`. The platform table is
-    known at check time; nothing was consulting it.
-    """
-    from scripts.cli.tool_commands import cmd_tools_check
-    from scripts.cli.tool_manager import ToolStatusType
-
-    status = _unsupported_status()
-    assert status.status_type is ToolStatusType.UNSUPPORTED
-    assert status.status_text == "UNSUPPORTED"
-
-    mock_manager = MagicMock()
-    mock_manager.check_tool.return_value = status
-    args = argparse.Namespace(tools=["noseyparker"], profile=None, json=False)
-
-    printed = []
-    with (
-        patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager),
-        patch("scripts.cli.tool_commands.print_tool_status_table"),
-        patch(
-            "builtins.print",
-            side_effect=lambda *a, **k: printed.append(" ".join(str(x) for x in a)),
-        ),
-    ):
-        result = cmd_tools_check(args)
-
-    text = chr(10).join(printed)
-    assert "tool(s) missing" not in text, (
-        "a tool with no build for this platform was counted as missing"
-    )
-    assert "jmo tools install" not in text, (
-        "the footer still points at an installer that refuses this tool"
-    )
-    assert "not available on this platform" in text
-    assert "Rust binary not available for Windows" in text
-    assert "docker" in text, (
-        "the workarounds must be shown; they are the only way forward"
-    )
-
-    # Nothing is actionable, so nothing failed. On Windows `--profile deep` can
-    # never have all 29 tools, so the old rc=1 made this a gate that could
-    # never pass.
-    assert result == 0
-
 
 def test_a_genuinely_missing_tool_still_reports_missing():
-    """Control: the fix must not silence real, installable gaps."""
+    """A tool that is not installed is counted, named with the installer
+    command that fixes it, and fails the check."""
     from scripts.cli.tool_commands import cmd_tools_check
     from scripts.cli.tool_manager import ToolStatus, ToolStatusType
 
@@ -3153,7 +2752,7 @@ def test_a_genuinely_missing_tool_still_reports_missing():
 
     mock_manager = MagicMock()
     mock_manager.check_tool.return_value = status
-    args = argparse.Namespace(tools=["trivy"], profile=None, json=False)
+    args = argparse.Namespace(tools=["trivy"], json=False)
 
     printed = []
     with (
@@ -3170,49 +2769,6 @@ def test_a_genuinely_missing_tool_still_reports_missing():
     assert "1 tool(s) missing" in text
     assert "jmo tools install" in text
     assert result == 1
-
-
-def test_the_installer_drops_unsupported_tools_before_the_prompt():
-    """The gate must come before `Proceed with installation? [Y/n]`.
-
-    It already existed, but downstream of the prompt: the user was asked to
-    confirm installing tools the installer was about to refuse, and the
-    summary then called them "manual installation" -- which they are not,
-    there is no manual route either.
-    """
-    from scripts.cli.tool_commands import cmd_tools_install
-
-    mock_manager = MagicMock()
-    mock_manager.platform = "windows"
-    mock_manager.get_missing_tools.return_value = [_unsupported_status()]
-
-    args = argparse.Namespace(
-        tools=None,
-        profile="deep",
-        yes=True,
-        dry_run=False,
-        print_script=False,
-        sequential=False,
-        jobs=4,
-    )
-
-    printed = []
-    with (
-        patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager),
-        patch("scripts.cli.tool_installer.ToolInstaller") as mock_installer,
-        patch(
-            "builtins.print",
-            side_effect=lambda *a, **k: printed.append(" ".join(str(x) for x in a)),
-        ),
-    ):
-        cmd_tools_install(args)
-
-    text = chr(10).join(printed)
-    assert "cannot run on windows" in text
-    assert "Rust binary not available for Windows" in text
-    # Nothing installable remained, so the installer must never have been asked
-    # to install anything.
-    assert not mock_installer.return_value.install_tool.called
 
 
 # ========== #1136: installed-but-unable-to-run reaches the summary ==========
@@ -3232,7 +2788,7 @@ def _check_with(statuses):
     mock_manager = MagicMock()
     mock_manager.check_tool.side_effect = lambda name: statuses[name]
 
-    args = argparse.Namespace(tools=list(statuses), profile=None, json=False)
+    args = argparse.Namespace(tools=list(statuses), json=False)
 
     buf = io.StringIO()
     with patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager):
@@ -3251,15 +2807,16 @@ def _status(name, **kw):
 
 
 def test_tools_check_names_a_tool_that_cannot_run():
-    """Measured with `java` hidden from PATH: `jmo tools check --profile deep`
-    printed `dependency-check  OK  -  12.1.0`, then
-    `All tools installed and up to date!`, and exited 0 - while every scan
-    using it exited 1 and wrote no output."""
+    """Measured with `java` hidden from PATH: `jmo tools check` printed a
+    Java-dependent tool (dependency-check, since removed) as
+    `OK  -  12.1.0`, then `All tools installed and up to date!`, and exited 0 -
+    while every scan using it exited 1 and wrote no output. zap is the Java
+    tool that remains."""
     statuses = {
-        "dependency-check": _status(
-            "dependency-check",
+        "zap": _status(
+            "zap",
             installed_version=None,
-            expected_version="12.1.0",
+            expected_version="2.16.1",
             execution_ready=False,
             execution_warning="Missing: java",
         )
@@ -3275,8 +2832,8 @@ def test_tools_check_names_a_tool_that_cannot_run():
 def test_tools_check_does_not_claim_all_is_well():
     """The green all-clear must not print over a tool that cannot run."""
     statuses = {
-        "dependency-check": _status(
-            "dependency-check",
+        "zap": _status(
+            "zap",
             execution_ready=False,
             execution_warning="Missing: java",
         )

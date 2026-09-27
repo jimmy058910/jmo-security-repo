@@ -22,7 +22,6 @@ def sample_diff_result():
         source_type="directory",
         path="baseline-results/",
         timestamp="2025-11-04T10:00:00Z",
-        profile="balanced",
         total_findings=150,
     )
 
@@ -30,7 +29,6 @@ def sample_diff_result():
         source_type="directory",
         path="current-results/",
         timestamp="2025-11-05T10:00:00Z",
-        profile="balanced",
         total_findings=142,
     )
 
@@ -180,8 +178,8 @@ def test_html_diff_escapes_uppercase_script_breakout(tmp_path):
         resolved=[],
         unchanged=[],
         modified=[],
-        baseline_source=DiffSource("directory", "baseline/", "", "fast", 0),
-        current_source=DiffSource("directory", "current/", "", "fast", 1),
+        baseline_source=DiffSource("directory", "baseline/", "", 0),
+        current_source=DiffSource("directory", "current/", "", 1),
         statistics={
             "total_new": 1,
             "total_resolved": 0,
@@ -250,7 +248,6 @@ def test_html_external_mode(tmp_path):
         source_type="directory",
         path="baseline/",
         timestamp="2025-11-04T10:00:00Z",
-        profile="fast",
         total_findings=1500,
     )
 
@@ -258,7 +255,6 @@ def test_html_external_mode(tmp_path):
         source_type="directory",
         path="current/",
         timestamp="2025-11-05T10:00:00Z",
-        profile="fast",
         total_findings=1500,
     )
 
@@ -339,7 +335,6 @@ def test_html_metadata_section(tmp_path, sample_diff_result):
     assert "current-results/" in content
     assert "2025-11-04" in content
     assert "2025-11-05" in content
-    assert "balanced" in content
 
 
 def test_html_summary_statistics(tmp_path, sample_diff_result):
@@ -477,7 +472,6 @@ def test_html_json_escaping(tmp_path):
         source_type="directory",
         path="baseline/",
         timestamp="2025-11-04T10:00:00Z",
-        profile="fast",
         total_findings=1,
     )
 
@@ -485,7 +479,6 @@ def test_html_json_escaping(tmp_path):
         source_type="directory",
         path="current/",
         timestamp="2025-11-05T10:00:00Z",
-        profile="fast",
         total_findings=1,
     )
 
@@ -563,7 +556,6 @@ def test_html_empty_diff(tmp_path):
         source_type="directory",
         path="baseline/",
         timestamp="2025-11-04T10:00:00Z",
-        profile="fast",
         total_findings=0,
     )
 
@@ -571,7 +563,6 @@ def test_html_empty_diff(tmp_path):
         source_type="directory",
         path="current/",
         timestamp="2025-11-05T10:00:00Z",
-        profile="fast",
         total_findings=0,
     )
 

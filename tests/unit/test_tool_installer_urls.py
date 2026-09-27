@@ -55,7 +55,6 @@ class TestBinaryURLPatterns:
             arch_amd="amd64",
             arch_aarch="x86_64",
             trivy_arch="64bit",
-            rust_arch="x86_64-unknown-linux-gnu",
         )
         assert url == (
             "https://github.com/aquasecurity/trivy/releases/download/v0.58.0/"
@@ -72,7 +71,6 @@ class TestBinaryURLPatterns:
             arch_amd="arm64",
             arch_aarch="aarch64",
             trivy_arch="ARM64",
-            rust_arch="aarch64-unknown-linux-gnu",
         )
         assert url == (
             "https://github.com/aquasecurity/trivy/releases/download/v0.58.0/"
@@ -89,7 +87,6 @@ class TestBinaryURLPatterns:
             arch_amd="amd64",
             arch_aarch="x86_64",
             trivy_arch="64bit",
-            rust_arch="x86_64-unknown-linux-gnu",
         )
         assert url == (
             "https://github.com/anchore/grype/releases/download/v0.87.0/"
@@ -106,7 +103,6 @@ class TestBinaryURLPatterns:
             arch_amd="amd64",
             arch_aarch="x86_64",
             trivy_arch="64bit",
-            rust_arch="x86_64-unknown-linux-gnu",
         )
         assert url == (
             "https://github.com/anchore/syft/releases/download/v1.20.0/"
@@ -123,7 +119,6 @@ class TestBinaryURLPatterns:
             arch_amd="amd64",
             arch_aarch="x86_64",
             trivy_arch="64bit",
-            rust_arch="x86_64-unknown-linux-gnu",
         )
         assert url == (
             "https://github.com/trufflesecurity/trufflehog/releases/download/v3.88.0/"
@@ -140,7 +135,6 @@ class TestBinaryURLPatterns:
             arch_amd="amd64",
             arch_aarch="x86_64",
             trivy_arch="64bit",
-            rust_arch="x86_64-unknown-linux-gnu",
         )
         assert url == (
             "https://github.com/projectdiscovery/nuclei/releases/download/v3.3.7/"
@@ -157,28 +151,10 @@ class TestBinaryURLPatterns:
             arch_amd="amd64",
             arch_aarch="x86_64",
             trivy_arch="64bit",
-            rust_arch="x86_64-unknown-linux-gnu",
         )
         assert url == (
             "https://github.com/securego/gosec/releases/download/v2.21.4/"
             "gosec_2.21.4_linux_amd64.tar.gz"
-        )
-
-    def test_noseyparker_url_x86_64(self):
-        """Test noseyparker URL for x86_64 Linux (Rust target triple)."""
-        url = BINARY_URLS["noseyparker"].format(
-            version="0.20.0",
-            os="Linux",
-            os_lower="linux",
-            arch="x86_64",
-            arch_amd="amd64",
-            arch_aarch="x86_64",
-            trivy_arch="64bit",
-            rust_arch="x86_64-unknown-linux-gnu",
-        )
-        assert url == (
-            "https://github.com/praetorian-inc/noseyparker/releases/download/v0.20.0/"
-            "noseyparker-v0.20.0-x86_64-unknown-linux-gnu.tar.gz"
         )
 
     def test_shellcheck_url_x86_64(self):
@@ -197,29 +173,10 @@ class TestBinaryURLPatterns:
             arch_amd="amd64",
             arch_aarch="x86_64",
             trivy_arch="64bit",
-            rust_arch="x86_64-unknown-linux-gnu",
         )
         assert url == (
             "https://github.com/koalaman/shellcheck/releases/download/v0.10.0/"
             "shellcheck-v0.10.0.linux.x86_64.tar.xz"
-        )
-
-    def test_kubescape_url_x86_64(self):
-        """Test kubescape URL for x86_64 Linux."""
-        url = BINARY_URLS["kubescape"]["default"].format(
-            version="3.0.47",
-            os="Linux",
-            os_lower="linux",
-            arch="x86_64",
-            arch_amd="amd64",
-            arch_aarch="x86_64",
-            trivy_arch="64bit",
-            rust_arch="x86_64-unknown-linux-gnu",
-        )
-        # kubescape uses versioned binary names: kubescape_{version}_{os}_{arch}
-        assert url == (
-            "https://github.com/kubescape/kubescape/releases/download/v3.0.47/"
-            "kubescape_3.0.47_linux_amd64"
         )
 
     def test_hadolint_url_x86_64(self):
@@ -232,28 +189,10 @@ class TestBinaryURLPatterns:
             arch_amd="amd64",
             arch_aarch="x86_64",
             trivy_arch="64bit",
-            rust_arch="x86_64-unknown-linux-gnu",
         )
         assert url == (
             "https://github.com/hadolint/hadolint/releases/download/v2.12.0/"
             "hadolint-Linux-x86_64"
-        )
-
-    def test_horusec_url_x86_64(self):
-        """Test horusec URL for x86_64 Linux (no version in filename)."""
-        url = BINARY_URLS["horusec"]["default"].format(
-            version="2.8.0",
-            os="Linux",
-            os_lower="linux",
-            arch="x86_64",
-            arch_amd="amd64",
-            arch_aarch="x86_64",
-            trivy_arch="64bit",
-            rust_arch="x86_64-unknown-linux-gnu",
-        )
-        assert url == (
-            "https://github.com/ZupIT/horusec/releases/download/v2.8.0/"
-            "horusec_linux_amd64"
         )
 
     # Windows-specific URL tests
@@ -267,7 +206,6 @@ class TestBinaryURLPatterns:
             arch_amd="amd64",
             arch_aarch="x86_64",
             trivy_arch="64bit",
-            rust_arch="x86_64-pc-windows-msvc",
         )
         assert url == (
             "https://github.com/aquasecurity/trivy/releases/download/v0.58.0/"
@@ -284,7 +222,6 @@ class TestBinaryURLPatterns:
             arch_amd="amd64",
             arch_aarch="x86_64",
             trivy_arch="64bit",
-            rust_arch="x86_64-pc-windows-msvc",
         )
         assert url == (
             "https://github.com/hadolint/hadolint/releases/download/v2.12.0/"
@@ -312,46 +249,10 @@ class TestBinaryURLPatterns:
             arch_amd="amd64",
             arch_aarch="x86_64",
             trivy_arch="64bit",
-            rust_arch="x86_64-pc-windows-msvc",
         )
         assert url == (
             "https://github.com/trufflesecurity/trufflehog/releases/download/v3.88.0/"
             "trufflehog_3.88.0_windows_amd64.tar.gz"
-        )
-
-    def test_horusec_url_windows(self):
-        """Test horusec URL for Windows (direct .exe download)."""
-        url = BINARY_URLS["horusec"]["windows"].format(
-            version="2.8.0",
-            os="Windows",
-            os_lower="windows",
-            arch="x86_64",
-            arch_amd="amd64",
-            arch_aarch="x86_64",
-            trivy_arch="64bit",
-            rust_arch="x86_64-pc-windows-msvc",
-        )
-        # Note: horusec uses "win" not "windows" in asset name
-        assert url == (
-            "https://github.com/ZupIT/horusec/releases/download/v2.8.0/"
-            "horusec_win_amd64.exe"
-        )
-
-    def test_kubescape_url_windows(self):
-        """Test kubescape URL for Windows (direct .exe download)."""
-        url = BINARY_URLS["kubescape"]["windows"].format(
-            version="3.0.47",
-            os="Windows",
-            os_lower="windows",
-            arch="x86_64",
-            arch_amd="amd64",
-            arch_aarch="x86_64",
-            trivy_arch="64bit",
-            rust_arch="x86_64-pc-windows-msvc",
-        )
-        assert url == (
-            "https://github.com/kubescape/kubescape/releases/download/v3.0.47/"
-            "kubescape_3.0.47_windows_amd64.exe"
         )
 
 
@@ -441,36 +342,12 @@ class TestArchPlaceholders:
         assert arch_aarch == expected_arch_aarch
         assert trivy_arch == expected_trivy_arch
 
-    @pytest.mark.parametrize(
-        "os_lower,arch_aarch,expected_rust_arch",
-        [
-            ("linux", "x86_64", "x86_64-unknown-linux-gnu"),
-            ("linux", "aarch64", "aarch64-unknown-linux-gnu"),
-            ("darwin", "x86_64", "x86_64-apple-darwin"),
-            ("darwin", "aarch64", "aarch64-apple-darwin"),
-        ],
-    )
-    def test_rust_arch_placeholder(
-        self, os_lower: str, arch_aarch: str, expected_rust_arch: str
-    ):
-        """Verify Rust target triple generation."""
-        # Simulate the logic from _install_binary()
-        if os_lower == "linux":
-            rust_arch = f"{arch_aarch}-unknown-linux-gnu"
-        elif os_lower == "darwin":
-            rust_arch = f"{arch_aarch}-apple-darwin"
-        else:
-            rust_arch = f"{arch_aarch}-pc-windows-msvc"
-
-        assert rust_arch == expected_rust_arch
-
 
 class TestSpecialToolHandling:
     """Test special handling for tools that aren't standard binaries.
 
     Some tools require special detection/installation:
     - yara: Python library (yara-python), not a CLI binary
-    - lynis: Git clone to subdirectory, not a single binary
     """
 
     def test_yara_version_command_uses_python(self):
@@ -500,31 +377,3 @@ class TestSpecialToolHandling:
         match = yara_pattern.search("4.5.4")
         assert match is not None, "Pattern should match simple version"
         assert match.group(1) == "4.5.4"
-
-    def test_lynis_installed_via_clone(self):
-        """Verify lynis uses clone installation method."""
-        from scripts.core.install_config import SPECIAL_INSTALL
-
-        assert "lynis" in SPECIAL_INSTALL, "lynis should be in SPECIAL_INSTALL"
-        assert SPECIAL_INSTALL["lynis"] == "clone", (
-            "lynis should use clone installation method"
-        )
-
-    def test_lynis_version_command(self):
-        """Verify lynis version command is correct (dict with default/fallback)."""
-        from scripts.cli.tool_manager import VERSION_COMMANDS
-
-        lynis_config = VERSION_COMMANDS.get("lynis", {})
-        # lynis uses platform-specific dict with default and fallback commands
-        assert isinstance(lynis_config, dict), (
-            "lynis version config should be a dict with default/fallback"
-        )
-        assert lynis_config.get("default") == [
-            "lynis",
-            "--version",
-        ], "lynis default version check should use 'lynis --version'"
-        assert lynis_config.get("fallback") == [
-            "lynis",
-            "show",
-            "version",
-        ], "lynis fallback version check should use 'lynis show version'"

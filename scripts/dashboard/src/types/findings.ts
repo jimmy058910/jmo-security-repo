@@ -92,7 +92,6 @@ export interface FindingsMetadata {
   schema_version: string
   timestamp: string
   scan_id?: string
-  profile: string
   tools: string[]
   target_count: number
   finding_count: number
@@ -111,7 +110,6 @@ export interface FindingsWrapper {
 export interface ScanMetadata {
   scan_id: string
   timestamp: string
-  profile: string
   tools: string[]
   target_count: number
   finding_count: number

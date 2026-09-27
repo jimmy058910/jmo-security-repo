@@ -40,12 +40,16 @@ from scripts.cli.scan_jobs.image_scanner import scan_image
 from scripts.cli.scan_jobs.k8s_scanner import scan_k8s_resource
 from scripts.cli.scan_jobs.repository_scanner import scan_repository
 from scripts.cli.scan_jobs.url_scanner import scan_url
+from scripts.core.scan_timings import Reason, State
 from scripts.core.tool_runner import ToolResult
 
 
 def _repo_target(tmp_path: Path) -> dict:
+    # A file, because a repository with nothing in it fails every tool before
+    # any runs (G2) - a different path from the one under test.
     repo = tmp_path / "test-repo"
     repo.mkdir()
+    (repo / "app.py").write_bytes(b"x = 1\n")
     return {"repo": repo}
 
 
@@ -113,6 +117,7 @@ def _run(
                 returncode=-1,
                 attempts=1,
                 error_message=f"Tool not found: python:{tool}",
+                failure="missing_tool",
             )
         ]
         return scan_func(
@@ -137,11 +142,12 @@ def test_resolve_then_vanish_is_not_recorded_as_success(
     with caplog.at_level(logging.ERROR):
         _, statuses = _run(module, scan_func, target(tmp_path), tool, tmp_path, stubbed)
 
-    assert statuses[tool] is False, (
+    assert statuses[tool].state is State.FAILED, (
         f"{module}: {tool} resolved in pre-flight and then failed to execute, "
-        f"but the scan recorded it as having run successfully. This is the "
+        f"but the scan recorded it as {statuses[tool].label}. This is the "
         f"branch that made a starved machine report a clean yara malware scan."
     )
+    assert statuses[tool].reason is Reason.NOT_FOUND_AT_RUN
 
 
 @pytest.mark.parametrize("module,scan_func,target,tool", SCANNERS)
@@ -235,7 +241,7 @@ def test_resolve_then_vanish_writes_no_stub(tmp_path, caplog):
         f"An empty stub is indistinguishable from a genuine empty result once "
         f"the report phase reads it."
     )
-    assert statuses["yara"] is False
+    assert statuses["yara"].label == "failed:not found at run time"
 
 
 def test_timeout_handling_does_not_depend_on_the_message_wording(tmp_path, caplog):
@@ -275,7 +281,7 @@ def test_timeout_handling_does_not_depend_on_the_message_wording(tmp_path, caplo
                 write_stub_func=lambda name, path: stubbed.append(name),
             )
 
-    assert statuses["semgrep"] is False
+    assert statuses["semgrep"].label == "failed:timed out"
     assert stubbed == ["semgrep"], (
         "no stub was written for a timed-out tool, so the report phase will "
         f"have no file for it at all. stubbed={stubbed}"
@@ -336,7 +342,7 @@ def test_a_timeout_names_itself_on_a_durable_stream(
     with caplog.at_level(logging.ERROR):
         statuses, _ = _run_timeout(module, scan_func, target(tmp_path), tool, tmp_path)
 
-    assert statuses[tool] is False
+    assert statuses[tool].label == "failed:timed out"
     assert tool in caplog.text, (
         f"{module}: {tool} timed out and said so on no stream. A non-TTY run "
         f"renders no progress display, so this is the only durable record. "

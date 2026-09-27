@@ -1,7 +1,7 @@
 """Tests for wizard_flows/tool_checker.py functions.
 
 Coverage targets (TASK-004):
-- check_tools_for_profile(): Main tool availability check
+- check_tools_for_matrix(): Main tool availability check
 - _check_policy_tools(): OPA availability check
 - _install_opa_tool(): OPA installation helper
 - _show_all_fix_commands(): Command display for manual fixes
@@ -116,67 +116,47 @@ class MockToolStatusSummary:
 
     def __init__(
         self,
-        profile_name: str = "fast",
-        profile_total: int = 9,
-        platform_applicable: int = 9,
-        installed: int = 9,
-        execution_ready: int = 9,
-        platform_skipped: list[str] | None = None,
-        manual_install: list[str] | None = None,
+        total: int = 12,
+        installed: int = 12,
+        execution_ready: int = 12,
         missing_dependency: list[str] | None = None,
         not_installed: list[str] | None = None,
         version_issues: list[str] | None = None,
-        content_triggered: list[str] | None = None,
     ):
-        self.profile_name = profile_name
-        self.profile_total = profile_total
-        self.platform_applicable = platform_applicable
+        self.total = total
         self.installed = installed
         self.execution_ready = execution_ready
-        self.platform_skipped = platform_skipped or []
-        self.manual_install = manual_install or []
         self.missing_dependency = missing_dependency or []
         self.not_installed = not_installed or []
         self.version_issues = version_issues or []
-        self.content_triggered = content_triggered or []
 
     @property
     def needs_attention_count(self) -> int:
         return (
-            len(self.manual_install)
-            + len(self.missing_dependency)
+            len(self.missing_dependency)
             + len(self.not_installed)
             + len(self.version_issues)
         )
 
-    @property
-    def skipped_count(self) -> int:
-        return (
-            len(self.platform_skipped)
-            + len(self.manual_install)
-            + len(self.content_triggered)
-        )
-
     def format_status_line(self) -> str:
-        if self.execution_ready == self.platform_applicable:
-            return f"All {self.platform_applicable} tools ready"
-        return f"{self.execution_ready}/{self.platform_applicable} tools ready ({self.needs_attention_count} need attention)"
+        if self.execution_ready == self.total:
+            return f"All {self.total} tools ready"
+        return f"{self.execution_ready}/{self.total} tools ready ({self.needs_attention_count} need attention)"
 
 
 # ============================================================================
-# check_tools_for_profile() tests
+# check_tools_for_matrix() tests
 # ============================================================================
 
 
-class TestCheckToolsForProfile:
-    """Test cases for check_tools_for_profile()."""
+class TestCheckToolsForMatrix:
+    """Test cases for check_tools_for_matrix()."""
 
     def test_docker_mode_skips_check(self):
         """Docker mode should skip tool check entirely."""
-        from scripts.cli.wizard import check_tools_for_profile
+        from scripts.cli.wizard import check_tools_for_matrix
 
-        should_continue, available = check_tools_for_profile(
-            profile="balanced",
+        should_continue, available = check_tools_for_matrix(
             yes=False,
             use_docker=True,
         )
@@ -189,12 +169,8 @@ class TestCheckToolsForProfile:
     @patch("scripts.cli.wizard_flows.tool_checker._get_colorize")
     @patch("scripts.cli.tool_manager.ToolManager")
     @patch("scripts.core.tool_registry.detect_platform")
-    @patch("scripts.core.tool_registry.get_tools_for_profile_filtered")
-    @patch("scripts.core.tool_registry.get_skipped_tools_for_profile")
     def test_all_tools_ready(
         self,
-        mock_get_skipped,
-        mock_get_filtered,
         mock_detect_platform,
         mock_tool_manager,
         mock_colorize,
@@ -202,35 +178,30 @@ class TestCheckToolsForProfile:
         mock_print_step,
     ):
         """All tools ready should return True with list of available tools."""
-        from scripts.cli.wizard import check_tools_for_profile
+        from scripts.cli.wizard import check_tools_for_matrix
 
         # Setup mocks
         mock_detect_platform.return_value = "linux"
-        mock_get_filtered.return_value = ["trivy", "semgrep"]
-        mock_get_skipped.return_value = []
         mock_colorize.return_value = lambda text, color: text
         mock_fallbacks.return_value = {"✅": "[OK]", "⚠": "[!]", "~": "~"}
         mock_print_step.return_value = lambda s, t, m: None
 
         # Create ready tools
         manager_instance = MagicMock()
-        manager_instance.check_profile.return_value = {
+        manager_instance.check_matrix.return_value = {
             "trivy": MockToolStatus("trivy", installed=True, execution_ready=True),
             "semgrep": MockToolStatus("semgrep", installed=True, execution_ready=True),
         }
         # Mock get_tool_summary to return proper summary object
         manager_instance.get_tool_summary.return_value = MockToolStatusSummary(
-            profile_name="fast",
-            profile_total=2,
-            platform_applicable=2,
+            total=2,
             installed=2,
             execution_ready=2,
         )
         mock_tool_manager.return_value = manager_instance
 
         with patch("builtins.print"):
-            should_continue, available = check_tools_for_profile(
-                profile="fast",
+            should_continue, available = check_tools_for_matrix(
                 yes=False,
                 use_docker=False,
             )
@@ -238,6 +209,9 @@ class TestCheckToolsForProfile:
         assert should_continue is True
         assert "trivy" in available
         assert "semgrep" in available
+        # The whole matrix is checked: no tool list is passed in.
+        manager_instance.check_matrix.assert_called_once_with()
+        manager_instance.get_tool_summary.assert_called_once_with()
 
     @patch("scripts.cli.wizard_flows.tool_checker._get_print_step")
     @patch("scripts.cli.wizard_flows.tool_checker._get_unicode_fallbacks")
@@ -245,12 +219,8 @@ class TestCheckToolsForProfile:
     @patch("scripts.cli.tool_manager.ToolManager")
     @patch("scripts.cli.tool_manager.get_remediation_for_tool")
     @patch("scripts.core.tool_registry.detect_platform")
-    @patch("scripts.core.tool_registry.get_tools_for_profile_filtered")
-    @patch("scripts.core.tool_registry.get_skipped_tools_for_profile")
     def test_yes_mode_continues_with_missing(
         self,
-        mock_get_skipped,
-        mock_get_filtered,
         mock_detect_platform,
         mock_get_remediation,
         mock_tool_manager,
@@ -260,49 +230,44 @@ class TestCheckToolsForProfile:
     ):
         """Non-interactive (yes) mode should continue with available tools."""
         from scripts.cli.tool_manager import ToolStatusType
-        from scripts.cli.wizard import check_tools_for_profile
+        from scripts.cli.wizard import check_tools_for_matrix
 
         # Setup mocks
         mock_detect_platform.return_value = "linux"
-        mock_get_filtered.return_value = ["trivy", "semgrep", "bandit"]
-        mock_get_skipped.return_value = []
         mock_colorize.return_value = lambda text, color: text
         mock_fallbacks.return_value = {"✅": "[OK]", "⚠": "[!]", "~": "~"}
         mock_print_step.return_value = lambda s, t, m: None
         mock_get_remediation.return_value = {
-            "is_manual": False,
-            "commands": ["pip install bandit"],
-            "jmo_install": "jmo tools install bandit",
+            "commands": ["go install github.com/securego/gosec/v2/cmd/gosec@latest"],
+            "manual": None,
+            "jmo_install": "jmo tools install gosec",
         }
 
         # Create status with one missing tool
-        bandit_status = MockToolStatus(
-            "bandit",
+        gosec_status = MockToolStatus(
+            "gosec",
             installed=False,
             execution_ready=False,
         )
-        bandit_status.status_type = ToolStatusType.MISSING
+        gosec_status.status_type = ToolStatusType.MISSING
 
         manager_instance = MagicMock()
-        manager_instance.check_profile.return_value = {
+        manager_instance.check_matrix.return_value = {
             "trivy": MockToolStatus("trivy", installed=True, execution_ready=True),
             "semgrep": MockToolStatus("semgrep", installed=True, execution_ready=True),
-            "bandit": bandit_status,
+            "gosec": gosec_status,
         }
         # Mock get_tool_summary to return proper summary object with missing tool
         manager_instance.get_tool_summary.return_value = MockToolStatusSummary(
-            profile_name="fast",
-            profile_total=3,
-            platform_applicable=3,
+            total=3,
             installed=2,
             execution_ready=2,
-            not_installed=["bandit"],
+            not_installed=["gosec"],
         )
         mock_tool_manager.return_value = manager_instance
 
-        with patch("builtins.print"):
-            should_continue, available = check_tools_for_profile(
-                profile="fast",
+        with patch("builtins.print") as mock_print:
+            should_continue, available = check_tools_for_matrix(
                 yes=True,  # Non-interactive mode
                 use_docker=False,
             )
@@ -311,7 +276,80 @@ class TestCheckToolsForProfile:
         # Only ready tools should be in available list
         assert "trivy" in available
         assert "semgrep" in available
-        assert "bandit" not in available
+        assert "gosec" not in available
+        # The tool that is not ready is named, not silently dropped
+        printed = " ".join(str(c) for c in mock_print.call_args_list)
+        assert "Skipping: gosec" in printed
+
+    @patch("scripts.cli.wizard_flows.tool_checker._auto_fix_tools")
+    @patch("scripts.cli.wizard_flows.tool_checker._get_print_step")
+    @patch("scripts.cli.wizard_flows.tool_checker._get_unicode_fallbacks")
+    @patch("scripts.cli.wizard_flows.tool_checker._get_colorize")
+    @patch("scripts.cli.tool_manager.ToolManager")
+    @patch("scripts.cli.tool_manager.get_remediation_for_tool")
+    @patch("scripts.core.tool_registry.detect_platform")
+    def test_attention_count_matches_the_tools_listed(
+        self,
+        mock_detect_platform,
+        mock_get_remediation,
+        mock_tool_manager,
+        mock_colorize,
+        mock_fallbacks,
+        mock_print_step,
+        mock_auto_fix,
+    ):
+        """The "N need attention" header counts exactly the tools listed below it.
+
+        An installed tool that is not ready for a reason the summary does not
+        bucket (here: no version reported, so neither `version_issues` nor
+        `missing_dependency`) is still listed and still offered to auto-fix.
+        `summary.needs_attention_count` would say 0 for it; the header must not.
+        Every matrix tool installs on every platform, so nothing listed is
+        withheld from the auto-fix set either.
+        """
+        from scripts.cli.tool_manager import ToolStatusType
+        from scripts.cli.wizard import check_tools_for_matrix
+
+        mock_detect_platform.return_value = "windows"
+        mock_colorize.return_value = lambda text, color: text
+        mock_fallbacks.return_value = {"✅": "[OK]", "⚠": "[!]"}
+        mock_print_step.return_value = lambda s, t, m: None
+        mock_get_remediation.return_value = {
+            "commands": [],
+            "manual": None,
+            "jmo_install": "jmo tools install shellcheck",
+        }
+        mock_auto_fix.return_value = (True, ["trivy", "shellcheck"])
+
+        unready = MockToolStatus(
+            "shellcheck",
+            installed=True,
+            execution_ready=False,
+            execution_warning="shellcheck did not report a version",
+            missing_deps=[],
+        )
+        unready.status_type = ToolStatusType.FAILED
+
+        manager_instance = MagicMock()
+        manager_instance.check_matrix.return_value = {
+            "trivy": MockToolStatus("trivy"),
+            "shellcheck": unready,
+        }
+        manager_instance.get_tool_summary.return_value = MockToolStatusSummary(
+            total=2, installed=2, execution_ready=1
+        )
+        mock_tool_manager.return_value = manager_instance
+
+        with (
+            patch("builtins.print") as mock_print,
+            patch("builtins.input", return_value="1"),
+        ):
+            check_tools_for_matrix(yes=False, use_docker=False)
+
+        printed = " ".join(str(c) for c in mock_print.call_args_list)
+        assert "1 tool(s) need attention" in printed
+        fix_info = mock_auto_fix.call_args[0][0]
+        assert [info["name"] for info in fix_info] == ["shellcheck"]
 
     @patch("scripts.cli.wizard_flows.tool_checker._get_print_step")
     @patch("scripts.cli.wizard_flows.tool_checker._get_unicode_fallbacks")
@@ -323,7 +361,7 @@ class TestCheckToolsForProfile:
         mock_print_step,
     ):
         """ImportError should be handled gracefully."""
-        from scripts.cli.wizard import check_tools_for_profile
+        from scripts.cli.wizard import check_tools_for_matrix
 
         mock_colorize.return_value = lambda text, color: text
         mock_fallbacks.return_value = {}
@@ -337,8 +375,7 @@ class TestCheckToolsForProfile:
             ),
             patch("builtins.print"),
         ):
-            should_continue, available = check_tools_for_profile(
-                profile="fast",
+            should_continue, available = check_tools_for_matrix(
                 yes=False,
                 use_docker=False,
             )
@@ -359,7 +396,7 @@ class TestCheckToolsForProfile:
         mock_print_step,
     ):
         """Generic exceptions should be handled gracefully."""
-        from scripts.cli.wizard import check_tools_for_profile
+        from scripts.cli.wizard import check_tools_for_matrix
 
         mock_colorize.return_value = lambda text, color: text
         mock_fallbacks.return_value = {}
@@ -367,69 +404,13 @@ class TestCheckToolsForProfile:
         mock_tool_manager.side_effect = RuntimeError("Unexpected error")
 
         with patch("builtins.print"):
-            should_continue, available = check_tools_for_profile(
-                profile="fast",
+            should_continue, available = check_tools_for_matrix(
                 yes=False,
                 use_docker=False,
             )
 
         assert should_continue is True
         assert available == []
-
-    @patch("scripts.cli.wizard_flows.tool_checker._get_print_step")
-    @patch("scripts.cli.wizard_flows.tool_checker._get_unicode_fallbacks")
-    @patch("scripts.cli.wizard_flows.tool_checker._get_colorize")
-    @patch("scripts.cli.tool_manager.ToolManager")
-    @patch("scripts.core.tool_registry.detect_platform")
-    @patch(
-        "scripts.core.tool_registry.PROFILE_TOOLS",
-        {"fast": ["trivy", "falco", "lynis"]},
-    )
-    def test_skipped_tools_displayed(
-        self,
-        mock_detect_platform,
-        mock_tool_manager,
-        mock_colorize,
-        mock_fallbacks,
-        mock_print_step,
-        capsys,
-    ):
-        """Platform-skipped tools should be displayed separately."""
-        from scripts.cli.wizard import check_tools_for_profile
-
-        # Setup mocks
-        mock_detect_platform.return_value = "windows"
-        mock_colorize.return_value = lambda text, color: text
-        mock_fallbacks.return_value = {"✅": "[OK]", "⚠": "[!]", "~": "~", "○": "o"}
-        mock_print_step.return_value = lambda s, t, m: None
-
-        # Create mock ToolStatusSummary with platform-skipped tools
-        mock_summary = MockToolStatusSummary(
-            profile_name="fast",
-            profile_total=3,
-            platform_applicable=1,
-            installed=1,
-            execution_ready=1,
-            platform_skipped=["falco", "lynis"],
-        )
-
-        manager_instance = MagicMock()
-        manager_instance.get_tool_summary.return_value = mock_summary
-        manager_instance.check_profile.return_value = {
-            "trivy": MockToolStatus("trivy", installed=True, execution_ready=True),
-        }
-        mock_tool_manager.return_value = manager_instance
-
-        should_continue, available = check_tools_for_profile(
-            profile="fast",
-            yes=False,
-            use_docker=False,
-        )
-
-        assert should_continue is True
-        # Check output contains skipped tools info
-        captured = capsys.readouterr()
-        assert "falco" in captured.out or "lynis" in captured.out
 
 
 # ============================================================================
@@ -791,11 +772,11 @@ class TestShowAllFixCommands:
 
         fix_info = [
             {
-                "name": "bandit",
+                "name": "checkov",
                 "issue": "Not installed",
                 "remediation": {
                     "commands": [],
-                    "jmo_install": "jmo tools install bandit",
+                    "jmo_install": "jmo tools install checkov",
                 },
             },
         ]
@@ -803,8 +784,8 @@ class TestShowAllFixCommands:
         _show_all_fix_commands(fix_info, "windows")
 
         captured = capsys.readouterr()
-        assert "bandit" in captured.out
-        assert "jmo tools install bandit" in captured.out
+        assert "checkov" in captured.out
+        assert "jmo tools install checkov" in captured.out
 
     @patch("scripts.cli.wizard_flows.tool_checker._get_colorize")
     def test_show_empty_fix_info(self, mock_colorize, capsys):
@@ -861,27 +842,6 @@ class TestCollectMissingDependencies:
 
         fix_info = [
             {
-                "name": "dependency-check",
-                "issue": "Missing Java",
-                "missing_deps": ["java"],
-            },
-        ]
-
-        result = _collect_missing_dependencies(fix_info)
-        assert "java" in result
-        assert "dependency-check" in result["java"]
-
-    def test_multiple_tools_same_dependency(self):
-        """Multiple tools requiring same dependency."""
-        from scripts.cli.wizard import _collect_missing_dependencies
-
-        fix_info = [
-            {
-                "name": "dependency-check",
-                "issue": "Missing Java",
-                "missing_deps": ["java"],
-            },
-            {
                 "name": "zap",
                 "issue": "Missing Java",
                 "missing_deps": ["java"],
@@ -890,34 +850,43 @@ class TestCollectMissingDependencies:
 
         result = _collect_missing_dependencies(fix_info)
         assert "java" in result
-        assert "dependency-check" in result["java"]
         assert "zap" in result["java"]
 
-    def test_node_version_normalization(self):
-        """Node.js versions should be normalized to 'node'."""
+    def test_multiple_tools_same_dependency(self):
+        """Multiple tools requiring same dependency."""
         from scripts.cli.wizard import _collect_missing_dependencies
 
         fix_info = [
             {
-                "name": "cdxgen",
-                "issue": "Missing Node",
-                "missing_deps": ["node20"],
+                "name": "zap",
+                "issue": "Missing Java",
+                "missing_deps": ["java"],
             },
             {
-                "name": "eslint",
-                "issue": "Missing Node",
-                "missing_deps": ["node18"],
+                "name": "java-tool",
+                "issue": "Missing Java",
+                "missing_deps": ["java"],
             },
         ]
 
         result = _collect_missing_dependencies(fix_info)
-        # Both should be normalized to "node"
-        assert "node" in result
-        assert "cdxgen" in result["node"]
-        assert "eslint" in result["node"]
-        # No separate node20/node18 keys
-        assert "node20" not in result
-        assert "node18" not in result
+        assert "java" in result
+        assert "zap" in result["java"]
+        assert "java-tool" in result["java"]
+
+    def test_dependency_names_are_not_rewritten(self):
+        """A dependency is grouped under exactly the name the tool reported.
+
+        This function used to fold every `node*` spelling into `node` for
+        cdxgen. That tool is gone, and a name that is rewritten no longer
+        matches the key `install_dependency` looks it up by.
+        """
+        from scripts.cli.wizard import _collect_missing_dependencies
+
+        fix_info = [{"name": "tool-a", "issue": "Missing", "missing_deps": ["node20"]}]
+
+        result = _collect_missing_dependencies(fix_info)
+        assert result == {"node20": ["tool-a"]}
 
     def test_multiple_different_dependencies(self):
         """Tools with different dependencies."""
@@ -925,14 +894,14 @@ class TestCollectMissingDependencies:
 
         fix_info = [
             {
-                "name": "dependency-check",
+                "name": "zap",
                 "issue": "Missing runtime",
                 "missing_deps": ["java"],
             },
             {
-                "name": "cdxgen",
+                "name": "gosec",
                 "issue": "Missing runtime",
-                "missing_deps": ["node"],
+                "missing_deps": ["go"],
             },
             {
                 "name": "bash-tool",
@@ -944,7 +913,7 @@ class TestCollectMissingDependencies:
         result = _collect_missing_dependencies(fix_info)
         assert len(result) == 3
         assert "java" in result
-        assert "node" in result
+        assert "go" in result
         assert "bash" in result
 
     def test_tool_with_multiple_deps(self):
@@ -955,13 +924,13 @@ class TestCollectMissingDependencies:
             {
                 "name": "complex-tool",
                 "issue": "Missing multiple",
-                "missing_deps": ["java", "node", "bash"],
+                "missing_deps": ["java", "go", "bash"],
             },
         ]
 
         result = _collect_missing_dependencies(fix_info)
         assert "complex-tool" in result["java"]
-        assert "complex-tool" in result["node"]
+        assert "complex-tool" in result["go"]
         assert "complex-tool" in result["bash"]
 
     def test_no_duplicate_tools_per_dep(self):
@@ -971,20 +940,20 @@ class TestCollectMissingDependencies:
         # Simulate a tool appearing twice in fix_info with same dep
         fix_info = [
             {
-                "name": "cdxgen",
+                "name": "zap",
                 "issue": "Issue 1",
-                "missing_deps": ["node"],
+                "missing_deps": ["java"],
             },
             {
-                "name": "cdxgen",
+                "name": "zap",
                 "issue": "Issue 2",
-                "missing_deps": ["node"],
+                "missing_deps": ["java"],
             },
         ]
 
         result = _collect_missing_dependencies(fix_info)
         # Tool should only appear once
-        assert result["node"].count("cdxgen") == 1
+        assert result["java"].count("zap") == 1
 
 
 # ============================================================================
@@ -993,7 +962,7 @@ class TestCollectMissingDependencies:
 
 
 class TestInteractiveChoices:
-    """Test interactive menu choices in check_tools_for_profile."""
+    """Test interactive menu choices in check_tools_for_matrix."""
 
     @patch("scripts.cli.wizard_flows.tool_checker._auto_fix_tools")
     @patch("scripts.cli.wizard_flows.tool_checker._get_print_step")
@@ -1002,7 +971,6 @@ class TestInteractiveChoices:
     @patch("scripts.cli.tool_manager.ToolManager")
     @patch("scripts.cli.tool_manager.get_remediation_for_tool")
     @patch("scripts.core.tool_registry.detect_platform")
-    @patch("scripts.core.tool_registry.PROFILE_TOOLS", {"fast": ["trivy", "bandit"]})
     def test_choice_1_auto_fix(
         self,
         mock_detect_platform,
@@ -1015,7 +983,7 @@ class TestInteractiveChoices:
     ):
         """Choice 1 triggers auto-fix."""
         from scripts.cli.tool_manager import ToolStatusType
-        from scripts.cli.wizard import check_tools_for_profile
+        from scripts.cli.wizard import check_tools_for_matrix
 
         # Setup
         mock_detect_platform.return_value = "linux"
@@ -1023,37 +991,35 @@ class TestInteractiveChoices:
         mock_fallbacks.return_value = {"✅": "[OK]", "⚠": "[!]", "○": "o"}
         mock_print_step.return_value = lambda s, t, m: None
         mock_get_remediation.return_value = {
-            "is_manual": False,
             "commands": [],
-            "jmo_install": "jmo tools install bandit",
+            "jmo_install": "jmo tools install checkov",
         }
-        mock_auto_fix.return_value = (True, ["trivy", "bandit"])
+        mock_auto_fix.return_value = (True, ["trivy", "checkov"])
 
-        bandit_status = MockToolStatus("bandit", installed=False, execution_ready=False)
-        bandit_status.status_type = ToolStatusType.MISSING
+        checkov_status = MockToolStatus(
+            "checkov", installed=False, execution_ready=False
+        )
+        checkov_status.status_type = ToolStatusType.MISSING
 
         # Create mock summary showing one tool needs attention
         mock_summary = MockToolStatusSummary(
-            profile_name="fast",
-            profile_total=2,
-            platform_applicable=2,
+            total=2,
             installed=1,
             execution_ready=1,
-            not_installed=["bandit"],
+            not_installed=["checkov"],
         )
 
         manager_instance = MagicMock()
         manager_instance.get_tool_summary.return_value = mock_summary
-        manager_instance.check_profile.return_value = {
+        manager_instance.check_matrix.return_value = {
             "trivy": MockToolStatus("trivy"),
-            "bandit": bandit_status,
+            "checkov": checkov_status,
         }
         mock_tool_manager.return_value = manager_instance
 
         with patch("builtins.print"):
             with patch("builtins.input", return_value="1"):  # Auto-fix
-                should_continue, available = check_tools_for_profile(
-                    profile="fast",
+                should_continue, available = check_tools_for_matrix(
                     yes=False,
                     use_docker=False,
                 )
@@ -1067,7 +1033,6 @@ class TestInteractiveChoices:
     @patch("scripts.cli.tool_manager.ToolManager")
     @patch("scripts.cli.tool_manager.get_remediation_for_tool")
     @patch("scripts.core.tool_registry.detect_platform")
-    @patch("scripts.core.tool_registry.PROFILE_TOOLS", {"fast": ["trivy", "bandit"]})
     def test_choice_2_continue_with_available(
         self,
         mock_detect_platform,
@@ -1079,50 +1044,48 @@ class TestInteractiveChoices:
     ):
         """Choice 2 continues with available tools only."""
         from scripts.cli.tool_manager import ToolStatusType
-        from scripts.cli.wizard import check_tools_for_profile
+        from scripts.cli.wizard import check_tools_for_matrix
 
         mock_detect_platform.return_value = "linux"
         mock_colorize.return_value = lambda text, color: text
         mock_fallbacks.return_value = {"✅": "[OK]", "⚠": "[!]", "○": "o"}
         mock_print_step.return_value = lambda s, t, m: None
         mock_get_remediation.return_value = {
-            "is_manual": False,
             "commands": [],
-            "jmo_install": "jmo tools install bandit",
+            "jmo_install": "jmo tools install checkov",
         }
 
-        bandit_status = MockToolStatus("bandit", installed=False, execution_ready=False)
-        bandit_status.status_type = ToolStatusType.MISSING
+        checkov_status = MockToolStatus(
+            "checkov", installed=False, execution_ready=False
+        )
+        checkov_status.status_type = ToolStatusType.MISSING
 
         # Create mock summary showing one tool needs attention
         mock_summary = MockToolStatusSummary(
-            profile_name="fast",
-            profile_total=2,
-            platform_applicable=2,
+            total=2,
             installed=1,
             execution_ready=1,
-            not_installed=["bandit"],
+            not_installed=["checkov"],
         )
 
         manager_instance = MagicMock()
         manager_instance.get_tool_summary.return_value = mock_summary
-        manager_instance.check_profile.return_value = {
+        manager_instance.check_matrix.return_value = {
             "trivy": MockToolStatus("trivy"),
-            "bandit": bandit_status,
+            "checkov": checkov_status,
         }
         mock_tool_manager.return_value = manager_instance
 
         with patch("builtins.print"):
             with patch("builtins.input", return_value="2"):  # Continue with available
-                should_continue, available = check_tools_for_profile(
-                    profile="fast",
+                should_continue, available = check_tools_for_matrix(
                     yes=False,
                     use_docker=False,
                 )
 
         assert should_continue is True
         assert "trivy" in available
-        assert "bandit" not in available
+        assert "checkov" not in available
 
     @patch("scripts.cli.wizard_flows.tool_checker._get_print_step")
     @patch("scripts.cli.wizard_flows.tool_checker._get_unicode_fallbacks")
@@ -1130,7 +1093,6 @@ class TestInteractiveChoices:
     @patch("scripts.cli.tool_manager.ToolManager")
     @patch("scripts.cli.tool_manager.get_remediation_for_tool")
     @patch("scripts.core.tool_registry.detect_platform")
-    @patch("scripts.core.tool_registry.PROFILE_TOOLS", {"fast": ["trivy", "bandit"]})
     def test_choice_4_cancel(
         self,
         mock_detect_platform,
@@ -1142,43 +1104,41 @@ class TestInteractiveChoices:
     ):
         """Choice 4 cancels the wizard."""
         from scripts.cli.tool_manager import ToolStatusType
-        from scripts.cli.wizard import check_tools_for_profile
+        from scripts.cli.wizard import check_tools_for_matrix
 
         mock_detect_platform.return_value = "linux"
         mock_colorize.return_value = lambda text, color: text
         mock_fallbacks.return_value = {"✅": "[OK]", "⚠": "[!]", "○": "o"}
         mock_print_step.return_value = lambda s, t, m: None
         mock_get_remediation.return_value = {
-            "is_manual": False,
             "commands": [],
             "jmo_install": "",
         }
 
-        bandit_status = MockToolStatus("bandit", installed=False, execution_ready=False)
-        bandit_status.status_type = ToolStatusType.MISSING
+        checkov_status = MockToolStatus(
+            "checkov", installed=False, execution_ready=False
+        )
+        checkov_status.status_type = ToolStatusType.MISSING
 
         # Create mock summary showing one tool needs attention
         mock_summary = MockToolStatusSummary(
-            profile_name="fast",
-            profile_total=2,
-            platform_applicable=2,
+            total=2,
             installed=1,
             execution_ready=1,
-            not_installed=["bandit"],
+            not_installed=["checkov"],
         )
 
         manager_instance = MagicMock()
         manager_instance.get_tool_summary.return_value = mock_summary
-        manager_instance.check_profile.return_value = {
+        manager_instance.check_matrix.return_value = {
             "trivy": MockToolStatus("trivy"),
-            "bandit": bandit_status,
+            "checkov": checkov_status,
         }
         mock_tool_manager.return_value = manager_instance
 
         with patch("builtins.print"):
             with patch("builtins.input", return_value="4"):  # Cancel
-                should_continue, available = check_tools_for_profile(
-                    profile="fast",
+                should_continue, available = check_tools_for_matrix(
                     yes=False,
                     use_docker=False,
                 )
@@ -1201,12 +1161,8 @@ class TestCrashDetection:
     @patch("scripts.cli.tool_manager.ToolManager")
     @patch("scripts.cli.tool_manager.get_remediation_for_tool")
     @patch("scripts.core.tool_registry.detect_platform")
-    @patch("scripts.core.tool_registry.get_tools_for_profile_filtered")
-    @patch("scripts.core.tool_registry.get_skipped_tools_for_profile")
     def test_tool_with_startup_crash(
         self,
-        mock_get_skipped,
-        mock_get_filtered,
         mock_detect_platform,
         mock_get_remediation,
         mock_tool_manager,
@@ -1217,16 +1173,13 @@ class TestCrashDetection:
     ):
         """Tool with startup crash should display crash info."""
         from scripts.cli.tool_manager import ToolStatusType
-        from scripts.cli.wizard import check_tools_for_profile
+        from scripts.cli.wizard import check_tools_for_matrix
 
         mock_detect_platform.return_value = "linux"
-        mock_get_filtered.return_value = ["checkov"]
-        mock_get_skipped.return_value = []
         mock_colorize.return_value = lambda text, color: text
         mock_fallbacks.return_value = {"✅": "[OK]", "⚠": "[!]"}
         mock_print_step.return_value = lambda s, t, m: None
         mock_get_remediation.return_value = {
-            "is_manual": False,
             "commands": [],
             "jmo_install": "",
         }
@@ -1245,14 +1198,12 @@ class TestCrashDetection:
         )
 
         manager_instance = MagicMock()
-        manager_instance.check_profile.return_value = {
+        manager_instance.check_matrix.return_value = {
             "checkov": crash_status,
         }
         # Mock get_tool_summary to return proper summary object with crashed tool
         manager_instance.get_tool_summary.return_value = MockToolStatusSummary(
-            profile_name="fast",
-            profile_total=1,
-            platform_applicable=1,
+            total=1,
             installed=1,
             execution_ready=0,
             version_issues=["checkov"],
@@ -1260,8 +1211,7 @@ class TestCrashDetection:
         mock_tool_manager.return_value = manager_instance
 
         with patch("builtins.input", return_value="2"):  # Continue with available
-            should_continue, available = check_tools_for_profile(
-                profile="fast",
+            should_continue, available = check_tools_for_matrix(
                 yes=False,
                 use_docker=False,
             )
@@ -1310,13 +1260,12 @@ class TestAutoFixToolsDependencies:
 
         fix_info = [
             {
-                "name": "dependency-check",
+                "name": "zap",
                 "issue": "Missing",
                 "missing_deps": ["java"],
                 "remediation": {
-                    "is_manual": False,
                     "commands": [],
-                    "jmo_install": "jmo tools install dependency-check",
+                    "jmo_install": "jmo tools install zap",
                 },
             }
         ]
@@ -1325,17 +1274,16 @@ class TestAutoFixToolsDependencies:
         # Mock ToolManager's post-install re-check (#907: unmocked, it shells
         # out to whatever scanner binaries are actually on PATH, matching
         # test_choice_2_skip_deps_continues's established pattern below).
-        mock_summary = MagicMock(execution_ready=1, platform_applicable=1)
+        mock_summary = MagicMock(execution_ready=1, total=1)
         with (
             patch("builtins.input", return_value="1"),
             patch("scripts.cli.tool_manager.ToolManager") as mock_manager_cls,
         ):
-            mock_manager_cls.return_value.check_profile.return_value = {}
+            mock_manager_cls.return_value.check_matrix.return_value = {}
             mock_manager_cls.return_value.get_tool_summary.return_value = mock_summary
             should_continue, available = _auto_fix_tools(
                 fix_info=fix_info,
                 platform="linux",
-                profile="fast",
                 available=[],
             )
 
@@ -1366,13 +1314,12 @@ class TestAutoFixToolsDependencies:
 
         fix_info = [
             {
-                "name": "dependency-check",
+                "name": "zap",
                 "issue": "Missing",
                 "missing_deps": ["java"],
                 "remediation": {
-                    "is_manual": False,
                     "commands": [],
-                    "jmo_install": "jmo tools install dependency-check",
+                    "jmo_install": "jmo tools install zap",
                 },
             }
         ]
@@ -1381,17 +1328,16 @@ class TestAutoFixToolsDependencies:
         # Mock ToolManager's post-install re-check (#907: unmocked, it shells
         # out to whatever scanner binaries are actually on PATH, matching
         # test_choice_2_skip_deps_continues's established pattern below).
-        mock_summary = MagicMock(execution_ready=1, platform_applicable=1)
+        mock_summary = MagicMock(execution_ready=1, total=1)
         with (
             patch("builtins.input", return_value="1"),
             patch("scripts.cli.tool_manager.ToolManager") as mock_manager_cls,
         ):
-            mock_manager_cls.return_value.check_profile.return_value = {}
+            mock_manager_cls.return_value.check_matrix.return_value = {}
             mock_manager_cls.return_value.get_tool_summary.return_value = mock_summary
             should_continue, available = _auto_fix_tools(
                 fix_info=fix_info,
                 platform="linux",
-                profile="fast",
                 available=[],
             )
 
@@ -1422,13 +1368,12 @@ class TestAutoFixToolsDependencies:
 
         fix_info = [
             {
-                "name": "dependency-check",
+                "name": "zap",
                 "issue": "Missing",
                 "missing_deps": ["java"],
                 "remediation": {
-                    "is_manual": False,
                     "commands": [],
-                    "jmo_install": "jmo tools install dependency-check",
+                    "jmo_install": "jmo tools install zap",
                 },
             }
         ]
@@ -1437,17 +1382,16 @@ class TestAutoFixToolsDependencies:
         # Mock ToolManager's post-install re-check (#907: unmocked, it shells
         # out to whatever scanner binaries are actually on PATH, matching
         # test_choice_2_skip_deps_continues's established pattern below).
-        mock_summary = MagicMock(execution_ready=1, platform_applicable=1)
+        mock_summary = MagicMock(execution_ready=1, total=1)
         with (
             patch("builtins.input", return_value="1"),
             patch("scripts.cli.tool_manager.ToolManager") as mock_manager_cls,
         ):
-            mock_manager_cls.return_value.check_profile.return_value = {}
+            mock_manager_cls.return_value.check_matrix.return_value = {}
             mock_manager_cls.return_value.get_tool_summary.return_value = mock_summary
             should_continue, available = _auto_fix_tools(
                 fix_info=fix_info,
                 platform="linux",
-                profile="fast",
                 available=[],
             )
 
@@ -1474,13 +1418,12 @@ class TestAutoFixToolsDependencies:
 
         fix_info = [
             {
-                "name": "dependency-check",
+                "name": "zap",
                 "issue": "Missing",
                 "missing_deps": ["java"],
                 "remediation": {
-                    "is_manual": False,
                     "commands": [],
-                    "jmo_install": "jmo tools install dependency-check",
+                    "jmo_install": "jmo tools install zap",
                 },
             }
         ]
@@ -1494,7 +1437,7 @@ class TestAutoFixToolsDependencies:
         mock_status.execution_ready = True
         mock_summary = MagicMock()
         mock_summary.execution_ready = 1
-        mock_summary.platform_applicable = 1
+        mock_summary.total = 1
 
         # Choice 2: skip deps
         with (
@@ -1506,7 +1449,7 @@ class TestAutoFixToolsDependencies:
             mock_installer_cls.return_value.install_tools_parallel.return_value = (
                 mock_progress
             )
-            mock_manager_cls.return_value.check_profile.return_value = {
+            mock_manager_cls.return_value.check_matrix.return_value = {
                 "trivy": mock_status
             }
             mock_manager_cls.return_value.get_tool_summary.return_value = mock_summary
@@ -1514,7 +1457,6 @@ class TestAutoFixToolsDependencies:
             should_continue, available = _auto_fix_tools(
                 fix_info=fix_info,
                 platform="linux",
-                profile="fast",
                 available=["trivy"],
             )
 
@@ -1538,13 +1480,12 @@ class TestAutoFixToolsDependencies:
 
         fix_info = [
             {
-                "name": "dependency-check",
+                "name": "zap",
                 "issue": "Missing",
                 "missing_deps": ["java"],
                 "remediation": {
-                    "is_manual": False,
                     "commands": [],
-                    "jmo_install": "jmo tools install dependency-check",
+                    "jmo_install": "jmo tools install zap",
                 },
             }
         ]
@@ -1554,7 +1495,6 @@ class TestAutoFixToolsDependencies:
             should_continue, available = _auto_fix_tools(
                 fix_info=fix_info,
                 platform="linux",
-                profile="fast",
                 available=["trivy"],
             )
 
@@ -1583,21 +1523,19 @@ class TestAutoFixToolsDependencies:
 
         fix_info = [
             {
-                "name": "dependency-check",
+                "name": "zap",
                 "issue": "Missing",
                 "missing_deps": ["java"],
                 "remediation": {
-                    "is_manual": False,
                     "commands": [],
                     "jmo_install": "",
                 },
             },
             {
-                "name": "cdxgen",
+                "name": "gosec",
                 "issue": "Missing",
-                "missing_deps": ["node"],
+                "missing_deps": ["go"],
                 "remediation": {
-                    "is_manual": False,
                     "commands": [],
                     "jmo_install": "",
                 },
@@ -1605,13 +1543,13 @@ class TestAutoFixToolsDependencies:
         ]
 
         # Choice 1: auto-install deps
-        # Mock ToolInstaller to prevent real npm/pip subprocess calls, and
+        # Mock ToolInstaller to prevent real pip/binary subprocess calls, and
         # ToolManager's post-install re-check (#907: unmocked, it shells out
         # to whatever scanner binaries are actually on PATH) -- same pattern
         # as test_choice_2_skip_deps_continues above.
         mock_progress = MagicMock()
         mock_progress.results = []
-        mock_summary = MagicMock(execution_ready=1, platform_applicable=1)
+        mock_summary = MagicMock(execution_ready=1, total=1)
 
         with (
             patch("builtins.print"),
@@ -1622,20 +1560,19 @@ class TestAutoFixToolsDependencies:
             mock_installer_cls.return_value.install_tools_parallel.return_value = (
                 mock_progress
             )
-            mock_manager_cls.return_value.check_profile.return_value = {}
+            mock_manager_cls.return_value.check_matrix.return_value = {}
             mock_manager_cls.return_value.get_tool_summary.return_value = mock_summary
             should_continue, available = _auto_fix_tools(
                 fix_info=fix_info,
                 platform="linux",
-                profile="fast",
                 available=[],
             )
 
-        # Both java and node should be installed
+        # Both java and go should be installed
         assert mock_install_dep.call_count == 2
         call_args = [call[0][0] for call in mock_install_dep.call_args_list]
         assert "java" in call_args
-        assert "node" in call_args
+        assert "go" in call_args
 
     @patch("scripts.cli.wizard_flows.tool_checker._get_unicode_fallbacks")
     @patch("scripts.cli.wizard_flows.tool_checker._get_colorize")
@@ -1653,13 +1590,12 @@ class TestAutoFixToolsDependencies:
 
         fix_info = [
             {
-                "name": "bandit",
+                "name": "checkov",
                 "issue": "Not installed",
                 "missing_deps": [],  # No missing deps
                 "remediation": {
-                    "is_manual": False,
                     "commands": [],
-                    "jmo_install": "jmo tools install bandit",
+                    "jmo_install": "jmo tools install checkov",
                 },
             }
         ]
@@ -1669,18 +1605,17 @@ class TestAutoFixToolsDependencies:
         # pattern as test_choice_2_skip_deps_continues above. Reached even
         # with no missing deps: the re-check runs unconditionally near the
         # end of _auto_fix_tools.
-        mock_summary = MagicMock(execution_ready=1, platform_applicable=1)
+        mock_summary = MagicMock(execution_ready=1, total=1)
         with (
             patch("builtins.print"),
             patch("scripts.cli.tool_manager.ToolManager") as mock_manager_cls,
         ):
-            mock_manager_cls.return_value.check_profile.return_value = {}
+            mock_manager_cls.return_value.check_matrix.return_value = {}
             mock_manager_cls.return_value.get_tool_summary.return_value = mock_summary
             # No input needed since menu should be skipped
             should_continue, available = _auto_fix_tools(
                 fix_info=fix_info,
                 platform="linux",
-                profile="fast",
                 available=["trivy"],
             )
 
@@ -1732,19 +1667,18 @@ class TestPlatformCommandExecution:
 
         # Mock re-check at end of _auto_fix_tools
         manager_instance = MagicMock()
-        manager_instance.check_profile.return_value = {
-            "bandit": MockToolStatus("bandit", installed=True, execution_ready=True),
+        manager_instance.check_matrix.return_value = {
+            "checkov": MockToolStatus("checkov", installed=True, execution_ready=True),
         }
         mock_tool_manager.return_value = manager_instance
 
         fix_info = [
             {
-                "name": "bandit",
+                "name": "checkov",
                 "issue": "Not installed",
                 "missing_deps": [],
                 "remediation": {
-                    "is_manual": False,
-                    "commands": ["pip install bandit"],
+                    "commands": ["pip install checkov"],
                     "jmo_install": "",
                 },
             }
@@ -1753,21 +1687,20 @@ class TestPlatformCommandExecution:
         should_continue, available = _auto_fix_tools(
             fix_info=fix_info,
             platform="linux",
-            profile="fast",
             available=[],
         )
 
         captured = capsys.readouterr()
         assert should_continue is True
         # Tool should be marked as fixed
-        assert "bandit" in available
+        assert "checkov" in available
         assert "fixed" in captured.out.lower()
         # Command should have been run
         mock_run.assert_called_once()
         call_args = mock_run.call_args
         # After shell=True refactor, commands are list-based via shlex.split()
         cmd_list = call_args[0][0]
-        assert "pip" in cmd_list and "install" in cmd_list and "bandit" in cmd_list
+        assert "pip" in cmd_list and "install" in cmd_list and "checkov" in cmd_list
 
     @patch("scripts.cli.tool_manager.ToolManager")
     @patch("scripts.cli.wizard_flows.tool_checker.subprocess.run")
@@ -1798,7 +1731,7 @@ class TestPlatformCommandExecution:
 
         # Mock re-check - no tools ready after failure
         manager_instance = MagicMock()
-        manager_instance.check_profile.return_value = {}
+        manager_instance.check_matrix.return_value = {}
         mock_tool_manager.return_value = manager_instance
 
         fix_info = [
@@ -1807,7 +1740,6 @@ class TestPlatformCommandExecution:
                 "issue": "Not installed",
                 "missing_deps": [],
                 "remediation": {
-                    "is_manual": False,
                     "commands": ["pip install missing-tool"],
                     "jmo_install": "",
                 },
@@ -1817,7 +1749,6 @@ class TestPlatformCommandExecution:
         should_continue, available = _auto_fix_tools(
             fix_info=fix_info,
             platform="linux",
-            profile="fast",
             available=[],
         )
 
@@ -1857,7 +1788,7 @@ class TestPlatformCommandExecution:
 
         # Mock re-check - tool now ready
         manager_instance = MagicMock()
-        manager_instance.check_profile.return_value = {
+        manager_instance.check_matrix.return_value = {
             "some-tool": MockToolStatus(
                 "some-tool", installed=True, execution_ready=True
             ),
@@ -1870,7 +1801,6 @@ class TestPlatformCommandExecution:
                 "issue": "Not installed",
                 "missing_deps": [],
                 "remediation": {
-                    "is_manual": False,
                     "commands": ["brew install some-tool"],
                     "jmo_install": "",
                 },
@@ -1880,7 +1810,6 @@ class TestPlatformCommandExecution:
         should_continue, available = _auto_fix_tools(
             fix_info=fix_info,
             platform="darwin",
-            profile="fast",
             available=[],
         )
 
@@ -1919,7 +1848,7 @@ class TestPlatformCommandExecution:
 
         # Mock re-check - no tools ready
         manager_instance = MagicMock()
-        manager_instance.check_profile.return_value = {}
+        manager_instance.check_matrix.return_value = {}
         mock_tool_manager.return_value = manager_instance
 
         fix_info = [
@@ -1928,7 +1857,6 @@ class TestPlatformCommandExecution:
                 "issue": "Not installed",
                 "missing_deps": [],
                 "remediation": {
-                    "is_manual": False,
                     "commands": ["pip install slow-tool"],
                     "jmo_install": "",
                 },
@@ -1938,7 +1866,6 @@ class TestPlatformCommandExecution:
         should_continue, available = _auto_fix_tools(
             fix_info=fix_info,
             platform="linux",
-            profile="fast",
             available=[],
         )
 
@@ -1975,7 +1902,7 @@ class TestPlatformCommandExecution:
 
         # Mock re-check
         manager_instance = MagicMock()
-        manager_instance.check_profile.return_value = {}
+        manager_instance.check_matrix.return_value = {}
         mock_tool_manager.return_value = manager_instance
 
         fix_info = [
@@ -1984,7 +1911,6 @@ class TestPlatformCommandExecution:
                 "issue": "Not installed",
                 "missing_deps": [],
                 "remediation": {
-                    "is_manual": False,
                     "commands": ["/protected/install.sh"],
                     "jmo_install": "",
                 },
@@ -1994,7 +1920,6 @@ class TestPlatformCommandExecution:
         should_continue, available = _auto_fix_tools(
             fix_info=fix_info,
             platform="linux",
-            profile="fast",
             available=[],
         )
 
@@ -2031,7 +1956,7 @@ class TestPlatformCommandExecution:
 
         # Mock re-check
         manager_instance = MagicMock()
-        manager_instance.check_profile.return_value = {
+        manager_instance.check_matrix.return_value = {
             "long-pkg": MockToolStatus(
                 "long-pkg", installed=True, execution_ready=True
             ),
@@ -2050,7 +1975,6 @@ class TestPlatformCommandExecution:
                 "issue": "Not installed",
                 "missing_deps": [],
                 "remediation": {
-                    "is_manual": False,
                     "commands": [long_cmd],
                     "jmo_install": "",
                 },
@@ -2060,7 +1984,6 @@ class TestPlatformCommandExecution:
         should_continue, available = _auto_fix_tools(
             fix_info=fix_info,
             platform="linux",
-            profile="fast",
             available=[],
         )
 
@@ -2099,7 +2022,7 @@ class TestPlatformCommandExecution:
 
         # Mock re-check
         manager_instance = MagicMock()
-        manager_instance.check_profile.return_value = {
+        manager_instance.check_matrix.return_value = {
             "trivy": MockToolStatus("trivy", installed=True, execution_ready=True),
         }
         mock_tool_manager.return_value = manager_instance
@@ -2110,7 +2033,6 @@ class TestPlatformCommandExecution:
                 "issue": "Not installed",
                 "missing_deps": [],
                 "remediation": {
-                    "is_manual": False,
                     "commands": ["jmo tools install trivy"],  # No --yes
                     "jmo_install": "",
                 },
@@ -2120,7 +2042,6 @@ class TestPlatformCommandExecution:
         should_continue, available = _auto_fix_tools(
             fix_info=fix_info,
             platform="linux",
-            profile="fast",
             available=[],
         )
 
@@ -2156,7 +2077,7 @@ class TestPlatformCommandExecution:
 
         # Mock re-check
         manager_instance = MagicMock()
-        manager_instance.check_profile.return_value = {
+        manager_instance.check_matrix.return_value = {
             "sparse-tool": MockToolStatus(
                 "sparse-tool", installed=True, execution_ready=True
             ),
@@ -2169,7 +2090,6 @@ class TestPlatformCommandExecution:
                 "issue": "Not installed",
                 "missing_deps": [],
                 "remediation": {
-                    "is_manual": False,
                     "commands": ["", "pip install sparse-tool", ""],  # Empty commands
                     "jmo_install": "",
                 },
@@ -2179,7 +2099,6 @@ class TestPlatformCommandExecution:
         should_continue, available = _auto_fix_tools(
             fix_info=fix_info,
             platform="linux",
-            profile="fast",
             available=[],
         )
 
@@ -2214,7 +2133,7 @@ class TestPlatformCommandExecution:
 
         # Mock re-check
         manager_instance = MagicMock()
-        manager_instance.check_profile.return_value = {
+        manager_instance.check_matrix.return_value = {
             "multi-cmd": MockToolStatus(
                 "multi-cmd", installed=True, execution_ready=True
             ),
@@ -2227,7 +2146,6 @@ class TestPlatformCommandExecution:
                 "issue": "Needs setup",
                 "missing_deps": [],
                 "remediation": {
-                    "is_manual": False,
                     "commands": [
                         "pip install multi-cmd",
                         "multi-cmd --init",
@@ -2240,7 +2158,6 @@ class TestPlatformCommandExecution:
         should_continue, available = _auto_fix_tools(
             fix_info=fix_info,
             platform="linux",
-            profile="fast",
             available=[],
         )
 
@@ -2279,7 +2196,7 @@ class TestPlatformCommandExecution:
 
         # Mock re-check
         manager_instance = MagicMock()
-        manager_instance.check_profile.return_value = {}
+        manager_instance.check_matrix.return_value = {}
         mock_tool_manager.return_value = manager_instance
 
         fix_info = [
@@ -2288,7 +2205,6 @@ class TestPlatformCommandExecution:
                 "issue": "Needs setup",
                 "missing_deps": [],
                 "remediation": {
-                    "is_manual": False,
                     "commands": [
                         "pip install fail-init",
                         "fail-init --init",
@@ -2301,7 +2217,6 @@ class TestPlatformCommandExecution:
         should_continue, available = _auto_fix_tools(
             fix_info=fix_info,
             platform="linux",
-            profile="fast",
             available=[],
         )
 
@@ -2337,7 +2252,7 @@ class TestPlatformCommandExecution:
 
         # Mock re-check
         manager_instance = MagicMock()
-        manager_instance.check_profile.return_value = {
+        manager_instance.check_matrix.return_value = {
             "tool-a": MockToolStatus("tool-a", installed=True, execution_ready=True),
             "tool-b": MockToolStatus("tool-b", installed=True, execution_ready=True),
         }
@@ -2349,7 +2264,6 @@ class TestPlatformCommandExecution:
                 "issue": "Not installed",
                 "missing_deps": [],
                 "remediation": {
-                    "is_manual": False,
                     "commands": ["pip install a"],
                     "jmo_install": "",
                 },
@@ -2359,7 +2273,6 @@ class TestPlatformCommandExecution:
                 "issue": "Not installed",
                 "missing_deps": [],
                 "remediation": {
-                    "is_manual": False,
                     "commands": ["pip install b"],
                     "jmo_install": "",
                 },
@@ -2369,7 +2282,6 @@ class TestPlatformCommandExecution:
         should_continue, available = _auto_fix_tools(
             fix_info=fix_info,
             platform="linux",
-            profile="fast",
             available=[],
         )
 
@@ -2410,7 +2322,7 @@ class TestPlatformCommandExecution:
 
         # Mock re-check
         manager_instance = MagicMock()
-        manager_instance.check_profile.return_value = {
+        manager_instance.check_matrix.return_value = {
             "success-tool": MockToolStatus(
                 "success-tool", installed=True, execution_ready=True
             ),
@@ -2423,7 +2335,6 @@ class TestPlatformCommandExecution:
                 "issue": "Not installed",
                 "missing_deps": [],
                 "remediation": {
-                    "is_manual": False,
                     "commands": ["pip install a"],
                     "jmo_install": "",
                 },
@@ -2433,7 +2344,6 @@ class TestPlatformCommandExecution:
                 "issue": "Not installed",
                 "missing_deps": [],
                 "remediation": {
-                    "is_manual": False,
                     "commands": ["pip install b"],
                     "jmo_install": "",
                 },
@@ -2443,7 +2353,6 @@ class TestPlatformCommandExecution:
         should_continue, available = _auto_fix_tools(
             fix_info=fix_info,
             platform="linux",
-            profile="fast",
             available=[],
         )
 

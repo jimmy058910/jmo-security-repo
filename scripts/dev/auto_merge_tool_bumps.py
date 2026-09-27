@@ -68,7 +68,7 @@ _FAILED_CONCLUSIONS = frozenset(
 
 # Conclusions that count as "green" for merge purposes. SKIPPED and NEUTRAL
 # are explicitly green — the contract-tests job SKIPs install+pytest when no
-# versions.yaml/Dockerfile.* change; that's still a pass.
+# versions.yaml/Dockerfile change; that's still a pass.
 _GREEN_CONCLUSIONS = frozenset({"SUCCESS", "SKIPPED", "NEUTRAL"})
 
 AUTO_MERGE_LABEL = "auto-merge-ok"

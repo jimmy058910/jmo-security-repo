@@ -40,7 +40,6 @@ class TestSQLInjectionResistance:
 
         store_scan(
             results_dir=scan_results_dir,
-            profile="balanced",
             tools=["trivy"],
             db_path=db_path,
         )
@@ -94,7 +93,6 @@ class TestSQLInjectionResistance:
 
         scan_id = store_scan(
             results_dir=scan_results_dir,
-            profile="balanced",
             tools=malicious_tools,
             db_path=db_path,
         )
@@ -135,7 +133,6 @@ class TestSQLInjectionResistance:
 
         scan_id = store_scan(
             results_dir=scan_results_dir,
-            profile="balanced",
             tools=["trivy"],
             db_path=db_path,
             commit_hash="abc123",
@@ -183,7 +180,6 @@ class TestSQLInjectionResistance:
         # Store scan with path containing SQL injection
         scan_id = store_scan(
             results_dir=scan_results_dir,
-            profile="balanced",
             tools=["trivy"],
             db_path=db_path,
         )
@@ -238,7 +234,6 @@ class TestSQLInjectionResistance:
 
         scan_id = store_scan(
             results_dir=scan_results_dir,
-            profile="balanced",
             tools=["trivy"],
             db_path=db_path,
         )

@@ -7,13 +7,13 @@ automated validation that JMo Security correctly detects known issues.
 
 Usage:
     # Generate baseline for Juice Shop
-    python scripts/dev/generate_baseline.py --target juice-shop --profile balanced
+    python scripts/dev/generate_baseline.py --target juice-shop
 
     # Update existing baseline
     python scripts/dev/generate_baseline.py --target juice-shop --update
 
     # Generate baseline from local directory
-    python scripts/dev/generate_baseline.py --target ./path/to/repo --profile fast
+    python scripts/dev/generate_baseline.py --target ./path/to/repo
 
     # Validate baseline schema
     python scripts/dev/generate_baseline.py --validate tests/integration/baselines/juice-shop.baseline.json
@@ -61,17 +61,14 @@ KNOWN_TARGETS = {
     "juice-shop": {
         "repo": "https://github.com/juice-shop/juice-shop.git",
         "version_cmd": ["git", "describe", "--tags", "--always"],
-        "default_profile": "balanced",
     },
     "webgoat": {
         "repo": "https://github.com/WebGoat/WebGoat.git",
         "version_cmd": ["git", "describe", "--tags", "--always"],
-        "default_profile": "balanced",
     },
     "dvwa": {
         "repo": "https://github.com/digininja/DVWA.git",
         "version_cmd": ["git", "describe", "--tags", "--always"],
-        "default_profile": "balanced",
     },
 }
 
@@ -122,9 +119,9 @@ def clone_target(target: str, dest: Path) -> str:
     return version
 
 
-def run_scan(target_path: Path, profile: str, results_dir: Path) -> int:
+def run_scan(target_path: Path, results_dir: Path) -> int:
     """Run JMo Security scan on target."""
-    logger.info(f"Running scan with profile '{profile}'...")
+    logger.info("Running scan...")
 
     cmd = [
         sys.executable,
@@ -133,8 +130,6 @@ def run_scan(target_path: Path, profile: str, results_dir: Path) -> int:
         "scan",
         "--repo",
         str(target_path),
-        "--profile",
-        profile,
         "--results-dir",
         str(results_dir),
     ]
@@ -243,10 +238,7 @@ def calculate_tolerance(findings: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def generate_baseline(
-    target: str,
-    profile: str,
-) -> dict[str, Any]:
+def generate_baseline(target: str) -> dict[str, Any]:
     """Generate or update a baseline for the given target."""
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
@@ -265,7 +257,7 @@ def generate_baseline(
         results_dir = tmp_path / "results"
         results_dir.mkdir(parents=True)
 
-        run_scan(target_path, profile, results_dir)
+        run_scan(target_path, results_dir)
 
         # Load and analyze findings
         findings = load_findings(results_dir)
@@ -281,7 +273,6 @@ def generate_baseline(
                 "target": f"{target}/{target}" if target in KNOWN_TARGETS else target,
                 "version": version,
                 "generated": datetime.now(UTC).isoformat(),
-                "profile": profile,
                 "tools_used": sorted(tools_used),
                 "notes": f"Auto-generated baseline from {len(findings)} findings",
             },
@@ -323,12 +314,6 @@ def main() -> int:
         help="Target to scan (juice-shop, webgoat, dvwa, or local path)",
     )
     parser.add_argument(
-        "--profile",
-        default="balanced",
-        choices=["fast", "slim", "balanced", "deep"],
-        help="Scan profile to use (default: balanced)",
-    )
-    parser.add_argument(
         "--update",
         action="store_true",
         help="Update existing baseline instead of creating new",
@@ -363,10 +348,7 @@ def main() -> int:
         parser.error("--target is required for generation")
 
     try:
-        baseline = generate_baseline(
-            target=args.target,
-            profile=args.profile,
-        )
+        baseline = generate_baseline(target=args.target)
 
         # Determine output path
         if args.output:

@@ -5,7 +5,7 @@ Unit tests for wizard policy integration (Phase 2.5).
 This test suite verifies that:
 1. Interactive policy selection menu works correctly
 2. Auto-detection recommends appropriate policies
-3. Non-interactive mode uses profile defaults
+3. Non-interactive mode uses the configured defaults (jmo.yml policy.default_policies)
 4. Policy choice parsing handles all input types
 5. Violation display and export functions work
 6. CLI integration with --policies and --skip-policies flags
@@ -117,98 +117,90 @@ def mock_policy_engine(sample_policy_metadata):
 # ========== AUTO-DETECTION TESTS ====================
 
 
-def test_detect_recommended_policies_fast_profile(sample_findings):
-    """Test auto-detection for fast profile (zero-secrets only)."""
-    from scripts.cli.wizard_flows.policy_flow import _detect_recommended_policies
-
-    # Create mock policies with proper metadata (as dicts, not PolicyMetadata objects)
-    policies_with_metadata = [
-        (
-            Path("zero-secrets.rego"),
-            {
-                "name": "zero-secrets",
-                "version": "1.0.0",
-                "description": "Block secrets",
-            },
-        ),
-        (
-            Path("owasp-top-10.rego"),
-            {"name": "owasp-top-10", "version": "1.0.0", "description": "OWASP Top 10"},
-        ),
-    ]
-
-    # Use findings without OWASP violations to test pure fast profile
-    findings_no_owasp = [
-        f for f in sample_findings if not f.get("compliance", {}).get("owaspTop10_2021")
-    ]
-
-    recommended = _detect_recommended_policies(
-        findings_no_owasp, "fast", policies_with_metadata
+def _policy(name: str) -> tuple[Path, dict]:
+    """A (policy_path, metadata) pair as policy_evaluation_menu builds them."""
+    return (
+        Path(f"{name}.rego"),
+        {"name": name, "version": "1.0.0", "description": name},
     )
 
-    # Fast profile should recommend zero-secrets only
-    assert len(recommended) == 1
-    assert "zero-secrets" in str(recommended[0])
+
+#: A finding that triggers no findings-based recommendation: not a verified
+#: secret, no OWASP or PCI mapping.
+NEUTRAL_FINDING = {
+    "tool": {"name": "trivy"},
+    "severity": "CRITICAL",
+    "message": "Critical vulnerability",
+}
 
 
-def test_detect_recommended_policies_balanced_profile(sample_findings):
-    """Test auto-detection for balanced profile (owasp + zero-secrets)."""
+def test_detect_recommended_policies_configured_defaults_only():
+    """With nothing in the findings, exactly the configured defaults are recommended.
+
+    `policy.default_policies` in jmo.yml replaced the per-profile table
+    (fast/slim/balanced/deep); the shipped jmo.yml configures these two.
+    """
     from scripts.cli.wizard_flows.policy_flow import _detect_recommended_policies
 
-    policies_with_metadata = [
-        (
-            Path("zero-secrets.rego"),
-            {
-                "name": "zero-secrets",
-                "version": "1.0.0",
-                "description": "Block secrets",
-            },
-        ),
-        (
-            Path("owasp-top-10.rego"),
-            {"name": "owasp-top-10", "version": "1.0.0", "description": "OWASP Top 10"},
-        ),
-        (
-            Path("pci-dss.rego"),
-            {"name": "pci-dss", "version": "1.0.0", "description": "PCI DSS"},
-        ),
-    ]
+    policies = [_policy(n) for n in ("zero-secrets", "owasp-top-10", "pci-dss")]
 
     recommended = _detect_recommended_policies(
-        sample_findings, "balanced", policies_with_metadata
+        [NEUTRAL_FINDING], policies, ["owasp-top-10", "zero-secrets"]
     )
 
-    # Balanced profile should recommend owasp-top-10 + zero-secrets
-    assert len(recommended) == 2
-    assert any("zero-secrets" in str(p) for p in recommended)
-    assert any("owasp-top-10" in str(p) for p in recommended)
+    assert sorted(p.stem for p in recommended) == ["owasp-top-10", "zero-secrets"]
 
 
-def test_detect_recommended_policies_deep_profile(
-    sample_findings, sample_policy_metadata
-):
-    """Test auto-detection for deep profile (all policies)."""
+def test_detect_recommended_policies_every_configured_default(sample_policy_metadata):
+    """Configuring every policy recommends every policy, once each."""
     from scripts.cli.wizard_flows.policy_flow import _detect_recommended_policies
 
-    # Convert PolicyMetadata objects to dicts
-    policies_with_metadata = [
-        (
-            Path(f"{meta.name}.rego"),
-            {
-                "name": meta.name,
-                "version": meta.version,
-                "description": meta.description,
-            },
-        )
-        for meta in sample_policy_metadata
-    ]
+    names = [meta.name for meta in sample_policy_metadata]
+    policies = [_policy(n) for n in names]
+
+    recommended = _detect_recommended_policies([NEUTRAL_FINDING], policies, names)
+
+    assert sorted(p.stem for p in recommended) == sorted(names)
+    assert len(recommended) == len(set(recommended))
+
+
+def test_detect_recommended_policies_no_defaults_and_nothing_found():
+    """No configured defaults and a neutral scan: nothing is recommended."""
+    from scripts.cli.wizard_flows.policy_flow import _detect_recommended_policies
+
+    policies = [_policy(n) for n in ("zero-secrets", "owasp-top-10")]
+
+    assert _detect_recommended_policies([NEUTRAL_FINDING], policies, []) == []
+
+
+def test_detect_recommended_policies_skips_a_default_with_no_policy_file():
+    """A configured name no built-in policy answers to is skipped, not an error."""
+    from scripts.cli.wizard_flows.policy_flow import _detect_recommended_policies
+
+    policies = [_policy("zero-secrets")]
 
     recommended = _detect_recommended_policies(
-        sample_findings, "deep", policies_with_metadata
+        [NEUTRAL_FINDING], policies, ["no-such-policy", "zero-secrets"]
     )
 
-    # Deep profile should recommend all 5 policies
-    assert len(recommended) == 5
+    assert [p.stem for p in recommended] == ["zero-secrets"]
+
+
+def test_detect_recommended_policies_does_not_mutate_the_defaults(sample_findings):
+    """Findings-based additions must not leak into the caller's list.
+
+    The caller's list may be the loaded config's own `policy.default_policies`;
+    mutating it would make one scan's findings change the next scan's defaults.
+    """
+    from scripts.cli.wizard_flows.policy_flow import _detect_recommended_policies
+
+    policies = [_policy(n) for n in ("zero-secrets", "owasp-top-10")]
+    defaults: list[str] = []
+
+    recommended = _detect_recommended_policies(sample_findings, policies, defaults)
+
+    assert defaults == []
+    assert sorted(p.stem for p in recommended) == ["owasp-top-10", "zero-secrets"]
 
 
 def test_detect_recommended_policies_with_verified_secrets():
@@ -223,27 +215,25 @@ def test_detect_recommended_policies_with_verified_secrets():
         }
     ]
 
-    policies_with_metadata = [
-        (
-            Path("zero-secrets.rego"),
-            {
-                "name": "zero-secrets",
-                "version": "1.0.0",
-                "description": "Block secrets",
-            },
-        ),
-        (
-            Path("owasp-top-10.rego"),
-            {"name": "owasp-top-10", "version": "1.0.0", "description": "OWASP Top 10"},
-        ),
-    ]
+    policies_with_metadata = [_policy("zero-secrets"), _policy("owasp-top-10")]
 
+    # No configured defaults, so the recommendation can only come from the finding
     recommended = _detect_recommended_policies(
-        findings_with_secrets, "fast", policies_with_metadata
+        findings_with_secrets, policies_with_metadata, []
     )
 
-    # Should recommend zero-secrets due to verified secrets
-    assert any("zero-secrets" in str(p) for p in recommended)
+    assert [p.stem for p in recommended] == ["zero-secrets"]
+
+
+def test_detect_recommended_policies_unverified_secret_adds_nothing():
+    """Only a *verified* trufflehog secret recommends zero-secrets."""
+    from scripts.cli.wizard_flows.policy_flow import _detect_recommended_policies
+
+    findings = [{"tool": {"name": "trufflehog"}, "verified": False, "severity": "HIGH"}]
+
+    recommended = _detect_recommended_policies(findings, [_policy("zero-secrets")], [])
+
+    assert recommended == []
 
 
 def test_detect_recommended_policies_with_owasp_violations():
@@ -258,27 +248,13 @@ def test_detect_recommended_policies_with_owasp_violations():
         }
     ]
 
-    policies_with_metadata = [
-        (
-            Path("zero-secrets.rego"),
-            {
-                "name": "zero-secrets",
-                "version": "1.0.0",
-                "description": "Block secrets",
-            },
-        ),
-        (
-            Path("owasp-top-10.rego"),
-            {"name": "owasp-top-10", "version": "1.0.0", "description": "OWASP Top 10"},
-        ),
-    ]
+    policies_with_metadata = [_policy("zero-secrets"), _policy("owasp-top-10")]
 
     recommended = _detect_recommended_policies(
-        findings_with_owasp, "fast", policies_with_metadata
+        findings_with_owasp, policies_with_metadata, []
     )
 
-    # Should recommend owasp-top-10 due to OWASP violations
-    assert any("owasp-top-10" in str(p) for p in recommended)
+    assert [p.stem for p in recommended] == ["owasp-top-10"]
 
 
 def test_detect_recommended_policies_with_pci_violations():
@@ -293,27 +269,13 @@ def test_detect_recommended_policies_with_pci_violations():
         }
     ]
 
-    policies_with_metadata = [
-        (
-            Path("zero-secrets.rego"),
-            {
-                "name": "zero-secrets",
-                "version": "1.0.0",
-                "description": "Block secrets",
-            },
-        ),
-        (
-            Path("pci-dss.rego"),
-            {"name": "pci-dss", "version": "1.0.0", "description": "PCI DSS"},
-        ),
-    ]
+    policies_with_metadata = [_policy("zero-secrets"), _policy("pci-dss")]
 
     recommended = _detect_recommended_policies(
-        findings_with_pci, "fast", policies_with_metadata
+        findings_with_pci, policies_with_metadata, []
     )
 
-    # Should recommend pci-dss due to PCI violations
-    assert any("pci-dss" in str(p) for p in recommended)
+    assert [p.stem for p in recommended] == ["pci-dss"]
 
 
 # ========== POLICY CHOICE PARSING TESTS ====================
@@ -576,7 +538,7 @@ def test_policy_evaluation_menu_opa_unavailable(
     mock_engine_class.side_effect = RuntimeError("OPA binary not found")
 
     results = policy_evaluation_menu(
-        tmp_path, "balanced", sample_findings, non_interactive=True
+        tmp_path, sample_findings, non_interactive=True, default_policies=[]
     )
 
     assert results == {}
@@ -600,7 +562,7 @@ def test_policy_evaluation_menu_no_policies(
     mock_glob.return_value = []
 
     results = policy_evaluation_menu(
-        tmp_path, "balanced", sample_findings, non_interactive=True
+        tmp_path, sample_findings, non_interactive=True, default_policies=[]
     )
 
     assert results == {}
@@ -646,7 +608,10 @@ def test_policy_evaluation_menu_metadata_fallback(
     (findings_dir / "findings.json").write_text(json.dumps(sample_findings))
 
     results = policy_evaluation_menu(
-        tmp_path, "fast", sample_findings, non_interactive=True
+        tmp_path,
+        sample_findings,
+        non_interactive=True,
+        default_policies=["zero-secrets"],
     )
 
     # Should use fallback metadata and still evaluate policy
@@ -829,7 +794,10 @@ def test_policy_evaluation_menu_interactive_skip(
     # Mock user input: choose 's' (skip)
     with patch("builtins.input", return_value="s"):
         results = policy_evaluation_menu(
-            tmp_path, "fast", sample_findings, non_interactive=False
+            tmp_path,
+            sample_findings,
+            non_interactive=False,
+            default_policies=["zero-secrets"],
         )
 
     assert results == {}
@@ -878,7 +846,10 @@ def test_policy_evaluation_menu_interactive_view_violations(
     # Mock user input: choose 'a' (recommended), then 'n' (don't view violations)
     with patch("builtins.input", side_effect=["a", "n"]):
         results = policy_evaluation_menu(
-            tmp_path, "fast", sample_findings, non_interactive=False
+            tmp_path,
+            sample_findings,
+            non_interactive=False,
+            default_policies=["zero-secrets"],
         )
 
     assert len(results) == 1
@@ -1065,7 +1036,7 @@ def test_display_policy_violations_interactive_previous_navigation(capsys):
 def test_policy_evaluation_menu_noninteractive_mode(
     mock_glob, mock_engine_class, tmp_path, sample_findings, capsys
 ):
-    """Test non-interactive mode uses profile defaults."""
+    """Non-interactive mode evaluates the configured defaults, recommended as-is."""
     from scripts.cli.wizard_flows.policy_flow import policy_evaluation_menu
     from scripts.core.policy_engine import PolicyResult
 
@@ -1098,14 +1069,101 @@ def test_policy_evaluation_menu_noninteractive_mode(
     findings_dir.mkdir(parents=True, exist_ok=True)
     (findings_dir / "findings.json").write_text(json.dumps(sample_findings))
 
+    # A neutral finding: both policies are evaluated because they are configured,
+    # not because the findings asked for them
     results = policy_evaluation_menu(
-        tmp_path, "balanced", sample_findings, non_interactive=True
+        tmp_path,
+        [{"tool": {"name": "trivy"}, "severity": "CRITICAL"}],
+        non_interactive=True,
+        default_policies=["owasp-top-10", "zero-secrets"],
     )
 
-    # Should evaluate 2 policies (balanced profile defaults)
-    assert len(results) == 2
+    assert sorted(results) == ["owasp-top-10", "zero-secrets"]
     captured = capsys.readouterr()
     assert "Non-interactive mode" in captured.out
+    assert "Recommended policies:" in captured.out
+
+
+@patch("scripts.cli.wizard_flows.policy_flow.PolicyEngine")
+@patch("scripts.cli.wizard_flows.policy_flow.Path.glob")
+def test_policy_evaluation_menu_reads_defaults_from_jmo_yml(
+    mock_glob, mock_engine_class, tmp_path, monkeypatch
+):
+    """default_policies=None means jmo.yml's `policy.default_policies`.
+
+    That is the same list `jmo report` evaluates by default, so the wizard
+    recommends what a plain scan would have run. A jmo.yml naming one of two
+    available policies, and a neutral finding, pins the source: only that one
+    is evaluated.
+    """
+    from scripts.cli.wizard_flows.policy_flow import policy_evaluation_menu
+    from scripts.core.policy_engine import PolicyResult
+
+    monkeypatch.delenv("JMO_POLICY_DEFAULT_POLICIES", raising=False)
+    (tmp_path / "jmo.yml").write_bytes(
+        b"policy:\n  default_policies:\n    - owasp-top-10\n"
+    )
+    monkeypatch.chdir(tmp_path)
+
+    mock_engine = MagicMock()
+    mock_engine_class.return_value = mock_engine
+    mock_glob.return_value = [
+        Path("policies/builtin/zero-secrets.rego"),
+        Path("policies/builtin/owasp-top-10.rego"),
+    ]
+    mock_engine.get_metadata.side_effect = [
+        {"name": "zero-secrets", "version": "1.0.0", "description": "Block secrets"},
+        {"name": "owasp-top-10", "version": "1.0.0", "description": "OWASP Top 10"},
+    ]
+    mock_engine.evaluate.return_value = PolicyResult(
+        policy_name="owasp-top-10", passed=True, violations=[]
+    )
+
+    results = policy_evaluation_menu(
+        tmp_path,
+        [{"tool": {"name": "trivy"}, "severity": "CRITICAL"}],
+        non_interactive=True,
+    )
+
+    assert list(results) == ["owasp-top-10"]
+
+
+@patch("scripts.cli.wizard_flows.policy_flow.PolicyEngine")
+@patch("scripts.cli.wizard_flows.policy_flow.Path.glob")
+def test_policy_evaluation_menu_env_override_beats_jmo_yml(
+    mock_glob, mock_engine_class, tmp_path, monkeypatch
+):
+    """JMO_POLICY_DEFAULT_POLICIES overrides jmo.yml, as it does for `jmo report`."""
+    from scripts.cli.wizard_flows.policy_flow import policy_evaluation_menu
+    from scripts.core.policy_engine import PolicyResult
+
+    (tmp_path / "jmo.yml").write_bytes(
+        b"policy:\n  default_policies:\n    - owasp-top-10\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("JMO_POLICY_DEFAULT_POLICIES", "zero-secrets")
+
+    mock_engine = MagicMock()
+    mock_engine_class.return_value = mock_engine
+    mock_glob.return_value = [
+        Path("policies/builtin/zero-secrets.rego"),
+        Path("policies/builtin/owasp-top-10.rego"),
+    ]
+    mock_engine.get_metadata.side_effect = [
+        {"name": "zero-secrets", "version": "1.0.0", "description": "Block secrets"},
+        {"name": "owasp-top-10", "version": "1.0.0", "description": "OWASP Top 10"},
+    ]
+    mock_engine.evaluate.return_value = PolicyResult(
+        policy_name="zero-secrets", passed=True, violations=[]
+    )
+
+    results = policy_evaluation_menu(
+        tmp_path,
+        [{"tool": {"name": "trivy"}, "severity": "CRITICAL"}],
+        non_interactive=True,
+    )
+
+    assert list(results) == ["zero-secrets"]
 
 
 # ========== EDGE CASE TESTS (TASK-006) ====================
@@ -1606,7 +1664,7 @@ def test_policy_evaluation_menu_evaluation_error(
     mock_engine = MagicMock()
     mock_engine_class.return_value = mock_engine
 
-    # Mock policy files - use zero-secrets.rego so it gets recommended for fast profile
+    # Mock policy files - zero-secrets.rego, configured as a default below
     mock_policy_files = [Path("policies/builtin/zero-secrets.rego")]
     mock_glob.return_value = mock_policy_files
 
@@ -1620,7 +1678,12 @@ def test_policy_evaluation_menu_evaluation_error(
     # Mock evaluate to raise exception
     mock_engine.evaluate.side_effect = Exception("OPA evaluation failed")
 
-    policy_evaluation_menu(tmp_path, "fast", sample_findings, non_interactive=True)
+    policy_evaluation_menu(
+        tmp_path,
+        sample_findings,
+        non_interactive=True,
+        default_policies=["zero-secrets"],
+    )
 
     # Should handle error gracefully
     captured = capsys.readouterr()

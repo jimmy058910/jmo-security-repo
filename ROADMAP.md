@@ -9,16 +9,22 @@
 **Latest Stable Release:** v1.1.1 (September 2026)
 
 v1.1.0 **shipped on 2026-09-05** — PyPI, the GitHub Release and all four Docker
-variants. It is not a feature milestone: it is the outcome of a pre-release fix
-program (Phases 0-13, tracked in
-[the plan](docs/superpowers/plans/2026-08-22-v1.1.0-pre-release-fix-program.md))
-that fixed every open defect before the tag rather than shipping with
-dispositions. Releases now return to a **patch cadence** — each hardens what is
-already there rather than accumulating toward a version milestone.
+variants — as the outcome of a pre-release fix program (Phases 0-13, tracked in
+[its plan](docs/superpowers/plans/2026-08-22-v1.1.0-pre-release-fix-program.md))
+that fixed every open defect before the tag. v1.1.1 **shipped on 2026-09-11** as
+the first patch after it: seven fixes and one removal across eleven issues.
+
+**Next: v2.0.0.** Two measured reviews (2026-09-09, 2026-09-11) found that 19 of the
+29 advertised tools execute on Windows, that the SAST rules cannot legally ship, and
+that a class of findings (Actions workflows) was invisible. v2.0.0 prunes the matrix to
+14 tools plus a JMo-native check pack, removes v1's four scan profiles, collapses its
+four Docker images to one, ships an offline rule bundle, and imports SARIF. Scope:
+[the design](docs/superpowers/specs/2026-09-12-v2.0.0-program-design.md); sequence and
+gates: [the program plan](docs/superpowers/plans/2026-09-12-v2.0.0-program.md).
 
 v1.0 delivers the full production scanning platform:
 
-- 29 security scanners with unified CLI
+- Security scanners orchestrated through one unified CLI
 - SQLite historical storage with trend analysis
 - Machine-readable diffs for CI/CD integration
 - Policy-as-Code (OPA integration)
@@ -71,7 +77,7 @@ it is not duplicated here, so there is nothing to keep in sync.
 
 Highlights of the v1.0 line:
 
-- **29 security scanners** — Unified CLI orchestrating tools across 6 scan types
+- **Unified CLI** — Security scanners orchestrated across 6 scan types
 - **Metadata wrapper** — Standardized `{"meta": {...}, "findings": [...]}` output
 - **CSV reporter** — Spreadsheet-friendly export for compliance workflows
 - **HTML dashboard dual-mode** — Inline (<=1000) or external JSON (>1000 findings)

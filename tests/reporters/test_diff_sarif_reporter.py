@@ -20,7 +20,6 @@ def sample_diff_result():
         source_type="directory",
         path="baseline-results/",
         timestamp="2025-11-04T10:00:00Z",
-        profile="balanced",
         total_findings=150,
     )
 
@@ -28,7 +27,6 @@ def sample_diff_result():
         source_type="directory",
         path="current-results/",
         timestamp="2025-11-05T10:00:00Z",
-        profile="balanced",
         total_findings=142,
     )
 
@@ -284,7 +282,6 @@ def test_sarif_unicode_handling(tmp_path):
         source_type="directory",
         path="baseline/",
         timestamp="2025-11-04T10:00:00Z",
-        profile="balanced",
         total_findings=1,
     )
 
@@ -292,7 +289,6 @@ def test_sarif_unicode_handling(tmp_path):
         source_type="directory",
         path="current/",
         timestamp="2025-11-05T10:00:00Z",
-        profile="balanced",
         total_findings=1,
     )
 
@@ -357,7 +353,6 @@ def test_sarif_empty_diff(tmp_path):
         source_type="directory",
         path="baseline/",
         timestamp="2025-11-04T10:00:00Z",
-        profile="fast",
         total_findings=0,
     )
 
@@ -365,7 +360,6 @@ def test_sarif_empty_diff(tmp_path):
         source_type="directory",
         path="current/",
         timestamp="2025-11-05T10:00:00Z",
-        profile="fast",
         total_findings=0,
     )
 

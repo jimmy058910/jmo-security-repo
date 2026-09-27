@@ -33,6 +33,12 @@ _CONFIG_ONLY_REPOSITORY_KEYS = {
     "exclude": "exclude",
 }
 
+# GitLab job timeout when the schedule sets no startingDeadlineSeconds. One value
+# since v2.0.0 dropped scan profiles (it was fast=10 / balanced=30 / deep=60,
+# with 30 for anything else). 30 kept: TOOL_MATRIX is smaller than balanced
+# was, and jmo.yml's top level inherits balanced's threads and timeout.
+_DEFAULT_JOB_TIMEOUT_MINUTES = 30
+
 
 class GitLabCIGenerator:
     """Generate .gitlab-ci.yml from ScanSchedule."""
@@ -116,14 +122,11 @@ class GitLabCIGenerator:
         Returns:
             Timeout string in GitLab CI format (e.g., "1h 30m")
         """
-        # Use startingDeadlineSeconds if set, otherwise profile-based defaults
+        # Use startingDeadlineSeconds if set, otherwise one default for the matrix
         if schedule.spec.startingDeadlineSeconds:
             minutes = schedule.spec.startingDeadlineSeconds // 60
         else:
-            # Profile-based defaults
-            profile_timeouts = {"fast": 10, "balanced": 30, "deep": 60}
-            profile = schedule.spec.jobTemplate.profile
-            minutes = profile_timeouts.get(profile, 30)
+            minutes = _DEFAULT_JOB_TIMEOUT_MINUTES
 
         # Convert to GitLab CI format (hours and minutes)
         if minutes >= 60:
@@ -149,9 +152,12 @@ class GitLabCIGenerator:
         # Create results directory
         commands.append("mkdir -p ${RESULTS_DIR}")
 
-        # Build jmo scan command
-        cmd_parts = ["jmo scan"]
-        cmd_parts.append(f"--profile-name {shlex.quote(spec.profile)}")
+        # Build the jmo command. A severity threshold makes it `jmo ci` (scan,
+        # report, then exit on the threshold): `jmo scan` has no --fail-on, and
+        # argparse read `--fail-on HIGH` as the prefix of --fail-on-store-error,
+        # leaving HIGH unrecognised, so the exported job exited 2 (#1277).
+        fail_on = spec.options.get("fail_on")
+        cmd_parts = ["jmo ci" if fail_on else "jmo scan"]
 
         # Targets
         #
@@ -170,7 +176,7 @@ class GitLabCIGenerator:
         if unhandled:
             logger.warning(
                 "%s: GitLab CI export ignores target key(s) %s -- the generated "
-                "`jmo scan` command will not include them.",
+                "command will not include them.",
                 name,
                 ", ".join(unhandled),
             )
@@ -186,7 +192,7 @@ class GitLabCIGenerator:
                 if repos.get(key):
                     logger.warning(
                         "%s: repositories.%s cannot be expressed on the "
-                        "`jmo scan` command line; set `%s:` in jmo.yml instead. "
+                        "command line; set `%s:` in jmo.yml instead. "
                         "(This generator used to emit --%s-pattern, which "
                         "`jmo scan` does not define -- the exported command "
                         "exited 2.)",
@@ -263,12 +269,13 @@ class GitLabCIGenerator:
         opts = spec.options
         if opts.get("allow_missing_tools"):
             cmd_parts.append("--allow-missing-tools")
+        # Quoted like every other value on this shell line; these two were not.
         if "threads" in opts:
-            cmd_parts.append(f"--threads {opts['threads']}")
+            cmd_parts.append(f"--threads {shlex.quote(str(opts['threads']))}")
         if "timeout" in opts:
-            cmd_parts.append(f"--timeout {opts['timeout']}")
-        if "fail_on" in opts:
-            cmd_parts.append(f"--fail-on {opts['fail_on']}")
+            cmd_parts.append(f"--timeout {shlex.quote(str(opts['timeout']))}")
+        if fail_on:
+            cmd_parts.append(f"--fail-on {shlex.quote(fail_on)}")
 
         cmd_parts.append("--human-logs")
 
@@ -478,7 +485,6 @@ class GitLabCIGenerator:
             [
                 f"# Cron: {schedule.spec.schedule}",
                 f"# Timezone: {schedule.spec.timezone}",
-                f"# Profile: {schedule.spec.jobTemplate.profile}",
                 f"# Generated: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}",
                 "#",
                 "# IMPORTANT: Configure schedule via GitLab UI:",

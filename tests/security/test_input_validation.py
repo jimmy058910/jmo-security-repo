@@ -31,13 +31,17 @@ class TestInputValidation:
         """
         import os
 
-        # Test with malicious tool name containing shell metacharacters
+        # Each payload, if any shell ever ran it, creates the sentinel file.
+        # That is the evidence of execution; a word in stderr is not, because
+        # the usage error names the rejected tool (#1279) and so echoes it.
+        sentinel = tmp_path / "pwned"
         malicious_inputs = [
-            "; rm -rf /",
+            f"; touch {sentinel}",
+            f"| touch {sentinel}",
+            f"& touch {sentinel}",
+            f"$(touch {sentinel})",
+            f"`touch {sentinel}`",
             "| cat /etc/passwd",
-            "& echo pwned",
-            "$(whoami)",
-            "`id`",
         ]
 
         # Set CI environment to skip interactive prompts
@@ -60,15 +64,13 @@ class TestInputValidation:
                 env=test_env,
             )
 
-            # Command should fail gracefully (invalid tool name), not execute shell commands
-            assert result.returncode != 0, (
-                f"Malicious input '{malicious_input}' should fail gracefully"
+            # A usage error, exit 2, naming what it refused: not a tool.
+            assert result.returncode == 2, (
+                f"Malicious input '{malicious_input}' should fail as a usage error"
             )
-
-            # Should not see signs of command execution in stderr
-            assert "pwned" not in result.stderr
+            assert "unknown tool" in result.stderr, result.stderr
+            assert not sentinel.exists(), f"{malicious_input!r} was executed"
             assert "root:" not in result.stdout  # /etc/passwd content
-            assert result.stderr  # Should have error message about invalid tool
 
     def test_yaml_config_prevents_arbitrary_code_execution(self, tmp_path):
         """Test that YAML config loading prevents arbitrary code execution.

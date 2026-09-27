@@ -138,27 +138,25 @@ class TestConstants:
         parser_names = set(build_parser()._subparsers._group_actions[0].choices)
         assert set(MAIN_SUBCOMMANDS) == parser_names
         # Meta-guard: a derivation that silently returns nothing passes every
-        # assertion built on it.
-        assert len(MAIN_SUBCOMMANDS) >= 20, sorted(MAIN_SUBCOMMANDS)
+        # assertion built on it. 17 since v2.0.0 removed `fast`, `balanced` and
+        # `full` with scan profiles.
+        assert len(MAIN_SUBCOMMANDS) >= 17, sorted(MAIN_SUBCOMMANDS)
         for known in ("scan", "report", "adapters", "attest", "verify", "setup"):
             assert known in MAIN_SUBCOMMANDS
 
-    def test_main_subcommands_includes_the_seven_that_had_drifted(self):
-        """Negative control: name the seven #783 was about.
+    def test_main_subcommands_includes_the_ones_that_had_drifted(self):
+        """Negative control: name the survivors of the seven #783 was about.
 
         If the derivation regresses to the old hard-coded list, the assertion
-        above still passes when both sides regress together. These seven cannot.
+        above still passes when both sides regress together. These cannot.
+        Three of the seven (`balanced`, `fast`, `full`) left the parser with
+        scan profiles in v2.0.0, so they are asserted absent instead: a
+        derivation that returned a stale list would still carry them.
         """
-        for missed in (
-            "adapters",
-            "attest",
-            "balanced",
-            "fast",
-            "full",
-            "setup",
-            "verify",
-        ):
+        for missed in ("adapters", "attest", "setup", "verify"):
             assert missed in MAIN_SUBCOMMANDS
+        for removed in ("balanced", "fast", "full"):
+            assert removed not in MAIN_SUBCOMMANDS
 
     def test_sub_subcommands_match_the_parser(self):
         """Every parent with children is covered, with the children it has."""
@@ -516,7 +514,7 @@ class TestFullTier:
             full_names = {c.name for c in result.checks if c.name.startswith("full:")}
             expected_names = {
                 "full: tools check",
-                "full: tools list --profiles",
+                "full: tools list",
                 "full: adapters list",
                 "full: history stats",
                 "full: build validate",
@@ -1072,7 +1070,7 @@ class TestFullTierEdgeCases:
     def test_full_tools_check_bound_clears_the_measured_runtime(self):
         """The bound must survive the validator's own load (#773).
 
-        `jmo tools check` probes all 29 registry entries -- measured 49s cold
+        `jmo tools check` probed every v1.x registry entry -- measured 49s cold
         and 33s warm, standalone, on a box with the tools installed. The old
         60s literal was 1.22x the cold run while this validator spawns
         subprocess checks alongside it, so the check ERRORed and `--tier full`

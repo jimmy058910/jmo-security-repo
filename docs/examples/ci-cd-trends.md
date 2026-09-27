@@ -84,7 +84,7 @@ jobs:
             -v ${{ github.workspace }}:/scan \
             -v ${{ github.workspace }}/.jmo:/root/.jmo \
             ghcr.io/jimmy058910/jmo-security:latest \
-            scan --repo /scan --results-dir /scan/results --profile-name balanced
+            scan --repo /scan --results-dir /scan/results
 
       # Analyze trends
       - name: Analyze security trends
@@ -169,7 +169,7 @@ jobs:
             -v ${{ github.workspace }}:/scan \
             -v ${{ github.workspace }}/.jmo:/root/.jmo \
             ghcr.io/jimmy058910/jmo-security:latest \
-            scan --repo /scan --results-dir /scan/results --profile-name balanced
+            scan --repo /scan --results-dir /scan/results
 
       # Analyze with branch context
       - name: Analyze trends
@@ -230,7 +230,7 @@ jobs:
             -v ${{ github.workspace }}:/scan \
             -v ${{ github.workspace }}/.jmo:/root/.jmo \
             ghcr.io/jimmy058910/jmo-security:latest \
-            scan --repo /scan --results-dir /scan/results --profile-name balanced
+            scan --repo /scan --results-dir /scan/results
 
       # CRITICAL: Fail if HIGH/CRITICAL regressions detected
       - name: Regression gate
@@ -307,7 +307,7 @@ jobs:
             -v ${{ github.workspace }}:/scan \
             -v ${{ github.workspace }}/.jmo:/root/.jmo \
             ghcr.io/jimmy058910/jmo-security:latest \
-            scan --repo /scan --results-dir /scan/results --profile-name deep
+            scan --repo /scan --results-dir /scan/results
 
       # Generate comprehensive trend analysis
       - name: Generate trend report
@@ -350,7 +350,7 @@ jobs:
 **Audit Features:**
 
 - Weekly schedule (adjustable)
-- Deep profile scan (comprehensive)
+- Full scan (every applicable scanner)
 - 52-week trend analysis (1 year)
 - Prometheus metrics export
 - Developer attribution
@@ -390,7 +390,7 @@ security-scan:
         -v $PWD:/scan \
         -v $PWD/.jmo:/root/.jmo \
         $JMO_IMAGE \
-        scan --repo /scan --results-dir /scan/results --profile-name balanced
+        scan --repo /scan --results-dir /scan/results
   artifacts:
     paths:
       - results/
@@ -493,7 +493,7 @@ Track trends per environment (dev/staging/prod):
         -v $PWD:/scan \
         -v $PWD/.jmo:/root/.jmo \
         ghcr.io/jimmy058910/jmo-security:latest \
-        scan --repo /scan --results-dir /scan/results-${ENVIRONMENT} --profile-name balanced
+        scan --repo /scan --results-dir /scan/results-${ENVIRONMENT}
     - |
       docker run --rm \
         -v $PWD/.jmo:/root/.jmo \
@@ -568,7 +568,7 @@ pipeline {
                         -v ${WORKSPACE}:/scan \
                         -v ${JMO_CACHE}:/root/.jmo \
                         ${JMO_IMAGE} \
-                        scan --repo /scan --results-dir /scan/results --profile-name balanced
+                        scan --repo /scan --results-dir /scan/results
                 """
             }
         }
@@ -655,7 +655,7 @@ node {
 
     stage('Security Scan') {
         docker.image(jmoImage).inside("-v ${WORKSPACE}:/scan -v ${jmoCache}:/root/.jmo") {
-            sh "jmo scan --repo /scan --results-dir /scan/results --profile-name balanced"
+            sh "jmo scan --repo /scan --results-dir /scan/results"
         }
     }
 
@@ -725,7 +725,7 @@ pipeline {
                         -v ${WORKSPACE}:/scan \
                         -v ${JMO_CACHE}:/root/.jmo \
                         ${JMO_IMAGE} \
-                        scan --repo /scan --results-dir /scan/results --profile-name balanced
+                        scan --repo /scan --results-dir /scan/results
                 """
             }
         }
@@ -811,7 +811,7 @@ steps:
         -v $(Build.SourcesDirectory):/scan \
         -v $(JMO_CACHE):/root/.jmo \
         $(JMO_IMAGE) \
-        scan --repo /scan --results-dir /scan/results --profile-name balanced
+        scan --repo /scan --results-dir /scan/results
     displayName: 'Run security scan'
 
   # Analyze trends
@@ -890,7 +890,7 @@ jobs:
               -v $(pwd):/scan \
               -v $(pwd)/.jmo:/root/.jmo \
               ghcr.io/jimmy058910/jmo-security:latest \
-              scan --repo /scan --results-dir /scan/results --profile-name balanced
+              scan --repo /scan --results-dir /scan/results
 
       # Analyze trends
       - run:
@@ -1163,7 +1163,7 @@ curl -X POST http://grafana:3000/api/dashboards/db \
 **Causes:**
 
 1. **Tool version changes** - Different tool versions find different issues
-2. **Scan profile changes** - Switching from fast → balanced adds tools
+2. **Tool set changes** - Adding tools with `--tools` or jmo.yml `tools:` adds findings
 3. **Codebase growth** - More code = more findings (not a regression)
 
 **Solutions:**
@@ -1180,15 +1180,15 @@ curl -X POST http://grafana:3000/api/dashboards/db \
      trends analyze --branch main-v2.0 --format terminal
    ```
 
-2. **Use consistent scan profiles:**
+2. **Use a consistent tool set:**
 
    ```bash
-   # Always use same profile for trend analysis
+   # Always scan with the same tools for trend analysis
    docker run --rm \
      -v $(pwd):/scan \
      -v ~/.jmo:/root/.jmo \
      ghcr.io/jimmy058910/jmo-security:latest \
-     scan --repo /scan --profile-name balanced
+     scan --repo /scan --tools trufflehog semgrep trivy
    ```
 
 3. **Normalize by codebase size:**

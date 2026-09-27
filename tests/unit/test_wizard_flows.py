@@ -184,31 +184,26 @@ class TestRepoFlow:
         assert len(targets["repos"]) == 1
 
     def test_prompt_user(self):
-        """Test user prompting."""
+        """Test user prompting: artifacts only, no profile choice."""
         flow = RepoFlow()
         flow.detected_targets = {"repos": []}  # Mock detected_targets
         flow.prompter = Mock()
-        flow.prompter.prompt_choice.return_value = "balanced"
         flow.prompter.prompt_yes_no.return_value = True
 
         options = flow.prompt_user()
 
-        assert options["profile"] == "balanced"
-        assert options["emit_artifacts"] is True
+        assert options == {"emit_artifacts": True}
+        flow.prompter.prompt_choice.assert_not_called()
 
     def test_build_command(self):
         """Test command building."""
         flow = RepoFlow()
         targets = {"repos": [Path("/test/repo")]}
-        options = {"profile": "fast"}
 
-        cmd = flow.build_command(targets, options)
+        cmd = flow.build_command(targets, {"emit_artifacts": False})
 
-        assert cmd[0] == "jmo"
-        assert cmd[1] == "scan"
-        assert "--profile-name" in cmd
-        assert "fast" in cmd
-        assert "--repo" in cmd
+        assert cmd == ["jmo", "scan", "--repo", str(Path("/test/repo"))]
+        assert "--profile-name" not in cmd
 
 
 class TestEntireStackFlow:
@@ -282,7 +277,7 @@ services:
             "iac": [Path("/test/main.tf")],
             "web": ["http://localhost:3000"],
         }
-        options = {"profile": "balanced"}
+        options = {"emit_artifacts": False, "parallel": False}
 
         cmd = flow.build_command(targets, options)
 
@@ -387,26 +382,25 @@ class TestDeploymentFlow:
         flow = DeploymentFlow()
         flow.detected_targets = {"environment": "production"}
         flow.prompter = Mock()
-        flow.prompter.prompt_choice.side_effect = ["production", "deep", "CRITICAL"]
+        flow.prompter.prompt_choice.side_effect = ["production", "CRITICAL"]
 
         options = flow.prompt_user()
 
-        assert options["environment"] == "production"
-        assert options["profile"] == "deep"
-        assert options["fail_on"] == "CRITICAL"
+        assert options == {"environment": "production", "fail_on": "CRITICAL"}
+        # Environment, then threshold -- no profile prompt between them
+        assert flow.prompter.prompt_choice.call_count == 2
 
     def test_prompt_user_staging(self):
         """Test user prompting for staging environment."""
         flow = DeploymentFlow()
         flow.detected_targets = {"environment": "staging"}
         flow.prompter = Mock()
-        flow.prompter.prompt_choice.side_effect = ["staging", "balanced", "HIGH"]
+        flow.prompter.prompt_choice.side_effect = ["staging", "HIGH"]
 
         options = flow.prompt_user()
 
-        assert options["environment"] == "staging"
-        assert options["profile"] == "balanced"
-        assert options["fail_on"] == "HIGH"
+        assert options == {"environment": "staging", "fail_on": "HIGH"}
+        assert flow.prompter.prompt_choice.call_count == 2
 
 
 class TestDependencyFlow:
@@ -625,15 +619,13 @@ def test_entire_stack_flow_prompt_user_no_recommendations(mock_base_init, tmp_pa
     }
     flow.prompter = MagicMock()
     flow.prompter.print_summary_box.return_value = None
-    flow.prompter.prompt_choice.return_value = "fast"
     flow.prompter.prompt_yes_no.side_effect = [False, False]
 
     with patch("scripts.cli.wizard_flows.stack_flow.Path.cwd", return_value=tmp_path):
         options = flow.prompt_user()
 
-    assert options["profile"] == "fast"
-    assert options["emit_artifacts"] is False
-    assert options["parallel"] is False
+    assert options == {"emit_artifacts": False, "parallel": False}
+    flow.prompter.prompt_choice.assert_not_called()
 
 
 @patch("scripts.cli.wizard_flows.stack_flow.BaseWizardFlow.__init__", return_value=None)
@@ -643,11 +635,11 @@ def test_entire_stack_flow_build_command_empty_targets(mock_base_init):
 
     flow = EntireStackFlow()
     targets = {"repos": [], "images": [], "iac": [], "web": []}
-    options = {"profile": "deep", "emit_artifacts": False, "parallel": True}
+    options = {"emit_artifacts": False, "parallel": True}
 
     cmd = flow.build_command(targets, options)
 
-    assert cmd == ["jmo", "scan", "--profile-name", "deep"]
+    assert cmd == ["jmo", "scan"]
 
 
 @patch("scripts.cli.wizard_flows.stack_flow.BaseWizardFlow.__init__", return_value=None)
@@ -716,7 +708,7 @@ def test_entire_stack_flow_build_command_many_iac_files(mock_base_init, tmp_path
         "iac": [Path(f"file{i}.tf") for i in range(10)],
         "web": [],
     }
-    options = {"profile": "balanced", "emit_artifacts": False, "parallel": False}
+    options = {"emit_artifacts": False, "parallel": False}
 
     cmd = flow.build_command(targets, options)
 

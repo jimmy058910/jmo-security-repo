@@ -13,7 +13,13 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 
 from scripts.cli.scan_jobs.k8s_scanner import scan_k8s_resource
-from scripts.cli.scan_utils import not_attempted_tools
+from scripts.core.scan_timings import State
+
+
+def _trivy_found(tool_name):
+    """Resolve trivy explicitly: the scan loop reads a result only for a tool
+    it planned, so leaving this to the real `find_tool` depends on the host."""
+    return f"/usr/bin/{tool_name}" if tool_name == "trivy" else None
 
 
 class TestK8sScanner:
@@ -44,10 +50,11 @@ class TestK8sScanner:
                 retries=0,
                 per_tool_config={},
                 allow_missing_tools=False,
+                find_tool_func=_trivy_found,
             )
 
             assert identifier == "minikube:default"
-            assert statuses["trivy"] is True
+            assert statuses["trivy"].state is State.RAN
 
     def test_scan_k8s_all_namespaces(self, tmp_path):
         """Test K8s scanning with all namespaces"""
@@ -236,7 +243,12 @@ class TestK8sScanner:
             from scripts.core.tool_runner import ToolResult
 
             mock_runner.run_all_parallel.return_value = [
-                ToolResult(tool="trivy", status="error", returncode=1, attempts=1),
+                ToolResult(
+                    tool="trivy",
+                    status="no_output",
+                    returncode=1,
+                    attempts=1,
+                ),
             ]
 
             k8s_info = {
@@ -252,9 +264,13 @@ class TestK8sScanner:
                 retries=0,
                 per_tool_config={},
                 allow_missing_tools=False,
+                find_tool_func=_trivy_found,
             )
 
-            assert statuses["trivy"] is False
+            # Measured 2026-09-25: a context that does not exist makes trivy
+            # exit 1 (an accepted code) with FATAL and write nothing.
+            assert statuses["trivy"].label == "failed:no output"
+            assert statuses["trivy"].exit_code == 1
 
     def test_scan_k8s_with_retries(self, tmp_path):
         """Test K8s scanning with retries"""
@@ -281,11 +297,11 @@ class TestK8sScanner:
                 retries=1,
                 per_tool_config={},
                 allow_missing_tools=False,
+                find_tool_func=_trivy_found,
             )
 
-            assert statuses["trivy"] is True
-            assert "__attempts__" in statuses
-            assert statuses["__attempts__"]["trivy"] == 2
+            assert statuses["trivy"].state is State.RAN
+            assert statuses["trivy"].attempts == 2
 
     def test_allow_missing_tools_writes_stubs(self, tmp_path):
         """Test that allow_missing_tools writes stubs for missing tools"""
@@ -324,10 +340,8 @@ class TestK8sScanner:
             # Trivy should have stub written
             assert len(stub_calls) == 1
             assert any("trivy" in path for _, path in stub_calls)
-            # Stubbed, so it did not succeed. This read `is True`, which
-            # encoded the defect as the contract (#825).
-            assert statuses["trivy"] is False
-            assert not_attempted_tools(statuses) == ["trivy"]
+            # Stubbed, so it did not run (#825): the row says so.
+            assert statuses["trivy"].label == "skipped:not installed"
 
     def test_per_tool_flags_applied(self, tmp_path):
         """Test that per_tool_config flags are correctly applied"""
@@ -663,7 +677,7 @@ class TestK8sScanner:
                 find_tool_func=mock_find_tool,
             )
 
-            assert "trivy" in statuses
+            assert statuses["trivy"].state is State.RAN
 
     def test_scan_k8s_custom_write_stub_func(self, tmp_path):
         """Test using custom write_stub_func"""

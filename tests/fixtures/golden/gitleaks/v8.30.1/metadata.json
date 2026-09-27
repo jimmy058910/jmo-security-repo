@@ -1,0 +1,15 @@
+{
+  "tool": "gitleaks",
+  "version": "8.30.1",
+  "generated_at": "2026-09-12T20:53:43.787136+00:00",
+  "sample_dir": null,
+  "finding_count": 69,
+  "raw_output_hash": "6cb96568a321",
+  "binary_sha256": "17157e2ee8b76fc8b1d8bee607a250e34b8a8023c8bc81822d4b5ee4d78fcb7c",
+  "download_url": "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_windows_x64.zip",
+  "target": {
+    "repository": "https://github.com/juice-shop/juice-shop",
+    "commit": "1618a611b173b4bf114028e6e02549950606e29d"
+  },
+  "command": "gitleaks dir . --config C:/Projects/_archive/2026-09-12-jmo-v2-evidence/coverage/gitleaks.toml --report-format sarif --report-path raw-output.json  (cwd: the juice-shop checkout; the config is the coverage review's, archived)"
+}

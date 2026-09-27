@@ -6,7 +6,6 @@ JMo Security's internal adapter architecture. Features:
 1. Lazy loading - adapters load on-demand when first accessed
 2. Auto-discovery from multiple search paths
 3. Hot-reload support for development iteration
-4. Profile preloading for batch operations
 
 Search order:
 1. ~/.jmo/adapters/ (user adapters - hot-loadable)
@@ -15,7 +14,6 @@ Search order:
 Performance:
 - Path discovery: ~1-5ms (scans filesystem without importing)
 - Lazy loading: Each adapter loaded only when requested
-- Use preload_profile() to batch-load adapters for a scan profile
 
 Usage:
     # Get an adapter (loads on-demand)
@@ -24,9 +22,6 @@ Usage:
 
     # List available adapters without loading
     available = get_available_adapters()
-
-    # Batch-load for a profile
-    preload_profile("fast")  # Loads all 8 fast-profile adapters
 """
 
 from __future__ import annotations
@@ -47,22 +42,22 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Adapters are loaded under a module name inside the `scripts` package rather
-# than the bare stem (`prowler_adapter`). Two separate things depend on it:
+# than the bare stem (`trivy_adapter`). Two separate things depend on it:
 #
 # 1. `logging.getLogger(__name__)` in an adapter names its logger after its
 #    module. Under a bare stem that logger is a *sibling* of `scripts`, so
 #    `configure_scan_logging` -- which attaches its handler to the `scripts`
 #    logger precisely so `--log-level` reaches the scan -- never sees it, and
 #    the record falls through to `logging.lastResort` as bare text. Measured
-#    before this change: 17 of 27 adapter loggers sat outside `scripts` and 0
-#    inside, and prowler's "matched neither format" warning reached the user
+#    before this change: 17 of 27 loggers (one per adapter at the time) sat
+#    outside `scripts` and 0 inside, and prowler's "matched neither format" warning reached the user
 #    unformatted by `--json-logs` and unsuppressable by `--log-level ERROR`
 #    (#838).
 # 2. A bare stem is a different `sys.modules` key from the dotted path the rest
 #    of the codebase imports, so the plugin-loaded adapter and the imported one
 #    were two distinct module objects -- `isinstance(loaded(), Imported)` was
 #    False. The test suite imports normally, so it exercised a different object
-#    than production ran, which is why (1) survived 27 adapters and 8,000 tests.
+#    than production ran, which is why (1) survived every adapter and 8,000 tests.
 _ADAPTER_PKG = "scripts.core.adapters"
 
 # User adapters from ~/.jmo/adapters/ deliberately do NOT get the real dotted
@@ -193,7 +188,7 @@ class PluginLoader:
         This is a fast operation that only scans directories for
         *_adapter.py files without importing them.
 
-        Performance: ~1-5ms for 28 adapters
+        Performance: ~1-5ms for the whole adapters directory
         """
         if self._paths_discovered:
             return
@@ -213,7 +208,7 @@ class PluginLoader:
             for plugin_file in search_path.glob("*_adapter.py"):
                 # Extract adapter name from filename
                 # e.g., "trivy_adapter.py" -> "trivy"
-                # e.g., "semgrep_secrets_adapter.py" -> "semgrep_secrets"
+                # e.g., "osv_scanner_adapter.py" -> "osv_scanner"
                 name = plugin_file.stem.replace("_adapter", "")
 
                 # First match wins (user adapters override built-in)
@@ -261,7 +256,7 @@ class PluginLoader:
             # Try both underscore and hyphenated variants since metadata.name may differ
             result = self.registry._plugins.get(name)
             if result is None:
-                # Try hyphenated version (e.g., "dependency_check" -> "dependency-check")
+                # Try hyphenated version (e.g., "osv_scanner" -> "osv-scanner")
                 hyphenated_name = name.replace("_", "-")
                 result = self.registry._plugins.get(hyphenated_name)
             return result
@@ -280,53 +275,11 @@ class PluginLoader:
         self._discover_adapter_paths()
         return list(self._adapter_paths.keys())
 
-    def preload_profile(self, profile: str) -> int:
-        """Preload all adapters needed for a scan profile.
-
-        This batch-loads adapters for faster subsequent access during scans.
-        Useful when you know which profile will be used upfront.
-
-        Args:
-            profile: Scan profile name ('fast', 'slim', 'balanced', 'deep')
-
-        Returns:
-            Number of adapters loaded
-
-        Example:
-            >>> loader.preload_profile('fast')  # Load 8 adapters at once
-            8
-        """
-        # Import here to avoid circular import
-        from scripts.core.tool_registry import PROFILE_TOOLS
-
-        if profile not in PROFILE_TOOLS:
-            logger.warning(f"Unknown profile: {profile}")
-            return 0
-
-        loaded_count = 0
-        tools = PROFILE_TOOLS[profile]
-
-        for tool_name in tools:
-            # Handle special cases (binary name -> adapter name)
-            adapter_name = self._tool_to_adapter_name(tool_name)
-
-            if self.get_adapter(adapter_name) is not None:
-                loaded_count += 1
-
-        logger.info(
-            f"Preloaded {loaded_count}/{len(tools)} adapters for {profile} profile"
-        )
-        return loaded_count
-
     def _tool_to_adapter_name(self, tool_name: str) -> str:
-        """Convert tool binary name to adapter name.
+        """Convert a tool name to its adapter name.
 
-        Some tools have different binary names than adapter names:
-        - "afl++" -> "aflplusplus"
-        - "dependency-check" -> "dependency_check"
-        - "semgrep-secrets" -> "semgrep_secrets"
-        - "trivy-rbac" -> "trivy_rbac"
-        - "checkov-cicd" -> "checkov" (same adapter)
+        Tool names are hyphenated where adapter modules cannot be:
+        "osv-scanner" -> "osv_scanner".
 
         Args:
             tool_name: Tool binary/command name
@@ -334,15 +287,7 @@ class PluginLoader:
         Returns:
             Adapter name
         """
-        # Special mappings from tool name to adapter name
-        mappings = {
-            "afl++": "aflplusplus",
-            "dependency-check": "dependency_check",
-            "semgrep-secrets": "semgrep_secrets",
-            "trivy-rbac": "trivy_rbac",
-            "checkov-cicd": "checkov",  # Uses same adapter
-        }
-        return mappings.get(tool_name, tool_name.replace("-", "_"))
+        return tool_name.replace("-", "_")
 
     def _is_builtin(self, plugin_path: Path) -> bool:
         """True if `plugin_path` is one of the adapters shipped with JMo."""
@@ -556,25 +501,6 @@ def get_plugin_loader() -> PluginLoader:
         Global plugin loader instance
     """
     return _global_loader
-
-
-def preload_profile(profile: str) -> int:
-    """Preload adapters for a specific scan profile.
-
-    This is useful when you know which profile will be used upfront
-    and want to batch-load all required adapters for faster access.
-
-    Args:
-        profile: Profile name ('fast', 'slim', 'balanced', 'deep')
-
-    Returns:
-        Number of adapters loaded
-
-    Example:
-        >>> preload_profile('fast')  # Load 8 adapters for fast profile
-        8
-    """
-    return _global_loader.preload_profile(profile)
 
 
 def get_available_adapters() -> list[str]:

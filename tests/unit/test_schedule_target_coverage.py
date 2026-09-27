@@ -89,36 +89,42 @@ EXPECTED: list[tuple[str, str]] = [
 ]
 
 
-def _maximal_schedule() -> ScanSchedule:
+def _maximal_schedule(options: dict[str, object] | None = None) -> ScanSchedule:
+    # A severity threshold by default, so the parse tests below exercise the
+    # option that broke: with `options={}` they never reached `fail_on`, and
+    # every exporter's `jmo scan --fail-on HIGH` (exit 2) went unseen (#1277).
     return ScanSchedule(
         metadata=ScheduleMetadata(name="maximal"),
         spec=ScheduleSpec(
             schedule="0 2 * * *",
             jobTemplate=JobTemplateSpec(
-                profile="balanced",
                 targets=dict(MAXIMAL_TARGETS),
                 results={},
-                options={},
+                options={"fail_on": "HIGH"} if options is None else options,
             ),
         ),
     )
 
 
 def _gitlab_scan_argv(schedule: ScanSchedule) -> list[str]:
-    """The `jmo scan` argv GitLab CI would run, lexed from the rendered YAML."""
+    """The argv GitLab CI would hand `jmo`, lexed from the rendered YAML.
+
+    Starts at the subcommand, like the GitHub argv: the leading `jmo` is the
+    program, and a parser handed it as a subcommand rejects every command.
+    """
     job = yaml.safe_load(GitLabCIGenerator().generate(schedule))["security-scan"]
-    line = next(s for s in job["script"] if "jmo scan" in s)
+    line = next(s for s in job["script"] if s.startswith("jmo "))
     # Collapse backslash-newline continuations first. `shlex` does NOT do this
     # -- a shell treats `\<newline>` as a line continuation, but shlex treats
     # the backslash as escaping the newline and emits a literal "\n" token,
     # which then reaches argparse as an unrecognised argument. Doing it here
     # rather than asserting on the raw string keeps the oracle honest: what is
     # tested is the argv a shell would actually build.
-    return shlex.split(line.replace("\\\n", " "))
+    return shlex.split(line.replace("\\\n", " "))[1:]
 
 
 def _github_scan_argv(schedule: ScanSchedule) -> list[str]:
-    """The `jmo scan` argv GitHub Actions would run."""
+    """The argv GitHub Actions hands the image's `jmo` entrypoint."""
     return shlex.split(GitHubActionsGenerator()._build_scan_args(schedule))
 
 
@@ -153,9 +159,16 @@ def test_every_consumer_carries_every_target(
     )
 
 
-def _scan_option_strings() -> set[str]:
-    scan_parser = build_parser()._subparsers._group_actions[0].choices["scan"]  # type: ignore[union-attr]
-    return {opt for action in scan_parser._actions for opt in action.option_strings}
+def _option_strings(subcommand: str) -> set[str]:
+    sub = build_parser()._subparsers._group_actions[0].choices[subcommand]  # type: ignore[union-attr]
+    return {opt for action in sub._actions for opt in action.option_strings}
+
+
+def _option_dests(subcommand: str) -> dict[str, str]:
+    sub = build_parser()._subparsers._group_actions[0].choices[subcommand]  # type: ignore[union-attr]
+    return {
+        opt: action.dest for action in sub._actions for opt in action.option_strings
+    }
 
 
 @pytest.mark.parametrize("consumer", sorted(ARGV_BUILDERS))
@@ -170,20 +183,12 @@ def test_every_flag_a_consumer_emits_resolves_to_a_real_jmo_scan_flag(
     peer comparison would have called GitLab the *complete* one. `jmo scan`
     defines neither flag, so that export produced a command that exits 2.
 
-    Resolution now requires an EXACT option name. It used to accept argparse's
-    own rule -- an exact name, or an unambiguous prefix of exactly one --
-    because both generators emitted `--profile`, which `jmo scan` does not
-    define, and which worked solely because `--profile-name` was the only option
-    starting with that prefix. #1019 fixed the generators, so the looser rule no
-    longer has anything to protect, and keeping it would leave the fragility it
-    documented available to the next emitter.
-
-    The fragility was concrete: a second `--profile*` option on `jmo scan` --
-    `--profile-config`, `--profile-timings`, `--profiles` are all plausible --
-    turns every previously exported workflow into `ambiguous option: --profile`
-    at once, and does so without failing the tests of the change that added it.
+    Resolution requires an EXACT option name, not argparse's own rule (an exact
+    name, or an unambiguous prefix of exactly one). A flag that resolves only by
+    prefix works only while no second option shares that prefix: adding one
+    turns every previously exported workflow into `ambiguous option` at once,
+    and does so without failing the tests of the change that added it (#1019).
     """
-    defined = _scan_option_strings()
     # NOT `_maximal_schedule()`. MAXIMAL_TARGETS deliberately omits
     # `repositories.include` / `exclude` (they are correctly emitted as
     # nothing, so they have no row in EXPECTED), which meant this oracle ran
@@ -198,13 +203,16 @@ def test_every_flag_a_consumer_emits_resolves_to_a_real_jmo_scan_flag(
         "exclude": ["*-deprecated"],
     }
     argv = ARGV_BUILDERS[consumer](schedule)
+    # The subcommand the consumer chose, not an assumed `scan`: a threshold
+    # makes it `ci`, which is the only one that defines --fail-on.
+    defined = _option_strings(argv[0])
 
     undefined = sorted(
         tok for tok in {t for t in argv if t.startswith("--")} if tok not in defined
     )
 
     assert not undefined, (
-        f"{consumer} emits {undefined}, which `jmo scan` does not define. Any "
+        f"{consumer} emits {undefined}, which `jmo {argv[0]}` does not define. Any "
         f"that argparse resolves by prefix today works only while no second "
         f"option shares that prefix -- emit the canonical name (#1019)."
     )
@@ -221,7 +229,6 @@ def test_the_repo_form_is_carried_too() -> None:
         spec=ScheduleSpec(
             schedule="0 2 * * *",
             jobTemplate=JobTemplateSpec(
-                profile="fast",
                 targets={"repositories": {"repo": "https://example.test/r.git"}},
                 results={},
                 options={},
@@ -244,16 +251,65 @@ def test_the_generated_command_actually_parses(consumer: str) -> None:
     none), which a name-only comparison passes.
     """
     argv = ARGV_BUILDERS[consumer](_maximal_schedule())
-    assert argv[0] in ("jmo", "scan"), f"unexpected argv head: {argv[:2]}"
-    tail = argv[2:] if argv[0] == "jmo" else argv[1:]
 
-    parsed = build_parser().parse_args(["scan", *tail])
+    # The emitted argv, whole: re-heading it with `scan` would test a command
+    # the consumer never wrote.
+    parsed = build_parser().parse_args(argv)
 
-    # `profile_name`, not `profile`: the generators emit `--profile`, which
-    # `jmo scan` does not define -- it lands on `--profile-name` through
-    # argparse's prefix matching. Asserting the resolved dest is what proves the
-    # command really parsed, rather than that a Namespace came back at all.
-    assert parsed.profile_name == "balanced"
+    # A threshold needs `jmo ci`: `jmo scan` has no --fail-on, and argparse
+    # read `--fail-on HIGH` as the prefix of --fail-on-store-error, leaving
+    # HIGH unrecognised (#1277).
+    assert parsed.cmd == "ci", f"{consumer} emitted `jmo {parsed.cmd}`"
+    assert parsed.fail_on == "HIGH"
+
+    _assert_every_target_resolved(parsed, consumer)
+
+
+@pytest.mark.parametrize("consumer", sorted(ARGV_BUILDERS))
+def test_a_schedule_without_a_threshold_stays_a_scan(consumer: str) -> None:
+    """The control for the test above: `ci` only when there is a threshold.
+
+    The targets are checked here too, so both subcommands' command lines are
+    proven to carry every target, not only the `ci` one.
+    """
+    parsed = build_parser().parse_args(
+        ARGV_BUILDERS[consumer](_maximal_schedule(options={}))
+    )
+
+    assert parsed.cmd == "scan"
+    _assert_every_target_resolved(parsed, consumer)
+
+
+@pytest.mark.parametrize("consumer", sorted(ARGV_BUILDERS))
+def test_every_consumer_carries_every_option(consumer: str) -> None:
+    """A schedule's options must reach the command, as its targets do.
+
+    GitHub Actions read `threads` and `fail_on` and dropped `timeout`
+    silently; GitLab carried it. Same shape as #928, one level down.
+    """
+    options = {"threads": 4, "timeout": 900, "allow_missing_tools": True}
+
+    parsed = build_parser().parse_args(
+        ARGV_BUILDERS[consumer](_maximal_schedule(options=options))
+    )
+
+    assert (parsed.threads, parsed.timeout) == (4, 900)
+    assert parsed.allow_missing_tools is True
+
+
+def _assert_every_target_resolved(parsed, consumer: str) -> None:
+    """Every target value must land on its own flag's dest.
+
+    Asserting resolved values is what proves the command really parsed, rather
+    than that a Namespace came back at all: a flag emitted with the wrong arity
+    shifts the values after it onto the wrong dests, which parse_args accepts
+    silently.
+    """
+    dests = _option_dests(parsed.cmd)
+    for flag, value in EXPECTED:
+        got = getattr(parsed, dests[flag])
+        resolved = value in got if isinstance(got, list) else got == value
+        assert resolved, f"{consumer}: {flag} parsed to {got!r}, not {value!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -287,7 +343,7 @@ def test_the_argv_extractors_actually_found_something() -> None:
     for consumer, builder in ARGV_BUILDERS.items():
         argv = builder(_maximal_schedule())
         assert len(argv) >= 10, f"{consumer} extractor produced only {argv}"
-        assert "--profile-name" in argv, f"{consumer} extractor missed --profile-name"
+        assert "--repos-dir" in argv, f"{consumer} extractor missed --repos-dir"
 
 
 # ---------------------------------------------------------------------------
@@ -300,9 +356,7 @@ def _gitlab_script(targets: dict[str, object]) -> str:
         metadata=ScheduleMetadata(name="talkative"),
         spec=ScheduleSpec(
             schedule="0 2 * * *",
-            jobTemplate=JobTemplateSpec(
-                profile="fast", targets=targets, results={}, options={}
-            ),
+            jobTemplate=JobTemplateSpec(targets=targets, results={}, options={}),
         ),
     )
     job = yaml.safe_load(GitLabCIGenerator().generate(schedule))["security-scan"]

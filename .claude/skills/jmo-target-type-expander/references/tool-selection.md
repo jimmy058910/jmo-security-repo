@@ -6,13 +6,13 @@ Guidelines for choosing security tools when adding new target types to JMo Secur
 
 | Target Type | Primary Category | Recommended Tools | Alternative Tools |
 |-------------|------------------|-------------------|-------------------|
-| Repositories | Secrets, SAST | trufflehog, semgrep, bandit | noseyparker, trivy |
+| Repositories | Secrets, SAST | trufflehog, semgrep | gitleaks, trivy |
 | Container Images | Vuln, SBOM | trivy, syft | grype, snyk |
 | IaC Files | Misconfig, Policy | checkov, trivy | tfsec, terrascan |
 | Web URLs | DAST | zap | burp, nikto |
 | GitLab Repos | Secrets | trufflehog | gitleaks |
 | Kubernetes | K8s Security | trivy | kubesec, kube-bench |
-| **AWS Accounts** | Cloud Security | prowler, scoutsuite (cmd: `scout`) | cloudmapper |
+| **AWS Accounts** | Cloud Security | scoutsuite (cmd: `scout`) | cloudmapper |
 | **npm Packages** | SCA | npm audit, snyk | retire.js |
 | **GraphQL APIs** | API Security | graphql-cop, inql | graphw00f |
 
@@ -22,7 +22,7 @@ Guidelines for choosing security tools when adding new target types to JMo Secur
 
 ```bash
 # Check tool documentation
-prowler aws --help          # Yes: has aws subcommand
+trivy k8s --help            # Yes: has k8s subcommand
 trivy image --help          # Yes: has image subcommand
 semgrep scan --help         # No: only scans local files
 ```
@@ -46,62 +46,53 @@ Fast (<5 min):
 
 Medium (5-20 min):
 - trivy (comprehensive scanning)
-- prowler (AWS account scanning)
 - zap (web app scanning)
 
 Slow (>20 min):
-- noseyparker (deep secret scanning)
 - ScoutSuite (multi-cloud auditing)
-- afl++ (fuzzing campaigns)
 ```
 
 ### 4. Does the tool output JSON?
 
 ```bash
 # Required: JSON output for adapter integration
-prowler aws --output-formats json  # Yes
+trivy image --format json nginx    # Yes
 scout aws --report-dir .           # Yes (generates JSON)
 nmap -oX output.xml                # No (XML only, needs conversion)
 ```
 
-## Tool Assignment Example: AWS Accounts
+## Tool Assignment Example: npm Packages
 
-**Primary Tool: Prowler**
+**Primary Tool: npm audit**
 
-- Native AWS support (`prowler aws`)
+- Native npm support (`npm audit --json`)
 - JSON output built-in
-- Fast (5-10 min per account)
-- Comprehensive coverage (300+ checks)
-- Active maintenance
+- Fast (seconds per package)
+- Ships with npm, so nothing extra to install
 
-**Secondary Tool: ScoutSuite**
+**Secondary Tool: Snyk**
 
-- Multi-cloud support (AWS, Azure, GCP)
-- JSON output via report directory
-- Slower (15-20 min per account)
-- Complementary checks to Prowler
-- Good for multi-cloud environments
+- Broader vulnerability database than the npm advisory feed
+- JSON output via `--json`
+- Needs an auth token (see [authentication-patterns.md](authentication-patterns.md))
+- Complementary findings to npm audit
 
 **Configuration:**
 
 ```yaml
-# jmo.yml
-profiles:
-  balanced:
-    tools: [prowler]  # Fast, single tool
-  deep:
-    tools: [prowler, scoutsuite]  # Comprehensive, both tools
-
+# jmo.yml -- scan settings are top-level; there are no profiles
 per_tool:
-  prowler:
+  npm-audit:
     flags:
-      - --severity
-      - high,critical
+      - --audit-level
+      - high
+    timeout: 300  # 5 min
+  snyk:
+    flags:
+      - --severity-threshold=high
     timeout: 900  # 15 min
-  scoutsuite:
-    flags:
-      - --force
-      - --report-name
-      - scoutsuite
-    timeout: 1800  # 30 min
 ```
+
+A tool runs by default only if it is in `TOOL_MATRIX`
+(`scripts/core/tool_registry.py`). A tool outside it runs when named with
+`--tools`, or listed under a top-level `tools:` key in `jmo.yml`.

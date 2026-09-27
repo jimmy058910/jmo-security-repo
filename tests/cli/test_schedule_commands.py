@@ -72,7 +72,6 @@ def create_mock_args(**kwargs: Any) -> MagicMock:
         "cron": None,
         "timezone": "UTC",
         "backend": "local-cron",
-        "profile": "balanced",
         "description": None,
         "label": None,
         "repos_dir": None,
@@ -112,7 +111,6 @@ def sample_schedule():
             suspend=False,
             backend=BackendConfig(type="github-actions"),
             jobTemplate=JobTemplateSpec(
-                profile="deep",
                 targets={
                     "repositories": {"repos_dir": "~/repos"},
                     "images": ["nginx:latest", "redis:alpine"],
@@ -300,7 +298,6 @@ def test_create_schedule_success():
         cron="0 2 * * *",
         timezone="UTC",
         backend="github-actions",
-        profile="balanced",
         description="Test description",
         label=["env=prod", "team=security"],
         repos_dir="~/repos",
@@ -587,22 +584,6 @@ def test_update_schedule_cron(sample_schedule):
     mock_manager.update.assert_called_once()
     assert sample_schedule.spec.schedule == "0 3 * * *"
     mock_success.assert_called()
-
-
-def test_update_schedule_profile(sample_schedule):
-    """Test updating schedule profile."""
-    args = create_mock_args(name="nightly-deep", profile="fast")
-
-    with patch("scripts.cli.schedule_commands.ScheduleManager") as MockManager:
-        mock_manager = MockManager.return_value
-        mock_manager.get.return_value = sample_schedule
-        mock_manager.update = MagicMock()
-
-        with patch("scripts.cli.schedule_commands._success"):
-            result = _cmd_schedule_update(args, mock_manager)
-
-    assert result == 0
-    assert sample_schedule.spec.jobTemplate.profile == "fast"
 
 
 def test_update_schedule_suspend(sample_schedule):
@@ -1161,12 +1142,12 @@ def test_print_schedules_table_with_data(sample_schedule, capsys):
     captured = capsys.readouterr()
     assert "NAME" in captured.out
     assert "BACKEND" in captured.out
-    assert "PROFILE" in captured.out
+    assert "PROFILE" not in captured.out
     assert "CRON" in captured.out
     assert "STATUS" in captured.out
     assert "nightly-deep" in captured.out
     assert "github-actions" in captured.out
-    assert "deep" in captured.out
+    assert "0 2 * * *" in captured.out
     assert "ACTIVE" in captured.out
 
 

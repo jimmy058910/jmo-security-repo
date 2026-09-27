@@ -143,13 +143,11 @@ class TestBuildDefinitionCreation:
         generator = ProvenanceGenerator()
 
         build_def = generator._create_build_definition(
-            profile="fast",
             tools=["trivy"],
             targets=["repo1"],
         )
 
         assert build_def.buildType == f"{JMO_BUILD_TYPE}@slsa/v1"
-        assert build_def.externalParameters["profile"] == "fast"
         assert build_def.externalParameters["tools"] == ["trivy"]
         assert build_def.externalParameters["targets"] == ["repo1"]
 
@@ -158,7 +156,6 @@ class TestBuildDefinitionCreation:
         generator = ProvenanceGenerator()
 
         build_def = generator._create_build_definition(
-            profile="balanced",
             tools=["trivy", "semgrep"],
             targets=["repo1"],
             threads=8,
@@ -174,7 +171,6 @@ class TestBuildDefinitionCreation:
         generator = ProvenanceGenerator()
 
         build_def = generator._create_build_definition(
-            profile="balanced",
             tools=[],
             targets=[],
         )
@@ -267,7 +263,6 @@ class TestProvenanceGeneration:
 
         provenance = generator.generate(
             findings_path=findings_file,
-            profile="balanced",
             tools=["trivy", "semgrep"],
             targets=["repo1"],
             threads=4,
@@ -292,7 +287,6 @@ class TestProvenanceGeneration:
         # Verify build definition
         build_def = predicate["buildDefinition"]
         assert build_def["buildType"] == f"{JMO_BUILD_TYPE}@slsa/v1"
-        assert build_def["externalParameters"]["profile"] == "balanced"
         assert build_def["externalParameters"]["tools"] == ["trivy", "semgrep"]
 
         # Verify run details
@@ -309,7 +303,6 @@ class TestProvenanceGeneration:
 
         provenance = generator.generate(
             findings_path=findings_file,
-            profile="fast",
             tools=["trivy"],
             targets=["repo1"],
             invocation_id="custom-id-abc",
@@ -327,7 +320,6 @@ class TestProvenanceGeneration:
 
         provenance = generator.generate(
             findings_path=findings_file,
-            profile="balanced",
             tools=["trivy"],
             targets=["repo1"],
             started_on="2025-01-01T00:00:00Z",
@@ -347,7 +339,6 @@ class TestProvenanceGeneration:
 
         provenance = generator.generate(
             findings_path=findings_file,
-            profile="balanced",
             tools=["trivy"],
             targets=["repo1"],
         )
@@ -369,7 +360,6 @@ class TestProvenanceGeneration:
 
         provenance = generator.generate(
             findings_path=findings_file,
-            profile="deep",
             tools=["trivy", "semgrep", "trufflehog", "syft"],
             targets=["repo1", "repo2"],
         )
@@ -392,7 +382,6 @@ class TestProvenanceGeneration:
 
         provenance = generator.generate(
             findings_path=findings_file,
-            profile="balanced",
             tools=["trivy"],
             targets=["repo1"],
         )
@@ -413,7 +402,6 @@ class TestProvenanceValidation:
 
         provenance = generator.generate(
             findings_path=findings_file,
-            profile="balanced",
             tools=["trivy"],
             targets=["repo1"],
         )
@@ -438,7 +426,6 @@ class TestProvenanceValidation:
 
         provenance = generator.generate(
             findings_path=findings_file,
-            profile="balanced",
             tools=["trivy"],
             targets=["repo1"],
         )
@@ -469,7 +456,7 @@ class TestSubjectIdentifiesWhatWasAttested:
         subject.write_text('{"runs": []}', encoding="utf-8")
 
         statement = ProvenanceGenerator().generate(
-            findings_path=subject, profile="fast", tools=[], targets=[]
+            findings_path=subject, tools=[], targets=[]
         )
 
         assert statement["subject"][0]["name"] == "report.sarif"
@@ -485,7 +472,7 @@ class TestSubjectIdentifiesWhatWasAttested:
         subject.write_text('{"findings": []}', encoding="utf-8")
 
         statement = ProvenanceGenerator().generate(
-            findings_path=subject, profile="fast", tools=[], targets=[]
+            findings_path=subject, tools=[], targets=[]
         )
 
         name = statement["subject"][0]["name"]
@@ -506,7 +493,7 @@ class TestGeneratedTimestamps:
         subject.write_text('{"findings": []}', encoding="utf-8")
 
         metadata = ProvenanceGenerator().generate(
-            findings_path=subject, profile="fast", tools=[], targets=[]
+            findings_path=subject, tools=[], targets=[]
         )["predicate"]["runDetails"]["metadata"]
 
         assert metadata["finishedOn"]
@@ -544,7 +531,7 @@ class TestGeneratedTimestamps:
 
         with patch("scripts.core.attestation.provenance.datetime", Clock):
             metadata = ProvenanceGenerator().generate(
-                findings_path=subject, profile="fast", tools=[], targets=[]
+                findings_path=subject, tools=[], targets=[]
             )["predicate"]["runDetails"]["metadata"]
 
         assert metadata["startedOn"] < metadata["finishedOn"], (
@@ -571,7 +558,6 @@ class TestGeneratedTimestamps:
             json.dumps(
                 ProvenanceGenerator().generate(
                     findings_path=subject,
-                    profile="balanced",
                     tools=["trivy"],
                     targets=["."],
                 )

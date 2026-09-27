@@ -23,9 +23,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from scripts.cli.scan_utils import not_attempted_tools
+from scripts.cli.path_sanitizers import _sanitize_path_component
 from scripts.core.config import RetryConfig
-from scripts.core.tool_registry import filter_tools_for_scan_type
+from scripts.core.scan_timings import OFF_TARGET_REASONS, Reason, State, ToolRun
+from scripts.core.tool_registry import TOOL_SCAN_TYPES
 from scripts.core.validation import validate_container_image, validate_url
 
 logger = logging.getLogger(__name__)
@@ -183,7 +184,7 @@ def _warn_msys_path_mangling(path_str: str) -> None:
 ║
 ║ Example:
 ║    MSYS_NO_PATHCONV=1 docker run --rm -v "C:\\Projects\\myrepo:/scan" \\
-║      jmo-security:fast scan --repo /scan --profile-name fast
+║      ghcr.io/jimmy058910/jmo-security:latest scan --repo /scan
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
     sys.stderr.write(warning)
@@ -213,6 +214,9 @@ class ScanTargets:
     # Without this, a mistyped path was indistinguishable from asking for
     # nothing: both produced an empty ScanTargets and the same message.
     rejected: list[str] = field(default_factory=list)
+    # Each repository's results folder, parallel to `repos` and unique in the
+    # scan (#1303). Filled by `discover_targets`; see `repo_result_names`.
+    repo_names: list[str] = field(default_factory=list)
 
     def total_count(self) -> int:
         """Return total number of scan targets across all types."""
@@ -277,6 +281,10 @@ class ScanConfig:
     include_patterns: list[str] = field(default_factory=list)
     exclude_patterns: list[str] = field(default_factory=list)
     allow_missing_tools: bool = False
+    # True when `tools` came from `--tools` or `jmo.yml`, not the matrix
+    # default: only a tool someone named is worth a warning when no target in
+    # the scan is one it reads (#1279).
+    explicit_tools: bool = False
 
     def __post_init__(self):
         """Validate configuration after initialization."""
@@ -290,66 +298,120 @@ class ScanConfig:
             raise ValueError(f"max_workers must be >= 1, got {self.max_workers}")
 
 
-# How one target's scan ended, derived from the per-tool status map every
-# scanner in scan_jobs/ returns. Named constants rather than bare strings so a
-# typo at a comparison site is a NameError instead of a silently false branch.
+# How one target's scan ended, derived from its accounting rows. Named
+# constants rather than bare strings so a typo at a comparison site is a
+# NameError instead of a silently false branch.
 TARGET_OK = "ok"
 TARGET_PARTIAL = "partial"
 TARGET_FAILED = "failed"
-# Every requested tool was stubbed rather than run. Distinct from FAILED, which
-# means tools ran and produced nothing: here nothing was attempted, and under
-# `--allow-missing-tools` that is what the user asked for -- so it must not
-# redden the run. It must still be said out loud, because an empty stub from a
-# secret scanner that never ran satisfies a zero-secrets policy (#825).
+# Every tool that reads this kind of target was skipped: not installed under
+# `--allow-missing-tools`, or nothing of its kind in the tree. Distinct from
+# FAILED, which means tools ran and produced nothing. It must not redden the
+# run, and it must still be said out loud, because an empty stub from a secret
+# scanner that never ran satisfies a zero-secrets policy (#825).
 TARGET_NOT_ATTEMPTED = "not-attempted"
 
 
-def classify_target_outcome(statuses: Mapping[str, Any] | None) -> str:
-    """Classify one target's scan from the booleans its scanner returned.
+def classify_target_outcome(rows: Mapping[str, ToolRun] | None) -> str:
+    """Classify one target's scan from its rows.
 
-    Args:
-        statuses: The per-tool status map from a ``scan_jobs`` scanner. Keys
-            beginning ``__`` are metadata (``__attempts__``,
-            ``__not_attempted__``), not tools.
+    Returns ``TARGET_OK`` if every tool that ran counts, ``TARGET_PARTIAL`` if
+    some failed, ``TARGET_FAILED`` if all did or if no requested tool reads
+    this kind of target, and ``TARGET_NOT_ATTEMPTED`` if every tool that reads
+    it was skipped.
 
-    Returns:
-        ``TARGET_OK`` if every tool that ran succeeded, ``TARGET_PARTIAL`` if
-        some did, ``TARGET_FAILED`` if none did, and ``TARGET_NOT_ATTEMPTED``
-        if no tool ran at all because every one was stubbed (#825).
+    **No rows, or only off-target rows, is ``TARGET_FAILED``, not vacuous
+    success**: the target contributed nothing. ``all([])`` being True is the
+    reading that would render it a clean scan (#809).
 
-    **An empty map is ``TARGET_FAILED``, not vacuous success.** It is what
-    ``scan_all`` appends when a scanner raised, and what a scanner returns when
-    no requested tool applied to this target type -- both cases where the target
-    contributed nothing. ``all([])`` being True is exactly the reading that
-    would let those render as a clean scan.
-
-    This exists because the information was already correct everywhere and
-    consulted nowhere: every scanner reports ``dict.fromkeys(tools, False)`` on
-    its failure paths, and the progress display decided the success symbol from
-    an elapsed time the caller hardcoded to ``1.0`` (#809).
+    A skipped tool gets no vote. Counting it as a failure would make a target
+    where one tool ran cleanly and two were not installed a partial failure.
     """
-    if not statuses:
+    if not rows:
         return TARGET_FAILED
-    # A tool that was never executed does not get a vote. It used to get a
-    # `True` -- the same value a successful run gets -- so a target where every
-    # tool was stubbed read as a clean scan (#825). Counting it as `False`
-    # instead would be the opposite error: a target where one tool ran cleanly
-    # and two were not installed has not partially failed.
-    skipped = set(not_attempted_tools(statuses))
-    outcomes = [
-        bool(ok)
-        for name, ok in statuses.items()
-        if not name.startswith("__") and name not in skipped
-    ]
-    if not outcomes:
-        # Nothing was tried. `--allow-missing-tools` is what makes this
-        # reachable, and it is not a failure -- it is the thing that flag buys.
-        return TARGET_NOT_ATTEMPTED if skipped else TARGET_FAILED
-    if all(outcomes):
+    in_scope = [r for r in rows.values() if r.reason not in OFF_TARGET_REASONS]
+    if not in_scope:
+        return TARGET_FAILED
+    ran = sum(r.state is State.RAN for r in in_scope)
+    failed = sum(r.state is State.FAILED for r in in_scope)
+    if not ran and not failed:
+        return TARGET_NOT_ATTEMPTED
+    if not failed:
         return TARGET_OK
-    if any(outcomes):
-        return TARGET_PARTIAL
-    return TARGET_FAILED
+    return TARGET_PARTIAL if ran else TARGET_FAILED
+
+
+@dataclass(frozen=True)
+class TargetSummary:
+    """What the progress lines say about one finished target."""
+
+    outcome: str
+    failed: list[str]  # tools that failed
+    not_installed: list[str]  # skipped because not installed
+    skipped: list[str]  # "tool (reason)" for every other in-scope skip
+
+
+def summarize_target(rows: Mapping[str, ToolRun] | None) -> TargetSummary:
+    """The outcome and the tool lists both progress trackers print."""
+    rows = rows or {}
+    return TargetSummary(
+        outcome=classify_target_outcome(rows),
+        failed=sorted(r.tool for r in rows.values() if r.state is State.FAILED),
+        not_installed=sorted(
+            r.tool
+            for r in rows.values()
+            if r.state is State.SKIPPED and r.reason is Reason.NOT_INSTALLED
+        ),
+        skipped=sorted(
+            f"{r.tool} ({r.reason})"
+            for r in rows.values()
+            if r.state is State.SKIPPED and r.reason not in OFF_TARGET_REASONS
+        ),
+    )
+
+
+def unique_names(names: list[str], prefixes: list[str] | None = None) -> list[str]:
+    """Make each results folder name unique within one target type's folder.
+
+    Two targets sharing a folder are scanned concurrently into it, and the last
+    writer's findings stand for both (#1303, #1312). A name that collides,
+    case-insensitively as Windows does, takes its prefix when there is one
+    (``alice__app``), and a numeric suffix settles a collision that survives
+    that. A name that does not collide is unchanged.
+    """
+    counts: dict[str, int] = {}
+    for name in names:
+        counts[name.casefold()] = counts.get(name.casefold(), 0) + 1
+    unique: list[str] = []
+    used: set[str] = set()
+    for i, name in enumerate(names):
+        if prefixes is not None and counts[name.casefold()] > 1:
+            name = f"{prefixes[i]}__{name}"
+        candidate, n = name, 2
+        while candidate.casefold() in used:
+            candidate = f"{name}-{n}"
+            n += 1
+        used.add(candidate.casefold())
+        unique.append(candidate)
+    return unique
+
+
+def repo_result_names(repos: list[Path]) -> list[str]:
+    """Each repository's results folder, unique within the scan (#1303).
+
+    Results land in ``individual-repos/<name>``, and two repositories with one
+    folder name (``~/work/app`` and ``~/oss/app``, or two forks cloned from a
+    TSV) shared one folder. A collision takes the parent's name as its prefix
+    (``alice__app``, ``bob__app``). The name is also the repository's name in
+    every accounting record.
+    """
+    # `Path(".").name` is "", which sanitized to "unknown" (#1315). `abspath`,
+    # not `resolve`: a symlinked repository keeps the name it was given.
+    paths = [Path(os.path.abspath(repo)) for repo in repos]
+    return unique_names(
+        [_sanitize_path_component(p.name) for p in paths],
+        [_sanitize_path_component(p.parent.name) for p in paths],
+    )
 
 
 def _run_timed(scan_job, *args: Any, **kwargs: Any) -> tuple[str, dict, float]:
@@ -432,6 +494,7 @@ class ScanOrchestrator:
 
         # Apply repository filters (include/exclude patterns)
         targets.repos = self._filter_repos(targets.repos)
+        targets.repo_names = repo_result_names(targets.repos)
 
         targets.rejected = list(self._rejected)
         return targets
@@ -451,10 +514,11 @@ class ScanOrchestrator:
         """
         Discover local Git repositories from CLI arguments.
 
-        Supports three input modes:
+        Supports four input modes:
         - --repo: Single repository path
         - --repos-dir: Directory containing multiple repos
         - --targets: File with list of repository paths
+        - --tsv: TSV of repositories, cloned into --dest first
 
         Also detects MSYS path mangling from Git Bash on Windows and provides
         helpful error messages with solutions.
@@ -531,7 +595,81 @@ class ScanOrchestrator:
                     if listed == 0:
                         self._reject("--targets", args.targets, "file lists no paths")
 
+        # TSV of repositories to clone, then scan (#1299)
+        elif getattr(args, "tsv", None):
+            repos.extend(self._clone_tsv(args.tsv, getattr(args, "dest", None)))
+
         return repos
+
+    def _clone_tsv(self, tsv: str, dest: str | None) -> list[Path]:
+        """Clone every repository a TSV lists into `dest`; return the clones.
+
+        Each row that is refused or fails to clone is rejected by name, and a
+        file whose every row failed is rejected as a whole: a scan of nothing
+        is not a clean scan.
+        """
+        import csv
+
+        from scripts.cli.clone_from_tsv import (
+            clone_or_update,
+            parse_tsv,
+            redact,
+            repo_name,
+        )
+
+        if not dest:
+            # No default: the working directory puts clones inside whatever
+            # repository the user runs from, and the results directory is
+            # uploaded whole by CI and deleted between runs.
+            self._reject("--tsv", tsv, "needs --dest DIR, where to clone the rows")
+            return []
+        path = _user_path(tsv)
+        why = _probe(path.exists, "file does not exist")
+        if why:
+            self._reject("--tsv", tsv, why)
+            return []
+        try:
+            urls = parse_tsv(path)
+        except OSError as exc:
+            self._reject("--tsv", tsv, _unreadable(exc))
+            return []
+        except (RuntimeError, UnicodeDecodeError, csv.Error) as exc:
+            self._reject("--tsv", tsv, str(exc))
+            return []
+        if not urls:
+            self._reject("--tsv", tsv, "file lists no repositories")
+            return []
+        dest_path = _user_path(dest)
+        try:
+            dest_path.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            self._reject("--tsv", tsv, f"--dest {dest} cannot be used: {exc}")
+            return []
+
+        clones: list[Path] = []
+        filtered = 0
+        for url in dict.fromkeys(urls):  # a row listed twice is scanned once
+            # include/exclude match the folder a row clones into, which the URL
+            # already names: a row they drop is never cloned or fetched.
+            name = repo_name(url)
+            if name is not None and not self._passes_filters(name):
+                logger.info("Not cloning %s: excluded by include/exclude", redact(url))
+                filtered += 1
+                continue
+            clone, why = clone_or_update(url, dest_path)
+            if clone is None:
+                self._reject("--tsv", redact(url), why or "clone failed")
+                continue
+            clones.append(clone)
+        if not clones:
+            self._reject(
+                "--tsv",
+                tsv,
+                "include/exclude left no row to clone"
+                if filtered and filtered == len(dict.fromkeys(urls))
+                else "no listed repository could be cloned",
+            )
+        return clones
 
     def _discover_images(self, args) -> list[str]:
         """
@@ -576,7 +714,9 @@ class ScanOrchestrator:
                             "not a valid container image reference",
                         )
 
-        return images
+        # An image listed twice is scanned once: two targets with one name put
+        # two rows per tool under it (#1312).
+        return list(dict.fromkeys(images))
 
     def _discover_iac_files(self, args) -> list[tuple[str, Path]]:
         """
@@ -652,19 +792,33 @@ class ScanOrchestrator:
         # handled only by jmo.py's _iter_urls, which nothing had called since
         # discovery moved here - so the flag was silently accepted and dropped
         # (#807). That dead helper has since been deleted (#808).
+        #
+        # zap runs a URL scan (`-quickurl`) and is never told the target is an
+        # OpenAPI definition, so a spec is only ever a URL (#1331). A remote
+        # one is scanned as that URL and says so. A local one became a
+        # `file://` URL that the URL job then rejected for its scheme, after
+        # the scan had started (#1320): it is refused here instead.
         if getattr(args, "api_spec", None):
             spec = args.api_spec
             if spec.startswith(("http://", "https://")):
+                logger.warning(
+                    "--api-spec %s is scanned as a plain URL: zap is not told it "
+                    "is an OpenAPI definition, so the API's endpoints are not "
+                    "requested (#1331)",
+                    spec,
+                )
                 urls.append(spec)
             else:
                 p = _user_path(spec)
-                why = _probe(p.exists, "spec file does not exist")
-                if why:
-                    self._reject("--api-spec", spec, why)
-                else:
-                    urls.append(f"file://{p.absolute()}")
+                why = _probe(p.exists, "spec file does not exist") or (
+                    "a local OpenAPI file is not scanned: zap runs a URL scan and "
+                    "cannot import a spec yet (#1331); pass the running API's "
+                    "address with --url"
+                )
+                self._reject("--api-spec", spec, why)
 
-        return urls
+        # A URL listed twice is scanned once, as a TSV row is (#1312).
+        return list(dict.fromkeys(urls))
 
     def _discover_gitlab_repos(self, args) -> list[dict[str, str]]:
         """
@@ -678,6 +832,10 @@ class ScanOrchestrator:
             List of dicts with keys: full_path, url, token, repo, group, name
         """
         gitlab_repos: list[dict[str, str]] = []
+        # `or`, not a getattr default: argparse always sets the attribute (None
+        # without --gitlab-url), so the default never applied and the job
+        # called None.rstrip before cloning anything (#1319).
+        url = getattr(args, "gitlab_url", None) or "https://gitlab.com"
 
         # Single GitLab repository
         if getattr(args, "gitlab_repo", None):
@@ -689,7 +847,7 @@ class ScanOrchestrator:
             gitlab_repos.append(
                 {
                     "full_path": full_path,
-                    "url": getattr(args, "gitlab_url", "https://gitlab.com"),
+                    "url": url,
                     "token": getattr(args, "gitlab_token", ""),
                     "repo": repo,
                     "group": group,
@@ -705,7 +863,7 @@ class ScanOrchestrator:
             gitlab_repos.append(
                 {
                     "full_path": f"group:{group}",
-                    "url": getattr(args, "gitlab_url", "https://gitlab.com"),
+                    "url": url,
                     "token": getattr(args, "gitlab_token", ""),
                     "repo": "",
                     "group": group,
@@ -771,27 +929,18 @@ class ScanOrchestrator:
         Returns:
             Filtered list of repositories
         """
-        # Apply include patterns
-        if self.config.include_patterns:
-            repos = [
-                r
-                for r in repos
-                if any(
-                    fnmatch.fnmatch(r.name, pat) for pat in self.config.include_patterns
-                )
-            ]
+        # The name the repository is recorded under: `--repo .` is not "".
+        return [r for r in repos if self._passes_filters(Path(os.path.abspath(r)).name)]
 
-        # Apply exclude patterns
-        if self.config.exclude_patterns:
-            repos = [
-                r
-                for r in repos
-                if not any(
-                    fnmatch.fnmatch(r.name, pat) for pat in self.config.exclude_patterns
-                )
-            ]
-
-        return repos
+    def _passes_filters(self, name: str) -> bool:
+        """Whether a repository folder name survives `include` and `exclude`."""
+        if self.config.include_patterns and not any(
+            fnmatch.fnmatch(name, pat) for pat in self.config.include_patterns
+        ):
+            return False
+        return not any(
+            fnmatch.fnmatch(name, pat) for pat in self.config.exclude_patterns
+        )
 
     def setup_results_directories(self, targets: ScanTargets) -> None:
         """
@@ -902,28 +1051,28 @@ class ScanOrchestrator:
         tool_progress_callback=None,
         session=None,
         session_path=None,
-    ) -> list[tuple[str, dict[str, bool]]]:
+    ) -> list[tuple[str, str, dict[str, ToolRun]]]:
         """
         Execute scans on all discovered targets in parallel.
 
-        This method encapsulates ALL scanning logic that was previously inline in cmd_scan.
-        It handles parallel execution, progress tracking, and result aggregation for all 6 target types.
+        Every job gets every requested tool and returns one row per tool, so a
+        tool that does not read a target type is a `skipped` row there rather
+        than a name filtered away before anything could report it.
 
         Args:
             targets: Discovered scan targets
             per_tool_config: Per-tool configuration overrides
             progress_callback: Optional target-level progress callback, invoked
-                as ``(target_type, target_id, statuses, elapsed=<seconds>)``.
-                ``statuses`` is the scanner's per-tool boolean map -- pass it to
-                ``classify_target_outcome``; do not infer success from
-                ``elapsed``, which is a duration and says nothing about outcome.
+                as ``(target_type, target_id, rows, elapsed=<seconds>)``. Pass
+                ``rows`` to ``classify_target_outcome``; ``elapsed`` is a
+                duration and says nothing about outcome.
             tool_progress_callback: Optional callback for tool-level progress (tool_name, status, count)
                                    Called when each tool starts and completes
             session: Optional ScanSession for checkpointing (skip completed targets)
             session_path: Optional Path to session file for checkpoint writes
 
         Returns:
-            List of (target_name, statuses_dict) tuples for all scanned targets
+            (target type, target name, rows by tool) for every scanned target
         """
         from concurrent.futures import ThreadPoolExecutor
 
@@ -935,10 +1084,14 @@ class ScanOrchestrator:
             scan_repository,
             scan_url,
         )
+        from scripts.cli.scan_jobs.iac_scanner import iac_target_name
+        from scripts.cli.scan_jobs.tool_loop import rows_without_running
+        from scripts.cli.scan_jobs.url_scanner import url_folder_name
 
-        all_results = []
+        all_results: list[tuple[str, str, dict[str, ToolRun]]] = []
         futures = []
         max_workers = self.get_effective_max_workers()
+        tools = list(self.config.tools)
 
         # Helper to check if a target was already completed in a previous session
         def _is_completed(target_id: str) -> bool:
@@ -946,98 +1099,111 @@ class ScanOrchestrator:
                 return bool(session.is_target_completed(target_id))
             return False
 
+        # A resumed scan does not scan a completed target again, but its rows
+        # are still this scan's record: `tool_runs`, history, the reconciler.
+        def _resumed(target_type: str, target_id: str) -> None:
+            kept = session.completed_rows(target_id) if session is not None else None
+            if kept is not None:
+                all_results.append((target_type, kept[0], kept[1]))
+
         # Helper to checkpoint after each target completes
-        def _checkpoint(target_id: str, statuses: dict[str, bool]) -> None:
+        def _checkpoint(target_id: str, name: str, rows: Mapping[str, ToolRun]) -> None:
             if session is not None and session_path is not None:
-                session.mark_target_complete(target_id, statuses)
+                session.mark_target_complete(target_id, rows, name=name)
                 from scripts.cli.scan_session import save_session as _save
 
                 _save(session, session_path)
 
-        # Filter tools by scan type for smarter tool selection
-        # This avoids running URL-only tools on repos, repo-only tools on images, etc.
-        repo_tools = filter_tools_for_scan_type(self.config.tools, "repo")
-        image_tools = filter_tools_for_scan_type(self.config.tools, "image")
-        iac_tools = filter_tools_for_scan_type(self.config.tools, "iac")
-        url_tools = filter_tools_for_scan_type(self.config.tools, "url")
-        gitlab_tools = filter_tools_for_scan_type(self.config.tools, "gitlab")
-        k8s_tools = filter_tools_for_scan_type(self.config.tools, "k8s")
-
-        # A requested tool that matches no target type present in this scan runs
-        # nowhere and contributes nothing, and until now said nothing either:
-        # `filter_tools_for_scan_type` drops silently, and the per-target
-        # scanners can only report on tools that were handed to them. On a deep
-        # scan of a repository that made `nuclei` (URL-only) and `lynis` vanish
-        # completely - absent from every stream, artifact and diagnostic.
-        #
-        # Computed against the target types actually being scanned, not each
-        # filter in isolation: nuclei is correctly skipped for a repository, but
-        # if the same run also has URLs then it does run and must not be named.
-        routed: set[str] = set()
-        for present, applicable in (
-            (targets.repos, repo_tools),
-            (targets.images, image_tools),
-            (targets.iac_files, iac_tools),
-            (targets.urls, url_tools),
-            (targets.gitlab_repos, gitlab_tools),
-            (targets.k8s_resources, k8s_tools),
-        ):
-            if present:
-                routed.update(applicable)
-
-        unrouted = [t for t in self.config.tools if t not in routed]
-        if unrouted:
-            logger.warning(
-                "Requested but applicable to no target type in this scan, so "
-                "not run and contributing no findings: %s",
-                ", ".join(sorted(unrouted)),
-            )
+        # A tool someone named that no target in this scan reads runs nowhere.
+        # Its rows say `skipped` on every target; this line says it once. Only
+        # for a tool someone named: the matrix default puts zap and nuclei in
+        # every repository scan, where the line fired although nothing was
+        # requested (#1279). Computed against the target types present, not each
+        # in isolation: nuclei is skipped on a repository, but runs if the same
+        # scan also has URLs.
+        if self.config.explicit_tools:
+            routed: set[str] = set()
+            for target_type, present in (
+                ("repo", targets.repos),
+                ("image", targets.images),
+                ("iac", targets.iac_files),
+                ("url", targets.urls),
+                ("gitlab", targets.gitlab_repos),
+                ("k8s", targets.k8s_resources),
+            ):
+                if present:
+                    routed.update(TOOL_SCAN_TYPES[target_type])
+            unrouted = [t for t in tools if t not in routed]
+            if unrouted:
+                logger.warning(
+                    "Requested but applicable to no target type in this scan, so "
+                    "not run and contributing no findings: %s",
+                    ", ".join(sorted(unrouted)),
+                )
 
         skipped_count = 0
+        repo_names = targets.repo_names or repo_result_names(targets.repos)
+        # Each target's folder, unique within its type (#1312). Assigned over
+        # every target, completed or not, so a resumed scan assigns the same.
+        # One file per IaC flag, so a shared stem is two types: `k8s__main`.
+        image_folders = unique_names(
+            [_sanitize_path_component(image) for image in targets.images]
+        )
+        iac_folders = unique_names(
+            [_sanitize_path_component(path.stem) for _, path in targets.iac_files],
+            [iac_type for iac_type, _ in targets.iac_files],
+        )
+        url_folders = unique_names([url_folder_name(url) for url in targets.urls])
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # Submit repositories - use repo-filtered tools
-            for repo in targets.repos:
-                if _is_completed(repo.name):
+            for repo, result_name in zip(targets.repos, repo_names, strict=True):
+                if _is_completed(result_name):
                     skipped_count += 1
+                    _resumed("repo", result_name)
                     continue
                 future = executor.submit(
                     _run_timed,
                     scan_repository,
                     repo,
                     self.config.results_dir / "individual-repos",
-                    repo_tools,
+                    tools,
                     self.config.timeout,
                     self.config.retries,
                     per_tool_config,
                     self.config.allow_missing_tools,
                     progress_callback=tool_progress_callback,
+                    result_name=result_name,
                 )
-                futures.append(("repo", repo.name, future))
+                futures.append(("repo", result_name, future))
 
-            # Submit images - use image-filtered tools (trivy, syft only)
-            for image in targets.images:
+            for image, folder in zip(targets.images, image_folders, strict=True):
                 if _is_completed(image):
                     skipped_count += 1
+                    _resumed("image", image)
                     continue
                 future = executor.submit(
                     _run_timed,
                     scan_image,
                     image,
                     self.config.results_dir / "individual-images",
-                    image_tools,
+                    tools,
                     self.config.timeout,
                     self.config.retries,
                     per_tool_config,
                     self.config.allow_missing_tools,
+                    result_name=folder,
                 )
                 futures.append(("image", image, future))
 
-            # Submit IaC files - use IaC-filtered tools
-            for iac_type, iac_path in targets.iac_files:
-                iac_id = str(iac_path)
+            for (iac_type, iac_path), folder in zip(
+                targets.iac_files, iac_folders, strict=True
+            ):
+                # The name its job records, so a scanner that raises is
+                # recorded under the name success would have used (#1315).
+                iac_id = iac_target_name(iac_type, iac_path)
                 if _is_completed(iac_id):
                     skipped_count += 1
+                    _resumed("iac", iac_id)
                     continue
                 future = executor.submit(
                     _run_timed,
@@ -1045,44 +1211,46 @@ class ScanOrchestrator:
                     iac_type,
                     iac_path,
                     self.config.results_dir / "individual-iac",
-                    iac_tools,
+                    tools,
                     self.config.timeout,
                     self.config.retries,
                     per_tool_config,
                     self.config.allow_missing_tools,
+                    result_name=folder,
                 )
                 futures.append(("iac", iac_id, future))
 
-            # Submit URLs - use URL-filtered tools (nuclei, zap, akto only)
-            for url in targets.urls:
+            for url, folder in zip(targets.urls, url_folders, strict=True):
                 if _is_completed(url):
                     skipped_count += 1
+                    _resumed("url", url)
                     continue
                 future = executor.submit(
                     _run_timed,
                     scan_url,
                     url,
                     self.config.results_dir / "individual-web",
-                    url_tools,
+                    tools,
                     self.config.timeout,
                     self.config.retries,
                     per_tool_config,
                     self.config.allow_missing_tools,
+                    result_name=folder,
                 )
                 futures.append(("url", url, future))
 
-            # Submit GitLab repos - use gitlab-filtered tools
             for gitlab_repo_info in targets.gitlab_repos:
                 gl_id = gitlab_repo_info.get("full_path", "unknown")
                 if _is_completed(gl_id):
                     skipped_count += 1
+                    _resumed("gitlab", gl_id)
                     continue
                 future = executor.submit(
                     _run_timed,
                     scan_gitlab_repo,
                     gitlab_repo_info,
                     self.config.results_dir / "individual-gitlab",
-                    gitlab_tools,
+                    tools,
                     self.config.timeout,
                     self.config.retries,
                     per_tool_config,
@@ -1090,20 +1258,20 @@ class ScanOrchestrator:
                 )
                 futures.append(("gitlab", gl_id, future))
 
-            # Submit K8s resources - use k8s-filtered tools (trivy only)
             for k8s_resource_info in targets.k8s_resources:
                 ctx = k8s_resource_info.get("context", "unknown")
                 ns = k8s_resource_info.get("namespace", "unknown")
                 k8s_id = f"{ctx}:{ns}"
                 if _is_completed(k8s_id):
                     skipped_count += 1
+                    _resumed("k8s", k8s_id)
                     continue
                 future = executor.submit(
                     _run_timed,
                     scan_k8s_resource,
                     k8s_resource_info,
                     self.config.results_dir / "individual-k8s",
-                    k8s_tools,
+                    tools,
                     self.config.timeout,
                     self.config.retries,
                     per_tool_config,
@@ -1119,40 +1287,45 @@ class ScanOrchestrator:
                 # prints INFO, so the two logging systems have different
                 # effective floors and this line was on the quiet one.
                 #
-                # It is the only thing that tells a reader their results cover
-                # fewer targets than they asked for, and the progress display
-                # ends part-way (`[1/2] ... Progress: 50%`) with no other
-                # explanation. That is not routine chatter.
+                # It is the only thing that explains a progress display that
+                # ends part-way (`[1/2] ... Progress: 50%`). The results still
+                # cover every target: the report reads the skipped targets'
+                # folders, and their rows come back from the session (#1317).
                 logger.warning(
-                    "Resuming scan: skipped %d previously completed target(s); "
-                    "this run's results cover only the remaining ones",
+                    "Resuming scan: %d target(s) completed earlier were not "
+                    "scanned again; their earlier results are reused",
                     skipped_count,
                 )
 
             # Collect results as they complete
             for target_type, target_id, future in futures:
                 try:
-                    name, statuses, elapsed = future.result()
-                    all_results.append((name, statuses))
+                    name, rows, elapsed = future.result()
+                    all_results.append((target_type, name, rows))
 
                     # Checkpoint after each completed target
-                    _checkpoint(target_id, statuses)
+                    _checkpoint(target_id, name, rows)
 
                     # Call progress callback if provided
                     if progress_callback:
-                        progress_callback(
-                            target_type, target_id, statuses, elapsed=elapsed
-                        )
+                        progress_callback(target_type, target_id, rows, elapsed=elapsed)
 
                 except Exception as e:
                     # Log error but continue with other targets
                     logger.error(
                         f"Scan failed for {target_type} {target_id}: {e}", exc_info=True
                     )
-                    # Still append partial result. An empty status map is
-                    # classify_target_outcome's TARGET_FAILED, so this target is
-                    # counted as having produced nothing rather than vanishing.
-                    all_results.append((target_id, {}))
+                    # `target_id` is the name the job records. Still a row per
+                    # tool, so this target is counted as having produced
+                    # nothing (TARGET_FAILED) rather than vanishing, and
+                    # reaches history with the reason.
+                    failed_rows = rows_without_running(
+                        tools,
+                        target_type,
+                        Reason.SCANNER_ERROR,
+                        detail=f"{type(e).__name__}: {e}",
+                    )
+                    all_results.append((target_type, target_id, failed_rows))
 
                     # The callback used to be skipped on this path, so a target
                     # whose scanner *raised* never reached the progress display
@@ -1166,7 +1339,9 @@ class ScanOrchestrator:
                     # whole scan. A progress display must not be able to do that.
                     if progress_callback:
                         try:
-                            progress_callback(target_type, target_id, {}, elapsed=0.0)
+                            progress_callback(
+                                target_type, target_id, failed_rows, elapsed=0.0
+                            )
                         except Exception:
                             logger.debug(
                                 "Progress callback failed for %s %s",

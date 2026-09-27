@@ -45,7 +45,6 @@ Severity Mapping (Trivy -> CommonFinding):
 Integration Notes:
 - Syft SBOM can feed into Trivy for vulnerability scanning
 - Grype is an alternative with similar capabilities
-- trivy_rbac_adapter.py handles RBAC-specific findings
 
 Example:
     >>> adapter = TrivyAdapter()
@@ -55,7 +54,6 @@ Example:
 See Also:
     - https://trivy.dev/
     - https://github.com/aquasecurity/trivy
-    - trivy_rbac_adapter.py for Kubernetes RBAC
 """
 
 from __future__ import annotations

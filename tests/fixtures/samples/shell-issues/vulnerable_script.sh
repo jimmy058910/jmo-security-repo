@@ -1,5 +1,4 @@
 #!/bin/bash
-# shellcheck disable=all
 # Sample shell script with INTENTIONAL issues for testing
 # These issues will be detected by ShellCheck
 #

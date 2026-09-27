@@ -14,7 +14,7 @@ make dev-deps
 - Optional security tools for full local CI:
 
 ```bash
-jmo tools install --profile balanced  # Install security scanners
+jmo tools install  # Install security scanners
 ```
 
 ## Unit & Integration Tests
@@ -76,8 +76,8 @@ To run a small smoke test using the CLI:
 # Use a small set of repos or create a dummy repo directory
 mkdir -p ~/smoke/repos/sample && cd ~/smoke/repos/sample && git init && cd -
 
-# Scan with fast profile and human logs
-python3 scripts/cli/jmo.py scan --repos-dir ~/smoke/repos --profile-name fast --human-logs
+# Scan with a narrowed tool list and human logs
+python3 scripts/cli/jmo.py scan --repos-dir ~/smoke/repos --tools trufflehog semgrep --human-logs
 
 # Aggregate reports with profiling
 python3 scripts/cli/jmo.py report ./results --profile --human-logs
@@ -122,8 +122,8 @@ pytest tests/e2e/ -m "not docker" -v
 | `test_scan_workflows.py` | U1-U6, M1-M3, W1 | Repo, image, IaC, multi-target, wizard scans |
 | `test_wizard_workflows.py` | M4, W2 | Wizard emit-script, non-interactive wizard |
 | `test_ci_gating.py` | U12 | CI mode exit codes, severity thresholds |
-| `test_advanced_targets.py` | A1-A3 | GitLab, Kubernetes, deep profile |
-| `test_docker_workflows.py` | U9-U11, M5-M6, W3-W4 | Docker-based scanning variants |
+| `test_advanced_targets.py` | A1-A3 | GitLab, Kubernetes, full tool matrix |
+| `test_docker_workflows.py` | U9-U11, M5-M6, W3-W4 | Docker image scanning |
 | `test_dashboard_visual.py` | - | Playwright visual tests for HTML dashboard |
 | `test_cross_platform.py` | - | Cross-platform compatibility |
 | `test_linux_specific.py` | - | Linux-only features |
@@ -167,7 +167,7 @@ Visual tests are skipped automatically if Playwright is not installed.
 
 The comprehensive test suite runs automatically in CI:
 
-- **On PRs:** Fast profile tests (10-15 minutes)
+- **On PRs:** Fast test tier (10-15 minutes)
 - **Nightly:** Full test suite on Ubuntu + macOS (2-3 hours)
 - **On Demand:** Manual workflow with specific test selection
 
@@ -180,7 +180,7 @@ For release readiness:
 - **≥95% success rate** (24/25 tests passing)
 - **All Tier 1 tests pass** (repos, images, multi-target)
 - **Zero CRITICAL issues** in test suite
-- **Performance within bounds** (fast ≤10min, balanced ≤20min, deep ≤60min)
+- **Performance within bounds** (no E2E test hits its pytest timeout)
 
 ### Troubleshooting
 
@@ -191,8 +191,8 @@ For release readiness:
 pytest tests/e2e/ -k "U1" -v -s
 
 # Verify tool installations
-jmo tools check --profile balanced
-jmo tools install --profile balanced
+jmo tools check
+jmo tools install
 ```
 
 **Docker tests failing:**
@@ -242,7 +242,7 @@ pytest tests/ --store-durations --durations-path=.test_durations
 
 ## General Troubleshooting
 
-- Missing tools: run `jmo tools check` and `jmo tools install --profile balanced`.
+- Missing tools: run `jmo tools check` and `jmo tools install`.
 - PATH issues: ensure `~/.local/bin` is in your PATH if using pip --user installs.
 - Coverage too low: add tests or temporarily adjust `pyproject.toml [tool.coverage]` (prefer adding tests).
 - Different Python version: tests target 3.12 in CI; using older versions may cause minor differences.

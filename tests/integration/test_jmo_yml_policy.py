@@ -4,9 +4,9 @@ Integration test for jmo.yml policy configuration.
 
 This test verifies that:
 1. The policy section loads correctly from jmo.yml
-2. Profile-specific policy overrides work as expected
-3. All three profiles (fast/balanced/deep) have correct policy defaults
-4. Environment variables correctly override jmo.yml settings
+2. The shipped jmo.yml's top-level policy is the one applied (v2.0.0 removed
+   the per-profile overrides with the profiles)
+3. Environment variables correctly override jmo.yml settings
 
 Target Coverage: ≥90%
 """
@@ -54,61 +54,17 @@ def test_jmo_yml_global_policy_defaults(jmo_yml_path):
     assert config.policy.opa["timeout"] == 30
 
 
-def test_jmo_yml_default_profile_policy(jmo_yml_path):
-    """Test that default profile (balanced) policy is applied."""
+def test_jmo_yml_default_policies(jmo_yml_path):
+    """Test that the shipped top-level policy set is what loads.
+
+    It is the set the former default profile (balanced) applied, now the only
+    one: there is no profile left to override it.
+    """
     from scripts.core.config import load_config
 
     config = load_config(str(jmo_yml_path))
 
-    # Default profile is balanced, should use balanced policies
-    assert "owasp-top-10" in config.policy.default_policies
-    assert "zero-secrets" in config.policy.default_policies
-    assert len(config.policy.default_policies) == 2
-
-
-def test_jmo_yml_fast_profile_policy(jmo_yml_path, tmp_path):
-    """Test that fast profile has correct policy defaults."""
-    from scripts.core.config import load_config
-
-    # Create modified jmo.yml with fast profile as default
-    jmo_content = jmo_yml_path.read_text(encoding="utf-8")
-    jmo_content = jmo_content.replace(
-        "default_profile: balanced", "default_profile: fast"
-    )
-
-    modified_yml = tmp_path / "jmo_fast.yml"
-    modified_yml.write_text(jmo_content, encoding="utf-8")
-
-    config = load_config(str(modified_yml))
-
-    # Fast profile should use minimal policies
-    assert config.policy.default_policies == ["zero-secrets"]
-    assert config.policy.fail_on_violation is False
-
-
-def test_jmo_yml_deep_profile_policy(jmo_yml_path, tmp_path):
-    """Test that deep profile has correct policy defaults."""
-    from scripts.core.config import load_config
-
-    # Create modified jmo.yml with deep profile as default
-    jmo_content = jmo_yml_path.read_text(encoding="utf-8")
-    jmo_content = jmo_content.replace(
-        "default_profile: balanced", "default_profile: deep"
-    )
-
-    modified_yml = tmp_path / "jmo_deep.yml"
-    modified_yml.write_text(jmo_content, encoding="utf-8")
-
-    config = load_config(str(modified_yml))
-
-    # Deep profile should use all 5 policies
-    assert len(config.policy.default_policies) == 5
-    assert "owasp-top-10" in config.policy.default_policies
-    assert "zero-secrets" in config.policy.default_policies
-    assert "pci-dss" in config.policy.default_policies
-    assert "production-hardening" in config.policy.default_policies
-    assert "hipaa-compliance" in config.policy.default_policies
-    assert config.policy.fail_on_violation is True
+    assert config.policy.default_policies == ["owasp-top-10", "zero-secrets"]
 
 
 def test_jmo_yml_environment_variable_override(jmo_yml_path, monkeypatch):
@@ -128,34 +84,6 @@ def test_jmo_yml_environment_variable_override(jmo_yml_path, monkeypatch):
     assert config.policy.fail_on_violation is True
 
 
-def test_jmo_yml_profile_precedence_over_global(jmo_yml_path):
-    """Test that profile defaults override global policy defaults."""
-    import yaml
-
-    from scripts.core.config import load_config
-
-    # Read jmo.yml to check profile override structure
-    jmo_data = yaml.safe_load(jmo_yml_path.read_text(encoding="utf-8"))
-
-    # Verify profile structure
-    assert "profiles" in jmo_data
-    assert "fast" in jmo_data["profiles"]
-    assert "balanced" in jmo_data["profiles"]
-    assert "deep" in jmo_data["profiles"]
-
-    # Verify each profile has policy section
-    assert "policy" in jmo_data["profiles"]["fast"]
-    assert "policy" in jmo_data["profiles"]["balanced"]
-    assert "policy" in jmo_data["profiles"]["deep"]
-
-    # Load config and verify profile overrides global
-    config = load_config(str(jmo_yml_path))
-
-    # Default profile (balanced) should override global defaults
-    # Global has [owasp-top-10, zero-secrets], balanced should use its own
-    assert config.policy.default_policies == ["owasp-top-10", "zero-secrets"]
-
-
 def test_jmo_yml_opa_configuration(jmo_yml_path):
     """Test that OPA configuration is loaded correctly."""
     from scripts.core.config import load_config
@@ -173,21 +101,24 @@ def test_jmo_yml_opa_configuration(jmo_yml_path):
     assert config.policy.opa["timeout"] == 30
 
 
-def test_jmo_yml_all_profiles_have_policy(jmo_yml_path):
-    """Test that all three profiles have policy configuration."""
-    import yaml
+def test_the_shipped_jmo_yml_has_no_unrecognised_keys(jmo_yml_path, caplog):
+    """Every key the shipped config carries must configure something.
 
-    jmo_data = yaml.safe_load(jmo_yml_path.read_text(encoding="utf-8"))
+    A `profiles:` or `default_profile:` block left in the file after v2.0.0
+    would load, warn, and do nothing -- the default config telling every user
+    that its own settings are ignored.
+    """
+    import logging
 
-    profiles = ["fast", "balanced", "deep"]
-    for profile in profiles:
-        assert profile in jmo_data["profiles"], f"Profile {profile} missing"
-        assert "policy" in jmo_data["profiles"][profile], (
-            f"Policy missing in {profile} profile"
-        )
-        assert "default_policies" in jmo_data["profiles"][profile]["policy"], (
-            f"default_policies missing in {profile} profile"
-        )
+    from scripts.core.config import load_config
+
+    with caplog.at_level(logging.WARNING, logger="scripts.core.config"):
+        load_config(str(jmo_yml_path))
+
+    unrecognised = [
+        r.getMessage() for r in caplog.records if "unrecognised" in r.getMessage()
+    ]
+    assert not unrecognised, unrecognised
 
 
 # ========== COVERAGE TARGET: ≥90% ====================

@@ -8,14 +8,21 @@ from __future__ import annotations
 
 import json
 import logging
-import re
-from collections.abc import Mapping
+import tomllib
+from collections.abc import Collection, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-# Re-export from core for backward compatibility.
-# find_tool/tool_exists live in scripts.core.tool_utils to maintain clean
-# dependency layering (core never imports from cli).
+# Re-exported from core, which never imports from cli: find_tool/tool_exists
+# live in scripts.core.tool_utils, the per-tool declarations in
+# scripts.core.tool_descriptors.
+from scripts.core.tool_descriptors import (  # noqa: F401
+    DESCRIPTORS,
+    TRIVY_UNSUPPORTED_FLAGS,
+    VENDORED_DIRS,
+    ExclusionStyle,
+    filter_trivy_flags,
+)
 from scripts.core.tool_utils import (  # noqa: F401
     TOOL_INSTALL_HINTS,
     clear_tool_warnings,
@@ -70,7 +77,7 @@ def _run_inline_tool_update(drift_list: list[dict]) -> bool:
 
 
 def check_version_drift_before_scan(
-    profile: str,
+    tools: Collection[str],
     interactive: bool = False,
 ) -> bool:
     """
@@ -82,7 +89,7 @@ def check_version_drift_before_scan(
     - Wizard mode (interactive=True): Prompt user before continuing
 
     Args:
-        profile: Scan profile ('fast', 'slim', 'balanced', 'deep')
+        tools: The tools the scan will run
         interactive: Whether to prompt user for confirmation
 
     Returns:
@@ -93,7 +100,7 @@ def check_version_drift_before_scan(
 
     logger = logging.getLogger(__name__)
     manager = ToolManager()
-    drift = manager.get_version_drift(profile)
+    drift = manager.get_version_drift(tools)
 
     if not drift:
         return True  # All versions match
@@ -210,7 +217,7 @@ def check_version_drift_before_scan(
         return True
 
 
-# A tool's stderr is unbounded (semgrep and horusec are chatty). Keep the tail,
+# A tool's stderr is unbounded (semgrep is chatty). Keep the tail,
 # where the fatal message is, rather than the head, where the banner is.
 STDERR_TAIL_CHARS = 500
 
@@ -258,202 +265,43 @@ def report_tool_failure(result: ToolResult, reason: str) -> None:
     )
 
 
-# jmo.yml configures flags per *tool*, but trivy's flag surface is per
-# *subcommand*, and JMo drives trivy with four of them (fs, image, config, k8s).
-# Measured against trivy 0.70.0: `trivy config` is the only one that rejects
-# --no-progress, and it rejects it fatally at argument parsing - so every IaC
-# scan died before it started and contributed nothing. All four shipped profiles
-# set that flag, so no profile escaped it.
-#
-# Only value-less flags belong here: dropping one must never orphan a value
-# argument. --scanners is accepted by all four subcommands and is not listed.
-TRIVY_UNSUPPORTED_FLAGS: dict[str, frozenset[str]] = {
-    "config": frozenset({"--no-progress"}),
-}
+# The per-tool tables below are derived from `tool_descriptors.DESCRIPTORS`,
+# where each tool's exclusion style, vendored tier, timeout floor and stub
+# shape are declared and justified. They keep their names because the scan
+# jobs' helpers and the tests read them.
 
-
-# Directories a JMo tool invocation creates *inside* the tree being scanned, and
-# that every other scanner therefore walks unless it is told not to.
-#
-# `.horusec/<uuid>` is horusec's staging copy of the whole repository. Measured
-# against `horusec start --help`: there is no flag to relocate it, so the only
-# tractable defence is to exclude it everywhere else. It is worse than a stable
-# directory because horusec creates and deletes it *while the other tools run* -
-# a scanner that opens a path after horusec removes it records an error, not a
-# skip. Measured on juice-shop (Windows, deep profile): semgrep-secrets recorded
-# 346 `Unix_error: No such file or directory` errors under `<repo>/.horusec/`,
-# and the report's "826 file(s) could not be analysed" warning was mostly those
-# paths (#1132).
-#
-# semgrep-secrets was not the worst of it. Re-parsing the same dogfood run's
-# dependency-check reports found 15,944 non-fatal analysis exceptions across
-# three repositories - 8499 on jmoadaptivegolf alone - and almost every one of
-# jmoadaptivegolf's names a vanished path under `.horusec/<uuid>/`.
-SCAN_EXCLUDED_DIRS: tuple[str, ...] = (".horusec",)
-
-
-# Directories holding code the scanned repository does not own: an installed
-# virtualenv, a fetched `node_modules`, a vendored third-party tree. Scanning
-# them buries the repo's own findings in dependency noise and costs most of the
-# scan's budget. Measured on this repo at 3ffc73a8: 36,705 files on disk to
-# analyse 985 tracked ones, and trivy, semgrep and checkov each hitting the
-# 300s cap and contributing nothing at all (#1080).
-#
-# **This is not a new policy.** `_collect_files` has skipped exactly these names
-# since #1132, for the two tools that take file arguments. What #1080 measured
-# is that the tools taking a *directory* never got the same treatment. Naming
-# the list once is what makes the two agree; `_collect_files` reads it from here
-# rather than repeating it.
-#
-# Deliberately absent: `dist`, `build`, `target`, and any tool's output
-# directory. Those hold the repository's *own* build output, and a user who
-# points JMo at a release tree means it. The general case - honouring
-# `.gitignore` - is a larger change than this one and is not what this list is.
-VENDORED_DIRS: tuple[str, ...] = (
-    ".git",
-    "node_modules",
-    "vendor",
-    ".venv",
-    "venv",
-)
-
-
-# Tools for which VENDORED_DIRS is noise. **Not every tool**, which is the whole
-# reason this is a set rather than a global: dependency-check and syft exist to
-# inventory exactly those trees. #1080 measured 282 of syft's 878 artifacts
-# inside `.venv/` and called them "arguably correct for an SBOM" - handing an
-# SCA or SBOM tool this list would gut it while reporting success, which is the
-# failure shape this project has been bitten by before.
-#
-# SCAN_EXCLUDED_DIRS has no such carve-out and goes to every tool in
-# TOOL_EXCLUSION_FLAG: `.horusec/<uuid>` is JMo's own staging copy of the tree
-# being scanned, so it is nobody's subject matter.
+# Tools for which VENDORED_DIRS is noise: the source readers and the secret
+# scanner. **Not every tool**: syft and grype exist to inventory exactly those
+# trees (#1205) - #1080 measured 282 of syft's 878 artifacts inside `.venv/`.
 VENDOR_NOISE_TOOLS: frozenset[str] = frozenset(
-    {"semgrep", "semgrep-secrets", "trivy", "trivy-rbac", "bandit", "checkov"}
+    name
+    for name, d in DESCRIPTORS.items()
+    if "repo" in d.target_types and d.excluded_vendored == VENDORED_DIRS
 )
 
-
-# bandit's -x is an argparse `default=`, NOT an addition - supplying a value
-# replaces upstream's list outright. Its own help text points at the config file
-# ("in addition to the excluded paths provided in the config file"), which reads
-# like the flag accumulates; it does not. Measured on bandit 1.9.2: with no -x,
-# `.tox/vendored.py` is skipped and `.horusec/staged.py` scanned; with
-# `-x .horusec` the two swap places. So JMo has to re-supply the defaults
-# alongside its own, or excluding one directory silently starts scanning nine
-# others - `.tox`, `.eggs` and `*.egg` hold vendored third-party code, so the
-# regression would arrive as a flood of findings in code the user does not own.
-BANDIT_DEFAULT_EXCLUDED_PATHS: tuple[str, ...] = (
-    ".svn",
-    "CVS",
-    ".bzr",
-    ".hg",
-    ".git",
-    "__pycache__",
-    ".tox",
-    ".eggs",
-    "*.egg",
-)
-
-
-# How each tool spells "skip this directory", as (flag, style). A tool appears
-# here only once its flag has been measured against the real binary; an unlisted
-# tool gets nothing rather than an argument it would reject at parse time, which
-# for trivy and semgrep is fatal (see TRIVY_UNSUPPORTED_FLAGS).
-#
-# The style cannot be inferred from the flag name: semgrep and dependency-check
-# both spell it `--exclude` and want different things - a gitignore-style glob
-# where a bare directory name matches at any depth, versus an Ant pattern where
-# it does not and `**/<dir>/**` is required.
-#
-#   "inline"    one `--flag=VALUE` per directory      (semgrep)
-#   "separate"  one `--flag **/VALUE` pair per directory (trivy)
-#   "regex"     one `--flag VALUE` pair per directory   (checkov)
-#   "ant"       one `--flag **/VALUE/**` pair         (dependency-check)
-#   "csv"       a single flag with one comma-separated value that REPLACES the
-#               tool's own defaults                   (bandit)
-#   "glob-csv"  a single flag with one comma-separated value of **/VALUE/**
-#               globs, ADDED to the tool's own defaults  (horusec)
-#
-# **`csv` and `glob-csv` differ on the thing that matters and look identical.**
-# bandit's `-x` replaces its defaults, so JMo re-sends them; horusec's `-i`
-# accumulates, so re-sending would be noise. Measured on horusec by planting a
-# finding under `.vscode/` -- one of its defaults -- and confirming it stayed
-# excluded with `-i` supplied. A bare name is also not enough for horusec:
-# `-i results` excludes nothing, `-i '**/results/**'` works. That is the
-# opposite of checkov, where the bare name is the only form that works.
-#
-# **trivy and checkov are the sharpest case of the warning above.** Both spell
-# it as a repeatable `--flag VALUE` pair, and the value that works is opposite.
-#
-# trivy 0.74.0, `--skip-dirs`, glob, anchored at the scan root:
-#     `node_modules`      skips a root `node_modules`, WALKS `deep/sub/node_modules`
-#     `**/node_modules`   skips both
-# The `**/` was missing until #1080 and the bug was invisible, because the only
-# entry was `.horusec` and horusec stages it at the root of the scanned repo -
-# which is trivy's scan root. This repo's own `node_modules` lives at
-# `scripts/dashboard/node_modules`, where the bare form is inert.
-#
-# checkov 3.3.16, `--skip-path`, *regex*, matched against the whole path:
-#     `vendor`            skips a root `vendor` AND `a/b/vendor`
-#     `**/vendor`         skips NEITHER - and says nothing
-# `**` is not a valid regex ("nothing to repeat"), and checkov's
-# `filter_ignored_paths` wraps `re.compile` in `except re.error: continue`, so
-# an unparseable pattern is dropped with no error and no warning. Its only
-# fallback is a plain substring test, which `**/vendor` also fails. Handing
-# checkov the trivy spelling produces a flag that looks right, parses, exits 0,
-# and excludes nothing - so it gets its own style rather than sharing one.
-#
-# checkov also ignores `node_modules`, `.terraform`, `.serverless` and every
-# dotted directory on its own (IGNORE_HIDDEN_DIRECTORY), so most of what JMo
-# sends it is already covered; `vendor` and `venv` are the ones that are not.
-# Worth sending anyway - those defaults are checkov's to change, not ours. And
-# `filter_ignored_paths` mutates os.walk's `dirs` list in place, so a skip
-# prunes the walk rather than filtering results afterwards.
+# How each tool spells "skip this directory" as (flag, style), for the styles
+# that are a command-line flag. See `ExclusionStyle` for why the style cannot be
+# read off the flag's name: trivy and checkov take the same `--flag VALUE` shape
+# and the working value is opposite.
 TOOL_EXCLUSION_FLAG: dict[str, tuple[str, str]] = {
-    "semgrep": ("--exclude", "inline"),
-    "semgrep-secrets": ("--exclude", "inline"),
-    "trivy": ("--skip-dirs", "separate"),
-    "trivy-rbac": ("--skip-dirs", "separate"),
-    "checkov": ("--skip-path", "regex"),
-    "dependency-check": ("--exclude", "ant"),
-    "bandit": ("-x", "csv"),
-    "horusec": ("-i", "glob-csv"),
+    name: (d.exclusion_flag, d.exclusion_style.value)
+    for name, d in DESCRIPTORS.items()
+    if d.exclusion_flag
+    and d.exclusion_style
+    in (
+        ExclusionStyle.INLINE,
+        ExclusionStyle.INLINE_REGEX,
+        ExclusionStyle.SEPARATE,
+        ExclusionStyle.REGEX,
+    )
 }
 
-
-# Per-tool minimum timeouts (seconds) for tools that typically run long. A
-# profile default may raise these but never lower them.
-#
-# Lived in repository_scanner.py, which is why only *repository* scans honoured
-# it: the other four scanners had their own copy of `get_tool_timeout` with no
-# floor at all. Measured consequence: `zap` carries a 900 s floor and also runs
-# on `url` targets, so a `balanced` URL scan gave it the profile's 600 s -- 300 s
-# short, a third of its budget -- while the identical tool on a repository
-# target got 900 s. Shared here so one definition reaches every target type.
+# Per-tool minimum timeouts (seconds). A configured default may raise these but
+# never lower them; an explicit `per_tool.<tool>.timeout` wins outright. One
+# definition for every target type: when each scanner had its own copy, zap got
+# its 900 s floor on a repository and the 600 s default on a URL.
 TOOL_TIMEOUT_DEFAULTS: dict[str, int] = {
-    "cdxgen": 600,  # 10 min - with --no-install-deps optimization (was 30 min)
-    "dependency-check": 1200,  # 20 min - NVD database sync can take a while
-    "scancode": 1200,  # 20 min - license scanning large codebases
-    "horusec": 900,  # 15 min - multi-language SAST
-    # semgrep's cost is its RULE COUNT, not the tree it walks: it restricts
-    # itself to git-tracked files by default, so the vendored-directory
-    # exclusions #1080 added cannot move its number. Measured on this
-    # repository -- 541 tracked files, `--config auto` resolving 2,930 rules
-    # and running 1,870 -- it took **409.8 s** with the flags JMo passes, on a
-    # run that produced 241 findings.
-    #
-    # 900 rather than something nearer that figure, matching horusec, the other
-    # multi-language SAST tool. #1204 measured the identical work on the same
-    # machine at **583 s**: same 541 files, 42% apart. A budget two samples
-    # cannot reproduce within 173 s is not a budget, and a floor is a *ceiling
-    # on wasted time* rather than an assertion about how long the tool should
-    # take -- so headroom costs nothing and a tight fit costs the findings.
-    #
-    # Without a floor semgrep took the profile default and lost `fast` (300 s)
-    # outright, with `slim` (500 s) inside 90 s of its cap.
-    "semgrep": 900,  # 15 min - multi-language SAST, cost is rule count (#1204)
-    "zap": 900,  # 15 min - DAST scanning
-    "prowler": 600,  # 10 min - cloud config scanning
+    name: d.timeout_floor for name, d in DESCRIPTORS.items() if d.timeout_floor
 }
 
 
@@ -491,7 +339,7 @@ def tool_timeout(per_tool_config: Mapping[str, Any], tool: str, default: int) ->
     """Resolve one tool's timeout.
 
     Precedence: an explicit `per_tool.<tool>.timeout` wins outright; otherwise
-    the profile default, raised to `TOOL_TIMEOUT_DEFAULTS` if the tool has a
+    the configured default, raised to `TOOL_TIMEOUT_DEFAULTS` if the tool has a
     floor.
 
     Shared by all five scanners. It used to be copied into each, and only
@@ -505,11 +353,17 @@ def tool_timeout(per_tool_config: Mapping[str, Any], tool: str, default: int) ->
     return max(default, TOOL_TIMEOUT_DEFAULTS.get(tool, 0))
 
 
-def tool_flags(per_tool_config: Mapping[str, Any], tool: str) -> list[str]:
+def tool_flags(
+    per_tool_config: Mapping[str, Any], tool: str, key: str = "flags"
+) -> list[str]:
     """Return a tool's configured extra flags, minus any JMo must own.
 
     Shared by all five scanners, which each carried an identical copy that did
-    no filtering.
+    no filtering. `key` is `flags` for the tool's run, or `history_flags` for
+    its git-history run (#1327); both are filtered alike.
+
+    The reserved set is `RESERVED_OUTPUT_FLAGS` plus the tool's own spellings
+    (its descriptor's `reserved_flags`, #1325).
 
     A dropped flag takes its **value** with it. Removing only the flag from
     `["-f", "table"]` would leave a bare `table` in the argv, and trivy reads a
@@ -520,17 +374,29 @@ def tool_flags(per_tool_config: Mapping[str, Any], tool: str) -> list[str]:
     tool_cfg = per_tool_config.get(tool, {})
     if not isinstance(tool_cfg, dict):
         return []
-    raw = tool_cfg.get("flags", [])
+    raw = tool_cfg.get(key, [])
     if not isinstance(raw, list):
         return []
     flags = [str(f) for f in raw]
+    own = (
+        descriptor.reserved_flags
+        if (descriptor := DESCRIPTORS.get(tool))
+        else frozenset()
+    )
+    reserved = RESERVED_OUTPUT_FLAGS | own
+    # A tool's own reserved short flags also take a value attached
+    # (`-cmine.toml`): gitleaks' parser reads that as `-c mine.toml`. Only its
+    # own, since elsewhere a single-dash flag can merely start like one
+    # (nuclei's `-fr`, `-omit-raw`).
+    attached = {flag for flag in own if len(flag) == 2}
 
     kept: list[str] = []
     dropped: list[str] = []
     i = 0
     while i < len(flags):
         token = flags[i]
-        if token.split("=", 1)[0] not in RESERVED_OUTPUT_FLAGS:
+        joined = len(token) > 2 and token[:2] in attached
+        if token.split("=", 1)[0] not in reserved and not joined:
             kept.append(token)
             i += 1
             continue
@@ -538,18 +404,24 @@ def tool_flags(per_tool_config: Mapping[str, Any], tool: str) -> list[str]:
         dropped.append(token)
         # `--format=json` carries its value inline; `-f json` does not. Only
         # consume a following token when it is a value rather than the next flag.
-        if "=" not in token and i + 1 < len(flags) and not flags[i + 1].startswith("-"):
+        if (
+            not joined
+            and "=" not in token
+            and i + 1 < len(flags)
+            and not flags[i + 1].startswith("-")
+        ):
             dropped.append(flags[i + 1])
             i += 1
         i += 1
 
     if dropped:
         logging.getLogger(__name__).warning(
-            "Ignoring %s flag(s) for %s that JMo must control -- they decide "
-            "where it writes and in what format, and the report phase cannot "
-            "read the output otherwise: %s",
+            "Ignoring %s flag(s) in per_tool.%s.%s that JMo must control -- they "
+            "decide where it writes and in what format, and the report phase "
+            "cannot read the output otherwise: %s",
             len(dropped),
             tool,
+            key,
             " ".join(dropped),
         )
     return kept
@@ -574,31 +446,72 @@ def tool_flags(per_tool_config: Mapping[str, Any], tool: str) -> list[str]:
 #: ``\.git`` is a substring match, and TruffleHog then also skips
 #: ``.github/workflows/*.yml`` - measured on a tree holding a secret in each -
 #: which is exactly where real deployment credentials live (#1134).
+#:
+#: ``(^|...)`` because git mode reports repository-relative paths
+#: (``results/creds.txt``): the old ``[\\/]results[\\/]`` excluded a nested
+#: ``results/`` and missed a root one there, while this form works in both
+#: modes (measured 2026-09-25, trufflehog 3.97.1).
 TRUFFLEHOG_EXCLUDE_PATTERNS: tuple[str, ...] = (
-    r"[\\/]\.git[\\/]",
-    r"[\\/]\.jmo[\\/]",
+    r"(^|[\\/])\.git[\\/]",
+    r"(^|[\\/])\.jmo[\\/]",
 )
 
 
+#: RE2's metacharacters. Python's ``re.escape`` is not an RE2 escaper: it also
+#: escapes a space as ``\ ``, which is not a valid RE2 escape, and a scan root
+#: or results directory can hold a space.
+_RE2_SPECIAL = frozenset("\\.+*?()|[]{}^$")
+
+
+def re2_escape(text: str) -> str:
+    """``text`` as a literal inside a Go (RE2) regex: its metacharacters only."""
+    return "".join("\\" + c if c in _RE2_SPECIAL else c for c in text)
+
+
+def segment_regex(name: str) -> str:
+    """A regex matching ``name`` as a whole path segment, at any depth."""
+    return rf"(^|[\\/]){re2_escape(name)}([\\/]|$)"
+
+
+def trufflehog_exclude_pattern(name: str, root: str | None = None) -> str:
+    """One directory name as a trufflehog ``--exclude-paths`` regex.
+
+    With ``root`` (filesystem mode) the pattern is anchored below it.
+    trufflehog matches each pattern against the scan root's own path as well,
+    so ``(^|[\\/])vendor[\\/]`` excluded every file of a repository that lives
+    under a ``vendor`` directory: measured 2026-09-25, a planted secret found
+    with no pattern and not at all with that one. ``root`` must be the exact
+    string trufflehog is given. Without it, for git mode's repository-relative
+    paths, the unanchored form.
+    """
+    tail = rf"{re2_escape(name)}[\\/]"
+    if root is None:
+        return rf"(^|[\\/]){tail}"
+    return rf"^{re2_escape(root)}[\\/](.*[\\/])?{tail}"
+
+
 def write_trufflehog_exclude_file(
-    out_dir: Path, *, results_dir_name: str | None = None
+    out_dir: Path,
+    *,
+    results_dir_name: str | None = None,
+    root: str | None = None,
+    name: str = ".trufflehog-exclude",
 ) -> Path:
     """Write TruffleHog's ``--exclude-paths`` file and return its path.
 
+    The vendored directories are in it (Phase 3: the secret scanner joins the
+    tier - on a real Next.js application trufflehog took 295.8 s and returned
+    253 findings, 222 of them in ``node_modules``; 18.8 s and 31 without), and
     ``results_dir_name`` adds JMo's own output directory when it sits inside
-    the tree being scanned (#1156). trufflehog was one of the two tools measured
-    reporting findings out of a previous scan's ``results/`` -- a "secret" in a
-    `syft.json` it wrote itself. Spelled with the same separator class as the
-    entries below, for the same reason: a bare name would also match a file
-    whose name merely contains it.
+    the tree being scanned (#1156): trufflehog was one of the two tools measured
+    reporting findings out of a previous scan's ``results/``.
 
-    ``re.escape`` is **Python's** escaping and these are **Go** (RE2) regexes.
-    They agree on what matters here: RE2 accepts an escaped ASCII punctuation
-    character, which is all `re.escape` emits. Confirmed in practice on a
-    directory name containing a hyphen -- `individual\\-repos` excluded as
-    intended. A name holding something RE2 rejects would make trufflehog reject
-    the file outright rather than silently ignore it, which is the failure
-    direction to prefer.
+    These are **Go** (RE2) regexes, so names and ``root`` are escaped with
+    ``re2_escape``, not Python's ``re.escape`` (which escapes a space as
+    ``\\ ``). ``root`` anchors every pattern below the scan root; see
+    ``trufflehog_exclude_pattern``. Measured on Windows with a root holding a
+    space, a hyphen and parentheses: the root's files were read and a nested
+    ``vendor/`` was excluded.
 
     ``write_bytes`` rather than ``write_text``: the latter opens with
     ``newline=None`` and would emit CRLF on Windows. TruffleHog splits the file
@@ -619,39 +532,143 @@ def write_trufflehog_exclude_file(
     patches ``Path.home()`` to its tmp dir, which hides it and takes the stub
     branch instead.
     """
-    patterns = list(TRUFFLEHOG_EXCLUDE_PATTERNS)
-    if results_dir_name:
-        patterns.append(rf"[\\/]{re.escape(results_dir_name)}[\\/]")
-    path = out_dir / ".trufflehog-exclude"
+    names = (
+        ".git",
+        ".jmo",
+        *excluded_dirs_for("trufflehog", results_dir_name=results_dir_name),
+    )
+    patterns = list(dict.fromkeys(trufflehog_exclude_pattern(n, root) for n in names))
+    path = out_dir / name
     path.write_bytes(("\n".join(patterns) + "\n").encode("utf-8"))
     return path
 
 
-def filter_trivy_flags(subcommand: str, flags: list[str]) -> list[str]:
-    """Drop configured trivy flags that ``subcommand`` does not accept.
+def write_gitleaks_config(
+    out_dir: Path,
+    *,
+    results_dir_name: str | None = None,
+    repo_config: Path | None = None,
+) -> Path:
+    """Write gitleaks' ``--config`` file and return its absolute path.
 
-    Args:
-        subcommand: The trivy subcommand being invoked ("config", "fs", ...).
-        flags: Flags from per-tool configuration.
+    gitleaks has no exclude flag: exclusions are ``[[allowlists]] paths`` in a
+    config, and ``[extend] useDefault = true`` keeps its own rules.
 
-    Returns:
-        The flags the subcommand actually accepts.
+    Given a ``--config``, gitleaks never reads the repository's own
+    ``.gitleaks.toml`` (#1327, measured: a repository-allowlisted key 0
+    alone and 1 under JMo). So with ``repo_config`` this extends that file
+    instead of the defaults: gitleaks refuses ``path`` and ``useDefault``
+    together (rc 1), and ``path`` alone behaves as gitleaks run alone, the
+    defaults included when the repository's config asks for them. The names
+    are trufflehog's (``.git``, ``.jmo`` and the vendored tier, plus the
+    results directory inside the tree), as whole-segment Go regexes at any
+    depth: gitleaks runs from the repository, so in both modes a path is
+    repository-relative and a pattern never meets the scan root's own path.
+
+    Each string is a TOML basic string written by ``json.dumps``, whose
+    escapes TOML shares, so a quote in a name cannot end the string early.
+    ``ensure_ascii=False``: an ASCII-only dump escapes a character outside
+    the Basic Multilingual Plane (an emoji) as a surrogate pair, which TOML
+    rejects, and gitleaks could not load the file (review of #1327).
+    Dot-prefixed scratch beside the outputs, written as bytes (LF, UTF-8);
+    absolute, because gitleaks' working directory is the repository, not the
+    caller's.
     """
-    unsupported = TRIVY_UNSUPPORTED_FLAGS.get(subcommand)
-    if not unsupported:
-        return list(flags)
 
-    kept = [f for f in flags if f not in unsupported]
-    dropped = [f for f in flags if f in unsupported]
-    if dropped:
-        logging.getLogger(__name__).warning(
-            "trivy %s does not accept %s; dropping so the scan can run. "
-            "Configure it under a profile that does not reach this subcommand "
-            "if you need it.",
-            subcommand,
-            ", ".join(dropped),
+    def toml_string(text: str) -> str:
+        return json.dumps(text, ensure_ascii=False)
+
+    names = dict.fromkeys(
+        (
+            ".git",
+            ".jmo",
+            *excluded_dirs_for("gitleaks", results_dir_name=results_dir_name),
         )
-    return kept
+    )
+    extend = (
+        f"path = {toml_string(str(repo_config.resolve()))}"
+        if repo_config is not None
+        else "useDefault = true"
+    )
+    lines = [
+        "# Written by JMo for one scan: its exclusion list, in gitleaks' grammar.",
+        "[extend]",
+        extend,
+        "",
+        "[[allowlists]]",
+        'description = "JMo: vendored trees and its own output"',
+        "paths = [",
+        *(f"  {toml_string(segment_regex(n))}," for n in names),
+        "]",
+    ]
+    path = (out_dir / ".gitleaks.toml").resolve()
+    path.write_bytes(("\n".join(lines) + "\n").encode("utf-8"))
+    return path
+
+
+def _extend_table(path: Path) -> dict[str, Any] | None:
+    """A gitleaks config's `[extend]` table: {} when it has none, None when
+    the file cannot be read as TOML at all.
+
+    The file is the scanned repository's, so untrusted: any value can be any
+    type, and a path can hold a NUL (ValueError from `open`). Nothing here may
+    raise, since this runs before any tool, and a raise failed every tool on
+    the target (review of #1327). gitleaks reports what it cannot load.
+    """
+    try:
+        document = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):  # TOMLDecodeError, UnicodeDecodeError, a NUL
+        return None
+    extend = document.get("extend")
+    return extend if isinstance(extend, dict) else {}
+
+
+def gitleaks_config_warning(repo_config: Path, root: Path) -> str | None:
+    """What gitleaks will not load under JMo's config, when that matters.
+
+    Two cases, both silent in gitleaks itself (measured, 8.30.1):
+
+    - **The defaults are not asked for.** A repository config whose chain has
+      no ``useDefault = true`` runs only its own rules, as gitleaks alone
+      does, so the scanned repository decides gitleaks' defaults do not run.
+    - **One level is lost.** gitleaks follows ``[extend]`` only so deep, and
+      JMo's config, extending the repository's, adds a level. When the
+      repository's config extends a file that itself extends further (the
+      defaults, or another file), that last extension is dropped: the
+      default rules vanished, rc 0, nothing said even at debug level.
+
+    A relative path resolves against gitleaks' working directory, which JMo
+    sets to ``root``. None for a file that is not TOML: gitleaks fails the
+    run and says why.
+    """
+    extend = _extend_table(repo_config)
+    if extend is None or extend.get("useDefault") is True:
+        return None
+    name = repo_config.name
+    base = extend.get("path")
+    if not isinstance(base, str) or not base:
+        return (
+            f"{name} does not ask for gitleaks' default rules (`[extend] "
+            "useDefault = true`), so only the rules it defines run, as with "
+            "gitleaks alone"
+        )
+    further = _extend_table(Path(base) if Path(base).is_absolute() else root / base)
+    if further is None:
+        return None
+    if further.get("useDefault") is True:
+        lost = "its default rules"
+    elif isinstance(further.get("path"), str) and further["path"]:
+        lost = f"the rules in {further['path']}"
+    else:
+        return (
+            f"{name} extends {base}, and neither asks for gitleaks' default "
+            "rules, so only the rules they define run, as with gitleaks alone"
+        )
+    return (
+        f"{name} extends {base}, which extends further; under JMo's config "
+        f"that is past the depth gitleaks follows, so {lost} are NOT loaded "
+        "(gitleaks run alone loads them)"
+    )
 
 
 def in_tree_results_name(repo: Path, results_dir: Path) -> str | None:
@@ -663,7 +680,7 @@ def in_tree_results_name(repo: Path, results_dir: Path) -> str | None:
 
     **A name rather than the path, and that is the measured choice, not the lazy
     one.** Every style in TOOL_EXCLUSION_FLAG already turns a bare directory
-    name into its own spelling; that is how one list reaches five grammars. A
+    name into its own spelling; that is how one list reaches every grammar. A
     *path* is not portable across them, measured at the pinned versions:
 
         trivy   --skip-dirs 'out/results'      works
@@ -673,7 +690,6 @@ def in_tree_results_name(repo: Path, results_dir: Path) -> str | None:
         checkov --skip-path 'out\\results'      CRASHES (`\\r` is not a valid
                                                escape, and one of the two call
                                                sites compiles unguarded)
-        horusec -i 'results'                   excludes NOTHING; it wants a glob
 
     The price is over-breadth: a repository whose own source lives in a second
     directory of the same name loses it too. Bounded deliberately -- this
@@ -706,22 +722,16 @@ def excluded_dirs_for(
 ) -> tuple[str, ...]:
     """Directory names ``tool`` should be told to skip.
 
-    Always JMo's own in-tree scratch (SCAN_EXCLUDED_DIRS), which is nobody's
-    subject matter; plus VENDORED_DIRS for the tools that read the repository's
-    own code rather than inventory its dependencies (VENDOR_NOISE_TOOLS); plus
-    the results directory when it resolves inside the tree being scanned, which
-    is JMo's own output and belongs to no tool (#1156).
-
-    The results directory goes to **every** tool with a flag, not just
-    VENDOR_NOISE_TOOLS. The carve-out below exists because a vendored tree is
-    dependency-check's and syft's subject matter; JMo's own output is nobody's.
+    The VENDORED_DIRS entries its descriptor declares - all of them for the
+    tools that read the repository's own code, none for syft, a virtualenv only
+    for grype - plus the results directory when it resolves inside the tree
+    being scanned, which is JMo's own output and belongs to no tool (#1156).
 
     Order is stable and duplicates are dropped, so a name appearing in both
     lists is passed once.
     """
-    names = list(SCAN_EXCLUDED_DIRS)
-    if tool in VENDOR_NOISE_TOOLS:
-        names.extend(d for d in VENDORED_DIRS if d not in names)
+    descriptor = DESCRIPTORS.get(tool)
+    names: list[str] = list(descriptor.excluded_vendored) if descriptor else []
     if results_dir_name and results_dir_name not in names:
         names.append(results_dir_name)
     return tuple(names)
@@ -732,141 +742,39 @@ def tool_exclusion_flags(
 ) -> list[str]:
     """Flags that keep ``tool`` out of directories it should not be reading.
 
-    Six tools, five spellings, and they are not interchangeable - see
-    TOOL_EXCLUSION_FLAG for what each style means and why the style cannot be
-    read off the flag name.
-
-    Returns an empty list for any tool not in TOOL_EXCLUSION_FLAG, so adding a
-    scanner never risks handing it an argument it would reject.
+    Rendered in the tool's own spelling (``ExclusionStyle``); they are not
+    interchangeable. Empty for a tool whose exclusion is not a flag: the
+    trufflehog pattern file, and the walk that picks hadolint's and
+    shellcheck's files.
     """
     entry = TOOL_EXCLUSION_FLAG.get(tool)
     if entry is None:
         return []
     flag, style = entry
     dirs = excluded_dirs_for(tool, results_dir_name=results_dir_name)
-    if style == "csv":
-        # bandit's -x REPLACES its defaults, so they have to be re-sent. Its
-        # defaults are bare names and bandit matches them itself, so the `**/`
-        # the other styles need is not applied here.
-        merged = list(BANDIT_DEFAULT_EXCLUDED_PATHS)
-        merged.extend(d for d in dirs if d not in merged)
-        return [flag, ",".join(merged)]
-    if style == "inline":
+    if style == ExclusionStyle.INLINE:
         return [f"{flag}={d}" for d in dirs]
-    if style == "ant":
-        return [arg for d in dirs for arg in (flag, f"**/{d}/**")]
-    if style == "glob-csv":
-        # horusec: ONE flag, comma-separated, and the values must be globs --
-        # a bare `results` excludes nothing (measured). Unlike bandit's `-x`
-        # this ADDS to horusec's own defaults rather than replacing them:
-        # verified by planting a finding under `.vscode/` (one of the defaults)
-        # and watching it stay excluded with `-i` supplied. So the defaults are
-        # deliberately NOT re-sent here.
-        #
-        # This hands horusec `**/.horusec/**` -- its OWN staging copy of the
-        # tree. Measured safe: a repository with one planted secret reports it
-        # identically with and without that flag (n=1, same file). horusec
-        # analyses the staging copy internally and reports paths in the real
-        # tree, so excluding the directory does not make it inert. Worth having
-        # measured rather than assumed: an exclusion that silences the tool
-        # sending it is the silent-zero shape this project keeps meeting.
-        return [flag, ",".join(f"**/{d}/**" for d in dirs)]
-    if style == "regex":
+    if style == ExclusionStyle.INLINE_REGEX:
+        return [f"{flag}={segment_regex(d)}" for d in dirs]
+    if style == ExclusionStyle.REGEX:
         # checkov: a bare name already matches at any depth, and `**/` would
-        # not compile as a regex - it is dropped silently. See above.
+        # not compile as a regex - it is dropped silently.
         return [arg for d in dirs for arg in (flag, d)]
-    # "separate" - the `**/` is what makes a nested directory match at all.
+    # SEPARATE: the `**/` is what makes a nested directory match at all, and
+    # syft and grype reject a bare name outright.
     return [arg for d in dirs for arg in (flag, f"**/{d}")]
 
 
-# The key a scanner's status map carries its not-attempted tools under.
-# `__`-prefixed by the same convention as `__attempts__`: every consumer of the
-# map already skips those, so adding this one cannot make an existing reader
-# mistake it for a tool.
-NOT_ATTEMPTED_KEY = "__not_attempted__"
-
-# Why a tool was never executed. Two reasons, because they mean different
-# things to whoever reads the scan: one is a gap in the environment the user can
-# close, the other is a correct decision about this target. Both are still
-# "did not run", which is the distinction #825 is about, and both were recorded
-# as a success before it.
-NOT_ATTEMPTED_MISSING = "not installed"
-NOT_ATTEMPTED_NOTHING_APPLICABLE = "nothing for it to scan"
-
-
-def record_not_attempted(
-    statuses: dict, tool: str, reason: str = NOT_ATTEMPTED_MISSING
-) -> None:
-    """Record that `tool` never ran, distinctly from having run and failed.
-
-    Under `--allow-missing-tools` every scanner used to write
-    ``statuses[tool] = True`` beside its stub -- the same value a tool that ran
-    successfully gets. So a secret scanner that was never executed produced an
-    empty result and a success, which is the `zero-secrets` shape: a policy
-    certifying "no secrets" because nothing looked (#825).
-
-    `False` is the honest boolean -- the tool did not run, so it did not
-    succeed -- and the tool is also listed under `NOT_ATTEMPTED_KEY`, so
-    `classify_target_outcome` can leave it out of the vote entirely rather than
-    counting it as a failure. Those are different things: a target where one
-    tool ran cleanly and two were never installed has not partially failed.
-
-    On a normal host the pre-flight removes missing tools before the scanners
-    run, so this fires only when `find_tool` disagrees with it at scan time.
-    **In a container the pre-flight is skipped entirely** (`jmo.py` gates it on
-    `DOCKER_CONTAINER`), so this is the normal path there -- a `deep` image is
-    expected to be missing the four MANUAL_INSTALL_TOOLS.
-    """
-    statuses[tool] = False
-    statuses.setdefault(NOT_ATTEMPTED_KEY, {})[tool] = reason
-
-
-def not_attempted_tools(
-    statuses: Mapping[str, Any] | None, *, reason: str | None = None
-) -> list[str]:
-    """The tools a target never ran, sorted. Empty when everything was tried.
-
-    Takes a `Mapping` rather than a `dict` because every caller reads a status
-    map it does not own -- `classify_target_outcome` and both progress
-    reporters annotate theirs as `Mapping`.
-
-    `reason` narrows to one of NOT_ATTEMPTED_MISSING / _NOTHING_APPLICABLE.
-    Without it the two are indistinguishable here, which is how the distinction
-    `record_not_attempted` records got lost on the way to the screen: three of
-    the four callers only need membership -- to keep a skipped tool out of the
-    failed-tools vote -- so nothing noticed that the fourth, the STUBBED
-    warning, was telling users "nothing looked, which is not the same as
-    finding nothing" about tools that correctly had nothing to look at (#1081).
-    """
-    if not statuses:
-        return []
-    recorded = statuses.get(NOT_ATTEMPTED_KEY) or {}
-    if not isinstance(recorded, dict):
-        return []
-    if reason is None:
-        return sorted(recorded)
-    return sorted(tool for tool, why in recorded.items() if why == reason)
-
-
 def write_stub(tool: str, out_path: Path) -> None:
-    """Write empty JSON stub for missing tool."""
+    """Write ``tool``'s empty-result shape to ``out_path``.
+
+    For a tool that applied to the target and did not run (not installed, or
+    nothing of its kind in the tree) or timed out. The accounting row, not this
+    file, is the record of why: an empty stub reads exactly like a clean run.
+    """
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    stubs = {
-        "trufflehog": [],
-        "semgrep": {"results": []},
-        "noseyparker": {"matches": []},
-        "syft": {"artifacts": []},
-        "trivy": {"Results": []},
-        "grype": {"matches": []},
-        "hadolint": [],
-        "checkov": {"results": {"failed_checks": []}},
-        "bandit": {"results": []},
-        "zap": {"site": []},
-        "nuclei": "",  # NDJSON format - empty string for empty file
-        "falco": [],
-        "afl++": {"crashes": []},
-    }
-    payload = stubs.get(tool, {})
+    descriptor = DESCRIPTORS.get(tool)
+    payload = descriptor.stub if descriptor else {}
     if isinstance(payload, str):
         # For NDJSON tools like nuclei, write empty string
         out_path.write_text(payload, encoding="utf-8")

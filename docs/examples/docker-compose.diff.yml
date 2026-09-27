@@ -32,7 +32,6 @@ services:
     command: >
       scan
       --repo /scan
-      --profile-name balanced
       --results-dir /results
       --human-logs
     environment:
@@ -53,7 +52,6 @@ services:
     command: >
       scan
       --repo /scan
-      --profile-name balanced
       --results-dir /results
       --human-logs
     environment:
@@ -113,12 +111,13 @@ networks:
 #    docker-compose -f docker-compose.diff.yml run --rm diff-report \
 #      diff /baseline /current --format html --only new --output /output/new-findings.html
 #
-# 4. Use slim image for faster startup:
+# 4. Pin a release instead of latest (reproducible baselines):
 #    Replace 'ghcr.io/jimmy058910/jmo-security:latest' with
-#    'ghcr.io/jimmy058910/jmo-security:slim' in all services
+#    'ghcr.io/jimmy058910/jmo-security:<version>' in all services
 #
-# 5. Scan with fast profile (5-10 minutes vs 18-25 minutes):
-#    Change '--profile-name balanced' to '--profile-name fast'
+# 5. Scan with fewer tools for a faster run:
+#    Add '--tools trufflehog semgrep trivy' to BOTH scan commands
+#    (baseline and current must use the same tool list for a meaningful diff)
 #
 # 6. Run only baseline scan:
 #    docker-compose -f docker-compose.diff.yml up baseline-scan

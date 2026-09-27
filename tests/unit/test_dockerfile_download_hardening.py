@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Drift guard: every binary download in `Dockerfile.*` builder stages must use curl.
+"""Drift guard: every binary download in a `Dockerfile*` builder stage must use curl.
 
 PR #350 hardened all curl invocations with `-f --retry --retry-all-errors --max-time`,
 but missed 9 wget invocations across nuclei / ZAP / dependency-check in all 4
@@ -45,8 +45,8 @@ WGET_DOWNLOAD_PATTERN = re.compile(
 
 
 def _production_dockerfiles() -> list[Path]:
-    """Dockerfile.* files in repo root that ship in releases."""
-    return sorted(p for p in REPO_ROOT.glob("Dockerfile.*") if p.is_file())
+    """Dockerfile* files in repo root that ship in releases."""
+    return sorted(p for p in REPO_ROOT.glob("Dockerfile*") if p.is_file())
 
 
 def test_no_wget_downloads_in_production_dockerfiles() -> None:
@@ -57,8 +57,17 @@ def test_no_wget_downloads_in_production_dockerfiles() -> None:
     and silently fails on transient HTTP 4xx/5xx; curl with
     `--retry-all-errors` recovers.
     """
+    dockerfiles = _production_dockerfiles()
+    # Meta-guard. This glob was `Dockerfile.*` until v2.0.0 folded the four
+    # images into one bare `Dockerfile`, which that pattern does not match:
+    # the loop below then read no file and the test passed. An empty scan
+    # must fail, not pass.
+    assert "Dockerfile" in [p.name for p in dockerfiles], (
+        f"the production Dockerfile was not found at {REPO_ROOT}: {dockerfiles}"
+    )
+
     violations: list[str] = []
-    for path in _production_dockerfiles():
+    for path in dockerfiles:
         text = path.read_text(encoding="utf-8")
         for match in WGET_DOWNLOAD_PATTERN.finditer(text):
             line_num = text[: match.start()].count("\n") + 1

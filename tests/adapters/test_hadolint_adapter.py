@@ -2,8 +2,10 @@
 
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 from scripts.core.adapters.hadolint_adapter import HadolintAdapter
+from scripts.core.tool_registry import ToolRegistry
 
 
 def write(tmp_path: Path, name: str, content: str) -> Path:
@@ -243,3 +245,24 @@ def test_hadolint_metadata(tmp_path: Path):
     assert metadata.tool_name == "hadolint"
     assert metadata.schema_version == "1.2.0"
     assert metadata.output_format == "json"
+
+
+def test_the_version_is_looked_up_once_per_parse_not_per_finding(tmp_path: Path):
+    """Each ToolRegistry() re-parses versions.yaml (~200 ms with PyYAML's
+    pure-Python loader). Resolving the version inside the per-finding loop made
+    1,000 findings take 61 s -- an xdist worker crashed on it, and it is over
+    the Windows shard's 60 s per-test timeout on its own."""
+    sample = [
+        {"code": f"DL30{i:02d}", "file": "Dockerfile", "line": i, "message": "m"}
+        for i in range(3)
+    ]
+    p = write(tmp_path, "hadolint.json", json.dumps(sample))
+
+    with patch(
+        "scripts.core.adapters.hadolint_adapter.ToolRegistry", wraps=ToolRegistry
+    ) as registry:
+        findings = HadolintAdapter().parse(p)
+
+    assert len(findings) == 3
+    assert registry.call_count == 1
+    assert len({f.tool["version"] for f in findings}) == 1

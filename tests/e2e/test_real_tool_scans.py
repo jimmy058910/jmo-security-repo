@@ -112,7 +112,6 @@ class TestRealToolScans:
                 self.threads = 1
                 self.allow_missing_tools = True
                 self.profile = False
-                self.profile_name = "fast"
                 # Multi-target args - testing image scanning
                 self.image = "nginx:1.19.0"
                 self.images_file = None
@@ -242,7 +241,6 @@ def safe_process(user_input):
                 self.threads = 1
                 self.allow_missing_tools = True
                 self.profile = False
-                self.profile_name = "fast"
                 # Multi-target args
                 self.image = None
                 self.images_file = None
@@ -357,7 +355,6 @@ def main():
                 self.threads = 1
                 self.allow_missing_tools = True
                 self.profile = False
-                self.profile_name = "fast"
                 # Multi-target args
                 self.image = None
                 self.images_file = None
@@ -484,7 +481,6 @@ resource "aws_s3_bucket" "secure_example" {
                 self.threads = 1
                 self.allow_missing_tools = True
                 self.profile = False
-                self.profile_name = "fast"
                 # Multi-target args - testing IaC scanning
                 self.image = None
                 self.images_file = None

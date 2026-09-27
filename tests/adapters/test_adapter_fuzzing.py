@@ -22,7 +22,6 @@ hypothesis = pytest.importorskip(
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from scripts.core.adapters.bandit_adapter import BanditAdapter
 from scripts.core.adapters.checkov_adapter import CheckovAdapter
 from scripts.core.adapters.semgrep_adapter import SemgrepAdapter
 from scripts.core.adapters.trivy_adapter import TrivyAdapter
@@ -121,23 +120,6 @@ def test_checkov_handles_malformed_json(tmp_path: Path, content: str):
     assert len(result) == 0
 
 
-@settings(
-    max_examples=50,
-    deadline=1000,
-    suppress_health_check=[HealthCheck.function_scoped_fixture],
-)
-@given(content=malformed_json())
-def test_bandit_handles_malformed_json(tmp_path: Path, content: str):
-    """Bandit adapter should not crash on malformed input."""
-    test_file = tmp_path / "bandit.json"
-    test_file.write_text(content, encoding="utf-8")
-
-    adapter = BanditAdapter()
-    adapter = BanditAdapter()
-    result = adapter.parse(test_file)
-    assert isinstance(result, list)
-
-
 # Strategy: Generate deeply nested JSON
 @st.composite
 def deeply_nested_json(draw):
@@ -173,8 +155,6 @@ def test_adapters_handle_deep_nesting(tmp_path: Path, content: str):
 
     adapter.parse(test_file)
     adapter = CheckovAdapter()
-    adapter.parse(test_file)
-    adapter = BanditAdapter()
     adapter.parse(test_file)
 
 
@@ -252,7 +232,7 @@ def test_concurrent_adapter_failures(tmp_path: Path):
     indiv = tmp_path / "individual-repos" / "test-repo"
     indiv.mkdir(parents=True)
 
-    for tool in ["trufflehog", "semgrep", "trivy", "checkov", "bandit"]:
+    for tool in ["trufflehog", "semgrep", "trivy", "checkov"]:
         (indiv / f"{tool}.json").write_text("INVALID JSON{", encoding="utf-8")
 
     # Should return empty list, not crash
@@ -283,11 +263,6 @@ def test_adapters_handle_missing_files(tmp_path: Path):
     result = adapter.parse(missing_file)
     assert result == []
 
-    adapter = BanditAdapter()
-    adapter = BanditAdapter()
-    result = adapter.parse(missing_file)
-    assert result == []
-
 
 # Test with empty files
 def test_adapters_handle_empty_files(tmp_path: Path):
@@ -309,11 +284,6 @@ def test_adapters_handle_empty_files(tmp_path: Path):
 
     adapter = CheckovAdapter()
     adapter = CheckovAdapter()
-    result = adapter.parse(empty_file)
-    assert result == []
-
-    adapter = BanditAdapter()
-    adapter = BanditAdapter()
     result = adapter.parse(empty_file)
     assert result == []
 

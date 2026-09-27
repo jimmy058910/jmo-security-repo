@@ -14,11 +14,12 @@ The contract is now written down, and this exercises it:
     2  usage error - the command was invoked incorrectly and did not run
 
 Subcommands are taken from the parser, not restated: `MAIN_SUBCOMMANDS` was a
-restated list and had drifted to 13 of 20 (#783).
+restated list and had drifted to 13 of the then-20 (#783).
 """
 
 from __future__ import annotations
 
+import ast
 import os
 import re
 import subprocess
@@ -78,9 +79,31 @@ def test_contract_table_exists():
     assert documented == {"0", "1", "2"}, documented
 
 
+def _declared_subcommands() -> set[str]:
+    """Every `subparsers.add_parser("<name>")` literal under scripts/cli.
+
+    A second, independent reading of the tree (source, not a built parser), so
+    the parametrisation below cannot shrink without the two disagreeing.
+    """
+    names: set[str] = set()
+    for path in (REPO / "scripts" / "cli").rglob("*.py"):
+        for node in ast.walk(ast.parse(path.read_bytes().decode("utf-8"))):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "add_parser"
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "subparsers"
+                and node.args
+                and isinstance(node.args[0], ast.Constant)
+            ):
+                names.add(node.args[0].value)
+    return names
+
+
 def test_subcommands_derived_not_restated():
     """Meta-guard for the parametrisation below."""
-    assert len(SUBCOMMANDS) >= 20, SUBCOMMANDS
+    assert set(SUBCOMMANDS) == _declared_subcommands(), SUBCOMMANDS
     for known in ("scan", "adapters", "attest", "verify", "setup", "validate"):
         assert known in SUBCOMMANDS
 

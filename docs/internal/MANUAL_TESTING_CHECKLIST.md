@@ -13,11 +13,17 @@
 > #959 named were audited; the rest were left as they stand rather than
 > re-ticked without running them, which is the failure this note exists to stop.
 >
+> **v2.0.0 removed scan profiles, the per-profile Docker images and 16 tools**
+> (see [TOOLS.md](../TOOLS.md#removed-in-v200)). A tick below that names a
+> profile, a variant image or a removed tool is a v1.0 record of what was
+> observed then, and is left as written. Items for features that no longer exist
+> are struck through, and the commands a tester would re-run have been moved to
+> the v2 CLI.
+>
 > **Scope note:** This checklist focuses on interactive workflows, cross-platform edge cases, and commands with minimal automated test coverage. Commands like `scan`, `report`, `history`, `trends`, `diff`, `ci`, and `policy` have broad automated coverage (8,000+ tests) and are not duplicated here. *A specific coverage percentage previously appeared here; nothing in the repo enforces one — CI's only floor is 85% on the marker-filtered suite (`.github/workflows/ci.yml`), and nothing sets `--cov-fail-under` ([#756](https://github.com/jimmy058910/jmo-security-repo/issues/756)). Measure it rather than quoting it.*
 
 **Related Documentation:**
 
-- [TESTING_MATRIX.md](TESTING_MATRIX.md) - Automated test coverage analysis
 - [PLATFORM_NOTES.md](../PLATFORM_NOTES.md) - Cross-platform development guide
 - [TEST.md](../../TEST.md) - Running the automated test suite
 
@@ -75,7 +81,7 @@ The wizard requires real user input that mocks cannot fully simulate.
 ### 2.1 Interactive Flow (Native Mode)
 
 - [x] `jmo wizard` - Wizard launches, prompts appear (verified via pexpect PopenSpawn harness)
-- [x] Profile selection: fast/slim/balanced/deep options work (verified: selected fast via pexpect)
+- [x] ~~Profile selection: fast/slim/balanced/deep options work (verified: selected fast via pexpect)~~ (removed in v2.0.0: the wizard has no profile step)
 - [x] Execution mode: "Native" vs "Docker" selection works (verified: selected Native via pexpect)
 - [x] **Native mode**: Proceeds without Docker requirement (verified: wizard continued to target selection)
 - [x] Tool pre-flight check: Shows installed/missing tools table (verified via `--yes` mode + pexpect)
@@ -100,7 +106,7 @@ The wizard requires real user input that mocks cannot fully simulate.
 - [x] Execution mode: Select "Docker" (verified: pexpect selected Docker mode, option 1)
 - [x] Docker availability check runs (verified: pexpect detected "Docker available: Yes")
 - [ ] Volume mount syntax shown in summary (not verified; requires interactive Docker wizard flow)
-- [x] Scan runs inside container (verified: PowerShell Docker scan via `docker run -v` completed, 6/9 tools ran on Juice Shop)
+- [x] Scan runs inside container (verified: PowerShell Docker scan via `docker run -v` completed, 6 of the 9 fast-profile tools ran on Juice Shop)
 - [x] Results written to local filesystem (verified: `results-ps-test/summaries/` directory populated on Windows host via volume mount)
 
 ### 2.3 Non-Interactive & Export Modes
@@ -149,7 +155,7 @@ The wizard requires real user input that mocks cannot fully simulate.
 
 ### 3.2 Installation Modes
 
-- [x] `jmo tools install --profile fast -y` - Non-interactive install (8 skipped, 1 failed: shellcheck binary not found on Windows)
+- [x] `jmo tools install -y` - Non-interactive install (v1.0 record, run with `--profile fast`: 8 skipped, 1 failed: shellcheck binary not found on Windows)
 - [x] `jmo tools install --sequential` - Sequential (not parallel) install (shows `[1/9]`, `[2/9]` steps)
 - [x] `jmo tools install --jobs 2` - Limited parallel workers (shows "max 2 workers")
 - [x] `jmo tools install --dry-run` - Preview without installing (FIXED: dry-run now skips confirmation)
@@ -157,10 +163,10 @@ The wizard requires real user input that mocks cannot fully simulate.
 
 ### 3.3 Diagnostic Commands
 
-- [x] `jmo tools check --profile balanced` - Shows installed/missing tools for profile (14/18 OK, 4 missing)
-- [x] `jmo tools list --profiles` - Lists tools grouped by profile (fast=9, slim=14, balanced=18, deep=29)
+- [x] `jmo tools check` - Shows installed/missing tools (v1.0 record, run with `--profile balanced`: 14/18 OK, 4 missing)
+- [x] ~~`jmo tools list --profiles` - Lists tools grouped by profile (fast=9, slim=14, balanced=18, deep=29)~~ (removed in v2.0.0)
 - [x] `jmo tools debug trivy` - Shows version detection details (binary path, pattern match, version 0.67.2)
-- [x] `jmo tools debug --all` - Shows debug info for all balanced profile tools (FIXED: handler now reads `args.all`)
+- [x] `jmo tools debug --all` - Shows debug info for every tool in the matrix (v1.0 record: the balanced profile's tools; FIXED: handler now reads `args.all`)
 - [x] `jmo tools outdated` - Lists tools needing updates ("All tools are up to date!")
 - [x] `jmo tools clean --force` - Removes isolated venvs ("No isolated venvs found")
 
@@ -184,7 +190,7 @@ Automated tests don't verify actual cron job creation or persistence.
 
 ### 4.1 Schedule Creation
 
-- [x] `jmo schedule create --name daily --cron "0 2 * * *" --profile balanced` - Creates schedule (requires `--repos-dir`)
+- [x] `jmo schedule create --name daily --cron "0 2 * * *" --repos-dir <dir>` - Creates schedule (v1.0 record also passed `--profile balanced`, removed in v2.0.0)
 - [x] `jmo schedule create --timezone America/New_York` - Timezone applied correctly (verified: `schedule get` shows `timezone: America/New_York`)
 - [x] `jmo schedule list` - Shows created schedules (29 schedules listed including test artifacts)
 - [x] `jmo schedule get daily` - Shows schedule details (K8s-style YAML with full spec)
@@ -192,7 +198,7 @@ Automated tests don't verify actual cron job creation or persistence.
 ### 4.2 Cron Integration (Linux/macOS)
 
 - [x] `jmo schedule install test-cron` - Adds to system crontab (verified in WSL: `crontab -l` shows `# JMo Security Schedule: test-cron` with marker comments)
-- [x] `crontab -l` - Shows JMo entry (verified: cron expression `0 3 * * *` with `jmo scan --profile fast --repos-dir ...`)
+- [x] `crontab -l` - Shows JMo entry (verified: cron expression `0 3 * * *` with `jmo scan --profile fast --repos-dir ...`; a v2.0.0 entry carries no profile)
 - [x] Schedule persists after terminal close (verified: new bash subprocess in WSL sees same crontab entry)
 - [ ] Schedule persists after system reboot (SKIP: WSL restart too disruptive for testing)
 - [x] `jmo schedule uninstall test-cron` - Removes from crontab (verified: entry cleanly removed, `crontab -l` returns empty)
@@ -216,7 +222,7 @@ Only basic parsing is tested - functionality needs manual verification.
 
 ### 5.1 Adapter Discovery
 
-- [x] `jmo adapters list` - Lists 28 adapter plugins (FIXED: semgrep_secrets now has metadata)
+- [x] `jmo adapters list` - Lists every adapter plugin (v1.0 record: 28 listed; FIXED: semgrep_secrets now has metadata)
 - [x] Each adapter shows: name, tool_name, version, description (28/28 have full metadata)
 - [x] No duplicate adapter names
 - [x] All adapters have valid metadata (FIXED: semgrep_secrets PluginMetadata added)
@@ -288,12 +294,12 @@ Automated tests cover API endpoints but not server lifecycle.
 
 ### 8.2 Image Testing
 
-- [x] `jmo build test --variant fast --local` - Built `jmo-security:local-fast` image, all 9 tools verified. Test passed ("All tests passed")
-- [x] `jmo build test --variant balanced --local` - Built `jmo-security:local-balanced` image, `--version` and `--help` pass (FIXED: xz-utils added to builder stage, Issue #13)
-- [x] `jmo build test --local` - Image runs correctly: `--version` and `--help` pass, `tools check` shows 9/9 tools
+- [x] ~~`jmo build test --variant fast --local` - Built `jmo-security:local-fast` image, all fast-profile tools verified. Test passed ("All tests passed")~~ (removed in v2.0.0: `jmo build` builds the one image)
+- [x] ~~`jmo build test --variant balanced --local` - Built `jmo-security:local-balanced` image, `--version` and `--help` pass (FIXED: xz-utils added to builder stage, Issue #13)~~ (removed in v2.0.0)
+- [x] `jmo build test --local` - Image runs correctly: `--version` and `--help` pass, `tools check` shows every tool ready (v1.0 record: 9/9 fast-profile tools)
 - [x] Test runs basic scan inside container (FIXED: `missing_tools` initialized before conditional block)
 - [x] Docker fast scan: Juice Shop repo, 66 findings (3 HIGH, 10 MEDIUM), 4 tools ran, results written to host volume
-- [x] Docker balanced scan: Juice Shop repo, 691 findings (487 CRITICAL, 111 HIGH), 13/18 tools ran, stored in history
+- [x] Docker balanced scan: Juice Shop repo, 691 findings (487 CRITICAL, 111 HIGH), 13 of the 18 balanced-profile tools ran, stored in history
 - [x] Docker results persistence: findings.json, dashboard.html, SUMMARY.md, COMPLIANCE_SUMMARY.md all generated
 
 ---
@@ -315,7 +321,7 @@ These platform-specific behaviors cannot be tested in CI matrix alone.
 **PowerShell:**
 
 ```powershell
-docker run --rm -v "${PWD}:/scan" ghcr.io/jimmy058910/jmo-security:balanced scan --repo /scan
+docker run --rm -v "${PWD}:/scan" ghcr.io/jimmy058910/jmo-security:latest scan --repo /scan
 ```
 
 - [x] Basic mount works (verified from PowerShell: `docker run --rm -v ($pwd + ':/scan') jmo-security:local-fast tools check` returns 9/9 fast tools; full scan also completed with results on host)
@@ -324,7 +330,7 @@ docker run --rm -v "${PWD}:/scan" ghcr.io/jimmy058910/jmo-security:balanced scan
 **CMD:**
 
 ```cmd
-docker run --rm -v "%CD%:/scan" ghcr.io/jimmy058910/jmo-security:balanced scan --repo /scan
+docker run --rm -v "%CD%:/scan" ghcr.io/jimmy058910/jmo-security:latest scan --repo /scan
 ```
 
 - [ ] Basic mount works (CMD execution from Git Bash hangs; needs native CMD terminal to test)
@@ -405,21 +411,24 @@ Use these intentionally vulnerable repos for realistic testing.
 
 ```bash
 git clone https://github.com/juice-shop/juice-shop.git
-jmo scan --repo ./juice-shop --profile balanced
+jmo scan --repo ./juice-shop
 jmo scan --image bkimminich/juice-shop:latest
 ```
 
 ### Quick Smoke Test (5 min)
 
+The tool list below is the one the expected counts further down were measured with.
+
 ```bash
-jmo scan --repo ./juice-shop --profile fast --results-dir results-smoke
+jmo scan --repo ./juice-shop --results-dir results-smoke \
+  --tools trufflehog semgrep syft trivy checkov hadolint shellcheck
 ```
 
 ### IaC Testing
 
 ```bash
 git clone https://github.com/bridgecrewio/terragoat.git
-jmo scan --repo ./terragoat --profile slim
+jmo scan --repo ./terragoat --tools checkov trivy
 ```
 
 ### Container Image Testing
@@ -432,58 +441,33 @@ jmo scan --image node:14      # EOL, has CVEs
 ### Expected Finding Counts (Approximate)
 
 **Count non-INFO findings.** The raw total is not comparable across releases:
-`syft` and `cdxgen` emit one INFO row per SBOM package — inventory, not
-vulnerabilities — and since #771 every `shellcheck` SC1017 lands in INFO too.
-Those three account for the entire INFO bucket in both profiles below, so a
-raw total silently tracks how many dependencies the target has.
+`syft` emits one INFO row per SBOM package — inventory, not vulnerabilities —
+and since #771 every `shellcheck` SC1017 lands in INFO too. Those two account
+for the entire INFO bucket in the run below, so a raw total silently tracks how
+many dependencies the target has.
 
-| Target | Profile | Expected Findings (non-INFO) |
-|--------|---------|------------------------------|
-| Juice Shop | fast | 100-130 (measured 115; raw 239 incl. 124 INFO) |
-| Juice Shop | balanced | 600-800 (measured 698, incl. 583 horusec; raw 845 incl. 147 INFO) |
-| juice-shop:latest (image) | balanced | 150-300 |
-| TerraGoat | slim | 80-150 |
+| Target | Tools | Expected Findings (non-INFO) |
+|--------|-------|------------------------------|
+| Juice Shop | the Quick Smoke Test list | 100-130 (measured 115; raw 239 incl. 124 INFO) |
+| Juice Shop | all (no `--tools`) | not yet measured for v2.0.0 (the v1.0 `balanced` figure was mostly horusec, which is removed) |
+| juice-shop:latest (image) | all (trivy and syft run on images) | 150-300 |
+| TerraGoat | `checkov trivy` | not yet measured for v2.0.0 (v1.0 `slim` profile: 80-150) |
 
-Measured 2026-08-08, native on Windows, `--allow-missing-tools`, against
-`C:/Projects/juice-shop`:
+Measured 2026-08-08 with the v1.0 `fast` profile, whose repository tools are
+exactly the Quick Smoke Test list; native on Windows, `--allow-missing-tools`,
+against `C:/Projects/juice-shop`:
 
-| Profile | non-INFO by tool | INFO by tool |
-|---|---|---|
-| fast | semgrep 71, checkov 26, trivy 9, trufflehog 5, hadolint 4 = **115** | shellcheck 83, syft 41 = **124** |
-| balanced | the same 115, plus horusec 583 = **698** | the above, plus cdxgen 23 = **147** |
+| non-INFO by tool | INFO by tool |
+|---|---|
+| semgrep 71, checkov 26, trivy 9, trufflehog 5, hadolint 4 = **115** | shellcheck 83, syft 41 = **124** |
 
-The two runs agree tool-for-tool — `balanced` is `fast` plus horusec and
-cdxgen — which is the cheapest way to tell a real change from scan noise.
+Compare runs tool-for-tool, not by total: it is the cheapest way to tell a real
+change from scan noise.
 
-The previous entries here read `50-100` and `600-800` against *raw* totals and
-so looked badly stale (239 and 845). They were not: both bands still hold on
-the basis they were measured on. Re-deriving them from the raw totals would
-have folded 64 SBOM inventory rows into a vulnerability expectation.
-
----
-
-## Tool Counts by Profile
-
-| Profile | Tool Count | Notes |
-|---------|-----------|-------|
-| fast | 9 | Includes OPA for policy checks |
-| slim | 13 | fast + cloud/IaC tools |
-| balanced | 17 | slim + DAST/SCA tools |
-| deep | 29 | All tools including fuzzing, mobile, host security. 4 of these are `MANUAL_INSTALL_TOOLS` (`afl++`, `akto`, `falco`, `mobsf`) and are deliberately absent from every Docker image |
-
-> **`deep` is the whole catalogue now -- 29 -- and that is by design.**
-> This note used to say "no profile has 29", because `shellcheck` was in fast,
-> slim and balanced but not deep. #795 made the most comprehensive profile a
-> superset of the others, so deep and the catalogue coincide at 29;
-> tests/unit/test_tool_registry_consistency.py
-> asserts it. `README.md`'s "29 tools across 12 categories" is still correct.
->
-> Derive these rather than trusting the table:
->
-> ```bash
-> python -c "from scripts.core.tool_registry import PROFILE_TOOLS; \
->   print({p: len(t) for p, t in PROFILE_TOOLS.items()})"
-> ```
+The previous entry here read `50-100` against the *raw* total and so looked
+badly stale (239). It was not: the band still holds on the basis it was
+measured on. Re-deriving it from the raw total would have folded SBOM
+inventory rows into a vulnerability expectation.
 
 ---
 
@@ -504,7 +488,7 @@ have folded 64 SBOM inventory rows into a vulnerability expectation.
 - [x] Attest/verify cycle: attestation generated + verified on real findings
 - [x] Docker wrapper scripts: bash wrapper verified, PS1 Issue #12 fixed (TTY detection), CMD wrapper verified via `cmd //c`
 - [x] Docker fast scan: 66 findings across 4 tools on Juice Shop
-- [x] Docker balanced scan: 691 findings from 6 reporting tools on Juice Shop (13/18 tools completed)
+- [x] Docker balanced scan: 691 findings from 6 reporting tools on Juice Shop (13 of the 18 balanced-profile tools completed)
 - [x] MCP server: **3 of 5** tools verified (`get_security_findings`, `apply_fix` dry_run, `mark_resolved`); server lifecycle verified (starts, runs, terminates cleanly). **Not verified here:** `query_findings_db` and `get_server_info`, plus the `finding://{id}` resource. *This line read "all 3 tools verified" where the server exposes five (#959).*
 - [x] Interactive wizard: 7 pexpect scenarios (native, docker, ctrl-c, invalid input, diff, yes, path formats)
 - [x] WSL scanning: /mnt/c cross-FS scan (61 findings), native path scan, cron install/uninstall, line endings
@@ -570,5 +554,5 @@ have folded 64 SBOM inventory rows into a vulnerability expectation.
 **Test Platform:** Windows 11, Python 3.12.11, Docker 29.1.5; WSL Ubuntu 24.04, Python 3.12.3, Docker 28.2.2
 **Tester:** Claude Code (automated + manual + pexpect interactive + Docker scan + WSL cross-platform verification)
 **Maintainer:** See [CONTRIBUTING.md](../../CONTRIBUTING.md)
-**Docker Images Tested:** local-fast (9 tools), local-balanced (18 tools), local-deep (27 tools)
+**Docker Images Tested:** local-fast, local-balanced and local-deep (the v1.0 per-profile images, no longer built)
 **WSL Testing:** Ubuntu 24.04, /mnt/c scans, cron integration, line ending validation, cross-FS results access

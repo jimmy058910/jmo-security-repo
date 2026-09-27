@@ -25,43 +25,32 @@ from scripts.core.validators import (
 
 logger = logging.getLogger(__name__)
 
-# All 27 adapter names. The directory holds 29 .py files: these 27 plus
-# __init__.py and common.py. (PROFILE_TOOLS names 29 *tools*, which is a
-# different number for two reasons: `checkov-cicd` reuses the checkov adapter,
-# and `opa` is the report-phase policy engine and emits no tool output.)
+# Every adapter module under scripts/core/adapters/, by stem. That is the 12
+# matrix scanners plus the three SARIF bindings (gitleaks, osv_scanner, zizmor),
+# which have adapters before a scan wires them. `opa` is the report-phase
+# policy engine and emits no tool output, so it has none.
+# tests/core/test_scan_validator.py holds this equal to the files on disk.
 EXPECTED_ADAPTERS = sorted(
     [
-        "aflplusplus",
-        "akto",
-        "bandit",
-        "cdxgen",
         "checkov",
-        "dependency_check",
-        "falco",
+        "gitleaks",
         "gosec",
         "grype",
         "hadolint",
-        "horusec",
-        "kubescape",
-        "lynis",
-        "mobsf",
-        "noseyparker",
         "nuclei",
-        "prowler",
-        "scancode",
+        "osv_scanner",
         "semgrep",
-        "semgrep_secrets",
         "shellcheck",
         "syft",
         "trivy",
-        "trivy_rbac",
         "trufflehog",
         "yara",
         "zap",
+        "zizmor",
     ]
 )
 
-EXPECTED_ADAPTER_COUNT = 27
+EXPECTED_ADAPTER_COUNT = len(EXPECTED_ADAPTERS)
 
 # Standard severity levels
 STANDARD_SEVERITIES = {"CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"}
@@ -127,7 +116,7 @@ def _check_adapters_importable() -> CheckResult:
 
 
 def _check_adapter_count() -> CheckResult:
-    """Registry has expected count (28 adapters)."""
+    """Registry has one adapter per EXPECTED_ADAPTERS entry."""
     try:
         from scripts.core.plugin_loader import get_plugin_loader
 
@@ -214,13 +203,14 @@ def _check_plugin_loader_fallback() -> CheckResult:
         from scripts.core.plugin_loader import get_plugin_loader
 
         loader = get_plugin_loader()
-        # The loader should handle underscore names (canonical)
-        adapter = loader.get_adapter("dependency_check")
+        # The loader should handle underscore names (canonical). osv_scanner is
+        # the adapter whose module name and tool name ("osv-scanner") differ.
+        adapter = loader.get_adapter("osv_scanner")
         if adapter is None:
             return CheckResult(
                 name="plugin-loader-fallback",
                 status=CheckStatus.FAIL,
-                message="Plugin loader could not resolve dependency_check adapter",
+                message="Plugin loader could not resolve osv_scanner adapter",
             )
         return CheckResult(
             name="plugin-loader-fallback",
@@ -278,7 +268,7 @@ def _check_adapter_metadata() -> CheckResult:
 
 
 # ---------------------------------------------------------------------------
-# Group 2: Fixture parsing checks (28 — one per adapter)
+# Group 2: Fixture parsing checks (one per adapter)
 # ---------------------------------------------------------------------------
 
 
@@ -1074,7 +1064,7 @@ def _check_compliance_cwe() -> CheckResult:
         from scripts.core.compliance_mapper import enrich_finding_with_compliance
 
         finding = _make_sample_finding(
-            ruleId="CWE-89", tool={"name": "bandit", "version": "1.0"}
+            ruleId="CWE-89", tool={"name": "semgrep", "version": "1.0"}
         )
         enriched = enrich_finding_with_compliance(finding)
         compliance = enriched.get("compliance", {})
@@ -1101,7 +1091,7 @@ def _check_compliance_cis() -> CheckResult:
         from scripts.core.compliance_mapper import enrich_finding_with_compliance
 
         finding = _make_sample_finding(
-            ruleId="CWE-78", tool={"name": "bandit", "version": "1.0"}
+            ruleId="CWE-78", tool={"name": "semgrep", "version": "1.0"}
         )
         enriched = enrich_finding_with_compliance(finding)
         compliance = enriched.get("compliance", {})
@@ -2030,7 +2020,7 @@ def _check_full_real_scan_available() -> CheckResult:
         from scripts.core.tool_utils import tool_exists
 
         tools_available = []
-        for tool in ["trivy", "bandit", "semgrep", "grype"]:
+        for tool in ["trivy", "semgrep", "grype"]:
             if tool_exists(tool, warn=False):
                 tools_available.append(tool)
 
@@ -2077,7 +2067,7 @@ def validate_scans(tier: str) -> CategoryResult:
     checks.append(timed_check("plugin-loader-fallback", _check_plugin_loader_fallback))
     checks.append(timed_check("adapter-metadata", _check_adapter_metadata))
 
-    # --- Group 2: Fixture parsing (28 checks — one per adapter) ---
+    # --- Group 2: Fixture parsing (one check per adapter) ---
     for adapter_name in EXPECTED_ADAPTERS:
         check_fn = _make_adapter_parse_check(adapter_name)
         checks.append(timed_check(f"parse-{adapter_name}", check_fn))

@@ -16,10 +16,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from scripts.core.history_db import get_connection, init_database
 from scripts.core.history_integrity import (
     recover_database,
     verify_database_integrity,
+)
+from tests.unit.test_history_legacy_scans_columns import (
+    LEGACY_SHAPES,
+    _build_pre_v2_database,
 )
 
 
@@ -38,19 +44,17 @@ def test_verify_integrity_clean_database(tmp_path: Path):
     conn.execute(
         """
         INSERT INTO scans (
-            id, timestamp, timestamp_iso, profile, tools, targets, target_type,
+            id, timestamp, timestamp_iso, tools, targets,
             total_findings, critical_count, high_count, medium_count, low_count, info_count,
             jmo_version
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             "scan-001",
             1234567890,
             "2024-01-01T00:00:00Z",
-            "balanced",
             '["trivy"]',
             '["/test"]',
-            "repo",
             1,
             0,
             1,
@@ -161,19 +165,17 @@ def test_recover_database_creates_backup(tmp_path: Path):
     conn.execute(
         """
         INSERT INTO scans (
-            id, timestamp, timestamp_iso, profile, tools, targets, target_type,
+            id, timestamp, timestamp_iso, tools, targets,
             total_findings, critical_count, high_count, medium_count, low_count, info_count,
             jmo_version
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             "scan-backup-test",
             1234567890,
             "2024-01-01T00:00:00Z",
-            "balanced",
             '["trivy"]',
             '["/test"]',
-            "repo",
             1,
             0,
             1,
@@ -215,19 +217,17 @@ def test_recover_database_preserves_data(tmp_path: Path):
     conn.execute(
         """
         INSERT INTO scans (
-            id, timestamp, timestamp_iso, profile, tools, targets, target_type,
+            id, timestamp, timestamp_iso, tools, targets,
             total_findings, critical_count, high_count, medium_count, low_count, info_count,
             jmo_version
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             scan_id,
             1234567890,
             "2024-01-01T00:00:00Z",
-            "balanced",
             '["trivy"]',
             '["/test"]',
-            "repo",
             2,
             1,
             1,
@@ -308,11 +308,11 @@ def test_recover_database_preserves_data(tmp_path: Path):
 
     # Verify specific scan exists
     scan = conn2.execute(
-        "SELECT id, profile FROM scans WHERE id = ?", (scan_id,)
+        "SELECT id, tools FROM scans WHERE id = ?", (scan_id,)
     ).fetchone()
     assert scan is not None, "Scan should exist after recovery"
     assert scan[0] == scan_id, "Scan ID should match"
-    assert scan[1] == "balanced", "Scan profile should match"
+    assert scan[1] == '["trivy"]', "Scan tools should match"
 
     # Verify findings exist
     findings = conn2.execute(
@@ -324,3 +324,41 @@ def test_recover_database_preserves_data(tmp_path: Path):
     assert findings[0][1] == "CRITICAL", "First finding severity should match"
     assert findings[1][0] == "finding-2", "Second finding should exist"
     assert findings[1][1] == "HIGH", "Second finding severity should match"
+
+
+@pytest.mark.parametrize("shape", LEGACY_SHAPES)
+def test_recovery_imports_a_legacy_database_into_the_current_schema(
+    tmp_path: Path, shape: str, caplog
+):
+    """Recovery re-creates the database with the current schema and copied
+    every row by the old database's columns. v2.0.0 dropped `profile` and
+    `target_type`, so a database still holding either failed to import
+    ("table scans has no column named ..."), after its file had already been
+    replaced. Only the columns both schemas have are copied, in `findings`
+    too: v1.1.0's migration added `findings.finding_status`, which the current
+    schema lacks, so the maintainer's own database ("1.1.0-live") failed on
+    it. What is left behind is said."""
+    db_path = tmp_path / "legacy.db"
+    _build_pre_v2_database(db_path, shape)
+
+    with caplog.at_level("WARNING", logger="scripts.core.history_integrity"):
+        result = recover_database(db_path)
+
+    left = [r.getMessage() for r in caplog.records if "not carried" in r.getMessage()]
+    if shape == "1.1.0-live":
+        assert len(left) == 1, left
+        assert "scans.scan_notes" in left[0]
+        assert "findings.finding_status" in left[0]
+
+    assert result["success"] is True, result["errors"]
+    conn = get_connection(db_path)
+    try:
+        rows = conn.execute("SELECT id, tools, targets FROM scans").fetchall()
+        assert [tuple(row) for row in rows] == [
+            ("old-scan", '["trivy"]', '["old-repo"]')
+        ]
+        assert conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0] == 3
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(scans)")}
+        assert not {"profile", "target_type"} & columns
+    finally:
+        conn.close()

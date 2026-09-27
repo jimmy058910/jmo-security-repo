@@ -1,14 +1,13 @@
 # Custom Policy Examples
 
-This guide provides **5 real-world custom policy examples** for JMo Security Policy-as-Code integration.
+This guide provides **4 real-world custom policy examples** for JMo Security Policy-as-Code integration.
 
 ## Table of Contents
 
 1. [SQL Injection Blocker](#1-sql-injection-blocker)
 2. [Container Vulnerability Gate](#2-container-vulnerability-gate)
 3. [CWE Top 25 Compliance](#3-cwe-top-25-compliance)
-4. [License Compliance Policy](#4-license-compliance-policy)
-5. [Cloud Misconfiguration Blocker](#5-cloud-misconfiguration-blocker)
+4. [Cloud Misconfiguration Blocker](#4-cloud-misconfiguration-blocker)
 
 ---
 
@@ -185,7 +184,7 @@ message := msg if {
 cp container-vulnerability-gate.rego ~/.jmo/policies/
 
 # Scan container image
-jmo scan --image nginx:latest --profile-name balanced
+jmo scan --image nginx:latest
 jmo report results/ --policy container-vulnerability-gate --fail-on-policy-violation
 ```
 
@@ -278,80 +277,12 @@ message := msg if {
 cp cwe-top-25.rego ~/.jmo/policies/
 
 # Scan with CWE Top 25 policy
-jmo ci --repo . --policy cwe-top-25 --fail-on-policy-violation --profile-name deep
+jmo ci --repo . --policy cwe-top-25 --fail-on-policy-violation
 ```
 
 ---
 
-## 4. License Compliance Policy
-
-**Purpose:** Block findings from copyleft licenses (GPL, LGPL, AGPL).
-
-**Use Case:** Commercial software, proprietary codebases, license compliance.
-
-### Policy (`license-compliance.rego`)
-
-```rego
-package jmo.policy.license_compliance
-
-import future.keywords.if
-import future.keywords.in
-
-metadata := {
-    "name": "License Compliance Policy",
-    "version": "1.0.0",
-    "description": "Block copyleft licenses (GPL, LGPL, AGPL) in dependencies",
-    "author": "Legal Team",
-    "tags": ["license", "compliance", "legal"],
-    "frameworks": ["License Compliance"],
-}
-
-default allow := false
-
-allow if {
-    count(violations) == 0
-}
-
-# Copyleft licenses to block
-copyleft_licenses := ["GPL", "LGPL", "AGPL", "GPL-2.0", "GPL-3.0", "LGPL-2.1", "LGPL-3.0", "AGPL-3.0"]
-
-violations contains violation if {
-    finding := input.findings[_]
-    finding.severity in ["HIGH", "MEDIUM"]
-
-    # Check license field (from scancode or custom scanners)
-    finding.license
-    some license in copyleft_licenses
-    contains(upper(finding.license), license)
-
-    violation := {
-        "fingerprint": finding.id,
-        "severity": "HIGH",
-        "tool": finding.tool.name,
-        "path": finding.location.path,
-        "line": finding.location.startLine,
-        "message": sprintf("Copyleft license detected: %s (License: %s)", [finding.message, finding.license]),
-        "remediation": "Replace dependency with MIT/Apache/BSD licensed alternative or obtain legal approval",
-    }
-}
-
-message := msg if {
-    count(violations) > 0
-    msg := sprintf("🚨 BLOCKED: %d copyleft license violations detected", [count(violations)])
-} else := "✅ No copyleft license violations detected"
-```
-
-### Usage
-
-```bash
-# Scan with license compliance policy
-jmo scan --repo . --profile-name deep  # Includes scancode
-jmo report results/ --policy license-compliance --fail-on-policy-violation
-```
-
----
-
-## 5. Cloud Misconfiguration Blocker
+## 4. Cloud Misconfiguration Blocker
 
 **Purpose:** Block HIGH/CRITICAL cloud misconfigurations (AWS, Azure, GCP, K8s).
 
@@ -381,7 +312,7 @@ allow if {
 }
 
 # Cloud/IaC scanning tools
-cloud_tools := ["checkov", "trivy", "prowler", "kubescape"]
+cloud_tools := ["checkov", "trivy"]
 
 cloud_misconfigurations contains finding if {
     finding := input.findings[_]
@@ -422,11 +353,11 @@ message := msg if {
 
 ```bash
 # Scan Terraform
-jmo scan --terraform-state infrastructure.tfstate --profile-name balanced
+jmo scan --terraform-state infrastructure.tfstate
 jmo report results/ --policy cloud-misconfiguration-blocker --fail-on-policy-violation
 
 # Scan Kubernetes manifests
-jmo scan --k8s-manifest deployment.yaml --profile-name balanced
+jmo scan --k8s-manifest deployment.yaml
 jmo report results/ --policy cloud-misconfiguration-blocker --fail-on-policy-violation
 ```
 
@@ -473,7 +404,7 @@ spec:
 1. **Create test findings file:**
 
    ```bash
-   jmo scan --repo /path/to/test-repo --profile-name fast
+   jmo scan --repo /path/to/test-repo --tools trufflehog semgrep trivy
    cp results/summaries/findings.json test-findings.json
    ```
 

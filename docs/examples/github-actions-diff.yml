@@ -45,14 +45,14 @@ jobs:
         run: |
           echo "📊 Scanning baseline (main branch)..."
           git checkout ${{ github.base_ref }}
-          jmo scan --repo . --profile fast --results-dir baseline-results/
+          jmo scan --repo . --tools trufflehog semgrep trivy --results-dir baseline-results/
           echo "✅ Baseline scan complete"
 
       - name: Scan current (PR branch)
         run: |
           echo "📊 Scanning current (PR branch)..."
           git checkout ${{ github.head_ref }}
-          jmo scan --repo . --profile fast --results-dir current-results/
+          jmo scan --repo . --tools trufflehog semgrep trivy --results-dir current-results/
           echo "✅ Current scan complete"
 
       - name: Generate diff report (Markdown)

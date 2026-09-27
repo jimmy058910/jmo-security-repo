@@ -671,7 +671,6 @@ class TestSuspiciousPatterns:
                 "buildDefinition": {
                     "externalParameters": {
                         "tools": ["trivy", "semgrep", "trufflehog", "syft", "checkov"],
-                        "profile": "balanced",
                     }
                 },
                 "runDetails": {"builder": {"id": "https://github.com/test/repo"}},
@@ -869,7 +868,6 @@ class TestCheckAll:
                 "buildDefinition": {
                     "externalParameters": {
                         "tools": ["trivy", "semgrep"],
-                        "profile": "balanced",
                     }
                 },
                 "runDetails": {
@@ -921,7 +919,6 @@ class TestCheckAll:
                 "buildDefinition": {
                     "externalParameters": {
                         "tools": ["trivy", "semgrep", "trufflehog", "syft", "checkov"],
-                        "profile": "balanced",
                     }
                 },
                 "runDetails": {

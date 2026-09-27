@@ -1,14 +1,14 @@
 # Integration Testing Patterns
 
-Integration tests verify multi-component workflows (scan -> report -> CI), profile behavior, Docker variants, and end-to-end scenarios.
+Integration tests verify multi-component workflows (scan -> report -> CI), tool selection, the Docker image, and end-to-end scenarios.
 
 ## When to Write Integration Tests
 
 Use integration tests when:
 
 - Testing multi-component workflows (scan -> report -> CI)
-- Testing profile behavior (fast/balanced/deep tool selection)
-- Testing Docker variants (full/slim/alpine)
+- Testing tool selection (`--tools`, `--skip-tools`, a `tools:` list in `jmo.yml`)
+- Testing the Docker image (the one image built from `Dockerfile`)
 - Testing multi-target scanning (repo + image + IaC + URL + GitLab + K8s)
 - Testing CLI argument combinations
 - Testing end-to-end scenarios
@@ -53,8 +53,10 @@ def test_workflow_happy_path(tmp_path):
         "scan",
         "--repo",
         str(test_repo),
-        "--profile-name",
-        "fast",
+        "--tools",
+        "trufflehog",
+        "semgrep",
+        "trivy",
         "--results-dir",
         str(tmp_path / "results"),
         "--allow-missing-tools",
@@ -70,26 +72,28 @@ def test_workflow_happy_path(tmp_path):
 
 ## Common Integration Test Patterns
 
-### Pattern 1: Profile Validation
+### Pattern 1: Tool Selection
 
-Test that profiles invoke correct tool subsets and configurations.
+Test that `--tools` narrows the default matrix to the tools asked for.
 
 ```python
-def test_profile_tool_selection_fast(tmp_path: Path):
-    """Test fast profile invokes correct tool subset."""
+def test_tools_flag_selects_tools(tmp_path: Path):
+    """Test --tools runs the requested subset."""
     test_repo = tmp_path / "test-repo"
     test_repo.mkdir()
     (test_repo / "app.py").write_text("x = 1")
 
-    # Run fast profile scan
+    # Run a scan narrowed to three tools
     cmd = [
         "python3",
         "scripts/cli/jmo.py",
         "scan",
         "--repo",
         str(test_repo),
-        "--profile-name",
-        "fast",
+        "--tools",
+        "trufflehog",
+        "semgrep",
+        "trivy",
         "--results-dir",
         str(tmp_path / "results"),
         "--allow-missing-tools",
@@ -105,10 +109,9 @@ def test_profile_tool_selection_fast(tmp_path: Path):
     tool_outputs = list(repo_dir.glob("*.json"))
     found_tools = [f.stem for f in tool_outputs]
 
-    # Fast profile: trufflehog, semgrep, trivy
     expected_tools = ["trufflehog", "semgrep", "trivy"]
     for tool in expected_tools:
-        assert tool in found_tools, f"Fast profile should include {tool}"
+        assert tool in found_tools, f"--tools should have run {tool}"
 ```
 
 ### Pattern 2: Multi-Target Deduplication
@@ -177,15 +180,13 @@ def test_allow_missing_tools(tmp_path: Path):
     test_repo.mkdir()
     (test_repo / "README.md").write_text("# Test")
 
-    # Run scan with --allow-missing-tools
+    # Run scan with --allow-missing-tools (the whole default matrix)
     cmd = [
         "python3",
         "scripts/cli/jmo.py",
         "scan",
         "--repo",
         str(test_repo),
-        "--profile-name",
-        "deep",
         "--results-dir",
         str(tmp_path / "results"),
         "--allow-missing-tools",
@@ -205,8 +206,8 @@ Integration tests run actual CLI commands and can be slow. Use appropriate timeo
 
 ```python
 @pytest.mark.slow
-def test_deep_profile_scan(tmp_path: Path):
-    """Test deep profile (may take 2-3 minutes)."""
+def test_default_matrix_scan(tmp_path: Path):
+    """Test a scan with the whole default matrix (may take 2-3 minutes)."""
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=240)
 ```
 
@@ -232,10 +233,10 @@ assert "trufflehog" in found_tools
 
 ```python
 # BAD: Assumes all tools create outputs
-deep_tools = ["trufflehog", "noseyparker", "semgrep", "bandit", "syft", "trivy"]
-for tool in deep_tools:
+all_tools = ["trufflehog", "semgrep", "syft", "trivy", "yara"]
+for tool in all_tools:
     assert (repo_dir / f"{tool}.json").exists()
-# Fails if noseyparker skips due to missing binary
+# Fails if yara skips due to missing binary
 
 # GOOD: Verify at least some tools ran
 tool_outputs = list(repo_dir.glob("*.json"))
@@ -274,24 +275,24 @@ assert Path(item["location"]["path"]).name == "file.py"
 
 ---
 
-## Configuration and Profile Testing
+## Configuration Testing
 
-Test profiles, per-tool overrides, and configuration loading logic.
+Test top-level settings, per-tool overrides, and configuration loading logic.
 
-### When to Test Profiles
+### When to Test Configuration
 
-Test profiles and overrides when:
+Test configuration and overrides when:
 
-- Adding new profile (fast/balanced/deep/custom)
+- Adding a top-level `jmo.yml` key (`threads`, `timeout`, `tools`, ...)
 - Adding per-tool override support (timeout, flags, retries)
 - Modifying config loading logic (jmo.yml parsing)
-- Testing profile inheritance (global vs profile-specific)
+- Testing precedence (`--tools` over a `tools:` list over the default matrix)
 
-### Profile Override Test Pattern
+### Per-Tool Override Test Pattern
 
 ```python
 def test_per_tool_timeout_override(tmp_path: Path):
-    """Test per-tool timeout override in profile."""
+    """Test per-tool timeout override of the top-level timeout."""
     import subprocess
 
     test_repo = tmp_path / "test-repo"
@@ -304,27 +305,21 @@ def test_per_tool_timeout_override(tmp_path: Path):
         """
 tools: [semgrep]
 outputs: [json]
-
-profiles:
-  custom:
-    tools: [semgrep]
-    timeout: 300  # Global: 5 minutes
-    per_tool:
-      semgrep:
-        timeout: 600  # Override: 10 minutes
-        flags: ["--exclude", "tests"]
+timeout: 300  # Global: 5 minutes
+per_tool:
+  semgrep:
+    timeout: 600  # Override: 10 minutes
+    flags: ["--exclude", "tests"]
 """
     )
 
-    # Run scan with custom profile
+    # Run scan with the custom config
     cmd = [
         "python3",
         "scripts/cli/jmo.py",
         "scan",
         "--repo",
         str(test_repo),
-        "--profile-name",
-        "custom",
         "--config",
         str(config_file),
         "--results-dir",
@@ -340,57 +335,17 @@ profiles:
     assert (tmp_path / "results" / "individual-repos").exists()
 ```
 
-### Profile Tool Selection Tests
+### Config Precedence Tests
 
 ```python
-def test_profile_tool_selection_balanced(tmp_path: Path):
-    """Test balanced profile invokes correct tool subset."""
-    test_repo = tmp_path / "test-repo"
-    test_repo.mkdir()
-    (test_repo / "app.py").write_text("x = 1")
-
-    # Run balanced profile
-    cmd = [
-        "python3",
-        "scripts/cli/jmo.py",
-        "scan",
-        "--repo",
-        str(test_repo),
-        "--profile-name",
-        "balanced",
-        "--results-dir",
-        str(tmp_path / "results"),
-        "--allow-missing-tools",
-    ]
-    subprocess.run(cmd, capture_output=True, text=True, timeout=240)
-
-    # Count tool JSON files in results directory. Assert the directory exists
-    # rather than guarding on it: under `if repo_dir.exists():` a scan that
-    # wrote nothing skips the profile check entirely and still reports green.
-    repo_dir = tmp_path / "results" / "individual-repos" / "test-repo"
-    assert repo_dir.exists(), f"scan produced no output directory at {repo_dir}"
-
-    found_tools = [f.stem for f in repo_dir.glob("*.json")]
-
-    # Balanced profile: trufflehog, semgrep, syft, trivy, checkov, hadolint, zap, nuclei
-    # Verify at least some balanced tools present
-    balanced_tools = ["trufflehog", "semgrep", "trivy", "syft"]
-    assert any(tool in found_tools for tool in balanced_tools), (
-        f"none of {balanced_tools} ran; got {found_tools}"
-    )
-```
-
-### Config Inheritance Tests
-
-```python
-def test_profile_inherits_global_config(tmp_path: Path):
-    """Test profile inherits global per_tool config."""
+def test_cli_tools_override_config_tools(tmp_path: Path):
+    """Test --tools on the command line wins over a tools: list in jmo.yml."""
     test_repo = tmp_path / "test-repo"
     test_repo.mkdir()
     (test_repo / "app.py").write_text("import os")
 
-    # Create config with global per_tool AND profile per_tool
-    config_file = tmp_path / "inherit-config.yml"
+    # Config narrows the matrix to two tools
+    config_file = tmp_path / "precedence-config.yml"
     config_file.write_text(
         """
 tools: [trivy, semgrep]
@@ -398,28 +353,21 @@ outputs: [json]
 
 per_tool:
   trivy:
-    flags: ["--no-progress"]  # Global trivy config
-
-profiles:
-  custom:
-    tools: [trivy, semgrep]
-    per_tool:
-      trivy:
-        timeout: 600  # Profile adds timeout (merges with global flags)
+    flags: ["--no-progress"]
 """
     )
 
-    # Run scan
+    # The CLI narrows it further, to one
     cmd = [
         "python3",
         "scripts/cli/jmo.py",
         "scan",
         "--repo",
         str(test_repo),
-        "--profile-name",
-        "custom",
         "--config",
         str(config_file),
+        "--tools",
+        "semgrep",
         "--results-dir",
         str(tmp_path / "results"),
         "--allow-missing-tools",
@@ -427,13 +375,13 @@ profiles:
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
     assert result.returncode in [0, 1]
 
-    # Verify both tools ran. Note the assertion is NOT inside an
-    # `if repo_dir.exists():` guard - a scan that produced no directory at all
-    # would then pass this test having checked nothing.
+    # Note the assertion is NOT inside an `if repo_dir.exists():` guard - a
+    # scan that produced no directory at all would then pass this test having
+    # checked nothing.
     repo_dir = tmp_path / "results" / "individual-repos" / "test-repo"
     assert repo_dir.exists(), f"scan produced no output directory at {repo_dir}"
 
     found_tools = [f.stem for f in repo_dir.glob("*.json")]
-    # At least one tool should have run
-    assert found_tools, f"no tool wrote output to {repo_dir}"
+    assert "semgrep" in found_tools, f"--tools semgrep did not run; got {found_tools}"
+    assert "trivy" not in found_tools, "the config's tools: list overrode --tools"
 ```

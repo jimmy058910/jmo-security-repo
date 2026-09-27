@@ -19,27 +19,13 @@ import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from scripts.cli.build_commands import VARIANTS
+import pytest
+
+from scripts.cli.build_commands import DOCKERFILE
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # ========== Category 1: Constants ==========
-
-
-def test_variants_contains_expected_entries():
-    """Test VARIANTS contains all expected Docker variants."""
-    from scripts.cli.build_commands import VARIANTS
-
-    expected = {"fast", "slim", "balanced", "deep"}
-    assert set(VARIANTS.keys()) == expected
-
-
-def test_variants_has_correct_dockerfiles():
-    """Test VARIANTS maps to correct Dockerfile names."""
-    from scripts.cli.build_commands import VARIANTS
-
-    assert VARIANTS["fast"] == "Dockerfile.fast"
-    assert VARIANTS["slim"] == "Dockerfile.slim"
-    assert VARIANTS["balanced"] == "Dockerfile.balanced"
-    assert VARIANTS["deep"] == "Dockerfile.deep"
 
 
 def test_default_registry():
@@ -182,17 +168,16 @@ def test_check_docker_success():
 
 
 def _make_repo(root: Path) -> Path:
-    """Build the marker set a real checkout has: versions.yaml + variant files.
+    """Build the marker set a real checkout has: versions.yaml + the Dockerfile.
 
-    These tests used to `touch` a bare file named `Dockerfile`, which is the
-    filesystem `_find_repo_root` expected and **not** the one the repo ships:
-    #303 renamed it to `Dockerfile.deep` on 2026-04-19. The tests fabricated
-    the missing file, passed, and the command was broken for seven releases --
-    while `test_variants_mapping` in this same file asserted the real name.
+    The name comes from the module, and
+    `test_the_repository_has_exactly_one_dockerfile` pins it to the real tree.
+    During v1.x these fixtures touched a bare `Dockerfile` while the repo shipped
+    `Dockerfile.deep` (#303): they fabricated the missing file, passed, and the
+    command was broken for seven releases.
     """
     (root / "versions.yaml").touch()
-    for dockerfile in VARIANTS.values():
-        (root / dockerfile).touch()
+    (root / DOCKERFILE).touch()
     return root
 
 
@@ -236,12 +221,26 @@ def test_find_repo_root_missing_versions_yaml(tmp_path):
     """Test _find_repo_root returns None when versions.yaml missing."""
     from scripts.cli.build_commands import _find_repo_root
 
-    for dockerfile in VARIANTS.values():
-        (tmp_path / dockerfile).touch()
+    (tmp_path / DOCKERFILE).touch()
 
     with patch.object(Path, "cwd", return_value=tmp_path):
         result = _find_repo_root()
         assert result is None
+
+
+def test_find_repo_root_ignores_a_v1_variant_dockerfile(tmp_path):
+    """A `Dockerfile.deep` is not the file `jmo build` builds, so it is no marker.
+
+    Accepting any `Dockerfile*` would find a v1.x checkout and then fail at
+    build time on the missing `Dockerfile`, far from the cause.
+    """
+    from scripts.cli.build_commands import _find_repo_root
+
+    (tmp_path / "versions.yaml").touch()
+    (tmp_path / "Dockerfile.deep").touch()
+
+    with patch.object(Path, "cwd", return_value=tmp_path):
+        assert _find_repo_root() is None
 
 
 def test_find_repo_root_finds_the_real_checkout():
@@ -254,24 +253,26 @@ def test_find_repo_root_finds_the_real_checkout():
     """
     from scripts.cli.build_commands import _find_repo_root
 
-    repo = Path(__file__).resolve().parents[2]
-    assert (repo / "versions.yaml").is_file(), "test is not running from a checkout"
+    assert (REPO_ROOT / "versions.yaml").is_file(), (
+        "test is not running from a checkout"
+    )
 
-    with patch.object(Path, "cwd", return_value=repo):
-        assert _find_repo_root() == repo
+    with patch.object(Path, "cwd", return_value=REPO_ROOT):
+        assert _find_repo_root() == REPO_ROOT
 
 
-def test_no_bare_dockerfile_exists_in_the_repo():
-    """Pin the fact that made #303 invisible: there is no bare `Dockerfile`.
+def test_the_repository_has_exactly_one_dockerfile():
+    """One image, one Dockerfile, and it is the file `jmo build` builds.
 
-    If one is ever reintroduced, `_find_repo_root` keeps working either way --
-    but the fixtures above would silently start describing reality again, and
-    the reason this guard exists would be lost.
+    v2.0.0 folded the four v1.x variant files into `Dockerfile`. A second
+    `Dockerfile*` reappearing means a variant crept back in beside the image
+    that CI, the release and `jmo build` actually build -- and would drift
+    unbuilt. `DOCKERFILE` naming anything else is #303 again: the command
+    looking for a file the tree does not have.
     """
-    repo = Path(__file__).resolve().parents[2]
-    assert not (repo / "Dockerfile").exists()
-    for dockerfile in VARIANTS.values():
-        assert (repo / dockerfile).is_file(), f"missing {dockerfile}"
+    found = sorted(p.name for p in REPO_ROOT.glob("Dockerfile*"))
+    assert found == ["Dockerfile"]
+    assert found == [DOCKERFILE]
 
 
 # ========== Category 5: Version Validation ==========
@@ -369,27 +370,11 @@ def test_validate_versions_exception(tmp_path):
 # ========== Category 6: Image Building ==========
 
 
-def test_build_image_unknown_variant(tmp_path):
-    """Test _build_image returns 1 for unknown variant."""
-    from scripts.cli.build_commands import _build_image
-
-    result = _build_image(
-        variant="nonexistent",
-        tag="v1.0.0",
-        repo_root=tmp_path,
-        registry="ghcr.io",
-        org="test",
-        image_name="test-image",
-    )
-    assert result == 1
-
-
 def test_build_image_dockerfile_not_found(tmp_path):
     """Test _build_image returns 1 when Dockerfile doesn't exist."""
     from scripts.cli.build_commands import _build_image
 
     result = _build_image(
-        variant="balanced",
         tag="v1.0.0",
         repo_root=tmp_path,
         registry="ghcr.io",
@@ -404,14 +389,13 @@ def test_build_image_local_tag(tmp_path):
     from scripts.cli.build_commands import _build_image
 
     # Create Dockerfile
-    (tmp_path / "Dockerfile.balanced").touch()
+    (tmp_path / DOCKERFILE).touch()
 
     mock_result = MagicMock()
     mock_result.returncode = 0
 
     with patch("subprocess.run", return_value=mock_result) as mock_run:
         _build_image(
-            variant="balanced",
             tag="v1.0.0",
             repo_root=tmp_path,
             registry="ghcr.io",
@@ -423,7 +407,7 @@ def test_build_image_local_tag(tmp_path):
         # Verify local tag format was used
         call_args = mock_run.call_args_list[0]
         cmd = call_args[0][0]
-        assert "jmo-security:local-balanced" in cmd
+        assert "jmo-security:local" in cmd
 
 
 def test_build_image_remote_tag(tmp_path):
@@ -431,14 +415,13 @@ def test_build_image_remote_tag(tmp_path):
     from scripts.cli.build_commands import _build_image
 
     # Create Dockerfile
-    (tmp_path / "Dockerfile.balanced").touch()
+    (tmp_path / DOCKERFILE).touch()
 
     mock_result = MagicMock()
     mock_result.returncode = 0
 
     with patch("subprocess.run", return_value=mock_result) as mock_run:
         _build_image(
-            variant="balanced",
             tag="v1.0.0",
             repo_root=tmp_path,
             registry="ghcr.io",
@@ -450,7 +433,61 @@ def test_build_image_remote_tag(tmp_path):
         # Verify remote tag format was used
         call_args = mock_run.call_args_list[0]
         cmd = call_args[0][0]
-        assert "ghcr.io/jmosecurity/jmo-security:v1.0.0-balanced" in cmd
+        assert "ghcr.io/jmosecurity/jmo-security:v1.0.0" in cmd
+
+
+def test_build_image_builds_the_one_dockerfile_under_one_tag(tmp_path):
+    """One `docker build` of `Dockerfile`, one tag, and no alias tagging.
+
+    v1.x tagged the deep build a second time as the bare tag (a `docker tag`
+    call after the build). With one image the build's own tag is the only
+    one, so a second subprocess call means an alias crept back in.
+    """
+    from scripts.cli.build_commands import _build_image
+
+    (tmp_path / DOCKERFILE).touch()
+    mock_result = MagicMock()
+    mock_result.returncode = 0
+
+    with patch("subprocess.run", return_value=mock_result) as mock_run:
+        rc = _build_image(
+            tag="latest",
+            repo_root=tmp_path,
+            registry="ghcr.io",
+            org="test",
+            image_name="jmo-security",
+        )
+
+    assert rc == 0
+    assert mock_run.call_count == 1
+    cmd = mock_run.call_args_list[0][0][0]
+    assert cmd[:2] == ["docker", "build"]
+    assert cmd[cmd.index("-f") + 1] == str(tmp_path / DOCKERFILE)
+    assert cmd.count("-t") == 1
+    assert cmd[cmd.index("-t") + 1] == "ghcr.io/test/jmo-security:latest"
+
+
+def test_build_image_push_pushes_the_built_tag(tmp_path):
+    """`--push` pushes exactly the reference the build produced."""
+    from scripts.cli.build_commands import _build_image
+
+    (tmp_path / DOCKERFILE).touch()
+    mock_result = MagicMock()
+    mock_result.returncode = 0
+
+    with patch("subprocess.run", return_value=mock_result) as mock_run:
+        rc = _build_image(
+            tag="2.0.0",
+            repo_root=tmp_path,
+            registry="ghcr.io",
+            org="test",
+            image_name="jmo-security",
+            push=True,
+        )
+
+    assert rc == 0
+    cmds = [c[0][0] for c in mock_run.call_args_list]
+    assert cmds[1:] == [["docker", "push", "ghcr.io/test/jmo-security:2.0.0"]]
 
 
 def test_build_image_no_cache(tmp_path):
@@ -458,14 +495,13 @@ def test_build_image_no_cache(tmp_path):
     from scripts.cli.build_commands import _build_image
 
     # Create Dockerfile
-    (tmp_path / "Dockerfile.fast").touch()
+    (tmp_path / DOCKERFILE).touch()
 
     mock_result = MagicMock()
     mock_result.returncode = 0
 
     with patch("subprocess.run", return_value=mock_result) as mock_run:
         _build_image(
-            variant="fast",
             tag="v1.0.0",
             repo_root=tmp_path,
             registry="ghcr.io",
@@ -485,14 +521,13 @@ def test_build_image_failure(tmp_path):
     from scripts.cli.build_commands import _build_image
 
     # Create Dockerfile
-    (tmp_path / "Dockerfile.fast").touch()
+    (tmp_path / DOCKERFILE).touch()
 
     mock_result = MagicMock()
     mock_result.returncode = 1
 
     with patch("subprocess.run", return_value=mock_result):
         result = _build_image(
-            variant="fast",
             tag="v1.0.0",
             repo_root=tmp_path,
             registry="ghcr.io",
@@ -507,11 +542,10 @@ def test_build_image_exception(tmp_path):
     from scripts.cli.build_commands import _build_image
 
     # Create Dockerfile
-    (tmp_path / "Dockerfile.fast").touch()
+    (tmp_path / DOCKERFILE).touch()
 
     with patch("subprocess.run", side_effect=Exception("Docker error")):
         result = _build_image(
-            variant="fast",
             tag="v1.0.0",
             repo_root=tmp_path,
             registry="ghcr.io",
@@ -526,14 +560,13 @@ def test_build_image_platform_override(tmp_path):
     from scripts.cli.build_commands import _build_image
 
     # Create Dockerfile
-    (tmp_path / "Dockerfile.fast").touch()
+    (tmp_path / DOCKERFILE).touch()
 
     mock_result = MagicMock()
     mock_result.returncode = 0
 
     with patch("subprocess.run", return_value=mock_result) as mock_run:
         _build_image(
-            variant="fast",
             tag="v1.0.0",
             repo_root=tmp_path,
             registry="ghcr.io",
@@ -596,8 +629,6 @@ def test_cmd_build_validation_failure(tmp_path):
     args = argparse.Namespace(
         build_command=None,
         skip_validate=False,
-        all=False,
-        variant="balanced",
         tag="latest",
         registry="ghcr.io",
         org="test",
@@ -632,8 +663,21 @@ def test_add_build_args_creates_parser():
     assert isinstance(build_parser, argparse.ArgumentParser)
 
 
-def test_add_build_args_has_variant_choices():
-    """Test add_build_args includes variant choices."""
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["build", "--variant", "deep"],
+        ["build", "--all"],
+        ["build", "test", "--variant", "deep"],
+    ],
+)
+def test_add_build_args_rejects_the_v1_variant_flags(argv):
+    """There is one image, so `--variant` and `--all` are gone, not ignored.
+
+    Accepting and ignoring them would build `Dockerfile` while the caller
+    believes they built a variant. No alias: v2.0.0 carries no backward
+    compatibility, so argparse exits 2.
+    """
     from scripts.cli.build_commands import add_build_args
 
     parser = argparse.ArgumentParser()
@@ -641,22 +685,9 @@ def test_add_build_args_has_variant_choices():
 
     add_build_args(subparsers)
 
-    # Parse a valid variant
-    args = parser.parse_args(["build", "--variant", "deep"])
-    assert args.variant == "deep"
-
-
-def test_add_build_args_has_all_flag():
-    """Test add_build_args includes --all flag."""
-    from scripts.cli.build_commands import add_build_args
-
-    parser = argparse.ArgumentParser()
-    subparsers = parser.add_subparsers()
-
-    add_build_args(subparsers)
-
-    args = parser.parse_args(["build", "--all"])
-    assert args.all is True
+    with pytest.raises(SystemExit) as exc:
+        parser.parse_args(argv)
+    assert exc.value.code == 2
 
 
 def test_add_build_args_has_local_flag():
@@ -682,7 +713,7 @@ def test_add_build_args_default_values():
     add_build_args(subparsers)
 
     args = parser.parse_args(["build"])
-    assert args.variant == "balanced"
+    assert args.tag == "latest"
     assert args.registry == DEFAULT_REGISTRY
     assert args.org == DEFAULT_ORG
     assert args.local is False
@@ -692,14 +723,12 @@ def test_add_build_args_default_values():
 # ========== Category 8: Image references and flag precedence (chunk 18) ==========
 
 
-def test_image_ref_uses_the_published_bare_variant_tags():
-    """`latest` maps to the bare variant tag, which is what release.yml pushes.
+def test_image_ref_latest_is_the_bare_published_tag():
+    """`latest` names `:latest`, which is what release.yml publishes.
 
-    Both the build path and the `test` path used `<tag>-<variant>`
-    unconditionally, so the default run named `:latest-balanced` -- a tag
-    family the project never publishes. `release.yml` pushes bare `:fast` /
-    `:slim` / `:balanced` / `:deep` (with `:latest` pointing at deep) and
-    versioned `:1.0.2-<variant>`.
+    release.yml publishes one image as `:latest` and semver with no suffix.
+    v1.x named `:<tag>-<variant>` here, and `jmo build test` then asked for a
+    tag that was never pushed; a suffix creeping back would repeat that.
     """
     from scripts.cli.build_commands import (
         DEFAULT_IMAGE,
@@ -708,14 +737,11 @@ def test_image_ref_uses_the_published_bare_variant_tags():
         _image_ref,
     )
 
-    ref = _image_ref(
-        "balanced", "latest", DEFAULT_REGISTRY, DEFAULT_ORG, DEFAULT_IMAGE, False
-    )
-    assert ref == f"{DEFAULT_REGISTRY}/{DEFAULT_ORG}/{DEFAULT_IMAGE}:balanced"
-    assert "latest-balanced" not in ref
+    ref = _image_ref("latest", DEFAULT_REGISTRY, DEFAULT_ORG, DEFAULT_IMAGE, False)
+    assert ref == f"{DEFAULT_REGISTRY}/{DEFAULT_ORG}/{DEFAULT_IMAGE}:latest"
 
 
-def test_image_ref_versioned_tag_keeps_the_variant_suffix():
+def test_image_ref_versioned_tag_is_bare_semver():
     from scripts.cli.build_commands import (
         DEFAULT_IMAGE,
         DEFAULT_ORG,
@@ -723,10 +749,8 @@ def test_image_ref_versioned_tag_keeps_the_variant_suffix():
         _image_ref,
     )
 
-    ref = _image_ref(
-        "deep", "1.0.9", DEFAULT_REGISTRY, DEFAULT_ORG, DEFAULT_IMAGE, False
-    )
-    assert ref.endswith(":1.0.9-deep")
+    ref = _image_ref("1.0.9", DEFAULT_REGISTRY, DEFAULT_ORG, DEFAULT_IMAGE, False)
+    assert ref.endswith(f"/{DEFAULT_IMAGE}:1.0.9")
 
 
 def test_image_ref_local():
@@ -737,19 +761,18 @@ def test_image_ref_local():
         _image_ref,
     )
 
-    ref = _image_ref(
-        "slim", "latest", DEFAULT_REGISTRY, DEFAULT_ORG, DEFAULT_IMAGE, True
-    )
-    assert ref == f"{DEFAULT_IMAGE}:local-slim"
+    ref = _image_ref("latest", DEFAULT_REGISTRY, DEFAULT_ORG, DEFAULT_IMAGE, True)
+    assert ref == f"{DEFAULT_IMAGE}:local"
 
 
 def test_test_subparser_does_not_clobber_parent_flags():
-    """`jmo build --variant deep test` silently tested `balanced`.
+    """`jmo build --variant deep test` silently tested `balanced` (v1.x).
 
     argparse applies a subparser's defaults *after* the parent has parsed, so a
     subparser re-declaring a flag overwrites the value the user gave the
     parent. rc 0, no warning, the wrong image. `default=argparse.SUPPRESS`
-    leaves the attribute alone when the flag is absent.
+    leaves the attribute alone when the flag is absent; `--variant` is gone,
+    and the flags that remain are held to the same rule.
     """
     import sys as _sys
 
@@ -757,14 +780,13 @@ def test_test_subparser_does_not_clobber_parent_flags():
 
     saved = _sys.argv
     try:
-        _sys.argv = ["jmo", "build", "--variant", "deep", "test"]
-        args = parse_args()
-        assert args.build_command == "test"
-        assert args.variant == "deep"
-
         _sys.argv = ["jmo", "build", "--local", "test"]
         args = parse_args()
+        assert args.build_command == "test"
         assert args.local is True
+
+        _sys.argv = ["jmo", "build", "--registry", "example.io", "test"]
+        assert parse_args().registry == "example.io"
 
         _sys.argv = ["jmo", "build", "--tag", "1.0.9", "test"]
         assert parse_args().tag == "1.0.9"
@@ -773,16 +795,16 @@ def test_test_subparser_does_not_clobber_parent_flags():
 
 
 def test_explicit_subparser_flag_still_wins():
-    """The fix must not make `jmo build test --variant deep` a no-op."""
+    """The fix must not make `jmo build test --tag 1.0.9` a no-op."""
     import sys as _sys
 
     from scripts.cli.jmo import parse_args
 
     saved = _sys.argv
     try:
-        _sys.argv = ["jmo", "build", "test", "--variant", "deep"]
-        assert parse_args().variant == "deep"
+        _sys.argv = ["jmo", "build", "test", "--tag", "1.0.9"]
+        assert parse_args().tag == "1.0.9"
         _sys.argv = ["jmo", "build", "test"]
-        assert parse_args().variant == "balanced"
+        assert parse_args().tag == "latest"
     finally:
         _sys.argv = saved

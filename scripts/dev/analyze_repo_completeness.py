@@ -334,7 +334,6 @@ class RepositoryAnalyzer:
 
         # Known v1.0.0 config options
         expected_config_keys = [
-            "default_profile",
             "tools",
             "outputs",
             "fail_on",
@@ -342,7 +341,6 @@ class RepositoryAnalyzer:
             "threads",
             "email",  # v0.9.0
             "schedule",  # v0.9.0
-            "profiles",
             "per_tool",
             "deduplication",  # v1.0.0
         ]

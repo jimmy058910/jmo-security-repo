@@ -29,11 +29,7 @@ TOOL_INSTALL_HINTS = {
     "checkov": "Install: pip install checkov or see https://www.checkov.io/2.Basics/Installing%20Checkov.html",
     "hadolint": "Install: brew install hadolint (macOS) or see https://github.com/hadolint/hadolint#install",
     "nuclei": "Install: brew install nuclei (macOS) or see https://docs.projectdiscovery.io/tools/nuclei/install",
-    "bandit": "Install: pip install bandit",
-    "noseyparker": "Install: Docker image ghcr.io/praetorian-inc/noseyparker:latest",
     "zap": "Install: Docker image ghcr.io/zaproxy/zaproxy:stable",
-    "falco": "Install: See https://falco.org/docs/install-operate/installation/",
-    "afl++": "Install: brew install afl++ (macOS) or see https://aflplus.plus/#building-and-installing-afl",
 }
 
 
@@ -55,77 +51,11 @@ def _is_windows() -> bool:
     return os.name == "nt"
 
 
-def find_scancode_launcher(scancode_dir: Path) -> Path | None:
-    """The scancode-toolkit launcher inside an extracted release directory.
-
-    Pre-built releases extract to the directory root or to a nested
-    `scancode-toolkit-vX.Y.Z/`, and some formats put the launcher under
-    `bin/`. The Windows entry point is `scancode.bat` (#1091): the registry
-    names the tool `scancode`, and looking only for that name and `.exe` left
-    a complete extraction reported as "Extraction succeeded but tool not
-    detected". Same class as the trufflehog `.exe` omission that once made a
-    scanner silently inert.
-
-    One helper for both resolvers. `tool_manager._find_binary` used to carry
-    this walk privately while `find_tool` only tried
-    `~/.jmo/bin/scancode/scancode`, so the check and the scanner could answer
-    differently for the nested layout.
-    """
-    if not scancode_dir.is_dir():
-        return None
-    if sys.platform == "win32":
-        names: tuple[str, ...] = ("scancode.bat", "scancode", "scancode.exe")
-    else:
-        names = ("scancode", "scancode.exe")
-    roots = [scancode_dir]
-    try:
-        roots += sorted(
-            p
-            for p in scancode_dir.iterdir()
-            if p.is_dir() and p.name.startswith("scancode")
-        )
-    except OSError:
-        pass
-    for root in roots:
-        for location in (root, root / "bin"):
-            for name in names:
-                candidate = location / name
-                if not candidate.is_file():
-                    continue
-                if name == "scancode.bat" and not _scancode_bootstrapped(location):
-                    continue
-                return candidate
-    return None
-
-
-def _scancode_bootstrapped(extraction_dir: Path) -> bool:
-    """Whether `scancode.bat`'s first-run bootstrap has produced the venv script.
-
-    The wrapper creates `venv\\` on first run and then delegates to
-    `venv\\Scripts\\scancode`; until that exists it is a bootstrap, not a tool.
-    Measured (#1091): on native Windows the bootstrap fails inside upstream's
-    own configure.bat and the wrapper exits 1 with "'...venv\\Scripts\\scancode'
-    is not recognized" -- and the version probe never runs it (it reads
-    SCANCODE_VERSION, "running the binary can be slow"), so accepting the
-    `.bat` on its own reported a broken extraction as OK 32.5.0. That is the
-    silently-inert shape this project already paid for once with trufflehog.
-    """
-    for venv_root in (extraction_dir, extraction_dir.parent):
-        scripts = venv_root / "venv" / "Scripts"
-        if any(
-            (scripts / name).is_file()
-            for name in ("scancode.exe", "scancode.cmd", "scancode")
-        ):
-            return True
-    return False
-
-
 def _platform_launcher(directory: Path, stem: str) -> Path | None:
     """Return the launcher for `stem` that this platform can actually execute.
 
-    The Java-based tools ship a POSIX `.sh` and a Windows `.bat` **side by side
-    in the same directory** (`zap.sh`/`zap.bat`,
-    `dependency-check.sh`/`dependency-check.bat`). Picking by name alone gets
+    Java-based tools ship a POSIX `.sh` and a Windows `.bat` **side by side
+    in the same directory** (`zap.sh`/`zap.bat`). Picking by name alone gets
     the wrong one half the time.
 
     Handing Windows the `.sh` does not fail as "not found". `subprocess` raises
@@ -133,7 +63,8 @@ def _platform_launcher(directory: Path, stem: str) -> Path | None:
         [WinError 193] %1 is not a valid Win32 application
 
     which reads like a corrupt download rather than the wrong file - which is
-    why dependency-check's failure was not obvious from its message.
+    why the failure (first measured on dependency-check) was not obvious from
+    its message.
 
     On Windows a missing `.bat` returns None rather than falling back to the
     `.sh`. `unresolved` is an accounted state the reconciler understands; a
@@ -192,7 +123,7 @@ def find_tool(tool_name: str) -> str | None:
     # Then the interpreter's own script directory.
     #
     # `jmo tools install` runs pip against `sys.executable`, so a pip-backed tool
-    # lands next to the running interpreter -- `.venv/Scripts/bandit.exe` when
+    # lands next to the running interpreter -- `.venv/Scripts/<tool>.exe` when
     # invoked as `.venv/Scripts/python.exe -m scripts.cli.jmo`. That directory is
     # only on PATH if the venv was *activated*, and `jmo` is routinely run by
     # absolute path (make targets, CI, scheduled tasks) where it is not.
@@ -226,20 +157,6 @@ def find_tool(tool_name: str) -> str | None:
         if zap_launcher is not None:
             return str(zap_launcher)
 
-    # dependency-check launcher, same shape as zap.
-    if tool_name in ("dependency-check", "dependency-check.sh", "dependency-check.bat"):
-        dc_launcher = _platform_launcher(
-            jmo_bin / "dependency-check" / "bin", "dependency-check"
-        )
-        if dc_launcher is not None:
-            return str(dc_launcher)
-
-    # Lynis is cloned to ~/.jmo/bin/lynis/
-    if tool_name == "lynis":
-        lynis_path = jmo_bin / "lynis" / "lynis"
-        if lynis_path.exists():
-            return str(lynis_path)
-
     # yara ships as libyara bindings (the yara-python wheel), not as a CLI: the
     # installed artifact is a compiled extension exposing compile()/match(),
     # with no main() and no console script. JMo drives it through
@@ -260,13 +177,6 @@ def find_tool(tool_name: str) -> str | None:
     if tool_name == "yara" and importlib.util.find_spec("yara") is not None:
         return sys.executable
 
-    # scancode is an extracted release directory with its own launcher names
-    # and layouts; see find_scancode_launcher.
-    if tool_name == "scancode":
-        scancode_launcher = find_scancode_launcher(jmo_bin / "scancode")
-        if scancode_launcher is not None:
-            return str(scancode_launcher)
-
     # Generic check for tools in ~/.jmo/bin/{tool}/
     tool_in_subdir = jmo_bin / tool_name / tool_name
     if tool_in_subdir.exists():
@@ -277,7 +187,7 @@ def find_tool(tool_name: str) -> str | None:
     if direct_binary.exists() and direct_binary.is_file():
         return str(direct_binary)
 
-    # Windows: Check for .exe extension (tools like hadolint.exe, kubescape.exe)
+    # Windows: Check for .exe extension (tools like hadolint.exe, gosec.exe)
     if os.name == "nt":
         exe_binary = jmo_bin / f"{tool_name}.exe"
         if exe_binary.exists() and exe_binary.is_file():

@@ -98,7 +98,7 @@ tests/e2e/
 
 - A1: GitLab repo scan (requires GITLAB_TOKEN)
 - A2: K8s cluster scan (requires kubectl + cluster)
-- A3: Deep profile (all 28 tools, 40-70 min)
+- A3: Full scan with the default tool matrix (long-running)
 
 ### Dashboard Visual Tests
 
@@ -115,15 +115,15 @@ Run via `make test-e2e-visual` or `pytest tests/e2e/test_dashboard_visual.py -v`
 
 ### Docker Workflows (U9-U11, M5-M6, W3-W4)
 
-`test_docker_workflows.py` — Docker-based scanning (requires Docker):
+`test_docker_workflows.py` — Docker-based scanning with the one JMo image (requires Docker):
 
-- U9: Single repo - Docker full
-- U10: Single image - Docker full
-- U11: Multi-target - Docker slim
-- M5: Single repo - Docker full (macOS)
-- M6: Multi-target - Docker slim (macOS)
-- W3: Single repo - Docker full (Windows)
-- W4: Multi-target - Docker slim (Windows)
+- U9: Single repo - Docker
+- U10: Single image - Docker
+- U11: Multi-target - Docker
+- M5: Single repo - Docker (macOS)
+- M6: Multi-target - Docker (macOS)
+- W3: Single repo - Docker (Windows)
+- W4: Multi-target - Docker (Windows)
 
 ## Usage Examples
 
@@ -142,7 +142,8 @@ pytest tests/e2e/ -m docker -v
 # With custom targets via environment variables
 TEST_REPO=https://github.com/myorg/myrepo.git pytest tests/e2e/test_scan_workflows.py -k "U1" -v
 TEST_IMAGE=nginx:1.25 pytest tests/e2e/test_scan_workflows.py -k "U2" -v
-DOCKER_TAG=0.6.0-full pytest tests/e2e/test_docker_workflows.py -k "U9" -v
+# Test a local build instead of the released image
+JMO_DOCKER_REGISTRY=jmo-security-dev pytest tests/e2e/test_docker_workflows.py -k "U9" -v
 ```
 
 ## Validation
@@ -153,7 +154,7 @@ Each test validates:
 2. **Output files:** findings.json, SUMMARY.md, dashboard.html present
 3. **JSON schema:** CommonFinding v1.2.0 compliance
 4. **Findings count:** >= 1 finding for vulnerable targets
-5. **Performance:** Within profile time limits
+5. **Performance:** Within the test's time limit
 
 ## CI/CD Integration
 
@@ -171,7 +172,7 @@ For release readiness:
 - **>= 95% success rate** (24/25 tests passing)
 - **All Tier 1 tests pass** (U1, U2, U5, U9, U12)
 - **Zero CRITICAL issues** in test suite
-- **Performance within bounds:** fast <= 10min, balanced <= 20min, deep <= 60min
+- **Performance within bounds:** each test finishes inside its own timeout
 
 ## Troubleshooting
 
@@ -182,8 +183,8 @@ For release readiness:
 pytest tests/e2e/ -k "U1" -v -s
 
 # Verify tool installations
-jmo tools check --profile balanced
-jmo tools install --profile balanced
+jmo tools check
+jmo tools install
 ```
 
 ### Docker Issues

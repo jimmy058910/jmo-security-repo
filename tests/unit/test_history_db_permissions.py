@@ -64,7 +64,6 @@ class TestDatabaseFilePermissions:
         # Act: Store scan (this creates the database)
         scan_id = store_scan(
             results_dir=results_dir,
-            profile="fast",
             tools=["trivy"],
             db_path=db_path,
         )
@@ -132,7 +131,6 @@ class TestDatabaseFilePermissions:
         # Act: Store scan (should fix permissions)
         _ = store_scan(
             results_dir=results_dir,
-            profile="fast",
             tools=["trivy"],
             db_path=db_path,
         )

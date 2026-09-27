@@ -330,7 +330,6 @@ def cmd_trends_show(args) -> int:
         sys.stdout.write("Target Scan:\n")
         sys.stdout.write(f"  Timestamp: {scan['timestamp_iso'][:19]}\n")
         sys.stdout.write(f"  Branch:    {scan['branch'] or 'N/A'}\n")
-        sys.stdout.write(f"  Profile:   {scan['profile']}\n")
         sys.stdout.write(f"  Findings:  {scan['total_findings']} total\n")
         sys.stdout.write(
             f"             {scan['critical_count']} CRITICAL, {scan['high_count']} HIGH\n"

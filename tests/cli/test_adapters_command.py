@@ -22,7 +22,7 @@ import pytest
 
 from scripts.cli.jmo import main
 
-REAL_ADAPTER = "scripts/core/adapters/prowler_adapter.py"
+REAL_ADAPTER = "scripts/core/adapters/checkov_adapter.py"
 
 MINIMAL_ADAPTER = """
 from pathlib import Path
@@ -47,7 +47,7 @@ def _run(*argv: str) -> int:
 class TestAdaptersValidate:
     def test_accepts_a_real_adapter(self, capsys):
         assert _run("adapters", "validate", REAL_ADAPTER) == 0
-        assert "prowler" in capsys.readouterr().out
+        assert "checkov" in capsys.readouterr().out
 
     def test_accepts_an_adapter_written_to_a_temp_file(self, tmp_path):
         plugin = tmp_path / "fixture_tool_adapter.py"

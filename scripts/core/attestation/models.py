@@ -102,9 +102,7 @@ class BuildDefinition:
     """
 
     buildType: str  # URI identifying the build type (JMo scan type)
-    externalParameters: dict[
-        str, Any
-    ]  # User-provided parameters (profile, tools, targets)
+    externalParameters: dict[str, Any]  # User-provided parameters (tools, targets)
     internalParameters: dict[str, Any]  # JMo internal parameters (threads, timeout)
     resolvedDependencies: list[dict[str, Any]] = field(
         default_factory=list

@@ -374,7 +374,6 @@ def test_ci_orchestrator_passes_policy_args_to_report(tmp_path):
         timeout=600,
         threads=None,
         allow_missing_tools=False,
-        profile_name=None,
         log_level=None,
         human_logs=False,
         store_history=False,

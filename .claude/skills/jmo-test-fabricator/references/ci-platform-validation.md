@@ -10,7 +10,7 @@ Create CI/CD examples when:
 
 - Adding support for new CI platform (GitLab CI, Jenkins, CircleCI, etc.)
 - Documenting multi-target scanning workflows
-- Showing profile-based configuration in CI
+- Showing tool selection in CI (`--tools` / `--skip-tools`)
 - Demonstrating failure thresholds (--fail-on)
 
 ### GitLab CI Example Structure
@@ -18,7 +18,6 @@ Create CI/CD examples when:
 ```yaml
 # docs/examples/.gitlab-ci.yml
 variables:
-  JMO_PROFILE: "balanced"
   JMO_FAIL_ON: "HIGH"
 
 stages:
@@ -26,7 +25,7 @@ stages:
   - compliance
 
 .jmo_scan_template:
-  image: jimmy058910/jmo-security:slim
+  image: ghcr.io/jimmy058910/jmo-security:latest
   artifacts:
     when: always
     paths:
@@ -46,7 +45,7 @@ security:scan:
   extends: .jmo_scan_template
   stage: security
   script:
-    - jmo scan --repo . --profile-name ${JMO_PROFILE} --results-dir results
+    - jmo scan --repo . --results-dir results
     - jmo report results --fail-on ${JMO_FAIL_ON}
 ```
 
@@ -57,7 +56,7 @@ security:scan:
 pipeline {
     agent any
     environment {
-        JMO_IMAGE = 'jimmy058910/jmo-security:slim'
+        JMO_IMAGE = 'ghcr.io/jimmy058910/jmo-security:latest'
     }
     stages {
         stage('Security Scan') {
@@ -97,7 +96,7 @@ Quick example:
 **Key features:**
 
 - Docker-based scanning (zero installation)
-- Profile-based configuration
+- Tool selection with `--tools` / `--skip-tools`
 - Artifact archiving
 - Multi-target support
 ```
@@ -121,7 +120,7 @@ Create manual validation checklists for platform-specific testing.
 Create manual validation checklists for:
 
 - Platform-specific testing (WSL, macOS, Windows)
-- Docker variant testing (full/slim/alpine)
+- Docker image testing (the one image built from `Dockerfile`)
 - Installation validation (pip, Docker, native tools)
 - Performance comparison baselines
 
@@ -306,7 +305,7 @@ repos:
 
 ```python
 @pytest.mark.slow
-def test_deep_profile_full_scan(tmp_path):
-    """Complete deep profile scan (30-60s)."""
+def test_default_matrix_full_scan(tmp_path):
+    """Complete scan with every tool in the default matrix (30-60s)."""
     # Only runs in nightly CI, skipped in PR checks
 ```

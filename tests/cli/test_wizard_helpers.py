@@ -15,12 +15,12 @@ from unittest.mock import patch
 import pytest
 
 from scripts.cli.wizard import (
-    PROFILES,
     _safe_print,
     calculate_time_estimate,
     format_time_range,
 )
 from scripts.cli.wizard_flows.base_flow import PromptHelper
+from scripts.core.tool_registry import TOOL_MATRIX
 
 
 class TestCalculateTimeEstimate:
@@ -39,34 +39,24 @@ class TestCalculateTimeEstimate:
         assert max_time > min_time
 
     def test_single_slow_tool(self):
-        """Test time estimate for single slow tool (mobsf ~300s)."""
-        min_time, max_time = calculate_time_estimate(["mobsf"])
+        """Test time estimate for single slow tool (zap ~300s)."""
+        min_time, max_time = calculate_time_estimate(["zap"])
         assert min_time >= 100  # 300 * 0.6 = 180, but min should be reasonable
         assert max_time >= min_time
 
-    def test_fast_profile_tools(self):
-        """Test time estimate for fast profile tools."""
-        fast_tools = PROFILES["fast"]["tools"]
-        min_time, max_time = calculate_time_estimate(fast_tools)
-        # Fast profile should take roughly 5-10 minutes
-        assert 60 <= min_time <= 600  # 1-10 minutes min
+    def test_matrix_tools(self):
+        """Test time estimate for the whole tool matrix (the default scan)."""
+        min_time, max_time = calculate_time_estimate(list(TOOL_MATRIX))
+        # The matrix should take minutes, not seconds or hours
+        assert 60 <= min_time <= 3600
         assert max_time > min_time
 
-    def test_balanced_profile_tools(self):
-        """Test time estimate for balanced profile tools."""
-        balanced_tools = PROFILES["balanced"]["tools"]
-        min_time, max_time = calculate_time_estimate(balanced_tools)
-        # Balanced should take longer than fast
-        fast_min, _ = calculate_time_estimate(PROFILES["fast"]["tools"])
-        assert min_time >= fast_min
-
-    def test_deep_profile_tools(self):
-        """Test time estimate for deep profile tools."""
-        deep_tools = PROFILES["deep"]["tools"]
-        min_time, max_time = calculate_time_estimate(deep_tools)
-        # Deep should take longest
-        balanced_min, _ = calculate_time_estimate(PROFILES["balanced"]["tools"])
-        assert min_time >= balanced_min
+    def test_narrowed_tools_estimate_no_longer_than_matrix(self):
+        """A `--tools` subset of the matrix never estimates longer than it."""
+        subset_min, subset_max = calculate_time_estimate(["trufflehog", "semgrep"])
+        matrix_min, matrix_max = calculate_time_estimate(list(TOOL_MATRIX))
+        assert subset_min <= matrix_min
+        assert subset_max <= matrix_max
 
     def test_unknown_tool_uses_default(self):
         """Test that unknown tool uses default time estimate."""
@@ -84,13 +74,12 @@ class TestCalculateTimeEstimate:
         assert min_time > 0
         assert max_time > min_time
 
-    def test_all_profiles_have_estimates(self):
-        """Test that all defined profiles produce valid time estimates."""
-        for profile_name, profile_info in PROFILES.items():
-            tools = profile_info["tools"]
-            min_time, max_time = calculate_time_estimate(tools)
-            assert min_time >= 0, f"Profile {profile_name} has negative min_time"
-            assert max_time >= min_time, f"Profile {profile_name} has max < min"
+    def test_every_matrix_tool_has_a_valid_estimate(self):
+        """Test that every matrix tool alone produces a valid time estimate."""
+        for tool in TOOL_MATRIX:
+            min_time, max_time = calculate_time_estimate([tool])
+            assert min_time > 0, f"{tool} has a non-positive min_time"
+            assert max_time >= min_time, f"{tool} has max < min"
 
 
 class TestFormatTimeRange:

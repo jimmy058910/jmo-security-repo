@@ -80,21 +80,19 @@ def db_with_sample_scans(temp_db):
         conn.execute(
             """
             INSERT INTO scans (
-                id, timestamp, timestamp_iso, branch, profile,
-                jmo_version, tools, targets, target_type, total_findings,
+                id, timestamp, timestamp_iso, branch,
+                jmo_version, tools, targets, total_findings,
                 critical_count, high_count, medium_count, low_count, info_count
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 scan_id,
                 timestamp,
                 time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(timestamp)),
                 "main",
-                "balanced",
                 "1.0.0",
                 json.dumps(["trivy", "semgrep", "checkov"]),
                 json.dumps(["repo-test"]),  # targets
-                "repo",  # target_type
                 50 - (i * 5),  # Decreasing findings (trend improving)
                 5 - i,  # CRITICAL
                 10 - i,  # HIGH
@@ -183,21 +181,19 @@ def db_with_recurring_findings(temp_db):
         conn.execute(
             """
             INSERT INTO scans (
-                id, timestamp, timestamp_iso, branch, profile,
-                jmo_version, tools, targets, target_type, total_findings,
+                id, timestamp, timestamp_iso, branch,
+                jmo_version, tools, targets, total_findings,
                 critical_count, high_count, medium_count, low_count, info_count
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 scan_id,
                 timestamp,
                 time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(timestamp)),
                 "main",
-                "balanced",
                 "1.0.0",
                 json.dumps(["trivy", "semgrep"]),
                 json.dumps(["repo-recurring"]),  # targets
-                "repo",  # target_type
                 10,
                 2,
                 3,
@@ -424,20 +420,18 @@ class TestReactDashboardHelpers:
         conn.execute(
             """
             INSERT INTO scans (
-                id, timestamp, timestamp_iso, branch, profile,
-                jmo_version, tools, targets, target_type, total_findings
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                id, timestamp, timestamp_iso, branch,
+                jmo_version, tools, targets, total_findings
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 "scan-feature",
                 current_time,
                 "2025-01-01T00:00:00Z",
                 "feature/x",
-                "balanced",
                 "1.0.0",
                 json.dumps(["trivy"]),
                 json.dumps(["repo-test"]),
-                "repo",
                 1,
             ),
         )
@@ -754,21 +748,19 @@ class TestComplianceHelpers:
         conn.execute(
             """
             INSERT INTO scans (
-                id, timestamp, timestamp_iso, branch, profile,
-                jmo_version, tools, targets, target_type, total_findings,
+                id, timestamp, timestamp_iso, branch,
+                jmo_version, tools, targets, total_findings,
                 critical_count, high_count, medium_count, low_count, info_count
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 "single-scan",
                 int(time.time()),
                 time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 "main",
-                "balanced",
                 "1.0.0",
                 json.dumps(["trivy"]),
                 json.dumps(["repo-single"]),  # targets
-                "repo",  # target_type
                 10,
                 2,
                 3,

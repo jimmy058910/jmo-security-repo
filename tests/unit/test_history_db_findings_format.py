@@ -44,7 +44,6 @@ class TestFindingsFormatHandling:
         # Store scan (should succeed with list format)
         scan_id = store_scan(
             results_dir=results_dir,
-            profile="fast",
             tools=["test-tool"],
             db_path=db_path,
         )
@@ -112,7 +111,6 @@ class TestFindingsFormatHandling:
         # Store scan (should succeed with dict format)
         scan_id = store_scan(
             results_dir=results_dir,
-            profile="fast",
             tools=["test-tool"],
             db_path=db_path,
         )
@@ -146,7 +144,6 @@ class TestFindingsFormatHandling:
         # Store scan (should succeed with 0 findings)
         scan_id = store_scan(
             results_dir=results_dir,
-            profile="fast",
             tools=["test-tool"],
             db_path=db_path,
         )
@@ -185,7 +182,6 @@ class TestFindingsFormatHandling:
         # Store scan (should handle gracefully with 0 findings)
         scan_id = store_scan(
             results_dir=results_dir,
-            profile="fast",
             tools=["test-tool"],
             db_path=db_path,
         )

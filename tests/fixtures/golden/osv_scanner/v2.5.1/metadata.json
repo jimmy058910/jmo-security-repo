@@ -1,0 +1,15 @@
+{
+  "tool": "osv-scanner",
+  "version": "2.5.1",
+  "generated_at": "2026-09-12T20:53:43.787136+00:00",
+  "sample_dir": null,
+  "finding_count": 303,
+  "raw_output_hash": "31d529cf7834",
+  "binary_sha256": "25e42f5ef6711fd8c0fb45390972205891dd44c6bd02ac93f0f63e8e98d9bfb6",
+  "download_url": "https://github.com/google/osv-scanner/releases/download/v2.5.1/osv-scanner_windows_amd64.exe",
+  "target": {
+    "repository": "https://github.com/OWASP/NodeGoat",
+    "commit": "c5cb68a7084e4ae7dcc60e6a98768720a81841e8"
+  },
+  "command": "osv-scanner scan source -L package-lock.json --format sarif --output-file raw-output.json  (cwd: the NodeGoat checkout; queries api.osv.dev, so the count can only grow over time)"
+}

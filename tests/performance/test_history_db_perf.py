@@ -75,19 +75,17 @@ def test_store_scan_1000_findings_fast(
     conn.execute(
         """
         INSERT INTO scans (
-            id, timestamp, timestamp_iso, profile, tools, targets, target_type,
+            id, timestamp, timestamp_iso, tools, targets,
             total_findings, critical_count, high_count, medium_count, low_count, info_count,
             jmo_version
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             scan_id,
             timestamp_now,
             "2024-01-01T00:00:00Z",
-            "balanced",
             '["trivy", "semgrep"]',
             '["/test"]',
-            "repo",
             1000,
             100,
             200,
@@ -173,19 +171,17 @@ def test_batch_insert_10k_findings(tmp_path: Path, large_database: Path):
     conn.execute(
         """
         INSERT INTO scans (
-            id, timestamp, timestamp_iso, profile, tools, targets, target_type,
+            id, timestamp, timestamp_iso, tools, targets,
             total_findings, critical_count, high_count, medium_count, low_count, info_count,
             jmo_version
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             scan_id,
             int(time.time()),
             "2024-01-01T00:00:00Z",
-            "balanced",
             '["trivy"]',
             '["/test"]',
-            "repo",
             10000,
             1000,
             2000,
@@ -264,11 +260,6 @@ def test_index_usage_verified(large_database: Path):
             "name": "Query scans ordered by timestamp",
             "query": "SELECT * FROM scans ORDER BY timestamp DESC LIMIT 100",
             "expected_index": "idx_scans_timestamp",
-        },
-        {
-            "name": "Query scans by target_type",
-            "query": "SELECT * FROM scans WHERE target_type = 'repo' LIMIT 100",
-            "expected_index": "idx_scans_target_type",
         },
     ]
 
@@ -369,7 +360,6 @@ def test_benchmark_suite(tmp_path: Path, benchmark_findings: list[dict[str, Any]
     start = time.time()
     scan_id = store_scan(
         results_dir=results_dir,
-        profile="balanced",
         tools=["trivy"],
         db_path=db_path,
     )
@@ -382,19 +372,17 @@ def test_benchmark_suite(tmp_path: Path, benchmark_findings: list[dict[str, Any]
     conn.execute(
         """
         INSERT INTO scans (
-            id, timestamp, timestamp_iso, profile, tools, targets, target_type,
+            id, timestamp, timestamp_iso, tools, targets,
             total_findings, critical_count, high_count, medium_count, low_count, info_count,
             jmo_version
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             scan_id_2,
             timestamp_now,
             "2024-01-01T00:00:00Z",
-            "balanced",
             '["trivy"]',
             '["/test"]',
-            "repo",
             1000,
             100,
             200,

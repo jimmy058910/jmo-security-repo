@@ -3,7 +3,8 @@
 Tool smoke tests: verify tools complete within timeout and produce parseable output.
 
 These tests run each tool on the juice_shop_fixture and verify:
-1. Tool completes within configured timeout (catches hangs like cdxgen 9+ min)
+1. Tool completes within configured timeout (catches hangs; cdxgen, since
+   removed, once took 9+ min)
 2. Tool produces valid output that the adapter can parse
 3. Adapter returns at least some minimum expected findings
 
@@ -40,7 +41,7 @@ from typing import Any
 import pytest
 
 from scripts.core.plugin_loader import get_plugin_registry
-from scripts.core.tool_registry import PROFILE_TOOLS
+from scripts.core.tool_registry import POLICY_ENGINE, TOOL_MATRIX
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +114,7 @@ class ToolSmokeConfig:
     skip_reason: str | None = None  # Skip with this reason if set
 
 
-# Tool configurations for balanced profile smoke tests
+# Tool configurations for the smoke tests, keyed by the tools JMo installs
 # Command templates match the patterns used in scripts/cli/scan_jobs/repository_scanner.py
 # Each tool has a timeout based on expected runtime + safety margin
 SMOKE_TEST_CONFIGS: dict[str, ToolSmokeConfig] = {
@@ -230,52 +231,6 @@ SMOKE_TEST_CONFIGS: dict[str, ToolSmokeConfig] = {
         output_format="stdout",  # Checkov outputs to stdout, CLI captures it
         description="IaC scanner",
     ),
-    "horusec": ToolSmokeConfig(
-        name="horusec",
-        timeout=240,
-        min_findings=0,  # Findings vary - just check tool runs
-        command_template=[
-            "horusec",
-            "start",
-            "-p",
-            "{target}",
-            "-o",
-            "json",
-            "-O",
-            "{output}",
-            "-D",  # Disable docker tools for faster execution
-        ],
-        description="Multi-language SAST",
-    ),
-    "kubescape": ToolSmokeConfig(
-        name="kubescape",
-        timeout=120,
-        min_findings=0,  # Findings vary - just check tool runs
-        command_template=[
-            "kubescape",
-            "scan",
-            "{target}/k8s-deployment.yaml",
-            "--format",
-            "json",
-            "--output",
-            "{output}",
-        ],
-        description="Kubernetes security scanner",
-    ),
-    "prowler": ToolSmokeConfig(
-        name="prowler",
-        timeout=180,
-        min_findings=0,  # May not find issues without AWS credentials
-        command_template=[
-            "prowler",
-            "--output-formats",
-            "json",
-            "--output-directory",
-            "{output_dir}",
-        ],
-        description="Cloud security scanner",
-        skip_reason="Requires cloud credentials",
-    ),
     "gosec": ToolSmokeConfig(
         name="gosec",
         timeout=120,
@@ -288,35 +243,6 @@ SMOKE_TEST_CONFIGS: dict[str, ToolSmokeConfig] = {
         ],
         description="Go security scanner",
         skip_reason="No Go code in juice-shop fixture",
-    ),
-    "scancode": ToolSmokeConfig(
-        name="scancode",
-        timeout=240,
-        min_findings=5,  # License detection
-        command_template=[
-            "scancode",
-            "--license",
-            "--copyright",
-            "--json-pp",
-            "{output}",
-            "{target}",
-        ],
-        description="License scanner",
-        skip_reason="Complex installation on Windows - requires isolated venv",
-    ),
-    "cdxgen": ToolSmokeConfig(
-        name="cdxgen",
-        timeout=180,  # With optimizations, should complete in <3 min
-        min_findings=1,  # SBOM should have at least one component
-        command_template=[
-            "cdxgen",
-            "--no-install-deps",  # Don't install dependencies (major speedup)
-            "--required-only",  # Only required deps, skip optional/dev
-            "-o",
-            "{output}",
-            "{target}",
-        ],
-        description="CycloneDX SBOM generator",
     ),
     "zap": ToolSmokeConfig(
         name="zap",
@@ -486,8 +412,8 @@ def parse_with_adapter(tool_name: str, output_file: Path) -> list[dict[str, Any]
         raise ValueError(f"Adapter {tool_name} has no parse method")
 
 
-# Get tools in balanced profile for parametrization
-BALANCED_TOOLS = PROFILE_TOOLS.get("balanced", [])
+# The tools `jmo tools install` installs: the scanners plus the policy engine
+SMOKE_TOOLS = [*TOOL_MATRIX, POLICY_ENGINE]
 
 
 @pytest.fixture
@@ -509,10 +435,10 @@ def smoke_output_dir(tmp_path: Path) -> Path:
 @pytest.mark.smoke
 @pytest.mark.requires_tools
 class TestToolSmoke:
-    """Smoke tests for security tools in the balanced profile."""
+    """Smoke tests for the tools JMo installs."""
 
     @pytest.mark.timeout(300)  # Global timeout safety net
-    @pytest.mark.parametrize("tool_name", BALANCED_TOOLS)
+    @pytest.mark.parametrize("tool_name", SMOKE_TOOLS)
     def test_tool_completes_and_produces_output(
         self, tool_name: str, juice_shop_fixture: Path, smoke_output_dir: Path
     ):
@@ -520,12 +446,12 @@ class TestToolSmoke:
         Smoke test: tool runs within timeout and produces parseable output.
 
         This test catches:
-        - Tools that hang (e.g., cdxgen taking 9+ minutes)
+        - Tools that hang (cdxgen, since removed, once took 9+ minutes)
         - Tools that crash or produce invalid output
         - Adapter parsing failures
 
         Args:
-            tool_name: Name of tool from balanced profile
+            tool_name: Name of a tool JMo installs
             juice_shop_fixture: Path to test fixture
             smoke_output_dir: Temporary output directory
         """
@@ -580,7 +506,7 @@ class TestToolSmoke:
         "tool_name",
         [
             t
-            for t in BALANCED_TOOLS
+            for t in SMOKE_TOOLS
             if t in SMOKE_TEST_CONFIGS and not SMOKE_TEST_CONFIGS[t].skip_reason
         ],
     )
@@ -681,16 +607,20 @@ class TestSmokeTestInfrastructure:
         if missing:
             pytest.fail(f"Missing fixture files: {missing}")
 
-    def test_all_balanced_tools_have_config(self):
-        """Verify all balanced profile tools have smoke test configs."""
+    def test_all_matrix_tools_have_config(self):
+        """Verify every tool JMo installs has a smoke test config."""
         missing = []
-        for tool in BALANCED_TOOLS:
+        for tool in SMOKE_TOOLS:
             if tool not in SMOKE_TEST_CONFIGS:
                 missing.append(tool)
 
         # This is informational, not a failure (some tools may not be testable)
         if missing:
             logger.warning(f"Tools without smoke configs: {missing}")
+
+        # The reverse direction is a failure: a config for a tool JMo no longer
+        # installs is dead configuration that reads as coverage.
+        assert sorted(set(SMOKE_TEST_CONFIGS) - set(SMOKE_TOOLS)) == []
 
     def test_configs_have_reasonable_timeouts(self):
         """Verify timeout values are within reasonable bounds."""
@@ -706,7 +636,7 @@ if __name__ == "__main__":
     print("Tool Smoke Test Configuration")
     print("=" * 60)
 
-    for tool_name in BALANCED_TOOLS:
+    for tool_name in SMOKE_TOOLS:
         config = SMOKE_TEST_CONFIGS.get(tool_name)
         available = tool_available(tool_name) if config else False
 

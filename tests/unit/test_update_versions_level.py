@@ -40,29 +40,32 @@ _LEVEL_INCLUDES = update_versions._LEVEL_INCLUDES
 
 
 # Representative mixed-bump fixture covering every classification outcome.
-# Each entry maps tool name to (current, latest, is_outdated).
+# Each entry maps tool name to (current, latest, is_outdated). The names are
+# only keys; the version shapes are what the classifier sees. The 0.x-major and
+# unknown shapes are the real cases that motivated the filter (falco's 0.0.0
+# placeholder and akto's mini-testing-X, both tools removed in v2.0.0).
 MIXED_RESULTS: dict[str, tuple[str, str, bool]] = {
-    "bandit": ("1.9.3", "1.9.4", True),  # patch
+    "hadolint": ("1.9.3", "1.9.4", True),  # patch
     "semgrep": ("1.151.0", "1.159.0", True),  # minor
-    "kubescape": ("3.0.47", "4.0.5", True),  # major
-    "falco": ("0.0.0", "0.43.1", True),  # major (0.x)
-    "akto": ("mini-testing-1.53.7", "1.98.0", True),  # unknown
+    "trivy": ("3.0.47", "4.0.5", True),  # major
+    "grype": ("0.0.0", "0.43.1", True),  # major (0.x)
+    "shellcheck": ("mini-testing-1.53.7", "1.98.0", True),  # unknown
     "ruff": ("0.6.0", "0.6.0", False),  # up-to-date — always skipped
 }
 
 # critical flag layout mirroring versions.yaml structure (category → tool → info).
 MIXED_VERSIONS: dict = {
     "python_tools": {
-        "bandit": {"version": "1.9.3", "critical": False},
         "semgrep": {"version": "1.151.0", "critical": True},
         "ruff": {"version": "0.6.0", "critical": False},
     },
     "binary_tools": {
-        "kubescape": {"version": "3.0.47", "critical": True},
-        "falco": {"version": "0.0.0", "critical": False},
+        "hadolint": {"version": "1.9.3", "critical": False},
+        "trivy": {"version": "3.0.47", "critical": True},
+        "grype": {"version": "0.0.0", "critical": False},
     },
     "special_tools": {
-        "akto": {"version": "mini-testing-1.53.7", "critical": False},
+        "shellcheck": {"version": "mini-testing-1.53.7", "critical": False},
     },
 }
 
@@ -74,10 +77,10 @@ def _tool_names(selected: list[tuple[str, str, str]]) -> set[str]:
 @pytest.mark.parametrize(
     ("level", "expected_selected"),
     [
-        ("patch", {"bandit"}),
-        ("minor", {"bandit", "semgrep"}),
-        ("major", {"bandit", "semgrep", "kubescape", "falco"}),
-        ("all", {"bandit", "semgrep", "kubescape", "falco", "akto"}),
+        ("patch", {"hadolint"}),
+        ("minor", {"hadolint", "semgrep"}),
+        ("major", {"hadolint", "semgrep", "trivy", "grype"}),
+        ("all", {"hadolint", "semgrep", "trivy", "grype", "shellcheck"}),
     ],
 )
 def test_select_tools_by_level_cumulative(
@@ -98,9 +101,9 @@ def test_select_tools_excludes_unknown_even_at_major() -> None:
     to_update, skipped = _select_tools_for_update(
         MIXED_RESULTS, MIXED_VERSIONS, critical_only=False, level="major"
     )
-    assert "akto" not in _tool_names(to_update)
+    assert "shellcheck" not in _tool_names(to_update)
     skipped_names = {name for name, *_ in skipped}
-    assert "akto" in skipped_names
+    assert "shellcheck" in skipped_names
 
 
 def test_select_tools_critical_only_narrows_after_level() -> None:
@@ -108,11 +111,11 @@ def test_select_tools_critical_only_narrows_after_level() -> None:
     to_update, skipped = _select_tools_for_update(
         MIXED_RESULTS, MIXED_VERSIONS, critical_only=True, level="all"
     )
-    # Only semgrep and kubescape are critical in the fixture.
-    assert _tool_names(to_update) == {"semgrep", "kubescape"}
+    # Only semgrep and trivy are critical in the fixture.
+    assert _tool_names(to_update) == {"semgrep", "trivy"}
     # Non-critical tools should appear in skipped with reason "non-critical".
     skipped_map = {name: reason for name, _, _, reason in skipped}
-    assert skipped_map.get("bandit") == "non-critical"
+    assert skipped_map.get("hadolint") == "non-critical"
 
 
 def test_select_tools_rejects_invalid_level() -> None:

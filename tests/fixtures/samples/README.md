@@ -14,14 +14,14 @@ These samples serve as **static test targets** that produce deterministic, repro
 
 ```text
 samples/
-├── python-vulnerable/     # Python security issues (Bandit, Semgrep)
+├── python-vulnerable/     # Python security issues (Semgrep)
 │   ├── vulnerable_app.py  # SAST findings (SQL injection, RCE, etc.)
 │   └── requirements.txt   # CVE-affected dependencies (Trivy, Grype)
 ├── dockerfile-issues/     # Dockerfile best practices (Hadolint, Trivy)
 │   └── Dockerfile         # Missing healthcheck, running as root, etc.
 ├── terraform-misconfig/   # IaC misconfigurations (Checkov, Trivy)
 │   └── main.tf           # S3 public access, open security groups, etc.
-├── credential-patterns/       # Secret detection (TruffleHog, Semgrep secrets)
+├── credential-patterns/       # Secret detection (TruffleHog, Trivy)
 │   └── config.py         # Fake AWS keys, tokens, passwords
 └── shell-issues/          # Shell script issues (ShellCheck)
     └── vulnerable_script.sh  # Quoting, word splitting, unsafe patterns
@@ -37,10 +37,10 @@ All code in this directory contains deliberate security vulnerabilities, misconf
 
 | Sample Directory | Tools That Should Find Issues |
 |-----------------|------------------------------|
-| python-vulnerable/ | Bandit, Semgrep, Trivy (CVEs), Grype |
+| python-vulnerable/ | Semgrep, Trivy (CVEs), Grype |
 | dockerfile-issues/ | Hadolint, Trivy (misconfig) |
 | terraform-misconfig/ | Checkov, Trivy (config) |
-| credential-patterns/ | TruffleHog, Semgrep secrets, Trivy (secrets) |
+| credential-patterns/ | TruffleHog, Trivy (secrets) |
 | shell-issues/ | ShellCheck |
 
 ## Usage

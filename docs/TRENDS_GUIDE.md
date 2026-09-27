@@ -66,10 +66,10 @@ Trend analysis requires at least 2 scans stored in history database:
 
 ```bash
 # First scan (baseline)
-jmo scan --repo ./myapp --profile balanced --store-history
+jmo scan --repo ./myapp --store-history
 
 # Make changes, then run second scan
-jmo scan --repo ./myapp --profile balanced --store-history
+jmo scan --repo ./myapp --store-history
 
 # Analyze trends
 jmo trends analyze
@@ -79,10 +79,10 @@ jmo trends analyze
 
 ```bash
 # 1. Run initial baseline scan
-jmo scan --repo ./myapp --profile balanced --store-history
+jmo scan --repo ./myapp --store-history
 
 # 2. Run periodic scans (daily/weekly)
-jmo scan --repo ./myapp --profile balanced --store-history
+jmo scan --repo ./myapp --store-history
 
 # 3. View trend analysis
 jmo trends analyze
@@ -152,7 +152,6 @@ jmo trends analyze --export grafana --export-file dashboard.json
 Analysis Period: 2025-10-01 to 2025-11-05 (35 days)
 Scans Analyzed: 12
 Branch: main
-Profile: balanced
 
 --------------------------------------------------------------------
 Severity Trends (Mann-Kendall Test, alpha=0.05)
@@ -485,9 +484,9 @@ jmo trends analyze --export csv --export-file trends.csv
 **CSV Structure:**
 
 ```csv
-scan_id,timestamp,branch,profile,critical,high,medium,low,info,total,score,grade
-abc123,2025-11-05T14:30:15,main,balanced,2,10,20,30,5,67,78,C
-def456,2025-11-04T08:45:33,main,balanced,3,12,22,32,8,77,65,D
+scan_id,timestamp,branch,critical,high,medium,low,info,total,score,grade
+abc123,2025-11-05T14:30:15,main,2,10,20,30,5,67,78,C
+def456,2025-11-04T08:45:33,main,3,12,22,32,8,77,65,D
 ```
 
 ---
@@ -505,17 +504,17 @@ jmo trends analyze --export prometheus --export-file metrics.prom
 ```prometheus
 # HELP jmo_scan_findings_total Total findings by severity
 # TYPE jmo_scan_findings_total gauge
-jmo_scan_findings_total{severity="critical",branch="main",profile="balanced"} 2
-jmo_scan_findings_total{severity="high",branch="main",profile="balanced"} 10
-jmo_scan_findings_total{severity="medium",branch="main",profile="balanced"} 20
+jmo_scan_findings_total{severity="critical",branch="main"} 2
+jmo_scan_findings_total{severity="high",branch="main"} 10
+jmo_scan_findings_total{severity="medium",branch="main"} 20
 
 # HELP jmo_security_score Security posture score (0-100)
 # TYPE jmo_security_score gauge
-jmo_security_score{branch="main",profile="balanced"} 78
+jmo_security_score{branch="main"} 78
 
 # HELP jmo_scan_duration_seconds Scan duration in seconds
 # TYPE jmo_scan_duration_seconds gauge
-jmo_scan_duration_seconds{branch="main",profile="balanced"} 245.2
+jmo_scan_duration_seconds{branch="main"} 245.2
 ```
 
 **Grafana Query Examples:**
@@ -576,8 +575,7 @@ jmo trends analyze --export dashboard --export-file dashboard.json
   "summary": {
     "scan_count": 12,
     "date_range": ["2025-10-01", "2025-11-05"],
-    "branch": "main",
-    "profile": "balanced"
+    "branch": "main"
   },
   "current_scan": {
     "scan_id": "abc123",
@@ -667,7 +665,7 @@ jobs:
 
       - name: Run security scan
         run: |
-          jmo scan --repo . --profile balanced --store-history
+          jmo scan --repo . --store-history
 
       - name: Analyze trends
         run: |
@@ -703,7 +701,7 @@ jobs:
 security_trends:
   stage: security
   script:
-    - jmo scan --repo . --profile balanced --store-history --db scans.db
+    - jmo scan --repo . --store-history --db scans.db
     - jmo trends analyze --db scans.db --format html --output trends.html
     - jmo trends regressions --db scans.db
     - jmo trends score --db scans.db
@@ -735,7 +733,7 @@ docker run --rm \
   -v $PWD:/scan:ro \
   -v $PWD/.jmo:/scan/.jmo \
   jmo-security:latest \
-  scan --repo /scan --profile balanced --store-history
+  scan --repo /scan --store-history
 
 # Analyze trends
 docker run --rm \
@@ -756,7 +754,7 @@ See [docker-compose.trends.yml](examples/docker-compose.trends.yml) for complete
 |----------|----------------|
 | **Regular Scanning** | Run scans at consistent intervals (daily/weekly) for reliable trend detection |
 | **Minimum Scans** | Need at least 5-7 scans for statistically meaningful trends |
-| **Consistent Profiles** | Use same profile (balanced vs balanced) for trend comparisons |
+| **Consistent Tool Sets** | Compare scans run with the same tools (the same `--tools` or `jmo.yml` `tools:` list) |
 | **Branch Strategy** | Track trends separately per branch (main, staging, dev) |
 | **CI/CD Cache** | Use GitHub Actions cache or GitLab artifacts to persist history database |
 | **Export Metrics** | Push Prometheus metrics to monitoring systems for alerting |
@@ -774,9 +772,9 @@ See [docker-compose.trends.yml](examples/docker-compose.trends.yml) for complete
 
 ```bash
 # Solution
-jmo scan --repo ./myapp --profile balanced --store-history
+jmo scan --repo ./myapp --store-history
 # ... make changes ...
-jmo scan --repo ./myapp --profile balanced --store-history
+jmo scan --repo ./myapp --store-history
 jmo trends analyze
 ```
 
@@ -803,7 +801,7 @@ docker run --rm \
 
 - **Cause:** Statistical significance threshold (p < 0.05) not met
 - **Explanation:** Changes may be real but not statistically significant due to high variance or small sample size
-- **Fix:** Accumulate more scans (10-15+) or reduce variance by using consistent scan profiles
+- **Fix:** Accumulate more scans (10-15+) or reduce variance by scanning with a consistent tool set
 
 ### Issue: Developer attribution showing "unknown"
 

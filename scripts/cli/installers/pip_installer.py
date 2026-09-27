@@ -4,8 +4,8 @@ This module provides two concrete installer implementations:
 - PipInstaller: For standard pip packages installed globally
 - IsolatedPipInstaller: For packages with dependency conflicts that need isolated venvs
 
-The isolation strategy is critical for tools like semgrep/prowler that have
-conflicting pydantic version requirements (v2 vs v1).
+The isolation strategy keeps the pinned dependencies of tools like semgrep and
+checkov out of JMo's own environment.
 """
 
 from __future__ import annotations
@@ -379,11 +379,8 @@ class PipInstaller(BaseInstaller):
 class IsolatedPipInstaller(BaseInstaller):
     """Installer for pip packages in isolated venvs.
 
-    Used for tools with dependency conflicts that cannot coexist in the same
-    Python environment:
-    - prowler (needs pydantic<2)
-    - semgrep (needs pydantic>=2)
-    - checkov (needs pydantic>=2)
+    Used for the tools in ISOLATED_TOOLS (semgrep, checkov), whose pinned
+    dependencies must not reach JMo's own Python environment.
 
     Each tool gets its own venv at ~/.jmo/tools/venvs/<tool_name>/ to prevent
     conflicts. The tool executable is found via get_isolated_tool_path().
@@ -458,14 +455,14 @@ class IsolatedPipInstaller(BaseInstaller):
     ) -> InstallResult:
         """Install a tool in an isolated virtual environment.
 
-        Used for tools with known dependency conflicts (e.g., prowler/checkov
-        pydantic conflict) that cannot be installed in the same environment.
+        Used for the tools in ISOLATED_TOOLS, whose pinned dependencies must
+        not reach JMo's own environment.
 
         The isolated venv is created at ~/.jmo/tools/venvs/<tool_name>/
 
         Args:
             tool_name: Name of the tool
-            package_spec: Pip package specification (e.g., "prowler==5.16.0")
+            package_spec: Pip package specification (e.g., "semgrep==1.175.0")
 
         Returns:
             InstallResult with success status and details

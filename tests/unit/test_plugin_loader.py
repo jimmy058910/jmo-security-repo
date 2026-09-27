@@ -4,7 +4,7 @@ Tests cover:
 - PluginRegistry: Basic registration and lookup
 - PluginLoader: Lazy loading and hot-reload
 - LazyPluginRegistry: On-demand adapter loading
-- Global functions: preload_profile, get_available_adapters
+- Global functions: get_available_adapters
 """
 
 import time
@@ -463,14 +463,8 @@ class CachedAdapter(AdapterPlugin):
         registry = PluginRegistry()
         loader = PluginLoader(registry)
 
-        # Test special mappings
-        assert loader._tool_to_adapter_name("afl++") == "aflplusplus"
-        assert loader._tool_to_adapter_name("dependency-check") == "dependency_check"
-        assert loader._tool_to_adapter_name("semgrep-secrets") == "semgrep_secrets"
-        assert loader._tool_to_adapter_name("trivy-rbac") == "trivy_rbac"
-        assert loader._tool_to_adapter_name("checkov-cicd") == "checkov"
-
-        # Test generic hyphen-to-underscore conversion
+        # Hyphens become underscores; no tool is special-cased any more
+        assert loader._tool_to_adapter_name("osv-scanner") == "osv_scanner"
         assert loader._tool_to_adapter_name("some-tool") == "some_tool"
 
         # Test names without hyphens pass through
@@ -566,54 +560,6 @@ class Available2Adapter(AdapterPlugin):
         all_available = registry.list_all_available()
         assert "available1" in all_available
         assert "available2" in all_available
-
-
-class TestPreloadProfile:
-    """Test profile preloading functionality."""
-
-    def test_preload_unknown_profile(self):
-        """Test preloading an unknown profile."""
-        registry = PluginRegistry()
-        loader = PluginLoader(registry)
-        loader.search_paths = []
-
-        count = loader.preload_profile("nonexistent_profile")
-        assert count == 0
-
-    def test_preload_profile_loads_adapters(self, tmp_path, monkeypatch):
-        """Test that preload_profile loads adapters for the profile."""
-        registry = PluginRegistry()
-        loader = PluginLoader(registry)
-
-        # Create plugin directory with adapters matching "fast" profile
-        plugin_dir = tmp_path / "adapters"
-        plugin_dir.mkdir()
-
-        # Create some adapters that match the fast profile
-        for tool_name in ["trivy", "semgrep", "syft"]:
-            (plugin_dir / f"{tool_name}_adapter.py").write_text(f"""
-from pathlib import Path
-from scripts.core.plugin_api import AdapterPlugin, PluginMetadata, adapter_plugin
-
-@adapter_plugin(PluginMetadata(name="{tool_name}", version="1.0.0"))
-class {tool_name.title()}Adapter(AdapterPlugin):
-    @property
-    def metadata(self):
-        return self.__class__._plugin_metadata
-
-    def parse(self, output_path: Path):
-        return []
-""")
-
-        loader.search_paths = [plugin_dir]
-
-        # Preload fast profile
-        count = loader.preload_profile("fast")
-
-        # Should have loaded at least some adapters
-        assert count >= 3
-        assert "trivy" in registry.list_plugins()
-        assert "semgrep" in registry.list_plugins()
 
 
 class TestGlobalFunctions:

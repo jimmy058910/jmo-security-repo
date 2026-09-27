@@ -56,18 +56,6 @@ class CICDFlow(BaseWizardFlow):
         # Display detected CI/CD files
         self._print_detected_pipelines(self.detected_targets)
 
-        # Use fast profile for CI/CD by default
-        self.prompter.print_info(
-            "Recommended: 'fast' profile for CI/CD pipelines (5-8 minutes)"
-        )
-        profile = self.prompter.prompt_choice(
-            "Select scan profile:",
-            # curated-profile-subset: CI/CD needs a short feedback loop, so
-            # `deep` (40-70 min) is deliberately not offered here.
-            choices=["fast", "balanced"],
-            default="fast",
-        )
-
         # Scan pipeline files
         scan_pipeline_files = self.prompter.prompt_yes_no(
             "\nScan pipeline files for secrets and misconfigurations?", default=True
@@ -100,7 +88,6 @@ class CICDFlow(BaseWizardFlow):
         )
 
         return {
-            "profile": profile,
             "scan_files": scan_pipeline_files,
             "scan_images": scan_pipeline_images,
             "check_permissions": check_permissions,
@@ -148,8 +135,6 @@ class CICDFlow(BaseWizardFlow):
         cmd = [
             "jmo",
             "ci",
-            "--profile-name",
-            options["profile"],
             "--fail-on",
             "HIGH",  # Fail on high severity in CI/CD
         ]

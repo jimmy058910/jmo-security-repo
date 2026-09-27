@@ -2,7 +2,7 @@
 REM JMo Security Docker Wrapper for Windows
 REM Automatically handles Git Bash MSYS path conversion issues
 REM
-REM Usage: jmo-docker scan --repo /scan --profile fast
+REM Usage: jmo-docker scan --repo /scan
 REM        jmo-docker wizard
 REM        jmo-docker --help
 REM

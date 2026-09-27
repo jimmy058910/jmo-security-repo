@@ -11,7 +11,7 @@ Usage:
 
 from __future__ import annotations
 
-from tests.conftest import windows_only
+from tests.conftest import assert_no_jmo_traceback, windows_only
 
 # Every `scan` below pins `--tools` to one cheap, network-free scanner.
 #
@@ -20,7 +20,7 @@ from tests.conftest import windows_only
 # invalid path", or "returncode in (0, 1)", so the tool list is irrelevant to
 # all of them.
 #
-# Left unpinned they invoke the whole default profile, including
+# Left unpinned they invoke the whole default tool matrix, including
 # `semgrep --config auto`, which fetches its rule registry over the network.
 # That is minutes against `jmo_runner`'s 120 s budget, and pytest-timeout's
 # Windows thread method kills the test thread but not the child, so the xdist
@@ -33,7 +33,7 @@ from tests.conftest import windows_only
 # The file already applies this same fix to its non-scan commands -- `--version`
 # rather than `tools check`, `tools debug <one>` rather than `tools check`. The
 # scanning tests were simply never given the same treatment.
-CHEAP_TOOLS = ["--tools", "bandit"]
+CHEAP_TOOLS = ["--tools", "shellcheck"]
 
 
 def test_every_scan_invocation_pins_its_tool_list():
@@ -44,7 +44,7 @@ def test_every_scan_invocation_pins_its_tool_list():
     it is written, not on whichever machine happens to be slow that day.
 
     One missing pin brings the whole failure mode back: that call site runs the
-    full default profile, `semgrep --config auto` fetches its rule registry over
+    full default tool matrix, `semgrep --config auto` fetches its rule registry over
     the network, and the xdist worker times out. Measured across the fix:
     177-393 s with 0-10 failures before, ~15 s with 0 failures over three
     consecutive runs after.
@@ -74,7 +74,7 @@ def test_every_scan_invocation_pins_its_tool_list():
     ]
     assert not unpinned, (
         "these scan invocations do not pin --tools, so they will invoke the "
-        f"whole default profile (#833): {unpinned}"
+        f"whole default tool matrix (#833): {unpinned}"
     )
 
 
@@ -133,7 +133,7 @@ class TestWindowsPathHandling:
         )
 
         combined = result.stdout.lower() + result.stderr.lower()
-        assert "traceback" not in combined
+        assert_no_jmo_traceback(combined)
 
     def test_drive_letter_paths(self, jmo_runner, tmp_path):
         """Verify drive letter paths work correctly."""
@@ -158,7 +158,7 @@ class TestWindowsPathHandling:
         )
 
         combined = result.stdout.lower() + result.stderr.lower()
-        assert "traceback" not in combined
+        assert_no_jmo_traceback(combined)
 
     def test_paths_with_spaces(self, jmo_runner, tmp_path):
         """Verify paths with spaces work on Windows."""
@@ -180,7 +180,7 @@ class TestWindowsPathHandling:
         )
 
         combined = result.stdout.lower() + result.stderr.lower()
-        assert "traceback" not in combined
+        assert_no_jmo_traceback(combined)
 
     def test_paths_with_special_chars(self, jmo_runner, tmp_path):
         """Verify paths with special characters work on Windows."""
@@ -203,7 +203,7 @@ class TestWindowsPathHandling:
         )
 
         combined = result.stdout.lower() + result.stderr.lower()
-        assert "traceback" not in combined
+        assert_no_jmo_traceback(combined)
 
     def test_long_paths(self, jmo_runner, tmp_path):
         """Verify long paths work on Windows (260+ chars).
@@ -246,7 +246,7 @@ class TestWindowsPathHandling:
 
         # May fail due to path length but shouldn't crash
         combined = result.stdout.lower() + result.stderr.lower()
-        assert "traceback" not in combined
+        assert_no_jmo_traceback(combined)
 
 
 @windows_only
@@ -280,7 +280,7 @@ class TestWindowsEnvironment:
 
         # Should work with Windows PATH
         combined = result.stdout.lower() + result.stderr.lower()
-        assert "traceback" not in combined
+        assert_no_jmo_traceback(combined)
 
 
 @windows_only
@@ -311,7 +311,7 @@ class TestWindowsFileOperations:
 
         # Should handle locked file gracefully
         combined = result.stdout.lower() + result.stderr.lower()
-        assert "traceback" not in combined
+        assert_no_jmo_traceback(combined)
 
     def test_history_db_in_appdata(self, jmo_runner, monkeypatch, tmp_path):
         """Verify history database uses AppData on Windows."""
@@ -331,14 +331,14 @@ class TestWindowsToolDiscovery:
 
     def test_exe_extension_handling(self, jmo_runner):
         """Verify .exe extension is handled in tool discovery."""
-        # Use single-tool debug (fast) instead of full tools check (scans 28+ tools, >60s)
+        # Use single-tool debug (fast) instead of full tools check (checks every TOOL_MATRIX tool, >60s)
         result = jmo_runner(["tools", "debug", "trivy"], timeout=30)
 
         # Should find tool whether it has .exe or not
         assert result.returncode in (0, 1)
         # Should complete without crashing
         combined = result.stdout.lower() + result.stderr.lower()
-        assert "traceback" not in combined
+        assert_no_jmo_traceback(combined)
 
     def test_tool_path_with_program_files(self, jmo_runner, tmp_path):
         """Verify tools in Program Files are discovered."""
@@ -347,7 +347,7 @@ class TestWindowsToolDiscovery:
 
         # Should complete and show path info
         combined = result.stdout.lower() + result.stderr.lower()
-        assert "traceback" not in combined
+        assert_no_jmo_traceback(combined)
 
 
 @windows_only
@@ -416,7 +416,7 @@ class TestWindowsSubprocessHandling:
 
         # Should not allow command injection
         combined = result.stdout.lower() + result.stderr.lower()
-        assert "traceback" not in combined
+        assert_no_jmo_traceback(combined)
 
     def test_timeout_handling(self, jmo_runner, tmp_path):
         """Verify timeout handling works on Windows."""

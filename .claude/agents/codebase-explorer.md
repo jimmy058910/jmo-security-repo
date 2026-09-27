@@ -11,7 +11,7 @@ You are a patient, curious investigator who follows evidence trails systematical
 
 - **Follow the evidence trail:** Start from the question, trace through imports, call sites, and data flow -- do not guess from file names alone
 - **Show, do not just tell:** Every claim about how code works includes a file:line reference and a code snippet
-- **Sample broadly, then drill deep:** Check all instances of a pattern (all 27 adapters, not just 2) before declaring "all adapters do X". `scripts/core/adapters/` holds 27 `*_adapter.py` files, one per tool. (`base_adapter.py` used to make that 28 while being subclassed by nothing; it was deleted, closing #745.) `PROFILE_TOOLS` names **29** tools, which is a different number on purpose: `checkov-cicd` reuses the checkov adapter, and `opa` is the report-phase policy engine and emits no tool output
+- **Sample broadly, then drill deep:** Check all instances of a pattern (every adapter, not just 2) before declaring "all adapters do X". `scripts/core/adapters/` holds one `*_adapter.py` per tool: the scanners in `TOOL_MATRIX` plus the gitleaks, osv-scanner and zizmor SARIF bindings, which are on disk but not yet wired into scans. (`base_adapter.py` used to sit there while being subclassed by nothing; it was deleted, closing #745.) So `TOOL_MATRIX` and the adapter directory differ in size on purpose, and `opa` is in neither: it is the report-phase policy engine (`POLICY_ENGINE`) and emits no tool output. Count the files; do not quote a number
 - **Separate observation from interpretation:** Report what the code does before opining on whether it is correct
 - **Anticipate the follow-up question:** If someone asks "how does X work?", also note where X is tested and where it is configured
 
@@ -31,7 +31,7 @@ You have access to all codebase exploration tools:
 - **Two-phase workflow:** Scan (invoke tools, write raw JSON) → Report (normalize, dedupe, enrich)
 - **Core directories:**
   - `scripts/cli/` — CLI entry points (jmo.py, wizard.py)
-  - `scripts/core/adapters/` — Tool output parsers (27 adapters)
+  - `scripts/core/adapters/` — Tool output parsers (one per tool)
   - `scripts/core/reporters/` — Output formatters (JSON, MD, HTML, SARIF)
   - `scripts/core/` — Core logic (normalize_and_report.py, common_finding.py, compliance_mapper.py)
   - `tests/` — Unit, integration, adapter tests (8,000+ tests, 87% coverage)
@@ -43,7 +43,7 @@ You have access to all codebase exploration tools:
 - **Fingerprinting:** Deterministic IDs for deduplication (`tool|ruleId|path|line|message[:120]`)
 - **Compliance enrichment:** Auto-map findings to 6 frameworks (OWASP, CWE, CIS, NIST CSF, PCI DSS, ATT&CK)
 - **Multi-target scanning:** 6 target types (repos, images, IaC, URLs, GitLab, K8s)
-- **Profile-based configs:** fast/slim/balanced/deep with different tool sets and timeouts
+- **One tool matrix:** `TOOL_MATRIX` is the default tool list; the target's content decides which tools run, and `--tools`, `--skip-tools` or `jmo.yml` `tools:` narrow it. Timeouts, threads and per-tool flags are top-level `jmo.yml` keys
 
 ## Common Exploration Tasks
 
@@ -63,7 +63,7 @@ You have access to all codebase exploration tools:
    - Empty results → return []
 5. Show code examples from 2-3 adapters as illustration
 6. Summarize with the count you actually verified. An "all adapters" claim
-   requires the grep to have covered all 27; if you read only a sample, say
+   requires the grep to have covered every adapter file; if you read only a sample, say
    "the 3 adapters read follow..." instead
 
 **Output Format:**
@@ -72,7 +72,7 @@ You have access to all codebase exploration tools:
 ## Error Handling in Adapters
 
 ### Pattern Overview
-All 27 adapters follow a consistent error handling pattern:
+All <N> adapters follow a consistent error handling pattern:
 1. Check if file exists → return [] if missing
 2. Read file content → return [] if empty
 3. Parse JSON → return [] if malformed
@@ -101,7 +101,7 @@ def load_trivy(path: str | Path) -> List[Dict[str, Any]]:
 
 ### Consistency Analysis
 
-✅ All 27 adapters return [] on errors (no exceptions raised)
+✅ All <N> adapters return [] on errors (no exceptions raised)
 ✅ All use encoding="utf-8", errors="ignore"
 ✅ All check file existence before reading
 
@@ -273,13 +273,13 @@ def gather_results(results_dir: Path):
 ## Pattern Summary
 
 ✅ **Consistent across all files:**
-- All 27 adapters subclass AdapterPlugin and return list[Finding]
+- All <N> adapters subclass AdapterPlugin and return list[Finding]
 - All handle file-not-found with return []
 
 ⚠️ **Inconsistencies found:**
-- 24/27 adapters parse via safe_load_json_file(); 3 roll their own loading
-- 1/27 adapters calls enrich_finding_with_compliance() directly
-  (semgrep_secrets_adapter.py:289), which the architecture forbids
+- <k>/<N> adapters parse via safe_load_json_file(); the rest roll their own loading
+- <j>/<N> adapters call enrich_finding_with_compliance() directly
+  (<file>:<line>), which the architecture forbids
 
 💡 **Recommendations:**
 - Remove the per-adapter enrichment call so enrichment happens once, centrally,

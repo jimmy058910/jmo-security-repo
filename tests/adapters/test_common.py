@@ -319,29 +319,6 @@ class TestUnparseableOutputIsAnnounced:
         assert result is None
         assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
 
-    def test_prowler_ndjson_does_not_warn_through_the_real_adapter(
-        self, tmp_path: Path, caplog
-    ) -> None:
-        """The end-to-end version: the real probe must not warn on valid NDJSON."""
-        from scripts.core.adapters.prowler_adapter import _iter_prowler_records
-
-        ndjson = tmp_path / "prowler.json"
-        ndjson.write_text(
-            '{"class_uid": 2001, "finding_info": {"uid": "a"}}\n'
-            '{"class_uid": 2001, "finding_info": {"uid": "b"}}\n',
-            encoding="utf-8",
-        )
-
-        with caplog.at_level(logging.WARNING, logger="scripts.core.adapters.common"):
-            _iter_prowler_records(ndjson)
-
-        noisy = [
-            r.getMessage()
-            for r in caplog.records
-            if r.levelno >= logging.WARNING and "Could not parse" in r.getMessage()
-        ]
-        assert not noisy, f"prowler's speculative JSON probe warned: {noisy}"
-
 
 class TestNdjsonFailuresAreAnnounced:
     """Chunk 5: `safe_load_ndjson_file` reported every failure at DEBUG.

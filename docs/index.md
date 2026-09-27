@@ -55,12 +55,12 @@
 |----------|---------|
 | [README](../README.md) | Project overview |
 | [Quick Start](../QUICKSTART.md) | 5-minute installation guide |
-| [Docker Guide](DOCKER_README.md) | Docker installation, variants, CI/CD |
+| [Docker Guide](DOCKER_README.md) | Docker installation, the image, CI/CD |
 | [Installation Guide](MANUAL_INSTALLATION.md) | Platform-specific installation (macOS, Windows, WSL, Linux) |
 | [FAQ](FAQ.md) | Common questions about installation, scanning, Docker, CI/CD |
 | [Troubleshooting](TROUBLESHOOTING.md) | Symptom-cause-fix guide for common problems |
 | [Known Limitations](KNOWN_LIMITATIONS.md) | Behaviour that is deliberate, unfinished, or environment-bound |
-| [Upgrade Guide](../UPGRADE.md) | Migration from earlier releases to v1.0.x |
+| [Upgrade Guide](../UPGRADE.md) | Migration from earlier releases, including v1.x to v2.0.0 |
 
 ### Reference
 
@@ -68,9 +68,8 @@
 |----------|---------|
 | [User Guide](USER_GUIDE.md) | Comprehensive reference (CLI, configuration, features) |
 | [CLI Reference](CLI_REFERENCE.md) | Full CLI reference for all commands and flags |
-| [Profiles and Tools](PROFILES_AND_TOOLS.md) | Canonical tool lists by profile, dependencies |
+| [Tools](TOOLS.md) | The tool matrix: what each tool finds, when it runs, how it installs |
 | [Scan Optimization](SCAN_OPTIMIZATION.md) | Speed optimization strategies (threads, caching, tool config) |
-| [Usage Matrix](USAGE_MATRIX.md) | Tool-target-profile usage matrix |
 | [Command Reference](QUICK_REFERENCE.md) | Quick command cheat sheet |
 | [API Reference](API_REFERENCE.md) | Python API documentation |
 
@@ -146,25 +145,23 @@
 
 ## Tools Overview
 
-JMo Security orchestrates 29 security scanners across 13 categories:
+JMo Security orchestrates these security scanners:
 
 | Category | Tools |
 |----------|-------|
-| Secrets | TruffleHog, Nosey Parker, Semgrep-Secrets |
-| SAST | Semgrep, Bandit, Gosec, Horusec |
-| SBOM | Syft, CDXgen, ScanCode |
-| SCA | Trivy, Grype, Dependency-Check |
-| IaC | Checkov, Checkov-CICD |
-| Cloud/CSPM | Prowler, Kubescape |
+| Secrets | TruffleHog |
+| SAST | Semgrep, Gosec |
+| SBOM | Syft |
+| SCA | Trivy, Grype |
+| IaC | Checkov, Trivy |
 | DAST | OWASP ZAP, Nuclei |
 | Dockerfile | Hadolint |
+| Shell scripts | ShellCheck |
 | Malware | YARA |
-| Mobile | MobSF |
-| System | Lynis |
-| Policy | OPA |
-| Runtime | Trivy-RBAC, Falco, AFL++ |
 
-**Tool details:** [Profiles and Tools Reference](PROFILES_AND_TOOLS.md) | [User Guide: Tool Overview](USER_GUIDE.md#tool-management)
+OPA is the policy engine for [policy-as-code](POLICY_AS_CODE.md), installed with the scanners but not one of them.
+
+**Tool details:** [Tools](TOOLS.md) | [User Guide: Tool Management](USER_GUIDE.md#tool-management)
 
 ---
 

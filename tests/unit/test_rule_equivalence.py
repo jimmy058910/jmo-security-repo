@@ -197,7 +197,7 @@ class TestSecretDetectionEquivalence:
         """
         canonical1 = get_canonical_rule_id("trufflehog", "github-pat")
         canonical2 = get_canonical_rule_id(
-            "noseyparker", "GitHub Personal Access Token"
+            "semgrep", "generic.secrets.security.detected-github-pat"
         )
 
         assert canonical1 == canonical2 == "secret-github-token"
@@ -219,22 +219,6 @@ class TestKubernetesEquivalence:
         canonical2 = get_canonical_rule_id("checkov", "CKV_K8S_6")
 
         assert canonical1 == canonical2 == "k8s-root-container"
-
-
-class TestCodeSecurityEquivalence:
-    """Test equivalence for code security rules."""
-
-    def test_sql_injection(self):
-        """Test SQL injection detection across tools."""
-        canonical = get_canonical_rule_id("bandit", "B608")
-        assert canonical == "code-sql-injection"
-
-    def test_command_injection(self):
-        """Test command injection detection across tools."""
-        canonical1 = get_canonical_rule_id("bandit", "B602")
-        canonical2 = get_canonical_rule_id("bandit", "B603")
-
-        assert canonical1 == canonical2 == "code-command-injection"
 
 
 class TestEdgeCases:
@@ -259,10 +243,10 @@ class TestSubstringFallbackBoundaries:
     """The substring fallback must not prefix-match structured rule IDs.
 
     `get_canonical_rule_id` falls back to substring matching so a rule ID that
-    carries a suffix still resolves -- semgrep reports
-    `...subprocess-shell-true.subprocess-shell-true` for the rule mapped here as
-    `...subprocess-shell-true`. Plain containment made that fallback fire on the
-    trailing number of every structured ID as well.
+    carries a suffix still resolves -- semgrep reports a registry rule as
+    `<path>.<rule>`, e.g. `...detected-github-pat.detected-github-pat` for the
+    rule mapped here as `...detected-github-pat`. Plain containment made that
+    fallback fire on the trailing number of every structured ID as well.
     """
 
     def test_numeric_suffix_does_not_prefix_match(self):
@@ -317,20 +301,20 @@ class TestSubstringFallbackBoundaries:
     def test_separator_delimited_suffix_still_matches(self):
         """The case the fallback exists for must keep working.
 
-        This drives a real cross-tool cluster (semgrep + bandit on one line);
-        tightening the fallback must not disable it.
+        This drives a real cross-tool cluster (semgrep + trufflehog on one
+        secret); tightening the fallback must not disable it.
         """
         semgrep_reported = (
-            "python.lang.security.audit.subprocess-shell-true.subprocess-shell-true"
+            "generic.secrets.security.detected-github-pat.detected-github-pat"
         )
         assert get_canonical_rule_id("semgrep", semgrep_reported) == (
-            "code-command-injection"
+            "secret-github-token"
         )
         equivalent, canonical = are_rules_equivalent(
-            "semgrep", semgrep_reported, "bandit", "B602"
+            "semgrep", semgrep_reported, "trufflehog", "github-pat"
         )
         assert equivalent is True
-        assert canonical == "code-command-injection"
+        assert canonical == "secret-github-token"
 
     def test_exact_table_entries_are_untouched(self):
         """Every (tool, rule) pair the table declares must still resolve."""

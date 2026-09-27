@@ -142,6 +142,9 @@ def _load_hadolint_internal(path: str | Path) -> list[dict[str, Any]]:
     data = safe_load_json_file(path, default=None)
     if not isinstance(data, list):
         return []
+    # Once per parse: each lookup re-parses versions.yaml (~200 ms), and doing
+    # it per finding made 1,000 findings take a minute.
+    version = _get_hadolint_version()
     out: list[dict[str, Any]] = []
     for it in data:
         if not isinstance(it, dict):
@@ -160,7 +163,7 @@ def _load_hadolint_internal(path: str | Path) -> list[dict[str, Any]]:
             "message": msg,
             "description": msg,
             "severity": sev,
-            "tool": {"name": "hadolint", "version": _get_hadolint_version()},
+            "tool": {"name": "hadolint", "version": version},
             "location": {"path": file_path, "startLine": line},
             "remediation": str(it.get("reference") or "See rule documentation"),
             "tags": ["dockerfile", "lint"],

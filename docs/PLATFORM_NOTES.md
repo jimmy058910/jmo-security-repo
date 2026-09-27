@@ -59,7 +59,7 @@ softwareupdate --install-rosetta
 sudo apt-get install shellcheck
 
 # Tools installed via pip
-pip install --user bandit semgrep
+pip install --user semgrep checkov
 
 # Ensure ~/.local/bin is in PATH
 export PATH="$HOME/.local/bin:$PATH"

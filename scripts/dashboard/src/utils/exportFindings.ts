@@ -114,10 +114,10 @@ export function generatePrometheus(findings: CommonFinding[], metadata?: Finding
 
   // Metadata (if provided)
   if (metadata) {
-    metrics.push('# HELP jmo_scan_info Scan metadata (version, profile, tools)')
+    metrics.push('# HELP jmo_scan_info Scan metadata (version, tools)')
     metrics.push('# TYPE jmo_scan_info gauge')
     const tools = metadata.tools.join(',')
-    metrics.push(`jmo_scan_info{version="${metadata.jmo_version}",profile="${metadata.profile}",tools="${tools}"} 1`)
+    metrics.push(`jmo_scan_info{version="${metadata.jmo_version}",tools="${tools}"} 1`)
   }
 
   return metrics.join('\n')
@@ -346,7 +346,7 @@ export function generateHTML(findings: CommonFinding[], metadata?: FindingsMetad
 <body>
   <h1>🛡️ Security Findings Report</h1>
   <p class="no-print">Generated on: ${new Date(timestamp).toLocaleString()}</p>
-  ${metadata ? `<p class="no-print">Profile: ${metadata.profile} | Tools: ${metadata.tools.join(', ')}</p>` : ''}
+  ${metadata ? `<p class="no-print">Tools: ${metadata.tools.join(', ')}</p>` : ''}
 
   <div class="summary-stats">
     <div class="stat-card">

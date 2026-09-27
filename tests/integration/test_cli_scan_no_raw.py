@@ -73,7 +73,6 @@ class TestNoStoreRawFindingsFlag:
         # Act: Store scan with no_store_raw=True
         scan_id = store_scan(
             results_dir=results_dir,
-            profile="fast",
             tools=["trufflehog", "trivy"],
             db_path=db_path,
             no_store_raw=True,  # ← FLAG UNDER TEST
@@ -147,7 +146,6 @@ class TestNoStoreRawFindingsFlag:
         # Act: Store scan with default (no_store_raw=False)
         scan_id = store_scan(
             results_dir=results_dir,
-            profile="balanced",
             tools=["trivy"],
             db_path=db_path,
             no_store_raw=False,  # ← DEFAULT BEHAVIOR
@@ -216,7 +214,6 @@ class TestNoStoreRawFindingsFlag:
         # Act: Store with no_store_raw=True (should skip redaction and set NULL)
         scan_id = store_scan(
             results_dir=results_dir,
-            profile="fast",
             tools=["trufflehog"],
             db_path=db_path,
             no_store_raw=True,

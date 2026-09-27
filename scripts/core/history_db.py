@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any
 
 from scripts.core.jmo_version import get_jmo_version
+from scripts.core.scan_timings import ToolRun
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -81,10 +82,8 @@ CREATE TABLE IF NOT EXISTS scans (
     is_dirty INTEGER DEFAULT 0,
 
     -- Scan Configuration
-    profile TEXT NOT NULL,
     tools TEXT NOT NULL,
     targets TEXT NOT NULL,
-    target_type TEXT NOT NULL,
 
     -- Results Summary
     total_findings INTEGER NOT NULL DEFAULT 0,
@@ -102,16 +101,13 @@ CREATE TABLE IF NOT EXISTS scans (
     ci_build_id TEXT,
 
     -- Performance
-    duration_seconds REAL,
+    duration_seconds REAL
 
-    -- Constraints
-    -- NOTE: `profile` is deliberately unconstrained here. A SQL CHECK can only
-    -- enumerate a fixed list, and the real rule is "a profile that exists in
-    -- tool_registry.PROFILE_TOOLS or in the user's jmo.yml `profiles:` dict" --
-    -- neither of which SQL can see. The previous enumeration predated the
-    -- `slim` profile and silently rejected every slim scan (#721). Validation
-    -- lives in store_scan(), against the registry, so it cannot drift again.
-    CHECK (target_type IN ('repo', 'image', 'iac', 'url', 'gitlab', 'k8s', 'unknown'))
+    -- There is no `profile` column: scan profiles left in v2.0.0. There is
+    -- no `target_type` either: one column cannot type a scan of two target
+    -- types, and it recorded `repo` for every scan (#1321); `scan_tool_runs`
+    -- types each target. init_database drops both from databases written
+    -- before (see _drop_legacy_profile_column, _drop_legacy_target_type_column).
 );
 """
 
@@ -175,14 +171,35 @@ CREATE TABLE IF NOT EXISTS scan_metadata (
 );
 """
 
+# One row per target and tool (#722): what each requested tool did and how long
+# it took. `scans.duration_seconds` is one number for the whole scan, which
+# cannot answer "which tool made my scan slow". The state and reason vocabulary
+# is `scan_timings.State` / `Reason`.
+CREATE_SCAN_TOOL_RUNS_TABLE = """
+CREATE TABLE IF NOT EXISTS scan_tool_runs (
+    scan_id TEXT NOT NULL,
+    target TEXT NOT NULL,
+    target_type TEXT NOT NULL,
+    tool TEXT NOT NULL,
+    state TEXT NOT NULL,
+    reason TEXT,
+    seconds REAL,
+    exit_code INTEGER,
+    attempts INTEGER NOT NULL DEFAULT 0,
+
+    PRIMARY KEY (scan_id, target_type, target, tool),
+    FOREIGN KEY (scan_id) REFERENCES scans(id) ON DELETE CASCADE,
+    CHECK (state IN ('ran', 'skipped', 'failed')),
+    CHECK ((state = 'ran') = (reason IS NULL))
+);
+"""
+
 # Indices for performance
 CREATE_INDICES = [
     "CREATE INDEX IF NOT EXISTS idx_scans_timestamp ON scans(timestamp DESC);",
     "CREATE INDEX IF NOT EXISTS idx_scans_branch ON scans(branch) WHERE branch IS NOT NULL;",
     "CREATE INDEX IF NOT EXISTS idx_scans_tag ON scans(tag) WHERE tag IS NOT NULL;",
     "CREATE INDEX IF NOT EXISTS idx_scans_commit ON scans(commit_hash) WHERE commit_hash IS NOT NULL;",
-    "CREATE INDEX IF NOT EXISTS idx_scans_target_type ON scans(target_type);",
-    "CREATE INDEX IF NOT EXISTS idx_scans_profile ON scans(profile);",
     "CREATE INDEX IF NOT EXISTS idx_findings_scan_id ON findings(scan_id);",
     "CREATE INDEX IF NOT EXISTS idx_findings_fingerprint ON findings(fingerprint);",
     "CREATE INDEX IF NOT EXISTS idx_findings_severity ON findings(severity);",
@@ -191,6 +208,7 @@ CREATE_INDICES = [
     "CREATE INDEX IF NOT EXISTS idx_findings_path ON findings(path);",
     "CREATE INDEX IF NOT EXISTS idx_findings_cvss ON findings(cvss_score DESC) WHERE cvss_score IS NOT NULL;",
     "CREATE INDEX IF NOT EXISTS idx_metadata_scan_id ON scan_metadata(scan_id);",
+    "CREATE INDEX IF NOT EXISTS idx_tool_runs_scan_id ON scan_tool_runs(scan_id);",
 ]
 
 # Triggers for auto-updating scan summary counts
@@ -350,6 +368,130 @@ def transaction(conn: sqlite3.Connection):
         raise
 
 
+def _drop_legacy_profile_column(conn: sqlite3.Connection) -> bool:
+    """Drop `scans.profile` from a database written before v2.0.0, in place.
+
+    ``ALTER TABLE ... DROP COLUMN`` rewrites the table without a DROP TABLE, so
+    the ON DELETE CASCADE foreign keys on findings/scan_metadata never fire --
+    the create-copy-drop-rename rebuild would delete every finding in the
+    database (the trap scripts/migrations/v1_2_0.py documents). SQLite refuses
+    to drop an indexed column, hence the index first.
+
+    Called by init_database, which store_scan runs on every store: migrations
+    only run on an explicit `jmo history migrate`, and an un-migrated database
+    would otherwise reject every insert on the NOT NULL column. Requires
+    SQLite >= 3.35.
+
+    SQLite also refuses to drop a column a CHECK constraint names, and a
+    database created before v1.2.0 that never saw `jmo history migrate` still
+    has `CHECK (profile IN ('fast', 'balanced', 'deep'))` ("error in table
+    scans after drop column: no such column: profile"). v1.2.0's migration
+    removes exactly that CHECK by editing the stored DDL, so it runs first; it
+    is a no-op on a database that has already lost the CHECK.
+
+    One transaction covers all three steps. Python's sqlite3 opens none for
+    DDL on its own, so without the explicit BEGIN the index drop would commit
+    even when the column drop then fails.
+
+    Returns:
+        True when the column was present and has been dropped.
+    """
+    # Local import: v1_2_0 imports history_migrations, which imports this module.
+    from scripts.migrations.v1_2_0 import Migration_1_1_0_to_1_2_0
+
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(scans)")}
+    if "profile" not in columns:
+        return False
+    if not conn.in_transaction:
+        conn.execute("BEGIN")
+    Migration_1_1_0_to_1_2_0().migrate_up(conn)
+    conn.execute("DROP INDEX IF EXISTS idx_scans_profile")
+    conn.execute("ALTER TABLE scans DROP COLUMN profile")
+    return True
+
+
+# The table-level CHECK every database written before PR B3 has on
+# `scans.target_type`. In every released shape it is the table's LAST
+# constraint, so the comma that has to go with it is the one BEFORE it, and
+# comment lines (with commas of their own) can sit between the two. The gap
+# between them is kept; the comma is not.
+_TARGET_TYPE_CHECK = re.compile(
+    r",(?P<gap>(?:\s|--[^\n]*)*)CHECK\s*\(\s*target_type\s+IN\s*\([^)]*\)\s*\)",
+    re.IGNORECASE,
+)
+
+
+def _rewrite_scans_ddl(conn: sqlite3.Connection, new_sql: str) -> None:
+    """Replace the stored `CREATE TABLE scans` statement, moving no data.
+
+    SQLite cannot drop a CHECK constraint, and the usual create-copy-drop-rename
+    rebuild deletes every finding (the ON DELETE CASCADE trap v1_2_0.py
+    documents), so a CHECK is removed by editing the stored DDL. The edit is
+    parsed on its own first: a statement that does not parse, once written to
+    sqlite_master, leaves a database no connection can open, where refusing
+    here leaves it as it was.
+    """
+    probe = sqlite3.connect(":memory:")
+    try:
+        probe.execute(new_sql)
+    except sqlite3.Error as exc:
+        raise RuntimeError(f"the edited scans DDL does not parse: {exc}") from exc
+    finally:
+        probe.close()
+
+    schema_version = conn.execute("PRAGMA schema_version").fetchone()[0]
+    conn.execute("PRAGMA writable_schema=ON")
+    try:
+        conn.execute(
+            "UPDATE sqlite_master SET sql=? WHERE type='table' AND name='scans'",
+            (new_sql,),
+        )
+        # Bump so every connection reloads the edited schema.
+        conn.execute(f"PRAGMA schema_version={schema_version + 1}")
+    finally:
+        conn.execute("PRAGMA writable_schema=OFF")
+
+    integrity = conn.execute("PRAGMA integrity_check").fetchone()[0]
+    if integrity != "ok":
+        raise RuntimeError(f"integrity_check failed after migration: {integrity}")
+    violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+    if violations:
+        raise RuntimeError(f"foreign_key_check failed after migration: {violations}")
+
+
+def _drop_legacy_target_type_column(conn: sqlite3.Connection) -> bool:
+    """Drop `scans.target_type` from a database written before PR B3, in place.
+
+    One column cannot type a scan of two target types, and it held `repo` for
+    every scan: it was the first `individual-*` folder that existed, and every
+    scan creates `individual-repos` (#1321). `scan_tool_runs` types each
+    target, so nothing reads it.
+
+    Every such database has `CHECK (target_type IN (...))`, and SQLite refuses
+    to drop a column a table CHECK names, so the CHECK is edited out of the
+    stored DDL first, then the index goes, then the column. `init_database`
+    calls this after the profile drop and inside the same transaction, so a
+    drop SQLite refuses leaves the database exactly as it was.
+
+    Returns:
+        True when the column was present and has been dropped.
+    """
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(scans)")}
+    if "target_type" not in columns:
+        return False
+    if not conn.in_transaction:
+        conn.execute("BEGIN")
+    old_sql = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='scans'"
+    ).fetchone()[0]
+    new_sql = _TARGET_TYPE_CHECK.sub(r"\g<gap>", old_sql, count=1)
+    if new_sql != old_sql:
+        _rewrite_scans_ddl(conn, new_sql)
+    conn.execute("DROP INDEX IF EXISTS idx_scans_target_type")
+    conn.execute("ALTER TABLE scans DROP COLUMN target_type")
+    return True
+
+
 def init_database(db_path: Path = DEFAULT_DB_PATH) -> None:
     """
     Initialize database schema.
@@ -358,10 +500,14 @@ def init_database(db_path: Path = DEFAULT_DB_PATH) -> None:
         db_path: Path to SQLite database file
 
     Creates:
-        - All tables (scans, findings, scan_metadata, schema_version)
+        - All tables (scans, findings, scan_metadata, scan_tool_runs,
+          schema_version)
         - All indices for performance
         - All triggers for auto-updating counts
         - All views for common queries
+
+    Every statement is `IF NOT EXISTS`, so a database written by an older
+    version gains the tables it lacks here, on the next store.
     """
     conn = get_connection(db_path)
 
@@ -372,6 +518,7 @@ def init_database(db_path: Path = DEFAULT_DB_PATH) -> None:
             conn.execute(CREATE_SCANS_TABLE)
             conn.execute(CREATE_FINDINGS_TABLE)
             conn.execute(CREATE_SCAN_METADATA_TABLE)
+            conn.execute(CREATE_SCAN_TOOL_RUNS_TABLE)
 
             # Create indices
             for idx_sql in CREATE_INDICES:
@@ -384,6 +531,11 @@ def init_database(db_path: Path = DEFAULT_DB_PATH) -> None:
             # Create views
             for view_sql in CREATE_VIEWS:
                 conn.execute(view_sql)
+
+            # A database written before v2.0.0 still has the profile column,
+            # and one written before PR B3 still has target_type.
+            _drop_legacy_profile_column(conn)
+            _drop_legacy_target_type_column(conn)
 
             # Record schema version
             cursor = conn.cursor()
@@ -495,70 +647,12 @@ def get_git_context(repo_path: Path) -> dict[str, Any]:
         }
 
 
-def detect_target_type(results_dir: Path) -> str:
-    """
-    Detect primary target type based on results directory structure.
-
-    Args:
-        results_dir: Path to scan results directory
-
-    Returns:
-        Target type: "repo" | "image" | "iac" | "url" | "gitlab" | "k8s" | "unknown"
-    """
-    if (results_dir / "individual-repos").exists():
-        return "repo"
-    elif (results_dir / "individual-images").exists():
-        return "image"
-    elif (results_dir / "individual-iac").exists():
-        return "iac"
-    elif (results_dir / "individual-web").exists():
-        return "url"
-    elif (results_dir / "individual-gitlab").exists():
-        return "gitlab"
-    elif (results_dir / "individual-k8s").exists():
-        return "k8s"
-    else:
-        return "unknown"
-
-
-def collect_targets(results_dir: Path) -> list[str]:
-    """
-    Collect target names from results directory.
-
-    Args:
-        results_dir: Path to scan results directory
-
-    Returns:
-        List of target names (e.g., ["myrepo", "nginx:latest"])
-    """
-    targets: list[str] = []
-    target_type = detect_target_type(results_dir)
-
-    if target_type == "unknown":
-        return targets
-
-    target_dir_map = {
-        "repo": "individual-repos",
-        "image": "individual-images",
-        "iac": "individual-iac",
-        "url": "individual-web",
-        "gitlab": "individual-gitlab",
-        "k8s": "individual-k8s",
-    }
-
-    target_dir = results_dir / target_dir_map[target_type]
-    if target_dir.exists():
-        targets = [d.name for d in target_dir.iterdir() if d.is_dir()]
-
-    return targets
-
-
 def redact_secrets(finding: dict, store_raw: bool = True) -> dict:
     """
     Redact secret values from findings before storing in database (Phase 6 Step 6.1).
 
-    This function removes sensitive data from secret scanner findings (trufflehog,
-    noseyparker, semgrep-secrets) before persisting to history database.
+    This function removes sensitive data from secret scanner findings
+    (trufflehog) before persisting to history database.
 
     Args:
         finding: CommonFinding dict with tool, message, raw data
@@ -572,9 +666,8 @@ def redact_secrets(finding: dict, store_raw: bool = True) -> dict:
 
     Redaction Strategy:
         - trufflehog: Replace 'Raw', 'RawV2' fields with '[REDACTED]'
-        - noseyparker: Replace 'snippet', 'capture_groups.secret' with '[REDACTED]'
-        - semgrep-secrets: Replace 'extra.lines', 'extra.metadata.secret_value' with '[REDACTED]'
-        - Other tools: No redaction (trivy, semgrep, bandit, etc. don't contain secrets)
+        - gitleaks: Replace SARIF's 'snippet' (the matched secret) the same way
+        - Other tools: No redaction (trivy, semgrep, etc. don't contain secrets)
 
     Example:
         >>> finding = {"tool": {"name": "trufflehog"}, "raw": {"Raw": "ghp_secret123"}}
@@ -601,10 +694,15 @@ def redact_secrets(finding: dict, store_raw: bool = True) -> dict:
     tool_info = finding.get("tool", {})
     tool_name = tool_info.get("name") if isinstance(tool_info, dict) else str(tool_info)
 
-    # Secret scanner tools that need redaction
-    SECRET_TOOLS = ["trufflehog", "noseyparker", "semgrep-secrets"]
+    # Secret scanner tools, and the raw keys that hold the secret itself.
+    # Each adapter already drops these; this is the second layer, for a
+    # finding that reaches history by another road.
+    SECRET_KEYS = {
+        "trufflehog": ("Raw", "RawV2"),
+        "gitleaks": ("snippet",),  # SARIF region.snippet: the match
+    }
 
-    if tool_name not in SECRET_TOOLS:
+    if tool_name not in SECRET_KEYS:
         # Non-secret tools: store raw data unchanged
         result["raw_finding"] = json.dumps(raw_data)
         return result
@@ -614,55 +712,30 @@ def redact_secrets(finding: dict, store_raw: bool = True) -> dict:
 
     redacted_raw = copy.deepcopy(raw_data)
 
-    # Redact based on tool type
-    if tool_name == "trufflehog":
-        # Recursively redact 'Raw' and 'RawV2' fields
-        _redact_trufflehog_secrets(redacted_raw)
-
-    elif tool_name == "noseyparker":
-        # Redact noseyparker secret fields
-        if "match" in redacted_raw:
-            if "snippet" in redacted_raw["match"]:
-                redacted_raw["match"]["snippet"] = "[REDACTED]"
-            if "capture_groups" in redacted_raw["match"]:
-                if isinstance(redacted_raw["match"]["capture_groups"], dict):
-                    for key in redacted_raw["match"]["capture_groups"]:
-                        if "secret" in key.lower():
-                            redacted_raw["match"]["capture_groups"][key] = "[REDACTED]"
-
-    elif tool_name == "semgrep-secrets":
-        # Redact semgrep-secrets fields
-        if "extra" in redacted_raw:
-            if "lines" in redacted_raw["extra"]:
-                redacted_raw["extra"]["lines"] = "[REDACTED]"
-            if "metadata" in redacted_raw["extra"]:
-                metadata = redacted_raw["extra"]["metadata"]
-                if isinstance(metadata, dict):
-                    for key in metadata:
-                        if "secret" in key.lower():
-                            metadata[key] = "[REDACTED]"
+    _redact_secret_keys(redacted_raw, SECRET_KEYS[tool_name])
 
     result["raw_finding"] = json.dumps(redacted_raw)
     return result
 
 
-def _redact_trufflehog_secrets(data: dict | list) -> None:
+def _redact_secret_keys(data: dict | list, keys: tuple[str, ...]) -> None:
     """
-    Recursively redact 'Raw' and 'RawV2' fields in trufflehog findings.
+    Recursively replace every value under one of ``keys`` with '[REDACTED]'.
 
     Args:
         data: Dictionary or list to recursively process (modified in-place)
+        keys: The keys whose values are secrets
     """
     if isinstance(data, dict):
         for key in data:
-            if key in ("Raw", "RawV2"):
+            if key in keys:
                 data[key] = "[REDACTED]"
             elif isinstance(data[key], (dict, list)):
-                _redact_trufflehog_secrets(data[key])
+                _redact_secret_keys(data[key], keys)
     elif isinstance(data, list):
         for item in data:
             if isinstance(item, (dict, list)):
-                _redact_trufflehog_secrets(item)
+                _redact_secret_keys(item, keys)
 
 
 def encrypt_raw_finding(raw_json: str) -> str:
@@ -841,30 +914,6 @@ def _enforce_database_permissions(db_path: Path) -> None:
         logger.warning(f"Failed to set database permissions: {e}")
 
 
-def get_known_profiles() -> set[str]:
-    """Profile names that may legitimately appear in history.
-
-    Derived at call time from the tool registry plus any profile the user
-    defined under ``profiles:`` in ``jmo.yml`` (a free-form dict). Never
-    hardcode the list: the previous enumeration of fast/balanced/deep predated
-    the ``slim`` profile and silently discarded every slim scan (#721).
-    """
-    from scripts.core.tool_registry import PROFILE_TOOLS
-
-    known = set(PROFILE_TOOLS)
-
-    try:
-        from scripts.core.config import load_config
-
-        known |= set(load_config("jmo.yml").profiles)
-    except (OSError, ValueError, TypeError, KeyError) as e:
-        # No readable jmo.yml on this path (common in tests and library use).
-        # The registry alone is a correct, if narrower, answer.
-        logger.debug(f"Could not read profiles from jmo.yml: {e}")
-
-    return known
-
-
 def _scanned_repo_paths(results_dir: Path) -> list[Path]:
     """Return the repository paths this scan actually visited.
 
@@ -911,6 +960,62 @@ def _scan_duration_seconds(results_dir: Path) -> float | None:
     if isinstance(raw, bool) or not isinstance(raw, int | float):
         return None
     return float(raw) if raw >= 0 else None
+
+
+def _scan_tool_runs(results_dir: Path) -> list[tuple[Any, ...]]:
+    """The scan's accounting rows as `scan_tool_runs` values (without scan_id).
+
+    Read from `tool_runs` in `.scan_metadata.json`, which `cmd_scan` writes
+    from what every target returned -- including a target whose scanner raised
+    and so wrote no `scan-timings.json`. Empty for a results directory from
+    before the key existed. A row that does not parse is skipped and said:
+    losing one row must not lose the scan.
+    """
+    try:
+        meta = json.loads((results_dir / ".scan_metadata.json").read_text("utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    raw = meta.get("tool_runs") if isinstance(meta, dict) else None
+    if not isinstance(raw, list):
+        return []
+    values: list[tuple[Any, ...]] = []
+    for entry in raw:
+        try:
+            row = ToolRun.from_dict(entry)
+            target = str(entry["target"])
+            target_type = str(entry["target_type"])
+        except (KeyError, TypeError, ValueError) as exc:
+            logger.warning("Skipping an unreadable tool_runs row %r: %s", entry, exc)
+            continue
+        values.append(
+            (
+                target,
+                target_type,
+                row.tool,
+                row.state.value,
+                None if row.reason is None else row.reason.value,
+                row.seconds,
+                row.exit_code,
+                row.attempts,
+            )
+        )
+    return values
+
+
+def get_scan_tool_runs(conn: sqlite3.Connection, scan_id: str) -> list[dict[str, Any]]:
+    """A scan's per-tool rows, or [] for a database written before they existed."""
+    try:
+        cursor = conn.execute(
+            "SELECT target, target_type, tool, state, reason, seconds, exit_code, "
+            "attempts FROM scan_tool_runs WHERE scan_id = ? "
+            "ORDER BY target_type, target, tool",
+            (scan_id,),
+        )
+    except sqlite3.OperationalError as exc:
+        if "no such table" in str(exc):
+            return []
+        raise
+    return [dict(row) for row in cursor.fetchall()]
 
 
 def _by_tool(findings: list[dict[str, Any]]) -> str:
@@ -966,7 +1071,6 @@ def _report_findings_not_stored(
 
 def store_scan(
     results_dir: Path,
-    profile: str,
     tools: list[str],
     db_path: Path = DEFAULT_DB_PATH,
     commit_hash: str | None = None,
@@ -983,7 +1087,6 @@ def store_scan(
 
     Args:
         results_dir: Path to scan results directory (contains findings.json)
-        profile: Profile name; any key of PROFILE_TOOLS or a jmo.yml profile
         tools: List of tool names that were run
         db_path: Path to SQLite database file
         commit_hash: Git commit hash (optional, auto-detected if None)
@@ -1004,7 +1107,7 @@ def store_scan(
 
     Raises:
         FileNotFoundError: If results_dir doesn't exist or findings.json not found
-        ValueError: If invalid profile or data, or if encryption requested without key
+        ValueError: If invalid data, or if encryption requested without key
         sqlite3.Error: On database errors
 
     Privacy Note:
@@ -1028,13 +1131,6 @@ def store_scan(
     findings_json = results_dir / "summaries" / "findings.json"
     if not findings_json.exists():
         raise FileNotFoundError(f"findings.json not found: {findings_json}")
-
-    known_profiles = get_known_profiles()
-    if profile not in known_profiles:
-        raise ValueError(
-            f"Unknown profile: {profile!r}. "
-            f"Known profiles: {', '.join(sorted(known_profiles))}"
-        )
 
     # Validate encryption prerequisites (Phase 6 Step 6.2)
     if encrypt_findings:
@@ -1067,14 +1163,19 @@ def store_scan(
     now = int(time.time())
     now_iso = datetime.fromtimestamp(now, tz=UTC).isoformat()
 
-    # Detect target type
-    target_type = detect_target_type(results_dir)
-    targets = collect_targets(results_dir)
+    # The scan's accounting rows (#722), and the targets they name. `targets`
+    # was the folders under `individual-repos`, which every scan creates, so an
+    # image or URL scan listed none and a repository was named by its folder
+    # (#1321). A results directory from before the rows names no target.
+    tool_runs = _scan_tool_runs(results_dir)
+    targets = list(dict.fromkeys(target for target, *_ in tool_runs))
 
-    # Get Git context (if repo target and not provided).
+    # Get Git context (if not provided).
     #
     # This reads the paths the scan actually visited, recorded as `repo_paths`
-    # in `.scan_metadata.json`. It used to walk up from
+    # in `.scan_metadata.json`, which only a repository target writes: a scan
+    # with none has nothing to read, so no target type is consulted. It used
+    # to walk up from
     # `results_dir/individual-repos/<name>` looking for a `.git` -- but that is
     # an OUTPUT directory, so the walk found whatever repository happened to
     # contain the results folder and recorded ITS branch and commit (#780).
@@ -1089,7 +1190,7 @@ def store_scan(
     # recorded", which is true; a branch copied from an unrelated repository is
     # not, and is worse than missing because it looks like data.
     git_ctx = {}
-    if target_type == "repo" and not all([commit_hash, branch]):
+    if not all([commit_hash, branch]):
         for scanned in _scanned_repo_paths(results_dir):
             if (scanned / ".git").exists():
                 git_ctx = get_git_context(scanned)
@@ -1164,14 +1265,14 @@ def store_scan(
                 INSERT INTO scans (
                     id, timestamp, timestamp_iso,
                     commit_hash, commit_short, branch, tag, is_dirty,
-                    profile, tools, targets, target_type,
+                    tools, targets,
                     total_findings, critical_count, high_count, medium_count, low_count, info_count,
                     jmo_version, hostname, username, ci_provider, ci_build_id,
                     duration_seconds
                 ) VALUES (
                     ?, ?, ?,
                     ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?,
+                    ?, ?,
                     ?, ?, ?, ?, ?, ?,
                     ?, ?, ?, ?, ?,
                     ?
@@ -1186,10 +1287,8 @@ def store_scan(
                     branch,
                     tag,
                     is_dirty,
-                    profile,
                     json.dumps(tools),
                     json.dumps(targets),
-                    target_type,
                     0,  # total_findings - will be updated by trigger
                     0,  # critical_count - will be updated by trigger
                     0,  # high_count - will be updated by trigger
@@ -1372,6 +1471,18 @@ def store_scan(
                 (scan_id, str(results_dir.absolute())),
             )
 
+            # Per-tool accounting (#722), in the same transaction as the scan.
+            if tool_runs:
+                conn.executemany(
+                    """
+                    INSERT OR REPLACE INTO scan_tool_runs (
+                        scan_id, target, target_type, tool, state, reason,
+                        seconds, exit_code, attempts
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    [(scan_id, *values) for values in tool_runs],
+                )
+
         _report_findings_not_stored(dropped_no_id, dropped_duplicate, scan_id)
         logger.info(
             f"Stored scan {scan_id}: {len(finding_rows)} findings from {len(tools)} tools"
@@ -1416,7 +1527,6 @@ def get_scan_by_id(conn: sqlite3.Connection, scan_id: str) -> dict[str, Any] | N
 def list_scans(
     conn: sqlite3.Connection,
     branch: str | None = None,
-    profile: str | None = None,
     since: int | None = None,
     limit: int | None = 50,
 ) -> list[dict[str, Any]]:
@@ -1428,7 +1538,6 @@ def list_scans(
         branch: Filter by branch name. None or "" means every branch,
             including the scans whose branch could not be determined and is
             stored NULL.
-        profile: Filter by profile name
         since: Filter by timestamp (Unix epoch seconds)
         limit: Maximum number of results, or None for no limit.
 
@@ -1453,10 +1562,6 @@ def list_scans(
         where_clauses.append("branch = ?")
         params.append(branch)
 
-    if profile:
-        where_clauses.append("profile = ?")
-        params.append(profile)
-
     if since:
         where_clauses.append("timestamp >= ?")
         params.append(str(since))
@@ -1470,7 +1575,7 @@ def list_scans(
         params.append(limit)
 
     # Security: where_sql and limit_sql are built from internal string literals only
-    # (e.g., "profile = ?", "LIMIT ?"), NOT from user input. All values use
+    # (e.g., "branch = ?", "LIMIT ?"), NOT from user input. All values use
     # parameterized queries via params list.
     cursor.execute(
         f"""
@@ -1784,17 +1889,6 @@ def get_database_stats(conn: sqlite3.Connection) -> dict[str, Any]:
         """)
     scans_by_branch = [{"branch": row[0], "count": row[1]} for row in cursor.fetchall()]
 
-    # Scans by profile
-    cursor.execute("""
-        SELECT profile, COUNT(*) as count
-        FROM scans
-        GROUP BY profile
-        ORDER BY count DESC
-        """)
-    scans_by_profile = [
-        {"profile": row[0], "count": row[1]} for row in cursor.fetchall()
-    ]
-
     # Findings by severity
     cursor.execute("""
         SELECT severity, COUNT(*) as count
@@ -1838,7 +1932,6 @@ def get_database_stats(conn: sqlite3.Connection) -> dict[str, Any]:
         "scans_by_branch": scans_by_branch,
         "scans_without_branch": scans_without_branch,
         "distinct_branches": distinct_branches,
-        "scans_by_profile": scans_by_profile,
         "findings_by_severity": findings_by_severity,
         "top_tools": top_tools,
         "distinct_tools": distinct_tools,

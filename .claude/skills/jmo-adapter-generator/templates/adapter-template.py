@@ -28,9 +28,9 @@ from scripts.core.plugin_api import (
     adapter_plugin
 )
 
-# The fingerprint helper is a module-level function, not a method. Every
-# shipped adapter imports it from here - see
-# scripts/core/adapters/bandit_adapter.py:59.
+# The fingerprint helper is a module-level function, not a method. Most
+# shipped adapters import it from here - see
+# scripts/core/adapters/gosec_adapter.py:33.
 from scripts.core.common_finding import fingerprint
 
 logger = logging.getLogger(__name__)
@@ -38,13 +38,13 @@ logger = logging.getLogger(__name__)
 
 # `{tool}` is the normalized, underscore-based identifier - the same token that
 # names the adapter file. A tool spelled with a hyphen normalizes once, here:
-# `dependency-check` -> `dependency_check`, giving
-# `dependency_check_adapter.py` and `name="dependency_check"`
-# (scripts/core/adapters/dependency_check_adapter.py:50).
+# `osv-scanner` -> `osv_scanner`, giving
+# `osv_scanner_adapter.py` and `name="osv_scanner"`
+# (scripts/core/adapters/osv_scanner_adapter.py:20).
 @adapter_plugin(PluginMetadata(
     # Matches the ADAPTER FILENAME identifier, not the tool's output filename.
     # plugin_loader has to "try both underscore and hyphenated variants since
-    # metadata.name may differ" (scripts/core/plugin_loader.py:235) precisely
+    # metadata.name may differ" (scripts/core/plugin_loader.py:261) precisely
     # because this drifts; normalizing once is what keeps it from drifting.
     name="{tool}",
     version="1.0.0",
@@ -114,13 +114,13 @@ class {Tool}Adapter(AdapterPlugin):
                     # Use the module-level `fingerprint()`, NOT
                     # `self.get_fingerprint()`. The method on AdapterPlugin
                     # takes one already-built `Finding`
-                    # (scripts/core/plugin_api.py:144), so it cannot be called
+                    # (scripts/core/plugin_api.py:145), so it cannot be called
                     # from inside the constructor of the Finding that needs the
                     # id. `fingerprint()` takes the five components positionally
                     # and returns 16 lowercase hex characters
-                    # (common_finding.py:193, FINGERPRINT_LENGTH = 16).
-                    # This is what every shipped adapter does - see
-                    # scripts/core/adapters/bandit_adapter.py:164.
+                    # (common_finding.py:17, FINGERPRINT_LENGTH = 16).
+                    # Most shipped adapters do this - see
+                    # scripts/core/adapters/gosec_adapter.py:166.
                     id=fingerprint(
                         self.metadata.tool_name,
                         vuln.get("id", "UNKNOWN"),

@@ -18,21 +18,18 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import logging
 import os
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections.abc import Mapping
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from scripts.core.adapters.common import normalize_finding_path
-from scripts.core.common_finding import (
-    FINGERPRINT_LENGTH,
-    MESSAGE_SNIPPET_LENGTH,
-    fingerprint,
-)
+from scripts.core.common_finding import fingerprint
 from scripts.core.compliance_mapper import enrich_findings_with_compliance
 from scripts.core.cwe_extraction import backfill_risk_cwe
 from scripts.core.exceptions import AdapterParseException
@@ -192,40 +189,33 @@ def scan_roots(results_dir: Path) -> tuple[str, ...]:
     """Absolute directories this scan visited, for #861 path normalization.
 
     Read from ``repo_paths`` in ``.scan_metadata.json``, the same key
-    ``history_db._scanned_repo_paths`` uses. Returns an empty tuple when the
-    file is absent or unreadable -- a results directory produced by something
-    other than `jmo scan` still normalizes separators and leading separators,
-    it just cannot strip a host prefix it was never told about.
+    ``history_db._scanned_repo_paths`` uses, and from the ``root`` each
+    tree's ``scan-timings.json`` records. ``repo_paths`` holds ``--repo``
+    targets only, so a GitLab clone, scanned in a random temporary directory,
+    reached no root and its findings kept that path (#1332).
+
+    Empty when neither is readable -- a results directory produced by
+    something other than `jmo scan` still normalizes separators and leading
+    separators, it just cannot strip a host prefix it was never told about.
     """
+    roots: list[str] = []
     try:
         meta = json.loads(
             (results_dir / ".scan_metadata.json").read_text(encoding="utf-8")
         )
     except (OSError, json.JSONDecodeError):
-        return ()
-    if not isinstance(meta, dict):
-        return ()
-    raw = meta.get("repo_paths")
-    if not isinstance(raw, list):
-        return ()
-    return tuple(entry for entry in raw if isinstance(entry, str) and entry)
-
-
-def _legacy_plugin_fingerprint(
-    tool: str, rule_id: str, path: str, start_line: Any, message: str
-) -> str:
-    """The formula in ``AdapterPlugin.get_fingerprint``.
-
-    There are **two** fingerprint formulas in this codebase and they disagree:
-    :func:`~scripts.core.common_finding.fingerprint` coerces a missing line to
-    ``0`` and strips the message, while ``get_fingerprint`` renders a missing
-    line as ``""`` and does not strip. trivy, trufflehog and semgrep use the
-    second. Reproducing both is what lets
-    :func:`_normalize_paths_and_ids` *prove* an id was path-derived instead of
-    assuming it.
-    """
-    parts = [tool, rule_id, path, str(start_line), message[:MESSAGE_SNIPPET_LENGTH]]
-    return hashlib.sha256("|".join(parts).encode()).hexdigest()[:FINGERPRINT_LENGTH]
+        meta = None
+    raw = meta.get("repo_paths") if isinstance(meta, dict) else None
+    if isinstance(raw, list):
+        roots.extend(entry for entry in raw if isinstance(entry, str) and entry)
+    for timings in sorted(results_dir.glob(f"individual-*/*/{SCAN_TIMINGS_FILENAME}")):
+        try:
+            root = json.loads(timings.read_bytes()).get("root")
+        except (OSError, json.JSONDecodeError, AttributeError):
+            continue
+        if isinstance(root, str) and root:
+            roots.append(root)
+    return tuple(dict.fromkeys(roots))
 
 
 def _normalize_paths_and_ids(
@@ -237,15 +227,13 @@ def _normalize_paths_and_ids(
 
     **The id is only recomputed when the existing one can be shown to have come
     from the old path.** That check is not defensive padding -- it is load
-    bearing. Four adapters deliberately fingerprint on something that is *not*
+    bearing. Two adapters deliberately fingerprint on something that is *not*
     ``location.path``:
 
     ==============  =====================================================
     ``zap``         ``f"{uri}:{method}:{param}:{idx}"`` -- one alert on one
                     URI yields several findings that differ only by param
-    ``cdxgen``      ``component_id``
     ``nuclei``      the matched URL
-    ``mobsf``       the literal ``"AndroidManifest.xml"`` on one branch
     ==============  =====================================================
 
     Re-keying those from ``location.path`` would give every instance the same
@@ -281,24 +269,34 @@ def _normalize_paths_and_ids(
         message = finding.get("message", "") or ""
         start_line = location.get("startLine")
 
-        if current == fingerprint(tool, rule_id, original, start_line, message):
-            finding["id"] = fingerprint(tool, rule_id, normalized, start_line, message)
-            ids_rekeyed += 1
-        elif current == _legacy_plugin_fingerprint(
-            tool,
-            rule_id,
-            original,
-            start_line if start_line is not None else "",
-            message,
-        ):
-            finding["id"] = _legacy_plugin_fingerprint(
-                tool,
-                rule_id,
-                normalized,
-                start_line if start_line is not None else "",
-                message,
-            )
-            ids_rekeyed += 1
+        # Two shapes of the one formula: five components, or six when the
+        # adapter keyed on its column (shellcheck, the SARIF bindings; #1242).
+        # Try five first and recompute under whichever shape matched, so a
+        # finding that carries a column but was keyed without one keeps its
+        # shape rather than being silently promoted.
+        column = location.get("startColumn")
+        columns = (None, column) if column is not None else (None,)
+        # A secret scanner's record from git history is keyed on its commit
+        # too (G1), and is re-keyed with it.
+        context = finding.get("secretContext")
+        commit = context.get("commit") if isinstance(context, dict) else None
+        commits = (None, commit) if commit else (None,)
+        shapes = [(col, c) for c in commits for col in columns]
+        for col, c in shapes:
+            if current == fingerprint(
+                tool, rule_id, original, start_line, message, start_column=col, commit=c
+            ):
+                finding["id"] = fingerprint(
+                    tool,
+                    rule_id,
+                    normalized,
+                    start_line,
+                    message,
+                    start_column=col,
+                    commit=c,
+                )
+                ids_rekeyed += 1
+                break
 
     return paths_changed, ids_rekeyed
 
@@ -328,12 +326,93 @@ def collect_tool_diagnostics(results_dir: Path) -> list[ToolDiagnostic]:
             for tool_output in target.glob("*.json"):
                 if tool_output.name == SCAN_TIMINGS_FILENAME:
                     continue
-                tool_name = tool_output.stem
-                if tool_name == "afl++":
-                    tool_name = "aflplusplus"
-                adapter_name = loader._tool_to_adapter_name(tool_name)
+                adapter_name = loader._tool_to_adapter_name(tool_of_output(tool_output))
                 out.extend(extract_tool_diagnostics(adapter_name, tool_output, roots))
     return out
+
+
+def tool_of_output(path: Path) -> str:
+    """The tool a scan output belongs to: its name before the first dot.
+
+    A tool with more than one invocation writes more than one file, and each
+    is read by the tool's adapter: `trufflehog.json` from the working tree,
+    `trufflehog.git.json` from git history (v2.0.0 Phase 3, G1).
+    """
+    return path.name.split(".", 1)[0]
+
+
+def _commit_date(finding: dict[str, Any]) -> tuple[datetime, str]:
+    """A history record's sort key: its commit's time, then the commit.
+
+    Compared as times, not strings: `2026-01-03T01:00:00+05:00` (20:00 UTC on
+    the 2nd) is earlier than `2026-01-02T22:00:00+00:00`. A date with no
+    offset is read as UTC, and one that does not parse sorts last.
+    """
+    context = finding.get("secretContext") or {}
+    try:
+        when = datetime.fromisoformat(str(context.get("date")))
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=UTC)
+    except ValueError:
+        when = datetime.max.replace(tzinfo=UTC)
+    return when, str(context.get("commit") or "")
+
+
+def pair_history_with_tree(
+    findings: list[dict[str, Any]], target_of: Mapping[int, str] | None = None
+) -> list[dict[str, Any]]:
+    """Fold each secret's git-history records into its working-tree finding.
+
+    A secret still in the tree is in history too, and trufflehog and gitleaks
+    each report it once per mode. Records are paired **by the secret**, within
+    one target, tool, rule and path (decided 2026-09-26). Pairing by location
+    cannot work: once a line is inserted above a committed key, the tree says
+    line 2 and history line 1 (measured).
+
+    `target_of` maps each finding (by `id()`) to the results folder it was
+    read from. Without the target in the key, two repositories in one scan
+    paired with each other: one's tree finding took the other's commit, and
+    the other's record was dropped (#1323).
+
+    - A tree finding keeps its id and location, and takes the `secretContext`
+      of the earliest commit that added its secret. Its history records go.
+    - History records with no tree finding are a secret that is gone from the
+      tree. One stays per (tool, rule, path, secret): the earliest.
+    - A key rotated in place is two secrets, so it stays two findings.
+
+    Every finding leaves without its `secretDigest`: this is the one place it
+    is read, and nothing writes it.
+    """
+    groups: dict[tuple[str, str, str, str, str], list[dict[str, Any]]] = {}
+    for finding in findings:
+        digest = finding.pop("secretDigest", None)
+        if not digest:
+            continue
+        tool = finding.get("tool") or {}
+        key = (
+            (target_of or {}).get(id(finding), ""),
+            str(tool.get("name") if isinstance(tool, dict) else tool),
+            str(finding.get("ruleId") or ""),
+            str((finding.get("location") or {}).get("path") or ""),
+            str(digest),
+        )
+        groups.setdefault(key, []).append(finding)
+
+    dropped: set[int] = set()
+    for members in groups.values():
+        history = sorted(
+            (f for f in members if (f.get("secretContext") or {}).get("commit")),
+            key=_commit_date,
+        )
+        if not history:
+            continue
+        tree = [f for f in members if not (f.get("secretContext") or {}).get("commit")]
+        for finding in tree:
+            finding["secretContext"] = dict(history[0]["secretContext"])
+        # By identity: two history records can be equal dicts.
+        kept = set() if tree else {id(history[0])}
+        dropped.update(id(f) for f in history if id(f) not in kept)
+    return [f for f in findings if id(f) not in dropped]
 
 
 def _target_dirs(results_dir: Path) -> list[Path]:
@@ -360,7 +439,10 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
     registry = get_plugin_registry()
     loader = get_plugin_loader()
 
-    jobs = []
+    # Each load job, and the results folder it reads: the pairing keeps two
+    # targets' records apart (#1323).
+    jobs: dict[Future[list[dict[str, Any]]], str] = {}
+    target_of: dict[int, str] = {}
     max_workers = 8
     try:
         # Allow override via env, else default to min(8, cpu_count or 4)
@@ -413,14 +495,11 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
                     if tool_output.name == SCAN_TIMINGS_FILENAME:
                         continue
 
-                    tool_name = tool_output.stem  # e.g., "trivy", "semgrep", "afl++"
+                    # e.g. "trivy", "osv-scanner"; "trufflehog" for
+                    # trufflehog.git.json as well
+                    tool_name = tool_of_output(tool_output)
 
-                    # Handle special case: afl++.json → tool name is "aflplusplus"
-                    if tool_name == "afl++":
-                        tool_name = "aflplusplus"
-
-                    # Normalize tool name to adapter name (e.g., "checkov-cicd" → "checkov")
-                    # This handles variant filenames from scan profiles
+                    # Hyphenated tool names map to underscored adapters
                     adapter_name = loader._tool_to_adapter_name(tool_name)
 
                     # Get plugin for this tool
@@ -432,14 +511,16 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
                         continue
 
                     # Submit job to load findings using plugin
-                    jobs.append(
-                        ex.submit(
-                            _safe_load_plugin, plugin_class, tool_output, profiling
-                        )
+                    future = ex.submit(
+                        _safe_load_plugin, plugin_class, tool_output, profiling
                     )
+                    jobs[future] = f"{target_dir.name}/{target.name}"
         for fut in as_completed(jobs):
             try:
-                findings.extend(fut.result())
+                loaded = fut.result()
+                for finding in loaded:
+                    target_of[id(finding)] = jobs[fut]
+                findings.extend(loaded)
             except (
                 Exception
             ) as e:  # Acceptable: a broken future must not abort aggregation
@@ -474,6 +555,18 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
             "(%d finding id(s) re-keyed)",
             paths_changed,
             ids_rekeyed,
+        )
+
+    # After the paths are normalised, since a tree record's absolute path and
+    # a history record's relative one must compare equal; before dedup, which
+    # would otherwise keep whichever of a secret's records a thread finished
+    # first.
+    paired = len(findings)
+    findings = pair_history_with_tree(findings, target_of)
+    if paired != len(findings):
+        logger.info(
+            "Folded %d git-history record(s) into the findings for the same secret",
+            paired - len(findings),
         )
 
     # Dedupe by id (fingerprint) - memory-efficient approach

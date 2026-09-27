@@ -17,7 +17,6 @@ from scripts.core.validators.release_validator import (
     _check_conftest_exists,
     _check_contributing_exists,
     _check_coverage_threshold,
-    _check_deep_profile_versions,
     _check_dev_install,
     _check_dockerfile_build,
     _check_docs_key_files,
@@ -29,6 +28,7 @@ from scripts.core.validators.release_validator import (
     _check_jmo_version_entry_point,
     _check_jmo_yml,
     _check_json_schema,
+    _check_matrix_versions,
     _check_merge_conflicts,
     _check_no_artifact_dirs,
     _check_no_circular_imports,
@@ -138,7 +138,7 @@ class TestValidateRelease:
         "scripts.core.validators.release_validator._get_jmo_version",
         return_value="1.0.0",
     )
-    def test_full_tier_has_52_checks(
+    def test_full_tier_has_49_checks(
         self, mock_jmo_ver, mock_pp_ver, mock_pp_data, mock_exists, mock_read, mock_cmd
     ):
         mock_pp_data.return_value = {
@@ -150,7 +150,7 @@ class TestValidateRelease:
         mock_read.return_value = "## [1.0.0] - 2026-02-23\nSome content here\n" * 10
         mock_cmd.return_value = MagicMock(returncode=0, stdout="", stderr="")
         result = validate_release("full")
-        assert result.total == 52
+        assert result.total == 49
 
     def test_version_checks_present(self):
         """Quick tier includes version-related checks."""
@@ -458,7 +458,7 @@ class TestToolVersionChecks:
     @patch("scripts.core.validators.release_validator._path_exists", return_value=True)
     @patch("scripts.core.validators.release_validator._read_text")
     def test_versions_yaml_exists_pass(self, mock_read, mock_exists):
-        mock_read.return_value = "python_tools:\n  bandit:\n    version: 1.9.3\n"
+        mock_read.return_value = "python_tools:\n  checkov:\n    version: 1.9.3\n"
         result = _check_versions_yaml_exists()
         assert result is None
 
@@ -476,23 +476,54 @@ class TestToolVersionChecks:
         # PyYAML may or may not raise on this - test with guaranteed invalid yaml
         pass  # YAML parser is lenient; skip this edge case
 
-    @patch("scripts.core.validators.release_validator._read_text")
-    def test_deep_profile_versions_basic(self, mock_read):
-        mock_read.return_value = (
-            "python_tools:\n"
-            "  bandit:\n    version: 1.9.3\n"
-            "  semgrep:\n    version: 1.151.0\n"
-            "  trivy:\n    version: 0.60.0\n"
+    @staticmethod
+    def _versions_yaml(tools) -> str:
+        return "binary_tools:\n" + "".join(
+            f"  {tool}:\n    version: 1.0.0\n" for tool in tools
         )
-        result = _check_deep_profile_versions()
-        # Some tools may be missing - that's expected
-        assert result is None or result.status in (CheckStatus.PASS, CheckStatus.WARN)
+
+    @patch("scripts.core.validators.release_validator._read_text")
+    def test_matrix_versions_pass_when_every_tool_is_pinned(self, mock_read):
+        from scripts.core.tool_registry import POLICY_ENGINE, TOOL_MATRIX
+
+        mock_read.return_value = self._versions_yaml((*TOOL_MATRIX, POLICY_ENGINE))
+        assert _check_matrix_versions() is None
+
+    @patch("scripts.core.validators.release_validator._read_text")
+    def test_matrix_versions_warn_names_the_unpinned_tool(self, mock_read):
+        """A matrix scanner with no versions.yaml entry is named, not counted away.
+
+        The v1.x check read the deep profile inside `try/except ImportError`, so
+        a failed import left an empty list and nothing could be missing. The
+        matrix is imported at module level now; this pins that a gap is found.
+        """
+        from scripts.core.tool_registry import POLICY_ENGINE, TOOL_MATRIX
+
+        dropped = TOOL_MATRIX[0]
+        pinned = [t for t in (*TOOL_MATRIX, POLICY_ENGINE) if t != dropped]
+        mock_read.return_value = self._versions_yaml(pinned)
+
+        result = _check_matrix_versions()
+        assert result is not None
+        assert result.status == CheckStatus.WARN
+        assert dropped in result.message
+
+    @patch("scripts.core.validators.release_validator._read_text")
+    def test_matrix_versions_requires_the_policy_engine(self, mock_read):
+        """opa is not a scanner but is installed and baked in, so it is pinned too."""
+        from scripts.core.tool_registry import POLICY_ENGINE, TOOL_MATRIX
+
+        mock_read.return_value = self._versions_yaml(TOOL_MATRIX)
+
+        result = _check_matrix_versions()
+        assert result is not None
+        assert POLICY_ENGINE in result.message
 
     @patch("scripts.core.validators.release_validator._read_text")
     def test_version_format_pass(self, mock_read):
         mock_read.return_value = (
             "python_tools:\n"
-            "  bandit:\n    version: 1.9.3\n"
+            "  checkov:\n    version: 1.9.3\n"
             "  semgrep:\n    version: 1.151.0\n"
         )
         result = _check_version_format()
@@ -500,9 +531,9 @@ class TestToolVersionChecks:
 
     @patch("scripts.core.validators.release_validator._read_text")
     def test_version_format_prefixed(self, mock_read):
-        """Accepts prefixed versions like akto's mini-testing-1.53.7."""
+        """Accepts prefixed versions like mini-testing-1.53.7."""
         mock_read.return_value = (
-            "java_tools:\n  akto:\n    version: mini-testing-1.53.7\n"
+            "binary_tools:\n  example:\n    version: mini-testing-1.53.7\n"
         )
         result = _check_version_format()
         assert result is None
@@ -510,7 +541,7 @@ class TestToolVersionChecks:
     @patch("scripts.core.validators.release_validator._read_text")
     def test_version_format_invalid(self, mock_read):
         mock_read.return_value = (
-            "python_tools:\n  bandit:\n    version: abc-not-a-version\n"
+            "python_tools:\n  checkov:\n    version: abc-not-a-version\n"
         )
         result = _check_version_format()
         assert result is not None
@@ -520,7 +551,7 @@ class TestToolVersionChecks:
     def test_outdated_tools_pass(self, mock_read):
         mock_read.return_value = (
             "python_tools:\n"
-            "  bandit:\n    version: 1.9.3\n    update_check: pip\n"
+            "  checkov:\n    version: 1.9.3\n    update_check: pip\n"
             "  semgrep:\n    version: 1.0.0\n    update_check: pip\n"
         )
         result = _check_outdated_tools()
@@ -1349,10 +1380,10 @@ class TestEdgeCases:
     @patch("scripts.core.validators.release_validator._path_exists", return_value=True)
     @patch("scripts.core.validators.release_validator._read_text")
     @patch("scripts.core.validators.release_validator._run_cmd")
-    def test_full_tier_adds_exactly_6_checks(
+    def test_full_tier_adds_exactly_3_checks(
         self, mock_cmd, mock_read, mock_exists, mock_data, mock_pp_ver, mock_jmo_ver
     ):
-        """Full tier should add exactly 6 checks beyond quick."""
+        """Full tier adds the one image build, dev install and entry point."""
         mock_data.return_value = {
             "project": {"version": "1.0.0", "requires-python": ">=3.12"},
             "tool": {"pytest": {"ini_options": {"markers": ["a", "b", "c"]}}},
@@ -1362,7 +1393,11 @@ class TestEdgeCases:
 
         quick_result = validate_release("quick")
         full_result = validate_release("full")
-        assert full_result.total - quick_result.total == 6
+        assert full_result.total - quick_result.total == 3
+        added = {c.name for c in full_result.checks} - {
+            c.name for c in quick_result.checks
+        }
+        assert added == {"docker-build-dockerfile", "dev-install", "jmo-entry-point"}
 
 
 # ---------------------------------------------------------------------------

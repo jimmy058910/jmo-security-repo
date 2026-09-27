@@ -159,4 +159,4 @@ All fixes in this skill come from [CLAUDE.md](../../../../CLAUDE.md). Memory int
 
 - `.jmo/memory/debugging/` - General debugging patterns (jmo-systematic-debugging skill)
 - `.jmo/memory/adapters/` - Tool adapter patterns (jmo-adapter-generator skill)
-- `.jmo/memory/profiles/` - Performance optimization patterns (jmo-profile-optimizer skill)
+- `.jmo/memory/timings/` - Per-tool timing baselines (jmo-profile-optimizer skill)

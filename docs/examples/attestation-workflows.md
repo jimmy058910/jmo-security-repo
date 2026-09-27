@@ -47,7 +47,7 @@ jobs:
 
       - name: Run security scan
         run: |
-          jmo scan --repo . --profile balanced --attest --sign
+          jmo scan --repo . --attest --sign
 
       - name: Upload attestations
         uses: actions/upload-artifact@v4
@@ -109,7 +109,6 @@ jobs:
             --image ghcr.io/${{ github.repository }}/app:latest \
             --terraform-state infrastructure/terraform.tfstate \
             --url https://staging.example.com \
-            --profile balanced \
             --attest \
             --sign
 
@@ -162,7 +161,7 @@ jobs:
 
       - name: Scan PR branch
         run: |
-          jmo scan --repo . --profile fast --attest --sign
+          jmo scan --repo . --tools trufflehog semgrep trivy --attest --sign
 
       - name: Verify attestation
         id: verify
@@ -217,7 +216,7 @@ security-scan:
   before_script:
     - pip install jmo-security
   script:
-    - jmo scan --repo . --profile balanced --attest --sign
+    - jmo scan --repo . --attest --sign
   artifacts:
     paths:
       - results/summaries/findings.json
@@ -251,7 +250,6 @@ security-scan:
       jmo scan \
         --repo . \
         --image $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA \
-        --profile balanced \
         --attest \
         --sign
   artifacts:
@@ -305,7 +303,7 @@ docker run --rm \
   -v $PWD:/scan \
   -v $PWD/results:/results \
   jmo-security:latest \
-  scan --repo /scan --profile balanced --attest
+  scan --repo /scan --attest
 
 echo "Attestation generated: results/summaries/findings.json.att.json"
 
@@ -332,7 +330,7 @@ docker run --rm \
   -e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
   -e GITHUB_REPOSITORY \
   jmo-security:latest \
-  scan --repo /scan --profile balanced --attest --sign
+  scan --repo /scan --attest --sign
 
 echo "Signed attestation: results/summaries/findings.json.att.sigstore.json"
 ```
@@ -346,7 +344,7 @@ version: '3.8'
 services:
   jmo-scan:
     image: jmo-security:latest
-    command: scan --repo /scan --profile balanced --attest
+    command: scan --repo /scan --attest
     volumes:
       - ./:/scan
       - ./results:/results
@@ -356,11 +354,11 @@ services:
 
 ## Multi-Stage Pipelines
 
-### Nightly Deep Scan with Historical Comparison
+### Nightly Scan with Historical Comparison
 
 ```yaml
-# .github/workflows/nightly-deep-scan.yml
-name: Nightly Deep Security Scan
+# .github/workflows/nightly-scan.yml
+name: Nightly Security Scan
 
 on:
   schedule:
@@ -368,7 +366,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  deep-scan:
+  nightly-scan:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -390,9 +388,9 @@ jobs:
           path: previous-attestations/
         continue-on-error: true  # First run may not have history
 
-      - name: Run deep scan
+      - name: Run scan
         run: |
-          jmo scan --repo . --profile deep --attest --sign
+          jmo scan --repo . --attest --sign
 
       - name: Verify with historical comparison
         run: |
@@ -464,7 +462,6 @@ jobs:
           jmo scan \
             --repo . \
             --image ghcr.io/${{ github.repository }}:${{ github.ref_name }} \
-            --profile deep \
             --attest \
             --sign
 
@@ -516,7 +513,6 @@ for repo in project-a project-b project-c; do
 
   jmo scan \
     --repo ~/repos/$repo \
-    --profile deep \
     --attest \
     --sign \
     --results-dir compliance-scans/$repo
@@ -571,7 +567,6 @@ jobs:
             --repo . \
             --image ${{ secrets.PAYMENT_APP_IMAGE }} \
             --url https://payment-api.example.com \
-            --profile deep \
             --attest \
             --sign
 
@@ -668,7 +663,7 @@ jobs:
 
       - name: Scan PR branch
         run: |
-          jmo scan --repo . --profile balanced --attest --sign
+          jmo scan --repo . --attest --sign
 
       - name: Detect regressions via attestation comparison
         id: regression

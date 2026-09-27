@@ -66,7 +66,6 @@ def _make_results(root: Path, repo_paths: list[Path] | None) -> Path:
     (root / "summaries" / "findings.json").write_bytes(b"[]")
     if repo_paths is not None:
         meta = {
-            "profile": "balanced",
             "tools": ["semgrep"],
             "timestamp": "2026-08-18T00:00:00+00:00",
             "target_count": len(repo_paths),
@@ -123,9 +122,7 @@ class TestBranchComesFromTheScannedRepo:
         # results directory.
         results = _make_results(containing / "res", [scanned])
         db = tmp_path / "h.db"
-        store_scan(
-            results_dir=results, profile="balanced", tools=["semgrep"], db_path=db
-        )
+        store_scan(results_dir=results, tools=["semgrep"], db_path=db)
 
         row = _stored_row(db)
         assert row["branch"] == "feature-branch"
@@ -146,9 +143,7 @@ class TestBranchComesFromTheScannedRepo:
         # copied off the containing repository would not be.
         results = _make_results(containing / "res", None)
         db = tmp_path / "h.db"
-        store_scan(
-            results_dir=results, profile="balanced", tools=["semgrep"], db_path=db
-        )
+        store_scan(results_dir=results, tools=["semgrep"], db_path=db)
 
         row = _stored_row(db)
         assert row["branch"] is None
@@ -160,7 +155,6 @@ class TestBranchComesFromTheScannedRepo:
         db = tmp_path / "h.db"
         store_scan(
             results_dir=results,
-            profile="balanced",
             tools=["semgrep"],
             db_path=db,
             branch="explicit",
@@ -176,9 +170,7 @@ class TestStoredVersionIsTheRunningVersion:
     def test_records_the_resolved_version(self, tmp_path):
         results = _make_results(tmp_path / "res", None)
         db = tmp_path / "h.db"
-        store_scan(
-            results_dir=results, profile="balanced", tools=["semgrep"], db_path=db
-        )
+        store_scan(results_dir=results, tools=["semgrep"], db_path=db)
 
         stored = _stored_row(db)["jmo_version"]
         assert stored == get_jmo_version()
@@ -193,7 +185,6 @@ class TestStoredVersionIsTheRunningVersion:
         db = tmp_path / "h.db"
         store_scan(
             results_dir=results,
-            profile="balanced",
             tools=["semgrep"],
             db_path=db,
             jmo_version="9.9.9",
@@ -368,66 +359,47 @@ class TestMigrationRelabelsFabricatedVersions:
         self._apply(db)  # must not raise
 
 
-class TestStoreProfileValidationIsNotDuplicatedInArgparse:
-    """The CLI must not be a narrower gate than the validator behind it.
+class TestStoreRejectsInputCleanly:
+    """`jmo history store` refuses what it cannot use without a traceback.
 
-    `--profile` used to carry `choices=list(PROFILE_TOOLS)`, the tool registry
-    only, while `store_scan()` validates against `get_known_profiles()` -- the
-    registry PLUS any profile defined under `profiles:` in jmo.yml. A
-    user-defined profile was therefore rejected by argparse before it could
-    reach the validator that accepts it: the #721 enumeration class one layer
-    above the SQL CHECK that #725 removed.
-
-    Uses the real parser (`parse_args`), not a hand-built stand-in -- a mirror
-    of a parser cannot notice what the parser rejects.
+    Scan profiles left in v2.0.0, and with them `history store --profile`
+    and `history list --profile`. The parser tests use the real parser
+    (`parse_args`), not a hand-built stand-in -- a mirror of a parser cannot
+    notice what the parser rejects.
     """
 
-    def test_real_parser_accepts_a_profile_outside_the_registry(
-        self, tmp_path, monkeypatch
-    ):
+    @pytest.mark.parametrize(
+        "argv",
+        [
+            pytest.param(
+                ["history", "store", "--results-dir", ".", "--profile", "balanced"],
+                id="store",
+            ),
+            pytest.param(["history", "list", "--profile", "balanced"], id="list"),
+        ],
+    )
+    def test_real_parser_rejects_the_removed_profile_flag(self, monkeypatch, argv):
         import sys
 
         from scripts.cli.jmo import parse_args
 
         # parse_args() reads sys.argv rather than taking a list.
-        monkeypatch.setattr(
-            sys,
-            "argv",
-            [
-                "jmo",
-                "history",
-                "store",
-                "--results-dir",
-                str(tmp_path),
-                "--profile",
-                "custom-audit",
-            ],
-        )
-        args = parse_args()
-        assert args.profile == "custom-audit"
+        monkeypatch.setattr(sys, "argv", ["jmo", *argv])
+        with pytest.raises(SystemExit) as exc:
+            parse_args()
+        assert exc.value.code == 2
 
-    def test_get_known_profiles_includes_jmo_yml_profiles(self, monkeypatch):
-        from types import SimpleNamespace
+    def test_invalid_input_is_a_clean_error_not_a_traceback(self, tmp_path, capsys):
+        """A findings.json that is not JSON is the user's mistake, not a crash.
 
-        import scripts.core.config as config_module
-        from scripts.core.history_db import get_known_profiles
-        from scripts.core.tool_registry import PROFILE_TOOLS
-
-        monkeypatch.setattr(
-            config_module,
-            "load_config",
-            lambda *a, **k: SimpleNamespace(profiles={"custom-audit": {}}),
-        )
-        known = get_known_profiles()
-        assert "custom-audit" in known
-        assert set(PROFILE_TOOLS) <= known
-
-    def test_unknown_profile_is_a_clean_error_not_a_traceback(self, tmp_path, capsys):
+        json.JSONDecodeError is a ValueError, which cmd_history_store reports
+        as a one-line error; the catch-all branch below it prints a traceback.
+        """
         results = _make_results(tmp_path / "res", None)
+        (results / "summaries" / "findings.json").write_bytes(b"{ not json")
 
         class _Args:
             results_dir = str(results)
-            profile = "definitely-not-a-profile"
             db = str(tmp_path / "h.db")
             commit = None
             branch = None
@@ -437,9 +409,7 @@ class TestStoreProfileValidationIsNotDuplicatedInArgparse:
         err = capsys.readouterr().err
 
         assert rc == 1
-        assert "Unknown profile" in err
-        # store_scan()'s message names every known profile, so the traceback
-        # adds noise and no information.
+        assert err.startswith("Error: "), err
         assert "Traceback" not in err
 
 
@@ -472,7 +442,6 @@ class TestStoreAcceptsBothFindingsShapes:
 
         class _Args:
             results_dir = str(results)
-            profile = "balanced"
             db = str(tmp_path / "h.db")
             commit = None
             branch = None
@@ -491,7 +460,6 @@ class TestStoreAcceptsBothFindingsShapes:
 
         class _Args:
             results_dir = str(results)
-            profile = "balanced"
             db = str(tmp_path / "h.db")
             commit = None
             branch = None
@@ -544,7 +512,7 @@ class TestOneBadFindingDoesNotDiscardTheScan:
             tmp_path / "res",
             [{"tool": {"name": "semgrep"}}, {"tool": {"name": "trivy"}}],
         )
-        store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
+        store_scan(results, ["semgrep"], db_path=tmp_path / "h.db")
 
         assert _stored_row(tmp_path / "h.db") is not None, (
             "the scan row itself was discarded because two findings collided"
@@ -559,7 +527,7 @@ class TestOneBadFindingDoesNotDiscardTheScan:
                 {"id": "same", "tool": {"name": "trivy"}},
             ],
         )
-        store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
+        store_scan(results, ["semgrep"], db_path=tmp_path / "h.db")
 
         assert _stored_row(tmp_path / "h.db") is not None
         assert _stored_fingerprints(tmp_path / "h.db") == ["same"], (
@@ -577,7 +545,7 @@ class TestOneBadFindingDoesNotDiscardTheScan:
                 {"id": "b", "tool": {"name": "trivy"}},
             ],
         )
-        store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
+        store_scan(results, ["semgrep"], db_path=tmp_path / "h.db")
 
         assert sorted(_stored_fingerprints(tmp_path / "h.db")) == ["a", "b"]
 
@@ -591,7 +559,7 @@ class TestOneBadFindingDoesNotDiscardTheScan:
                 {"id": "c", "tool": {"name": "gosec"}},
             ],
         )
-        store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
+        store_scan(results, ["semgrep"], db_path=tmp_path / "h.db")
 
         assert sorted(_stored_fingerprints(tmp_path / "h.db")) == ["a", "b", "c"]
 
@@ -613,7 +581,7 @@ class TestOneBadFindingDoesNotDiscardTheScan:
             ],
         )
         with caplog.at_level(logging.WARNING, logger="scripts.core.history_db"):
-            store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
+            store_scan(results, ["semgrep"], db_path=tmp_path / "h.db")
 
         warnings = [
             r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING
@@ -635,7 +603,7 @@ class TestOneBadFindingDoesNotDiscardTheScan:
             tmp_path / "res", [{"id": "a", "tool": {"name": "semgrep"}}]
         )
         with caplog.at_level(logging.WARNING, logger="scripts.core.history_db"):
-            store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
+            store_scan(results, ["semgrep"], db_path=tmp_path / "h.db")
 
         assert not [r for r in caplog.records if "NOT recorded" in r.getMessage()], (
             "a clean scan produced a data-loss warning"
@@ -670,7 +638,7 @@ class TestScanDurationReachesTheDatabase:
 
     def test_the_scans_own_duration_is_stored(self, tmp_path):
         results = _results_with_duration(tmp_path / "res", 1234.5)
-        store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
+        store_scan(results, ["semgrep"], db_path=tmp_path / "h.db")
         assert _stored_row(tmp_path / "h.db")["duration_seconds"] == 1234.5
 
     def test_absent_metadata_stores_null_rather_than_a_guess(self, tmp_path):
@@ -681,7 +649,7 @@ class TestScanDurationReachesTheDatabase:
         ~30 seconds, which reads as measured.
         """
         results = _make_results(tmp_path / "res", None)
-        store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
+        store_scan(results, ["semgrep"], db_path=tmp_path / "h.db")
         assert _stored_row(tmp_path / "h.db")["duration_seconds"] is None
 
     def test_an_explicit_argument_wins_over_the_metadata(self, tmp_path):
@@ -689,7 +657,6 @@ class TestScanDurationReachesTheDatabase:
         results = _results_with_duration(tmp_path / "res", 1234.5)
         store_scan(
             results,
-            "balanced",
             ["semgrep"],
             db_path=tmp_path / "h.db",
             duration_seconds=7.0,
@@ -713,7 +680,7 @@ class TestScanDurationReachesTheDatabase:
         unguarded isinstance check stores it as a 1.0-second scan.
         """
         results = _results_with_duration(tmp_path / "res", junk)
-        store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
+        store_scan(results, ["semgrep"], db_path=tmp_path / "h.db")
         assert _stored_row(tmp_path / "h.db")["duration_seconds"] is None
 
     def test_history_list_renders_the_duration_it_stored(self, tmp_path, capsys):
@@ -724,12 +691,11 @@ class TestScanDurationReachesTheDatabase:
         claims and only the second is what the issue is about.
         """
         results = _results_with_duration(tmp_path / "res", 1234.5)
-        store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
+        store_scan(results, ["semgrep"], db_path=tmp_path / "h.db")
 
         class _Args:
             db = str(tmp_path / "h.db")
             limit = 10
-            profile = None
             branch = None
             json = False
 
@@ -749,12 +715,11 @@ class TestScanDurationReachesTheDatabase:
         `tabulate` is not a runtime dependency (#1011).
         """
         results = _make_results(tmp_path / "res", None)
-        store_scan(results, "balanced", ["semgrep"], db_path=tmp_path / "h.db")
+        store_scan(results, ["semgrep"], db_path=tmp_path / "h.db")
 
         class _Args:
             db = str(tmp_path / "h.db")
             limit = 10
-            profile = None
             branch = None
             json = False
 
@@ -768,9 +733,7 @@ class TestScanDurationReachesTheDatabase:
         """The second reader: `Duration:` is guarded on a truthy value, so it
         had never printed for any scan in the database's recorded history."""
         results = _results_with_duration(tmp_path / "res", 1234.5)
-        scan_id = store_scan(
-            results, "balanced", ["semgrep"], db_path=tmp_path / "h.db"
-        )
+        scan_id = store_scan(results, ["semgrep"], db_path=tmp_path / "h.db")
 
         class _Args:
             db = str(tmp_path / "h.db")

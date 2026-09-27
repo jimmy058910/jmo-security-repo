@@ -390,27 +390,28 @@ class TestCompareScansInteractive:
         ):
             _compare_scans_interactive(tmp_path)
 
-    def test_happy_path_with_scan_selection(self, tmp_path: Path):
-        """Test full compare flow: list scans, select two, run comparison."""
+    def test_happy_path_with_scan_selection(self, tmp_path: Path, capsys):
+        """Test full compare flow: list scans, select two, run comparison.
+
+        History rows carry no profile since v2.0.0, so the listing has no
+        Profile column to fill with "unknown".
+        """
         scans = [
             {
                 "id": "scan-aaa",
                 "timestamp_iso": "2026-02-10",
-                "profile": "balanced",
                 "branch": "main",
                 "total_findings": 5,
             },
             {
                 "id": "scan-bbb",
                 "timestamp_iso": "2026-02-11",
-                "profile": "balanced",
                 "branch": "dev",
                 "total_findings": 3,
             },
             {
                 "id": "scan-ccc",
                 "timestamp_iso": "2026-02-12",
-                "profile": "deep",
                 "branch": "dev",
                 "total_findings": 8,
             },
@@ -432,20 +433,23 @@ class TestCompareScansInteractive:
                     args = mock_compare.call_args[0][0]
                     assert args.scan_ids == ["scan-aaa", "scan-bbb"]
 
+        out = capsys.readouterr().out
+        assert "Branch" in out
+        assert "Profile" not in out
+        assert "unknown" not in out
+
     def test_compare_nonzero_exit(self, tmp_path: Path):
         """Test compare prints warning on nonzero exit code."""
         scans = [
             {
                 "id": "scan-aaa",
                 "timestamp_iso": "2026-02-10",
-                "profile": "b",
                 "branch": "m",
                 "total_findings": 0,
             },
             {
                 "id": "scan-bbb",
                 "timestamp_iso": "2026-02-11",
-                "profile": "b",
                 "branch": "d",
                 "total_findings": 0,
             },
@@ -467,14 +471,12 @@ class TestCompareScansInteractive:
             {
                 "id": "scan-aaa",
                 "timestamp_iso": "2026-02-10",
-                "profile": "b",
                 "branch": "m",
                 "total_findings": 0,
             },
             {
                 "id": "scan-bbb",
                 "timestamp_iso": "2026-02-11",
-                "profile": "b",
                 "branch": "d",
                 "total_findings": 0,
             },

@@ -141,7 +141,7 @@ class TestExtremeLoad:
 
         # Generate findings for multiple tools
         findings_per_tool = 20000  # 20k per tool, 5 tools = 100k
-        tools = ["semgrep", "trivy", "bandit", "grype", "checkov"]
+        tools = ["semgrep", "trivy", "hadolint", "grype", "checkov"]
 
         for tool in tools:
             tool_findings = []
@@ -175,19 +175,17 @@ class TestExtremeLoad:
                         }
                     ],
                 }
-            elif tool == "bandit":
-                content = {
-                    "results": [
-                        {
-                            "test_id": f"B{i}",
-                            "filename": f"file_{i}.py",
-                            "line_number": i,
-                            "issue_severity": "LOW",
-                            "issue_text": f"Issue {i}",
-                        }
-                        for i in range(findings_per_tool)
-                    ]
-                }
+            elif tool == "hadolint":
+                content = [
+                    {
+                        "code": f"DL{i}",
+                        "file": "Dockerfile",
+                        "line": i,
+                        "level": "info",
+                        "message": f"Issue {i}",
+                    }
+                    for i in range(findings_per_tool)
+                ]
             elif tool == "grype":
                 content = {
                     "matches": [
@@ -380,17 +378,15 @@ class TestConcurrentOperations:
                 conn.execute(
                     """
                     INSERT INTO scans
-                    (id, timestamp, timestamp_iso, profile, tools, targets, target_type, jmo_version)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    (id, timestamp, timestamp_iso, tools, targets, jmo_version)
+                    VALUES (?, ?, ?, ?, ?, ?)
                     """,
                     (
                         f"scan-{scan_id}",
                         1704067200,
                         "2024-01-01T00:00:00",
-                        "fast",
                         "[]",
                         f'["/repo-{scan_id}"]',
-                        "repo",
                         "1.0.0",
                     ),
                 )
@@ -513,17 +509,15 @@ class TestDatabaseStress:
             conn.execute(
                 """
                 INSERT INTO scans
-                (id, timestamp, timestamp_iso, profile, tools, targets, target_type, jmo_version)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                (id, timestamp, timestamp_iso, tools, targets, jmo_version)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 (
                     f"scan-{i:05d}",
                     1704067200 + i * 86400,
                     f"2024-01-{(i % 28) + 1:02d}T00:00:00",
-                    ["fast", "balanced", "deep"][i % 3],
                     "[]",
                     f'["/repo-{i % 100}"]',
-                    "repo",
                     "1.0.0",
                 ),
             )
@@ -600,17 +594,15 @@ class TestDatabaseStress:
             conn.execute(
                 """
                 INSERT INTO scans
-                (id, timestamp, timestamp_iso, profile, tools, targets, target_type, jmo_version)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                (id, timestamp, timestamp_iso, tools, targets, jmo_version)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 (
                     f"scan-{i}",
                     1704067200,
                     "2024-01-01",
-                    "fast",
                     "[]",
                     "[]",
-                    "repo",
                     "1.0.0",
                 ),
             )

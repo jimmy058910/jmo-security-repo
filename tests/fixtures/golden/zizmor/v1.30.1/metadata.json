@@ -1,0 +1,15 @@
+{
+  "tool": "zizmor",
+  "version": "1.30.1",
+  "generated_at": "2026-09-12T20:53:43.787136+00:00",
+  "sample_dir": null,
+  "finding_count": 217,
+  "raw_output_hash": "f2989834e30a",
+  "binary_sha256": "4ace959d58c0dc48659c3eeefc4bb9e3b18197c174e5e997d2f8e0896f0d3c9e",
+  "download_url": "https://github.com/zizmorcore/zizmor/releases/download/v1.30.1/zizmor-x86_64-pc-windows-msvc.zip",
+  "target": {
+    "repository": "https://github.com/jimmy058910/jmo-security-repo",
+    "commit": "3098c766985912699b76beb3f634a962087c628e"
+  },
+  "command": "zizmor --format sarif --no-online-audits .  (cwd: the repository root, clean tree at the recorded commit)"
+}

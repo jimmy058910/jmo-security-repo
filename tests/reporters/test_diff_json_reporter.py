@@ -15,7 +15,6 @@ def sample_diff_result():
         source_type="directory",
         path="baseline-results/",
         timestamp="2025-11-04T10:00:00Z",
-        profile="balanced",
         total_findings=150,
     )
 
@@ -23,7 +22,6 @@ def sample_diff_result():
         source_type="directory",
         path="current-results/",
         timestamp="2025-11-05T10:00:00Z",
-        profile="balanced",
         total_findings=142,
     )
 
@@ -161,16 +159,17 @@ def test_json_metadata_wrapper(tmp_path, sample_diff_result):
     assert baseline["source_type"] == "directory"
     assert baseline["path"] == "baseline-results/"
     assert baseline["timestamp"] == "2025-11-04T10:00:00Z"
-    assert baseline["profile"] == "balanced"
     assert baseline["total_findings"] == 150
+    # Scan profiles are gone (v2.0.0), so the source block no longer names one.
+    assert "profile" not in baseline
 
     # Check current metadata
     current = meta["current"]
     assert current["source_type"] == "directory"
     assert current["path"] == "current-results/"
     assert current["timestamp"] == "2025-11-05T10:00:00Z"
-    assert current["profile"] == "balanced"
     assert current["total_findings"] == 142
+    assert "profile" not in current
 
 
 def test_json_statistics_section(tmp_path, sample_diff_result):
@@ -296,7 +295,6 @@ def test_json_empty_diff(tmp_path):
         source_type="directory",
         path="baseline/",
         timestamp="2025-11-04T10:00:00Z",
-        profile="fast",
         total_findings=0,
     )
 
@@ -304,7 +302,6 @@ def test_json_empty_diff(tmp_path):
         source_type="directory",
         path="current/",
         timestamp="2025-11-05T10:00:00Z",
-        profile="fast",
         total_findings=0,
     )
 
@@ -347,7 +344,6 @@ def test_json_unicode_handling(tmp_path):
         source_type="directory",
         path="baseline/",
         timestamp="2025-11-04T10:00:00Z",
-        profile="balanced",
         total_findings=1,
     )
 
@@ -355,7 +351,6 @@ def test_json_unicode_handling(tmp_path):
         source_type="directory",
         path="current/",
         timestamp="2025-11-05T10:00:00Z",
-        profile="balanced",
         total_findings=1,
     )
 
@@ -412,7 +407,6 @@ def test_json_creates_parent_directory(tmp_path):
         source_type="directory",
         path="baseline/",
         timestamp="2025-11-04T10:00:00Z",
-        profile="fast",
         total_findings=0,
     )
 
@@ -420,7 +414,6 @@ def test_json_creates_parent_directory(tmp_path):
         source_type="directory",
         path="current/",
         timestamp="2025-11-05T10:00:00Z",
-        profile="fast",
         total_findings=0,
     )
 

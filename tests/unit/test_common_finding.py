@@ -484,6 +484,26 @@ class TestFingerprint:
 
         assert actual == expected
 
+    def test_five_argument_calls_hash_as_they_always_have(self):
+        """#1242 adds an optional column. Every existing 5-argument call must
+        hash byte-identically: this hex was computed on 2026-09-12 before the
+        parameter existed, so any change to the 5-component form fails here."""
+        assert fingerprint("t", "r", "p", 3, "m") == "c195e281b9d65b61"
+        assert fingerprint("t", "r", "p", 3, "m", start_column=None) == (
+            "c195e281b9d65b61"
+        )
+
+    def test_column_is_a_sixth_component_only_when_supplied(self):
+        """Two findings on one line at different columns are two findings
+        (gitleaks/juice-shop, columns 82 and 116). Column 0 is a column, not an
+        absence: shellcheck writes 0 when the tool omitted it, and the id must
+        stay deterministic either way."""
+        base = fingerprint("t", "r", "p", 3, "m")
+        col5 = fingerprint("t", "r", "p", 3, "m", start_column=5)
+        col20 = fingerprint("t", "r", "p", 3, "m", start_column=20)
+        assert len({base, col5, col20}) == 3
+        assert fingerprint("t", "r", "p", 3, "m", start_column=0) != base
+
 
 # ============================================================================
 # 4. extract_code_snippet() Tests
@@ -751,7 +771,6 @@ class TestConstants:
         assert "zap" in TOOL_SEVERITY_MAPPINGS
         assert "semgrep" in TOOL_SEVERITY_MAPPINGS
         assert "nuclei" in TOOL_SEVERITY_MAPPINGS
-        assert "falco" in TOOL_SEVERITY_MAPPINGS
 
     def test_tool_severity_mappings_values_are_valid(self):
         """Test all mapped severity values are valid CommonFinding severities."""
@@ -843,41 +862,6 @@ class TestMapToolSeverity:
     def test_nuclei_unknown(self):
         """Test Nuclei unknown maps to INFO."""
         assert map_tool_severity("nuclei", "unknown") == "INFO"
-
-    # ------------------------------------
-    # Falco priority mapping tests
-    # ------------------------------------
-    def test_falco_emergency(self):
-        """Test Falco emergency maps to CRITICAL."""
-        assert map_tool_severity("falco", "emergency") == "CRITICAL"
-
-    def test_falco_alert(self):
-        """Test Falco alert maps to CRITICAL."""
-        assert map_tool_severity("falco", "alert") == "CRITICAL"
-
-    def test_falco_critical(self):
-        """Test Falco critical maps to CRITICAL."""
-        assert map_tool_severity("falco", "critical") == "CRITICAL"
-
-    def test_falco_error(self):
-        """Test Falco error maps to HIGH."""
-        assert map_tool_severity("falco", "error") == "HIGH"
-
-    def test_falco_warning(self):
-        """Test Falco warning maps to MEDIUM."""
-        assert map_tool_severity("falco", "warning") == "MEDIUM"
-
-    def test_falco_notice(self):
-        """Test Falco notice maps to LOW."""
-        assert map_tool_severity("falco", "notice") == "LOW"
-
-    def test_falco_informational(self):
-        """Test Falco informational maps to INFO."""
-        assert map_tool_severity("falco", "informational") == "INFO"
-
-    def test_falco_debug(self):
-        """Test Falco debug maps to INFO."""
-        assert map_tool_severity("falco", "debug") == "INFO"
 
     # ------------------------------------
     # ShellCheck tests

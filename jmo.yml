@@ -1,12 +1,6 @@
-tools:
-- trufflehog
-- semgrep
-- syft
-- trivy
-- checkov
-- hadolint
-- zap
-- nuclei
+# No `tools:` list: every scanner in scripts/core/tool_registry.py TOOL_MATRIX
+# is eligible, and each target's content decides which of them run. Add a
+# `tools:` list here (or pass --tools) to narrow it.
 outputs:
 - json
 - md
@@ -22,193 +16,42 @@ outputs:
 - compliance
 - suppressions
 fail_on: ''
-default_profile: balanced
-profiles:
-  fast:
-    # 9 tools for fast pre-commit checks (5-10 min)
-    # Tool list defined in scripts/core/tool_registry.py:PROFILE_TOOLS (single source of truth)
-    threads: 8
-    timeout: 300
-    policy:
-      default_policies:
-      - zero-secrets
-    per_tool:
-      semgrep:
-        flags:
-        - --exclude
-        - node_modules
-        - --exclude
-        - .git
-      trivy:
-        flags:
-        - --no-progress
-        - --scanners
-        - vuln,secret,misconfig
-      nuclei:
-        timeout: 300
-        flags:
-        - -severity
-        - critical,high
-      checkov:
-        flags:
-        - --quiet
-  slim:
-    # 13 tools for cloud/IaC focused scans (12-18 min)
-    # Optimized for AWS/Azure/GCP, Kubernetes, and infrastructure scanning
-    # Tool list defined in scripts/core/tool_registry.py:PROFILE_TOOLS (single source of truth)
-    threads: 4
-    timeout: 500
-    policy:
-      default_policies:
-      - owasp-top-10
-      - zero-secrets
-    per_tool:
-      semgrep:
-        flags:
-        - --exclude
-        - node_modules
-        - --exclude
-        - .git
-      trivy:
-        flags:
-        - --no-progress
-        - --scanners
-        - vuln,secret,misconfig
-      nuclei:
-        timeout: 500
-        flags:
-        - -severity
-        - critical,high,medium
-      prowler:
-        timeout: 600
-        # No --quiet: prowler 5.x does not have it, and an unknown option makes
-        # argparse exit 2 before the scan starts. The scanner passes
-        # --no-banner, which is the flag that actually suppresses the chatter.
-      kubescape:
-        timeout: 500
-        # No --silent: kubescape does not have it (`kubescape scan --help`
-        # matches it 0 times), and an unknown flag makes it exit 1 having
-        # written no output file -- so JMo reported `findings are MISSING`
-        # and the tool contributed nothing on every profile it is in. Same
-        # shape as the prowler --quiet note above and as #1206's --scanners
-        # on trivy-rbac. kubescape is already quiet with --format json.
-  balanced:
-    # 17 tools for production scans (18-25 min)
-    # Tool list defined in scripts/core/tool_registry.py:PROFILE_TOOLS (single source of truth)
-    threads: 4
+# Scan defaults. There are no profiles (v2.0.0); these are the settings the
+# former default profile (balanced) used, plus the yara and grype entries only
+# the former deep profile carried.
+threads: 4
+timeout: 600
+per_tool:
+  semgrep:
+    flags:
+    - --exclude
+    - node_modules
+    - --exclude
+    - .git
+  trivy:
+    flags:
+    - --no-progress
+  zap:
+    flags:
+    - -config
+    - api.disablekey=true
+    - -config
+    - spider.maxDuration=5
+  nuclei:
     timeout: 600
-    policy:
-      default_policies:
-      - owasp-top-10
-      - zero-secrets
-    per_tool:
-      semgrep:
-        flags:
-        - --exclude
-        - node_modules
-        - --exclude
-        - .git
-      trivy:
-        flags:
-        - --no-progress
-      zap:
-        flags:
-        - -config
-        - api.disablekey=true
-        - -config
-        - spider.maxDuration=5
-      nuclei:
-        timeout: 600
-        flags:
-        - -severity
-        - critical,high,medium
-      prowler:
-        timeout: 900
-        # See the `fast` profile: --quiet does not exist in prowler 5.x.
-      kubescape:
-        timeout: 600
-        # No --silent: kubescape does not have it (`kubescape scan --help`
-        # matches it 0 times), and an unknown flag makes it exit 1 having
-        # written no output file -- so JMo reported `findings are MISSING`
-        # and the tool contributed nothing on every profile it is in. Same
-        # shape as the prowler --quiet note above and as #1206's --scanners
-        # on trivy-rbac. kubescape is already quiet with --format json.
-  deep:
-    # 29 tools for comprehensive audits (40-70 min)
-    # Tool list defined in scripts/core/tool_registry.py:PROFILE_TOOLS (single source of truth)
-    threads: 2
+    flags:
+    - -severity
+    - critical,high,medium
+  yara:
     timeout: 900
-    retries: 1
-    policy:
-      default_policies:
-      - owasp-top-10
-      - zero-secrets
-      - pci-dss
-      - production-hardening
-      - hipaa-compliance
-      fail_on_violation: true
-    per_tool:
-      semgrep:
-        flags:
-        - --exclude
-        - node_modules
-        - --exclude
-        - .git
-      trivy:
-        flags:
-        - --no-progress
-      zap:
-        flags:
-        - -config
-        - api.disablekey=true
-        - -config
-        - spider.maxDuration=10
-      nuclei:
-        timeout: 900
-        flags:
-        - -severity
-        - critical,high,medium,low
-      noseyparker:
-        timeout: 1200
-      semgrep-secrets:
-        # p/secrets ruleset is very large (3000+ rules) and slow
-        # First run downloads rules from semgrep.dev, subsequent runs use cache
-        timeout: 1800
-        flags:
-        - --exclude
-        - node_modules
-        - --exclude
-        - .git
-      afl++:
-        timeout: 1800
-        flags:
-        - -m
-        - none
-      prowler:
-        timeout: 1200
-        # See the `fast` profile: --quiet does not exist in prowler 5.x.
-      kubescape:
-        timeout: 900
-        # No --silent: kubescape does not have it (`kubescape scan --help`
-        # matches it 0 times), and an unknown flag makes it exit 1 having
-        # written no output file -- so JMo reported `findings are MISSING`
-        # and the tool contributed nothing on every profile it is in. Same
-        # shape as the prowler --quiet note above and as #1206's --scanners
-        # on trivy-rbac. kubescape is already quiet with --format json.
-      mobsf:
-        timeout: 1800
-      lynis:
-        timeout: 900
-      yara:
-        timeout: 900
-        # No flags by default. This shipped `--max-rules-per-file=500`, which is
-        # not a yara option: v4.5.8 defines `max-rules` and
-        # `max-strings-per-rule`, and nothing of that name. The scanner would
-        # have been rejected on an unknown option had it ever got far enough to
-        # run. Set `rules_path` here to point at your own rule set; otherwise
-        # the bundle installed by `jmo tools install yara` is used.
-      grype:
-        timeout: 900
+    # No flags by default. This shipped `--max-rules-per-file=500`, which is
+    # not a yara option: v4.5.8 defines `max-rules` and
+    # `max-strings-per-rule`, and nothing of that name. The scanner would
+    # have been rejected on an unknown option had it ever got far enough to
+    # run. Set `rules_path` here to point at your own rule set; otherwise
+    # the bundle installed by `jmo tools install yara` is used.
+  grype:
+    timeout: 900
 profiling:
   min_threads: 2
   max_threads: 8

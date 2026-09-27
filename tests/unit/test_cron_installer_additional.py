@@ -48,7 +48,6 @@ def basic_schedule():
             suspend=False,
             backend=BackendConfig(type="local-cron"),
             jobTemplate=JobTemplateSpec(
-                profile="balanced",
                 targets={},
                 options={},
                 results={},
@@ -358,7 +357,7 @@ def test_generate_cron_entry_with_custom_results_dir(basic_schedule):
     installer = CronInstaller()
     entry = installer._generate_cron_entry(basic_schedule)
 
-    assert "--results-dir /var/jmo-scans/$(date +%Y-%m-%d)" in entry
+    assert "--results-dir /var/jmo-scans/$(date +\\%Y-\\%m-\\%d)" in entry
 
 
 def test_generate_cron_entry_default_results_dir(basic_schedule):
@@ -368,7 +367,9 @@ def test_generate_cron_entry_default_results_dir(basic_schedule):
     installer = CronInstaller()
     entry = installer._generate_cron_entry(basic_schedule)
 
-    assert "--results-dir" in entry and "~/jmo-results" in entry
+    # "$HOME", not '~': a quoted tilde is never expanded (see
+    # test_schedule_contract.py::test_the_cron_results_dir_expands_home).
+    assert '--results-dir "$HOME"/jmo-results/' in entry
 
 
 # ========== Category 10: _generate_cron_entry() - Multi-Target Comprehensive ==========
@@ -376,7 +377,6 @@ def test_generate_cron_entry_default_results_dir(basic_schedule):
 
 def test_generate_cron_entry_comprehensive_all_targets(basic_schedule):
     """Test _generate_cron_entry with all target types in one schedule."""
-    basic_schedule.spec.jobTemplate.profile = "deep"
     basic_schedule.spec.jobTemplate.targets = {
         "repositories": {"repos_dir": "~/repos"},
         "images": ["nginx:latest"],
@@ -395,8 +395,11 @@ def test_generate_cron_entry_comprehensive_all_targets(basic_schedule):
     installer = CronInstaller()
     entry = installer._generate_cron_entry(basic_schedule)
 
-    # Verify profile
-    assert "jmo scan --profile-name deep" in entry
+    # Verify the command head: the first target follows the subcommand
+    # directly, with no profile flag (v2.0.0 removed scan profiles). `jmo ci`,
+    # because the schedule has a threshold and `jmo scan` has no --fail-on (#1277).
+    assert "0 2 * * * jmo ci --repos-dir" in entry
+    assert "--profile" not in entry
 
     # Verify all targets
     assert "--repos-dir" in entry and "~/repos" in entry
@@ -413,7 +416,7 @@ def test_generate_cron_entry_comprehensive_all_targets(basic_schedule):
     assert "--fail-on HIGH" in entry
 
     # Verify results dir
-    assert "--results-dir /var/scans/$(date +%Y-%m-%d)" in entry
+    assert "--results-dir /var/scans/$(date +\\%Y-\\%m-\\%d)" in entry
 
     # Verify cron schedule
     assert "0 2 * * *" in entry

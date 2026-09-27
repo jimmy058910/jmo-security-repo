@@ -52,7 +52,6 @@ def test_container_image_scan_creates_output(tmp_path: Path, monkeypatch):
         allow_missing_tools = True
         log_level = "ERROR"
         human_logs = False
-        profile_name = None
 
     # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
     # resolves `Path.home()` with no injection point -- redirect it so this
@@ -124,7 +123,6 @@ resource "aws_s3_bucket" "test" {
         allow_missing_tools = True
         log_level = "ERROR"
         human_logs = False
-        profile_name = None
 
     # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
     # resolves `Path.home()` with no injection point -- redirect it so this
@@ -205,7 +203,6 @@ resource "aws_s3_bucket" "test" {
         allow_missing_tools = True
         log_level = "ERROR"
         human_logs = False
-        profile_name = None
 
     # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
     # resolves `Path.home()` with no injection point -- redirect it so this
@@ -277,7 +274,6 @@ def test_ci_multi_target_with_fail_on(tmp_path: Path, monkeypatch):
             self.profile = True
             self.log_level = "ERROR"
             self.human_logs = False
-            self.profile_name = None
 
     # `jmo ci` runs `cmd_scan` internally, which unconditionally calls
     # `_show_kofi_reminder()` (#933) -- redirect Path.home() so this
@@ -335,7 +331,6 @@ busybox:latest
         allow_missing_tools = True
         log_level = "ERROR"
         human_logs = False
-        profile_name = None
 
     # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
     # resolves `Path.home()` with no injection point -- redirect it so this
@@ -385,6 +380,10 @@ def test_repo_plus_image_deduplication(tmp_path: Path):
         "--results-dir",
         str(tmp_path / "results"),
         "--allow-missing-tools",
+        # The child inherits the repo root as its cwd, where the default
+        # history database is the developer's real `.jmo/history.db`.
+        "--history-db",
+        str(tmp_path / "history.db"),
     ]
     # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
     # resolves `Path.home()` with no injection point. monkeypatch cannot
@@ -451,6 +450,10 @@ def test_multi_target_compliance_aggregation(tmp_path: Path):
         "--results-dir",
         str(tmp_path / "results"),
         "--allow-missing-tools",
+        # The child inherits the repo root as its cwd, where the default
+        # history database is the developer's real `.jmo/history.db`.
+        "--history-db",
+        str(tmp_path / "history.db"),
     ]
     # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
     # resolves `Path.home()` with no injection point. monkeypatch cannot
@@ -522,6 +525,10 @@ resource "aws_s3_bucket" "test" {
         "--results-dir",
         str(tmp_path / "results"),
         "--allow-missing-tools",
+        # The child inherits the repo root as its cwd, where the default
+        # history database is the developer's real `.jmo/history.db`.
+        "--history-db",
+        str(tmp_path / "history.db"),
     ]
     # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
     # resolves `Path.home()` with no injection point. monkeypatch cannot
@@ -567,6 +574,10 @@ def test_multi_target_partial_failure(tmp_path: Path):
         "--results-dir",
         str(tmp_path / "results"),
         "--allow-missing-tools",
+        # The child inherits the repo root as its cwd, where the default
+        # history database is the developer's real `.jmo/history.db`.
+        "--history-db",
+        str(tmp_path / "history.db"),
     ]
     # `cmd_scan` unconditionally calls `_show_kofi_reminder()` (#933), which
     # resolves `Path.home()` with no injection point. monkeypatch cannot

@@ -25,7 +25,7 @@ policies/
 
 **Enforcement:**
 
-- ❌ FAIL: Any verified secret detected by TruffleHog, Nosey Parker, or semgrep-secrets
+- ❌ FAIL: Any verified secret detected by TruffleHog
 - ✅ PASS: Zero verified secrets found
 
 **Severity:** CRITICAL
@@ -469,11 +469,11 @@ Policies not yet accepted into `policies/builtin/` can be shared via:
    # ❌ SLOW: Re-compute secret_tools in every iteration
    violations contains violation if {
        finding := input.findings[_]
-       finding.tool.name in ["trufflehog", "noseyparker", "semgrep-secrets"]
+       finding.tool.name in ["trufflehog", "trivy"]
    }
 
    # ✅ FAST: Define once at module level
-   secret_tools := ["trufflehog", "noseyparker", "semgrep-secrets"]
+   secret_tools := ["trufflehog", "trivy"]
 
    violations contains violation if {
        finding := input.findings[_]

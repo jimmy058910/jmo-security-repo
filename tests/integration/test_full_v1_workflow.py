@@ -33,7 +33,7 @@ class TestV1WorkflowIntegration:
 
         Workflow:
         1. Create test repo
-        2. Run jmo scan with fast profile
+        2. Run jmo scan
         3. Verify raw JSON outputs created
         4. Run jmo report
         5. Verify SQLite scan stored automatically
@@ -61,7 +61,6 @@ class TestV1WorkflowIntegration:
                 self.threads = 1
                 self.allow_missing_tools = True
                 self.profile = False
-                self.profile_name = "fast"
                 # v0.6.0+ multi-target args
                 self.image = None
                 self.images_file = None
@@ -117,12 +116,7 @@ class TestV1WorkflowIntegration:
 
             assert len(scans) >= 1, "At least one scan should be stored"
             scan = scans[0]
-            # Profile comes from config file default_profile, not scan args
-            assert scan["profile"] in [
-                "fast",
-                "balanced",
-                "",
-            ], "Profile should be stored"
+            assert "profile" not in scan, "v2.0.0 stores no scan profile"
             assert "trufflehog" in scan["tools"], "trufflehog should be in tools"
 
         # Step 5: Verify dashboard HTML
@@ -146,8 +140,8 @@ class TestV1WorkflowIntegration:
         assert meta["output_version"] == "1.0.0"
         assert "jmo_version" in meta
         assert "timestamp" in meta
-        # Profile comes from config default_profile, may be empty or balanced
-        assert "profile" in meta
+        # Scan profiles left in v2.0.0; the metadata carries none.
+        assert "profile" not in meta
         # Tools list may be empty if no findings detected
         assert "tools" in meta
 
@@ -298,7 +292,6 @@ class TestV1WorkflowIntegration:
 
             scan_id = store_scan(
                 results_dir=results_dir,
-                profile="balanced",
                 tools=["trivy"],
                 db_path=db_path,
                 branch="main",
@@ -491,7 +484,6 @@ class TestV1WorkflowIntegration:
 
             store_scan(
                 results_dir=results_dir,
-                profile="balanced",
                 tools=["semgrep"],
                 db_path=db_path,
                 branch="main",

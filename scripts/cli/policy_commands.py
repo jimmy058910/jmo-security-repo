@@ -435,7 +435,7 @@ def cmd_policy(args: argparse.Namespace) -> int:
         # calls _verify_opa_available() and raises this. Nothing caught it and
         # main() has no top-level handler, so the exception reached Python's
         # default excepthook: `jmo policy list` answered a first-run condition
-        # -- opa is in no profile's tool list and is not installed by default --
+        # -- a machine where opa is not installed yet --
         # with an 18-line traceback whose last line was the friendly
         # INSTALL_INSTRUCTIONS the exception class exists to carry.
         #

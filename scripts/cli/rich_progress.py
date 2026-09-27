@@ -41,8 +41,9 @@ from scripts.cli.scan_orchestrator import (
     TARGET_FAILED,
     TARGET_NOT_ATTEMPTED,
     TARGET_PARTIAL,
-    classify_target_outcome,
+    summarize_target,
 )
+from scripts.core.scan_timings import ToolRun
 
 if TYPE_CHECKING:
     from argparse import Namespace
@@ -59,10 +60,6 @@ class RichScanProgressTracker:
         total_tools: Total number of tools to run per target
         console: Rich Console instance (writes to stderr)
     """
-
-    # Suffixes for multi-phase tools (e.g., noseyparker-init, noseyparker-scan)
-    # These phases should be counted as a single logical tool
-    _PHASE_SUFFIXES = ("-init", "-scan", "-report")
 
     def __init__(
         self,
@@ -110,7 +107,7 @@ class RichScanProgressTracker:
         self.tools_completed = 0
         self.tools_in_progress: set[str] = set()
         self.tool_status: dict[str, str] = {}  # tool_name -> "success" | "error"
-        # Track completed base tools (handles multi-phase tools like noseyparker)
+        # Tools already counted as completed, so a tool reporting twice counts once
         self._completed_base_tools: set[str] = set()
         # Elapsed time tracking for running tools
         self._tool_start_times: dict[str, float] = {}
@@ -149,27 +146,6 @@ class RichScanProgressTracker:
         # Stderr capture buffer (Phase 5.1 enhancement)
         self._stderr_buffer = io.StringIO()
         self._original_stderr = sys.stderr
-
-    def _get_base_tool_name(self, tool_name: str) -> str:
-        """Extract base tool name from a potentially phased tool name.
-
-        Multi-phase tools like noseyparker run as:
-        - noseyparker-init
-        - noseyparker-scan
-        - noseyparker-report
-
-        All should be counted as one logical tool "noseyparker".
-
-        Args:
-            tool_name: The tool name (may include phase suffix)
-
-        Returns:
-            Base tool name without phase suffix
-        """
-        for suffix in self._PHASE_SUFFIXES:
-            if tool_name.endswith(suffix):
-                return tool_name[: -len(suffix)]
-        return tool_name
 
     def _format_elapsed(self, elapsed: float) -> str:
         """Format elapsed time as human-readable string."""
@@ -272,7 +248,7 @@ class RichScanProgressTracker:
         self,
         target_type: str,
         target_name: str,
-        statuses: Mapping[str, Any] | None = None,
+        statuses: Mapping[str, ToolRun] | None = None,
         elapsed: float = 0.0,
     ) -> None:
         """Update progress after completing a target scan.
@@ -282,7 +258,7 @@ class RichScanProgressTracker:
         Args:
             target_type: Type of target (repo, image, url, etc.)
             target_name: Name/identifier of target
-            statuses: The scanner's per-tool boolean map for this target.
+            statuses: The target's rows by tool.
             elapsed: Seconds this target took, measured in the worker.
 
         This method is passed to ``scan_all`` as ``progress_callback`` **as a
@@ -292,24 +268,12 @@ class RichScanProgressTracker:
         because the parameter was never read. The target bar therefore advanced
         identically whether a target found everything or nothing (#809).
         """
-        from scripts.cli.scan_utils import (
-            NOT_ATTEMPTED_MISSING,
-            not_attempted_tools,
-        )
-
-        outcome = classify_target_outcome(statuses)
-        # Excluded for the same reason as in `ScanProgressReporter`: a stubbed
-        # tool is False now, and accusing it of failing would be wrong (#825).
-        # The UNION of both not-attempted reasons, deliberately.
-        skipped_tools = set(not_attempted_tools(statuses))
-        # The subset that is an environment gap. A tool with nothing to scan is
-        # reported once at the end of the run instead of once per target (#1081).
-        missing_tools = set(not_attempted_tools(statuses, reason=NOT_ATTEMPTED_MISSING))
-        failed_tools = sorted(
-            name
-            for name, ok in (statuses or {}).items()
-            if not name.startswith("__") and not ok and name not in skipped_tools
-        )
+        summary = summarize_target(statuses)
+        outcome = summary.outcome
+        failed_tools = summary.failed
+        # An environment gap. A tool with nothing to scan is reported once at
+        # the end of the run instead of once per target (#1081).
+        missing_tools = summary.not_installed
 
         # Outside the lock: self.log() takes it, and re-entering a
         # threading.Lock from the same thread deadlocks.
@@ -324,12 +288,14 @@ class RichScanProgressTracker:
                     else "no tool ran against this target"
                 ),
             )
-        elif outcome == TARGET_NOT_ATTEMPTED:
+        elif outcome == TARGET_NOT_ATTEMPTED and missing_tools:
+            # A target whose tools all had nothing to scan is a correct
+            # result, and says nothing here, as a clean one does (#1317).
             self.log(
                 "WARN",
                 f"{target_type}: {target_name} - NO tool ran against this "
-                f"target; {len(skipped_tools)} stubbed and their empty output "
-                f"is NOT a clean result: {', '.join(sorted(skipped_tools))}",
+                f"target, so its empty output is NOT a clean result: "
+                f"{', '.join(summary.skipped)}",
             )
         elif outcome == TARGET_PARTIAL:
             self.log(
@@ -341,7 +307,7 @@ class RichScanProgressTracker:
             self.log(
                 "WARN",
                 f"{target_type}: {target_name} - {len(missing_tools)} tool(s) "
-                f"were stubbed and did NOT run: {', '.join(sorted(missing_tools))}",
+                f"were stubbed and did NOT run: {', '.join(missing_tools)}",
             )
 
         with self._lock:
@@ -389,10 +355,9 @@ class RichScanProgressTracker:
         """Update progress when a tool starts or completes.
 
         This is the main callback passed to the scan orchestrator.
-        Handles multi-phase tools (noseyparker-init, etc.) correctly.
 
         Args:
-            tool_name: Name of the tool (may include phase suffix)
+            tool_name: Name of the tool
             status: "start"/"success"/"error"/"retrying"/"timeout"
             findings_count: Number of findings (for verbose mode)
             message: Optional message (e.g., timeout reason)
@@ -400,29 +365,26 @@ class RichScanProgressTracker:
             max_attempts: Maximum attempts configured
             **kwargs: Forward compatibility for future parameters
         """
-        # Get the base tool name (strip phase suffixes like -init, -scan, -report)
-        base_tool_name = self._get_base_tool_name(tool_name)
-
         with self._lock:
             # Handle intermediate statuses (retrying/timeout)
             if status == "retrying":
                 # Log retry through Rich console (below live display)
                 self.console.print(
-                    f"[yellow]WARN[/] {base_tool_name}: "
+                    f"[yellow]WARN[/] {tool_name}: "
                     f"Retry {attempt}/{max_attempts} - {message}"
                 )
                 return  # Don't update completion count
 
             if status == "timeout":
                 self.console.print(
-                    f"[red]ERROR[/] {base_tool_name}: "
+                    f"[red]ERROR[/] {tool_name}: "
                     f"Timed out after {max_attempts} attempts"
                 )
                 # Fall through to mark as failed
 
             if status == "no_output":
                 self.console.print(
-                    f"[red]ERROR[/] {base_tool_name}: exited with an accepted code "
+                    f"[red]ERROR[/] {tool_name}: exited with an accepted code "
                     f"but wrote no output file - its findings are MISSING "
                     f"from this scan"
                 )
@@ -432,21 +394,20 @@ class RichScanProgressTracker:
                 self.tools_in_progress.add(tool_name)
                 self._tool_start_times[tool_name] = time.time()
             else:
-                # Tool/phase completed (success, error, or timeout)
+                # Tool completed (success, error, or timeout)
                 self.tools_in_progress.discard(tool_name)
                 # Clean up start time
                 self._tool_start_times.pop(tool_name, None)
 
-                # Only count as completed if base tool hasn't been counted yet
-                # This handles multi-phase tools correctly
-                if base_tool_name not in self._completed_base_tools:
-                    self._completed_base_tools.add(base_tool_name)
+                # Only count as completed if the tool hasn't been counted yet
+                if tool_name not in self._completed_base_tools:
+                    self._completed_base_tools.add(tool_name)
                     self.tools_completed += 1
                     # Map timeout and no_output to error for status tracking.
                     # The summary panel tallies "success" and "error" separately,
                     # so any third status would land in neither and the counts
                     # would silently stop adding up to the tool total.
-                    self.tool_status[base_tool_name] = (
+                    self.tool_status[tool_name] = (
                         "error" if status in ("timeout", "no_output") else status
                     )
 

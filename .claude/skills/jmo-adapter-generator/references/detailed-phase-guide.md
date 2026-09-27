@@ -107,38 +107,43 @@ Skip directly to Phase 5.
 
 ## Phase 5: Update Configuration
 
-**File:** `jmo.yml`
+**Files:** `scripts/core/tool_registry.py`, `scripts/cli/scan_jobs/`, `jmo.yml`
 
-**Add {tool} to profiles:**
+There are no scan profiles. `TOOL_MATRIX` is the one default tool list, and the
+target's content decides which of its tools run.
+
+**1. Add {tool} to the matrix** (membership makes it eligible, nothing more):
+
+```python
+# scripts/core/tool_registry.py
+TOOL_MATRIX = (
+    # ... the existing tools ...
+    "{tool}",
+)
+```
+
+**2. Decide when it runs.** Add its block to the scan job for each target type
+it applies to (`repository_scanner.py`, `image_scanner.py`, `iac_scanner.py`,
+`url_scanner.py`, `k8s_scanner.py`), gated on the content it needs — the way
+hadolint runs only when a Dockerfile is present and zap and nuclei only on
+`--url` targets. Record the trigger in `docs/TOOLS.md` ("When each tool runs",
+"Target types").
+
+**3. Per-tool defaults, if any,** go under the top-level `per_tool:` key:
 
 ```yaml
-profiles:
-  fast:
-    # Add if fast enough (<5 min)
-    tools: [trufflehog, semgrep, trivy, checkov]
-
-  balanced:
-    # Add here
-    tools: [trufflehog, semgrep, syft, trivy, checkov,
-            hadolint, zap, nuclei, {tool}]
-
-  deep:
-    tools: [trufflehog, noseyparker, semgrep, bandit, syft, trivy,
-            checkov, hadolint, zap, nuclei, {tool}, falco, afl++]
-
+# jmo.yml
 per_tool:
   {tool}:
     flags: ["--json"]  # From memory: Required flag
     timeout: 600  # From memory: Common pitfall (large repos timeout)
 ```
 
-**Profile Selection Guidelines:**
-
-| Profile | Criteria | Examples |
-|---------|----------|----------|
-| **fast** | <5 min, core capability, high-precision by design | trufflehog, semgrep, trivy |
-| **balanced** | Production-ready, SAST/DAST/SCA/IaC/CSPM | prowler, kubescape, akto |
-| **deep** | Specialized, >10 min, fuzzing, runtime, mobile | mobsf, lynis, afl++ |
+**Admission criteria.** The v2.0.0 cut removed tools for four reasons, so a new
+tool should clear all four: it installs on every supported platform (or is
+honestly gated), it scans a target JMo has, it does not duplicate a matrix tool's
+coverage, and it is maintained upstream. `docs/TOOLS.md` "Removed in v2.0.0"
+lists each removed tool with its reason.
 
 ---
 
@@ -148,8 +153,9 @@ per_tool:
 1. **README.md** - Add {tool} to supported tools list
 2. **QUICKSTART.md** - Add {tool} scan example (if commonly used)
 3. **docs/USER_GUIDE.md** - Add {tool} configuration section
-4. **CLAUDE.md** - Update tool count and category list
-5. **CHANGELOG.md** - Document feature addition
+4. **docs/TOOLS.md** - Add {tool} to the matrix, "When each tool runs" and "Target types"
+5. **CLAUDE.md** - Update any tool count it states
+6. **CHANGELOG.md** - Document feature addition
 
 ---
 
@@ -157,13 +163,13 @@ per_tool:
 
 **CRITICAL:** This phase is STILL REQUIRED for plugin-based adapters.
 
-**Why:** Plugin system only affects adapters (Python code). Docker images still need binary installation, wizard profiles still need tool selection, installation scripts still need tool downloads.
+**Why:** Plugin system only affects adapters (Python code). The Docker image still needs binary installation, the wizard still needs to detect the tool, installation scripts still need tool downloads.
 
 **Sub-Phases:**
 1. **Version Tracking** (`versions.yaml`) - Add tool version
 2. **Local Installation** (`scripts/dev/install_tools.sh`) - Add install script
-3. **Docker Integration** (3 Dockerfiles) - Add tool to all variants
-4. **Wizard Profiles** (`scripts/cli/wizard.py`) - Add to appropriate profiles
+3. **Docker Integration** (`Dockerfile`, the one image) - Add the tool's install; the pinned version comes from `versions.yaml` via `update_versions.py --sync`
+4. **Wizard** (`scripts/cli/wizard.py`) - Confirm it detects and reports the new tool
 5. **Verify Parity** - Check consistency across all integration points
 
 ---
@@ -302,7 +308,7 @@ Add support for {tool} scanner using v3.0.0 plugin architecture.
   (plugin-based, 150 lines, 87% coverage)
 - **Tests:** `tests/adapters/test_{tool}_adapter.py` (8 tests, all passing)
 - **Integration:** `tests/integration/test_{tool}_integration.py` (end-to-end test)
-- **Config:** Added {tool} to `balanced` and `deep` profiles
+- **Config:** Added {tool} to `TOOL_MATRIX` and to the scan job(s) that run it
 - **Docs:** Updated README.md, QUICKSTART.md, USER_GUIDE.md, CLAUDE.md
 - **Memory:** Stored patterns in `.jmo/memory/adapters/{tool}.json`
 
@@ -328,7 +334,7 @@ Coverage: 87% (130/150 lines)
 
 ## Example Usage
 
-jmo scan --profile balanced --repo ./my-project --tools {tool}
+jmo scan --repo ./my-project --tools {tool}
 cat results/summaries/findings.json | jq '.[] | select(.tool.name == "{tool}")'
 
 ## Checklist

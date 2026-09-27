@@ -16,10 +16,40 @@ def build_repo_args(target: TargetConfig, use_docker: bool = False) -> list[str]
     args = []
 
     if use_docker:
-        # Docker mode: mount volumes
-        if target.repo_path:
+        # Docker mode: the container sees only its mounts, so the target is
+        # always /scan, and repo_mode decides what the scan makes of it. This
+        # ignored repo_mode and passed --repos-dir for every mode: a single
+        # repository was scanned as a directory of repositories (each
+        # subdirectory, never its own root files), and a targets file was
+        # mounted where a directory belongs.
+        if target.repo_mode == "targets":
+            raise ValueError(
+                "Docker mode cannot scan a targets file: it lists paths on this "
+                "machine, which the container cannot see. Use repos-dir on the "
+                "directory that holds the repositories, or run natively."
+            )
+        if target.repo_mode == "tsv":
+            # The TSV read-only; the clones in the destination the wizard asked
+            # for, so they persist and a second run fast-forwards them. Not
+            # under /results, which a CI job uploads whole.
+            # TODO(issue-#1304): measured on Linux paths only; a Docker Desktop
+            # mount may read as another owner (`dubious ownership`).
+            tsv_abs = str(Path(target.tsv_path).resolve())
+            dest_abs = str(Path(target.tsv_dest).resolve())
+            return [
+                "-v",
+                f"{tsv_abs}:/repos.tsv:ro",
+                "-v",
+                f"{dest_abs}:/repos-tsv",
+                "--tsv",
+                "/repos.tsv",
+                "--dest",
+                "/repos-tsv",
+            ]
+        if target.repo_path and target.repo_mode in ("repo", "repos-dir"):
             repo_abs = str(Path(target.repo_path).resolve())
-            return ["-v", f"{repo_abs}:/scan", "--repos-dir", "/scan"]
+            flag = "--repo" if target.repo_mode == "repo" else "--repos-dir"
+            return ["-v", f"{repo_abs}:/scan", flag, "/scan"]
     else:
         # Native mode: normalize backslashes for cross-platform script compatibility
         if target.repo_mode == "repo":
@@ -29,9 +59,15 @@ def build_repo_args(target: TargetConfig, use_docker: bool = False) -> list[str]
         elif target.repo_mode == "targets":
             args.extend(["--targets", target.repo_path.replace("\\", "/")])
         elif target.repo_mode == "tsv":
-            args.extend(["--tsv", target.tsv_path.replace("\\", "/")])
-            if hasattr(target, "tsv_dest") and target.tsv_dest:
-                args.extend(["--dest", target.tsv_dest])
+            # `jmo scan --tsv` has no default destination, so always name one.
+            args.extend(
+                [
+                    "--tsv",
+                    target.tsv_path.replace("\\", "/"),
+                    "--dest",
+                    target.tsv_dest.replace("\\", "/"),
+                ]
+            )
 
     return args
 
@@ -97,8 +133,9 @@ def build_gitlab_args(target: TargetConfig, use_docker: bool = False) -> list[st
 
     if target.gitlab_url:
         args.extend(["--gitlab-url", target.gitlab_url])
-    if target.gitlab_token:
-        args.extend(["--gitlab-token", target.gitlab_token])
+    # No --gitlab-token: this command is printed and written into scripts. The
+    # token reaches `jmo` as GITLAB_TOKEN in its environment (execute_scan;
+    # Docker forwards it by name in build_command_parts).
     if target.gitlab_repo:
         args.extend(["--gitlab-repo", target.gitlab_repo])
     elif target.gitlab_group:
@@ -131,6 +168,12 @@ def build_command_parts(config: WizardConfig) -> list[str]:
     Returns:
         List of command components for execution
     """
+    # A severity threshold makes it `jmo ci` (scan, report, then exit on the
+    # threshold): `jmo scan` defines no --fail-on, and argparse resolved
+    # `--fail-on HIGH` as the prefix of --fail-on-store-error, leaving HIGH as
+    # an unrecognised argument, so every wizard run with a threshold exited 2.
+    subcommand = "ci" if config.fail_on else "scan"
+
     if config.use_docker:
         # Docker command base
         cmd_parts = ["docker", "run", "--rm"]
@@ -148,9 +191,14 @@ def build_command_parts(config: WizardConfig) -> list[str]:
         results_abs = str(Path(config.results_dir).resolve())
         cmd_parts.extend(["-v", f"{results_abs}:/results"])
 
+        # A bare `-e NAME` forwards the variable's value from the environment,
+        # so the token never appears in the command.
+        if config.target.type == "gitlab" and config.target.gitlab_token:
+            cmd_parts.extend(["-e", "GITLAB_TOKEN"])
+
         # Image and base command
         cmd_parts.append(JMO_DOCKER_IMAGE_FULL)
-        cmd_parts.append("scan")
+        cmd_parts.append(subcommand)
 
         # Add target flags (non-volume args)
         target_flags = [
@@ -159,31 +207,31 @@ def build_command_parts(config: WizardConfig) -> list[str]:
         cmd_parts.extend(target_flags)
 
         cmd_parts.extend(["--results-dir", "/results"])
-        cmd_parts.extend(["--profile-name", config.profile])
 
     else:
         # Native command
-        cmd_parts = ["jmo", "scan"]
+        cmd_parts = ["jmo", subcommand]
 
         # Add target-specific flags
         cmd_parts.extend(_get_target_args_with_volumes(config.target, use_docker=False))
 
-        # Results directory and profile (normalize backslashes for script compatibility)
+        # Results directory (normalize backslashes for script compatibility)
         if config.results_dir:
             cmd_parts.extend(["--results-dir", config.results_dir.replace("\\", "/")])
-        cmd_parts.extend(["--profile-name", config.profile])
 
-        # Advanced options
-        if config.threads is not None:
-            cmd_parts.extend(["--threads", str(config.threads)])
-        if config.timeout is not None:
-            cmd_parts.extend(["--timeout", str(config.timeout)])
-        if config.fail_on:
-            cmd_parts.extend(["--fail-on", config.fail_on.upper()])
-        if config.allow_missing_tools:
-            cmd_parts.append("--allow-missing-tools")
-        if config.human_logs:
-            cmd_parts.append("--human-logs")
+    # Advanced options, for both branches. They lived in the native branch
+    # only, so Docker mode dropped the threshold, threads, timeout,
+    # --allow-missing-tools and --human-logs without a word (#1277).
+    if config.threads is not None:
+        cmd_parts.extend(["--threads", str(config.threads)])
+    if config.timeout is not None:
+        cmd_parts.extend(["--timeout", str(config.timeout)])
+    if config.fail_on:
+        cmd_parts.extend(["--fail-on", config.fail_on.upper()])
+    if config.allow_missing_tools:
+        cmd_parts.append("--allow-missing-tools")
+    if config.human_logs:
+        cmd_parts.append("--human-logs")
 
     return cmd_parts
 

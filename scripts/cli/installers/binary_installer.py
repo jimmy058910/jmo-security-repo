@@ -74,7 +74,6 @@ class PlatformInfo:
     arch_amd: str  # "amd64", "arm64" (Go style)
     arch_aarch: str  # "x86_64", "aarch64" (GNU style)
     trivy_arch: str  # "64bit", "ARM64" (Trivy's unique format)
-    rust_arch: str  # "x86_64-unknown-linux-gnu", etc.
     platform_key: str  # "linux", "macos", "windows" (for URL config lookup)
 
 
@@ -111,14 +110,6 @@ def get_platform_info() -> PlatformInfo:
     # Trivy's unique format: x86_64 -> "64bit", arm64 -> "ARM64"
     trivy_arch = "64bit" if normalized_arch == "x86_64" else "ARM64"
 
-    # Rust target triple (for noseyparker and similar)
-    if os_lower == "linux":
-        rust_arch = f"{arch_aarch}-unknown-linux-gnu"
-    elif os_lower == "darwin":
-        rust_arch = f"{arch_aarch}-apple-darwin"
-    else:
-        rust_arch = f"{arch_aarch}-pc-windows-msvc"
-
     # Platform key for URL config lookup
     if os_lower == "darwin":
         platform_key = "macos"
@@ -132,7 +123,6 @@ def get_platform_info() -> PlatformInfo:
         arch_amd=arch_amd,
         arch_aarch=arch_aarch,
         trivy_arch=trivy_arch,
-        rust_arch=rust_arch,
         platform_key=platform_key,
     )
 
@@ -349,7 +339,6 @@ class BinaryInstaller(BaseInstaller):
             arch_amd=self._platform.arch_amd,
             arch_aarch=self._platform.arch_aarch,
             trivy_arch=self._platform.trivy_arch,
-            rust_arch=self._platform.rust_arch,
         )
 
     def _download(

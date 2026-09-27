@@ -274,7 +274,7 @@ app.post('/api/subscribe', async (req, res) => {
         <ul class="benefits">
             <li><strong>Zero installation:</strong> Scan in 60 seconds with Docker (or install locally)</li>
             <li><strong>For everyone:</strong> Interactive wizard guides beginners; CLI power for pros</li>
-            <li><strong>Always current:</strong> Auto-updated security tools (28 scanners, weekly checks)</li>
+            <li><strong>Always current:</strong> Auto-updated security tools (weekly checks)</li>
             <li><strong>Compliance ready:</strong> Auto-tags findings with OWASP, CWE, NIST, PCI DSS, CIS, MITRE ATT&CK</li>
             <li><strong>Actionable results:</strong> Interactive HTML dashboard with copy-paste fixes, not 100-page PDFs</li>
         </ul>
@@ -297,7 +297,7 @@ app.post('/api/subscribe', async (req, res) => {
 
     <div class="quick-start">
         <strong>Security pro?</strong><br>
-        Install CLI, customize profiles, automate in CI/CD<br>
+        Install CLI, choose tools, automate in CI/CD<br>
         <a href="https://github.com/jimmy058910/jmo-security-repo#readme">📖 Full Documentation</a>
     </div>
 
@@ -346,7 +346,7 @@ JMo Security finds vulnerabilities in code, containers, cloud configs, and live 
 
 ✅ Zero installation: Scan in 60 seconds with Docker (or install locally)
 ✅ For everyone: Interactive wizard guides beginners; CLI power for pros
-✅ Always current: Auto-updated security tools (28 scanners, weekly checks)
+✅ Always current: Auto-updated security tools (weekly checks)
 ✅ Compliance ready: Auto-tags findings with OWASP, CWE, NIST, PCI DSS, CIS, MITRE ATT&CK
 ✅ Actionable results: Interactive HTML dashboard with copy-paste fixes, not 100-page PDFs
 
@@ -363,7 +363,7 @@ Docker user?
   → Docs: https://github.com/jimmy058910/jmo-security-repo/blob/main/docs/DOCKER_README.md
 
 Security pro?
-  → Install CLI, customize profiles, automate in CI/CD
+  → Install CLI, choose tools, automate in CI/CD
   → Docs: https://github.com/jimmy058910/jmo-security-repo#readme
 
 Additional Resources

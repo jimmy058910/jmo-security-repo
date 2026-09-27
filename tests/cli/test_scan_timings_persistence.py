@@ -34,8 +34,10 @@ SCAN_JOBS_DIR = Path(__file__).resolve().parents[2] / "scripts" / "cli" / "scan_
 
 
 def _repo_target(tmp_path: Path) -> dict:
+    # A file: an empty tree fails every tool before any runs (G2).
     repo = tmp_path / "test-repo"
     repo.mkdir()
+    (repo / "app.py").write_bytes(b"x = 1\n")
     return {"repo": repo}
 
 
@@ -139,10 +141,10 @@ def test_scan_job_persists_its_tool_durations(
     entries = {t["tool"]: t for t in doc["tools"]}
 
     assert tool in entries, f"{module}: {tool} ran but is absent from the timings"
-    assert entries[tool]["duration"] == 12.5, (
+    assert entries[tool]["seconds"] == 12.5, (
         f"{module}: the measured duration did not survive to disk"
     )
-    assert entries[tool]["status"] == "success"
+    assert entries[tool]["state"] == "ran"
 
 
 @pytest.mark.parametrize("module,scan_func,target,tool,target_type", SCANNERS)
@@ -160,24 +162,40 @@ def test_scan_job_records_its_own_target_type(
     assert _read_timings(tmp_path)["target_type"] == target_type
 
 
+def _modules_calling(name: str) -> set[str]:
+    found = set()
+    for path in SCAN_JOBS_DIR.glob("*.py"):
+        tree = ast.parse(path.read_bytes().decode("utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                func = node.func
+                called = (
+                    func.attr
+                    if isinstance(func, ast.Attribute)
+                    else getattr(func, "id", "")
+                )
+                if called == name:
+                    found.add(path.stem)
+    return found
+
+
 def test_every_tool_running_scan_job_is_covered_here():
     """The parameterization must not fall behind the scan_jobs package.
 
-    This bug's shape is omission: a job that never calls the writer looks
-    entirely normal and no assertion fires. Discovering the jobs from the source
-    instead of a hand-kept list means a sixth scanner cannot quietly opt out of
-    instrumentation -- adding one turns this test red until it is wired up.
+    This bug's shape is omission: a job that never writes the timings looks
+    entirely normal. Every job runs its tools through `tool_loop.run_tools`,
+    which writes them, and nothing else in the package runs a tool, so the
+    jobs calling it are the set this file must cover. Discovered from the
+    source, so a seventh scanner cannot quietly opt out.
     """
-    runs_tools = set()
-    for path in SCAN_JOBS_DIR.glob("*.py"):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Attribute) and node.attr == "run_all_parallel":
-                runs_tools.add(path.stem)
+    jobs = _modules_calling("run_tools")
 
-    assert runs_tools == PARAMETERIZED_MODULES, (
-        "scan jobs that invoke tools are no longer the same set this file "
-        "covers.\n"
-        f"  not covered here: {sorted(runs_tools - PARAMETERIZED_MODULES)}\n"
-        f"  no longer run tools: {sorted(PARAMETERIZED_MODULES - runs_tools)}"
+    assert jobs == PARAMETERIZED_MODULES, (
+        "scan jobs that run tools are no longer the set this file covers.\n"
+        f"  not covered here: {sorted(jobs - PARAMETERIZED_MODULES)}\n"
+        f"  no longer run tools: {sorted(PARAMETERIZED_MODULES - jobs)}"
+    )
+    assert _modules_calling("run_all_parallel") == {"tool_loop"}, (
+        "a scan job runs tools outside the shared loop, so its rows and timings "
+        "are nobody's responsibility"
     )

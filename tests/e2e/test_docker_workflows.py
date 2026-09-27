@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-End-to-end tests for JMo Security Docker image variants.
+End-to-end tests for the JMo Security Docker image.
 
-These tests validate that each Docker image variant:
-- Has the expected tools installed
+There is one image, built from `Dockerfile` and published as `:latest` and the
+release semver. These tests validate that it:
+- Carries every TOOL_MATRIX scanner and the policy engine, able to run
 - Can complete a scan successfully
 - Produces valid output
 
 Requires: Docker installed and running
-Runtime: ~30-60 minutes for all variants
 """
 
 from __future__ import annotations
@@ -22,28 +22,15 @@ from pathlib import Path
 
 import pytest
 
-from tests.conftest import skip_on_windows
+from tests.conftest import assert_no_jmo_traceback, skip_on_windows
 
-# Docker image variants to test.
-# expected_tools mirrors scheduled.yml validate-variants matrix (source of truth).
-# Counts align with PROFILE_TOOLS in scripts/core/tool_registry.py minus
-# MANUAL_INSTALL_TOOLS (akto, afl++, mobsf, falco) for variants that include them.
-# Post-v1.0.3 (dev → main reconciliation): bearer was removed from PROFILE_TOOLS,
-# so all variants that previously included bearer dropped by 1:
-#   deep:     29 → 28 in PROFILE_TOOLS, minus 4 manual = 24 expected installable
-#   balanced: 18 → 17 in PROFILE_TOOLS (no manual tools)
-#   slim:     14 → 13 in PROFILE_TOOLS (no manual tools)
-#   fast:      9 →  9 (bearer was never in fast)
-# Then #795 added shellcheck to deep -- it was in the other three profiles and
-# not the most comprehensive one, and Dockerfile.deep already built it:
-#   deep:     28 → 29 in PROFILE_TOOLS, minus 4 manual = 25 expected installable
 # Registry this suite audits. Overridable so the same tests can be pointed at an
 # image built from the CURRENT source tree rather than the published release:
 #
 #     JMO_DOCKER_REGISTRY=jmo-security-dev pytest tests/e2e/test_docker_workflows.py -m docker
 #
 # The distinction is not cosmetic. Images are rebuilt ONLY on a `v*` tag push
-# (release.yml), and every variant bakes the whole tree in via
+# (release.yml), and the image bakes the whole tree in via
 # `COPY . /opt/jmo-security/`. For most of a development cycle the default below
 # is therefore many commits behind `dev` -- at the time this was written, 77
 # commits and +7820/-2324 lines of `scripts/`. Running this suite with the
@@ -52,17 +39,22 @@ from tests.conftest import skip_on_windows
 DOCKER_REGISTRY = os.environ.get(
     "JMO_DOCKER_REGISTRY", "ghcr.io/jimmy058910/jmo-security"
 )
-DOCKER_VARIANTS = [
-    pytest.param("deep", 25, id="deep"),
-    pytest.param("balanced", 17, id="balanced"),
-    pytest.param("slim", 13, id="slim"),
-    pytest.param("fast", 9, id="fast"),
-]
 
 
 # Budget for a single `docker pull`. Exceeding it is reported as a FAILURE, not
 # a skip -- see ensure_image().
 PULL_TIMEOUT = 600
+
+# Scanners the image carries but cannot run yet, each with the issue that fixes
+# it. test_docker_image_tools fails on any OTHER not-ready tool, and fails on a
+# listed one once it can run, so an entry cannot outlive its fix.
+KNOWN_NOT_READY = {
+    # The Dockerfile installs yara-python but never fetches a rule bundle, so
+    # `tools check` reports yara installed and not execution_ready: a scan would
+    # report every file clean. v1's image was the same; its test asserted only
+    # `installed`. Phase 6 replaces yara with yara-x + signature-base.
+    "yara": "no rules in the image, TODO(issue-#1282)",
+}
 
 
 def _docker(*args: str, timeout: int = 60) -> subprocess.CompletedProcess[str]:
@@ -216,101 +208,58 @@ def ensure_image(image: str) -> None:
     pytest.fail(f"docker pull {image} failed (rc={result.returncode}): {err}")
 
 
-def absent_without_excuse(tools: dict[str, dict]) -> list[str]:
-    """Tools the image's own profile lists, does not excuse, and lacks.
+def image_tool_matrix(image: str) -> tuple[list[str], str]:
+    """The TOOL_MATRIX and POLICY_ENGINE the IMAGE was built with.
 
-    `tools` is `jmo tools check --profile X --json` output from INSIDE the
-    image: `{name: {"installed": bool, "manual_install": bool, ...}}`.
-
-    A tool the image itself marks `manual_install` is deliberately absent --
-    `MANUAL_INSTALL_TOOLS` are listed in the profile and never baked in. Any
-    other absence is a real gap, and naming it beats reporting a total.
+    The expectation comes from the image, never from this checkout -- the same
+    source scheduled.yml's validate-image job reads. For an image built from
+    the PR (ci.yml's docker-smoke) the two are equal anyway. For the weekly run
+    against the published image they are not: the image is whatever the last
+    `v*` tag built, so a checkout comparison false-alarms whenever main's
+    matrix is ahead of that tag, which is exactly how #1039 went red on a
+    correctly built image.
     """
-    return sorted(
-        name
-        for name, status in tools.items()
-        if not status.get("manual_install", False)
-        and not status.get("installed", False)
+    result = _docker(
+        "run",
+        "--rm",
+        "--entrypoint",
+        "python3",
+        image,
+        "-c",
+        "import json; "
+        "from scripts.core.tool_registry import POLICY_ENGINE, TOOL_MATRIX; "
+        "print(json.dumps([list(TOOL_MATRIX), POLICY_ENGINE]))",
+        timeout=120,
     )
-
-
-class TestVariantExpectationRule:
-    """The `absent_without_excuse` rule, without a Docker daemon.
-
-    Regression for #1039. Unmarked on purpose: markers are per-class in this
-    file, so these run in the ordinary shards while everything around them
-    needs `docker`. The rule they cover is the one that decides whether a
-    nightly goes red, and it was previously a hardcoded count that could not be
-    exercised anywhere without a daemon.
-
-    Payloads are reconstructed from nightly run 33177110349's own output.
-    """
-
-    MANUAL = ("afl++", "akto", "falco", "mobsf")
-
-    def _payload(self, names: list[str], extra_missing: tuple[str, ...] = ()) -> dict:
-        missing = set(self.MANUAL) | set(extra_missing)
-        return {
-            n: {"installed": n not in missing, "manual_install": n in self.MANUAL}
-            for n in names
-        }
-
-    # `deep` at v1.0.8 -- what the shipped image actually contains.
-    V1_0_8_DEEP = [f"tool{i}" for i in range(24)] + list(MANUAL)
-    # `deep` on main -- `shellcheck` joined the profile after the tag.
-    MAIN_DEEP = [f"tool{i}" for i in range(25)] + list(MANUAL)
-
-    def test_a_release_skewed_image_is_not_a_failure(self) -> None:
-        """The nightly's actual case: 28-tool image, 29-tool checkout.
-
-        `PROFILE_TOOLS["deep"]` holds 28 entries at `v1.0.8` and 29 on `main`.
-        The image is built by the last `v*` tag and `tests/` runs from the
-        working tree, so a count computed here is a claim about main asserted
-        against a release. 28 - 4 manual = 24 installed, against an expected 25
-        -- and every one of the four absences was a `manual_install` tool.
-        """
-        assert absent_without_excuse(self._payload(self.V1_0_8_DEEP)) == []
-
-    def test_a_matching_image_is_also_not_a_failure(self) -> None:
-        """The control: after the tag, image and checkout agree."""
-        assert absent_without_excuse(self._payload(self.MAIN_DEEP)) == []
-
-    def test_a_genuinely_missing_tool_is_named(self) -> None:
-        """What the rule exists for, and the count could only ever total."""
-        tools = self._payload(self.MAIN_DEEP, extra_missing=("tool7",))
-        assert absent_without_excuse(tools) == ["tool7"]
-
-    def test_a_manual_tool_is_never_reported(self) -> None:
-        """`MANUAL_INSTALL_TOOLS` are listed in the profile and never shipped."""
-        tools = self._payload(self.MAIN_DEEP)
-        assert all(not tools[m]["installed"] for m in self.MANUAL)
-        assert absent_without_excuse(tools) == []
-
-    def test_a_tool_missing_its_manual_flag_is_reported(self) -> None:
-        """The excuse must be the image's, not the reader's.
-
-        A payload whose `manual_install` key is absent entirely must not be
-        read as excused -- that is the difference between "the image says this
-        is manual" and "we could not tell".
-        """
-        tools = {"afl++": {"installed": False}}
-        assert absent_without_excuse(tools) == ["afl++"]
+    if result.returncode != 0:
+        pytest.fail(
+            f"could not read TOOL_MATRIX from {image} (rc={result.returncode}): "
+            f"{result.stderr.strip()[:500]}"
+        )
+    try:
+        matrix, engine = json.loads(result.stdout)
+    except (json.JSONDecodeError, ValueError):
+        pytest.fail(f"{image} printed no [matrix, engine] pair: {result.stdout[:500]}")
+    # Meta-guard: every check built on an empty matrix passes.
+    if not matrix:
+        pytest.fail(f"{image} reports an empty TOOL_MATRIX")
+    return matrix, engine
 
 
 @pytest.mark.docker
 @pytest.mark.e2e
 @pytest.mark.slow
 @pytest.mark.timeout(1200)
-class TestDockerVariants:
-    """End-to-end tests for Docker image variants.
+class TestDockerImage:
+    """End-to-end tests for the Docker image.
 
     Per-class ``@pytest.mark.timeout(1200)`` overrides the 120s default from
-    pyproject.toml. Deep variant cold-start (25 tools, each doing a --version
-    subprocess inside the container) routinely exceeds 10 minutes on unseeded
-    CI runners. Without this override, pytest-timeout's thread method kills
-    the test before any per-subprocess timeout can fire — prior fixes that
-    raised ``subprocess.run(timeout=...)`` were ineffective because pytest
-    pulled the plug first.
+    pyproject.toml. A cold start of the image's `tools check` (every
+    TOOL_MATRIX tool, each doing a --version subprocess inside the container)
+    has exceeded 10 minutes on unseeded CI runners. Without this override,
+    pytest-timeout's thread method kills the test before any per-subprocess
+    timeout can fire — prior fixes that raised ``subprocess.run(timeout=...)``
+    were ineffective because pytest pulled the plug first.
     """
 
     @pytest.fixture(autouse=True)
@@ -319,21 +268,19 @@ class TestDockerVariants:
         if not docker_available():
             pytest.skip("Docker not available")
 
-    @pytest.mark.parametrize("variant,expected_tools", DOCKER_VARIANTS)
-    def test_docker_variant_tools(self, variant: str, expected_tools: int):
-        """Each Docker variant should have the expected minimum tool count.
+    def test_docker_image_tools(self):
+        """The image carries every TOOL_MATRIX scanner, able to run, and opa.
 
-        Mirrors the scheduled.yml validate-variants pattern:
-          - Uses ``--profile <variant>`` so the output is the guarded per-tool
-            ``{name: {installed: bool, ...}}`` shape. Without ``--profile`` the
-            CLI returns a profile-summary dict with integer ``installed`` counts
-            that can't be iterated tool-by-tool (and the plain path has
-            historically hit the 120s subprocess timeout while fanning out
-            across all profiles).
+        Mirrors scheduled.yml's validate-image job. With no tool names,
+        ``tools check --json`` reports the scan matrix under ``tools`` and the
+        policy engine under ``policy_engine``, one entry per tool, so every
+        assertion below names its offenders rather than reporting a total.
         """
-        image = f"{DOCKER_REGISTRY}:{variant}"
+        image = f"{DOCKER_REGISTRY}:latest"
 
         ensure_image(image)
+        # From the image, never the checkout: see image_tool_matrix for why.
+        expected, policy_engine = image_tool_matrix(image)
 
         # Subprocess timeout is 1150s — slightly less than the class-level
         # ``@pytest.mark.timeout(1200)`` so ``subprocess.TimeoutExpired`` fires
@@ -343,86 +290,78 @@ class TestDockerVariants:
         # pytest killed the test long before subprocess.run's timeout could
         # fire. See release.rules.md troubleshooting entry.
         result = subprocess.run(
-            [
-                "docker",
-                "run",
-                "--rm",
-                image,
-                "tools",
-                "check",
-                "--profile",
-                variant,
-                "--json",
-            ],
+            ["docker", "run", "--rm", image, "tools", "check", "--json"],
             capture_output=True,
             text=True,
             timeout=1150,
         )
 
-        # `tools check --json` (tool_commands.py:170-171) returns rc=1 when any
-        # tool reports installed=false. For the `deep` profile, 4 tools in
-        # PROFILE_TOOLS are in MANUAL_INSTALL_TOOLS (akto, afl++, mobsf, falco)
-        # and intentionally NOT baked into the Docker image — so rc=1 is the
-        # expected outcome even for a correctly-built deep container. The real
-        # verification is the installed count assertion below. Only hard-fail
-        # here if we can't parse JSON (catastrophic failure).
+        # Unparseable output is catastrophic regardless of rc, and says nothing
+        # about which tool is at fault, so fail with both streams.
         try:
-            tools = json.loads(result.stdout)
+            data = json.loads(result.stdout)
         except json.JSONDecodeError:
             pytest.fail(
-                f"tools check --profile {variant} emitted invalid JSON "
+                f"tools check --json emitted invalid JSON "
                 f"(rc={result.returncode}): "
                 f"stderr={result.stderr[:500]} stdout={result.stdout[:500]}"
             )
 
-        # Shape is {tool_name: {installed: bool, manual_install: bool, ...}}.
-        #
-        # The expectation is derived from the IMAGE'S OWN profile, not from the
-        # checkout's `PROFILE_TOOLS`. Those are different programs: an image
-        # ships whatever code the last `v*` tag built, while `tests/` runs from
-        # the working tree immediately. A count computed here is therefore a
-        # claim about main asserted against a release, and it goes red for a
-        # reason that has nothing to do with either being wrong.
-        #
-        # Measured on nightly run 33177110349 (#1039): `deep` reported 24
-        # installed against an expected 25, and the four tools reporting
-        # installed=false were exactly the four MANUAL_INSTALL_TOOLS -- i.e. a
-        # correctly built image. `PROFILE_TOOLS["deep"]` holds 28 entries at
-        # `v1.0.8` and 29 on `main`, because `shellcheck` was added to the
-        # profile after the tag. 28 - 4 = 24, and 29 - 4 = 25. Nothing was
-        # broken; the two numbers described two different builds.
-        #
-        # So the rule asserted is the one that is true of every correct image:
-        # a tool the image itself does not mark `manual_install` must be
-        # installed. That is stronger than a floor -- it names the offender
-        # rather than reporting a total -- and it cannot drift at a release.
-        absent = absent_without_excuse(tools)
-        manual = sorted(n for n, s in tools.items() if s.get("manual_install", False))
-        installed = sum(1 for s in tools.values() if s.get("installed", False))
+        tools = data.get("tools", {})
+        engine = data.get("policy_engine", {})
 
-        assert not absent, (
-            f"{variant} variant is missing {len(absent)} tool(s) its own profile "
-            f"lists and does not mark manual_install: {absent}. "
-            f"({installed} installed, {len(tools)} in the image's profile, "
-            f"{len(manual)} manual: {manual})"
+        # `tools check` must report exactly the image's own matrix. Both sides
+        # come from one program, so a difference is a defect in the image, not
+        # release skew. `expected` is never empty (image_tool_matrix fails
+        # first), so this also catches an empty `tools` dict, which a broken
+        # image or a changed output shape would produce and which satisfies
+        # every assertion below.
+        assert sorted(tools) == sorted(expected), (
+            f"tools check reports scanners {sorted(tools)}; the image's "
+            f"TOOL_MATRIX is {sorted(expected)}"
         )
 
-        # Meta-guard. Every assertion above is satisfied by an empty or
-        # near-empty `tools` dict, which is what a broken image or a changed
-        # output shape would produce. `expected_tools` is no longer the
-        # expectation -- it is a floor on how much this test is looking at.
-        assert len(tools) >= expected_tools - 1, (
-            f"{variant} reported only {len(tools)} tools in its profile; the "
-            f"checkout expects around {expected_tools}. A shortfall of more "
-            f"than one is image drift worth reading, not release skew."
+        # Each tool must be installed and able to run. An installed tool that
+        # cannot run (zap without Java) contributes nothing to a scan, the same
+        # as a missing one (#1136).
+        not_ready = sorted(
+            name
+            for name, status in tools.items()
+            if not (status.get("installed") and status.get("execution_ready"))
+        )
+        unexpected = [name for name in not_ready if name not in KNOWN_NOT_READY]
+        assert not unexpected, (
+            f"{len(unexpected)} of {len(tools)} scanner(s) in the image are not "
+            f"installed or not able to run: {unexpected}"
+        )
+        # A known exception that has started working must go, or it would hide
+        # the tool's next regression.
+        recovered = [
+            name for name in KNOWN_NOT_READY if name in tools and name not in not_ready
+        ]
+        assert not recovered, (
+            f"{recovered} can run in the image now: delete their KNOWN_NOT_READY "
+            f"entry so the strict check covers them again"
         )
 
-    @pytest.mark.parametrize("variant,_expected_tools", DOCKER_VARIANTS)
-    def test_docker_variant_scan(
-        self, variant: str, _expected_tools: int, tmp_path: Path
-    ):
-        """Each Docker variant should complete a scan successfully."""
-        image = f"{DOCKER_REGISTRY}:{variant}"
+        # opa scans nothing, so it is not in TOOL_MATRIX, but policy evaluation
+        # defaults on and the image must carry it.
+        assert engine.get("name") == policy_engine and engine.get("installed"), (
+            f"the image does not carry its policy engine {policy_engine}: {engine}"
+        )
+
+        # rc=0 is the contract once every tool and the policy engine are ready;
+        # anything else means the exit code and the JSON disagree. A known
+        # not-ready tool makes `tools check` exit 1, which is also the contract.
+        expected_rc = 1 if not_ready else 0
+        assert result.returncode == expected_rc, (
+            f"tools check exited {result.returncode}, expected {expected_rc} with "
+            f"not-ready scanners {not_ready}: {result.stderr[:500]}"
+        )
+
+    def test_docker_image_scan(self, tmp_path: Path):
+        """The image completes a scan successfully."""
+        image = f"{DOCKER_REGISTRY}:latest"
 
         # Ensure image exists
         ensure_image(image)
@@ -450,9 +389,6 @@ const query = "SELECT * FROM users WHERE id = " + userId;
         # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
         os.chmod(str(src_dir), 0o777)
 
-        # Determine profile based on variant
-        profile = "fast" if variant in ["fast", "slim"] else variant
-
         # Run scan in Docker
         result = subprocess.run(
             [
@@ -467,8 +403,6 @@ const query = "SELECT * FROM users WHERE id = " + userId;
                 "scan",
                 "--repo",
                 ".",
-                "--profile",
-                profile,
                 "--results-dir",
                 "/scan/results",
             ],
@@ -489,7 +423,7 @@ const query = "SELECT * FROM users WHERE id = " + userId;
 
     def test_docker_help_command(self):
         """Docker image should show help correctly."""
-        image = f"{DOCKER_REGISTRY}:balanced"
+        image = f"{DOCKER_REGISTRY}:latest"
 
         ensure_image(image)
 
@@ -505,7 +439,7 @@ const query = "SELECT * FROM users WHERE id = " + userId;
 
     def test_docker_version_command(self):
         """Docker image should report version correctly."""
-        image = f"{DOCKER_REGISTRY}:balanced"
+        image = f"{DOCKER_REGISTRY}:latest"
 
         ensure_image(image)
 
@@ -534,7 +468,7 @@ class TestDockerVolumeMount:
 
     def test_volume_mount_results_persist(self, tmp_path: Path):
         """Results should persist to mounted volume."""
-        image = f"{DOCKER_REGISTRY}:fast"
+        image = f"{DOCKER_REGISTRY}:latest"
 
         ensure_image(image)
 
@@ -573,8 +507,6 @@ class TestDockerVolumeMount:
                 "scan",
                 "--repo",
                 ".",
-                "--profile",
-                "fast",
                 "--results-dir",
                 "/scan/results",
             ],
@@ -601,7 +533,7 @@ class TestDockerVolumeMount:
 
     def test_history_db_mount(self, tmp_path: Path):
         """History database should persist when mounted."""
-        image = f"{DOCKER_REGISTRY}:fast"
+        image = f"{DOCKER_REGISTRY}:latest"
 
         ensure_image(image)
 
@@ -628,8 +560,6 @@ class TestDockerVolumeMount:
                 "scan",
                 "--repo",
                 ".",
-                "--profile",
-                "fast",
             ],
             capture_output=True,
             text=True,
@@ -653,20 +583,20 @@ class TestDockerToolVerification:
             pytest.skip("Docker not available")
 
     @pytest.mark.parametrize(
-        "variant,tool",
+        "tool",
         [
-            ("fast", "trivy"),
-            ("fast", "gitleaks"),
-            ("fast", "semgrep"),
-            ("fast", "bandit"),
-            ("balanced", "trivy"),
-            ("balanced", "checkov"),
-            ("deep", "nuclei"),
+            "trivy",
+            # Exercises `tools debug` for a tool neither registered nor installed;
+            # it makes no claim that gitleaks is present.
+            pytest.param("gitleaks", id="unregistered-gitleaks"),
+            "semgrep",
+            "checkov",
+            "nuclei",
         ],
     )
-    def test_tool_actually_runs(self, variant: str, tool: str):
+    def test_tool_actually_runs(self, tool: str):
         """Verify each tool can actually execute in the container."""
-        image = f"{DOCKER_REGISTRY}:{variant}"
+        image = f"{DOCKER_REGISTRY}:latest"
 
         ensure_image(image)
 
@@ -680,12 +610,11 @@ class TestDockerToolVerification:
 
         combined = result.stdout.lower() + result.stderr.lower()
         # Should show version info or "not found" - but not crash
-        assert "traceback" not in combined
+        assert_no_jmo_traceback(combined)
 
-    @pytest.mark.parametrize("variant,expected_tools", DOCKER_VARIANTS)
-    def test_all_expected_tools_functional(self, variant: str, expected_tools: int):
-        """Verify all expected tools in variant are functional."""
-        image = f"{DOCKER_REGISTRY}:{variant}"
+    def test_all_expected_tools_functional(self):
+        """Verify the image's tools are functional."""
+        image = f"{DOCKER_REGISTRY}:latest"
 
         ensure_image(image)
 
@@ -718,7 +647,7 @@ class TestDockerNonRootExecution:
 
     def test_run_as_non_root_user(self, tmp_path: Path):
         """Container should work when run as non-root user."""
-        image = f"{DOCKER_REGISTRY}:fast"
+        image = f"{DOCKER_REGISTRY}:latest"
 
         ensure_image(image)
 
@@ -727,7 +656,7 @@ class TestDockerNonRootExecution:
         src_dir.mkdir()
         (src_dir / "test.py").write_text("x = 1", encoding="utf-8")
 
-        # UID-mismatch fix (mirrors test_docker_variant_scan + scheduled.yml:1083):
+        # UID-mismatch fix (mirrors test_docker_image_scan + scheduled.yml:1083):
         # GitHub runners use UID 1001; this test mounts as `--user 1000:1000` (the
         # `jmo` container user). Without world-accessible bits, the container's
         # UID 1000 can't traverse the host-owned tmp_path → EACCES → which
@@ -754,8 +683,6 @@ class TestDockerNonRootExecution:
                 "scan",
                 "--repo",
                 ".",
-                "--profile",
-                "fast",
                 "--allow-missing-tools",
             ],
             capture_output=True,
@@ -770,7 +697,7 @@ class TestDockerNonRootExecution:
     @skip_on_windows
     def test_run_with_uid_mapping(self, tmp_path: Path):
         """Container should work with UID/GID mapping."""
-        image = f"{DOCKER_REGISTRY}:fast"
+        image = f"{DOCKER_REGISTRY}:latest"
 
         ensure_image(image)
 
@@ -813,7 +740,7 @@ class TestDockerNonRootExecution:
 
         # Should complete (may have warnings but shouldn't crash)
         combined = result.stdout.lower() + result.stderr.lower()
-        assert "traceback" not in combined
+        assert_no_jmo_traceback(combined)
 
 
 @pytest.mark.docker
@@ -829,7 +756,7 @@ class TestDockerResourceLimits:
 
     def test_run_with_memory_limit(self, tmp_path: Path):
         """Container should work with memory limits."""
-        image = f"{DOCKER_REGISTRY}:fast"
+        image = f"{DOCKER_REGISTRY}:latest"
 
         ensure_image(image)
 
@@ -861,7 +788,7 @@ class TestDockerResourceLimits:
 
     def test_run_with_cpu_limit(self, tmp_path: Path):
         """Container should work with CPU limits."""
-        image = f"{DOCKER_REGISTRY}:fast"
+        image = f"{DOCKER_REGISTRY}:latest"
 
         ensure_image(image)
 
@@ -905,7 +832,7 @@ class TestDockerHistoryPersistence:
 
     def test_history_persists_between_scans(self, tmp_path: Path):
         """History database should persist between container runs."""
-        image = f"{DOCKER_REGISTRY}:fast"
+        image = f"{DOCKER_REGISTRY}:latest"
 
         ensure_image(image)
 
@@ -941,8 +868,6 @@ class TestDockerHistoryPersistence:
                 "scan",
                 "--repo",
                 ".",
-                "--profile",
-                "fast",
                 "--allow-missing-tools",
             ],
             capture_output=True,
@@ -968,8 +893,6 @@ class TestDockerHistoryPersistence:
                 "scan",
                 "--repo",
                 ".",
-                "--profile",
-                "fast",
                 "--allow-missing-tools",
             ],
             capture_output=True,
@@ -1001,8 +924,7 @@ class TestDockerHistoryPersistence:
         # behavior — see scripts/cli/history_commands.py). The test's
         # primary intent is "container can read its own history without
         # crashing", not "scans always populate history" (which depends on
-        # tool availability inside the container — fast variant lacks most
-        # tools, so --allow-missing-tools scans may produce no findings to
+        # what the scan finds -- a one-line `x = 1` may produce no findings to
         # store).
         assert result_history.returncode in (0, 1)
 
@@ -1020,7 +942,7 @@ class TestDockerOutputFormats:
 
     def test_json_output_valid(self, tmp_path: Path):
         """JSON output from container should be valid."""
-        image = f"{DOCKER_REGISTRY}:fast"
+        image = f"{DOCKER_REGISTRY}:latest"
 
         ensure_image(image)
 
@@ -1040,7 +962,7 @@ class TestDockerOutputFormats:
 
     def test_human_readable_output(self, tmp_path: Path):
         """Human-readable output should be properly formatted."""
-        image = f"{DOCKER_REGISTRY}:fast"
+        image = f"{DOCKER_REGISTRY}:latest"
 
         ensure_image(image)
 
@@ -1080,74 +1002,28 @@ class TestDockerOutputFormats:
 # way: it is a property of the artifact in the registry, not of whichever daemon
 # happens to run the test. It is also the number users actually experience.
 #
-# Measured 2026-08-25 against published v1.0.8, linux/amd64:
-#     fast 511    slim 806    balanced 1796    deep 2033   MiB
-# Cross-checked: the manifest sum for :fast equals what `docker image inspect`
-# reports under containerd on the same image, confirming the two agree once the
-# store's unit is known — the manifest just does not depend on knowing it.
+# Measured 2026-08-25 against published v1.0.8, linux/amd64. `:latest` was the
+# deep image then: 2033 MiB.
+# Cross-checked: the manifest sum for the then-published `:fast` equals what
+# `docker image inspect` reports under containerd on the same image, confirming
+# the two agree once the store's unit is known — the manifest just does not
+# depend on knowing it.
 #
-# Bands are +/-20%, the buffer this file has always used, now applied to
-# MEASURED values rather than extrapolated ones. Widen only after re-measuring;
+# The band is +/-20%, the buffer this file has always used, applied to a
+# MEASURED value rather than an extrapolated one. Widen only after re-measuring;
 # a band that no longer contains reality is how this test spent months red.
-IMAGE_SIZE_RANGES = {
-    "deep": (1620, 2440),  # measured 2033 MiB (24 baked tools; 4 manual-install)
-    "balanced": (1430, 2160),  # measured 1796 MiB (17 tools)
-    "slim": (640, 970),  # measured 806 MiB (13 tools, cloud-focused)
-    "fast": (400, 620),  # measured 511 MiB (9 tools)
-}
-
-# Tools that are deep-profile-only (should NOT appear in lighter variants).
-# Note: `afl-fuzz` (afl++) is in MANUAL_INSTALL_TOOLS — listed in
-# PROFILE_TOOLS["deep"] but intentionally NOT baked into the Docker image
-# (users install manually per docs/MANUAL_INSTALLATION.md). Removed from
-# this list because deep image legitimately doesn't have afl-fuzz.
-# `falcoctl` IS installed separately in Dockerfile.deep (lines around 130),
-# so it stays.
-DEEP_ONLY_TOOLS = ["noseyparker", "bandit", "falcoctl"]
-# Tools that are deep/balanced but NOT in fast (slim uses fast profile tools)
-BALANCED_ONLY_TOOLS = ["checkov", "hadolint"]
-
-# Named tool sets per variant for exhaustive presence checks.
-# Excludes MANUAL_INSTALL_TOOLS binaries: afl-fuzz (afl++) is in
-# PROFILE_TOOLS["deep"] but listed in MANUAL_INSTALL_TOOLS — users install
-# it manually per docs/MANUAL_INSTALLATION.md, not baked into the image.
-# falcoctl IS installed separately in Dockerfile.deep (not via the falco
-# manual-install entry).
-DEEP_EXPECTED_TOOLS = [
-    "trufflehog",
-    "noseyparker",
-    "semgrep",
-    "bandit",
-    "syft",
-    "trivy",
-    "checkov",
-    "hadolint",
-    "zap",
-    "falcoctl",
-]
-BALANCED_EXPECTED_TOOLS = [
-    "trufflehog",
-    "semgrep",
-    "syft",
-    "trivy",
-    "checkov",
-    "hadolint",
-    "zap",
-]
-FAST_EXPECTED_TOOLS = ["trufflehog", "semgrep", "trivy"]
-
-# Mapping of variant -> (profile, expected_named_tools, shell)
-VARIANT_NAMED_TOOLS: list[tuple[str, str, list[str], str]] = [
-    ("deep", "deep", DEEP_EXPECTED_TOOLS, "bash"),
-    ("balanced", "balanced", BALANCED_EXPECTED_TOOLS, "bash"),
-    ("fast", "fast", FAST_EXPECTED_TOOLS, "sh"),
-]
+#
+# v2.0.0 publishes one image, and it is not the deep image: it drops every
+# tool v2.0.0 removed, Node and the C toolchain. No v2.0.0 image has been published
+# to measure, so this band is still v1.0.8's `:latest`. Re-measure it against
+# the first published v2.0.0 image; do not widen it to fit.
+IMAGE_SIZE_RANGE = (1620, 2440)
 
 
 @pytest.mark.docker
 @pytest.mark.e2e
 class TestDockerImageSize:
-    """Test Docker image sizes are within expected ranges."""
+    """Test the Docker image size is within its measured range."""
 
     @pytest.fixture(autouse=True)
     def check_docker(self):
@@ -1155,16 +1031,7 @@ class TestDockerImageSize:
         if not docker_available():
             pytest.skip("Docker not available")
 
-    @pytest.mark.parametrize(
-        "variant,size_range",
-        [
-            ("deep", IMAGE_SIZE_RANGES["deep"]),
-            ("balanced", IMAGE_SIZE_RANGES["balanced"]),
-            ("slim", IMAGE_SIZE_RANGES["slim"]),
-            ("fast", IMAGE_SIZE_RANGES["fast"]),
-        ],
-    )
-    def test_image_size_within_range(self, variant: str, size_range: tuple):
+    def test_image_size_within_range(self):
         """Compressed download size stays inside its measured band.
 
         Reads the registry manifest rather than `docker image inspect`, because
@@ -1173,7 +1040,7 @@ class TestDockerImageSize:
         manifest query needs no local copy, so this does not pull ~2 GB just to
         read a number.
         """
-        image = f"{DOCKER_REGISTRY}:{variant}"
+        image = f"{DOCKER_REGISTRY}:latest"
 
         size_mb = registry_compressed_mb(image)
         if size_mb is None:
@@ -1184,122 +1051,20 @@ class TestDockerImageSize:
                 "name (the default is the published GHCR repo) to run it."
             )
 
-        min_mb, max_mb = size_range
+        min_mb, max_mb = IMAGE_SIZE_RANGE
         assert min_mb <= size_mb <= max_mb, (
             f"{image} compressed size {size_mb:.0f} MiB is outside the measured "
             f"band [{min_mb}, {max_mb}] MiB. Either the image really changed "
             f"(bloat, or tools dropped), or the band needs re-measuring against "
-            f"the current release -- see the IMAGE_SIZE_RANGES comment before "
+            f"the current release -- see the IMAGE_SIZE_RANGE comment before "
             f"widening it."
         )
 
 
 @pytest.mark.docker
 @pytest.mark.e2e
-class TestDockerToolExclusion:
-    """Test that lighter variants correctly exclude heavy/deep-only tools."""
-
-    @pytest.fixture(autouse=True)
-    def check_docker(self):
-        """Skip all tests if Docker is not available."""
-        if not docker_available():
-            pytest.skip("Docker not available")
-
-    def test_balanced_excludes_deep_only_tools(self):
-        """Balanced variant should NOT include deep-profile-only tools."""
-        image = f"{DOCKER_REGISTRY}:balanced"
-
-        ensure_image(image)
-
-        found = []
-        for tool in DEEP_ONLY_TOOLS:
-            result = subprocess.run(
-                [
-                    "docker",
-                    "run",
-                    "--rm",
-                    "--entrypoint",
-                    "bash",
-                    image,
-                    "-c",
-                    f"which {tool}",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            if result.returncode == 0:
-                found.append(tool)
-
-        assert not found, (
-            f"Balanced image should not include deep-only tools, but found: {found}"
-        )
-
-    def test_fast_excludes_deep_only_tools(self):
-        """Fast variant should NOT include deep-profile-only tools."""
-        image = f"{DOCKER_REGISTRY}:fast"
-
-        ensure_image(image)
-
-        found = []
-        for tool in DEEP_ONLY_TOOLS:
-            result = subprocess.run(
-                [
-                    "docker",
-                    "run",
-                    "--rm",
-                    "--entrypoint",
-                    "bash",
-                    image,
-                    "-c",
-                    f"which {tool}",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            if result.returncode == 0:
-                found.append(tool)
-
-        assert not found, (
-            f"Fast image should not include deep-only tools, but found: {found}"
-        )
-
-    def test_deep_includes_deep_only_tools(self):
-        """Deep variant SHOULD include the deep-profile-only tools."""
-        image = f"{DOCKER_REGISTRY}:deep"
-
-        ensure_image(image)
-
-        missing = []
-        for tool in DEEP_ONLY_TOOLS:
-            result = subprocess.run(
-                [
-                    "docker",
-                    "run",
-                    "--rm",
-                    "--entrypoint",
-                    "bash",
-                    image,
-                    "-c",
-                    f"which {tool}",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            if result.returncode != 0:
-                missing.append(tool)
-
-        assert not missing, (
-            f"Deep image should include deep-only tools, but missing: {missing}"
-        )
-
-
-@pytest.mark.docker
-@pytest.mark.e2e
 class TestDockerCLIConsistency:
-    """Test that all variants have a consistent CLI interface."""
+    """Test the image exposes the expected CLI interface."""
 
     @pytest.fixture(autouse=True)
     def check_docker(self):
@@ -1307,10 +1072,9 @@ class TestDockerCLIConsistency:
         if not docker_available():
             pytest.skip("Docker not available")
 
-    @pytest.mark.parametrize("variant,_expected_tools", DOCKER_VARIANTS)
-    def test_scan_help_available(self, variant: str, _expected_tools: int):
-        """All variants should support scan --help."""
-        image = f"{DOCKER_REGISTRY}:{variant}"
+    def test_scan_help_available(self):
+        """The image should support scan --help."""
+        image = f"{DOCKER_REGISTRY}:latest"
 
         ensure_image(image)
 
@@ -1327,10 +1091,9 @@ class TestDockerCLIConsistency:
         assert "scan" in result.stdout.lower()
         assert "--repo" in result.stdout
 
-    @pytest.mark.parametrize("variant,_expected_tools", DOCKER_VARIANTS)
-    def test_core_scan_flags_present(self, variant: str, _expected_tools: int):
-        """All variants should expose the same core scan flags."""
-        image = f"{DOCKER_REGISTRY}:{variant}"
+    def test_core_scan_flags_present(self):
+        """The image should expose the core scan flags."""
+        image = f"{DOCKER_REGISTRY}:latest"
 
         ensure_image(image)
 
@@ -1342,63 +1105,19 @@ class TestDockerCLIConsistency:
         )
 
         assert result.returncode == 0
-        # All variants must expose core flags
         assert "--repo" in result.stdout
         assert "--results-dir" in result.stdout
-        assert "--profile" in result.stdout or "--profile-name" in result.stdout
-
-    def test_all_variants_same_version(self):
-        """All variants should report the same jmo package version."""
-        versions: dict[str, str] = {}
-
-        # Names only. This list used to carry tool counts bound to `_` and read
-        # by nothing -- and by the time #795 touched it they had drifted to
-        # (28, 18, 14, 8) against an actual (28, 17, 13, 9), wrong in three of
-        # four entries. A number nobody reads cannot stay right; DOCKER_VARIANTS
-        # above is the one place a count belongs.
-        for variant in ("deep", "balanced", "slim", "fast"):
-            image = f"{DOCKER_REGISTRY}:{variant}"
-
-            if not image_exists(image):
-                continue  # Skip missing images, don't fail
-
-            result = subprocess.run(
-                [
-                    "docker",
-                    "run",
-                    "--rm",
-                    "--entrypoint",
-                    "bash",
-                    image,
-                    "-c",
-                    "python3 -c 'import importlib.metadata; print(importlib.metadata.version(\"jmo-security\"))'",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-
-            if result.returncode == 0 and result.stdout.strip():
-                versions[variant] = result.stdout.strip()
-
-        if len(versions) < 2:
-            pytest.skip(
-                "Fewer than 2 variants available locally — cannot compare versions"
-            )
-
-        unique_versions = set(versions.values())
-        assert len(unique_versions) == 1, (
-            f"Version mismatch across variants: {versions}"
-        )
+        # How a scan narrows its tool list since v2.0.0, which removed the
+        # profile flag this line used to accept in its place.
+        assert "--tools" in result.stdout
 
 
 @pytest.mark.docker
 @pytest.mark.e2e
 class TestDockerNamedToolPresence:
-    """Verify specific named tools are present (via which) in each variant.
+    """Verify every scanner and the policy engine are on the image's PATH.
 
-    Merged from tests/integration/test_docker_variants.py which used legacy
-    variant names: full→deep, slim→balanced, alpine→fast.
+    Merged from tests/integration/test_docker_variants.py.
     """
 
     @pytest.fixture(autouse=True)
@@ -1407,51 +1126,22 @@ class TestDockerNamedToolPresence:
         if not docker_available():
             pytest.skip("Docker not available")
 
-    @pytest.mark.parametrize(
-        "variant,profile,expected_tools,shell",
-        VARIANT_NAMED_TOOLS,
-        ids=["deep", "balanced", "fast"],
-    )
-    def test_variant_has_named_tools(
-        self, variant: str, profile: str, expected_tools: list[str], shell: str
-    ):
-        """Each variant should have its expected named tools on PATH."""
-        image = f"{DOCKER_REGISTRY}:{variant}"
+    def test_image_has_every_tool_on_path(self):
+        """Every TOOL_MATRIX scanner, and the policy engine, is on PATH.
+
+        The list is the image's own TOOL_MATRIX, read from inside it (see
+        image_tool_matrix for why not the checkout's), so a tool entering or
+        leaving the matrix changes what this checks with no edit here. Each
+        tool's name is also its command in the image; zap's is the
+        /usr/local/bin/zap symlink to /opt/zaproxy/zap.sh.
+        """
+        image = f"{DOCKER_REGISTRY}:latest"
 
         ensure_image(image)
-
-        missing_tools = []
-        for tool in expected_tools:
-            result = subprocess.run(
-                [
-                    "docker",
-                    "run",
-                    "--rm",
-                    "--entrypoint",
-                    shell,
-                    image,
-                    "-c",
-                    f"which {tool}",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            if result.returncode != 0:
-                missing_tools.append(tool)
-
-        assert not missing_tools, (
-            f"{image} ({profile} profile) missing tools: {missing_tools}"
-        )
-
-    def test_deep_has_all_expected_tools(self):
-        """Deep variant should have all expected tools (comprehensive check)."""
-        image = f"{DOCKER_REGISTRY}:deep"
-
-        ensure_image(image)
+        matrix, policy_engine = image_tool_matrix(image)
 
         missing = []
-        for tool in DEEP_EXPECTED_TOOLS:
+        for tool in (*matrix, policy_engine):
             result = subprocess.run(
                 [
                     "docker",
@@ -1470,17 +1160,17 @@ class TestDockerNamedToolPresence:
             if result.returncode != 0:
                 missing.append(tool)
 
-        assert not missing, f"Deep image missing expected tools: {missing}"
+        assert not missing, f"{image} is missing tools on PATH: {missing}"
 
 
 @pytest.mark.docker
 @pytest.mark.e2e
-class TestDockerBasicScanByVariant:
-    """Basic scan functionality tests using /repo mount pattern.
+class TestDockerBasicScan:
+    """Basic scan functionality test using the /repo mount pattern.
 
-    Merged from tests/integration/test_docker_variants.py (test_docker_full_basic_scan,
-    test_docker_slim_basic_scan, test_docker_alpine_basic_scan). Uses --profile-name
-    flag and /repo volume mount rather than working-directory approach.
+    Merged from tests/integration/test_docker_variants.py
+    (test_docker_full_basic_scan). Uses a /repo volume mount rather than the
+    working-directory approach.
     """
 
     @pytest.fixture(autouse=True)
@@ -1489,9 +1179,9 @@ class TestDockerBasicScanByVariant:
         if not docker_available():
             pytest.skip("Docker not available")
 
-    def test_deep_basic_scan(self, tmp_path: Path):
-        """Deep variant can perform a basic repository scan."""
-        image = f"{DOCKER_REGISTRY}:deep"
+    def test_basic_scan(self, tmp_path: Path):
+        """The image can perform a basic repository scan."""
+        image = f"{DOCKER_REGISTRY}:latest"
         ensure_image(image)
 
         test_repo = tmp_path / "test-repo"
@@ -1510,76 +1200,6 @@ class TestDockerBasicScanByVariant:
                 "scan",
                 "--repo",
                 "/repo",
-                "--profile",
-                "fast",
-                "--allow-missing-tools",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-
-        assert result.returncode in (
-            0,
-            1,
-        ), f"Scan failed with exit code {result.returncode}: {result.stderr}"
-
-    def test_balanced_basic_scan(self, tmp_path: Path):
-        """Balanced variant can perform a basic repository scan."""
-        image = f"{DOCKER_REGISTRY}:balanced"
-        ensure_image(image)
-
-        test_repo = tmp_path / "test-repo"
-        test_repo.mkdir()
-        (test_repo / "app.py").write_text("print('hello')")
-
-        result = subprocess.run(
-            [
-                "docker",
-                "run",
-                "--rm",
-                "-v",
-                f"{test_repo}:/repo",
-                image,
-                "scan",
-                "--repo",
-                "/repo",
-                "--profile",
-                "balanced",
-                "--allow-missing-tools",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-
-        assert result.returncode in (
-            0,
-            1,
-        ), f"Scan failed with exit code {result.returncode}: {result.stderr}"
-
-    def test_fast_basic_scan(self, tmp_path: Path):
-        """Fast variant can perform a basic repository scan."""
-        image = f"{DOCKER_REGISTRY}:fast"
-        ensure_image(image)
-
-        test_repo = tmp_path / "test-repo"
-        test_repo.mkdir()
-        (test_repo / "test.py").write_text("x = 1")
-
-        result = subprocess.run(
-            [
-                "docker",
-                "run",
-                "--rm",
-                "-v",
-                f"{test_repo}:/repo",
-                image,
-                "scan",
-                "--repo",
-                "/repo",
-                "--profile",
-                "fast",
                 "--allow-missing-tools",
             ],
             capture_output=True,
@@ -1597,69 +1217,42 @@ class TestDockerBasicScanByVariant:
 @pytest.mark.slow
 @pytest.mark.docker
 class TestDockerCLIWorkflows:
-    """Docker CLI workflow tests replacing bash U9-U11, M5-M6, W3-W4.
+    """Docker CLI workflow tests replacing bash U9-U10, M5, W3.
 
     Tests jmo scan execution inside Docker containers with volume mounts.
     """
 
-    DOCKER_REGISTRY = "ghcr.io/jimmy058910/jmo-security"
-
     @pytest.mark.skipif(not shutil.which("docker"), reason="Docker not installed")
     @pytest.mark.parametrize(
-        "test_id,variant,cli_args,platform",
+        "test_id,cli_args,platform",
         [
             pytest.param(
                 "U9",
-                "latest",
-                ["ci", "--repo", "/scan", "--profile-name", "balanced"],
+                ["ci", "--repo", "/scan"],
                 "linux",
                 id="U9-docker-full-repo",
             ),
             pytest.param(
                 "U10",
-                "latest",
                 ["ci", "--image", "alpine:3.19", "--tools", "trivy,syft"],
                 "linux",
                 id="U10-docker-full-image",
             ),
             pytest.param(
-                "U11",
-                "slim",
-                ["ci", "--repo", "/scan", "--profile-name", "fast"],
-                "linux",
-                id="U11-docker-slim-multi",
-            ),
-            pytest.param(
                 "M5",
-                "latest",
-                ["ci", "--repo", "/scan", "--profile-name", "balanced"],
+                ["ci", "--repo", "/scan"],
                 "darwin",
                 id="M5-docker-full-macos",
             ),
             pytest.param(
-                "M6",
-                "slim",
-                ["ci", "--repo", "/scan", "--profile-name", "fast"],
-                "darwin",
-                id="M6-docker-slim-macos",
-            ),
-            pytest.param(
                 "W3",
-                "latest",
-                ["ci", "--repo", "/scan", "--profile-name", "balanced"],
+                ["ci", "--repo", "/scan"],
                 "win32",
                 id="W3-docker-full-windows",
             ),
-            pytest.param(
-                "W4",
-                "slim",
-                ["ci", "--repo", "/scan", "--profile-name", "fast"],
-                "win32",
-                id="W4-docker-slim-windows",
-            ),
         ],
     )
-    def test_docker_cli_workflow(self, test_id, variant, cli_args, platform, tmp_path):
+    def test_docker_cli_workflow(self, test_id, cli_args, platform, tmp_path):
         """Run jmo inside Docker container and validate output."""
         if sys.platform != platform:
             pytest.skip(f"Test {test_id} is for {platform}")
@@ -1686,7 +1279,7 @@ class TestDockerCLIWorkflows:
             f"{tmp_path}:/scan",
             "-v",
             f"{results_dir}:/scan/results",
-            f"{self.DOCKER_REGISTRY}:{variant}",
+            f"{DOCKER_REGISTRY}:latest",
             *cli_args,
             "--results-dir",
             "/scan/results",

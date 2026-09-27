@@ -20,9 +20,9 @@ from scripts.cli.installers.pip_installer import IsolatedPipInstaller, PipInstal
 
 
 def make_tool_info(
-    name: str = "bandit",
-    version: str = "1.7.5",
-    pypi_package: str | None = "bandit",
+    name: str = "yara",
+    version: str = "4.5.4",
+    pypi_package: str | None = "yara-python",
     **kwargs,
 ) -> MagicMock:
     """Create a mock ToolInfo."""
@@ -62,7 +62,9 @@ class TestPipInstallerProperties:
         installer = PipInstaller()
         with patch("scripts.cli.installers.pip_installer.ISOLATED_TOOLS", {}):
             assert (
-                installer.can_install(make_tool_info("bandit", pypi_package="bandit"))
+                installer.can_install(
+                    make_tool_info("yara", pypi_package="yara-python")
+                )
                 is True
             )
 
@@ -93,10 +95,10 @@ class TestPipInstallerInstall:
         with patch(
             "scripts.cli.installers.pip_installer.validate_version", return_value=True
         ):
-            result = installer.install("bandit", make_tool_info())
+            result = installer.install("yara", make_tool_info())
             assert result.success is True
             assert result.method == "pip"
-            assert "bandit==" in result.message
+            assert "yara-python==4.5.4" in result.message
 
     def test_no_pypi_package(self):
         """Test install fails when no pypi_package defined."""
@@ -111,7 +113,7 @@ class TestPipInstallerInstall:
         with patch(
             "scripts.cli.installers.pip_installer.validate_version", return_value=False
         ):
-            result = installer.install("bandit", make_tool_info(version="evil;cmd"))
+            result = installer.install("yara", make_tool_info(version="evil;cmd"))
             assert result.success is False
             assert "Invalid version" in result.message
 
@@ -122,7 +124,7 @@ class TestPipInstallerInstall:
         with patch(
             "scripts.cli.installers.pip_installer.validate_version", return_value=True
         ):
-            result = installer.install("bandit", make_tool_info())
+            result = installer.install("yara", make_tool_info())
             assert result.success is False
             assert "pip install failed" in result.message
 
@@ -134,7 +136,7 @@ class TestPipInstallerInstall:
         with patch(
             "scripts.cli.installers.pip_installer.validate_version", return_value=True
         ):
-            result = installer.install("bandit", make_tool_info())
+            result = installer.install("yara", make_tool_info())
             assert result.success is False
             assert "timed out" in result.message.lower()
 
@@ -146,7 +148,7 @@ class TestPipInstallerInstall:
         with patch(
             "scripts.cli.installers.pip_installer.validate_version", return_value=True
         ):
-            result = installer.install("bandit", make_tool_info())
+            result = installer.install("yara", make_tool_info())
             assert result.success is False
             assert "permission denied" in result.message
 
@@ -155,16 +157,16 @@ class TestPipInstallerInstall:
         runner = make_runner(returncode=0)
         manager = MagicMock()
         status = MagicMock()
-        status.installed_version = "1.7.5"
+        status.installed_version = "4.5.4"
         manager.check_tool.return_value = status
         installer = PipInstaller(subprocess_runner=runner, tool_manager=manager)
         with patch(
             "scripts.cli.installers.pip_installer.validate_version", return_value=True
         ):
-            result = installer.install("bandit", make_tool_info())
+            result = installer.install("yara", make_tool_info())
             assert result.success is True
-            assert result.version_installed == "1.7.5"
-            manager.check_tool.assert_called_once_with("bandit")
+            assert result.version_installed == "4.5.4"
+            manager.check_tool.assert_called_once_with("yara")
 
     def test_duration_tracked(self):
         """Test duration_seconds is tracked."""
@@ -173,7 +175,7 @@ class TestPipInstallerInstall:
         with patch(
             "scripts.cli.installers.pip_installer.validate_version", return_value=True
         ):
-            result = installer.install("bandit", make_tool_info())
+            result = installer.install("yara", make_tool_info())
             assert result.duration_seconds >= 0
 
 
@@ -188,7 +190,7 @@ class TestPipInstallerBatchInstall:
         runner = make_runner(returncode=0)
         installer = PipInstaller(subprocess_runner=runner)
         tools = [
-            ("bandit", make_tool_info("bandit")),
+            ("yara", make_tool_info("yara")),
             ("safety", make_tool_info("safety", pypi_package="safety")),
         ]
         results = installer.batch_install(tools)
@@ -203,7 +205,7 @@ class TestPipInstallerBatchInstall:
         with patch(
             "scripts.cli.installers.pip_installer.validate_version", return_value=True
         ):
-            tools = [("bandit", make_tool_info("bandit"))]
+            tools = [("yara", make_tool_info("yara"))]
             results = installer.batch_install(tools)
             # Fallback runs individual installs (which also fail)
             assert len(results) >= 1
@@ -223,7 +225,7 @@ class TestPipInstallerBatchInstall:
         with patch(
             "scripts.cli.installers.pip_installer.validate_version", return_value=True
         ):
-            tools = [("bandit", make_tool_info("bandit"))]
+            tools = [("yara", make_tool_info("yara"))]
             results = installer.batch_install(tools)
             assert len(results) >= 1
 
@@ -232,7 +234,7 @@ class TestPipInstallerBatchInstall:
         runner = MagicMock()
         runner.run.side_effect = RuntimeError("unexpected")
         installer = PipInstaller(subprocess_runner=runner)
-        tools = [("bandit", make_tool_info("bandit"))]
+        tools = [("yara", make_tool_info("yara"))]
         results = installer.batch_install(tools)
         assert len(results) == 1
         assert not results[0].success
@@ -242,9 +244,9 @@ class TestPipInstallerBatchInstall:
         runner = make_runner(returncode=0)
         installer = PipInstaller(subprocess_runner=runner)
         progress = MagicMock()
-        tools = [("bandit", make_tool_info("bandit"))]
+        tools = [("yara", make_tool_info("yara"))]
         installer.batch_install(tools, progress=progress)
-        progress.on_start.assert_called_with("bandit")
+        progress.on_start.assert_called_with("yara")
 
 
 # ========== PipInstaller: _fallback_individual_install() ==========
@@ -258,7 +260,7 @@ class TestFallbackIndividualInstall:
         installer = PipInstaller(subprocess_runner=make_runner())
         progress = MagicMock()
         progress.is_cancelled.return_value = True
-        tools = [("bandit", make_tool_info())]
+        tools = [("yara", make_tool_info())]
         results = installer._fallback_individual_install(tools, progress, None)
         assert len(results) == 1
         assert not results[0].success
@@ -299,7 +301,7 @@ class TestIsolatedPipInstallerProperties:
         """Test can_install rejects non-isolated tools."""
         installer = IsolatedPipInstaller()
         with patch("scripts.cli.installers.pip_installer.ISOLATED_TOOLS", {}):
-            assert installer.can_install(make_tool_info("bandit")) is False
+            assert installer.can_install(make_tool_info("yara")) is False
 
 
 # ========== IsolatedPipInstaller: install() ==========
@@ -483,12 +485,12 @@ class TestWindowsVenvLauncher:
         """When pip produced a proper .exe, leave everything alone."""
         bin_dir = tmp_path / "Scripts"
         bin_dir.mkdir()
-        (bin_dir / "bandit.exe").write_bytes(b"MZ")
-        (bin_dir / "bandit").write_bytes(b"#!python\n")
+        (bin_dir / "semgrep.exe").write_bytes(b"MZ")
+        (bin_dir / "semgrep").write_bytes(b"#!python\n")
 
-        self._installer()._ensure_windows_launcher("bandit", bin_dir)
+        self._installer()._ensure_windows_launcher("semgrep", bin_dir)
 
-        assert not (bin_dir / "bandit.cmd").exists()
+        assert not (bin_dir / "semgrep.cmd").exists()
 
     def test_no_script_to_wrap_is_a_noop(self, tmp_path: Path):
         """Nothing to wrap -> write nothing, raise nothing."""

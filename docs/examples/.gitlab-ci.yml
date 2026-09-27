@@ -3,16 +3,11 @@
 # using Docker images for zero-installation scanning.
 
 variables:
-  # Default profile for all scans (can override per-stage)
-  JMO_PROFILE: "balanced"
-
   # Fail pipeline on HIGH or CRITICAL findings
   JMO_FAIL_ON: "HIGH"
 
-  # Docker image variants
-  JMO_IMAGE_FULL: "jmogaming/jmo-security:latest"
-  JMO_IMAGE_SLIM: "jmogaming/jmo-security:slim"
-  JMO_IMAGE_ALPINE: "jmogaming/jmo-security:alpine"
+  # One image carries every scanner (pin a version tag for reproducible runs)
+  JMO_IMAGE: "jmogaming/jmo-security:latest"
 
 stages:
   - security
@@ -20,9 +15,9 @@ stages:
 
 # Template for JMo Security scans
 .jmo_scan_template:
-  image: ${JMO_IMAGE_SLIM}
+  image: ${JMO_IMAGE}
   before_script:
-    - echo "Starting JMo Security scan with profile=${JMO_PROFILE}"
+    - echo "Starting JMo Security scan"
   artifacts:
     when: always
     paths:
@@ -35,15 +30,14 @@ stages:
     paths:
       - .jmo-cache/
 
-# Fast scan for all branches (pre-merge validation)
-security:fast-scan:
+# Quick scan for feature branches (pre-merge validation), narrowed with --tools
+security:pr-scan:
   extends: .jmo_scan_template
   stage: security
   variables:
-    JMO_PROFILE: "fast"
     JMO_FAIL_ON: ""  # Don't fail pipeline, just report
   script:
-    - jmo scan --repo . --profile-name fast --results-dir results --human-logs
+    - jmo scan --repo . --tools trufflehog semgrep trivy --results-dir results --human-logs
     - jmo report results --profile --human-logs
   only:
     - branches
@@ -52,31 +46,17 @@ security:fast-scan:
     - master
     - tags
 
-# Balanced scan for main/master branches
-security:balanced-scan:
+# Full scan for main/master branches and release tags.
+# Every scanner is considered; the repository's content decides which run.
+security:scan:
   extends: .jmo_scan_template
   stage: security
-  variables:
-    JMO_PROFILE: "balanced"
   script:
-    - jmo scan --repo . --profile-name balanced --results-dir results --human-logs
+    - jmo scan --repo . --results-dir results --human-logs
     - jmo report results --fail-on ${JMO_FAIL_ON} --profile --human-logs
   only:
     - main
     - master
-
-# Deep scan for release tags (comprehensive audit)
-security:deep-scan:
-  extends: .jmo_scan_template
-  image: ${JMO_IMAGE_FULL}  # Use full image for deep profile
-  stage: security
-  variables:
-    JMO_PROFILE: "deep"
-    JMO_FAIL_ON: "MEDIUM"  # Stricter threshold for releases
-  script:
-    - jmo scan --repo . --profile-name deep --results-dir results --human-logs
-    - jmo report results --fail-on ${JMO_FAIL_ON} --profile --human-logs
-  only:
     - tags
   timeout: 2h
 
@@ -90,7 +70,6 @@ security:multi-target-scan:
         --repo . \
         --image ${CI_REGISTRY_IMAGE}:${CI_COMMIT_SHORT_SHA} \
         --terraform-state infrastructure/terraform.tfstate \
-        --profile-name balanced \
         --results-dir results \
         --human-logs
     - jmo report results --fail-on ${JMO_FAIL_ON} --profile --human-logs
@@ -102,7 +81,7 @@ compliance:report:
   extends: .jmo_scan_template
   stage: compliance
   dependencies:
-    - security:balanced-scan
+    - security:scan
   script:
     - jmo report results --profile --human-logs
     - echo "Compliance reports generated:"

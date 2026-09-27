@@ -95,7 +95,6 @@ def test_concurrent_writes_thread_safety(concurrency_db, sample_findings, tmp_pa
             try:
                 scan_id = store_scan(
                     results_dir=results_dir,
-                    profile="fast",
                     tools=["trufflehog"],
                     db_path=concurrency_db,
                     commit_hash=f"commit_{thread_id}_{scan_num}",
@@ -174,7 +173,6 @@ def test_concurrent_reads_during_writes(concurrency_db, sample_findings, tmp_pat
     for i in range(10):
         store_scan(
             results_dir=results_dir,
-            profile="fast",
             tools=["trufflehog"],
             db_path=concurrency_db,
             commit_hash=f"initial_{i}",
@@ -203,7 +201,6 @@ def test_concurrent_reads_during_writes(concurrency_db, sample_findings, tmp_pat
             try:
                 scan_id = store_scan(
                     results_dir=results_dir,
-                    profile="fast",
                     tools=["trufflehog"],
                     db_path=concurrency_db,
                     commit_hash=f"concurrent_{i}",
@@ -277,7 +274,6 @@ def test_sqlite_locking_under_contention(concurrency_db, sample_findings, tmp_pa
                 # SQLite will handle locking automatically
                 scan_id = store_scan(
                     results_dir=results_dir,
-                    profile="fast",
                     tools=["trufflehog"],
                     db_path=concurrency_db,
                     commit_hash=f"contention_{thread_id}_{scan_num}",
@@ -348,7 +344,6 @@ def test_database_corruption_recovery(concurrency_db, sample_findings, tmp_path)
     # Store initial scan
     _ = store_scan(
         results_dir=results_dir,
-        profile="fast",
         tools=["trufflehog"],
         db_path=concurrency_db,
         commit_hash="valid_commit",
@@ -401,7 +396,6 @@ def test_database_corruption_recovery(concurrency_db, sample_findings, tmp_path)
     # Store new scan after recovery
     new_scan_id = store_scan(
         results_dir=results_dir,
-        profile="fast",
         tools=["trufflehog"],
         db_path=concurrency_db,
         commit_hash="recovery_commit",
@@ -440,7 +434,6 @@ def test_partial_write_recovery(concurrency_db, sample_findings, tmp_path):
     # Store initial scan
     scan_id_1 = store_scan(
         results_dir=results_dir,
-        profile="fast",
         tools=["trufflehog"],
         db_path=concurrency_db,
         commit_hash="commit_1",
@@ -460,7 +453,6 @@ def test_partial_write_recovery(concurrency_db, sample_findings, tmp_path):
     # (SQLite's WAL mode provides automatic recovery)
     _ = store_scan(
         results_dir=results_dir,
-        profile="fast",
         tools=["trufflehog"],
         db_path=concurrency_db,
         commit_hash="commit_2",
@@ -469,7 +461,6 @@ def test_partial_write_recovery(concurrency_db, sample_findings, tmp_path):
 
     _ = store_scan(
         results_dir=results_dir,
-        profile="fast",
         tools=["trufflehog"],
         db_path=concurrency_db,
         commit_hash="commit_3",

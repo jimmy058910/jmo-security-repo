@@ -32,7 +32,7 @@ Before fabricating JSON, understand the tool's actual output format:
 
 Tools typically follow one of these patterns:
 
-### Pattern 1: Results Array (Semgrep, Bandit, Checkov)
+### Pattern 1: Results Array (Semgrep, Checkov)
 
 **Structure:** Top-level object with `results` array
 

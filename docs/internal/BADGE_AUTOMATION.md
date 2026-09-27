@@ -161,7 +161,7 @@ grep "badge.fury.io\|shields.io/pypi" README.md
 ### During Release (Automated)
 
 - [x] PyPI publish via Trusted Publishers (OIDC)
-- [x] Docker images built (full/slim/alpine)
+- [x] Docker image built (`:latest` and `:<version>`)
 - [x] GitHub release created
 - [x] Badge verification (60s after PyPI publish)
 

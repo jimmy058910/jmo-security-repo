@@ -29,7 +29,7 @@ How systematic debugging integrates with the broader JMo skill ecosystem.
 
 **Complementary JMo skills:**
 
-- **jmo-profile-optimizer:** After fixing bugs, optimize performance
+- **jmo-profile-optimizer:** After fixing bugs, tune per-tool timeouts and threads from measured timings
 - **jmo-documentation-updater:** After fixing bugs, document troubleshooting steps
 
 ---

@@ -13,6 +13,7 @@ Coverage:
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from pathlib import Path
 
@@ -41,7 +42,6 @@ def test_db(tmp_path: Path) -> Path:
         CREATE TABLE scans (
             id TEXT PRIMARY KEY,
             timestamp INTEGER NOT NULL,
-            profile TEXT NOT NULL,
             branch TEXT,
             total_findings INTEGER NOT NULL DEFAULT 0
         )
@@ -64,11 +64,11 @@ def test_db(tmp_path: Path) -> Path:
 
     # Insert test scans
     cursor.executemany(
-        "INSERT INTO scans (id, timestamp, profile, branch, total_findings) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO scans (id, timestamp, branch, total_findings) VALUES (?, ?, ?, ?)",
         [
-            ("scan-001", 1700000000, "balanced", "main", 3),
-            ("scan-002", 1700001000, "fast", "dev", 2),
-            ("scan-003", 1700002000, "deep", "main", 1),
+            ("scan-001", 1700000000, "main", 3),
+            ("scan-002", 1700001000, "dev", 2),
+            ("scan-003", 1700002000, "main", 1),
         ],
     )
 
@@ -234,7 +234,7 @@ class TestSecurityRejections:
         conn = _sqlite3.connect(f"file://{uri_path}?mode=ro", uri=True)
         try:
             with pytest.raises(_sqlite3.OperationalError, match="readonly"):
-                conn.execute("INSERT INTO scans VALUES ('evil', 0, 'fast', 'main', 0)")
+                conn.execute("INSERT INTO scans VALUES ('evil', 0, 'main', 0)")
         finally:
             conn.close()
 
@@ -273,12 +273,12 @@ class TestFunctionalQueries:
 
     def test_query_select_basic(self, test_db):
         result = execute_readonly_query(
-            test_db, "SELECT id, profile FROM scans ORDER BY timestamp"
+            test_db, "SELECT id, branch FROM scans ORDER BY timestamp"
         )
-        assert result["columns"] == ["id", "profile"]
+        assert result["columns"] == ["id", "branch"]
         assert result["row_count"] == 3
         assert result["truncated"] is False
-        assert result["rows"][0] == ["scan-001", "balanced"]
+        assert result["rows"][0] == ["scan-001", "main"]
 
     def test_query_select_with_params(self, test_db):
         result = execute_readonly_query(
@@ -307,7 +307,7 @@ class TestFunctionalQueries:
             test_db,
             """
             WITH recent AS (
-                SELECT id, profile FROM scans ORDER BY timestamp DESC LIMIT 2
+                SELECT id, branch FROM scans ORDER BY timestamp DESC LIMIT 2
             )
             SELECT * FROM recent
             """,
@@ -322,7 +322,7 @@ class TestFunctionalQueries:
         # satisfied either way, so it cannot tell the two apart.
         assert result["row_count"] > 0
         assert result["columns"][:2] == ["addr", "opcode"]
-        assert "profile" not in result["columns"]
+        assert "branch" not in result["columns"]
 
     def test_allow_safe_pragma(self, test_db):
         result = execute_readonly_query(test_db, "PRAGMA table_info(scans)")
@@ -432,7 +432,7 @@ def _build_mcp_db(db_path: Path) -> None:
     try:
         conn.execute(
             "CREATE TABLE scans (id TEXT PRIMARY KEY, timestamp INTEGER NOT NULL, "
-            "profile TEXT NOT NULL, branch TEXT, total_findings INTEGER DEFAULT 0)"
+            "branch TEXT, total_findings INTEGER DEFAULT 0)"
         )
         conn.execute(
             "CREATE TABLE findings (scan_id TEXT NOT NULL, fingerprint TEXT NOT NULL, "
@@ -441,12 +441,9 @@ def _build_mcp_db(db_path: Path) -> None:
             "PRIMARY KEY (scan_id, fingerprint))"
         )
         conn.executemany(
-            "INSERT INTO scans (id, timestamp, profile, branch, total_findings) "
-            "VALUES (?, ?, ?, ?, ?)",
-            [
-                (f"scan-{i:04d}", 1700000000 + i, "balanced", "main", 1)
-                for i in range(600)
-            ],
+            "INSERT INTO scans (id, timestamp, branch, total_findings) "
+            "VALUES (?, ?, ?, ?)",
+            [(f"scan-{i:04d}", 1700000000 + i, "main", 1) for i in range(600)],
         )
         conn.executemany(
             "INSERT INTO findings (scan_id, fingerprint, severity, tool, rule_id, "
@@ -631,3 +628,54 @@ class TestTheToolNotJustTheFunctionUnderneath:
 
         # And it goes back to the repo-root database once unset.
         assert query_findings_db(query="SELECT 1")["row_count"] == 1
+
+
+class TestTheDescriptionMatchesTheSchema:
+    """#1316: an agent learns what it can query from the tool's description
+    (FastMCP publishes the docstring). It listed an `attestations` table the
+    schema has never had and left out `scan_tool_runs`, so the per-tool rows
+    were undiscoverable. Both checks derive from `init_database`, so the next
+    table fails here until the description names it."""
+
+    @staticmethod
+    def _schema(tmp_path: Path) -> Path:
+        from scripts.core.history_db import init_database
+
+        db = tmp_path / "schema.db"
+        init_database(db)
+        return db
+
+    @staticmethod
+    def _doc() -> str:
+        from scripts.jmo_mcp.jmo_server import query_findings_db
+
+        return query_findings_db.__doc__ or ""
+
+    def test_it_names_every_table_and_view(self, tmp_path):
+        con = sqlite3.connect(self._schema(tmp_path))
+        try:
+            schema = set(
+                con.execute(
+                    "SELECT type, name FROM sqlite_master "
+                    "WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%'"
+                )
+            )
+        finally:
+            con.close()
+        listed = set()
+        for line in self._doc().splitlines():
+            kind, _, names = line.strip().partition(": ")
+            if kind in ("Tables", "Views"):
+                listed |= {(kind[:-1].lower(), n.strip()) for n in names.split(",")}
+
+        assert ("table", "scan_tool_runs") in schema, "the schema lost a table"
+        assert listed == schema
+
+    def test_every_example_runs_against_the_schema(self, tmp_path):
+        db = self._schema(tmp_path)
+        examples = re.findall(r'^\s+- "(.+)"$', self._doc(), re.MULTILINE)
+
+        assert any("scan_tool_runs" in q for q in examples), examples
+        for query in examples:
+            params = ["x"] * query.count("?")
+            execute_readonly_query(db_path=db, query=query, params=params or None)

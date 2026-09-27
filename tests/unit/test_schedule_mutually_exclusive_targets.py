@@ -14,7 +14,7 @@ time the cron fired, in CI, long after anyone could connect it to the create.
 **Reachability.** The issue says `jmo schedule create` exposes `--repo` and
 `--repos-dir`, so a user reaches this from the CLI. It does not: measured, that
 subcommand's options are `--backend --cron --description --image --label --name
---profile --repos-dir --slack-webhook --timezone --url`, with **no** `--repo`.
+--repos-dir --slack-webhook --timezone --url`, with **no** `--repo`.
 `repo` arrives only through `from_simple_args`' `**kwargs`, so the reachable
 paths are the Python API and a hand-edited `~/.jmo/schedules.json` -- which is
 what the plan said and the issue did not.
@@ -121,7 +121,6 @@ def test_both_repo_and_repos_dir_is_rejected_at_creation() -> None:
         ScanSchedule.from_simple_args(
             name="nightly",
             cron="0 2 * * *",
-            profile="balanced",
             repos_dir="/srv/repos",
             repo="/srv/one-repo",
         )
@@ -151,7 +150,6 @@ def test_any_single_target_alone_is_accepted(key: str) -> None:
     schedule = ScanSchedule.from_simple_args(
         name="nightly",
         cron="0 2 * * *",
-        profile="balanced",
         **{key: "/srv/target"},
     )
     assert schedule.spec.jobTemplate.targets["repositories"][key] == "/srv/target"
@@ -182,7 +180,6 @@ def test_the_factory_drops_an_empty_value_before_the_rule_sees_it() -> None:
     schedule = ScanSchedule.from_simple_args(
         name="nightly",
         cron="0 2 * * *",
-        profile="balanced",
         repos_dir="",
         repo="/srv/one-repo",
     )
@@ -223,7 +220,6 @@ def _hand_built_conflicting_schedule() -> ScanSchedule:
         spec=ScheduleSpec(
             schedule="0 2 * * *",
             jobTemplate=JobTemplateSpec(
-                profile="balanced",
                 targets={
                     "repositories": {"repo": "/srv/one", "repos_dir": "/srv/many"}
                 },
@@ -239,16 +235,22 @@ def _github_argv(schedule: ScanSchedule) -> list[str]:
 
 
 def _gitlab_argv(schedule: ScanSchedule) -> list[str]:
+    """The argv the parser sees: the script line minus its leading `jmo`.
+
+    Handing the parser `jmo` as the subcommand made every assertion on the exit
+    code vacuous (#1277), because `invalid choice: 'jmo'` also exits 2.
+    """
     job = yaml.safe_load(GitLabCIGenerator().generate(schedule))["security-scan"]
-    line = next(s for s in job["script"] if "jmo scan" in s)
-    return shlex.split(line.replace("\\\n", " "))
+    line = next(s for s in job["script"] if s.startswith("jmo "))
+    argv = shlex.split(line.replace("\\\n", " "))
+    return argv[1:]
 
 
 @pytest.mark.parametrize(
     "render", [_github_argv, _gitlab_argv], ids=["github", "gitlab"]
 )
 def test_a_conflicting_schedule_still_renders_a_command_the_parser_rejects(
-    render,
+    render, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """Documents the residue, and pins that it is a *read*-side gap.
 
@@ -257,9 +259,29 @@ def test_a_conflicting_schedule_still_renders_a_command_the_parser_rejects(
     flags. Asserting the rejection here is what keeps that honest: if a future
     change makes the consumers silently drop one, this test fails and the
     dropping is a decision someone takes on purpose rather than a side effect.
+
+    The exit code alone proved nothing (#1277): the GitLab argv began with
+    `jmo`, which the parser rejects as an unknown subcommand, so this passed for
+    every schedule. The message is what names the rule that fired.
     """
     argv = render(_hand_built_conflicting_schedule())
     assert "--repo" in argv and "--repos-dir" in argv
     with pytest.raises(SystemExit) as exc:
         build_parser().parse_args(argv)
     assert exc.value.code == 2
+    assert "not allowed with argument" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "render", [_github_argv, _gitlab_argv], ids=["github", "gitlab"]
+)
+def test_a_single_target_schedule_renders_a_command_the_parser_accepts(
+    render,
+) -> None:
+    """The negative control that makes the rejection above mean something."""
+    schedule = _hand_built_conflicting_schedule()
+    schedule.spec.jobTemplate.targets["repositories"] = {"repos_dir": "/srv/many"}
+
+    parsed = build_parser().parse_args(render(schedule))
+
+    assert parsed.repos_dir == "/srv/many"

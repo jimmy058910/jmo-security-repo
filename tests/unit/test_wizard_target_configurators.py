@@ -155,16 +155,18 @@ def test_configure_repo_target_repos_dir_no_repos_retry():
         assert mock_validate.call_count == 2
 
 
-def test_configure_repo_target_tsv_mode():
+def test_configure_repo_target_tsv_mode(tmp_path):
     """Test configure_repo_target with TSV mode."""
     mock_config = MagicMock()
     mock_print_step = MagicMock()
+    tsv = tmp_path / "repos.tsv"
+    tsv.write_bytes(b"url\n")
 
     with (
         patch(
             "scripts.cli.wizard_flows.target_configurators._prompter"
         ) as mock_prompter,
-        patch("builtins.input", side_effect=["./repos.tsv", "repos-tsv"]),
+        patch("builtins.input", side_effect=[str(tsv), "repos-tsv"]),
     ):
         mock_prompter.prompt_choice.return_value = "tsv"
 
@@ -172,8 +174,30 @@ def test_configure_repo_target_tsv_mode():
 
         assert result.type == "repo"
         assert result.repo_mode == "tsv"
-        assert result.tsv_path == "./repos.tsv"
+        assert result.tsv_path == str(tsv)
         assert result.tsv_dest == "repos-tsv"
+
+
+def test_configure_repo_target_tsv_mode_asks_again_for_a_missing_file(tmp_path):
+    """Docker mounts a missing file anyway, and creates a root-owned directory
+    of that name on the host, so a TSV that is not there is asked for again."""
+    tsv = tmp_path / "repos.tsv"
+    tsv.write_bytes(b"url\n")
+
+    with (
+        patch(
+            "scripts.cli.wizard_flows.target_configurators._prompter"
+        ) as mock_prompter,
+        patch(
+            "builtins.input",
+            side_effect=[str(tmp_path / "missing.tsv"), str(tsv), "repos-tsv"],
+        ),
+    ):
+        mock_prompter.prompt_choice.return_value = "tsv"
+
+        result = configure_repo_target(MagicMock(), MagicMock())
+
+    assert result.tsv_path == str(tsv)
 
 
 def test_configure_repo_target_targets_mode():
@@ -610,23 +634,40 @@ def test_configure_url_target_batch_invalid_file_retry():
         assert mock_validate.call_count == 2
 
 
-def test_configure_url_target_api_mode():
-    """Test configure_url_target with API spec mode."""
-    mock_config = MagicMock()
-    mock_print_step = MagicMock()
-
+def _api_mode(answers: list[str]) -> tuple[MagicMock, list[str]]:
+    """Run the API mode with these answers; the result and what it printed."""
     with (
         patch(
             "scripts.cli.wizard_flows.target_configurators._prompter"
         ) as mock_prompter,
-        patch("builtins.input", return_value="./openapi.yaml"),
+        patch("builtins.input", side_effect=answers),
     ):
         mock_prompter.prompt_choice.return_value = "api"
+        mock_prompter.colorize.side_effect = lambda text, _color: text
+        result = configure_url_target(MagicMock(), MagicMock())
+    printed = [call.args[0] for call in mock_prompter.colorize.call_args_list]
+    return result, printed
 
-        result = configure_url_target(mock_config, mock_print_step)
 
-        assert result.type == "url"
-        assert result.api_spec == "./openapi.yaml"
+def test_configure_url_target_api_mode_takes_the_spec_url_and_says_how():
+    """zap runs a URL scan and is not told a spec is one (#1331): the spec is
+    scanned as the URL it is served from, and the wizard says so."""
+    result, printed = _api_mode(["https://api.example.com/openapi.json"])
+
+    assert result.type == "url"
+    assert result.api_spec == "https://api.example.com/openapi.json"
+    assert any("plain URL" in line and "#1331" in line for line in printed), printed
+
+
+def test_configure_url_target_api_mode_asks_again_for_a_local_file():
+    """Its default was `./openapi.yaml`, a local file that `jmo scan`
+    rejected after the scan started (#1320) and now refuses up front."""
+    result, printed = _api_mode(
+        ["./openapi.yaml", "https://api.example.com/openapi.json"]
+    )
+
+    assert result.api_spec == "https://api.example.com/openapi.json"
+    assert any("local" in line and "#1331" in line for line in printed), printed
 
 
 # ========== Category 5: GitLab Target Configuration ==========

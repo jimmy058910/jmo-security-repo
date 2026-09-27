@@ -3,7 +3,6 @@
     "target": "WebGoat/WebGoat",
     "version": "2023.8",
     "generated": "2026-01-22T00:00:00Z",
-    "profile": "balanced",
     "tools_used": [
       "semgrep",
       "trivy",

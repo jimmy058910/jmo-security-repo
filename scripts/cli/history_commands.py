@@ -31,6 +31,7 @@ from scripts.core.history_db import (
     get_database_stats,
     get_findings_for_scan,
     get_scan_by_id,
+    get_scan_tool_runs,
     get_trend_summary,
     list_scans,
     optimize_database,
@@ -41,6 +42,7 @@ from scripts.core.history_db import (
 )
 from scripts.core.history_integrity import recover_database, verify_database_integrity
 from scripts.core.history_migrations import get_current_version, run_migrations
+from scripts.core.scan_timings import OFF_TARGET_REASONS
 from scripts.core.unicode_utils import safe_write
 
 logger = logging.getLogger(__name__)
@@ -144,13 +146,9 @@ def cmd_history_store(args) -> int:
             else:
                 tools = []
 
-        # Get profile from args
-        profile = getattr(args, "profile", "balanced")
-
         # Store scan
         scan_id = db_store_scan(
             results_dir=results_dir,
-            profile=profile,
             tools=tools,
             db_path=db_path,
             commit_hash=getattr(args, "commit", None),
@@ -166,10 +164,8 @@ def cmd_history_store(args) -> int:
         sys.stderr.write(f"Error: {e}\n")
         return 1
     except ValueError as e:
-        # A rejected profile name is a user mistake, not a crash.
-        # store_scan() validates against get_known_profiles() -- the tool
-        # registry PLUS jmo.yml `profiles:` -- and its message names every
-        # known profile, so a traceback adds noise and no information.
+        # Invalid input (e.g. encryption requested with no key) is a user
+        # mistake, not a crash; store_scan()'s message says which.
         sys.stderr.write(f"Error: {e}\n")
         return 1
     except Exception as e:
@@ -201,7 +197,6 @@ def cmd_history_list(args) -> int:
 
         # Parse filters
         branch = getattr(args, "branch", None)
-        profile = getattr(args, "profile", None)
         since = None
         if getattr(args, "since", None):
             since_seconds = parse_time_delta(args.since)
@@ -211,7 +206,6 @@ def cmd_history_list(args) -> int:
         scans = list_scans(
             conn,
             branch=branch,
-            profile=profile,
             since=since,
             limit=getattr(args, "limit", 50),
         )
@@ -254,7 +248,6 @@ def cmd_history_list(args) -> int:
             table.add_column("Scan ID", style="cyan", no_wrap=True)
             table.add_column("Timestamp", no_wrap=True)
             table.add_column("Branch")
-            table.add_column("Profile", no_wrap=True)
             table.add_column("Findings", justify="right", no_wrap=True)
             table.add_column("Critical", justify="right", style="red", no_wrap=True)
             table.add_column("High", justify="right", style="yellow", no_wrap=True)
@@ -265,7 +258,6 @@ def cmd_history_list(args) -> int:
                     scan["id"][:8] + "...",
                     scan["timestamp_iso"][:19].replace("T", " "),
                     scan["branch"] or "N/A",
-                    scan["profile"],
                     str(scan["total_findings"]),
                     str(scan["critical_count"]),
                     str(scan["high_count"]),
@@ -315,12 +307,16 @@ def cmd_history_show(args) -> int:
             findings = get_findings_for_scan(conn, scan["id"])
         else:
             findings = []
+        # What each tool did and how long it took (#722): "why is my scan
+        # slow" was unanswerable from JMo's own data before these rows.
+        tool_runs = get_scan_tool_runs(conn, scan["id"])
 
         conn.close()
 
         # Format output
         if getattr(args, "json", False):
             output = dict(scan)
+            output["tool_runs"] = tool_runs
             if findings:
                 output["findings"] = [dict(f) for f in findings]
             sys.stdout.write(json.dumps(output, indent=2) + "\n")
@@ -336,7 +332,6 @@ def cmd_history_show(args) -> int:
                 sys.stdout.write(f"Commit:          {scan['commit_short']}{dirty}\n")
             if scan["tag"]:
                 sys.stdout.write(f"Tag:             {scan['tag']}\n")
-            sys.stdout.write(f"Profile:         {scan['profile']}\n")
             tools = json.loads(scan["tools"])
             sys.stdout.write(
                 f"Tools:           {len(tools)} ({', '.join(tools[:5])}{', ...' if len(tools) > 5 else ''})\n"
@@ -355,6 +350,34 @@ def cmd_history_show(args) -> int:
             safe_write("  " + "─" * 14 + "\n")
             sys.stdout.write(f"  TOTAL:         {scan['total_findings']}\n")
             sys.stdout.write("\n")
+
+            # A tool that does not read a target still has a row there: an
+            # image showed ten such lines of twelve. They are counted here and
+            # listed in --json (#1316).
+            on_target = [
+                run for run in tool_runs if run["reason"] not in OFF_TARGET_REASONS
+            ]
+            if tool_runs:
+                sys.stdout.write("Tool Runs:\n")
+                for run in on_target:
+                    state = run["state"] + (
+                        f":{run['reason']}" if run["reason"] else ""
+                    )
+                    seconds = (
+                        f"{run['seconds']:8.1f}s"
+                        if run["state"] != "skipped"
+                        else " " * 9
+                    )
+                    sys.stdout.write(
+                        f"  {run['target']:<24} {run['tool']:<11} {seconds}  {state}\n"
+                    )
+                hidden = len(tool_runs) - len(on_target)
+                if hidden:
+                    sys.stdout.write(
+                        f"  ({hidden} row(s) for tools that do not read their "
+                        "target; --json lists them)\n"
+                    )
+                sys.stdout.write("\n")
 
             if findings:
                 sys.stdout.write(f"\nTop Findings ({len(findings)} total):\n")
@@ -563,7 +586,6 @@ def cmd_history_export(args) -> int:
                     "scan_id",
                     "timestamp",
                     "branch",
-                    "profile",
                     "fingerprint",
                     "severity",
                     "tool",
@@ -580,7 +602,6 @@ def cmd_history_export(args) -> int:
                             scan["id"],
                             scan["timestamp_iso"],
                             scan["branch"],
-                            scan["profile"],
                             finding["fingerprint"],
                             finding["severity"],
                             finding["tool"],
@@ -658,14 +679,6 @@ def cmd_history_stats(args) -> int:
                 if scans_without_branch:
                     sys.stdout.write(
                         f"  {'(no branch recorded)':20} {scans_without_branch:4} scans\n"
-                    )
-                sys.stdout.write("\n")
-
-            if stats["scans_by_profile"]:
-                sys.stdout.write("Scans by Profile:\n")
-                for item in stats["scans_by_profile"]:
-                    sys.stdout.write(
-                        f"  {item['profile']:10} {item['count']:4} scans\n"
                     )
                 sys.stdout.write("\n")
 

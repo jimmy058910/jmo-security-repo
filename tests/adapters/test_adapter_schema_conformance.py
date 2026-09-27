@@ -69,28 +69,6 @@ GRYPE_RAW: dict[str, Any] = {
     ]
 }
 
-DEPENDENCY_CHECK_RAW: dict[str, Any] = {
-    "scanInfo": {"engineVersion": "10.0.4"},
-    "dependencies": [
-        {
-            "fileName": "libexample-1.0.0.jar",
-            "filePath": "/app/lib/libexample-1.0.0.jar",
-            "vulnerabilities": [
-                {
-                    "name": "CVE-2024-5678",
-                    "severity": "CRITICAL",
-                    "description": "Example vulnerability in a jar",
-                    "cvssv3": {
-                        "baseScore": 9.1,
-                        "baseSeverity": "CRITICAL",
-                        "vectorString": "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N",
-                    },
-                }
-            ],
-        }
-    ],
-}
-
 
 def _parse_grype(path: Path) -> list[dict[str, Any]]:
     from scripts.core.adapters.grype_adapter import _load_grype_internal
@@ -98,18 +76,9 @@ def _parse_grype(path: Path) -> list[dict[str, Any]]:
     return _load_grype_internal(path)
 
 
-def _parse_dependency_check(path: Path) -> list[dict[str, Any]]:
-    from scripts.core.adapters.dependency_check_adapter import (
-        _load_dependency_check_internal,
-    )
-
-    return _load_dependency_check_internal(path)
-
-
-# (label, raw payload, parse function) -- both known cvss producers.
+# (label, raw payload, parse function) -- the adapters that emit a cvss vector.
 CVSS_PRODUCERS = [
     ("grype", GRYPE_RAW, _parse_grype),
-    ("dependency-check", DEPENDENCY_CHECK_RAW, _parse_dependency_check),
 ]
 
 

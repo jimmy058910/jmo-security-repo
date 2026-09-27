@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     pass
 
 from scripts.cli.wizard_flows.base_flow import PromptHelper, TargetDetector
+from scripts.cli.wizard_flows.ui_helpers import WIZARD_TOTAL_STEPS
 from scripts.cli.wizard_flows.validators import (
     detect_iac_type,
     validate_k8s_context,
@@ -38,10 +39,12 @@ def _prompt_text(question: str, default: str = "") -> str:
 
 
 def configure_repo_target(
-    target_config_class: Any, print_step_fn: Callable, total_steps: int = 7
+    target_config_class: Any,
+    print_step_fn: Callable,
+    total_steps: int = WIZARD_TOTAL_STEPS,
 ) -> Any:
     """Configure repository scanning target."""
-    print_step_fn(4, total_steps, "Configure Repository Target")
+    print_step_fn(3, total_steps, "Configure Repository Target")
 
     config = target_config_class()
     config.type = "repo"
@@ -63,7 +66,14 @@ def configure_repo_target(
     config.repo_mode = mode
 
     if mode == "tsv":
-        config.tsv_path = _prompt_text("Path to TSV file", default="./repos.tsv")
+        # Checked here, not at scan time: in Docker mode a missing file is
+        # mounted anyway, and Docker creates a directory by that name as root.
+        while True:
+            tsv_path = _prompt_text("Path to TSV file", default="./repos.tsv")
+            if validate_path(tsv_path, must_exist=True):
+                break
+            print(_prompter.colorize(f"File not found: {tsv_path}", "red"))
+        config.tsv_path = tsv_path
         config.tsv_dest = _prompt_text("Clone destination", default="repos-tsv")
         return config
 
@@ -108,10 +118,12 @@ def configure_repo_target(
 
 
 def configure_image_target(
-    target_config_class: Any, print_step_fn: Callable, total_steps: int = 7
+    target_config_class: Any,
+    print_step_fn: Callable,
+    total_steps: int = WIZARD_TOTAL_STEPS,
 ) -> Any:
     """Configure container image scanning target."""
-    print_step_fn(4, total_steps, "Configure Container Image Target")
+    print_step_fn(3, total_steps, "Configure Container Image Target")
 
     config = target_config_class()
     config.type = "image"
@@ -156,10 +168,12 @@ def configure_image_target(
 
 
 def configure_iac_target(
-    target_config_class: Any, print_step_fn: Callable, total_steps: int = 7
+    target_config_class: Any,
+    print_step_fn: Callable,
+    total_steps: int = WIZARD_TOTAL_STEPS,
 ) -> Any:
     """Configure IaC file scanning target."""
-    print_step_fn(4, total_steps, "Configure Infrastructure as Code Target")
+    print_step_fn(3, total_steps, "Configure Infrastructure as Code Target")
 
     config = target_config_class()
     config.type = "iac"
@@ -196,10 +210,12 @@ def configure_iac_target(
 
 
 def configure_url_target(
-    target_config_class: Any, print_step_fn: Callable, total_steps: int = 7
+    target_config_class: Any,
+    print_step_fn: Callable,
+    total_steps: int = WIZARD_TOTAL_STEPS,
 ) -> Any:
     """Configure web URL scanning target."""
-    print_step_fn(4, total_steps, "Configure Web Application/API Target")
+    print_step_fn(3, total_steps, "Configure Web Application/API Target")
 
     config = target_config_class()
     config.type = "url"
@@ -255,19 +271,40 @@ def configure_url_target(
             print(_prompter.colorize(f"File not found: {path}", "red"))
 
     else:  # api
-        config.api_spec = _prompt_text(
-            "OpenAPI spec URL or file path", default="./openapi.yaml"
+        # zap runs a URL scan and cannot import a spec yet (#1331), so a spec
+        # is scanned as the URL it is served from, and `jmo scan` refuses a
+        # local file (#1320). This asked for a file by default.
+        while True:
+            spec = _prompt_text("OpenAPI spec URL (http/https)")
+            if spec.startswith(("http://", "https://")):
+                config.api_spec = spec
+                break
+            print(
+                _prompter.colorize(
+                    "A local spec file is not scanned yet (#1331): zap runs a URL "
+                    "scan. Enter the URL the spec is served from, or choose "
+                    "'single' with the API's address.",
+                    "yellow",
+                )
+            )
+        print(
+            _prompter.colorize(
+                f"Will scan {config.api_spec} as a plain URL: zap is not told it "
+                "is an OpenAPI definition (#1331)",
+                "yellow",
+            )
         )
-        print(_prompter.colorize(f"Will scan API spec: {config.api_spec}", "green"))
 
     return config
 
 
 def configure_gitlab_target(
-    target_config_class: Any, print_step_fn: Callable, total_steps: int = 7
+    target_config_class: Any,
+    print_step_fn: Callable,
+    total_steps: int = WIZARD_TOTAL_STEPS,
 ) -> Any:
     """Configure GitLab scanning target."""
-    print_step_fn(4, total_steps, "Configure GitLab Target")
+    print_step_fn(3, total_steps, "Configure GitLab Target")
 
     config = target_config_class()
     config.type = "gitlab"
@@ -329,10 +366,12 @@ def configure_gitlab_target(
 
 
 def configure_k8s_target(
-    target_config_class: Any, print_step_fn: Callable, total_steps: int = 7
+    target_config_class: Any,
+    print_step_fn: Callable,
+    total_steps: int = WIZARD_TOTAL_STEPS,
 ) -> Any:
     """Configure Kubernetes scanning target."""
-    print_step_fn(4, total_steps, "Configure Kubernetes Target")
+    print_step_fn(3, total_steps, "Configure Kubernetes Target")
 
     config = target_config_class()
     config.type = "k8s"

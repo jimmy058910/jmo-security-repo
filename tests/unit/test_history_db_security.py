@@ -4,7 +4,6 @@ Unit tests for history_db.py security features (Phase 6 Step 6.1).
 
 Tests cover:
 - Secret redaction for trufflehog findings
-- Secret redaction for noseyparker findings
 - Non-secret tools unchanged
 - --no-store-raw-findings flag behavior
 """
@@ -55,76 +54,8 @@ class TestSecretRedaction:
         assert raw_data["DetectorName"] == "github"  # Non-secret field unchanged
         assert raw_data["Verified"] is True  # Non-secret field unchanged
 
-    def test_redact_secrets_noseyparker(self):
-        """Test that noseyparker secrets are redacted in raw_finding."""
-        # Arrange: Create a noseyparker finding with secret data
-        finding = {
-            "schemaVersion": "1.2.0",
-            "id": "noseyparker|aws.access_key|config.yaml|10|def456",
-            "tool": {"name": "noseyparker", "version": "0.16.0"},
-            "ruleId": "aws.access_key",
-            "severity": "HIGH",
-            "message": "AWS Access Key detected",
-            "location": {"path": "config.yaml", "startLine": 10},
-            "raw": {
-                "rule": {"id": "aws.access_key", "name": "AWS Access Key"},
-                "match": {
-                    "provenance": {"path": "config.yaml", "line_number": 10},
-                    "snippet": 'aws_access_key_id = "AKIAIOSFODNN7EXAMPLE"',  # ← SECRET
-                    "capture_groups": {
-                        "secret": "AKIAIOSFODNN7EXAMPLE"  # ← SECRET VALUE
-                    },
-                },
-            },
-        }
-
-        # Act: Redact secrets
-        redacted = redact_secrets(finding, store_raw=True)
-
-        # Assert: Secret values are replaced with [REDACTED]
-        raw_data = json.loads(redacted["raw_finding"])
-        assert raw_data["match"]["snippet"] == "[REDACTED]"
-        assert raw_data["match"]["capture_groups"]["secret"] == "[REDACTED]"
-        assert raw_data["rule"]["id"] == "aws.access_key"  # Non-secret field unchanged
-        assert raw_data["match"]["provenance"]["path"] == "config.yaml"  # Unchanged
-
-    def test_redact_secrets_semgrep_secrets(self):
-        """Test that semgrep-secrets findings are redacted in raw_finding."""
-        # Arrange: Create a semgrep-secrets finding with secret data
-        finding = {
-            "schemaVersion": "1.2.0",
-            "id": "semgrep-secrets|jwt-token|api.py|25|ghi789",
-            "tool": {"name": "semgrep-secrets", "version": "1.45.0"},
-            "ruleId": "jwt-token",
-            "severity": "MEDIUM",
-            "message": "JWT token hardcoded in source",
-            "location": {"path": "api.py", "startLine": 25},
-            "raw": {
-                "check_id": "jwt-token",
-                "path": "api.py",
-                "start": {"line": 25},
-                "extra": {
-                    "lines": 'token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.secret"',  # ← SECRET
-                    "message": "JWT token found",
-                    "metadata": {
-                        "secret_value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.secret"  # ← SECRET
-                    },
-                },
-            },
-        }
-
-        # Act: Redact secrets
-        redacted = redact_secrets(finding, store_raw=True)
-
-        # Assert: Secret values are replaced with [REDACTED]
-        raw_data = json.loads(redacted["raw_finding"])
-        assert raw_data["extra"]["lines"] == "[REDACTED]"
-        assert raw_data["extra"]["metadata"]["secret_value"] == "[REDACTED]"
-        assert raw_data["check_id"] == "jwt-token"  # Non-secret field unchanged
-        assert raw_data["path"] == "api.py"  # Non-secret field unchanged
-
     def test_redact_secrets_non_secret_tool_unchanged(self):
-        """Test that non-secret tools (trivy, semgrep, bandit) are unchanged."""
+        """Test that non-secret tools (trivy, semgrep) are unchanged."""
         # Arrange: Create a trivy vulnerability finding (not a secret)
         finding = {
             "schemaVersion": "1.2.0",
