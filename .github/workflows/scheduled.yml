@@ -1559,6 +1559,23 @@ jobs:
           set -e
           read -r -a EXPECTED < tool-matrix.txt || true
           if [ "$rc" -ne 0 ] || [ "${#EXPECTED[@]}" -eq 0 ]; then
+            # An image built before v2.0.0 has no TOOL_MATRIX: its registry is
+            # the v1 layout (PROFILE_TOOLS), and every check below is v2's. That
+            # is the state between syncing v2 work to main and the first v2 tag,
+            # not a broken image, so it is said and the step ends. Any other
+            # image that cannot answer is still an error.
+            probe="import sys, scripts.core.tool_registry as r; "
+            probe="${probe}v1 = hasattr(r, 'PROFILE_TOOLS') and not hasattr(r, 'TOOL_MATRIX'); "
+            probe="${probe}sys.exit(0 if v1 else 1)"
+            set +e
+            docker run --rm --entrypoint python3 "$REGISTRY/$IMAGE_NAME:latest" -c "$probe"
+            v1=$?
+            set -e
+            if [ "$v1" -eq 0 ]; then
+              echo "::notice::the published image predates TOOL_MATRIX (a v1.x image, built by the last v* tag):" \
+                "v2's tool checks apply once a v2 image is published"
+              exit 0
+            fi
             echo "::error::could not read TOOL_MATRIX from the image (rc=$rc)"
             cat tool-matrix.stderr.log
             exit 1

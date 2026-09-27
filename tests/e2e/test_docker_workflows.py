@@ -208,6 +208,20 @@ def ensure_image(image: str) -> None:
     pytest.fail(f"docker pull {image} failed (rc={result.returncode}): {err}")
 
 
+# Run inside an image: its TOOL_MATRIX and POLICY_ENGINE as a JSON pair, or
+# `null` for an image whose registry is the v1 layout (scan profiles,
+# PROFILE_TOOLS, neither name). Importing the two names directly assumed a v2
+# image, which is this checkout's knowledge, not the image's: from the sync of
+# v2 work to main until the first v2 tag, `:latest` is a v1 image, and the
+# nightly failed on it with an ImportError (2026-09-27). Any other image that
+# cannot answer still raises, and fails.
+_MATRIX_PROBE = (
+    "import json, scripts.core.tool_registry as r; "
+    "v1 = hasattr(r, 'PROFILE_TOOLS') and not hasattr(r, 'TOOL_MATRIX'); "
+    "print(json.dumps(None if v1 else [list(r.TOOL_MATRIX), r.POLICY_ENGINE]))"
+)
+
+
 def image_tool_matrix(image: str) -> tuple[list[str], str]:
     """The TOOL_MATRIX and POLICY_ENGINE the IMAGE was built with.
 
@@ -217,7 +231,8 @@ def image_tool_matrix(image: str) -> tuple[list[str], str]:
     against the published image they are not: the image is whatever the last
     `v*` tag built, so a checkout comparison false-alarms whenever main's
     matrix is ahead of that tag, which is exactly how #1039 went red on a
-    correctly built image.
+    correctly built image. A v1 image has no matrix to compare, so the
+    caller's checks are skipped for it (`_MATRIX_PROBE`).
     """
     result = _docker(
         "run",
@@ -226,9 +241,7 @@ def image_tool_matrix(image: str) -> tuple[list[str], str]:
         "python3",
         image,
         "-c",
-        "import json; "
-        "from scripts.core.tool_registry import POLICY_ENGINE, TOOL_MATRIX; "
-        "print(json.dumps([list(TOOL_MATRIX), POLICY_ENGINE]))",
+        _MATRIX_PROBE,
         timeout=120,
     )
     if result.returncode != 0:
@@ -237,9 +250,15 @@ def image_tool_matrix(image: str) -> tuple[list[str], str]:
             f"{result.stderr.strip()[:500]}"
         )
     try:
-        matrix, engine = json.loads(result.stdout)
+        answer = json.loads(result.stdout)
     except (json.JSONDecodeError, ValueError):
         pytest.fail(f"{image} printed no [matrix, engine] pair: {result.stdout[:500]}")
+    if answer is None:
+        pytest.skip(
+            f"{image} is a v1 image (PROFILE_TOOLS, no TOOL_MATRIX): v2's checks "
+            "apply once a v2 image is published"
+        )
+    matrix, engine = answer
     # Meta-guard: every check built on an empty matrix passes.
     if not matrix:
         pytest.fail(f"{image} reports an empty TOOL_MATRIX")
@@ -1323,3 +1342,53 @@ class TestDockerCLIWorkflows:
             f"summaries/findings.json through the volume mount; results tree: "
             f"{sorted(str(p.relative_to(results_dir)) for p in results_dir.rglob('*'))}"
         )
+
+
+def _run_matrix_probe(tmp_path: Path, registry: str) -> subprocess.CompletedProcess:
+    """`_MATRIX_PROBE` run here, against a `scripts.core.tool_registry` holding
+    `registry`: what it does inside an image, without Docker, so PR CI checks
+    it too (the image tests are `docker`-marked)."""
+    core = tmp_path / "scripts" / "core"
+    core.mkdir(parents=True)
+    (tmp_path / "scripts" / "__init__.py").write_bytes(b"")
+    (core / "__init__.py").write_bytes(b"")
+    (core / "tool_registry.py").write_bytes(registry.encode())
+    return subprocess.run(
+        [sys.executable, "-c", _MATRIX_PROBE],
+        cwd=tmp_path,
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=60,
+    )
+
+
+@pytest.mark.parametrize(
+    ("registry", "expected"),
+    [
+        pytest.param(
+            "PROFILE_TOOLS = {'deep': ['trivy', 'opa']}\n", None, id="v1-layout"
+        ),
+        pytest.param(
+            "TOOL_MATRIX = ('trivy', 'semgrep')\nPOLICY_ENGINE = 'opa'\n",
+            [["trivy", "semgrep"], "opa"],
+            id="v2-layout",
+        ),
+    ],
+)
+def test_the_matrix_probe_reads_either_layout(tmp_path, registry, expected):
+    """A v1 image answers `null` (its checks are skipped, not failed); a v2
+    image answers its matrix and policy engine."""
+    result = _run_matrix_probe(tmp_path, registry)
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == expected
+
+
+def test_the_matrix_probe_fails_on_an_image_with_neither(tmp_path):
+    """The skip is for the v1 layout only: an image with no matrix and no
+    profiles is broken, and still fails."""
+    result = _run_matrix_probe(tmp_path, "OTHER = 1\n")
+
+    assert result.returncode != 0
+    assert "TOOL_MATRIX" in result.stderr
