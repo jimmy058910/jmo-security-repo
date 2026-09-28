@@ -5,7 +5,7 @@ import future.keywords.in
 
 metadata := {
 	"name": "Production Hardening Policy",
-	"version": "1.1.0",
+	"version": "1.2.0",
 	"description": "Stricter rules for production deployments",
 	"author": "JMo Security",
 	"tags": ["production", "hardening", "zero-tolerance"],
@@ -33,7 +33,7 @@ blocking_findings contains finding if {
 # Dockerfile-specific issues (critical for containers)
 dockerfile_issues contains finding if {
 	finding := input.findings[_]
-	finding.tool.name == "hadolint"
+	reported_by(finding, ["hadolint"])
 	finding.severity in ["CRITICAL", "HIGH"]
 	contains(lower(finding.location.path), "dockerfile")
 }
@@ -41,8 +41,22 @@ dockerfile_issues contains finding if {
 # Any secrets (verified or not)
 secret_findings contains finding if {
 	finding := input.findings[_]
-	finding.tool.name in ["trufflehog"]
+	reported_by(finding, ["trufflehog"])
 	finding.severity in ["CRITICAL", "HIGH"]
+}
+
+# Whether one of `tools` reported `finding`. A consensus finding (cross-tool
+# clustering) carries its lead's `tool` and lists every tool that reported it
+# in `detected_by`: on a severity tie the lead is the first tool by name, so
+# gitleaks or semgrep leads a TruffleHog secret, and checkov a hadolint
+# Dockerfile rule, and reading `tool.name` alone moved those findings out of
+# their category (#1355). A finding no other tool reported has no
+# `detected_by`, so the first definition stays.
+reported_by(finding, tools) if finding.tool.name in tools
+
+reported_by(finding, tools) if {
+	some reporter in finding.detected_by
+	reporter.name in tools
 }
 
 # The three populations below overlap -- a verified TruffleHog secret is a

@@ -259,7 +259,7 @@ violation := {"rule": finding.ruleId,
 `compliance`, `context`, `raw`, and `location.startLine` / `location.endLine`
 are all optional.
 
-**Three traps:**
+**Four traps:**
 
 1. **`risk.cwe` is an array of strings, in two spellings.** Adapters store
    either the bare id (`["CWE-798"]`) or the id with its description
@@ -279,6 +279,24 @@ are all optional.
    `description`), `cisControlsV8_1`, `nistCsf2_0`, `mitreAttack` and
    `cweTop25_2024`. A findings file assembled by hand rather than by
    `jmo report` will not have them.
+
+4. **`tool.name` names one reporter of a consensus finding.** When several
+   tools report one issue, the report merges them into one finding whose
+   `tool` is its lead's (highest severity, then the first tool by name) and
+   whose `detected_by` lists every tool, as `{name, version}` objects; each
+   other tool's own `raw` is in its `context.duplicates` entry. A rule that
+   selects findings by tool must read both, as the builtin `zero-secrets` and
+   `production-hardening` do, or a TruffleHog secret that gitleaks also
+   reported is not a TruffleHog finding to it:
+
+   ```rego
+   reported_by(finding, tools) if finding.tool.name in tools
+
+   reported_by(finding, tools) if {
+       some reporter in finding.detected_by
+       reporter.name in tools
+   }
+   ```
 
 > **Check a new rule against a findings file you know contains a violation
 > and one you know does not.** A PASS over an input the rule cannot match is
