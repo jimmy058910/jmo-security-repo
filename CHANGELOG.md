@@ -57,6 +57,18 @@ All notable changes to JMo Security will be documented in this file.
   extends further (gitleaks' depth limit, one level shallower under JMo, drops that
   last level). A config the warning cannot read never stops the scan; gitleaks reports
   it (#1327).
+- **zizmor joins the matrix as its 14th tool.** On a repository, JMo walks the tree
+  itself — pruning `.git`, `node_modules`, `vendor`, `.venv`, `venv` and an in-tree
+  results directory — and hands zizmor the GitHub Actions files it finds
+  (`.github/workflows/*.yml`/`.yaml`, any `action.yml`/`.yaml`, `.github/dependabot.yml`/
+  `.yaml`) as paths relative to the repository, run from its root, with `--format sarif
+  --offline --no-exit-codes`. No matching file is `skipped:no GitHub Actions workflows`.
+  `--offline` means no network call even with `GH_TOKEN` set, so zizmor's online audits
+  (`ref-confusion` among them) never run
+  ([Known limitations](docs/KNOWN_LIMITATIONS.md#zizmor-runs-offline-so-its-online-audits-never-run)).
+  Installed as a pinned release binary (`versions.yaml` 1.30.1; no Windows arm64 build).
+  On this repository, at the Phase 1 golden's commit, zizmor found 217 raw findings, 216
+  after dedup, the same ids as the golden's.
 
 ### Removed
 
@@ -67,8 +79,8 @@ All notable changes to JMo Security will be documented in this file.
   checkov, hadolint, shellcheck, gosec, yara, grype, zap and nuclei. opa is the policy
   engine: installed and checked by `jmo tools check`, not a scanner. checkov-cicd folds
   into checkov. Naming a removed tool in `--tools`, `--skip-tools` or `tools:` is a
-  usage error (exit 2) that says it was removed (#1088, #1099, #1152, #1164, #1217,
-  #1219, #1222, #1225).
+  usage error (exit 2) that says it was removed
+  (#1088, #1099, #1152, #1164, #1217, #1219, #1222, #1225).
 - **Breaking. Scan profiles are gone.** `--profile-name`, the `jmo fast`, `jmo balanced`
   and `jmo full` subcommands, and `--profile` on `jmo tools`, `jmo wizard`,
   `jmo schedule` and `jmo history` no longer exist; every scan resolves to
@@ -194,6 +206,20 @@ All notable changes to JMo Security will be documented in this file.
   TruffleHog findings its violations went from 7 to 71. A merged finding is a copy of its
   most severe member, so when trivy (CRITICAL) or gitleaks led one, the secret had left
   the count even where TruffleHog also found it (#1328).
+- **Breaking. checkov's repository scan covers only Terraform and CloudFormation.** Its
+  content trigger no longer counts `.github/workflows` or a Helm `Chart.yaml`: a
+  repository scan passes `--framework terraform terraform_json cloudformation`, so
+  checkov's other frameworks (secrets, Kubernetes, Dockerfiles, Helm, GitHub Actions,
+  GitLab CI, CircleCI, Azure/Bitbucket pipelines, ARM, Bicep, Ansible and serverless) no
+  longer run there, even beside a Terraform file that does trigger it. Helm was dropped
+  rather than narrowed to: no helm binary exists in either environment, so checkov
+  silently disabled the framework, and a chart-only repository's trigger read `ran` and
+  found nothing. zizmor now covers GitHub Actions (above); Gitleaks and TruffleHog
+  already cover secrets, and Trivy and Hadolint cover Dockerfiles. An IaC file target
+  (`--terraform-state`, `--cloudformation`, `--k8s-manifest`) still keeps every
+  framework. The skip reason changed from `no IaC or workflow files` to `no IaC files`.
+  Measured: a workflow-only private repository's scan went from checkov's 293 s to a
+  4.25 s skip.
 - `scan-timings.json` records the `root` a repository target's tools scanned.
 - `jmo report` logs each policy's verdict with its message.
 
@@ -257,6 +283,15 @@ All notable changes to JMo Security will be documented in this file.
   looser match paired gitleaks' `yandex-aws-access-token`, a Yandex Cloud key, with
   TruffleHog's AWS detector. `generic-api-key`, which fires on any key-shaped
   assignment, pairs with nothing (#1328).
+- **checkov's `--skip-path` stops matching by substring.** Its values were rendered as
+  bare names, and checkov applies them with `re.search` against the absolute path, so
+  `vendor` dropped `vendor-accounts.tf`, `venv` dropped `envs/devenv/main.tf`, `results`
+  dropped `modules/results-bucket/main.tf`, and `.git` dropped `.github`. A repository
+  that itself lived under a `vendor/` (or `vendor-portal/`, or `results/`) directory was
+  scanned for nothing (`resource_count` 0, row `ran`). Each name is now rendered
+  `[\\/]NAME$`, `re.escape`d. On Windows, a results-directory name holding one of
+  cmd.exe's metacharacters (`& | ^ < > %`) has that character rendered as `.`, since
+  `checkov.cmd`'s arguments are re-parsed by cmd.exe (#1313).
 
 - **nuclei and ZAP produce findings on URL scans.** nuclei 3 rejects `-json` on every
   platform (exit 2); it now gets `-jsonl`. On Windows, `zap.bat` looks for its jar in the

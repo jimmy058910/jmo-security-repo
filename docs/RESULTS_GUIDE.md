@@ -191,17 +191,17 @@ Total findings: 8058 | 🔴 3 CRITICAL | 🔴 91 HIGH | 🟡 280 MEDIUM | ⚪ 73
 
 - **trivy**: 81 findings (🔴 3 CRITICAL, 🔴 28 HIGH)
 - **semgrep**: 32 findings (🔴 6 HIGH, 🟡 24 MEDIUM)
-- **trufflehog**: 7 findings (🟡 7 MEDIUM)
+- **trufflehog**: 7 findings (🔴 7 HIGH)
 ```
 **What this tells you:**
 
 - **Trivy found CRITICAL** - Likely container or dependency vulnerabilities (CVEs)
 - **Semgrep found HIGH** - Code security issues (SQL injection, XSS, command injection)
-- **TruffleHog found MEDIUM** - Potential secrets (unverified by default)
+- **TruffleHog found HIGH** - Potential secrets (unverified by default)
 
 **Tool-Specific Context:**
 
-- **TruffleHog MEDIUM = unverified secrets** - May be false positives (test keys, examples)
+- **TruffleHog HIGH = unverified secrets** - May be false positives (test keys, examples)
 - **Trivy CRITICAL = CVE** - Likely real vulnerability with CVSS ≥9.0
 - **ShellCheck/Hadolint LOW = style warnings** - Code quality, not security risk
 
