@@ -263,6 +263,21 @@ GitHub, `ref-confusion` among them, do not run, whether or not a token is set.
 
 **What to do:** for those audits, run zizmor yourself with a token.
 
+### OSV-Scanner reads pom.xml and requirements.txt for direct dependencies only
+
+JMo runs OSV-Scanner with `--no-resolve`. Without it, OSV-Scanner resolves a
+`pom.xml` or a `requirements.txt` transitively through deps.dev, a network call, even
+with `--offline-vulnerabilities` (measured, OSV-Scanner 2.6.0: under an unreachable
+proxy it reported "failed resolution"). A scan makes no network call, so only the
+dependencies those two files name are matched: two pinned packages in a
+`requirements.txt` gave 18 findings, against 38 when resolved online. Lockfiles
+(`package-lock.json`, `poetry.lock`, `gradle.lockfile` and the rest) already list
+every dependency and lose nothing.
+
+**What to do:** commit a file that lists every dependency (a `requirements.txt`
+written by `pip-compile` or `uv pip compile`, a `uv.lock`, a `poetry.lock`, Gradle
+dependency locking), or run OSV-Scanner yourself without `--no-resolve`.
+
 ### Checkov's repository run misses several CI/CD and IaC dialects
 
 On a repository, Checkov reads only Terraform and CloudFormation

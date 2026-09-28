@@ -33,7 +33,9 @@ def test_parses_the_golden_document_with_the_binding_tags():
     findings = OsvScannerAdapter().parse(GOLDEN)
     assert len(findings) == 303
     assert all(f.tool["name"] == "osv-scanner" for f in findings)
-    assert all(f.tool["version"] == "2.5.1" for f in findings)
+    # versions.yaml's pin, read first, not the document's 2.5.1: the golden
+    # predates the pin (Phase 4, O1), and the pin is the binary a scan runs.
+    assert all(f.tool["version"] == "2.6.0" for f in findings)
     assert all({"sca", "vulnerability", "sarif"} <= set(f.tags) for f in findings)
     # The file:// URI is decoded to a path the report phase can root-strip.
     assert all("://" not in f.location["path"] for f in findings)

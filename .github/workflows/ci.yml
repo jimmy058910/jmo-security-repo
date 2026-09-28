@@ -1474,6 +1474,8 @@ jobs:
               - 'tests/integration/test_git_history_secrets.py'
               - 'tests/unit/test_gitleaks_wiring.py'
               - 'tests/unit/test_zizmor_wiring.py'
+              - 'tests/unit/test_osv_scanner_wiring.py'
+              - 'scripts/core/osv_database.py'
               - 'scripts/core/tool_descriptors.py'
               - 'scripts/cli/scan_utils.py'
               - 'scripts/core/adapters/trufflehog_adapter.py'
@@ -1513,6 +1515,7 @@ jobs:
           SYFT_VERSION: "1.51.1"
           GITLEAKS_VERSION: "8.30.1"
           ZIZMOR_VERSION: "1.30.1"
+          OSV_SCANNER_VERSION: "2.6.0"
         run: |
           # Same install block as scheduled.yml:tool-contract-tests — kept in
           # sync manually. Any drift means the weekly and PR gates disagree.
@@ -1552,6 +1555,17 @@ jobs:
           gzip -t /tmp/zizmor.tar.gz
           tar -xzf /tmp/zizmor.tar.gz -C /usr/local/bin zizmor
           chmod +x /usr/local/bin/zizmor
+          # osv-scanner: a raw binary, checked against the release's
+          # SHA256SUMS. No offline database is fetched: its tests read the
+          # frozen one in tests/fixtures/osv-db.
+          base="https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}"
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            "${base}/osv-scanner_SHA256SUMS" -o /tmp/osv-scanner_SHA256SUMS
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            "${base}/osv-scanner_linux_amd64" -o /usr/local/bin/osv-scanner
+          sum=$(awk '$2 == "osv-scanner_linux_amd64" {print $1}' /tmp/osv-scanner_SHA256SUMS)
+          echo "${sum:?no checksum for osv-scanner_linux_amd64}  /usr/local/bin/osv-scanner" | sha256sum -c -
+          chmod +x /usr/local/bin/osv-scanner
           # Grype and Syft: their contracts had no install line, so neither
           # had ever run in CI (#1073).
           for t in grype syft; do
@@ -1572,6 +1586,7 @@ jobs:
           trufflehog --version || echo "trufflehog not available"
           gitleaks version || echo "gitleaks not available"
           zizmor --version || echo "zizmor not available"
+          osv-scanner --version || echo "osv-scanner not available"
           checkov --version || echo "checkov not available"
           shellcheck --version || echo "shellcheck not available"
           grype version || echo "grype not available"
@@ -1589,6 +1604,7 @@ jobs:
             tests/integration/test_git_history_secrets.py \
             tests/unit/test_gitleaks_wiring.py \
             tests/unit/test_zizmor_wiring.py \
+            tests/unit/test_osv_scanner_wiring.py \
             -v \
             -m "requires_tools" \
             --tb=short \

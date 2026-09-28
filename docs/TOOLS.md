@@ -26,6 +26,7 @@ To narrow the list:
 | Gosec | Go security issues | Repository, GitLab | Go sources or a `go.mod` are present | Release binary |
 | YARA | Malware patterns: web shells, backdoors, cryptominers | Repository, GitLab | Always | `yara-python` via pip, plus a rule bundle |
 | Grype | Vulnerable dependencies (Anchore database) | Repository, GitLab | Always | Release binary or install script |
+| OSV-Scanner | Vulnerable dependencies, read from lockfiles against an offline OSV database | Repository, GitLab | A lockfile is present | Release binary |
 | ZAP | Web application vulnerabilities (DAST) | URL | Never: URL targets only | Extracted application, needs Java 17+ |
 | Nuclei | Template-based vulnerability probes (DAST) | URL | Never: URL targets only | Release binary |
 
@@ -33,13 +34,14 @@ Versions are pinned in [`versions.yaml`](../versions.yaml). OPA is installed alo
 
 ## When each tool runs
 
-Being in the matrix makes a tool eligible. Two things then decide whether it runs on a given target: the target type (next section) and, for five tools on a repository, the target's content.
+Being in the matrix makes a tool eligible. Two things then decide whether it runs on a given target: the target type (next section) and, for six tools on a repository, the target's content.
 
 | Tool | Content it needs | Files it looks for |
 |------|------------------|--------------------|
 | Hadolint | Dockerfiles | `Dockerfile`, `Dockerfile.*`, `*.Dockerfile` |
 | ShellCheck | Shell scripts | `*.sh`, `*.bash`, `*.ksh` |
 | zizmor | GitHub Actions | `.github/workflows/*.yml` and `*.yaml` (the repository's own, not a subdirectory's), `action.yml` or `action.yaml` anywhere, `.github/dependabot.yml` or `.yaml` |
+| OSV-Scanner | Lockfiles | anywhere: `package-lock.json`, `npm-shrinkwrap.json`, `yarn.lock`, `pnpm-lock.yaml`, `bun.lock`, `requirements*.txt`, `poetry.lock`, `Pipfile.lock`, `pdm.lock`, `uv.lock`, `pylock.toml`, `go.mod`, `Cargo.lock`, `composer.lock`, `Gemfile.lock`, `gradle.lockfile`, `pom.xml`, `packages.lock.json`, `packages.config`, `pubspec.lock`, `mix.lock`, `renv.lock`, `conan.lock` |
 | Gosec | Go code | any `.go` file, or a `go.mod` |
 | Checkov | Infrastructure as code | `*.tf`, `*.tf.json`, or a YAML, JSON or `.template` file whose first 8 KB name `AWSTemplateFormatVersion` or an `AWS::` type (CloudFormation) |
 
@@ -53,6 +55,8 @@ Vendored trees are never content: `.git`, `node_modules`, `vendor`, `.venv` and 
 
 zizmor reads only the files JMo hands it, since it has no way to exclude a directory itself, and it runs offline, so its audits that call GitHub do not run ([Known limitations](KNOWN_LIMITATIONS.md#zizmor-runs-offline-so-its-online-audits-never-run)).
 
+OSV-Scanner reads only the lockfiles JMo hands it (given a directory on Windows it finds none), and a scan never downloads: it matches them against the offline databases in `~/.jmo/osv-db`. A lockfile whose ecosystem has no database there is left out, and the row reads `failed:offline database missing`, naming the ecosystem and the lockfile; the other lockfiles are still read. So is a lockfile it cannot parse: the row fails naming it, and the others' findings are kept. It reads `pom.xml` and `requirements.txt` for their direct dependencies only ([Known limitations](KNOWN_LIMITATIONS.md#osv-scanner-reads-pomxml-and-requirementstxt-for-direct-dependencies-only)).
+
 ### What a scan records
 
 Every requested tool leaves one row per target, in `scan-timings.json`, in `.scan_metadata.json` and, when history is on, in the `scan_tool_runs` table (`jmo history show <scan-id>`):
@@ -60,8 +64,8 @@ Every requested tool leaves one row per target, in `scan-timings.json`, in `.sca
 | Row | Meaning |
 |-----|---------|
 | `ran` | It ran and its output is beside the row. |
-| `skipped:<reason>` | It did not apply: `needs --url`, `not for this target type`, `no Dockerfiles`, `no shell scripts`, `no GitHub Actions workflows`, `no Go sources`, `no IaC files`, or `not installed` under `--allow-missing-tools`. |
-| `failed:<reason>` | It applied and produced nothing you can trust: `not installed`, `timed out`, `no files to scan`, `examined 0 files`, `unaccepted exit code`, `no output`, and a few rarer ones. |
+| `skipped:<reason>` | It did not apply: `needs --url`, `not for this target type`, `no Dockerfiles`, `no shell scripts`, `no GitHub Actions workflows`, `no lockfile`, `no Go sources`, `no IaC files`, or `not installed` under `--allow-missing-tools`. |
+| `failed:<reason>` | It applied and produced nothing you can trust: `not installed`, `timed out`, `no files to scan`, `examined 0 files`, `offline database missing`, `unaccepted exit code`, `no output`, and a few rarer ones. |
 
 `failed:no files to scan` means the repository had no file outside the excluded directories, so no tool ran against it. `failed:examined 0 files` means the tool's own output reports that it read nothing. Semgrep and Gosec report that count, and it is how a run that scanned nothing stops passing for a clean one.
 
@@ -77,7 +81,7 @@ The remaining repository tools (TruffleHog, Gitleaks, Semgrep, Syft, Trivy, YARA
 
 | Target | Flags | Tools that run |
 |--------|-------|----------------|
-| Repository | `--repo`, `--repos-dir`, `--targets`, `--tsv` | TruffleHog, Gitleaks, Semgrep, Syft, Trivy, YARA, Grype; Hadolint, ShellCheck, zizmor, Gosec and Checkov when their content is present |
+| Repository | `--repo`, `--repos-dir`, `--targets`, `--tsv` | TruffleHog, Gitleaks, Semgrep, Syft, Trivy, YARA, Grype; Hadolint, ShellCheck, zizmor, OSV-Scanner, Gosec and Checkov when their content is present |
 | Container image | `--image`, `--images-file` | Trivy, Syft |
 | IaC file | `--terraform-state`, `--cloudformation`, `--k8s-manifest` | Trivy (`trivy config`), Checkov |
 | URL | `--url`, `--urls-file` | ZAP, Nuclei |
@@ -97,7 +101,7 @@ jmo tools check     # what is installed, at which version, and what is missing
 
 | Tool | How `jmo tools install` installs it | Where it goes |
 |------|-------------------------------------|---------------|
-| TruffleHog, Gitleaks, Hadolint, ShellCheck, zizmor, Gosec, Nuclei | Pinned release binary from GitHub | `~/.jmo/bin/` |
+| TruffleHog, Gitleaks, Hadolint, ShellCheck, zizmor, OSV-Scanner, Gosec, Nuclei | Pinned release binary from GitHub | `~/.jmo/bin/` |
 | Syft, Trivy, Grype | Windows: pinned release binary. Linux and macOS: the tool's own install script, run with the pinned version | `~/.jmo/bin/` |
 | Semgrep, Checkov | Pinned PyPI package in a virtual environment of its own, so their dependencies cannot conflict with JMo's or each other's | `~/.jmo/tools/venvs/<tool>/` |
 | YARA | Pinned `yara-python` package, installed into the Python environment JMo runs from, plus a pinned rule bundle (reversinglabs-yara-rules, MIT) | rules in `~/.jmo/yara-rules/` |

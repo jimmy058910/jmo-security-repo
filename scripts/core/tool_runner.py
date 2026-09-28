@@ -15,6 +15,7 @@ import signal
 import subprocess
 import sys
 import time
+from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
@@ -85,6 +86,9 @@ class ToolDefinition:
     # zap.bat finds its jar relative to the working directory (measured:
     # "Unable to access jarfile zap-2.17.0.jar" from anywhere else).
     cwd: Path | None = None
+    # Merged over the environment `run_tool` builds (osv-scanner's database
+    # directory, Phase 4).
+    env: Mapping[str, str] | None = None
 
     @property
     def retry_config(self) -> RetryConfig:
@@ -424,6 +428,10 @@ class ToolRunner:
         last_failure_was_timeout = False
         last_failure = ""
         last_returncode = -1
+        # A crash's stderr says why; the scan loop reads it to decide whether a
+        # run can be split per input (osv-scanner, Phase 4), and the failure
+        # log prints its tail.
+        last_stderr = ""
 
         # Track attempts per failure type
         attempts_by_type: dict[str, int] = {}
@@ -491,6 +499,9 @@ class ToolRunner:
             # this whole code path exists to prevent.
             child_env.pop("PYTHONPATH", None)
             child_env.pop("PYTHONHOME", None)
+
+        if tool.env:
+            child_env.update(tool.env)
 
         while True:
             attempt += 1
@@ -586,6 +597,7 @@ class ToolRunner:
                 last_failure_was_timeout = False
                 last_failure = "crash"
                 last_returncode = result.returncode
+                last_stderr = result.stderr or ""
                 attempts_by_type["crash"] = attempts_by_type.get("crash", 0) + 1
                 budget = rc.attempts_for_failure("crash")
                 if attempts_by_type["crash"] < budget:
@@ -600,6 +612,7 @@ class ToolRunner:
                 last_failure_was_timeout = True
                 last_failure = "timeout"
                 last_returncode = -1
+                last_stderr = ""
                 attempts_by_type["timeout"] = attempts_by_type.get("timeout", 0) + 1
                 budget = rc.attempts_for_failure("timeout")
 
@@ -649,6 +662,7 @@ class ToolRunner:
                 last_failure_was_timeout = False
                 last_failure = "system_error"
                 last_returncode = -1
+                last_stderr = ""
                 attempts_by_type["system_error"] = (
                     attempts_by_type.get("system_error", 0) + 1
                 )
@@ -666,6 +680,7 @@ class ToolRunner:
                 last_failure_was_timeout = False
                 last_failure = "unknown"
                 last_returncode = -1
+                last_stderr = ""
                 attempts_by_type["unknown"] = attempts_by_type.get("unknown", 0) + 1
                 budget = rc.attempts_for_failure("unknown")
                 logger.error(
@@ -688,6 +703,7 @@ class ToolRunner:
             duration=duration,
             output_file=tool.output_file,
             capture_stdout=tool.capture_stdout,
+            stderr=last_stderr,
             error_message=last_error,
             timed_out=last_failure_was_timeout,
             failure=last_failure,

@@ -181,6 +181,12 @@ BINARY_URLS: dict[str, str | dict[str, str]] = {
         "macos": "https://github.com/zizmorcore/zizmor/releases/download/v{version}/zizmor-{arch_aarch}-apple-darwin.tar.gz",
         "default": "https://github.com/zizmorcore/zizmor/releases/download/v{version}/zizmor-{arch_aarch}-unknown-linux-gnu.tar.gz",
     },
+    # osv-scanner: raw binaries, no archive, no version in the name (v2.6.0's
+    # assets, listed 2026-09-28); Windows has an arm64 build.
+    "osv-scanner": {
+        "windows": "https://github.com/google/osv-scanner/releases/download/v{version}/osv-scanner_windows_{arch_amd}.exe",
+        "default": "https://github.com/google/osv-scanner/releases/download/v{version}/osv-scanner_{os_lower}_{arch_amd}",
+    },
     "nuclei": "https://github.com/projectdiscovery/nuclei/releases/download/v{version}/nuclei_{version}_{os_lower}_{arch_amd}.zip",
     "gosec": "https://github.com/securego/gosec/releases/download/v{version}/gosec_{version}_{os_lower}_{arch_amd}.tar.gz",
     # OPA (Open Policy Agent): "opa_linux_amd64" (no version in filename)

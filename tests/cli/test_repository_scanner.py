@@ -30,6 +30,21 @@ from scripts.core.tool_runner import ToolResult
 REPO_TOOLS = [t for t in TOOL_MATRIX if t in TOOL_SCAN_TYPES["repo"]]
 
 
+@pytest.fixture(autouse=True)
+def _every_osv_database(tmp_path_factory, monkeypatch):
+    """osv-scanner runs only on lockfiles whose offline database is in the
+    cache. These tests are about the loop, so the cache holds every ecosystem;
+    the machine's own `~/.jmo/osv-db` must not decide them."""
+    from scripts.core import osv_database
+
+    cache = tmp_path_factory.mktemp("osv-db")
+    for ecosystem in osv_database.ECOSYSTEMS:
+        path = osv_database.database_path(ecosystem, cache)
+        path.parent.mkdir(parents=True)
+        path.write_bytes(b"PK")
+    monkeypatch.setattr(osv_database, "cache_dir", lambda: cache)
+
+
 def _found(tool_name):
     return f"/usr/bin/{tool_name}"
 
@@ -161,6 +176,7 @@ class TestRepositoryScanner:
                 "main.go": "package main\n",
                 "main.tf": 'resource "aws_s3_bucket" "b" {}\n',
                 ".github/workflows/ci.yml": "on: push\n",
+                "package-lock.json": "{}\n",
             },
         )
 
@@ -375,6 +391,8 @@ class TestContentDecidesWhoRuns:
                 Reason.NO_WORKFLOWS,
                 {".github/dependabot.yml": "version: 2\n"},
             ),
+            ("osv-scanner", Reason.NO_LOCKFILE, {"package-lock.json": "{}\n"}),
+            ("osv-scanner", Reason.NO_LOCKFILE, {"api/requirements.txt": "a==1\n"}),
         ],
     )
     def test_skipped_without_content_and_run_with_it(
@@ -811,9 +829,11 @@ class TestExclusions:
                 "main.go": "package main\n",
                 "main.tf": "x\n",
                 ".github/workflows/ci.yml": "on: push\n",
+                "package-lock.json": "{}\n",
                 "results/individual-repos/old/Dockerfile": "FROM alpine\n",
                 "results/individual-repos/old/old.sh": "#!/bin/sh\n",
                 "results/individual-repos/old/action.yml": "runs: {}\n",
+                "results/individual-repos/old/package-lock.json": "{}\n",
             },
         )
 
@@ -825,8 +845,9 @@ class TestExclusions:
             if d.exclusion_style is ExclusionStyle.WALK:
                 # By location, not substring: macOS's temp root is
                 # /private/var/folders/..., and "folders" contains "old".
-                # zizmor's paths are relative to its working directory, the
-                # repository; hadolint's and shellcheck's are absolute.
+                # zizmor's and osv-scanner's paths are relative to their
+                # working directory, the repository; hadolint's and
+                # shellcheck's are absolute.
                 cwd = defs[tool].cwd
                 root = repo.resolve() if cwd else repo
                 files = [

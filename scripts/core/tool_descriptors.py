@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+from scripts.core import osv_database
 from scripts.core.scan_timings import Reason
 
 logger = logging.getLogger(__name__)
@@ -81,6 +82,12 @@ def filter_trivy_flags(subcommand: str, flags: Iterable[str]) -> list[str]:
             ", ".join(dropped),
         )
     return kept
+
+
+# A fallback invocation's output file. The scan loop removes every file of this
+# shape a tool left in its directory before the tool runs again: their number
+# follows the inputs, and the report reads whatever is there.
+PART_OUTPUT = "{tool}.part{n}.json"
 
 
 class ExclusionStyle(StrEnum):
@@ -160,6 +167,11 @@ class ScanContext:
         tool by the name before the first dot, so it reaches the same adapter."""
         return self.out_dir / f"{self.tool}.git.json"
 
+    def part_output(self, n: int) -> Path:
+        """The file of a fallback's `n`th invocation (`Fallback`). It reaches
+        the tool's adapter as `history_output` does."""
+        return self.out_dir / PART_OUTPUT.format(tool=self.tool, n=n)
+
     def any_file(self, predicate: Callable[[Path], bool]) -> bool:
         """Stop at the first file of the pruned walk that satisfies `predicate`."""
         if self.iter_files is None:
@@ -229,6 +241,39 @@ class Invocation:
     cwd: Path | None = None
     # Which of a tool's invocations this is, for a failed row to name.
     label: str = ""
+    # Merged over the environment the runner builds for the child.
+    env: Mapping[str, str] | None = None
+    # What to run instead when this invocation fails in one known way.
+    fallback: Fallback | None = None
+
+
+@dataclass(frozen=True)
+class Fallback:
+    """Run `invocations` instead of an invocation that exited with one of
+    `returncodes` and wrote `stderr_marker` to stderr.
+
+    For a tool that reads many inputs in one run and loses all of them to one
+    it cannot read (osv-scanner: a truncated lockfile, rc 127, no output). One
+    run per input then costs only the bad one's findings, and the row names
+    each invocation that failed by its `label`. Each writes its own output
+    (`ScanContext.part_output`).
+    """
+
+    returncodes: tuple[int, ...]
+    stderr_marker: str
+    invocations: tuple[Invocation, ...]
+
+
+@dataclass(frozen=True)
+class Shortfall:
+    """What a tool's pre-run check (`ToolDescriptor.precheck`) found it cannot
+    read. The row fails with `reason`, `detail` naming what was left out,
+    whatever the run does; the tool runs on `files` only, and with none left
+    it does not run at all."""
+
+    reason: Reason
+    detail: str
+    files: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -244,6 +289,7 @@ class VersionProbe:
 
 Builder = Callable[[ScanContext], list[Invocation]]
 Trigger = Callable[[ScanContext], Reason | None]
+Precheck = Callable[[ScanContext], Shortfall | None]
 
 
 @dataclass(frozen=True)
@@ -267,6 +313,9 @@ class ToolDescriptor:
     file_patterns: tuple[str, ...] = ()
     no_files_reason: Reason | None = None
     trigger: Trigger | None = None
+    # Run once the content is known to be there: what the tool cannot read
+    # of it fails the row before it runs (a trigger can only skip).
+    precheck: Precheck | None = None
     off_target_reason: Reason = Reason.NOT_FOR_TARGET
     timeout_floor: int = 0
     binary: str | None = None  # executable name, where it differs from `name`
@@ -655,19 +704,27 @@ def _file_fed(*format_args: str) -> Builder:
     return build
 
 
+def _relative_to_target(ctx: ScanContext) -> tuple[Path, list[str]]:
+    """The resolved root to run a walk-fed tool from, and its walked files
+    relative to that root, `/`-separated.
+
+    Relative to the target as given, not resolve()d: the walk globs from it,
+    and a file reached through a link that leaves the repository resolves
+    outside the root. That raised ValueError, and every tool on the target
+    failed (measured on a junction). The path as found reaches the same file
+    from the resolved root.
+    """
+    root = Path(scan_root(ctx.target)).resolve()
+    target = Path(ctx.target).absolute()
+    return root, [Path(f).absolute().relative_to(target).as_posix() for f in ctx.files]
+
+
 def _zizmor_repo(ctx: ScanContext) -> list[Invocation]:
     # Walk-fed and repository-relative, run from the root: zizmor has no
     # exclude flag and reads vendored workflows (a planted node_modules
     # workflow was audited, measured 1.30.1), and an absolute input puts an
     # absolute URI, so a checkout-dependent id, in every finding.
-    # Relative to the target as given, not resolve()d: the walk globs from it,
-    # and a file reached through a link that leaves the repository resolves
-    # outside the root. That raised ValueError, and every tool on the target
-    # failed (measured on a junction). The path as found reaches the same
-    # file from the resolved root.
-    root = Path(scan_root(ctx.target)).resolve()
-    target = Path(ctx.target).absolute()
-    inputs = [Path(f).absolute().relative_to(target).as_posix() for f in ctx.files]
+    root, inputs = _relative_to_target(ctx)
     return [
         Invocation(
             command=(
@@ -687,6 +744,95 @@ def _zizmor_repo(ctx: ScanContext) -> list[Invocation]:
             cwd=root,
         )
     ]
+
+
+# osv-scanner exits 127 for every error. This line is its own for a lockfile it
+# could not extract (2.6.0), the one failure a run per lockfile recovers from.
+# A database it cannot load exits 127 too (measured: a lone pom.xml with no
+# Maven database), and split, every run would fail the same way.
+_OSV_UNREADABLE_LOCKFILE = "extraction failed on specified lockfile"
+
+
+def _osv_scanner_repo(ctx: ScanContext) -> list[Invocation]:
+    # Walk-fed, `-L` per lockfile: given a directory on Windows osv-scanner
+    # walks nothing (rc 128, "No package sources found", 2.5.1 and 2.6.0).
+    root, lockfiles = _relative_to_target(ctx)
+    env = {"OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY": str(osv_database.cache_dir())}
+
+    def scan(
+        files: Sequence[str],
+        output: Path,
+        label: str = "",
+        fallback: Fallback | None = None,
+    ) -> Invocation:
+        return Invocation(
+            command=(
+                ctx.binary,
+                "scan",
+                "source",
+                "--format",
+                "sarif",
+                # Absolute: it runs from the repository.
+                "--output-file",
+                str(output.absolute()),
+                # Scans never download (decision 6), and never resolve:
+                # `pom.xml` and `requirements.txt` were resolved over the
+                # network (deps.dev) without `--no-resolve` (measured, 2.6.0).
+                "--offline-vulnerabilities",
+                "--no-resolve",
+                # A lockfile with no packages is rc 128 and no output without
+                # it; with it, rc 0 and an empty report. A lockfile it cannot
+                # read is still 127 (measured).
+                "--allow-no-lockfiles",
+                *ctx.flags,
+                *(arg for f in files for arg in ("-L", f)),
+            ),
+            output_file=output,
+            capture_stdout=False,
+            ok_return_codes=(0, 1),  # 1 = findings
+            cwd=root,
+            label=label,
+            env=env,
+            fallback=fallback,
+        )
+
+    if len(lockfiles) == 1:
+        return [scan(lockfiles, ctx.output, label=lockfiles[0])]
+    # One run for all: a per-lockfile run loads the database each time (npm
+    # ~11 s). But one unreadable lockfile loses every other's findings (a
+    # truncated package-lock.json cost NodeGoat's 304: rc 127, no output), so
+    # that failure falls back to one run each.
+    each = tuple(
+        scan([f], ctx.part_output(n), label=f) for n, f in enumerate(lockfiles, 1)
+    )
+    fallback = Fallback((127,), _OSV_UNREADABLE_LOCKFILE, each)
+    return [scan(lockfiles, ctx.output, fallback=fallback)]
+
+
+def _osv_databases(ctx: ScanContext) -> Shortfall | None:
+    """Each lockfile's ecosystem must have an offline database, or osv-scanner
+    does not read it. Decided here because osv-scanner's answer cannot be
+    trusted: a Cargo.lock with no crates.io database beside NodeGoat's
+    package-lock.json exited **1** with 40 of its 304 results (measured three
+    times), and alone it is rc 127, which would read `unaccepted exit code`."""
+    _, lockfiles = _relative_to_target(ctx)
+    present = osv_database.present_ecosystems()
+    kept: list[str] = []
+    missing: dict[str, list[str]] = {}
+    for path, lockfile in zip(ctx.files, lockfiles, strict=True):
+        ecosystem = osv_database.ecosystem_of(lockfile) or lockfile
+        if ecosystem in present:
+            kept.append(path)
+        else:
+            missing.setdefault(ecosystem, []).append(lockfile)
+    if not missing:
+        return None
+    named = "; ".join(f"{eco} ({', '.join(files)})" for eco, files in missing.items())
+    return Shortfall(
+        Reason.NO_OFFLINE_DB,
+        f"no offline database for {named}: run `jmo tools update`",
+        tuple(kept),
+    )
 
 
 def _gosec_repo(ctx: ScanContext) -> list[Invocation]:
@@ -976,6 +1122,28 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             # this repository were the dev machine's CPython (decided 2026-09-11).
             excluded_vendored=(".venv", "venv"),
             stub={"matches": []},
+        ),
+        ToolDescriptor(
+            name="osv-scanner",
+            invocations={"repo": _osv_scanner_repo},
+            # `osv-scanner --version` prints `osv-scanner version: 2.6.0`, then
+            # `osv-scalibr version: 0.5.2` (measured).
+            version_probe=VersionProbe(
+                re.compile(r"osv-scanner version:\s*v?(\d+\.\d+\.\d+)")
+            ),
+            exclusion_style=ExclusionStyle.WALK,
+            # Exactly the names 2.6.0 accepts through `-L`: one it rejects
+            # (`go.sum`, `package.json`, `pyproject.toml`, ...) aborts the
+            # whole run, rc 127, no output (measured one by one).
+            file_patterns=tuple(
+                f"**/{name}" for name in osv_database.LOCKFILE_ECOSYSTEMS
+            ),
+            no_files_reason=Reason.NO_LOCKFILE,
+            precheck=_osv_databases,
+            # Where it writes; `--format` and `--output` are shared. The
+            # download flag would fetch mid-scan (measured: 207 -> 252 MB).
+            reserved_flags=frozenset({"--output-file", "--download-offline-databases"}),
+            stub={"version": "2.1.0", "runs": []},
         ),
         ToolDescriptor(
             name="zap",

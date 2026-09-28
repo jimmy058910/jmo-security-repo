@@ -44,6 +44,8 @@ TOOL_TIME_ESTIMATES: dict[str, int] = {
     "hadolint": 5,
     "shellcheck": 10,
     "zizmor": 5,
+    # Loading the npm database is most of it (11.7 s on NodeGoat, 2.6.0).
+    "osv-scanner": 15,
     # Medium tools (30s - 2min)
     "trivy": 45,
     "grype": 40,

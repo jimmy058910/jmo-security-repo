@@ -88,19 +88,16 @@ def test_table_names_only_tools_jmo_installs(table_name: str):
     )
 
 
-def test_osv_scanner_is_gone():
-    """Named explicitly so a revert is loud rather than merely a count change.
-
-    Removed in #782, completing a removal the CHANGELOG recorded at the time as
-    "Trivy superior for container/dependency scanning" -- with a documented user
-    migration, `--tools osv-scanner` -> `--tools trivy`.
-    """
-    for table_name in TOOL_NAME_SIDES:
-        assert "osv-scanner" not in _tool_names(table_name), (
-            f"osv-scanner reappeared in {table_name}. It was removed deliberately;"
-            " re-adding it needs an adapter, a binary name and an execution"
-            " command, not just a registry entry."
-        )
+def test_osv_scanner_came_back_whole():
+    """Removed in #782 as half-wired: registry entries that nothing installed or
+    ran. v2.0.0 Phase 4 (task O1) brings it back as a descriptor row, so it is
+    in the universe and in every table that names a repository tool, not in
+    one table and missing from the next."""
+    assert "osv-scanner" in _universe()
+    assert "osv-scanner" in _tool_names("DESCRIPTORS")
+    assert "osv-scanner" in _tool_names("_REPO_TOOLS")
+    assert "osv-scanner" in registry.TOOL_SCAN_TYPES["repo"]
+    assert "osv-scanner" in registry.TOOL_SCAN_TYPES["gitlab"]
 
 
 def test_every_matrix_tool_applies_to_some_target_type():

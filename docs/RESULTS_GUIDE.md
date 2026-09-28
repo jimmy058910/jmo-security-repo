@@ -105,6 +105,8 @@ results/
 │       ├── gitleaks.json
 │       ├── gitleaks.git.json
 │       ├── zizmor.json           # GitHub Actions audit
+│       ├── osv-scanner.json      # Dependency vulnerabilities, from lockfiles
+│       ├── osv-scanner.part1.json  # one per lockfile, when one could not be read
 │       └── ...
 ├── individual-images/         # Raw outputs per container image (v0.6.0+)
 │   └── <image-name>/

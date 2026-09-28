@@ -130,6 +130,22 @@ RUN ZIZMOR_VERSION="1.30.1" && \
     tar -xzf /tmp/zizmor.tar.gz -C /usr/local/bin zizmor && \
     chmod +x /usr/local/bin/zizmor
 
+# Download osv-scanner (dependency lockfiles); a raw binary, so it is checked
+# against the release's SHA256SUMS before use. The image carries no offline
+# database: `jmo tools update` fetches it into ~/.jmo/osv-db
+RUN OSV_SCANNER_VERSION="2.6.0" && \
+    OSV_SCANNER_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
+    OSV_SCANNER_ASSET="osv-scanner_linux_${OSV_SCANNER_ARCH}" && \
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/${OSV_SCANNER_ASSET}" \
+    -o "/tmp/${OSV_SCANNER_ASSET}" && \
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_SHA256SUMS" \
+    -o /tmp/osv-scanner_SHA256SUMS && \
+    awk -v f="${OSV_SCANNER_ASSET}" '$2 == f {print $1 "  /tmp/" f}' /tmp/osv-scanner_SHA256SUMS > /tmp/osv-scanner.sha256 && \
+    test -s /tmp/osv-scanner.sha256 && \
+    sha256sum -c /tmp/osv-scanner.sha256 && \
+    mv "/tmp/${OSV_SCANNER_ASSET}" /usr/local/bin/osv-scanner && \
+    chmod +x /usr/local/bin/osv-scanner
+
 #
 # Stage 2: Runtime - Complete runtime environment with ALL tools
 #
@@ -223,6 +239,7 @@ COPY --from=builder /usr/local/bin/grype /usr/local/bin/grype
 COPY --from=builder /usr/local/bin/opa /usr/local/bin/opa
 COPY --from=builder /usr/local/bin/shellcheck /usr/local/bin/shellcheck
 COPY --from=builder /usr/local/bin/zizmor /usr/local/bin/zizmor
+COPY --from=builder /usr/local/bin/osv-scanner /usr/local/bin/osv-scanner
 COPY --from=builder /opt/zaproxy /opt/zaproxy
 
 # Binary stripping (Phase 1 optimization: 15 MB savings)

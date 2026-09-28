@@ -38,12 +38,14 @@ V2_PHASE_2_MATRIX = {
     "gitleaks",
     # Phase 4, PR Z: GitHub Actions, taken over from checkov.
     "zizmor",
+    # Phase 4, PR O: lockfiles, against an offline database.
+    "osv-scanner",
 }
 
 
 def test_tool_matrix_is_the_phase_2_set():
     """TOOL_MATRIX is the v2.0.0 Phase 2 scanner set plus Phase 3's gitleaks
-    and Phase 4's zizmor, with no duplicates."""
+    and Phase 4's zizmor and osv-scanner, with no duplicates."""
     assert set(TOOL_MATRIX) == V2_PHASE_2_MATRIX
     assert len(TOOL_MATRIX) == len(set(TOOL_MATRIX))
 

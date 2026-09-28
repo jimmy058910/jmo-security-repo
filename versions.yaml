@@ -128,6 +128,19 @@ binary_tools:
     update_check: gh api repos/zizmorcore/zizmor/releases/latest
     critical: false
     notes: 'no Windows arm64 build upstream: jmo tools install fetches the x86_64 one there'
+  osv-scanner:
+    version: 2.6.0
+    github_repo: google/osv-scanner
+    description: Dependency vulnerability scanner (lockfiles, offline OSV databases)
+    # Raw binaries named by OS and arch, no version in the name; checksums in
+    # osv-scanner_SHA256SUMS.
+    release_pattern: osv-scanner_linux_{arch}
+    architectures:
+      amd64: amd64
+      arm64: arm64
+    update_check: gh api repos/google/osv-scanner/releases/latest
+    critical: false
+    notes: v2.0.0 - reads lockfiles against offline databases; a scan never downloads
 special_tools:
   zap:
     version: 2.17.0
