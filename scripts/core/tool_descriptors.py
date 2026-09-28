@@ -631,8 +631,14 @@ def _zizmor_repo(ctx: ScanContext) -> list[Invocation]:
     # exclude flag and reads vendored workflows (a planted node_modules
     # workflow was audited, measured 1.30.1), and an absolute input puts an
     # absolute URI, so a checkout-dependent id, in every finding.
+    # Relative to the target as given, not resolve()d: the walk globs from it,
+    # and a file reached through a link that leaves the repository resolves
+    # outside the root. That raised ValueError, and every tool on the target
+    # failed (measured on a junction). The path as found reaches the same
+    # file from the resolved root.
     root = Path(scan_root(ctx.target)).resolve()
-    inputs = [Path(f).resolve().relative_to(root).as_posix() for f in ctx.files]
+    target = Path(ctx.target).absolute()
+    inputs = [Path(f).absolute().relative_to(target).as_posix() for f in ctx.files]
     return [
         Invocation(
             command=(

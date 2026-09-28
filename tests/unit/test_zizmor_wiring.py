@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import sys
 import time
 from pathlib import Path
 from unittest.mock import patch
@@ -253,6 +254,8 @@ def test_it_hands_zizmor_the_repositorys_own_files_relative_to_its_root(
     )
 
     fixed, inputs = definition.command[:5], definition.command[5:]
+    # At 1.30.1 `--format sarif` exits 0 with findings anyway, so
+    # `--no-exit-codes` guards a future release; pinned here so it stays.
     assert fixed == ["/bin/zizmor", "--format", "sarif", "--offline", "--no-exit-codes"]
     assert sorted(inputs) == sorted(rel for rel, kept in PLANTED.items() if kept)
     # Repository-relative and `/`-separated: the URIs zizmor writes are these
@@ -266,6 +269,44 @@ def test_it_hands_zizmor_the_repositorys_own_files_relative_to_its_root(
     # plain and json formats exit 14); `--no-exit-codes` keeps it so if a
     # release changes that.
     assert definition.ok_return_codes == (0,)
+
+
+def _link_directory(link: Path, target: Path) -> None:
+    """A directory link made without privilege: a junction on Windows, where
+    `os.symlink` needs admin or developer mode (WinError 1314, measured)."""
+    if sys.platform == "win32":
+        import _winapi
+
+        _winapi.CreateJunction(str(target), str(link))
+    else:
+        os.symlink(target, link, target_is_directory=True)
+
+
+def test_a_link_out_of_the_repository_is_handed_over_by_its_own_path(
+    tmp_path,
+) -> None:
+    """A workflow reached through a link that leaves the repository, as a
+    monorepo package's `.github` linked to a shared one. Resolved before it
+    was made relative, its path left the root: ValueError, and the scan loop
+    failed every tool on the target (measured on a junction, `jmo scan --tools
+    zizmor semgrep`: rc 1, "every tool failed (semgrep, zizmor)"). The path as
+    the walk found it is repository-relative and reaches the file from the
+    root."""
+    shared = tmp_path / "shared" / ".github"
+    (shared / "workflows").mkdir(parents=True)
+    (shared / "workflows" / "ci.yml").write_bytes(WORKFLOW)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "lib.py").write_bytes(b"x = 1\n")
+    _link_directory(repo / ".github", shared)
+    out = tmp_path / "out"
+    out.mkdir()
+
+    _, (definition,) = _recorded(repo, out)
+
+    assert definition.command[5:] == [".github/workflows/ci.yml"]
+    assert definition.cwd == repo.resolve()
+    assert (definition.cwd / definition.command[5]).is_file()
 
 
 def test_the_results_directory_is_not_read_even_when_it_is_all_there_is(
