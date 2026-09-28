@@ -279,6 +279,8 @@ All notable changes to JMo Security will be documented in this file.
   read a consensus finding's `tool` now also reads its `detected_by` array, so a policy
   keyed on one tool sees a finding any member tool reported, whichever led the merge.
 
+### Fixed
+
 - **A consensus finding no longer misreports what it is a consensus of.** Building it as a
   copy of one member, rather than a merge, meant the load order that happened to put a
   non-CWE-798 secret finding in the lead could inflate `owasp-top-10`'s count with an entry
@@ -294,7 +296,6 @@ All notable changes to JMo Security will be documented in this file.
 - **A code comment named a private repository for a timing figure.** `tool_descriptors.py`'s
   checkov comment said "195.8 s alone on" a repository this project does not own the name
   of; it now says "one measured repository", matching `docs/TOOLS.md` (#1366).
-
 - **A GitLab target's findings are repository-relative, and keep their id.** The clone
   lives in a random temporary directory the report was never told about, so a finding
   carried the host's temporary path, and every scan of the repository read as new
