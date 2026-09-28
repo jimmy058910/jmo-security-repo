@@ -43,6 +43,7 @@ TOOL_TIME_ESTIMATES: dict[str, int] = {
     "semgrep": 25,
     "hadolint": 5,
     "shellcheck": 10,
+    "zizmor": 5,
     # Medium tools (30s - 2min)
     "trivy": 45,
     "grype": 40,

@@ -173,6 +173,14 @@ BINARY_URLS: dict[str, str | dict[str, str]] = {
         "windows": "https://github.com/gitleaks/gitleaks/releases/download/v{version}/gitleaks_{version}_windows_{arch_x64}.zip",
         "default": "https://github.com/gitleaks/gitleaks/releases/download/v{version}/gitleaks_{version}_{os_lower}_{arch_x64}.tar.gz",
     },
+    # zizmor: named by target triple, no version in the name (v1.30.1's
+    # assets, listed 2026-09-27). No Windows arm64 build, so Windows is the
+    # x86_64 one on every architecture, as for hadolint and shellcheck.
+    "zizmor": {
+        "windows": "https://github.com/zizmorcore/zizmor/releases/download/v{version}/zizmor-x86_64-pc-windows-msvc.zip",
+        "macos": "https://github.com/zizmorcore/zizmor/releases/download/v{version}/zizmor-{arch_aarch}-apple-darwin.tar.gz",
+        "default": "https://github.com/zizmorcore/zizmor/releases/download/v{version}/zizmor-{arch_aarch}-unknown-linux-gnu.tar.gz",
+    },
     "nuclei": "https://github.com/projectdiscovery/nuclei/releases/download/v{version}/nuclei_{version}_{os_lower}_{arch_amd}.zip",
     "gosec": "https://github.com/securego/gosec/releases/download/v{version}/gosec_{version}_{os_lower}_{arch_amd}.tar.gz",
     # OPA (Open Policy Agent): "opa_linux_amd64" (no version in filename)

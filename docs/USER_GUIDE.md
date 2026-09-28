@@ -183,6 +183,7 @@ Not every tool produces findings for every project. JMo uses content-triggered e
 | **YARA** | Matches malware patterns (web shells, backdoors) across the tree |
 | **Hadolint** | Lints Dockerfiles — only fires if a `Dockerfile` exists in the repo |
 | **ShellCheck** | Analyses shell scripts — only fires if `.sh` files exist |
+| **zizmor** | Audits GitHub Actions workflows — only fires if the repo has `.github/workflows`, an `action.yml` or a Dependabot config |
 | **Gosec** | Skipped unless the repo contains Go code |
 | **ZAP, Nuclei** | Skipped for local repos (they test a running application at a URL) |
 
@@ -548,7 +549,7 @@ https://staging.example.com
 - `--gitlab-group GROUP`: Scan all repositories in a group
 - `--gitlab-repo REPO`: Single GitLab repository (format: `group/repo`)
 
-**Tools used:** Full repository scanner (TruffleHog, Gitleaks, Semgrep, Syft, Trivy, Checkov, YARA, Grype, plus Hadolint, ShellCheck and Gosec when their content is present)
+**Tools used:** Full repository scanner (TruffleHog, Gitleaks, Semgrep, Syft, Trivy, Checkov, YARA, Grype, plus Hadolint, ShellCheck, zizmor and Gosec when their content is present)
 
 **Architecture:** GitLab repos are cloned temporarily and scanned using the same repository scanner as local repos, providing comprehensive coverage instead of secrets-only scanning
 

@@ -119,6 +119,15 @@ binary_tools:
     update_check: gh api repos/anchore/grype/releases/latest
     critical: false
     notes: v1.0.0 - Dual scanning with Trivy (Anchore DB)
+  zizmor:
+    version: 1.30.1
+    github_repo: zizmorcore/zizmor
+    description: GitHub Actions auditor (workflows, composite actions, Dependabot config)
+    # Named by target triple, no version in the name, no checksum file.
+    release_pattern: zizmor-{arch_aarch}-unknown-linux-gnu.tar.gz
+    update_check: gh api repos/zizmorcore/zizmor/releases/latest
+    critical: false
+    notes: 'no Windows arm64 build upstream: jmo tools install fetches the x86_64 one there'
 special_tools:
   zap:
     version: 2.17.0

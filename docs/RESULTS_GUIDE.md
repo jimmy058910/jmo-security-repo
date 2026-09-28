@@ -104,6 +104,7 @@ results/
 │       ├── trufflehog.git.json   # git history, when the repository has a .git
 │       ├── gitleaks.json
 │       ├── gitleaks.git.json
+│       ├── zizmor.json           # GitHub Actions audit
 │       └── ...
 ├── individual-images/         # Raw outputs per container image (v0.6.0+)
 │   └── <image-name>/

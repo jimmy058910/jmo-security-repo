@@ -118,21 +118,34 @@ def test_the_table_is_the_matrix() -> None:
 
 
 def test_gitleaks_joined_beside_the_other_secret_scanner() -> None:
-    """PR C (decided 2026-09-24): gitleaks is wired in Phase 3 for G1, so the
-    matrix is 13. Listed after trufflehog, so the two secret scanners read
-    together wherever the matrix is printed."""
-    assert len(DESCRIPTORS) == 13
+    """PR C (decided 2026-09-24): gitleaks is wired in Phase 3 for G1. Listed
+    after trufflehog, so the two secret scanners read together wherever the
+    matrix is printed."""
     names = list(DESCRIPTORS)
     assert names[names.index("trufflehog") + 1] == "gitleaks"
+
+
+def test_zizmor_joined_beside_the_other_walk_fed_linters() -> None:
+    """Phase 4, PR Z: zizmor takes GitHub Actions from checkov, so the matrix
+    is 14. Listed after shellcheck: the tools JMo hands files to read together
+    wherever the matrix is printed."""
+    assert len(DESCRIPTORS) == 14
+    names = list(DESCRIPTORS)
+    assert names[names.index("hadolint") : names.index("hadolint") + 3] == [
+        "hadolint",
+        "shellcheck",
+        "zizmor",
+    ]
 
 
 def test_target_types_differ_from_the_old_literal_only_by_the_url_tools() -> None:
     """zap left `repo` and nuclei left `gitlab`: both are URL-only (Phase 3
     decision: "zap and nuclei on a non-URL target are skipped:needs --url").
-    gitleaks (PR C) reads a repository, and so a GitLab clone."""
+    gitleaks (PR C) and zizmor (PR Z) read a repository, and so a GitLab
+    clone."""
     expected = {k: set(v) for k, v in OLD_TOOL_SCAN_TYPES.items()}
     expected["repo"].discard("zap")
-    expected["repo"].add("gitleaks")
+    expected["repo"] |= {"gitleaks", "zizmor"}
     expected["gitlab"] = set(expected["repo"])
 
     assert expected == tool_registry.TOOL_SCAN_TYPES
@@ -149,8 +162,8 @@ def test_timeout_floors_are_derived_unchanged() -> None:
 
 def test_stub_shapes_are_derived_unchanged_plus_the_three_empty_ones() -> None:
     """shellcheck, gosec and yara had no entry and fell back to `{}`; they are
-    declared now, with the value they already got. gitleaks (PR C) writes
-    SARIF, so its empty result is an empty SARIF document."""
+    declared now, with the value they already got. gitleaks (PR C) and zizmor
+    (PR Z) write SARIF, so their empty result is an empty SARIF document."""
     derived = {name: d.stub for name, d in DESCRIPTORS.items()}
     assert derived == {
         **OLD_STUBS,
@@ -158,12 +171,17 @@ def test_stub_shapes_are_derived_unchanged_plus_the_three_empty_ones() -> None:
         "gosec": {},
         "yara": {},
         "gitleaks": {"version": "2.1.0", "runs": []},
+        "zizmor": {"version": "2.1.0", "runs": []},
     }
 
 
 # gitleaks (PR C): `gitleaks version` prints the bare version, `8.30.1`
-# (measured, the release's windows_x64 binary).
-NEW_VERSION_PATTERNS = {"gitleaks": (r"^v?(\d+\.\d+\.\d+)$", re.MULTILINE)}
+# (measured, the release's windows_x64 binary). zizmor (PR Z): `zizmor
+# --version` prints `zizmor 1.30.1`, so it needs no command of its own.
+NEW_VERSION_PATTERNS = {
+    "gitleaks": (r"^v?(\d+\.\d+\.\d+)$", re.MULTILINE),
+    "zizmor": (r"zizmor\s+v?(\d+\.\d+\.\d+)", 0),
+}
 NEW_VERSION_COMMANDS = {"gitleaks": ["gitleaks", "version"]}
 
 
@@ -223,6 +241,9 @@ def test_vendored_tier_is_the_old_set_plus_the_readers_that_walked_anyway() -> N
             "yara",
             # PR C: the second secret scanner, for the same reason as the first.
             "gitleaks",
+            # PR Z: walk-fed like hadolint; it read vendored workflows when
+            # handed a directory (7 of 10 findings on a planted fixture).
+            "zizmor",
         }
         == scan_utils.VENDOR_NOISE_TOOLS
     )

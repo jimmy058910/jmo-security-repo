@@ -626,6 +626,34 @@ def _file_fed(*format_args: str) -> Builder:
     return build
 
 
+def _zizmor_repo(ctx: ScanContext) -> list[Invocation]:
+    # Walk-fed and repository-relative, run from the root: zizmor has no
+    # exclude flag and reads vendored workflows (a planted node_modules
+    # workflow was audited, measured 1.30.1), and an absolute input puts an
+    # absolute URI, so a checkout-dependent id, in every finding.
+    root = Path(scan_root(ctx.target)).resolve()
+    inputs = [Path(f).resolve().relative_to(root).as_posix() for f in ctx.files]
+    return [
+        Invocation(
+            command=(
+                ctx.binary,
+                "--format",
+                "sarif",
+                # --offline, not --no-online-audits: zizmor reads GH_TOKEN,
+                # and a scan makes no network call.
+                "--offline",
+                "--no-exit-codes",
+                *ctx.flags,
+                *inputs,
+            ),
+            output_file=ctx.output,
+            capture_stdout=True,
+            ok_return_codes=(0,),
+            cwd=root,
+        )
+    ]
+
+
 def _gosec_repo(ctx: ScanContext) -> list[Invocation]:
     return [
         Invocation(
@@ -859,6 +887,26 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             exclusion_style=ExclusionStyle.WALK,
             file_patterns=("**/*.sh", "**/*.bash", "**/*.ksh"),
             no_files_reason=Reason.NO_SHELL_SCRIPTS,
+        ),
+        ToolDescriptor(
+            name="zizmor",
+            invocations={"repo": _zizmor_repo},
+            # `zizmor --version` prints `zizmor 1.30.1` (measured).
+            version_probe=VersionProbe(re.compile(r"zizmor\s+v?(\d+\.\d+\.\d+)")),
+            exclusion_style=ExclusionStyle.WALK,
+            # The workflows GitHub runs (the root's, flat), every composite
+            # action, and Dependabot's config, which has audits of its own
+            # (6 `dependabot-cooldown` findings at 3098c766 without it).
+            file_patterns=(
+                ".github/workflows/*.yml",
+                ".github/workflows/*.yaml",
+                "**/action.yml",
+                "**/action.yaml",
+                ".github/dependabot.yml",
+                ".github/dependabot.yaml",
+            ),
+            no_files_reason=Reason.NO_WORKFLOWS,
+            stub={"version": "2.1.0", "runs": []},
         ),
         ToolDescriptor(
             name="gosec",

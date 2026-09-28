@@ -62,6 +62,26 @@ def _gitleaks_findings(out: dict[str, Any]) -> list[dict[str, Any]]:
     return usable
 
 
+def _zizmor_findings(out: dict[str, Any]) -> list[dict[str, Any]]:
+    """The SARIF results the zizmor binding can use: each needs its rule, its
+    path and line, and `properties["zizmor/severity"]`, which is where the
+    binding reads a severity from (`level` alone folds Low into warning)."""
+    usable = []
+    for run in out.get("runs") or []:
+        for result in run.get("results") or []:
+            location = (
+                ((result.get("locations") or [{}])[0]).get("physicalLocation") or {}
+            )
+            if (
+                result.get("ruleId")
+                and (location.get("artifactLocation") or {}).get("uri")
+                and (location.get("region") or {}).get("startLine")
+                and (result.get("properties") or {}).get("zizmor/severity")
+            ):
+                usable.append(result)
+    return usable
+
+
 # Required fields per tool (minimal contract)
 # These define the structural requirements adapters depend on
 #
@@ -194,6 +214,29 @@ TOOL_CONTRACTS: dict[str, dict[str, Any]] = {
         # the samples instead.
         "ok_return_codes": (1,),
         "description": "Shell script linter with array root",
+    },
+    "zizmor": {
+        "required_keys": ["runs"],
+        "result_item_keys": ["tool", "results"],
+        "sample_target": "github-actions",
+        # As JMo runs it, but given an absolute path (the harness runs from
+        # the repository root): `--offline` so a token in the environment
+        # makes no network call. Findings are rc 0 (SARIF output already
+        # exits 0 with them at 1.30.1; `--no-exit-codes` keeps it so).
+        "command": [
+            "zizmor",
+            "--format",
+            "sarif",
+            "--offline",
+            "--no-exit-codes",
+            "{target}/.github/workflows/ci.yml",
+        ],
+        "ok_return_codes": (0,),
+        # Measured 2026-09-27 with 1.30.1: 5 results on the sample
+        # (artipacked, excessive-permissions, dangerous-triggers,
+        # template-injection, unpinned-uses), each with a zizmor/severity.
+        "findings": _zizmor_findings,
+        "description": "GitHub Actions auditor with SARIF output",
     },
 }
 
@@ -648,6 +691,31 @@ class TestSanityCheckBites:
         del region["snippet"]
         assert check_run("gitleaks", contract, report, 0) == [
             "gitleaks: reported nothing on its sample"
+        ]
+
+    def test_a_zizmor_result_without_its_severity_is_not_a_finding(self):
+        """The binding grades a finding by `properties["zizmor/severity"]`, so
+        SARIF without it reports nothing the binding can grade."""
+        properties = {"zizmor/severity": "High"}
+        result = {
+            "ruleId": "zizmor/template-injection",
+            "locations": [
+                {
+                    "physicalLocation": {
+                        "artifactLocation": {"uri": ".github/workflows/ci.yml"},
+                        "region": {"startLine": 14},
+                    }
+                }
+            ],
+            "properties": properties,
+        }
+        report = {"runs": [{"tool": {}, "results": [result]}]}
+        contract = TOOL_CONTRACTS["zizmor"]
+
+        assert check_run("zizmor", contract, report, 0) == []
+        del properties["zizmor/severity"]
+        assert check_run("zizmor", contract, report, 0) == [
+            "zizmor: reported nothing on its sample"
         ]
 
     def test_a_dict_contract_with_no_required_keys_is_not_indexed(self):

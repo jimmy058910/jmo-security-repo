@@ -160,6 +160,7 @@ class TestRepositoryScanner:
                 "build.sh": "#!/bin/sh\necho hi\n",
                 "main.go": "package main\n",
                 "main.tf": 'resource "aws_s3_bucket" "b" {}\n',
+                ".github/workflows/ci.yml": "on: push\n",
             },
         )
 
@@ -367,6 +368,13 @@ class TestContentDecidesWhoRuns:
             # A module whose sources are generated at build time (#1081).
             ("gosec", Reason.NO_GO_SOURCES, {"go.mod": "module example.com/x\n"}),
             ("checkov", Reason.NO_IAC, {"main.tf": 'resource "x" "y" {}\n'}),
+            ("zizmor", Reason.NO_WORKFLOWS, {".github/workflows/ci.yml": "on: push\n"}),
+            ("zizmor", Reason.NO_WORKFLOWS, {"action.yml": "runs: {}\n"}),
+            (
+                "zizmor",
+                Reason.NO_WORKFLOWS,
+                {".github/dependabot.yml": "version: 2\n"},
+            ),
         ],
     )
     def test_skipped_without_content_and_run_with_it(
@@ -763,8 +771,10 @@ class TestExclusions:
                 "run.sh": "#!/bin/sh\n",
                 "main.go": "package main\n",
                 "main.tf": "x\n",
+                ".github/workflows/ci.yml": "on: push\n",
                 "results/individual-repos/old/Dockerfile": "FROM alpine\n",
                 "results/individual-repos/old/old.sh": "#!/bin/sh\n",
+                "results/individual-repos/old/action.yml": "runs: {}\n",
             },
         )
 
@@ -776,9 +786,17 @@ class TestExclusions:
             if d.exclusion_style is ExclusionStyle.WALK:
                 # By location, not substring: macOS's temp root is
                 # /private/var/folders/..., and "folders" contains "old".
-                files = [Path(arg) for arg in command if Path(arg).is_relative_to(repo)]
+                # zizmor's paths are relative to its working directory, the
+                # repository; hadolint's and shellcheck's are absolute.
+                cwd = defs[tool].cwd
+                root = repo.resolve() if cwd else repo
+                files = [
+                    f
+                    for f in ((cwd / arg) if cwd else Path(arg) for arg in command)
+                    if f.is_relative_to(root) and f.is_file()
+                ]
                 assert files, (tool, command)
-                assert not [f for f in files if f.is_relative_to(repo / "results")], (
+                assert not [f for f in files if f.is_relative_to(root / "results")], (
                     tool,
                     command,
                 )

@@ -22,6 +22,7 @@ To narrow the list:
 | Checkov | IaC misconfigurations: Terraform, CloudFormation, Kubernetes, Dockerfiles, CI workflows | Repository, IaC, GitLab | IaC is present | Isolated Python venv |
 | Hadolint | Dockerfile problems | Repository, GitLab | Dockerfiles are present | Release binary |
 | ShellCheck | Shell script bugs (unquoted expansions, unguarded `cd`) | Repository, GitLab | Shell scripts are present | Release binary |
+| zizmor | GitHub Actions flaws: template injection, unpinned actions, dangerous triggers, credential persistence | Repository, GitLab | Workflows, composite actions or a Dependabot config are present | Release binary |
 | Gosec | Go security issues | Repository, GitLab | Go sources or a `go.mod` are present | Release binary |
 | YARA | Malware patterns: web shells, backdoors, cryptominers | Repository, GitLab | Always | `yara-python` via pip, plus a rule bundle |
 | Grype | Vulnerable dependencies (Anchore database) | Repository, GitLab | Always | Release binary or install script |
@@ -32,12 +33,13 @@ Versions are pinned in [`versions.yaml`](../versions.yaml). OPA is installed alo
 
 ## When each tool runs
 
-Being in the matrix makes a tool eligible. Two things then decide whether it runs on a given target: the target type (next section) and, for four tools on a repository, the target's content.
+Being in the matrix makes a tool eligible. Two things then decide whether it runs on a given target: the target type (next section) and, for five tools on a repository, the target's content.
 
 | Tool | Content it needs | Files it looks for |
 |------|------------------|--------------------|
 | Hadolint | Dockerfiles | `Dockerfile`, `Dockerfile.*`, `*.Dockerfile` |
 | ShellCheck | Shell scripts | `*.sh`, `*.bash`, `*.ksh` |
+| zizmor | GitHub Actions | `.github/workflows/*.yml` and `*.yaml` (the repository's own, not a subdirectory's), `action.yml` or `action.yaml` anywhere, `.github/dependabot.yml` or `.yaml` |
 | Gosec | Go code | any `.go` file, or a `go.mod` |
 | Checkov | Infrastructure as code | `*.tf`, `*.tf.json`, a Helm `Chart.yaml`, a GitHub Actions workflow (`.github/workflows/*.yml`), or a YAML, JSON or `.template` file whose first 8 KB name `AWSTemplateFormatVersion` or an `AWS::` type (CloudFormation) |
 
@@ -47,6 +49,8 @@ Kubernetes manifests and Dockerfiles do not trigger Checkov on their own. In a r
 
 Vendored trees are never content: `.git`, `node_modules`, `vendor`, `.venv` and `venv` are excluded before anything is looked for, and so is the results directory when it sits inside the scanned tree.
 
+zizmor reads only the files JMo hands it, since it has no way to exclude a directory itself, and it runs offline, so its audits that call GitHub do not run ([Known limitations](KNOWN_LIMITATIONS.md#zizmor-runs-offline-so-its-online-audits-never-run)).
+
 ### What a scan records
 
 Every requested tool leaves one row per target, in `scan-timings.json`, in `.scan_metadata.json` and, when history is on, in the `scan_tool_runs` table (`jmo history show <scan-id>`):
@@ -54,7 +58,7 @@ Every requested tool leaves one row per target, in `scan-timings.json`, in `.sca
 | Row | Meaning |
 |-----|---------|
 | `ran` | It ran and its output is beside the row. |
-| `skipped:<reason>` | It did not apply: `needs --url`, `not for this target type`, `no Dockerfiles`, `no shell scripts`, `no Go sources`, `no IaC or workflow files`, or `not installed` under `--allow-missing-tools`. |
+| `skipped:<reason>` | It did not apply: `needs --url`, `not for this target type`, `no Dockerfiles`, `no shell scripts`, `no GitHub Actions workflows`, `no Go sources`, `no IaC or workflow files`, or `not installed` under `--allow-missing-tools`. |
 | `failed:<reason>` | It applied and produced nothing you can trust: `not installed`, `timed out`, `no files to scan`, `examined 0 files`, `unaccepted exit code`, `no output`, and a few rarer ones. |
 
 `failed:no files to scan` means the repository had no file outside the excluded directories, so no tool ran against it. `failed:examined 0 files` means the tool's own output reports that it read nothing. Semgrep and Gosec report that count, and it is how a run that scanned nothing stops passing for a clean one.
@@ -71,7 +75,7 @@ The remaining repository tools (TruffleHog, Gitleaks, Semgrep, Syft, Trivy, YARA
 
 | Target | Flags | Tools that run |
 |--------|-------|----------------|
-| Repository | `--repo`, `--repos-dir`, `--targets`, `--tsv` | TruffleHog, Gitleaks, Semgrep, Syft, Trivy, YARA, Grype; Hadolint, ShellCheck, Gosec and Checkov when their content is present |
+| Repository | `--repo`, `--repos-dir`, `--targets`, `--tsv` | TruffleHog, Gitleaks, Semgrep, Syft, Trivy, YARA, Grype; Hadolint, ShellCheck, zizmor, Gosec and Checkov when their content is present |
 | Container image | `--image`, `--images-file` | Trivy, Syft |
 | IaC file | `--terraform-state`, `--cloudformation`, `--k8s-manifest` | Trivy (`trivy config`), Checkov |
 | URL | `--url`, `--urls-file` | ZAP, Nuclei |
@@ -91,7 +95,7 @@ jmo tools check     # what is installed, at which version, and what is missing
 
 | Tool | How `jmo tools install` installs it | Where it goes |
 |------|-------------------------------------|---------------|
-| TruffleHog, Gitleaks, Hadolint, ShellCheck, Gosec, Nuclei | Pinned release binary from GitHub | `~/.jmo/bin/` |
+| TruffleHog, Gitleaks, Hadolint, ShellCheck, zizmor, Gosec, Nuclei | Pinned release binary from GitHub | `~/.jmo/bin/` |
 | Syft, Trivy, Grype | Windows: pinned release binary. Linux and macOS: the tool's own install script, run with the pinned version | `~/.jmo/bin/` |
 | Semgrep, Checkov | Pinned PyPI package in a virtual environment of its own, so their dependencies cannot conflict with JMo's or each other's | `~/.jmo/tools/venvs/<tool>/` |
 | YARA | Pinned `yara-python` package, installed into the Python environment JMo runs from, plus a pinned rule bundle (reversinglabs-yara-rules, MIT) | rules in `~/.jmo/yara-rules/` |
@@ -101,6 +105,7 @@ jmo tools check     # what is installed, at which version, and what is missing
 Platform differences:
 
 - **Linux:** ShellCheck is installed with `sudo apt-get install shellcheck` when passwordless sudo is available, which gives the distribution's version. Otherwise it is the pinned binary.
+- **zizmor has no Windows arm64 build.** On Windows, `jmo tools install` fetches the x86_64 one whatever the architecture, as it does for Hadolint and ShellCheck.
 - **Gosec needs a Go toolchain** (`go` on `PATH`) to load packages, which neither `jmo tools install` nor the Docker image provides. Without one it examines 0 files, and its row reads `failed:examined 0 files` ([#1310](https://github.com/jimmy058910/jmo-security-repo/issues/1310)).
 - **ZAP needs Java 17 or newer** at runtime, which `jmo tools install` does not provide. Install it yourself (`winget install Microsoft.OpenJDK.17`, `sudo apt-get install default-jre-headless`, or `brew install openjdk@17`); `jmo wizard` offers to do it for you.
 - **YARA without rules finds nothing.** If the rule bundle download fails, the install reports failure rather than leaving a scanner that silently matches nothing. To use your own rules, set `per_tool.yara.rules_path` in `jmo.yml`.

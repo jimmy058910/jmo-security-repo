@@ -1,0 +1,14 @@
+# Intentionally insecure GitHub Actions workflow: zizmor's contract sample.
+# Nothing runs it. GitHub reads workflows only from a repository's own root
+# .github/workflows directory, and this one is nested under tests/.
+name: insecure-sample
+on:
+  pull_request_target:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: echo "${{ github.event.pull_request.title }}"

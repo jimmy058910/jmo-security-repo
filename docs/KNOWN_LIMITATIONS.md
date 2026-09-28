@@ -253,6 +253,16 @@ of the scanned repository. An empty one disables the built-in list (measured: al
 13 files scanned). JMo still keeps the vendored trees and its results directory out
 through its own flags.
 
+### zizmor runs offline, so its online audits never run
+
+JMo runs zizmor with `--offline`. zizmor reads `GH_TOKEN` and `GITHUB_TOKEN` from the
+environment, and with a token set its online audits call GitHub's API. With
+`--no-online-audits` instead, it still looked a commit up on GitHub (measured, zizmor
+1.30.1). A scan makes no network call it was not asked to make, so the audits that need
+GitHub, `ref-confusion` among them, do not run, whether or not a token is set.
+
+**What to do:** for those audits, run zizmor yourself with a token.
+
 ---
 
 ## Deduplication

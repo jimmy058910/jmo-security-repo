@@ -1141,6 +1141,7 @@ jobs:
           GRYPE_VERSION: "0.118.0"
           SYFT_VERSION: "1.51.1"
           GITLEAKS_VERSION: "8.30.1"
+          ZIZMOR_VERSION: "1.30.1"
         run: |
           # Install tools needed for contract validation
           # Trivy - vulnerability scanner
@@ -1178,6 +1179,15 @@ jobs:
           tar -xzf /tmp/gitleaks.tar.gz -C /usr/local/bin gitleaks
           chmod +x /usr/local/bin/gitleaks
 
+          # zizmor - GitHub Actions auditor. Assets are named by target
+          # triple, with no version.
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            "https://github.com/zizmorcore/zizmor/releases/download/v${ZIZMOR_VERSION}/zizmor-x86_64-unknown-linux-gnu.tar.gz" \
+            -o /tmp/zizmor.tar.gz
+          gzip -t /tmp/zizmor.tar.gz
+          tar -xzf /tmp/zizmor.tar.gz -C /usr/local/bin zizmor
+          chmod +x /usr/local/bin/zizmor
+
           # Checkov - IaC scanner
           pip install checkov
 
@@ -1202,6 +1212,7 @@ jobs:
           hadolint --version || echo "hadolint not available"
           trufflehog --version || echo "trufflehog not available"
           gitleaks version || echo "gitleaks not available"
+          zizmor --version || echo "zizmor not available"
           checkov --version || echo "checkov not available"
           shellcheck --version || echo "shellcheck not available"
           grype version || echo "grype not available"
@@ -1216,6 +1227,7 @@ jobs:
           pytest tests/integration/test_tool_contracts.py \
             tests/integration/test_git_history_secrets.py \
             tests/unit/test_gitleaks_wiring.py \
+            tests/unit/test_zizmor_wiring.py \
             -v \
             -m "requires_tools" \
             --tb=short \
