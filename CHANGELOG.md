@@ -123,6 +123,15 @@ All notable changes to JMo Security will be documented in this file.
   named `trivy,syft`, which ran nowhere. An unknown name is a usage error, exit 2, naming
   it, and `jmo ci` stops there too, before its report reads an earlier run's results
   (#1279).
+- **Breaking. trivy findings carry trivy's own rule ids.** A misconfiguration's `ruleId`
+  is its check id as trivy prints it (`DS-0002`, `KSV-0017`, `AWS-0086`) and a secret's
+  is its rule (`github-pat`); both used to be the check's title, which is now their
+  `title`. A vulnerability keeps its CVE as `ruleId` and takes its advisory's title as
+  `title`. Every trivy misconfiguration and secret therefore gets a new id, so history and
+  `jmo diff` read each once as resolved and new, and a suppression keyed on a trivy title,
+  or on an `AVD-DS-0002` or `DS002` spelling, no longer matches: key it on the id a
+  report shows, as `jmo.suppress.yml`'s example now does. `tool.version` is trivy's own
+  (`Trivy.Version`); under the pinned 0.74.0 every finding said `unknown` (#1221).
 - **One exclusion list, rendered for every tool.** `.git`, `node_modules`, `vendor`,
   `.venv` and `venv`, and the results directory when it sits inside the scanned tree,
   reach each tool in its own syntax. syft and grype now skip the results directory, where
@@ -178,6 +187,12 @@ All notable changes to JMo Security will be documented in this file.
   `findings.finding_status` the current schema lacks, and on a pre-v2 `profile`.
   A results directory from before the per-tool rows existed (#722) stores no targets,
   where it stored its `individual-repos` folder names (#1321).
+- **gitleaks' and trivy's secret findings carry CWE-798** ("Use of Hard-coded
+  Credentials"), as TruffleHog's always have, so they reach OWASP A02:2021 and the other
+  CWE-keyed mappings, and `owasp-top-10` counts rise. On juice-shop's gitleaks and
+  TruffleHog findings its violations went from 7 to 71. A merged finding is a copy of its
+  most severe member, so when trivy (CRITICAL) or gitleaks led one, the secret had left
+  the count even where TruffleHog also found it (#1328).
 - `scan-timings.json` records the `root` a repository target's tools scanned.
 - `jmo report` logs each policy's verdict with its message.
 
@@ -212,6 +227,34 @@ All notable changes to JMo Security will be documented in this file.
 - **TruffleHog and syft findings name their tool's version**, where every one said
   `unknown`. syft's comes from its own output (`descriptor.version`); TruffleHog's
   output carries none, so it is the version `versions.yaml` pins (#1333).
+- **trivy misconfigurations keep their lines, and their number.** trivy 0.74.0 writes a
+  misconfiguration's lines only in `CauseMetadata`, which was never read, so every one
+  sat at line 0 and two findings of one check in one file shared an id: deduplication
+  kept one. On juice-shop, 40 of 87 were merged away. Their code snippet is read from
+  the directory trivy scanned, not the one `jmo` ran in (#1221).
+- **trivy vulnerabilities carry `cvss`, and `jmo diff` reads it.** trivy's output holds
+  each vulnerability's scores by source; a finding now takes NVD's v3 score, else
+  another source's v3, else a v2. `jmo diff`'s priority, which decides whether a
+  finding present in both scans changed and in which direction, read `cvss.baseScore`,
+  a key no adapter writes, so its CVSS tier never fired and a CRITICAL at 9.8 and one
+  at 9.0 both scored 90. It reads `cvss.score`, the schema's key (#1243).
+- **Cross-tool deduplication pairs a trivy, hadolint or checkov check only with the
+  same check.** The equivalence table keyed trivy by titles and ids 0.74.0 does not
+  print, so 3 of its trivy groups could match, by title alone, and 11 hadolint and
+  checkov entries named another check: checkov's `CKV_DOCKER_1` ("port 22 is not
+  exposed") sat with the `:latest` checks, hadolint's `DL3010` ("use ADD for extracting
+  archives") with "use COPY instead of ADD". Every entry was checked against its tool's
+  own output: trivy's entries are the ids it prints, each wrong partner moved to its own
+  check's group or left, and four groups that were left holding one tool are gone
+  (#1221).
+- **gitleaks and TruffleHog findings of one secret merge.** The equivalence table listed
+  gitleaks' ids (`aws-access-token`, `github-pat`) under TruffleHog's name and had none
+  for `private-key` or `jwt`, so on juice-shop five secrets both tools found on one line
+  stayed two findings each: 76 findings, now 71. gitleaks' ids join TruffleHog's
+  classes, and a new JWT class holds `jwt` and `jwt-base64`. They match exactly: a
+  looser match paired gitleaks' `yandex-aws-access-token`, a Yandex Cloud key, with
+  TruffleHog's AWS detector. `generic-api-key`, which fires on any key-shaped
+  assignment, pairs with nothing (#1328).
 
 - **nuclei and ZAP produce findings on URL scans.** nuclei 3 rejects `-json` on every
   platform (exit 2); it now gets `-jsonl`. On Windows, `zap.bat` looks for its jar in the
