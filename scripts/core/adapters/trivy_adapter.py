@@ -54,6 +54,13 @@ Field mapping (measured on trivy 0.74.0's own JSON, #1221):
   ``ArtifactName`` for ``trivy fs <dir>``; for ``trivy config <file>`` (``jmo
   scan --iac <file>``) ``ArtifactName`` is the file and ``Target`` its name,
   so it is the file's directory.
+- cvss (vulnerabilities only, #1243): a vulnerability's ``CVSS`` is keyed by
+  source (``nvd``, ``ghsa``, ``redhat``, ...), each holding up to
+  ``V3Score``/``V3Vector`` and ``V2Score``/``V2Vector``. NVD's V3 score wins;
+  else any other source's V3; else NVD's V2; else any other source's V2 -- v3
+  always outranks v2 (schema: "Adapters select v3 over v2"), NVD is preferred
+  within a version. Omitted (not even an empty ``cvss``) when the block is
+  absent or empty, or holds no numeric score under either key.
 
 Severity Mapping (Trivy -> CommonFinding):
 - CRITICAL: CRITICAL
@@ -129,6 +136,39 @@ def _scanned_root(artifact_name: Any) -> Path | None:
         return root.parent if root.is_file() else root
     except OSError:
         return root
+
+
+def _best_vulnerability_cvss(cvss_block: Any) -> dict[str, Any] | None:
+    """Best CVSS for a trivy vulnerability, or ``None``.
+
+    ``cvss_block`` is trivy's per-vulnerability ``CVSS`` object, keyed by
+    source (``nvd``, ``ghsa``, ``redhat``, ...). NVD's V3 score wins; then
+    any other source's V3; then NVD's V2; then any other source's V2 -- v3
+    always outranks v2 regardless of source, and NVD is the tiebreak within
+    one version. Matches ``grype_adapter._select_best_cvss``'s v3-over-v2
+    shape, adapted for trivy's by-source keying.
+    """
+    if not isinstance(cvss_block, dict) or not cvss_block:
+        return None
+
+    nvd = cvss_block.get("nvd")
+    nvd = nvd if isinstance(nvd, dict) else None
+    others = [v for k, v in cvss_block.items() if k != "nvd" and isinstance(v, dict)]
+    sources = ([nvd] if nvd is not None else []) + others
+
+    for version, score_key, vector_key in (
+        ("3.x", "V3Score", "V3Vector"),
+        ("2.0", "V2Score", "V2Vector"),
+    ):
+        for source in sources:
+            score = source.get(score_key)
+            if isinstance(score, (int, float)) and not isinstance(score, bool):
+                return {
+                    "version": version,
+                    "score": float(score),
+                    "vector": str(source.get(vector_key) or ""),
+                }
+    return None
 
 
 def _tool_version(data: dict[str, Any]) -> str:
@@ -226,12 +266,14 @@ class TrivyAdapter(AdapterPlugin):
                     if end_line is not None:
                         location["endLine"] = end_line
 
-                    # Risk metadata for vulnerabilities
+                    # Risk metadata and CVSS for vulnerabilities
                     risk = None
+                    cvss_field = None
                     if tag == "vulnerability":
                         cwe_ids = item.get("CweIDs", [])
                         if cwe_ids and isinstance(cwe_ids, list):
                             risk = {"cwe": cwe_ids}
+                        cvss_field = _best_vulnerability_cvss(item.get("CVSS"))
 
                     # Create Finding object
                     finding = Finding(
@@ -248,6 +290,7 @@ class TrivyAdapter(AdapterPlugin):
                         tags=[tag],
                         context=context,
                         risk=risk,
+                        cvss=cvss_field,
                         raw=item,
                     )
 

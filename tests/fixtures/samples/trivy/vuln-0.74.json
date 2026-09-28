@@ -1,0 +1,287 @@
+{
+  "SchemaVersion": 2,
+  "Trivy": {
+    "Version": "0.74.0"
+  },
+  "ReportID": "01a0e56f-6186-7d24-a58f-d6da3f185201",
+  "CreatedAt": "2026-09-27T20:34:37.0628614-04:00",
+  "ArtifactName": ".",
+  "ArtifactType": "filesystem",
+  "Results": [
+    {
+      "Target": "package-lock.json",
+      "Class": "lang-pkgs",
+      "Type": "npm",
+      "Packages": [
+        {
+          "ID": "lodash@4.17.4",
+          "Name": "lodash",
+          "Identifier": {
+            "PURL": "pkg:npm/lodash@4.17.4",
+            "UID": "565d885500b3375e"
+          },
+          "Version": "4.17.4",
+          "Licenses": [
+            "MIT"
+          ],
+          "Relationship": "direct",
+          "Locations": [
+            {
+              "StartLine": 15,
+              "EndLine": 20
+            }
+          ],
+          "AnalyzedBy": "npm"
+        },
+        {
+          "ID": "minimist@0.0.8",
+          "Name": "minimist",
+          "Identifier": {
+            "PURL": "pkg:npm/minimist@0.0.8",
+            "UID": "444517bdf5746150"
+          },
+          "Version": "0.0.8",
+          "Licenses": [
+            "MIT"
+          ],
+          "Relationship": "direct",
+          "Locations": [
+            {
+              "StartLine": 21,
+              "EndLine": 26
+            }
+          ],
+          "AnalyzedBy": "npm"
+        }
+      ],
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2019-10744",
+          "VendorIDs": [
+            "GHSA-jf85-cpcp-j695"
+          ],
+          "PkgID": "lodash@4.17.4",
+          "PkgName": "lodash",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/lodash@4.17.4",
+            "UID": "565d885500b3375e"
+          },
+          "InstalledVersion": "4.17.4",
+          "FixedVersion": "4.17.12",
+          "Status": "fixed",
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2019-10744",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Fingerprint": "sha256:f0d3b6a121c7a31a24631cf50dfe1e442b3f26199e76d6fa04231e0430e11838",
+          "Title": "nodejs-lodash: prototype pollution in defaultsDeep function leading to modifying properties",
+          "Description": "Versions of lodash lower than 4.17.12 are vulnerable to Prototype Pollution. The function defaultsDeep could be tricked into adding or modifying properties of Object.prototype using a constructor payload.",
+          "Severity": "CRITICAL",
+          "CweIDs": [
+            "CWE-1321"
+          ],
+          "VendorSeverity": {
+            "ghsa": 4,
+            "nvd": 4,
+            "redhat": 3,
+            "ruby-advisory-db": 4
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:H",
+              "V3Score": 9.1
+            },
+            "nvd": {
+              "V2Vector": "AV:N/AC:L/Au:N/C:N/I:P/A:P",
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:H",
+              "V2Score": 6.4,
+              "V3Score": 9.1
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:H",
+              "V3Score": 9.1
+            }
+          },
+          "References": [
+            "https://access.redhat.com/errata/RHSA-2019:3024",
+            "https://access.redhat.com/security/cve/CVE-2019-10744",
+            "https://github.com/advisories/GHSA-jf85-cpcp-j695",
+            "https://github.com/lodash/lodash/pull/4336",
+            "https://github.com/rubysec/ruby-advisory-db/blob/master/gems/lodash-rails/CVE-2019-10744.yml",
+            "https://nvd.nist.gov/vuln/detail/CVE-2019-10744",
+            "https://security.netapp.com/advisory/ntap-20191004-0005",
+            "https://security.netapp.com/advisory/ntap-20191004-0005/",
+            "https://snyk.io/vuln/SNYK-JS-LODASH-450202",
+            "https://support.f5.com/csp/article/K47105354",
+            "https://support.f5.com/csp/article/K47105354?utm_source=f5support&amp%3Butm_medium=RSS",
+            "https://support.f5.com/csp/article/K47105354?utm_source=f5support&amp;utm_medium=RSS",
+            "https://www.cve.org/CVERecord?id=CVE-2019-10744",
+            "https://www.npmjs.com/advisories/1065",
+            "https://www.oracle.com/security-alerts/cpujan2021.html",
+            "https://www.oracle.com/security-alerts/cpuoct2020.html"
+          ],
+          "PublishedDate": "2019-07-26T00:15:11.217Z",
+          "LastModifiedDate": "2026-06-17T02:11:35.247Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2018-16487",
+          "PkgID": "lodash@4.17.4",
+          "PkgName": "lodash",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/lodash@4.17.4",
+            "UID": "565d885500b3375e"
+          },
+          "InstalledVersion": "4.17.4",
+          "FixedVersion": ">=4.17.11",
+          "Status": "fixed",
+          "SeveritySource": "nodejs-security-wg",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2018-16487",
+          "DataSource": {
+            "ID": "nodejs-security-wg",
+            "Name": "Node.js Ecosystem Security Working Group",
+            "URL": "https://github.com/nodejs/security-wg"
+          },
+          "Fingerprint": "sha256:f02b6672f85bc3fefbfca8b238486d589b29491fded1c87678fa2bad2e017f82",
+          "Title": "lodash: Prototype pollution in utilities function",
+          "Description": "A prototype pollution vulnerability was found in lodash <4.17.11 where the functions merge, mergeWith, and defaultsDeep can be tricked into adding or modifying properties of Object.prototype.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-400"
+          ],
+          "VendorSeverity": {
+            "ghsa": 3,
+            "nodejs-security-wg": 3,
+            "nvd": 2,
+            "redhat": 2,
+            "ruby-advisory-db": 2,
+            "ubuntu": 2
+          },
+          "CVSS": {
+            "nvd": {
+              "V2Vector": "AV:N/AC:M/Au:N/C:P/I:P/A:P",
+              "V3Vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:L/A:L",
+              "V2Score": 6.8,
+              "V3Score": 5.6
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.0/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:L/A:L",
+              "V3Score": 5.6
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2018-16487",
+            "https://github.com/advisories/GHSA-4xc9-xhrj-v574",
+            "https://github.com/lodash/lodash/commit/90e6199a161b6445b01454517b40ef65ebecd2ad",
+            "https://github.com/rubysec/ruby-advisory-db/blob/master/gems/lodash-rails/CVE-2018-16487.yml",
+            "https://hackerone.com/reports/380873",
+            "https://nvd.nist.gov/vuln/detail/CVE-2018-16487",
+            "https://security.netapp.com/advisory/ntap-20190919-0004",
+            "https://security.netapp.com/advisory/ntap-20190919-0004/",
+            "https://www.cve.org/CVERecord?id=CVE-2018-16487",
+            "https://www.npmjs.com/advisories/782"
+          ],
+          "PublishedDate": "2019-02-01T18:29:00.943Z",
+          "LastModifiedDate": "2026-06-17T01:44:22.88Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2021-44906",
+          "VendorIDs": [
+            "GHSA-xvch-5gv4-984h"
+          ],
+          "PkgID": "minimist@0.0.8",
+          "PkgName": "minimist",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/minimist@0.0.8",
+            "UID": "444517bdf5746150"
+          },
+          "InstalledVersion": "0.0.8",
+          "FixedVersion": "1.2.6, 0.2.4",
+          "Status": "fixed",
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2021-44906",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Fingerprint": "sha256:40c2ca2cabe8c1567eecda004528d085af8ea3cbacdefe1405b93788cfe41165",
+          "Title": "minimist: prototype pollution",
+          "Description": "Minimist <=1.2.5 is vulnerable to Prototype Pollution via file index.js, function setKey() (lines 69-95).",
+          "Severity": "CRITICAL",
+          "CweIDs": [
+            "CWE-1321"
+          ],
+          "VendorSeverity": {
+            "alma": 2,
+            "ghsa": 4,
+            "nvd": 4,
+            "oracle-oval": 2,
+            "redhat": 2,
+            "rocky": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+              "V3Score": 9.8
+            },
+            "nvd": {
+              "V2Vector": "AV:N/AC:L/Au:N/C:P/I:P/A:P",
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+              "V2Score": 7.5,
+              "V3Score": 9.8
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:N/I:L/A:N",
+              "V3Score": 3.1
+            }
+          },
+          "References": [
+            "https://access.redhat.com/errata/RHSA-2023:0321",
+            "https://access.redhat.com/security/cve/CVE-2021-44906",
+            "https://bugzilla.redhat.com/2066009",
+            "https://bugzilla.redhat.com/2130518",
+            "https://bugzilla.redhat.com/2134609",
+            "https://bugzilla.redhat.com/2140911",
+            "https://bugzilla.redhat.com/show_bug.cgi?id=2066009",
+            "https://bugzilla.redhat.com/show_bug.cgi?id=2130518",
+            "https://bugzilla.redhat.com/show_bug.cgi?id=2134609",
+            "https://bugzilla.redhat.com/show_bug.cgi?id=2140911",
+            "https://bugzilla.redhat.com/show_bug.cgi?id=2142808",
+            "https://creativecommons.org/licenses/by/4.0/",
+            "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2021-44906",
+            "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2022-3517",
+            "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2022-35256",
+            "https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2022-43548",
+            "https://errata.almalinux.org/9/ALSA-2023-0321.html",
+            "https://errata.rockylinux.org/RLSA-2023:0321",
+            "https://github.com/Marynk/JavaScript-vulnerability-detection/blob/main/minimist%20PoC.zip",
+            "https://github.com/advisories/GHSA-xvch-5gv4-984h",
+            "https://github.com/minimistjs/minimist/commit/34e20b8461118608703d6485326abbb8e35e1703",
+            "https://github.com/minimistjs/minimist/commit/bc8ecee43875261f4f17eb20b1243d3ed15e70eb",
+            "https://github.com/minimistjs/minimist/commit/c2b981977fa834b223b408cfb860f933c9811e4d",
+            "https://github.com/minimistjs/minimist/commit/ef9153fc52b6cea0744b2239921c5dcae4697f11",
+            "https://github.com/minimistjs/minimist/commits/v0.2.4",
+            "https://github.com/minimistjs/minimist/issues/11",
+            "https://github.com/minimistjs/minimist/pull/24",
+            "https://github.com/substack/minimist",
+            "https://github.com/substack/minimist/blob/master/index.js#L69",
+            "https://github.com/substack/minimist/issues/164",
+            "https://linux.oracle.com/cve/CVE-2021-44906.html",
+            "https://linux.oracle.com/errata/ELSA-2023-0321.html",
+            "https://nvd.nist.gov/vuln/detail/CVE-2021-44906",
+            "https://security.netapp.com/advisory/ntap-20240621-0006",
+            "https://security.netapp.com/advisory/ntap-20240621-0006/",
+            "https://snyk.io/vuln/SNYK-JS-MINIMIST-559764",
+            "https://stackoverflow.com/questions/8588563/adding-custom-properties-to-a-function/20278068#20278068",
+            "https://www.cve.org/CVERecord?id=CVE-2021-44906"
+          ],
+          "PublishedDate": "2022-03-17T16:15:07.51Z",
+          "LastModifiedDate": "2026-06-17T04:12:57.03Z"
+        }
+      ]
+    }
+  ]
+}

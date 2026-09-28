@@ -9,6 +9,8 @@ Tests cover:
 - Code context extraction for misconfigurations
 - Schema version and compliance enrichment
 - trivy 0.74.0's own output (``TestTrivy074RecordedOutput``), recorded below
+- cvss extraction (#1243, ``TestTrivyCvss``) and trivy 0.74.0's own
+  vulnerability output (``TestTrivy074RecordedVulnOutput``), recorded below
 
 Recorded fixture ``tests/fixtures/samples/trivy/misconfig-0.74.json``: trivy
 **0.74.0**'s JSON, byte for byte, recorded 2026-09-28 on Windows by running,
@@ -94,6 +96,39 @@ and checkov 3.3.16 were run on the same three files to check each key's
 partners (the lower-case ``as`` is for checkov: its CKV_DOCKER_11 matches
 only `` as ``). ``apt-get -y dist-upgrade`` stays to show that DS-0024, which
 0.74.0 ships deprecated, does not fire.
+
+Recorded fixture ``tests/fixtures/samples/trivy/vuln-0.74.json`` (#1243): trivy
+**0.74.0**'s own JSON, byte for byte, recorded 2026-09-28 on Windows against a
+throwaway npm project holding only a synthetic lockfile -- never a real
+project's dependencies, per this repo's privacy convention for anything a
+private repo's export would otherwise be needed for. From inside that
+directory (``package.json``: ``{"dependencies": {"lodash": "4.17.4",
+"minimist": "0.0.8"}}``), ``npm install --package-lock-only`` generated the
+lockfile, then::
+
+    trivy fs -q -f json --scanners vuln --skip-db-update --skip-check-update \\
+        . -o vuln-0.74.json
+
+``--skip-db-update --skip-check-update`` used the vulnerability DB already
+cached locally (``trivy --version``: DB version 2). trivy's raw run found 12
+vulnerabilities across both packages; the fixture keeps 3 (``CVE-2019-10744``,
+``CVE-2018-16487``, ``CVE-2021-44906``) -- enough to cover a ``CVSS`` block
+with all three of ``ghsa``/``nvd``/``redhat``, one missing ``ghsa`` entirely,
+and one where NVD's and a vendor's V3 scores disagree (9.8 vs 3.1), which is
+what proves NVD wins on real trivy output rather than by construction. The
+other 9 (more lodash CVEs) were dropped only to keep the fixture small; none
+of them exercises a shape these three do not already cover. ``ArtifactName``
+is ``"."`` (scanned from inside the directory) and no path in the fixture
+names this machine, grepped for ``Users``/``Jimmy``/a drive letter before
+committing.
+
+The "no NVD" and "V2-only" branches of ``_best_vulnerability_cvss`` are not
+exercised by any real CVE found this way (every one of trivy's own DB entries
+for these two packages carries NVD's V3), so those branches are covered by
+hand-built ``TestTrivyCvss`` cases instead -- the same split
+``TestTrivyRuleIdLineAndVersionChain`` already uses for secrets, and for the
+same reason: a real fixture proves the common case, a hand-built one proves a
+fallback no live CVE happened to need.
 """
 
 import json
@@ -107,6 +142,14 @@ RECORDED_074 = (
     / "samples"
     / "trivy"
     / "misconfig-0.74.json"
+)
+
+RECORDED_074_VULN = (
+    Path(__file__).resolve().parents[1]
+    / "fixtures"
+    / "samples"
+    / "trivy"
+    / "vuln-0.74.json"
 )
 
 
@@ -475,6 +518,192 @@ class TestTrivyCweMapping:
         findings = adapter.parse(path)
         assert len(findings) == 1
         assert findings[0].risk is None
+
+
+class TestTrivyCvss:
+    """#1243: trivy vulnerabilities carried no ``cvss`` at all.
+
+    NVD's V3 score wins; else any other source's V3; else NVD's V2; else any
+    other source's V2 -- v3 always outranks v2 regardless of source.
+    """
+
+    def _vuln(self, tmp_path: Path, name: str, cvss: dict) -> Path:
+        sample = {
+            "Results": [
+                {
+                    "Target": "test",
+                    "Vulnerabilities": [
+                        {
+                            "VulnerabilityID": "CVE-CVSS",
+                            "Severity": "HIGH",
+                            "CVSS": cvss,
+                        }
+                    ],
+                }
+            ]
+        }
+        return write(tmp_path, name, json.dumps(sample))
+
+    def test_nvd_v3_wins(self, tmp_path: Path):
+        cvss = {
+            "nvd": {
+                "V2Vector": "AV:N/AC:L/Au:N/C:P/I:P/A:P",
+                "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+                "V2Score": 7.5,
+                "V3Score": 9.8,
+            },
+            "redhat": {
+                "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N",
+                "V3Score": 8.1,
+            },
+        }
+        f = TrivyAdapter().parse(self._vuln(tmp_path, "nvd_v3.json", cvss))[0]
+        assert f.cvss == {
+            "version": "3.x",
+            "score": 9.8,
+            "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        }
+
+    def test_vendor_v3_used_when_nvd_absent(self, tmp_path: Path):
+        cvss = {
+            "ghsa": {
+                "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+                "V3Score": 9.1,
+            }
+        }
+        f = TrivyAdapter().parse(self._vuln(tmp_path, "vendor_v3.json", cvss))[0]
+        assert f.cvss == {
+            "version": "3.x",
+            "score": 9.1,
+            "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        }
+
+    def test_vendor_v3_preferred_over_nvd_v2_only(self, tmp_path: Path):
+        """v3 always outranks v2, even from a different source than NVD's."""
+        cvss = {
+            "nvd": {"V2Vector": "AV:N/AC:L/Au:N/C:P/I:P/A:P", "V2Score": 5.0},
+            "redhat": {
+                "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+                "V3Score": 7.2,
+            },
+        }
+        f = TrivyAdapter().parse(self._vuln(tmp_path, "vendor_over_nvd_v2.json", cvss))[
+            0
+        ]
+        assert f.cvss == {
+            "version": "3.x",
+            "score": 7.2,
+            "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        }
+
+    def test_nvd_v2_only_used_when_nothing_has_v3(self, tmp_path: Path):
+        """A source with only V2 (old CVE, no V3 assigned anywhere)."""
+        cvss = {"nvd": {"V2Vector": "AV:N/AC:L/Au:N/C:P/I:P/A:P", "V2Score": 5.0}}
+        f = TrivyAdapter().parse(self._vuln(tmp_path, "nvd_v2_only.json", cvss))[0]
+        assert f.cvss == {
+            "version": "2.0",
+            "score": 5.0,
+            "vector": "AV:N/AC:L/Au:N/C:P/I:P/A:P",
+        }
+
+    def test_vendor_v2_used_when_only_option(self, tmp_path: Path):
+        cvss = {"ssapi": {"V2Vector": "AV:N/AC:L/Au:N/C:P/I:P/A:P", "V2Score": 4.3}}
+        f = TrivyAdapter().parse(self._vuln(tmp_path, "vendor_v2_only.json", cvss))[0]
+        assert f.cvss == {
+            "version": "2.0",
+            "score": 4.3,
+            "vector": "AV:N/AC:L/Au:N/C:P/I:P/A:P",
+        }
+
+    def test_no_cvss_block_omits_the_key(self, tmp_path: Path):
+        sample = {
+            "Results": [
+                {
+                    "Target": "test",
+                    "Vulnerabilities": [
+                        {"VulnerabilityID": "CVE-NOCVSS", "Severity": "HIGH"}
+                    ],
+                }
+            ]
+        }
+        f = TrivyAdapter().parse(write(tmp_path, "no_cvss.json", json.dumps(sample)))[0]
+        assert f.cvss is None
+        assert "cvss" not in f.to_dict()
+
+    def test_empty_cvss_block_omits_the_key(self, tmp_path: Path):
+        f = TrivyAdapter().parse(self._vuln(tmp_path, "empty_cvss.json", {}))[0]
+        assert f.cvss is None
+
+    def test_cvss_block_with_no_numeric_score_omits_the_key(self, tmp_path: Path):
+        """A source present but carrying neither ``V3Score`` nor ``V2Score``."""
+        cvss = {"nvd": {"V3Vector": "", "V2Vector": ""}}
+        f = TrivyAdapter().parse(self._vuln(tmp_path, "no_score.json", cvss))[0]
+        assert f.cvss is None
+
+    def test_misconfig_and_secret_never_carry_cvss(self, tmp_path: Path):
+        """trivy's ``CVSS`` block only ever appears on vulnerabilities."""
+        sample = {
+            "Results": [
+                {
+                    "Target": "test",
+                    "Misconfigurations": [
+                        {"ID": "DS001", "Severity": "HIGH"},
+                    ],
+                    "Secrets": [
+                        {"Title": "token", "Severity": "HIGH"},
+                    ],
+                }
+            ]
+        }
+        findings = TrivyAdapter().parse(
+            write(tmp_path, "no_vuln_cvss.json", json.dumps(sample))
+        )
+        assert len(findings) == 2
+        assert all(f.cvss is None for f in findings)
+
+
+class TestTrivy074RecordedVulnOutput:
+    """#1243, asserted on trivy 0.74.0's own vulnerability output.
+
+    Before the fix, every one of these carried no ``cvss`` at all, though
+    trivy's raw ``CVSS`` block was right there in ``raw``.
+    """
+
+    def _parse(self):
+        findings = TrivyAdapter().parse(RECORDED_074_VULN)
+        assert len(findings) == 3
+        return {f.ruleId: f for f in findings}
+
+    def test_nvd_v3_wins_when_all_three_sources_agree(self):
+        by_id = self._parse()
+        f = by_id["CVE-2019-10744"]
+        assert set(f.raw["CVSS"]) == {"ghsa", "nvd", "redhat"}
+        assert f.cvss == {
+            "version": "3.x",
+            "score": 9.1,
+            "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:H",
+        }
+
+    def test_nvd_v3_wins_when_ghsa_is_absent(self):
+        by_id = self._parse()
+        f = by_id["CVE-2018-16487"]
+        assert "ghsa" not in f.raw["CVSS"]
+        assert f.cvss == {
+            "version": "3.x",
+            "score": 5.6,
+            "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:L/A:L",
+        }
+
+    def test_nvd_v3_wins_over_a_disagreeing_vendor_score(self):
+        """NVD 9.8 vs. redhat's 3.1 for the same CVE: NVD's must win."""
+        by_id = self._parse()
+        f = by_id["CVE-2021-44906"]
+        assert f.raw["CVSS"]["redhat"]["V3Score"] == 3.1
+        assert f.cvss == {
+            "version": "3.x",
+            "score": 9.8,
+            "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        }
 
 
 class TestTrivyCompliance:

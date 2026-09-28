@@ -694,8 +694,10 @@ class DiffEngine:
         if epss is not None:
             return float(epss) * 100  # Normalize to 0-100
 
-        # Try CVSS base score
-        cvss = finding.get("cvss", {}).get("baseScore")
+        # Try CVSS base score. ``score`` is the schema's required key
+        # (docs/schemas/common_finding.v1.json); #1243 read ``baseScore``,
+        # which no adapter has ever written, so this branch never fired.
+        cvss = finding.get("cvss", {}).get("score")
         if cvss is not None:
             return float(cvss) * 10  # Normalize to 0-100
 
