@@ -59,11 +59,13 @@ ACCEPTED = {
     "mix.lock": "Hex",
     # Ruling 31: mapped here, fetched by O2 beside the ten.
     "renv.lock": "CRAN",
-    "conan.lock": "ConanCenter",
 }
 
 # Each aborts the WHOLE osv-scanner run when handed through `-L` (rc 127, no
-# output, every other lockfile's findings lost; measured on 2.6.0).
+# output, every other lockfile's findings lost; measured on 2.6.0). It decides
+# by the exact name, so a differently cased accepted name is rejected too
+# ("could not determine extractor", measured on `Requirements.txt`,
+# `Package-Lock.json`); the walk's glob ignores case on Windows and found both.
 REJECTED = (
     "go.sum",
     "requirements.in",
@@ -72,6 +74,11 @@ REJECTED = (
     "pyproject.toml",
     "verification-metadata.xml",
     "deps.json",
+    "Requirements.txt",
+    "requirements.TXT",
+    "REQUIREMENTS-dev.txt",
+    "Package-Lock.json",
+    "cargo.lock",
 )
 
 
@@ -87,6 +94,20 @@ def test_a_name_osv_scanner_rejects_maps_to_nothing(name) -> None:
     assert ecosystem_of(name) is None
 
 
+def test_the_wildcard_is_exact_only_where_it_is_spelled() -> None:
+    """Measured, 2.6.0: `requirements-Dev.txt` is read (rc 1, its finding),
+    `Requirements.txt` is not. The fixed parts of the pattern are exact."""
+    assert ecosystem_of("requirements-Dev.txt") == "PyPI"
+    assert ecosystem_of("Requirements-dev.txt") is None
+
+
+def test_a_conan_lockfile_is_not_read() -> None:
+    """Ruling 42: OSV publishes no ConanCenter database (404, and absent from
+    its ecosystems list), so a `conan.lock` could only ever fail its row."""
+    assert ecosystem_of("conan.lock") is None
+    assert "ConanCenter" not in ECOSYSTEMS
+
+
 def test_the_map_is_exactly_the_accepted_names() -> None:
     """The walk's patterns are derived from this map, so a name added here is
     a name handed to osv-scanner: one it rejects would cost every other
@@ -97,7 +118,7 @@ def test_the_map_is_exactly_the_accepted_names() -> None:
     }
 
 
-def test_the_ecosystems_are_the_twelve_bucket_spellings() -> None:
+def test_the_ecosystems_are_the_eleven_bucket_spellings() -> None:
     assert set(ECOSYSTEMS) == {
         "npm",
         "PyPI",
@@ -110,7 +131,6 @@ def test_the_ecosystems_are_the_twelve_bucket_spellings() -> None:
         "Pub",
         "Hex",
         "CRAN",
-        "ConanCenter",
     }
     assert len(ECOSYSTEMS) == len(set(ECOSYSTEMS))
 

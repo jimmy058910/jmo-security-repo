@@ -2626,7 +2626,7 @@ def test_refresh_osv_databases_prints_a_summary_and_names_each_failure(capsys):
 
     results = [
         FetchResult("npm", True, "fetched"),
-        FetchResult("ConanCenter", False, "download failed: 503 Service Unavailable"),
+        FetchResult("CRAN", False, "download failed: 503 Service Unavailable"),
     ]
 
     with patch("scripts.core.osv_database.fetch_all", return_value=results):
@@ -2634,7 +2634,7 @@ def test_refresh_osv_databases_prints_a_summary_and_names_each_failure(capsys):
 
     out = capsys.readouterr().out
     assert "1/2 refreshed, 1 failed" in out
-    assert "ConanCenter" in out
+    assert "CRAN" in out
     assert "download failed: 503 Service Unavailable" in out
     assert "jmo tools update" in out
 
@@ -3102,12 +3102,12 @@ def test_check_reports_missing_osv_databases_without_failing_the_check():
         result, out = _check_with(statuses)
 
     # osv-scanner itself is installed and execution_ready, so a missing
-    # database (only some of the twelve) does not fail the check -- it fails
+    # database (only some of the eleven) does not fail the check -- it fails
     # only the lockfiles whose ecosystem has none, at scan time.
     assert result == 0
     assert "offline database(s) missing" in out
     assert "run `jmo tools update`" in out.lower()
-    for eco in ("CRAN", "ConanCenter", "Hex", "Maven", "NuGet"):
+    for eco in ("CRAN", "Hex", "Maven", "NuGet"):
         assert eco in out
 
 

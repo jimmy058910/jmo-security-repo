@@ -41,7 +41,7 @@ Being in the matrix makes a tool eligible. Two things then decide whether it run
 | Hadolint | Dockerfiles | `Dockerfile`, `Dockerfile.*`, `*.Dockerfile` |
 | ShellCheck | Shell scripts | `*.sh`, `*.bash`, `*.ksh` |
 | zizmor | GitHub Actions | `.github/workflows/*.yml` and `*.yaml` (the repository's own, not a subdirectory's), `action.yml` or `action.yaml` anywhere, `.github/dependabot.yml` or `.yaml` |
-| OSV-Scanner | Lockfiles | anywhere: `package-lock.json`, `npm-shrinkwrap.json`, `yarn.lock`, `pnpm-lock.yaml`, `bun.lock`, `requirements*.txt`, `poetry.lock`, `Pipfile.lock`, `pdm.lock`, `uv.lock`, `pylock.toml`, `go.mod`, `Cargo.lock`, `composer.lock`, `Gemfile.lock`, `gradle.lockfile`, `pom.xml`, `packages.lock.json`, `packages.config`, `pubspec.lock`, `mix.lock`, `renv.lock`, `conan.lock` |
+| OSV-Scanner | Lockfiles | anywhere: `package-lock.json`, `npm-shrinkwrap.json`, `yarn.lock`, `pnpm-lock.yaml`, `bun.lock`, `requirements*.txt`, `poetry.lock`, `Pipfile.lock`, `pdm.lock`, `uv.lock`, `pylock.toml`, `go.mod`, `Cargo.lock`, `composer.lock`, `Gemfile.lock`, `gradle.lockfile`, `pom.xml`, `packages.lock.json`, `packages.config`, `pubspec.lock`, `mix.lock`, `renv.lock` |
 | Gosec | Go code | any `.go` file, or a `go.mod` |
 | Checkov | Infrastructure as code | `*.tf`, `*.tf.json`, or a YAML, JSON or `.template` file whose first 8 KB name `AWSTemplateFormatVersion` or an `AWS::` type (CloudFormation) |
 

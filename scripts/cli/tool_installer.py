@@ -1744,7 +1744,7 @@ class ToolInstaller:
         whatsoever, so an engine-only install matches nothing and produces
         exactly the output of a clean repository. osv-scanner's binary
         carries no vulnerability data either: Phase 4 decision 6 keeps OSV's
-        offline databases (~280 MB across twelve ecosystems) out of every
+        offline databases (~280 MB across eleven ecosystems) out of every
         install artifact and fills them here instead, once osv-scanner itself
         is on disk.
         """
@@ -1759,7 +1759,7 @@ class ToolInstaller:
 
         Unlike `_install_yara_rules`, a fetch failure here does not flip
         `result.success`: osv-scanner just installed is not useless without
-        every one of the twelve ecosystems -- it still runs against whichever
+        every one of the eleven ecosystems -- it still runs against whichever
         ecosystem a target's lockfile needs, from a database this fetch just
         populated or one already cached from an earlier run. A failure is
         still LOUD -- named ecosystem and reason, on the logger and appended

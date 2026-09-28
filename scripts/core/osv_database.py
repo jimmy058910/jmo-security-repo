@@ -26,7 +26,7 @@ import tempfile
 import zipfile
 from collections.abc import Iterable
 from dataclasses import dataclass
-from fnmatch import fnmatch
+from fnmatch import fnmatchcase
 from pathlib import Path, PurePath
 
 import requests
@@ -38,7 +38,13 @@ import requests
 #
 # Names it rejects abort the WHOLE run (rc 127, no output), so they are not
 # here: go.sum, requirements.in, package.json, Pipfile, pyproject.toml,
-# verification-metadata.xml, deps.json. A glob matches like `Path.glob`.
+# verification-metadata.xml, deps.json. It decides by the exact name, so a
+# `Requirements.txt` or `Package-Lock.json` is rejected too (measured, 2.6.0:
+# "could not determine extractor"), and `ecosystem_of` matches case-sensitively.
+#
+# `conan.lock` is accepted by osv-scanner but not here: OSV publishes no
+# ConanCenter database (404, and absent from its ecosystems list), so its row
+# could only ever fail (Ruling 42; docs/KNOWN_LIMITATIONS.md).
 LOCKFILE_ECOSYSTEMS: dict[str, str] = {
     "package-lock.json": "npm",
     "npm-shrinkwrap.json": "npm",
@@ -62,7 +68,6 @@ LOCKFILE_ECOSYSTEMS: dict[str, str] = {
     "pubspec.lock": "Pub",
     "mix.lock": "Hex",
     "renv.lock": "CRAN",
-    "conan.lock": "ConanCenter",
 }
 
 # Each ecosystem once, in the map's order: what the cache can hold.
@@ -81,10 +86,15 @@ def database_path(ecosystem: str, cache: Path | None = None) -> Path:
 
 
 def ecosystem_of(lockfile: str | PurePath) -> str | None:
-    """The ecosystem a lockfile is matched in, by its file name."""
+    """The ecosystem a lockfile is matched in, by its exact file name.
+
+    Case-sensitive on every platform, as osv-scanner decides: on Windows the
+    walk's glob ignores case, and a `Requirements.txt` it found beside a
+    `package-lock.json` lost both files' findings (rc 127, no output).
+    """
     name = PurePath(lockfile).name
     for pattern, ecosystem in LOCKFILE_ECOSYSTEMS.items():
-        if fnmatch(name, pattern):
+        if fnmatchcase(name, pattern):
             return ecosystem
     return None
 
@@ -114,7 +124,7 @@ OSV_DATABASE_BASE_URL = "https://osv-vulnerabilities.storage.googleapis.com"
 
 # A stall timeout for `requests`, not a whole-download cap: with `stream=True`
 # it resets on every chunk received, so npm's ~206 MB zip does not need a
-# larger value just because it is the biggest of the twelve.
+# larger value just because it is the biggest of the eleven.
 FETCH_TIMEOUT_SECONDS = 300
 
 

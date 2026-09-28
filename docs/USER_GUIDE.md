@@ -312,7 +312,7 @@ jmo tools update --yes
 
 **Critical tools** are flagged in `versions.yaml` and include tools where outdated versions may miss vulnerabilities (e.g., Trivy, TruffleHog).
 
-A bare `jmo tools update` also refreshes osv-scanner's offline vulnerability databases (`~/.jmo/osv-db`, ~280 MB across twelve ecosystems), even when osv-scanner's own binary is already current - the databases are OSV's own daily data, not tied to the pinned version. `jmo tools install` fills them too, the first time osv-scanner is installed. See [Tools: OSV-Scanner](TOOLS.md#when-each-tool-runs).
+A bare `jmo tools update` also refreshes osv-scanner's offline vulnerability databases (`~/.jmo/osv-db`, ~280 MB across eleven ecosystems), even when osv-scanner's own binary is already current - the databases are OSV's own daily data, not tied to the pinned version. `jmo tools install` fills them too, the first time osv-scanner is installed. See [Tools: OSV-Scanner](TOOLS.md#when-each-tool-runs).
 
 ### Viewing Outdated Tools
 

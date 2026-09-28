@@ -36,7 +36,9 @@ they run offline and download nothing.
 from __future__ import annotations
 
 import json
+import logging
 import shutil
+import sys
 import time
 import zipfile
 from pathlib import Path
@@ -237,8 +239,14 @@ def _failed(definition, stderr: str, seconds: float = 1.0) -> ToolResult:
 
 
 def _lockfiles(definition) -> list[str]:
+    """The lockfile paths a definition hands osv-scanner, each `-L :<path>`:
+    osv-scanner reads `-L` as `[parse-as:]path`, so without the leading colon
+    `-L a:b/package-lock.json` is `b/package-lock.json` parsed as `a` (rc 127,
+    no output, measured on Linux)."""
     command = definition.command
-    return [command[i + 1] for i, tok in enumerate(command) if tok == "-L"]
+    values = [command[i + 1] for i, tok in enumerate(command) if tok == "-L"]
+    assert all(v.startswith(":") for v in values), values
+    return [v[1:] for v in values]
 
 
 def _run(repo: Path, out: Path, runner, results_tree=None, per_tool_config=None):
@@ -319,7 +327,7 @@ def test_one_run_reads_every_lockfile_relative_to_the_root(
         "--no-call-analysis=all",
     ]
     lockfiles = _lockfiles(definition)
-    assert definition.command[11:] == [a for f in lockfiles for a in ("-L", f)]
+    assert definition.command[11:] == [a for f in lockfiles for a in ("-L", ":" + f)]
     assert sorted(lockfiles) == sorted(rel for rel, kept in PLANTED.items() if kept)
     assert all(not Path(f).is_absolute() and "\\" not in f for f in lockfiles)
     assert definition.cwd == (tmp_path / "repo").resolve()
@@ -398,6 +406,88 @@ def test_a_repository_without_a_lockfile_is_skipped_and_says_why(
         "version": "2.1.0",
         "runs": [],
     }
+
+
+def test_a_name_it_does_not_read_exactly_is_never_handed_over(
+    tmp_path, monkeypatch, caplog
+) -> None:
+    """Review I1. On Windows the walk's glob ignores case, so it found
+    `Requirements.txt`; handed over beside a `package-lock.json` it cost both
+    files' findings (rc 127, "could not determine extractor", no output, no
+    split: measured, 2.6.0). Only exactly spelled names reach osv-scanner, and
+    what is left out is named."""
+    _cache(tmp_path, monkeypatch, "npm", "PyPI")
+    repo = tmp_path / "repo"
+    _plant(repo, ["package-lock.json", "a/Requirements.txt", "b/requirements.TXT"])
+    runner = Scripted()
+
+    with caplog.at_level(logging.WARNING, logger="scripts.cli.scan_jobs.tool_loop"):
+        _run(repo, tmp_path, runner)
+
+    ((definition,),) = runner.rounds
+    assert _lockfiles(definition) == ["package-lock.json"]
+    if sys.platform == "win32":  # the only platform whose glob found them
+        assert "a/Requirements.txt" in caplog.text
+        assert "b/requirements.TXT" in caplog.text
+        assert "NOT scanned" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("refused", "read"),
+    [
+        ("Requirements.txt", "requirements.txt"),
+        ("requirements.TXT", "requirements-dev.txt"),
+        ("Package-Lock.json", "package-lock.json"),
+        ("cargo.lock", "Cargo.lock"),
+    ],
+)
+def test_only_the_exact_spelling_is_a_name_it_reads(refused, read) -> None:
+    """The row's name test, on every platform: osv-scanner picks its extractor
+    by the exact name, so the scan loop must too."""
+    reads = DESCRIPTORS["osv-scanner"].accepts_name
+    assert reads(refused) is False
+    assert reads(read) is True
+
+
+def test_the_walk_leaves_out_what_the_name_test_refuses(tmp_path, caplog) -> None:
+    """`collect_files` with a name test, on a pattern that matches both files on
+    every platform: the one refused is left out and named."""
+    for name in ("requirements.txt", "Requirements.txt.txt"):
+        (tmp_path / name).write_bytes(b"x==1\n")
+
+    with caplog.at_level(logging.WARNING, logger="scripts.cli.scan_jobs.tool_loop"):
+        found = tool_loop.collect_files(
+            tmp_path,
+            ("**/*.txt",),
+            "osv-scanner",
+            accepts_name=DESCRIPTORS["osv-scanner"].accepts_name,
+        )
+
+    assert [Path(f).name for f in found] == ["requirements.txt"]
+    assert "Requirements.txt.txt" in caplog.text
+    assert "NOT scanned" in caplog.text
+
+
+@pytest.mark.parametrize(
+    "files",
+    [
+        # Ruling 42: OSV publishes no ConanCenter database.
+        ["conan.lock"],
+        # Only names osv-scanner would reject for their case.
+        ["Requirements.txt"],
+    ],
+)
+def test_nothing_it_reads_exactly_is_no_lockfile(tmp_path, monkeypatch, files) -> None:
+    _cache(tmp_path, monkeypatch, "npm", "PyPI")
+    repo = tmp_path / "repo"
+    _plant(repo, files)
+    (repo / "lib.py").write_bytes(b"x = 1\n")
+    runner = Scripted()
+
+    rows = _run(repo, tmp_path, runner)
+
+    assert runner.rounds == [[]]
+    assert rows["osv-scanner"].label == "skipped:no lockfile"
 
 
 def test_a_lockfile_in_the_results_directory_is_not_read(tmp_path, monkeypatch) -> None:
@@ -688,6 +778,23 @@ def _rule_ids(path: Path) -> list[str]:
     return sorted(
         r["ruleId"] for r in json.loads(path.read_bytes())["runs"][0]["results"]
     )
+
+
+@pytest.mark.requires_tools
+def test_real_osv_scanner_keeps_its_findings_beside_a_miscased_name(
+    tmp_path, monkeypatch
+) -> None:
+    """Review I1 against the binary: on Windows, where the walk found it,
+    `Requirements.txt` handed over beside `package-lock.json` was rc 127 and
+    no output at all."""
+    row, out, _ = _real_scan(
+        tmp_path,
+        monkeypatch,
+        {"package-lock.json": NPM_LOCK, "api/Requirements.txt": b"urllib3==1.25.0\n"},
+    )
+
+    assert row.state is State.RAN, row
+    assert _rule_ids(out / "osv-scanner.json") == ["JMO-TEST-2026-0001"]
 
 
 @pytest.mark.requires_tools

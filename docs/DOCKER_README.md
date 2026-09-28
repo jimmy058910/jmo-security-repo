@@ -561,9 +561,9 @@ docker volume rm trivy-cache
 ### osv-scanner's Offline Databases
 
 osv-scanner reads dependency lockfiles against OSV's own offline vulnerability
-databases, cached at `~/.jmo/osv-db` (twelve ecosystems, ~280 MB total: npm,
-PyPI, Go, Maven, crates.io, RubyGems, Packagist, NuGet, Pub, Hex, CRAN,
-ConanCenter). **The image does not carry any of it** -- a scan never
+databases, cached at `~/.jmo/osv-db` (eleven ecosystems, ~280 MB total: npm,
+PyPI, Go, Maven, crates.io, RubyGems, Packagist, NuGet, Pub, Hex and
+CRAN). **The image does not carry any of it** -- a scan never
 downloads, and baking ~280 MB of data that goes stale daily into every image
 build was not worth the size. A fresh container therefore has no database at
 all, and osv-scanner's row reads `failed:offline database missing`, naming

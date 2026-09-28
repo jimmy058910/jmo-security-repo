@@ -848,11 +848,15 @@ class TestExclusions:
                 # zizmor's and osv-scanner's paths are relative to their
                 # working directory, the repository; hadolint's and
                 # shellcheck's are absolute.
+                # osv-scanner's are `-L :<path>` (`[parse-as:]path`).
                 cwd = defs[tool].cwd
                 root = repo.resolve() if cwd else repo
                 files = [
                     f
-                    for f in ((cwd / arg) if cwd else Path(arg) for arg in command)
+                    for f in (
+                        (cwd / arg.removeprefix(":")) if cwd else Path(arg)
+                        for arg in command
+                    )
                     if f.is_relative_to(root) and f.is_file()
                 ]
                 assert files, (tool, command)

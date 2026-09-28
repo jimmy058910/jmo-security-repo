@@ -636,7 +636,13 @@ class TestContractInfrastructure:
             ln
             for ln in run.splitlines()
             if not ln.lstrip().startswith("#")
-            and re.search(r"pip install|apt-get install|tar -x|-o /usr/local/bin/", ln)
+            # `mv ... /usr/local/bin/`: a raw binary checked in /tmp first
+            # (osv-scanner).
+            and re.search(
+                r"pip install|apt-get install|tar -x|-o /usr/local/bin/"
+                r"|mv \S+ /usr/local/bin/",
+                ln,
+            )
         ]
 
         missing = [

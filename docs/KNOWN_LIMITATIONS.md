@@ -278,6 +278,11 @@ every dependency and lose nothing.
 written by `pip-compile` or `uv pip compile`, a `uv.lock`, a `poetry.lock`, Gradle
 dependency locking), or run OSV-Scanner yourself without `--no-resolve`.
 
+**Conan lockfiles are not read at all.** OSV publishes no ConanCenter vulnerability
+database, so JMo does not hand OSV-Scanner a `conan.lock` (the lockfiles it does read
+are listed in [TOOLS.md](TOOLS.md#when-each-tool-runs)); a repository whose only
+lockfile is a Conan one reads `skipped:no lockfile`.
+
 ### Checkov's repository run misses several CI/CD and IaC dialects
 
 On a repository, Checkov reads only Terraform and CloudFormation

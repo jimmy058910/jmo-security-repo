@@ -311,6 +311,9 @@ class ToolDescriptor:
     excluded_vendored: tuple[str, ...] = VENDORED_DIRS
     # Content the tool needs: walk-fed file patterns, or a predicate.
     file_patterns: tuple[str, ...] = ()
+    # For a walk-fed tool that decides by the exact file name: the walk's glob
+    # ignores case on Windows, so what it found is checked again by name.
+    accepts_name: Callable[[str], bool] | None = None
     no_files_reason: Reason | None = None
     trigger: Trigger | None = None
     # Run once the content is known to be there: what the tool cannot read
@@ -790,7 +793,11 @@ def _osv_scanner_repo(ctx: ScanContext) -> list[Invocation]:
                 # `all` also wins over a later `--call-analysis=` (measured).
                 "--no-call-analysis=all",
                 *ctx.flags,
-                *(arg for f in files for arg in ("-L", f)),
+                # `-L` is `[parse-as:]path`: `-L a:b/package-lock.json` read
+                # `b/package-lock.json` as a lockfile of type `a` (rc 127, no
+                # output, measured on Linux); a leading `:` keeps the whole
+                # path, on Windows too.
+                *(arg for f in files for arg in ("-L", f":{f}")),
             ),
             output_file=output,
             capture_stdout=False,
@@ -812,6 +819,11 @@ def _osv_scanner_repo(ctx: ScanContext) -> list[Invocation]:
     )
     fallback = Fallback((127,), _OSV_UNREADABLE_LOCKFILE, each)
     return [scan(lockfiles, ctx.output, fallback=fallback)]
+
+
+def _osv_reads(name: str) -> bool:
+    """A file name osv-scanner reads through `-L`, spelled exactly."""
+    return osv_database.ecosystem_of(name) is not None
 
 
 def _osv_databases(ctx: ScanContext) -> Shortfall | None:
@@ -1143,6 +1155,9 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             file_patterns=tuple(
                 f"**/{name}" for name in osv_database.LOCKFILE_ECOSYSTEMS
             ),
+            # It decides by the exact name: `Requirements.txt` is rejected,
+            # and one rejected name loses every lockfile's findings.
+            accepts_name=_osv_reads,
             no_files_reason=Reason.NO_LOCKFILE,
             precheck=_osv_databases,
             # Where it writes; `--format` and `--output` are shared. The

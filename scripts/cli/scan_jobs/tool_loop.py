@@ -120,11 +120,17 @@ def collect_files(
     patterns: tuple[str, ...],
     tool_name: str,
     skip_tree: Path | None = None,
+    accepts_name: Callable[[str], bool] | None = None,
 ) -> list[str]:
     """Collect matching files for a tool that takes file arguments.
 
     hadolint used to take `dockerfiles[0]`, which on docker-library/postgres
     meant 1 of 26 files scanned, with nothing in the output to say so.
+
+    `accepts_name` is the tool's own test of a file name, for a tool that
+    decides by the exact name: on Windows the glob ignores case, so it found
+    `Requirements.txt` and `Package-Lock.json` for osv-scanner, which rejects
+    both and then read nothing at all. A file it refuses is named and left out.
     """
     seen: set[Path] = set()
     for pattern in patterns:
@@ -139,6 +145,18 @@ def collect_files(
                 continue
             if path.is_file():
                 seen.add(path)
+
+    if accepts_name is not None:
+        refused = sorted(p for p in seen if not accepts_name(p.name))
+        if refused:
+            logger.warning(
+                "%s: %d file(s) matched its patterns but not a name it reads "
+                "(it reads names exactly, case included) - NOT scanned: %s",
+                tool_name,
+                len(refused),
+                ", ".join(p.relative_to(repo).as_posix() for p in refused),
+            )
+            seen.difference_update(refused)
 
     files = sorted(seen)
     if len(files) > MAX_FILE_ARGS:
@@ -570,7 +588,11 @@ def run_tools(
         tool_config = per_tool_config.get(tool)
         files: tuple[str, ...] = ()
         if d.file_patterns and repo_root is not None:
-            files = tuple(collect_files(repo_root, d.file_patterns, tool, results_tree))
+            files = tuple(
+                collect_files(
+                    repo_root, d.file_patterns, tool, results_tree, d.accepts_name
+                )
+            )
         tree_excl, history_excl = (
             _exclusions(d, out_dir, results_name, target) if key == "repo" else ((), ())
         )

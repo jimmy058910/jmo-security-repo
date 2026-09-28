@@ -4,7 +4,7 @@
 The same shape as yara's rule-bundle fetch (`_install_yara_rules`), with one
 deliberate difference: a yara install with no rules is useless, so a failed
 rule-bundle download flips the whole `InstallResult` to a failure. osv-scanner
-is not useless without every one of the twelve ecosystems -- it still runs
+is not useless without every one of the eleven ecosystems -- it still runs
 against whichever ecosystem a target's lockfile needs -- so a fetch failure
 here is loud (named ecosystem, reason, on the logger and in the result's
 message) but never flips `result.success`.
@@ -92,9 +92,7 @@ def test_a_failed_ecosystem_is_named_loudly_but_does_not_flip_success(
     fetch_all = MagicMock(
         return_value=[
             FetchResult("npm", True, "fetched"),
-            FetchResult(
-                "ConanCenter", False, "download failed: 503 Service Unavailable"
-            ),
+            FetchResult("CRAN", False, "download failed: 503 Service Unavailable"),
         ]
     )
 
@@ -105,10 +103,10 @@ def test_a_failed_ecosystem_is_named_loudly_but_does_not_flip_success(
         result = installer._post_install("osv-scanner", OK)
 
     assert result.success is True  # the binary installed; that part held
-    assert "ConanCenter" in result.message
+    assert "CRAN" in result.message
     assert "download failed: 503 Service Unavailable" in result.message
     assert "jmo tools update" in result.message
-    assert any("ConanCenter" in r.message for r in caplog.records)
+    assert any("CRAN" in r.message for r in caplog.records)
 
 
 def test_every_ecosystem_failing_still_keeps_the_binary_marked_installed() -> None:
