@@ -491,69 +491,50 @@ def membership(clusters) -> set[frozenset[str]]:
     return {frozenset(f["id"] for f in c.findings) for c in clusters}
 
 
-def test_one_finding_per_tool_when_one_rule_covers_two_advisories():
-    """osv-scanner's lodash rule lists both advisories trivy reports apart
-    (measured on NodeGoat). It joins one of them; trivy's other finding stays
-    a finding of its own rather than a second trivy member."""
-    findings = [
-        dep(
-            "t1", "trivy", "CVE-2021-23337", "lodash", "4.13.1", ["GHSA-35jh-r3h4-6jhm"]
-        ),
-        dep(
-            "t2", "trivy", "CVE-2026-4800", "lodash", "4.13.1", ["GHSA-r5fr-rjxr-66jc"]
-        ),
-        dep(
-            "o1",
-            "osv-scanner",
-            "CVE-2021-23337",
-            "lodash",
-            "4.13.1",
-            ["CVE-2026-4800", "GHSA-35jh-r3h4-6jhm", "GHSA-r5fr-rjxr-66jc"],
-        ),
-    ]
-    clusters = cluster_dependency_findings(findings)
+# NodeGoat's lodash 4.13.1, as the three tools report it (measured): osv-scanner
+# files two advisories under one rule, CVE-2021-23337, whose ids list the other
+# one (CVE-2026-4800); trivy and grype report each advisory as a finding of its
+# own, trivy by CVE with the GHSA as alias, grype by GHSA with the CVE related.
+LODASH_A = ("CVE-2021-23337", "GHSA-35jh-r3h4-6jhm")
+LODASH_B = ("CVE-2026-4800", "GHSA-r5fr-rjxr-66jc")
+GROUPED = [LODASH_B[0], LODASH_A[1], LODASH_B[1]]
 
-    assert sorted(len(c.findings) for c in clusters) == [1, 2]
-    for cluster in clusters:
-        tools = [f["tool"]["name"] for f in cluster.findings]
-        assert len(tools) == len(set(tools))
+
+def lodash(fid: str, severity: str = "HIGH") -> dict[str, Any]:
+    tool, advisory = {
+        "t1": ("trivy", LODASH_A),
+        "t2": ("trivy", LODASH_B),
+        "g1": ("grype", LODASH_B[::-1]),
+        "g2": ("grype", LODASH_A[::-1]),
+    }.get(fid, ("osv-scanner", None))
+    if advisory is None:
+        return dep(
+            fid, tool, LODASH_A[0], "lodash", "4.13.1", GROUPED, severity=severity
+        )
+    primary, alias = advisory
+    return dep(fid, tool, primary, "lodash", "4.13.1", [alias], severity=severity)
+
+
+def test_a_grouped_rule_joins_the_finding_with_its_own_id():
+    """osv-scanner's rule CVE-2021-23337 names both of trivy's advisories. It
+    joins trivy's CVE-2021-23337 finding, even when trivy's CVE-2026-4800
+    finding sorts first; that one stays a finding of its own."""
+    findings = [lodash("t1"), lodash("t2", severity="CRITICAL"), lodash("o1")]
+    assert membership(cluster_dependency_findings(findings)) == {
+        frozenset({"t1", "o1"}),
+        frozenset({"t2"}),
+    }
 
 
 def test_a_split_linked_set_still_pairs_by_shared_id():
-    """osv-scanner's rule links trivy's two lodash advisories into one set.
-    Split one tool per cluster, grype's CVE-2026-4800 finding joins trivy's
-    CVE-2026-4800 one, not whichever cluster without a grype finding came
-    first."""
+    """osv-scanner's rule links trivy's two lodash advisories. grype's
+    CVE-2026-4800 finding joins trivy's CVE-2026-4800 one, whichever cluster
+    without a grype finding came first."""
     findings = [
-        dep(
-            "t1",
-            "trivy",
-            "CVE-2021-23337",
-            "lodash",
-            "4.13.1",
-            ["GHSA-35jh-r3h4-6jhm"],
-            severity="CRITICAL",
-        ),
-        dep(
-            "t2",
-            "trivy",
-            "CVE-2026-4800",
-            "lodash",
-            "4.13.1",
-            ["GHSA-r5fr-rjxr-66jc"],
-            severity="CRITICAL",
-        ),
-        dep(
-            "o1",
-            "osv-scanner",
-            "CVE-2021-23337",
-            "lodash",
-            "4.13.1",
-            ["CVE-2026-4800", "GHSA-35jh-r3h4-6jhm", "GHSA-r5fr-rjxr-66jc"],
-        ),
-        dep(
-            "g1", "grype", "GHSA-r5fr-rjxr-66jc", "lodash", "4.13.1", ["CVE-2026-4800"]
-        ),
+        lodash("t1", severity="CRITICAL"),
+        lodash("t2", severity="CRITICAL"),
+        lodash("o1"),
+        lodash("g1"),
     ]
     assert membership(cluster_dependency_findings(findings)) == {
         frozenset({"t1", "o1"}),
@@ -561,16 +542,29 @@ def test_a_split_linked_set_still_pairs_by_shared_id():
     }
 
 
-def test_a_third_tool_joins_through_an_alias_only_a_member_carries():
-    """trivy leads (the highest severity) knowing only the CVE; grype knows
-    only the GHSA; osv-scanner, not the lead, knows both. One finding."""
+def test_two_advisories_are_never_one_finding():
+    """trivy's CVE-2021-23337 and grype's CVE-2026-4800 share no id. osv-scanner's
+    grouped rule names both, and still cannot make them one finding: every
+    pair in a finding shares an id."""
+    findings = [lodash("t1"), lodash("o1"), lodash("g1")]
+    assert membership(cluster_dependency_findings(findings)) == {
+        frozenset({"t1", "o1"}),
+        frozenset({"g1"}),
+    }
+
+
+def test_every_pair_in_a_finding_shares_an_id():
+    """trivy knows only the CVE, grype only the GHSA, osv-scanner both. trivy
+    and grype name no common id, so they are not one finding, however
+    osv-scanner links them; osv-scanner joins the one with its own id."""
     findings = [
         dep("t1", "trivy", "CVE-2019-10744", "lodash", "4.17.4", severity="CRITICAL"),
         dep("o1", "osv-scanner", "CVE-2019-10744", "lodash", "4.17.4", [GHSA_LODASH]),
         dep("g1", "grype", GHSA_LODASH, "lodash", "4.17.4"),
     ]
     assert membership(cluster_dependency_findings(findings)) == {
-        frozenset({"t1", "o1", "g1"})
+        frozenset({"t1", "o1"}),
+        frozenset({"g1"}),
     }
 
 
@@ -597,34 +591,83 @@ def test_a_dependency_finding_never_joins_a_finding_without_one():
         assert membership(clusters) == {frozenset({"t1"}), frozenset({"s1"})}, algorithm
 
 
-def test_membership_does_not_depend_on_load_order():
+def test_the_same_primary_id_outranks_a_mutual_alias():
+    """grype can match one advisory twice, by its GHSA and by its CVE, each
+    relating the other. osv-scanner's CVE-2019-10744 joins the CVE match,
+    even when the GHSA match sorts first; one tool per finding keeps the
+    other apart."""
     findings = [
         dep(
-            "t1", "trivy", "CVE-2021-23337", "lodash", "4.13.1", ["GHSA-35jh-r3h4-6jhm"]
+            "g-ghsa",
+            "grype",
+            GHSA_LODASH,
+            "lodash",
+            "4.17.4",
+            ["CVE-2019-10744"],
+            severity="CRITICAL",
         ),
-        dep(
-            "t2", "trivy", "CVE-2026-4800", "lodash", "4.13.1", ["GHSA-r5fr-rjxr-66jc"]
-        ),
+        dep("g-cve", "grype", "CVE-2019-10744", "lodash", "4.17.4", [GHSA_LODASH]),
+        dep("o1", "osv-scanner", "CVE-2019-10744", "lodash", "4.17.4", [GHSA_LODASH]),
+    ]
+    assert membership(cluster_dependency_findings(findings)) == {
+        frozenset({"g-cve", "o1"}),
+        frozenset({"g-ghsa"}),
+    }
+
+
+def test_one_finding_per_tool_even_when_its_reports_share_an_id():
+    """trivy's CVE record and a GHSA-only record of the same advisory share
+    the GHSA, and each shares an id with osv-scanner's: still one trivy
+    finding per cluster."""
+    findings = [
+        dep("t-cve", "trivy", "CVE-2019-10744", "lodash", "4.17.4", [GHSA_LODASH]),
+        dep("t-ghsa", "trivy", GHSA_LODASH, "lodash", "4.17.4"),
+        dep("o1", "osv-scanner", "CVE-2019-10744", "lodash", "4.17.4", [GHSA_LODASH]),
+    ]
+    assert membership(cluster_dependency_findings(findings)) == {
+        frozenset({"t-cve", "o1"}),
+        frozenset({"t-ghsa"}),
+    }
+
+
+def test_a_tie_goes_by_lead_order_in_every_load_order():
+    """osv-scanner's rule names two of trivy's advisories, neither by its own
+    id: an equal link to each. The higher severity takes it, whichever
+    finding loaded first."""
+    findings = [
         dep(
             "o1",
             "osv-scanner",
             "CVE-2021-23337",
             "lodash",
             "4.13.1",
-            ["CVE-2026-4800", "GHSA-35jh-r3h4-6jhm", "GHSA-r5fr-rjxr-66jc"],
+            ["CVE-2026-4800", "CVE-2026-9999"],
         ),
-        dep(
-            "g1", "grype", "GHSA-r5fr-rjxr-66jc", "lodash", "4.13.1", ["CVE-2026-4800"]
-        ),
-        dep(
-            "g2", "grype", "GHSA-35jh-r3h4-6jhm", "lodash", "4.13.1", ["CVE-2021-23337"]
-        ),
+        dep("t-a", "trivy", "CVE-2026-4800", "lodash", "4.13.1"),
+        dep("t-b", "trivy", "CVE-2026-9999", "lodash", "4.13.1", severity="CRITICAL"),
     ]
-    seen = {
-        frozenset(membership(cluster_dependency_findings(list(order))))
-        for order in itertools.permutations(findings)
-    }
-    assert len(seen) == 1, seen
+    for order in itertools.permutations(findings):
+        assert membership(cluster_dependency_findings(list(order))) == {
+            frozenset({"t-b", "o1"}),
+            frozenset({"t-a"}),
+        }, [f["id"] for f in order]
+
+
+@pytest.mark.parametrize("critical", [None, "t1", "t2", "o1", "g1", "g2"])
+def test_every_load_order_gives_the_right_findings(critical):
+    """Two advisories, three tools, one of them osv-scanner's grouped rule:
+    exactly two findings, CVE-2021-23337 (trivy, osv-scanner's rule, grype)
+    and CVE-2026-4800 (trivy, grype), in every load order and whichever
+    member's severity puts it first."""
+    findings = [
+        lodash(fid, severity="CRITICAL" if fid == critical else "HIGH")
+        for fid in ("t1", "t2", "o1", "g1", "g2")
+    ]
+    expected = {frozenset({"t1", "o1", "g2"}), frozenset({"t2", "g1"})}
+    for order in itertools.permutations(findings):
+        assert membership(cluster_dependency_findings(list(order))) == expected, [
+            f["id"] for f in order
+        ]
 
 
 def _large_corpus() -> list[dict[str, Any]]:

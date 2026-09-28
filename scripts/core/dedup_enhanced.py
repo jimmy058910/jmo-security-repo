@@ -906,18 +906,18 @@ def cluster_dependency_findings(
     Measured before this, on a real lockfile: trivy and osv-scanner reported
     the same 47 and the report held 85, clustered 0.
 
-    One package's findings are linked by shared ids, directly or through
-    another finding: an alias only one member carries -- often not the lead,
-    which is a matter of severity and tool name -- is enough for a third tool.
-    A linked set with one finding per tool is one finding. A set holding two
-    of one tool's findings is split one tool per cluster (`_one_per_tool`):
-    osv-scanner files some distinct advisories under one rule (on NodeGoat its
-    lodash rule CVE-2021-23337 lists CVE-2026-4800 too, which trivy reports as
-    a finding of its own), so the rule joins one of trivy's two and the other
-    stays a finding of its own.
+    That holds for EVERY PAIR in a cluster, and a cluster holds one finding
+    per tool (`FindingCluster.can_accept`). A union of the members' ids is
+    never enough: osv-scanner files some distinct advisories under one rule
+    (on NodeGoat its lodash rule CVE-2021-23337 lists CVE-2026-4800, which
+    trivy and grype each report as a finding of its own), and a union would
+    fold both advisories into one finding.
 
-    Findings are taken in `lead_order`, so each cluster's first finding is
-    its lead and membership does not depend on load order.
+    Within one package, the pairs that share an id are joined strongest first
+    (`_link_strength`), so that grouped rule joins the finding with its own
+    id, whichever sorts first. Ties go by `lead_order`, and each cluster's
+    first finding by it is its lead, so the result does not depend on load
+    order.
     """
     by_package: dict[Any, list[dict[str, Any]]] = {}
     for finding in sorted(findings, key=lead_order):
@@ -925,43 +925,66 @@ def cluster_dependency_findings(
 
     clusters: list[FindingCluster] = []
     for package in by_package.values():
-        links = UnionFind(len(package))
-        first_named: dict[str, int] = {}
-        for index, finding in enumerate(package):
-            for advisory in advisory_ids(finding):
-                links.union(first_named.setdefault(advisory, index), index)
-        for linked in links.get_groups(package):
-            tools = [tool_name_of(finding) for finding in linked]
-            if len(set(tools)) == len(tools):
-                cluster = FindingCluster(representative=linked[0])
-                for finding in linked[1:]:
-                    cluster.add(finding, 1.0)
-                clusters.append(cluster)
-            else:
-                clusters.extend(_one_per_tool(linked))
+        for members in _identity_groups(package):
+            cluster = FindingCluster(representative=package[members[0]])
+            for index in members[1:]:
+                cluster.add(package[index], 1.0)
+            clusters.append(cluster)
     return clusters
 
 
-def _one_per_tool(linked: list[dict[str, Any]]) -> list[FindingCluster]:
-    """Split linked findings holding two of one tool's, in `lead_order`: each
-    joins the first cluster without its tool that shares an id with a member."""
-    clusters: list[tuple[FindingCluster, set[str]]] = []
-    for finding in linked:
-        ids = advisory_ids(finding)
-        home = next(
-            (
-                (cluster, known)
-                for cluster, known in clusters
-                if cluster.can_accept(finding) and ids & known
-            ),
-            None,
-        )
-        if home is None:
-            clusters.append((FindingCluster(representative=finding), set(ids)))
-        else:
-            home[0].add(finding, 1.0)
-            home[1].update(ids)
-    return [cluster for cluster, _ in clusters]
+def _link_strength(
+    ids_a: frozenset[str], primary_a: str, ids_b: frozenset[str], primary_b: str
+) -> int:
+    """How surely two findings that share an id name one advisory: 3 for the
+    same primary id (``ruleId``), else how many of the two primary ids the
+    other finding lists -- 2, 1, or 0 when they share only an alias."""
+    if primary_a and primary_a == primary_b:
+        return 3
+    return (primary_a in ids_b) + (primary_b in ids_a)
+
+
+def _identity_groups(package: list[dict[str, Any]]) -> list[list[int]]:
+    """One package's findings, in `lead_order`, as groups of their indices.
+
+    Every pair sharing an id is a candidate link; links are taken strongest
+    first, then by index. A link joins two groups only when no tool is in
+    both and every finding of one shares an id with every finding of the
+    other. Each group is sorted, and keyed by its lowest index: its lead.
+    """
+    ids = [advisory_ids(finding) for finding in package]
+    primary = [str(finding.get("ruleId") or "").upper() for finding in package]
+    tools = [tool_name_of(finding) for finding in package]
+
+    named_by: dict[str, list[int]] = {}
+    for index, finding_ids in enumerate(ids):
+        for advisory in finding_ids:
+            named_by.setdefault(advisory, []).append(index)
+    links = {
+        (a, b)
+        for indices in named_by.values()
+        for position, a in enumerate(indices)
+        for b in indices[position + 1 :]
+    }
+
+    def strongest_first(link: tuple[int, int]) -> tuple[int, int, int]:
+        a, b = link
+        return (-_link_strength(ids[a], primary[a], ids[b], primary[b]), a, b)
+
+    group = list(range(len(package)))
+    members = {index: [index] for index in group}
+    for a, b in sorted(links, key=strongest_first):
+        left, right = sorted((group[a], group[b]))
+        if left == right:
+            continue
+        if {tools[i] for i in members[left]} & {tools[i] for i in members[right]}:
+            continue
+        if not all(ids[i] & ids[j] for i in members[left] for j in members[right]):
+            continue
+        for index in members[right]:
+            group[index] = left
+        members[left] = sorted(members[left] + members.pop(right))
+    return [members[key] for key in sorted(members)]
 
 
 class FindingClusterer:
