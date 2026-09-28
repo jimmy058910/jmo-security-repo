@@ -11,7 +11,7 @@ Tests cover:
 - trivy 0.74.0's own output (``TestTrivy074RecordedOutput``), recorded below
 
 Recorded fixture ``tests/fixtures/samples/trivy/misconfig-0.74.json``: trivy
-**0.74.0**'s JSON, byte for byte, recorded 2026-09-27 on Windows by running,
+**0.74.0**'s JSON, byte for byte, recorded 2026-09-28 on Windows by running,
 from inside a scratch directory holding only the three files listed below::
 
     trivy fs -q -f json --scanners vuln,secret,misconfig \\
@@ -21,20 +21,22 @@ from inside a scratch directory holding only the three files listed below::
 (``tool_descriptors._trivy``); scanning ``.`` from inside the directory keeps
 ``ArtifactName`` and every ``Target`` relative, so no machine path is
 recorded. ``--skip-db-update --skip-check-update`` used the vulnerability DB
-and check bundle already cached. Result: 43 misconfigurations, 0
+and check bundle already cached. Result: 47 misconfigurations, 0
 vulnerabilities, 0 secrets. To re-record, recreate the three files verbatim::
 
     Dockerfile
-        FROM alpine:latest AS build
+        FROM alpine:latest as build
         RUN apk add curl
         RUN sudo apk add bash
 
-        FROM alpine:latest
+        FROM alpine as build
         ENV DB_PASSWORD=example
         RUN apt-get update && apt-get -y dist-upgrade
         ADD app.py /app/app.py
         RUN cd /app && make
         CMD ["python3", "/app/app.py"]
+        EXPOSE 22
+        MAINTAINER example
 
     pod.yaml
         apiVersion: v1
@@ -43,6 +45,7 @@ vulnerabilities, 0 secrets. To re-record, recreate the three files verbatim::
           name: insecure-pod
         spec:
           hostNetwork: true
+          hostPID: true
           containers:
             - name: app
               image: nginx:latest
@@ -83,9 +86,14 @@ vulnerabilities, 0 secrets. To re-record, recreate the three files verbatim::
           }
         }
 
-The two ``FROM ...:latest`` lines and the two open ingress rules are there on
+The two ``FROM alpine`` lines and the two open ingress rules are there on
 purpose: each makes trivy report one check twice in one file, which is the
-case that lost its lines (#1221's line defect).
+case that lost its lines (#1221's line defect). The rest gives every trivy key
+in ``scripts/core/rule_equivalence.py`` a recorded finding; hadolint 2.14.0
+and checkov 3.3.16 were run on the same three files to check each key's
+partners (the lower-case ``as`` is for checkov: its CKV_DOCKER_11 matches
+only `` as ``). ``apt-get -y dist-upgrade`` stays to show that DS-0024, which
+0.74.0 ships deprecated, does not fire.
 """
 
 import json
@@ -706,35 +714,23 @@ class TestTrivyMisconfigurationDetails:
         assert secret_finding.ruleId == "API Key"
 
 
-def _recorded_misconfigs() -> list[tuple[str, dict]]:
-    """(Target, item) for every misconfiguration trivy 0.74.0 recorded."""
-    data = json.loads(RECORDED_074.read_bytes())
-    pairs = [
-        (result["Target"], item)
-        for result in data["Results"]
-        for item in result.get("Misconfigurations") or []
-    ]
-    # Meta-guard: a fixture that silently parses to nothing satisfies every
-    # "for each finding" assertion below.
-    assert len(pairs) == 43, len(pairs)
-    return pairs
-
-
 class TestTrivy074RecordedOutput:
     """#1221 and the line defect, asserted on trivy 0.74.0's own output.
 
     0.74.0 names a misconfiguration's rule in ``ID`` (``DS-0001``), not
     ``RuleID`` or ``AVDID``, puts its lines in ``CauseMetadata``, not at the
     top level, and writes its version at ``Trivy.Version``, not ``Version``.
-    Before this was fixed every one of the 43 findings below had its Title as
-    its rule id, line 0, and tool version ``unknown`` -- and the two findings
-    of one check in one file shared an id, so deduplication kept one.
+    Before this was fixed every one of the findings below had its Title as its
+    rule id, line 0, and tool version ``unknown`` -- and the two findings of
+    one check in one file shared an id, so deduplication kept one.
     """
 
     def _parse(self):
         findings = TrivyAdapter().parse(RECORDED_074)
         misconfigs = [f for f in findings if "misconfig" in f.tags]
-        assert len(misconfigs) == len(findings) == 43
+        # Meta-guard: a fixture that silently parses to nothing satisfies
+        # every "for each finding" assertion below.
+        assert len(misconfigs) == len(findings) == 47
         return misconfigs
 
     def test_rule_id_is_trivys_id_and_title_is_its_title(self):
@@ -771,7 +767,7 @@ class TestTrivy074RecordedOutput:
             by_id.setdefault(f.id, []).append((f.ruleId, f.location["startLine"]))
         shared = {k: v for k, v in by_id.items() if len(v) > 1}
         assert not shared, shared
-        assert len(by_id) == 43
+        assert len(by_id) == 47
 
     def test_tool_version_is_trivy_version(self):
         misconfigs = self._parse()
@@ -896,6 +892,41 @@ class TestTrivyRuleIdLineAndVersionChain:
         }
         f = TrivyAdapter().parse(write(tmp_path, "t.json", json.dumps(sample)))[0]
         assert f.location["path"] == "Dockerfile"
+        assert f.context is not None
+        assert "FROM alpine:latest" in f.context["snippet"]
+        assert "decoy" not in f.context["snippet"]
+
+    def test_context_when_trivy_scanned_one_file(self, tmp_path: Path, monkeypatch):
+        """``jmo scan --iac <file>`` runs ``trivy config <file>``.
+
+        Measured on 0.74.0: ``ArtifactName`` is then the file itself and
+        ``Target`` its name, so the file's directory is the root.
+        """
+        scanned = tmp_path / "scanned"
+        scanned.mkdir()
+        (scanned / "Dockerfile").write_bytes(b"# scanned\nFROM alpine:latest\n")
+        elsewhere = tmp_path / "elsewhere"
+        elsewhere.mkdir()
+        (elsewhere / "Dockerfile").write_bytes(b"# decoy\nFROM decoy:latest\n")
+        monkeypatch.chdir(elsewhere)
+        sample = {
+            "ArtifactName": str(scanned / "Dockerfile"),
+            "ArtifactType": "filesystem",
+            "Results": [
+                {
+                    "Target": "Dockerfile",
+                    "Misconfigurations": [
+                        {
+                            "ID": "DS-0001",
+                            "Title": "':latest' tag used",
+                            "Severity": "MEDIUM",
+                            "CauseMetadata": {"StartLine": 2, "EndLine": 2},
+                        }
+                    ],
+                }
+            ],
+        }
+        f = TrivyAdapter().parse(write(tmp_path, "t.json", json.dumps(sample)))[0]
         assert f.context is not None
         assert "FROM alpine:latest" in f.context["snippet"]
         assert "decoy" not in f.context["snippet"]

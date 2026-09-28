@@ -14,8 +14,9 @@
 # and ignored -- it is never silently dropped.
 #
 # Rule identifiers differ sharply between tools: checkov emits `CKV_AWS_23`,
-# hadolint `DL3008`, trivy `AVD-DS-0002`, and semgrep a long dotted path. Use a
-# glob unless you have copied the exact id out of a report.
+# hadolint `DL3008`, trivy `DS-0002` (a misconfiguration) or `github-pat` (a
+# secret), and semgrep a long dotted path. Use a glob unless you have copied
+# the exact id out of a report.
 #
 # See: docs/USER_GUIDE.md#handling-false-positives
 

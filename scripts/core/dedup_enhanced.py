@@ -25,7 +25,7 @@ Threshold: 0.65 (lowered from 0.75 for better cross-tool clustering)
 
 Rule Equivalence:
     Known equivalent rules across tools are mapped in rule_equivalence.py.
-    Example: Trivy "DS-0001" = Hadolint "DL3006" = Checkov "CKV_DOCKER_1"
+    Example: Trivy "DS-0001" = Hadolint "DL3006" = Checkov "CKV_DOCKER_7"
 
 Performance:
     - Greedy: O(n×k), best for small datasets (<500 findings)
@@ -552,7 +552,7 @@ class SimilarityCalculator:
         """Calculate metadata similarity based on CWE, CVE, Rule IDs.
 
         Also checks rule equivalence mapping for known equivalent rules
-        across different security tools (e.g., Hadolint DL3006 = Trivy :latest tag).
+        across different security tools (e.g., Hadolint DL3006 = Trivy DS-0001).
 
         Args:
             raw1: Raw finding data from first tool

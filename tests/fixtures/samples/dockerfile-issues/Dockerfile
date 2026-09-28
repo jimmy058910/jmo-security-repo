@@ -36,5 +36,5 @@ RUN cd /app && npm install
 # DL3045: COPY should use --chown flag
 COPY package.json /app/
 
-# Missing HEALTHCHECK (Trivy DS002)
-# Running as root (Trivy DS001, Hadolint DL3002)
+# Missing HEALTHCHECK (Trivy DS-0026)
+# Running as root (Trivy DS-0002, Hadolint DL3002)

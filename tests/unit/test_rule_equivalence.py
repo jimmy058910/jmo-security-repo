@@ -33,11 +33,11 @@ RECORDED_TRIVY_074 = (
 
 
 def _trivy_074_findings():
-    """The recorded output, through the real adapter (43 misconfigurations)."""
+    """The recorded output, through the real adapter (47 misconfigurations)."""
     from scripts.core.adapters.trivy_adapter import TrivyAdapter
 
     findings = TrivyAdapter().parse(RECORDED_TRIVY_074)
-    assert len(findings) == 43, len(findings)
+    assert len(findings) == 47, len(findings)
     return findings
 
 
@@ -101,15 +101,29 @@ class TestGetCanonicalRuleId:
         canonical = get_canonical_rule_id("trivy", "DS-0001")
         assert canonical == "dockerfile-latest-tag"
 
-    def test_checkov_docker_1(self):
-        """Test Checkov CKV_DOCKER_1 maps to dockerfile-latest-tag."""
-        canonical = get_canonical_rule_id("checkov", "CKV_DOCKER_1")
-        assert canonical == "dockerfile-latest-tag"
+    def test_checkov_docker_7(self):
+        """Checkov CKV_DOCKER_7 is its latest-tag check.
 
-    def test_hadolint_dl3055(self):
-        """Test Hadolint DL3055 maps to dockerfile-no-healthcheck."""
-        canonical = get_canonical_rule_id("hadolint", "DL3055")
-        assert canonical == "dockerfile-no-healthcheck"
+        CKV_DOCKER_1 stood here until #1221; checkov's own name for it is
+        "Ensure port 22 is not exposed".
+        """
+        assert get_canonical_rule_id("checkov", "CKV_DOCKER_7") == (
+            "dockerfile-latest-tag"
+        )
+        assert get_canonical_rule_id("checkov", "CKV_DOCKER_1") == (
+            "dockerfile-port-22-exposed"
+        )
+
+    def test_hadolint_dl3057(self):
+        """Hadolint's missing-HEALTHCHECK rule is DL3057, not DL3055.
+
+        hadolint 2.14.0's own messages: DL3057 "`HEALTHCHECK` instruction
+        missing.", DL3055 "Label `commit` is not a valid git hash."
+        """
+        assert get_canonical_rule_id("hadolint", "DL3057") == (
+            "dockerfile-no-healthcheck"
+        )
+        assert get_canonical_rule_id("hadolint", "DL3055") is None
 
     def test_trivy_no_healthcheck(self):
         """Test Trivy's HEALTHCHECK check (DS-0026) maps correctly."""
@@ -154,7 +168,7 @@ class TestAreRulesEquivalent:
     def test_hadolint_checkov_latest_tag(self):
         """Test Hadolint and Checkov :latest tag rules are equivalent."""
         is_equiv, canonical = are_rules_equivalent(
-            "hadolint", "DL3006", "checkov", "CKV_DOCKER_1"
+            "hadolint", "DL3006", "checkov", "CKV_DOCKER_7"
         )
         assert is_equiv is True
         assert canonical == "dockerfile-latest-tag"
@@ -165,7 +179,7 @@ class TestAreRulesEquivalent:
             "hadolint",
             "DL3006",
             "hadolint",
-            "DL3055",  # :latest tag  # no healthcheck
+            "DL3057",  # :latest tag  # no healthcheck
         )
         assert is_equiv is False
         assert canonical is None
@@ -230,12 +244,14 @@ class TestKubernetesEquivalence:
     def test_privileged_container(self):
         """Test privileged container detection across tools."""
         canonical1 = get_canonical_rule_id("trivy", "KSV-0017")
-        canonical2 = get_canonical_rule_id("checkov", "CKV_K8S_1")
+        canonical2 = get_canonical_rule_id("checkov", "CKV_K8S_16")
 
         assert canonical1 == canonical2 == "k8s-privileged-container"
+        # CKV_K8S_1 stood here until #1221: a PodSecurityPolicy's host PID.
+        assert get_canonical_rule_id("checkov", "CKV_K8S_1") == "k8s-host-pid"
         # KSV-0001 is "Can elevate its own privileges", a different control;
         # the table listed its old id, KSV001, here until #1221.
-        assert get_canonical_rule_id("trivy", "KSV-0001") is None
+        assert get_canonical_rule_id("trivy", "KSV-0001") == "k8s-privilege-escalation"
 
     def test_root_container(self):
         """Test root container detection across tools."""
@@ -328,10 +344,13 @@ class TestSubstringFallbackBoundaries:
     """
 
     def test_numeric_suffix_does_not_prefix_match(self):
-        """CKV_K8S_1 is a substring of CKV_K8S_14 but a different rule."""
-        assert (
-            get_canonical_rule_id("checkov", "CKV_K8S_1") == "k8s-privileged-container"
-        )
+        """CKV_K8S_1 is a substring of CKV_K8S_14 but a different rule.
+
+        CKV_K8S_16 and CKV_K8S_17 are listed in groups of their own since
+        #1221, so each must reach its own group, never CKV_K8S_1's.
+        """
+        host_pid = get_canonical_rule_id("checkov", "CKV_K8S_1")
+        assert host_pid == "k8s-host-pid"
         for unrelated in (
             "CKV_K8S_10",
             "CKV_K8S_14",
@@ -340,9 +359,19 @@ class TestSubstringFallbackBoundaries:
             "CKV_K8S_17",
             "CKV_K8S_18",
         ):
-            assert get_canonical_rule_id("checkov", unrelated) is None, (
-                f"{unrelated} must not resolve to CKV_K8S_1's canonical id"
+            got = get_canonical_rule_id("checkov", unrelated)
+            assert got is None or ("checkov", unrelated) in RULE_EQUIVALENCE[got], (
+                f"{unrelated} resolved to {got}, a group it is not listed in"
             )
+        # CKV_K8S_17 is listed in k8s-host-pid itself; the other five are not.
+        for unrelated in (
+            "CKV_K8S_10",
+            "CKV_K8S_14",
+            "CKV_K8S_15",
+            "CKV_K8S_16",
+            "CKV_K8S_18",
+        ):
+            assert get_canonical_rule_id("checkov", unrelated) != host_pid
 
     def test_shorter_id_is_not_captured_by_a_longer_mapped_one(self):
         """The reverse direction was broken too: CKV_AWS_1 inside CKV_AWS_19."""

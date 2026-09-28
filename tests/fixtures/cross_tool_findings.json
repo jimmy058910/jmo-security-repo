@@ -152,7 +152,7 @@
           "severity": "MEDIUM",
           "message": "Container runs as root (UID 0)",
           "location": {"path": "Dockerfile", "startLine": 20, "endLine": 22},
-          "ruleId": "DS002",
+          "ruleId": "DS-0002",
           "raw": {"misconfiguration": true}
         }
       ]

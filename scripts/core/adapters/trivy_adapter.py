@@ -49,8 +49,11 @@ Field mapping (measured on trivy 0.74.0's own JSON, #1221):
   shared an id: juice-shop's 87 became 47.
 - tool.version: ``Trivy.Version``, else the top-level ``Version`` (older
   trivy), else ``unknown``.
-- A ``Target`` is relative to ``ArtifactName``, the directory trivy scanned,
-  so code context is read under it rather than under the working directory.
+- A ``Target`` is relative to the directory trivy scanned, so code context is
+  read under it rather than under the working directory. That directory is
+  ``ArtifactName`` for ``trivy fs <dir>``; for ``trivy config <file>`` (``jmo
+  scan --iac <file>``) ``ArtifactName`` is the file and ``Target`` its name,
+  so it is the file's directory.
 
 Severity Mapping (Trivy -> CommonFinding):
 - CRITICAL: CRITICAL
@@ -112,6 +115,22 @@ def _lines(item: dict[str, Any]) -> tuple[int, int | None]:
     return 0, None
 
 
+def _scanned_root(artifact_name: Any) -> Path | None:
+    """The directory a ``Target`` is relative to, from ``ArtifactName``.
+
+    ``trivy fs <dir>`` writes the directory; ``trivy config <file>`` (``jmo
+    scan --iac <file>``) writes the file itself, with ``Target`` its name, so
+    the root is the file's directory. Measured on 0.74.0.
+    """
+    if not isinstance(artifact_name, str) or not artifact_name:
+        return None
+    root = Path(artifact_name)
+    try:
+        return root.parent if root.is_file() else root
+    except OSError:
+        return root
+
+
 def _tool_version(data: dict[str, Any]) -> str:
     """``Trivy.Version`` (0.74.0), else the top-level ``Version`` (older)."""
     meta = data.get("Trivy")
@@ -158,7 +177,7 @@ class TrivyAdapter(AdapterPlugin):
 
         findings: list[Finding] = []
         tool_version = _tool_version(data)
-        scanned_root = data.get("ArtifactName")
+        scanned_root = _scanned_root(data.get("ArtifactName"))
 
         for r in results:
             target = r.get("Target") or ""
@@ -192,8 +211,8 @@ class TrivyAdapter(AdapterPlugin):
                     context = None
                     if tag == "misconfig" and path_str and line:
                         source = (
-                            Path(scanned_root) / str(path_str)
-                            if isinstance(scanned_root, str) and scanned_root
+                            scanned_root / str(path_str)
+                            if scanned_root is not None
                             else Path(str(path_str))
                         )
                         context = extract_code_snippet(

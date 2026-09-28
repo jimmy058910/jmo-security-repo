@@ -3,8 +3,8 @@
   "Trivy": {
     "Version": "0.74.0"
   },
-  "ReportID": "01a0e53b-55ed-7aa5-9581-aac4c9f497c1",
-  "CreatedAt": "2026-09-27T19:37:46.2216976-04:00",
+  "ReportID": "01a0e557-b1ce-752e-8776-03da52bda22a",
+  "CreatedAt": "2026-09-27T20:08:44.7503396-04:00",
   "ArtifactName": ".",
   "ArtifactType": "filesystem",
   "Results": [
@@ -22,8 +22,8 @@
       "Class": "config",
       "Type": "dockerfile",
       "MisconfSummary": {
-        "Successes": 18,
-        "Failures": 10
+        "Successes": 15,
+        "Failures": 13
       },
       "Misconfigurations": [
         {
@@ -50,11 +50,11 @@
               "Lines": [
                 {
                   "Number": 1,
-                  "Content": "FROM alpine:latest AS build",
+                  "Content": "FROM alpine:latest as build",
                   "IsCause": true,
                   "Annotation": "",
                   "Truncated": false,
-                  "Highlighted": "\u001b[38;5;64mFROM\u001b[0m\u001b[38;5;37m alpine:latest AS build\u001b[0m",
+                  "Highlighted": "\u001b[38;5;64mFROM\u001b[0m\u001b[38;5;37m alpine:latest as build\u001b[0m",
                   "FirstCause": true,
                   "LastCause": true
                 }
@@ -86,11 +86,11 @@
               "Lines": [
                 {
                   "Number": 5,
-                  "Content": "FROM alpine:latest",
+                  "Content": "FROM alpine as build",
                   "IsCause": true,
                   "Annotation": "",
                   "Truncated": false,
-                  "Highlighted": "\u001b[38;5;64mFROM\u001b[0m\u001b[38;5;37m alpine:latest\u001b[0m",
+                  "Highlighted": "\u001b[38;5;64mFROM\u001b[0m\u001b[38;5;37m alpine as build\u001b[0m",
                   "FirstCause": true,
                   "LastCause": true
                 }
@@ -117,6 +117,42 @@
           "CauseMetadata": {
             "Provider": "Dockerfile",
             "Service": "general"
+          }
+        },
+        {
+          "Type": "Dockerfile Security Check",
+          "ID": "DS-0004",
+          "Title": "Port 22 exposed",
+          "Description": "Exposing port 22 might allow users to SSH into the container.",
+          "Message": "Port 22 should not be exposed in Dockerfile",
+          "Namespace": "builtin.dockerfile.DS004",
+          "Query": "data.builtin.dockerfile.DS004.deny",
+          "Resolution": "Remove 'EXPOSE 22' statement from the Dockerfile",
+          "Severity": "MEDIUM",
+          "PrimaryURL": "https://avd.aquasec.com/misconfig/ds-0004",
+          "References": [
+            "https://avd.aquasec.com/misconfig/ds-0004"
+          ],
+          "Status": "FAIL",
+          "CauseMetadata": {
+            "Provider": "Dockerfile",
+            "Service": "general",
+            "StartLine": 11,
+            "EndLine": 11,
+            "Code": {
+              "Lines": [
+                {
+                  "Number": 11,
+                  "Content": "EXPOSE 22",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "\u001b[38;5;64mEXPOSE\u001b[0m\u001b[38;5;37m 22\u001b[0m",
+                  "FirstCause": true,
+                  "LastCause": true
+                }
+              ]
+            }
           }
         },
         {
@@ -195,6 +231,43 @@
         },
         {
           "Type": "Dockerfile Security Check",
+          "ID": "DS-0012",
+          "Title": "Duplicate aliases defined in different FROMs",
+          "Description": "Different FROMs can't have the same alias defined.",
+          "Message": "Duplicate aliases 'build' are found in different FROMs",
+          "Namespace": "builtin.dockerfile.DS012",
+          "Query": "data.builtin.dockerfile.DS012.deny",
+          "Resolution": "Change aliases to make them different",
+          "Severity": "CRITICAL",
+          "PrimaryURL": "https://avd.aquasec.com/misconfig/ds-0012",
+          "References": [
+            "https://docs.docker.com/develop/develop-images/multistage-build/",
+            "https://avd.aquasec.com/misconfig/ds-0012"
+          ],
+          "Status": "FAIL",
+          "CauseMetadata": {
+            "Provider": "Dockerfile",
+            "Service": "general",
+            "StartLine": 1,
+            "EndLine": 1,
+            "Code": {
+              "Lines": [
+                {
+                  "Number": 1,
+                  "Content": "FROM alpine:latest as build",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "\u001b[38;5;64mFROM\u001b[0m\u001b[38;5;37m alpine:latest as build\u001b[0m",
+                  "FirstCause": true,
+                  "LastCause": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Type": "Dockerfile Security Check",
           "ID": "DS-0013",
           "Title": "'RUN cd ...' to change directory",
           "Description": "Use WORKDIR instead of proliferating instructions like 'RUN cd … \u0026\u0026 do-something', which are hard to read, troubleshoot, and maintain.",
@@ -260,6 +333,43 @@
                   "Annotation": "",
                   "Truncated": false,
                   "Highlighted": "\u001b[38;5;64mRUN\u001b[0m apt-get update \u001b[38;5;245m\u0026\u0026\u001b[0m apt-get -y dist-upgrade",
+                  "FirstCause": true,
+                  "LastCause": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Type": "Dockerfile Security Check",
+          "ID": "DS-0022",
+          "Title": "Deprecated MAINTAINER used",
+          "Description": "MAINTAINER has been deprecated since Docker 1.13.0.",
+          "Message": "MAINTAINER should not be used: 'MAINTAINER example'",
+          "Namespace": "builtin.dockerfile.DS022",
+          "Query": "data.builtin.dockerfile.DS022.deny",
+          "Resolution": "Use LABEL instead of MAINTAINER",
+          "Severity": "HIGH",
+          "PrimaryURL": "https://avd.aquasec.com/misconfig/ds-0022",
+          "References": [
+            "https://docs.docker.com/engine/deprecated/#maintainer-in-dockerfile",
+            "https://avd.aquasec.com/misconfig/ds-0022"
+          ],
+          "Status": "FAIL",
+          "CauseMetadata": {
+            "Provider": "Dockerfile",
+            "Service": "general",
+            "StartLine": 12,
+            "EndLine": 12,
+            "Code": {
+              "Lines": [
+                {
+                  "Number": 12,
+                  "Content": "MAINTAINER example",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "\u001b[38;5;64mMAINTAINER\u001b[0m\u001b[38;5;37m example\u001b[0m",
                   "FirstCause": true,
                   "LastCause": true
                 }
@@ -1362,8 +1472,8 @@
       "Class": "config",
       "Type": "kubernetes",
       "MisconfSummary": {
-        "Successes": 78,
-        "Failures": 20
+        "Successes": 77,
+        "Failures": 21
       },
       "Misconfigurations": [
         {
@@ -1385,12 +1495,12 @@
           "CauseMetadata": {
             "Provider": "Kubernetes",
             "Service": "general",
-            "StartLine": 8,
-            "EndLine": 12,
+            "StartLine": 9,
+            "EndLine": 13,
             "Code": {
               "Lines": [
                 {
-                  "Number": 8,
+                  "Number": 9,
                   "Content": "    - name: app",
                   "IsCause": true,
                   "Annotation": "",
@@ -1400,7 +1510,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 9,
+                  "Number": 10,
                   "Content": "      image: nginx:latest",
                   "IsCause": true,
                   "Annotation": "",
@@ -1410,7 +1520,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 10,
+                  "Number": 11,
                   "Content": "      securityContext:",
                   "IsCause": true,
                   "Annotation": "",
@@ -1420,7 +1530,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 11,
+                  "Number": 12,
                   "Content": "        privileged: true",
                   "IsCause": true,
                   "Annotation": "",
@@ -1430,7 +1540,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 12,
+                  "Number": 13,
                   "Content": "        runAsUser: 0",
                   "IsCause": true,
                   "Annotation": "",
@@ -1462,12 +1572,12 @@
           "CauseMetadata": {
             "Provider": "Kubernetes",
             "Service": "general",
-            "StartLine": 8,
-            "EndLine": 12,
+            "StartLine": 9,
+            "EndLine": 13,
             "Code": {
               "Lines": [
                 {
-                  "Number": 8,
+                  "Number": 9,
                   "Content": "    - name: app",
                   "IsCause": true,
                   "Annotation": "",
@@ -1477,7 +1587,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 9,
+                  "Number": 10,
                   "Content": "      image: nginx:latest",
                   "IsCause": true,
                   "Annotation": "",
@@ -1487,7 +1597,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 10,
+                  "Number": 11,
                   "Content": "      securityContext:",
                   "IsCause": true,
                   "Annotation": "",
@@ -1497,7 +1607,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 11,
+                  "Number": 12,
                   "Content": "        privileged: true",
                   "IsCause": true,
                   "Annotation": "",
@@ -1507,7 +1617,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 12,
+                  "Number": 13,
                   "Content": "        runAsUser: 0",
                   "IsCause": true,
                   "Annotation": "",
@@ -1539,12 +1649,12 @@
           "CauseMetadata": {
             "Provider": "Kubernetes",
             "Service": "general",
-            "StartLine": 8,
-            "EndLine": 12,
+            "StartLine": 9,
+            "EndLine": 13,
             "Code": {
               "Lines": [
                 {
-                  "Number": 8,
+                  "Number": 9,
                   "Content": "    - name: app",
                   "IsCause": true,
                   "Annotation": "",
@@ -1554,7 +1664,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 9,
+                  "Number": 10,
                   "Content": "      image: nginx:latest",
                   "IsCause": true,
                   "Annotation": "",
@@ -1564,7 +1674,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 10,
+                  "Number": 11,
                   "Content": "      securityContext:",
                   "IsCause": true,
                   "Annotation": "",
@@ -1574,7 +1684,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 11,
+                  "Number": 12,
                   "Content": "        privileged: true",
                   "IsCause": true,
                   "Annotation": "",
@@ -1584,7 +1694,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 12,
+                  "Number": 13,
                   "Content": "        runAsUser: 0",
                   "IsCause": true,
                   "Annotation": "",
@@ -1617,7 +1727,7 @@
             "Provider": "Kubernetes",
             "Service": "general",
             "StartLine": 5,
-            "EndLine": 12,
+            "EndLine": 13,
             "Code": {
               "Lines": [
                 {
@@ -1642,6 +1752,16 @@
                 },
                 {
                   "Number": 7,
+                  "Content": "  hostPID: true",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "\u001b[0m  \u001b[38;5;33mhostPID\u001b[0m: \u001b[38;5;166mtrue",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 8,
                   "Content": "  containers:",
                   "IsCause": true,
                   "Annotation": "",
@@ -1651,7 +1771,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 8,
+                  "Number": 9,
                   "Content": "    - name: app",
                   "IsCause": true,
                   "Annotation": "",
@@ -1661,7 +1781,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 9,
+                  "Number": 10,
                   "Content": "      image: nginx:latest",
                   "IsCause": true,
                   "Annotation": "",
@@ -1671,7 +1791,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 10,
+                  "Number": 11,
                   "Content": "      securityContext:",
                   "IsCause": true,
                   "Annotation": "",
@@ -1681,7 +1801,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 11,
+                  "Number": 12,
                   "Content": "        privileged: true",
                   "IsCause": true,
                   "Annotation": "",
@@ -1691,7 +1811,124 @@
                   "LastCause": false
                 },
                 {
+                  "Number": 13,
+                  "Content": "        runAsUser: 0",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "\u001b[0m        \u001b[38;5;33mrunAsUser\u001b[0m: \u001b[38;5;37m0\u001b[0m",
+                  "FirstCause": false,
+                  "LastCause": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Type": "Kubernetes Security Check",
+          "ID": "KSV-0010",
+          "Title": "Access to host PID",
+          "Description": "Sharing the host’s PID namespace allows visibility on host processes, potentially leaking information such as environment variables and configuration.",
+          "Message": "Pod 'insecure-pod' should not set 'spec.template.spec.hostPID' to true",
+          "Namespace": "builtin.kubernetes.KSV010",
+          "Query": "data.builtin.kubernetes.KSV010.deny",
+          "Resolution": "Do not set 'spec.template.spec.hostPID' to true.",
+          "Severity": "HIGH",
+          "PrimaryURL": "https://avd.aquasec.com/misconfig/ksv-0010",
+          "References": [
+            "https://kubernetes.io/docs/concepts/security/pod-security-standards/#baseline",
+            "https://avd.aquasec.com/misconfig/ksv-0010"
+          ],
+          "Status": "FAIL",
+          "CauseMetadata": {
+            "Provider": "Kubernetes",
+            "Service": "general",
+            "StartLine": 5,
+            "EndLine": 13,
+            "Code": {
+              "Lines": [
+                {
+                  "Number": 5,
+                  "Content": "spec:",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "\u001b[38;5;33mspec\u001b[0m:",
+                  "FirstCause": true,
+                  "LastCause": false
+                },
+                {
+                  "Number": 6,
+                  "Content": "  hostNetwork: true",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "  \u001b[38;5;33mhostNetwork\u001b[0m: \u001b[38;5;166mtrue",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 7,
+                  "Content": "  hostPID: true",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "\u001b[0m  \u001b[38;5;33mhostPID\u001b[0m: \u001b[38;5;166mtrue",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 8,
+                  "Content": "  containers:",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "\u001b[0m  \u001b[38;5;33mcontainers\u001b[0m:",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 9,
+                  "Content": "    - name: app",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "    - \u001b[38;5;33mname\u001b[0m: app",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 10,
+                  "Content": "      image: nginx:latest",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33mimage\u001b[0m: nginx:latest",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 11,
+                  "Content": "      securityContext:",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "      \u001b[38;5;33msecurityContext\u001b[0m:",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
                   "Number": 12,
+                  "Content": "        privileged: true",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "        \u001b[38;5;33mprivileged\u001b[0m: \u001b[38;5;166mtrue",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 13,
                   "Content": "        runAsUser: 0",
                   "IsCause": true,
                   "Annotation": "",
@@ -1723,12 +1960,12 @@
           "CauseMetadata": {
             "Provider": "Kubernetes",
             "Service": "general",
-            "StartLine": 8,
-            "EndLine": 12,
+            "StartLine": 9,
+            "EndLine": 13,
             "Code": {
               "Lines": [
                 {
-                  "Number": 8,
+                  "Number": 9,
                   "Content": "    - name: app",
                   "IsCause": true,
                   "Annotation": "",
@@ -1738,7 +1975,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 9,
+                  "Number": 10,
                   "Content": "      image: nginx:latest",
                   "IsCause": true,
                   "Annotation": "",
@@ -1748,7 +1985,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 10,
+                  "Number": 11,
                   "Content": "      securityContext:",
                   "IsCause": true,
                   "Annotation": "",
@@ -1758,7 +1995,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 11,
+                  "Number": 12,
                   "Content": "        privileged: true",
                   "IsCause": true,
                   "Annotation": "",
@@ -1768,7 +2005,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 12,
+                  "Number": 13,
                   "Content": "        runAsUser: 0",
                   "IsCause": true,
                   "Annotation": "",
@@ -1800,12 +2037,12 @@
           "CauseMetadata": {
             "Provider": "Kubernetes",
             "Service": "general",
-            "StartLine": 8,
-            "EndLine": 12,
+            "StartLine": 9,
+            "EndLine": 13,
             "Code": {
               "Lines": [
                 {
-                  "Number": 8,
+                  "Number": 9,
                   "Content": "    - name: app",
                   "IsCause": true,
                   "Annotation": "",
@@ -1815,7 +2052,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 9,
+                  "Number": 10,
                   "Content": "      image: nginx:latest",
                   "IsCause": true,
                   "Annotation": "",
@@ -1825,7 +2062,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 10,
+                  "Number": 11,
                   "Content": "      securityContext:",
                   "IsCause": true,
                   "Annotation": "",
@@ -1835,7 +2072,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 11,
+                  "Number": 12,
                   "Content": "        privileged: true",
                   "IsCause": true,
                   "Annotation": "",
@@ -1845,7 +2082,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 12,
+                  "Number": 13,
                   "Content": "        runAsUser: 0",
                   "IsCause": true,
                   "Annotation": "",
@@ -1877,12 +2114,12 @@
           "CauseMetadata": {
             "Provider": "Kubernetes",
             "Service": "general",
-            "StartLine": 8,
-            "EndLine": 12,
+            "StartLine": 9,
+            "EndLine": 13,
             "Code": {
               "Lines": [
                 {
-                  "Number": 8,
+                  "Number": 9,
                   "Content": "    - name: app",
                   "IsCause": true,
                   "Annotation": "",
@@ -1892,7 +2129,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 9,
+                  "Number": 10,
                   "Content": "      image: nginx:latest",
                   "IsCause": true,
                   "Annotation": "",
@@ -1902,7 +2139,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 10,
+                  "Number": 11,
                   "Content": "      securityContext:",
                   "IsCause": true,
                   "Annotation": "",
@@ -1912,7 +2149,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 11,
+                  "Number": 12,
                   "Content": "        privileged: true",
                   "IsCause": true,
                   "Annotation": "",
@@ -1922,7 +2159,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 12,
+                  "Number": 13,
                   "Content": "        runAsUser: 0",
                   "IsCause": true,
                   "Annotation": "",
@@ -1954,12 +2191,12 @@
           "CauseMetadata": {
             "Provider": "Kubernetes",
             "Service": "general",
-            "StartLine": 8,
-            "EndLine": 12,
+            "StartLine": 9,
+            "EndLine": 13,
             "Code": {
               "Lines": [
                 {
-                  "Number": 8,
+                  "Number": 9,
                   "Content": "    - name: app",
                   "IsCause": true,
                   "Annotation": "",
@@ -1969,7 +2206,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 9,
+                  "Number": 10,
                   "Content": "      image: nginx:latest",
                   "IsCause": true,
                   "Annotation": "",
@@ -1979,7 +2216,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 10,
+                  "Number": 11,
                   "Content": "      securityContext:",
                   "IsCause": true,
                   "Annotation": "",
@@ -1989,7 +2226,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 11,
+                  "Number": 12,
                   "Content": "        privileged: true",
                   "IsCause": true,
                   "Annotation": "",
@@ -1999,7 +2236,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 12,
+                  "Number": 13,
                   "Content": "        runAsUser: 0",
                   "IsCause": true,
                   "Annotation": "",
@@ -2031,12 +2268,12 @@
           "CauseMetadata": {
             "Provider": "Kubernetes",
             "Service": "general",
-            "StartLine": 8,
-            "EndLine": 12,
+            "StartLine": 9,
+            "EndLine": 13,
             "Code": {
               "Lines": [
                 {
-                  "Number": 8,
+                  "Number": 9,
                   "Content": "    - name: app",
                   "IsCause": true,
                   "Annotation": "",
@@ -2046,7 +2283,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 9,
+                  "Number": 10,
                   "Content": "      image: nginx:latest",
                   "IsCause": true,
                   "Annotation": "",
@@ -2056,7 +2293,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 10,
+                  "Number": 11,
                   "Content": "      securityContext:",
                   "IsCause": true,
                   "Annotation": "",
@@ -2066,7 +2303,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 11,
+                  "Number": 12,
                   "Content": "        privileged: true",
                   "IsCause": true,
                   "Annotation": "",
@@ -2076,7 +2313,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 12,
+                  "Number": 13,
                   "Content": "        runAsUser: 0",
                   "IsCause": true,
                   "Annotation": "",
@@ -2108,12 +2345,12 @@
           "CauseMetadata": {
             "Provider": "Kubernetes",
             "Service": "general",
-            "StartLine": 8,
-            "EndLine": 12,
+            "StartLine": 9,
+            "EndLine": 13,
             "Code": {
               "Lines": [
                 {
-                  "Number": 8,
+                  "Number": 9,
                   "Content": "    - name: app",
                   "IsCause": true,
                   "Annotation": "",
@@ -2123,7 +2360,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 9,
+                  "Number": 10,
                   "Content": "      image: nginx:latest",
                   "IsCause": true,
                   "Annotation": "",
@@ -2133,7 +2370,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 10,
+                  "Number": 11,
                   "Content": "      securityContext:",
                   "IsCause": true,
                   "Annotation": "",
@@ -2143,7 +2380,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 11,
+                  "Number": 12,
                   "Content": "        privileged: true",
                   "IsCause": true,
                   "Annotation": "",
@@ -2153,7 +2390,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 12,
+                  "Number": 13,
                   "Content": "        runAsUser: 0",
                   "IsCause": true,
                   "Annotation": "",
@@ -2185,12 +2422,12 @@
           "CauseMetadata": {
             "Provider": "Kubernetes",
             "Service": "general",
-            "StartLine": 8,
-            "EndLine": 12,
+            "StartLine": 9,
+            "EndLine": 13,
             "Code": {
               "Lines": [
                 {
-                  "Number": 8,
+                  "Number": 9,
                   "Content": "    - name: app",
                   "IsCause": true,
                   "Annotation": "",
@@ -2200,7 +2437,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 9,
+                  "Number": 10,
                   "Content": "      image: nginx:latest",
                   "IsCause": true,
                   "Annotation": "",
@@ -2210,7 +2447,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 10,
+                  "Number": 11,
                   "Content": "      securityContext:",
                   "IsCause": true,
                   "Annotation": "",
@@ -2220,7 +2457,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 11,
+                  "Number": 12,
                   "Content": "        privileged: true",
                   "IsCause": true,
                   "Annotation": "",
@@ -2230,7 +2467,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 12,
+                  "Number": 13,
                   "Content": "        runAsUser: 0",
                   "IsCause": true,
                   "Annotation": "",
@@ -2262,12 +2499,12 @@
           "CauseMetadata": {
             "Provider": "Kubernetes",
             "Service": "general",
-            "StartLine": 8,
-            "EndLine": 12,
+            "StartLine": 9,
+            "EndLine": 13,
             "Code": {
               "Lines": [
                 {
-                  "Number": 8,
+                  "Number": 9,
                   "Content": "    - name: app",
                   "IsCause": true,
                   "Annotation": "",
@@ -2277,7 +2514,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 9,
+                  "Number": 10,
                   "Content": "      image: nginx:latest",
                   "IsCause": true,
                   "Annotation": "",
@@ -2287,7 +2524,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 10,
+                  "Number": 11,
                   "Content": "      securityContext:",
                   "IsCause": true,
                   "Annotation": "",
@@ -2297,7 +2534,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 11,
+                  "Number": 12,
                   "Content": "        privileged: true",
                   "IsCause": true,
                   "Annotation": "",
@@ -2307,7 +2544,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 12,
+                  "Number": 13,
                   "Content": "        runAsUser: 0",
                   "IsCause": true,
                   "Annotation": "",
@@ -2339,12 +2576,12 @@
           "CauseMetadata": {
             "Provider": "Kubernetes",
             "Service": "general",
-            "StartLine": 8,
-            "EndLine": 12,
+            "StartLine": 9,
+            "EndLine": 13,
             "Code": {
               "Lines": [
                 {
-                  "Number": 8,
+                  "Number": 9,
                   "Content": "    - name: app",
                   "IsCause": true,
                   "Annotation": "",
@@ -2354,7 +2591,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 9,
+                  "Number": 10,
                   "Content": "      image: nginx:latest",
                   "IsCause": true,
                   "Annotation": "",
@@ -2364,7 +2601,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 10,
+                  "Number": 11,
                   "Content": "      securityContext:",
                   "IsCause": true,
                   "Annotation": "",
@@ -2374,7 +2611,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 11,
+                  "Number": 12,
                   "Content": "        privileged: true",
                   "IsCause": true,
                   "Annotation": "",
@@ -2384,7 +2621,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 12,
+                  "Number": 13,
                   "Content": "        runAsUser: 0",
                   "IsCause": true,
                   "Annotation": "",
@@ -2416,12 +2653,12 @@
           "CauseMetadata": {
             "Provider": "Kubernetes",
             "Service": "general",
-            "StartLine": 8,
-            "EndLine": 12,
+            "StartLine": 9,
+            "EndLine": 13,
             "Code": {
               "Lines": [
                 {
-                  "Number": 8,
+                  "Number": 9,
                   "Content": "    - name: app",
                   "IsCause": true,
                   "Annotation": "",
@@ -2431,7 +2668,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 9,
+                  "Number": 10,
                   "Content": "      image: nginx:latest",
                   "IsCause": true,
                   "Annotation": "",
@@ -2441,7 +2678,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 10,
+                  "Number": 11,
                   "Content": "      securityContext:",
                   "IsCause": true,
                   "Annotation": "",
@@ -2451,7 +2688,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 11,
+                  "Number": 12,
                   "Content": "        privileged: true",
                   "IsCause": true,
                   "Annotation": "",
@@ -2461,7 +2698,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 12,
+                  "Number": 13,
                   "Content": "        runAsUser: 0",
                   "IsCause": true,
                   "Annotation": "",
@@ -2493,12 +2730,12 @@
           "CauseMetadata": {
             "Provider": "Kubernetes",
             "Service": "general",
-            "StartLine": 8,
-            "EndLine": 12,
+            "StartLine": 9,
+            "EndLine": 13,
             "Code": {
               "Lines": [
                 {
-                  "Number": 8,
+                  "Number": 9,
                   "Content": "    - name: app",
                   "IsCause": true,
                   "Annotation": "",
@@ -2508,7 +2745,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 9,
+                  "Number": 10,
                   "Content": "      image: nginx:latest",
                   "IsCause": true,
                   "Annotation": "",
@@ -2518,7 +2755,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 10,
+                  "Number": 11,
                   "Content": "      securityContext:",
                   "IsCause": true,
                   "Annotation": "",
@@ -2528,7 +2765,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 11,
+                  "Number": 12,
                   "Content": "        privileged: true",
                   "IsCause": true,
                   "Annotation": "",
@@ -2538,7 +2775,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 12,
+                  "Number": 13,
                   "Content": "        runAsUser: 0",
                   "IsCause": true,
                   "Annotation": "",
@@ -2570,12 +2807,12 @@
           "CauseMetadata": {
             "Provider": "Kubernetes",
             "Service": "general",
-            "StartLine": 8,
-            "EndLine": 12,
+            "StartLine": 9,
+            "EndLine": 13,
             "Code": {
               "Lines": [
                 {
-                  "Number": 8,
+                  "Number": 9,
                   "Content": "    - name: app",
                   "IsCause": true,
                   "Annotation": "",
@@ -2585,7 +2822,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 9,
+                  "Number": 10,
                   "Content": "      image: nginx:latest",
                   "IsCause": true,
                   "Annotation": "",
@@ -2595,7 +2832,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 10,
+                  "Number": 11,
                   "Content": "      securityContext:",
                   "IsCause": true,
                   "Annotation": "",
@@ -2605,7 +2842,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 11,
+                  "Number": 12,
                   "Content": "        privileged: true",
                   "IsCause": true,
                   "Annotation": "",
@@ -2615,7 +2852,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 12,
+                  "Number": 13,
                   "Content": "        runAsUser: 0",
                   "IsCause": true,
                   "Annotation": "",
@@ -2647,12 +2884,12 @@
           "CauseMetadata": {
             "Provider": "Kubernetes",
             "Service": "general",
-            "StartLine": 10,
-            "EndLine": 12,
+            "StartLine": 11,
+            "EndLine": 13,
             "Code": {
               "Lines": [
                 {
-                  "Number": 10,
+                  "Number": 11,
                   "Content": "      securityContext:",
                   "IsCause": true,
                   "Annotation": "",
@@ -2662,7 +2899,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 11,
+                  "Number": 12,
                   "Content": "        privileged: true",
                   "IsCause": true,
                   "Annotation": "",
@@ -2672,7 +2909,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 12,
+                  "Number": 13,
                   "Content": "        runAsUser: 0",
                   "IsCause": true,
                   "Annotation": "",
@@ -2704,12 +2941,12 @@
           "CauseMetadata": {
             "Provider": "Kubernetes",
             "Service": "general",
-            "StartLine": 8,
-            "EndLine": 12,
+            "StartLine": 9,
+            "EndLine": 13,
             "Code": {
               "Lines": [
                 {
-                  "Number": 8,
+                  "Number": 9,
                   "Content": "    - name: app",
                   "IsCause": true,
                   "Annotation": "",
@@ -2719,7 +2956,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 9,
+                  "Number": 10,
                   "Content": "      image: nginx:latest",
                   "IsCause": true,
                   "Annotation": "",
@@ -2729,7 +2966,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 10,
+                  "Number": 11,
                   "Content": "      securityContext:",
                   "IsCause": true,
                   "Annotation": "",
@@ -2739,7 +2976,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 11,
+                  "Number": 12,
                   "Content": "        privileged: true",
                   "IsCause": true,
                   "Annotation": "",
@@ -2749,7 +2986,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 12,
+                  "Number": 13,
                   "Content": "        runAsUser: 0",
                   "IsCause": true,
                   "Annotation": "",
@@ -2829,7 +3066,7 @@
             "Provider": "Kubernetes",
             "Service": "general",
             "StartLine": 5,
-            "EndLine": 12,
+            "EndLine": 13,
             "Code": {
               "Lines": [
                 {
@@ -2854,6 +3091,16 @@
                 },
                 {
                   "Number": 7,
+                  "Content": "  hostPID: true",
+                  "IsCause": true,
+                  "Annotation": "",
+                  "Truncated": false,
+                  "Highlighted": "\u001b[0m  \u001b[38;5;33mhostPID\u001b[0m: \u001b[38;5;166mtrue",
+                  "FirstCause": false,
+                  "LastCause": false
+                },
+                {
+                  "Number": 8,
                   "Content": "  containers:",
                   "IsCause": true,
                   "Annotation": "",
@@ -2863,7 +3110,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 8,
+                  "Number": 9,
                   "Content": "    - name: app",
                   "IsCause": true,
                   "Annotation": "",
@@ -2873,7 +3120,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 9,
+                  "Number": 10,
                   "Content": "      image: nginx:latest",
                   "IsCause": true,
                   "Annotation": "",
@@ -2883,7 +3130,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 10,
+                  "Number": 11,
                   "Content": "      securityContext:",
                   "IsCause": true,
                   "Annotation": "",
@@ -2893,7 +3140,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 11,
+                  "Number": 12,
                   "Content": "        privileged: true",
                   "IsCause": true,
                   "Annotation": "",
@@ -2903,7 +3150,7 @@
                   "LastCause": false
                 },
                 {
-                  "Number": 12,
+                  "Number": 13,
                   "Content": "        runAsUser: 0",
                   "IsCause": true,
                   "Annotation": "",

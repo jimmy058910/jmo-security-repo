@@ -271,8 +271,10 @@ Composite similarity is weighted **toward location** — `0.50` location, `0.25`
 message, `0.25` metadata — so two tools agreeing on a `path:line` are most of
 the way to the `0.65` default threshold before their wording is considered.
 Trivy's `DS-0001` (`':latest' tag used`) and Hadolint's `DL3006` on the same
-Dockerfile line score `0.82` and do cluster, via the rule-equivalence table in
-`scripts/core/rule_equivalence.py`.
+Dockerfile line score `0.79` and do cluster, via the rule-equivalence table in
+`scripts/core/rule_equivalence.py`. (Measured 2026-09-28: trivy 0.74.0 and
+hadolint 2.14.0 run on one `FROM alpine` line, each output through its
+adapter, scored by `SimilarityCalculator.calculate_similarity`.)
 
 No findings are lost — anything not clustered is reported separately.
 
@@ -286,7 +288,8 @@ very little, because there is nothing for them to agree on.
 > This section previously said clustering was "conservative", that similarity
 > was "weighted toward message text", and that the Trivy/Hadolint pair scored
 > "about `0.39`". All three were measured false — the weights favour location,
-> and that exact pair scores `0.82`. The sentence "no findings are lost" was
+> and that pair scores `0.79` (measured as above). The sentence "no findings
+> are lost" was
 > also untrue until the one-finding-per-tool rule landed: clustering was
 > merging distinct findings from a single tool and dropping them from the
 > report.

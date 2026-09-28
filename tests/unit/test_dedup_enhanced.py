@@ -837,7 +837,7 @@ def test_trivy_hadolint_checkov_latest_tag_clustering():
             "tool": {"name": "checkov"},
             "severity": "LOW",
             "message": "Ensure the base image uses a non latest version tag",
-            "ruleId": "CKV_DOCKER_1",
+            "ruleId": "CKV_DOCKER_7",  # CKV_DOCKER_1 is port 22 (#1221)
             "location": {"path": "Dockerfile", "startLine": 1},
             "raw": {},
         },

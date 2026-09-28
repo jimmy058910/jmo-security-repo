@@ -36,8 +36,9 @@ from __future__ import annotations
 # `CKV_AWS_17` said "RDS encryption" while the rule checkov actually ships
 # under that id is "Ensure all data stored in RDS is not publicly accessible".
 #
-#   `# alias:` one tool reporting one check under more than one id
-#             (hadolint DL3018/DL3019)
+#   `# alias:` one tool reporting one check under more than one id (none
+#             now: hadolint DL3018/DL3019 were listed as one, and are "Pin
+#             versions in apk add" and "Use the `--no-cache` switch")
 #   `# cross:` different tools reporting the SAME issue -- what the table is
 #             for, and the only relationship that should span tool names
 #
@@ -59,52 +60,84 @@ from __future__ import annotations
 # left `dockerfile-apt-get-upgrade` (hadolint DL3005) and
 # `dockerfile-missing-version-pin` (hadolint DL3008) with one tool each, and a
 # one-tool group cannot deduplicate across tools, so both groups are gone.
+#
+# Live trivy keys made their partners live too, and eleven of those named a
+# different check, so a correct trivy id could merge with the wrong control
+# (the task review scored KSV-0012 "Runs as root user" against checkov's
+# allowPrivilegeEscalation check at 0.778, over the 0.65 threshold, when the
+# two share a line range). Every partner below was measured on
+# the same three files: hadolint 2.14.0 and checkov 3.3.16 run on them, plus
+# `checkov --list`; each comment quotes the tool's own words. A partner naming
+# another check moved to the group of the trivy id that names it, or went. The
+# guards are in tests/unit/test_rule_equivalence_table.py.
 RULE_EQUIVALENCE: dict[str, list[tuple[str, str]]] = {
     # ===== Dockerfile Best Practices =====
     "dockerfile-latest-tag": [
-        ("trivy", "DS-0001"),  # "':latest' tag used"
-        ("hadolint", "DL3006"),
-        ("hadolint", "DL3007"),  # Using latest is prone to errors
-        ("checkov", "CKV_DOCKER_1"),
-        ("checkov", "CKV_DOCKER_7"),  # Ensure base image uses a non-latest tag
+        ("trivy", "DS-0001"),  # "':latest' tag used" (an untagged FROM too)
+        ("hadolint", "DL3006"),  # "Always tag the version of an image explicitly"
+        ("hadolint", "DL3007"),  # "Using latest is prone to errors if the image..."
+        ("checkov", "CKV_DOCKER_7"),  # "Ensure the base image uses a non latest..."
     ],
     "dockerfile-no-healthcheck": [
         ("trivy", "DS-0026"),  # "No HEALTHCHECK defined"
-        ("hadolint", "DL3055"),
+        # "`HEALTHCHECK` instruction missing." -- off unless enabled. DL3055,
+        # listed here until #1221, is "Label `commit` is not a valid git hash."
+        ("hadolint", "DL3057"),
+        # "Ensure that HEALTHCHECK instructions have been added to container images"
         ("checkov", "CKV_DOCKER_2"),
     ],
     "dockerfile-no-user": [
         ("trivy", "DS-0002"),  # "Image user should not be 'root'"
-        ("hadolint", "DL3002"),
-        ("checkov", "CKV_DOCKER_3"),
-        ("checkov", "CKV_DOCKER_8"),  # Ensure the last USER is not root
+        ("hadolint", "DL3002"),  # "Last USER should not be root"
+        ("checkov", "CKV_DOCKER_3"),  # "Ensure that a user for the container..."
+        ("checkov", "CKV_DOCKER_8"),  # "Ensure the last USER is not root"
     ],
     "dockerfile-add-instead-of-copy": [
         ("trivy", "DS-0005"),  # "ADD instead of COPY"
-        ("hadolint", "DL3010"),
-        ("checkov", "CKV_DOCKER_4"),
-    ],
-    "dockerfile-hardcoded-secret": [
-        # "Secrets passed via `build-args` or envs or copied secret files"
-        ("trivy", "DS-0031"),
-        ("hadolint", "DL3059"),  # Multiple consecutive RUN with secrets
-        ("checkov", "CKV_DOCKER_5"),
-        ("checkov", "CKV_DOCKER_11"),  # Ensure secret args are not hard-coded
+        # "Use COPY instead of ADD for files and folders". DL3010, listed here
+        # until #1221, is its opposite: "Use `ADD` for extracting archives".
+        ("hadolint", "DL3020"),
+        ("checkov", "CKV_DOCKER_4"),  # "Ensure that COPY is used instead of ADD..."
     ],
     "dockerfile-sudo": [
         ("trivy", "DS-0010"),  # "RUN using 'sudo'"
-        ("hadolint", "DL3004"),
-        ("checkov", "CKV2_DOCKER_1"),
+        ("hadolint", "DL3004"),  # "Do not use sudo as it leads to unpredictable..."
+        ("checkov", "CKV2_DOCKER_1"),  # "Ensure that sudo isn't used"
     ],
     "dockerfile-missing-apk-no-cache": [
         ("trivy", "DS-0025"),  # "'apk add' is missing '--no-cache'"
-        ("hadolint", "DL3018"),  # Pin versions in apk add
-        ("hadolint", "DL3019"),  # Use --no-cache
+        ("hadolint", "DL3019"),  # "Use the `--no-cache` switch to avoid ..."
     ],
-    "dockerfile-curl-pipe-bash": [
-        ("hadolint", "DL4006"),  # Set SHELL option pipefail
+    "dockerfile-update-alone": [
+        ("trivy", "DS-0017"),  # "'RUN <package-manager> update' instruction alone"
+        # "Ensure update instructions are not use alone in the Dockerfile". It
+        # counts update RUNs against install RUNs over the whole file, so it
+        # did not fire beside DS-0017 on the recorded Dockerfile.
+        ("checkov", "CKV_DOCKER_5"),
+    ],
+    "dockerfile-duplicate-stage-alias": [
+        ("trivy", "DS-0012"),  # "Duplicate aliases defined in different FROMs"
+        ("hadolint", "DL3024"),  # "FROM aliases (stage names) must be unique"
+        # "Ensure From Alias are unique for multistage builds." (matches a
+        # lower-case ` as ` only)
+        ("checkov", "CKV_DOCKER_11"),
+    ],
+    "dockerfile-port-22-exposed": [
+        ("trivy", "DS-0004"),  # "Port 22 exposed"
+        ("checkov", "CKV_DOCKER_1"),  # "Ensure port 22 is not exposed"
+    ],
+    "dockerfile-deprecated-maintainer": [
+        ("trivy", "DS-0022"),  # "Deprecated MAINTAINER used"
+        ("hadolint", "DL4000"),  # "MAINTAINER is deprecated"
+        # "Ensure that LABEL maintainer is used instead of MAINTAINER (deprecated)"
         ("checkov", "CKV_DOCKER_6"),
     ],
+    # REMOVED (#1221): `dockerfile-hardcoded-secret` held trivy DS-0031
+    # ("Secrets passed via `build-args` or envs or copied secret files") with
+    # hadolint DL3059 ("Multiple consecutive `RUN` instructions"), checkov
+    # CKV_DOCKER_5 (update alone) and CKV_DOCKER_11 (stage aliases); neither
+    # tool has a secrets-in-ENV check. `dockerfile-curl-pipe-bash` held hadolint
+    # DL4006 (pipefail) with checkov CKV_DOCKER_6 (MAINTAINER), which moved.
     # ===== Infrastructure as Code =====
     "iac-public-s3-bucket": [
         ("trivy", "AWS-0092"),  # "S3 Buckets not publicly accessible through ACL."
@@ -139,25 +172,48 @@ RULE_EQUIVALENCE: dict[str, list[tuple[str, str]]] = {
         # Measured from checkov's own `check_name`.
     ],
     # ===== Kubernetes Security =====
+    # checkov's "Do not admit ..." checks (CKV_K8S_1 to _7) read only a
+    # PodSecurityPolicy; the pod-level checks are the ones that fire on a
+    # workload, beside trivy's.
     "k8s-privileged-container": [
         # "Privileged"; the old key KSV001 is "Can elevate its own privileges"
         ("trivy", "KSV-0017"),
+        ("checkov", "CKV_K8S_16"),  # "Container should not be privileged"
+    ],
+    "k8s-privilege-escalation": [
+        ("trivy", "KSV-0001"),  # "Can elevate its own privileges"
+        # "Containers should not run with allowPrivilegeEscalation"
+        ("checkov", "CKV_K8S_20"),
+    ],
+    "k8s-host-pid": [
+        ("trivy", "KSV-0010"),  # "Access to host PID"
+        # "Containers should not share the host process ID namespace"
+        ("checkov", "CKV_K8S_17"),
+        # "Do not admit containers wishing to share the host process ID
+        # namespace" (a PodSecurityPolicy); listed as privileged until #1221
         ("checkov", "CKV_K8S_1"),
     ],
     "k8s-root-container": [
         ("trivy", "KSV-0012"),  # "Runs as root user"
-        ("checkov", "CKV_K8S_6"),
-        ("checkov", "CKV_K8S_20"),
+        ("checkov", "CKV_K8S_23"),  # "Minimize the admission of root containers"
+        ("checkov", "CKV_K8S_6"),  # "Do not admit root containers" (a PSP)
     ],
     "k8s-host-network": [
         ("trivy", "KSV-0009"),  # "Access to host network"
+        # "Containers should not share the host network namespace"
         ("checkov", "CKV_K8S_19"),
     ],
-    "k8s-no-resource-limits": [
+    "k8s-no-cpu-limits": [
         ("trivy", "KSV-0011"),  # "CPU not limited"
-        ("checkov", "CKV_K8S_11"),
-        ("checkov", "CKV_K8S_12"),
-        ("checkov", "CKV_K8S_13"),
+        ("checkov", "CKV_K8S_11"),  # "CPU limits should be set"
+    ],
+    "k8s-no-memory-limits": [
+        ("trivy", "KSV-0018"),  # "Memory not limited"
+        ("checkov", "CKV_K8S_13"),  # "Memory limits should be set"
+    ],
+    "k8s-no-memory-requests": [
+        ("trivy", "KSV-0016"),  # "Memory requests not specified"
+        ("checkov", "CKV_K8S_12"),  # "Memory requests should be set"
     ],
     # ===== Secret Detection =====
     "secret-aws-access-key": [
