@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import tomllib
 from collections.abc import Collection, Mapping
 from pathlib import Path
@@ -473,6 +474,54 @@ def segment_regex(name: str) -> str:
     return rf"(^|[\\/]){re2_escape(name)}([\\/]|$)"
 
 
+#: cmd.exe's own metacharacters. A `.cmd` tool's argv is re-parsed by cmd.exe
+#: on Windows -- `CreateProcess` launches a `.bat`/`.cmd` target through
+#: `%ComSpec% /c`, and `list2cmdline` quotes only an argument holding a space
+#: -- so any of these reaching checkov's `--skip-path` value bare breaks the
+#: invocation (measured: `|`/`^` in #1313's proposed rendering, rc 255). A
+#: results directory's name is the last segment of a user-supplied
+#: `--results-dir`, so it can hold any of these; `re.escape` does not help,
+#: since it escapes `&`, `|` and `^` with a backslash that still leaves the
+#: character itself in the string (`\&`, `\|`, `\^`), and passes `%`, `<`,
+#: `>` through unescaped. Rendered as `.` instead: it matches that one
+#: character too (harmlessly broad) and never reaches cmd.exe as itself.
+_CMD_METACHARS = frozenset("&|^<>%")
+
+
+def checkov_skip_path_pattern(name: str) -> str:
+    r"""One directory NAME as checkov's ``--skip-path`` regex (#1313).
+
+    checkov applies each ``--skip-path`` value with ``re.search`` against the
+    scanned file's **absolute** path, falling back to a literal-substring
+    test when the value fails to compile (`base_runner.py:241-248`). A bare
+    name is therefore a substring match everywhere: ``vendor`` drops
+    ``vendor-accounts.tf``, ``venv`` drops ``envs/devenv/main.tf``, ``results``
+    drops ``modules/results-bucket/main.tf``, and a repository living under a
+    directory of that name (``vendor/``, ``results/`` with its results inside
+    it) scans **nothing** -- ``resource_count: 0``, exit 0, the row still
+    reads ``ran``.
+
+    ``[\\/]NAME$``, not ``(^|[\\/])NAME([\\/]|$)`` (#1313's own proposal):
+    checkov walks the tree and tests ``<walked dir>\\<entry>`` as it goes, so
+    an end-anchored pattern can only ever match the entry itself -- never a
+    folder above the scan root, which is what made the substring form so
+    costly in the first place. The proposed form also crashes checkov twice
+    over, which is why this task does not reuse it (or `segment_regex`,
+    which shares its `^`/`|` shape): on Windows, cmd.exe re-parses a `.cmd`
+    tool's `\\|` and `^` (rc 255, measured); on every platform, an unguarded
+    second `re.compile` in `module_finder.py:63` raises on them regardless
+    (rc 2, no output).
+
+    Escaped with Python's ``re.escape`` -- checkov is Python ``re``, not RE2,
+    so ``re2_escape`` (written for Go regexes, and it mis-escapes a space)
+    does not apply here. The six characters in ``_CMD_METACHARS`` are
+    rendered as ``.`` rather than escaped, because ``re.escape`` leaves the
+    character itself in the string for four of them (see that constant).
+    """
+    escaped = "".join("." if c in _CMD_METACHARS else re.escape(c) for c in name)
+    return rf"[\\/]{escaped}$"
+
+
 def trufflehog_exclude_pattern(name: str, root: str | None = None) -> str:
     """One directory name as a trufflehog ``--exclude-paths`` regex.
 
@@ -757,9 +806,11 @@ def tool_exclusion_flags(
     if style == ExclusionStyle.INLINE_REGEX:
         return [f"{flag}={segment_regex(d)}" for d in dirs]
     if style == ExclusionStyle.REGEX:
-        # checkov: a bare name already matches at any depth, and `**/` would
-        # not compile as a regex - it is dropped silently.
-        return [arg for d in dirs for arg in (flag, d)]
+        # checkov: `re.search` against the absolute path, so a bare name is
+        # a substring match anywhere in it (#1313) - end-anchored to one
+        # whole path segment instead. `**/` would not compile as a regex
+        # either way - it is dropped silently.
+        return [arg for d in dirs for arg in (flag, checkov_skip_path_pattern(d))]
     # SEPARATE: the `**/` is what makes a nested directory match at all, and
     # syft and grype reject a bare name outright.
     return [arg for d in dirs for arg in (flag, f"**/{d}")]

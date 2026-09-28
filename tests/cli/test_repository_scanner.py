@@ -736,9 +736,12 @@ class TestExclusions:
             command[i + 1] for i, tok in enumerate(command) if tok == "--skip-dirs"
         ]
 
-    def test_checkov_gets_bare_names(self, tmp_path):
+    def test_checkov_gets_an_end_anchored_escaped_pattern(self, tmp_path):
         """`--skip-path` is a regex and checkov drops an unparseable one in
-        silence, so `**/node_modules` would exclude nothing."""
+        silence, so `**/node_modules` would exclude nothing. A bare name is
+        also wrong -- `re.search` against the absolute path makes it a
+        substring match anywhere (#1313) -- so the value is end-anchored to
+        one whole path segment and the name itself is escaped."""
         _, _, defs = _scan(
             _repo(tmp_path, files={"main.tf": "x\n"}), tmp_path / "out", ["checkov"]
         )
@@ -747,8 +750,8 @@ class TestExclusions:
             command[i + 1] for i, tok in enumerate(command) if tok == "--skip-path"
         ]
 
-        assert "node_modules" in values
-        assert ".venv" in values
+        assert r"[\\/]node_modules$" in values
+        assert r"[\\/]\.venv$" in values
         assert not any(v.startswith("**") for v in values), values
 
     def test_checkov_narrows_frameworks_on_the_repo_invocation(self, tmp_path):
@@ -930,7 +933,7 @@ class TestTheInTreeResultsDirectoryIsKeptOutOfTheScan:
         _, _, defs = _scan(repo, repo / "results" / "individual-repos", ["checkov"])
         cmd = " ".join(defs["checkov"].command)
 
-        assert "--skip-path results" in cmd, cmd
+        assert r"--skip-path [\\/]results$" in cmd, cmd
         assert "individual-repos" not in cmd.split("--skip-path")[-1]
 
     def test_a_results_dir_outside_the_repo_adds_no_exclusion(self, tmp_path):

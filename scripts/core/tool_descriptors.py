@@ -88,11 +88,18 @@ class ExclusionStyle(StrEnum):
 
     The style cannot be inferred from the flag's name. trivy and checkov both
     take a repeatable `--flag VALUE`, and the value that works is opposite:
-    trivy's is a glob anchored at the scan root (`**/vendor` for any depth),
-    checkov's a regex matched against the whole path (`**` does not compile
-    and is dropped without a word, so `vendor` is right). syft and grype reject
-    a bare name outright (rc 1: "must start with one of: './', '*/', or
-    '**/'"), and `./results` covers only the root copy (measured 2026-09-25).
+    trivy's is a glob anchored at the scan root (`**/vendor` for any depth);
+    checkov's is a Python regex matched with `re.search` against the whole
+    (absolute) path, so a bare name is a substring match everywhere -
+    `vendor` also drops `vendor-accounts.tf`, and a repository living under a
+    `vendor/` directory scans nothing at all (#1313). checkov's value is
+    rendered `[\\/]NAME$`, the name escaped, by `checkov_skip_path_pattern`
+    (`scripts/cli/scan_utils.py`) - see that function for why it is not the
+    `(^|[\\/])NAME([\\/]|$)` shape gosec and trufflehog use. `**` does not
+    compile as a regex at all and is dropped without a word either way. syft
+    and grype reject a bare name outright (rc 1: "must start with one of:
+    './', '*/', or '**/'"), and `./results` covers only the root copy
+    (measured 2026-09-25).
     """
 
     INLINE = "inline"  # one `--flag=NAME` per directory
@@ -103,7 +110,11 @@ class ExclusionStyle(StrEnum):
     # log, which it writes with or without a Go toolchain).
     INLINE_REGEX = "inline_regex"
     SEPARATE = "separate"  # one `--flag **/NAME` pair per directory
-    REGEX = "regex"  # one `--flag NAME` pair per directory
+    # One `--flag PATTERN` pair per directory: checkov only. The pattern is
+    # `[\\/]NAME$`, the name escaped (`checkov_skip_path_pattern`) - not a
+    # bare name (#1313, a substring match) and not `(^|[\\/])NAME([\\/]|$)`
+    # (crashes checkov on Windows and on every platform, see that function).
+    REGEX = "regex"
     PATTERN_FILE = "pattern_file"  # a generated file of regexes, one flag
     # A generated config file, one flag: gitleaks has no exclude flag at all,
     # only a config's `[[allowlists]] paths`.

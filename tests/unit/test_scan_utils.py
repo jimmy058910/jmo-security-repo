@@ -349,6 +349,12 @@ class TestToolExclusionFlags:
         `--skip-path '**/vendor'` reports the same 3, `--skip-path vendor`
         reports 1. trivy is the exact inverse - see the trivy test - which is
         why these two share a flag shape and not a style.
+
+        A bare name is *also* wrong, just less loudly: `re.search` against the
+        absolute path makes it a substring match anywhere, so `vendor` drops
+        `vendor-accounts.tf` too, and a repository living under a `vendor/`
+        directory scans nothing at all (#1313). The value is end-anchored to
+        one whole path segment instead - see `checkov_skip_path_pattern`.
         """
         from scripts.cli.scan_utils import tool_exclusion_flags
 
@@ -360,15 +366,15 @@ class TestToolExclusionFlags:
         )
         assert flags == [
             "--skip-path",
-            ".git",
+            r"[\\/]\.git$",
             "--skip-path",
-            "node_modules",
+            r"[\\/]node_modules$",
             "--skip-path",
-            "vendor",
+            r"[\\/]vendor$",
             "--skip-path",
-            ".venv",
+            r"[\\/]\.venv$",
             "--skip-path",
-            "venv",
+            r"[\\/]venv$",
         ]
 
     def test_trivy_needs_a_globstar_or_a_nested_directory_is_walked(self):
@@ -463,6 +469,108 @@ class TestToolExclusionFlags:
         flags = tool_exclusion_flags("semgrep", results_dir_name="vendor")
 
         assert flags.count("--exclude=vendor") == 1
+
+
+class TestCheckovSkipPathPattern:
+    """#1313: checkov applies `--skip-path` with `re.search` against the
+    absolute path (literal-substring fallback if it fails to compile), so a
+    bare name drops unrelated files and drops everything when the scan root
+    itself lives under a directory of that name. `checkov_skip_path_pattern`
+    end-anchors the value to one whole path segment and escapes the name.
+
+    Each assertion here mirrors checkov's own matching, not just the
+    rendered string, so a mutation that still "looks like a regex" is still
+    caught: dropping the anchor or the escape changes what actually matches.
+    """
+
+    def test_matches_the_segment_itself_at_any_depth(self):
+        import re
+
+        from scripts.cli.scan_utils import checkov_skip_path_pattern
+
+        pattern = checkov_skip_path_pattern("vendor")
+
+        assert re.search(pattern, r"C:\repo\vendor")
+        assert re.search(pattern, r"C:\repo\a\b\vendor")
+        assert re.search(pattern, "/repo/vendor")  # POSIX separator too
+
+    def test_the_end_anchor_stops_a_substring_match(self):
+        """Mutation: drop the trailing `$`. Without it, `[\\/]vendor` is a
+        substring match again, and `vendor` would still drop
+        `vendor-accounts.tf` -- the exact defect #1313 reports."""
+        import re
+
+        from scripts.cli.scan_utils import checkov_skip_path_pattern
+
+        pattern = checkov_skip_path_pattern("vendor")
+
+        assert pattern.endswith("$")
+        assert not re.search(pattern, r"C:\repo\vendor-accounts.tf")
+        assert not re.search(pattern, r"C:\repo\vendor-portal\app\main.tf")
+
+    def test_a_bare_name_would_also_drop_unrelated_files(self):
+        """The substring defect itself, pinned so a regression that reverts
+        to the bare-name spelling (TOOL_EXCLUSION_FLAG's old REGEX branch)
+        is caught even if someone "fixes" it by re-adding `**/` or a bare
+        name rather than through `checkov_skip_path_pattern`."""
+        import re
+
+        bare = "vendor"
+
+        assert re.search(bare, r"C:\repo\vendor-accounts.tf")
+        assert re.search(
+            bare, r"C:\repo\envs\devenv\main.tf".replace("devenv", "vendor")
+        )
+
+    def test_the_name_is_escaped_not_matched_as_a_regex(self):
+        """Mutation: drop `re.escape`. `.venv`'s dot would then match ANY
+        character, so an unescaped pattern also drops a file merely ending
+        in `venv` preceded by any byte -- not just the literal `.venv`."""
+        import re
+
+        from scripts.cli.scan_utils import checkov_skip_path_pattern
+
+        pattern = checkov_skip_path_pattern(".venv")
+
+        assert r"\." in pattern, f"the dot in .venv must be escaped: {pattern}"
+        assert re.search(pattern, r"C:\repo\.venv")
+        assert not re.search(pattern, r"C:\repo\Xvenv")
+        # Proof the assertion above has teeth: the *unescaped* shape it guards
+        # against really does match what the escaped one correctly rejects.
+        unescaped = r"[\\/].venv$"
+        assert re.search(unescaped, r"C:\repo\Xvenv")
+
+    def test_cmd_exe_metacharacters_never_reach_the_rendered_string(self):
+        """A results directory's name is the last segment of a user-supplied
+        `--results-dir` and can hold any character. `re.escape` leaves `&`,
+        `|` and `^` in the string (as `\\&`, `\\|`, `\\^`) and passes `%`,
+        `<`, `>` through untouched -- all six are cmd.exe metacharacters a
+        `.cmd` tool's argv is re-parsed for on Windows (`list2cmdline` quotes
+        only an argument holding a space; measured separately: an unhandled
+        `&` here produces a stray `'x$' is not recognized` command and a
+        truncated `--skip-path` value). Rendered as `.` instead, so none of
+        them survives into the pattern checkov actually receives.
+        """
+        import re
+
+        from scripts.cli.scan_utils import checkov_skip_path_pattern
+
+        for raw in ("&", "|", "^", "<", ">", "%"):
+            name = f"results{raw}x"
+            pattern = checkov_skip_path_pattern(name)
+
+            assert raw not in pattern, (name, pattern)
+            # Still matches the literal name -- `.` is harmlessly broad, not
+            # a dead exclusion.
+            assert re.search(pattern, f"C:\\repo\\{name}")
+
+    def test_an_ordinary_name_is_unaffected(self):
+        """The metacharacter handling must not widen an already-safe name:
+        no character of it is special to cmd.exe, so every position is a
+        plain `re.escape` output, not a `.`."""
+        from scripts.cli.scan_utils import checkov_skip_path_pattern
+
+        assert checkov_skip_path_pattern("node_modules") == r"[\\/]node_modules$"
 
 
 class TestTruffleHogExcludePatterns:
@@ -672,7 +780,7 @@ class TestTheResultsDirectoryIsExcludedWhenItIsInsideTheTree:
 
         assert semgrep[-1] == "--exclude=results"
         assert trivy[-2:] == ["--skip-dirs", "**/results"]
-        assert checkov[-2:] == ["--skip-path", "results"]
+        assert checkov[-2:] == ["--skip-path", r"[\\/]results$"]
         assert "**" not in " ".join(checkov)
 
     def test_the_trufflehog_exclude_file_gains_the_results_dir(self, tmp_path):
