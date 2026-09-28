@@ -253,6 +253,28 @@ below replaces a number that would fail, or pass for the wrong reason:
 - **trivy gains `--offline-scan`**: the coverage review measured a Maven lookup failing
   twice with 429 and producing no output; the vulnerability database is already local.
 
+### Corrections from PR O's measurement (2026-09-28)
+
+PR O's execution measured past what the list above assumed, without changing any of it:
+
+- `conan.lock` is dropped from the accepted names above: OSV publishes no ConanCenter
+  vulnerability database (a 404, and it is absent from OSV's own `ecosystems.txt`), so a
+  `conan.lock`-only repository can only ever fail. The offline database set is decision 6's
+  ten ecosystems plus CRAN (`renv.lock`): eleven.
+- Lockfile names are matched case-sensitively. Windows' own glob is case-insensitive, and so
+  was the ecosystem lookup, so a `Requirements.txt` beside a `package-lock.json` reached
+  osv-scanner, which picks its extractor by the exact name and aborted the whole run with no
+  output.
+- The row's command gained three flags the command line above lacks: `--no-resolve`
+  (`pom.xml` and `requirements.txt` resolve transitively through deps.dev without it, a
+  network call), `--allow-no-lockfiles` (a lockfile with no packages exits 128 with no output
+  otherwise), and `--no-call-analysis=all` (Go's call analysis runs whenever a Go toolchain
+  happens to be installed, and hides the vulnerabilities it finds uncalled). Each lockfile is
+  passed as `-L :<path>`, not `-L <path>`: a POSIX path containing `:` is otherwise misparsed
+  as `[parse-as:]path`.
+- A partial offline database runs the present lockfiles and fails only the row naming the
+  ecosystems it is missing, rather than failing the whole invocation.
+
 ## PR sequence
 
 Each PR into `dev`, green before the next is cut from it. The tool count moves in Z,
