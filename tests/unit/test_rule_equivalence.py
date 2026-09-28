@@ -14,6 +14,7 @@ Version: 1.0.0
 from pathlib import Path
 
 import pytest
+import yaml
 
 from scripts.core.rule_equivalence import (
     RULE_EQUIVALENCE,
@@ -611,6 +612,21 @@ class TestGitleaksIdsAreExactMatchOnly:
             "zendesk-secret-key",
         ):
             assert must_have in GITLEAKS_8_30_1_DEFAULT_IDS, must_have
+
+    def test_the_snapshot_is_of_the_gitleaks_versions_yaml_pins(self):
+        """The id list is a hand snapshot of one release's config. A gitleaks
+        bump can add an id a listed one prefixes, or one that belongs in a
+        class, and every test here would still pass against the old list."""
+        versions = yaml.safe_load(
+            (Path(__file__).resolve().parents[2] / "versions.yaml").read_bytes()
+        )
+        pinned = str(versions["binary_tools"]["gitleaks"]["version"])
+        assert pinned == "8.30.1", (
+            f"versions.yaml pins gitleaks {pinned}, but GITLEAKS_8_30_1_DEFAULT_IDS "
+            f"is gitleaks 8.30.1's id list. Re-derive it from config/gitleaks.toml "
+            f"at tag v{pinned} (the command is above the list), rename it, and "
+            f"re-check test_only_the_five_intended_ids_resolve against it."
+        )
 
     def test_only_the_five_intended_ids_resolve(self):
         resolved = {
