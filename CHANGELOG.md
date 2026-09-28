@@ -245,7 +245,8 @@ All notable changes to JMo Security will be documented in this file.
   exposed") sat with the `:latest` checks, hadolint's `DL3010` ("use ADD for extracting
   archives") with "use COPY instead of ADD". Every entry was checked against its tool's
   own output: trivy's entries are the ids it prints, each wrong partner moved to its own
-  check's group or left, and four groups that were left holding one tool are gone
+  check's group or left, four groups that were left holding one tool are gone, and
+  trivy's secrets-in-`ENV` check `DS-0031` pairs with hadolint 2.15's new `DL3064`
   (#1221).
 - **gitleaks and TruffleHog findings of one secret merge.** The equivalence table listed
   gitleaks' ids (`aws-access-token`, `github-pat`) under TruffleHog's name and had none

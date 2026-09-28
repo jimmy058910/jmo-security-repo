@@ -67,7 +67,9 @@ from __future__ import annotations
 # allowPrivilegeEscalation check at 0.778, over the 0.65 threshold, when the
 # two share a line range). Every partner below was measured on
 # the same three files: hadolint 2.14.0 and checkov 3.3.16 run on them, plus
-# `checkov --list`; each comment quotes the tool's own words. A partner naming
+# `checkov --list`; each comment quotes the tool's own words. Re-run with
+# hadolint 2.15.1 (the pin): the same ids on the same lines, plus DL3064,
+# which pairs with DS-0031. A partner naming
 # another check moved to the group of the trivy id that names it, or went. The
 # guards are in tests/unit/test_rule_equivalence_table.py.
 RULE_EQUIVALENCE: dict[str, list[tuple[str, str]]] = {
@@ -132,12 +134,19 @@ RULE_EQUIVALENCE: dict[str, list[tuple[str, str]]] = {
         # "Ensure that LABEL maintainer is used instead of MAINTAINER (deprecated)"
         ("checkov", "CKV_DOCKER_6"),
     ],
-    # REMOVED (#1221): `dockerfile-hardcoded-secret` held trivy DS-0031
-    # ("Secrets passed via `build-args` or envs or copied secret files") with
+    "dockerfile-secret-in-arg-or-env": [
+        # "Secrets passed via `build-args` or envs or copied secret files"
+        ("trivy", "DS-0031"),
+        # "Potentially sensitive data should not be used in the `ARG` or `ENV`
+        # commands" -- new in hadolint 2.15, fired on the same ENV line.
+        ("hadolint", "DL3064"),
+    ],
+    # REMOVED (#1221): `dockerfile-hardcoded-secret` held trivy DS-0031 with
     # hadolint DL3059 ("Multiple consecutive `RUN` instructions"), checkov
-    # CKV_DOCKER_5 (update alone) and CKV_DOCKER_11 (stage aliases); neither
-    # tool has a secrets-in-ENV check. `dockerfile-curl-pipe-bash` held hadolint
-    # DL4006 (pipefail) with checkov CKV_DOCKER_6 (MAINTAINER), which moved.
+    # CKV_DOCKER_5 (update alone) and CKV_DOCKER_11 (stage aliases). checkov
+    # has no secrets-in-ENV check; hadolint's is DL3064, above.
+    # `dockerfile-curl-pipe-bash` held hadolint DL4006 (pipefail) with checkov
+    # CKV_DOCKER_6 (MAINTAINER), which moved.
     # ===== Infrastructure as Code =====
     "iac-public-s3-bucket": [
         ("trivy", "AWS-0092"),  # "S3 Buckets not publicly accessible through ACL."

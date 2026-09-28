@@ -183,8 +183,15 @@ def test_the_repaired_groups_no_longer_merge_different_controls():
 # checkov 3.3.16 were each run on them, and `checkov --list` gave the rest.
 # Every pair is one check in both tools' own words. Making trivy's ids live
 # (#1221) made these groups live, and the partners they held before were
-# measured against the same output: eleven named another check.
+# measured against the same output: eleven named another check. Re-run with
+# hadolint 2.15.1, the version versions.yaml pins: every hadolint id above
+# fires on the same lines with the same words, and 2.15.1 adds DL3064, the
+# partner DS-0031 lacked under 2.14.0 (and DL3066, which pairs with nothing).
 TRIVY_PARTNERS = [
+    # "Secrets passed via `build-args` or envs or copied secret files" /
+    # "Potentially sensitive data should not be used in the `ARG` or `ENV`
+    # commands" (hadolint 2.15.1; 2.14.0 has no such check)
+    ("DS-0031", "hadolint", "DL3064", "dockerfile-secret-in-arg-or-env"),
     # "Can elevate its own privileges" / "Containers should not run with
     # allowPrivilegeEscalation"
     ("KSV-0001", "checkov", "CKV_K8S_20", "k8s-privilege-escalation"),

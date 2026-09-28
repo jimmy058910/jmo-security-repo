@@ -92,7 +92,8 @@ The two ``FROM alpine`` lines and the two open ingress rules are there on
 purpose: each makes trivy report one check twice in one file, which is the
 case that lost its lines (#1221's line defect). The rest gives every trivy key
 in ``scripts/core/rule_equivalence.py`` a recorded finding; hadolint 2.14.0
-and checkov 3.3.16 were run on the same three files to check each key's
+(then 2.15.1, the pin, which adds DL3064 on the ``ENV`` line) and checkov
+3.3.16 were run on the same three files to check each key's
 partners (the lower-case ``as`` is for checkov: its CKV_DOCKER_11 matches
 only `` as ``). ``apt-get -y dist-upgrade`` stays to show that DS-0024, which
 0.74.0 ships deprecated, does not fire.

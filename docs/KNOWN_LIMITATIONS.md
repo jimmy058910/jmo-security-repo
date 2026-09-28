@@ -273,8 +273,9 @@ the way to the `0.65` default threshold before their wording is considered.
 Trivy's `DS-0001` (`':latest' tag used`) and Hadolint's `DL3006` on the same
 Dockerfile line score `0.79` and do cluster, via the rule-equivalence table in
 `scripts/core/rule_equivalence.py`. (Measured 2026-09-28: trivy 0.74.0 and
-hadolint 2.14.0 run on one `FROM alpine` line, each output through its
-adapter, scored by `SimilarityCalculator.calculate_similarity`.)
+hadolint run on one `FROM alpine` line, each output through its adapter,
+scored by `SimilarityCalculator.calculate_similarity`: 0.793 with hadolint
+2.14.0 and again with 2.15.1, the version `versions.yaml` pins.)
 
 No findings are lost — anything not clustered is reported separately.
 

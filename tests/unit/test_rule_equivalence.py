@@ -118,8 +118,9 @@ class TestGetCanonicalRuleId:
     def test_hadolint_dl3057(self):
         """Hadolint's missing-HEALTHCHECK rule is DL3057, not DL3055.
 
-        hadolint 2.14.0's own messages: DL3057 "`HEALTHCHECK` instruction
-        missing.", DL3055 "Label `commit` is not a valid git hash."
+        hadolint's own messages, 2.14.0 and 2.15.1 alike: DL3057
+        "`HEALTHCHECK` instruction missing.", DL3055 "Label `commit` is not a
+        valid git hash."
         """
         assert get_canonical_rule_id("hadolint", "DL3057") == (
             "dockerfile-no-healthcheck"
