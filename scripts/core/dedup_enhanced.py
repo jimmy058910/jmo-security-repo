@@ -23,6 +23,12 @@ Similarity Calculation:
 
 Threshold: 0.65 (lowered from 0.75 for better cross-tool clustering)
 
+Dependency findings (#1346) are not clustered by similarity at all: they have
+no line, so location similarity is 0.0 for every pair and no two dependency
+scanners ever reached the threshold. They are matched on their identity --
+lockfile, package, installed version, advisory id or alias -- by
+`cluster_dependency_findings`, whichever algorithm clusters the rest.
+
 Rule Equivalence:
     Known equivalent rules across tools are mapped in rule_equivalence.py.
     Example: Trivy "DS-0001" = Hadolint "DL3006" = Checkov "CKV_DOCKER_7"
@@ -116,6 +122,48 @@ _LEAD_ONLY_FIELDS = frozenset({"id", "tool", "location", "raw"})
 
 def _canonical(value: Any) -> str:
     return json.dumps(value, sort_keys=True, default=str)
+
+
+# How two tools spell one package, measured (#1346): a PyPI name as written
+# in requirements.txt (trivy: `Flask_Cors`) or normalised (osv-scanner:
+# `flask-cors`), and a Go version with or without its `v` (trivy `v0.3.0`,
+# osv-scanner `0.3.0`). Folding a name this way could only confuse two
+# packages that also share a lockfile, a version and an advisory id.
+_NAME_SEPARATORS = re.compile(r"[-_.]+")
+_VERSION_V = re.compile(r"^v(?=\d)")
+
+
+def dependency_key(finding: dict[str, Any]) -> tuple[str, str, str] | None:
+    """(lockfile, package name, installed version) of a dependency finding,
+    folded so two tools' spellings of one package are equal; ``None`` for a
+    finding without a `dependency` naming both a package and a version.
+
+    The lockfile is ``location.path`` as the report phase leaves it
+    (repo-relative, one separator), so two lockfiles are two keys however
+    alike their packages are.
+    """
+    dependency = finding.get("dependency")
+    if not isinstance(dependency, dict):
+        return None
+    name, version = dependency.get("name"), dependency.get("version")
+    if not (isinstance(name, str) and name and isinstance(version, str) and version):
+        return None
+    location = finding.get("location")
+    path = location.get("path") if isinstance(location, dict) else None
+    return (
+        str(path or "").replace("\\", "/").removeprefix("./"),
+        _NAME_SEPARATORS.sub("-", name).casefold(),
+        _VERSION_V.sub("", version),
+    )
+
+
+def advisory_ids(finding: dict[str, Any]) -> frozenset[str]:
+    """Every id a finding names its advisory by: its ``ruleId`` and its
+    dependency's ``aliases``, upper-cased so a GHSA id's case cannot matter."""
+    dependency = finding.get("dependency")
+    aliases = dependency.get("aliases") if isinstance(dependency, dict) else None
+    ids = [finding.get("ruleId"), *(aliases if isinstance(aliases, list) else [])]
+    return frozenset(i.upper() for i in ids if isinstance(i, str) and i)
 
 
 def _merge_into(base: Any, other: Any) -> Any:
@@ -846,11 +894,83 @@ class SimilarityCalculator:
         return False
 
 
+def cluster_dependency_findings(
+    findings: list[dict[str, Any]],
+) -> list[FindingCluster]:
+    """Cluster dependency findings on their identity, not on similarity (#1346).
+
+    One vulnerability in one installed package version is one finding,
+    whichever dependency scanners report it: two findings are one when their
+    `dependency_key` (lockfile, name, version) is equal and their
+    `advisory_ids` intersect -- one tool's id is the other's id or alias.
+    Measured before this, on a real lockfile: trivy and osv-scanner reported
+    the same 47 and the report held 85, clustered 0.
+
+    One package's findings are linked by shared ids, directly or through
+    another finding: an alias only one member carries -- often not the lead,
+    which is a matter of severity and tool name -- is enough for a third tool.
+    A linked set with one finding per tool is one finding. A set holding two
+    of one tool's findings is split one tool per cluster (`_one_per_tool`):
+    osv-scanner files some distinct advisories under one rule (on NodeGoat its
+    lodash rule CVE-2021-23337 lists CVE-2026-4800 too, which trivy reports as
+    a finding of its own), so the rule joins one of trivy's two and the other
+    stays a finding of its own.
+
+    Findings are taken in `lead_order`, so each cluster's first finding is
+    its lead and membership does not depend on load order.
+    """
+    by_package: dict[Any, list[dict[str, Any]]] = {}
+    for finding in sorted(findings, key=lead_order):
+        by_package.setdefault(dependency_key(finding), []).append(finding)
+
+    clusters: list[FindingCluster] = []
+    for package in by_package.values():
+        links = UnionFind(len(package))
+        first_named: dict[str, int] = {}
+        for index, finding in enumerate(package):
+            for advisory in advisory_ids(finding):
+                links.union(first_named.setdefault(advisory, index), index)
+        for linked in links.get_groups(package):
+            tools = [tool_name_of(finding) for finding in linked]
+            if len(set(tools)) == len(tools):
+                cluster = FindingCluster(representative=linked[0])
+                for finding in linked[1:]:
+                    cluster.add(finding, 1.0)
+                clusters.append(cluster)
+            else:
+                clusters.extend(_one_per_tool(linked))
+    return clusters
+
+
+def _one_per_tool(linked: list[dict[str, Any]]) -> list[FindingCluster]:
+    """Split linked findings holding two of one tool's, in `lead_order`: each
+    joins the first cluster without its tool that shares an id with a member."""
+    clusters: list[tuple[FindingCluster, set[str]]] = []
+    for finding in linked:
+        ids = advisory_ids(finding)
+        home = next(
+            (
+                (cluster, known)
+                for cluster, known in clusters
+                if cluster.can_accept(finding) and ids & known
+            ),
+            None,
+        )
+        if home is None:
+            clusters.append((FindingCluster(representative=finding), set(ids)))
+        else:
+            home[0].add(finding, 1.0)
+            home[1].update(ids)
+    return [cluster for cluster, _ in clusters]
+
+
 class FindingClusterer:
     """Main clustering engine with automatic algorithm selection.
 
     Uses improved weights (location-first) and rule equivalence mapping
-    to better cluster findings from different security tools.
+    to better cluster findings from different security tools. Dependency
+    findings go to `cluster_dependency_findings` instead, under either
+    algorithm, and never join a finding without a `dependency`.
 
     Algorithm Selection:
         - <500 findings: Greedy algorithm (simpler, lower overhead)
@@ -906,13 +1026,20 @@ class FindingClusterer:
         if not findings:
             return []
 
+        # Dependency findings are matched on identity, never on similarity,
+        # and by the same code whichever algorithm clusters the rest, so the
+        # two algorithms cannot disagree about them (#1346).
+        dependencies = [f for f in findings if dependency_key(f) is not None]
+        others = [f for f in findings if dependency_key(f) is None]
+
         # Select algorithm
         use_lsh = self._should_use_lsh(len(findings))
 
         if use_lsh:
-            return self._cluster_lsh(findings, progress_callback)
+            clusters = self._cluster_lsh(others, progress_callback)
         else:
-            return self._cluster_greedy(findings, progress_callback)
+            clusters = self._cluster_greedy(others, progress_callback)
+        return clusters + cluster_dependency_findings(dependencies)
 
     def _should_use_lsh(self, n: int) -> bool:
         """Determine if LSH algorithm should be used.

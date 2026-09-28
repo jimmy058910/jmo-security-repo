@@ -1,7 +1,7 @@
 [
   {
     "schemaVersion": "1.2.0",
-    "id": "c53054e008810ca5",
+    "id": "c4e017b316af8f27",
     "ruleId": "CVE-2026-27904",
     "severity": "HIGH",
     "tool": {
@@ -27,6 +27,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "minimatch",
+      "version": "0.3.0",
+      "aliases": [
+        "GHSA-23c5-xmqv-rm74"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "11e980284ce72c7f80e80f75e180fb7335333c4d9ff0bdd6cc1d4f7ec4c82bca"
@@ -66,7 +74,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "941529ddc104a2c2",
+    "id": "0bcb1fa959bf00df",
     "ruleId": "CVE-2026-27904",
     "severity": "HIGH",
     "tool": {
@@ -92,6 +100,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "minimatch",
+      "version": "3.0.2",
+      "aliases": [
+        "GHSA-23c5-xmqv-rm74"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "b6dbea385478b83329085c71cb76102ebbf3f909fe50de4441e28a5452dade8e"
@@ -131,7 +147,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "5daacf39db256c9f",
+    "id": "b4409ab640bd54b4",
     "ruleId": "CVE-2026-27904",
     "severity": "HIGH",
     "tool": {
@@ -157,6 +173,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "minimatch",
+      "version": "3.0.3",
+      "aliases": [
+        "GHSA-23c5-xmqv-rm74"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "e288a431ebce9081167b263d0f965f391d90572015ebd75ebe2f9745014878ba"
@@ -196,7 +220,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "413057009c6b79ca",
+    "id": "fd6874976621a7c2",
     "ruleId": "CVE-2026-27904",
     "severity": "HIGH",
     "tool": {
@@ -222,6 +246,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "minimatch",
+      "version": "3.0.4",
+      "aliases": [
+        "GHSA-23c5-xmqv-rm74"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "a3e4b534118af803720020dd0d4b2f29b5dbb52ccc52ff29842831c7eedbf574"
@@ -261,7 +293,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "f74cb1fbe561e6bf",
+    "id": "8aefa915a9007a87",
     "ruleId": "CVE-2026-59873",
     "severity": "CRITICAL",
     "tool": {
@@ -287,6 +319,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tar",
+      "version": "2.2.1",
+      "aliases": [
+        "GHSA-23hp-3jrh-7fpw"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "233a3f50d3c75a7b8312c4afb8d5339a4ab53871f6d95c393afc4836a78b5583"
@@ -326,7 +366,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "08939370bbfd5d41",
+    "id": "a8d02084ec481d92",
     "ruleId": "CVE-2026-59873",
     "severity": "CRITICAL",
     "tool": {
@@ -352,6 +392,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tar",
+      "version": "4.4.8",
+      "aliases": [
+        "GHSA-23hp-3jrh-7fpw"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "653654175a24db862487ac54e1410513b75bcc6dbad3370b4fead5960fa624ed"
@@ -391,7 +439,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "be8e9176e694a891",
+    "id": "fb51f81fe9ba50ef",
     "ruleId": "CVE-2021-23807",
     "severity": "MEDIUM",
     "tool": {
@@ -417,6 +465,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "jsonpointer",
+      "version": "4.0.0",
+      "aliases": [
+        "GHSA-282f-qqgm-c34q"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "543d3b801cb43608d14975cda71fa05f740aab01bf3ba6328dbaabf626b9f8b4"
@@ -456,7 +512,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "2c4fa042b46bd638",
+    "id": "a54ed80a91c37a4f",
     "ruleId": "CVE-2021-23807",
     "severity": "MEDIUM",
     "tool": {
@@ -482,6 +538,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "jsonpointer",
+      "version": "4.0.1",
+      "aliases": [
+        "GHSA-282f-qqgm-c34q"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "9388cff876e95bc9e8ceb87bb5338cd2f4dfdd7df328880b9f749e5b7e6ebead"
@@ -521,7 +585,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "28940383f9be4a53",
+    "id": "7389ea500201840b",
     "ruleId": "CVE-2026-84375",
     "severity": "HIGH",
     "tool": {
@@ -547,6 +611,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "js-yaml",
+      "version": "3.5.5",
+      "aliases": [
+        "GHSA-2883-xcg3-v3hh"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "97a755818e57b273042dedceac1c2301c4b702c26e9fc5fe894eb2023c10c35e"
@@ -586,7 +658,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "0e16b04bbe336068",
+    "id": "959920469516510e",
     "ruleId": "CVE-2026-84375",
     "severity": "HIGH",
     "tool": {
@@ -612,6 +684,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "js-yaml",
+      "version": "3.6.1",
+      "aliases": [
+        "GHSA-2883-xcg3-v3hh"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "63896b745cf26e95b339aad4836fbb334e2020a3dd2f1a96485e1caaab10336d"
@@ -651,7 +731,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "b78ebbda8ce3ccd3",
+    "id": "4dce48eae5fb1b5b",
     "ruleId": "CVE-2020-28500",
     "severity": "MEDIUM",
     "tool": {
@@ -677,6 +757,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "lodash",
+      "version": "4.13.1",
+      "aliases": [
+        "GHSA-29mw-wpgm-hmr9"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "11f7145d1d1ea7e4c451b19a9358de8348be189d231e207c406a1f1acea50c6c"
@@ -716,7 +804,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "664898a784f0aa1f",
+    "id": "c373b531192976d9",
     "ruleId": "CVE-2020-28500",
     "severity": "MEDIUM",
     "tool": {
@@ -742,6 +830,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "lodash",
+      "version": "4.17.11",
+      "aliases": [
+        "GHSA-29mw-wpgm-hmr9"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "b89a8ede8f718f107d08e76b315e65b94b1fffd711d4e67e977ffdbd8aa95c00"
@@ -781,7 +877,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "3bc9e80214ddb9d1",
+    "id": "1af283e2d1c5f301",
     "ruleId": "CVE-2020-28500",
     "severity": "MEDIUM",
     "tool": {
@@ -807,6 +903,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "lodash",
+      "version": "4.17.20",
+      "aliases": [
+        "GHSA-29mw-wpgm-hmr9"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "e416f312f53951e635faca1a0e8a6e3ac508243216a5759a687085193942560b"
@@ -846,7 +950,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "fa77143ddfce4f1e",
+    "id": "3fc7ff2c29fa8fd6",
     "ruleId": "GHSA-2cf5-4w76-r9qv",
     "severity": "HIGH",
     "tool": {
@@ -872,6 +976,12 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "handlebars",
+      "version": "4.0.5",
+      "aliases": []
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "15efc28a6912cb3320c5d156a675e6af23843612e8b568485ab986793e7bb941"
@@ -911,7 +1021,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "3b62cd4fa95097c4",
+    "id": "e162c7b70f94061b",
     "ruleId": "CVE-2025-69873",
     "severity": "MEDIUM",
     "tool": {
@@ -937,6 +1047,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "ajv",
+      "version": "6.10.0",
+      "aliases": [
+        "GHSA-2g4f-4pwh-qvx6"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "b67a5f8bfb130570e73e365968317646c8b9e9bd28ed9169545f26b66b63ad4f"
@@ -976,7 +1094,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "4741f059b53480e4",
+    "id": "8bb9423520671803",
     "ruleId": "CVE-2018-3737",
     "severity": "HIGH",
     "tool": {
@@ -1002,6 +1120,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "sshpk",
+      "version": "1.10.1",
+      "aliases": [
+        "GHSA-2m39-62fm-q8r3"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "489cef22e0136f87e9c895eaa2861d4d03672f7076cc24a5f3cbdcdda74b815b"
@@ -1041,7 +1167,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "c786e31fc1a5e5ec",
+    "id": "769c96437aee4c9a",
     "ruleId": "GHSA-2pr6-76vf-7546",
     "severity": "MEDIUM",
     "tool": {
@@ -1067,6 +1193,12 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "js-yaml",
+      "version": "3.5.5",
+      "aliases": []
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "6310c52743964973e6f60c687c5287f937ade75e8892eba9a75c662b2a49d159"
@@ -1106,7 +1238,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "12985a1d17fd86c5",
+    "id": "05fdae783519f8c3",
     "ruleId": "GHSA-2pr6-76vf-7546",
     "severity": "MEDIUM",
     "tool": {
@@ -1132,6 +1264,12 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "js-yaml",
+      "version": "3.6.1",
+      "aliases": []
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "7690e39fd053d22ffb5c621197cf7a379ae9e59809fdd094258f81f874846669"
@@ -1171,7 +1309,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "3b9641856ff35d4e",
+    "id": "dac929c4f572e7b7",
     "ruleId": "CVE-2026-33916",
     "severity": "MEDIUM",
     "tool": {
@@ -1197,6 +1335,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "handlebars",
+      "version": "4.0.5",
+      "aliases": [
+        "GHSA-2qvq-rjwj-gvw9"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "bf264c81307976376e9272e6b6d01e63d536527eec8433b88b9b0a2f0589492d"
@@ -1236,7 +1382,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "d57d9991cbdd199e",
+    "id": "3723f9a1ae8a767f",
     "ruleId": "CVE-2023-25345",
     "severity": "HIGH",
     "tool": {
@@ -1262,6 +1408,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "swig",
+      "version": "1.4.2",
+      "aliases": [
+        "GHSA-2rq5-699j-x7p6"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "c9f3f20ccb27b8ff638879a7c70c6ce00e7d83159f0b9d756fc5ae82c8fbd23a"
@@ -1301,7 +1455,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "b0093b6612e62c2e",
+    "id": "502fcd77d1965569",
     "ruleId": "CVE-2026-33937",
     "severity": "CRITICAL",
     "tool": {
@@ -1327,6 +1481,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "handlebars",
+      "version": "4.0.5",
+      "aliases": [
+        "GHSA-2w6w-674q-4c4q"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "01f46fabc23ca122570b00d4e530a3b8b5120839eddc184a5795f15b45633586"
@@ -1366,7 +1528,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "26a097b918b1a7cf",
+    "id": "75f000fc0f3c1f93",
     "ruleId": "CVE-2019-10795",
     "severity": "MEDIUM",
     "tool": {
@@ -1392,6 +1554,15 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "undefsafe",
+      "version": "2.0.2",
+      "aliases": [
+        "SNYK-JS-UNDEFSAFE-548940",
+        "GHSA-332q-7ff2-57h2"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "f8c432df0fd9486228cdf76735dc94c5c9b153e70048b7be1d51b78cebecff03"
@@ -1431,7 +1602,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "673d62ac889a95d6",
+    "id": "2b589a13711ff051",
     "ruleId": "CVE-2026-24842",
     "severity": "HIGH",
     "tool": {
@@ -1457,6 +1628,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tar",
+      "version": "2.2.1",
+      "aliases": [
+        "GHSA-34x7-hfp2-rc4v"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "ed4c96bd821c905e6964f4c458605bd761aa5650b4a307648ff0811d02e7d223"
@@ -1496,7 +1675,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "977d1ed3069fcf88",
+    "id": "ba1a81a5dbd44274",
     "ruleId": "CVE-2026-24842",
     "severity": "HIGH",
     "tool": {
@@ -1522,6 +1701,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tar",
+      "version": "4.4.8",
+      "aliases": [
+        "GHSA-34x7-hfp2-rc4v"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "0ca18be2e8ca4aa87cbc1e9b41bb63ebbe7c4d37825627b9f3c3d3c8122852f0"
@@ -1561,7 +1748,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "63fa9e8131af8879",
+    "id": "37d059fbb02bbfa0",
     "ruleId": "CVE-2021-23337",
     "severity": "HIGH",
     "tool": {
@@ -1587,6 +1774,16 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "lodash",
+      "version": "2.4.2",
+      "aliases": [
+        "CVE-2026-4800",
+        "GHSA-35jh-r3h4-6jhm",
+        "GHSA-r5fr-rjxr-66jc"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "b654a69c9d87b61132ea4a762bb4089645c4a3b221cae65ef346c77936754188"
@@ -1626,7 +1823,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "e15730d8fee83fb6",
+    "id": "3fdfeb9568d0c41e",
     "ruleId": "CVE-2021-23337",
     "severity": "HIGH",
     "tool": {
@@ -1652,6 +1849,16 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "lodash",
+      "version": "4.13.1",
+      "aliases": [
+        "CVE-2026-4800",
+        "GHSA-35jh-r3h4-6jhm",
+        "GHSA-r5fr-rjxr-66jc"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "034e5f2a01933e3bd6c4a03c2d2e8afea51edaa11917dc47073688ef9513415a"
@@ -1691,7 +1898,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "43e698cb3d112eeb",
+    "id": "699fe527372e3ef8",
     "ruleId": "CVE-2021-23337",
     "severity": "HIGH",
     "tool": {
@@ -1717,6 +1924,16 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "lodash",
+      "version": "4.17.11",
+      "aliases": [
+        "CVE-2026-4800",
+        "GHSA-35jh-r3h4-6jhm",
+        "GHSA-r5fr-rjxr-66jc"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "6d951cb17dffa168c37e9ddfff120fcd2af5dac700bd86494afd2910ad192ba3"
@@ -1756,7 +1973,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "a6cf87e218697050",
+    "id": "14f7e996df0ca9b6",
     "ruleId": "CVE-2021-23337",
     "severity": "HIGH",
     "tool": {
@@ -1782,6 +1999,16 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "lodash",
+      "version": "4.17.20",
+      "aliases": [
+        "CVE-2026-4800",
+        "GHSA-35jh-r3h4-6jhm",
+        "GHSA-r5fr-rjxr-66jc"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "f1abb7bb3fe09d5e608268512ffffc3ade6791aee8a984987d80c6b88a0d0b66"
@@ -1821,7 +2048,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "9e56f35b5f28b7a1",
+    "id": "cba7fa995e18d11e",
     "ruleId": "CVE-2021-23337",
     "severity": "HIGH",
     "tool": {
@@ -1847,6 +2074,16 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "lodash",
+      "version": "4.17.21",
+      "aliases": [
+        "CVE-2026-4800",
+        "GHSA-35jh-r3h4-6jhm",
+        "GHSA-r5fr-rjxr-66jc"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "0260f5c4efc60a5b594ba8ad4c673e64e7bc668c47b7918c7402a6243ba5fd35"
@@ -1886,7 +2123,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "4a5623990c7c9f77",
+    "id": "8eada974d20ae0d3",
     "ruleId": "CVE-2024-45296",
     "severity": "HIGH",
     "tool": {
@@ -1912,6 +2149,16 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "path-to-regexp",
+      "version": "0.1.7",
+      "aliases": [
+        "CVE-2026-4867",
+        "GHSA-37ch-88jc-xwx2",
+        "GHSA-9wv6-86v2-598j"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "1103b2edb09668cb903208fdb5077987eff4033d920bbf9430166f4e9a8561b4"
@@ -1951,7 +2198,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "9ff116f47466cfc5",
+    "id": "816ddf313c216102",
     "ruleId": "CVE-2019-20920",
     "severity": "HIGH",
     "tool": {
@@ -1977,6 +2224,15 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "handlebars",
+      "version": "4.0.5",
+      "aliases": [
+        "SNYK-JS-HANDLEBARS-534478",
+        "GHSA-3cqr-58rm-57f8"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "1fa8de3af96b40d8e6b3b498ada8dfa2a986b9e2f0a401da534a6ed8ac16ca28"
@@ -2016,7 +2272,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "bd0e2a1400fa8948",
+    "id": "f1dddf3d6fe5f94d",
     "ruleId": "CVE-2021-32804",
     "severity": "HIGH",
     "tool": {
@@ -2042,6 +2298,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tar",
+      "version": "2.2.1",
+      "aliases": [
+        "GHSA-3jfq-g458-7qm9"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "b2e8b158ed2569bc60cd75f1c85a65ef252071f798a42eb65026bfbfaf7f8cdb"
@@ -2081,7 +2345,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "158dfd147f08f8ef",
+    "id": "2df105d355adebe4",
     "ruleId": "CVE-2021-32804",
     "severity": "HIGH",
     "tool": {
@@ -2107,6 +2371,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tar",
+      "version": "4.4.8",
+      "aliases": [
+        "GHSA-3jfq-g458-7qm9"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "e2d5365a64fc45e966539953cf65775fb3a50267f03622e89bb79ce4900b11ba"
@@ -2146,7 +2418,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "d074ef11d74b4780",
+    "id": "2f4498f2ccc81052",
     "ruleId": "CVE-2026-13149",
     "severity": "HIGH",
     "tool": {
@@ -2172,6 +2444,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "brace-expansion",
+      "version": "1.1.11",
+      "aliases": [
+        "GHSA-3jxr-9vmj-r5cp"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "043b29bf64f15ac24cb3882a53cd16c9f9ca4f3cbd1d220f5acf8bf471be6b28"
@@ -2211,7 +2491,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "f23a3b4571529eff",
+    "id": "5cb935150afe8757",
     "ruleId": "CVE-2026-13149",
     "severity": "HIGH",
     "tool": {
@@ -2237,6 +2517,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "brace-expansion",
+      "version": "1.1.6",
+      "aliases": [
+        "GHSA-3jxr-9vmj-r5cp"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "654072067ea169e5538f7f19c17c035f290514217d5ffccdaf83f0c66dfd2517"
@@ -2276,7 +2564,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "0e1c23d9efc05552",
+    "id": "45ee734ae2a6657a",
     "ruleId": "CVE-2026-33938",
     "severity": "HIGH",
     "tool": {
@@ -2302,6 +2590,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "handlebars",
+      "version": "4.0.5",
+      "aliases": [
+        "GHSA-3mfm-83xf-c92r"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "98ae85f5e4ab11c248d9a253d49a6f48ec1ce475286d435e4dda5208b7a62187"
@@ -2341,7 +2637,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "f1e3b4bfc118c3d2",
+    "id": "04c40af597c7d7b7",
     "ruleId": "CVE-2026-26996",
     "severity": "HIGH",
     "tool": {
@@ -2367,6 +2663,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "minimatch",
+      "version": "0.3.0",
+      "aliases": [
+        "GHSA-3ppc-4f35-3m26"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "fec06496dcdb79adc4b9067cd096b0db94905501c07c0da21079585117c67af1"
@@ -2406,7 +2710,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "04aa92c938af5796",
+    "id": "862ce23fbae6d51c",
     "ruleId": "CVE-2026-26996",
     "severity": "HIGH",
     "tool": {
@@ -2432,6 +2736,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "minimatch",
+      "version": "3.0.2",
+      "aliases": [
+        "GHSA-3ppc-4f35-3m26"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "741bb413d7b05e5b50740eb6c71fea59c777fbfeaa3c8c47a5906d0f97777d65"
@@ -2471,7 +2783,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "1427fe34f6ba76e0",
+    "id": "56a54b1d4e836780",
     "ruleId": "CVE-2026-26996",
     "severity": "HIGH",
     "tool": {
@@ -2497,6 +2809,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "minimatch",
+      "version": "3.0.3",
+      "aliases": [
+        "GHSA-3ppc-4f35-3m26"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "4de3d94dbdda2528900fb38758f329af6c7850c3adb9f2f46e78c225498eed94"
@@ -2536,7 +2856,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "841514a27242f165",
+    "id": "37d7c4c7043f7bee",
     "ruleId": "CVE-2026-26996",
     "severity": "HIGH",
     "tool": {
@@ -2562,6 +2882,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "minimatch",
+      "version": "3.0.4",
+      "aliases": [
+        "GHSA-3ppc-4f35-3m26"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "9ec961b027a6c4a57769c47356ff5b787cc0c8be8ae7d4f36a61a68291f10462"
@@ -2601,7 +2929,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "c31d8a08c61856f4",
+    "id": "ffead64abdc4b649",
     "ruleId": "CVE-2018-1002204",
     "severity": "MEDIUM",
     "tool": {
@@ -2627,6 +2955,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "adm-zip",
+      "version": "0.4.4",
+      "aliases": [
+        "GHSA-3v6h-hqm4-2rg6"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "48a85c0004b2936757526229ec6726c78531b89162af13b4bd462693f1b3628d"
@@ -2666,7 +3002,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "91fc6516697ca310",
+    "id": "a6325be760603c99",
     "ruleId": "CVE-2024-21538",
     "severity": "HIGH",
     "tool": {
@@ -2692,6 +3028,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "cross-spawn",
+      "version": "4.0.0",
+      "aliases": [
+        "GHSA-3xgq-45jj-v275"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "bb1269cc9985b6077481c001966d2a30360663882faae17ae5d29776bc3b9a74"
@@ -2731,7 +3075,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "12d41df2643d0b4e",
+    "id": "26a6869425920682",
     "ruleId": "CVE-2024-21538",
     "severity": "HIGH",
     "tool": {
@@ -2757,6 +3101,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "cross-spawn",
+      "version": "4.0.2",
+      "aliases": [
+        "GHSA-3xgq-45jj-v275"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "fb138cdf3d6bcc8a9f60a9a8953f212b6ef4362c9bf4818874c8fa721dabac0c"
@@ -2796,7 +3148,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "70b68e628753e451",
+    "id": "761b3aa141a841db",
     "ruleId": "CVE-2024-21538",
     "severity": "HIGH",
     "tool": {
@@ -2822,6 +3174,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "cross-spawn",
+      "version": "5.1.0",
+      "aliases": [
+        "GHSA-3xgq-45jj-v275"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "7e8204b1b54f11d77bf072ce39aa8d60d55b2d8b70bea21b3368e808b4da28ec"
@@ -2861,7 +3221,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "6091698742a5c710",
+    "id": "a9a632f49a5d68e8",
     "ruleId": "CVE-2024-21538",
     "severity": "HIGH",
     "tool": {
@@ -2887,6 +3247,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "cross-spawn",
+      "version": "6.0.5",
+      "aliases": [
+        "GHSA-3xgq-45jj-v275"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "0e3608152a816f7e67506454b61c16dcead16344064138c0b9e5b26baa884bd3"
@@ -2926,7 +3294,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "4b039e084b46c39a",
+    "id": "882f0578c74010db",
     "ruleId": "CVE-2024-21538",
     "severity": "HIGH",
     "tool": {
@@ -2952,6 +3320,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "cross-spawn",
+      "version": "7.0.3",
+      "aliases": [
+        "GHSA-3xgq-45jj-v275"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "36bc72f6745a550124d60797ee16a8acf7b25b95871ff595b25e107372b1d669"
@@ -2991,7 +3367,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "1b0519b850c7cd26",
+    "id": "0c24546f0faf1b0e",
     "ruleId": "CVE-2019-16777",
     "severity": "HIGH",
     "tool": {
@@ -3017,6 +3393,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "npm",
+      "version": "3.10.10",
+      "aliases": [
+        "GHSA-4328-8hgf-7wjr"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "4915ffed833a45384d6a3ecb7e01b2ba3479f0fb6dd2d55945f54cb263c44be1"
@@ -3056,7 +3440,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "c5f6804aa5d12f58",
+    "id": "b9c6707ba225160a",
     "ruleId": "CVE-2021-23362",
     "severity": "MEDIUM",
     "tool": {
@@ -3082,6 +3466,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "hosted-git-info",
+      "version": "2.1.5",
+      "aliases": [
+        "GHSA-43f8-2h32-f4cj"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "cf4559fc9a5798652110e11b5804e501a187b219fc7fc0572b59b2faee11ea76"
@@ -3121,7 +3513,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "0189171df1a62ab5",
+    "id": "2b6cfa01cb3efb17",
     "ruleId": "CVE-2021-23362",
     "severity": "MEDIUM",
     "tool": {
@@ -3147,6 +3539,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "hosted-git-info",
+      "version": "2.7.1",
+      "aliases": [
+        "GHSA-43f8-2h32-f4cj"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "bb90286d8b9d35a35a71fec2106df563446a5c97f62f101c875469948aac5784"
@@ -3186,7 +3586,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "78d6e448fddf860c",
+    "id": "169d1da50d7bcc16",
     "ruleId": "GHSA-442j-39wm-28r2",
     "severity": "LOW",
     "tool": {
@@ -3212,6 +3612,12 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "handlebars",
+      "version": "4.0.5",
+      "aliases": []
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "6693b802fe753f635a6856136d08da92008cbe6187670851e69a32aebd1baad8"
@@ -3251,7 +3657,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "28f8e742379a00a9",
+    "id": "c48812f0ac01be8b",
     "ruleId": "CVE-2022-29167",
     "severity": "HIGH",
     "tool": {
@@ -3277,6 +3683,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "hawk",
+      "version": "1.0.0",
+      "aliases": [
+        "GHSA-44pw-h2cw-w3vq"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "ce293b5974cad17cc56771d2267c2365764ac34707266999f8312253a4751d5b"
@@ -3316,7 +3730,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "7e3fd268e395fdd9",
+    "id": "c1953a4e9ce6a9f0",
     "ruleId": "CVE-2022-29167",
     "severity": "HIGH",
     "tool": {
@@ -3342,6 +3756,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "hawk",
+      "version": "3.1.3",
+      "aliases": [
+        "GHSA-44pw-h2cw-w3vq"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "7539760823cdc5c0ffc45450e7f828b275c6945a34947ec5a4f0b2289424a851"
@@ -3381,7 +3803,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "7c4322c71805f941",
+    "id": "62cf15a6b10f33e4",
     "ruleId": "CVE-2019-10747",
     "severity": "CRITICAL",
     "tool": {
@@ -3407,6 +3829,15 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "set-value",
+      "version": "0.4.3",
+      "aliases": [
+        "SNYK-JS-SETVALUE-450213",
+        "GHSA-4g88-fppr-53pp"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "e061101c3ff848d12f7e27f4b845f284505c87007ba134d412bd932fdad5cb2b"
@@ -3446,7 +3877,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "69ecedda5a2cc280",
+    "id": "2da23aef38a6d601",
     "ruleId": "CVE-2019-10747",
     "severity": "CRITICAL",
     "tool": {
@@ -3472,6 +3903,15 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "set-value",
+      "version": "2.0.0",
+      "aliases": [
+        "SNYK-JS-SETVALUE-450213",
+        "GHSA-4g88-fppr-53pp"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "68c2e2fa4bca98387104bf1b1f02a16245e6aa127244d84b7bd2056e89bf29f2"
@@ -3511,7 +3951,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "7923ba7eb9d932e8",
+    "id": "84e3325c585a0aab",
     "ruleId": "CVE-2024-27088",
     "severity": "MEDIUM",
     "tool": {
@@ -3535,6 +3975,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "es5-ext",
+      "version": "0.10.12",
+      "aliases": [
+        "GHSA-4gmj-3p3h-gm8h"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "5935543319f3a1d2eacc92e3c7e37e893a2e53565fb64463c628ab18d58b3864"
@@ -3574,7 +4022,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "6acd697397c36250",
+    "id": "fbacae340844000a",
     "ruleId": "CVE-2018-1107",
     "severity": "MEDIUM",
     "tool": {
@@ -3600,6 +4048,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "is-my-json-valid",
+      "version": "2.15.0",
+      "aliases": [
+        "GHSA-4hpf-3wq7-5rpr"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "0827a4d5ffac5a4c4a2d4f51caa4287ab589347563cbc866865f945a5c0f67fa"
@@ -3639,7 +4095,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "ba9a9f6051359a8f",
+    "id": "dbd2f3943693b8fd",
     "ruleId": "CVE-2021-23440",
     "severity": "HIGH",
     "tool": {
@@ -3665,6 +4121,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "set-value",
+      "version": "0.4.3",
+      "aliases": [
+        "GHSA-4jqc-8m5r-9rpr"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "a0dffabdd4de9b5f2417fd7bf9135ce55724ffb3555f0ddfd448788f2fb1cab1"
@@ -3704,7 +4168,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "70bfab30eb14b16b",
+    "id": "1298cbaf0e1fc6f4",
     "ruleId": "CVE-2021-23440",
     "severity": "HIGH",
     "tool": {
@@ -3730,6 +4194,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "set-value",
+      "version": "2.0.0",
+      "aliases": [
+        "GHSA-4jqc-8m5r-9rpr"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "fdb077adf5008a1cda8b40a750a466b121e6219d30548f17b58009ca1e9c11b3"
@@ -3769,7 +4241,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "ae0e3de856a87a75",
+    "id": "2b9101ce2aebae61",
     "ruleId": "CVE-2019-2391",
     "severity": "MEDIUM",
     "tool": {
@@ -3795,6 +4267,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "bson",
+      "version": "1.0.9",
+      "aliases": [
+        "GHSA-4jwp-vfvf-657p"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "c4c4a719e1e1112d77414ff2dcf4c93b78eecdf2ba80906246693b0eb74d82d9"
@@ -3834,7 +4314,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "d69965513b1322b5",
+    "id": "819a6627836bbb39",
     "ruleId": "CVE-2026-82417",
     "severity": "MEDIUM",
     "tool": {
@@ -3860,6 +4340,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "qs",
+      "version": "5.2.1",
+      "aliases": [
+        "GHSA-4mjr-xmp4-gh2g"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "8efa73144fd37f32305dda70d146a419d50ee5d0b66ab10f8ba159e5bb587727"
@@ -3899,7 +4387,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "c5425efc4f27b952",
+    "id": "0157d24197ea7aef",
     "ruleId": "CVE-2026-82417",
     "severity": "MEDIUM",
     "tool": {
@@ -3925,6 +4413,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "qs",
+      "version": "6.2.1",
+      "aliases": [
+        "GHSA-4mjr-xmp4-gh2g"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "c0700d38657cdc141ee330f1ed8492665bf292dc995063594b5368c3adf1a615"
@@ -3964,7 +4460,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "0475bb5622444e22",
+    "id": "76d1daa092314b4a",
     "ruleId": "CVE-2026-82417",
     "severity": "MEDIUM",
     "tool": {
@@ -3990,6 +4486,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "qs",
+      "version": "6.3.2",
+      "aliases": [
+        "GHSA-4mjr-xmp4-gh2g"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "522d8139dd1368a1a13faec9c213b739c88e6ec991d413f81824de496e57cc68"
@@ -4029,7 +4533,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "efef7a8388b86407",
+    "id": "7a11c1c1cc54fb73",
     "ruleId": "CVE-2026-82417",
     "severity": "MEDIUM",
     "tool": {
@@ -4055,6 +4559,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "qs",
+      "version": "6.5.2",
+      "aliases": [
+        "GHSA-4mjr-xmp4-gh2g"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "07684a5cded5d94409b71b0d5959274fe7db5ca0bd7138c3154e1f9ee6430c88"
@@ -4094,7 +4606,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "e243ebc890fa16f5",
+    "id": "cc338a626ae766e8",
     "ruleId": "CVE-2022-0144",
     "severity": "HIGH",
     "tool": {
@@ -4120,6 +4632,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "shelljs",
+      "version": "0.3.0",
+      "aliases": [
+        "GHSA-4rq4-32rv-6wp6"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "42cd3869e949fb6744f51723a90874a173e6fe4b87e6e8cd7e52c5f8e1fc6218"
@@ -4159,7 +4679,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "c12133f67fec3c0e",
+    "id": "952a8fe89539ee2d",
     "ruleId": "CVE-2018-16487",
     "severity": "MEDIUM",
     "tool": {
@@ -4183,6 +4703,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "lodash",
+      "version": "2.4.2",
+      "aliases": [
+        "GHSA-4xc9-xhrj-v574"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "7238d40b8beeaa99bbb1bb70e90e35382e9e9634ba611cceb41a6fdb0110d0f5"
@@ -4222,7 +4750,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "9bd4b0ccd8d372e6",
+    "id": "cdf6caf7807d158a",
     "ruleId": "CVE-2018-16487",
     "severity": "MEDIUM",
     "tool": {
@@ -4246,6 +4774,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "lodash",
+      "version": "4.13.1",
+      "aliases": [
+        "GHSA-4xc9-xhrj-v574"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "a3f35aaada4f52a388e4e15202814b3b84ed19251d2ebb4d0dd1fb7180148601"
@@ -4285,7 +4821,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "fd25b54ce92cadd2",
+    "id": "27d13e068e01e71d",
     "ruleId": "CVE-2026-59869",
     "severity": "HIGH",
     "tool": {
@@ -4311,6 +4847,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "js-yaml",
+      "version": "3.5.5",
+      "aliases": [
+        "GHSA-52cp-r559-cp3m"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "d0d3ca182a678e2c0bb0ec49009c675e579c05662cc66a55847643facb32bba9"
@@ -4350,7 +4894,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "0c3e5386c69633ae",
+    "id": "3e7e9e31d8475b3c",
     "ruleId": "CVE-2026-59869",
     "severity": "HIGH",
     "tool": {
@@ -4376,6 +4920,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "js-yaml",
+      "version": "3.6.1",
+      "aliases": [
+        "GHSA-52cp-r559-cp3m"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "8844043d897a7e9b7b361312364c9d83b0c411b67fabf67c5cc762f383f1a743"
@@ -4415,7 +4967,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "5c85fa9462159d20",
+    "id": "0f3a56a6b7af106d",
     "ruleId": "CVE-2025-54798",
     "severity": "LOW",
     "tool": {
@@ -4441,6 +4993,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tmp",
+      "version": "0.0.24",
+      "aliases": [
+        "GHSA-52f5-9888-hmc6"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "4785b15e174eef8c0345c2450500bc5be3e775aaae31bb9ecf6a8c20c82233b4"
@@ -4480,7 +5040,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "c48f3245bdaccd7b",
+    "id": "cc0dfccb9c04939e",
     "ruleId": "CVE-2025-54798",
     "severity": "LOW",
     "tool": {
@@ -4506,6 +5066,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tmp",
+      "version": "0.1.0",
+      "aliases": [
+        "GHSA-52f5-9888-hmc6"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "eb99b7c90f56141865291231f8064f35e3353f6358179c6ef1a641c636379a85"
@@ -4545,7 +5113,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "aa89065e276ee991",
+    "id": "a71a3e6a7a8f3bbb",
     "ruleId": "CVE-2021-37713",
     "severity": "HIGH",
     "tool": {
@@ -4571,6 +5139,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tar",
+      "version": "2.2.1",
+      "aliases": [
+        "GHSA-5955-9wpr-37jh"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "16a55ba681ba8551a6a5cb3cfc3da64cc475c7a307e48a86322a8bb2453c80a1"
@@ -4610,7 +5186,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "70fd6e37d467f0eb",
+    "id": "f525d9c57d63baa3",
     "ruleId": "CVE-2021-37713",
     "severity": "HIGH",
     "tool": {
@@ -4636,6 +5212,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tar",
+      "version": "4.4.8",
+      "aliases": [
+        "GHSA-5955-9wpr-37jh"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "fc5dd35ac1a876d4d90912ae655baa403014bb8944e6c1fddc4aaa70b5d13f59"
@@ -4675,7 +5259,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "5c528f5886b4bb1c",
+    "id": "a770f6912779ca85",
     "ruleId": "GHSA-5p4m-2wfm-xmqj",
     "severity": "HIGH",
     "tool": {
@@ -4701,6 +5285,12 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "js-yaml",
+      "version": "3.5.5",
+      "aliases": []
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "7ae3f9717e9854fd3913b51e09325db97d147cc17bf18b44c673bbe256b24712"
@@ -4740,7 +5330,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "66ee59806991db94",
+    "id": "c693e0a0a2362654",
     "ruleId": "GHSA-5p4m-2wfm-xmqj",
     "severity": "HIGH",
     "tool": {
@@ -4766,6 +5356,12 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "js-yaml",
+      "version": "3.6.1",
+      "aliases": []
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "e9c2f0185077d4be5a3edffa9afe5d7b68eae4764d6e66555526c4b18c9251d5"
@@ -4805,7 +5401,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "17a236bd5c8a1c00",
+    "id": "7877d925d020e66d",
     "ruleId": "CVE-2022-21681",
     "severity": "HIGH",
     "tool": {
@@ -4831,6 +5427,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "marked",
+      "version": "0.3.5",
+      "aliases": [
+        "GHSA-5v2h-r2cx-5xgj"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "5d6e5db56d53b1a179431383d7bb4f7c899635078f470e9eba69eab093019afc"
@@ -4870,7 +5474,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "d97e431cb56c5660",
+    "id": "006a2f6a5e0770a8",
     "ruleId": "CVE-2019-20922",
     "severity": "HIGH",
     "tool": {
@@ -4896,6 +5500,15 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "handlebars",
+      "version": "4.0.5",
+      "aliases": [
+        "SNYK-JS-HANDLEBARS-480388",
+        "GHSA-62gr-4qp9-h98f"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "f3bfe83484e807daa0a54cf0d129091d75a287c7d7901e61b9fbd5b7dd58afc6"
@@ -4935,7 +5548,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "9f7019ec951827b9",
+    "id": "cc204b1a6ec6f6ef",
     "ruleId": "GHSA-64g7-mvw6-v9qj",
     "severity": "MEDIUM",
     "tool": {
@@ -4959,6 +5572,12 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "shelljs",
+      "version": "0.3.0",
+      "aliases": []
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "bc29b27a92bd0c99af2ede28e7d2f04a48325989c6614c8ad1b43fb530160516"
@@ -4998,7 +5617,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "46d7ea626a042d1c",
+    "id": "5ae4ee71b3576515",
     "ruleId": "CVE-2023-45133",
     "severity": "CRITICAL",
     "tool": {
@@ -5024,6 +5643,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "babel-traverse",
+      "version": "6.11.4",
+      "aliases": [
+        "GHSA-67hx-6x53-jw92"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "e5d5a4ad7eec1ce31cd34af48ba3806503fe563f0d8bf5386c739b7582f471f0"
@@ -5063,7 +5690,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "a6089e619f9eb5fe",
+    "id": "96264296e55b7b9b",
     "ruleId": "CVE-2019-20149",
     "severity": "HIGH",
     "tool": {
@@ -5089,6 +5716,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "kind-of",
+      "version": "6.0.2",
+      "aliases": [
+        "GHSA-6c8f-qphg-qjgp"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "a82664af64a2abdbd3405b32b9ecc8687a5ae1dfb05b894d6d9c2448dd36d815"
@@ -5128,7 +5763,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "075896f0a6b6e96e",
+    "id": "8020908930c0929a",
     "ruleId": "CVE-2017-16028",
     "severity": "MEDIUM",
     "tool": {
@@ -5154,6 +5789,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "randomatic",
+      "version": "1.1.5",
+      "aliases": [
+        "GHSA-6g33-f262-xjp4"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "eccf8a6c4fadf78f6a124674533c919b07ea7bb182aa1c1918e6f3edf28199d4"
@@ -5193,7 +5836,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "94a21aa483cf8ad2",
+    "id": "392035a0e81e487d",
     "ruleId": "CVE-2025-15284",
     "severity": "MEDIUM",
     "tool": {
@@ -5219,6 +5862,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "qs",
+      "version": "0.6.6",
+      "aliases": [
+        "GHSA-6rw7-vpxm-498p"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "34730fcd3c92043f9b2fcf182972e01ebc0e4af811e4c6f83d665e36439bb00c"
@@ -5258,7 +5909,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "34c72d9d52e93ec8",
+    "id": "4fb835b0c7806f3e",
     "ruleId": "CVE-2025-15284",
     "severity": "MEDIUM",
     "tool": {
@@ -5284,6 +5935,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "qs",
+      "version": "5.2.1",
+      "aliases": [
+        "GHSA-6rw7-vpxm-498p"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "27e990bb40544f75685ca3c20d016db8251f0fa5bb704a2eebaaec8fe39cb95e"
@@ -5323,7 +5982,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "04a04f671462a7c7",
+    "id": "910d1c373121a166",
     "ruleId": "CVE-2025-15284",
     "severity": "MEDIUM",
     "tool": {
@@ -5349,6 +6008,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "qs",
+      "version": "6.2.1",
+      "aliases": [
+        "GHSA-6rw7-vpxm-498p"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "559f78d3117540570f48d80c5072a27f8bb01fb2f73e9628492edf02c5f47f39"
@@ -5388,7 +6055,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "9a5c9c0dbf40dbd3",
+    "id": "7630c7b8228e1d38",
     "ruleId": "CVE-2025-15284",
     "severity": "MEDIUM",
     "tool": {
@@ -5414,6 +6081,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "qs",
+      "version": "6.3.2",
+      "aliases": [
+        "GHSA-6rw7-vpxm-498p"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "a8c23670b5710cd85b610de2b39f8deb97c4b2a249ccaa6615d22a4b63ad39c5"
@@ -5453,7 +6128,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "c0705698da1b13c3",
+    "id": "ddc55b7cc4dafe05",
     "ruleId": "CVE-2025-15284",
     "severity": "MEDIUM",
     "tool": {
@@ -5479,6 +6154,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "qs",
+      "version": "6.5.2",
+      "aliases": [
+        "GHSA-6rw7-vpxm-498p"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "1691c5ce1eb202f04d08f698556f2bca966db4d6d6b6781ead5eda5c4926c515"
@@ -5518,7 +6201,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "781200531e76854d",
+    "id": "6e9d1dc76ffe8d10",
     "ruleId": "CVE-2022-21803",
     "severity": "HIGH",
     "tool": {
@@ -5544,6 +6227,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "nconf",
+      "version": "0.10.0",
+      "aliases": [
+        "GHSA-6xwr-q98w-rvg7"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "8eb245816460c13e034b66065976761937231645cdbb1396abd5ab2ec4866f79"
@@ -5583,7 +6274,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "5d2651f93df8ad77",
+    "id": "b24fcc91fe42ab75",
     "ruleId": "CVE-2022-21803",
     "severity": "HIGH",
     "tool": {
@@ -5609,6 +6300,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "nconf",
+      "version": "0.6.9",
+      "aliases": [
+        "GHSA-6xwr-q98w-rvg7"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "ad56d90f3de2ec79eb79acc31f2dbb82767e9aaf4b4710094ccfaa778ceffa38"
@@ -5648,7 +6347,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "93ce6ffb27a987ac",
+    "id": "e6c1fd2a6884cb33",
     "ruleId": "CVE-2023-26136",
     "severity": "MEDIUM",
     "tool": {
@@ -5674,6 +6373,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tough-cookie",
+      "version": "2.2.2",
+      "aliases": [
+        "GHSA-72xf-g2v4-qvf3"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "7b09e9604633ad24f2d90e7051ff4d94d51253b4c22af296cbf70d5a7a765cc9"
@@ -5713,7 +6420,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "34a994cb66d075bc",
+    "id": "33a91c7bf00015ad",
     "ruleId": "CVE-2023-26136",
     "severity": "MEDIUM",
     "tool": {
@@ -5739,6 +6446,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tough-cookie",
+      "version": "2.3.1",
+      "aliases": [
+        "GHSA-72xf-g2v4-qvf3"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "cec84a1b315055ee51a29584061804de194b7667b19c96646cb1181a15bc4bb8"
@@ -5778,7 +6493,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "b4a46f0395c874c9",
+    "id": "16a8c69a18065ab6",
     "ruleId": "CVE-2023-26136",
     "severity": "MEDIUM",
     "tool": {
@@ -5804,6 +6519,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tough-cookie",
+      "version": "2.3.4",
+      "aliases": [
+        "GHSA-72xf-g2v4-qvf3"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "9a282a90000a1767b30268268585d96a6e01c14d3164f4b1e8ed7274ea9abf7b"
@@ -5843,7 +6566,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "a245e63cb8bbb630",
+    "id": "b00472e2d72aae0c",
     "ruleId": "CVE-2023-26136",
     "severity": "MEDIUM",
     "tool": {
@@ -5869,6 +6592,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tough-cookie",
+      "version": "2.4.3",
+      "aliases": [
+        "GHSA-72xf-g2v4-qvf3"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "9cb5b5a66c289c32dfb7cd8114197c5c29d03a40ab03d937f4d9d2333512246f"
@@ -5908,7 +6639,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "3272f25f04744a08",
+    "id": "e1189618098c18cc",
     "ruleId": "CVE-2026-24001",
     "severity": "LOW",
     "tool": {
@@ -5934,6 +6665,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "diff",
+      "version": "1.4.0",
+      "aliases": [
+        "GHSA-73rr-hh4g-fpgx"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "d7b8ea292c4988d68329ae8463464cf9ad9c7eb43f2da39f3fcb336f90aa2203"
@@ -5973,7 +6712,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "d5d18c88df9be550",
+    "id": "ea54973bb296580f",
     "ruleId": "CVE-2021-23383",
     "severity": "CRITICAL",
     "tool": {
@@ -5999,6 +6738,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "handlebars",
+      "version": "4.0.5",
+      "aliases": [
+        "GHSA-765h-qjxv-5f44"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "5f3a1f8467e8ab103e1a064ef7eca4025de2eca9fc247c62e8e8c3875cee8d9a"
@@ -6038,7 +6785,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "4012f3f61d1da2ea",
+    "id": "32b936cd6ffc6d24",
     "ruleId": "CVE-2025-7339",
     "severity": "LOW",
     "tool": {
@@ -6064,6 +6811,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "on-headers",
+      "version": "1.0.1",
+      "aliases": [
+        "GHSA-76c9-3jph-rj3q"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "506a0e16474e995e2cf0525330ad8015ea8f5b79e8842db1791c7765a8298c96"
@@ -6103,7 +6858,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "5a896a8f684e28df",
+    "id": "66f95588b12c8811",
     "ruleId": "CVE-2023-0842",
     "severity": "MEDIUM",
     "tool": {
@@ -6129,6 +6884,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "xml2js",
+      "version": "0.4.4",
+      "aliases": [
+        "GHSA-776f-qx25-q3cc"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "950727897ed9a096caf134fcf3ef4a31073bea971494b3b9ab96171ae512ad44"
@@ -6168,7 +6931,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "ac697ce841692cc1",
+    "id": "89fb67ed9ca26f33",
     "ruleId": "CVE-2021-33623",
     "severity": "HIGH",
     "tool": {
@@ -6194,6 +6957,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "trim-newlines",
+      "version": "1.0.0",
+      "aliases": [
+        "GHSA-7p7h-4mm5-852v"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "d68b1c6c79f4985af32c726768752ce9207ab71c746460e912bddbaa140bc016"
@@ -6233,7 +7004,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "b389b4b036b684b8",
+    "id": "c3c3a9f3e778b1bf",
     "ruleId": "CVE-2026-19693",
     "severity": "HIGH",
     "tool": {
@@ -6259,6 +7030,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "extract-zip",
+      "version": "1.6.7",
+      "aliases": [
+        "GHSA-7pqw-9j4j-h8q3"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "741a065be876d1cefceb612e2801ffa1e0ccb536ec75768f1187862b8986e67b"
@@ -6298,7 +7077,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "4841a3fd1b6c2e05",
+    "id": "f5fa7f0780863a81",
     "ruleId": "CVE-2017-1000427",
     "severity": "MEDIUM",
     "tool": {
@@ -6324,6 +7103,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "marked",
+      "version": "0.3.5",
+      "aliases": [
+        "GHSA-7px7-7xjx-hxm8"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "1c2ef3ae0396db072d1eb1edf403deb789846f56eab2bc4b50bf9fe48c210985"
@@ -6363,7 +7150,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "f04fe6e5512cfaa2",
+    "id": "2c1cf2e44c7f3c21",
     "ruleId": "CVE-2026-27903",
     "severity": "HIGH",
     "tool": {
@@ -6389,6 +7176,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "minimatch",
+      "version": "0.3.0",
+      "aliases": [
+        "GHSA-7r86-cg39-jmmj"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "4a2b213e66691c3c456aaa22f267e4e46dae1361a2cca8cafb8d64b6e08b3c34"
@@ -6428,7 +7223,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "f8af8ec954385d5e",
+    "id": "ee5a2aa081b3e900",
     "ruleId": "CVE-2026-27903",
     "severity": "HIGH",
     "tool": {
@@ -6454,6 +7249,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "minimatch",
+      "version": "3.0.2",
+      "aliases": [
+        "GHSA-7r86-cg39-jmmj"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "2770e21cd936b01adedd34a3958cf3241ac6639d2251d9d8891a7baa214f4b25"
@@ -6493,7 +7296,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "94e051e0ed8fc390",
+    "id": "bf895f40334b7864",
     "ruleId": "CVE-2026-27903",
     "severity": "HIGH",
     "tool": {
@@ -6519,6 +7322,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "minimatch",
+      "version": "3.0.3",
+      "aliases": [
+        "GHSA-7r86-cg39-jmmj"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "115c382895f55a736c4889027f0f462d899ad9626620ece53f9cdb449d48a7a9"
@@ -6558,7 +7369,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "0f8710558a80b27a",
+    "id": "1ecdc486e46cdb95",
     "ruleId": "CVE-2026-27903",
     "severity": "HIGH",
     "tool": {
@@ -6584,6 +7395,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "minimatch",
+      "version": "3.0.4",
+      "aliases": [
+        "GHSA-7r86-cg39-jmmj"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "3e5825037b18556d66f9edc4d3d307b2404c7aaddc53e9ba1888f9ae7442b3cf"
@@ -6623,7 +7442,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "b4672d664310db4b",
+    "id": "e28671fb4255c5a1",
     "ruleId": "CVE-2017-16026",
     "severity": "MEDIUM",
     "tool": {
@@ -6649,6 +7468,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "request",
+      "version": "2.36.0",
+      "aliases": [
+        "GHSA-7xfp-9c55-5vqj"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "1daab94765f7b8a130a6094dcfe08702016405b855a0fcb411297d4d53db9919"
@@ -6688,7 +7515,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "e30cb980196dda1f",
+    "id": "729ce3c979778076",
     "ruleId": "CVE-2017-16026",
     "severity": "MEDIUM",
     "tool": {
@@ -6714,6 +7541,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "request",
+      "version": "2.67.0",
+      "aliases": [
+        "GHSA-7xfp-9c55-5vqj"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "3363a1392fa5667785a5e4d4913bd95ae45cdc999840906e82b168181749a871"
@@ -6753,7 +7588,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "7d05bcc751437f22",
+    "id": "3b50ff5076249990",
     "ruleId": "CVE-2017-18077",
     "severity": "HIGH",
     "tool": {
@@ -6779,6 +7614,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "brace-expansion",
+      "version": "1.1.6",
+      "aliases": [
+        "GHSA-832h-xg76-4gv6"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "5024abb6e99cd677cd81aa0eb701d5da16540cb27e8020b75cb92bfbf6005c4d"
@@ -6818,7 +7661,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "68615ac5e537647f",
+    "id": "31d730574d9f7a56",
     "ruleId": "CVE-2026-26960",
     "severity": "HIGH",
     "tool": {
@@ -6844,6 +7687,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tar",
+      "version": "2.2.1",
+      "aliases": [
+        "GHSA-83g3-92jg-28cx"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "faa5126db772528e4ca8641f1d9dfbfebcc3590f1d0b68c742042b88eb7c19e7"
@@ -6883,7 +7734,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "ea059ff41a72399c",
+    "id": "602e6b6cc527716c",
     "ruleId": "CVE-2026-26960",
     "severity": "HIGH",
     "tool": {
@@ -6909,6 +7760,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tar",
+      "version": "4.4.8",
+      "aliases": [
+        "GHSA-83g3-92jg-28cx"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "b5e85c4efec3f65326a5ba9b591777b1bbf5412749abb057e433a4c90e9022e6"
@@ -6948,7 +7807,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "d574c97d4bd9e670",
+    "id": "d5656c6041d71173",
     "ruleId": "CVE-2021-3918",
     "severity": "CRITICAL",
     "tool": {
@@ -6974,6 +7833,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "json-schema",
+      "version": "0.2.3",
+      "aliases": [
+        "GHSA-896r-f27r-55mw"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "ef454d5e6edcfda4fbb33bd8d46bed8b65791edb565880a093cc5d1269f30794"
@@ -7013,7 +7880,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "d77d5557b55f22bd",
+    "id": "dabf9874723600f9",
     "ruleId": "CVE-2022-24785",
     "severity": "HIGH",
     "tool": {
@@ -7039,6 +7906,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "moment",
+      "version": "2.24.0",
+      "aliases": [
+        "GHSA-8hfj-j24r-96c4"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "9b332554707dbc228d5aa2351b871927fd6ed6f5035cb656d6d9f6af616ea350"
@@ -7078,7 +7953,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "fcf2089790a55034",
+    "id": "b801d4890f1aadde",
     "ruleId": "GHSA-8j8c-7jfh-h6hx",
     "severity": "MEDIUM",
     "tool": {
@@ -7102,6 +7977,12 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "js-yaml",
+      "version": "3.5.5",
+      "aliases": []
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "f2fd05d6f5fc09ac583bf15ba31ed19be65c48947eeaafb1783e7cc8bbd2c6e4"
@@ -7141,7 +8022,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "c57ea4db44873884",
+    "id": "c94504d13029422c",
     "ruleId": "GHSA-8j8c-7jfh-h6hx",
     "severity": "MEDIUM",
     "tool": {
@@ -7165,6 +8046,12 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "js-yaml",
+      "version": "3.6.1",
+      "aliases": []
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "6d20d9f613fafb33c6a951551daa9cdaa8bfa8b640853ae5916d1421cbcfbdcf"
@@ -7204,7 +8091,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "9e008f8aefded69b",
+    "id": "20763e659fa44c8c",
     "ruleId": "CVE-2026-23745",
     "severity": "HIGH",
     "tool": {
@@ -7230,6 +8117,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tar",
+      "version": "2.2.1",
+      "aliases": [
+        "GHSA-8qq5-rm4j-mr97"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "ccda194bd5625f0b6f7371302fc838a8de9391cdd84053c9e1c6ba96d81a7c57"
@@ -7269,7 +8164,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "e5685afbdd05670a",
+    "id": "483e5618da714fb5",
     "ruleId": "CVE-2026-23745",
     "severity": "HIGH",
     "tool": {
@@ -7295,6 +8190,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tar",
+      "version": "4.4.8",
+      "aliases": [
+        "GHSA-8qq5-rm4j-mr97"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "fed50e0ce1fcef5d916fe111d2adc7831c2e3771b895241de25490b000eadbd9"
@@ -7334,7 +8237,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "a97930c0bf91893e",
+    "id": "02abfeb2bf22537a",
     "ruleId": "CVE-2023-45311",
     "severity": "CRITICAL",
     "tool": {
@@ -7360,6 +8263,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "fsevents",
+      "version": "1.2.9",
+      "aliases": [
+        "GHSA-8r6j-v8pm-fqw3"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "cbf4ddcb1f845edc7cc5403964f68f56ef0ee348f3832c71220f06112764be8e"
@@ -7399,7 +8310,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "833b22460030e5d0",
+    "id": "f188f92a6b223eb1",
     "ruleId": "CVE-2026-59874",
     "severity": "HIGH",
     "tool": {
@@ -7425,6 +8336,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tar",
+      "version": "2.2.1",
+      "aliases": [
+        "GHSA-8x88-c5mf-7j5w"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "27c885ded03a640ca09bbbeb2d92d04bf68070be7198d8dbc3601beaee40e0fd"
@@ -7464,7 +8383,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "c781055563b5920c",
+    "id": "6184827c7c4e43bf",
     "ruleId": "CVE-2026-59874",
     "severity": "HIGH",
     "tool": {
@@ -7490,6 +8409,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tar",
+      "version": "4.4.8",
+      "aliases": [
+        "GHSA-8x88-c5mf-7j5w"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "0d8a5e0141be0a7a3713649991fd5fa1e91cc0b0ae562135d270ea2eabc942ae"
@@ -7529,7 +8456,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "2e476d82ea403c0a",
+    "id": "8724adb80f235195",
     "ruleId": "CVE-2020-15095",
     "severity": "MEDIUM",
     "tool": {
@@ -7555,6 +8482,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "npm",
+      "version": "3.10.10",
+      "aliases": [
+        "GHSA-93f3-23rq-pjfp"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "7111345d72d4712526dcfb9594ec6e5f5b9f3311900bd8ff2f1bfe1078257f77"
@@ -7594,7 +8529,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "2d7e573dd020a94a",
+    "id": "58d497b9999d930d",
     "ruleId": "CVE-2021-3807",
     "severity": "HIGH",
     "tool": {
@@ -7620,6 +8555,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "ansi-regex",
+      "version": "3.0.0",
+      "aliases": [
+        "GHSA-93q8-gq69-wqmw"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "813a6fa65cba5b3065707a58f9a2d7cad32519af2ac41e02a7957902fb930be3"
@@ -7659,7 +8602,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "20d54fc529075426",
+    "id": "7d0590437931ee56",
     "ruleId": "CVE-2024-4067",
     "severity": "MEDIUM",
     "tool": {
@@ -7685,6 +8628,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "micromatch",
+      "version": "2.3.11",
+      "aliases": [
+        "GHSA-952p-6rrq-rcjv"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "3c0e597b022ba1a424f13662d17d6ff50406e1cc1defa1a1154cdac16157b797"
@@ -7724,7 +8675,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "a86ebacd073ee05e",
+    "id": "648c315548dd3168",
     "ruleId": "CVE-2024-4067",
     "severity": "MEDIUM",
     "tool": {
@@ -7750,6 +8701,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "micromatch",
+      "version": "3.1.10",
+      "aliases": [
+        "GHSA-952p-6rrq-rcjv"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "5005ae87117104876c730f9297c7df1c3b0f356e118202ce3839313b2f658822"
@@ -7789,7 +8748,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "2f42f6317eb5773c",
+    "id": "92921d6706e0458c",
     "ruleId": "CVE-2020-28282",
     "severity": "CRITICAL",
     "tool": {
@@ -7815,6 +8774,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "getobject",
+      "version": "0.1.0",
+      "aliases": [
+        "GHSA-957j-59c2-j692"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "3c135b87ebd0d99f03d6c78d676e9c4e04d3a87ee2c88d684da4f370dd009f44"
@@ -7854,7 +8821,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "c2420e4cfb6aec73",
+    "id": "3c6319aeaf1dc3ea",
     "ruleId": "CVE-2026-48779",
     "severity": "HIGH",
     "tool": {
@@ -7880,6 +8847,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "ws",
+      "version": "1.1.5",
+      "aliases": [
+        "GHSA-96hv-2xvq-fx4p"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "2056d1f36ed92fc12baef5bbe7771c9025211943b8572cc17735dabedfa09a81"
@@ -7919,7 +8894,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "e76b708c11d04bfd",
+    "id": "aa3d916c7c8e227c",
     "ruleId": "CVE-2026-33939",
     "severity": "HIGH",
     "tool": {
@@ -7945,6 +8920,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "handlebars",
+      "version": "4.0.5",
+      "aliases": [
+        "GHSA-9cx6-37pm-9jff"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "fb0bc3510698b37f8f69709c955a34f4bfcf332c6bc48e0591038a33d15a1faf"
@@ -7984,7 +8967,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "310fb719983517d9",
+    "id": "ca0717527faba21d",
     "ruleId": "CVE-2026-31802",
     "severity": "HIGH",
     "tool": {
@@ -8010,6 +8993,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tar",
+      "version": "2.2.1",
+      "aliases": [
+        "GHSA-9ppj-qmqm-q256"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "b1ed562ebc9cac48f6552d591a4599134bda6be760724d4700e5fe5bcce7f0f1"
@@ -8049,7 +9040,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "4642e05a43da6870",
+    "id": "566f55242809dc35",
     "ruleId": "CVE-2026-31802",
     "severity": "HIGH",
     "tool": {
@@ -8075,6 +9066,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tar",
+      "version": "4.4.8",
+      "aliases": [
+        "GHSA-9ppj-qmqm-q256"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "d271fa35df1fda6fc8134b900c191419733116e7e3cb3f5cc398ff23a8cde1e3"
@@ -8114,7 +9113,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "b78b801b9bf26418",
+    "id": "9decd7037b16d314",
     "ruleId": "CVE-2021-37701",
     "severity": "HIGH",
     "tool": {
@@ -8140,6 +9139,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tar",
+      "version": "4.4.8",
+      "aliases": [
+        "GHSA-9r2w-394v-53qc"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "bd8c44d7c03889c0dcb143e7f1bc4328396f7a7eaa66c5bd31e179f2f307bee2"
@@ -8179,7 +9186,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "1a3c33a71ea785d2",
+    "id": "14a573532b30e6ce",
     "ruleId": "CVE-2017-20165",
     "severity": "HIGH",
     "tool": {
@@ -8205,6 +9212,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "debug",
+      "version": "2.2.0",
+      "aliases": [
+        "GHSA-9vvw-cc9w-f27h"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "0d9e0cd30237e6351ded1566301a7d5d8fc87baa9a79a6c055c91f8686418609"
@@ -8244,7 +9259,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "4a5623990c7c9f77",
+    "id": "8eada974d20ae0d3",
     "ruleId": "CVE-2024-45296",
     "severity": "HIGH",
     "tool": {
@@ -8270,6 +9285,16 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "path-to-regexp",
+      "version": "0.1.7",
+      "aliases": [
+        "CVE-2026-4867",
+        "GHSA-37ch-88jc-xwx2",
+        "GHSA-9wv6-86v2-598j"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "1103b2edb09668cb903208fdb5077987eff4033d920bbf9430166f4e9a8561b4"
@@ -8309,7 +9334,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "e33141d413febcc5",
+    "id": "606e3e794b3cc562",
     "ruleId": "CVE-2022-25883",
     "severity": "HIGH",
     "tool": {
@@ -8335,6 +9360,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "semver",
+      "version": "5.3.0",
+      "aliases": [
+        "GHSA-c2qf-rxjj-qqgw"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "8423ace24f9837d0456e6bbeff3bf9ba643b8bca81bf71284cbf0260b5fa7d06"
@@ -8374,7 +9407,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "3a0044c045fc99ac",
+    "id": "0533a471c4b65c5d",
     "ruleId": "CVE-2022-25883",
     "severity": "HIGH",
     "tool": {
@@ -8400,6 +9433,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "semver",
+      "version": "5.6.0",
+      "aliases": [
+        "GHSA-c2qf-rxjj-qqgw"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "95f4197ec1817f47e40a0bd603e46219ece0bd0157ad9f7d0b271addb4d85cb4"
@@ -8439,7 +9480,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "c80fed50ffdcda89",
+    "id": "d7ab9f4b474be83b",
     "ruleId": "CVE-2022-25883",
     "severity": "HIGH",
     "tool": {
@@ -8465,6 +9506,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "semver",
+      "version": "5.7.0",
+      "aliases": [
+        "GHSA-c2qf-rxjj-qqgw"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "442bcf51af1c57c489ee23fb0d56c48afba5f5ab6d2999f5d399d1d50ed1415f"
@@ -8504,7 +9553,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "67bc7f22cfe56b46",
+    "id": "bb599357d732c2f0",
     "ruleId": "GHSA-c3m8-x3cg-qm2c",
     "severity": "MEDIUM",
     "tool": {
@@ -8530,6 +9579,12 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "helmet-csp",
+      "version": "1.2.2",
+      "aliases": []
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "260f57747364b8102ff3cd1f1908e7afde92e7f0d391f1becc25067c3c00d446"
@@ -8569,7 +9624,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "d17fe2fed10573b3",
+    "id": "5de824ee0b6df3a1",
     "ruleId": "CVE-2020-36604",
     "severity": "HIGH",
     "tool": {
@@ -8595,6 +9650,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "hoek",
+      "version": "0.9.1",
+      "aliases": [
+        "GHSA-c429-5p7v-vgjp"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "e1a2cd5c1faf15715522349935b99053064e0760362a064c83dc1a833acd2ce2"
@@ -8634,7 +9697,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "6668855f1d3a0867",
+    "id": "36722c6edce87e3f",
     "ruleId": "CVE-2020-36604",
     "severity": "HIGH",
     "tool": {
@@ -8660,6 +9723,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "hoek",
+      "version": "2.16.3",
+      "aliases": [
+        "GHSA-c429-5p7v-vgjp"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "40fd61a627b403f0ae6784552b4c3269d89fd66f9bc0f132505adda852d0a770"
@@ -8699,7 +9770,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "bc558b7b86796eab",
+    "id": "ceb842e6798c4013",
     "ruleId": "CVE-2020-7774",
     "severity": "HIGH",
     "tool": {
@@ -8725,6 +9796,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "y18n",
+      "version": "3.2.1",
+      "aliases": [
+        "GHSA-c4w7-xm78-47vh"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "f87631bffd4e9d15601956ac8189c4e33d033353cba2da8e74619c74723cea44"
@@ -8764,7 +9843,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "6780556f1876c380",
+    "id": "f2911b34f5709cf8",
     "ruleId": "CVE-2017-18869",
     "severity": "LOW",
     "tool": {
@@ -8790,6 +9869,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "chownr",
+      "version": "1.0.1",
+      "aliases": [
+        "GHSA-c6rq-rjc2-86v2"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "8b25c7e1f321f73935c5c445d8d841db53503221c974bbdb1afce83b7a8611c9"
@@ -8829,7 +9916,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "84a6dcfacde6f091",
+    "id": "eadc50db83c16373",
     "ruleId": "CVE-2015-8858",
     "severity": "HIGH",
     "tool": {
@@ -8855,6 +9942,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "uglify-js",
+      "version": "2.4.24",
+      "aliases": [
+        "GHSA-c9f4-xj24-8jqx"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "982e40a35bd2461573c66a1e151ce1a7b23bc6db48749fa65183f0a5fa875de4"
@@ -8894,7 +9989,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "9e2408bd34ac6082",
+    "id": "fccfd84afbd8da29",
     "ruleId": "CVE-2021-23358",
     "severity": "CRITICAL",
     "tool": {
@@ -8920,6 +10015,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "underscore",
+      "version": "1.8.3",
+      "aliases": [
+        "GHSA-cf4h-3jhx-xvhq"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "f52f26334174ac40694242fa8cd9b0bd1354a811894caa56ec16440aa32fa1cf"
@@ -8959,7 +10062,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "c58dd8310d3a8551",
+    "id": "7d0592d1b029a919",
     "ruleId": "CVE-2021-23358",
     "severity": "CRITICAL",
     "tool": {
@@ -8985,6 +10088,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "underscore",
+      "version": "1.9.1",
+      "aliases": [
+        "GHSA-cf4h-3jhx-xvhq"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "fd3a3705fa03412f80d00bfe733b142f7801694fae9d79649fb432dff54b1da4"
@@ -9024,7 +10135,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "b209656ae72feb94",
+    "id": "6540020d78a43c78",
     "ruleId": "CVE-2024-43800",
     "severity": "MEDIUM",
     "tool": {
@@ -9050,6 +10161,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "serve-static",
+      "version": "1.13.2",
+      "aliases": [
+        "GHSA-cm22-4g7w-348p"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "0649e0c63589e4b2edbbe116ab8f1fc41ba48bb721108b80e15c06f8565b9497"
@@ -9089,7 +10208,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "7ba044cae4545df5",
+    "id": "5748014f865e0f1f",
     "ruleId": "CVE-2025-13465",
     "severity": "MEDIUM",
     "tool": {
@@ -9115,6 +10234,16 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "lodash",
+      "version": "2.4.2",
+      "aliases": [
+        "CVE-2026-2950",
+        "GHSA-f23m-r3pf-42rh",
+        "GHSA-xxjr-mmjv-4gpg"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "62d121362b64e4e7363dbd6ed99a6a2f60b3f80cbefd72966e76feeb5872d6a9"
@@ -9154,7 +10283,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "2d97833cbe1d77e5",
+    "id": "bc4bb8ccfd3cb227",
     "ruleId": "CVE-2025-13465",
     "severity": "MEDIUM",
     "tool": {
@@ -9180,6 +10309,16 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "lodash",
+      "version": "4.13.1",
+      "aliases": [
+        "CVE-2026-2950",
+        "GHSA-f23m-r3pf-42rh",
+        "GHSA-xxjr-mmjv-4gpg"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "475ebae99b59cf3e2fca1bdeffac1e8050bc295405062004008663cd98558088"
@@ -9219,7 +10358,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "9c5af0dd521c0866",
+    "id": "c85eb377f2f9a291",
     "ruleId": "CVE-2025-13465",
     "severity": "MEDIUM",
     "tool": {
@@ -9245,6 +10384,16 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "lodash",
+      "version": "4.17.11",
+      "aliases": [
+        "CVE-2026-2950",
+        "GHSA-f23m-r3pf-42rh",
+        "GHSA-xxjr-mmjv-4gpg"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "bc993b36868135db4463aaf17e3227ffb09e38522331f15afb98dce2a37c4d4c"
@@ -9284,7 +10433,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "8f50e7c596591897",
+    "id": "7d37025858b7932a",
     "ruleId": "CVE-2025-13465",
     "severity": "MEDIUM",
     "tool": {
@@ -9310,6 +10459,16 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "lodash",
+      "version": "4.17.20",
+      "aliases": [
+        "CVE-2026-2950",
+        "GHSA-f23m-r3pf-42rh",
+        "GHSA-xxjr-mmjv-4gpg"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "4af80001eb57f855fbf27923d831bb1c5ce04a51d378b3a71a40cc1763cf19ae"
@@ -9349,7 +10508,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "15164c1c75edfccd",
+    "id": "147cc01be0ce2f02",
     "ruleId": "CVE-2025-13465",
     "severity": "MEDIUM",
     "tool": {
@@ -9375,6 +10534,16 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "lodash",
+      "version": "4.17.21",
+      "aliases": [
+        "CVE-2026-2950",
+        "GHSA-f23m-r3pf-42rh",
+        "GHSA-xxjr-mmjv-4gpg"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "fece9441e00f289872017d9001127fbae9dbdde8bcd548f1c2b9f15ac4bcb960"
@@ -9414,7 +10583,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "bed9ebeff1779fde",
+    "id": "863b05ff420db77c",
     "ruleId": "CVE-2021-23369",
     "severity": "CRITICAL",
     "tool": {
@@ -9440,6 +10609,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "handlebars",
+      "version": "4.0.5",
+      "aliases": [
+        "GHSA-f2jv-r9rf-7988"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "2ecc64e2ca3186f6415b616841a5d7f8b69198849bf51e68f478cfcd15774196"
@@ -9479,7 +10656,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "ccf433be28ed251e",
+    "id": "eb83c843e2a70abc",
     "ruleId": "GHSA-f52g-6jhx-586p",
     "severity": "MEDIUM",
     "tool": {
@@ -9503,6 +10680,12 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "handlebars",
+      "version": "4.0.5",
+      "aliases": []
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "19e558ac3bf8b20c695c34a3f2a6a0fb74e042f31d4125a284f35507896e2076"
@@ -9542,7 +10725,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "eca27b464043d8fe",
+    "id": "9c6b965bda73658c",
     "ruleId": "CVE-2024-28863",
     "severity": "MEDIUM",
     "tool": {
@@ -9568,6 +10751,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tar",
+      "version": "2.2.1",
+      "aliases": [
+        "GHSA-f5x3-32g6-xq36"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "35bf4e7f95c069e5ac343e6315b0fa1d56f94153431d387e670bf03b75a415b3"
@@ -9607,7 +10798,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "76968d8199bf05ec",
+    "id": "b0f48f7006ea77b0",
     "ruleId": "CVE-2024-28863",
     "severity": "MEDIUM",
     "tool": {
@@ -9633,6 +10824,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tar",
+      "version": "4.4.8",
+      "aliases": [
+        "GHSA-f5x3-32g6-xq36"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "e3174d20cf90ff0a317a38ee513b5239d6ee9da44b9a9a02751565b3464d242d"
@@ -9672,7 +10871,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "b0aff49588f86c77",
+    "id": "645670e416bb5303",
     "ruleId": "CVE-2026-33750",
     "severity": "MEDIUM",
     "tool": {
@@ -9698,6 +10897,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "brace-expansion",
+      "version": "1.1.11",
+      "aliases": [
+        "GHSA-f886-m6hf-6m8v"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "e55e9b5f2bf07922ab30a0e6a69bd1a2010381355255fabced19cacb9d22c775"
@@ -9737,7 +10944,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "d9326be055808352",
+    "id": "2ac24c79818717e9",
     "ruleId": "CVE-2026-33750",
     "severity": "MEDIUM",
     "tool": {
@@ -9763,6 +10970,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "brace-expansion",
+      "version": "1.1.6",
+      "aliases": [
+        "GHSA-f886-m6hf-6m8v"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "eb68eca9a7e7aa041ad15bac03c7e66db9212a5370ba1f4b0de121dad2fba4f0"
@@ -9802,7 +11017,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "acead66263ca6b02",
+    "id": "1cd3e53f039a5ab0",
     "ruleId": "CVE-2022-3517",
     "severity": "HIGH",
     "tool": {
@@ -9828,6 +11043,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "minimatch",
+      "version": "0.3.0",
+      "aliases": [
+        "GHSA-f8q6-p94x-37v3"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "9aa47b854c624ee0d427898b10c4decde3bda29616746482cb553f290336fd06"
@@ -9867,7 +11090,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "1eb60e07c0a83ffb",
+    "id": "c65b4f951c9ee479",
     "ruleId": "CVE-2022-3517",
     "severity": "HIGH",
     "tool": {
@@ -9893,6 +11116,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "minimatch",
+      "version": "3.0.2",
+      "aliases": [
+        "GHSA-f8q6-p94x-37v3"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "ffdc88c1938dcf7f64059c7a0795f9cd2807fbef92fb14d17cb93e5cba649c96"
@@ -9932,7 +11163,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "250a16a8f229678c",
+    "id": "2c50cb70c7ba2179",
     "ruleId": "CVE-2022-3517",
     "severity": "HIGH",
     "tool": {
@@ -9958,6 +11189,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "minimatch",
+      "version": "3.0.3",
+      "aliases": [
+        "GHSA-f8q6-p94x-37v3"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "962f26dfe32a9088e9bcd70f0218465226ba43c39952007632c18df0d1457023"
@@ -9997,7 +11236,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "a8dd62097199f448",
+    "id": "d688cf9cc67bd998",
     "ruleId": "CVE-2022-3517",
     "severity": "HIGH",
     "tool": {
@@ -10023,6 +11262,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "minimatch",
+      "version": "3.0.4",
+      "aliases": [
+        "GHSA-f8q6-p94x-37v3"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "76274e0fd512c629c756dcbcbf5786eacf55ece6e39c249e92ce3be217515b6c"
@@ -10062,7 +11309,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "1ae265b3f320a79b",
+    "id": "20c0d2ac02409a6c",
     "ruleId": "CVE-2014-10064",
     "severity": "MEDIUM",
     "tool": {
@@ -10086,6 +11333,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "qs",
+      "version": "0.6.6",
+      "aliases": [
+        "GHSA-f9cm-p3w6-xvr3"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "595757a560b1c6cd9f5af0d1a20fa2bb83073e6345fccaacebba38d24d2c0833"
@@ -10125,7 +11380,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "0953a98244a5b8ea",
+    "id": "352f0b0e6bb711d2",
     "ruleId": "CVE-2020-8116",
     "severity": "HIGH",
     "tool": {
@@ -10151,6 +11406,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "dot-prop",
+      "version": "4.2.0",
+      "aliases": [
+        "GHSA-ff7x-qrg7-qggm"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "93b2714b5983310f4aaf111adde7383b923c5544dfb9f6b24e5588c64777f776"
@@ -10190,7 +11453,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "b65621ed4d92ef33",
+    "id": "5c097c349d0bd93a",
     "ruleId": "CVE-2019-10746",
     "severity": "CRITICAL",
     "tool": {
@@ -10216,6 +11479,15 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "mixin-deep",
+      "version": "1.3.1",
+      "aliases": [
+        "SNYK-JS-MIXINDEEP-450212",
+        "GHSA-fhjf-83wg-r2j9"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "ddc21e91f726ac276844446a842168015866d904ad2d66e12dd05ae5a59a375c"
@@ -10255,7 +11527,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "a7b180f6e1c10052",
+    "id": "efd906168870881e",
     "ruleId": "CVE-2025-7783",
     "severity": "CRITICAL",
     "tool": {
@@ -10281,6 +11553,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "form-data",
+      "version": "0.1.4",
+      "aliases": [
+        "GHSA-fjxv-7rqg-78g4"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "c6098d6283843b458eb29bdc51ced2f0bcef26f081ad72c89120f2d43d1f1d3c"
@@ -10320,7 +11600,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "0fd7b50aa3eceed7",
+    "id": "0b5dea9d677d3c32",
     "ruleId": "CVE-2025-7783",
     "severity": "CRITICAL",
     "tool": {
@@ -10346,6 +11626,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "form-data",
+      "version": "1.0.1",
+      "aliases": [
+        "GHSA-fjxv-7rqg-78g4"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "ec6e74eb658a95525754a1bc7116d20c42f6d87e679a652378dca1355cc3e2be"
@@ -10385,7 +11673,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "402d9ed16b6e9d66",
+    "id": "cf9f69a6c4102f3e",
     "ruleId": "CVE-2025-7783",
     "severity": "CRITICAL",
     "tool": {
@@ -10411,6 +11699,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "form-data",
+      "version": "2.0.0",
+      "aliases": [
+        "GHSA-fjxv-7rqg-78g4"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "f303d26778483e31e87b53fc03ce1b4cba48af0b5cabc72639dc42c5f241f955"
@@ -10450,7 +11746,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "0c48cab128b1b205",
+    "id": "d7195791fb78f50d",
     "ruleId": "CVE-2025-7783",
     "severity": "CRITICAL",
     "tool": {
@@ -10476,6 +11772,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "form-data",
+      "version": "2.1.4",
+      "aliases": [
+        "GHSA-fjxv-7rqg-78g4"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "86aa41f2bbdc89e54fd612386fed90b4b4963f7dd38c6414f1983a1a2a9f1ad9"
@@ -10515,7 +11819,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "634e4e43cfec640e",
+    "id": "94bdd43b1e6cb30f",
     "ruleId": "CVE-2025-7783",
     "severity": "CRITICAL",
     "tool": {
@@ -10541,6 +11845,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "form-data",
+      "version": "2.3.3",
+      "aliases": [
+        "GHSA-fjxv-7rqg-78g4"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "a686a55a1a77a08662306baffbd2ac39754b27fd4f8a707242b87a4ecab202c1"
@@ -10580,7 +11892,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "f56506a446ee4cd7",
+    "id": "26eec1741d8b4e3b",
     "ruleId": "CVE-2018-3721",
     "severity": "MEDIUM",
     "tool": {
@@ -10606,6 +11918,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "lodash",
+      "version": "2.4.2",
+      "aliases": [
+        "GHSA-fvqr-27wr-82fm"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "a9a50a79b5e8b516f36a2e264376498acf85ca49701d4a1da7c7aef9ed92e104"
@@ -10645,7 +11965,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "1d7aa187a88f717d",
+    "id": "5b26b5001cc0c2c6",
     "ruleId": "CVE-2018-3721",
     "severity": "MEDIUM",
     "tool": {
@@ -10671,6 +11991,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "lodash",
+      "version": "4.13.1",
+      "aliases": [
+        "GHSA-fvqr-27wr-82fm"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "9e562d620cbd85855921fa2f721d4920c0dbbf271e89eba4fa763150c8ea916b"
@@ -10710,7 +12038,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "5ffd0f612d435218",
+    "id": "6dfa9caba6050b8c",
     "ruleId": "CVE-2021-43138",
     "severity": "HIGH",
     "tool": {
@@ -10736,6 +12064,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "async",
+      "version": "2.6.1",
+      "aliases": [
+        "GHSA-fwr7-v2mv-hh25"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "095073e9d7970294e9b5309e8856cd8fe0a39097e3b9c0da62a25b0a802f5c1d"
@@ -10775,7 +12111,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "30b5119be4d4a5f8",
+    "id": "a73afcdb6bb1f42b",
     "ruleId": "CVE-2020-7662",
     "severity": "HIGH",
     "tool": {
@@ -10801,6 +12137,15 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "websocket-extensions",
+      "version": "0.1.3",
+      "aliases": [
+        "SNYK-JS-WEBSOCKETEXTENSIONS-570623",
+        "GHSA-g78m-2chm-r7qv"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "bc23465f31b9bb8d25dbde19036851211dd19600159dbb890ae7843b9ef63097"
@@ -10840,7 +12185,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "7eb9ae5ffe0c7327",
+    "id": "93bdf01221bd836d",
     "ruleId": "CVE-2017-15010",
     "severity": "HIGH",
     "tool": {
@@ -10866,6 +12211,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tough-cookie",
+      "version": "2.2.2",
+      "aliases": [
+        "GHSA-g7q5-pjjr-gqvp"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "1ef3e6e703fc284f096f2cc7f26c5a84e54859dd5410c7d3a73eb120fbc343cb"
@@ -10905,7 +12258,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "f8829985bbea5cdb",
+    "id": "9abd4d456d80ef07",
     "ruleId": "CVE-2017-15010",
     "severity": "HIGH",
     "tool": {
@@ -10931,6 +12284,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tough-cookie",
+      "version": "2.3.1",
+      "aliases": [
+        "GHSA-g7q5-pjjr-gqvp"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "c1db73158c299d49e59e32ec94101c4dc4c6a219f1ce6250e283938622e0a32e"
@@ -10970,7 +12331,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "1aa153832d8a2b44",
+    "id": "a31eeda1b4e044e2",
     "ruleId": "GHSA-g9r4-xpmj-mj65",
     "severity": "MEDIUM",
     "tool": {
@@ -10994,6 +12355,12 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "handlebars",
+      "version": "4.0.5",
+      "aliases": []
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "bfcdca1378587a12e0c3a439397293ee8a3a3390f0375e0f95edd685629a5c2b"
@@ -11033,7 +12400,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "34cd040534eaa48e",
+    "id": "6d3be77007c301a1",
     "ruleId": "CVE-2017-1000048",
     "severity": "HIGH",
     "tool": {
@@ -11059,6 +12426,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "qs",
+      "version": "0.6.6",
+      "aliases": [
+        "GHSA-gqgv-6jq5-jjj9"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "9ae276b0ceb139a21d63d79aaab957fefe9acd49355fd9d224d6c162ceaec442"
@@ -11098,7 +12473,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "51481c359607adf3",
+    "id": "9b490db09cc76295",
     "ruleId": "CVE-2017-1000048",
     "severity": "HIGH",
     "tool": {
@@ -11124,6 +12499,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "qs",
+      "version": "5.2.1",
+      "aliases": [
+        "GHSA-gqgv-6jq5-jjj9"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "01dcb15905ece05dd62e36f5acc93b3495fb11ce30ae30355bf507c8d60936c2"
@@ -11163,7 +12546,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "15c5c7fd9c658b75",
+    "id": "8084c9edd0e4eb0f",
     "ruleId": "CVE-2017-1000048",
     "severity": "HIGH",
     "tool": {
@@ -11189,6 +12572,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "qs",
+      "version": "6.2.1",
+      "aliases": [
+        "GHSA-gqgv-6jq5-jjj9"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "b28ff702794523ae5581321cfd6550f3fbbe60094c4fd2dc051e546c3e5c4e0b"
@@ -11228,7 +12619,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "17c0049387bd1878",
+    "id": "719d9e5477476640",
     "ruleId": "CVE-2024-4068",
     "severity": "HIGH",
     "tool": {
@@ -11254,6 +12645,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "braces",
+      "version": "1.8.5",
+      "aliases": [
+        "GHSA-grv7-fg5c-xmjg"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "af2375b88ae2e728ae480c6ba932d9188efd279a10f06cbb7176d761a214177e"
@@ -11293,7 +12692,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "4d158f3a4bcb48e5",
+    "id": "c4abc292b107d360",
     "ruleId": "CVE-2024-4068",
     "severity": "HIGH",
     "tool": {
@@ -11319,6 +12718,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "braces",
+      "version": "2.3.2",
+      "aliases": [
+        "GHSA-grv7-fg5c-xmjg"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "d1bf371ee0817ddd80163fa34a8bbe8e300e71dbd1fcad24ad9d0626ac511748"
@@ -11358,7 +12765,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "dd5a359ad6cfa1e9",
+    "id": "f0e7bc1d0a92802a",
     "ruleId": "CVE-2026-59875",
     "severity": "MEDIUM",
     "tool": {
@@ -11384,6 +12791,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tar",
+      "version": "2.2.1",
+      "aliases": [
+        "GHSA-gvwx-54wh-qm9j"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "22625c572418d28a0b345c5354d0d7b791d19878254822b01a10287ae1777ce6"
@@ -11423,7 +12838,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "f0a323feb03975e4",
+    "id": "94b1bb4dbacc3d5d",
     "ruleId": "CVE-2026-59875",
     "severity": "MEDIUM",
     "tool": {
@@ -11449,6 +12864,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tar",
+      "version": "4.4.8",
+      "aliases": [
+        "GHSA-gvwx-54wh-qm9j"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "ae93f58a7a012cf790b063454ba3d26d0e04793e61bb55b99f9dc0deab319c05"
@@ -11488,7 +12911,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "bb1c3c9d6f7a726c",
+    "id": "78aa77c3529c3fc7",
     "ruleId": "CVE-2017-16137",
     "severity": "LOW",
     "tool": {
@@ -11514,6 +12937,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "debug",
+      "version": "2.2.0",
+      "aliases": [
+        "GHSA-gxpj-cx7g-858c"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "4ec15f64187353107c97ae964358e51a4697b6e049f65c3798079ed49b8da307"
@@ -11553,7 +12984,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "0bf8514dfd532822",
+    "id": "b08828c25188fed4",
     "ruleId": "CVE-2017-16137",
     "severity": "LOW",
     "tool": {
@@ -11579,6 +13010,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "debug",
+      "version": "3.2.6",
+      "aliases": [
+        "GHSA-gxpj-cx7g-858c"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "c23282e89c04fd7e1aabe4f9b0533880bd3b916e2459a4d947349f3b67f0cc93"
@@ -11618,7 +13057,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "4ff94616ff96ea1b",
+    "id": "0ccfb2827b85d926",
     "ruleId": "CVE-2017-16137",
     "severity": "LOW",
     "tool": {
@@ -11644,6 +13083,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "debug",
+      "version": "4.1.1",
+      "aliases": [
+        "GHSA-gxpj-cx7g-858c"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "0cf5d02ffc65c5449ea5e569ad5d744a14741123e74500ceeb1a915f4e8be532"
@@ -11683,7 +13130,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "07eb8c83dc33a926",
+    "id": "e6ecbbbf935ba14e",
     "ruleId": "CVE-2026-53550",
     "severity": "MEDIUM",
     "tool": {
@@ -11709,6 +13156,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "js-yaml",
+      "version": "3.5.5",
+      "aliases": [
+        "GHSA-h67p-54hq-rp68"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "dbd112b96cc43a9b86eecbc338e0ca1d36c91b1ef10f97d7a99bfe1fecb13742"
@@ -11748,7 +13203,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "48dfd4c4ff436578",
+    "id": "24cff7035aa7fc66",
     "ruleId": "CVE-2026-53550",
     "severity": "MEDIUM",
     "tool": {
@@ -11774,6 +13229,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "js-yaml",
+      "version": "3.6.1",
+      "aliases": [
+        "GHSA-h67p-54hq-rp68"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "5b468b250fbe60938e79711312ed24de44e8c953efb8717771bd0e7f3c58a490"
@@ -11813,7 +13276,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "b7cd160d59fa2e51",
+    "id": "75ff20ca20836750",
     "ruleId": "GHSA-h6ch-v84p-w6p9",
     "severity": "MEDIUM",
     "tool": {
@@ -11837,6 +13300,12 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "diff",
+      "version": "1.4.0",
+      "aliases": []
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "313fc0fd14149c072f87976242b220a2d6c2403b4f112722d2f9aecb6c3fa72d"
@@ -11876,7 +13345,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "abf7001bff2da7ee",
+    "id": "f87a772c9583c1ad",
     "ruleId": "CVE-2021-23343",
     "severity": "MEDIUM",
     "tool": {
@@ -11902,6 +13371,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "path-parse",
+      "version": "1.0.5",
+      "aliases": [
+        "GHSA-hj48-42vr-x3v9"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "1bf0ed474b2bf1b7c64a9b8433de94bd92630d85efc46a2afd5b7aaf2109394d"
@@ -11941,7 +13418,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "99d65a90188446cf",
+    "id": "406bdbcbc48794e6",
     "ruleId": "CVE-2026-12143",
     "severity": "HIGH",
     "tool": {
@@ -11967,6 +13444,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "form-data",
+      "version": "0.1.4",
+      "aliases": [
+        "GHSA-hmw2-7cc7-3qxx"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "313af5b19252950dd8b9da3a1510f9058c32e49898e514027d4f02beffab5d49"
@@ -12006,7 +13491,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "7b8fb92c4463a126",
+    "id": "8194c912118d4565",
     "ruleId": "CVE-2026-12143",
     "severity": "HIGH",
     "tool": {
@@ -12032,6 +13517,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "form-data",
+      "version": "1.0.1",
+      "aliases": [
+        "GHSA-hmw2-7cc7-3qxx"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "02566eb7d17bfdd328650dde681c191c59ba7545c5e1652728f74f55023d9189"
@@ -12071,7 +13564,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "9e6af179934d9744",
+    "id": "a3b2d9b2eaaeb53b",
     "ruleId": "CVE-2026-12143",
     "severity": "HIGH",
     "tool": {
@@ -12097,6 +13590,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "form-data",
+      "version": "2.0.0",
+      "aliases": [
+        "GHSA-hmw2-7cc7-3qxx"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "73f5b134d05241962ee08c810028d3479f1ea81cc73df054b664331db33c76b5"
@@ -12136,7 +13637,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "f8516beadd2b0903",
+    "id": "690a7c93de279753",
     "ruleId": "CVE-2026-12143",
     "severity": "HIGH",
     "tool": {
@@ -12162,6 +13663,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "form-data",
+      "version": "2.1.4",
+      "aliases": [
+        "GHSA-hmw2-7cc7-3qxx"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "3ad9cce187469854ac9d236d7f7345cec131f92f55fcc2f1ecde0e94740375f0"
@@ -12201,7 +13710,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "833df1e9c55837f5",
+    "id": "03770c34faeb4f89",
     "ruleId": "CVE-2026-12143",
     "severity": "HIGH",
     "tool": {
@@ -12227,6 +13736,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "form-data",
+      "version": "2.3.3",
+      "aliases": [
+        "GHSA-hmw2-7cc7-3qxx"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "6a3f74d6f1826466a6908b223835bbad5b57154da08123a36fb31cd4c39efa2b"
@@ -12266,7 +13783,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "cefd93602976a41e",
+    "id": "de9fcf51fbebe2cf",
     "ruleId": "CVE-2022-24999",
     "severity": "HIGH",
     "tool": {
@@ -12292,6 +13809,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "qs",
+      "version": "0.6.6",
+      "aliases": [
+        "GHSA-hrpp-h998-j3pp"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "48910f2c4d8a13a2c090e64017469ef6d48b8b4f841ee3fd04005708163a0961"
@@ -12331,7 +13856,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "b4c242380bb6abfc",
+    "id": "d4543ec47ad59c8f",
     "ruleId": "CVE-2022-24999",
     "severity": "HIGH",
     "tool": {
@@ -12357,6 +13882,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "qs",
+      "version": "5.2.1",
+      "aliases": [
+        "GHSA-hrpp-h998-j3pp"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "3f2852b137964b23be7d1ab82334b0154a1ca0b9a0445c59cc3b1e4c738361d2"
@@ -12396,7 +13929,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "24d3fb745b3a8ef9",
+    "id": "ae53d3e60d6c2fc4",
     "ruleId": "CVE-2022-24999",
     "severity": "HIGH",
     "tool": {
@@ -12422,6 +13955,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "qs",
+      "version": "6.2.1",
+      "aliases": [
+        "GHSA-hrpp-h998-j3pp"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "adff95ac7bdc6ee632d8a231b078d180a5857bc109eca7ed4e4a40fcc26a4138"
@@ -12461,7 +14002,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "e4b7fccdf789cc2d",
+    "id": "331f7d98baa0cd93",
     "ruleId": "CVE-2022-24999",
     "severity": "HIGH",
     "tool": {
@@ -12487,6 +14028,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "qs",
+      "version": "6.3.2",
+      "aliases": [
+        "GHSA-hrpp-h998-j3pp"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "206ad87f4472e83011a2d6421505619f3548f0d91e7b73953b8681986d9c3dd8"
@@ -12526,7 +14075,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "c7fca158e7628497",
+    "id": "de3695c5ac8224f7",
     "ruleId": "CVE-2022-24999",
     "severity": "HIGH",
     "tool": {
@@ -12552,6 +14101,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "qs",
+      "version": "6.5.2",
+      "aliases": [
+        "GHSA-hrpp-h998-j3pp"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "dec8a8febd337123ef5feef01af5eeca245060f72f136145962b5c6b0188f8dd"
@@ -12591,7 +14148,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "5afa5f81a0f5b51e",
+    "id": "e3fb14395b217057",
     "ruleId": "CVE-2016-10540",
     "severity": "HIGH",
     "tool": {
@@ -12617,6 +14174,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "minimatch",
+      "version": "0.3.0",
+      "aliases": [
+        "GHSA-hxm2-r34f-qmc5"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "8244aa868f733f5338eded141a277170cfb54f5eadc4ac0bd7c3e075275295cd"
@@ -12656,7 +14221,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "b18001ed430ce4cd",
+    "id": "c8457dfaa9db8316",
     "ruleId": "CVE-2022-0436",
     "severity": "MEDIUM",
     "tool": {
@@ -12682,6 +14247,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "grunt",
+      "version": "1.0.3",
+      "aliases": [
+        "GHSA-j383-35pm-c5h4"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "e1b5e5d3b665515cf643f3d9d786420cf32d042366b7e1ce6859dcd1c15e723d"
@@ -12721,7 +14294,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "346c7ceb76ea1563",
+    "id": "97bed977a41d212c",
     "ruleId": "CVE-2018-20834",
     "severity": "HIGH",
     "tool": {
@@ -12747,6 +14320,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tar",
+      "version": "2.2.1",
+      "aliases": [
+        "GHSA-j44m-qm6p-hp7m"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "363f5936af1aefa71326ac8cf1f26df60b7fbc94d994701297faf2ba1568a258"
@@ -12786,7 +14367,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "34b5cc7c30fc116a",
+    "id": "17382ce8559680c1",
     "ruleId": "CVE-2016-2515",
     "severity": "HIGH",
     "tool": {
@@ -12812,6 +14393,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "hawk",
+      "version": "1.0.0",
+      "aliases": [
+        "GHSA-jcpv-g9rr-qxrc"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "9436ee1942105036ee852d7be86fa4d51b50855c2827fa532d06fc69ef12d24b"
@@ -12851,7 +14440,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "40fd0143f58a27ca",
+    "id": "77cfd5d7162e5721",
     "ruleId": "CVE-2019-10744",
     "severity": "CRITICAL",
     "tool": {
@@ -12877,6 +14466,15 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "lodash",
+      "version": "2.4.2",
+      "aliases": [
+        "SNYK-JS-LODASH-450202",
+        "GHSA-jf85-cpcp-j695"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "4e8cca00b72aef30c2ea66bedf6711e913d6a0e52def3bd04de22410fd41d528"
@@ -12916,7 +14514,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "b9c5ac7c7d01dc19",
+    "id": "eb7e36cf0df3a7eb",
     "ruleId": "CVE-2019-10744",
     "severity": "CRITICAL",
     "tool": {
@@ -12942,6 +14540,15 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "lodash",
+      "version": "4.13.1",
+      "aliases": [
+        "SNYK-JS-LODASH-450202",
+        "GHSA-jf85-cpcp-j695"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "d394dd7c096dd10dd3ae3f81fe06423d6dbaea8d0795e876ace29a60cf52f3fa"
@@ -12981,7 +14588,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "f66e877d23fda980",
+    "id": "edc65eb96ae36a55",
     "ruleId": "CVE-2019-10744",
     "severity": "CRITICAL",
     "tool": {
@@ -13007,6 +14614,15 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "lodash",
+      "version": "4.17.11",
+      "aliases": [
+        "SNYK-JS-LODASH-450202",
+        "GHSA-jf85-cpcp-j695"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "df128bf03b5adec170a0fa0ebd4543ceee85f9f3de693db9fde21efc47477ba5"
@@ -13046,7 +14662,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "ae2bc9e6cff9ed5e",
+    "id": "0a883e9a1a4a14fe",
     "ruleId": "CVE-2014-7191",
     "severity": "MEDIUM",
     "tool": {
@@ -13070,6 +14686,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "qs",
+      "version": "0.6.6",
+      "aliases": [
+        "GHSA-jjv7-qpx3-h62q"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "ea1b0464b7cf48f7a5e466c2e304a0be04d41839f69dab52ee957d2b8d290542"
@@ -13109,7 +14733,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "01dbd66376e83be7",
+    "id": "da4dffd6beef96e6",
     "ruleId": "CVE-2026-56876",
     "severity": "HIGH",
     "tool": {
@@ -13135,6 +14759,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "extract-zip",
+      "version": "1.6.7",
+      "aliases": [
+        "GHSA-jmr9-qjv8-65gv"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "0c67661dd86f9f311f6af6d515f882e16cb82ac8da00c1a54444b7fa93c46446"
@@ -13174,7 +14806,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "d23b648f9f57148a",
+    "id": "9d2c5a8a0a9a201f",
     "ruleId": "CVE-2018-3728",
     "severity": "HIGH",
     "tool": {
@@ -13200,6 +14832,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "hoek",
+      "version": "0.9.1",
+      "aliases": [
+        "GHSA-jp4x-w63m-7wgm"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "2415219f1aa1a575b54b52cca09f33422392f06cf31ab742a1007e5932aeb0b6"
@@ -13239,7 +14879,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "57afe32c4680bf88",
+    "id": "615f9444e2682438",
     "ruleId": "CVE-2018-3728",
     "severity": "HIGH",
     "tool": {
@@ -13265,6 +14905,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "hoek",
+      "version": "2.16.3",
+      "aliases": [
+        "GHSA-jp4x-w63m-7wgm"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "7f646ea773f24a85fe6a6f14a07d4b38456fec6787dea3b607c0273fd6ba6e6a"
@@ -13304,7 +14952,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "c7b1b1f3ebe0e4f5",
+    "id": "94a5ece98a38c4a9",
     "ruleId": "CVE-2020-7729",
     "severity": "HIGH",
     "tool": {
@@ -13330,6 +14978,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "grunt",
+      "version": "1.0.3",
+      "aliases": [
+        "GHSA-m5pj-vjjf-4m3h"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "3e17213ac0b279f4b76765886553acda5b47af6cf88f4a19858bbbc85043ce16"
@@ -13369,7 +15025,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "348d492662bbe0d0",
+    "id": "3314c73bccdfed2c",
     "ruleId": "CVE-2019-16775",
     "severity": "HIGH",
     "tool": {
@@ -13395,6 +15051,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "npm",
+      "version": "3.10.10",
+      "aliases": [
+        "GHSA-m6cx-g6qm-p2cx"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "e2b8e7127be88cdac01d7c1eb76261c256f41c500abeecd5e9b121d5bd3f9ed2"
@@ -13434,7 +15098,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "9e0579ee591b3f97",
+    "id": "7b3de0d5575ed858",
     "ruleId": "CVE-2024-43799",
     "severity": "MEDIUM",
     "tool": {
@@ -13460,6 +15124,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "send",
+      "version": "0.16.2",
+      "aliases": [
+        "GHSA-m6fv-jmcg-4jfg"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "6e61b486c6b98101326ed02820b63f597bf18b21ba360f3b72e8b3809da6dd3f"
@@ -13499,7 +15171,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "420561f17980544e",
+    "id": "74bc6097fbb0ced1",
     "ruleId": "CVE-2018-21270",
     "severity": "MEDIUM",
     "tool": {
@@ -13523,6 +15195,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "stringstream",
+      "version": "0.0.5",
+      "aliases": [
+        "GHSA-mf6x-7mm4-x2g7"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "63e9176c015f41d83b8d52df8f5500442b245a0fcc0f5e7ad4d20abf9b71bb9e"
@@ -13562,7 +15242,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "0e833a6ecdef0f16",
+    "id": "43d4072661ad2ad7",
     "ruleId": "CVE-2025-64718",
     "severity": "MEDIUM",
     "tool": {
@@ -13588,6 +15268,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "js-yaml",
+      "version": "3.5.5",
+      "aliases": [
+        "GHSA-mh29-5h37-fv8m"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "519516202df82e778b334c4094bfde104d653c0c98e9e852575394f38a8ceeb5"
@@ -13627,7 +15315,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "8d4b9d78a399caaa",
+    "id": "2574690ee82c9e6c",
     "ruleId": "CVE-2025-64718",
     "severity": "MEDIUM",
     "tool": {
@@ -13653,6 +15341,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "js-yaml",
+      "version": "3.6.1",
+      "aliases": [
+        "GHSA-mh29-5h37-fv8m"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "042d869350673ff5ac59667fafd28f7297506b28989c9222526d98f8a8ce2a3a"
@@ -13692,7 +15388,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "2efddb2c694f6a53",
+    "id": "32dcbfe9883aac9f",
     "ruleId": "GHSA-mh5c-679w-hh4r",
     "severity": "MEDIUM",
     "tool": {
@@ -13716,6 +15412,12 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "mongodb",
+      "version": "2.2.36",
+      "aliases": []
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "208cde8568b2210d6d03ff1a4c71128dc4b0c45b7821c5bb476e767eb73dfae8"
@@ -13755,7 +15457,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "30ccf2c31025b70e",
+    "id": "da23cfa4262e5c0f",
     "ruleId": "CVE-2026-14257",
     "severity": "HIGH",
     "tool": {
@@ -13781,6 +15483,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "brace-expansion",
+      "version": "1.1.11",
+      "aliases": [
+        "GHSA-mh99-v99m-4gvg"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "16f785f8c06756db98399341089e227c5f783f873d4ac2fd74b31710a9a5c5ba"
@@ -13820,7 +15530,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "889a3276bc7e1e4f",
+    "id": "508182e36c9cc285",
     "ruleId": "CVE-2026-14257",
     "severity": "HIGH",
     "tool": {
@@ -13846,6 +15556,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "brace-expansion",
+      "version": "1.1.6",
+      "aliases": [
+        "GHSA-mh99-v99m-4gvg"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "3960b002e49d372f9381a02b45c04812cdfedb0554596d44df1abe525d5d9421"
@@ -13885,7 +15603,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "ed22b93c0a0e6c1e",
+    "id": "756ebb54cc182b66",
     "ruleId": "CVE-2026-54490",
     "severity": "MEDIUM",
     "tool": {
@@ -13911,6 +15629,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "websocket-driver",
+      "version": "0.7.0",
+      "aliases": [
+        "GHSA-mp7j-qc5w-4988"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "243c7527d3aa809fa481f219f07322f269d32dd83b61f194cb9d09ce5d9b4ba5"
@@ -13950,7 +15676,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "8e59a398023d415d",
+    "id": "108c539d1ccac74e",
     "ruleId": "CVE-2020-8203",
     "severity": "HIGH",
     "tool": {
@@ -13976,6 +15702,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "lodash",
+      "version": "4.13.1",
+      "aliases": [
+        "GHSA-p6mc-m468-83gw"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "d9ac418caad2ee93863c481c3fb442a3a91388819422bf3f8ca763946050c9bb"
@@ -14015,7 +15749,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "c47220a1989a73c7",
+    "id": "9fe8e88fb7c19243",
     "ruleId": "CVE-2020-8203",
     "severity": "HIGH",
     "tool": {
@@ -14041,6 +15775,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "lodash",
+      "version": "4.17.11",
+      "aliases": [
+        "GHSA-p6mc-m468-83gw"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "73bc72194f773201f771551c78db15d3927d1f0b133664c9eab24476304f25df"
@@ -14080,7 +15822,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "39eb2de5f71d82a6",
+    "id": "162d2c69a0b21a57",
     "ruleId": "CVE-2023-28155",
     "severity": "MEDIUM",
     "tool": {
@@ -14106,6 +15848,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "request",
+      "version": "2.36.0",
+      "aliases": [
+        "GHSA-p8p7-x288-28g6"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "504390f1cfc53810da0c0f510d7c9761249b32e7dac44f593619cbd6455b906e"
@@ -14145,7 +15895,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "2e8cad42f73ba8f4",
+    "id": "03f0bd38cc9fd86a",
     "ruleId": "CVE-2023-28155",
     "severity": "MEDIUM",
     "tool": {
@@ -14171,6 +15921,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "request",
+      "version": "2.67.0",
+      "aliases": [
+        "GHSA-p8p7-x288-28g6"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "c90336405cf4bd70e9702c1b9df8b6ffdbe2b305931b76e50754eb9c46b84378"
@@ -14210,7 +15968,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "24abe690a09d022e",
+    "id": "29c0ce361a12006e",
     "ruleId": "CVE-2023-28155",
     "severity": "MEDIUM",
     "tool": {
@@ -14236,6 +15994,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "request",
+      "version": "2.75.0",
+      "aliases": [
+        "GHSA-p8p7-x288-28g6"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "45f75f8db1c099939efe6d528ab5ee040ed3f699458e6fe19ee49fc2885227ac"
@@ -14275,7 +16041,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "c481cc7991592490",
+    "id": "64a3d54bcf379d64",
     "ruleId": "CVE-2023-28155",
     "severity": "MEDIUM",
     "tool": {
@@ -14301,6 +16067,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "request",
+      "version": "2.79.0",
+      "aliases": [
+        "GHSA-p8p7-x288-28g6"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "80b6cb8bebefecefb7568eee733f3eee8e54cb984c584e5fafe207e0762bfa01"
@@ -14340,7 +16114,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "ec52f2fe412f30f7",
+    "id": "1d670f56eb36ce9c",
     "ruleId": "CVE-2023-28155",
     "severity": "MEDIUM",
     "tool": {
@@ -14366,6 +16140,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "request",
+      "version": "2.88.0",
+      "aliases": [
+        "GHSA-p8p7-x288-28g6"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "5dc7ce292ea21ba3d8d0d9c2bf610d7c2c680c07f64ff172280ff767b40d626f"
@@ -14405,7 +16187,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "e06a609105f9b7f0",
+    "id": "6648464189f125dd",
     "ruleId": "CVE-2020-7608",
     "severity": "MEDIUM",
     "tool": {
@@ -14431,6 +16213,15 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "yargs-parser",
+      "version": "2.4.1",
+      "aliases": [
+        "SNYK-JS-YARGSPARSER-560381",
+        "GHSA-p9pc-299p-vxgp"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "0343fa4f1bd3f50cfa150eec137056fa2e36a33b5e8a2b53c364b8edd138faec"
@@ -14470,7 +16261,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "f81b5d39cfbf6930",
+    "id": "09db10ebf200fd0e",
     "ruleId": "CVE-2018-25110",
     "severity": "MEDIUM",
     "tool": {
@@ -14496,6 +16287,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "marked",
+      "version": "0.3.5",
+      "aliases": [
+        "GHSA-p9wx-2529-fp83"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "73759599dc6ba76ae5083928862ccf2416ede6dccdda2f2d73d11813e0549395"
@@ -14535,7 +16334,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "65425871c0e7ba6b",
+    "id": "201b281bb1dc3c26",
     "ruleId": "CVE-2022-33987",
     "severity": "MEDIUM",
     "tool": {
@@ -14561,6 +16360,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "got",
+      "version": "6.7.1",
+      "aliases": [
+        "GHSA-pfrx-2q88-qq97"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "5f974cbce046c6f1ac6f25e41fa2c30af11669e6cc33975dbc05906bd99d4271"
@@ -14600,7 +16407,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "07ebfacb77e89648",
+    "id": "239faf76bed7c4f6",
     "ruleId": "CVE-2018-7408",
     "severity": "HIGH",
     "tool": {
@@ -14626,6 +16433,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "npm",
+      "version": "3.10.10",
+      "aliases": [
+        "GHSA-ph34-pc88-72gc"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "32fb158af1877c439a36350111298f30fb998d6203185588ff6c6a68e45651c5"
@@ -14665,7 +16480,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "67750cc6642fde14",
+    "id": "f0a005b4f28e5d99",
     "ruleId": "CVE-2026-44705",
     "severity": "HIGH",
     "tool": {
@@ -14691,6 +16506,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tmp",
+      "version": "0.0.24",
+      "aliases": [
+        "GHSA-ph9p-34f9-6g65"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "e3b9c2afd42668e3ce4f52fe4bbd4dd87d0c3ae52975399fa9337ea0b7936fd7"
@@ -14730,7 +16553,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "6b066d5ffa179c6b",
+    "id": "3e36cb178ca27114",
     "ruleId": "CVE-2026-44705",
     "severity": "HIGH",
     "tool": {
@@ -14756,6 +16579,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tmp",
+      "version": "0.1.0",
+      "aliases": [
+        "GHSA-ph9p-34f9-6g65"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "ec0c8a4a7ef56b57c54c9bc0a745845746673097c54a1fe0263315783c8524ed"
@@ -14795,7 +16626,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "d303fcae6b7a99fa",
+    "id": "caa7b0e69731c623",
     "ruleId": "CVE-2020-8244",
     "severity": "MEDIUM",
     "tool": {
@@ -14821,6 +16652,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "bl",
+      "version": "1.0.3",
+      "aliases": [
+        "GHSA-pp7h-53gx-mx7r"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "c37efc262caf2de73a452d7a5ecfb785bee35d73066ca7d854bc9cd258d65078"
@@ -14860,7 +16699,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "35a625371dffffbb",
+    "id": "6d9a7facd183eff5",
     "ruleId": "CVE-2020-8244",
     "severity": "MEDIUM",
     "tool": {
@@ -14886,6 +16725,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "bl",
+      "version": "1.1.2",
+      "aliases": [
+        "GHSA-pp7h-53gx-mx7r"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "0be658594b41f0b916bdc8be523e8e7a4641def8836d507ba28293ee35981bbf"
@@ -14925,7 +16772,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "ceb25a9c1e808d57",
+    "id": "777f2716de7e9931",
     "ruleId": "CVE-2020-7754",
     "severity": "HIGH",
     "tool": {
@@ -14951,6 +16798,15 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "npm-user-validate",
+      "version": "0.1.5",
+      "aliases": [
+        "GHSA-pw54-mh39-w3hc",
+        "GHSA-xgh6-85xh-479p"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "9339cb5463a978738e1c311d8bef9e66ff4b497838c981dff7617969dd64a001"
@@ -14990,7 +16846,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "6a2f8efc2be93a4e",
+    "id": "2ed8cf0b13ad230d",
     "ruleId": "CVE-2024-47764",
     "severity": "MEDIUM",
     "tool": {
@@ -15014,6 +16870,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "cookie",
+      "version": "0.3.1",
+      "aliases": [
+        "GHSA-pxg6-pf52-xh8x"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "74a08c50bb2bcf24b043a5dd0f3e1a30a402d31d02fa8746204a82547e459b3e"
@@ -15053,7 +16917,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "fe70a85b86e6466a",
+    "id": "5672565d7efc1ef7",
     "ruleId": "GHSA-q2c6-c6pm-g3gh",
     "severity": "MEDIUM",
     "tool": {
@@ -15077,6 +16941,12 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "handlebars",
+      "version": "4.0.5",
+      "aliases": []
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "15a92db70beedbd3c18e4ff4951eaa6a72bfd5a0349d80f91508cec467a56a42"
@@ -15116,7 +16986,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "ec4e9a8c8d58cb85",
+    "id": "66659ded949c35b7",
     "ruleId": "GHSA-q42p-pg8m-cqh6",
     "severity": "HIGH",
     "tool": {
@@ -15142,6 +17012,12 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "handlebars",
+      "version": "4.0.5",
+      "aliases": []
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "4466c5a94dfa8d048841f32c71d6269c8eed5d14f6a43a75c66e54d5fd5a3db6"
@@ -15181,7 +17057,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "66fba28d1f40d87a",
+    "id": "82fe6a02f260ebc5",
     "ruleId": "CVE-2026-29786",
     "severity": "HIGH",
     "tool": {
@@ -15207,6 +17083,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tar",
+      "version": "2.2.1",
+      "aliases": [
+        "GHSA-qffp-2rhf-9h96"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "0f9561830aec3c48d8252126ce4f3622fdc4c4b5eccf28438f96c9b2ac4b963d"
@@ -15246,7 +17130,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "7358bea72b7ab2a2",
+    "id": "eb00950a2e0d3bf6",
     "ruleId": "CVE-2026-29786",
     "severity": "HIGH",
     "tool": {
@@ -15272,6 +17156,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tar",
+      "version": "4.4.8",
+      "aliases": [
+        "GHSA-qffp-2rhf-9h96"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "a4decdf1e737e1ba690b958b44355d7c77ab6a0efae59227d1b2c9b6fe1f4a92"
@@ -15311,7 +17203,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "6346c19f30ad7a1f",
+    "id": "ea7e8f5def8b18d5",
     "ruleId": "CVE-2017-16042",
     "severity": "CRITICAL",
     "tool": {
@@ -15337,6 +17229,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "growl",
+      "version": "1.9.2",
+      "aliases": [
+        "GHSA-qh2h-chj9-jffq"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "a030179f40bd2f3439adb7715f03e92fcf05c2561abc1b9a6f8e189a9cb52a48"
@@ -15376,7 +17276,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "6e4d374c78b08022",
+    "id": "0f49be409c4abd08",
     "ruleId": "CVE-2016-1000232",
     "severity": "MEDIUM",
     "tool": {
@@ -15402,6 +17302,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tough-cookie",
+      "version": "2.2.2",
+      "aliases": [
+        "GHSA-qhv9-728r-6jqg"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "9cde3b63e403d215f509478b9312806f737d481e094ca1684dbb175b877982ab"
@@ -15441,7 +17349,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "ca1a9865761c378a",
+    "id": "2d6d272b93de838c",
     "ruleId": "CVE-2026-27601",
     "severity": "HIGH",
     "tool": {
@@ -15467,6 +17375,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "underscore",
+      "version": "1.8.3",
+      "aliases": [
+        "GHSA-qpx9-hpmf-5gmw"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "ac02d1ce6748e793d9f33bea7fd55f580f257d501db6fc8adf47f3ec2b1daee5"
@@ -15506,7 +17422,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "e7f29883b1294333",
+    "id": "302505c484976496",
     "ruleId": "CVE-2026-27601",
     "severity": "HIGH",
     "tool": {
@@ -15532,6 +17448,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "underscore",
+      "version": "1.9.1",
+      "aliases": [
+        "GHSA-qpx9-hpmf-5gmw"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "e7cc23d2bc6cbba3367e8a02f2abb04d0cab6e6ca72a8607df9c5d299bdb7e36"
@@ -15571,7 +17495,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "1f786ff74a638dca",
+    "id": "f934b3392f263aba",
     "ruleId": "CVE-2021-37712",
     "severity": "HIGH",
     "tool": {
@@ -15597,6 +17521,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tar",
+      "version": "4.4.8",
+      "aliases": [
+        "GHSA-qq89-hq3f-393p"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "24eef080c424ee290fa52323de422af0b3c38c7e731b45e83c81fc98d9cb2e47"
@@ -15636,7 +17568,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "75c6914c6d3805ef",
+    "id": "6f6c047a146f3e81",
     "ruleId": "CVE-2020-7788",
     "severity": "HIGH",
     "tool": {
@@ -15662,6 +17594,15 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "ini",
+      "version": "1.3.4",
+      "aliases": [
+        "SNYK-JS-INI-1048974",
+        "GHSA-qqgx-2p2h-9c37"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "22d5b9ae209aa183bb343314ebd7f704236336fa9564ad676ff8e52d3a286c98"
@@ -15701,7 +17642,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "f2e9b55e586491da",
+    "id": "57a1c4e1d6e62046",
     "ruleId": "CVE-2020-7788",
     "severity": "HIGH",
     "tool": {
@@ -15727,6 +17668,15 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "ini",
+      "version": "1.3.5",
+      "aliases": [
+        "SNYK-JS-INI-1048974",
+        "GHSA-qqgx-2p2h-9c37"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "a58c60d292748b578d94e9337cef4dd0135c3d5abafa7718c6b9f89caf321e70"
@@ -15766,7 +17716,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "aa31e2aa3b49e374",
+    "id": "e373de0390f9977b",
     "ruleId": "CVE-2018-16492",
     "severity": "MEDIUM",
     "tool": {
@@ -15790,6 +17740,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "extend",
+      "version": "3.0.0",
+      "aliases": [
+        "GHSA-qrmc-fj45-qfc2"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "8409e08c02a50a514d5c0e4a3ec07b425a88af924c1ee75ea2c006dc8962dee1"
@@ -15829,7 +17787,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "18734bdbda1b6ac9",
+    "id": "d6f3cf968b372583",
     "ruleId": "CVE-2024-43796",
     "severity": "MEDIUM",
     "tool": {
@@ -15855,6 +17813,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "express",
+      "version": "4.16.4",
+      "aliases": [
+        "GHSA-qw6h-vgh9-j6wx"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "9c2fc2fe2f5812f91099bd594f639a22299e51ca0a3799b98909210a2a0b9066"
@@ -15894,7 +17860,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "ba5ad9c59e200c7d",
+    "id": "edfbeadb3f919d1b",
     "ruleId": "CVE-2024-45590",
     "severity": "HIGH",
     "tool": {
@@ -15920,6 +17886,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "body-parser",
+      "version": "1.18.3",
+      "aliases": [
+        "GHSA-qwcr-r2fm-qrc7"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "c6e667a0ac289ea3a1bc6c90ba205e6747452328bdabccf87ce88a8798a6f1fe"
@@ -15959,7 +17933,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "7227466cb2b9bafd",
+    "id": "4519be0e2e27dcb5",
     "ruleId": "CVE-2026-73566",
     "severity": "HIGH",
     "tool": {
@@ -15985,6 +17959,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tar",
+      "version": "2.2.1",
+      "aliases": [
+        "GHSA-r292-9mhp-454m"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "6f181f34e40058eb3670ff41729a98b819c4de4ace219421b32d1cc239b6261b"
@@ -16024,7 +18006,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "468fbb1792369d6e",
+    "id": "fbbe723a86a82808",
     "ruleId": "CVE-2026-73566",
     "severity": "HIGH",
     "tool": {
@@ -16050,6 +18032,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tar",
+      "version": "4.4.8",
+      "aliases": [
+        "GHSA-r292-9mhp-454m"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "2ce28bb9cf2f306386c20b7c544d56bdb31929cd2f8da968eda10f40dd0408b9"
@@ -16089,7 +18079,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "63fa9e8131af8879",
+    "id": "37d059fbb02bbfa0",
     "ruleId": "CVE-2021-23337",
     "severity": "HIGH",
     "tool": {
@@ -16115,6 +18105,16 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "lodash",
+      "version": "2.4.2",
+      "aliases": [
+        "CVE-2026-4800",
+        "GHSA-35jh-r3h4-6jhm",
+        "GHSA-r5fr-rjxr-66jc"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "b654a69c9d87b61132ea4a762bb4089645c4a3b221cae65ef346c77936754188"
@@ -16154,7 +18154,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "e15730d8fee83fb6",
+    "id": "3fdfeb9568d0c41e",
     "ruleId": "CVE-2021-23337",
     "severity": "HIGH",
     "tool": {
@@ -16180,6 +18180,16 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "lodash",
+      "version": "4.13.1",
+      "aliases": [
+        "CVE-2026-4800",
+        "GHSA-35jh-r3h4-6jhm",
+        "GHSA-r5fr-rjxr-66jc"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "034e5f2a01933e3bd6c4a03c2d2e8afea51edaa11917dc47073688ef9513415a"
@@ -16219,7 +18229,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "43e698cb3d112eeb",
+    "id": "699fe527372e3ef8",
     "ruleId": "CVE-2021-23337",
     "severity": "HIGH",
     "tool": {
@@ -16245,6 +18255,16 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "lodash",
+      "version": "4.17.11",
+      "aliases": [
+        "CVE-2026-4800",
+        "GHSA-35jh-r3h4-6jhm",
+        "GHSA-r5fr-rjxr-66jc"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "6d951cb17dffa168c37e9ddfff120fcd2af5dac700bd86494afd2910ad192ba3"
@@ -16284,7 +18304,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "a6cf87e218697050",
+    "id": "14f7e996df0ca9b6",
     "ruleId": "CVE-2021-23337",
     "severity": "HIGH",
     "tool": {
@@ -16310,6 +18330,16 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "lodash",
+      "version": "4.17.20",
+      "aliases": [
+        "CVE-2026-4800",
+        "GHSA-35jh-r3h4-6jhm",
+        "GHSA-r5fr-rjxr-66jc"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "f1abb7bb3fe09d5e608268512ffffc3ade6791aee8a984987d80c6b88a0d0b66"
@@ -16349,7 +18379,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "9e56f35b5f28b7a1",
+    "id": "cba7fa995e18d11e",
     "ruleId": "CVE-2021-23337",
     "severity": "HIGH",
     "tool": {
@@ -16375,6 +18405,16 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "lodash",
+      "version": "4.17.21",
+      "aliases": [
+        "CVE-2026-4800",
+        "GHSA-35jh-r3h4-6jhm",
+        "GHSA-r5fr-rjxr-66jc"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "0260f5c4efc60a5b594ba8ad4c673e64e7bc668c47b7918c7402a6243ba5fd35"
@@ -16414,7 +18454,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "7deb897b440b38d0",
+    "id": "180ed3b88b5af031",
     "ruleId": "CVE-2021-32803",
     "severity": "HIGH",
     "tool": {
@@ -16440,6 +18480,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tar",
+      "version": "4.4.8",
+      "aliases": [
+        "GHSA-r628-mhmh-qjhw"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "099bd9582b45bd07c77568b10772c73adf16d71c5fd9e2328ab76f22225c71bf"
@@ -16479,7 +18527,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "99cd611935802014",
+    "id": "4577c67458deec1e",
     "ruleId": "CVE-2026-23950",
     "severity": "HIGH",
     "tool": {
@@ -16505,6 +18553,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tar",
+      "version": "2.2.1",
+      "aliases": [
+        "GHSA-r6q2-hw4h-h46w"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "fe2260ca6775631a071a793146916400315380156b851b6bd6cff907cf912fb6"
@@ -16544,7 +18600,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "3cda4e8359321098",
+    "id": "72a1941da02bd595",
     "ruleId": "CVE-2026-23950",
     "severity": "HIGH",
     "tool": {
@@ -16570,6 +18626,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tar",
+      "version": "4.4.8",
+      "aliases": [
+        "GHSA-r6q2-hw4h-h46w"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "a0556c4bba3d46b59913c3d6a85c0c56734876708142456df2184231471e2eaf"
@@ -16609,7 +18673,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "93b98a62afcb9b90",
+    "id": "681fe81983b88b1f",
     "ruleId": "CVE-2026-69152",
     "severity": "HIGH",
     "tool": {
@@ -16635,6 +18699,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "brace-expansion",
+      "version": "1.1.11",
+      "aliases": [
+        "GHSA-rgw5-rvv9-x895"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "d25cb3592c794fadce048c4952ad7e250915caba5a4638ad374df1c7b6edd052"
@@ -16674,7 +18746,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "d5d54befd3fb8174",
+    "id": "53558f58edc17c38",
     "ruleId": "CVE-2026-69152",
     "severity": "HIGH",
     "tool": {
@@ -16700,6 +18772,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "brace-expansion",
+      "version": "1.1.6",
+      "aliases": [
+        "GHSA-rgw5-rvv9-x895"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "99999781f993424e8d080f4ec1289fa82bb6cb3603c08b6b180d3634c6f021af"
@@ -16739,7 +18819,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "adec51a13b4c4ce6",
+    "id": "af7a7aff5a56f59d",
     "ruleId": "CVE-2024-52798",
     "severity": "HIGH",
     "tool": {
@@ -16765,6 +18845,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "path-to-regexp",
+      "version": "0.1.7",
+      "aliases": [
+        "GHSA-rhx6-c78j-4q9w"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "23b22de5762529199db658366b12a2be2807388d33793db51d117d85d71243e4"
@@ -16804,7 +18892,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "a3787a31694e2c88",
+    "id": "2ed36caafc799874",
     "ruleId": "CVE-2022-1537",
     "severity": "HIGH",
     "tool": {
@@ -16830,6 +18918,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "grunt",
+      "version": "1.0.3",
+      "aliases": [
+        "GHSA-rm36-94g8-835r"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "b9d6d38ea8538ec77421182c8479c520b07761389989155bb69bf20c02f193bb"
@@ -16869,7 +18965,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "118baf4f147d0f07",
+    "id": "16ea8a770d45379e",
     "ruleId": "CVE-2022-21680",
     "severity": "HIGH",
     "tool": {
@@ -16895,6 +18991,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "marked",
+      "version": "0.3.5",
+      "aliases": [
+        "GHSA-rrrm-qjm4-v8hf"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "37fda0a4bbe3feb7e21a409c6a59c2cae89f742f47d0bb0e3dfe9166f347a590"
@@ -16934,7 +19038,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "3b40348d285bc7da",
+    "id": "b5d1c04b21911920",
     "ruleId": "CVE-2024-29041",
     "severity": "MEDIUM",
     "tool": {
@@ -16960,6 +19064,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "express",
+      "version": "4.16.4",
+      "aliases": [
+        "GHSA-rv95-896h-c2vc"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "f0115df029e2b02642a02986008c572aaf949b3ae6d34612375a29ec2090486e"
@@ -16999,7 +19111,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "8c202ad12d5f1d8d",
+    "id": "5699fbf58b2e6278",
     "ruleId": "CVE-2026-12590",
     "severity": "LOW",
     "tool": {
@@ -17025,6 +19137,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "body-parser",
+      "version": "1.18.3",
+      "aliases": [
+        "GHSA-v422-hmwv-36x6"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "e13d5fb8a4b901fc15291d19ebbbe8e1805b7ecf22a7dac19fc36c35c2485b53"
@@ -17064,7 +19184,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "ee46f01dddb19da7",
+    "id": "2c692021ab1bd260",
     "ruleId": "CVE-2025-5889",
     "severity": "LOW",
     "tool": {
@@ -17090,6 +19210,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "brace-expansion",
+      "version": "1.1.11",
+      "aliases": [
+        "GHSA-v6h2-p8h4-qcjw"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "3a238474e5138f333a1999e4f9489745861eeb596bc852efe0b8253cb8e9b5ca"
@@ -17129,7 +19257,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "e3520c970d5efcb8",
+    "id": "0da62f16902f6c24",
     "ruleId": "CVE-2025-5889",
     "severity": "LOW",
     "tool": {
@@ -17155,6 +19283,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "brace-expansion",
+      "version": "1.1.6",
+      "aliases": [
+        "GHSA-v6h2-p8h4-qcjw"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "54ab3fa8df2fb698eaa76c88745d7183743ceb67e260ff4f01ca3dbe9bcbf39a"
@@ -17194,7 +19330,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "7eeaba56ae13783e",
+    "id": "a548c865e3521b2e",
     "ruleId": "CVE-2020-15366",
     "severity": "MEDIUM",
     "tool": {
@@ -17220,6 +19356,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "ajv",
+      "version": "6.10.0",
+      "aliases": [
+        "GHSA-v88g-cgmw-v5xw"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "c4a48efdc1ddec819494e1bc56ae6fd3406cbc7e01c9159f7f709dfc1cdab9ca"
@@ -17259,7 +19403,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "d020cf14942d728e",
+    "id": "37a564a11f7d813d",
     "ruleId": "CVE-2020-7610",
     "severity": "CRITICAL",
     "tool": {
@@ -17285,6 +19429,15 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "bson",
+      "version": "1.0.9",
+      "aliases": [
+        "SNYK-JS-BSON-561052",
+        "GHSA-v8w9-2789-6hhr"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "9f080fa050214d1e4af4d21f9925c777d5560309b0bcdb29c19f1a9d00fbb8cc"
@@ -17324,7 +19477,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "6364d947a6503e14",
+    "id": "b283dab12b3320dd",
     "ruleId": "CVE-2026-45822",
     "severity": "MEDIUM",
     "tool": {
@@ -17350,6 +19503,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "decode-uri-component",
+      "version": "0.2.0",
+      "aliases": [
+        "GHSA-vcc3-ghjq-m6fr"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "4fe205848a92810e4f2cc526e08e52fd754852027ce43bb06180cb30394c17f2"
@@ -17389,7 +19550,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "453349eb5c9a45d3",
+    "id": "fb15f25f4defeb85",
     "ruleId": "CVE-2016-10531",
     "severity": "MEDIUM",
     "tool": {
@@ -17415,6 +19576,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "marked",
+      "version": "0.3.5",
+      "aliases": [
+        "GHSA-vfvf-mqq8-rwqc"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "d5889731cf990243e68e32da3fd27e65140a2b0167b87668f431a5b0554c7afd"
@@ -17454,7 +19623,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "700734bc7b691ded",
+    "id": "dfdba97f99de4233",
     "ruleId": "CVE-2020-7598",
     "severity": "MEDIUM",
     "tool": {
@@ -17480,6 +19649,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "minimist",
+      "version": "0.0.10",
+      "aliases": [
+        "GHSA-vh95-rmgr-6w4m"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "f11e3c1e8e93176519b376889137d4bc480705b02ca930173ff54dbc4b5d7115"
@@ -17519,7 +19696,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "178e3c019798380e",
+    "id": "a0710e93538392ec",
     "ruleId": "CVE-2020-7598",
     "severity": "MEDIUM",
     "tool": {
@@ -17545,6 +19722,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "minimist",
+      "version": "0.0.8",
+      "aliases": [
+        "GHSA-vh95-rmgr-6w4m"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "31da6b67b92a4285782da764fe4b8f89744cb219f551d62763fc6926e40b9ed7"
@@ -17584,7 +19769,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "4624806477a5fd1d",
+    "id": "7ed431aae7b42ffb",
     "ruleId": "CVE-2020-7598",
     "severity": "MEDIUM",
     "tool": {
@@ -17610,6 +19795,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "minimist",
+      "version": "1.2.0",
+      "aliases": [
+        "GHSA-vh95-rmgr-6w4m"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "9f6c3b8851e29bb2cdf7f1fc28bcf694787e364bd3c8d4325f8804a154f776ff"
@@ -17649,7 +19842,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "b057343f18f7a0b2",
+    "id": "3ce25c391f13bb96",
     "ruleId": "CVE-2026-53655",
     "severity": "MEDIUM",
     "tool": {
@@ -17675,6 +19868,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tar",
+      "version": "2.2.1",
+      "aliases": [
+        "GHSA-vmf3-w455-68vh"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "bb4a87eb172f1ebec16c5b8c80d9b802bcb5a292e77dbd6fe2712b21c31084e5"
@@ -17714,7 +19915,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "bb3461ddda324c9d",
+    "id": "eee7f8575cd07875",
     "ruleId": "CVE-2026-53655",
     "severity": "MEDIUM",
     "tool": {
@@ -17740,6 +19941,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tar",
+      "version": "4.4.8",
+      "aliases": [
+        "GHSA-vmf3-w455-68vh"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "b445192c93a4e6e716d39a0f7838d6b70e2ace4dc143963171b554f99444f90c"
@@ -17779,7 +19988,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "539da35737229355",
+    "id": "9e52f63578df4c91",
     "ruleId": "CVE-2019-19919",
     "severity": "CRITICAL",
     "tool": {
@@ -17805,6 +20014,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "handlebars",
+      "version": "4.0.5",
+      "aliases": [
+        "GHSA-w457-6q6x-cgp9"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "11592fad1a357b6b7b40a1f64f87a63189199cc7d135fd3e2c80d0d544753e4d"
@@ -17844,7 +20061,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "661c9ced82091a78",
+    "id": "d8aaa1651fcb1047",
     "ruleId": "CVE-2022-38900",
     "severity": "HIGH",
     "tool": {
@@ -17870,6 +20087,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "decode-uri-component",
+      "version": "0.2.0",
+      "aliases": [
+        "GHSA-w573-4hg7-7wgq"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "837f374673ab3ff2c3ba1bbf13933f980a4240fba12f3bed44baf06b9742d6b9"
@@ -17909,7 +20134,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "e4a147375f7826c5",
+    "id": "f38abe5bdc16bec3",
     "ruleId": "CVE-2026-41907",
     "severity": "HIGH",
     "tool": {
@@ -17935,6 +20160,15 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "uuid",
+      "version": "3.3.2",
+      "aliases": [
+        "CVE-2026-41988",
+        "GHSA-w5hq-g745-h8pq"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "7d63019aae5561330eca623f8264649f1f355d8326cb6ea27e58eab9c81aa3ca"
@@ -17974,7 +20208,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "68d94ccf9e50d569",
+    "id": "3666d3794a9dc1c6",
     "ruleId": "CVE-2026-59871",
     "severity": "MEDIUM",
     "tool": {
@@ -18000,6 +20234,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tar",
+      "version": "2.2.1",
+      "aliases": [
+        "GHSA-w8wr-v893-vjvp"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "e859ac1e87b869646f00c04ad3de2ee55095d633cfa8b57c7d8c5e2f5d4d33af"
@@ -18039,7 +20281,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "f760bf6de077a320",
+    "id": "106b6b3fe9880f41",
     "ruleId": "CVE-2026-59871",
     "severity": "MEDIUM",
     "tool": {
@@ -18065,6 +20307,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tar",
+      "version": "4.4.8",
+      "aliases": [
+        "GHSA-w8wr-v893-vjvp"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "dfdace2408d02231c3a24e351eca167957be4f8843e905f740f686fff8f289b3"
@@ -18104,7 +20354,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "ddecc13fa1d1a291",
+    "id": "5288f913ee72e2db",
     "ruleId": "CVE-2017-20162",
     "severity": "MEDIUM",
     "tool": {
@@ -18130,6 +20380,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "ms",
+      "version": "0.7.1",
+      "aliases": [
+        "GHSA-w9mr-4mfr-499f"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "511ba29f74dc90207c90c641a8dc32b2f9ef0b9fdedca52940d667b333293df4"
@@ -18169,7 +20427,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "0194f0e2d785025c",
+    "id": "43c3a2458a38d72d",
     "ruleId": "CVE-2022-31129",
     "severity": "HIGH",
     "tool": {
@@ -18195,6 +20453,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "moment",
+      "version": "2.24.0",
+      "aliases": [
+        "GHSA-wc69-rhjr-hc9g"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "5d1a35c066262a5faa73c5b29bb1c3383fd2a30eac7bad77a1a382e568a2f24d"
@@ -18234,7 +20500,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "a4adff08cd302ecf",
+    "id": "0523c79237284b0e",
     "ruleId": "CVE-2017-16138",
     "severity": "HIGH",
     "tool": {
@@ -18260,6 +20526,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "mime",
+      "version": "1.2.11",
+      "aliases": [
+        "GHSA-wrvr-8mpx-r7pp"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "018542b122e91d042de3e4f728f98298ea36b6d0f817073d24db467086a7f6de"
@@ -18299,7 +20573,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "0f305e0574f734e2",
+    "id": "73850372ca367cb3",
     "ruleId": "CVE-2021-3820",
     "severity": "HIGH",
     "tool": {
@@ -18325,6 +20599,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "i",
+      "version": "0.3.6",
+      "aliases": [
+        "GHSA-x55w-vjjp-222r"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "d95ff326e0ab14f80aade2035b5dbe1494c93f0d088aaac568c93faa3d244c48"
@@ -18364,7 +20646,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "5dfda859da1dd1ac",
+    "id": "d1fce4471dc24158",
     "ruleId": "CVE-2017-16114",
     "severity": "HIGH",
     "tool": {
@@ -18390,6 +20672,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "marked",
+      "version": "0.3.5",
+      "aliases": [
+        "GHSA-x5pg-88wf-qq4p"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "ec23be32d01dd28d74618f2ac25692a551f96614bbe8428042f5fe34211837fc"
@@ -18429,7 +20719,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "41ab47ec9569366e",
+    "id": "6478178f212294e6",
     "ruleId": "CVE-2019-1010266",
     "severity": "MEDIUM",
     "tool": {
@@ -18455,6 +20745,15 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "lodash",
+      "version": "4.13.1",
+      "aliases": [
+        "SNYK-JS-LODASH-73639",
+        "GHSA-x5rq-j2xg-h7qm"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "55dddc06c254fb4268255b493ff3d8326041631341dae27b037a72bb6bb75e05"
@@ -18494,7 +20793,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "b8ac46985e11c415",
+    "id": "5b1e8ddcee5bf947",
     "ruleId": "CVE-2019-16776",
     "severity": "HIGH",
     "tool": {
@@ -18520,6 +20819,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "npm",
+      "version": "3.10.10",
+      "aliases": [
+        "GHSA-x8qc-rrcw-4r46"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "90c3e09354bbdd1b8a3b2ef7a5a470aaccc0bb8bbe57950dac1225087e4e4547"
@@ -18559,7 +20866,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "0ca767c5c07576b2",
+    "id": "27b0d57ce4005c65",
     "ruleId": "GHSA-xc7v-wxcw-j472",
     "severity": "MEDIUM",
     "tool": {
@@ -18583,6 +20890,12 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "tunnel-agent",
+      "version": "0.4.3",
+      "aliases": []
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "257ca7e8b66ff75e51291a99e64d9888fcd2ec66ae98136d0d6d8024381524d6"
@@ -18622,7 +20935,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "1d589bd18b7fd0ff",
+    "id": "06a56ecc41deeaa9",
     "ruleId": "CVE-2026-39244",
     "severity": "HIGH",
     "tool": {
@@ -18648,6 +20961,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "adm-zip",
+      "version": "0.4.4",
+      "aliases": [
+        "GHSA-xcpc-8h2w-3j85"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "6ce292914a24fa9a31a2a6cc337a1b48e78049230d88e95142d6bf7668c76c47"
@@ -18687,7 +21008,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "7c651df93616b9db",
+    "id": "57bbaaf8548c925c",
     "ruleId": "CVE-2019-13173",
     "severity": "HIGH",
     "tool": {
@@ -18713,6 +21034,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "fstream",
+      "version": "1.0.10",
+      "aliases": [
+        "GHSA-xf7w-r453-m56c"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "4a978db75b2dda28b908bb58f939cd4afc0e12d0ad158ef10f2f2573db5d4296"
@@ -18752,7 +21081,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "ceb25a9c1e808d57",
+    "id": "777f2716de7e9931",
     "ruleId": "CVE-2020-7754",
     "severity": "HIGH",
     "tool": {
@@ -18778,6 +21107,15 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "npm-user-validate",
+      "version": "0.1.5",
+      "aliases": [
+        "GHSA-pw54-mh39-w3hc",
+        "GHSA-xgh6-85xh-479p"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "9339cb5463a978738e1c311d8bef9e66ff4b497838c981dff7617969dd64a001"
@@ -18817,7 +21155,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "a77380f2375936ea",
+    "id": "0d37ae7097a30532",
     "ruleId": "CVE-2026-33940",
     "severity": "HIGH",
     "tool": {
@@ -18843,6 +21181,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "handlebars",
+      "version": "4.0.5",
+      "aliases": [
+        "GHSA-xhpv-hc6g-r9c6"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "79fbee5e8160743f7cf8f14ec29d24e1350d40732d9cd0a53f68b28f288749af"
@@ -18882,7 +21228,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "0ae8c2a18c45b57e",
+    "id": "0c16f019232d0287",
     "ruleId": "CVE-2026-33941",
     "severity": "HIGH",
     "tool": {
@@ -18908,6 +21254,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "handlebars",
+      "version": "4.0.5",
+      "aliases": [
+        "GHSA-xjpj-3mr7-gcpf"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "98f590052a3e3abc4580f9544878022ab2a7fd8129d6f2efa132bbd638798c69"
@@ -18947,7 +21301,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "c39cf54200876a5a",
+    "id": "02f4e1c384b731a0",
     "ruleId": "CVE-2026-54466",
     "severity": "CRITICAL",
     "tool": {
@@ -18973,6 +21327,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "websocket-driver",
+      "version": "0.7.0",
+      "aliases": [
+        "GHSA-xv26-6w52-cph6"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "c252cc665acc76d4159b44f3b49fbeb246eb7bb77e55bceba3ca7aa85de6a506"
@@ -19012,7 +21374,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "c6a77b1d684007d7",
+    "id": "a1d4cee441c366af",
     "ruleId": "CVE-2021-44906",
     "severity": "CRITICAL",
     "tool": {
@@ -19038,6 +21400,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "minimist",
+      "version": "0.0.10",
+      "aliases": [
+        "GHSA-xvch-5gv4-984h"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "5118df29fe09926e7aba55f209dbbab03f05cd5d49b6ecad2bbd355b41a6c5a5"
@@ -19077,7 +21447,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "96cc9d040e8b1c95",
+    "id": "6520599a64d8eeec",
     "ruleId": "CVE-2021-44906",
     "severity": "CRITICAL",
     "tool": {
@@ -19103,6 +21473,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "minimist",
+      "version": "0.0.8",
+      "aliases": [
+        "GHSA-xvch-5gv4-984h"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "048777b02943908732c4a623fa4e2a1e7a46bc5fb7274bd68f3261c3d2d296d3"
@@ -19142,7 +21520,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "0d32974450c017dc",
+    "id": "f31a697da4e4be8d",
     "ruleId": "CVE-2021-44906",
     "severity": "CRITICAL",
     "tool": {
@@ -19168,6 +21546,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "minimist",
+      "version": "1.2.0",
+      "aliases": [
+        "GHSA-xvch-5gv4-984h"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "422c1479d0a39b4e9f60e9fc1ab9c1fec2c2784533b813a3668a5f91287daca5"
@@ -19207,7 +21593,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "a3c0cbd41da538a7",
+    "id": "52b4a996b107606f",
     "ruleId": "CVE-2021-44906",
     "severity": "CRITICAL",
     "tool": {
@@ -19233,6 +21619,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "minimist",
+      "version": "1.2.5",
+      "aliases": [
+        "GHSA-xvch-5gv4-984h"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "7fd23b2963a9a1ba950dd55054a6ae986ffdf4a52cca08d5fb36025af6e618ec"
@@ -19272,7 +21666,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "7ba044cae4545df5",
+    "id": "5748014f865e0f1f",
     "ruleId": "CVE-2025-13465",
     "severity": "MEDIUM",
     "tool": {
@@ -19298,6 +21692,16 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "lodash",
+      "version": "2.4.2",
+      "aliases": [
+        "CVE-2026-2950",
+        "GHSA-f23m-r3pf-42rh",
+        "GHSA-xxjr-mmjv-4gpg"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "62d121362b64e4e7363dbd6ed99a6a2f60b3f80cbefd72966e76feeb5872d6a9"
@@ -19337,7 +21741,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "2d97833cbe1d77e5",
+    "id": "bc4bb8ccfd3cb227",
     "ruleId": "CVE-2025-13465",
     "severity": "MEDIUM",
     "tool": {
@@ -19363,6 +21767,16 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "lodash",
+      "version": "4.13.1",
+      "aliases": [
+        "CVE-2026-2950",
+        "GHSA-f23m-r3pf-42rh",
+        "GHSA-xxjr-mmjv-4gpg"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "475ebae99b59cf3e2fca1bdeffac1e8050bc295405062004008663cd98558088"
@@ -19402,7 +21816,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "9c5af0dd521c0866",
+    "id": "c85eb377f2f9a291",
     "ruleId": "CVE-2025-13465",
     "severity": "MEDIUM",
     "tool": {
@@ -19428,6 +21842,16 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "lodash",
+      "version": "4.17.11",
+      "aliases": [
+        "CVE-2026-2950",
+        "GHSA-f23m-r3pf-42rh",
+        "GHSA-xxjr-mmjv-4gpg"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "bc993b36868135db4463aaf17e3227ffb09e38522331f15afb98dce2a37c4d4c"
@@ -19467,7 +21891,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "8f50e7c596591897",
+    "id": "7d37025858b7932a",
     "ruleId": "CVE-2025-13465",
     "severity": "MEDIUM",
     "tool": {
@@ -19493,6 +21917,16 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "lodash",
+      "version": "4.17.20",
+      "aliases": [
+        "CVE-2026-2950",
+        "GHSA-f23m-r3pf-42rh",
+        "GHSA-xxjr-mmjv-4gpg"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "4af80001eb57f855fbf27923d831bb1c5ce04a51d378b3a71a40cc1763cf19ae"
@@ -19532,7 +21966,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "15164c1c75edfccd",
+    "id": "147cc01be0ce2f02",
     "ruleId": "CVE-2025-13465",
     "severity": "MEDIUM",
     "tool": {
@@ -19558,6 +21992,16 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "lodash",
+      "version": "4.17.21",
+      "aliases": [
+        "CVE-2026-2950",
+        "GHSA-f23m-r3pf-42rh",
+        "GHSA-xxjr-mmjv-4gpg"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "fece9441e00f289872017d9001127fbae9dbdde8bcd548f1c2b9f15ac4bcb960"
@@ -19597,7 +22041,7 @@
   },
   {
     "schemaVersion": "1.2.0",
-    "id": "999667e3450decc3",
+    "id": "c5a7cc330d508ac3",
     "ruleId": "MAL-2023-462",
     "severity": "MEDIUM",
     "tool": {
@@ -19621,6 +22065,14 @@
     "risk": null,
     "compliance": null,
     "context": null,
+    "secretContext": null,
+    "dependency": {
+      "name": "fsevents",
+      "version": "1.2.9",
+      "aliases": [
+        "GHSA-xv2f-5jw4-v95m"
+      ]
+    },
     "raw": {
       "partialFingerprints": {
         "primaryLocationLineHash": "ede3c64bc3631d6a1acb2795002dc4bbc051cfef53c136e7abb7fed3aab439c0"

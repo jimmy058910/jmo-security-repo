@@ -53,6 +53,7 @@ from typing import Any
 
 import pytest
 
+from scripts.core import dedup_enhanced
 from scripts.core.common_finding import Severity
 from scripts.core.compliance_mapper import (
     COMPLIANCE_ENTRY_KEYS,
@@ -174,7 +175,10 @@ def every_pair_similar(monkeypatch):
     """Any two findings score 1.0 and share an LSH bucket.
 
     Clustering still refuses a second finding from one tool, so a group of one
-    finding per tool becomes exactly one cluster.
+    finding per tool becomes exactly one cluster. The osv-scanner member is a
+    dependency finding, which the clusterer matches on identity rather than
+    similarity (#1346); it takes the similarity path here too, so its
+    `dependency` object is merged like every other field.
     """
     monkeypatch.setattr(
         SimilarityCalculator, "calculate_similarity", lambda self, a, b: 1.0
@@ -182,6 +186,7 @@ def every_pair_similar(monkeypatch):
     monkeypatch.setattr(
         LSHSignatureGenerator, "generate_signatures", lambda self, f: ["one-bucket"]
     )
+    monkeypatch.setattr(dedup_enhanced, "dependency_key", lambda finding: None)
 
 
 def _by_cluster_add(order: tuple[dict[str, Any], ...]) -> dict[str, Any]:

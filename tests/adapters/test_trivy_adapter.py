@@ -144,6 +144,7 @@ import json
 from pathlib import Path
 
 from scripts.core.adapters.trivy_adapter import TrivyAdapter
+from scripts.core.common_finding import fingerprint
 
 RECORDED_074 = (
     Path(__file__).resolve().parents[1]
@@ -1278,3 +1279,94 @@ class TestTrivyRuleIdLineAndVersionChain:
             sample = {**top, "Results": [{"Target": "x", "Vulnerabilities": [item]}]}
             path = write(tmp_path, f"v{n}.json", json.dumps(sample))
             assert TrivyAdapter().parse(path)[0].tool["version"] == expected, top
+
+
+class TestTrivyDependency:
+    """#1346: a vulnerability names its installed package, and its id is keyed
+    on it. trivy's message is the advisory title, which names no version, so
+    without the package two installed versions of one package with one
+    advisory shared an id and phase-1 deduplication kept one: 47 findings on a
+    real lockfile became 38."""
+
+    def test_a_recorded_vulnerability_carries_its_package(self):
+        by_id = {f.ruleId: f for f in TrivyAdapter().parse(RECORDED_074_VULN)}
+        assert by_id["CVE-2019-10744"].dependency == {
+            "name": "lodash",
+            "version": "4.17.4",
+            "ecosystem": "npm",
+            "aliases": ["GHSA-jf85-cpcp-j695"],
+        }
+        # No VendorIDs in trivy's record: no aliases, not a guessed one.
+        assert by_id["CVE-2018-16487"].dependency["aliases"] == []
+        assert by_id["CVE-2021-44906"].dependency["name"] == "minimist"
+
+    def test_two_installed_versions_of_one_package_are_two_findings(self, tmp_path):
+        def vuln(version):
+            return {
+                "VulnerabilityID": "CVE-2019-10744",
+                "PkgName": "lodash",
+                "PkgIdentifier": {"PURL": f"pkg:npm/lodash@{version}"},
+                "InstalledVersion": version,
+                "Severity": "CRITICAL",
+                "Title": "nodejs-lodash: prototype pollution in defaultsDeep",
+                "VendorIDs": ["GHSA-jf85-cpcp-j695"],
+            }
+
+        sample = {
+            "Results": [
+                {
+                    "Target": "package-lock.json",
+                    "Vulnerabilities": [vuln("4.13.1"), vuln("4.17.4")],
+                }
+            ]
+        }
+        findings = TrivyAdapter().parse(
+            write(tmp_path, "trivy.json", json.dumps(sample))
+        )
+        assert len({f.id for f in findings}) == 2
+        assert findings[0].id == fingerprint(
+            "trivy",
+            "CVE-2019-10744",
+            "package-lock.json",
+            0,
+            "nodejs-lodash: prototype pollution in defaultsDeep",
+            package="lodash@4.13.1",
+        )
+
+    def test_misconfigurations_and_secrets_have_none_and_keep_their_ids(self):
+        findings = TrivyAdapter().parse(RECORDED_074)
+        assert findings
+        for f in findings:
+            assert f.dependency is None
+            assert f.id == fingerprint(
+                "trivy",
+                f.ruleId,
+                f.location["path"],
+                f.location["startLine"],
+                f.message,
+            )
+
+    def test_no_package_without_both_name_and_version(self, tmp_path):
+        sample = {
+            "Results": [
+                {
+                    "Target": "package-lock.json",
+                    "Vulnerabilities": [
+                        {
+                            "VulnerabilityID": "CVE-1",
+                            "PkgName": "lodash",
+                            "Severity": "LOW",
+                        },
+                        {
+                            "VulnerabilityID": "CVE-2",
+                            "InstalledVersion": "1.0",
+                            "Severity": "LOW",
+                        },
+                    ],
+                }
+            ]
+        }
+        findings = TrivyAdapter().parse(
+            write(tmp_path, "trivy.json", json.dumps(sample))
+        )
+        assert [f.dependency for f in findings] == [None, None]

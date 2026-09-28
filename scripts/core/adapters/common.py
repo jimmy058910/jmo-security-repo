@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from pathlib import Path
 from typing import Any, cast
 
@@ -399,3 +399,35 @@ def normalize_finding_path(path: str, roots: Sequence[str] = ()) -> str:
     # its comparison, so this brings the stored path into line with the form the
     # suppression engine has been compensating for.
     return unified.lstrip("/")
+
+
+def dependency_record(
+    name: Any,
+    version: Any,
+    advisory_id: Any,
+    aliases: Iterable[Any] = (),
+    purl: Any = None,
+) -> dict[str, Any] | None:
+    """A dependency finding's `dependency` object, or ``None`` (#1346).
+
+    One builder for every dependency scanner, so the object has one shape.
+    ``name`` and ``version`` are the installed package as the tool spells it;
+    without both there is no package to key on. ``ecosystem`` is the PURL
+    type (``npm``, ``pypi``, ``golang``) when the tool gives a PURL, and is
+    left out otherwise: osv-scanner's SARIF carries none. ``aliases`` are the
+    other ids the tool knows the advisory by, each once, never
+    ``advisory_id`` itself (that is the finding's ``ruleId``).
+    """
+    if not (isinstance(name, str) and name and isinstance(version, str) and version):
+        return None
+    record: dict[str, Any] = {"name": name, "version": version}
+    if isinstance(purl, str) and purl.startswith("pkg:") and "/" in purl:
+        record["ecosystem"] = purl[len("pkg:") : purl.index("/")].lower()
+    record["aliases"] = list(
+        dict.fromkeys(
+            alias
+            for alias in aliases
+            if isinstance(alias, str) and alias and alias != advisory_id
+        )
+    )
+    return record

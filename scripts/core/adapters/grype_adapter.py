@@ -31,8 +31,8 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from scripts.core.adapters.common import safe_load_json_file
-from scripts.core.common_finding import fingerprint, normalize_severity
+from scripts.core.adapters.common import dependency_record, safe_load_json_file
+from scripts.core.common_finding import fingerprint, normalize_severity, package_of
 from scripts.core.plugin_api import (
     AdapterPlugin,
     Finding,
@@ -187,6 +187,7 @@ class GrypeAdapter(AdapterPlugin):
                 risk=f_dict.get("risk"),
                 compliance=f_dict.get("compliance"),
                 context=f_dict.get("context"),
+                dependency=f_dict.get("dependency"),
                 raw=f_dict.get("raw"),
             )
             findings.append(finding)
@@ -312,8 +313,26 @@ def _load_grype_internal(path: str | Path) -> list[dict[str, Any]]:
         # Build title
         title = f"{vuln_id}: {artifact_name}"
 
+        # The package, keyed into the id and matched across tools (#1346):
+        # the match's artifact, and its related vulnerabilities as aliases
+        # (the CVE of a GHSA match, measured on 0.115.0).
+        related = match.get("relatedVulnerabilities")
+        dependency = dependency_record(
+            artifact.get("name"),
+            artifact.get("version"),
+            vuln_id,
+            [
+                entry.get("id")
+                for entry in (related if isinstance(related, list) else [])
+                if isinstance(entry, dict)
+            ],
+            artifact.get("purl"),
+        )
+
         # Generate stable fingerprint
-        fid = fingerprint("grype", vuln_id, location_path, 0, message)
+        fid = fingerprint(
+            "grype", vuln_id, location_path, 0, message, package=package_of(dependency)
+        )
 
         # Build remediation
         if fixed_versions:
@@ -364,6 +383,7 @@ def _load_grype_internal(path: str | Path) -> list[dict[str, Any]]:
             "tags": tags,
             "cvss": cvss_field,
             "context": context,
+            "dependency": dependency,
             "raw": match,
         }
 

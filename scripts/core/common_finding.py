@@ -249,6 +249,22 @@ def preferred_cvss(candidates: Iterable[Any]) -> dict[str, Any] | None:
     return best
 
 
+def package_of(dependency: Any) -> str | None:
+    """``name@version`` of a dependency finding's package, or ``None``.
+
+    The component `fingerprint(package=)` appends, built in one place so the
+    adapters and the report phase's re-keying (`_normalize_paths_and_ids`)
+    cannot spell it two ways. ``dependency`` is a finding's `dependency`
+    object; anything without a non-empty ``name`` and ``version`` is not one.
+    """
+    if not isinstance(dependency, dict):
+        return None
+    name, version = dependency.get("name"), dependency.get("version")
+    if isinstance(name, str) and name and isinstance(version, str) and version:
+        return f"{name}@{version}"
+    return None
+
+
 def fingerprint(
     tool: str,
     rule_id: str | None,
@@ -257,6 +273,7 @@ def fingerprint(
     message: str | None,
     start_column: int | None = None,
     commit: str | None = None,
+    package: str | None = None,
 ) -> str:
     """Generate stable fingerprint ID for deduplication.
 
@@ -275,6 +292,13 @@ def fingerprint(
     only its first 120 characters are hashed, and gitleaks puts the commit
     after the path.
 
+    ``|pkg:name@version`` is appended the same way, by a dependency scanner
+    (#1346; `package_of` builds it): a dependency finding has no line, so
+    two installed versions of one package with one advisory differ in
+    nothing else the key holds when the tool's message names no version --
+    trivy's is the advisory title, and its 47 findings on a real lockfile
+    collapsed to 38.
+
     Args:
         tool: Tool name (e.g., "trufflehog", "semgrep")
         rule_id: Rule or vulnerability ID
@@ -286,6 +310,8 @@ def fingerprint(
             column, not an absence.
         commit: The commit a record from git history names; ``None`` for
             everything else.
+        package: ``name@version`` of a dependency finding's package
+            (`package_of`); ``None`` for everything else.
 
     Returns:
         Hex string of length FINGERPRINT_LENGTH for stable deduplication
@@ -296,6 +322,8 @@ def fingerprint(
         base = f"{base}|{start_column}"
     if commit:
         base = f"{base}|@{commit}"
+    if package:
+        base = f"{base}|pkg:{package}"
     return hashlib.sha256(base.encode("utf-8")).hexdigest()[:FINGERPRINT_LENGTH]
 
 

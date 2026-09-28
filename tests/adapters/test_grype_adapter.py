@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from scripts.core.adapters.grype_adapter import GrypeAdapter
+from scripts.core.common_finding import fingerprint
 
 
 def write(p: Path, obj):
@@ -336,3 +337,77 @@ def test_grype_adapter_compliance_enrichment(tmp_path: Path):
     assert len(items) == 1
     # Compliance field should exist (enriched by compliance_mapper)
     assert hasattr(items[0], "compliance")
+
+
+def test_grype_adapter_fills_the_dependency_from_its_match(tmp_path: Path):
+    """#1346: the match's artifact is the package, its PURL's type the
+    ecosystem, and its related vulnerabilities the aliases. Shaped as grype
+    0.115.0 wrote NodeGoat's lockfile: a GHSA match relating its CVE."""
+    data = {
+        "matches": [
+            {
+                "vulnerability": {"id": "GHSA-c4w7-xm78-47vh", "severity": "High"},
+                "relatedVulnerabilities": [
+                    {"id": "CVE-2020-7774", "namespace": "nvd:cpe"},
+                    {
+                        "id": "GHSA-c4w7-xm78-47vh",
+                        "namespace": "github:language:javascript",
+                    },
+                ],
+                "artifact": {
+                    "name": "y18n",
+                    "version": "3.2.1",
+                    "type": "npm",
+                    "purl": "pkg:npm/y18n@3.2.1",
+                    "locations": [{"path": "/package-lock.json"}],
+                },
+            },
+            {
+                "vulnerability": {"id": "GHSA-c4w7-xm78-47vh", "severity": "High"},
+                "relatedVulnerabilities": [{"id": "CVE-2020-7774"}],
+                "artifact": {
+                    "name": "y18n",
+                    "version": "4.0.0",
+                    "type": "npm",
+                    "purl": "pkg:npm/y18n@4.0.0",
+                    "locations": [{"path": "/package-lock.json"}],
+                },
+            },
+        ]
+    }
+    f = tmp_path / "grype.json"
+    write(f, data)
+    first, second = GrypeAdapter().parse(f)
+
+    # its own id among the related ones is not an alias
+    assert first.dependency == {
+        "name": "y18n",
+        "version": "3.2.1",
+        "ecosystem": "npm",
+        "aliases": ["CVE-2020-7774"],
+    }
+    assert second.dependency["version"] == "4.0.0"
+    assert first.id == fingerprint(
+        "grype",
+        "GHSA-c4w7-xm78-47vh",
+        "/package-lock.json",
+        0,
+        first.message,
+        package="y18n@3.2.1",
+    )
+    assert first.id != second.id
+
+
+def test_grype_adapter_names_no_package_without_a_version(tmp_path: Path):
+    data = {
+        "matches": [
+            {
+                "vulnerability": {"id": "CVE-2023-0001", "severity": "Low"},
+                "artifact": {"name": "thing", "locations": []},
+            }
+        ]
+    }
+    f = tmp_path / "grype.json"
+    write(f, data)
+    [item] = GrypeAdapter().parse(f)
+    assert item.dependency is None

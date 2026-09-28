@@ -64,6 +64,10 @@ Field mapping (measured on trivy 0.74.0's own JSON, #1221):
 - risk: a vulnerability's ``CweIDs``; a secret's CWE-798, in the dict
   gitleaks and trufflehog write (trivy's secret records carry no CWE); none
   for a misconfiguration.
+- dependency (vulnerabilities only, #1346): ``PkgName``,
+  ``InstalledVersion``, the PURL's type and ``VendorIDs`` as aliases. The id
+  is keyed on ``name@version`` too: the message is the advisory title, so two
+  installed versions of one package with one advisory used to share an id.
 
 Severity Mapping (Trivy -> CommonFinding):
 - CRITICAL: CRITICAL
@@ -91,7 +95,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from scripts.core.adapters.common import safe_load_json_file
+from scripts.core.adapters.common import dependency_record, safe_load_json_file
 from scripts.core.common_finding import (
     extract_code_snippet,
     normalize_severity,
@@ -174,6 +178,21 @@ def _best_vulnerability_cvss(cvss_block: Any) -> dict[str, Any] | None:
                     "vector": str(source.get(vector_key) or ""),
                 }
     return None
+
+
+def _dependency(item: dict[str, Any]) -> dict[str, Any] | None:
+    """A vulnerability's package: ``PkgName``, ``InstalledVersion``, the PURL's
+    type, and ``VendorIDs`` as aliases (a CVE's GHSA, and a Go advisory's
+    ``GO-`` id, measured on 0.74.0; trivy writes no other alias list)."""
+    identifier = item.get("PkgIdentifier")
+    vendor_ids = item.get("VendorIDs")
+    return dependency_record(
+        item.get("PkgName"),
+        item.get("InstalledVersion"),
+        item.get("VulnerabilityID"),
+        vendor_ids if isinstance(vendor_ids, list) else (),
+        identifier.get("PURL") if isinstance(identifier, dict) else None,
+    )
 
 
 def _tool_version(data: dict[str, Any]) -> str:
@@ -274,11 +293,13 @@ class TrivyAdapter(AdapterPlugin):
                     # Risk metadata and CVSS for vulnerabilities
                     risk: dict[str, Any] | None = None
                     cvss_field = None
+                    dependency = None
                     if tag == "vulnerability":
                         cwe_ids = item.get("CweIDs", [])
                         if cwe_ids and isinstance(cwe_ids, list):
                             risk = {"cwe": cwe_ids}
                         cvss_field = _best_vulnerability_cvss(item.get("CVSS"))
+                        dependency = _dependency(item)
                     elif tag == "secret":
                         # trivy writes no CWE on a secret, and compliance
                         # enrichment reads `risk.cwe` only. A trivy secret shares
@@ -309,10 +330,11 @@ class TrivyAdapter(AdapterPlugin):
                         context=context,
                         risk=risk,
                         cvss=cvss_field,
+                        dependency=dependency,
                         raw=item,
                     )
 
-                    # Generate fingerprint
+                    # Generate fingerprint (keyed on the package when there is one)
                     finding.id = self.get_fingerprint(finding)
 
                     findings.append(finding)

@@ -180,6 +180,17 @@
         "gitUrl": { "type": "string", "format": "uri", "description": "Link to view in Git hosting (GitHub, GitLab, etc.)" }
       }
     },
+    "dependency": {
+      "type": "object",
+      "description": "Dependency scanners (trivy, osv-scanner, grype): the vulnerable installed package. With the lockfile (location.path) and the advisory (ruleId plus aliases) it is the finding's identity: one vulnerability in one installed package version is one finding, whichever and however many tools report it (#1346).",
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "description": "Package name as the tool spells it (e.g., 'lodash', '@scope/pkg', 'Flask_Cors')" },
+        "version": { "type": "string", "minLength": 1, "description": "Installed version as the tool spells it (e.g., '4.17.4', 'v0.3.0')" },
+        "ecosystem": { "type": "string", "description": "PURL type when the tool reports a PURL (e.g., 'npm', 'pypi', 'golang'); absent otherwise" },
+        "aliases": { "type": "array", "items": { "type": "string" }, "description": "Other ids the tool gives the same advisory (e.g., the GHSA of a CVE). An adapter never lists the finding's own ruleId; a consensus finding holds the union of its members' aliases" }
+      }
+    },
     "raw": { "type": "object" }
   },
   "additionalProperties": true

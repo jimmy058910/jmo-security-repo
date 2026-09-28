@@ -279,12 +279,47 @@ def test_two_results_on_one_line_at_different_columns_are_two_findings(tmp_path)
 
 
 def test_no_region_means_no_column_in_the_key(tmp_path):
-    """osv-scanner has no region at all; its ids stay five-component."""
+    """osv-scanner has no region at all; no column joins its key."""
     r = result()
     del r["locations"][0]["physicalLocation"]["region"]
     p = write(tmp_path, sarif([r]))
     f = parse_sarif(p, SPEC)[0]
     assert f.id == fingerprint("sarifdemo", "R1", "src/a.py", None, "boom")
+
+
+def test_a_binding_without_the_dependency_hook_grows_no_dependency(tmp_path):
+    """zizmor and gitleaks (and the next SARIF tool) keep their shape and
+    their ids: only a binding that reads a package gets one (#1346)."""
+    f = parse_sarif(write(tmp_path, sarif([result()])), SPEC)[0]
+    assert f.dependency is None
+    assert f.id == fingerprint("sarifdemo", "R1", "src/a.py", 3, "boom", start_column=7)
+
+
+def test_the_dependency_hook_fills_the_object_and_keys_the_id(tmp_path):
+    seen = []
+
+    def hook(res, rule):
+        seen.append((res["ruleId"], rule.get("id")))
+        return {"name": "lodash", "version": "4.17.4", "aliases": ["GHSA-x"]}
+
+    spec = SarifToolSpec(tool="sarifdemo", dependency=hook)
+    doc = sarif([result()], rules=[{"id": "R1"}])
+    f = parse_sarif(write(tmp_path, doc), spec)[0]
+    assert seen == [("R1", "R1")]  # the result and ITS rule
+    assert f.dependency == {
+        "name": "lodash",
+        "version": "4.17.4",
+        "aliases": ["GHSA-x"],
+    }
+    assert f.id == fingerprint(
+        "sarifdemo",
+        "R1",
+        "src/a.py",
+        3,
+        "boom",
+        start_column=7,
+        package="lodash@4.17.4",
+    )
 
 
 def test_field_mapping_from_rule(tmp_path):
