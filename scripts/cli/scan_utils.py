@@ -435,8 +435,9 @@ def tool_flags(
 #: ``.git/logs/HEAD`` names no commit and no source file, so nobody can act on
 #: it, and the reflog's 40-hex commit ids trip keyword-plus-40-character
 #: detectors as Cloudflare tokens. Measured across the 2026-09-02 dogfood: 41
-#: findings under ``.git/`` - 12 on jmoadaptivegolf (4 CloudflareApiToken, 8
-#: CloudflareGlobalApiKey), 22 on jmo-security-repo, 7 on BetHedgeSlider.
+#: findings under ``.git/`` - 12 on one measured private repository (4
+#: CloudflareApiToken, 8 CloudflareGlobalApiKey), 22 on jmo-security-repo, 7
+#: on another measured private repository.
 #:
 #: ``.jmo/`` - JMo's own state directory. ``history.db`` stores raw findings, so
 #: scanning it re-reports every secret JMo has ever recorded, and each scan
