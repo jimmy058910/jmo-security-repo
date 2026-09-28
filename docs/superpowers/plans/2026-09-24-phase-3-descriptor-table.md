@@ -1175,6 +1175,20 @@ wizard generates, native and Docker, parses through `build_parser()`, and `jmo s
 --tsv` scans what it cloned. Suite green;
 `windows-2022` shows no new failures against 8685 / 90 / 181.
 
+**Measured (2026-09-27, at `292d3cff`).** Each clause, from the PR that carries it; the
+first was re-run, because no record had it at 13.
+
+| Clause | Evidence |
+|---|---|
+| Sums to 13 | Re-run through `jmo scan` (`--history-db`, `--results-dir` in tmp) on a plain fixture (`app.py`, `README.md`, no `.git`), with the archive's gitleaks on `PATH`: **13 rows**, 6 `ran`, 6 `skipped:<reason>` (checkov, hadolint, shellcheck, gosec by content; zap, nuclei `needs --url`), and yara `failed:not installed`, B8's named host exception (no yara-python). B8's own record was 12, before `2fc7fc30` added gitleaks. Without the archive on `PATH`, gitleaks is `failed:not installed` too: this host has no installed gitleaks |
+| Deleted-commit secret, both tools | `2fc7fc30`: `test_git_history_secrets.py` against the real binaries, 6 passed, with commit, author and ISO date through each tool; CI has run them since `dda79bde` |
+| Exclusions for every tool, syft included | `b451dc31` (B5): every descriptor's rendered command excludes an in-tree `results/`; `2fc7fc30`: gitleaks' generated config, measured at depth |
+| Zero files is `failed` | `b451dc31` (B6): an empty tree is `failed:no files to scan`, rc 1 |
+| #722's per-tool duration | `b451dc31` (B4, B8); the re-run above stored 13 `scan_tool_runs` rows, all 13 with seconds |
+| gitleaks on juice-shop = 69 | `2fc7fc30` (C2): 69, the golden's id set, 69 post-dedup; unchanged after its review |
+| Wizard commands parse, `--tsv` scans its clones | `3d1a4bf8` (A3) and `025edd01` (T3): the parser oracle covers all four modes, native and Docker; the native tsv command ran end to end |
+| Suite, `windows-2022` | main push `36313124368`: **9155 / 92 / 195**, 0 failed. Skips moved 90 → 92; the CI step passes no `-rs`, so the log cannot name them. Local bounded suite 9171 / 99 / 0 at `dda79bde` |
+
 ## Unresolved
 
 1. ~~**trufflehog verifies secrets over the network by default**, and git mode adds calls.

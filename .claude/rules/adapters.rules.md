@@ -107,7 +107,11 @@ it through the real loader. `CONTRIBUTING.md` has the template.
   then, through `generate_golden.run_adapter` (it has no gitleaks entry of its own).
 - **gitleaks' binding does more than delegate.** It pops `region.snippet` (the matched
   secret, unredacted) out of `raw`, digests it for pairing, and fills `secretContext`
-  from `partialFingerprints` when `commitSha` is set (git mode).
+  from `partialFingerprints` when `commitSha` is set (git mode). It also sets `risk` to
+  TruffleHog's unverified dict (`cwe: ["CWE-798"]`, confidence MEDIUM): gitleaks' SARIF
+  carries no CWE, and compliance enrichment reads `risk.cwe` and nowhere else. The
+  golden was re-derived the same way when that landed, so its `risk` is that dict on
+  all 69 findings; the golden test compares ids only and would not have noticed.
 
 ## Secret scanners and git history (G1)
 

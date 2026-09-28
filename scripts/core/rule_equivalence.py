@@ -5,8 +5,9 @@ different security scanning tools. When two tools report the same issue
 using different rule IDs, this mapping helps identify them as duplicates.
 
 Example:
-    Trivy reports `:latest tag used` and Hadolint reports `DL3006` for the
-    same issue on the same line. This mapping recognizes them as equivalent.
+    Trivy reports `DS-0001` (`':latest' tag used`) and Hadolint reports
+    `DL3006` for the same issue on the same line. This mapping recognizes them
+    as equivalent.
 
 Usage:
     from scripts.core.rule_equivalence import get_canonical_rule_id
@@ -35,77 +36,120 @@ from __future__ import annotations
 # `CKV_AWS_17` said "RDS encryption" while the rule checkov actually ships
 # under that id is "Ensure all data stored in RDS is not publicly accessible".
 #
-#   `# alias:` one tool reporting one check under more than one id
-#             (trivy `:latest tag used` and `DS001`; hadolint DL3018/DL3019)
+#   `# alias:` one tool reporting one check under more than one id (none
+#             now: hadolint DL3018/DL3019 were listed as one, and are "Pin
+#             versions in apk add" and "Use the `--no-cache` switch")
 #   `# cross:` different tools reporting the SAME issue -- what the table is
 #             for, and the only relationship that should span tool names
 #
 # When adding an entry, quote the tool's own rule description rather than
 # paraphrasing it. Three groups were measured wrong in #846 and every one was
 # caught by comparing against `check_name` from a real scan.
+#
+# TRIVY KEYS (#1221) are the `ID` trivy 0.74.0 prints, each commented with the
+# `Title` it prints beside it, both read from its own output
+# (tests/fixtures/samples/trivy/misconfig-0.74.json) -- one id per group, the
+# check the group names. The adapter used to make a misconfiguration's Title
+# its rule id, so this table keyed trivy by Titles and by old ids (`DS001`).
+# On 0.74.0's output no old id matched anything and three Titles did, and
+# eight old ids named another check entirely (`DS031` sat here as "open
+# ingress": it is the Dockerfile secrets check). Where 0.74.0 has no check for
+# a group, the trivy key was dropped, not translated: `DS013` is "'RUN cd ...'
+# to change directory", `DS015` is "'yum clean all' missing", and 0.74.0 ships
+# `DS-0024` ("'apt-get dist-upgrade' used") deprecated, so it never fires. That
+# left `dockerfile-apt-get-upgrade` (hadolint DL3005) and
+# `dockerfile-missing-version-pin` (hadolint DL3008) with one tool each, and a
+# one-tool group cannot deduplicate across tools, so both groups are gone.
+#
+# Live trivy keys made their partners live too, and eleven of those named a
+# different check, so a correct trivy id could merge with the wrong control
+# (the task review scored KSV-0012 "Runs as root user" against checkov's
+# allowPrivilegeEscalation check at 0.778, over the 0.65 threshold, when the
+# two share a line range). Every partner below was measured on
+# the same three files: hadolint 2.14.0 and checkov 3.3.16 run on them, plus
+# `checkov --list`; each comment quotes the tool's own words. Re-run with
+# hadolint 2.15.1 (the pin): the same ids on the same lines, plus DL3064,
+# which pairs with DS-0031. A partner naming
+# another check moved to the group of the trivy id that names it, or went. The
+# guards are in tests/unit/test_rule_equivalence_table.py.
 RULE_EQUIVALENCE: dict[str, list[tuple[str, str]]] = {
     # ===== Dockerfile Best Practices =====
     "dockerfile-latest-tag": [
-        ("trivy", ":latest tag used"),
-        ("trivy", "DS001"),
-        ("hadolint", "DL3006"),
-        ("hadolint", "DL3007"),  # Using latest is prone to errors
-        ("checkov", "CKV_DOCKER_1"),
-        ("checkov", "CKV_DOCKER_7"),  # Ensure base image uses a non-latest tag
+        ("trivy", "DS-0001"),  # "':latest' tag used" (an untagged FROM too)
+        ("hadolint", "DL3006"),  # "Always tag the version of an image explicitly"
+        ("hadolint", "DL3007"),  # "Using latest is prone to errors if the image..."
+        ("checkov", "CKV_DOCKER_7"),  # "Ensure the base image uses a non latest..."
     ],
     "dockerfile-no-healthcheck": [
-        ("trivy", "No HEALTHCHECK defined"),
-        ("trivy", "DS026"),
-        ("hadolint", "DL3055"),
+        ("trivy", "DS-0026"),  # "No HEALTHCHECK defined"
+        # "`HEALTHCHECK` instruction missing." -- off unless enabled. DL3055,
+        # listed here until #1221, is "Label `commit` is not a valid git hash."
+        ("hadolint", "DL3057"),
+        # "Ensure that HEALTHCHECK instructions have been added to container images"
         ("checkov", "CKV_DOCKER_2"),
     ],
     "dockerfile-no-user": [
-        ("trivy", "Image user should not be 'root'"),
-        ("trivy", "DS002"),
-        ("trivy", "Running as root"),
-        ("hadolint", "DL3002"),
-        ("checkov", "CKV_DOCKER_3"),
-        ("checkov", "CKV_DOCKER_8"),  # Ensure the last USER is not root
+        ("trivy", "DS-0002"),  # "Image user should not be 'root'"
+        ("hadolint", "DL3002"),  # "Last USER should not be root"
+        ("checkov", "CKV_DOCKER_3"),  # "Ensure that a user for the container..."
+        ("checkov", "CKV_DOCKER_8"),  # "Ensure the last USER is not root"
     ],
     "dockerfile-add-instead-of-copy": [
-        ("trivy", "Consider using COPY instead of ADD"),
-        ("trivy", "DS005"),
-        ("hadolint", "DL3010"),
-        ("checkov", "CKV_DOCKER_4"),
-    ],
-    "dockerfile-hardcoded-secret": [
-        ("trivy", "Potential secret in ENV"),
-        ("trivy", "DS017"),
-        ("hadolint", "DL3059"),  # Multiple consecutive RUN with secrets
-        ("checkov", "CKV_DOCKER_5"),
-        ("checkov", "CKV_DOCKER_11"),  # Ensure secret args are not hard-coded
+        ("trivy", "DS-0005"),  # "ADD instead of COPY"
+        # "Use COPY instead of ADD for files and folders". DL3010, listed here
+        # until #1221, is its opposite: "Use `ADD` for extracting archives".
+        ("hadolint", "DL3020"),
+        ("checkov", "CKV_DOCKER_4"),  # "Ensure that COPY is used instead of ADD..."
     ],
     "dockerfile-sudo": [
-        ("trivy", "DS011"),  # sudo detected
-        ("hadolint", "DL3004"),
-        ("checkov", "CKV2_DOCKER_1"),
-    ],
-    "dockerfile-apt-get-upgrade": [
-        ("trivy", "DS016"),  # apt-get upgrade
-        ("hadolint", "DL3005"),
+        ("trivy", "DS-0010"),  # "RUN using 'sudo'"
+        ("hadolint", "DL3004"),  # "Do not use sudo as it leads to unpredictable..."
+        ("checkov", "CKV2_DOCKER_1"),  # "Ensure that sudo isn't used"
     ],
     "dockerfile-missing-apk-no-cache": [
-        ("trivy", "DS014"),  # Missing --no-cache
-        ("hadolint", "DL3018"),  # Pin versions in apk add
-        ("hadolint", "DL3019"),  # Use --no-cache
+        ("trivy", "DS-0025"),  # "'apk add' is missing '--no-cache'"
+        ("hadolint", "DL3019"),  # "Use the `--no-cache` switch to avoid ..."
     ],
-    "dockerfile-curl-pipe-bash": [
-        ("trivy", "DS013"),  # curl pipe to bash
-        ("hadolint", "DL4006"),  # Set SHELL option pipefail
+    "dockerfile-update-alone": [
+        ("trivy", "DS-0017"),  # "'RUN <package-manager> update' instruction alone"
+        # "Ensure update instructions are not use alone in the Dockerfile". It
+        # counts update RUNs against install RUNs over the whole file, so it
+        # did not fire beside DS-0017 on the recorded Dockerfile.
+        ("checkov", "CKV_DOCKER_5"),
+    ],
+    "dockerfile-duplicate-stage-alias": [
+        ("trivy", "DS-0012"),  # "Duplicate aliases defined in different FROMs"
+        ("hadolint", "DL3024"),  # "FROM aliases (stage names) must be unique"
+        # "Ensure From Alias are unique for multistage builds." (matches a
+        # lower-case ` as ` only)
+        ("checkov", "CKV_DOCKER_11"),
+    ],
+    "dockerfile-port-22-exposed": [
+        ("trivy", "DS-0004"),  # "Port 22 exposed"
+        ("checkov", "CKV_DOCKER_1"),  # "Ensure port 22 is not exposed"
+    ],
+    "dockerfile-deprecated-maintainer": [
+        ("trivy", "DS-0022"),  # "Deprecated MAINTAINER used"
+        ("hadolint", "DL4000"),  # "MAINTAINER is deprecated"
+        # "Ensure that LABEL maintainer is used instead of MAINTAINER (deprecated)"
         ("checkov", "CKV_DOCKER_6"),
     ],
-    "dockerfile-missing-version-pin": [
-        ("trivy", "DS015"),  # Missing version pin in apt-get
-        ("hadolint", "DL3008"),  # Pin versions in apt-get
+    "dockerfile-secret-in-arg-or-env": [
+        # "Secrets passed via `build-args` or envs or copied secret files"
+        ("trivy", "DS-0031"),
+        # "Potentially sensitive data should not be used in the `ARG` or `ENV`
+        # commands" -- new in hadolint 2.15, fired on the same ENV line.
+        ("hadolint", "DL3064"),
     ],
+    # REMOVED (#1221): `dockerfile-hardcoded-secret` held trivy DS-0031 with
+    # hadolint DL3059 ("Multiple consecutive `RUN` instructions"), checkov
+    # CKV_DOCKER_5 (update alone) and CKV_DOCKER_11 (stage aliases). checkov
+    # has no secrets-in-ENV check; hadolint's is DL3064, above.
+    # `dockerfile-curl-pipe-bash` held hadolint DL4006 (pipefail) with checkov
+    # CKV_DOCKER_6 (MAINTAINER), which moved.
     # ===== Infrastructure as Code =====
     "iac-public-s3-bucket": [
-        ("trivy", "Public S3 bucket"),
+        ("trivy", "AWS-0092"),  # "S3 Buckets not publicly accessible through ACL."
         # cross: "S3 Bucket has an ACL defined which allows public READ access."
         ("checkov", "CKV_AWS_20"),
         # REMOVED (#846), measured against checkov's own `check_name`:
@@ -117,7 +161,7 @@ RULE_EQUIVALENCE: dict[str, list[tuple[str, str]]] = {
         # than relocated. A group is for one issue reported by several tools.
     ],
     "iac-unencrypted-storage": [
-        ("trivy", "Unencrypted storage"),
+        ("trivy", "AWS-0026"),  # "EBS volumes must be encrypted"
         ("checkov", "CKV_AWS_3"),  # cross: EBS volume encryption
         # REMOVED (#846): CKV_AWS_17. Its inline comment here said "RDS
         # encryption"; checkov's own `check_name`, measured on a real scan, is
@@ -126,8 +170,9 @@ RULE_EQUIVALENCE: dict[str, list[tuple[str, str]]] = {
         # a public-access control ended up in an encryption group.
     ],
     "iac-security-group-open-ingress": [
-        ("trivy", "Security group allows open ingress"),
-        ("trivy", "DS031"),  # alias: same trivy check, id form
+        # "Security groups should not allow unrestricted ingress to SSH or RDP
+        # from any IP address."
+        ("trivy", "AWS-0107"),
         # cross: both are "ingress from 0.0.0.0:0", to port 22 and 3389
         ("checkov", "CKV_AWS_24"),
         ("checkov", "CKV_AWS_25"),
@@ -136,44 +181,114 @@ RULE_EQUIVALENCE: dict[str, list[tuple[str, str]]] = {
         # Measured from checkov's own `check_name`.
     ],
     # ===== Kubernetes Security =====
+    # checkov's "Do not admit ..." checks (CKV_K8S_1 to _7) read only a
+    # PodSecurityPolicy; the pod-level checks are the ones that fire on a
+    # workload, beside trivy's.
     "k8s-privileged-container": [
-        ("trivy", "Privileged container"),
-        ("trivy", "KSV001"),
+        # "Privileged"; the old key KSV001 is "Can elevate its own privileges"
+        ("trivy", "KSV-0017"),
+        ("checkov", "CKV_K8S_16"),  # "Container should not be privileged"
+    ],
+    "k8s-privilege-escalation": [
+        ("trivy", "KSV-0001"),  # "Can elevate its own privileges"
+        # "Containers should not run with allowPrivilegeEscalation"
+        ("checkov", "CKV_K8S_20"),
+    ],
+    "k8s-host-pid": [
+        ("trivy", "KSV-0010"),  # "Access to host PID"
+        # "Containers should not share the host process ID namespace"
+        ("checkov", "CKV_K8S_17"),
+        # "Do not admit containers wishing to share the host process ID
+        # namespace" (a PodSecurityPolicy); listed as privileged until #1221
         ("checkov", "CKV_K8S_1"),
     ],
     "k8s-root-container": [
-        ("trivy", "Container running as root"),
-        ("trivy", "KSV012"),
-        ("checkov", "CKV_K8S_6"),
-        ("checkov", "CKV_K8S_20"),
+        ("trivy", "KSV-0012"),  # "Runs as root user"
+        ("checkov", "CKV_K8S_23"),  # "Minimize the admission of root containers"
+        ("checkov", "CKV_K8S_6"),  # "Do not admit root containers" (a PSP)
     ],
     "k8s-host-network": [
-        ("trivy", "Host network enabled"),
-        ("trivy", "KSV009"),
+        ("trivy", "KSV-0009"),  # "Access to host network"
+        # "Containers should not share the host network namespace"
         ("checkov", "CKV_K8S_19"),
     ],
-    "k8s-no-resource-limits": [
-        ("trivy", "No resource limits"),
-        ("trivy", "KSV011"),
-        ("checkov", "CKV_K8S_11"),
-        ("checkov", "CKV_K8S_12"),
-        ("checkov", "CKV_K8S_13"),
+    "k8s-no-cpu-limits": [
+        ("trivy", "KSV-0011"),  # "CPU not limited"
+        ("checkov", "CKV_K8S_11"),  # "CPU limits should be set"
+    ],
+    # CKV_K8S_12/13 as checkov's Kubernetes framework names them; its Terraform
+    # framework swaps them (`checkov --list`: _12 "Memory Limits should be set",
+    # _13 "Memory requests should be set"). No mis-merge: KSV fires on manifests.
+    "k8s-no-memory-limits": [
+        ("trivy", "KSV-0018"),  # "Memory not limited"
+        ("checkov", "CKV_K8S_13"),  # "Memory limits should be set"
+    ],
+    "k8s-no-memory-requests": [
+        ("trivy", "KSV-0016"),  # "Memory requests not specified"
+        ("checkov", "CKV_K8S_12"),  # "Memory requests should be set"
     ],
     # ===== Secret Detection =====
+    # GITLEAKS KEYS (#1328) are the `id` gitleaks 8.30.1's default config
+    # prints (`config/gitleaks.toml` at tag v8.30.1), each commented with the
+    # `description` it prints beside it, read from the tool's own file -- the
+    # same discipline the trivy keys above use. `aws-access-token` and
+    # `github-pat` used to sit here under the tool name `trufflehog`: both are
+    # gitleaks ids, so neither could ever match a real trufflehog finding
+    # (trufflehog's own detectors for the same two secrets are named `AWS` and
+    # `Github`, both already listed below and unaffected by this move).
     "secret-aws-access-key": [
         ("trufflehog", "AWS"),
-        ("trufflehog", "aws-access-token"),
+        # "Identified a pattern that may indicate AWS credentials, risking
+        # unauthorized cloud resource access and data breaches on AWS
+        # platforms."
+        ("gitleaks", "aws-access-token"),
         ("semgrep", "generic.secrets.security.detected-aws-account-id"),
     ],
     "secret-github-token": [
         ("trufflehog", "Github"),
-        ("trufflehog", "github-pat"),
+        # "Uncovered a GitHub Personal Access Token, potentially leading to
+        # unauthorized repository access and sensitive content exposure."
+        ("gitleaks", "github-pat"),
         ("semgrep", "generic.secrets.security.detected-github-pat"),
     ],
     "secret-private-key": [
         ("trufflehog", "PrivateKey"),
+        # "Identified a Private Key, which may compromise cryptographic
+        # security and sensitive data encryption."
+        ("gitleaks", "private-key"),
         ("semgrep", "generic.secrets.security.detected-private-key"),
     ],
+    "secret-jwt": [
+        ("trufflehog", "JWT"),
+        # "Uncovered a JSON Web Token, which may lead to unauthorized access
+        # to web applications and sensitive user data."
+        ("gitleaks", "jwt"),
+        # "Detected a Base64-encoded JSON Web Token, posing a risk of
+        # exposing encoded authentication and data exchange information."
+        # Fix-round-1 (#1328): a JWT wrapped in an extra base64 layer is
+        # still the same secret class, and gitleaks' own regex for it is
+        # narrow and structural (a fixed `ZXlK...` prefix decoding to the
+        # JWT header's `eyJ`), not a catch-all like `generic-api-key` below
+        # -- so, unlike that one, mapping it here does not trade a real
+        # pairing for a wide blast radius. Listed explicitly, not left to
+        # the substring fallback (removed for gitleaks just below): before
+        # this fix-round it resolved to `secret-jwt` anyway, coincidentally,
+        # by sharing gitleaks' `jwt` as a `-`-delimited prefix.
+        ("gitleaks", "jwt-base64"),
+    ],
+    # `generic-api-key` ("Detected a Generic API Key...") is deliberately NOT
+    # mapped anywhere. Measured on juice-shop `1618a611`, gitleaks reports
+    # BOTH `jwt` and `generic-api-key` for the one secret at
+    # `test/api/user.test.ts:280` -- but a cluster holds at most one finding
+    # per tool (`FindingCluster.can_accept`), so gitleaks' `jwt` and its own
+    # `generic-api-key` can never join the same cluster regardless of what
+    # this table says: adding `generic-api-key` here would be inert for that
+    # pairing. It would not be inert everywhere else -- `generic-api-key`
+    # fires 54 times on that one repo alone, on secrets that have nothing to
+    # do with a JWT, and location similarity keys on line only (not column),
+    # so mapping it into `secret-jwt` risks merging two distinct secrets that
+    # only happen to share a line elsewhere (the shape #1242 and the
+    # `oauth.component.spec.ts:91` fixture below both guard against).
     # ===== Code Security =====
     "code-hardcoded-password": [
         ("semgrep", "python.lang.security.audit.hardcoded-password"),
@@ -204,7 +319,7 @@ def get_canonical_rule_id(tool: str, rule_id: str) -> str | None:
 
     Args:
         tool: Name of the security tool (e.g., "trivy", "hadolint")
-        rule_id: Rule ID from the tool (e.g., "DL3006", ":latest tag used")
+        rule_id: Rule ID from the tool (e.g., "DL3006", "DS-0001")
 
     Returns:
         Canonical rule ID if found in equivalence mapping, None otherwise.
@@ -212,7 +327,7 @@ def get_canonical_rule_id(tool: str, rule_id: str) -> str | None:
     Example:
         >>> get_canonical_rule_id("hadolint", "DL3006")
         "dockerfile-latest-tag"
-        >>> get_canonical_rule_id("trivy", ":latest tag used")
+        >>> get_canonical_rule_id("trivy", "DS-0001")
         "dockerfile-latest-tag"
         >>> get_canonical_rule_id("unknown", "RULE123")
         None
@@ -223,23 +338,39 @@ def get_canonical_rule_id(tool: str, rule_id: str) -> str | None:
         return None
 
     _build_reverse_map()
+    tool_lower = tool.lower()
+    rule_id_lower = rule_id.lower()
 
     # Try exact match first
-    key = (tool.lower(), rule_id)
+    key = (tool_lower, rule_id)
     if key in _REVERSE_MAP:
         return _REVERSE_MAP[key]
 
     # Try case-insensitive rule_id match
-    key_lower = (tool.lower(), rule_id.lower())
+    key_lower = (tool_lower, rule_id_lower)
     if key_lower in _REVERSE_MAP:
         return _REVERSE_MAP[key_lower]
+
+    # gitleaks ids are exact-match only -- no substring fallback (fix-round-1,
+    # #1328). gitleaks 8.30.1 ships ~222 short, hyphen-delimited default-config
+    # ids that share prefixes by design (`aws-access-token` /
+    # `yandex-aws-access-token`; `jwt` / `jwt-base64`), unlike the aliasing the
+    # fallback below exists for (trivy's `AVD-`-prefixed alias ids, semgrep's
+    # dotted-suffix registry ids). Measured against all 222:
+    # `yandex-aws-access-token` (a Yandex Cloud key, not AWS) resolved to
+    # `secret-aws-access-key` and `jwt-base64` to `secret-jwt` purely because
+    # each is a `-`-delimited prefix of an id this table lists -- the exact
+    # #1242 shape (two different secrets, one line) this table exists to
+    # avoid, except reachable cross-tool instead of within one tool. Every
+    # gitleaks id this table intends to match is listed exactly (`jwt-base64`
+    # included, above); nothing else should resolve.
+    if tool_lower == "gitleaks":
+        return None
 
     # Try substring matching for rule IDs that carry a suffix or vary in wording
     # (e.g. semgrep reports `...subprocess-shell-true.subprocess-shell-true` for
     # the rule mapped here as `...subprocess-shell-true`).
     # Require minimum length to avoid matching everything
-    tool_lower = tool.lower()
-    rule_id_lower = rule_id.lower()
     if len(rule_id_lower) >= 3:  # Minimum 3 chars for substring matching
         for (mapped_tool, mapped_rule), canonical in _REVERSE_MAP.items():
             if mapped_tool == tool_lower:
@@ -303,7 +434,7 @@ def are_rules_equivalent(
         If not equivalent, canonical_id is None.
 
     Example:
-        >>> are_rules_equivalent("hadolint", "DL3006", "trivy", ":latest tag used")
+        >>> are_rules_equivalent("hadolint", "DL3006", "trivy", "DS-0001")
         (True, "dockerfile-latest-tag")
 
     """

@@ -8,12 +8,158 @@ Tests cover:
 - Edge cases (empty input, malformed JSON, missing fields)
 - Code context extraction for misconfigurations
 - Schema version and compliance enrichment
+- trivy 0.74.0's own output (``TestTrivy074RecordedOutput``), recorded below
+- cvss extraction (#1243, ``TestTrivyCvss``) and trivy 0.74.0's own
+  vulnerability output (``TestTrivy074RecordedVulnOutput``), recorded below
+
+Recorded fixture ``tests/fixtures/samples/trivy/misconfig-0.74.json``: trivy
+**0.74.0**'s JSON, byte for byte, recorded 2026-09-28 on Windows by running,
+from inside a scratch directory holding only the three files listed below::
+
+    trivy fs -q -f json --scanners vuln,secret,misconfig \\
+        --skip-db-update --skip-check-update . -o misconfig-0.74.json
+
+``--scanners`` is what JMo's repository descriptor passes
+(``tool_descriptors._trivy``); scanning ``.`` from inside the directory keeps
+``ArtifactName`` and every ``Target`` relative, so no machine path is
+recorded. ``--skip-db-update --skip-check-update`` used the vulnerability DB
+and check bundle already cached. Result: 47 misconfigurations, 0
+vulnerabilities, 0 secrets. To re-record, recreate the three files verbatim::
+
+    Dockerfile
+        FROM alpine:latest as build
+        RUN apk add curl
+        RUN sudo apk add bash
+
+        FROM alpine as build
+        ENV DB_PASSWORD=example
+        RUN apt-get update && apt-get -y dist-upgrade
+        ADD app.py /app/app.py
+        RUN cd /app && make
+        CMD ["python3", "/app/app.py"]
+        EXPOSE 22
+        MAINTAINER example
+
+    pod.yaml
+        apiVersion: v1
+        kind: Pod
+        metadata:
+          name: insecure-pod
+        spec:
+          hostNetwork: true
+          hostPID: true
+          containers:
+            - name: app
+              image: nginx:latest
+              securityContext:
+                privileged: true
+                runAsUser: 0
+
+    main.tf
+        resource "aws_s3_bucket" "public" {
+          bucket = "example-public-bucket"
+          acl    = "public-read"
+        }
+
+        resource "aws_ebs_volume" "data" {
+          availability_zone = "us-east-1a"
+          size              = 10
+          encrypted         = false
+        }
+
+        resource "aws_security_group" "open" {
+          name        = "open"
+          description = "open ingress"
+
+          ingress {
+            description = "ssh"
+            from_port   = 22
+            to_port     = 22
+            protocol    = "tcp"
+            cidr_blocks = ["0.0.0.0/0"]
+          }
+
+          ingress {
+            description = "rdp"
+            from_port   = 3389
+            to_port     = 3389
+            protocol    = "tcp"
+            cidr_blocks = ["0.0.0.0/0"]
+          }
+        }
+
+The two ``FROM alpine`` lines and the two open ingress rules are there on
+purpose: each makes trivy report one check twice in one file, which is the
+case that lost its lines (#1221's line defect). The rest gives every trivy key
+in ``scripts/core/rule_equivalence.py`` a recorded finding; hadolint 2.14.0
+(then 2.15.1, the pin, which adds DL3064 on the ``ENV`` line) and checkov
+3.3.16 were run on the same three files to check each key's
+partners (the lower-case ``as`` is for checkov: its CKV_DOCKER_11 matches
+only `` as ``). ``apt-get -y dist-upgrade`` stays to show that DS-0024, which
+0.74.0 ships deprecated, does not fire.
+
+Recorded fixture ``tests/fixtures/samples/trivy/vuln-0.74.json`` (#1243): trivy
+**0.74.0**'s own JSON, trimmed (how, below), recorded 2026-09-28 on Windows against a
+throwaway npm project holding only a synthetic lockfile -- never a real
+project's dependencies, per this repo's privacy convention for anything a
+private repo's export would otherwise be needed for. From inside that
+directory (``package.json``: ``{"dependencies": {"lodash": "4.17.4",
+"minimist": "0.0.8"}}``), ``npm install --package-lock-only`` generated the
+lockfile, then::
+
+    trivy fs -q -f json --scanners vuln --skip-db-update --skip-check-update \\
+        . -o vuln-0.74.json
+
+``--skip-db-update --skip-check-update`` used the vulnerability DB already
+cached locally (``trivy --version``: DB version 2). trivy's raw run found 12
+vulnerabilities across both packages; the fixture keeps 3 (``CVE-2019-10744``,
+``CVE-2018-16487``, ``CVE-2021-44906``) -- enough to cover a ``CVSS`` block
+with all three of ``ghsa``/``nvd``/``redhat``, one missing ``ghsa`` entirely,
+and one where NVD's and a vendor's V3 scores disagree (9.8 vs 3.1), which is
+what proves NVD wins on real trivy output rather than by construction. The
+other 9 (more lodash CVEs) were dropped only to keep the fixture small; none
+of them exercises a shape these three do not already cover. So it is not byte
+for byte, unlike ``misconfig-0.74.json``: trivy's output was parsed, its one
+``Result``'s ``Vulnerabilities`` cut to those three (in trivy's order, every
+other key and value as trivy wrote it, ``Packages`` included), and written
+back with Python's ``json.dumps(indent=2)`` and a newline. That rewrite also
+turned Go's HTML escapes (``\\u003c``, ``\\u003e``, ``\\u0026``, which
+``misconfig-0.74.json`` still carries) into ``<``, ``>`` and ``&``; re-parsing
+trivy's untrimmed output and cutting the list gives this file's document
+exactly, key order included. ``ArtifactName``
+is ``"."`` (scanned from inside the directory) and no path in the fixture
+names this machine, grepped for ``Users``/``Jimmy``/a drive letter before
+committing.
+
+The "no NVD" and "V2-only" branches of ``_best_vulnerability_cvss`` are not
+exercised by any real CVE found this way (every one of trivy's own DB entries
+for these two packages carries NVD's V3), so those branches are covered by
+hand-built ``TestTrivyCvss`` cases instead -- the same split
+``TestTrivyRuleIdLineAndVersionChain`` already uses for secrets, and for the
+same reason: a real fixture proves the common case, a hand-built one proves a
+fallback no live CVE happened to need.
 """
 
 import json
 from pathlib import Path
 
 from scripts.core.adapters.trivy_adapter import TrivyAdapter
+
+RECORDED_074 = (
+    Path(__file__).resolve().parents[1]
+    / "fixtures"
+    / "samples"
+    / "trivy"
+    / "misconfig-0.74.json"
+)
+
+RECORDED_074_VULN = (
+    Path(__file__).resolve().parents[1]
+    / "fixtures"
+    / "samples"
+    / "trivy"
+    / "vuln-0.74.json"
+)
 
 
 def write(tmp_path: Path, name: str, content: str) -> Path:
@@ -51,6 +197,8 @@ class TestTrivyBasicParsing:
         assert len(findings) == 1
         item = findings[0]
         assert item.ruleId == "CVE-2023-1234"
+        # The advisory's Title is the title; the CVE stays the rule id.
+        assert item.title == "Remote Code Execution"
         assert item.severity == "CRITICAL"
         assert item.tool["name"] == "trivy"
         assert item.tool["version"] == "0.45.0"
@@ -102,8 +250,10 @@ class TestTrivyBasicParsing:
         adapter = TrivyAdapter()
         findings = adapter.parse(path)
         assert len(findings) == 1
-        # Note: Adapter prioritizes Title over RuleID for rule identification
-        assert findings[0].ruleId == "User not specified"
+        # The rule's id is the id, and its Title is the title (#1221). This
+        # test used to pin the defect: Title ranked above RuleID.
+        assert findings[0].ruleId == "DS002"
+        assert findings[0].title == "User not specified"
         assert findings[0].severity == "MEDIUM"
         assert "misconfig" in findings[0].tags
 
@@ -379,6 +529,289 @@ class TestTrivyCweMapping:
         assert findings[0].risk is None
 
 
+class TestTrivySecretCwe:
+    """A trivy secret carries CWE-798, as gitleaks' and trufflehog's do.
+
+    trivy writes no CWE on a secret, and compliance enrichment reads
+    ``risk.cwe`` and nowhere else, so a trivy secret reached no OWASP mapping.
+    Since #1221 its ruleId is its RuleID (``github-pat``), the same string
+    gitleaks prints, so the two cluster on the id alone; when trivy's CRITICAL
+    finding led the cluster, the consensus copied trivy's empty ``risk`` and
+    the secret left the ``owasp-top-10`` count. The load-order test is
+    ``tests/integration/test_cross_tool_dedup_integration.py``.
+    """
+
+    def _parse(self, tmp_path: Path, results: list[dict]):
+        sample = {"Trivy": {"Version": "0.74.0"}, "Results": results}
+        return TrivyAdapter().parse(write(tmp_path, "trivy.json", json.dumps(sample)))
+
+    def test_secret_carries_cwe_798_in_the_secret_scanners_shape(self, tmp_path: Path):
+        findings = self._parse(
+            tmp_path,
+            [
+                {
+                    "Target": "app/config.py",
+                    "Class": "secret",
+                    "Secrets": [
+                        {
+                            "RuleID": "github-pat",
+                            "Category": "GitHub",
+                            "Severity": "CRITICAL",
+                            "Title": "GitHub Personal Access Token",
+                            "StartLine": 4,
+                            "EndLine": 4,
+                            "Match": "TOKEN = ****************",
+                        }
+                    ],
+                }
+            ],
+        )
+        assert len(findings) == 1
+        # gitleaks_adapter's and trufflehog_adapter's (unverified) dict: trivy
+        # verifies nothing either.
+        assert findings[0].risk == {
+            "cwe": ["CWE-798"],
+            "confidence": "MEDIUM",
+            "likelihood": "HIGH",
+            "impact": "HIGH",
+        }
+
+    def test_vulnerabilities_and_misconfigurations_never_get_it(self, tmp_path: Path):
+        findings = self._parse(
+            tmp_path,
+            [
+                {
+                    "Target": "package-lock.json",
+                    "Vulnerabilities": [
+                        {
+                            "VulnerabilityID": "CVE-2023-0001",
+                            "Severity": "HIGH",
+                            "CweIDs": ["CWE-79"],
+                        },
+                        {"VulnerabilityID": "CVE-2023-0002", "Severity": "LOW"},
+                    ],
+                },
+                {
+                    "Target": "Dockerfile",
+                    "Misconfigurations": [{"ID": "DS-0002", "Severity": "HIGH"}],
+                },
+            ],
+        )
+        by_id = {f.ruleId: f for f in findings}
+        assert set(by_id) == {"CVE-2023-0001", "CVE-2023-0002", "DS-0002"}
+        assert by_id["CVE-2023-0001"].risk == {"cwe": ["CWE-79"]}
+        assert by_id["CVE-2023-0002"].risk is None
+        assert by_id["DS-0002"].risk is None
+
+    def test_each_secret_gets_its_own_risk_dict(self, tmp_path: Path):
+        """Enrichment writes into ``risk``; one shared dict would leak across."""
+        findings = self._parse(
+            tmp_path,
+            [
+                {
+                    "Target": "a.py",
+                    "Secrets": [
+                        {
+                            "RuleID": "github-pat",
+                            "Severity": "CRITICAL",
+                            "StartLine": 1,
+                        },
+                        {"RuleID": "private-key", "Severity": "HIGH", "StartLine": 2},
+                    ],
+                }
+            ],
+        )
+        assert len(findings) == 2
+        assert findings[0].risk == findings[1].risk
+        assert findings[0].risk is not findings[1].risk
+
+
+class TestTrivyCvss:
+    """#1243: trivy vulnerabilities carried no ``cvss`` at all.
+
+    NVD's V3 score wins; else any other source's V3; else NVD's V2; else any
+    other source's V2 -- v3 always outranks v2 regardless of source.
+    """
+
+    def _vuln(self, tmp_path: Path, name: str, cvss: dict) -> Path:
+        sample = {
+            "Results": [
+                {
+                    "Target": "test",
+                    "Vulnerabilities": [
+                        {
+                            "VulnerabilityID": "CVE-CVSS",
+                            "Severity": "HIGH",
+                            "CVSS": cvss,
+                        }
+                    ],
+                }
+            ]
+        }
+        return write(tmp_path, name, json.dumps(sample))
+
+    def test_nvd_v3_wins(self, tmp_path: Path):
+        cvss = {
+            "nvd": {
+                "V2Vector": "AV:N/AC:L/Au:N/C:P/I:P/A:P",
+                "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+                "V2Score": 7.5,
+                "V3Score": 9.8,
+            },
+            "redhat": {
+                "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N",
+                "V3Score": 8.1,
+            },
+        }
+        f = TrivyAdapter().parse(self._vuln(tmp_path, "nvd_v3.json", cvss))[0]
+        assert f.cvss == {
+            "version": "3.x",
+            "score": 9.8,
+            "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        }
+
+    def test_vendor_v3_used_when_nvd_absent(self, tmp_path: Path):
+        cvss = {
+            "ghsa": {
+                "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+                "V3Score": 9.1,
+            }
+        }
+        f = TrivyAdapter().parse(self._vuln(tmp_path, "vendor_v3.json", cvss))[0]
+        assert f.cvss == {
+            "version": "3.x",
+            "score": 9.1,
+            "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        }
+
+    def test_vendor_v3_preferred_over_nvd_v2_only(self, tmp_path: Path):
+        """v3 always outranks v2, even from a different source than NVD's."""
+        cvss = {
+            "nvd": {"V2Vector": "AV:N/AC:L/Au:N/C:P/I:P/A:P", "V2Score": 5.0},
+            "redhat": {
+                "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+                "V3Score": 7.2,
+            },
+        }
+        f = TrivyAdapter().parse(self._vuln(tmp_path, "vendor_over_nvd_v2.json", cvss))[
+            0
+        ]
+        assert f.cvss == {
+            "version": "3.x",
+            "score": 7.2,
+            "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        }
+
+    def test_nvd_v2_only_used_when_nothing_has_v3(self, tmp_path: Path):
+        """A source with only V2 (old CVE, no V3 assigned anywhere)."""
+        cvss = {"nvd": {"V2Vector": "AV:N/AC:L/Au:N/C:P/I:P/A:P", "V2Score": 5.0}}
+        f = TrivyAdapter().parse(self._vuln(tmp_path, "nvd_v2_only.json", cvss))[0]
+        assert f.cvss == {
+            "version": "2.0",
+            "score": 5.0,
+            "vector": "AV:N/AC:L/Au:N/C:P/I:P/A:P",
+        }
+
+    def test_vendor_v2_used_when_only_option(self, tmp_path: Path):
+        cvss = {"ssapi": {"V2Vector": "AV:N/AC:L/Au:N/C:P/I:P/A:P", "V2Score": 4.3}}
+        f = TrivyAdapter().parse(self._vuln(tmp_path, "vendor_v2_only.json", cvss))[0]
+        assert f.cvss == {
+            "version": "2.0",
+            "score": 4.3,
+            "vector": "AV:N/AC:L/Au:N/C:P/I:P/A:P",
+        }
+
+    def test_no_cvss_block_omits_the_key(self, tmp_path: Path):
+        sample = {
+            "Results": [
+                {
+                    "Target": "test",
+                    "Vulnerabilities": [
+                        {"VulnerabilityID": "CVE-NOCVSS", "Severity": "HIGH"}
+                    ],
+                }
+            ]
+        }
+        f = TrivyAdapter().parse(write(tmp_path, "no_cvss.json", json.dumps(sample)))[0]
+        assert f.cvss is None
+        assert "cvss" not in f.to_dict()
+
+    def test_empty_cvss_block_omits_the_key(self, tmp_path: Path):
+        f = TrivyAdapter().parse(self._vuln(tmp_path, "empty_cvss.json", {}))[0]
+        assert f.cvss is None
+
+    def test_cvss_block_with_no_numeric_score_omits_the_key(self, tmp_path: Path):
+        """A source present but carrying neither ``V3Score`` nor ``V2Score``."""
+        cvss = {"nvd": {"V3Vector": "", "V2Vector": ""}}
+        f = TrivyAdapter().parse(self._vuln(tmp_path, "no_score.json", cvss))[0]
+        assert f.cvss is None
+
+    def test_misconfig_and_secret_never_carry_cvss(self, tmp_path: Path):
+        """trivy's ``CVSS`` block only ever appears on vulnerabilities."""
+        sample = {
+            "Results": [
+                {
+                    "Target": "test",
+                    "Misconfigurations": [
+                        {"ID": "DS001", "Severity": "HIGH"},
+                    ],
+                    "Secrets": [
+                        {"Title": "token", "Severity": "HIGH"},
+                    ],
+                }
+            ]
+        }
+        findings = TrivyAdapter().parse(
+            write(tmp_path, "no_vuln_cvss.json", json.dumps(sample))
+        )
+        assert len(findings) == 2
+        assert all(f.cvss is None for f in findings)
+
+
+class TestTrivy074RecordedVulnOutput:
+    """#1243, asserted on trivy 0.74.0's own vulnerability output.
+
+    Before the fix, every one of these carried no ``cvss`` at all, though
+    trivy's raw ``CVSS`` block was right there in ``raw``.
+    """
+
+    def _parse(self):
+        findings = TrivyAdapter().parse(RECORDED_074_VULN)
+        assert len(findings) == 3
+        return {f.ruleId: f for f in findings}
+
+    def test_nvd_v3_wins_when_all_three_sources_agree(self):
+        by_id = self._parse()
+        f = by_id["CVE-2019-10744"]
+        assert set(f.raw["CVSS"]) == {"ghsa", "nvd", "redhat"}
+        assert f.cvss == {
+            "version": "3.x",
+            "score": 9.1,
+            "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:H",
+        }
+
+    def test_nvd_v3_wins_when_ghsa_is_absent(self):
+        by_id = self._parse()
+        f = by_id["CVE-2018-16487"]
+        assert "ghsa" not in f.raw["CVSS"]
+        assert f.cvss == {
+            "version": "3.x",
+            "score": 5.6,
+            "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:L/A:L",
+        }
+
+    def test_nvd_v3_wins_over_a_disagreeing_vendor_score(self):
+        """NVD 9.8 vs. redhat's 3.1 for the same CVE: NVD's must win."""
+        by_id = self._parse()
+        f = by_id["CVE-2021-44906"]
+        assert f.raw["CVSS"]["redhat"]["V3Score"] == 3.1
+        assert f.cvss == {
+            "version": "3.x",
+            "score": 9.8,
+            "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        }
+
+
 class TestTrivyCompliance:
     """Tests for compliance enrichment and metadata."""
 
@@ -614,3 +1047,234 @@ class TestTrivyMisconfigurationDetails:
         secret_finding = [f for f in findings if "secret" in f.tags][0]
         assert vuln_finding.ruleId == "CVE-V"
         assert secret_finding.ruleId == "API Key"
+
+
+class TestTrivy074RecordedOutput:
+    """#1221 and the line defect, asserted on trivy 0.74.0's own output.
+
+    0.74.0 names a misconfiguration's rule in ``ID`` (``DS-0001``), not
+    ``RuleID`` or ``AVDID``, puts its lines in ``CauseMetadata``, not at the
+    top level, and writes its version at ``Trivy.Version``, not ``Version``.
+    Before this was fixed every one of the findings below had its Title as its
+    rule id, line 0, and tool version ``unknown`` -- and the two findings of
+    one check in one file shared an id, so deduplication kept one.
+    """
+
+    def _parse(self):
+        findings = TrivyAdapter().parse(RECORDED_074)
+        misconfigs = [f for f in findings if "misconfig" in f.tags]
+        # Meta-guard: a fixture that silently parses to nothing satisfies
+        # every "for each finding" assertion below.
+        assert len(misconfigs) == len(findings) == 47
+        return misconfigs
+
+    def test_rule_id_is_trivys_id_and_title_is_its_title(self):
+        misconfigs = self._parse()
+        for f in misconfigs:
+            assert f.ruleId == f.raw["ID"], (f.ruleId, f.raw["ID"])
+            assert f.title == f.raw["Title"], (f.title, f.raw["Title"])
+        ids = {f.ruleId for f in misconfigs}
+        # One id per provider family, spelled as 0.74.0 prints it.
+        assert {"DS-0001", "KSV-0017", "AWS-0086"} <= ids
+        assert "':latest' tag used" not in ids
+
+    def test_lines_come_from_cause_metadata(self):
+        misconfigs = self._parse()
+        for f in misconfigs:
+            cause = f.raw.get("CauseMetadata") or {}
+            assert f.location["startLine"] == (cause.get("StartLine") or 0), f.ruleId
+            assert f.location.get("endLine") == cause.get("EndLine"), f.ruleId
+        lines = {
+            (f.location["path"], f.ruleId, f.location["startLine"]) for f in misconfigs
+        }
+        assert ("Dockerfile", "DS-0001", 1) in lines
+        assert ("Dockerfile", "DS-0001", 5) in lines
+        assert ("main.tf", "AWS-0107", 21) in lines
+        assert ("main.tf", "AWS-0107", 29) in lines
+        # Whole-file checks carry no line in 0.74.0 and stay at 0.
+        assert ("Dockerfile", "DS-0026", 0) in lines
+
+    def test_one_check_twice_in_one_file_keeps_two_ids(self):
+        """The juice-shop loss: same-rule findings in one file shared an id."""
+        misconfigs = self._parse()
+        by_id: dict[str, list] = {}
+        for f in misconfigs:
+            by_id.setdefault(f.id, []).append((f.ruleId, f.location["startLine"]))
+        shared = {k: v for k, v in by_id.items() if len(v) > 1}
+        assert not shared, shared
+        assert len(by_id) == 47
+
+    def test_tool_version_is_trivy_version(self):
+        misconfigs = self._parse()
+        assert {f.tool["version"] for f in misconfigs} == {"0.74.0"}
+
+
+class TestTrivyRuleIdLineAndVersionChain:
+    """The fallbacks behind the 0.74.0 shape, on hand-built input.
+
+    Secrets are hand-built on purpose: a recorded secret finding would commit
+    a token-shaped string. ``Match`` below is the masked form trivy writes.
+    """
+
+    def test_secret_rule_id_is_rule_id_not_title(self, tmp_path: Path):
+        sample = {
+            "Trivy": {"Version": "0.74.0"},
+            "Results": [
+                {
+                    "Target": "app/config.py",
+                    "Class": "secret",
+                    "Secrets": [
+                        {
+                            "RuleID": "github-pat",
+                            "Category": "GitHub",
+                            "Severity": "CRITICAL",
+                            "Title": "GitHub Personal Access Token",
+                            "StartLine": 4,
+                            "EndLine": 4,
+                            "Match": "TOKEN = ****************",
+                        }
+                    ],
+                }
+            ],
+        }
+        findings = TrivyAdapter().parse(
+            write(tmp_path, "trivy.json", json.dumps(sample))
+        )
+        assert len(findings) == 1
+        f = findings[0]
+        assert f.ruleId == "github-pat"
+        assert f.title == "GitHub Personal Access Token"
+        # Secrets keep their lines at the top level; nothing to fall back past.
+        assert f.location["startLine"] == 4
+        assert f.location["endLine"] == 4
+
+    def test_cause_metadata_line_wins_over_top_level(self, tmp_path: Path):
+        sample = {
+            "Results": [
+                {
+                    "Target": "Dockerfile",
+                    "Misconfigurations": [
+                        {
+                            "ID": "DS-0001",
+                            "Title": "':latest' tag used",
+                            "Severity": "MEDIUM",
+                            "StartLine": 3,
+                            "EndLine": 3,
+                            "CauseMetadata": {"StartLine": 7, "EndLine": 8},
+                        }
+                    ],
+                }
+            ]
+        }
+        f = TrivyAdapter().parse(write(tmp_path, "t.json", json.dumps(sample)))[0]
+        assert (f.location["startLine"], f.location["endLine"]) == (7, 8)
+
+    def test_top_level_line_when_cause_metadata_has_none(self, tmp_path: Path):
+        """Older trivy wrote the line at the top level; keep reading it there."""
+        sample = {
+            "Results": [
+                {
+                    "Target": "Dockerfile",
+                    "Misconfigurations": [
+                        {
+                            "ID": "DS002",
+                            "Title": "Image user should not be 'root'",
+                            "Severity": "HIGH",
+                            "StartLine": 12,
+                            "EndLine": 14,
+                            "CauseMetadata": {"Provider": "Dockerfile"},
+                        }
+                    ],
+                }
+            ]
+        }
+        f = TrivyAdapter().parse(write(tmp_path, "t.json", json.dumps(sample)))[0]
+        assert f.ruleId == "DS002"
+        assert (f.location["startLine"], f.location["endLine"]) == (12, 14)
+
+    def test_context_is_read_under_the_scanned_root_not_the_cwd(
+        self, tmp_path: Path, monkeypatch
+    ):
+        """``Target`` is relative to ``ArtifactName``, the directory trivy scanned.
+
+        A real line makes the adapter read code context, and ``jmo scan`` runs
+        trivy on an absolute target from some other working directory. Read
+        relative to the cwd, a juice-shop ``Dockerfile`` finding would carry
+        the lines of whatever ``Dockerfile`` the cwd happens to hold.
+        """
+        scanned = tmp_path / "scanned"
+        scanned.mkdir()
+        (scanned / "Dockerfile").write_bytes(b"# scanned\nFROM alpine:latest\n")
+        elsewhere = tmp_path / "elsewhere"
+        elsewhere.mkdir()
+        (elsewhere / "Dockerfile").write_bytes(b"# decoy\nFROM decoy:latest\n")
+        monkeypatch.chdir(elsewhere)
+        sample = {
+            "ArtifactName": str(scanned),
+            "Results": [
+                {
+                    "Target": "Dockerfile",
+                    "Misconfigurations": [
+                        {
+                            "ID": "DS-0001",
+                            "Title": "':latest' tag used",
+                            "Severity": "MEDIUM",
+                            "CauseMetadata": {"StartLine": 2, "EndLine": 2},
+                        }
+                    ],
+                }
+            ],
+        }
+        f = TrivyAdapter().parse(write(tmp_path, "t.json", json.dumps(sample)))[0]
+        assert f.location["path"] == "Dockerfile"
+        assert f.context is not None
+        assert "FROM alpine:latest" in f.context["snippet"]
+        assert "decoy" not in f.context["snippet"]
+
+    def test_context_when_trivy_scanned_one_file(self, tmp_path: Path, monkeypatch):
+        """``jmo scan --iac <file>`` runs ``trivy config <file>``.
+
+        Measured on 0.74.0: ``ArtifactName`` is then the file itself and
+        ``Target`` its name, so the file's directory is the root.
+        """
+        scanned = tmp_path / "scanned"
+        scanned.mkdir()
+        (scanned / "Dockerfile").write_bytes(b"# scanned\nFROM alpine:latest\n")
+        elsewhere = tmp_path / "elsewhere"
+        elsewhere.mkdir()
+        (elsewhere / "Dockerfile").write_bytes(b"# decoy\nFROM decoy:latest\n")
+        monkeypatch.chdir(elsewhere)
+        sample = {
+            "ArtifactName": str(scanned / "Dockerfile"),
+            "ArtifactType": "filesystem",
+            "Results": [
+                {
+                    "Target": "Dockerfile",
+                    "Misconfigurations": [
+                        {
+                            "ID": "DS-0001",
+                            "Title": "':latest' tag used",
+                            "Severity": "MEDIUM",
+                            "CauseMetadata": {"StartLine": 2, "EndLine": 2},
+                        }
+                    ],
+                }
+            ],
+        }
+        f = TrivyAdapter().parse(write(tmp_path, "t.json", json.dumps(sample)))[0]
+        assert f.context is not None
+        assert "FROM alpine:latest" in f.context["snippet"]
+        assert "decoy" not in f.context["snippet"]
+
+    def test_version_falls_back_to_top_level_then_unknown(self, tmp_path: Path):
+        item = {"VulnerabilityID": "CVE-1", "Severity": "LOW"}
+        cases = [
+            ({"Trivy": {"Version": "0.74.0"}, "Version": "0.1.0"}, "0.74.0"),
+            ({"Version": "0.50.0"}, "0.50.0"),
+            ({"Trivy": "not a mapping", "Version": "0.50.0"}, "0.50.0"),
+            ({"Trivy": {}}, "unknown"),
+        ]
+        for n, (top, expected) in enumerate(cases):
+            sample = {**top, "Results": [{"Target": "x", "Vulnerabilities": [item]}]}
+            path = write(tmp_path, f"v{n}.json", json.dumps(sample))
+            assert TrivyAdapter().parse(path)[0].tool["version"] == expected, top

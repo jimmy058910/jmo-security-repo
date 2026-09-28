@@ -308,7 +308,7 @@ def test_modification_detection_priority():
             "tool": {"name": "semgrep"},
             "location": {"path": "src/auth.py", "startLine": 42},
             "message": "Secret",
-            "cvss": {"baseScore": 4.5},  # Priority = 45
+            "cvss": {"score": 4.5},  # Priority = 45
         }
     ]
 
@@ -320,7 +320,7 @@ def test_modification_detection_priority():
             "tool": {"name": "semgrep"},
             "location": {"path": "src/auth.py", "startLine": 42},
             "message": "Secret",
-            "cvss": {"baseScore": 7.9},  # Priority = 79 (delta > 5)
+            "cvss": {"score": 7.9},  # Priority = 79 (delta > 5)
         }
     ]
 
@@ -478,10 +478,16 @@ def test_extract_priority_epss():
 
 
 def test_extract_priority_cvss():
-    """Test priority extraction with CVSS score."""
+    """Test priority extraction with CVSS score.
+
+    ``score`` is the schema's required key (docs/schemas/common_finding.v1.json)
+    and what history_db.py and the SARIF importer write; #1243 was
+    ``_extract_priority`` reading ``baseScore`` instead, which no adapter has
+    ever produced, so this branch never fired.
+    """
     engine = DiffEngine()
 
-    finding = {"cvss": {"baseScore": 7.5}}
+    finding = {"cvss": {"score": 7.5}}
 
     priority = engine._extract_priority(finding)
     assert priority == 75.0  # 7.5 * 10
@@ -495,6 +501,46 @@ def test_extract_priority_fallback():
 
     priority = engine._extract_priority(finding)
     assert priority == 70  # HIGH = 70 points
+
+
+def test_extract_priority_cvss_9_8_scores_98_not_severity_fallback():
+    """#1243: a real ``cvss.score`` must win over the severity fallback.
+
+    Before the fix, ``_extract_priority`` read ``baseScore`` (a key no
+    adapter writes), so this fell through to the CRITICAL severity fallback
+    (90) -- indistinguishable from the 9.0 case below.
+    """
+    engine = DiffEngine()
+
+    finding = {"severity": "CRITICAL", "cvss": {"score": 9.8}}
+
+    assert engine._extract_priority(finding) == 98.0
+
+
+def test_extract_priority_cvss_9_0_scores_90():
+    """A different CVSS score must yield a different priority than 9.8's.
+
+    Same CRITICAL severity as the 9.8 case above, so if the code fell back
+    to severity both would (wrongly) read identically -- 90 either way.
+    """
+    engine = DiffEngine()
+
+    finding = {"severity": "CRITICAL", "cvss": {"score": 9.0}}
+
+    assert engine._extract_priority(finding) == 90.0
+
+
+def test_extract_priority_no_cvss_key_takes_severity_fallback():
+    """No ``cvss`` key at all: fall back to the severity table, unaffected.
+
+    LOW (not CRITICAL) so this result cannot be mistaken for either CVSS
+    case above landing on the fallback by coincidence.
+    """
+    engine = DiffEngine()
+
+    finding = {"severity": "LOW"}
+
+    assert engine._extract_priority(finding) == 30
 
 
 def test_flatten_compliance():

@@ -970,7 +970,7 @@ def _cluster_cross_tool_duplicates(
     # Updated weights: location=0.50, message=0.25, metadata=0.25
     # Lower threshold (0.65 vs 0.75) enables better cross-tool clustering
     # Rule equivalence mapping in metadata_similarity prevents false positives
-    # Example: Trivy ":latest tag used" + Hadolint "DL3006" on same line → clustered
+    # Example: Trivy "DS-0001" + Hadolint "DL3006" on same line → clustered
     # Threshold is configurable via jmo.yml deduplication section or JMO_DEDUP_THRESHOLD env
     logger.debug(f"Using similarity threshold: {similarity_threshold}")
     clusterer = FindingClusterer(similarity_threshold=similarity_threshold)
