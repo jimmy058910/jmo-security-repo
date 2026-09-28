@@ -138,6 +138,31 @@ def test_rank1_security_severity_buckets(tmp_path, props, expected):
     assert f.cvss == {"score": float(props["security-severity"])}
 
 
+def test_security_severity_carries_no_version_even_when_the_rule_text_states_one(
+    tmp_path,
+):
+    """#1356: ``security-severity`` never states a CVSS version (rank 1), so
+    the finding's ``cvss`` never gains a ``version`` key -- even when a rule's
+    free-text ``help``/``fullDescription`` happens to spell one out in prose,
+    the way a real osv-scanner advisory sometimes does
+    (``"**CVSS v4.0:** 8.7 (...)"``). That prose is not a structured field
+    every advisory carries, so it is not parsed."""
+    rules = [
+        {
+            "id": "R1",
+            "properties": {"security-severity": "8.7"},
+            "fullDescription": {
+                "markdown": "**Severity:** High  \n**CVSS v4.0:** 8.7 (AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N)"
+            },
+            "help": {"markdown": "See advisory. CVSS v4.0: 8.7"},
+        }
+    ]
+    p = write(tmp_path, sarif([result(ruleId="R1", level="warning")], rules))
+    f = parse_sarif(p, SPEC)[0]
+    assert f.cvss == {"score": 8.7}
+    assert "version" not in f.cvss
+
+
 def test_rank1_on_the_rule_when_the_result_has_none(tmp_path):
     rules = [{"id": "R1", "properties": {"security-severity": "7.5"}}]
     p = write(tmp_path, sarif([result(level="warning")], rules))

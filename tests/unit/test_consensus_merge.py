@@ -325,9 +325,19 @@ def _lost_leaves(
 
 
 def _cvss_rank(cvss: dict[str, Any]) -> tuple[int, float]:
-    """Ruling 29: v3.x over v2.0 over no version, then the higher score."""
+    """Ruling 34 (#1356): v3.x over v4.0 over v2.0 over no version, then the
+    higher score. An independent oracle -- it does not call `preferred_cvss`,
+    so it cannot pass merely because the implementation and the test share a
+    bug."""
     version = str(cvss.get("version") or "")
-    tier = 2 if version.startswith("3") else 1 if version.startswith("2") else 0
+    if version.startswith("3"):
+        tier = 3
+    elif version.startswith("4"):
+        tier = 2
+    elif version.startswith("2"):
+        tier = 1
+    else:
+        tier = 0
     score = cvss.get("score")
     return tier, float(score) if isinstance(score, (int, float)) else -1.0
 
@@ -699,10 +709,62 @@ def test_merging_leaves_the_members_untouched():
         ),
         ([None, {}], None),
         ([], None),
+        # Ruling 34 (#1356): v3.x outranks v4.0 whatever the numbers.
+        (
+            [{"version": "4.0", "score": 9.0}, {"version": "3.x", "score": 5.3}],
+            {"version": "3.x", "score": 5.3},
+        ),
+        # v4.0 is the only offer.
+        (
+            [{"version": "4.0", "score": 8.7}],
+            {"version": "4.0", "score": 8.7},
+        ),
+        # v4.0 outranks v2.0 whatever the numbers.
+        (
+            [{"version": "2.0", "score": 10.0}, {"version": "4.0", "score": 1.0}],
+            {"version": "4.0", "score": 1.0},
+        ),
+        # v2.0 is the only offer.
+        (
+            [{"version": "2.0", "score": 6.5}],
+            {"version": "2.0", "score": 6.5},
+        ),
     ],
 )
 def test_preferred_cvss(candidates, expected):
-    """Ruling 29's order, in the one helper #1356 extends with v4.0."""
+    """Ruling 29's order, extended by Ruling 34 (#1356) with v4.0."""
     from scripts.core.common_finding import preferred_cvss
 
     assert preferred_cvss(candidates) == expected
+
+
+def test_consensus_merge_prefers_v3_then_v4_then_v2_across_members():
+    """Ruling 34 (#1356) through the actual consensus-merge code path, not
+    just the bare helper: two cluster members carrying different CVSS
+    versions, merged by `FindingCluster.to_consensus_finding`."""
+    v2 = {
+        "id": "a",
+        "severity": "LOW",
+        "tool": {"name": "grype"},
+        "cvss": {"version": "2.0", "score": 10.0},
+    }
+    v4 = {
+        "id": "b",
+        "severity": "LOW",
+        "tool": {"name": "trivy"},
+        "cvss": {"version": "4.0", "score": 1.0},
+    }
+    v3 = {
+        "id": "c",
+        "severity": "LOW",
+        "tool": {"name": "osv-scanner"},
+        "cvss": {"version": "3.x", "score": 5.0},
+    }
+
+    v2_v4 = FindingCluster(representative=copy.deepcopy(v2))
+    v2_v4.add(copy.deepcopy(v4), 0.9)
+    assert v2_v4.to_consensus_finding()["cvss"] == {"version": "4.0", "score": 1.0}
+
+    v3_v4 = FindingCluster(representative=copy.deepcopy(v3))
+    v3_v4.add(copy.deepcopy(v4), 0.9)
+    assert v3_v4.to_consensus_finding()["cvss"] == {"version": "3.x", "score": 5.0}

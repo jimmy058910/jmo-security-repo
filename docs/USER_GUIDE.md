@@ -1099,7 +1099,7 @@ Cross-tool deduplication uses a multi-dimensional similarity algorithm combining
 - **Message (25%):** Fuzzy + token matching (e.g., "SQL injection" vs "SQL Injection vulnerability")
 - **Metadata (25%):** CWE/CVE/Rule ID matching + rule equivalence mapping
 
-Findings with similarity above the configured threshold (default: 65%) are clustered together into one consensus finding that merges every member: their CWEs, references, tags and compliance mappings are combined, the CVSS is the best any member reports (v3 over v2, then the higher score), and a KEV listing or a higher EPSS on any member carries over. The highest-severity member leads (a tie goes to the tool name, then the finding id, never to the order the tools' outputs loaded in): the consensus takes its id (`cluster-<id>`), location and message, and the others are attached as duplicates in `context.duplicates`, each with its own `raw`.
+Findings with similarity above the configured threshold (default: 65%) are clustered together into one consensus finding that merges every member: their CWEs, references, tags and compliance mappings are combined, the CVSS is the best any member reports (v3.x over v4.0 over v2.0, whatever the numbers, then the higher score within a version), and a KEV listing or a higher EPSS on any member carries over. The highest-severity member leads (a tie goes to the tool name, then the finding id, never to the order the tools' outputs loaded in): the consensus takes its id (`cluster-<id>`), location and message, and the others are attached as duplicates in `context.duplicates`, each with its own `raw`.
 
 **Algorithm Selection:**
 

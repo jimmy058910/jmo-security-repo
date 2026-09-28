@@ -163,7 +163,17 @@ def _props(holder: dict[str, Any]) -> dict[str, Any]:
 
 def _security_severity(holders: tuple[dict[str, Any], ...]) -> float | None:
     """Rank 1: GitHub's ``security-severity`` (a CVSS base score as a string),
-    on the result first, then on the rule. A non-numeric value is ignored."""
+    on the result first, then on the rule. A non-numeric value is ignored.
+
+    No version ever comes with it (#1356): measured on osv-scanner 2.5.1/2.6.0,
+    ``rules[].properties`` holds only this one key. A rule's free-text ``help``
+    or ``fullDescription`` markdown occasionally spells one out in prose (e.g.
+    ``"**CVSS v3.1:** 8.1 (AV:N/...)"``, seen in 1 of 178 rules on a real scan)
+    but that is advisory-author prose, not a structured field every advisory
+    carries, so it is not parsed -- the version stays absent rather than being
+    guessed at. This score therefore has nothing to prefer among and never
+    goes through `common_finding.preferred_cvss`.
+    """
     for holder in holders:
         raw = _props(holder).get("security-severity")
         if raw is None or isinstance(raw, bool):

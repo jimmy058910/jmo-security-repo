@@ -32,7 +32,12 @@ from pathlib import Path
 from typing import Any
 
 from scripts.core.adapters.common import dependency_record, safe_load_json_file
-from scripts.core.common_finding import fingerprint, normalize_severity, package_of
+from scripts.core.common_finding import (
+    fingerprint,
+    normalize_severity,
+    package_of,
+    preferred_cvss,
+)
 from scripts.core.plugin_api import (
     AdapterPlugin,
     Finding,
@@ -44,11 +49,24 @@ from scripts.core.plugin_api import (
 logger = logging.getLogger(__name__)
 
 
+# Grype's own version string, normalized to the label JMo stores: any 3.x is
+# "3.x" (matching trivy), 4.x is "4.0" (grype has measured only "4.0" so far),
+# 2.x is "2.0". A version outside these three passes through unchanged, so it
+# still reaches `preferred_cvss` and sorts last there rather than vanishing.
+_CVSS_VERSION_LABELS: tuple[tuple[str, str], ...] = (
+    ("3", "3.x"),
+    ("4", "4.0"),
+    ("2", "2.0"),
+)
+
+
 def _select_best_cvss(cvss_scores: dict[str, Any]) -> dict[str, Any] | None:
-    """Select best CVSS score (v3 preferred over v2).
+    """Select the best CVSS via the shared preference (Ruling 34, #1356): v3.x
+    over v4.0 over v2.0, whatever the numbers -- the same order the trivy
+    adapter and the consensus merge use, all through `preferred_cvss`.
 
     Args:
-        cvss_scores: Dictionary of CVSS scores keyed by version (e.g., "cvss_v3.1", "cvss_v2")
+        cvss_scores: Dictionary of CVSS scores keyed by version (e.g., "cvss_v3.1", "cvss_v2.0", "cvss_v4.0")
 
     Returns:
         CVSS field dict with version, score, vector or None if no scores
@@ -56,16 +74,21 @@ def _select_best_cvss(cvss_scores: dict[str, Any]) -> dict[str, Any] | None:
     if not cvss_scores:
         return None
 
-    # Prefer CVSS v3 over v2
-    for prefix, version_label in [("cvss_v3", "3.x"), ("cvss_v2", "2.0")]:
-        key = next((k for k in cvss_scores if k.startswith(prefix)), None)
-        if key:
-            return {
-                "version": version_label,
-                "score": cvss_scores[key]["score"],
-                "vector": cvss_scores[key]["vector"],
-            }
-    return None
+    candidates = []
+    for key, entry in cvss_scores.items():
+        raw_version = key[len("cvss_v") :]
+        label = next(
+            (
+                label
+                for prefix, label in _CVSS_VERSION_LABELS
+                if raw_version.startswith(prefix)
+            ),
+            raw_version,
+        )
+        candidates.append(
+            {"version": label, "score": entry["score"], "vector": entry["vector"]}
+        )
+    return preferred_cvss(candidates)
 
 
 def _build_grype_context(

@@ -54,13 +54,14 @@ Field mapping (measured on trivy 0.74.0's own JSON, #1221):
   ``ArtifactName`` for ``trivy fs <dir>``; for ``trivy config <file>`` (``jmo
   scan --iac <file>``) ``ArtifactName`` is the file and ``Target`` its name,
   so it is the file's directory.
-- cvss (vulnerabilities only, #1243): a vulnerability's ``CVSS`` is keyed by
-  source (``nvd``, ``ghsa``, ``redhat``, ...), each holding up to
-  ``V3Score``/``V3Vector`` and ``V2Score``/``V2Vector``. NVD's V3 score wins;
-  else any other source's V3; else NVD's V2; else any other source's V2 -- v3
-  always outranks v2 (schema: "Adapters select v3 over v2"), NVD is preferred
-  within a version. Omitted (not even an empty ``cvss``) when the block is
-  absent or empty, or holds no numeric score under either key.
+- cvss (vulnerabilities only, #1243, v4.0 added by #1356): a vulnerability's
+  ``CVSS`` is keyed by source (``nvd``, ``ghsa``, ``redhat``, ...), each
+  holding up to ``V3Score``/``V3Vector``, ``V40Score``/``V40Vector`` and
+  ``V2Score``/``V2Vector``. NVD's score wins within a version; else any other
+  source's -- across versions, `common_finding.preferred_cvss` ranks v3.x over
+  v4.0 over v2.0 (Ruling 34), whatever the numbers. Omitted (not even an empty
+  ``cvss``) when the block is absent or empty, or holds no numeric score under
+  any key.
 - risk: a vulnerability's ``CweIDs``; a secret's CWE-798, in the dict
   gitleaks and trufflehog write (trivy's secret records carry no CWE); none
   for a misconfiguration.
@@ -99,6 +100,7 @@ from scripts.core.adapters.common import dependency_record, safe_load_json_file
 from scripts.core.common_finding import (
     extract_code_snippet,
     normalize_severity,
+    preferred_cvss,
 )
 from scripts.core.plugin_api import (
     AdapterPlugin,
@@ -149,13 +151,15 @@ def _best_vulnerability_cvss(cvss_block: Any) -> dict[str, Any] | None:
     """Best CVSS for a trivy vulnerability, or ``None``.
 
     ``cvss_block`` is trivy's per-vulnerability ``CVSS`` object, keyed by
-    source (``nvd``, ``ghsa``, ``redhat``, ...). NVD's V3 score wins; then
-    any other source's V3; then NVD's V2; then any other source's V2 -- v3
-    always outranks v2 regardless of source, and NVD is the tiebreak within
-    one version. Among the other sources the first in trivy's JSON wins, which
-    is alphabetical: trivy's ``CVSS`` block is a Go map, and ``encoding/json``
-    sorts map keys. Matches ``grype_adapter._select_best_cvss``'s v3-over-v2
-    shape, adapted for trivy's by-source keying.
+    source (``nvd``, ``ghsa``, ``redhat``, ...), each holding up to
+    ``V3Score``/``V3Vector``, ``V40Score``/``V40Vector`` and
+    ``V2Score``/``V2Vector``. Within each version NVD's score wins; then any
+    other source's -- among the other sources the first in trivy's JSON wins,
+    which is alphabetical: trivy's ``CVSS`` block is a Go map, and
+    ``encoding/json`` sorts map keys. That gives at most one candidate per
+    version, which `preferred_cvss` then ranks v3.x over v4.0 over v2.0
+    (Ruling 34, #1356) -- the same order the consensus merge and grype use, all
+    through that one function.
     """
     if not isinstance(cvss_block, dict) or not cvss_block:
         return None
@@ -165,19 +169,24 @@ def _best_vulnerability_cvss(cvss_block: Any) -> dict[str, Any] | None:
     others = [v for k, v in cvss_block.items() if k != "nvd" and isinstance(v, dict)]
     sources = ([nvd] if nvd is not None else []) + others
 
+    candidates = []
     for version, score_key, vector_key in (
         ("3.x", "V3Score", "V3Vector"),
+        ("4.0", "V40Score", "V40Vector"),
         ("2.0", "V2Score", "V2Vector"),
     ):
         for source in sources:
             score = source.get(score_key)
             if isinstance(score, (int, float)) and not isinstance(score, bool):
-                return {
-                    "version": version,
-                    "score": float(score),
-                    "vector": str(source.get(vector_key) or ""),
-                }
-    return None
+                candidates.append(
+                    {
+                        "version": version,
+                        "score": float(score),
+                        "vector": str(source.get(vector_key) or ""),
+                    }
+                )
+                break
+    return preferred_cvss(candidates)
 
 
 def _dependency(item: dict[str, Any]) -> dict[str, Any] | None:

@@ -630,8 +630,9 @@ class TestTrivySecretCwe:
 class TestTrivyCvss:
     """#1243: trivy vulnerabilities carried no ``cvss`` at all.
 
-    NVD's V3 score wins; else any other source's V3; else NVD's V2; else any
-    other source's V2 -- v3 always outranks v2 regardless of source.
+    NVD's score wins within a version; else any other source's. Across
+    versions, v3.x outranks v4.0 outranks v2.0 regardless of source or numbers
+    (Ruling 34, #1356).
     """
 
     def _vuln(self, tmp_path: Path, name: str, cvss: dict) -> Path:
@@ -720,6 +721,70 @@ class TestTrivyCvss:
             "version": "2.0",
             "score": 4.3,
             "vector": "AV:N/AC:L/Au:N/C:P/I:P/A:P",
+        }
+
+    def test_v4_only_used_when_nothing_has_v3(self, tmp_path: Path):
+        """Ruling 34 (#1356): an advisory with a v4.0 metric and nothing else."""
+        cvss = {
+            "nvd": {
+                "V40Vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N",
+                "V40Score": 8.7,
+            }
+        }
+        f = TrivyAdapter().parse(self._vuln(tmp_path, "v4_only.json", cvss))[0]
+        assert f.cvss == {
+            "version": "4.0",
+            "score": 8.7,
+            "vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N",
+        }
+
+    def test_v3_preferred_over_v4_even_with_a_lower_score(self, tmp_path: Path):
+        """Ruling 34: v3.x outranks v4.0 whatever the numbers."""
+        cvss = {
+            "nvd": {
+                "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+                "V3Score": 5.3,
+                "V40Vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N",
+                "V40Score": 9.0,
+            }
+        }
+        f = TrivyAdapter().parse(self._vuln(tmp_path, "v3_over_v4.json", cvss))[0]
+        assert f.cvss == {
+            "version": "3.x",
+            "score": 5.3,
+            "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        }
+
+    def test_v4_preferred_over_v2_even_with_a_lower_score(self, tmp_path: Path):
+        """Ruling 34: v4.0 outranks v2.0 whatever the numbers."""
+        cvss = {
+            "nvd": {
+                "V2Vector": "AV:N/AC:L/Au:N/C:P/I:P/A:P",
+                "V2Score": 10.0,
+                "V40Vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:L/VI:N/VA:N/SC:N/SI:N/SA:N",
+                "V40Score": 1.0,
+            }
+        }
+        f = TrivyAdapter().parse(self._vuln(tmp_path, "v4_over_v2.json", cvss))[0]
+        assert f.cvss == {
+            "version": "4.0",
+            "score": 1.0,
+            "vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:L/VI:N/VA:N/SC:N/SI:N/SA:N",
+        }
+
+    def test_vendor_v4_used_when_nvd_absent(self, tmp_path: Path):
+        """NVD-first within a version (Ruling 34's tie-break) also holds for v4.0."""
+        cvss = {
+            "ghsa": {
+                "V40Vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N",
+                "V40Score": 9.1,
+            }
+        }
+        f = TrivyAdapter().parse(self._vuln(tmp_path, "vendor_v4.json", cvss))[0]
+        assert f.cvss == {
+            "version": "4.0",
+            "score": 9.1,
+            "vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N",
         }
 
     def test_no_cvss_block_omits_the_key(self, tmp_path: Path):

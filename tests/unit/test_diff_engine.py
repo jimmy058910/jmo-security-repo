@@ -543,6 +543,20 @@ def test_extract_priority_no_cvss_key_takes_severity_fallback():
     assert engine._extract_priority(finding) == 30
 
 
+def test_extract_priority_cvss_v4_score_is_the_same_scale_as_v3():
+    """#1356: this tier reads only ``cvss.score``, never ``cvss.version``.
+
+    A v4.0 base score is on the same 0-10 scale as v3.x, so the existing
+    ``score * 10`` arithmetic needs no version-aware branch here -- checked,
+    not re-calibrated, per Ruling 34's scope.
+    """
+    engine = DiffEngine()
+
+    finding = {"severity": "CRITICAL", "cvss": {"version": "4.0", "score": 7.5}}
+
+    assert engine._extract_priority(finding) == 75.0
+
+
 def test_flatten_compliance():
     """Test compliance flattening."""
     engine = DiffEngine()

@@ -229,6 +229,124 @@ def test_grype_adapter_multiple_cvss_versions(tmp_path: Path):
     assert items[0].cvss["score"] == 9.8
 
 
+def test_grype_adapter_cvss_v4_only(tmp_path: Path):
+    """Ruling 34 (#1356): an advisory with a v4.0 metric and nothing else."""
+    data = {
+        "matches": [
+            {
+                "vulnerability": {
+                    "id": "CVE-2026-4000",
+                    "severity": "HIGH",
+                    "description": "v4.0-only advisory",
+                    "cvss": [
+                        {
+                            "version": "4.0",
+                            "vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N",
+                            "metrics": {"baseScore": 8.7},
+                        }
+                    ],
+                    "fix": {"versions": ["2.0.0"]},
+                },
+                "artifact": {
+                    "name": "v4pkg",
+                    "version": "1.0.0",
+                    "locations": [{"path": "/usr/lib/v4pkg.so"}],
+                },
+            }
+        ]
+    }
+    f = tmp_path / "grype.json"
+    write(f, data)
+    items = GrypeAdapter().parse(f)
+
+    assert len(items) == 1
+    assert items[0].cvss == {
+        "version": "4.0",
+        "score": 8.7,
+        "vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N",
+    }
+
+
+def test_grype_adapter_prefers_v3_over_v4_even_with_a_lower_score(tmp_path: Path):
+    """Ruling 34: v3.x outranks v4.0 whatever the numbers."""
+    data = {
+        "matches": [
+            {
+                "vulnerability": {
+                    "id": "CVE-2026-4001",
+                    "severity": "HIGH",
+                    "description": "Both v3.x and v4.0",
+                    "cvss": [
+                        {
+                            "version": "4.0",
+                            "vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N",
+                            "metrics": {"baseScore": 9.0},
+                        },
+                        {
+                            "version": "3.1",
+                            "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+                            "metrics": {"baseScore": 5.3},
+                        },
+                    ],
+                    "fix": {"versions": ["2.0.0"]},
+                },
+                "artifact": {
+                    "name": "bothpkg",
+                    "version": "1.0.0",
+                    "locations": [{"path": "/usr/lib/bothpkg.so"}],
+                },
+            }
+        ]
+    }
+    f = tmp_path / "grype.json"
+    write(f, data)
+    items = GrypeAdapter().parse(f)
+
+    assert len(items) == 1
+    assert items[0].cvss["version"] == "3.x"
+    assert items[0].cvss["score"] == 5.3
+
+
+def test_grype_adapter_prefers_v4_over_v2_even_with_a_lower_score(tmp_path: Path):
+    """Ruling 34: v4.0 outranks v2.0 whatever the numbers."""
+    data = {
+        "matches": [
+            {
+                "vulnerability": {
+                    "id": "CVE-2026-4002",
+                    "severity": "HIGH",
+                    "description": "Both v2.0 and v4.0",
+                    "cvss": [
+                        {
+                            "version": "2.0",
+                            "vector": "AV:N/AC:L/Au:N/C:P/I:P/A:P",
+                            "metrics": {"baseScore": 10.0},
+                        },
+                        {
+                            "version": "4.0",
+                            "vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:L/VI:N/VA:N/SC:N/SI:N/SA:N",
+                            "metrics": {"baseScore": 1.0},
+                        },
+                    ],
+                    "fix": {"versions": ["2.0.0"]},
+                },
+                "artifact": {
+                    "name": "oldnewpkg",
+                    "version": "1.0.0",
+                    "locations": [{"path": "/usr/lib/oldnewpkg.so"}],
+                },
+            }
+        ]
+    }
+    f = tmp_path / "grype.json"
+    write(f, data)
+    items = GrypeAdapter().parse(f)
+
+    assert len(items) == 1
+    assert items[0].cvss["version"] == "4.0"
+    assert items[0].cvss["score"] == 1.0
+
+
 def test_grype_adapter_missing_locations(tmp_path: Path):
     """Test Grype adapter handles missing location information."""
     data = {
