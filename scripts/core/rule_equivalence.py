@@ -207,6 +207,9 @@ RULE_EQUIVALENCE: dict[str, list[tuple[str, str]]] = {
         ("trivy", "KSV-0011"),  # "CPU not limited"
         ("checkov", "CKV_K8S_11"),  # "CPU limits should be set"
     ],
+    # CKV_K8S_12/13 as checkov's Kubernetes framework names them; its Terraform
+    # framework swaps them (`checkov --list`: _12 "Memory Limits should be set",
+    # _13 "Memory requests should be set"). No mis-merge: KSV fires on manifests.
     "k8s-no-memory-limits": [
         ("trivy", "KSV-0018"),  # "Memory not limited"
         ("checkov", "CKV_K8S_13"),  # "Memory limits should be set"

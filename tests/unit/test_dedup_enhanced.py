@@ -919,7 +919,8 @@ def test_location_first_weight_helps_clustering():
 
 def test_metadata_similarity_with_rule_equivalence(calc):
     """Test metadata_similarity uses rule equivalence mapping."""
-    # Hadolint DL3006 and Trivy :latest tag should match via rule equivalence
+    # Hadolint DL3006 and Trivy DS-0001 (both in dockerfile-latest-tag) should
+    # match via rule equivalence
     meta_sim = calc.metadata_similarity(
         raw1={},
         raw2={},
@@ -939,7 +940,7 @@ def test_metadata_similarity_no_equivalence(calc):
         raw1={},
         raw2={},
         rule_id1="DL3006",  # :latest tag
-        rule_id2="DL3055",  # no healthcheck
+        rule_id2="DL3055",  # label is not a valid git hash
         tool1="hadolint",
         tool2="hadolint",
     )

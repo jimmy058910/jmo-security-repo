@@ -148,7 +148,9 @@ def _best_vulnerability_cvss(cvss_block: Any) -> dict[str, Any] | None:
     source (``nvd``, ``ghsa``, ``redhat``, ...). NVD's V3 score wins; then
     any other source's V3; then NVD's V2; then any other source's V2 -- v3
     always outranks v2 regardless of source, and NVD is the tiebreak within
-    one version. Matches ``grype_adapter._select_best_cvss``'s v3-over-v2
+    one version. Among the other sources the first in trivy's JSON wins, which
+    is alphabetical: trivy's ``CVSS`` block is a Go map, and ``encoding/json``
+    sorts map keys. Matches ``grype_adapter._select_best_cvss``'s v3-over-v2
     shape, adapted for trivy's by-source keying.
     """
     if not isinstance(cvss_block, dict) or not cvss_block:

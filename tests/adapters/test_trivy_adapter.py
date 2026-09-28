@@ -98,7 +98,7 @@ only `` as ``). ``apt-get -y dist-upgrade`` stays to show that DS-0024, which
 0.74.0 ships deprecated, does not fire.
 
 Recorded fixture ``tests/fixtures/samples/trivy/vuln-0.74.json`` (#1243): trivy
-**0.74.0**'s own JSON, byte for byte, recorded 2026-09-28 on Windows against a
+**0.74.0**'s own JSON, trimmed (how, below), recorded 2026-09-28 on Windows against a
 throwaway npm project holding only a synthetic lockfile -- never a real
 project's dependencies, per this repo's privacy convention for anything a
 private repo's export would otherwise be needed for. From inside that
@@ -117,7 +117,15 @@ with all three of ``ghsa``/``nvd``/``redhat``, one missing ``ghsa`` entirely,
 and one where NVD's and a vendor's V3 scores disagree (9.8 vs 3.1), which is
 what proves NVD wins on real trivy output rather than by construction. The
 other 9 (more lodash CVEs) were dropped only to keep the fixture small; none
-of them exercises a shape these three do not already cover. ``ArtifactName``
+of them exercises a shape these three do not already cover. So it is not byte
+for byte, unlike ``misconfig-0.74.json``: trivy's output was parsed, its one
+``Result``'s ``Vulnerabilities`` cut to those three (in trivy's order, every
+other key and value as trivy wrote it, ``Packages`` included), and written
+back with Python's ``json.dumps(indent=2)`` and a newline. That rewrite also
+turned Go's HTML escapes (``\\u003c``, ``\\u003e``, ``\\u0026``, which
+``misconfig-0.74.json`` still carries) into ``<``, ``>`` and ``&``; re-parsing
+trivy's untrimmed output and cutting the list gives this file's document
+exactly, key order included. ``ArtifactName``
 is ``"."`` (scanned from inside the directory) and no path in the fixture
 names this machine, grepped for ``Users``/``Jimmy``/a drive letter before
 committing.
