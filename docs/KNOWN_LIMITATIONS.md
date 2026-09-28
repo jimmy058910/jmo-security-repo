@@ -253,6 +253,34 @@ of the scanned repository. An empty one disables the built-in list (measured: al
 13 files scanned). JMo still keeps the vendored trees and its results directory out
 through its own flags.
 
+### zizmor runs offline, so its online audits never run
+
+JMo runs zizmor with `--offline`. zizmor reads `GH_TOKEN` and `GITHUB_TOKEN` from the
+environment, and with a token set its online audits call GitHub's API. With
+`--no-online-audits` instead, it still looked a commit up on GitHub (measured, zizmor
+1.30.1). A scan makes no network call it was not asked to make, so the audits that need
+GitHub, `ref-confusion` among them, do not run, whether or not a token is set.
+
+**What to do:** for those audits, run zizmor yourself with a token.
+
+### Checkov's repository run misses several CI/CD and IaC dialects
+
+On a repository, Checkov reads only Terraform and CloudFormation
+(`--framework terraform terraform_json cloudformation`). Its other frameworks
+never run there, so GitLab CI, CircleCI, Azure Pipelines, Bitbucket Pipelines,
+ARM, Bicep, Ansible and serverless configs are read by no JMo tool on a
+repository scan. It bites hardest on a GitLab target, since a `.gitlab-ci.yml`
+is exactly what a GitLab-cloned repository has and no repository tool checks
+it.
+
+An `--iac` single-file target (`--terraform-state`, `--cloudformation`,
+`--k8s-manifest`) is unaffected: Checkov keeps every framework there, so a
+Kubernetes manifest given directly is still checked in full.
+
+**What to do:** for one of the dropped dialects, run Checkov yourself with
+`--framework <name>` outside JMo. See
+[When each tool runs](TOOLS.md#when-each-tool-runs).
+
 ---
 
 ## Deduplication

@@ -104,6 +104,7 @@ results/
 │       ├── trufflehog.git.json   # git history, when the repository has a .git
 │       ├── gitleaks.json
 │       ├── gitleaks.git.json
+│       ├── zizmor.json           # GitHub Actions audit
 │       └── ...
 ├── individual-images/         # Raw outputs per container image (v0.6.0+)
 │   └── <image-name>/
@@ -190,17 +191,17 @@ Total findings: 8058 | 🔴 3 CRITICAL | 🔴 91 HIGH | 🟡 280 MEDIUM | ⚪ 73
 
 - **trivy**: 81 findings (🔴 3 CRITICAL, 🔴 28 HIGH)
 - **semgrep**: 32 findings (🔴 6 HIGH, 🟡 24 MEDIUM)
-- **trufflehog**: 7 findings (🟡 7 MEDIUM)
+- **trufflehog**: 7 findings (🔴 7 HIGH)
 ```
 **What this tells you:**
 
 - **Trivy found CRITICAL** - Likely container or dependency vulnerabilities (CVEs)
 - **Semgrep found HIGH** - Code security issues (SQL injection, XSS, command injection)
-- **TruffleHog found MEDIUM** - Potential secrets (unverified by default)
+- **TruffleHog found HIGH** - Potential secrets (unverified by default)
 
 **Tool-Specific Context:**
 
-- **TruffleHog MEDIUM = unverified secrets** - May be false positives (test keys, examples)
+- **TruffleHog HIGH = unverified secrets** - May be false positives (test keys, examples)
 - **Trivy CRITICAL = CVE** - Likely real vulnerability with CVSS ≥9.0
 - **ShellCheck/Hadolint LOW = style warnings** - Code quality, not security risk
 
@@ -1278,16 +1279,15 @@ JMo Security automatically clusters duplicate findings detected by multiple tool
 
 When multiple tools detect the same underlying issue, JMo clusters them into a single "consensus finding":
 
-**Before (3 separate findings):**
+**Before (2 separate findings):**
 
 - Trivy: HIGH - Image user should not be 'root' in Dockerfile:12
-- Checkov: HIGH - Ensure that a user for the container has been created in Dockerfile:12
 - Hadolint: MEDIUM - Last USER should not be root in Dockerfile:12
 
 **After (1 consensus finding):**
 
-- Detected by 3 tools | HIGH CONFIDENCE
-- Tools: trivy, checkov, hadolint
+- Detected by 2 tools | MEDIUM CONFIDENCE
+- Tools: trivy, hadolint
 - Container runs as root
 - Dockerfile:12
 

@@ -35,6 +35,67 @@ docker_path = str(output_dir).replace("\\", "/")
 results_path = "results\\scan-001"
 ```
 
+## A `.cmd` Tool's Argv Is Re-Parsed by cmd.exe
+
+A different class from console *output* encoding, but the same shape: an
+environment invisible from Linux CI, and a Windows-only argument corruption
+that looks like the tool itself is broken.
+
+Windows' `CreateProcess` cannot execute a `.bat`/`.cmd` file directly — for
+those, it launches `%ComSpec% /c "<command line>"` and hands the **whole**
+command line to `cmd.exe`, which re-parses it with its own metacharacters:
+`& | ^ < > %`. `subprocess.run([tool_cmd, *args], shell=False)` still hits
+this, because the re-parsing happens one layer down, inside `CreateProcess`
+itself, not in Python. Python's own `list2cmdline` (what builds that command
+line) only double-quotes an argument that contains a **space** — an argument
+holding `&`, `|`, `^`, or `%` and no space reaches cmd.exe bare.
+
+**Measured case (checkov, #1313), two separate sources of the same six
+characters:**
+
+1. **The regex's own shape.** `checkov.cmd` is exactly this kind of launcher,
+   and the exclusion value JMo builds for its `--skip-path` is a regex.
+   #1313's own proposed rendering, `(^|[\\/])NAME([\\/]|$)` (an alternation,
+   used by `segment_regex` for other tools), puts a literal `|` and `^` in
+   *every* invocation, regardless of what `NAME` is — `|` is the alternation
+   operator and `^` the anchor. cmd.exe treated `|` as a pipe and `^` as its
+   own escape character, and the invocation failed with **rc 255** — not a
+   checkov error, not a Python traceback, just a silently wrong exit code
+   from a command that was never the one JMo thought it sent. The fix here
+   is a different pattern shape (`checkov_skip_path_pattern`'s `[\\/]NAME$`)
+   that contains neither character structurally.
+2. **The name itself.** A results directory's name is user-controlled (the
+   last segment of `--results-dir`), so even the safe shape above can carry
+   one of the six characters through the escaped `NAME`. Measured directly
+   against `checkov.cmd`, with the venv `Scripts` directory prepended to
+   `PATH` (as `tool_runner.py` does) and a name containing `&`: a stray
+   `'x$' is not recognized as an internal or external command` on stderr,
+   and a silently truncated `--skip-path` value — cmd.exe split the line at
+   the unescaped `&` and ran the tail as a second, bogus command.
+
+**For case 2, `re.escape` does not fix it.** It escapes `&`, `|` and `^`
+with a backslash, but the character itself is still in the string (`\&`,
+`\|`, `\^`) — cmd.exe does not treat a backslash as its escape character
+(`^` is), so the metacharacter still reaches it. `%`, `<` and `>` pass
+through `re.escape` completely untouched.
+
+**The fix, where it is safe to lose precision:** render the offending
+character as something that cannot reach cmd.exe as itself. For a regex
+built from a directory name, `checkov_skip_path_pattern`
+(`scripts/cli/scan_utils.py`) renders each of `& | ^ < > %` as a literal
+`.`, which still matches that one character (harmlessly broad — a directory
+name differing only in one of these six characters and otherwise identical
+is not a realistic collision) and never appears in the rendered string. When
+losing precision is not acceptable, the value has to be kept off a `.cmd`
+launcher's argv another way (a config/response file, or invoking a `.exe`
+sibling if one exists) rather than escaped — there is no in-band escape that
+survives this re-parse.
+
+**Test for this class**, not just this one tool: does the rendered string
+contain any of `& | ^ < > %` at all? If yes, and the string reaches a `.cmd`
+tool's argv, it is a candidate for this defect regardless of what character
+class produced it.
+
 ## Console Encoding (Windows) — the class that CI structurally cannot see
 
 `ci.yml` sets `PYTHONUTF8: "1"` on its test steps. That forces UTF-8 for `open()`,

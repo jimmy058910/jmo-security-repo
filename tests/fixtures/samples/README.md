@@ -23,8 +23,10 @@ samples/
 │   └── main.tf           # S3 public access, open security groups, etc.
 ├── credential-patterns/       # Secret detection (TruffleHog, Trivy)
 │   └── config.py         # Fake AWS keys, tokens, passwords
-└── shell-issues/          # Shell script issues (ShellCheck)
-    └── vulnerable_script.sh  # Quoting, word splitting, unsafe patterns
+├── shell-issues/          # Shell script issues (ShellCheck)
+│   └── vulnerable_script.sh  # Quoting, word splitting, unsafe patterns
+└── github-actions/        # GitHub Actions flaws (zizmor)
+    └── .github/workflows/ci.yml  # Template injection, unpinned action, pull_request_target
 ```
 
 ## Security Warning
@@ -42,6 +44,7 @@ All code in this directory contains deliberate security vulnerabilities, misconf
 | terraform-misconfig/ | Checkov, Trivy (config) |
 | credential-patterns/ | TruffleHog, Trivy (secrets) |
 | shell-issues/ | ShellCheck |
+| github-actions/ | zizmor |
 
 ## Usage
 

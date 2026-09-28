@@ -160,6 +160,7 @@ class TestRepositoryScanner:
                 "build.sh": "#!/bin/sh\necho hi\n",
                 "main.go": "package main\n",
                 "main.tf": 'resource "aws_s3_bucket" "b" {}\n',
+                ".github/workflows/ci.yml": "on: push\n",
             },
         )
 
@@ -367,6 +368,13 @@ class TestContentDecidesWhoRuns:
             # A module whose sources are generated at build time (#1081).
             ("gosec", Reason.NO_GO_SOURCES, {"go.mod": "module example.com/x\n"}),
             ("checkov", Reason.NO_IAC, {"main.tf": 'resource "x" "y" {}\n'}),
+            ("zizmor", Reason.NO_WORKFLOWS, {".github/workflows/ci.yml": "on: push\n"}),
+            ("zizmor", Reason.NO_WORKFLOWS, {"action.yml": "runs: {}\n"}),
+            (
+                "zizmor",
+                Reason.NO_WORKFLOWS,
+                {".github/dependabot.yml": "version: 2\n"},
+            ),
         ],
     )
     def test_skipped_without_content_and_run_with_it(
@@ -395,16 +403,18 @@ class TestContentDecidesWhoRuns:
     @pytest.mark.parametrize(
         "files",
         [
-            {".github/workflows/ci.yml": "on: push\n"},
-            {"charts/app/Chart.yaml": "name: app\n"},
+            {"main.tf": 'resource "aws_s3_bucket" "b" {}\n'},
             {"stack.yaml": "AWSTemplateFormatVersion: 2010-09-09\n"},
             {"infra/net.json": '{"Resources": {"V": {"Type": "AWS::EC2::VPC"}}}'},
             {"main.tf.json": "{}"},
         ],
     )
     def test_checkov_reads_every_kind_of_iac_it_is_triggered_by(self, tmp_path, files):
-        """The Phase 3 decision: Terraform, CloudFormation, Helm, and the
-        workflows checkov-cicd used to cover."""
+        """Terraform and CloudFormation only: the trigger fires only on what
+        the narrowed framework list reads. Workflows moved to zizmor (Task Z2)
+        and Helm's `Chart.yaml` never worked -- no helm binary exists on the
+        host or in the image, checkov disabled the framework in silence, and
+        trivy reads charts."""
         _, rows, _ = _scan(_repo(tmp_path, files=files), tmp_path / "out", ["checkov"])
 
         assert rows["checkov"].state is State.RAN
@@ -413,6 +423,8 @@ class TestContentDecidesWhoRuns:
         "files",
         [
             {"workflows/ci.yml": "on: push\n"},  # not under .github
+            {".github/workflows/ci.yml": "on: push\n"},  # zizmor's now, not checkov's
+            {"charts/app/Chart.yaml": "name: app\n"},  # helm: dead in both environments
             {"config.yaml": "resources: {}\n"},  # no AWS marker
             {"Dockerfile": "FROM alpine\n", "k8s/pod.yaml": "kind: Pod\n"},
         ],
@@ -420,7 +432,18 @@ class TestContentDecidesWhoRuns:
     def test_checkov_is_not_triggered_by_other_yaml(self, tmp_path, files):
         _, rows, _ = _scan(_repo(tmp_path, files=files), tmp_path / "out", ["checkov"])
 
-        assert rows["checkov"].label == "skipped:no IaC or workflow files"
+        assert rows["checkov"].label == "skipped:no IaC files"
+
+    def test_checkov_hands_workflows_to_zizmor(self, tmp_path):
+        """RED (Task Z2): a repository whose only content is a GitHub Actions
+        workflow used to read checkov `ran`. It must now read
+        `skipped:no IaC files`, with zizmor `ran` on the same content."""
+        repo = _repo(tmp_path, files={".github/workflows/ci.yml": "on: push\n"})
+
+        _, rows, _ = _scan(repo, tmp_path / "out", ["checkov", "zizmor"])
+
+        assert rows["checkov"].label == "skipped:no IaC files"
+        assert rows["zizmor"].state is State.RAN
 
     def test_a_missing_binary_is_reported_before_content_is_looked_at(self, tmp_path):
         """A repository with Go and no gosec is an environment gap, not a
@@ -714,9 +737,12 @@ class TestExclusions:
             command[i + 1] for i, tok in enumerate(command) if tok == "--skip-dirs"
         ]
 
-    def test_checkov_gets_bare_names(self, tmp_path):
+    def test_checkov_gets_an_end_anchored_escaped_pattern(self, tmp_path):
         """`--skip-path` is a regex and checkov drops an unparseable one in
-        silence, so `**/node_modules` would exclude nothing."""
+        silence, so `**/node_modules` would exclude nothing. A bare name is
+        also wrong -- `re.search` against the absolute path makes it a
+        substring match anywhere (#1313) -- so the value is end-anchored to
+        one whole path segment and the name itself is escaped."""
         _, _, defs = _scan(
             _repo(tmp_path, files={"main.tf": "x\n"}), tmp_path / "out", ["checkov"]
         )
@@ -725,9 +751,29 @@ class TestExclusions:
             command[i + 1] for i, tok in enumerate(command) if tok == "--skip-path"
         ]
 
-        assert "node_modules" in values
-        assert ".venv" in values
+        assert r"[\\/]node_modules$" in values
+        assert r"[\\/]\.venv$" in values
         assert not any(v.startswith("**") for v in values), values
+
+    def test_checkov_narrows_frameworks_on_the_repo_invocation(self, tmp_path):
+        """The repository invocation (`-d`) is narrowed to exactly
+        what `_is_iac` triggers on -- terraform, terraform_json,
+        cloudformation. Not helm (dead in both environments) and not
+        github_actions (zizmor's now)."""
+        _, _, defs = _scan(
+            _repo(tmp_path, files={"main.tf": "x\n"}), tmp_path / "out", ["checkov"]
+        )
+        command = defs["checkov"].command
+
+        assert command[1] == "-d"
+        idx = command.index("--framework")
+        assert command[idx + 1 : idx + 4] == [
+            "terraform",
+            "terraform_json",
+            "cloudformation",
+        ]
+        assert "helm" not in command
+        assert "github_actions" not in command
 
     def test_exclusions_precede_the_users_flags(self, tmp_path):
         _, _, defs = _scan(
@@ -739,6 +785,7 @@ class TestExclusions:
         command = defs["checkov"].command
 
         assert command.index("--skip-path") < command.index("--compact")
+        assert command.index("--framework") < command.index("--compact")
 
     def test_syft_reads_vendored_trees_and_grype_reads_all_but_a_virtualenv(
         self, tmp_path
@@ -763,8 +810,10 @@ class TestExclusions:
                 "run.sh": "#!/bin/sh\n",
                 "main.go": "package main\n",
                 "main.tf": "x\n",
+                ".github/workflows/ci.yml": "on: push\n",
                 "results/individual-repos/old/Dockerfile": "FROM alpine\n",
                 "results/individual-repos/old/old.sh": "#!/bin/sh\n",
+                "results/individual-repos/old/action.yml": "runs: {}\n",
             },
         )
 
@@ -776,9 +825,17 @@ class TestExclusions:
             if d.exclusion_style is ExclusionStyle.WALK:
                 # By location, not substring: macOS's temp root is
                 # /private/var/folders/..., and "folders" contains "old".
-                files = [Path(arg) for arg in command if Path(arg).is_relative_to(repo)]
+                # zizmor's paths are relative to its working directory, the
+                # repository; hadolint's and shellcheck's are absolute.
+                cwd = defs[tool].cwd
+                root = repo.resolve() if cwd else repo
+                files = [
+                    f
+                    for f in ((cwd / arg) if cwd else Path(arg) for arg in command)
+                    if f.is_relative_to(root) and f.is_file()
+                ]
                 assert files, (tool, command)
-                assert not [f for f in files if f.is_relative_to(repo / "results")], (
+                assert not [f for f in files if f.is_relative_to(root / "results")], (
                     tool,
                     command,
                 )
@@ -877,7 +934,7 @@ class TestTheInTreeResultsDirectoryIsKeptOutOfTheScan:
         _, _, defs = _scan(repo, repo / "results" / "individual-repos", ["checkov"])
         cmd = " ".join(defs["checkov"].command)
 
-        assert "--skip-path results" in cmd, cmd
+        assert r"--skip-path [\\/]results$" in cmd, cmd
         assert "individual-repos" not in cmd.split("--skip-path")[-1]
 
     def test_a_results_dir_outside_the_repo_adds_no_exclusion(self, tmp_path):

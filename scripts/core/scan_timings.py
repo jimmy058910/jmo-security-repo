@@ -68,7 +68,8 @@ class Reason(StrEnum):
     NO_DOCKERFILES = "no Dockerfiles"
     NO_SHELL_SCRIPTS = "no shell scripts"
     NO_GO_SOURCES = "no Go sources"
-    NO_IAC = "no IaC or workflow files"
+    NO_IAC = "no IaC files"
+    NO_WORKFLOWS = "no GitHub Actions workflows"
     # failed
     NO_FILES_TO_SCAN = "no files to scan"
     EXAMINED_ZERO = "examined 0 files"
@@ -90,6 +91,7 @@ SKIP_REASONS: frozenset[Reason] = frozenset(
         Reason.NO_SHELL_SCRIPTS,
         Reason.NO_GO_SOURCES,
         Reason.NO_IAC,
+        Reason.NO_WORKFLOWS,
     }
 )
 # The target is not one this tool reads: the row says so, and says nothing

@@ -88,11 +88,18 @@ class ExclusionStyle(StrEnum):
 
     The style cannot be inferred from the flag's name. trivy and checkov both
     take a repeatable `--flag VALUE`, and the value that works is opposite:
-    trivy's is a glob anchored at the scan root (`**/vendor` for any depth),
-    checkov's a regex matched against the whole path (`**` does not compile
-    and is dropped without a word, so `vendor` is right). syft and grype reject
-    a bare name outright (rc 1: "must start with one of: './', '*/', or
-    '**/'"), and `./results` covers only the root copy (measured 2026-09-25).
+    trivy's is a glob anchored at the scan root (`**/vendor` for any depth);
+    checkov's is a Python regex matched with `re.search` against the whole
+    (absolute) path, so a bare name is a substring match everywhere -
+    `vendor` also drops `vendor-accounts.tf`, and a repository living under a
+    `vendor/` directory scans nothing at all (#1313). checkov's value is
+    rendered `[\\/]NAME$`, the name escaped, by `checkov_skip_path_pattern`
+    (`scripts/cli/scan_utils.py`) - see that function for why it is not the
+    `(^|[\\/])NAME([\\/]|$)` shape gosec and trufflehog use. `**` does not
+    compile as a regex at all and is dropped without a word either way. syft
+    and grype reject a bare name outright (rc 1: "must start with one of:
+    './', '*/', or '**/'"), and `./results` covers only the root copy
+    (measured 2026-09-25).
     """
 
     INLINE = "inline"  # one `--flag=NAME` per directory
@@ -103,7 +110,11 @@ class ExclusionStyle(StrEnum):
     # log, which it writes with or without a Go toolchain).
     INLINE_REGEX = "inline_regex"
     SEPARATE = "separate"  # one `--flag **/NAME` pair per directory
-    REGEX = "regex"  # one `--flag NAME` pair per directory
+    # One `--flag PATTERN` pair per directory: checkov only. The pattern is
+    # `[\\/]NAME$`, the name escaped (`checkov_skip_path_pattern`) - not a
+    # bare name (#1313, a substring match) and not `(^|[\\/])NAME([\\/]|$)`
+    # (crashes checkov on Windows and on every platform, see that function).
+    REGEX = "regex"
     PATTERN_FILE = "pattern_file"  # a generated file of regexes, one flag
     # A generated config file, one flag: gitleaks has no exclude flag at all,
     # only a config's `[[allowlists]] paths`.
@@ -295,19 +306,22 @@ _CFN_HEAD_BYTES = 8192
 
 
 def _is_iac(path: Path) -> bool:
-    """Terraform, CloudFormation, Helm, or a GitHub Actions workflow.
+    """Terraform or CloudFormation.
 
-    checkov's trigger (Phase 3 decision): the cut folded checkov-cicd into
-    checkov, so `.github/workflows` is checkov's until Phase 4 hands it to
-    zizmor. CloudFormation has no file name of its own, so a YAML or JSON file
-    counts when its first 8 KB name an `AWS::` type or the template version.
+    checkov's trigger (Phase 4, Task Z2): the Phase 3 cut folded checkov-cicd
+    into checkov, so `.github/workflows` was checkov's until this task handed
+    it to zizmor. **Not Helm either**: `Chart.yaml` used to count, but no helm
+    binary exists on the host or in the image and checkov disables the
+    framework silently, so a chart-only repository reading checkov `ran`
+    reported nothing. The trigger now fires only on what checkov's narrowed
+    `--framework terraform terraform_json cloudformation` (the repository
+    invocation) actually reads. CloudFormation has no file name of its own, so
+    a YAML or JSON file counts when its first 8 KB name an `AWS::` type or the
+    template version.
     """
     name = path.name
-    if name.endswith((".tf", ".tf.json")) or name == "Chart.yaml":
+    if name.endswith((".tf", ".tf.json")):
         return True
-    if path.suffix in (".yml", ".yaml") and path.parent.name == "workflows":
-        if path.parent.parent.name == ".github":
-            return True
     if path.suffix in _CFN_SUFFIXES:
         try:
             with path.open("rb") as fh:
@@ -587,7 +601,21 @@ def _trivy_k8s(ctx: ScanContext) -> list[Invocation]:
     ]
 
 
-def _checkov(flag: str, excl: bool) -> Builder:
+# checkov's default (no `--framework`) evaluates every framework it ships,
+# including `secrets` (195.8 s alone on bracketforge) and `github_actions` --
+# ground zizmor now owns. Narrowed to exactly what `_is_iac` triggers on.
+# This narrowing is for the REPOSITORY invocation (`-d`) only. The
+# single-file `iac` invocation (`-f`, for --terraform-state/--cloudformation/
+# --k8s-manifest) keeps every framework -- the user named the file, and
+# narrowing would drop checkov's kubernetes checks on --k8s-manifest.
+_CHECKOV_IAC_FRAMEWORKS: tuple[str, ...] = (
+    "terraform",
+    "terraform_json",
+    "cloudformation",
+)
+
+
+def _checkov(flag: str, excl: bool, framework: bool = False) -> Builder:
     def build(ctx: ScanContext) -> list[Invocation]:
         return [
             Invocation(
@@ -597,6 +625,7 @@ def _checkov(flag: str, excl: bool) -> Builder:
                     str(ctx.target),
                     "-o",
                     "json",
+                    *(("--framework", *_CHECKOV_IAC_FRAMEWORKS) if framework else ()),
                     *(ctx.exclusion_args if excl else ()),
                     *ctx.flags,
                 ),
@@ -624,6 +653,40 @@ def _file_fed(*format_args: str) -> Builder:
         ]
 
     return build
+
+
+def _zizmor_repo(ctx: ScanContext) -> list[Invocation]:
+    # Walk-fed and repository-relative, run from the root: zizmor has no
+    # exclude flag and reads vendored workflows (a planted node_modules
+    # workflow was audited, measured 1.30.1), and an absolute input puts an
+    # absolute URI, so a checkout-dependent id, in every finding.
+    # Relative to the target as given, not resolve()d: the walk globs from it,
+    # and a file reached through a link that leaves the repository resolves
+    # outside the root. That raised ValueError, and every tool on the target
+    # failed (measured on a junction). The path as found reaches the same
+    # file from the resolved root.
+    root = Path(scan_root(ctx.target)).resolve()
+    target = Path(ctx.target).absolute()
+    inputs = [Path(f).absolute().relative_to(target).as_posix() for f in ctx.files]
+    return [
+        Invocation(
+            command=(
+                ctx.binary,
+                "--format",
+                "sarif",
+                # --offline, not --no-online-audits: zizmor reads GH_TOKEN,
+                # and a scan makes no network call.
+                "--offline",
+                "--no-exit-codes",
+                *ctx.flags,
+                *inputs,
+            ),
+            output_file=ctx.output,
+            capture_stdout=True,
+            ok_return_codes=(0,),
+            cwd=root,
+        )
+    ]
 
 
 def _gosec_repo(ctx: ScanContext) -> list[Invocation]:
@@ -825,7 +888,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ToolDescriptor(
             name="checkov",
             invocations={
-                "repo": _checkov("-d", excl=True),
+                "repo": _checkov("-d", excl=True, framework=True),
                 "iac": _checkov("-f", excl=False),
             },
             version_probe=VersionProbe(
@@ -859,6 +922,26 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             exclusion_style=ExclusionStyle.WALK,
             file_patterns=("**/*.sh", "**/*.bash", "**/*.ksh"),
             no_files_reason=Reason.NO_SHELL_SCRIPTS,
+        ),
+        ToolDescriptor(
+            name="zizmor",
+            invocations={"repo": _zizmor_repo},
+            # `zizmor --version` prints `zizmor 1.30.1` (measured).
+            version_probe=VersionProbe(re.compile(r"zizmor\s+v?(\d+\.\d+\.\d+)")),
+            exclusion_style=ExclusionStyle.WALK,
+            # The workflows GitHub runs (the root's, flat), every composite
+            # action, and Dependabot's config, which has audits of its own
+            # (6 `dependabot-cooldown` findings at 3098c766 without it).
+            file_patterns=(
+                ".github/workflows/*.yml",
+                ".github/workflows/*.yaml",
+                "**/action.yml",
+                "**/action.yaml",
+                ".github/dependabot.yml",
+                ".github/dependabot.yaml",
+            ),
+            no_files_reason=Reason.NO_WORKFLOWS,
+            stub={"version": "2.1.0", "runs": []},
         ),
         ToolDescriptor(
             name="gosec",

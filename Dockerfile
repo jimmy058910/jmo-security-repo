@@ -121,6 +121,15 @@ RUN SHELLCHECK_VERSION="0.11.0" && \
     mv /tmp/shellcheck-v${SHELLCHECK_VERSION}/shellcheck /usr/local/bin/shellcheck && \
     chmod +x /usr/local/bin/shellcheck
 
+# Download zizmor (GitHub Actions); assets are named by target triple, no version
+RUN ZIZMOR_VERSION="1.30.1" && \
+    ZIZMOR_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "aarch64" || echo "x86_64") && \
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/zizmorcore/zizmor/releases/download/v${ZIZMOR_VERSION}/zizmor-${ZIZMOR_ARCH}-unknown-linux-gnu.tar.gz" \
+    -o /tmp/zizmor.tar.gz && \
+    gzip -t /tmp/zizmor.tar.gz && \
+    tar -xzf /tmp/zizmor.tar.gz -C /usr/local/bin zizmor && \
+    chmod +x /usr/local/bin/zizmor
+
 #
 # Stage 2: Runtime - Complete runtime environment with ALL tools
 #
@@ -213,6 +222,7 @@ COPY --from=builder /usr/local/bin/gosec /usr/local/bin/gosec
 COPY --from=builder /usr/local/bin/grype /usr/local/bin/grype
 COPY --from=builder /usr/local/bin/opa /usr/local/bin/opa
 COPY --from=builder /usr/local/bin/shellcheck /usr/local/bin/shellcheck
+COPY --from=builder /usr/local/bin/zizmor /usr/local/bin/zizmor
 COPY --from=builder /opt/zaproxy /opt/zaproxy
 
 # Binary stripping (Phase 1 optimization: 15 MB savings)
