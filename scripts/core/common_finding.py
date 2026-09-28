@@ -9,6 +9,7 @@ import hashlib
 import hmac
 import logging
 import os
+from collections.abc import Iterable
 from enum import Enum
 from typing import Any
 
@@ -197,6 +198,55 @@ def normalize_severity(value: str | None) -> str:
         Normalized severity string: CRITICAL, HIGH, MEDIUM, LOW, or INFO
     """
     return Severity.from_string(value).value
+
+
+# CVSS versions in preference order, most preferred first, by the prefix of a
+# finding's `cvss.version` ("3.x", "3.1" and "3.0" are all v3). A version not
+# listed, or none at all (SARIF's bare `security-severity` score), sorts last.
+CVSS_VERSION_PREFERENCE: tuple[str, ...] = ("3", "2")
+
+
+def _cvss_preference(cvss: dict[str, Any]) -> tuple[int, float]:
+    """Sort key for `preferred_cvss`: higher is preferred."""
+    version = str(cvss.get("version") or "")
+    rank = next(
+        (
+            len(CVSS_VERSION_PREFERENCE) - i
+            for i, prefix in enumerate(CVSS_VERSION_PREFERENCE)
+            if version.startswith(prefix)
+        ),
+        0,
+    )
+    score = cvss.get("score")
+    if isinstance(score, bool) or not isinstance(score, (int, float)):
+        return rank, -1.0
+    return rank, float(score)
+
+
+def preferred_cvss(candidates: Iterable[Any]) -> dict[str, Any] | None:
+    """The one CVSS a finding should carry, of several on offer, or ``None``.
+
+    The single home of JMo's CVSS preference: a v3.x score outranks a v2.0 one
+    whatever the numbers, and within one version the higher score wins; a
+    candidate with no version (or one not in `CVSS_VERSION_PREFERENCE`) sorts
+    after every versioned one, and a missing score after every scored one. A
+    candidate is chosen whole, so its score and vector stay a pair. On a tie
+    the earlier candidate is kept, so pass them in a deterministic order.
+    Anything that is not a non-empty dict is skipped.
+
+    A consensus finding takes its CVSS from here across all its members
+    (#1355). #1356 extends the order with v4.0 and routes the trivy, grype and
+    SARIF adapters' own choices through this function.
+    """
+    best: dict[str, Any] | None = None
+    best_key: tuple[int, float] | None = None
+    for cvss in candidates:
+        if not isinstance(cvss, dict) or not cvss:
+            continue
+        key = _cvss_preference(cvss)
+        if best_key is None or key > best_key:
+            best, best_key = cvss, key
+    return best
 
 
 def fingerprint(
