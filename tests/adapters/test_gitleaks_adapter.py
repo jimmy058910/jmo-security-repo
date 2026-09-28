@@ -43,6 +43,34 @@ def test_parses_the_golden_document_with_the_binding_tags():
     assert {f.severity for f in findings} == {"HIGH"}
 
 
+def test_findings_carry_cwe_798_so_compliance_enrichment_reaches_them():
+    """Fix-round-1 (#1328): gitleaks emits no CWE anywhere in its SARIF
+    output, so every gitleaks finding was invisible to
+    `enrich_findings_with_compliance` (which reads `risk.cwe` and nowhere
+    else, `normalize_and_report.py`) and, downstream, to the `owasp-top-10`
+    policy (`policies/builtin/owasp-top-10.rego`, which reads only
+    `compliance.owaspTop10_2021`). Measured on juice-shop `1618a611`: 69
+    gitleaks findings all lost their CWE mapping this way, and the five
+    secrets both gitleaks and trufflehog found lost trufflehog's mapping too
+    on merge (gitleaks stays representative on equal severity), dropping
+    owasp-top-10's violation count 7 -> 2.
+
+    Same field, same shape as `trufflehog_adapter`'s `test_cwe_798_tag`
+    (`CWE-798`, "Use of Hard-coded Credentials"), confidence `MEDIUM` to
+    match an *unverified* trufflehog secret -- gitleaks verifies nothing,
+    same as trufflehog's default.
+    """
+    findings = GitleaksAdapter().parse(GOLDEN)
+    assert len(findings) == 69
+    for f in findings:
+        assert f.risk == {
+            "cwe": ["CWE-798"],
+            "confidence": "MEDIUM",
+            "likelihood": "HIGH",
+            "impact": "HIGH",
+        }
+
+
 def test_the_secret_never_reaches_a_finding():
     """gitleaks' SARIF carries each matched secret, unredacted, in
     `region.snippet.text` (measured on the golden: 69 of 69, 20 to 1,674

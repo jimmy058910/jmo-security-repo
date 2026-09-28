@@ -322,6 +322,338 @@ class TestGitleaksSecretEquivalence:
         for canonical, members in RULE_EQUIVALENCE.items():
             assert ("gitleaks", "generic-api-key") not in members, canonical
 
+    def test_jwt_base64_equivalence(self):
+        """gitleaks `jwt-base64` joins `secret-jwt` too -- decided on purpose.
+
+        Unlike `generic-api-key`, this is gitleaks' OWN narrower, structural
+        rule for the same secret class (a base64-encoded JWT), not a broad
+        catch-all: safe to list explicitly, and listed rather than left to
+        the (now gitleaks-disabled) substring fallback that used to reach it
+        coincidentally. See `TestGitleaksIdsAreExactMatchOnly` for the
+        fallback removal this decision depends on.
+        """
+        assert get_canonical_rule_id("gitleaks", "jwt-base64") == "secret-jwt"
+
+
+# gitleaks 8.30.1's full default-config id list (`config/gitleaks.toml` at tag
+# v8.30.1), derived with:
+#   gh api 'repos/gitleaks/gitleaks/contents/config/gitleaks.toml?ref=v8.30.1' \
+#     --jq .content | base64 -d | grep -n '^id = "' | sed -E 's/^[0-9]+:id = "([^"]+)"/\1/' | sort
+# Only the id *names* -- gitleaks' regexes and allowlist examples (some of
+# which are real-looking key material used as test fixtures upstream) are
+# deliberately not reproduced here.
+GITLEAKS_8_30_1_DEFAULT_IDS = frozenset(
+    {
+        "1password-secret-key",
+        "1password-service-account-token",
+        "adafruit-api-key",
+        "adobe-client-id",
+        "adobe-client-secret",
+        "age-secret-key",
+        "airtable-api-key",
+        "airtable-personnal-access-token",
+        "algolia-api-key",
+        "alibaba-access-key-id",
+        "alibaba-secret-key",
+        "anthropic-admin-api-key",
+        "anthropic-api-key",
+        "artifactory-api-key",
+        "artifactory-reference-token",
+        "asana-client-id",
+        "asana-client-secret",
+        "atlassian-api-token",
+        "authress-service-client-access-key",
+        "aws-access-token",
+        "aws-amazon-bedrock-api-key-long-lived",
+        "aws-amazon-bedrock-api-key-short-lived",
+        "azure-ad-client-secret",
+        "beamer-api-token",
+        "bitbucket-client-id",
+        "bitbucket-client-secret",
+        "bittrex-access-key",
+        "bittrex-secret-key",
+        "cisco-meraki-api-key",
+        "clickhouse-cloud-api-secret-key",
+        "clojars-api-token",
+        "cloudflare-api-key",
+        "cloudflare-global-api-key",
+        "cloudflare-origin-ca-key",
+        "codecov-access-token",
+        "cohere-api-token",
+        "coinbase-access-token",
+        "confluent-access-token",
+        "confluent-secret-key",
+        "contentful-delivery-api-token",
+        "curl-auth-header",
+        "curl-auth-user",
+        "databricks-api-token",
+        "datadog-access-token",
+        "defined-networking-api-token",
+        "digitalocean-access-token",
+        "digitalocean-pat",
+        "digitalocean-refresh-token",
+        "discord-api-token",
+        "discord-client-id",
+        "discord-client-secret",
+        "doppler-api-token",
+        "droneci-access-token",
+        "dropbox-api-token",
+        "dropbox-long-lived-api-token",
+        "dropbox-short-lived-api-token",
+        "duffel-api-token",
+        "dynatrace-api-token",
+        "easypost-api-token",
+        "easypost-test-api-token",
+        "etsy-access-token",
+        "facebook-access-token",
+        "facebook-page-access-token",
+        "facebook-secret",
+        "fastly-api-token",
+        "finicity-api-token",
+        "finicity-client-secret",
+        "finnhub-access-token",
+        "flickr-access-token",
+        "flutterwave-encryption-key",
+        "flutterwave-public-key",
+        "flutterwave-secret-key",
+        "flyio-access-token",
+        "frameio-api-token",
+        "freemius-secret-key",
+        "freshbooks-access-token",
+        "gcp-api-key",
+        "generic-api-key",
+        "github-app-token",
+        "github-fine-grained-pat",
+        "github-oauth",
+        "github-pat",
+        "github-refresh-token",
+        "gitlab-cicd-job-token",
+        "gitlab-deploy-token",
+        "gitlab-feature-flag-client-token",
+        "gitlab-feed-token",
+        "gitlab-incoming-mail-token",
+        "gitlab-kubernetes-agent-token",
+        "gitlab-oauth-app-secret",
+        "gitlab-pat",
+        "gitlab-pat-routable",
+        "gitlab-ptt",
+        "gitlab-rrt",
+        "gitlab-runner-authentication-token",
+        "gitlab-runner-authentication-token-routable",
+        "gitlab-scim-token",
+        "gitlab-session-cookie",
+        "gitter-access-token",
+        "gocardless-api-token",
+        "grafana-api-key",
+        "grafana-cloud-api-token",
+        "grafana-service-account-token",
+        "harness-api-key",
+        "hashicorp-tf-api-token",
+        "hashicorp-tf-password",
+        "heroku-api-key",
+        "heroku-api-key-v2",
+        "hubspot-api-key",
+        "huggingface-access-token",
+        "huggingface-organization-api-token",
+        "infracost-api-token",
+        "intercom-api-key",
+        "intra42-client-secret",
+        "jfrog-api-key",
+        "jfrog-identity-token",
+        "jwt",
+        "jwt-base64",
+        "kraken-access-token",
+        "kubernetes-secret-yaml",
+        "kucoin-access-token",
+        "kucoin-secret-key",
+        "launchdarkly-access-token",
+        "linear-api-key",
+        "linear-client-secret",
+        "linkedin-client-id",
+        "linkedin-client-secret",
+        "lob-api-key",
+        "lob-pub-api-key",
+        "looker-client-id",
+        "looker-client-secret",
+        "mailchimp-api-key",
+        "mailgun-private-api-token",
+        "mailgun-pub-key",
+        "mailgun-signing-key",
+        "mapbox-api-token",
+        "mattermost-access-token",
+        "maxmind-license-key",
+        "messagebird-api-token",
+        "messagebird-client-id",
+        "microsoft-teams-webhook",
+        "netlify-access-token",
+        "new-relic-browser-api-token",
+        "new-relic-insert-key",
+        "new-relic-user-api-id",
+        "new-relic-user-api-key",
+        "notion-api-token",
+        "npm-access-token",
+        "nuget-config-password",
+        "nytimes-access-token",
+        "octopus-deploy-api-key",
+        "okta-access-token",
+        "openai-api-key",
+        "openshift-user-token",
+        "perplexity-api-key",
+        "pkcs12-file",
+        "plaid-api-token",
+        "plaid-client-id",
+        "plaid-secret-key",
+        "planetscale-api-token",
+        "planetscale-oauth-token",
+        "planetscale-password",
+        "postman-api-token",
+        "prefect-api-token",
+        "privateai-api-token",
+        "private-key",
+        "pulumi-api-token",
+        "pypi-upload-token",
+        "rapidapi-access-token",
+        "readme-api-token",
+        "rubygems-api-token",
+        "scalingo-api-token",
+        "sendbird-access-id",
+        "sendbird-access-token",
+        "sendgrid-api-token",
+        "sendinblue-api-token",
+        "sentry-access-token",
+        "sentry-org-token",
+        "sentry-user-token",
+        "settlemint-application-access-token",
+        "settlemint-personal-access-token",
+        "settlemint-service-access-token",
+        "shippo-api-token",
+        "shopify-access-token",
+        "shopify-custom-access-token",
+        "shopify-private-app-access-token",
+        "shopify-shared-secret",
+        "sidekiq-secret",
+        "sidekiq-sensitive-url",
+        "slack-app-token",
+        "slack-bot-token",
+        "slack-config-access-token",
+        "slack-config-refresh-token",
+        "slack-legacy-bot-token",
+        "slack-legacy-token",
+        "slack-legacy-workspace-token",
+        "slack-user-token",
+        "slack-webhook-url",
+        "snyk-api-token",
+        "sonar-api-token",
+        "sourcegraph-access-token",
+        "square-access-token",
+        "squarespace-access-token",
+        "stripe-access-token",
+        "sumologic-access-id",
+        "sumologic-access-token",
+        "telegram-bot-api-token",
+        "travisci-access-token",
+        "twilio-api-key",
+        "twitch-api-token",
+        "twitter-access-secret",
+        "twitter-access-token",
+        "twitter-api-key",
+        "twitter-api-secret",
+        "twitter-bearer-token",
+        "typeform-api-token",
+        "vault-batch-token",
+        "vault-service-token",
+        "yandex-access-token",
+        "yandex-api-key",
+        "yandex-aws-access-token",
+        "zendesk-secret-key",
+    }
+)
+
+# The only ids, of all 222 above, this table intends to resolve. Everything
+# else must resolve to None.
+_GITLEAKS_EXPECTED_RESOLUTIONS = {
+    "aws-access-token": "secret-aws-access-key",
+    "github-pat": "secret-github-token",
+    "private-key": "secret-private-key",
+    "jwt": "secret-jwt",
+    "jwt-base64": "secret-jwt",
+}
+
+
+class TestGitleaksIdsAreExactMatchOnly:
+    """Fix-round-1 (#1328): pin the resolved canonical set over EVERY
+    gitleaks 8.30.1 default-config id, not just the five this table lists.
+
+    Before this fix-round, `get_canonical_rule_id("gitleaks",
+    "yandex-aws-access-token")` returned `secret-aws-access-key` and
+    `get_canonical_rule_id("gitleaks", "jwt-base64")` returned `secret-jwt` --
+    both via the substring fallback finding a `-`-delimited prefix match
+    against a listed gitleaks id, not because either was actually listed.
+    The first was a real false equivalence (a Yandex Cloud key is not an AWS
+    one); the second happened to be the right answer for the wrong reason,
+    and is now listed explicitly (`test_jwt_base64_equivalence` above).
+    """
+
+    def test_meta_guard_the_id_list_itself_is_not_empty_or_truncated(self):
+        """An extractor that silently found nothing would pass every
+        assertion built on it (testing.rules.md's "mirror of a mirror")."""
+        assert len(GITLEAKS_8_30_1_DEFAULT_IDS) == 222, len(GITLEAKS_8_30_1_DEFAULT_IDS)
+        # A few ids from different parts of the alphabet, spot-checked
+        # against the fetched config directly.
+        for must_have in (
+            "aws-access-token",
+            "github-pat",
+            "private-key",
+            "jwt",
+            "jwt-base64",
+            "generic-api-key",
+            "yandex-aws-access-token",
+            "zendesk-secret-key",
+        ):
+            assert must_have in GITLEAKS_8_30_1_DEFAULT_IDS, must_have
+
+    def test_only_the_five_intended_ids_resolve(self):
+        resolved = {
+            gid: canonical
+            for gid in GITLEAKS_8_30_1_DEFAULT_IDS
+            if (canonical := get_canonical_rule_id("gitleaks", gid)) is not None
+        }
+        assert resolved == _GITLEAKS_EXPECTED_RESOLUTIONS, (
+            f"gitleaks id(s) resolved that should not have, or vice versa: "
+            f"extra={set(resolved) - set(_GITLEAKS_EXPECTED_RESOLUTIONS)}, "
+            f"missing={set(_GITLEAKS_EXPECTED_RESOLUTIONS) - set(resolved)}"
+        )
+
+    def test_yandex_aws_access_token_is_not_an_aws_key(self):
+        """The measured false equivalence this fix-round exists for.
+
+        A Yandex Cloud static key formatted to resemble an AWS one (`YC...`)
+        is not an AWS credential. Merging a gitleaks
+        `yandex-aws-access-token` finding with a trufflehog `AWS` finding on
+        one line would be exactly #1242's shape (two different secrets, one
+        line) -- see `test_dedup_enhanced.py`'s
+        `test_gitleaks_yandex_key_and_trufflehog_aws_on_one_line_stay_two`
+        for the cross-tool clustering-level guard.
+        """
+        assert get_canonical_rule_id("gitleaks", "yandex-aws-access-token") is None
+
+    def test_gitleaks_case_insensitive_exact_match_still_works(self):
+        """Exact-match-only must not also disable the case-insensitive path."""
+        assert get_canonical_rule_id("gitleaks", "PRIVATE-KEY") == "secret-private-key"
+        assert get_canonical_rule_id("gitleaks", "Jwt") == "secret-jwt"
+
+    def test_other_tools_fallback_is_unaffected(self):
+        """The gitleaks-only exclusion must not disable the fallback for the
+        tools it was built for."""
+        assert get_canonical_rule_id("trivy", "AVD-DS-0001") == "dockerfile-latest-tag"
+        assert (
+            get_canonical_rule_id(
+                "semgrep",
+                "generic.secrets.security.detected-github-pat.detected-github-pat",
+            )
+            == "secret-github-token"
+        )
+
 
 class TestKubernetesEquivalence:
     """Test equivalence for Kubernetes rules."""

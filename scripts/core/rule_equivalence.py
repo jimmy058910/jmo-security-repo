@@ -251,6 +251,18 @@ RULE_EQUIVALENCE: dict[str, list[tuple[str, str]]] = {
         # "Uncovered a JSON Web Token, which may lead to unauthorized access
         # to web applications and sensitive user data."
         ("gitleaks", "jwt"),
+        # "Detected a Base64-encoded JSON Web Token, posing a risk of
+        # exposing encoded authentication and data exchange information."
+        # Fix-round-1 (#1328): a JWT wrapped in an extra base64 layer is
+        # still the same secret class, and gitleaks' own regex for it is
+        # narrow and structural (a fixed `ZXlK...` prefix decoding to the
+        # JWT header's `eyJ`), not a catch-all like `generic-api-key` below
+        # -- so, unlike that one, mapping it here does not trade a real
+        # pairing for a wide blast radius. Listed explicitly, not left to
+        # the substring fallback (removed for gitleaks just below): before
+        # this fix-round it resolved to `secret-jwt` anyway, coincidentally,
+        # by sharing gitleaks' `jwt` as a `-`-delimited prefix.
+        ("gitleaks", "jwt-base64"),
     ],
     # `generic-api-key` ("Detected a Generic API Key...") is deliberately NOT
     # mapped anywhere. Measured on juice-shop `1618a611`, gitleaks reports
@@ -314,23 +326,39 @@ def get_canonical_rule_id(tool: str, rule_id: str) -> str | None:
         return None
 
     _build_reverse_map()
+    tool_lower = tool.lower()
+    rule_id_lower = rule_id.lower()
 
     # Try exact match first
-    key = (tool.lower(), rule_id)
+    key = (tool_lower, rule_id)
     if key in _REVERSE_MAP:
         return _REVERSE_MAP[key]
 
     # Try case-insensitive rule_id match
-    key_lower = (tool.lower(), rule_id.lower())
+    key_lower = (tool_lower, rule_id_lower)
     if key_lower in _REVERSE_MAP:
         return _REVERSE_MAP[key_lower]
+
+    # gitleaks ids are exact-match only -- no substring fallback (fix-round-1,
+    # #1328). gitleaks 8.30.1 ships ~222 short, hyphen-delimited default-config
+    # ids that share prefixes by design (`aws-access-token` /
+    # `yandex-aws-access-token`; `jwt` / `jwt-base64`), unlike the aliasing the
+    # fallback below exists for (trivy's `AVD-`-prefixed alias ids, semgrep's
+    # dotted-suffix registry ids). Measured against all 222:
+    # `yandex-aws-access-token` (a Yandex Cloud key, not AWS) resolved to
+    # `secret-aws-access-key` and `jwt-base64` to `secret-jwt` purely because
+    # each is a `-`-delimited prefix of an id this table lists -- the exact
+    # #1242 shape (two different secrets, one line) this table exists to
+    # avoid, except reachable cross-tool instead of within one tool. Every
+    # gitleaks id this table intends to match is listed exactly (`jwt-base64`
+    # included, above); nothing else should resolve.
+    if tool_lower == "gitleaks":
+        return None
 
     # Try substring matching for rule IDs that carry a suffix or vary in wording
     # (e.g. semgrep reports `...subprocess-shell-true.subprocess-shell-true` for
     # the rule mapped here as `...subprocess-shell-true`).
     # Require minimum length to avoid matching everything
-    tool_lower = tool.lower()
-    rule_id_lower = rule_id.lower()
     if len(rule_id_lower) >= 3:  # Minimum 3 chars for substring matching
         for (mapped_tool, mapped_rule), canonical in _REVERSE_MAP.items():
             if mapped_tool == tool_lower:

@@ -41,6 +41,19 @@ class GitleaksAdapter(AdapterPlugin):
             # unverified TruffleHog secret, so `--fail-on HIGH` stops on a
             # leaked secret (decided 2026-09-26). SARIF's default is MEDIUM.
             finding.severity = "HIGH"
+            # gitleaks' SARIF carries no CWE anywhere, so without this every
+            # gitleaks finding was invisible to `enrich_findings_with_compliance`
+            # (which reads `risk.cwe` and nowhere else) and, downstream, to any
+            # CWE-keyed policy such as `owasp-top-10` (fix-round-1, #1328).
+            # Same field, same shape as `trufflehog_adapter`'s CWE-798
+            # ("Use of Hard-coded Credentials"); confidence MEDIUM matches an
+            # *unverified* trufflehog secret, since gitleaks verifies nothing.
+            finding.risk = {
+                "cwe": ["CWE-798"],
+                "confidence": "MEDIUM",
+                "likelihood": "HIGH",
+                "impact": "HIGH",
+            }
             snippets = _pop_snippets(finding.raw)
             # `--redact` writes this marker as every snippet, so every secret
             # would share one digest and pair with any other at its path and

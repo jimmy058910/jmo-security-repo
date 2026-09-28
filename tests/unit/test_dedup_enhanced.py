@@ -2026,3 +2026,53 @@ def test_two_gitleaks_secrets_on_one_line_stay_two():
         "two distinct secrets on one line must remain two findings, got "
         f"{len(clusters)}"
     )
+
+
+def test_gitleaks_yandex_key_and_trufflehog_aws_on_one_line_stay_two():
+    """Fix-round-1 (#1328): the CROSS-tool negative the one-per-tool
+    invariant cannot catch.
+
+    `test_two_gitleaks_secrets_on_one_line_stay_two` above is both gitleaks,
+    so `FindingCluster.can_accept` keeps them apart regardless of what
+    `RULE_EQUIVALENCE` says -- it cannot tell a correct mapping from a wrong
+    one. This fixture uses two DIFFERENT tools so the rule-equivalence table
+    is the only thing standing between them and a merge.
+
+    Before the exact-match fix, `get_canonical_rule_id("gitleaks",
+    "yandex-aws-access-token")` resolved to `secret-aws-access-key` via the
+    substring fallback (it is a `-`-delimited prefix match against the listed
+    `aws-access-token`) -- a false equivalence: a Yandex Cloud key is not an
+    AWS one. Combined with same-line location similarity (0.50 of the
+    default 0.65 threshold on its own), that false metadata match was enough
+    to merge two genuinely different secrets, exactly #1242's shape but
+    reachable cross-tool instead of within one tool.
+    """
+    path, line = "config/yandex-storage.tf", 42
+    findings = [
+        {
+            "id": "gitleaks-yandex",
+            "ruleId": "yandex-aws-access-token",
+            "severity": "HIGH",
+            "message": f"yandex-aws-access-token has detected secret for file {path}.",
+            "tool": {"name": "gitleaks", "version": "8.30.1"},
+            "location": {"path": path, "startLine": line, "endLine": line},
+            "raw": {},
+        },
+        {
+            "id": "trufflehog-aws",
+            "ruleId": "AWS",
+            "severity": "HIGH",
+            "message": "AWS secret detected",
+            "tool": {"name": "trufflehog", "version": "3.97.1"},
+            "location": {"path": path, "startLine": line},
+            "raw": {},
+        },
+    ]
+
+    clusters = FindingClusterer(similarity_threshold=0.65).cluster(findings)
+
+    _assert_one_finding_per_tool(clusters)
+    assert len(clusters) == 2, (
+        "a Yandex key and an AWS key on one line are two different secrets, "
+        f"got {len(clusters)} cluster(s)"
+    )
