@@ -1279,16 +1279,15 @@ JMo Security automatically clusters duplicate findings detected by multiple tool
 
 When multiple tools detect the same underlying issue, JMo clusters them into a single "consensus finding":
 
-**Before (3 separate findings):**
+**Before (2 separate findings):**
 
 - Trivy: HIGH - Image user should not be 'root' in Dockerfile:12
-- Checkov: HIGH - Ensure that a user for the container has been created in Dockerfile:12
 - Hadolint: MEDIUM - Last USER should not be root in Dockerfile:12
 
 **After (1 consensus finding):**
 
-- Detected by 3 tools | HIGH CONFIDENCE
-- Tools: trivy, checkov, hadolint
+- Detected by 2 tools | MEDIUM CONFIDENCE
+- Tools: trivy, hadolint
 - Container runs as root
 - Dockerfile:12
 

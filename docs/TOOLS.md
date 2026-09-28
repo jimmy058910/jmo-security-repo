@@ -19,7 +19,7 @@ To narrow the list:
 | Semgrep | Code-level flaws (SAST), many languages | Repository, GitLab | Always | Isolated Python venv |
 | Syft | Software bill of materials (SBOM) | Repository, image, GitLab | Always | Release binary or install script |
 | Trivy | Vulnerable dependencies, secrets, misconfigurations | Repository, image, IaC, Kubernetes, GitLab | Always | Release binary or install script |
-| Checkov | IaC misconfigurations: Terraform, CloudFormation (Kubernetes and Dockerfiles too, on an IaC file target given directly) | Repository, IaC, GitLab | IaC is present | Isolated Python venv |
+| Checkov | IaC misconfigurations: Terraform, CloudFormation (Kubernetes too, on a `--k8s-manifest` target) | Repository, IaC, GitLab | IaC is present | Isolated Python venv |
 | Hadolint | Dockerfile problems | Repository, GitLab | Dockerfiles are present | Release binary |
 | ShellCheck | Shell script bugs (unquoted expansions, unguarded `cd`) | Repository, GitLab | Shell scripts are present | Release binary |
 | zizmor | GitHub Actions flaws: template injection, unpinned actions, dangerous triggers, credential persistence | Repository, GitLab | Workflows, composite actions or a Dependabot config are present | Release binary |
@@ -45,9 +45,9 @@ Being in the matrix makes a tool eligible. Two things then decide whether it run
 
 When the content is absent, the tool is skipped for that target and contributes no findings. It is not an error. An IaC file target (`--terraform-state`, `--cloudformation`, `--k8s-manifest`) is itself the content, so Checkov always reads it.
 
-On a repository, Checkov reads only Terraform (`.tf`, `.tf.json`) and CloudFormation, and only when at least one is present (`--framework terraform terraform_json cloudformation`). Every other framework it ships stops running there too, even alongside a Terraform file that does trigger it: secrets (195.8 s alone on bracketforge), Kubernetes, Dockerfiles, Helm charts, GitHub Actions, GitLab CI, CircleCI, Azure Pipelines, Bitbucket Pipelines, ARM, Bicep, Ansible and serverless configs. Gitleaks and TruffleHog already cover secrets; Trivy covers Kubernetes and Dockerfiles (Hadolint covers Dockerfiles too); zizmor covers GitHub Actions. GitLab CI, CircleCI, Azure Pipelines, Bitbucket Pipelines, ARM/Bicep and serverless configs are read by no JMo tool on a repository scan.
+On a repository, Checkov reads only Terraform (`.tf`, `.tf.json`) and CloudFormation, and only when at least one is present (`--framework terraform terraform_json cloudformation`). Every other framework it ships stops running there too, even alongside a Terraform file that does trigger it, among them: secrets (195.8 s alone on one measured repository), Kubernetes, Dockerfiles, Helm charts, GitHub Actions, GitLab CI, CircleCI, Azure Pipelines, Bitbucket Pipelines, ARM, Bicep, Ansible and serverless configs. Gitleaks and TruffleHog already cover secrets; Trivy covers Kubernetes, Helm charts and Dockerfiles (Hadolint covers Dockerfiles too); zizmor covers GitHub Actions. GitLab CI, CircleCI, Azure Pipelines, Bitbucket Pipelines, ARM/Bicep and serverless configs are read by no JMo tool on a repository scan.
 
-Given an IaC file target directly (`--terraform-state`, `--cloudformation`, `--k8s-manifest`), Checkov keeps every framework, so it still evaluates Kubernetes there (Ruling 16). Helm was dropped rather than narrowed to: no helm binary exists on the host or in the image, and Checkov disables the framework without a word, so a chart-only repository triggering it read `ran` and found nothing.
+Given an IaC file target directly (`--terraform-state`, `--cloudformation`, `--k8s-manifest`), Checkov keeps every framework, so it still evaluates Kubernetes there. Helm was dropped rather than narrowed to: no helm binary exists on the host or in the image, and Checkov disables the framework without a word, so a chart-only repository triggering it read `ran` and found nothing.
 
 Vendored trees are never content: `.git`, `node_modules`, `vendor`, `.venv` and `venv` are excluded before anything is looked for, and so is the results directory when it sits inside the scanned tree.
 
@@ -136,7 +136,7 @@ These tools are no longer installed, run or parsed. A `per_tool` block for one o
 | semgrep-secrets | Semgrep with secret-detection rules | It scanned 0 files; SAST moves to a vendored rule bundle in a later release |
 | bandit (as a scanner) | Python SAST | Its results were dominated by `.venv` noise; SAST moves to a vendored rule bundle in a later release |
 | trivy-rbac | Kubernetes RBAC checks | Its output was identical to Trivy's config scan |
-| checkov-cicd | Checkov on CI/CD pipelines | Folded into Checkov in Phase 3; Phase 4 then narrowed Checkov's repository run to Terraform and CloudFormation only ([above](#when-each-tool-runs)), handing `.github/workflows` to zizmor and dropping Checkov's other CI/CD and secrets frameworks there with nothing replacing them except zizmor for Actions |
+| checkov-cicd | Checkov on CI/CD pipelines | Folded into Checkov, which never actually read `.github/workflows` under JMo (its `.git` exclusion also matched `.github`, #1313); Checkov's repository run was then narrowed to Terraform and CloudFormation only ([above](#when-each-tool-runs)), dropping its other CI/CD and secrets frameworks there. zizmor now audits workflows |
 
 Each tool below was never installable on Windows, not a repository scanner, a duplicate of a kept tool, or abandoned upstream:
 

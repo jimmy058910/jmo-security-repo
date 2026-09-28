@@ -549,7 +549,7 @@ https://staging.example.com
 - `--gitlab-group GROUP`: Scan all repositories in a group
 - `--gitlab-repo REPO`: Single GitLab repository (format: `group/repo`)
 
-**Tools used:** Full repository scanner (TruffleHog, Gitleaks, Semgrep, Syft, Trivy, Checkov, YARA, Grype, plus Hadolint, ShellCheck, zizmor and Gosec when their content is present)
+**Tools used:** Full repository scanner (TruffleHog, Gitleaks, Semgrep, Syft, Trivy, YARA, Grype, plus Hadolint, ShellCheck, zizmor, Gosec and Checkov when their content is present)
 
 **Architecture:** GitLab repos are cloned temporarily and scanned using the same repository scanner as local repos, providing comprehensive coverage instead of secrets-only scanning
 

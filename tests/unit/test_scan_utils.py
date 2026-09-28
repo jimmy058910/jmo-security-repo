@@ -508,20 +508,6 @@ class TestCheckovSkipPathPattern:
         assert not re.search(pattern, r"C:\repo\vendor-accounts.tf")
         assert not re.search(pattern, r"C:\repo\vendor-portal\app\main.tf")
 
-    def test_a_bare_name_would_also_drop_unrelated_files(self):
-        """The substring defect itself, pinned so a regression that reverts
-        to the bare-name spelling (TOOL_EXCLUSION_FLAG's old REGEX branch)
-        is caught even if someone "fixes" it by re-adding `**/` or a bare
-        name rather than through `checkov_skip_path_pattern`."""
-        import re
-
-        bare = "vendor"
-
-        assert re.search(bare, r"C:\repo\vendor-accounts.tf")
-        assert re.search(
-            bare, r"C:\repo\envs\devenv\main.tf".replace("devenv", "vendor")
-        )
-
     def test_the_name_is_escaped_not_matched_as_a_regex(self):
         """Mutation: drop `re.escape`. `.venv`'s dot would then match ANY
         character, so an unescaped pattern also drops a file merely ending

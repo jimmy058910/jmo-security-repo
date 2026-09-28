@@ -410,10 +410,11 @@ class TestContentDecidesWhoRuns:
         ],
     )
     def test_checkov_reads_every_kind_of_iac_it_is_triggered_by(self, tmp_path, files):
-        """Phase 4 Ruling 15: Terraform and CloudFormation only. Workflows
-        moved to zizmor (Task Z2) and Helm's `Chart.yaml` never worked -- no
-        helm binary exists on the host or in the image, and checkov disabled
-        the framework in silence."""
+        """Terraform and CloudFormation only: the trigger fires only on what
+        the narrowed framework list reads. Workflows moved to zizmor (Task Z2)
+        and Helm's `Chart.yaml` never worked -- no helm binary exists on the
+        host or in the image, checkov disabled the framework in silence, and
+        trivy reads charts."""
         _, rows, _ = _scan(_repo(tmp_path, files=files), tmp_path / "out", ["checkov"])
 
         assert rows["checkov"].state is State.RAN
@@ -755,7 +756,7 @@ class TestExclusions:
         assert not any(v.startswith("**") for v in values), values
 
     def test_checkov_narrows_frameworks_on_the_repo_invocation(self, tmp_path):
-        """Ruling 16: the repository invocation (`-d`) is narrowed to exactly
+        """The repository invocation (`-d`) is narrowed to exactly
         what `_is_iac` triggers on -- terraform, terraform_json,
         cloudformation. Not helm (dead in both environments) and not
         github_actions (zizmor's now)."""

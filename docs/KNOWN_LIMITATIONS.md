@@ -263,6 +263,24 @@ GitHub, `ref-confusion` among them, do not run, whether or not a token is set.
 
 **What to do:** for those audits, run zizmor yourself with a token.
 
+### Checkov's repository run misses several CI/CD and IaC dialects
+
+On a repository, Checkov reads only Terraform and CloudFormation
+(`--framework terraform terraform_json cloudformation`). Its other frameworks
+never run there, so GitLab CI, CircleCI, Azure Pipelines, Bitbucket Pipelines,
+ARM, Bicep, Ansible and serverless configs are read by no JMo tool on a
+repository scan. It bites hardest on a GitLab target, since a `.gitlab-ci.yml`
+is exactly what a GitLab-cloned repository has and no repository tool checks
+it.
+
+An `--iac` single-file target (`--terraform-state`, `--cloudformation`,
+`--k8s-manifest`) is unaffected: Checkov keeps every framework there, so a
+Kubernetes manifest given directly is still checked in full.
+
+**What to do:** for one of the dropped dialects, run Checkov yourself with
+`--framework <name>` outside JMo. See
+[When each tool runs](TOOLS.md#when-each-tool-runs).
+
 ---
 
 ## Deduplication

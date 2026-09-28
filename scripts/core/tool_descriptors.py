@@ -604,7 +604,7 @@ def _trivy_k8s(ctx: ScanContext) -> list[Invocation]:
 # checkov's default (no `--framework`) evaluates every framework it ships,
 # including `secrets` (195.8 s alone on bracketforge) and `github_actions` --
 # ground zizmor now owns. Narrowed to exactly what `_is_iac` triggers on.
-# Ruling 16: this narrowing is for the REPOSITORY invocation (`-d`) only. The
+# This narrowing is for the REPOSITORY invocation (`-d`) only. The
 # single-file `iac` invocation (`-f`, for --terraform-state/--cloudformation/
 # --k8s-manifest) keeps every framework -- the user named the file, and
 # narrowing would drop checkov's kubernetes checks on --k8s-manifest.

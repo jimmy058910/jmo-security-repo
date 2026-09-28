@@ -218,8 +218,8 @@ All notable changes to JMo Security will be documented in this file.
   already cover secrets, and Trivy and Hadolint cover Dockerfiles. An IaC file target
   (`--terraform-state`, `--cloudformation`, `--k8s-manifest`) still keeps every
   framework. The skip reason changed from `no IaC or workflow files` to `no IaC files`.
-  Measured: a workflow-only private repository's scan went from checkov's 293 s to a
-  4.25 s skip.
+  Measured: an 805-file repository whose only checkov trigger was five workflows went
+  from checkov's 293 s to a 4.25 s skip.
 - `scan-timings.json` records the `root` a repository target's tools scanned.
 - `jmo report` logs each policy's verdict with its message.
 
@@ -289,9 +289,9 @@ All notable changes to JMo Security will be documented in this file.
   dropped `modules/results-bucket/main.tf`, and `.git` dropped `.github`. A repository
   that itself lived under a `vendor/` (or `vendor-portal/`, or `results/`) directory was
   scanned for nothing (`resource_count` 0, row `ran`). Each name is now rendered
-  `[\\/]NAME$`, `re.escape`d. On Windows, a results-directory name holding one of
-  cmd.exe's metacharacters (`& | ^ < > %`) has that character rendered as `.`, since
-  `checkov.cmd`'s arguments are re-parsed by cmd.exe (#1313).
+  `[\\/]NAME$`, `re.escape`d. A results-directory name holding one of cmd.exe's
+  metacharacters (`& | ^ < > %`) has that character rendered as `.` on every platform,
+  because `checkov.cmd`'s arguments are re-parsed by cmd.exe on Windows (#1313).
 
 - **nuclei and ZAP produce findings on URL scans.** nuclei 3 rejects `-json` on every
   platform (exit 2); it now gets `-jsonl`. On Windows, `zap.bat` looks for its jar in the

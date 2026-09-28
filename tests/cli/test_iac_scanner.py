@@ -84,7 +84,7 @@ class TestIacScanner:
         assert checkov_def.command[1:3] == ["-f", str(tmp_path / "main.tf")]
 
     def test_checkov_keeps_every_framework_on_a_file_target(self, tmp_path):
-        """Ruling 16: the single-file invocation (`-f`) is NOT narrowed. The
+        """The single-file invocation (`-f`) is NOT narrowed. The
         user named the file directly (--terraform-state, --cloudformation,
         --k8s-manifest), and narrowing would drop checkov's kubernetes checks
         on --k8s-manifest."""
