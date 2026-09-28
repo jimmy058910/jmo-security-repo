@@ -208,13 +208,13 @@ Total findings: 8058 | 🔴 3 CRITICAL | 🔴 91 HIGH | 🟡 280 MEDIUM | ⚪ 73
 
 ```markdown
 
-1. **Fix Image user should not be 'root'** (5 findings) → Review container security
+1. **Fix DS-0002** (5 findings) → Review container security best practices
 2. **Address 63 code security issues** → Review SAST findings
 ```
 **How to use this:**
 
 - Start with **systemic issues** (same fix applies to multiple findings)
-- Example: "User should not be root" in 5 Dockerfiles → One fix (add `USER jmo` to base Dockerfile template)
+- The line names the rule id; the findings carry its title. Example: trivy's `DS-0002` ("Image user should not be 'root'") in 5 Dockerfiles → One fix (add `USER jmo` to base Dockerfile template)
 
 ### Section 5: By Category
 
