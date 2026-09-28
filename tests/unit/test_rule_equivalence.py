@@ -223,19 +223,104 @@ class TestSecretDetectionEquivalence:
     def test_github_token_equivalence(self):
         """Test GitHub token detection across tools.
 
-        Used to assert on `("gitleaks", "github-pat")`. gitleaks has no
-        adapter, is absent from `PROFILE_TOOLS` and from `versions.yaml`, and
-        appeared nowhere in the product except `RULE_EQUIVALENCE` - so this
-        pinned an entry that could never match a real finding. Its six tuples
-        were removed in #846; the assertion now uses two tools that exist, and
-        checks they agree, which is what a cross-tool equivalence test is for.
+        Used to assert on `("gitleaks", "github-pat")`, removed in #846
+        because gitleaks had no adapter then. A later edit substituted
+        `("trufflehog", "github-pat")` as a stand-in -- but `github-pat` is
+        gitleaks' own rule id, not trufflehog's (trufflehog's GitHub-PAT
+        detector is named `Github`, see `test_aws_access_key_equivalence`'s
+        sibling below), so that entry could never match a real trufflehog
+        finding either (#1328). Since #1330 gitleaks has a real adapter, so
+        the correct tool is back.
         """
-        canonical1 = get_canonical_rule_id("trufflehog", "github-pat")
+        canonical1 = get_canonical_rule_id("gitleaks", "github-pat")
         canonical2 = get_canonical_rule_id(
             "semgrep", "generic.secrets.security.detected-github-pat"
         )
 
         assert canonical1 == canonical2 == "secret-github-token"
+
+        # The wrong tuple is gone from the table itself. (Not asserted as
+        # `get_canonical_rule_id("trufflehog", "github-pat") is None`: the
+        # substring fallback still resolves that query, coincidentally, via
+        # trufflehog's own `Github` entry -- "github-pat" starts with
+        # "github" at a `-` boundary. That fallback exists for a different
+        # case (semgrep's dotted-suffix rule ids) and trufflehog never
+        # actually reports a ruleId spelled `github-pat`, so it is not a
+        # real-world false match, but it does mean the fallback is not
+        # evidence either way here -- the table entry is.)
+        assert ("trufflehog", "github-pat") not in (
+            RULE_EQUIVALENCE["secret-github-token"]
+        )
+
+
+class TestGitleaksSecretEquivalence:
+    """#1328: gitleaks 8.30.1's own ids, added to the secret classes.
+
+    Ids and descriptions read from gitleaks' own default config
+    (``config/gitleaks.toml`` at tag v8.30.1), the same discipline the trivy
+    keys use (`TestTrivyKeysAreWhatTrivyPrints`).
+    """
+
+    def test_private_key_equivalence(self):
+        """gitleaks `private-key` = trufflehog `PrivateKey` = semgrep's rule.
+
+        Juice-shop `1618a611`, `terraform/networking.tf:171` (and its
+        `infrastructure/` copy): gitleaks and trufflehog each report the same
+        committed private key on the one line, under these two ids.
+        """
+        assert are_rules_equivalent(
+            "gitleaks", "private-key", "trufflehog", "PrivateKey"
+        ) == (
+            True,
+            "secret-private-key",
+        )
+        assert (
+            get_canonical_rule_id(
+                "semgrep", "generic.secrets.security.detected-private-key"
+            )
+            == "secret-private-key"
+        )
+
+    def test_jwt_equivalence(self):
+        """`secret-jwt`: gitleaks `jwt` = trufflehog `JWT`.
+
+        Juice-shop `1618a611`, `test/cypress/e2e/forgedJwt.spec.ts:38` and
+        `test/server/currentUser.unit.test.ts:31`: both tools report the same
+        embedded JWT on the one line, under these two ids.
+        """
+        assert are_rules_equivalent("gitleaks", "jwt", "trufflehog", "JWT") == (
+            True,
+            "secret-jwt",
+        )
+
+    def test_aws_access_token_equivalence(self):
+        """gitleaks `aws-access-token` = trufflehog `AWS`."""
+        assert are_rules_equivalent(
+            "gitleaks", "aws-access-token", "trufflehog", "AWS"
+        ) == (
+            True,
+            "secret-aws-access-key",
+        )
+
+    def test_generic_api_key_is_deliberately_unmapped(self):
+        """gitleaks' broadest secret rule joins no equivalence class.
+
+        Juice-shop `test/api/user.test.ts:280` has gitleaks `jwt`, gitleaks
+        `generic-api-key` AND trufflehog `JWT` all on one line. The first and
+        third are a genuine cross-tool pair (`test_jwt_equivalence`); the
+        second is gitleaks' own broader rule re-firing on the same secret,
+        and mapping it into `secret-jwt` would be inert for this triple
+        anyway -- `FindingCluster.can_accept` refuses a second finding from a
+        tool already in the cluster, so gitleaks' `jwt` and `generic-api-key`
+        can never share a cluster regardless of what this table says. It
+        stays unmapped because it is not inert *everywhere*: the same rule
+        fires 54 times on this one repo alone, on unrelated secrets, and
+        location similarity is line-only (no column), so mapping it risks
+        merging two distinct secrets that only happen to share a line.
+        """
+        assert get_canonical_rule_id("gitleaks", "generic-api-key") is None
+        for canonical, members in RULE_EQUIVALENCE.items():
+            assert ("gitleaks", "generic-api-key") not in members, canonical
 
 
 class TestKubernetesEquivalence:
@@ -408,8 +493,11 @@ class TestSubstringFallbackBoundaries:
     def test_separator_delimited_suffix_still_matches(self):
         """The case the fallback exists for must keep working.
 
-        This drives a real cross-tool cluster (semgrep + trufflehog on one
-        secret); tightening the fallback must not disable it.
+        This drives a real cross-tool cluster (semgrep + gitleaks on one
+        secret; gitleaks per #1328/#1330, replacing trufflehog here -- see
+        `test_github_token_equivalence`'s docstring: `github-pat` is
+        gitleaks' rule id, not a real trufflehog one). Tightening the
+        fallback must not disable it.
         """
         semgrep_reported = (
             "generic.secrets.security.detected-github-pat.detected-github-pat"
@@ -418,7 +506,7 @@ class TestSubstringFallbackBoundaries:
             "secret-github-token"
         )
         equivalent, canonical = are_rules_equivalent(
-            "semgrep", semgrep_reported, "trufflehog", "github-pat"
+            "semgrep", semgrep_reported, "gitleaks", "github-pat"
         )
         assert equivalent is True
         assert canonical == "secret-github-token"

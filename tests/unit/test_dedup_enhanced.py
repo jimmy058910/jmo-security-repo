@@ -1881,3 +1881,148 @@ def test_clustered_members_are_actually_similar_to_their_representative():
         f"{len(strays)} finding(s) clustered with a representative they are not "
         f"similar to, e.g. {strays[:3]}"
     )
+
+
+# ===== #1328: gitleaks + trufflehog secret equivalence =====
+#
+# Shapes measured on a real scan of juice-shop `1618a611` (trufflehog 3.97.1 +
+# gitleaks 8.30.1): five same-line places where both tools report one secret
+# stayed apart because `rule_equivalence.py` listed gitleaks' own ids
+# (`aws-access-token`, `github-pat`) under the tool name `trufflehog`, and had
+# no entry at all for `private-key` or `jwt`. No token material appears below
+# -- these are Finding dicts, not scanner output, and the fixtures only need a
+# `ruleId` and a `location` to exercise the clusterer.
+
+
+def _secret_pair(rule_gitleaks: str, rule_trufflehog: str, path: str, line: int):
+    return [
+        {
+            "id": f"gitleaks-{path}-{line}",
+            "ruleId": rule_gitleaks,
+            "severity": "HIGH",
+            "message": f"{rule_gitleaks} has detected secret for file {path}.",
+            "tool": {"name": "gitleaks", "version": "8.30.1"},
+            "location": {"path": path, "startLine": line, "endLine": line},
+            "raw": {},
+            "tags": ["secrets", "sarif"],
+        },
+        {
+            "id": f"trufflehog-{path}-{line}",
+            "ruleId": rule_trufflehog,
+            "severity": "HIGH",
+            "message": f"{rule_trufflehog} secret detected",
+            "tool": {"name": "trufflehog", "version": "3.97.1"},
+            "location": {"path": path, "startLine": line},
+            "raw": {},
+            "tags": ["secrets", "unverified"],
+        },
+    ]
+
+
+def test_gitleaks_private_key_clusters_with_trufflehog():
+    """`terraform/networking.tf:171`'s shape: one committed key, two tools."""
+    findings = _secret_pair("private-key", "PrivateKey", "terraform/networking.tf", 171)
+    clusters = FindingClusterer(similarity_threshold=0.65).cluster(findings)
+
+    assert len(clusters) == 1
+    assert len(clusters[0].findings) == 2
+    consensus = clusters[0].to_consensus_finding()
+    assert {t["name"] for t in consensus["detected_by"]} == {
+        "gitleaks",
+        "trufflehog",
+    }
+
+
+def test_gitleaks_jwt_clusters_with_trufflehog():
+    """`test/server/currentUser.unit.test.ts:31`'s shape: one JWT, two tools."""
+    findings = _secret_pair("jwt", "JWT", "test/server/currentUser.unit.test.ts", 31)
+    clusters = FindingClusterer(similarity_threshold=0.65).cluster(findings)
+
+    assert len(clusters) == 1
+    assert len(clusters[0].findings) == 2
+
+
+def test_gitleaks_generic_api_key_does_not_widen_the_jwt_cluster():
+    """`test/api/user.test.ts:280`'s shape: jwt + generic-api-key + JWT.
+
+    gitleaks reports the SAME secret twice on this line, under `jwt` and
+    under its broader `generic-api-key` rule. The pair (gitleaks `jwt`,
+    trufflehog `JWT`) must still cluster; `generic-api-key` must stay a
+    separate, unclustered finding -- both because it is unmapped in
+    `RULE_EQUIVALENCE`, and because `FindingCluster.can_accept` would refuse
+    a second gitleaks finding into that cluster even if it were mapped.
+    """
+    path, line = "test/api/user.test.ts", 280
+    findings = _secret_pair("jwt", "JWT", path, line)
+    findings.append(
+        {
+            "id": "gitleaks-generic-api-key",
+            "ruleId": "generic-api-key",
+            "severity": "HIGH",
+            "message": f"generic-api-key has detected secret for file {path}.",
+            "tool": {"name": "gitleaks", "version": "8.30.1"},
+            "location": {"path": path, "startLine": line, "endLine": line},
+            "raw": {},
+            "tags": ["secrets", "sarif"],
+        }
+    )
+
+    clusters = FindingClusterer(similarity_threshold=0.65).cluster(findings)
+
+    _assert_one_finding_per_tool(clusters)
+    sizes = sorted(len(c.findings) for c in clusters)
+    assert sizes == [1, 2], (
+        f"expected one pair (gitleaks jwt + trufflehog JWT) and one standalone "
+        f"generic-api-key finding, got cluster sizes {sizes}"
+    )
+    standalone = next(c for c in clusters if len(c.findings) == 1)
+    assert standalone.representative["ruleId"] == "generic-api-key"
+
+
+def test_two_gitleaks_secrets_on_one_line_stay_two():
+    """#1242's shape, from `oauth.component.spec.ts:91`: two distinct keys,
+    one line, same tool and rule, different columns -- must never merge.
+
+    The one-per-tool invariant guarantees this structurally: both findings
+    are gitleaks, so a cluster holding one refuses the other regardless of
+    location or rule-equivalence similarity.
+    """
+    path, line = "frontend/src/app/oauth/oauth.component.spec.ts", 91
+    findings = [
+        {
+            "id": "gitleaks-col82",
+            "ruleId": "generic-api-key",
+            "severity": "HIGH",
+            "message": f"generic-api-key has detected secret for file {path}.",
+            "tool": {"name": "gitleaks", "version": "8.30.1"},
+            "location": {
+                "path": path,
+                "startLine": line,
+                "endLine": line,
+                "startColumn": 82,
+            },
+            "raw": {},
+        },
+        {
+            "id": "gitleaks-col116",
+            "ruleId": "generic-api-key",
+            "severity": "HIGH",
+            "message": f"generic-api-key has detected secret for file {path}.",
+            "tool": {"name": "gitleaks", "version": "8.30.1"},
+            "location": {
+                "path": path,
+                "startLine": line,
+                "endLine": line,
+                "startColumn": 116,
+            },
+            "raw": {},
+        },
+    ]
+
+    clusters = FindingClusterer(similarity_threshold=0.65).cluster(findings)
+
+    _assert_one_finding_per_tool(clusters)
+    assert len(clusters) == 2, (
+        "two distinct secrets on one line must remain two findings, got "
+        f"{len(clusters)}"
+    )

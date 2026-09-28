@@ -216,20 +216,55 @@ RULE_EQUIVALENCE: dict[str, list[tuple[str, str]]] = {
         ("checkov", "CKV_K8S_12"),  # "Memory requests should be set"
     ],
     # ===== Secret Detection =====
+    # GITLEAKS KEYS (#1328) are the `id` gitleaks 8.30.1's default config
+    # prints (`config/gitleaks.toml` at tag v8.30.1), each commented with the
+    # `description` it prints beside it, read from the tool's own file -- the
+    # same discipline the trivy keys above use. `aws-access-token` and
+    # `github-pat` used to sit here under the tool name `trufflehog`: both are
+    # gitleaks ids, so neither could ever match a real trufflehog finding
+    # (trufflehog's own detectors for the same two secrets are named `AWS` and
+    # `Github`, both already listed below and unaffected by this move).
     "secret-aws-access-key": [
         ("trufflehog", "AWS"),
-        ("trufflehog", "aws-access-token"),
+        # "Identified a pattern that may indicate AWS credentials, risking
+        # unauthorized cloud resource access and data breaches on AWS
+        # platforms."
+        ("gitleaks", "aws-access-token"),
         ("semgrep", "generic.secrets.security.detected-aws-account-id"),
     ],
     "secret-github-token": [
         ("trufflehog", "Github"),
-        ("trufflehog", "github-pat"),
+        # "Uncovered a GitHub Personal Access Token, potentially leading to
+        # unauthorized repository access and sensitive content exposure."
+        ("gitleaks", "github-pat"),
         ("semgrep", "generic.secrets.security.detected-github-pat"),
     ],
     "secret-private-key": [
         ("trufflehog", "PrivateKey"),
+        # "Identified a Private Key, which may compromise cryptographic
+        # security and sensitive data encryption."
+        ("gitleaks", "private-key"),
         ("semgrep", "generic.secrets.security.detected-private-key"),
     ],
+    "secret-jwt": [
+        ("trufflehog", "JWT"),
+        # "Uncovered a JSON Web Token, which may lead to unauthorized access
+        # to web applications and sensitive user data."
+        ("gitleaks", "jwt"),
+    ],
+    # `generic-api-key` ("Detected a Generic API Key...") is deliberately NOT
+    # mapped anywhere. Measured on juice-shop `1618a611`, gitleaks reports
+    # BOTH `jwt` and `generic-api-key` for the one secret at
+    # `test/api/user.test.ts:280` -- but a cluster holds at most one finding
+    # per tool (`FindingCluster.can_accept`), so gitleaks' `jwt` and its own
+    # `generic-api-key` can never join the same cluster regardless of what
+    # this table says: adding `generic-api-key` here would be inert for that
+    # pairing. It would not be inert everywhere else -- `generic-api-key`
+    # fires 54 times on that one repo alone, on secrets that have nothing to
+    # do with a JWT, and location similarity keys on line only (not column),
+    # so mapping it into `secret-jwt` risks merging two distinct secrets that
+    # only happen to share a line elsewhere (the shape #1242 and the
+    # `oauth.component.spec.ts:91` fixture below both guard against).
     # ===== Code Security =====
     "code-hardcoded-password": [
         ("semgrep", "python.lang.security.audit.hardcoded-password"),
