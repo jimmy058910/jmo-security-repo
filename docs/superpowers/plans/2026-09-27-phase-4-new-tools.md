@@ -263,7 +263,7 @@ touch the ~25 documents that state it.
 |---|---|---|
 | **A** | this plan; the program-plan corrections; Phase 3 marked landed; the new issues filed and rostered; report-side fixes that touch no scan-engine code: trivy's rule id and lines, CVSS for the diff tier, gitleaks' rule equivalences | #1221 #1243 #1328 |
 | **Z** | zizmor's row, installer, image; checkov hands Actions over (trigger and `--framework`); checkov's exclusions | #1313 |
-| **O** | osv-scanner's row, installer, image and offline database; trivy's dependency flags; one identity per dependency finding, so two scanners' reports of one vulnerability cluster | #1346 |
+| **O** | osv-scanner's row, installer, image and offline database; trivy's dependency flags; one identity per dependency finding, so two scanners' reports of one vulnerability cluster; a consensus finding merges its members (#1355, first); CVSS v4.0 | #1346 #1355 #1356 |
 | **N** | the `jmo-native` row, its runner and its tracked fixture | — |
 | **G** | gosec removed (#1310); GitLab targets scan the images they reference (#1311); every tool's short output flags, new rows included | #1310 #1311 #1335 |
 | **API** | zap's OpenAPI import: a new invocation with its own target rules, on its own PR as PR T was | #1331 #1347 #1348 |
