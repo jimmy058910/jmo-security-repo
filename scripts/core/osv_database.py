@@ -137,6 +137,27 @@ class FetchResult:
     message: str
 
 
+def _get(url: str, *, timeout: float, **kwargs):
+    """`fetch_ecosystem`'s one call to `requests.get`, through a name that
+    exists only in this module.
+
+    A test guard (`tests/conftest.py`'s
+    `_guard_no_unmarked_osv_database_download`, fix round 1, review Ruling
+    43 named risk (b)) needs to intercept exactly this call, without
+    touching `requests.get` itself -- that symbol is one shared module
+    attribute, and patching it globally would also intercept every OTHER
+    module's real, unrelated network calls (measured: it broke
+    `kev_integration.py`'s real CISA KEV feed fetch in an unrelated test).
+    Patching `osv_database._get` instead reaches only this module.
+
+    `timeout` is its own required keyword, not folded into `**kwargs`: bandit's
+    B113 ("call to requests without timeout") pattern-matches the literal
+    argument at the `requests.get` call site, and cannot see one hidden a
+    level up inside a caller's `**kwargs`.
+    """
+    return requests.get(url, timeout=timeout, **kwargs)
+
+
 def fetch_ecosystem(
     ecosystem: str,
     cache: Path | None = None,
@@ -151,23 +172,39 @@ def fetch_ecosystem(
     never kept as the zip. The download lands in a temp file in the SAME
     directory as the destination -- so the final `os.replace` is one
     filesystem, not a cross-volume copy -- and is validated with
-    `zipfile.testzip()` before it replaces the old file. Any failure along the
-    way (HTTP error, a dropped connection mid-download, a corrupt zip) leaves
-    yesterday's database exactly as it was and deletes the partial temp file;
-    nothing is ever written in place at `dest`.
+    `zipfile.testzip()`, and that the zip has at least one member (fix round
+    1, review Minor #3: `testzip()` alone accepts a zero-member zip, and a
+    structurally valid but empty `all.zip` would silently replace a good
+    database with a useless one), before it replaces the old file.
+
+    Every filesystem step is guarded, not only the download (fix round 1,
+    review Important #2): creating the cache directory, the temp file
+    itself, and the final replace can each raise `OSError` (disk full, a
+    permission error, `dest` existing as a directory -- `os.replace` raises
+    `IsADirectoryError` in that case), and each becomes a failed
+    `FetchResult` here rather than an uncaught exception. That is what lets
+    `fetch_all` isolate one ecosystem's filesystem error from every
+    ecosystem after it, the same guarantee Ruling 31 already gives HTTP and
+    zip-content failures.
+
+    Any failure along the way leaves yesterday's database exactly as it was
+    and deletes the partial temp file; nothing is ever written in place at
+    `dest`.
     """
     dest = database_path(ecosystem, cache)
-    dest.parent.mkdir(parents=True, exist_ok=True)
     url = f"{base_url}/{ecosystem}/all.zip"
+    tmp_path: Path | None = None
 
-    fd, tmp_name = tempfile.mkstemp(
-        dir=dest.parent, prefix=f".{dest.name}.", suffix=".part"
-    )
-    tmp_path = Path(tmp_name)
     try:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp_name = tempfile.mkstemp(
+            dir=dest.parent, prefix=f".{dest.name}.", suffix=".part"
+        )
+        tmp_path = Path(tmp_name)
+
         with os.fdopen(fd, "wb") as tmp_file:
             try:
-                with requests.get(url, stream=True, timeout=timeout) as response:
+                with _get(url, stream=True, timeout=timeout) as response:
                     response.raise_for_status()
                     for chunk in response.iter_content(chunk_size=1024 * 1024):
                         if chunk:
@@ -178,21 +215,38 @@ def fetch_ecosystem(
         try:
             with zipfile.ZipFile(tmp_path) as zf:
                 bad_member = zf.testzip()
+                has_members = bool(zf.infolist())
         except zipfile.BadZipFile as exc:
             return FetchResult(ecosystem, False, f"corrupt zip: {exc}")
         if bad_member is not None:
             return FetchResult(
                 ecosystem, False, f"corrupt zip: bad member {bad_member!r}"
             )
+        if not has_members:
+            return FetchResult(
+                ecosystem, False, "corrupt zip: no members (an empty archive)"
+            )
 
         os.replace(tmp_path, dest)
         return FetchResult(ecosystem, True, f"fetched into {dest}")
+    except OSError as exc:
+        # Everything that touches the filesystem outside the download loop
+        # above (which already has its own, more specific "download failed"
+        # message): `mkdir`, `mkstemp`, and `os.replace`. Always a
+        # `FetchResult`, never an exception out of this function.
+        return FetchResult(ecosystem, False, f"filesystem error: {exc}")
     finally:
         # `os.replace` above already moved a successful download out from
         # under this path; on any failure it still exists here and must not
         # be left behind as a stray `.part` file (the "no partial file left
-        # on an interrupted download" requirement).
-        tmp_path.unlink(missing_ok=True)
+        # on an interrupted download" requirement). Best-effort: a cleanup
+        # failure must not discard this ecosystem's already-computed
+        # FetchResult, or masquerade as this ecosystem's actual outcome.
+        if tmp_path is not None:
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 def fetch_all(
@@ -204,10 +258,13 @@ def fetch_all(
 ) -> list[FetchResult]:
     """Fetch every ecosystem's database, one at a time.
 
-    Each ecosystem is independent (Ruling 31): one HTTP error or a corrupt zip
-    does not stop the rest, and the returned list says which ecosystem(s)
-    failed and why. `ecosystems` defaults to `ECOSYSTEMS`, the same list
-    `present_ecosystems` reads -- there is no second, hand-written list.
+    Each ecosystem is independent (Ruling 31): one HTTP error, a corrupt zip,
+    or a filesystem error (disk full, a permission error, `dest` existing as
+    a directory) does not stop the rest -- `fetch_ecosystem` never raises for
+    any of those, always returning a `FetchResult` -- and the returned list
+    says which ecosystem(s) failed and why. `ecosystems` defaults to
+    `ECOSYSTEMS`, the same list `present_ecosystems` reads -- there is no
+    second, hand-written list.
     """
     return [
         fetch_ecosystem(eco, cache=cache, base_url=base_url, timeout=timeout)

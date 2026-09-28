@@ -15,6 +15,14 @@ class InstallResult:
     version_expected: str | None = None
     version_mismatch: bool = False
     duration_seconds: float = 0.0
+    # A non-fatal caveat on an otherwise successful install (Task O2 fix
+    # round 1, review Important #1): `print_install_progress` renders
+    # `.message` only on the FAILURE branch, so a note appended to
+    # `.message` on a `success=True` result never reached the CLI's own
+    # summary table -- only the logger did. `.warning` is rendered under
+    # the [OK] row instead, regardless of success. None for every tool that
+    # has nothing to add (the overwhelming majority).
+    warning: str | None = None
 
 
 @dataclass

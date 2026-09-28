@@ -912,6 +912,102 @@ def _guard_no_unmarked_scanner_spawn(request, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# osv_database's download transport, reachable by a loosely-mocked test.
+# ---------------------------------------------------------------------------
+# `scripts.core.osv_database.fetch_ecosystem` calls `requests.get` (through
+# the module's own `_get` indirection, see below) directly -- no
+# `subprocess.Popen`, so `_guard_no_unmarked_scanner_spawn` above has no
+# visibility into it at all. Task O2's own fix round found and fixed 7 tests
+# that would have reached the real ~280 MB-total OSV host under a loosely-
+# configured `MagicMock()` (an unconfigured `.installed` is truthy), but that
+# was 7 *known* instances, not a structural guard against a future one
+# (review Ruling 43, named risk (b)).
+#
+# Unlike the Popen guard, this one PREVENTS rather than detects-after: a
+# `Popen` spawn the guard merely flags is (at worst) a wasted local process,
+# but letting a real download run to completion before failing the test
+# would still cost the ~280 MB it exists to prevent. `pytest.fail` fires
+# before the real transport is ever called.
+#
+# Patches `osv_database._get`, not `requests.get`: `requests.get` is one
+# module attribute shared by every caller in the process, and patching it
+# globally intercepted OTHER modules' real, unrelated network calls too --
+# measured directly, it broke `kev_integration.py`'s real CISA KEV feed
+# fetch inside an unrelated `tests/cli/test_scan_target_names.py` test.
+# `osv_database._get` is a name that exists only in that one module.
+
+
+def osv_download_host_is_allowed(url: str) -> bool:
+    """True if `url`'s host is a local test server.
+
+    The only kind of host a unit test's `osv_database` download call may
+    reach without declaring `@pytest.mark.requires_tools` -- every test in
+    `tests/unit/test_osv_database.py` points `fetch_ecosystem`/`fetch_all` at
+    one via `base_url=` (a `127.0.0.1` `http.server`, an ephemeral port).
+    """
+    from urllib.parse import urlsplit
+
+    return urlsplit(url).hostname in ("127.0.0.1", "localhost")
+
+
+def make_osv_download_guard(delegate, on_blocked):
+    """Build an `osv_database._get` replacement that calls `on_blocked(url)`
+    - expected to raise - instead of `delegate` for any URL whose host is
+    not a local test server, and otherwise calls straight through to
+    `delegate`.
+
+    A standalone builder, not the fixture itself, so the detection logic can
+    be proven with a fake delegate and no real network reached - the same
+    shape `make_scanner_spawn_recorder` above uses for the Popen guard.
+    """
+
+    def guarded_get(url, *args, **kwargs):
+        if not osv_download_host_is_allowed(url):
+            on_blocked(url)
+            raise AssertionError(  # pragma: no cover - on_blocked must raise
+                "unreachable: on_blocked did not raise"
+            )
+        return delegate(url, *args, **kwargs)
+
+    return guarded_get
+
+
+@pytest.fixture(autouse=True)
+def _guard_no_unmarked_osv_database_download(request, monkeypatch):
+    """Make `osv_database`'s download transport raise on any non-local host,
+    unless the test declares `@pytest.mark.requires_tools`.
+
+    Per-test function scope: each test gets its own patch of
+    `osv_database._get`, restored automatically by `monkeypatch` -- same
+    isolation reasoning as `_guard_no_unmarked_scanner_spawn` above.
+    """
+    if request.node.get_closest_marker("requires_tools") is not None:
+        yield
+        return
+
+    import scripts.core.osv_database as osv_database_module
+
+    def _blocked(url: str) -> None:
+        pytest.fail(
+            f"{request.node.nodeid} called osv_database's download "
+            f"transport against a real host ({url!r}) without "
+            "@pytest.mark.requires_tools. osv_database.fetch_ecosystem can "
+            "download up to ~280 MB total from the real OSV host -- point "
+            "the test at a local test server instead (base_url=..., see "
+            "tests/unit/test_osv_database.py's `_serve` helper), or mark "
+            "the test requires_tools if it genuinely needs the real thing.",
+            pytrace=False,
+        )
+
+    monkeypatch.setattr(
+        osv_database_module,
+        "_get",
+        make_osv_download_guard(osv_database_module._get, _blocked),
+    )
+    yield
+
+
+# ---------------------------------------------------------------------------
 # Scan logging leaks out of the test that configured it.
 # ---------------------------------------------------------------------------
 # `configure_scan_logging()` sets a level and turns off propagation on the

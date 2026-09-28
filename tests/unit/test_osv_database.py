@@ -265,6 +265,34 @@ class _CorruptZip(http.server.BaseHTTPRequestHandler):
         pass
 
 
+def _empty_zip_bytes() -> bytes:
+    """A structurally valid zip with zero members (just the End Of Central
+    Directory record) -- distinct from `_CorruptZip`'s garbage bytes, which
+    fail `zipfile.ZipFile()` outright. This one opens fine and passes
+    `testzip()` (nothing to check); Minor #3 is that `testzip()` alone
+    accepts it as a good database."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w"):
+        pass
+    return buf.getvalue()
+
+
+class _EmptyZip(http.server.BaseHTTPRequestHandler):
+    """200 OK, a well-formed zip, but it has no members."""
+
+    BODY = _empty_zip_bytes()
+
+    def do_GET(self) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", "application/zip")
+        self.send_header("Content-Length", str(len(self.BODY)))
+        self.end_headers()
+        self.wfile.write(self.BODY)
+
+    def log_message(self, *args: object) -> None:
+        pass
+
+
 class _Interrupted(http.server.BaseHTTPRequestHandler):
     """Announces a Content-Length it never delivers, then drops the socket."""
 
@@ -414,3 +442,114 @@ def test_fetch_all_defaults_to_every_ecosystem_the_map_names(
     fetch_all(cache=tmp_path)
 
     assert seen == list(ECOSYSTEMS)
+
+
+# ---------------------------------------------------------------------------
+# Fix round 1 (review Important #2, Minor #3): every filesystem step is
+# guarded, not only the download, and a zero-member zip is rejected too.
+# ---------------------------------------------------------------------------
+
+
+def test_fetch_ecosystem_empty_zip_fails_and_keeps_the_old_zip(tmp_path) -> None:
+    """Minor #3: `zipfile.testzip()` accepts a zero-member zip as valid; a
+    structurally well-formed but empty `all.zip` must still be rejected, or
+    it would silently replace a good database with a useless one."""
+    dest = database_path("npm", tmp_path)
+    dest.parent.mkdir(parents=True)
+    dest.write_bytes(b"yesterday's good zip")
+
+    with _serve(_EmptyZip) as base_url:
+        result = fetch_ecosystem("npm", cache=tmp_path, base_url=base_url)
+
+    assert not result.success
+    assert "no members" in result.message
+    assert dest.read_bytes() == b"yesterday's good zip"
+    assert list(dest.parent.iterdir()) == [dest]
+
+
+def test_fetch_ecosystem_mkdir_failure_is_a_failed_result_not_an_exception(
+    tmp_path, monkeypatch
+) -> None:
+    """Important #2: `dest.parent.mkdir()` was unguarded -- a permission
+    error there must be a failed `FetchResult`, never an uncaught exception."""
+    dest = database_path("npm", tmp_path)
+    real_mkdir = Path.mkdir
+
+    def selective_fail(self, *a, **kw):
+        if self == dest.parent:
+            raise PermissionError("denied")
+        return real_mkdir(self, *a, **kw)
+
+    monkeypatch.setattr(Path, "mkdir", selective_fail)
+
+    with _serve(_GoodZip) as base_url:
+        result = fetch_ecosystem("npm", cache=tmp_path, base_url=base_url)
+
+    assert not result.success
+    assert "filesystem error" in result.message
+    assert not dest.exists()
+
+
+def test_fetch_ecosystem_mkstemp_failure_is_a_failed_result_not_an_exception(
+    tmp_path, monkeypatch
+) -> None:
+    """Important #2: `tempfile.mkstemp()` was unguarded -- a disk-full there
+    must be a failed `FetchResult`, never an uncaught exception, and must not
+    leave anything behind (there is nothing to clean up: it never opened)."""
+    dest = database_path("npm", tmp_path)
+    dest.parent.mkdir(parents=True)
+    real_mkstemp = osv_database.tempfile.mkstemp
+
+    def selective_fail(*a, **kw):
+        if kw.get("dir") == dest.parent:
+            raise OSError("No space left on device")
+        return real_mkstemp(*a, **kw)
+
+    monkeypatch.setattr(osv_database.tempfile, "mkstemp", selective_fail)
+
+    with _serve(_GoodZip) as base_url:
+        result = fetch_ecosystem("npm", cache=tmp_path, base_url=base_url)
+
+    assert not result.success
+    assert "filesystem error" in result.message
+    assert list(dest.parent.iterdir()) == []
+
+
+def test_fetch_ecosystem_os_replace_failure_is_a_failed_result_not_an_exception(
+    tmp_path,
+) -> None:
+    """Important #2's own named case: `dest` exists as a directory, so
+    `os.replace` cannot put a file there (`IsADirectoryError`/`OSError`,
+    platform-dependent) -- no mocking needed, the real filesystem does this."""
+    dest = database_path("npm", tmp_path)
+    dest.mkdir(parents=True)  # dest is a directory, not a file
+
+    with _serve(_GoodZip) as base_url:
+        result = fetch_ecosystem("npm", cache=tmp_path, base_url=base_url)
+
+    assert not result.success
+    assert "filesystem error" in result.message
+    assert dest.is_dir()  # untouched
+    # No stray temp file left beside it.
+    assert list(dest.parent.iterdir()) == [dest]
+
+
+def test_fetch_all_isolates_a_filesystem_error_to_one_ecosystem(tmp_path) -> None:
+    """Important #2: the other ecosystems still run, and their (real) zips
+    land, when one ecosystem's `os.replace` fails -- the same independence
+    guarantee `test_fetch_all_continues_past_one_ecosystem_failing` already
+    proves for an HTTP error, extended to a filesystem error."""
+    pypi_dest = database_path("PyPI", tmp_path)
+    pypi_dest.mkdir(parents=True)  # will fail os.replace
+
+    with _serve(_GoodZip) as base_url:
+        results = fetch_all(["npm", "PyPI", "Go"], cache=tmp_path, base_url=base_url)
+
+    by_ecosystem = {r.ecosystem: r for r in results}
+    assert by_ecosystem["npm"].success
+    assert by_ecosystem["Go"].success
+    assert not by_ecosystem["PyPI"].success
+    assert "filesystem error" in by_ecosystem["PyPI"].message
+    assert database_path("npm", tmp_path).is_file()
+    assert database_path("Go", tmp_path).is_file()
+    assert pypi_dest.is_dir()  # untouched

@@ -1762,8 +1762,12 @@ class ToolInstaller:
         every one of the eleven ecosystems -- it still runs against whichever
         ecosystem a target's lockfile needs, from a database this fetch just
         populated or one already cached from an earlier run. A failure is
-        still LOUD -- named ecosystem and reason, on the logger and appended
-        to the result's message -- and a still-missing ecosystem shows up
+        still LOUD, three ways: named ecosystem and reason on the logger, in
+        the result's `.message` (for anything that reads it directly), and in
+        `.warning` -- what `print_install_progress` actually renders under
+        the [OK] row (fix round 1, review Important #1: a note that only
+        ever reached `.message` was invisible there, since that branch is
+        read only on failure). A still-missing ecosystem also shows up
         concretely later: `jmo tools check` reports it, and a scan's row
         reads `failed:offline database missing` naming it.
         """
@@ -1779,12 +1783,12 @@ class ToolInstaller:
             f"osv-scanner: {len(failed)}/{len(fetch_results)} offline "
             f"database(s) failed to fetch: {detail}"
         )
-        note = (
-            f" (osv-scanner installed; {len(failed)}/{len(fetch_results)} "
-            f"offline database(s) failed to fetch: {detail} -- re-run "
-            "`jmo tools update` to retry)"
+        warning = (
+            f"{len(failed)}/{len(fetch_results)} offline database(s) failed "
+            f"to fetch: {detail} -- re-run `jmo tools update` to retry"
         )
-        return replace(result, message=result.message + note)
+        note = f" (osv-scanner installed; {warning})"
+        return replace(result, message=result.message + note, warning=warning)
 
     def _install_yara_rules(self, result: InstallResult) -> InstallResult:
         """Install the pinned rule bundle into ~/.jmo/yara-rules/.
@@ -2179,6 +2183,13 @@ def print_install_progress(
                 f" (v{result.version_installed})" if result.version_installed else ""
             )
             print(f"  {icon} {result.tool_name}{version} - {result.method}")
+            # A non-fatal caveat (osv-scanner's databases today): rendered
+            # here, not folded into `.message`, because the branch above
+            # never reads `.message` on a successful result (review
+            # Important #1) -- a note appended only there was invisible in
+            # this table, the summary a human actually watches.
+            if result.warning:
+                print(f"      {colorize('[WARN]', 'yellow')} {result.warning}")
         else:
             icon = colorize("[FAIL]", "red")
             # Not truncated: failure messages carry the asset URL, which is the

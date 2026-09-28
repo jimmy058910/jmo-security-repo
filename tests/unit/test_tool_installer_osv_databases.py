@@ -19,8 +19,8 @@ from __future__ import annotations
 import logging
 from unittest.mock import MagicMock, patch
 
-from scripts.cli.installers.models import InstallResult
-from scripts.cli.tool_installer import ToolInstaller
+from scripts.cli.installers.models import InstallProgress, InstallResult
+from scripts.cli.tool_installer import ToolInstaller, print_install_progress
 from scripts.core.osv_database import FetchResult
 
 OK = InstallResult(
@@ -107,6 +107,13 @@ def test_a_failed_ecosystem_is_named_loudly_but_does_not_flip_success(
     assert "download failed: 503 Service Unavailable" in result.message
     assert "jmo tools update" in result.message
     assert any("CRAN" in r.message for r in caplog.records)
+    # Fix round 1, review Important #1: `.message` alone never reaches the
+    # CLI's own install summary on a successful result -- `.warning` is what
+    # `print_install_progress` actually renders (see the class below).
+    assert result.warning is not None
+    assert "CRAN" in result.warning
+    assert "download failed: 503 Service Unavailable" in result.warning
+    assert "jmo tools update" in result.warning
 
 
 def test_every_ecosystem_failing_still_keeps_the_binary_marked_installed() -> None:
@@ -129,3 +136,74 @@ def test_every_ecosystem_failing_still_keeps_the_binary_marked_installed() -> No
     assert result.version_installed == "2.6.0"
     for eco in ("npm", "PyPI", "Go"):
         assert eco in result.message
+
+
+class TestPrintInstallProgressRendersTheWarning:
+    """Fix round 1, review Important #1: a note that reached only
+    `result.message` on a `success=True` result was invisible in
+    `print_install_progress`'s table -- the CLI's actual install summary, and
+    the thing a human watches. These test the RENDERED output (`capsys`),
+    not the `InstallResult` object the tests above already cover.
+    """
+
+    def test_a_warning_is_rendered_under_the_ok_row(self, capsys) -> None:
+        installer = _installer()
+        fetch_all = MagicMock(
+            return_value=[
+                FetchResult("npm", True, "fetched"),
+                FetchResult("CRAN", False, "download failed: 503 Service Unavailable"),
+            ]
+        )
+
+        with patch("scripts.core.osv_database.fetch_all", fetch_all):
+            result = installer._post_install("osv-scanner", OK)
+
+        progress = InstallProgress(total=1)
+        progress.add_result(result)
+        print_install_progress(progress)
+
+        out = capsys.readouterr().out
+        assert "[OK] osv-scanner (v2.6.0) - binary" in out
+        lines = out.splitlines()
+        ok_line = next(i for i, line in enumerate(lines) if "[OK] osv-scanner" in line)
+        assert "[WARN]" in lines[ok_line + 1]
+        assert "CRAN" in lines[ok_line + 1]
+        assert "download failed: 503 Service Unavailable" in lines[ok_line + 1]
+
+    def test_a_clean_install_prints_no_warning_line(self, capsys) -> None:
+        installer = _installer()
+        fetch_all = MagicMock(return_value=[FetchResult("npm", True, "fetched")])
+
+        with patch("scripts.core.osv_database.fetch_all", fetch_all):
+            result = installer._post_install("osv-scanner", OK)
+
+        progress = InstallProgress(total=1)
+        progress.add_result(result)
+        print_install_progress(progress)
+
+        out = capsys.readouterr().out
+        assert "[OK] osv-scanner (v2.6.0) - binary" in out
+        assert "[WARN]" not in out
+
+    def test_an_unrelated_tools_successful_row_is_unchanged(self, capsys) -> None:
+        """The general `print_install_progress` behaviour for every OTHER
+        tool -- whose `InstallResult` never sets `.warning` -- must not
+        change: only osv-scanner's caveat gains a line."""
+        progress = InstallProgress(total=1)
+        progress.add_result(
+            InstallResult(
+                tool_name="trivy",
+                success=True,
+                method="binary",
+                message="Installed binary to /home/user/.jmo/bin/trivy",
+                version_installed="0.50.0",
+            )
+        )
+        print_install_progress(progress)
+
+        out = capsys.readouterr().out
+        assert "[OK] trivy (v0.50.0) - binary" in out
+        assert "[WARN]" not in out
+        # The pre-existing behaviour this task must not disturb: a
+        # successful result's `.message` is still never printed.
+        assert "Installed binary to" not in out
