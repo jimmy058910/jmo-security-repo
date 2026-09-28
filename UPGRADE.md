@@ -71,7 +71,7 @@ These 16 tools are no longer installed, run or parsed. Their `per_tool` blocks i
 | kubescape | Trivy's config scan covers the same ground, and kubescape fetched its rules at scan time |
 | semgrep-secrets, bandit (as a scanner) | semgrep-secrets scanned 0 files and bandit's results were dominated by `.venv` noise; SAST moves to a vendored rule bundle in a later release |
 | trivy-rbac | Its output was identical to Trivy's config scan |
-| checkov-cicd | Folded into checkov, which already scans `.github/workflows` |
+| checkov-cicd | Folded into checkov, whose repository run covered `.github/workflows` until Phase 4 handed that to zizmor |
 | noseyparker, prowler, akto, scancode, cdxgen, dependency-check, horusec, falco (with falcoctl), afl++, mobsf, lynis | Never installable on Windows, not a repository scanner, a duplicate of a kept tool, or abandoned upstream |
 
 Bandit remains this repository's own pre-commit hook and lint step; only bandit as a JMo scanner is gone. Details: [docs/TOOLS.md](docs/TOOLS.md#removed-in-v200).

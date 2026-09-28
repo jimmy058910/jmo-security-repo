@@ -72,7 +72,7 @@ class TestIacScanner:
     def test_checkov_runs_on_a_file_target_with_no_tree_to_walk(self, tmp_path):
         """checkov's content trigger reads a tree. An IaC file target has none,
         and the file is itself checkov's content: it must run, not be skipped
-        as `no IaC or workflow files` (a defect caught while writing B3)."""
+        as `no IaC files` (a defect caught while writing B3)."""
         _, rows, MockRunner = _scan(
             tmp_path,
             [ToolResult(tool="checkov", status="success", attempts=1)],
@@ -82,6 +82,20 @@ class TestIacScanner:
         assert rows["checkov"].state is State.RAN
         (checkov_def,) = _defs(MockRunner)
         assert checkov_def.command[1:3] == ["-f", str(tmp_path / "main.tf")]
+
+    def test_checkov_keeps_every_framework_on_a_file_target(self, tmp_path):
+        """Ruling 16: the single-file invocation (`-f`) is NOT narrowed. The
+        user named the file directly (--terraform-state, --cloudformation,
+        --k8s-manifest), and narrowing would drop checkov's kubernetes checks
+        on --k8s-manifest."""
+        _, _, MockRunner = _scan(
+            tmp_path,
+            [ToolResult(tool="checkov", status="success", attempts=1)],
+            ["checkov"],
+        )
+
+        (checkov_def,) = _defs(MockRunner)
+        assert "--framework" not in checkov_def.command
 
     def test_scan_iac_with_retries(self, tmp_path):
         _, rows, _ = _scan(

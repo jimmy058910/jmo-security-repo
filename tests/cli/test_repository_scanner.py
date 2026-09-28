@@ -403,16 +403,17 @@ class TestContentDecidesWhoRuns:
     @pytest.mark.parametrize(
         "files",
         [
-            {".github/workflows/ci.yml": "on: push\n"},
-            {"charts/app/Chart.yaml": "name: app\n"},
+            {"main.tf": 'resource "aws_s3_bucket" "b" {}\n'},
             {"stack.yaml": "AWSTemplateFormatVersion: 2010-09-09\n"},
             {"infra/net.json": '{"Resources": {"V": {"Type": "AWS::EC2::VPC"}}}'},
             {"main.tf.json": "{}"},
         ],
     )
     def test_checkov_reads_every_kind_of_iac_it_is_triggered_by(self, tmp_path, files):
-        """The Phase 3 decision: Terraform, CloudFormation, Helm, and the
-        workflows checkov-cicd used to cover."""
+        """Phase 4 Ruling 15: Terraform and CloudFormation only. Workflows
+        moved to zizmor (Task Z2) and Helm's `Chart.yaml` never worked -- no
+        helm binary exists on the host or in the image, and checkov disabled
+        the framework in silence."""
         _, rows, _ = _scan(_repo(tmp_path, files=files), tmp_path / "out", ["checkov"])
 
         assert rows["checkov"].state is State.RAN
@@ -421,6 +422,8 @@ class TestContentDecidesWhoRuns:
         "files",
         [
             {"workflows/ci.yml": "on: push\n"},  # not under .github
+            {".github/workflows/ci.yml": "on: push\n"},  # zizmor's now, not checkov's
+            {"charts/app/Chart.yaml": "name: app\n"},  # helm: dead in both environments
             {"config.yaml": "resources: {}\n"},  # no AWS marker
             {"Dockerfile": "FROM alpine\n", "k8s/pod.yaml": "kind: Pod\n"},
         ],
@@ -428,7 +431,18 @@ class TestContentDecidesWhoRuns:
     def test_checkov_is_not_triggered_by_other_yaml(self, tmp_path, files):
         _, rows, _ = _scan(_repo(tmp_path, files=files), tmp_path / "out", ["checkov"])
 
-        assert rows["checkov"].label == "skipped:no IaC or workflow files"
+        assert rows["checkov"].label == "skipped:no IaC files"
+
+    def test_checkov_hands_workflows_to_zizmor(self, tmp_path):
+        """RED (Task Z2): a repository whose only content is a GitHub Actions
+        workflow used to read checkov `ran`. It must now read
+        `skipped:no IaC files`, with zizmor `ran` on the same content."""
+        repo = _repo(tmp_path, files={".github/workflows/ci.yml": "on: push\n"})
+
+        _, rows, _ = _scan(repo, tmp_path / "out", ["checkov", "zizmor"])
+
+        assert rows["checkov"].label == "skipped:no IaC files"
+        assert rows["zizmor"].state is State.RAN
 
     def test_a_missing_binary_is_reported_before_content_is_looked_at(self, tmp_path):
         """A repository with Go and no gosec is an environment gap, not a
@@ -737,6 +751,26 @@ class TestExclusions:
         assert ".venv" in values
         assert not any(v.startswith("**") for v in values), values
 
+    def test_checkov_narrows_frameworks_on_the_repo_invocation(self, tmp_path):
+        """Ruling 16: the repository invocation (`-d`) is narrowed to exactly
+        what `_is_iac` triggers on -- terraform, terraform_json,
+        cloudformation. Not helm (dead in both environments) and not
+        github_actions (zizmor's now)."""
+        _, _, defs = _scan(
+            _repo(tmp_path, files={"main.tf": "x\n"}), tmp_path / "out", ["checkov"]
+        )
+        command = defs["checkov"].command
+
+        assert command[1] == "-d"
+        idx = command.index("--framework")
+        assert command[idx + 1 : idx + 4] == [
+            "terraform",
+            "terraform_json",
+            "cloudformation",
+        ]
+        assert "helm" not in command
+        assert "github_actions" not in command
+
     def test_exclusions_precede_the_users_flags(self, tmp_path):
         _, _, defs = _scan(
             _repo(tmp_path, files={"main.tf": "x\n"}),
@@ -747,6 +781,7 @@ class TestExclusions:
         command = defs["checkov"].command
 
         assert command.index("--skip-path") < command.index("--compact")
+        assert command.index("--framework") < command.index("--compact")
 
     def test_syft_reads_vendored_trees_and_grype_reads_all_but_a_virtualenv(
         self, tmp_path

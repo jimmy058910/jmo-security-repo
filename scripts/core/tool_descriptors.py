@@ -295,19 +295,22 @@ _CFN_HEAD_BYTES = 8192
 
 
 def _is_iac(path: Path) -> bool:
-    """Terraform, CloudFormation, Helm, or a GitHub Actions workflow.
+    """Terraform or CloudFormation.
 
-    checkov's trigger (Phase 3 decision): the cut folded checkov-cicd into
-    checkov, so `.github/workflows` is checkov's until Phase 4 hands it to
-    zizmor. CloudFormation has no file name of its own, so a YAML or JSON file
-    counts when its first 8 KB name an `AWS::` type or the template version.
+    checkov's trigger (Phase 4, Task Z2): the Phase 3 cut folded checkov-cicd
+    into checkov, so `.github/workflows` was checkov's until this task handed
+    it to zizmor. **Not Helm either**: `Chart.yaml` used to count, but no helm
+    binary exists on the host or in the image and checkov disables the
+    framework silently, so a chart-only repository reading checkov `ran`
+    reported nothing. The trigger now fires only on what checkov's narrowed
+    `--framework terraform terraform_json cloudformation` (the repository
+    invocation) actually reads. CloudFormation has no file name of its own, so
+    a YAML or JSON file counts when its first 8 KB name an `AWS::` type or the
+    template version.
     """
     name = path.name
-    if name.endswith((".tf", ".tf.json")) or name == "Chart.yaml":
+    if name.endswith((".tf", ".tf.json")):
         return True
-    if path.suffix in (".yml", ".yaml") and path.parent.name == "workflows":
-        if path.parent.parent.name == ".github":
-            return True
     if path.suffix in _CFN_SUFFIXES:
         try:
             with path.open("rb") as fh:
@@ -587,7 +590,21 @@ def _trivy_k8s(ctx: ScanContext) -> list[Invocation]:
     ]
 
 
-def _checkov(flag: str, excl: bool) -> Builder:
+# checkov's default (no `--framework`) evaluates every framework it ships,
+# including `secrets` (195.8 s alone on bracketforge) and `github_actions` --
+# ground zizmor now owns. Narrowed to exactly what `_is_iac` triggers on.
+# Ruling 16: this narrowing is for the REPOSITORY invocation (`-d`) only. The
+# single-file `iac` invocation (`-f`, for --terraform-state/--cloudformation/
+# --k8s-manifest) keeps every framework -- the user named the file, and
+# narrowing would drop checkov's kubernetes checks on --k8s-manifest.
+_CHECKOV_IAC_FRAMEWORKS: tuple[str, ...] = (
+    "terraform",
+    "terraform_json",
+    "cloudformation",
+)
+
+
+def _checkov(flag: str, excl: bool, framework: bool = False) -> Builder:
     def build(ctx: ScanContext) -> list[Invocation]:
         return [
             Invocation(
@@ -597,6 +614,7 @@ def _checkov(flag: str, excl: bool) -> Builder:
                     str(ctx.target),
                     "-o",
                     "json",
+                    *(("--framework", *_CHECKOV_IAC_FRAMEWORKS) if framework else ()),
                     *(ctx.exclusion_args if excl else ()),
                     *ctx.flags,
                 ),
@@ -859,7 +877,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ToolDescriptor(
             name="checkov",
             invocations={
-                "repo": _checkov("-d", excl=True),
+                "repo": _checkov("-d", excl=True, framework=True),
                 "iac": _checkov("-f", excl=False),
             },
             version_probe=VersionProbe(
