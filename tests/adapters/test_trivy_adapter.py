@@ -520,6 +520,103 @@ class TestTrivyCweMapping:
         assert findings[0].risk is None
 
 
+class TestTrivySecretCwe:
+    """A trivy secret carries CWE-798, as gitleaks' and trufflehog's do.
+
+    trivy writes no CWE on a secret, and compliance enrichment reads
+    ``risk.cwe`` and nowhere else, so a trivy secret reached no OWASP mapping.
+    Since #1221 its ruleId is its RuleID (``github-pat``), the same string
+    gitleaks prints, so the two cluster on the id alone; when trivy's CRITICAL
+    finding led the cluster, the consensus copied trivy's empty ``risk`` and
+    the secret left the ``owasp-top-10`` count. The load-order test is
+    ``tests/integration/test_cross_tool_dedup_integration.py``.
+    """
+
+    def _parse(self, tmp_path: Path, results: list[dict]):
+        sample = {"Trivy": {"Version": "0.74.0"}, "Results": results}
+        return TrivyAdapter().parse(write(tmp_path, "trivy.json", json.dumps(sample)))
+
+    def test_secret_carries_cwe_798_in_the_secret_scanners_shape(self, tmp_path: Path):
+        findings = self._parse(
+            tmp_path,
+            [
+                {
+                    "Target": "app/config.py",
+                    "Class": "secret",
+                    "Secrets": [
+                        {
+                            "RuleID": "github-pat",
+                            "Category": "GitHub",
+                            "Severity": "CRITICAL",
+                            "Title": "GitHub Personal Access Token",
+                            "StartLine": 4,
+                            "EndLine": 4,
+                            "Match": "TOKEN = ****************",
+                        }
+                    ],
+                }
+            ],
+        )
+        assert len(findings) == 1
+        # gitleaks_adapter's and trufflehog_adapter's (unverified) dict: trivy
+        # verifies nothing either.
+        assert findings[0].risk == {
+            "cwe": ["CWE-798"],
+            "confidence": "MEDIUM",
+            "likelihood": "HIGH",
+            "impact": "HIGH",
+        }
+
+    def test_vulnerabilities_and_misconfigurations_never_get_it(self, tmp_path: Path):
+        findings = self._parse(
+            tmp_path,
+            [
+                {
+                    "Target": "package-lock.json",
+                    "Vulnerabilities": [
+                        {
+                            "VulnerabilityID": "CVE-2023-0001",
+                            "Severity": "HIGH",
+                            "CweIDs": ["CWE-79"],
+                        },
+                        {"VulnerabilityID": "CVE-2023-0002", "Severity": "LOW"},
+                    ],
+                },
+                {
+                    "Target": "Dockerfile",
+                    "Misconfigurations": [{"ID": "DS-0002", "Severity": "HIGH"}],
+                },
+            ],
+        )
+        by_id = {f.ruleId: f for f in findings}
+        assert set(by_id) == {"CVE-2023-0001", "CVE-2023-0002", "DS-0002"}
+        assert by_id["CVE-2023-0001"].risk == {"cwe": ["CWE-79"]}
+        assert by_id["CVE-2023-0002"].risk is None
+        assert by_id["DS-0002"].risk is None
+
+    def test_each_secret_gets_its_own_risk_dict(self, tmp_path: Path):
+        """Enrichment writes into ``risk``; one shared dict would leak across."""
+        findings = self._parse(
+            tmp_path,
+            [
+                {
+                    "Target": "a.py",
+                    "Secrets": [
+                        {
+                            "RuleID": "github-pat",
+                            "Severity": "CRITICAL",
+                            "StartLine": 1,
+                        },
+                        {"RuleID": "private-key", "Severity": "HIGH", "StartLine": 2},
+                    ],
+                }
+            ],
+        )
+        assert len(findings) == 2
+        assert findings[0].risk == findings[1].risk
+        assert findings[0].risk is not findings[1].risk
+
+
 class TestTrivyCvss:
     """#1243: trivy vulnerabilities carried no ``cvss`` at all.
 

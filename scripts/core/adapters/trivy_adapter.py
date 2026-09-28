@@ -61,6 +61,9 @@ Field mapping (measured on trivy 0.74.0's own JSON, #1221):
   always outranks v2 (schema: "Adapters select v3 over v2"), NVD is preferred
   within a version. Omitted (not even an empty ``cvss``) when the block is
   absent or empty, or holds no numeric score under either key.
+- risk: a vulnerability's ``CweIDs``; a secret's CWE-798, in the dict
+  gitleaks and trufflehog write (trivy's secret records carry no CWE); none
+  for a misconfiguration.
 
 Severity Mapping (Trivy -> CommonFinding):
 - CRITICAL: CRITICAL
@@ -267,13 +270,26 @@ class TrivyAdapter(AdapterPlugin):
                         location["endLine"] = end_line
 
                     # Risk metadata and CVSS for vulnerabilities
-                    risk = None
+                    risk: dict[str, Any] | None = None
                     cvss_field = None
                     if tag == "vulnerability":
                         cwe_ids = item.get("CweIDs", [])
                         if cwe_ids and isinstance(cwe_ids, list):
                             risk = {"cwe": cwe_ids}
                         cvss_field = _best_vulnerability_cvss(item.get("CVSS"))
+                    elif tag == "secret":
+                        # trivy writes no CWE on a secret, and compliance
+                        # enrichment reads `risk.cwe` only. A trivy secret shares
+                        # gitleaks' ruleId (`github-pat`), so the two cluster,
+                        # and trivy's CRITICAL leads: the consensus copied an
+                        # empty risk and the secret left `owasp-top-10`. The
+                        # gitleaks and (unverified) trufflehog dict: CWE-798.
+                        risk = {
+                            "cwe": ["CWE-798"],
+                            "confidence": "MEDIUM",
+                            "likelihood": "HIGH",
+                            "impact": "HIGH",
+                        }
 
                     # Create Finding object
                     finding = Finding(
