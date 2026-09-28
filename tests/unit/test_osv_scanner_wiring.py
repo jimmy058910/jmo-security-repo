@@ -21,9 +21,16 @@ Measured before any of this was written (the Phase 4 plan, and O1's own):
   unroutable proxy: "failed resolution ... dial tcp 127.0.0.1:9"); with
   `--no-resolve` nothing is dialled and NodeGoat's 304 are unchanged.
 
-The real-binary tests read `tests/fixtures/osv-db`: two synthetic advisories
+- Go's call analysis is on by default and runs only where a Go toolchain is
+  installed ("Skipping call analysis on Go code since Go is not installed"
+  otherwise), hiding what it finds uncalled. `--no-call-analysis=all` removes
+  that line and wins over a later `--call-analysis=rust`; an unknown value is
+  accepted silently (measured, 2.6.0), so the value is pinned here.
+
+The real-binary tests read `tests/fixtures/osv-db`: three synthetic advisories
 (`JMO-TEST-2026-0001`, npm `left-pad` < 1.3.0; `JMO-TEST-2026-0002`, PyPI
-`urllib3` < 1.26.5), so they run offline and download nothing.
+`urllib3` < 1.26.5; `JMO-TEST-2026-0003`, Go `golang.org/x/text` < 0.3.8), so
+they run offline and download nothing.
 """
 
 from __future__ import annotations
@@ -291,7 +298,7 @@ def test_one_run_reads_every_lockfile_relative_to_the_root(
     rows = _run(repo, out, runner, results_tree=(tmp_path / "repo/results").resolve())
 
     ((definition,),) = runner.rounds
-    assert definition.command[:10] == [
+    assert definition.command[:11] == [
         "/bin/osv-scanner",
         "scan",
         "source",
@@ -307,9 +314,12 @@ def test_one_run_reads_every_lockfile_relative_to_the_root(
         # A lockfile with no packages is rc 128 and no report without it
         # (measured); JMo has already found the lockfile, so it is clean.
         "--allow-no-lockfiles",
+        # Call analysis runs only where a Go toolchain is installed and hides
+        # what it finds uncalled: a result that depends on the machine.
+        "--no-call-analysis=all",
     ]
     lockfiles = _lockfiles(definition)
-    assert definition.command[10:] == [a for f in lockfiles for a in ("-L", f)]
+    assert definition.command[11:] == [a for f in lockfiles for a in ("-L", f)]
     assert sorted(lockfiles) == sorted(rel for rel, kept in PLANTED.items() if kept)
     assert all(not Path(f).is_absolute() and "\\" not in f for f in lockfiles)
     assert definition.cwd == (tmp_path / "repo").resolve()
@@ -611,11 +621,12 @@ def test_a_single_broken_lockfile_has_nothing_to_split_and_is_named(
 # --- the frozen database and the real binary ----------------------------------
 
 
-def test_the_frozen_database_is_two_synthetic_advisories() -> None:
+def test_the_frozen_database_is_three_synthetic_advisories() -> None:
     """What the real-binary and contract tests read. Synthetic, so it is no
     advisory's copy and matches nothing in a real lockfile by accident."""
+    assert osv_database.present_ecosystems(cache=FROZEN_DB) == {"npm", "PyPI", "Go"}
     held = {}
-    for ecosystem in ("npm", "PyPI"):
+    for ecosystem in ("npm", "PyPI", "Go"):
         with zipfile.ZipFile(database_path(ecosystem, FROZEN_DB)) as z:
             (name,) = z.namelist()
             record = json.loads(z.read(name))
@@ -626,6 +637,7 @@ def test_the_frozen_database_is_two_synthetic_advisories() -> None:
     assert held == {
         "npm": ("JMO-TEST-2026-0001", "left-pad"),
         "PyPI": ("JMO-TEST-2026-0002", "urllib3"),
+        "Go": ("JMO-TEST-2026-0003", "golang.org/x/text"),
     }
 
 
@@ -741,6 +753,31 @@ def test_real_osv_scanner_reads_a_lockfile_with_no_packages_as_clean(
 
     assert row.state is State.RAN, row
     assert _rule_ids(out / "osv-scanner.json") == []
+
+
+@pytest.mark.requires_tools
+def test_real_osv_scanner_runs_no_call_analysis(tmp_path, monkeypatch) -> None:
+    """Every vulnerable version is reported, called or not, on any machine.
+    Without `--no-call-analysis=all` osv-scanner starts Go's call analysis:
+    with no toolchain it says "Skipping call analysis on Go code since Go is
+    not installed" (measured, 2.6.0); with one, it builds the module and hides
+    what is uncalled."""
+    row, out, results = _real_scan(
+        tmp_path,
+        monkeypatch,
+        {
+            "go.mod": (
+                b"module example.com/app\n\ngo 1.21\n\n"
+                b"require golang.org/x/text v0.3.0\n"
+            ),
+            "main.go": b"package main\n\nfunc main() {}\n",
+        },
+    )
+
+    assert row.state is State.RAN, row
+    (result,) = results
+    assert "call analysis" not in result.stderr.lower(), result.stderr
+    assert _rule_ids(out / "osv-scanner.json") == ["JMO-TEST-2026-0003"]
 
 
 @pytest.mark.requires_tools

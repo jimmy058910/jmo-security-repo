@@ -784,6 +784,11 @@ def _osv_scanner_repo(ctx: ScanContext) -> list[Invocation]:
                 # it; with it, rc 0 and an empty report. A lockfile it cannot
                 # read is still 127 (measured).
                 "--allow-no-lockfiles",
+                # Go's call analysis is on by default and runs only where a Go
+                # toolchain is installed, hiding the vulnerabilities it finds
+                # uncalled: a result that depended on the scanning machine.
+                # `all` also wins over a later `--call-analysis=` (measured).
+                "--no-call-analysis=all",
                 *ctx.flags,
                 *(arg for f in files for arg in ("-L", f)),
             ),

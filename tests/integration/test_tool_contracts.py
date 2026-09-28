@@ -266,9 +266,9 @@ TOOL_CONTRACTS: dict[str, dict[str, Any]] = {
         "sample_target": "python-vulnerable",
         # As JMo runs it, with the lockfile given by an absolute path and the
         # SARIF on stdout. Offline against tests/fixtures/osv-db, a frozen
-        # database of two synthetic advisories, so the contract downloads
+        # database of three synthetic advisories, so the contract downloads
         # nothing; `--no-resolve` so `requirements.txt` is not resolved over
-        # the network (deps.dev).
+        # the network (deps.dev); no call analysis, as in a scan.
         "command": [
             "osv-scanner",
             "scan",
@@ -277,6 +277,7 @@ TOOL_CONTRACTS: dict[str, dict[str, Any]] = {
             "sarif",
             "--offline-vulnerabilities",
             "--no-resolve",
+            "--no-call-analysis=all",
             "-L",
             "{target}/requirements.txt",
         ],
