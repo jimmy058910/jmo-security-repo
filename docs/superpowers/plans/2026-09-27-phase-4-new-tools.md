@@ -263,10 +263,10 @@ touch the ~25 documents that state it.
 |---|---|---|
 | **A** | this plan; the program-plan corrections; Phase 3 marked landed; the new issues filed and rostered; report-side fixes that touch no scan-engine code: trivy's rule id and lines, CVSS for the diff tier, gitleaks' rule equivalences | #1221 #1243 #1328 |
 | **Z** | zizmor's row, installer, image; checkov hands Actions over (trigger and `--framework`); checkov's exclusions | #1313 |
-| **O** | osv-scanner's row, installer, image and offline database; trivy's dependency flags; one identity per dependency finding, so two scanners' reports of one vulnerability cluster | (the new dependency-identity issue) |
+| **O** | osv-scanner's row, installer, image and offline database; trivy's dependency flags; one identity per dependency finding, so two scanners' reports of one vulnerability cluster | #1346 |
 | **N** | the `jmo-native` row, its runner and its tracked fixture | — |
 | **G** | gosec removed (#1310); GitLab targets scan the images they reference (#1311); every tool's short output flags, new rows included | #1310 #1311 #1335 |
-| **API** | zap's OpenAPI import: a new invocation with its own target rules, on its own PR as PR T was | #1331 |
+| **API** | zap's OpenAPI import: a new invocation with its own target rules, on its own PR as PR T was | #1331 #1347 #1348 |
 
 A precedes Z because the corrections change Z's gate. Z precedes O only for review
 size; O and N are independent. G follows N because #1335 covers the new rows' flags.
@@ -286,7 +286,7 @@ summary table), this file.
 - [x] § Phase 5 "Measure first" gains the two measured traps (Defender quarantines two
   opengrep-rules test files; `generic/secrets` trips secret scanning). § Phase 6 gains
   the answer-key targets (decision 9).
-- [ ] Search again, then file six issues **immediately before pushing** (decision 8),
+- [x] Search again, then file six issues **immediately before pushing** (decision 8),
   each body carrying its measurement from this plan, and roster them: dependency
   scanners never cluster (`phase:4`); zap severity always MEDIUM (`phase:4`); a trailing
   slash stops zap's spider (`phase:4`); the vacuous juice-shop smoke job (`phase:6`);
@@ -294,7 +294,7 @@ summary table), this file.
   the tag). Rosters move Phase 4 8 → 11, Phase 6 3 → 4, Phase 8 9 → 10, after the tag
   26 → 27, `before tag` 95 → 100. Amend #1221's body with the lines and the version.
   Filing reddens every open PR's `phase-audit` until this merges.
-- [ ] `phase_audit.py derive` exit 0; `verify` unclaimed 0; `test_real_plan_parses` green.
+- [x] `phase_audit.py derive` exit 0; `verify` unclaimed 0; `test_real_plan_parses` green.
 
 ## Task A2: trivy's rule id and lines (#1221, and the line defect)
 
@@ -566,17 +566,17 @@ the wizard's API mode, tests beside each.
 | 9 | The answer-key targets ("Ground truth", below) | **All in Phase 6**, with its golden-fixture work; Phase 4 keeps its measured gates. PR A roster-notes them in the program plan's Phase 6 |
 | 10 | The schema-packaging defect | **Filed, Phase 8** (distribution) |
 
-## New defects found by the measurement (none has an issue; searched)
+## New defects found by the measurement (searched; filed 2026-09-28)
 
 | Defect | Routing (decided) |
 |---|---|
 | trivy misconfigurations lose their lines (40 of 87 on juice-shop), and trivy findings report `tool.version` `unknown` | into #1221's body (same file, same fixture, PR A) |
-| No two dependency scanners can ever cluster (golf: 85 post-dedup, 0 clusters, 38 shared CVEs) | a new issue, Phase 4, PR O |
-| CI's "Tool Smoke Tests (Juice-Shop Fixture)" has passed on 22 skips since 2026-02-01: its fixture is gitignored for push protection | a new issue, Phase 6 (golden fixtures and silent adapter failure are that phase's); its keys generated at test time as G1's are |
-| Every zap finding is MEDIUM (`zap_adapter.py:93`), so `--fail-on HIGH` misses a High XSS | a new issue, Phase 4, PR API |
-| A trailing slash on `--url` stops zap's spider (an XSS missed) | a new issue, Phase 4, PR API |
-| nuclei cannot import a spec without attacking its `servers` | a new issue, after the tag (decision 7) |
-| **Neither the wheel nor the image ships the findings schema**: the wheel built from `292d3cff` has 188 entries and no `common_finding.v1.json` (`package-data` names only the dashboard), and `.dockerignore:45` drops `docs/`. `schema_validator.py:34` looks for `docs/schemas/` beside the package, so every installed JMo logs "Schema validation skipped" and validates nothing (seen in the docker-task run at `292d3cff`) | a new issue, Phase 8 (decision 10) |
+| No two dependency scanners can ever cluster (golf: 85 post-dedup, 0 clusters, 38 shared CVEs) | #1346, Phase 4, PR O |
+| CI's "Tool Smoke Tests (Juice-Shop Fixture)" has passed on 22 skips since 2026-02-01: its fixture is gitignored for push protection | #1349, Phase 6 (golden fixtures and silent adapter failure are that phase's); its keys generated at test time as G1's are |
+| Every zap finding is MEDIUM (`zap_adapter.py:93`), so `--fail-on HIGH` misses a High XSS | #1347, Phase 4, PR API |
+| A trailing slash on `--url` stops zap's spider (an XSS missed) | #1348, Phase 4, PR API |
+| nuclei cannot import a spec without attacking its `servers` | #1351, after the tag (decision 7) |
+| **Neither the wheel nor the image ships the findings schema**: the wheel built from `292d3cff` has 188 entries and no `common_finding.v1.json` (`package-data` names only the dashboard), and `.dockerignore:45` drops `docs/`. `schema_validator.py:34` looks for `docs/schemas/` beside the package, so every installed JMo logs "Schema validation skipped" and validates nothing (seen in the docker-task run at `292d3cff`) | #1350, Phase 8 (decision 10) |
 | gosec findings report `tool.version` `unknown` | moot: gosec is removed |
 | A `.cmd` tool's arguments are re-parsed by cmd.exe on Windows (`\|`, `^`, `&`) | into #1313 for checkov's rendering; `.claude/rules/windows-encoding.rules.md` for the class |
 
