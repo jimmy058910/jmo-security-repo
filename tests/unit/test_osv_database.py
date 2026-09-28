@@ -57,7 +57,8 @@ ACCEPTED = {
     "packages.config": "NuGet",
     "pubspec.lock": "Pub",
     "mix.lock": "Hex",
-    # Ruling 31: mapped here, fetched by O2 beside the ten.
+    # CRAN: mapped here, fetched by O2 beside the ten (fetch_all reads this
+    # same map, so it needs no separate entry).
     "renv.lock": "CRAN",
 }
 
@@ -102,7 +103,7 @@ def test_the_wildcard_is_exact_only_where_it_is_spelled() -> None:
 
 
 def test_a_conan_lockfile_is_not_read() -> None:
-    """Ruling 42: OSV publishes no ConanCenter database (404, and absent from
+    """OSV publishes no ConanCenter database (404, and absent from
     its ecosystems list), so a `conan.lock` could only ever fail its row."""
     assert ecosystem_of("conan.lock") is None
     assert "ConanCenter" not in ECOSYSTEMS
@@ -184,7 +185,7 @@ def test_an_unreadable_cache_counts_as_absent(tmp_path, monkeypatch) -> None:
 
 
 # ---------------------------------------------------------------------------
-# The fetch side (Task O2, Ruling 30/31): `fetch_ecosystem`/`fetch_all` fill
+# The fetch side (Task O2): `fetch_ecosystem`/`fetch_all` fill
 # the cache `present_ecosystems` above reads. Exercised against a local
 # `http.server` on 127.0.0.1, never the real OSV host -- see task-O2-report.md
 # for the one real fetch (crates.io, into a scratch tmp dir, through this same
@@ -392,8 +393,8 @@ def test_fetch_ecosystem_replaces_atomically_via_a_same_dir_temp_file(
     tmp_path, monkeypatch
 ) -> None:
     """`os.replace` is the only thing that ever creates or overwrites `dest`,
-    and its source is a temp file in `dest`'s own directory (Ruling 31's
-    atomic-replace requirement: never a cross-filesystem copy)."""
+    and its source is a temp file in `dest`'s own directory (so the replace
+    is never a cross-filesystem copy)."""
     calls: list[tuple[Path, Path]] = []
     real_replace = osv_database.os.replace
 
@@ -430,7 +431,8 @@ def test_fetch_all_continues_past_one_ecosystem_failing(tmp_path) -> None:
 def test_fetch_all_defaults_to_every_ecosystem_the_map_names(
     tmp_path, monkeypatch
 ) -> None:
-    """No second, hand-written ecosystem list for the fetch side (Ruling 31)."""
+    """No second, hand-written ecosystem list for the fetch side: it defaults
+    to this module's own map."""
     seen: list[str] = []
 
     def fake_fetch(eco, cache=None, *, base_url="", timeout=0):

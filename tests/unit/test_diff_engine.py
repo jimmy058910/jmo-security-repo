@@ -548,7 +548,8 @@ def test_extract_priority_cvss_v4_score_is_the_same_scale_as_v3():
 
     A v4.0 base score is on the same 0-10 scale as v3.x, so the existing
     ``score * 10`` arithmetic needs no version-aware branch here -- checked,
-    not re-calibrated, per Ruling 34's scope.
+    not re-calibrated: the CVSS version-preference order (#1356) only picks
+    which score to use, not how it is scaled.
     """
     engine = DiffEngine()
 

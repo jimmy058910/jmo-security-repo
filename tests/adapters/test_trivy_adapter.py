@@ -632,7 +632,7 @@ class TestTrivyCvss:
 
     NVD's score wins within a version; else any other source's. Across
     versions, v3.x outranks v4.0 outranks v2.0 regardless of source or numbers
-    (Ruling 34, #1356).
+    (#1356).
     """
 
     def _vuln(self, tmp_path: Path, name: str, cvss: dict) -> Path:
@@ -724,7 +724,7 @@ class TestTrivyCvss:
         }
 
     def test_v4_only_used_when_nothing_has_v3(self, tmp_path: Path):
-        """Ruling 34 (#1356): an advisory with a v4.0 metric and nothing else."""
+        """An advisory with a v4.0 metric and nothing else (#1356)."""
         cvss = {
             "nvd": {
                 "V40Vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N",
@@ -739,7 +739,7 @@ class TestTrivyCvss:
         }
 
     def test_v3_preferred_over_v4_even_with_a_lower_score(self, tmp_path: Path):
-        """Ruling 34: v3.x outranks v4.0 whatever the numbers."""
+        """v3.x outranks v4.0 whatever the numbers (#1356)."""
         cvss = {
             "nvd": {
                 "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
@@ -756,7 +756,7 @@ class TestTrivyCvss:
         }
 
     def test_v4_preferred_over_v2_even_with_a_lower_score(self, tmp_path: Path):
-        """Ruling 34: v4.0 outranks v2.0 whatever the numbers."""
+        """v4.0 outranks v2.0 whatever the numbers (#1356)."""
         cvss = {
             "nvd": {
                 "V2Vector": "AV:N/AC:L/Au:N/C:P/I:P/A:P",
@@ -773,7 +773,7 @@ class TestTrivyCvss:
         }
 
     def test_vendor_v4_used_when_nvd_absent(self, tmp_path: Path):
-        """NVD-first within a version (Ruling 34's tie-break) also holds for v4.0."""
+        """NVD-first within a version (the same tie-break #1356 uses) also holds for v4.0."""
         cvss = {
             "ghsa": {
                 "V40Vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N",

@@ -527,9 +527,13 @@ def test_a_grouped_rule_joins_the_finding_with_its_own_id():
 
 
 def test_a_split_linked_set_still_pairs_by_shared_id():
-    """osv-scanner's rule links trivy's two lodash advisories. grype's
-    CVE-2026-4800 finding joins trivy's CVE-2026-4800 one, whichever cluster
-    without a grype finding came first."""
+    """osv-scanner's rule links both of trivy's lodash advisories via alias,
+    so the four findings are one connected set by shared ids -- and they
+    still split into two. t1 and o1 share a primary id and pair first; t2 and
+    g1 each name the other's id and pair too. The two pairs never merge,
+    because trivy already has a finding in each: two groups join only when no
+    tool sits in both and every finding of one shares an id with every
+    finding of the other."""
     findings = [
         lodash("t1", severity="CRITICAL"),
         lodash("t2", severity="CRITICAL"),

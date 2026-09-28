@@ -1,5 +1,6 @@
 """Guard: `_guard_no_unmarked_osv_database_download` must still detect a real
-download (fix round 1, review Ruling 43, named risk (b)).
+download (fix round 1 review: nothing structurally guarded against a future
+test reaching the real OSV host).
 
 `tests/conftest.py`'s autouse fixture wraps `osv_database._get` (a name that
 exists only in that module -- patching `requests.get` itself would also

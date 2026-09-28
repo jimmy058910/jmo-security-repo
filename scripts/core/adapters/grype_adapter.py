@@ -61,7 +61,7 @@ _CVSS_VERSION_LABELS: tuple[tuple[str, str], ...] = (
 
 
 def _select_best_cvss(cvss_scores: dict[str, Any]) -> dict[str, Any] | None:
-    """Select the best CVSS via the shared preference (Ruling 34, #1356): v3.x
+    """Select the best CVSS via the shared preference (#1356): v3.x
     over v4.0 over v2.0, whatever the numbers -- the same order the trivy
     adapter and the consensus merge use, all through `preferred_cvss`.
 

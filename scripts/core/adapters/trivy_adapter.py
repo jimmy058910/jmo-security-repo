@@ -59,7 +59,7 @@ Field mapping (measured on trivy 0.74.0's own JSON, #1221):
   holding up to ``V3Score``/``V3Vector``, ``V40Score``/``V40Vector`` and
   ``V2Score``/``V2Vector``. NVD's score wins within a version; else any other
   source's -- across versions, `common_finding.preferred_cvss` ranks v3.x over
-  v4.0 over v2.0 (Ruling 34), whatever the numbers. Omitted (not even an empty
+  v4.0 over v2.0, whatever the numbers (#1356). Omitted (not even an empty
   ``cvss``) when the block is absent or empty, or holds no numeric score under
   any key.
 - risk: a vulnerability's ``CweIDs``; a secret's CWE-798, in the dict
@@ -158,7 +158,7 @@ def _best_vulnerability_cvss(cvss_block: Any) -> dict[str, Any] | None:
     which is alphabetical: trivy's ``CVSS`` block is a Go map, and
     ``encoding/json`` sorts map keys. That gives at most one candidate per
     version, which `preferred_cvss` then ranks v3.x over v4.0 over v2.0
-    (Ruling 34, #1356) -- the same order the consensus merge and grype use, all
+    (#1356) -- the same order the consensus merge and grype use, all
     through that one function.
     """
     if not isinstance(cvss_block, dict) or not cvss_block:

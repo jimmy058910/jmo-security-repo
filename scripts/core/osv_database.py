@@ -5,7 +5,7 @@ A scan never downloads (Phase 4 decision): osv-scanner runs with
 at `cache_dir()`, where it reads `osv-scalibr/<ecosystem>/all.zip` (measured,
 2.6.0: "Loaded npm local db from ...\\osv-db/osv-scalibr/npm/all.zip"). O1 built
 the read side: which lockfile belongs to which ecosystem, and which ecosystems
-have a database. This module also fills the cache (Task O2, Ruling 30):
+have a database. This module also fills the cache (Task O2):
 `fetch_ecosystem`/`fetch_all` download OSV's own hosted zips, one ecosystem at
 a time, atomically. `ToolInstaller._post_install` calls them when osv-scanner
 is installed, and `cmd_tools_update` calls them on every `jmo tools update`
@@ -44,7 +44,7 @@ import requests
 #
 # `conan.lock` is accepted by osv-scanner but not here: OSV publishes no
 # ConanCenter database (404, and absent from its ecosystems list), so its row
-# could only ever fail (Ruling 42; docs/KNOWN_LIMITATIONS.md).
+# could only ever fail (docs/KNOWN_LIMITATIONS.md).
 LOCKFILE_ECOSYSTEMS: dict[str, str] = {
     "package-lock.json": "npm",
     "npm-shrinkwrap.json": "npm",
@@ -142,8 +142,9 @@ def _get(url: str, *, timeout: float, **kwargs):
     exists only in this module.
 
     A test guard (`tests/conftest.py`'s
-    `_guard_no_unmarked_osv_database_download`, fix round 1, review Ruling
-    43 named risk (b)) needs to intercept exactly this call, without
+    `_guard_no_unmarked_osv_database_download`, added because nothing
+    structurally stopped a future test from reaching the real OSV host)
+    needs to intercept exactly this call, without
     touching `requests.get` itself -- that symbol is one shared module
     attribute, and patching it globally would also intercept every OTHER
     module's real, unrelated network calls (measured: it broke
@@ -184,8 +185,8 @@ def fetch_ecosystem(
     `IsADirectoryError` in that case), and each becomes a failed
     `FetchResult` here rather than an uncaught exception. That is what lets
     `fetch_all` isolate one ecosystem's filesystem error from every
-    ecosystem after it, the same guarantee Ruling 31 already gives HTTP and
-    zip-content failures.
+    ecosystem after it, the same isolation HTTP and zip-content failures
+    already have below.
 
     Any failure along the way leaves yesterday's database exactly as it was
     and deletes the partial temp file; nothing is ever written in place at
@@ -258,7 +259,7 @@ def fetch_all(
 ) -> list[FetchResult]:
     """Fetch every ecosystem's database, one at a time.
 
-    Each ecosystem is independent (Ruling 31): one HTTP error, a corrupt zip,
+    Each ecosystem is independent: one HTTP error, a corrupt zip,
     or a filesystem error (disk full, a permission error, `dest` existing as
     a directory) does not stop the rest -- `fetch_ecosystem` never raises for
     any of those, always returning a `FetchResult` -- and the returned list

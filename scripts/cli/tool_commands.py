@@ -592,8 +592,8 @@ def cmd_tools_install(args: argparse.Namespace) -> int:
 def _refresh_osv_databases() -> None:
     """Fill osv-scanner's offline vulnerability databases (Task O2, decision 6).
 
-    OSV publishes each ecosystem's zip independently (the eleven of Rulings
-    31 and 42), so one HTTP error or a corrupt zip does not stop the rest -- a
+    OSV publishes each ecosystem's zip independently (the eleven ecosystems
+    JMo fetches), so one HTTP error or a corrupt zip does not stop the rest -- a
     machine that already has some of the eleven keeps the ones a refresh fails on;
     `fetch_ecosystem`'s atomic replace never trades a good file for a bad one.
     """

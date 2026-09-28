@@ -920,8 +920,7 @@ def _guard_no_unmarked_scanner_spawn(request, monkeypatch):
 # visibility into it at all. Task O2's own fix round found and fixed 7 tests
 # that would have reached the real ~280 MB-total OSV host under a loosely-
 # configured `MagicMock()` (an unconfigured `.installed` is truthy), but that
-# was 7 *known* instances, not a structural guard against a future one
-# (review Ruling 43, named risk (b)).
+# was 7 *known* instances, not a structural guard against a future one.
 #
 # Unlike the Popen guard, this one PREVENTS rather than detects-after: a
 # `Popen` spawn the guard merely flags is (at worst) a wasted local process,

@@ -471,7 +471,7 @@ def test_the_walk_leaves_out_what_the_name_test_refuses(tmp_path, caplog) -> Non
 @pytest.mark.parametrize(
     "files",
     [
-        # Ruling 42: OSV publishes no ConanCenter database.
+        # OSV publishes no ConanCenter database.
         ["conan.lock"],
         # Only names osv-scanner would reject for their case.
         ["Requirements.txt"],
@@ -508,7 +508,7 @@ def test_a_lockfile_in_the_results_directory_is_not_read(tmp_path, monkeypatch) 
     assert rows["osv-scanner"].label == "skipped:no lockfile"
 
 
-# --- the offline database, checked before the run (Ruling 32) ------------------
+# --- the offline database, checked before the run (osv-scanner's own exit code can't be trusted) ------------------
 
 
 def test_with_no_database_osv_scanner_does_not_run(tmp_path, monkeypatch) -> None:

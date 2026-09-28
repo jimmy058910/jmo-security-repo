@@ -203,9 +203,9 @@ def normalize_severity(value: str | None) -> str:
 # CVSS versions in preference order, most preferred first, by the prefix of a
 # finding's `cvss.version` ("3.x", "3.1" and "3.0" are all v3; "4.0" is v4). A
 # version not listed, or none at all (SARIF's bare `security-severity` score),
-# sorts last. Ruling 34 (#1356): v3.x outranks v4.0 outranks v2.0, because the
-# priority tier (#1243) and stored history are calibrated on v3 and a v4 base
-# score is not on the same scale as a v3 one, whatever their numbers say.
+# sorts last. v3.x outranks v4.0 outranks v2.0 (#1356), because the priority
+# tier (#1243) and stored history are calibrated on v3 and a v4 base score is
+# not on the same scale as a v3 one, whatever their numbers say.
 CVSS_VERSION_PREFERENCE: tuple[str, ...] = ("3", "4", "2")
 
 
@@ -229,8 +229,8 @@ def _cvss_preference(cvss: dict[str, Any]) -> tuple[int, float]:
 def preferred_cvss(candidates: Iterable[Any]) -> dict[str, Any] | None:
     """The one CVSS a finding should carry, of several on offer, or ``None``.
 
-    The single home of JMo's CVSS preference (Ruling 34, #1356): a v3.x score
-    outranks a v4.0 one, which outranks a v2.0 one, whatever the numbers, and
+    The single home of JMo's CVSS preference (#1356): a v3.x score outranks a
+    v4.0 one, which outranks a v2.0 one, whatever the numbers, and
     within one version the higher score wins; a candidate with no version (or
     one not in `CVSS_VERSION_PREFERENCE`) sorts after every versioned one, and
     a missing score after every scored one. A candidate is chosen whole, so

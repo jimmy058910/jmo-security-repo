@@ -325,8 +325,8 @@ def _lost_leaves(
 
 
 def _cvss_rank(cvss: dict[str, Any]) -> tuple[int, float]:
-    """Ruling 34 (#1356): v3.x over v4.0 over v2.0 over no version, then the
-    higher score. An independent oracle -- it does not call `preferred_cvss`,
+    """v3.x over v4.0 over v2.0 over no version, then the higher score
+    (#1356). An independent oracle -- it does not call `preferred_cvss`,
     so it cannot pass merely because the implementation and the test share a
     bug."""
     version = str(cvss.get("version") or "")
@@ -709,7 +709,7 @@ def test_merging_leaves_the_members_untouched():
         ),
         ([None, {}], None),
         ([], None),
-        # Ruling 34 (#1356): v3.x outranks v4.0 whatever the numbers.
+        # v3.x outranks v4.0 whatever the numbers (#1356).
         (
             [{"version": "4.0", "score": 9.0}, {"version": "3.x", "score": 5.3}],
             {"version": "3.x", "score": 5.3},
@@ -732,16 +732,17 @@ def test_merging_leaves_the_members_untouched():
     ],
 )
 def test_preferred_cvss(candidates, expected):
-    """Ruling 29's order, extended by Ruling 34 (#1356) with v4.0."""
+    """The v3-over-v2 CVSS preference order, extended with v4.0 (#1356)."""
     from scripts.core.common_finding import preferred_cvss
 
     assert preferred_cvss(candidates) == expected
 
 
 def test_consensus_merge_prefers_v3_then_v4_then_v2_across_members():
-    """Ruling 34 (#1356) through the actual consensus-merge code path, not
-    just the bare helper: two cluster members carrying different CVSS
-    versions, merged by `FindingCluster.to_consensus_finding`."""
+    """The v3-then-v4-then-v2 CVSS order (#1356), through the actual
+    consensus-merge code path, not just the bare helper: two cluster members
+    carrying different CVSS versions, merged by
+    `FindingCluster.to_consensus_finding`."""
     v2 = {
         "id": "a",
         "severity": "LOW",

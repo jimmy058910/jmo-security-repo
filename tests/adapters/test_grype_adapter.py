@@ -230,7 +230,7 @@ def test_grype_adapter_multiple_cvss_versions(tmp_path: Path):
 
 
 def test_grype_adapter_cvss_v4_only(tmp_path: Path):
-    """Ruling 34 (#1356): an advisory with a v4.0 metric and nothing else."""
+    """An advisory with a v4.0 metric and nothing else (#1356)."""
     data = {
         "matches": [
             {
@@ -268,7 +268,7 @@ def test_grype_adapter_cvss_v4_only(tmp_path: Path):
 
 
 def test_grype_adapter_prefers_v3_over_v4_even_with_a_lower_score(tmp_path: Path):
-    """Ruling 34: v3.x outranks v4.0 whatever the numbers."""
+    """v3.x outranks v4.0 whatever the numbers (#1356)."""
     data = {
         "matches": [
             {
@@ -308,7 +308,7 @@ def test_grype_adapter_prefers_v3_over_v4_even_with_a_lower_score(tmp_path: Path
 
 
 def test_grype_adapter_prefers_v4_over_v2_even_with_a_lower_score(tmp_path: Path):
-    """Ruling 34: v4.0 outranks v2.0 whatever the numbers."""
+    """v4.0 outranks v2.0 whatever the numbers (#1356)."""
     data = {
         "matches": [
             {
