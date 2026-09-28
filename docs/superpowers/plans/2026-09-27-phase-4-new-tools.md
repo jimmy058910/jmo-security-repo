@@ -722,6 +722,8 @@ tests beside it.
 - [ ] `repo`: `--scanners vuln,misconfig` (no `license`: decision 5), `--include-dev-deps`,
   `--offline-scan`. `image`: `--scanners vuln,secret,misconfig`, unchanged.
 - [ ] Gate: golf's trivy findings equal osv-scanner's (package, version, id) set: 47.
+- [ ] Gate: a repository scan reports 0 trivy secret findings (its secret pass is off),
+  so a trivy secret reaches a repo report only through an image scan.
 
 ## Task O4: one identity per dependency finding
 
