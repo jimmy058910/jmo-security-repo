@@ -9,6 +9,11 @@ finds.
 
 from __future__ import annotations
 
+import http.server
+import io
+import threading
+import zipfile
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -17,9 +22,12 @@ from scripts.core import osv_database
 from scripts.core.osv_database import (
     ECOSYSTEMS,
     LOCKFILE_ECOSYSTEMS,
+    FetchResult,
     cache_dir,
     database_path,
     ecosystem_of,
+    fetch_all,
+    fetch_ecosystem,
     present_ecosystems,
 )
 
@@ -153,3 +161,236 @@ def test_an_unreadable_cache_counts_as_absent(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(Path, "is_file", denied)
 
     assert present_ecosystems(cache=tmp_path) == frozenset()
+
+
+# ---------------------------------------------------------------------------
+# The fetch side (Task O2, Ruling 30/31): `fetch_ecosystem`/`fetch_all` fill
+# the cache `present_ecosystems` above reads. Exercised against a local
+# `http.server` on 127.0.0.1, never the real OSV host -- see task-O2-report.md
+# for the one real fetch (crates.io, into a scratch tmp dir, through this same
+# module function) and the two HEAD-only size checks.
+# ---------------------------------------------------------------------------
+
+
+def _zip_bytes(content: bytes = b"a synthetic advisory, for testzip to walk") -> bytes:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("all.json", content)
+    return buf.getvalue()
+
+
+@contextmanager
+def _serve(handler_cls: type[http.server.BaseHTTPRequestHandler]):
+    """A local HTTP server on 127.0.0.1, an ephemeral port.
+
+    Teardown joins the thread with a timeout, never a bare `.join()`
+    (Windows hang-prevention rule) -- `server.shutdown()` unblocks
+    `serve_forever()` first, so the join is not what does the waiting.
+    """
+    server = http.server.HTTPServer(("127.0.0.1", 0), handler_cls)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_port}"
+    finally:
+        server.shutdown()
+        thread.join(timeout=10)
+
+
+class _GoodZip(http.server.BaseHTTPRequestHandler):
+    """Every ecosystem gets the same well-formed zip."""
+
+    BODY = _zip_bytes()
+
+    def do_GET(self) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", "application/zip")
+        self.send_header("Content-Length", str(len(self.BODY)))
+        self.end_headers()
+        self.wfile.write(self.BODY)
+
+    def log_message(self, *args: object) -> None:  # quiet the test output
+        pass
+
+
+class _NotFound(http.server.BaseHTTPRequestHandler):
+    """An HTML error page -- must never be kept as the zip (`curl -f`)."""
+
+    BODY = b"<html><body>Not Found</body></html>"
+
+    def do_GET(self) -> None:
+        self.send_response(404)
+        self.send_header("Content-Type", "text/html")
+        self.send_header("Content-Length", str(len(self.BODY)))
+        self.end_headers()
+        self.wfile.write(self.BODY)
+
+    def log_message(self, *args: object) -> None:
+        pass
+
+
+class _CorruptZip(http.server.BaseHTTPRequestHandler):
+    """200 OK, but the body is not a zip at all."""
+
+    BODY = b"not a zip file, just plain bytes" * 50
+
+    def do_GET(self) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", "application/zip")
+        self.send_header("Content-Length", str(len(self.BODY)))
+        self.end_headers()
+        self.wfile.write(self.BODY)
+
+    def log_message(self, *args: object) -> None:
+        pass
+
+
+class _Interrupted(http.server.BaseHTTPRequestHandler):
+    """Announces a Content-Length it never delivers, then drops the socket."""
+
+    def do_GET(self) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", "application/zip")
+        self.send_header("Content-Length", "1000000")
+        self.end_headers()
+        self.wfile.write(b"only a few bytes before the connection dies")
+        self.close_connection = True
+
+    def log_message(self, *args: object) -> None:
+        pass
+
+
+class _MixedResults(http.server.BaseHTTPRequestHandler):
+    """PyPI's path 404s; every other ecosystem gets a good zip."""
+
+    GOOD = _zip_bytes()
+
+    def do_GET(self) -> None:
+        if self.path.startswith("/PyPI/"):
+            self.send_response(404)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "application/zip")
+        self.send_header("Content-Length", str(len(self.GOOD)))
+        self.end_headers()
+        self.wfile.write(self.GOOD)
+
+    def log_message(self, *args: object) -> None:
+        pass
+
+
+def test_fetch_ecosystem_downloads_a_good_zip(tmp_path) -> None:
+    with _serve(_GoodZip) as base_url:
+        result = fetch_ecosystem("npm", cache=tmp_path, base_url=base_url)
+
+    assert result.success
+    assert result.ecosystem == "npm"
+    dest = database_path("npm", tmp_path)
+    assert dest.read_bytes() == _GoodZip.BODY
+    # No stray `.part` temp file left beside the real database.
+    assert list(dest.parent.iterdir()) == [dest]
+
+
+def test_fetch_ecosystem_http_error_fails_and_keeps_the_old_zip(tmp_path) -> None:
+    dest = database_path("npm", tmp_path)
+    dest.parent.mkdir(parents=True)
+    dest.write_bytes(b"yesterday's good zip")
+
+    with _serve(_NotFound) as base_url:
+        result = fetch_ecosystem("npm", cache=tmp_path, base_url=base_url)
+
+    assert not result.success
+    assert "404" in result.message
+    # The 404 page is never mistaken for the database.
+    assert dest.read_bytes() == b"yesterday's good zip"
+    assert list(dest.parent.iterdir()) == [dest]
+
+
+def test_fetch_ecosystem_corrupt_zip_fails_testzip_and_keeps_the_old_zip(
+    tmp_path,
+) -> None:
+    dest = database_path("npm", tmp_path)
+    dest.parent.mkdir(parents=True)
+    dest.write_bytes(b"yesterday's good zip")
+
+    with _serve(_CorruptZip) as base_url:
+        result = fetch_ecosystem("npm", cache=tmp_path, base_url=base_url)
+
+    assert not result.success
+    assert "corrupt zip" in result.message
+    assert dest.read_bytes() == b"yesterday's good zip"
+    assert list(dest.parent.iterdir()) == [dest]
+
+
+def test_fetch_ecosystem_interrupted_download_leaves_no_partial_file(
+    tmp_path,
+) -> None:
+    dest = database_path("npm", tmp_path)
+    dest.parent.mkdir(parents=True)
+    dest.write_bytes(b"yesterday's good zip")
+
+    with _serve(_Interrupted) as base_url:
+        result = fetch_ecosystem("npm", cache=tmp_path, base_url=base_url)
+
+    assert not result.success
+    assert dest.read_bytes() == b"yesterday's good zip"
+    # Nothing survives beside the (unchanged) real database.
+    assert list(dest.parent.iterdir()) == [dest]
+
+
+def test_fetch_ecosystem_replaces_atomically_via_a_same_dir_temp_file(
+    tmp_path, monkeypatch
+) -> None:
+    """`os.replace` is the only thing that ever creates or overwrites `dest`,
+    and its source is a temp file in `dest`'s own directory (Ruling 31's
+    atomic-replace requirement: never a cross-filesystem copy)."""
+    calls: list[tuple[Path, Path]] = []
+    real_replace = osv_database.os.replace
+
+    def spy(src: object, dst: object) -> None:
+        calls.append((Path(src), Path(dst)))
+        real_replace(src, dst)
+
+    monkeypatch.setattr(osv_database.os, "replace", spy)
+
+    with _serve(_GoodZip) as base_url:
+        result = fetch_ecosystem("npm", cache=tmp_path, base_url=base_url)
+
+    assert result.success
+    assert len(calls) == 1
+    src, dst = calls[0]
+    assert dst == database_path("npm", tmp_path)
+    assert src.parent == dst.parent
+    assert src != dst
+
+
+def test_fetch_all_continues_past_one_ecosystem_failing(tmp_path) -> None:
+    with _serve(_MixedResults) as base_url:
+        results = fetch_all(["npm", "PyPI", "Go"], cache=tmp_path, base_url=base_url)
+
+    by_ecosystem = {r.ecosystem: r for r in results}
+    assert by_ecosystem["npm"].success
+    assert by_ecosystem["Go"].success
+    assert not by_ecosystem["PyPI"].success
+    assert database_path("npm", tmp_path).is_file()
+    assert database_path("Go", tmp_path).is_file()
+    assert not database_path("PyPI", tmp_path).is_file()
+
+
+def test_fetch_all_defaults_to_every_ecosystem_the_map_names(
+    tmp_path, monkeypatch
+) -> None:
+    """No second, hand-written ecosystem list for the fetch side (Ruling 31)."""
+    seen: list[str] = []
+
+    def fake_fetch(eco, cache=None, *, base_url="", timeout=0):
+        seen.append(eco)
+        return FetchResult(eco, True, "stub")
+
+    monkeypatch.setattr(osv_database, "fetch_ecosystem", fake_fetch)
+
+    fetch_all(cache=tmp_path)
+
+    assert seen == list(ECOSYSTEMS)

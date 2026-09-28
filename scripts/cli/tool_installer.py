@@ -22,6 +22,7 @@ import zipfile
 from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
+from dataclasses import replace
 from pathlib import Path
 
 import requests
@@ -1739,13 +1740,51 @@ class ToolInstaller:
     def _post_install(self, tool_name: str, result: InstallResult) -> InstallResult:
         """Fetch companion data a tool needs but its package does not carry.
 
-        Only yara needs this today. Its wheel is the libyara engine and no
-        detection content whatsoever, so an engine-only install matches nothing
-        and produces exactly the output of a clean repository.
+        yara's wheel is the libyara engine and no detection content
+        whatsoever, so an engine-only install matches nothing and produces
+        exactly the output of a clean repository. osv-scanner's binary
+        carries no vulnerability data either: Phase 4 decision 6 keeps OSV's
+        offline databases (~280 MB across twelve ecosystems) out of every
+        install artifact and fills them here instead, once osv-scanner itself
+        is on disk.
         """
         if tool_name == "yara" and result.success:
             return self._install_yara_rules(result)
+        if tool_name == "osv-scanner" and result.success:
+            return self._install_osv_databases(result)
         return result
+
+    def _install_osv_databases(self, result: InstallResult) -> InstallResult:
+        """Fill osv-scanner's offline vulnerability database cache (Task O2).
+
+        Unlike `_install_yara_rules`, a fetch failure here does not flip
+        `result.success`: osv-scanner just installed is not useless without
+        every one of the twelve ecosystems -- it still runs against whichever
+        ecosystem a target's lockfile needs, from a database this fetch just
+        populated or one already cached from an earlier run. A failure is
+        still LOUD -- named ecosystem and reason, on the logger and appended
+        to the result's message -- and a still-missing ecosystem shows up
+        concretely later: `jmo tools check` reports it, and a scan's row
+        reads `failed:offline database missing` naming it.
+        """
+        from scripts.core import osv_database
+
+        fetch_results = osv_database.fetch_all()
+        failed = [r for r in fetch_results if not r.success]
+        if not failed:
+            return result
+
+        detail = "; ".join(f"{r.ecosystem}: {r.message}" for r in failed)
+        logger.error(
+            f"osv-scanner: {len(failed)}/{len(fetch_results)} offline "
+            f"database(s) failed to fetch: {detail}"
+        )
+        note = (
+            f" (osv-scanner installed; {len(failed)}/{len(fetch_results)} "
+            f"offline database(s) failed to fetch: {detail} -- re-run "
+            "`jmo tools update` to retry)"
+        )
+        return replace(result, message=result.message + note)
 
     def _install_yara_rules(self, result: InstallResult) -> InstallResult:
         """Install the pinned rule bundle into ~/.jmo/yara-rules/.

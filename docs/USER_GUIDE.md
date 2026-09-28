@@ -230,7 +230,7 @@ open results/summaries/dashboard.html   # macOS (use xdg-open on Linux)
 
 JMo Security orchestrates the security scanners in the [tool matrix](TOOLS.md#the-tool-matrix), plus OPA for policy-as-code. For native installations (non-Docker), use the `jmo tools` command to manage these tools.
 
-**Docker users:** Skip this section - Docker images include all tools pre-installed. Tool management is for native/pip installations only.
+**Docker users:** Skip this section for tool binaries - Docker images include all of them pre-installed. Tool management is for native/pip installations only. One exception: osv-scanner's offline vulnerability databases are not baked into the image, so `jmo tools update` still has a job to do in a container - see [Docker: osv-scanner's Offline Databases](DOCKER_README.md#osv-scanners-offline-databases).
 
 ### Checking Tool Status
 
@@ -311,6 +311,8 @@ jmo tools update --yes
 ```
 
 **Critical tools** are flagged in `versions.yaml` and include tools where outdated versions may miss vulnerabilities (e.g., Trivy, TruffleHog).
+
+A bare `jmo tools update` also refreshes osv-scanner's offline vulnerability databases (`~/.jmo/osv-db`, ~280 MB across twelve ecosystems), even when osv-scanner's own binary is already current - the databases are OSV's own daily data, not tied to the pinned version. `jmo tools install` fills them too, the first time osv-scanner is installed. See [Tools: OSV-Scanner](TOOLS.md#when-each-tool-runs).
 
 ### Viewing Outdated Tools
 

@@ -120,6 +120,22 @@ def _status_json(status: ToolStatus) -> dict:
     }
 
 
+def _osv_missing_ecosystems(statuses: dict[str, ToolStatus]) -> list[str] | None:
+    """Which of osv-scanner's ecosystems have no offline database cached.
+
+    Cheap: `present_ecosystems` only stats files, no network. Returns `None`
+    when osv-scanner is not installed or not among the tools being checked,
+    so a caller can tell "nothing to report" from "checked, all present".
+    """
+    osv_status = statuses.get("osv-scanner")
+    if osv_status is None or not osv_status.installed:
+        return None
+
+    from scripts.core.osv_database import ECOSYSTEMS, present_ecosystems
+
+    return sorted(set(ECOSYSTEMS) - present_ecosystems())
+
+
 def cmd_tools_check(args: argparse.Namespace) -> int:
     """
     Check tool installation status.
@@ -153,6 +169,12 @@ def cmd_tools_check(args: argparse.Namespace) -> int:
     # missing one, so both fail the check (#788, #1136).
     rc = 0 if all(s.installed and s.execution_ready for s in everything) else 1
 
+    # Informational only: a missing offline database does not fail the check
+    # (osv-scanner is still installed and execution_ready; it fails only the
+    # lockfiles whose ecosystem has no database, at scan time), but a user
+    # would otherwise have no cheap way to see it coming.
+    missing_osv_dbs = _osv_missing_ecosystems(statuses)
+
     if output_json:
         data: dict = {"tools": {name: _status_json(s) for name, s in statuses.items()}}
         if policy_engine is not None:
@@ -160,6 +182,8 @@ def cmd_tools_check(args: argparse.Namespace) -> int:
                 "name": POLICY_ENGINE,
                 **_status_json(policy_engine),
             }
+        if missing_osv_dbs:
+            data["osv_scanner_missing_databases"] = missing_osv_dbs
         print(json.dumps(data, indent=2))
         return rc
 
@@ -202,6 +226,16 @@ def cmd_tools_check(args: argparse.Namespace) -> int:
         for s in not_ready:
             print(f"  - {s.name}: {s.execution_warning or 'cannot run'}")
 
+    if missing_osv_dbs:
+        print(
+            colorize(
+                f"osv-scanner: {len(missing_osv_dbs)} offline database(s) missing "
+                f"({', '.join(missing_osv_dbs)})",
+                "yellow",
+            )
+        )
+        print("Run `jmo tools update` to fetch them")
+
     if missing:
         print(colorize(f"{len(missing)} tool(s) missing", "red"))
         print("Run `jmo tools install` to install")
@@ -214,7 +248,7 @@ def cmd_tools_check(args: argparse.Namespace) -> int:
         print(colorize(msg, "yellow"))
         print("Run `jmo tools update` to update")
 
-    if not missing and not outdated and not not_ready:
+    if not missing and not outdated and not not_ready and not missing_osv_dbs:
         print(colorize("All tools installed and up to date!", "green"))
 
     return rc
@@ -555,6 +589,37 @@ def cmd_tools_install(args: argparse.Namespace) -> int:
         return 1
 
 
+def _refresh_osv_databases() -> None:
+    """Fill osv-scanner's offline vulnerability databases (Task O2, decision 6).
+
+    OSV publishes each ecosystem's zip independently (Ruling 31's twelve), so
+    one HTTP error or a corrupt zip does not stop the rest -- a machine that
+    already has some of the twelve keeps the ones a refresh fails on;
+    `fetch_ecosystem`'s atomic replace never trades a good file for a bad one.
+    """
+    from scripts.core import osv_database
+
+    print("\nRefreshing osv-scanner's offline vulnerability databases...")
+    results = osv_database.fetch_all()
+    failed = [r for r in results if not r.success]
+    ok = len(results) - len(failed)
+    if failed:
+        print(
+            colorize(
+                f"osv-scanner databases: {ok}/{len(results)} refreshed, "
+                f"{len(failed)} failed",
+                "yellow",
+            )
+        )
+        for r in failed:
+            print(f"  - {r.ecosystem}: {r.message}")
+        print("Re-run `jmo tools update` to retry the failed ecosystem(s).")
+    else:
+        print(
+            colorize(f"osv-scanner databases: {ok}/{len(results)} refreshed", "green")
+        )
+
+
 def cmd_tools_update(args: argparse.Namespace) -> int:
     """
     Update outdated tools.
@@ -585,7 +650,24 @@ def cmd_tools_update(args: argparse.Namespace) -> int:
     else:
         outdated = manager.get_outdated_tools()
 
+    # osv-scanner's offline vulnerability databases are OSV's own daily data
+    # (decision 6), independent of the pinned binary version in versions.yaml,
+    # so a bare `jmo tools update` (no specific tool names -- the "refresh
+    # everything" invocation) refreshes them even when osv-scanner itself is
+    # already current and so never appears in `outdated`. A targeted `jmo
+    # tools update <other-tool>` leaves osv-scanner alone, same as it leaves
+    # every other tool not named. When osv-scanner DOES get reinstalled below,
+    # `ToolInstaller._post_install` already covers the refresh; skip it here
+    # in that case so the ~280 MB set is not fetched twice in one run.
+    refresh_osv_now = (
+        not tools_arg
+        and manager.check_tool("osv-scanner").installed
+        and not any(s.name == "osv-scanner" for s in outdated)
+    )
+
     if not outdated:
+        if refresh_osv_now:
+            _refresh_osv_databases()
         print(colorize("All tools are up to date!", "green"))
         return 0
 
@@ -633,6 +715,9 @@ def cmd_tools_update(args: argparse.Namespace) -> int:
         # Force reinstall to update
         result = installer.install_tool(status.name, force=True)
         progress.add_result(result)
+
+    if refresh_osv_now:
+        _refresh_osv_databases()
 
     # Print results
     print_install_progress(progress, colorize)

@@ -440,6 +440,68 @@ const query = "SELECT * FROM users WHERE id = " + userId;
             or "findings" in result.stdout.lower()
         ), f"Scan failed: {result.stderr}"
 
+    def test_docker_osv_scanner_needs_a_database_the_image_does_not_carry(
+        self, tmp_path: Path
+    ):
+        """A fresh container has no `~/.jmo/osv-db`: the image never fetches
+        one (decision 6), and none is mounted here. osv-scanner's row must
+        read `failed:offline database missing`, not silently `skipped` or
+        `ran` with nothing found -- the behaviour DOCKER_README.md pins for a
+        container without a persistent `~/.jmo` volume.
+
+        Read from `scan-timings.json`, the way `test_cli_scan_ci.py` reads
+        rows, rather than parsing human log output.
+        """
+        image = f"{DOCKER_REGISTRY}:latest"
+        ensure_image(image)
+
+        src_dir = tmp_path / "src"
+        src_dir.mkdir()
+        (src_dir / "package-lock.json").write_text(
+            json.dumps({"name": "tiny", "lockfileVersion": 3, "packages": {}})
+        )
+
+        # UID-mismatch fix, see test_docker_image_scan above.
+        # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+        os.chmod(str(tmp_path), 0o777)
+        # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+        os.chmod(str(src_dir), 0o777)
+
+        result = subprocess.run(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "-v",
+                f"{tmp_path}:/scan",
+                "-w",
+                "/scan",
+                image,
+                "scan",
+                "--repo",
+                ".",
+                "--results-dir",
+                "/scan/results",
+                "--tools",
+                "osv-scanner",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+
+        results_dir = tmp_path / "results"
+        timing_files = list(results_dir.rglob("scan-timings.json"))
+        assert timing_files, (
+            f"no scan-timings.json written (rc={result.returncode}): "
+            f"stdout={result.stdout[-500:]} stderr={result.stderr[-500:]}"
+        )
+        rows = {r["tool"]: r for r in json.loads(timing_files[0].read_bytes())["tools"]}
+        row = rows.get("osv-scanner")
+        assert row is not None, f"no osv-scanner row in {rows}"
+        assert row["state"] == "failed", row
+        assert row["reason"] == "offline database missing", row
+
     def test_docker_help_command(self):
         """Docker image should show help correctly."""
         image = f"{DOCKER_REGISTRY}:latest"
