@@ -128,8 +128,9 @@ All notable changes to JMo Security will be documented in this file.
   is its rule (`github-pat`); both used to be the check's title, which is now their
   `title`. A vulnerability keeps its CVE as `ruleId` and takes its advisory's title as
   `title`. Every trivy misconfiguration and secret therefore gets a new id, so history and
-  `jmo diff` read each once as resolved and new, and a suppression keyed on a trivy title,
-  or on an `AVD-DS-0002` or `DS002` spelling, no longer matches: key it on the id a
+  `jmo diff` read each once as resolved and new. A suppression keyed on such a finding's
+  `id`, or on its title as a `ruleId`, no longer matches; one keyed on an `AVD-DS-0002` or
+  `DS002` spelling never did, since the old `ruleId` was the title. Key it on the id a
   report shows, as `jmo.suppress.yml`'s example now does. `tool.version` is trivy's own
   (`Trivy.Version`); under the pinned 0.74.0 every finding said `unknown` (#1221).
 - **One exclusion list, rendered for every tool.** `.git`, `node_modules`, `vendor`,
