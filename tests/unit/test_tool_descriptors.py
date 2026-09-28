@@ -417,3 +417,66 @@ def test_run_tools_hands_exclusions_to_a_repository_only(
 
     assert len(handed) == 1
     assert bool(handed[0]) is (target_type == "repo"), handed
+
+
+# --- O3: a repository scan drops trivy's secret pass; an image keeps it -----
+#
+# trivy skips devDependencies by default, so a JS app whose vulnerable
+# packages are all dev-only read 0 vulnerabilities (measured on a private
+# export). `--include-dev-deps` fixes that; `--offline-scan` stops a Maven
+# lookup measured failing twice with 429 and producing no output, since the
+# vulnerability database is already local. `secret` comes off the repository
+# scanners list entirely -- gitleaks and trufflehog already read a
+# repository's secrets -- and stays on the image scan, where nothing else
+# reads its layers.
+
+
+def _trivy_command(tmp_path: Path, target_type: str, **ctx_kwargs) -> tuple:
+    ctx = ScanContext(
+        tool="trivy",
+        target_type=target_type,
+        target=tmp_path if target_type == "repo" else "nginx:latest",
+        out_dir=tmp_path,
+        binary="trivy",
+        **ctx_kwargs,
+    )
+    invocations = DESCRIPTORS["trivy"].invocations[target_type](ctx)
+    assert len(invocations) == 1
+    return invocations[0].command
+
+
+class TestTrivyRepoDropsItsSecretPass:
+    def test_the_repository_scanners_list_has_no_secret(self, tmp_path):
+        command = _trivy_command(tmp_path, "repo")
+        idx = command.index("--scanners")
+        assert command[idx + 1] == "vuln,misconfig", command
+
+    def test_the_repository_scan_reads_dev_dependencies(self, tmp_path):
+        assert "--include-dev-deps" in _trivy_command(tmp_path, "repo")
+
+    def test_the_repository_scan_is_offline(self, tmp_path):
+        assert "--offline-scan" in _trivy_command(tmp_path, "repo")
+
+    def test_the_image_scan_keeps_its_secret_pass(self, tmp_path):
+        """Gate 4: nothing else reads an image's layers, so a secret baked
+        into one is found only here. A command-shape assertion, never a real
+        pull."""
+        command = _trivy_command(tmp_path, "image")
+        idx = command.index("--scanners")
+        assert command[idx + 1] == "vuln,secret,misconfig", command
+
+    def test_the_image_scan_does_not_gain_the_repository_only_flags(self, tmp_path):
+        command = _trivy_command(tmp_path, "image")
+        assert "--include-dev-deps" not in command
+        assert "--offline-scan" not in command
+
+    def test_a_user_flag_can_still_ask_for_secret_on_a_repository(self, tmp_path):
+        """`--scanners` unions rather than replaces at trivy's own CLI
+        (measured, ``test_per_tool_flag_policy.py``), so a
+        ``per_tool.trivy.flags: [--scanners, secret]`` config still reaches
+        the argv here, twice -- on purpose, not silently."""
+        command = _trivy_command(tmp_path, "repo", flags=("--scanners", "secret"))
+        occurrences = [
+            command[i + 1] for i, tok in enumerate(command) if tok == "--scanners"
+        ]
+        assert occurrences == ["vuln,misconfig", "secret"], command

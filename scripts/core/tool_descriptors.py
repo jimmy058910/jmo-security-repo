@@ -1038,7 +1038,25 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
         ToolDescriptor(
             name="trivy",
             invocations={
-                "repo": _trivy("fs", "--scanners", "vuln,secret,misconfig", excl=True),
+                # No `secret`: gitleaks and trufflehog already read a repository's
+                # secrets, and trivy's own pass is redundant there. `--include-dev-deps`
+                # reads devDependencies too -- trivy skips them by default, so a
+                # JS app whose vulnerable packages are all dev-only reads 0
+                # vulnerabilities otherwise (measured). `--offline-scan` stops it
+                # calling out for a Maven lookup it cannot complete (measured: two
+                # 429s and no output); the vulnerability database is already local.
+                # No `license`: the adapter ignores license results (408 raw
+                # entries, 0 findings measured on a real repository).
+                "repo": _trivy(
+                    "fs",
+                    "--scanners",
+                    "vuln,misconfig",
+                    "--include-dev-deps",
+                    "--offline-scan",
+                    excl=True,
+                ),
+                # The image scan keeps its secret pass: nothing else reads an
+                # image's layers, so a secret baked into one is only found here.
                 "image": _trivy("image", "--scanners", "vuln,secret,misconfig"),
                 "iac": _trivy("config"),
                 "k8s": _trivy_k8s,

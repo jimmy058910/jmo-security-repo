@@ -18,7 +18,7 @@ To narrow the list:
 | Gitleaks | Secrets, by a second rule set, in the working tree and git history | Repository, GitLab | Always | Release binary |
 | Semgrep | Code-level flaws (SAST), many languages | Repository, GitLab | Always | Isolated Python venv |
 | Syft | Software bill of materials (SBOM) | Repository, image, GitLab | Always | Release binary or install script |
-| Trivy | Vulnerable dependencies, secrets, misconfigurations | Repository, image, IaC, Kubernetes, GitLab | Always | Release binary or install script |
+| Trivy | Vulnerable dependencies (dev dependencies included, offline) and misconfigurations on a repository; adds secrets on a container image | Repository, image, IaC, Kubernetes, GitLab | Always | Release binary or install script |
 | Checkov | IaC misconfigurations: Terraform, CloudFormation (Kubernetes too, on a `--k8s-manifest` target) | Repository, IaC, GitLab | IaC is present | Isolated Python venv |
 | Hadolint | Dockerfile problems | Repository, GitLab | Dockerfiles are present | Release binary |
 | ShellCheck | Shell script bugs (unquoted expansions, unguarded `cd`) | Repository, GitLab | Shell scripts are present | Release binary |
@@ -76,6 +76,8 @@ jmo scan --url https://staging.example.com
 ```
 
 The remaining repository tools (TruffleHog, Gitleaks, Semgrep, Syft, Trivy, YARA, Grype) run on every repository scan. When the repository has a `.git` of its own, TruffleHog and Gitleaks read its history too and name the commit that added each secret; see [Known limitations](KNOWN_LIMITATIONS.md#secret-scanning-skips-git-jmo-and-vendored-trees).
+
+Trivy's repository scan reads vulnerabilities (dev dependencies included, and offline: it never calls out to a package registry) and misconfigurations; its secret pass runs only on an image scan. A repository's secrets come from TruffleHog and Gitleaks, not Trivy.
 
 ## Target types
 
