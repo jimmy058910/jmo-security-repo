@@ -291,7 +291,7 @@ cat results/summaries/timings.json
 
 | Target Type | Tools Used | Expected Findings |
 |-------------|------------|-------------------|
-| Repositories | trufflehog, semgrep, syft, trivy, checkov, yara, grype; hadolint, shellcheck and gosec when Dockerfiles, shell scripts or Go sources are present | Secrets, SAST issues, dependencies |
+| Repositories | trufflehog, gitleaks, semgrep, syft, trivy, yara, grype; hadolint, shellcheck, zizmor, osv-scanner, gosec, jmo-native and checkov when their content is present | Secrets, SAST issues, dependencies |
 | Container Images | trivy, syft | CVEs, outdated packages, SBOM |
 | IaC Files | checkov, trivy | Misconfigurations, hardcoded secrets |
 | Web URLs | zap, nuclei | XSS, SQLi, CSRF, API issues |

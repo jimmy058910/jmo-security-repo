@@ -311,7 +311,9 @@ jmo-native decides what it reads by path from the scanned root
   the root's `supabase/migrations/`. In a monorepo, `apps/web/src/...` is not client
   code, so the `service_role` check never runs on it, and
   `packages/db/supabase/migrations/` is not read, so no table is checked. The
-  public-env, browser-LLM and Firebase checks still read every file.
+  other checks still read their files wherever they sit: JS/TS source and `.env`
+  files for the public-env check, JS/TS source for the browser-LLM check, and
+  `firestore.rules`, `storage.rules` and `database.rules` for the Firebase check.
 - **Only `public`-schema tables are checked.** A table in another schema
   (`private.notes`) is skipped, since Supabase's API serves `public` by default. A
   schema exposed to the API by configuration is not checked.
