@@ -20,13 +20,14 @@ URI -- the #861 failure class.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlsplit
 
 from scripts.core.adapters.common import pinned_version, safe_load_json_file
-from scripts.core.common_finding import fingerprint, normalize_severity
+from scripts.core.common_finding import fingerprint, normalize_severity, package_of
 from scripts.core.exceptions import AdapterParseException
 from scripts.core.plugin_api import Finding
 
@@ -44,10 +45,17 @@ _CVSS_BUCKETS: tuple[tuple[float, str], ...] = (
 
 @dataclass(frozen=True)
 class SarifToolSpec:
-    """What one binding contributes: the tool name and its static tags."""
+    """What one binding contributes: the tool name, its static tags, and, for
+    a dependency scanner, how to read a result's package."""
 
     tool: str  # Finding.tool["name"] AND the ToolRegistry key
     tags: tuple[str, ...] = ()
+    # (result, its rule) -> the finding's `dependency` object, or None. SARIF
+    # has no package field, so only a binding knows where its tool puts one
+    # (#1346); a tool without this hook grows no `dependency`.
+    dependency: (
+        Callable[[dict[str, Any], dict[str, Any]], dict[str, Any] | None] | None
+    ) = None
 
 
 def parse_sarif(output_path: Path, spec: SarifToolSpec) -> list[Finding]:
@@ -155,7 +163,17 @@ def _props(holder: dict[str, Any]) -> dict[str, Any]:
 
 def _security_severity(holders: tuple[dict[str, Any], ...]) -> float | None:
     """Rank 1: GitHub's ``security-severity`` (a CVSS base score as a string),
-    on the result first, then on the rule. A non-numeric value is ignored."""
+    on the result first, then on the rule. A non-numeric value is ignored.
+
+    No version ever comes with it (#1356): measured on osv-scanner 2.5.1/2.6.0,
+    ``rules[].properties`` holds only this one key. A rule's free-text ``help``
+    or ``fullDescription`` markdown occasionally spells one out in prose (e.g.
+    ``"**CVSS v3.1:** 8.1 (AV:N/...)"``, seen in 1 of 178 rules on a real scan)
+    but that is advisory-author prose, not a structured field every advisory
+    carries, so it is not parsed -- the version stays absent rather than being
+    guessed at. This score therefore has nothing to prefer among and never
+    goes through `common_finding.preferred_cvss`.
+    """
     for holder in holders:
         raw = _props(holder).get("security-severity")
         if raw is None or isinstance(raw, bool):
@@ -270,6 +288,7 @@ def _finding(
     )
     severity, cvss = _resolve_severity(result, rule)
     location = _location(result)
+    dependency = spec.dependency(result, rule) if spec.dependency else None
 
     tags = list(spec.tags)
     for tag in _props(rule).get("tags") or []:
@@ -281,6 +300,7 @@ def _finding(
         schemaVersion="1.2.0",
         # The column is part of the key (#1242): two results on one line at
         # different columns are two findings, and gitleaks reports exactly that.
+        # So is a dependency finding's package (#1346).
         id=fingerprint(
             spec.tool,
             rule_id,
@@ -288,6 +308,7 @@ def _finding(
             location.get("startLine"),
             message,
             start_column=location.get("startColumn"),
+            package=package_of(dependency),
         ),
         ruleId=rule_id,
         severity=severity,
@@ -300,5 +321,6 @@ def _finding(
         references=[help_uri] if isinstance(help_uri, str) and help_uri else [],
         tags=tags,
         cvss=cvss,
+        dependency=dependency,
         raw=result,
     )

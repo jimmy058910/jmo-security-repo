@@ -69,6 +69,36 @@ All notable changes to JMo Security will be documented in this file.
   Installed as a pinned release binary (`versions.yaml` 1.30.1; no Windows arm64 build).
   On this repository, at the Phase 1 golden's commit, zizmor found 217 raw findings, 216
   after dedup, the same ids as the golden's.
+- **osv-scanner joins the matrix as its 15th tool.** On a repository, JMo walks the tree
+  itself (the same walk zizmor uses) and hands osv-scanner every lockfile whose name it
+  reads, each as `-L :<path>`, repository-relative, run from the repository's root (the
+  accepted names are in [TOOLS.md](docs/TOOLS.md#when-each-tool-runs)). A repository with
+  none of them is `skipped:no lockfile`. It runs offline only: `--offline-vulnerabilities`,
+  `--no-resolve` (without it, a `pom.xml` or `requirements.txt` resolves transitively over
+  the network through deps.dev), `--allow-no-lockfiles` and `--no-call-analysis=all` (Go's
+  call analysis runs only where a Go toolchain is installed, hiding the vulnerabilities it
+  finds uncalled -- a result that used to depend on the scanning machine). A lockfile whose
+  ecosystem has no offline database is left out and the row reads
+  `failed:offline database missing`, naming the ecosystem, the lockfile and
+  `jmo tools update`. One lockfile osv-scanner cannot extract fails the whole run at once;
+  the row then retries every other lockfile on its own, so only that lockfile's findings are
+  lost, and the row names it. On NodeGoat (c5cb68a7), 304 raw findings, 292 post-dedup, the
+  Phase 1 golden's 303 all present. A Conan lockfile is not among the accepted names: OSV
+  publishes no ConanCenter database, so a Conan-only repository reads `skipped:no lockfile`
+  ([Known limitations](docs/KNOWN_LIMITATIONS.md#osv-scanner-reads-pomxml-and-requirementstxt-for-direct-dependencies-only)).
+- **`jmo tools update` fills osv-scanner's offline vulnerability databases.** Installing
+  osv-scanner, or running `jmo tools update` (or `jmo tools update osv-scanner`) with it
+  already installed, fetches all eleven ecosystems' databases from OSV's own hosted zips
+  into `~/.jmo/osv-db`, about 280 MB, one ecosystem at a time so one failure does not stop
+  the rest; `jmo tools update` names each ecosystem that failed and exits 1. A scan never
+  downloads. The image carries none of them; `jmo tools check` lists which ecosystems are
+  still missing.
+- **CVSS v4.0 is recorded, in one preference order for every adapter and the consensus.**
+  trivy and grype normalize a `cvss_v4.0` entry the way they already did v3.x and v2.0, and
+  both defer to one helper, `preferred_cvss` (`common_finding.py`): a v3.x score still
+  outranks everything, and a v4.0 score now outranks v2.0 instead of being dropped or read
+  as unversioned. osv-scanner's SARIF carries no structured CVSS version, so its score stays
+  versionless (#1356).
 
 ### Removed
 
@@ -222,9 +252,54 @@ All notable changes to JMo Security will be documented in this file.
   from checkov's 293 s to a 4.25 s skip.
 - `scan-timings.json` records the `root` a repository target's tools scanned.
 - `jmo report` logs each policy's verdict with its message.
+- **Breaking. trivy's repository scan reads dev dependencies and drops its own secret
+  pass.** It now runs `--scanners vuln,misconfig --include-dev-deps --offline-scan`: a
+  JavaScript app whose vulnerable packages are all dev-only used to read 0 vulnerabilities
+  from trivy, and now reads them (NodeGoat: 87 -> 313). `--offline-scan` stops a Maven
+  lookup calling out to the network, since the vulnerability database is already local.
+  Secrets on a repository are gitleaks' and TruffleHog's; trivy's own pass there was
+  redundant and is gone (the image scan keeps it -- nothing else reads an image's layers).
+  The license scanner was already unused (the adapter ignores license results) and is
+  dropped from `--scanners` too (#1346).
+- **Breaking. One dependency vulnerability is one finding, whichever scanners report it.**
+  A dependency finding's identity is its lockfile, package, installed version and advisory
+  id (or alias), not location similarity, which is always 0.0 for a finding with no line --
+  so no two of trivy, osv-scanner and grype had ever clustered. Two tools naming the same
+  advisory for the same installed version are now one finding, `detected_by` both; on one
+  real lockfile scanned by trivy and osv-scanner, 47 + 47 = 85 findings and 0 clusters
+  became 47. Every dependency finding also carries a `dependency` object (name, version,
+  ecosystem, aliases), and its id changes once, since it now folds in the package and
+  version the way it already folds in a commit's.
+- **Breaking. A consensus finding is the merge of its members, and no longer depends on
+  which tool's output loaded first.** Its lists (CWEs, compliance mappings, references)
+  are the union of every member's, its CVSS is the preferred one across members (v3.x over
+  v4.0 over v2.0, then the higher score), its priority keeps the most urgent of each value
+  (score, EPSS, KEV listing, due date), and its lead (whose id, tool, location and raw
+  survive as the consensus's own) is chosen by severity, then tool name, then id, rather
+  than by which thread finished first. On juice-shop (trivy, TruffleHog, gitleaks), the
+  same raw outputs in all six load orders used to produce 160 or 163 findings and three
+  distinct sets of consensus ids; they now produce a byte-identical report every time
+  (#1355). Every built-in policy that used to read a consensus finding's `tool` now also
+  reads its `detected_by` array, so a policy keyed on one tool sees a finding any member
+  tool reported, whichever led the merge.
 
 ### Fixed
 
+- **A consensus finding no longer misreports what it is a consensus of.** Building it as a
+  copy of one member, rather than a merge, meant the load order that happened to put a
+  non-CWE-798 secret finding in the lead could inflate `owasp-top-10`'s count with an entry
+  that should have merged away; on juice-shop it now reads 73 violations in every order,
+  where it used to read 73 or 76. `zero-secrets` selected a secret to block by `tool.name`
+  alone, so a verified TruffleHog secret that gitleaks also reported passed the policy
+  unless gitleaks' output happened to load first; it now fails `zero-secrets` in every order
+  (#1355).
+- **Dependency findings from different scanners never clustered.** A vulnerability has no
+  line, so the similarity-based clusterer scored every trivy/osv-scanner/grype pair at 0.0
+  and never merged them, however identical the advisory; every scanner's findings for one
+  package stood alone. They now cluster on identity instead (#1346).
+- **A code comment named a private repository for a timing figure.** `tool_descriptors.py`'s
+  checkov comment said "195.8 s alone on" a repository this project does not own the name
+  of; it now says "one measured repository", matching `docs/TOOLS.md` (#1366).
 - **A GitLab target's findings are repository-relative, and keep their id.** The clone
   lives in a random temporary directory the report was never told about, so a finding
   carried the host's temporary path, and every scan of the repository read as new

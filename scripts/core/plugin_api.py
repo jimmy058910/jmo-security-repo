@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from scripts.core.common_finding import fingerprint
+from scripts.core.common_finding import fingerprint, package_of
 
 
 @dataclass
@@ -51,6 +51,10 @@ class Finding:
     # Secret scanners: commit, author and date of a record from git history.
     # Never the secret itself.
     secretContext: dict[str, Any] | None = None
+    # Dependency scanners: the vulnerable package {name, version, ecosystem,
+    # aliases}. With the lockfile (`location.path`) and the advisory id
+    # (`ruleId` plus `aliases`) it is the finding's identity (#1346).
+    dependency: dict[str, Any] | None = None
     # Transient: a keyed digest of the secret (common_finding.secret_digest),
     # which the report phase pairs tree and history records by and then
     # removes. Nothing writes it.
@@ -157,6 +161,7 @@ class AdapterPlugin(ABC):
         a missing line as ``""`` where the canonical one uses ``0`` and did not
         strip the message; trivy, trufflehog and semgrep ids built from a
         finding with no line or a padded message differ from before.
+        A finding with a `dependency` is keyed on its package too (#1346).
         Override for tool-specific fingerprinting logic.
 
         Args:
@@ -171,6 +176,7 @@ class AdapterPlugin(ABC):
             finding.location.get("path", ""),
             finding.location.get("startLine"),
             finding.message,
+            package=package_of(finding.dependency),
         )
 
 

@@ -129,7 +129,6 @@ def test_zizmor_joined_beside_the_other_walk_fed_linters() -> None:
     """Phase 4, PR Z: zizmor takes GitHub Actions from checkov, so the matrix
     is 14. Listed after shellcheck: the tools JMo hands files to read together
     wherever the matrix is printed."""
-    assert len(DESCRIPTORS) == 14
     names = list(DESCRIPTORS)
     assert names[names.index("hadolint") : names.index("hadolint") + 3] == [
         "hadolint",
@@ -138,14 +137,22 @@ def test_zizmor_joined_beside_the_other_walk_fed_linters() -> None:
     ]
 
 
+def test_osv_scanner_joined_beside_the_other_dependency_scanner() -> None:
+    """Phase 4, PR O: osv-scanner reads lockfiles offline, so the matrix is
+    15. Listed after grype, the other scanner of dependencies only."""
+    assert len(DESCRIPTORS) == 15
+    names = list(DESCRIPTORS)
+    assert names[names.index("grype") + 1] == "osv-scanner"
+
+
 def test_target_types_differ_from_the_old_literal_only_by_the_url_tools() -> None:
     """zap left `repo` and nuclei left `gitlab`: both are URL-only (Phase 3
     decision: "zap and nuclei on a non-URL target are skipped:needs --url").
-    gitleaks (PR C) and zizmor (PR Z) read a repository, and so a GitLab
-    clone."""
+    gitleaks (PR C), zizmor (PR Z) and osv-scanner (PR O) read a repository,
+    and so a GitLab clone."""
     expected = {k: set(v) for k, v in OLD_TOOL_SCAN_TYPES.items()}
     expected["repo"].discard("zap")
-    expected["repo"] |= {"gitleaks", "zizmor"}
+    expected["repo"] |= {"gitleaks", "zizmor", "osv-scanner"}
     expected["gitlab"] = set(expected["repo"])
 
     assert expected == tool_registry.TOOL_SCAN_TYPES
@@ -162,8 +169,9 @@ def test_timeout_floors_are_derived_unchanged() -> None:
 
 def test_stub_shapes_are_derived_unchanged_plus_the_three_empty_ones() -> None:
     """shellcheck, gosec and yara had no entry and fell back to `{}`; they are
-    declared now, with the value they already got. gitleaks (PR C) and zizmor
-    (PR Z) write SARIF, so their empty result is an empty SARIF document."""
+    declared now, with the value they already got. gitleaks (PR C), zizmor
+    (PR Z) and osv-scanner (PR O) write SARIF, so their empty result is an
+    empty SARIF document."""
     derived = {name: d.stub for name, d in DESCRIPTORS.items()}
     assert derived == {
         **OLD_STUBS,
@@ -172,15 +180,19 @@ def test_stub_shapes_are_derived_unchanged_plus_the_three_empty_ones() -> None:
         "yara": {},
         "gitleaks": {"version": "2.1.0", "runs": []},
         "zizmor": {"version": "2.1.0", "runs": []},
+        "osv-scanner": {"version": "2.1.0", "runs": []},
     }
 
 
 # gitleaks (PR C): `gitleaks version` prints the bare version, `8.30.1`
 # (measured, the release's windows_x64 binary). zizmor (PR Z): `zizmor
 # --version` prints `zizmor 1.30.1`, so it needs no command of its own.
+# osv-scanner (PR O): `osv-scanner --version` prints `osv-scanner version:
+# 2.6.0`, then its library's version on the next line.
 NEW_VERSION_PATTERNS = {
     "gitleaks": (r"^v?(\d+\.\d+\.\d+)$", re.MULTILINE),
     "zizmor": (r"zizmor\s+v?(\d+\.\d+\.\d+)", 0),
+    "osv-scanner": (r"osv-scanner version:\s*v?(\d+\.\d+\.\d+)", 0),
 }
 NEW_VERSION_COMMANDS = {"gitleaks": ["gitleaks", "version"]}
 
@@ -244,6 +256,9 @@ def test_vendored_tier_is_the_old_set_plus_the_readers_that_walked_anyway() -> N
             # PR Z: walk-fed like hadolint; it read vendored workflows when
             # handed a directory (7 of 10 findings on a planted fixture).
             "zizmor",
+            # PR O: walk-fed; an installed package's own lockfile is not the
+            # repository's dependency set.
+            "osv-scanner",
         }
         == scan_utils.VENDOR_NOISE_TOOLS
     )
@@ -402,3 +417,66 @@ def test_run_tools_hands_exclusions_to_a_repository_only(
 
     assert len(handed) == 1
     assert bool(handed[0]) is (target_type == "repo"), handed
+
+
+# --- O3: a repository scan drops trivy's secret pass; an image keeps it -----
+#
+# trivy skips devDependencies by default, so a JS app whose vulnerable
+# packages are all dev-only read 0 vulnerabilities (measured on a private
+# export). `--include-dev-deps` fixes that; `--offline-scan` stops a Maven
+# lookup measured failing twice with 429 and producing no output, since the
+# vulnerability database is already local. `secret` comes off the repository
+# scanners list entirely -- gitleaks and trufflehog already read a
+# repository's secrets -- and stays on the image scan, where nothing else
+# reads its layers.
+
+
+def _trivy_command(tmp_path: Path, target_type: str, **ctx_kwargs) -> tuple:
+    ctx = ScanContext(
+        tool="trivy",
+        target_type=target_type,
+        target=tmp_path if target_type == "repo" else "nginx:latest",
+        out_dir=tmp_path,
+        binary="trivy",
+        **ctx_kwargs,
+    )
+    invocations = DESCRIPTORS["trivy"].invocations[target_type](ctx)
+    assert len(invocations) == 1
+    return invocations[0].command
+
+
+class TestTrivyRepoDropsItsSecretPass:
+    def test_the_repository_scanners_list_has_no_secret(self, tmp_path):
+        command = _trivy_command(tmp_path, "repo")
+        idx = command.index("--scanners")
+        assert command[idx + 1] == "vuln,misconfig", command
+
+    def test_the_repository_scan_reads_dev_dependencies(self, tmp_path):
+        assert "--include-dev-deps" in _trivy_command(tmp_path, "repo")
+
+    def test_the_repository_scan_is_offline(self, tmp_path):
+        assert "--offline-scan" in _trivy_command(tmp_path, "repo")
+
+    def test_the_image_scan_keeps_its_secret_pass(self, tmp_path):
+        """Gate 4: nothing else reads an image's layers, so a secret baked
+        into one is found only here. A command-shape assertion, never a real
+        pull."""
+        command = _trivy_command(tmp_path, "image")
+        idx = command.index("--scanners")
+        assert command[idx + 1] == "vuln,secret,misconfig", command
+
+    def test_the_image_scan_does_not_gain_the_repository_only_flags(self, tmp_path):
+        command = _trivy_command(tmp_path, "image")
+        assert "--include-dev-deps" not in command
+        assert "--offline-scan" not in command
+
+    def test_a_user_flag_can_still_ask_for_secret_on_a_repository(self, tmp_path):
+        """`--scanners` unions rather than replaces at trivy's own CLI
+        (measured, ``test_per_tool_flag_policy.py``), so a
+        ``per_tool.trivy.flags: [--scanners, secret]`` config still reaches
+        the argv here, twice -- on purpose, not silently."""
+        command = _trivy_command(tmp_path, "repo", flags=("--scanners", "secret"))
+        occurrences = [
+            command[i + 1] for i, tok in enumerate(command) if tok == "--scanners"
+        ]
+        assert occurrences == ["vuln,misconfig", "secret"], command

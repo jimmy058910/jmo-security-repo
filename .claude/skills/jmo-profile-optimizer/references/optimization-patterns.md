@@ -231,9 +231,9 @@ a closed set otherwise (`Reason` in `scan_timings.py`):
 
 - **skipped:** `needs --url`, `not for this target type`, `not installed` (only
   under `--allow-missing-tools`), `no Dockerfiles`, `no shell scripts`,
-  `no Go sources`, `no IaC files`
+  `no Go sources`, `no IaC files`, `no GitHub Actions workflows`, `no lockfile`
 - **failed:** `not installed`, `timed out`, `no files to scan`,
-  `examined 0 files`, `unaccepted exit code`, `no output`,
+  `offline database missing`, `examined 0 files`, `unaccepted exit code`, `no output`,
   `not found at run time`, `could not be run`, `target not scanned`,
   `scanner error`
 

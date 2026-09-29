@@ -263,6 +263,26 @@ GitHub, `ref-confusion` among them, do not run, whether or not a token is set.
 
 **What to do:** for those audits, run zizmor yourself with a token.
 
+### OSV-Scanner reads pom.xml and requirements.txt for direct dependencies only
+
+JMo runs OSV-Scanner with `--no-resolve`. Without it, OSV-Scanner resolves a
+`pom.xml` or a `requirements.txt` transitively through deps.dev, a network call, even
+with `--offline-vulnerabilities` (measured, OSV-Scanner 2.6.0: under an unreachable
+proxy it reported "failed resolution"). A scan makes no network call, so only the
+dependencies those two files name are matched: two pinned packages in a
+`requirements.txt` gave 18 findings, against 38 when resolved online. Lockfiles
+(`package-lock.json`, `poetry.lock`, `gradle.lockfile` and the rest) already list
+every dependency and lose nothing.
+
+**What to do:** commit a file that lists every dependency (a `requirements.txt`
+written by `pip-compile` or `uv pip compile`, a `uv.lock`, a `poetry.lock`, Gradle
+dependency locking), or run OSV-Scanner yourself without `--no-resolve`.
+
+**Conan lockfiles are not read at all.** OSV publishes no ConanCenter vulnerability
+database, so JMo does not hand OSV-Scanner a `conan.lock` (the lockfiles it does read
+are listed in [TOOLS.md](TOOLS.md#when-each-tool-runs)); a repository whose only
+lockfile is a Conan one reads `skipped:no lockfile`.
+
 ### Checkov's repository run misses several CI/CD and IaC dialects
 
 On a repository, Checkov reads only Terraform and CloudFormation
@@ -306,6 +326,22 @@ scored by `SimilarityCalculator.calculate_similarity`: 0.793 with hadolint
 2.14.0 and again with 2.15.1, the version `versions.yaml` pins.)
 
 No findings are lost — anything not clustered is reported separately.
+
+**Dependency findings are matched on identity, not similarity** (#1346). A
+trivy, osv-scanner or grype vulnerability has no line, so location similarity
+never let two of them cluster: on one real lockfile trivy and osv-scanner
+reported the same 47 vulnerabilities and the report held 85. Each is now one
+finding per lockfile, package, installed version and advisory, whichever of
+those tools report it; two tools name one advisory when one's id is the
+other's id or alias (a CVE and its GHSA), and every two reports folded into one
+finding name a common id. `similarity_threshold` does not apply to them. The
+same package in two lockfiles is two findings. osv-scanner files some
+advisories other tools keep apart under one rule (NodeGoat's lodash
+CVE-2021-23337 lists CVE-2026-4800, which trivy and grype report separately);
+that rule joins the finding with its own id, and the other advisory stays a
+finding of its own. A tool that names an advisory only by an id the other
+tools' reports do not carry (a GHSA with no CVE beside one that has only the
+CVE) stays a finding of its own.
 
 **What to do:** lower `deduplication.similarity_threshold` toward `0.5` if you
 would rather over-cluster than under-cluster, or raise it toward `1.0` for the

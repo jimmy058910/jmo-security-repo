@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import shutil
 import subprocess
 import sys
@@ -77,6 +78,27 @@ def _zizmor_findings(out: dict[str, Any]) -> list[dict[str, Any]]:
                 and (location.get("artifactLocation") or {}).get("uri")
                 and (location.get("region") or {}).get("startLine")
                 and (result.get("properties") or {}).get("zizmor/severity")
+            ):
+                usable.append(result)
+    return usable
+
+
+def _osv_scanner_findings(out: dict[str, Any]) -> list[dict[str, Any]]:
+    """The SARIF results the osv-scanner binding can use: each needs its rule,
+    its lockfile, and a message naming `package@version`, which is the only
+    place osv-scanner's SARIF carries either."""
+    usable = []
+    for run in out.get("runs") or []:
+        for result in run.get("results") or []:
+            location = (
+                ((result.get("locations") or [{}])[0]).get("physicalLocation") or {}
+            )
+            text = (result.get("message") or {}).get("text") or ""
+            if (
+                result.get("ruleId")
+                and (location.get("artifactLocation") or {}).get("uri")
+                and text.startswith("Package '")
+                and "@" in text
             ):
                 usable.append(result)
     return usable
@@ -238,6 +260,38 @@ TOOL_CONTRACTS: dict[str, dict[str, Any]] = {
         "findings": _zizmor_findings,
         "description": "GitHub Actions auditor with SARIF output",
     },
+    "osv-scanner": {
+        "required_keys": ["runs"],
+        "result_item_keys": ["tool", "results"],
+        "sample_target": "python-vulnerable",
+        # As JMo runs it, with the lockfile given by an absolute path and the
+        # SARIF on stdout. Offline against tests/fixtures/osv-db, a frozen
+        # database of three synthetic advisories, so the contract downloads
+        # nothing; `--no-resolve` so `requirements.txt` is not resolved over
+        # the network (deps.dev); no call analysis, as in a scan.
+        "command": [
+            "osv-scanner",
+            "scan",
+            "source",
+            "--format",
+            "sarif",
+            "--offline-vulnerabilities",
+            "--no-resolve",
+            "--no-call-analysis=all",
+            "-L",
+            "{target}/requirements.txt",
+        ],
+        "env": {
+            "OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY": str(
+                PROJECT_ROOT / "tests" / "fixtures" / "osv-db"
+            )
+        },
+        # 1 is findings. Measured 2026-09-28 with 2.6.0: 1 result on the
+        # sample, JMO-TEST-2026-0002 on urllib3@1.25.0.
+        "ok_return_codes": (1,),
+        "findings": _osv_scanner_findings,
+        "description": "Dependency scanner with SARIF output, offline database",
+    },
 }
 
 
@@ -291,6 +345,9 @@ def run_tool_on_sample(
         errors="replace",
         timeout=180,  # 3 minute timeout
         cwd=PROJECT_ROOT,
+        # Merged over the inherited environment, as ToolRunner merges a
+        # definition's (osv-scanner's database directory).
+        env={**os.environ, **contract["env"]} if "env" in contract else None,
     )
 
     # stdout only: every contract tool writes its report there. Falling back to
@@ -579,7 +636,13 @@ class TestContractInfrastructure:
             ln
             for ln in run.splitlines()
             if not ln.lstrip().startswith("#")
-            and re.search(r"pip install|apt-get install|tar -x|-o /usr/local/bin/", ln)
+            # `mv ... /usr/local/bin/`: a raw binary checked in /tmp first
+            # (osv-scanner).
+            and re.search(
+                r"pip install|apt-get install|tar -x|-o /usr/local/bin/"
+                r"|mv \S+ /usr/local/bin/",
+                ln,
+            )
         ]
 
         missing = [
@@ -716,6 +779,32 @@ class TestSanityCheckBites:
         del properties["zizmor/severity"]
         assert check_run("zizmor", contract, report, 0) == [
             "zizmor: reported nothing on its sample"
+        ]
+
+    def test_an_osv_scanner_result_not_naming_its_package_is_not_a_finding(self):
+        """osv-scanner's SARIF carries the package and version only in the
+        message, so a result without them reports nothing the binding keys."""
+        message = {
+            "text": "Package 'urllib3@1.25.0' is vulnerable to 'JMO-TEST-2026-0002'."
+        }
+        result = {
+            "ruleId": "JMO-TEST-2026-0002",
+            "locations": [
+                {
+                    "physicalLocation": {
+                        "artifactLocation": {"uri": "file:///r/requirements.txt"}
+                    }
+                }
+            ],
+            "message": message,
+        }
+        report = {"runs": [{"tool": {}, "results": [result]}]}
+        contract = TOOL_CONTRACTS["osv-scanner"]
+
+        assert check_run("osv-scanner", contract, report, 1) == []
+        message["text"] = "A vulnerability."
+        assert check_run("osv-scanner", contract, report, 1) == [
+            "osv-scanner: reported nothing on its sample"
         ]
 
     def test_a_dict_contract_with_no_required_keys_is_not_indexed(self):

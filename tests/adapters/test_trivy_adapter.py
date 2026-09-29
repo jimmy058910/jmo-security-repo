@@ -144,6 +144,7 @@ import json
 from pathlib import Path
 
 from scripts.core.adapters.trivy_adapter import TrivyAdapter
+from scripts.core.common_finding import fingerprint
 
 RECORDED_074 = (
     Path(__file__).resolve().parents[1]
@@ -629,8 +630,9 @@ class TestTrivySecretCwe:
 class TestTrivyCvss:
     """#1243: trivy vulnerabilities carried no ``cvss`` at all.
 
-    NVD's V3 score wins; else any other source's V3; else NVD's V2; else any
-    other source's V2 -- v3 always outranks v2 regardless of source.
+    NVD's score wins within a version; else any other source's. Across
+    versions, v3.x outranks v4.0 outranks v2.0 regardless of source or numbers
+    (#1356).
     """
 
     def _vuln(self, tmp_path: Path, name: str, cvss: dict) -> Path:
@@ -719,6 +721,70 @@ class TestTrivyCvss:
             "version": "2.0",
             "score": 4.3,
             "vector": "AV:N/AC:L/Au:N/C:P/I:P/A:P",
+        }
+
+    def test_v4_only_used_when_nothing_has_v3(self, tmp_path: Path):
+        """An advisory with a v4.0 metric and nothing else (#1356)."""
+        cvss = {
+            "nvd": {
+                "V40Vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N",
+                "V40Score": 8.7,
+            }
+        }
+        f = TrivyAdapter().parse(self._vuln(tmp_path, "v4_only.json", cvss))[0]
+        assert f.cvss == {
+            "version": "4.0",
+            "score": 8.7,
+            "vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N",
+        }
+
+    def test_v3_preferred_over_v4_even_with_a_lower_score(self, tmp_path: Path):
+        """v3.x outranks v4.0 whatever the numbers (#1356)."""
+        cvss = {
+            "nvd": {
+                "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+                "V3Score": 5.3,
+                "V40Vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N",
+                "V40Score": 9.0,
+            }
+        }
+        f = TrivyAdapter().parse(self._vuln(tmp_path, "v3_over_v4.json", cvss))[0]
+        assert f.cvss == {
+            "version": "3.x",
+            "score": 5.3,
+            "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        }
+
+    def test_v4_preferred_over_v2_even_with_a_lower_score(self, tmp_path: Path):
+        """v4.0 outranks v2.0 whatever the numbers (#1356)."""
+        cvss = {
+            "nvd": {
+                "V2Vector": "AV:N/AC:L/Au:N/C:P/I:P/A:P",
+                "V2Score": 10.0,
+                "V40Vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:L/VI:N/VA:N/SC:N/SI:N/SA:N",
+                "V40Score": 1.0,
+            }
+        }
+        f = TrivyAdapter().parse(self._vuln(tmp_path, "v4_over_v2.json", cvss))[0]
+        assert f.cvss == {
+            "version": "4.0",
+            "score": 1.0,
+            "vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:L/VI:N/VA:N/SC:N/SI:N/SA:N",
+        }
+
+    def test_vendor_v4_used_when_nvd_absent(self, tmp_path: Path):
+        """NVD-first within a version (the same tie-break #1356 uses) also holds for v4.0."""
+        cvss = {
+            "ghsa": {
+                "V40Vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N",
+                "V40Score": 9.1,
+            }
+        }
+        f = TrivyAdapter().parse(self._vuln(tmp_path, "vendor_v4.json", cvss))[0]
+        assert f.cvss == {
+            "version": "4.0",
+            "score": 9.1,
+            "vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N",
         }
 
     def test_no_cvss_block_omits_the_key(self, tmp_path: Path):
@@ -1278,3 +1344,94 @@ class TestTrivyRuleIdLineAndVersionChain:
             sample = {**top, "Results": [{"Target": "x", "Vulnerabilities": [item]}]}
             path = write(tmp_path, f"v{n}.json", json.dumps(sample))
             assert TrivyAdapter().parse(path)[0].tool["version"] == expected, top
+
+
+class TestTrivyDependency:
+    """#1346: a vulnerability names its installed package, and its id is keyed
+    on it. trivy's message is the advisory title, which names no version, so
+    without the package two installed versions of one package with one
+    advisory shared an id and phase-1 deduplication kept one: 47 findings on a
+    real lockfile became 38."""
+
+    def test_a_recorded_vulnerability_carries_its_package(self):
+        by_id = {f.ruleId: f for f in TrivyAdapter().parse(RECORDED_074_VULN)}
+        assert by_id["CVE-2019-10744"].dependency == {
+            "name": "lodash",
+            "version": "4.17.4",
+            "ecosystem": "npm",
+            "aliases": ["GHSA-jf85-cpcp-j695"],
+        }
+        # No VendorIDs in trivy's record: no aliases, not a guessed one.
+        assert by_id["CVE-2018-16487"].dependency["aliases"] == []
+        assert by_id["CVE-2021-44906"].dependency["name"] == "minimist"
+
+    def test_two_installed_versions_of_one_package_are_two_findings(self, tmp_path):
+        def vuln(version):
+            return {
+                "VulnerabilityID": "CVE-2019-10744",
+                "PkgName": "lodash",
+                "PkgIdentifier": {"PURL": f"pkg:npm/lodash@{version}"},
+                "InstalledVersion": version,
+                "Severity": "CRITICAL",
+                "Title": "nodejs-lodash: prototype pollution in defaultsDeep",
+                "VendorIDs": ["GHSA-jf85-cpcp-j695"],
+            }
+
+        sample = {
+            "Results": [
+                {
+                    "Target": "package-lock.json",
+                    "Vulnerabilities": [vuln("4.13.1"), vuln("4.17.4")],
+                }
+            ]
+        }
+        findings = TrivyAdapter().parse(
+            write(tmp_path, "trivy.json", json.dumps(sample))
+        )
+        assert len({f.id for f in findings}) == 2
+        assert findings[0].id == fingerprint(
+            "trivy",
+            "CVE-2019-10744",
+            "package-lock.json",
+            0,
+            "nodejs-lodash: prototype pollution in defaultsDeep",
+            package="lodash@4.13.1",
+        )
+
+    def test_misconfigurations_and_secrets_have_none_and_keep_their_ids(self):
+        findings = TrivyAdapter().parse(RECORDED_074)
+        assert findings
+        for f in findings:
+            assert f.dependency is None
+            assert f.id == fingerprint(
+                "trivy",
+                f.ruleId,
+                f.location["path"],
+                f.location["startLine"],
+                f.message,
+            )
+
+    def test_no_package_without_both_name_and_version(self, tmp_path):
+        sample = {
+            "Results": [
+                {
+                    "Target": "package-lock.json",
+                    "Vulnerabilities": [
+                        {
+                            "VulnerabilityID": "CVE-1",
+                            "PkgName": "lodash",
+                            "Severity": "LOW",
+                        },
+                        {
+                            "VulnerabilityID": "CVE-2",
+                            "InstalledVersion": "1.0",
+                            "Severity": "LOW",
+                        },
+                    ],
+                }
+            ]
+        }
+        findings = TrivyAdapter().parse(
+            write(tmp_path, "trivy.json", json.dumps(sample))
+        )
+        assert [f.dependency for f in findings] == [None, None]

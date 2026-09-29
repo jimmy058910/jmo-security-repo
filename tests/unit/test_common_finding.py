@@ -26,6 +26,7 @@ from scripts.core.common_finding import (
     fingerprint,
     map_tool_severity,
     normalize_severity,
+    package_of,
 )
 
 # ============================================================================
@@ -503,6 +504,27 @@ class TestFingerprint:
         col20 = fingerprint("t", "r", "p", 3, "m", start_column=20)
         assert len({base, col5, col20}) == 3
         assert fingerprint("t", "r", "p", 3, "m", start_column=0) != base
+
+    def test_package_is_appended_only_when_supplied(self):
+        """#1346: a dependency finding's key holds its package, so two
+        installed versions of one package with one advisory are two ids; every
+        call without one hashes as before (the pinned hex above)."""
+        assert fingerprint("t", "r", "p", 0, "m", package=None) == fingerprint(
+            "t", "r", "p", 0, "m"
+        )
+        assert fingerprint("t", "r", "p", 3, "m", package=None) == "c195e281b9d65b61"
+        old = fingerprint("t", "r", "p", 0, "m", package="lodash@4.13.1")
+        new = fingerprint("t", "r", "p", 0, "m", package="lodash@4.17.4")
+        assert len({old, new, fingerprint("t", "r", "p", 0, "m")}) == 3
+        base = "t|r|p|0|m|pkg:lodash@4.13.1"
+        assert old == hashlib.sha256(base.encode("utf-8")).hexdigest()[:16]
+
+    def test_package_of_needs_a_name_and_a_version(self):
+        assert package_of({"name": "@scope/x", "version": "1.0.0"}) == "@scope/x@1.0.0"
+        assert package_of({"name": "x", "version": ""}) is None
+        assert package_of({"name": "x"}) is None
+        assert package_of(None) is None
+        assert package_of("x@1") is None
 
 
 # ============================================================================

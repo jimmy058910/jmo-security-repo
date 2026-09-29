@@ -428,3 +428,62 @@ class TestAdapterOutputCompliance:
 
         errors = validate_finding(adapter_output)
         assert errors == [], f"Full adapter output should be valid: {errors}"
+
+
+GOLDEN_DIR = Path(__file__).parent.parent / "fixtures" / "golden"
+GOLDEN_EXPECTED = sorted(GOLDEN_DIR.glob("*/*/expected-findings.json"))
+
+
+class TestDependencyObject:
+    """#1346: a dependency scanner's `dependency` object, and the golden
+    adapter outputs that carry it, against the schema."""
+
+    @pytest.fixture
+    def dependency_finding(self, valid_finding: dict[str, Any]) -> dict[str, Any]:
+        return {
+            **valid_finding,
+            "location": {"path": "package-lock.json"},
+            "dependency": {
+                "name": "lodash",
+                "version": "4.17.4",
+                "ecosystem": "npm",
+                "aliases": ["GHSA-jf85-cpcp-j695"],
+            },
+        }
+
+    def test_a_dependency_object_is_valid(self, dependency_finding) -> None:
+        assert validate_finding(dependency_finding) == []
+
+    @pytest.mark.parametrize("missing", ["name", "version"])
+    def test_a_package_needs_its_name_and_version(
+        self, dependency_finding, missing: str
+    ) -> None:
+        del dependency_finding["dependency"][missing]
+        assert validate_finding(dependency_finding) != []
+
+    def test_aliases_are_a_list_of_strings(self, dependency_finding) -> None:
+        dependency_finding["dependency"]["aliases"] = "GHSA-jf85-cpcp-j695"
+        assert validate_finding(dependency_finding) != []
+
+    @pytest.mark.parametrize(
+        "expected",
+        GOLDEN_EXPECTED,
+        ids=lambda p: f"{p.parent.parent.name}-{p.parent.name}",
+    )
+    def test_golden_adapter_output_is_schema_compliant(self, expected: Path) -> None:
+        # The golden files keep None fields; Finding.to_dict drops them.
+        findings = [
+            {k: v for k, v in f.items() if v is not None}
+            for f in json.loads(expected.read_bytes())
+        ]
+        assert validate_findings(findings) == {}
+
+    def test_the_golden_corpus_holds_dependency_findings(self) -> None:
+        """Meta-guard: the golden check above must see the object at all."""
+        assert len(GOLDEN_EXPECTED) >= 4
+        osv = json.loads(
+            (
+                GOLDEN_DIR / "osv_scanner" / "v2.5.1" / "expected-findings.json"
+            ).read_bytes()
+        )
+        assert osv and all(f.get("dependency") for f in osv)

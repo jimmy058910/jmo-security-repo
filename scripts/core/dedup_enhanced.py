@@ -23,6 +23,12 @@ Similarity Calculation:
 
 Threshold: 0.65 (lowered from 0.75 for better cross-tool clustering)
 
+Dependency findings (#1346) are not clustered by similarity at all: they have
+no line, so location similarity is 0.0 for every pair and no two dependency
+scanners ever reached the threshold. They are matched on their identity --
+lockfile, package, installed version, advisory id or alias -- by
+`cluster_dependency_findings`, whichever algorithm clusters the rest.
+
 Rule Equivalence:
     Known equivalent rules across tools are mapped in rule_equivalence.py.
     Example: Trivy "DS-0001" = Hadolint "DL3006" = Checkov "CKV_DOCKER_7"
@@ -47,6 +53,9 @@ Version: 1.1.0
 
 from __future__ import annotations
 
+import copy
+import json
+import math
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -59,7 +68,16 @@ except ImportError:
     # Fallback to simple ratio calculation if rapidfuzz not available
     fuzz = None  # type: ignore[assignment]  # Graceful fallback when rapidfuzz optional dep not installed
 
-from scripts.core.common_finding import Severity
+from scripts.core.common_finding import Severity, preferred_cvss
+from scripts.core.compliance_mapper import COMPLIANCE_ENTRY_KEYS, first_entry_per_key
+
+_SEVERITY_RANK = {
+    Severity.CRITICAL: 4,
+    Severity.HIGH: 3,
+    Severity.MEDIUM: 2,
+    Severity.LOW: 1,
+    Severity.INFO: 0,
+}
 
 
 def tool_name_of(finding: dict[str, Any]) -> str:
@@ -74,6 +92,136 @@ def tool_name_of(finding: dict[str, Any]) -> str:
     return str(tool.get("name") or "")
 
 
+def lead_order(finding: dict[str, Any]) -> tuple[int, str, str]:
+    """Sort key putting a cluster's lead first: severity, then tool, then id.
+
+    The lead gives a consensus finding its id (``cluster-<lead id>``), its
+    location, and every scalar the members disagree on, so it must not depend
+    on the order findings were loaded in -- which is whichever adapter thread
+    finished first. Highest severity leads, as it always has; a tie used to go
+    to a stable sort, i.e. to load order, and now goes to the tool name, then
+    the finding id (#1355). The clusterers sort by this key and
+    `FindingCluster.add` compares with it, so the two cannot disagree.
+    """
+    severity = Severity.from_string(finding.get("severity", "INFO"))
+    return (
+        -_SEVERITY_RANK.get(severity, 0),
+        tool_name_of(finding),
+        str(finding.get("id", "")),
+    )
+
+
+# A consensus finding's fields that are its lead's, whole, rather than merged
+# (#1355). `id` becomes `cluster-<lead id>`; every member's tool is in
+# `detected_by`; one location is kept rather than a blend of several; and
+# `raw` is a tool's own payload, so each other member's stays with that member,
+# in its `context.duplicates` entry. A merged `raw` would also sit under the
+# lead's tool name, which `history_db.redact_secrets` picks the secret keys by.
+_LEAD_ONLY_FIELDS = frozenset({"id", "tool", "location", "raw"})
+
+
+def _canonical(value: Any) -> str:
+    return json.dumps(value, sort_keys=True, default=str)
+
+
+# How two tools spell one package, measured (#1346): a PyPI name as written
+# in requirements.txt (trivy: `Flask_Cors`) or normalised (osv-scanner:
+# `flask-cors`), and a Go version with or without its `v` (trivy `v0.3.0`,
+# osv-scanner `0.3.0`). Folding a name this way could only confuse two
+# packages that also share a lockfile, a version and an advisory id.
+_NAME_SEPARATORS = re.compile(r"[-_.]+")
+_VERSION_V = re.compile(r"^v(?=\d)")
+
+
+def dependency_key(finding: dict[str, Any]) -> tuple[str, str, str] | None:
+    """(lockfile, package name, installed version) of a dependency finding,
+    folded so two tools' spellings of one package are equal; ``None`` for a
+    finding without a `dependency` naming both a package and a version.
+
+    The lockfile is ``location.path`` as the report phase leaves it
+    (repo-relative, one separator), so two lockfiles are two keys however
+    alike their packages are.
+    """
+    dependency = finding.get("dependency")
+    if not isinstance(dependency, dict):
+        return None
+    name, version = dependency.get("name"), dependency.get("version")
+    if not (isinstance(name, str) and name and isinstance(version, str) and version):
+        return None
+    location = finding.get("location")
+    path = location.get("path") if isinstance(location, dict) else None
+    return (
+        str(path or "").replace("\\", "/").removeprefix("./"),
+        _NAME_SEPARATORS.sub("-", name).casefold(),
+        _VERSION_V.sub("", version),
+    )
+
+
+def advisory_ids(finding: dict[str, Any]) -> frozenset[str]:
+    """Every id a finding names its advisory by: its ``ruleId`` and its
+    dependency's ``aliases``, upper-cased so a GHSA id's case cannot matter."""
+    dependency = finding.get("dependency")
+    aliases = dependency.get("aliases") if isinstance(dependency, dict) else None
+    ids = [finding.get("ruleId"), *(aliases if isinstance(aliases, list) else [])]
+    return frozenset(i.upper() for i in ids if isinstance(i, str) and i)
+
+
+def _merge_into(base: Any, other: Any) -> Any:
+    """Merge ``other`` into ``base``, the value the consensus holds so far.
+
+    Dicts merge key by key, recursively, so a key only ``other`` has is added.
+    Lists become their union: ``other``'s items the list lacks are appended in
+    ``other``'s order (compared by value, so dict items dedupe too). ``None`` is
+    an absence, so either side's value replaces it. Anything else -- two
+    scalars, or two different shapes -- keeps ``base``: the lead's value wins.
+    """
+    if other is None:
+        return base
+    if base is None:
+        return copy.deepcopy(other)
+    if isinstance(base, dict) and isinstance(other, dict):
+        for key, value in other.items():
+            if value is not None:
+                base[key] = _merge_into(base.get(key), value)
+        return base
+    if isinstance(base, list) and isinstance(other, list):
+        seen = {_canonical(item) for item in base}
+        for item in other:
+            key = _canonical(item)
+            if key not in seen:
+                seen.add(key)
+                base.append(copy.deepcopy(item))
+        return base
+    return base
+
+
+def _most_urgent(base: Any, other: Any) -> Any:
+    """Merge two members' `priority` dicts, keeping the more urgent value of each.
+
+    The larger number (the score, the EPSS and its percentile, each score
+    component), KEV-listed if either is, and the earlier of two strings -- the
+    only one is `kev_due_date`, an ISO date, so the earlier deadline.
+    """
+    if other is None:
+        return base
+    if base is None:
+        return copy.deepcopy(other)
+    if isinstance(base, dict) and isinstance(other, dict):
+        for key, value in other.items():
+            if value is not None:
+                base[key] = _most_urgent(base.get(key), value)
+        return base
+    if isinstance(base, bool) and isinstance(other, bool):
+        return base or other
+    if isinstance(base, bool) or isinstance(other, bool):
+        return base  # a flag against a number: two shapes, the lead's wins
+    if isinstance(base, (int, float)) and isinstance(other, (int, float)):
+        return max(base, other)
+    if isinstance(base, str) and isinstance(other, str):
+        return min(base, other)
+    return base
+
+
 @dataclass
 class FindingCluster:
     """Cluster of similar findings from different tools.
@@ -86,9 +234,10 @@ class FindingCluster:
     reporting one issue, which is what `detected_by` and `confidence` describe.
 
     Attributes:
-        representative: Primary finding (highest severity in cluster)
+        representative: The cluster's lead, first by `lead_order` (highest
+            severity, then tool name, then id), whatever order members joined in
         findings: All findings in this cluster
-        similarity_scores: Mapping of finding ID to similarity score
+        similarity_scores: Mapping of finding ID to its similarity to the lead
 
     """
 
@@ -119,7 +268,7 @@ class FindingCluster:
         return tool_name_of(finding) not in self.tool_names()
 
     def add(self, finding: dict[str, Any], similarity: float) -> None:
-        """Add finding to cluster and update representative if needed.
+        """Add finding to cluster; it becomes the lead if it sorts first.
 
         Args:
             finding: Finding to add to cluster
@@ -127,43 +276,70 @@ class FindingCluster:
 
         """
         self.findings.append(finding)
+
+        # The lead is first by `lead_order`, never by arrival: a strictly
+        # higher severity alone left a tie with whichever member came first
+        # (#1355). Scores are similarity to the lead, so a new lead scores 1.0
+        # and the one it displaces takes the score this pair measured.
+        if lead_order(finding) < lead_order(self.representative):
+            self.similarity_scores[self.representative["id"]] = similarity
+            self.representative = finding
+            similarity = 1.0
         self.similarity_scores[finding["id"]] = similarity
 
-        # Update representative if new finding has higher severity
-        if self._compare_severity(finding, self.representative) > 0:
-            self.representative = finding
-
-    def _compare_severity(self, f1: dict, f2: dict) -> int:
-        """Compare severity: returns 1 if f1 > f2, -1 if f1 < f2, 0 if equal."""
-        sev1 = Severity.from_string(f1.get("severity", "INFO"))
-        sev2 = Severity.from_string(f2.get("severity", "INFO"))
-
-        if sev1 > sev2:
-            return 1
-        elif sev1 < sev2:
-            return -1
-        else:
-            return 0
-
     def to_consensus_finding(self) -> dict[str, Any]:
-        """Generate single consensus finding from cluster.
+        """Generate single consensus finding from cluster: its members, merged.
 
-        Returns:
-            Dict representing consensus finding with:
-                - All fields from representative finding
-                - detected_by: Array of tool objects
-                - confidence: Object with level and tool_count
-                - severity: Elevated to highest in cluster
-                - context.duplicates: Array of non-representative findings
+        The consensus is a new finding, not a copy of one member (#1355).
+        Every member's fields are merged into the lead's (`_merge_into`): lists
+        are unioned, objects merged recursively -- the next field a finding
+        grows included -- and where members disagree on a scalar, the lead's
+        value stands. The exceptions are fields built from all the members:
 
+            - id: ``cluster-<lead id>``
+            - severity: the highest in the cluster
+            - cvss: `preferred_cvss` over every member's, not the lead's
+            - priority: the most urgent of each value (`_most_urgent`), so a
+              KEV-listed member leaves the consensus KEV-listed
+            - compliance: each framework in `COMPLIANCE_ENTRY_KEYS` one entry
+              per key, as `compliance_mapper` keeps it within one finding
+            - tool, location, raw: the lead's (`_LEAD_ONLY_FIELDS`); the other
+              members' tools are in detected_by, their raw in their duplicates
+              entry
+            - detected_by: Array of tool objects
+            - confidence: Object with level and tool_count
+            - context.duplicates: Array of the other members
+
+        Members are taken in `lead_order`, so the result is byte-identical
+        whatever order they joined the cluster in.
         """
-        # Start with representative as base
-        consensus = self.representative.copy()
+        lead = self.representative
+        members = sorted(self.findings, key=lead_order)
+        others = [finding for finding in members if finding is not lead]
+
+        consensus = copy.deepcopy(lead)
+        for member in others:
+            for key, value in member.items():
+                if key in _LEAD_ONLY_FIELDS or key in ("cvss", "severity"):
+                    continue
+                merge = _most_urgent if key == "priority" else _merge_into
+                consensus[key] = merge(consensus.get(key), value)
+
+        compliance = consensus.get("compliance")
+        if isinstance(compliance, dict):
+            for framework, entry_key in COMPLIANCE_ENTRY_KEYS.items():
+                entries = compliance.get(framework)
+                if isinstance(entries, list):
+                    compliance[framework] = first_entry_per_key(entries, entry_key)
+
+        cvss = preferred_cvss(finding.get("cvss") for finding in members)
+        if cvss is not None:
+            consensus["cvss"] = copy.deepcopy(cvss)
 
         # Build detected_by array (deduplicated by tool name)
         seen_tools: set[str] = set()
         detected_by = []
-        for finding in self.findings:
+        for finding in members:
             tool_info = finding.get("tool", {})
             if isinstance(tool_info, dict):
                 tool_name = tool_info.get("name", "unknown")
@@ -184,30 +360,29 @@ class FindingCluster:
         # Calculate confidence
         consensus["confidence"] = self._calculate_confidence()
 
-        # Attach duplicates to context
+        # Attach duplicates to context, each with its own raw (see
+        # _LEAD_ONLY_FIELDS)
         duplicates = []
-        for finding in self.findings:
-            if finding["id"] != self.representative["id"]:
-                duplicates.append(
-                    {
-                        "id": finding["id"],
-                        "tool": finding.get("tool", {}),
-                        "severity": finding.get("severity", "INFO"),
-                        "message": finding.get("message", ""),
-                        "similarity_score": self.similarity_scores.get(
-                            finding["id"], 0.0
-                        ),
-                    }
-                )
+        for finding in others:
+            duplicate = {
+                "id": finding["id"],
+                "tool": finding.get("tool", {}),
+                "severity": finding.get("severity", "INFO"),
+                "message": finding.get("message", ""),
+                "similarity_score": self.similarity_scores.get(finding["id"], 0.0),
+            }
+            if finding.get("raw") is not None:
+                duplicate["raw"] = copy.deepcopy(finding["raw"])
+            duplicates.append(duplicate)
 
-        if "context" not in consensus:
+        if not isinstance(consensus.get("context"), dict):
             consensus["context"] = {}
         consensus["context"]["duplicates"] = duplicates
         consensus["context"]["cluster_size"] = len(self.findings)
 
         # Generate new fingerprint for consensus finding
         # (Prepend "cluster-" to original fingerprint)
-        consensus["id"] = f"cluster-{self.representative['id']}"
+        consensus["id"] = f"cluster-{lead['id']}"
 
         return consensus
 
@@ -246,8 +421,9 @@ class FindingCluster:
         else:
             level = "LOW"
 
-        # Average similarity
-        avg_similarity = sum(self.similarity_scores.values()) / len(
+        # Average similarity. `fsum` is exact, so the order members joined in
+        # cannot move the last digit (#1355).
+        avg_similarity = math.fsum(self.similarity_scores.values()) / len(
             self.similarity_scores
         )
 
@@ -718,11 +894,106 @@ class SimilarityCalculator:
         return False
 
 
+def cluster_dependency_findings(
+    findings: list[dict[str, Any]],
+) -> list[FindingCluster]:
+    """Cluster dependency findings on their identity, not on similarity (#1346).
+
+    One vulnerability in one installed package version is one finding,
+    whichever dependency scanners report it: two findings are one when their
+    `dependency_key` (lockfile, name, version) is equal and their
+    `advisory_ids` intersect -- one tool's id is the other's id or alias.
+    Measured before this, on a real lockfile: trivy and osv-scanner reported
+    the same 47 and the report held 85, clustered 0.
+
+    That holds for EVERY PAIR in a cluster, and a cluster holds one finding
+    per tool (`FindingCluster.can_accept`). A union of the members' ids is
+    never enough: osv-scanner files some distinct advisories under one rule
+    (on NodeGoat its lodash rule CVE-2021-23337 lists CVE-2026-4800, which
+    trivy and grype each report as a finding of its own), and a union would
+    fold both advisories into one finding.
+
+    Within one package, the pairs that share an id are joined strongest first
+    (`_link_strength`), so that grouped rule joins the finding with its own
+    id, whichever sorts first. Ties go by `lead_order`, and each cluster's
+    first finding by it is its lead, so the result does not depend on load
+    order.
+    """
+    by_package: dict[Any, list[dict[str, Any]]] = {}
+    for finding in sorted(findings, key=lead_order):
+        by_package.setdefault(dependency_key(finding), []).append(finding)
+
+    clusters: list[FindingCluster] = []
+    for package in by_package.values():
+        for members in _identity_groups(package):
+            cluster = FindingCluster(representative=package[members[0]])
+            for index in members[1:]:
+                cluster.add(package[index], 1.0)
+            clusters.append(cluster)
+    return clusters
+
+
+def _link_strength(
+    ids_a: frozenset[str], primary_a: str, ids_b: frozenset[str], primary_b: str
+) -> int:
+    """How surely two findings that share an id name one advisory: 3 for the
+    same primary id (``ruleId``), else how many of the two primary ids the
+    other finding lists -- 2, 1, or 0 when they share only an alias."""
+    if primary_a and primary_a == primary_b:
+        return 3
+    return (primary_a in ids_b) + (primary_b in ids_a)
+
+
+def _identity_groups(package: list[dict[str, Any]]) -> list[list[int]]:
+    """One package's findings, in `lead_order`, as groups of their indices.
+
+    Every pair sharing an id is a candidate link; links are taken strongest
+    first, then by index. A link joins two groups only when no tool is in
+    both and every finding of one shares an id with every finding of the
+    other. Each group is sorted, and keyed by its lowest index: its lead.
+    """
+    ids = [advisory_ids(finding) for finding in package]
+    primary = [str(finding.get("ruleId") or "").upper() for finding in package]
+    tools = [tool_name_of(finding) for finding in package]
+
+    named_by: dict[str, list[int]] = {}
+    for index, finding_ids in enumerate(ids):
+        for advisory in finding_ids:
+            named_by.setdefault(advisory, []).append(index)
+    links = {
+        (a, b)
+        for indices in named_by.values()
+        for position, a in enumerate(indices)
+        for b in indices[position + 1 :]
+    }
+
+    def strongest_first(link: tuple[int, int]) -> tuple[int, int, int]:
+        a, b = link
+        return (-_link_strength(ids[a], primary[a], ids[b], primary[b]), a, b)
+
+    group = list(range(len(package)))
+    members = {index: [index] for index in group}
+    for a, b in sorted(links, key=strongest_first):
+        left, right = sorted((group[a], group[b]))
+        if left == right:
+            continue
+        if {tools[i] for i in members[left]} & {tools[i] for i in members[right]}:
+            continue
+        if not all(ids[i] & ids[j] for i in members[left] for j in members[right]):
+            continue
+        for index in members[right]:
+            group[index] = left
+        members[left] = sorted(members[left] + members.pop(right))
+    return [members[key] for key in sorted(members)]
+
+
 class FindingClusterer:
     """Main clustering engine with automatic algorithm selection.
 
     Uses improved weights (location-first) and rule equivalence mapping
-    to better cluster findings from different security tools.
+    to better cluster findings from different security tools. Dependency
+    findings go to `cluster_dependency_findings` instead, under either
+    algorithm, and never join a finding without a `dependency`.
 
     Algorithm Selection:
         - <500 findings: Greedy algorithm (simpler, lower overhead)
@@ -778,13 +1049,20 @@ class FindingClusterer:
         if not findings:
             return []
 
+        # Dependency findings are matched on identity, never on similarity,
+        # and by the same code whichever algorithm clusters the rest, so the
+        # two algorithms cannot disagree about them (#1346).
+        dependencies = [f for f in findings if dependency_key(f) is not None]
+        others = [f for f in findings if dependency_key(f) is None]
+
         # Select algorithm
         use_lsh = self._should_use_lsh(len(findings))
 
         if use_lsh:
-            return self._cluster_lsh(findings, progress_callback)
+            clusters = self._cluster_lsh(others, progress_callback)
         else:
-            return self._cluster_greedy(findings, progress_callback)
+            clusters = self._cluster_greedy(others, progress_callback)
+        return clusters + cluster_dependency_findings(dependencies)
 
     def _should_use_lsh(self, n: int) -> bool:
         """Determine if LSH algorithm should be used.
@@ -821,8 +1099,10 @@ class FindingClusterer:
             List of FindingCluster objects
 
         """
-        # Sort by severity (CRITICAL first) for optimal representative selection
-        sorted_findings = self._sort_by_severity(findings)
+        # Leads first (`lead_order`): each cluster's first finding is its
+        # representative, and never a member of equal severity that merely
+        # loaded earlier.
+        sorted_findings = sorted(findings, key=lead_order)
 
         clusters: list[FindingCluster] = []
         total = len(sorted_findings)
@@ -881,48 +1161,6 @@ class FindingClusterer:
         """
         lsh_clusterer = LSHClusterer(similarity_threshold=self.threshold)
         return lsh_clusterer.cluster(findings, progress_callback)
-
-    def _sort_by_severity(self, findings: list[dict]) -> list[dict]:
-        """Sort findings by severity (CRITICAL → INFO)."""
-
-        def severity_key(f: dict) -> int:
-            """Convert severity level to numeric sort key for ordering findings.
-
-            Maps severity strings to integers for consistent sorting from highest
-            to lowest severity: CRITICAL → HIGH → MEDIUM → LOW → INFO.
-
-            Args:
-                f (dict): Finding dictionary with 'severity' field
-
-            Returns:
-                int: Numeric sort key (4=CRITICAL, 3=HIGH, 2=MEDIUM, 1=LOW, 0=INFO)
-
-            Example:
-                >>> severity_key({'severity': 'CRITICAL'})
-                4
-                >>> severity_key({'severity': 'low'})
-                1
-                >>> sorted([{'severity': 'LOW'}, {'severity': 'CRITICAL'}],
-                ...        key=severity_key, reverse=True)
-                [{'severity': 'CRITICAL'}, {'severity': 'LOW'}]
-
-            Note:
-                Unknown severity levels default to 0 (same as INFO).
-                Used internally by _sort_by_severity for finding prioritization.
-
-            """
-            sev = Severity.from_string(f.get("severity", "INFO"))
-            # Reverse order: CRITICAL=4, HIGH=3, ..., INFO=0
-            order = {
-                Severity.CRITICAL: 4,
-                Severity.HIGH: 3,
-                Severity.MEDIUM: 2,
-                Severity.LOW: 1,
-                Severity.INFO: 0,
-            }
-            return order.get(sev, 0)
-
-        return sorted(findings, key=severity_key, reverse=True)
 
 
 class UnionFind:
@@ -1373,9 +1611,9 @@ class LSHClusterer:
             if not group_indices:
                 continue
 
-            # Sort by severity to select best representative
+            # Leads first (`lead_order`), as in the greedy algorithm
             group_findings = [findings[idx] for idx in group_indices]
-            sorted_group = self._sort_by_severity(group_findings)
+            sorted_group = sorted(group_findings, key=lead_order)
 
             # Refusing same-tool *unions* above is not sufficient: Union-Find is
             # transitive, so checkov~trivy plus trivy~checkov still lands two
@@ -1416,19 +1654,3 @@ class LSHClusterer:
             progress_callback(n, n, f"Clustered into {len(clusters)} groups")
 
         return clusters
-
-    def _sort_by_severity(self, findings: list[dict]) -> list[dict]:
-        """Sort findings by severity (CRITICAL → INFO)."""
-
-        def severity_key(f: dict) -> int:
-            sev = Severity.from_string(f.get("severity", "INFO"))
-            order = {
-                Severity.CRITICAL: 4,
-                Severity.HIGH: 3,
-                Severity.MEDIUM: 2,
-                Severity.LOW: 1,
-                Severity.INFO: 0,
-            }
-            return order.get(sev, 0)
-
-        return sorted(findings, key=severity_key, reverse=True)

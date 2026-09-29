@@ -362,10 +362,15 @@ def _matrix_check(capsys, json_output=False):
     """Run `jmo tools check` over the real TOOL_MATRIX with every tool OK.
 
     Only `ToolManager.check_tool` is stubbed, so `check_matrix` and the table
-    printer are the real ones.
+    printer are the real ones. osv-scanner's offline databases are a real
+    filesystem check (`present_ecosystems`), not something `ToolManager`
+    knows about, so it is stubbed too here -- otherwise this test's "all
+    installed and up to date" outcome would depend on whatever `~/.jmo/osv-db`
+    happens to hold on the machine running it.
     """
     from scripts.cli.tool_commands import cmd_tools_check
     from scripts.cli.tool_manager import ToolManager
+    from scripts.core.osv_database import ECOSYSTEMS
 
     checked: list[str] = []
 
@@ -374,7 +379,11 @@ def _matrix_check(capsys, json_output=False):
         return _status(name)
 
     with patch.object(ToolManager, "check_tool", ok):
-        result = cmd_tools_check(argparse.Namespace(tools=None, json=json_output))
+        with patch(
+            "scripts.core.osv_database.present_ecosystems",
+            return_value=frozenset(ECOSYSTEMS),
+        ):
+            result = cmd_tools_check(argparse.Namespace(tools=None, json=json_output))
     return result, capsys.readouterr().out, checked
 
 
@@ -1134,6 +1143,11 @@ class TestCmdToolsUpdate:
 
         mock_manager = MagicMock()
         mock_manager.get_outdated_tools.return_value = [mock_status]
+        # cmd_tools_update also asks whether osv-scanner is installed, to
+        # decide whether to refresh its offline databases (Task O2); an
+        # unconfigured MagicMock's `.installed` is truthy, which would make
+        # this test fetch ~280 MB for real.
+        mock_manager.check_tool.return_value = MagicMock(installed=False)
 
         mock_installer = MagicMock()
         mock_installer.install_tool.return_value = InstallResult(
@@ -1162,6 +1176,10 @@ class TestCmdToolsUpdate:
 
         mock_manager = MagicMock()
         mock_manager.get_outdated_tools.return_value = []
+        # See test_update_all_tools above: an unconfigured check_tool()
+        # defaults to a truthy `.installed`, which would trigger a real
+        # osv-scanner database fetch from this test.
+        mock_manager.check_tool.return_value = MagicMock(installed=False)
 
         args = argparse.Namespace(tools=None, critical_only=False, yes=True)
 
@@ -1505,6 +1523,10 @@ class TestCmdToolsUpdateComprehensive:
 
         mock_manager = MagicMock()
         mock_manager.get_outdated_tools.return_value = []
+        # An unconfigured check_tool() defaults to a truthy `.installed`,
+        # which would make this test fetch osv-scanner's real databases
+        # (Task O2's `jmo tools update` refresh).
+        mock_manager.check_tool.return_value = MagicMock(installed=False)
 
         args = argparse.Namespace(
             tools=None,
@@ -1528,6 +1550,7 @@ class TestCmdToolsUpdateComprehensive:
 
         mock_manager = MagicMock()
         mock_manager.get_critical_outdated.return_value = []
+        mock_manager.check_tool.return_value = MagicMock(installed=False)
 
         args = argparse.Namespace(
             tools=None,
@@ -1765,7 +1788,12 @@ class TestCmdToolsUpdateWithInstaller:
         mock_status.is_outdated = False
 
         mock_manager = MagicMock()
-        mock_manager.check_tool.return_value = mock_status
+        # Distinct from the osv-scanner check cmd_tools_update also makes
+        # (Task O2): a blanket return_value would answer that check with this
+        # same "installed" trivy mock and trigger a real database fetch.
+        mock_manager.check_tool.side_effect = lambda name: (
+            mock_status if name == "trivy" else MagicMock(installed=False)
+        )
 
         args = argparse.Namespace(
             tools=["trivy"],
@@ -2340,6 +2368,10 @@ class TestCmdToolsUpdateInteractive:
 
         mock_manager = MagicMock()
         mock_manager.get_outdated_tools.return_value = [mock_status]
+        # An unconfigured check_tool() defaults to a truthy `.installed`,
+        # which would make this test fetch osv-scanner's real databases
+        # (Task O2's `jmo tools update` refresh).
+        mock_manager.check_tool.return_value = MagicMock(installed=False)
 
         mock_result = MagicMock()
         mock_result.success = True
@@ -2392,6 +2424,8 @@ class TestCmdToolsUpdateInteractive:
 
         mock_manager = MagicMock()
         mock_manager.get_outdated_tools.return_value = [mock_status]
+        # See test_update_executes_installer above.
+        mock_manager.check_tool.return_value = MagicMock(installed=False)
 
         mock_result = MagicMock()
         mock_result.success = False
@@ -2427,6 +2461,338 @@ class TestCmdToolsUpdateInteractive:
                             result = cmd_tools_update(args)
 
         assert result == 1
+
+
+# ========== osv-scanner's offline database refresh (Task O2, decision 6) ====
+
+
+class TestCmdToolsUpdateOsvDatabaseRefresh:
+    """`jmo tools update` refreshes osv-scanner's offline databases even when
+    the binary itself is already current (decision 6), but never twice in one
+    run and never for a targeted update of a different tool.
+    """
+
+    @staticmethod
+    def _manager(outdated, osv_installed: bool):
+        mock_manager = MagicMock()
+        mock_manager.get_outdated_tools.return_value = outdated
+        mock_manager.get_critical_outdated.return_value = outdated
+        mock_manager.check_tool.return_value = MagicMock(installed=osv_installed)
+        return mock_manager
+
+    def test_bare_update_with_nothing_outdated_still_refreshes_when_installed(self):
+        from scripts.cli.tool_commands import cmd_tools_update
+
+        mock_manager = self._manager(outdated=[], osv_installed=True)
+        args = argparse.Namespace(tools=None, critical_only=False, yes=True)
+        refresh = MagicMock()
+
+        with (
+            patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager),
+            patch("scripts.cli.tool_commands._refresh_osv_databases", refresh),
+            patch("builtins.print"),
+        ):
+            result = cmd_tools_update(args)
+
+        refresh.assert_called_once_with()
+        assert result == 0
+
+    def test_bare_update_skips_the_refresh_when_osv_scanner_is_not_installed(self):
+        from scripts.cli.tool_commands import cmd_tools_update
+
+        mock_manager = self._manager(outdated=[], osv_installed=False)
+        args = argparse.Namespace(tools=None, critical_only=False, yes=True)
+        refresh = MagicMock()
+
+        with (
+            patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager),
+            patch("scripts.cli.tool_commands._refresh_osv_databases", refresh),
+            patch("builtins.print"),
+        ):
+            cmd_tools_update(args)
+
+        refresh.assert_not_called()
+
+    def test_a_targeted_update_of_another_tool_never_asks_about_osv_scanner(self):
+        """`not tools_arg` short-circuits before `check_tool("osv-scanner")`
+        even runs -- a targeted update leaves osv-scanner alone entirely,
+        same as it leaves every other unnamed tool alone."""
+        from scripts.cli.tool_commands import cmd_tools_update
+
+        trivy = MagicMock(name="trivy")
+        trivy.name = "trivy"
+        trivy.installed = True
+        trivy.is_outdated = False
+        mock_manager = MagicMock()
+        mock_manager.check_tool.return_value = trivy
+        refresh = MagicMock()
+
+        args = argparse.Namespace(
+            tools=["trivy"], critical_only=False, yes=True, dry_run=False
+        )
+
+        with (
+            patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager),
+            patch("scripts.cli.tool_commands._refresh_osv_databases", refresh),
+            patch("builtins.print"),
+        ):
+            cmd_tools_update(args)
+
+        refresh.assert_not_called()
+        mock_manager.check_tool.assert_called_once_with("trivy")
+
+    def test_reinstalling_osv_scanner_itself_does_not_double_fetch(self):
+        """When osv-scanner is the outdated tool being reinstalled,
+        `ToolInstaller._post_install` already refreshes its databases;
+        `cmd_tools_update`'s own explicit refresh must not run too."""
+        from scripts.cli.installers.models import InstallResult
+        from scripts.cli.tool_commands import cmd_tools_update
+
+        osv_status = MagicMock()
+        osv_status.name = "osv-scanner"
+        osv_status.installed = True
+        osv_status.installed_version = "2.5.1"
+        osv_status.expected_version = "2.6.0"
+        osv_status.is_outdated = True
+        osv_status.is_critical = False
+
+        mock_manager = self._manager(outdated=[osv_status], osv_installed=True)
+        mock_installer = MagicMock()
+        mock_installer.install_tool.return_value = InstallResult(
+            tool_name="osv-scanner",
+            success=True,
+            method="binary",
+            version_installed="2.6.0",
+        )
+        refresh = MagicMock()
+
+        args = argparse.Namespace(tools=None, critical_only=False, yes=True)
+
+        with (
+            patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager),
+            patch("scripts.cli.tool_commands._refresh_osv_databases", refresh),
+            patch(
+                "scripts.cli.tool_installer.ToolInstaller",
+                return_value=mock_installer,
+            ),
+            patch("builtins.print"),
+        ):
+            result = cmd_tools_update(args)
+
+        refresh.assert_not_called()
+        assert result == 0
+
+    def test_reinstalling_a_different_outdated_tool_still_refreshes_osv(self):
+        """The bare-update refresh survives the install loop: it fires after
+        it, not only on the early "nothing outdated" return."""
+        from scripts.cli.installers.models import InstallResult
+        from scripts.cli.tool_commands import cmd_tools_update
+
+        trivy_status = MagicMock()
+        trivy_status.name = "trivy"
+        trivy_status.installed = True
+        trivy_status.installed_version = "0.40.0"
+        trivy_status.expected_version = "0.50.0"
+        trivy_status.is_outdated = True
+        trivy_status.is_critical = False
+
+        mock_manager = self._manager(outdated=[trivy_status], osv_installed=True)
+        mock_installer = MagicMock()
+        mock_installer.install_tool.return_value = InstallResult(
+            tool_name="trivy", success=True, method="binary", version_installed="0.50.0"
+        )
+        refresh = MagicMock()
+
+        args = argparse.Namespace(tools=None, critical_only=False, yes=True)
+
+        with (
+            patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager),
+            patch("scripts.cli.tool_commands._refresh_osv_databases", refresh),
+            patch(
+                "scripts.cli.tool_installer.ToolInstaller",
+                return_value=mock_installer,
+            ),
+            patch("builtins.print"),
+        ):
+            result = cmd_tools_update(args)
+
+        refresh.assert_called_once_with()
+        assert result == 0
+
+    def test_naming_osv_scanner_refreshes_its_databases_when_the_binary_is_current(
+        self,
+    ):
+        """`jmo tools update osv-scanner` is what a user types after a scan
+        row said "no offline database for npm ...: run `jmo tools update`".
+        With the binary already current it used to print "already up to
+        date" and fetch nothing."""
+        from scripts.cli.tool_commands import cmd_tools_update
+
+        osv_status = MagicMock()
+        osv_status.installed = True
+        osv_status.is_outdated = False
+        osv_status.installed_version = "2.6.0"
+        mock_manager = MagicMock()
+        mock_manager.check_tool.return_value = osv_status
+        refresh = MagicMock(return_value=True)
+
+        args = argparse.Namespace(
+            tools=["osv-scanner"], critical_only=False, yes=True, dry_run=False
+        )
+
+        with (
+            patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager),
+            patch("scripts.cli.tool_commands._refresh_osv_databases", refresh),
+            patch("builtins.print"),
+        ):
+            result = cmd_tools_update(args)
+
+        refresh.assert_called_once_with()
+        assert result == 0
+
+    @staticmethod
+    def _failed_fetch():
+        from scripts.core.osv_database import FetchResult
+
+        return [
+            FetchResult("npm", True, "fetched"),
+            FetchResult(
+                "PyPI",
+                False,
+                "filesystem error: [Errno 13] Permission denied: "
+                "'/home/jmo/.jmo/osv-db'",
+            ),
+        ]
+
+    def test_a_failed_refresh_with_nothing_outdated_exits_1_without_the_all_clear(
+        self, capsys
+    ):
+        """When nothing is outdated the refresh is the command's only work,
+        so its failure is the command's failure: a script, a CI step or the
+        Docker one-time setup must be able to see it from the exit code."""
+        from scripts.cli.tool_commands import cmd_tools_update
+
+        mock_manager = self._manager(outdated=[], osv_installed=True)
+        args = argparse.Namespace(tools=None, critical_only=False, yes=True)
+
+        with (
+            patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager),
+            patch(
+                "scripts.core.osv_database.fetch_all",
+                return_value=self._failed_fetch(),
+            ),
+        ):
+            result = cmd_tools_update(args)
+
+        out = capsys.readouterr().out
+        assert result == 1
+        assert "All tools are up to date!" not in out
+        assert "1/2 refreshed, 1 failed" in out
+        assert "PyPI: filesystem error" in out
+
+    def test_a_successful_refresh_with_nothing_outdated_still_gives_the_all_clear(
+        self, capsys
+    ):
+        from scripts.cli.tool_commands import cmd_tools_update
+        from scripts.core.osv_database import FetchResult
+
+        mock_manager = self._manager(outdated=[], osv_installed=True)
+        args = argparse.Namespace(tools=None, critical_only=False, yes=True)
+
+        with (
+            patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager),
+            patch(
+                "scripts.core.osv_database.fetch_all",
+                return_value=[FetchResult("npm", True, "fetched")],
+            ),
+        ):
+            result = cmd_tools_update(args)
+
+        out = capsys.readouterr().out
+        assert result == 0
+        assert "All tools are up to date!" in out
+
+    def test_a_failed_refresh_after_a_successful_tool_update_exits_1(self, capsys):
+        """The rc is aggregate: every tool updating does not cover a
+        database refresh that failed, and the green all-clear must not
+        print."""
+        from scripts.cli.installers.models import InstallResult
+        from scripts.cli.tool_commands import cmd_tools_update
+
+        trivy_status = MagicMock()
+        trivy_status.name = "trivy"
+        trivy_status.installed = True
+        trivy_status.installed_version = "0.40.0"
+        trivy_status.expected_version = "0.50.0"
+        trivy_status.is_outdated = True
+        trivy_status.is_critical = False
+
+        mock_manager = self._manager(outdated=[trivy_status], osv_installed=True)
+        mock_installer = MagicMock()
+        mock_installer.install_tool.return_value = InstallResult(
+            tool_name="trivy", success=True, method="binary", version_installed="0.50.0"
+        )
+
+        args = argparse.Namespace(tools=None, critical_only=False, yes=True)
+
+        with (
+            patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager),
+            patch(
+                "scripts.core.osv_database.fetch_all",
+                return_value=self._failed_fetch(),
+            ),
+            patch(
+                "scripts.cli.tool_installer.ToolInstaller",
+                return_value=mock_installer,
+            ),
+        ):
+            result = cmd_tools_update(args)
+
+        out = capsys.readouterr().out
+        assert result == 1
+        assert "updated successfully!" not in out
+        assert "1/2 refreshed, 1 failed" in out
+        assert "PyPI: filesystem error" in out
+
+
+def test_refresh_osv_databases_prints_a_summary_and_names_each_failure(capsys):
+    from scripts.cli.tool_commands import _refresh_osv_databases
+    from scripts.core.osv_database import FetchResult
+
+    results = [
+        FetchResult("npm", True, "fetched"),
+        FetchResult("CRAN", False, "download failed: 503 Service Unavailable"),
+    ]
+
+    with patch("scripts.core.osv_database.fetch_all", return_value=results):
+        all_ok = _refresh_osv_databases()
+
+    out = capsys.readouterr().out
+    assert all_ok is False
+    assert "1/2 refreshed, 1 failed" in out
+    assert "CRAN" in out
+    assert "download failed: 503 Service Unavailable" in out
+    assert "jmo tools update" in out
+
+
+def test_refresh_osv_databases_prints_a_clean_summary_when_everything_succeeds(
+    capsys,
+):
+    from scripts.cli.tool_commands import _refresh_osv_databases
+    from scripts.core.osv_database import FetchResult
+
+    results = [
+        FetchResult("npm", True, "fetched"),
+        FetchResult("PyPI", True, "fetched"),
+    ]
+
+    with patch("scripts.core.osv_database.fetch_all", return_value=results):
+        all_ok = _refresh_osv_databases()
+
+    out = capsys.readouterr().out
+    assert all_ok is True
+    assert "2/2 refreshed" in out
+    assert "failed" not in out
 
 
 # ========== Category: cmd_tools_uninstall Tool Types ==========
@@ -2854,3 +3220,138 @@ def test_tools_check_is_unchanged_when_everything_can_run():
     assert result == 0
     assert "All tools installed and up to date!" in out
     assert "not able to run" not in out
+
+
+# ========== osv-scanner's missing offline databases (Task O2) ==============
+#
+# Cheap, no-network reporting: `jmo tools check` reads `present_ecosystems()`
+# (a filesystem stat, not the mocked ToolManager), so every test here patches
+# it directly rather than going through `_check_with`'s manager mock.
+
+
+def test_check_reports_missing_osv_databases_without_failing_the_check():
+    statuses = {"osv-scanner": _status("osv-scanner")}
+
+    with patch(
+        "scripts.core.osv_database.present_ecosystems",
+        return_value=frozenset({"npm", "PyPI", "Go"}),
+    ):
+        result, out = _check_with(statuses)
+
+    # osv-scanner itself is installed and execution_ready, so a missing
+    # database (only some of the eleven) does not fail the check -- it fails
+    # only the lockfiles whose ecosystem has none, at scan time.
+    assert result == 0
+    assert "offline database(s) missing" in out
+    assert "run `jmo tools update`" in out.lower()
+    for eco in ("CRAN", "Hex", "Maven", "NuGet"):
+        assert eco in out
+
+
+def test_check_all_clear_requires_no_missing_osv_databases_too():
+    from scripts.core.osv_database import ECOSYSTEMS
+
+    statuses = {"osv-scanner": _status("osv-scanner")}
+
+    with patch(
+        "scripts.core.osv_database.present_ecosystems",
+        return_value=frozenset(ECOSYSTEMS),
+    ):
+        result, out = _check_with(statuses)
+
+    assert result == 0
+    assert "All tools installed and up to date!" in out
+    assert "offline database" not in out
+
+
+def test_check_does_not_claim_all_clear_over_a_missing_osv_database():
+    statuses = {"osv-scanner": _status("osv-scanner")}
+
+    with patch(
+        "scripts.core.osv_database.present_ecosystems",
+        return_value=frozenset(),
+    ):
+        _, out = _check_with(statuses)
+
+    assert "All tools installed and up to date!" not in out
+
+
+def test_check_omits_the_osv_section_when_osv_scanner_is_not_checked():
+    """No osv-scanner in the tools being checked: no filesystem stat, no
+    section -- the check does not go looking for it uninvited."""
+    statuses = {"trivy": _status("trivy")}
+    present_ecosystems = MagicMock()
+
+    with patch("scripts.core.osv_database.present_ecosystems", present_ecosystems):
+        _, out = _check_with(statuses)
+
+    present_ecosystems.assert_not_called()
+    assert "offline database" not in out
+
+
+def test_check_omits_the_osv_section_when_osv_scanner_is_not_installed():
+    statuses = {"osv-scanner": _status("osv-scanner", installed=False)}
+    present_ecosystems = MagicMock()
+
+    with patch("scripts.core.osv_database.present_ecosystems", present_ecosystems):
+        _, out = _check_with(statuses)
+
+    present_ecosystems.assert_not_called()
+    assert "offline database" not in out
+
+
+def test_check_json_output_includes_the_missing_osv_databases_key():
+    import json
+
+    from scripts.cli.tool_commands import cmd_tools_check
+
+    mock_manager = MagicMock()
+    mock_manager.check_tool.side_effect = lambda name: _status(name)
+    args = argparse.Namespace(tools=["osv-scanner"], json=True)
+
+    captured: list[str] = []
+    with (
+        patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager),
+        patch(
+            "scripts.core.osv_database.present_ecosystems",
+            return_value=frozenset({"npm"}),
+        ),
+        patch(
+            "builtins.print",
+            side_effect=lambda *a, **k: captured.append(" ".join(str(x) for x in a)),
+        ),
+    ):
+        result = cmd_tools_check(args)
+
+    payload = json.loads("\n".join(captured))
+    assert "npm" not in payload["osv_scanner_missing_databases"]
+    assert "PyPI" in payload["osv_scanner_missing_databases"]
+    assert result == 0
+
+
+def test_check_json_output_omits_the_key_when_nothing_is_missing():
+    import json
+
+    from scripts.cli.tool_commands import cmd_tools_check
+    from scripts.core.osv_database import ECOSYSTEMS
+
+    mock_manager = MagicMock()
+    mock_manager.check_tool.side_effect = lambda name: _status(name)
+    args = argparse.Namespace(tools=["osv-scanner"], json=True)
+
+    captured: list[str] = []
+    with (
+        patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager),
+        patch(
+            "scripts.core.osv_database.present_ecosystems",
+            return_value=frozenset(ECOSYSTEMS),
+        ),
+        patch(
+            "builtins.print",
+            side_effect=lambda *a, **k: captured.append(" ".join(str(x) for x in a)),
+        ),
+    ):
+        cmd_tools_check(args)
+
+    payload = json.loads("\n".join(captured))
+    assert "osv_scanner_missing_databases" not in payload

@@ -184,6 +184,7 @@ Not every tool produces findings for every project. JMo uses content-triggered e
 | **Hadolint** | Lints Dockerfiles — only fires if a `Dockerfile` exists in the repo |
 | **ShellCheck** | Analyses shell scripts — only fires if `.sh` files exist |
 | **zizmor** | Audits GitHub Actions workflows — only fires if the repo has `.github/workflows`, an `action.yml` or a Dependabot config |
+| **OSV-Scanner** | Checks the dependencies its lockfiles pin against an offline OSV database — only fires if the repo has a lockfile |
 | **Gosec** | Skipped unless the repo contains Go code |
 | **ZAP, Nuclei** | Skipped for local repos (they test a running application at a URL) |
 
@@ -229,7 +230,7 @@ open results/summaries/dashboard.html   # macOS (use xdg-open on Linux)
 
 JMo Security orchestrates the security scanners in the [tool matrix](TOOLS.md#the-tool-matrix), plus OPA for policy-as-code. For native installations (non-Docker), use the `jmo tools` command to manage these tools.
 
-**Docker users:** Skip this section - Docker images include all tools pre-installed. Tool management is for native/pip installations only.
+**Docker users:** Skip this section for tool binaries - Docker images include all of them pre-installed. Tool management is for native/pip installations only. One exception: osv-scanner's offline vulnerability databases are not baked into the image, so `jmo tools update` still has a job to do in a container - see [Docker: osv-scanner's Offline Databases](DOCKER_README.md#osv-scanners-offline-databases).
 
 ### Checking Tool Status
 
@@ -310,6 +311,8 @@ jmo tools update --yes
 ```
 
 **Critical tools** are flagged in `versions.yaml` and include tools where outdated versions may miss vulnerabilities (e.g., Trivy, TruffleHog).
+
+A bare `jmo tools update` also refreshes osv-scanner's offline vulnerability databases (`~/.jmo/osv-db`, ~280 MB across eleven ecosystems), even when osv-scanner's own binary is already current - the databases are OSV's own daily data, not tied to the pinned version. `jmo tools install` fills them too, the first time osv-scanner is installed. See [Tools: OSV-Scanner](TOOLS.md#when-each-tool-runs).
 
 ### Viewing Outdated Tools
 
@@ -549,7 +552,7 @@ https://staging.example.com
 - `--gitlab-group GROUP`: Scan all repositories in a group
 - `--gitlab-repo REPO`: Single GitLab repository (format: `group/repo`)
 
-**Tools used:** Full repository scanner (TruffleHog, Gitleaks, Semgrep, Syft, Trivy, YARA, Grype, plus Hadolint, ShellCheck, zizmor, Gosec and Checkov when their content is present)
+**Tools used:** Full repository scanner (TruffleHog, Gitleaks, Semgrep, Syft, Trivy, YARA, Grype, plus Hadolint, ShellCheck, zizmor, OSV-Scanner, Gosec and Checkov when their content is present)
 
 **Architecture:** GitLab repos are cloned temporarily and scanned using the same repository scanner as local repos, providing comprehensive coverage instead of secrets-only scanning
 
@@ -1096,7 +1099,7 @@ Cross-tool deduplication uses a multi-dimensional similarity algorithm combining
 - **Message (25%):** Fuzzy + token matching (e.g., "SQL injection" vs "SQL Injection vulnerability")
 - **Metadata (25%):** CWE/CVE/Rule ID matching + rule equivalence mapping
 
-Findings with similarity above the configured threshold (default: 65%) are clustered together. The highest-severity finding becomes the representative, and others are attached as duplicates in `context.duplicates`.
+Findings with similarity above the configured threshold (default: 65%) are clustered together into one consensus finding that merges every member: their CWEs, references, tags and compliance mappings are combined, the CVSS is the best any member reports (v3.x over v4.0 over v2.0, whatever the numbers, then the higher score within a version), and a KEV listing or a higher EPSS on any member carries over. The highest-severity member leads (a tie goes to the tool name, then the finding id, never to the order the tools' outputs loaded in): the consensus takes its id (`cluster-<id>`), location and message, and the others are attached as duplicates in `context.duplicates`, each with its own `raw`.
 
 **Algorithm Selection:**
 

@@ -9,6 +9,7 @@ import hashlib
 import hmac
 import logging
 import os
+from collections.abc import Iterable
 from enum import Enum
 from typing import Any
 
@@ -199,6 +200,79 @@ def normalize_severity(value: str | None) -> str:
     return Severity.from_string(value).value
 
 
+# CVSS versions in preference order, most preferred first, by the prefix of a
+# finding's `cvss.version` ("3.x", "3.1" and "3.0" are all v3; "4.0" is v4). A
+# version not listed, or none at all (SARIF's bare `security-severity` score),
+# sorts last. v3.x outranks v4.0 outranks v2.0 (#1356), because the priority
+# tier (#1243) and stored history are calibrated on v3 and a v4 base score is
+# not on the same scale as a v3 one, whatever their numbers say.
+CVSS_VERSION_PREFERENCE: tuple[str, ...] = ("3", "4", "2")
+
+
+def _cvss_preference(cvss: dict[str, Any]) -> tuple[int, float]:
+    """Sort key for `preferred_cvss`: higher is preferred."""
+    version = str(cvss.get("version") or "")
+    rank = next(
+        (
+            len(CVSS_VERSION_PREFERENCE) - i
+            for i, prefix in enumerate(CVSS_VERSION_PREFERENCE)
+            if version.startswith(prefix)
+        ),
+        0,
+    )
+    score = cvss.get("score")
+    if isinstance(score, bool) or not isinstance(score, (int, float)):
+        return rank, -1.0
+    return rank, float(score)
+
+
+def preferred_cvss(candidates: Iterable[Any]) -> dict[str, Any] | None:
+    """The one CVSS a finding should carry, of several on offer, or ``None``.
+
+    The single home of JMo's CVSS preference (#1356): a v3.x score outranks a
+    v4.0 one, which outranks a v2.0 one, whatever the numbers, and
+    within one version the higher score wins; a candidate with no version (or
+    one not in `CVSS_VERSION_PREFERENCE`) sorts after every versioned one, and
+    a missing score after every scored one. A candidate is chosen whole, so
+    its score and vector stay a pair. On a tie the earlier candidate is kept,
+    so pass them in a deterministic order. Anything that is not a non-empty
+    dict is skipped.
+
+    A consensus finding takes its CVSS from here across all its members
+    (#1355); the trivy and grype adapters route their own per-vulnerability
+    selection through this same function (#1356), so the two cannot disagree.
+    The SARIF importer's `security-severity` score never carries a version
+    (measured on osv-scanner: neither `rules[].properties` nor `help`/
+    `fullDescription` state one in a structured field), so it has nothing to
+    prefer among and does not call this function.
+    """
+    best: dict[str, Any] | None = None
+    best_key: tuple[int, float] | None = None
+    for cvss in candidates:
+        if not isinstance(cvss, dict) or not cvss:
+            continue
+        key = _cvss_preference(cvss)
+        if best_key is None or key > best_key:
+            best, best_key = cvss, key
+    return best
+
+
+def package_of(dependency: Any) -> str | None:
+    """``name@version`` of a dependency finding's package, or ``None``.
+
+    The component `fingerprint(package=)` appends, built in one place so the
+    adapters and the report phase's re-keying (`_normalize_paths_and_ids`)
+    cannot spell it two ways. ``dependency`` is a finding's `dependency`
+    object; anything without a non-empty ``name`` and ``version`` is not one.
+    """
+    if not isinstance(dependency, dict):
+        return None
+    name, version = dependency.get("name"), dependency.get("version")
+    if isinstance(name, str) and name and isinstance(version, str) and version:
+        return f"{name}@{version}"
+    return None
+
+
 def fingerprint(
     tool: str,
     rule_id: str | None,
@@ -207,6 +281,7 @@ def fingerprint(
     message: str | None,
     start_column: int | None = None,
     commit: str | None = None,
+    package: str | None = None,
 ) -> str:
     """Generate stable fingerprint ID for deduplication.
 
@@ -225,6 +300,13 @@ def fingerprint(
     only its first 120 characters are hashed, and gitleaks puts the commit
     after the path.
 
+    ``|pkg:name@version`` is appended the same way, by a dependency scanner
+    (#1346; `package_of` builds it): a dependency finding has no line, so
+    two installed versions of one package with one advisory differ in
+    nothing else the key holds when the tool's message names no version --
+    trivy's is the advisory title, and its 47 findings on a real lockfile
+    collapsed to 38.
+
     Args:
         tool: Tool name (e.g., "trufflehog", "semgrep")
         rule_id: Rule or vulnerability ID
@@ -236,6 +318,8 @@ def fingerprint(
             column, not an absence.
         commit: The commit a record from git history names; ``None`` for
             everything else.
+        package: ``name@version`` of a dependency finding's package
+            (`package_of`); ``None`` for everything else.
 
     Returns:
         Hex string of length FINGERPRINT_LENGTH for stable deduplication
@@ -246,6 +330,8 @@ def fingerprint(
         base = f"{base}|{start_column}"
     if commit:
         base = f"{base}|@{commit}"
+    if package:
+        base = f"{base}|pkg:{package}"
     return hashlib.sha256(base.encode("utf-8")).hexdigest()[:FINGERPRINT_LENGTH]
 
 

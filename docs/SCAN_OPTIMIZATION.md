@@ -156,7 +156,18 @@ semgrep scan --config auto --baseline-commit HEAD~1 .
 
 ### 5. Trivy Optimizations
 
-Trivy scans for vulnerabilities, secrets, and misconfigurations. Focus on what you need.
+On a repository, trivy already runs `--scanners vuln,misconfig --include-dev-deps
+--offline-scan`: it reads vulnerabilities (dev dependencies included) and misconfigurations,
+and carries no secret pass there, since gitleaks and TruffleHog already read a repository's
+secrets (see [TOOLS.md](TOOLS.md#when-each-tool-runs)). The image scan keeps
+`--scanners vuln,secret,misconfig`, since nothing else reads an image's layers.
+
+**`--scanners` accumulates, it never replaces.** trivy treats a repeated `--scanners` flag as
+the union of every occurrence, not the last one. A `per_tool.trivy.flags` entry adding
+`--scanners secret` on a repository does not select secrets *instead of* JMo's own choice --
+it adds trivy's own (redundant) secret pass on top of `vuln,misconfig`. There is no flag that
+narrows which scanners run; `--severity` and `--timeout` below are what actually change
+trivy's work.
 
 **In `jmo.yml`:**
 
@@ -166,27 +177,22 @@ per_tool:
     timeout: 300
     flags:
       - --no-progress
-      # Scan only what you need (pick relevant scanners)
-      - --scanners
-      - vuln,secret,misconfig
       # Skip unfixed vulnerabilities (optional)
       # - --ignore-unfixed
-      # Set severity threshold
+      # Set severity threshold (does not change which scanners run)
       - --severity
       - CRITICAL,HIGH,MEDIUM
-      # Skip dev dependencies (for package scanning)
-      # - --skip-dev-dependencies
 ```
 
-**For faster container scans:**
+**For container image scans**, the same accumulation applies: adding `--scanners vuln` here
+does not drop `secret` or `misconfig` from the image invocation's own
+`vuln,secret,misconfig`. Narrow with `--severity` instead:
 
 ```yaml
 per_tool:
   trivy:
     flags:
       - --no-progress
-      - --scanners
-      - vuln  # Skip misconfig for images
       - --severity
       - CRITICAL,HIGH
 ```
@@ -296,7 +302,7 @@ jmo scan --targets repos.txt --threads 8
 
 ### 10. Skip Tools Based on Target Type
 
-Not all tools are relevant for all targets, and JMo already skips the ones that are not: hadolint runs only when Dockerfiles are present, shellcheck only with shell scripts, gosec only with Go sources, and zap and nuclei only on `--url` targets. To narrow further, name the tools:
+Not all tools are relevant for all targets, and JMo already skips the ones that are not: hadolint runs only when Dockerfiles are present, shellcheck only with shell scripts, zizmor only with GitHub Actions workflows or actions, or a Dependabot config, osv-scanner only with dependency lockfiles, gosec only with Go sources, checkov only with Terraform or CloudFormation, and zap and nuclei only on `--url` targets. To narrow further, name the tools:
 
 ```bash
 # Python project: secrets, SAST, dependencies, IaC

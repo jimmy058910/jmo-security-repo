@@ -58,6 +58,12 @@ MUST_EXTRACT = {
     "compliance.owaspTop10_2021",  # owasp-top-10
     "compliance.pciDss4_0",  # pci-dss
     "location.startLine",  # zero-secrets
+    # A consensus finding's lead is one tool of several (#1355): policies that
+    # select by tool read every reporter, and zero-secrets reads each other
+    # member's own raw.
+    "detected_by",  # zero-secrets, production-hardening
+    "detected_by[].name",  # zero-secrets, production-hardening
+    "context.duplicates[].raw.Verified",  # zero-secrets
 }
 
 # `finding.<path>` and `<local> := <set>[_]` aliases both appear, so match the
@@ -73,6 +79,14 @@ _DEREF = re.compile(
 # contract entirely, and the fix for one silent-drop class would create another.
 _OBJECT_GET = re.compile(
     r"\bobject\.get\(\s*finding((?:\.[A-Za-z_][A-Za-z0-9_]*)*)\s*,\s*\"([A-Za-z_][A-Za-z0-9_]*)\""
+)
+
+# `some x in finding.<list>` binds each element; `x.<path>` then reads a field
+# of one, recorded as `<list>[].<path>` ("some element has it"). Without this,
+# a read through `detected_by` or `context.duplicates` escaped the contract.
+_SOME_IN = re.compile(
+    r"\bsome\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\s+finding\."
+    r"((?:[A-Za-z_][A-Za-z0-9_]*)(?:\.[A-Za-z_][A-Za-z0-9_]*)*)"
 )
 
 
@@ -105,13 +119,21 @@ def _extract_field_paths(text: str) -> set[str]:
     """Every dotted path a policy's *code* reads off a finding.
 
     Covers both spellings: the bare `finding.a.b` dereference and the
-    `object.get(finding.a, "b", <default>)` guarded read.
+    `object.get(finding.a, "b", <default>)` guarded read -- and a read through
+    an element of a list, `some x in finding.a` then `x.b`, as `a[].b`.
     """
     code = _strip_comments(text)
     paths = {m.group(1) for m in _DEREF.finditer(code)}
     for m in _OBJECT_GET.finditer(code):
         prefix = m.group(1).lstrip(".")
         paths.add(f"{prefix}.{m.group(2)}" if prefix else m.group(2))
+    for m in _SOME_IN.finditer(code):
+        var, collection = m.group(1), m.group(2)
+        for read in re.finditer(
+            rf"\b{var}\.((?:[A-Za-z_][A-Za-z0-9_]*)(?:\.[A-Za-z_][A-Za-z0-9_]*)*)",
+            code,
+        ):
+            paths.add(f"{collection}[].{read.group(1)}")
     return paths
 
 
@@ -202,16 +224,92 @@ def _real_findings() -> list[dict[str, Any]]:
         )
         findings += [f.to_dict() for f in NucleiAdapter().parse(nu)]
 
-    return enrich_findings_with_compliance(findings)
+        findings = enrich_findings_with_compliance(findings)
+        findings.append(_consensus_finding(tmp))
+
+    return findings
 
 
-def _has_path(finding: dict[str, Any], dotted: str) -> bool:
-    cur: Any = finding
-    for part in dotted.split("."):
-        if not isinstance(cur, dict) or part not in cur:
-            return False
-        cur = cur[part]
-    return True
+def _consensus_finding(tmp: Path) -> dict[str, Any]:
+    """A consensus finding, as cross-tool clustering builds one (#1355).
+
+    One verified AWS key reported by gitleaks and TruffleHog on one line; the
+    two share a rule-equivalence class, so the report phase merges them. On a
+    severity tie gitleaks leads (tool name), so the consensus's own `tool` and
+    `raw` are gitleaks' and TruffleHog is visible only through `detected_by`
+    and its `context.duplicates` entry -- which is what a policy selecting by
+    tool has to read.
+    """
+    from scripts.core.adapters.gitleaks_adapter import GitleaksAdapter
+    from scripts.core.normalize_and_report import _cluster_cross_tool_duplicates
+
+    path, line = "deploy/aws.env", 7
+    gl = tmp / "gitleaks.json"
+    gl.write_bytes(
+        json.dumps(
+            {
+                "version": "2.1.0",
+                "runs": [
+                    {
+                        "tool": {"driver": {"name": "gitleaks"}},
+                        "results": [
+                            {
+                                "message": {
+                                    "text": f"aws-access-token has detected secret for file {path}."
+                                },
+                                "ruleId": "aws-access-token",
+                                "locations": [
+                                    {
+                                        "physicalLocation": {
+                                            "artifactLocation": {"uri": path},
+                                            "region": {
+                                                "startLine": line,
+                                                "endLine": line,
+                                            },
+                                        }
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ],
+            }
+        ).encode("utf-8")
+    )
+    th = tmp / "trufflehog-pair.json"
+    th.write_bytes(
+        (
+            json.dumps(
+                {
+                    "SourceMetadata": {
+                        "Data": {"Filesystem": {"file": path, "line": line}}
+                    },
+                    "DetectorName": "AWS",
+                    "Verified": True,
+                }
+            )
+            + "\n"
+        ).encode("utf-8")
+    )
+    members = [f.to_dict() for f in GitleaksAdapter().parse(gl)]
+    members += [f.to_dict() for f in TruffleHogAdapter().parse(th)]
+    (consensus,) = _cluster_cross_tool_duplicates(
+        enrich_findings_with_compliance(members), similarity_threshold=0.65
+    )
+    return consensus
+
+
+def _has_path(finding: Any, dotted: str) -> bool:
+    """Whether `dotted` resolves; a `[]` suffix means "some element of"."""
+    if not dotted:
+        return True
+    part, _, rest = dotted.partition(".")
+    if part.endswith("[]"):
+        items = finding.get(part[:-2]) if isinstance(finding, dict) else None
+        return isinstance(items, list) and any(_has_path(i, rest) for i in items)
+    if not isinstance(finding, dict) or part not in finding:
+        return False
+    return _has_path(finding[part], rest)
 
 
 @pytest.fixture(scope="module")
@@ -223,7 +321,33 @@ def real_findings() -> list[dict[str, Any]]:
     assert len(findings) >= 3, f"only {len(findings)} findings built from adapters"
     assert any(f["tool"]["name"] == "trufflehog" for f in findings)
     assert any(f.get("compliance") for f in findings), "enrichment produced nothing"
+    assert any(len(f.get("detected_by") or []) >= 2 for f in findings), (
+        "no consensus finding: the clustering pair stopped clustering"
+    )
     return findings
+
+
+def test_a_consensus_finding_carries_detected_by_and_its_members_raw(real_findings):
+    """The shape policies read on a consensus finding (#1355).
+
+    `tool` is the lead's alone, so a policy selecting secrets by tool reads
+    `detected_by`: one `{name, version}` per tool that reported the finding.
+    Each other member keeps its own `raw` in its `context.duplicates` entry.
+    """
+    (consensus,) = [f for f in real_findings if f.get("detected_by")]
+    assert consensus["id"].startswith("cluster-")
+    assert consensus["tool"]["name"] == "gitleaks", "the case under test: not led"
+    assert all(
+        isinstance(r, dict)
+        and set(r) == {"name", "version"}
+        and all(isinstance(v, str) and v for v in r.values())
+        for r in consensus["detected_by"]
+    ), consensus["detected_by"]
+    assert {r["name"] for r in consensus["detected_by"]} == {"gitleaks", "trufflehog"}
+    (duplicate,) = consensus["context"]["duplicates"]
+    assert duplicate["tool"]["name"] == "trufflehog"
+    assert duplicate["raw"]["Verified"] is True
+    assert "verified" in consensus["tags"]
 
 
 def test_extractor_actually_traces_dereferences():
@@ -278,6 +402,19 @@ def test_extractor_rejects_the_field_that_was_broken():
     assert not any(_has_path(f, "raw.verified") for f in findings), (
         "raw.verified is produced by something now -- update this control"
     )
+
+    # The same for a read through a list element: a misspelt field of a
+    # `detected_by` entry is extracted, and resolves on nothing.
+    through_list = """
+    reported contains finding if {
+        finding := input.findings[_]
+        some reporter in finding.detected_by
+        reporter.tool_name == "trufflehog"
+    }
+    """
+    assert "detected_by[].tool_name" in _extract_field_paths(through_list)
+    assert not any(_has_path(f, "detected_by[].tool_name") for f in findings)
+    assert any(_has_path(f, "detected_by[].name") for f in findings)
 
 
 def test_every_policy_field_exists_in_real_findings(real_findings):

@@ -5,7 +5,7 @@ import future.keywords.in
 
 metadata := {
 	"name": "Zero Secrets Policy",
-	"version": "1.2.0",
+	"version": "1.3.0",
 	"description": "Blocks all verified secrets (zero tolerance)",
 	"author": "JMo Security",
 	"tags": ["secrets", "credentials", "zero-trust"],
@@ -26,8 +26,22 @@ allow if {
 # verification signals below share one definition of "candidate".
 secret_candidates contains finding if {
 	finding := input.findings[_]
-	finding.tool.name in secret_tools
+	reported_by(finding, secret_tools)
 	finding.severity in ["CRITICAL", "HIGH"]
+}
+
+# Whether one of `tools` reported `finding`. A consensus finding (cross-tool
+# clustering) carries its lead's `tool` and lists every tool that reported it
+# in `detected_by`, so its own `tool.name` is one reporter of several: on a
+# severity tie gitleaks, which this policy does not list, leads a gitleaks +
+# TruffleHog pair, and reading `tool.name` alone passed a verified TruffleHog
+# secret whenever gitleaks also found it (#1355). A finding no other tool
+# reported has no `detected_by`, so the first definition stays.
+reported_by(finding, tools) if finding.tool.name in tools
+
+reported_by(finding, tools) if {
+	some reporter in finding.detected_by
+	reporter.name in tools
 }
 
 # A secret counts as verified on either signal, unioned as a set so a finding
@@ -56,6 +70,17 @@ verified_secrets contains finding if {
 verified_secrets contains finding if {
 	finding := secret_candidates[_]
 	finding.raw.Verified == true
+}
+
+# A consensus finding's `raw` is its lead's; each other member keeps its own
+# in its `context.duplicates` entry. The `verified` tag reaches the consensus
+# either way (tags are merged), so this arm matters only for a TruffleHog
+# record carrying `raw.Verified` without the tag -- the same degenerate input
+# the arm above is kept for.
+verified_secrets contains finding if {
+	finding := secret_candidates[_]
+	some duplicate in finding.context.duplicates
+	duplicate.raw.Verified == true
 }
 
 # The secrets this policy passes: every one no tool verified. TruffleHog

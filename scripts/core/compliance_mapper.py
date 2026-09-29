@@ -1024,6 +1024,35 @@ def map_cwe_to_top25_2024(cwes: list[str]) -> list[dict[str, Any]]:
     return top25_entries
 
 
+# The field that identifies an entry of each framework below whose mapper
+# combines two tables (a CWE one, then a tool-category one). The tables can
+# describe one entry in different words (PCI DSS 8.3.2 has two descriptions),
+# so an entry is one per key, the first kept -- within one finding here, and
+# across a cluster's members when they merge into one consensus (#1355).
+COMPLIANCE_ENTRY_KEYS: dict[str, str] = {
+    "nistCsf2_0": "subcategory",
+    "pciDss4_0": "requirement",
+    "mitreAttack": "technique",
+}
+
+
+def first_entry_per_key(entries: list[Any], key: str) -> list[Any]:
+    """``entries`` without any entry whose ``key`` an earlier one already has.
+
+    An item that is not a dict has no key, so it is kept as it is.
+    """
+    seen = set()
+    unique = []
+    for entry in entries:
+        if isinstance(entry, dict):
+            value = entry.get(key, "")
+            if value in seen:
+                continue
+            seen.add(value)
+        unique.append(entry)
+    return unique
+
+
 def map_to_cis_controls_v8_1(tool_name: str, tags: list[str]) -> list[dict[str, str]]:
     """Map finding to CIS Controls v8.1.
 
@@ -1065,16 +1094,7 @@ def map_to_nist_csf_2_0(
     if category and category in NIST_CSF_2_0:
         mappings.extend(NIST_CSF_2_0[category])
 
-    # Deduplicate by subcategory
-    seen = set()
-    unique_mappings = []
-    for m in mappings:
-        key = m.get("subcategory", "")
-        if key not in seen:
-            seen.add(key)
-            unique_mappings.append(m)
-
-    return unique_mappings
+    return first_entry_per_key(mappings, COMPLIANCE_ENTRY_KEYS["nistCsf2_0"])
 
 
 def map_to_pci_dss_4_0(
@@ -1102,16 +1122,7 @@ def map_to_pci_dss_4_0(
     if category and category in PCI_DSS_4_0:
         mappings.extend(PCI_DSS_4_0[category])
 
-    # Deduplicate by requirement
-    seen = set()
-    unique_mappings = []
-    for m in mappings:
-        key = m.get("requirement", "")
-        if key not in seen:
-            seen.add(key)
-            unique_mappings.append(m)
-
-    return unique_mappings
+    return first_entry_per_key(mappings, COMPLIANCE_ENTRY_KEYS["pciDss4_0"])
 
 
 def map_to_mitre_attack(
@@ -1147,16 +1158,7 @@ def map_to_mitre_attack(
     if category and category in MITRE_ATTACK:
         mappings.extend(MITRE_ATTACK[category])
 
-    # Deduplicate by technique
-    seen = set()
-    unique_mappings = []
-    for m in mappings:
-        key = m.get("technique", "")
-        if key not in seen:
-            seen.add(key)
-            unique_mappings.append(m)
-
-    return unique_mappings
+    return first_entry_per_key(mappings, COMPLIANCE_ENTRY_KEYS["mitreAttack"])
 
 
 def map_rule_to_owasp_top10_2021(tool_name: str, rule_id: str) -> list[str]:

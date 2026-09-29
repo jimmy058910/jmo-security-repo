@@ -1142,6 +1142,7 @@ jobs:
           SYFT_VERSION: "1.51.1"
           GITLEAKS_VERSION: "8.30.1"
           ZIZMOR_VERSION: "1.30.1"
+          OSV_SCANNER_VERSION: "2.6.0"
         run: |
           # Install tools needed for contract validation
           # Trivy - vulnerability scanner
@@ -1188,6 +1189,20 @@ jobs:
           tar -xzf /tmp/zizmor.tar.gz -C /usr/local/bin zizmor
           chmod +x /usr/local/bin/zizmor
 
+          # osv-scanner: a raw binary, checked in /tmp against the release's
+          # SHA256SUMS before it is installed, as the Dockerfile does. No
+          # offline database is fetched: its tests read the frozen one in
+          # tests/fixtures/osv-db.
+          base="https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}"
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            "${base}/osv-scanner_SHA256SUMS" -o /tmp/osv-scanner_SHA256SUMS
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            "${base}/osv-scanner_linux_amd64" -o /tmp/osv-scanner_linux_amd64
+          sum=$(awk '$2 == "osv-scanner_linux_amd64" {print $1}' /tmp/osv-scanner_SHA256SUMS)
+          echo "${sum:?no checksum for osv-scanner_linux_amd64}  /tmp/osv-scanner_linux_amd64" | sha256sum -c -
+          mv /tmp/osv-scanner_linux_amd64 /usr/local/bin/osv-scanner
+          chmod +x /usr/local/bin/osv-scanner
+
           # Checkov - IaC scanner
           pip install checkov
 
@@ -1213,6 +1228,7 @@ jobs:
           trufflehog --version || echo "trufflehog not available"
           gitleaks version || echo "gitleaks not available"
           zizmor --version || echo "zizmor not available"
+          osv-scanner --version || echo "osv-scanner not available"
           checkov --version || echo "checkov not available"
           shellcheck --version || echo "shellcheck not available"
           grype version || echo "grype not available"
@@ -1228,6 +1244,7 @@ jobs:
             tests/integration/test_git_history_secrets.py \
             tests/unit/test_gitleaks_wiring.py \
             tests/unit/test_zizmor_wiring.py \
+            tests/unit/test_osv_scanner_wiring.py \
             -v \
             -m "requires_tools" \
             --tb=short \

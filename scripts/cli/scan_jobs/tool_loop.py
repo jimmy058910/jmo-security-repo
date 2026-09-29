@@ -11,9 +11,14 @@ exactly one `ToolRun`, in this order:
 2. **binary**: not found is `failed:not installed`, or `skipped:not installed`
    under `--allow-missing-tools` (#825's semantics).
 3. **content**: a tool that needs files of a kind the target lacks is
-   `skipped` with that reason (no Dockerfiles, no Go sources, no IaC).
+   `skipped` with that reason (no Dockerfiles, no Go sources, no IaC). A
+   tool's `precheck` then fails the row for what of that content it cannot
+   read (osv-scanner: a lockfile with no offline database), and it runs on
+   the rest, or not at all.
 4. **run**: `ToolRunner`'s result becomes `ran` or `failed:<reason>`, and a
    tool whose own output says it examined 0 files is `failed` (G2, #1231).
+   An invocation that failed the way its `Fallback` names is replaced by the
+   fallback's invocations, run in a second round.
 
 Before any of that, a repository whose pruned walk yields no file at all fails
 every tool that would have read it: nothing was there to scan (G2).
@@ -40,10 +45,13 @@ from ...core.scan_timings import (
 )
 from ...core.tool_descriptors import (
     DESCRIPTORS,
+    PART_OUTPUT,
     VENDORED_DIRS,
     ExclusionStyle,
+    Fallback,
     Invocation,
     ScanContext,
+    Shortfall,
     ToolDescriptor,
     read_history,
     scan_root,
@@ -112,11 +120,17 @@ def collect_files(
     patterns: tuple[str, ...],
     tool_name: str,
     skip_tree: Path | None = None,
+    accepts_name: Callable[[str], bool] | None = None,
 ) -> list[str]:
     """Collect matching files for a tool that takes file arguments.
 
     hadolint used to take `dockerfiles[0]`, which on docker-library/postgres
     meant 1 of 26 files scanned, with nothing in the output to say so.
+
+    `accepts_name` is the tool's own test of a file name, for a tool that
+    decides by the exact name: on Windows the glob ignores case, so it found
+    `Requirements.txt` and `Package-Lock.json` for osv-scanner, which rejects
+    both and then read nothing at all. A file it refuses is named and left out.
     """
     seen: set[Path] = set()
     for pattern in patterns:
@@ -131,6 +145,18 @@ def collect_files(
                 continue
             if path.is_file():
                 seen.add(path)
+
+    if accepts_name is not None:
+        refused = sorted(p for p in seen if not accepts_name(p.name))
+        if refused:
+            logger.warning(
+                "%s: %d file(s) matched its patterns but not a name it reads "
+                "(it reads names exactly, case included) - NOT scanned: %s",
+                tool_name,
+                len(refused),
+                ", ".join(p.relative_to(repo).as_posix() for p in refused),
+            )
+            seen.difference_update(refused)
 
     files = sorted(seen)
     if len(files) > MAX_FILE_ARGS:
@@ -386,6 +412,42 @@ def _row_from_results(
     )
 
 
+def _unlink(path: Path) -> None:
+    try:
+        path.unlink(missing_ok=True)
+    except OSError as exc:
+        logger.warning("could not remove %s from an earlier scan: %s", path, exc)
+
+
+def _remove_parts(out_dir: Path, tool: str) -> None:
+    """Remove the fallback outputs (`PART_OUTPUT`) an earlier scan left."""
+    for stale in out_dir.glob(PART_OUTPUT.format(tool=tool, n="*")):
+        _unlink(stale)
+
+
+def _fallen_back(
+    results: list[ToolResult],
+    planned: Mapping[str, tuple[ToolDescriptor, list[Invocation]]],
+) -> dict[str, list[tuple[ToolResult, Invocation, Fallback]]]:
+    """Each failed result whose invocation's `Fallback` names its failure (a
+    return code it lists and its marker in stderr), with that invocation."""
+    fallen: dict[str, list[tuple[ToolResult, Invocation, Fallback]]] = {}
+    for result in results:
+        if result.status == "success" or result.tool not in planned:
+            continue
+        for inv in planned[result.tool][1]:
+            fallback = inv.fallback
+            if (
+                inv.output_file == result.output_file
+                and fallback is not None
+                and result.returncode in fallback.returncodes
+                and fallback.stderr_marker in (result.stderr or "")
+            ):
+                fallen.setdefault(result.tool, []).append((result, inv, fallback))
+                break
+    return fallen
+
+
 def run_tools(
     *,
     tools: Iterable[str],
@@ -473,8 +535,22 @@ def run_tools(
                 history_gap,
             )
 
+    def definition(tool: str, inv: Invocation) -> ToolDefinition:
+        return ToolDefinition(
+            name=tool,
+            command=list(inv.command),
+            output_file=inv.output_file,
+            timeout=tool_timeout(per_tool_config, tool, timeout),
+            retries=retries,
+            ok_return_codes=inv.ok_return_codes,
+            capture_stdout=inv.capture_stdout,
+            cwd=inv.cwd,
+            env=inv.env,
+        )
+
     rows: TargetRows = {}
     planned: dict[str, tuple[ToolDescriptor, list[Invocation]]] = {}
+    shortfalls: dict[str, Shortfall] = {}
     definitions: list[ToolDefinition] = []
     for tool in ordered:
         d = _descriptor(tool)
@@ -482,6 +558,9 @@ def run_tools(
         if builder is None:
             rows[tool] = ToolRun(tool, State.SKIPPED, d.off_target_reason)
             continue
+        # A fallback writes one file per input, so an earlier scan's may be
+        # more than this one writes, and the report reads every file here.
+        _remove_parts(out_dir, tool)
 
         binary = _resolve(d, find)
         if not binary:
@@ -509,7 +588,11 @@ def run_tools(
         tool_config = per_tool_config.get(tool)
         files: tuple[str, ...] = ()
         if d.file_patterns and repo_root is not None:
-            files = tuple(collect_files(repo_root, d.file_patterns, tool, results_tree))
+            files = tuple(
+                collect_files(
+                    repo_root, d.file_patterns, tool, results_tree, d.accepts_name
+                )
+            )
         tree_excl, history_excl = (
             _exclusions(d, out_dir, results_name, target) if key == "repo" else ((), ())
         )
@@ -540,40 +623,75 @@ def run_tools(
             stub(tool, ctx.output)
             rows[tool] = ToolRun(tool, State.SKIPPED, reason)
             continue
+        if walk is not None and d.precheck is not None:
+            shortfall = d.precheck(ctx)
+            if shortfall is not None:
+                logger.error(
+                    "%s: %s - what it cannot read is MISSING from this scan",
+                    tool,
+                    shortfall.detail,
+                )
+                if not shortfall.files:
+                    rows[tool] = ToolRun(
+                        tool, State.FAILED, shortfall.reason, detail=shortfall.detail
+                    )
+                    continue
+                ctx = replace(ctx, files=shortfall.files)
+                shortfalls[tool] = shortfall
 
         invocations = builder(ctx)
         planned[tool] = (d, invocations)
-        for inv in invocations:
-            definitions.append(
-                ToolDefinition(
-                    name=tool,
-                    command=list(inv.command),
-                    output_file=inv.output_file,
-                    timeout=tool_timeout(per_tool_config, tool, timeout),
-                    retries=retries,
-                    ok_return_codes=inv.ok_return_codes,
-                    capture_stdout=inv.capture_stdout,
-                    cwd=inv.cwd,
-                )
-            )
+        definitions.extend(definition(tool, inv) for inv in invocations)
 
     runner = runner_cls(tools=definitions, progress_callback=progress_callback)
     started = time.perf_counter()
     results: list[ToolResult] = runner.run_all_parallel()
+
+    # A second round, for the invocations that failed the way their fallback
+    # names: each is replaced by the fallback's invocations.
+    fallen = _fallen_back(results, planned)
+    second: list[ToolDefinition] = []
+    for tool, pairs in fallen.items():
+        d, invocations = planned[tool]
+        instead: list[Invocation] = []
+        for _result, inv, fallback in pairs:
+            logger.warning(
+                "%s: one of the %d inputs of a run could not be read, so it "
+                "runs once for each of them",
+                tool,
+                len(fallback.invocations),
+            )
+            # It wrote nothing, so a file there is an earlier scan's.
+            _unlink(inv.output_file)
+            instead.extend(fallback.invocations)
+        gone = {id(inv) for _, inv, _ in pairs}
+        planned[tool] = (d, [i for i in invocations if id(i) not in gone] + instead)
+        second.extend(definition(tool, i) for i in instead)
+    if second:
+        superseded = {id(r) for pairs in fallen.values() for r, _, _ in pairs}
+        results = [r for r in results if id(r) not in superseded]
+        runner = runner_cls(tools=second, progress_callback=progress_callback)
+        results += runner.run_all_parallel()
     wall = time.perf_counter() - started
 
     by_tool: dict[str, list[ToolResult]] = {}
     for result in results:
         by_tool.setdefault(result.tool, []).append(result)
     for tool, (d, invocations) in planned.items():
-        labels = (
-            {inv.output_file: inv.label for inv in invocations}
-            if len(invocations) > 1
-            else {}
-        )
+        # Each failed invocation is named by its label, in the builder's order.
+        labels = {inv.output_file: inv.label for inv in invocations}
         row = _row_from_results(
             d, by_tool.get(tool, []), len(invocations), out_dir, stub, labels
         )
+        if tool in fallen:
+            # What the replaced run cost is part of what the row cost.
+            replaced = [r for r, _, _ in fallen[tool]]
+            row = replace(
+                row,
+                seconds=row.seconds + sum(r.duration for r in replaced),
+                attempts=row.attempts + sum(r.attempts for r in replaced),
+                invocations=row.invocations + len(replaced),
+            )
         if d.reads_history and row.state is State.RAN:
             # The tree ran, so the row is `ran`; the record says history did not.
             if tool not in readers:
@@ -583,6 +701,17 @@ def run_tools(
                 )
             elif history_gap:
                 row = replace(row, detail=f"history not read: {history_gap}")
+        if tool in shortfalls:
+            # Decided before the run, so it is the row's reason whatever the
+            # run did; what the run itself says follows it.
+            shortfall = shortfalls[tool]
+            said = row.detail if row.state is State.FAILED and row.detail else ""
+            row = replace(
+                row,
+                state=State.FAILED,
+                reason=shortfall.reason,
+                detail="; ".join(filter(None, (shortfall.detail, said))),
+            )
         rows[tool] = row
 
     rows = {tool: rows[tool] for tool in ordered}

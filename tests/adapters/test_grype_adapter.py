@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from scripts.core.adapters.grype_adapter import GrypeAdapter
+from scripts.core.common_finding import fingerprint
 
 
 def write(p: Path, obj):
@@ -228,6 +229,124 @@ def test_grype_adapter_multiple_cvss_versions(tmp_path: Path):
     assert items[0].cvss["score"] == 9.8
 
 
+def test_grype_adapter_cvss_v4_only(tmp_path: Path):
+    """An advisory with a v4.0 metric and nothing else (#1356)."""
+    data = {
+        "matches": [
+            {
+                "vulnerability": {
+                    "id": "CVE-2026-4000",
+                    "severity": "HIGH",
+                    "description": "v4.0-only advisory",
+                    "cvss": [
+                        {
+                            "version": "4.0",
+                            "vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N",
+                            "metrics": {"baseScore": 8.7},
+                        }
+                    ],
+                    "fix": {"versions": ["2.0.0"]},
+                },
+                "artifact": {
+                    "name": "v4pkg",
+                    "version": "1.0.0",
+                    "locations": [{"path": "/usr/lib/v4pkg.so"}],
+                },
+            }
+        ]
+    }
+    f = tmp_path / "grype.json"
+    write(f, data)
+    items = GrypeAdapter().parse(f)
+
+    assert len(items) == 1
+    assert items[0].cvss == {
+        "version": "4.0",
+        "score": 8.7,
+        "vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N",
+    }
+
+
+def test_grype_adapter_prefers_v3_over_v4_even_with_a_lower_score(tmp_path: Path):
+    """v3.x outranks v4.0 whatever the numbers (#1356)."""
+    data = {
+        "matches": [
+            {
+                "vulnerability": {
+                    "id": "CVE-2026-4001",
+                    "severity": "HIGH",
+                    "description": "Both v3.x and v4.0",
+                    "cvss": [
+                        {
+                            "version": "4.0",
+                            "vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N",
+                            "metrics": {"baseScore": 9.0},
+                        },
+                        {
+                            "version": "3.1",
+                            "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+                            "metrics": {"baseScore": 5.3},
+                        },
+                    ],
+                    "fix": {"versions": ["2.0.0"]},
+                },
+                "artifact": {
+                    "name": "bothpkg",
+                    "version": "1.0.0",
+                    "locations": [{"path": "/usr/lib/bothpkg.so"}],
+                },
+            }
+        ]
+    }
+    f = tmp_path / "grype.json"
+    write(f, data)
+    items = GrypeAdapter().parse(f)
+
+    assert len(items) == 1
+    assert items[0].cvss["version"] == "3.x"
+    assert items[0].cvss["score"] == 5.3
+
+
+def test_grype_adapter_prefers_v4_over_v2_even_with_a_lower_score(tmp_path: Path):
+    """v4.0 outranks v2.0 whatever the numbers (#1356)."""
+    data = {
+        "matches": [
+            {
+                "vulnerability": {
+                    "id": "CVE-2026-4002",
+                    "severity": "HIGH",
+                    "description": "Both v2.0 and v4.0",
+                    "cvss": [
+                        {
+                            "version": "2.0",
+                            "vector": "AV:N/AC:L/Au:N/C:P/I:P/A:P",
+                            "metrics": {"baseScore": 10.0},
+                        },
+                        {
+                            "version": "4.0",
+                            "vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:L/VI:N/VA:N/SC:N/SI:N/SA:N",
+                            "metrics": {"baseScore": 1.0},
+                        },
+                    ],
+                    "fix": {"versions": ["2.0.0"]},
+                },
+                "artifact": {
+                    "name": "oldnewpkg",
+                    "version": "1.0.0",
+                    "locations": [{"path": "/usr/lib/oldnewpkg.so"}],
+                },
+            }
+        ]
+    }
+    f = tmp_path / "grype.json"
+    write(f, data)
+    items = GrypeAdapter().parse(f)
+
+    assert len(items) == 1
+    assert items[0].cvss["version"] == "4.0"
+    assert items[0].cvss["score"] == 1.0
+
+
 def test_grype_adapter_missing_locations(tmp_path: Path):
     """Test Grype adapter handles missing location information."""
     data = {
@@ -336,3 +455,77 @@ def test_grype_adapter_compliance_enrichment(tmp_path: Path):
     assert len(items) == 1
     # Compliance field should exist (enriched by compliance_mapper)
     assert hasattr(items[0], "compliance")
+
+
+def test_grype_adapter_fills_the_dependency_from_its_match(tmp_path: Path):
+    """#1346: the match's artifact is the package, its PURL's type the
+    ecosystem, and its related vulnerabilities the aliases. Shaped as grype
+    0.115.0 wrote NodeGoat's lockfile: a GHSA match relating its CVE."""
+    data = {
+        "matches": [
+            {
+                "vulnerability": {"id": "GHSA-c4w7-xm78-47vh", "severity": "High"},
+                "relatedVulnerabilities": [
+                    {"id": "CVE-2020-7774", "namespace": "nvd:cpe"},
+                    {
+                        "id": "GHSA-c4w7-xm78-47vh",
+                        "namespace": "github:language:javascript",
+                    },
+                ],
+                "artifact": {
+                    "name": "y18n",
+                    "version": "3.2.1",
+                    "type": "npm",
+                    "purl": "pkg:npm/y18n@3.2.1",
+                    "locations": [{"path": "/package-lock.json"}],
+                },
+            },
+            {
+                "vulnerability": {"id": "GHSA-c4w7-xm78-47vh", "severity": "High"},
+                "relatedVulnerabilities": [{"id": "CVE-2020-7774"}],
+                "artifact": {
+                    "name": "y18n",
+                    "version": "4.0.0",
+                    "type": "npm",
+                    "purl": "pkg:npm/y18n@4.0.0",
+                    "locations": [{"path": "/package-lock.json"}],
+                },
+            },
+        ]
+    }
+    f = tmp_path / "grype.json"
+    write(f, data)
+    first, second = GrypeAdapter().parse(f)
+
+    # its own id among the related ones is not an alias
+    assert first.dependency == {
+        "name": "y18n",
+        "version": "3.2.1",
+        "ecosystem": "npm",
+        "aliases": ["CVE-2020-7774"],
+    }
+    assert second.dependency["version"] == "4.0.0"
+    assert first.id == fingerprint(
+        "grype",
+        "GHSA-c4w7-xm78-47vh",
+        "/package-lock.json",
+        0,
+        first.message,
+        package="y18n@3.2.1",
+    )
+    assert first.id != second.id
+
+
+def test_grype_adapter_names_no_package_without_a_version(tmp_path: Path):
+    data = {
+        "matches": [
+            {
+                "vulnerability": {"id": "CVE-2023-0001", "severity": "Low"},
+                "artifact": {"name": "thing", "locations": []},
+            }
+        ]
+    }
+    f = tmp_path / "grype.json"
+    write(f, data)
+    [item] = GrypeAdapter().parse(f)
+    assert item.dependency is None

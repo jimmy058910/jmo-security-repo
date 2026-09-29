@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from scripts.core.adapters.common import normalize_finding_path
-from scripts.core.common_finding import fingerprint
+from scripts.core.common_finding import fingerprint, package_of
 from scripts.core.compliance_mapper import enrich_findings_with_compliance
 from scripts.core.cwe_extraction import backfill_risk_cwe
 from scripts.core.exceptions import AdapterParseException
@@ -281,10 +281,22 @@ def _normalize_paths_and_ids(
         context = finding.get("secretContext")
         commit = context.get("commit") if isinstance(context, dict) else None
         commits = (None, commit) if commit else (None,)
-        shapes = [(col, c) for c in commits for col in columns]
-        for col, c in shapes:
+        # And a dependency scanner's on its package (#1346): osv-scanner's
+        # path arrives absolute, and without this shape its ids kept the
+        # scanning machine's directory.
+        package = package_of(finding.get("dependency"))
+        packages = (None, package) if package else (None,)
+        shapes = [(col, c, p) for p in packages for c in commits for col in columns]
+        for col, c, p in shapes:
             if current == fingerprint(
-                tool, rule_id, original, start_line, message, start_column=col, commit=c
+                tool,
+                rule_id,
+                original,
+                start_line,
+                message,
+                start_column=col,
+                commit=c,
+                package=p,
             ):
                 finding["id"] = fingerprint(
                     tool,
@@ -294,6 +306,7 @@ def _normalize_paths_and_ids(
                     message,
                     start_column=col,
                     commit=c,
+                    package=p,
                 )
                 ids_rekeyed += 1
                 break

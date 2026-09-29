@@ -70,8 +70,12 @@ class Reason(StrEnum):
     NO_GO_SOURCES = "no Go sources"
     NO_IAC = "no IaC files"
     NO_WORKFLOWS = "no GitHub Actions workflows"
+    NO_LOCKFILE = "no lockfile"
     # failed
     NO_FILES_TO_SCAN = "no files to scan"
+    # A lockfile's ecosystem has no database in JMo's cache, so osv-scanner
+    # cannot read it: `jmo tools update` fetches it (scans never download).
+    NO_OFFLINE_DB = "offline database missing"
     EXAMINED_ZERO = "examined 0 files"
     TIMED_OUT = "timed out"
     EXIT_CODE = "unaccepted exit code"
@@ -92,6 +96,7 @@ SKIP_REASONS: frozenset[Reason] = frozenset(
         Reason.NO_GO_SOURCES,
         Reason.NO_IAC,
         Reason.NO_WORKFLOWS,
+        Reason.NO_LOCKFILE,
     }
 )
 # The target is not one this tool reads: the row says so, and says nothing
@@ -103,6 +108,7 @@ FAIL_REASONS: frozenset[Reason] = frozenset(
     {
         Reason.NOT_INSTALLED,
         Reason.NO_FILES_TO_SCAN,
+        Reason.NO_OFFLINE_DB,
         Reason.EXAMINED_ZERO,
         Reason.TIMED_OUT,
         Reason.EXIT_CODE,

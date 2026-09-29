@@ -5,6 +5,7 @@ Integration test for cross-tool deduplication in normalize_and_report.py
 Tests the end-to-end flow of Phase 1 (fingerprint) + Phase 2 (clustering) deduplication.
 """
 
+import copy
 import itertools
 import json
 from pathlib import Path
@@ -139,8 +140,8 @@ def test_cluster_empty_list():
 # trivy's ruleId is `github-pat` (its RuleID, since #1221), the string gitleaks
 # prints too, so the two cluster on the id alone (`_rule_id_similarity` scores
 # equal strings 1.0), outside `rule_equivalence.py`. trivy's secret is CRITICAL
-# and gitleaks' HIGH, so trivy leads whatever cluster it is in, and the
-# consensus is a copy of its finding. Before trivy's secrets carried CWE-798,
+# and gitleaks' HIGH, so trivy leads whatever cluster it is in, and until #1355
+# the consensus was a copy of its finding. Before trivy's secrets carried CWE-798,
 # measured through this exact path: 2 findings in all 6 orders, one of them
 # led by trivy with no `risk.cwe` and no OWASP mapping (trivy+gitleaks in 3
 # orders, trivy alone in the other 3). The secret left `owasp-top-10` whenever
@@ -250,8 +251,8 @@ def test_one_secret_keeps_cwe_798_and_owasp_a02_in_every_load_order(
     result = _cluster_cross_tool_duplicates(findings, similarity_threshold=0.65)
 
     # Meta-guards: every tool's report is still in the result, and trivy leads
-    # one finding (a consensus is a copy of its lead), which is the case that
-    # lost the mapping.
+    # one finding (until #1355 a consensus was a copy of its lead), which is
+    # the case that lost the mapping.
     reported = {
         tool["name"] for f in result for tool in f.get("detected_by") or [f["tool"]]
     }
@@ -266,3 +267,142 @@ def test_one_secret_keeps_cwe_798_and_owasp_a02_in_every_load_order(
         )
         owasp = (f.get("compliance") or {}).get("owaspTop10_2021") or []
         assert any(o.startswith("A02") for o in owasp), (who, owasp)
+
+
+# ===== #1355: PR A's two measured cases, before its CWE-798 parity =====
+#
+# PR A gave every secret scanner CWE-798, so no member of a secret cluster
+# lacks it any more. That is parity, not a fix: the consensus was still a copy
+# of one member, chosen by load order where severities tie. These rebuild the
+# two cases PR A measured with the CWE stripped from the tool that lacked it
+# then, so they fail on a copy-of-one consensus and pass only on a merge.
+
+
+def _report_phase(findings: list[dict]) -> list[dict]:
+    """The report phase's order: backfill, compliance, then clustering."""
+    findings = copy.deepcopy(findings)
+    backfill_risk_cwe(findings)
+    findings = enrich_findings_with_compliance(findings)
+    return _cluster_cross_tool_duplicates(findings, similarity_threshold=0.65)
+
+
+def _cwes(finding: dict) -> list[str]:
+    return (finding.get("risk") or {}).get("cwe") or []
+
+
+def _owasp(finding: dict) -> list[str]:
+    return (finding.get("compliance") or {}).get("owaspTop10_2021") or []
+
+
+# juice-shop `1618a611`'s `terraform/networking.tf:171`, one of the five
+# same-line pairs: one committed private key, two tools. No key material.
+_KEY_PATH, _KEY_LINE = "terraform/networking.tf", 171
+
+_GITLEAKS_KEY = {
+    "version": "2.1.0",
+    "runs": [
+        {
+            "tool": {"driver": {"name": "gitleaks", "semanticVersion": "v8.30.1"}},
+            "results": [
+                {
+                    "message": {
+                        "text": f"private-key has detected secret for file {_KEY_PATH}."
+                    },
+                    "ruleId": "private-key",
+                    "locations": [
+                        {
+                            "physicalLocation": {
+                                "artifactLocation": {"uri": _KEY_PATH},
+                                "region": {
+                                    "startLine": _KEY_LINE,
+                                    "startColumn": 1,
+                                    "endLine": _KEY_LINE,
+                                    "endColumn": 32,
+                                },
+                            }
+                        }
+                    ],
+                }
+            ],
+        }
+    ],
+}
+
+_TRUFFLEHOG_KEY = {
+    "SourceMetadata": {"Data": {"Filesystem": {"file": _KEY_PATH, "line": _KEY_LINE}}},
+    "DetectorName": "PrivateKey",
+    "DecoderName": "PLAIN",
+    "Verified": False,
+}
+
+
+def test_pr_a_pair_keeps_trufflehogs_cwe_798_whichever_tool_loads_first(tmp_path):
+    """PR A, juice-shop: 7 `owasp-top-10` violations became 2 on clustering.
+
+    Both tools grade a secret HIGH, so the stable severity sort left the lead
+    to load order; gitleaks (no CWE before #1328's fix-round) led, and the
+    consensus -- a copy of it -- dropped trufflehog's CWE-798 and OWASP A02.
+    """
+    parsed = {}
+    for tool, adapter, text in (
+        ("gitleaks", GitleaksAdapter, json.dumps(_GITLEAKS_KEY)),
+        ("trufflehog", TruffleHogAdapter, json.dumps(_TRUFFLEHOG_KEY) + "\n"),
+    ):
+        path = tmp_path / f"{tool}.json"
+        path.write_bytes(text.encode("utf-8"))
+        parsed[tool] = [f.to_dict() for f in adapter().parse(path)]
+        assert len(parsed[tool]) == 1, (tool, parsed[tool])
+    # gitleaks as PR A measured it: its binding set no `risk` then.
+    del parsed["gitleaks"][0]["risk"]
+
+    results = {
+        order: _report_phase([f for tool in order for f in parsed[tool]])
+        for order in itertools.permutations(parsed)
+    }
+
+    for order, result in results.items():
+        # Meta-guard: the pair is one cluster, as it was on juice-shop.
+        assert len(result) == 1, (order, [f["id"] for f in result])
+        (consensus,) = result
+        assert {t["name"] for t in consensus["detected_by"]} == {
+            "gitleaks",
+            "trufflehog",
+        }
+        assert "CWE-798" in _cwes(consensus), (order, consensus.get("risk"))
+        assert "A02:2021" in _owasp(consensus), (order, _owasp(consensus))
+    assert len({json.dumps(r, sort_keys=True) for r in results.values()}) == 1, (
+        "the consensus differs between the two load orders"
+    )
+
+
+def test_pr_a_three_scanners_keep_owasp_a02_in_every_load_order(tmp_path):
+    """PR A: trivy + gitleaks + trufflehog on one secret, all six orders.
+
+    Before trivy's secrets carried CWE-798, a cluster trivy led was a copy of
+    trivy and had no OWASP A02 -- and whether trivy clustered with gitleaks or
+    stood alone also depended on load order (3 orders each). Merged, and with
+    a lead and a membership that no longer depend on order, every finding
+    keeps the A02 some member carried, and all six orders agree byte for byte.
+    """
+    parsed = _one_secret_from_three_tools(tmp_path)
+    # trivy as PR A measured it: its secrets carried no CWE then.
+    del parsed["trivy"][0]["risk"]
+
+    results = {
+        order: _report_phase([f for tool in order for f in parsed[tool]])
+        for order in itertools.permutations(parsed)
+    }
+
+    for order, result in results.items():
+        # Meta-guard: the case that lost the mapping -- a cluster trivy leads
+        # with a member that carries the CWE -- is the one under test.
+        led = [f for f in result if f["tool"]["name"] == "trivy"]
+        assert len(led) == 1, (order, [f["id"] for f in result])
+        assert "gitleaks" in {t["name"] for t in led[0].get("detected_by") or []}, order
+        for f in result:
+            who = [t["name"] for t in f.get("detected_by") or [f["tool"]]]
+            assert "CWE-798" in _cwes(f), (order, who, f.get("risk"))
+            assert "A02:2021" in _owasp(f), (order, who, _owasp(f))
+    assert len({json.dumps(r, sort_keys=True) for r in results.values()}) == 1, (
+        "the findings differ between load orders"
+    )

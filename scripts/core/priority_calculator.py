@@ -252,4 +252,7 @@ class PriorityCalculator:
             cve_pattern = r"CVE-\d{4}-\d{4,7}"
             cves.extend(re.findall(cve_pattern, message))
 
-        return list(set(cves))  # Deduplicate
+        # Deduplicate in first-seen order: EPSS is read from `cves[0]`, and a
+        # set made that choice follow the hash seed for a finding naming
+        # several CVEs (osv-scanner lists every alias in its message).
+        return list(dict.fromkeys(cves))

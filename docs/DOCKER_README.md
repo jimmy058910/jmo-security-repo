@@ -4,7 +4,7 @@
 
 All security tools pre-installed and ready to use. Perfect for beginners, CI/CD pipelines, and production environments.
 
-**Note:** Docker users do NOT need to use `jmo tools` commands - all tools are pre-installed in Docker images. The `jmo tools` command is for native/pip installations only. See [User Guide: Tool Management](USER_GUIDE.md#tool-management) for native tool management.
+**Note:** Docker users do NOT need to use `jmo tools` commands to install any scanner - every tool binary is pre-installed in the image. The `jmo tools` command is for native/pip installations only. See [User Guide: Tool Management](USER_GUIDE.md#tool-management) for native tool management. **One exception:** osv-scanner's offline vulnerability databases are not baked into the image, so `jmo tools update` still has a job to do in a container - see [osv-scanner's Offline Databases](#osv-scanners-offline-databases) below.
 
 ---
 
@@ -557,6 +557,41 @@ docker volume rm trivy-cache
       ghcr.io/jimmy058910/jmo-security:latest \
       ci --repo /scan --fail-on HIGH
 ```
+
+### osv-scanner's Offline Databases
+
+osv-scanner reads dependency lockfiles against OSV's own offline vulnerability
+databases, cached at `~/.jmo/osv-db` (eleven ecosystems, ~280 MB total: npm,
+PyPI, Go, Maven, crates.io, RubyGems, Packagist, NuGet, Pub, Hex and
+CRAN). **The image does not carry any of it** -- a scan never
+downloads, and baking ~280 MB of data that goes stale daily into every image
+build was not worth the size. A fresh container therefore has no database at
+all, and osv-scanner's row reads `failed:offline database missing`, naming
+the ecosystem and lockfile, until `jmo tools update` fills the cache.
+
+```bash
+# One-time, against a persistent ~/.jmo volume (note the container's HOME:
+# the image runs as USER jmo, not root, so this is /home/jmo/.jmo, NOT
+# /root/.jmo -- unlike some of the -v root paths elsewhere on this page).
+docker run --rm \
+  -v jmo-home:/home/jmo/.jmo \
+  ghcr.io/jimmy058910/jmo-security:latest \
+  tools update
+
+# Every later scan against the same volume finds the cache already there:
+docker run --rm \
+  -v "$(pwd):/scan" \
+  -v jmo-home:/home/jmo/.jmo \
+  ghcr.io/jimmy058910/jmo-security:latest \
+  scan --repo /scan --results /scan/results
+```
+
+Without that volume (or without ever running `tools update` inside it), every
+container start is "fresh" again: the database never persisted, so
+osv-scanner's row keeps reading `failed:offline database missing` on every
+run. This is separate from the Trivy database above and from `~/.jmo/history.db`
+below; a volume mounted at one of those paths does not cover this one, and
+vice versa -- each needs its own `-v` if you want it to persist.
 
 ### Suppression File
 

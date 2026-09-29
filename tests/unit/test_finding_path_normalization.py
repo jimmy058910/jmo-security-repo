@@ -272,6 +272,66 @@ def test_five_component_id_on_a_finding_that_carries_a_column_keeps_its_shape():
     assert finding["id"] == fingerprint("t", "R1", "a/b.py", 3, "m")
 
 
+def test_package_keyed_id_is_rekeyed_under_the_package_shape():
+    """#1346: a dependency finding's id is keyed on its package, and
+    osv-scanner's path arrives absolute (its decoded `file:///` URI). Without
+    the package shape the pass matches nothing, and the id keeps the scanning
+    machine's directory: the same lockfile scanned from another checkout
+    becomes a different finding."""
+    path = ROOT + BS + "package-lock.json"
+    message = "Package 'lodash@4.17.4' is vulnerable to 'CVE-2019-10744'."
+    finding = {
+        "id": fingerprint(
+            "osv-scanner",
+            "CVE-2019-10744",
+            path,
+            None,
+            message,
+            package="lodash@4.17.4",
+        ),
+        "ruleId": "CVE-2019-10744",
+        "tool": {"name": "osv-scanner"},
+        "location": {"path": path},
+        "message": message,
+        "dependency": {"name": "lodash", "version": "4.17.4", "aliases": []},
+    }
+
+    changed, rekeyed = nr._normalize_paths_and_ids([finding], (ROOT,))
+
+    assert (changed, rekeyed) == (1, 1)
+    assert finding["id"] == fingerprint(
+        "osv-scanner",
+        "CVE-2019-10744",
+        "package-lock.json",
+        None,
+        message,
+        package="lodash@4.17.4",
+    )
+
+
+def test_get_fingerprint_keys_a_dependency_finding_on_its_package():
+    from scripts.core.plugin_api import AdapterPlugin, Finding, PluginMetadata
+
+    class Probe(AdapterPlugin):
+        @property
+        def metadata(self):
+            return PluginMetadata(name="probe", version="1.0.0")
+
+        def parse(self, output_path):
+            return []
+
+    finding = Finding(
+        ruleId="CVE-1",
+        tool={"name": "trivy"},
+        location={"path": "package-lock.json", "startLine": 0},
+        message="title",
+        dependency={"name": "lodash", "version": "4.17.4"},
+    )
+    assert Probe().get_fingerprint(finding) == fingerprint(
+        "trivy", "CVE-1", "package-lock.json", 0, "title", package="lodash@4.17.4"
+    )
+
+
 def test_findings_without_a_usable_path_are_left_alone():
     findings = [
         {"id": "a", "location": {}},

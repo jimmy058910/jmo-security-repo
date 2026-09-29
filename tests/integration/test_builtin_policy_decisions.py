@@ -33,6 +33,7 @@ everywhere is ``tests/unit/test_policy_field_contract.py``.
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import sys
 import tempfile
@@ -477,3 +478,306 @@ def test_zero_secrets_says_what_it_does_not_block(tmp_path, monkeypatch, capsys)
         if "zero-secrets" in line and "not verified" in line
     ]
     assert len(said) == 1, said
+
+
+# ------------------------------------------------ consensus findings (#1355) --
+#
+# Cross-tool clustering merges one secret's reports into one consensus finding
+# whose `tool` is its lead's. On a severity tie the lead is the first tool by
+# name, so gitleaks leads a gitleaks + TruffleHog pair and semgrep a semgrep +
+# TruffleHog one -- and neither is a tool these policies select secrets by. A
+# policy reading `tool.name` alone passed a verified TruffleHog secret whenever
+# another scanner also reported it. juice-shop `1618a611`'s
+# `terraform/networking.tf:171` shape; no key material.
+
+_KEY_PATH, _KEY_LINE = "terraform/networking.tf", 171
+
+# The policies' secret rules, and how each marks a finding it flags: every
+# zero-secrets violation, and production-hardening's `secrets` category.
+_SECRET_RULES = {
+    "zero-secrets": lambda v: True,
+    "production-hardening": lambda v: v.get("category") == "secrets",
+}
+
+
+def _one_key_from(tools: tuple[str, ...], verified: bool) -> list[dict[str, Any]]:
+    """The key's record from each of `tools`, through the real adapters."""
+    from scripts.core.adapters.gitleaks_adapter import GitleaksAdapter
+
+    records: dict[str, tuple[Any, str, str]] = {
+        "gitleaks": (
+            GitleaksAdapter,
+            "gitleaks.json",
+            json.dumps(
+                {
+                    "version": "2.1.0",
+                    "runs": [
+                        {
+                            "tool": {"driver": {"name": "gitleaks"}},
+                            "results": [
+                                {
+                                    "message": {
+                                        "text": "private-key has detected secret "
+                                        f"for file {_KEY_PATH}."
+                                    },
+                                    "ruleId": "private-key",
+                                    "locations": [
+                                        {
+                                            "physicalLocation": {
+                                                "artifactLocation": {"uri": _KEY_PATH},
+                                                "region": {
+                                                    "startLine": _KEY_LINE,
+                                                    "endLine": _KEY_LINE,
+                                                },
+                                            }
+                                        }
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ),
+        ),
+        "semgrep": (
+            SemgrepAdapter,
+            "semgrep.json",
+            json.dumps(
+                {
+                    "results": [
+                        {
+                            "check_id": "generic.secrets.security.detected-private-key",
+                            "path": _KEY_PATH,
+                            "start": {"line": _KEY_LINE},
+                            "end": {"line": _KEY_LINE},
+                            "extra": {
+                                "message": "Private Key detected.",
+                                "severity": "ERROR",
+                                "metadata": {"cwe": ["CWE-798"]},
+                            },
+                        }
+                    ],
+                    "errors": [],
+                }
+            ),
+        ),
+        "trufflehog": (
+            TruffleHogAdapter,
+            "trufflehog.json",
+            json.dumps(
+                {
+                    "SourceMetadata": {
+                        "Data": {"Filesystem": {"file": _KEY_PATH, "line": _KEY_LINE}}
+                    },
+                    "DetectorName": "PrivateKey",
+                    "Verified": verified,
+                }
+            )
+            + "\n",
+        ),
+    }
+    out: list[dict[str, Any]] = []
+    with tempfile.TemporaryDirectory() as td:
+        for tool in tools:
+            adapter, name, text = records[tool]
+            p = Path(td) / name
+            p.write_bytes(text.encode("utf-8"))
+            parsed = [f.to_dict() for f in adapter().parse(p)]
+            assert len(parsed) == 1, (tool, parsed)
+            out += parsed
+    return out
+
+
+def _report_phase(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The report phase's order: CWE backfill, compliance, then clustering."""
+    import copy
+
+    from scripts.core.cwe_extraction import backfill_risk_cwe
+    from scripts.core.normalize_and_report import _cluster_cross_tool_duplicates
+
+    findings = copy.deepcopy(findings)
+    backfill_risk_cwe(findings)
+    findings = enrich_findings_with_compliance(findings)
+    return _cluster_cross_tool_duplicates(findings, similarity_threshold=0.65)
+
+
+def _flagged(policy: str, findings: list[dict[str, Any]]) -> set[str]:
+    """The ids of `findings` that `policy`'s secret rule flags, via real OPA."""
+    result = evaluate_policies(findings, [policy], BUILTIN_DIR, USER_DIR)[policy]
+    return {v["fingerprint"] for v in result.violations if _SECRET_RULES[policy](v)}
+
+
+@pytest.mark.parametrize(
+    "order", [("gitleaks", "trufflehog"), ("trufflehog", "gitleaks")], ids="-".join
+)
+def test_a_verified_trufflehog_secret_gitleaks_also_reports_is_blocked(order):
+    """Both load orders: zero-secrets FAILS with one violation.
+
+    Measured at 705f5317 (copy-of-the-lead consensus, load order picks the
+    lead): gitleaks-first passed, trufflehog-first failed. With #1355's
+    tie-break alone, gitleaks leads in both orders and both passed.
+    """
+    members = {f["tool"]["name"]: f for f in _one_key_from(order, verified=True)}
+    (consensus,) = _report_phase([members[tool] for tool in order])
+
+    # Meta-guards: one cluster, led by the tool the policies do not list.
+    assert {r["name"] for r in consensus["detected_by"]} == {"gitleaks", "trufflehog"}
+    assert consensus["tool"]["name"] == "gitleaks"
+
+    zero = evaluate_policies([consensus], ["zero-secrets"], BUILTIN_DIR, USER_DIR)
+    result = zero["zero-secrets"]
+    assert result.passed is False, result.message
+    assert len(result.violations) == 1, result.violations
+    assert result.violations[0]["fingerprint"] == consensus["id"]
+
+    assert _flagged("production-hardening", [consensus]) == {consensus["id"]}
+
+
+@pytest.mark.parametrize(
+    "hadolint_first", [True, False], ids=["hadolint-first", "trivy-first"]
+)
+def test_a_hadolint_dockerfile_issue_trivy_leads_keeps_its_category(hadolint_first):
+    """production-hardening's `dockerfile` category reads every reporter too.
+
+    hadolint's DL3024 ("FROM aliases must be unique", level error: HIGH) and
+    trivy's DS-0012 (CRITICAL) are one rule-equivalence class, so they
+    cluster, and trivy leads on severity -- in any order, before #1355 and
+    after. Reading `tool.name` alone moved the finding from `dockerfile` to
+    the generic `security` category. The verdict fails either way.
+    """
+    from scripts.core.adapters.hadolint_adapter import HadolintAdapter
+    from scripts.core.adapters.trivy_adapter import TrivyAdapter
+
+    records = {
+        "hadolint": (
+            HadolintAdapter,
+            [
+                {
+                    "code": "DL3024",
+                    "level": "error",
+                    "line": 9,
+                    "file": "Dockerfile",
+                    "message": "FROM aliases (stage names) must be unique",
+                }
+            ],
+        ),
+        "trivy": (
+            TrivyAdapter,
+            {
+                "Trivy": {"Version": "0.74.0"},
+                "Results": [
+                    {
+                        "Target": "Dockerfile",
+                        "Misconfigurations": [
+                            {
+                                "ID": "DS-0012",
+                                "Title": "Duplicate aliases defined in different FROMs",
+                                "Severity": "CRITICAL",
+                                "CauseMetadata": {"StartLine": 9, "EndLine": 9},
+                            }
+                        ],
+                    }
+                ],
+            },
+        ),
+    }
+    members = []
+    with tempfile.TemporaryDirectory() as td:
+        for tool in ("hadolint", "trivy") if hadolint_first else ("trivy", "hadolint"):
+            adapter, record = records[tool]
+            if tool == "trivy":
+                # The scanned root: trivy's adapter reads a code snippet under
+                # it, and there is no Dockerfile here to read.
+                record = {**record, "ArtifactName": td}
+            p = Path(td) / f"{tool}.json"
+            p.write_bytes(json.dumps(record).encode("utf-8"))
+            members += [f.to_dict() for f in adapter().parse(p)]
+    assert len(members) == 2, members
+
+    (consensus,) = _report_phase(members)
+    assert consensus["tool"]["name"] == "trivy", "the case under test: not led"
+    assert {r["name"] for r in consensus["detected_by"]} == {"hadolint", "trivy"}
+
+    result = evaluate_policies(
+        [consensus], ["production-hardening"], BUILTIN_DIR, USER_DIR
+    )["production-hardening"]
+    assert result.passed is False
+    assert [v["category"] for v in result.violations] == ["dockerfile"], (
+        result.violations
+    )
+
+
+def test_a_consensus_is_flagged_whenever_a_member_alone_would_be():
+    """The general guard for the secret rules, over every load order.
+
+    Members: gitleaks, semgrep and TruffleHog reporting one key, in four
+    TruffleHog shapes -- verified (both signals), the tag alone, `raw.Verified`
+    alone (the degenerate inputs `test_each_verification_signal_blocks_on_its_own`
+    requires the policy to handle) and unverified. Every subset holding the
+    TruffleHog record, in every order, through the real report phase; each
+    output finding must be flagged if any member it stands for is flagged when
+    evaluated alone.
+    """
+    base = {f["tool"]["name"]: f for f in _one_key_from(("gitleaks", "semgrep"), True)}
+    verified = _one_key_from(("trufflehog",), verified=True)[0]
+    shapes = {
+        "verified": verified,
+        "tag-only": {k: v for k, v in verified.items() if k != "raw"},
+        "raw-only": {**verified, "tags": ["secrets"]},
+        "unverified": _one_key_from(("trufflehog",), verified=False)[0],
+    }
+    assert shapes["raw-only"]["raw"]["Verified"] is True
+    for shape, finding in shapes.items():
+        # One id per shape, so a batch evaluation can tell them apart.
+        shapes[shape] = {**finding, "id": f"{finding['id']}-{shape}"}
+    members = [*base.values(), *shapes.values()]
+
+    alone = {policy: _flagged(policy, members) for policy in _SECRET_RULES}
+    # Meta-guard: what each rule flags alone, so the property is not vacuous:
+    # zero-secrets every verified shape, production-hardening every TruffleHog
+    # secret; neither gitleaks nor semgrep, which is the point.
+    ids = {shape: f["id"] for shape, f in shapes.items()}
+    assert alone["zero-secrets"] == {
+        ids["verified"],
+        ids["tag-only"],
+        ids["raw-only"],
+    }
+    assert alone["production-hardening"] == set(ids.values())
+
+    outputs: list[dict[str, Any]] = []
+    covers: dict[str, list[str]] = {}
+    for shape, trufflehog in shapes.items():
+        for others in ((), ("gitleaks",), ("semgrep",), ("gitleaks", "semgrep")):
+            group = [trufflehog, *(base[t] for t in others)]
+            for n, order in enumerate(itertools.permutations(group)):
+                for f in _report_phase(list(order)):
+                    run_id = f"{f['id']}#{shape}/{'+'.join(others)}/{n}"
+                    duplicates = (f.get("context") or {}).get("duplicates") or []
+                    covers[run_id] = [
+                        f["id"].removeprefix("cluster-"),
+                        *(d["id"] for d in duplicates),
+                    ]
+                    outputs.append({**f, "id": run_id})
+
+    for policy in _SECRET_RULES:
+        flagged = _flagged(policy, outputs)
+        missed = [
+            (run_id, member)
+            for run_id, member_ids in covers.items()
+            for member in member_ids
+            if member in alone[policy] and run_id not in flagged
+        ]
+        assert not missed, f"{policy}: {len(missed)} finding(s) missed, {missed[:3]}"
+        # Meta-guard: the case that regressed -- another tool leads a
+        # consensus holding a flagged TruffleHog member -- is exercised: every
+        # order of every group with a second tool (10 per shape).
+        led_by_another = [
+            f["id"]
+            for f in outputs
+            if f["tool"]["name"] != "trufflehog"
+            and any(m in alone[policy] for m in covers[f["id"]])
+        ]
+        assert len(led_by_another) == 10 * len(alone[policy]), (
+            policy,
+            len(led_by_another),
+        )

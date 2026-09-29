@@ -11,7 +11,7 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/jmogaming/jmo-security)](https://hub.docker.com/r/jmogaming/jmo-security)
 [![GitHub Stars](https://img.shields.io/github/stars/jimmy058910/jmo-security-repo?style=social)](https://github.com/jimmy058910/jmo-security-repo)
 
-**v1.1.1** | A terminal-first security audit toolkit orchestrating 14 scanners with unified CLI, normalized outputs, and interactive HTML dashboard.
+**v1.1.1** | A terminal-first security audit toolkit orchestrating 15 scanners with unified CLI, normalized outputs, and interactive HTML dashboard.
 
 [![Newsletter](https://img.shields.io/badge/Newsletter-Subscribe-667eea)](https://jmotools.com/subscribe.html)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/jmogaming)
@@ -30,7 +30,7 @@ JMo Security is an automated security audit framework for scanning code reposito
 
 ## Key Features
 
-- **14 Security Scanners** - Secrets, SAST, SBOM, SCA, IaC, DAST, and more
+- **15 Security Scanners** - Secrets, SAST, SBOM, SCA, IaC, DAST, and more
 - **6 Target Types** - Repos, images, IaC files, URLs, GitLab, Kubernetes
 - **Unified Output** - JSON, SARIF, Markdown, CSV export, dual-mode HTML dashboard
 - **Cross-Tool Deduplication** - Findings several tools report for the same issue collapse into one consensus finding
@@ -81,14 +81,14 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
 
 ## Security Tools
 
-14 scanners, one list. `jmo scan` considers all of them, and the target's content decides which run:
+15 scanners, one list. `jmo scan` considers all of them, and the target's content decides which run:
 
 | Category | Tools |
 |----------|-------|
 | **Secrets** | TruffleHog, Gitleaks (working tree and git history) |
 | **SAST** | Semgrep, Gosec |
 | **SBOM** | Syft |
-| **SCA** | Trivy, Grype |
+| **SCA** | Trivy, Grype, OSV-Scanner |
 | **IaC** | Checkov, Trivy |
 | **Kubernetes** | Trivy |
 | **DAST** | OWASP ZAP, Nuclei |
@@ -96,7 +96,7 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
 | **GitHub Actions** | zizmor |
 | **Malware** | YARA |
 
-Hadolint runs only when Dockerfiles are present, ShellCheck only with shell scripts, zizmor only with GitHub Actions workflows, Gosec only with Go sources, and ZAP and Nuclei only on `--url` targets. Narrow the list with `--tools`, `--skip-tools`, or a top-level `tools:` list in `jmo.yml`.
+Hadolint runs only when Dockerfiles are present, ShellCheck only with shell scripts, zizmor only with GitHub Actions workflows, OSV-Scanner only with lockfiles, Gosec only with Go sources, and ZAP and Nuclei only on `--url` targets. Narrow the list with `--tools`, `--skip-tools`, or a top-level `tools:` list in `jmo.yml`.
 
 > **Policy engine:** OPA evaluates policy-as-code in the report phase. `jmo tools install` installs it and the Docker image carries it, but it is not a scanner.
 
@@ -351,6 +351,7 @@ Dual licensed under [MIT](LICENSE-MIT) OR [Apache 2.0](LICENSE-APACHE).
 - [TruffleHog](https://github.com/trufflesecurity/trufflehog) - Secrets scanning
 - [Gitleaks](https://github.com/gitleaks/gitleaks) - Secrets scanning
 - [zizmor](https://github.com/zizmorcore/zizmor) - GitHub Actions auditing
+- [OSV-Scanner](https://github.com/google/osv-scanner) - Dependency vulnerabilities from lockfiles
 - [Semgrep](https://semgrep.dev) - Multi-language SAST
 - [Trivy](https://aquasecurity.github.io/trivy/) - Vulnerability scanning
 - [OWASP ZAP](https://www.zaproxy.org/) - DAST scanning

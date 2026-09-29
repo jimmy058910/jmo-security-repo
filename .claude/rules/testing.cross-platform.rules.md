@@ -178,6 +178,8 @@ def test_docker_thing(self, tmp_path: Path):
 
 **Variant: arbitrary UID (`--user $(id -u):$(id -g)`)** — semgrep and other tools that write to `~/.cache` will fail because no `/etc/passwd` entry exists for that UID, so `HOME` resolves to `/`. Set `-e HOME=/tmp` explicitly so the container has a writable home.
 
+**A container-written `individual-*` directory is 0o700 on purpose, and a host-side glob against it fails silently.** `scan_orchestrator.setup_results_directories` (and each scan job's own `out_dir.mkdir`) creates `results/individual-repos/` and its siblings with `mode=0o700` — raw scanner output can hold secrets. A test running as a *different* uid than the container's `jmo` (CI: 1001 vs 1000) cannot even traverse that directory, and `Path.rglob`/`glob` swallow the resulting `PermissionError` and return `[]` rather than raising — indistinguishable from "the file was never written" (measured: `test_docker_workflows.py`'s osv-scanner test read `[]` in CI while the container had written the row fine; 0 matches at `--user 1001`, 1 at `--user 1000`, same directory). Read such a file back *through a second container run*, as the image's own user, instead of globbing it from the host — see `container_find`/`read_file_via_container` in `tests/e2e/test_docker_workflows.py`. Reads under `summaries/` (created with no explicit `mode`, so default `0o755`) are unaffected.
+
 ## Workflow Marker Filter Convention
 
 Pytest invocations in CI workflows use these filter sets. Each filter is tuned to match the runner environment's actual capabilities (which tools/packages are installed).

@@ -86,9 +86,9 @@ VERSIONS_YAML = REPO_ROOT / "versions.yaml"
 # workflow env: blocks, where `key.upper()` does not produce it. Deriving the
 # name silently misses abbreviations and hyphens: `noseyparker` was pinned as
 # NP_VERSION and `dependency-check` as DC_VERSION, so both were unreachable by
-# --sync and stayed correct only by luck (#797). Both left in v2.0.0; every
-# remaining pin uppercases cleanly, so the table is empty until one does not.
-VERSION_VAR_ALIASES: dict[str, str] = {}
+# --sync and stayed correct only by luck (#797). Both left in v2.0.0.
+# `osv-scanner` uppercases to OSV-SCANNER, which is no shell variable.
+VERSION_VAR_ALIASES: dict[str, str] = {"osv-scanner": "OSV_SCANNER"}
 
 # Registry entries deliberately not pinned in the image or any workflow, so
 # having no match is correct rather than a defect. The manual-install tools

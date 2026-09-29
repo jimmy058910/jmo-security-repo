@@ -4,6 +4,7 @@ Unit tests for scripts/core/tool_runner.py
 Tests the ToolRunner class extracted from cmd_scan() as part of PHASE 1 refactoring.
 """
 
+import json
 import subprocess
 import sys
 import time
@@ -1545,6 +1546,40 @@ class TestChildEnvironment:
 
         assert sentinel in captured["env"]["PATH"].split(_os.pathsep)
 
+    def test_a_definitions_env_reaches_the_child_over_the_built_one(
+        self, tmp_path, monkeypatch
+    ):
+        """osv-scanner reads its offline databases from the directory
+        `OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY` names (Phase 4, O1). The
+        definition's env is merged over the environment the runner builds, so
+        ~/.jmo/bin stays on PATH beside it."""
+        import os as _os
+        from pathlib import Path as _Path
+
+        jmo_bin = tmp_path / ".jmo" / "bin"
+        jmo_bin.mkdir(parents=True)
+        monkeypatch.setattr(_Path, "home", staticmethod(lambda: tmp_path))
+        monkeypatch.setenv("JMO_TEST_INHERITED", "kept")
+        code = (
+            "import json, os; print(json.dumps({k: os.environ.get(k) for k in "
+            "('JMO_TEST_DB', 'JMO_TEST_INHERITED', 'PATH')}))"
+        )
+        tool = ToolDefinition(
+            name="probe",
+            command=[sys.executable, "-c", code],
+            output_file=tmp_path / "out.json",
+            ok_return_codes=(0,),
+            capture_stdout=True,
+            env={"JMO_TEST_DB": str(tmp_path / "db")},
+        )
+
+        result = ToolRunner([tool]).run_tool(tool)
+
+        seen = json.loads(result.stdout)
+        assert seen["JMO_TEST_DB"] == str(tmp_path / "db")
+        assert seen["JMO_TEST_INHERITED"] == "kept"
+        assert str(jmo_bin) in seen["PATH"].split(_os.pathsep)
+
 
 class TestTimeoutKillsTheProcessTree:
     """A timeout must bound the whole tree, not just the process we spawned.
@@ -1947,6 +1982,20 @@ class TestFailureKind:
             "crash",
         )
         assert result.timed_out is False
+
+    def test_a_crash_keeps_its_stderr(self, tmp_path):
+        """The scan loop decides from it whether a run can be split (osv-scanner
+        exits 127 for a lockfile it cannot extract, and for anything else),
+        and the failure log prints its tail. A crash's result dropped it."""
+        tool = self._tool(
+            tmp_path,
+            "import sys; sys.stderr.write('Error during extraction: x'); sys.exit(127)",
+        )
+
+        result = ToolRunner([tool]).run_tool(tool)
+
+        assert (result.returncode, result.failure) == (127, "crash")
+        assert "Error during extraction: x" in result.stderr
 
     def test_a_timeout_has_no_exit_code(self, tmp_path):
         tool = self._tool(tmp_path, "import time; time.sleep(30)", timeout=1)

@@ -39,7 +39,7 @@ All code in this directory contains deliberate security vulnerabilities, misconf
 
 | Sample Directory | Tools That Should Find Issues |
 |-----------------|------------------------------|
-| python-vulnerable/ | Semgrep, Trivy (CVEs), Grype |
+| python-vulnerable/ | Semgrep, Trivy (CVEs), Grype, OSV-Scanner (against `tests/fixtures/osv-db`, a frozen database of three synthetic advisories) |
 | dockerfile-issues/ | Hadolint, Trivy (misconfig) |
 | terraform-misconfig/ | Checkov, Trivy (config) |
 | credential-patterns/ | TruffleHog, Trivy (secrets) |
