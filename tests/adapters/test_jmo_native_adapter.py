@@ -106,7 +106,7 @@ def test_enrichment_maps_the_lifted_cwe(tmp_path, rule):
 
 
 def test_a_public_env_secret_is_broken_access_control(tmp_path):
-    """Ruling 75: OWASP Top 10 2021 maps CWE-540 (Inclusion of Sensitive
+    """OWASP Top 10 2021 maps CWE-540 (Inclusion of Sensitive
     Information in Source Code) to A01, and the public-env rule is how a
     server secret ends up in the browser bundle."""
     finding = next(

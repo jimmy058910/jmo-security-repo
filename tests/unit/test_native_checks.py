@@ -157,7 +157,7 @@ class TestFixtureContract:
 
 
 class TestCommentStripping:
-    """Ruling 60: string-aware, line-preserving comment stripping.
+    """String-aware, line-preserving comment stripping.
 
     The spike's `line.find("//")` truncates the idiomatic one-line
     `createClient("https://x.supabase.co", ...SERVICE_ROLE_KEY)` at the URL,
@@ -221,7 +221,7 @@ class TestCommentStripping:
     def test_an_apostrophe_in_jsx_text_does_not_keep_a_later_comment(
         self, tmp_path, newline
     ):
-        """Final review I1. A `'` or `"` string ends at its line's end, since
+        """A `'` or `"` string ends at its line's end, since
         JS forbids a raw newline in one, so `Don't` in JSX text costs one line.
         It used to open a "string" that ran on to the next quote in the file,
         and a later comment naming service_role read as code."""
@@ -339,7 +339,7 @@ class TestCommentStripping:
 
 
 class TestMigrationRules:
-    """Ruling 61: SQL findings are located at their `create table` statement,
+    """SQL findings are located at their `create table` statement,
     only public-schema tables are checked, and RLS state is the migration
     set's final state, read in filename order."""
 
@@ -413,7 +413,7 @@ class TestMigrationRules:
         assert rc == 0
 
     def test_rls_disabled_by_a_later_migration_is_a_finding(self, tmp_path):
-        """Final review I3: the "RLS was blocking me, so I turned it off"
+        """The "RLS was blocking me, so I turned it off"
         migration. State only accumulated, so this read as secured."""
         target = self._migrations(tmp_path)
         mig = target / "supabase" / "migrations"
@@ -579,7 +579,7 @@ class TestMigrationRules:
 
 
 class TestWalk:
-    """Ruling 62: prune VENDORED_DIRS + `.next` (never `dist`/`build`),
+    """Prune VENDORED_DIRS + `.next` (never `dist`/`build`),
     `--exclude-dir` at any depth, `allow_abbrev=False`."""
 
     def test_next_directory_is_pruned(self, tmp_path):
@@ -765,7 +765,7 @@ class TestEnvCommentSkip:
 
 
 class TestPublicEnvName:
-    """Final review I2 (Ruling 81). Next.js, Vite, CRA and Expo inline only the
+    """Next.js, Vite, CRA and Expo inline only the
     exact upper-case prefixes, and a `.env` line's value is never read."""
 
     def test_a_prefix_inside_a_longer_name_is_not_a_finding(self, tmp_path):
@@ -831,7 +831,7 @@ _SERVICE_ROLE_LINE = (
 
 
 class TestServerModules:
-    """Final review I4 (Ruling 83). Four markers Next.js itself enforces make a
+    """Four markers Next.js itself enforces make a
     module under a client directory server code, so none can hide a real
     client reference."""
 

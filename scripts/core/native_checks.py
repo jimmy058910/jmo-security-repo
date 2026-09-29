@@ -37,29 +37,31 @@ Exit codes match `yara_runner.py`'s:
   2  did NOT scan (bad target, unwritable output, any unexpected error)
 ===  ===========================================================
 
-**Comments are stripped before any rule runs (Ruling 60).** The naive
+**Comments are stripped before any rule runs.** The naive
 ``line.find("//")`` a first-cut spike used truncates the idiomatic one-line
 ``createClient("https://x.supabase.co", process.env.SUPABASE_SERVICE_ROLE_KEY)``
 at the URL's own ``//`` -- a silent miss on exactly the line the rule exists
 for. :func:`strip_code_comments` is string-aware (a ``//``/``/*`` inside a
 ``'...'``, ``"..."`` or backtick literal is not a comment) and preserves every
 line break, so line numbers never shift. A ``'...'`` or ``"..."`` literal
-ends at its line's end, as JS requires (Ruling 80), so a stray quote --
+ends at its line's end, as JS requires, so a stray quote --
 ``Don't`` in JSX text -- costs one line, not the rest of the file.
 :func:`strip_sql_comments` does the same for ``--`` and ``/* */`` in
 migration SQL.
 
-**A SQL finding is located at its ``create table`` statement (Ruling 61)**,
-never a synthetic path or line 0, and only public-schema tables are checked
+**A SQL finding is located at its ``create table`` statement**, never a
+synthetic path or line 0 -- SARIF, the dashboard and the finding's
+fingerprint all need a real file and line -- and only public-schema tables
+are checked
 (unqualified name = public; ``private.x``, ``auth.x`` etc. are skipped --
 Supabase's Data API exposes ``public``, and another schema is Supabase's own
 guidance for keeping a table private). A table's RLS state is the migration
 set's *final* state: every ``supabase/migrations/*.sql`` statement applied in
-order (Ruling 82), so a later ``disable row level security``, ``drop table``
+order, so a later ``disable row level security``, ``drop table``
 or ``drop policy`` counts.
 
 **No secret value ever reaches the output.** The public-env-secret rule
-reads only the *name* on a `.env` line, left of its first `=` (Ruling 81),
+reads only the *name* on a `.env` line, left of its first `=`,
 and reports the name it matched, so no part of a value is ever read.
 """
 
@@ -120,7 +122,7 @@ PRUNE_DIRS: frozenset[str] = frozenset(VENDORED_DIRS) | {".next"}
 CODE_SUFFIXES = (".ts", ".tsx", ".js", ".jsx", ".mjs")
 CLIENT_DIRS = ("app/", "src/", "components/", "pages/", "lib/")
 SERVER_MARKERS = (".server.", "/api/", "/server/", "/actions/", "supabase/functions/")
-# Server-only by Next.js's own rules, wherever they sit (Ruling 83), so none
+# Server-only by Next.js's own rules, wherever they sit, so none
 # can hide a real client reference: an App Router route handler, the root's
 # or `src/`'s middleware, a module importing `server-only` (the build fails
 # if a client module does), and one whose first statement is "use server".
@@ -139,7 +141,7 @@ RULES_FILE_NAMES = ("firestore.rules", "storage.rules")
 
 # Case-sensitive, and never inside a longer name (`INVITE_SECRET` is not
 # `VITE_SECRET`): Next.js, Vite, CRA and Expo inline exactly these upper-case
-# prefixes (Ruling 81).
+# prefixes.
 PUBLIC_SECRET = re.compile(
     r"(?<![A-Za-z0-9_])(NEXT_PUBLIC_|VITE_|REACT_APP_|EXPO_PUBLIC_)[A-Z0-9_]*"
     r"(SECRET|SERVICE_ROLE|PRIVATE|ACCESS_TOKEN|_SK_|SECRET_KEY|OPENAI|ANTHROPIC|"
@@ -299,7 +301,7 @@ def _log(message: str) -> None:
 # comment, or a comment. A '...' or "..." string ends at an unescaped newline
 # as well as at its quote, since JS forbids a raw newline in one: a stray
 # quote (`Don't` in JSX text, the regex literal /'/) costs one line, not the
-# rest of the file (Ruling 80). A backtick string may span lines, and an
+# rest of the file. A backtick string may span lines, and an
 # escape (`\` plus any character, a newline included) never ends a string.
 _CODE_TOKENS = re.compile(
     r"""'(?:\\.|[^'\\\n])*'?"""
@@ -457,7 +459,7 @@ def scan_file(path: Path, root: Path) -> list[NativeFinding]:
             searched = line
             if is_env:
                 # Only the name, left of the first `=` (an `export ` before
-                # it included), never the value (Ruling 81).
+                # it included), never the value.
                 name, eq, _ = line.partition("=")
                 searched = name if eq else ""
             match = PUBLIC_SECRET.search(searched)
@@ -552,8 +554,8 @@ def _table_key(match: re.Match[str]) -> tuple[str, str]:
 
 
 def scan_migrations(root: Path) -> list[NativeFinding]:
-    """A table's RLS state is the *final* state of the migration set
-    (Ruling 82): the statements applied in order, files in filename order and
+    """A table's RLS state is the *final* state of the migration set:
+    the statements applied in order, files in filename order and
     statements in file order, keyed by (schema, table). A finding is located
     at the `create table` that made the surviving table. Only public-schema
     tables are reported."""

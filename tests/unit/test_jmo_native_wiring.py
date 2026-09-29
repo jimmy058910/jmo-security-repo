@@ -108,15 +108,16 @@ class TestTheRow:
         assert match.group(1) == native_checks.JMO_VERSION
 
     def test_it_joins_no_policys_tool_list(self):
-        """Ruling 71: zero-secrets included. A policy that names tools names
-        them in its Rego; none names this one."""
+        """Not in zero-secrets' tool list: its findings are misnamed variables
+        and access-control configuration, not secret values. A policy that
+        names tools names them in its Rego; none names this one."""
         policies = Path(__file__).resolve().parents[2] / "policies"
         rego = list(policies.rglob("*.rego"))
         assert rego
         assert not [p for p in rego if TOOL.encode() in p.read_bytes()]
 
 
-# --- the trigger (Ruling 68) --------------------------------------------------
+# --- the trigger --------------------------------------------------------------
 
 # One file each; the content is what the runner would report if it read the
 # file, so each case also says whether the runner reads it.
@@ -218,7 +219,7 @@ class TestTrigger:
         assert (_trigger(repo) is None) == (rc == 1), rel
 
 
-# --- built in (Ruling 69) -----------------------------------------------------
+# --- built in -----------------------------------------------------------------
 
 
 class TestBuiltIn:
@@ -305,7 +306,7 @@ class TestBuiltIn:
         assert entry["annotations"]["version"] == native_checks.JMO_VERSION
 
 
-# --- end to end through `jmo scan` and `jmo report` (Ruling 66) ---------------
+# --- end to end through `jmo scan` and `jmo report` ---------------------------
 
 
 @pytest.fixture
