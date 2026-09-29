@@ -394,24 +394,27 @@ def _iac_trigger(ctx: ScanContext) -> Reason | None:
 def _native_trigger(ctx: ScanContext) -> Reason | None:
     """jmo-native reads JS/TS source, `.env` files, Firebase rules files and
     the root's `supabase/migrations/*.sql`, and nothing under the directories
-    it prunes. Decided with the runner's own constants, so the two cannot
-    disagree about what it reads."""
+    it prunes. Decided with the runner's own constants and functions, so the
+    two cannot disagree about what it reads, letter case included."""
     # Imported here: the runner imports VENDORED_DIRS from this module.
     from scripts.core import native_checks
 
     root = Path(ctx.target)
+    try:
+        if native_checks.migration_files(root):
+            return None
+    except OSError:
+        # The runner cannot read them either: run it, so the row fails and
+        # says so rather than reading as a skip.
+        return None
 
     def reads(path: Path) -> bool:
         parts = path.relative_to(root).parts
         if set(parts[:-1]) & native_checks.PRUNE_DIRS:
             return False
         return (
-            parts[:2] == ("supabase", "migrations")
-            and len(parts) == 3
-            and path.suffix == ".sql"
-        ) or (
             path.suffix in native_checks.CODE_SUFFIXES
-            or native_checks._is_env_file(path.name)
+            or native_checks.is_env_file(path.name)
             or path.name in native_checks.RULES_FILE_NAMES
         )
 

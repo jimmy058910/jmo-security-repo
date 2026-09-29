@@ -388,7 +388,9 @@ def iter_target_files(
     return sorted(files)
 
 
-def _is_env_file(name: str) -> bool:
+def is_env_file(name: str) -> bool:
+    """Whether the public-env check reads a file of this name. Public: the
+    row's trigger asks the same question (`tool_descriptors`)."""
     return name.startswith(".env") or name.endswith((".env", ".env.example"))
 
 
@@ -409,7 +411,7 @@ def scan_file(path: Path, root: Path) -> list[NativeFinding]:
     name = path.name
     findings: list[NativeFinding] = []
 
-    is_env = _is_env_file(name)
+    is_env = is_env_file(name)
     is_code = path.suffix in CODE_SUFFIXES
     if is_env or is_code:
         try:
@@ -487,19 +489,29 @@ def _line_col(text: str, offset: int) -> tuple[int, int]:
     return line, offset - last_newline
 
 
+MIGRATIONS_DIR = Path("supabase", "migrations")
+
+
+def migration_files(root: Path) -> list[Path]:
+    """The migrations the RLS checks read: the `*.sql` directly in the root's
+    `supabase/migrations`, in filename order. The filesystem decides letter
+    case (`Supabase/Migrations` and `init.SQL` count on Windows, not on
+    Linux). Public: the row's trigger asks it the same question."""
+    mig_dir = root / MIGRATIONS_DIR
+    if not mig_dir.is_dir():
+        return []
+    return sorted(mig_dir.glob("*.sql"))
+
+
 def scan_migrations(root: Path) -> list[NativeFinding]:
     """A table's RLS state is the *final* state of the whole migration set,
     read in filename order; a finding is located at the file and line of its
     `create table` statement. Only public-schema tables are checked."""
-    mig_dir = root / "supabase" / "migrations"
-    if not mig_dir.is_dir():
-        return []
-
     created: dict[str, tuple[str, int, int]] = {}
     enabled: set[str] = set()
     policies: set[str] = set()
 
-    for path in sorted(mig_dir.glob("*.sql")):
+    for path in migration_files(root):
         rel = path.relative_to(root).as_posix()
         try:
             raw = path.read_bytes()

@@ -147,6 +147,14 @@ NOT_READ = [
     # Next.js's build cache, which the runner prunes.
     (".next/static/chunk.js", _LLM),
 ]
+# The migrations in another letter case. Whether the runner reads them is the
+# filesystem's answer (it joins `supabase/migrations` onto the root and globs
+# `*.sql`): yes on Windows, no on Linux. So these assert only that the trigger
+# gives the same answer, on either.
+CASE_VARIANTS = [
+    ("Supabase/Migrations/20260101000000_init.sql", _SQL),
+    ("supabase/migrations/20260101000000_init.SQL", _SQL),
+]
 
 
 def _trigger(repo: Path) -> Reason | None:
@@ -189,7 +197,7 @@ class TestTrigger:
         _plant(repo, rel, body)
         assert _trigger(repo) is Reason.NO_WEB_APP_FILES
 
-    @pytest.mark.parametrize(("rel", "body"), READ + NOT_READ)
+    @pytest.mark.parametrize(("rel", "body"), READ + NOT_READ + CASE_VARIANTS)
     def test_the_trigger_and_the_runner_agree(self, tmp_path, rel, body):
         """The trigger imports the runner's constants rather than copying them,
         and this is what fails if the two ever diverge: on every case, the row
@@ -278,6 +286,20 @@ class TestBuiltIn:
         assert result.method == "builtin"
         assert "built into jmo" in result.message.lower()
         installer._install_special.assert_not_called()
+
+    def test_an_attestation_records_jmos_version_for_it(self):
+        """Review Minor 4: provenance looked every scanned tool up in
+        versions.yaml and wrote `unknown` for jmo-native, whose version is
+        known. `unknown` also hides it from the tamper detector's version
+        rollback check, which ignores that value."""
+        from scripts.core.attestation.provenance import ProvenanceGenerator
+
+        generator = ProvenanceGenerator()
+        [entry] = generator._get_tool_versions([TOOL])
+
+        assert entry["name"] == TOOL
+        assert entry["annotations"]["version"] == generator.jmo_version
+        assert entry["annotations"]["version"] == native_checks.JMO_VERSION
 
 
 # --- end to end through `jmo scan` and `jmo report` (Ruling 66) ---------------

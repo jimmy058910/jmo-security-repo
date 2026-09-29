@@ -7,7 +7,12 @@ from pathlib import Path
 from typing import Any
 
 from scripts.core.adapters.common import safe_load_json_file
-from scripts.core.adapters.sarif_common import SarifToolSpec, parse_sarif
+from scripts.core.adapters.sarif_common import (
+    SarifToolSpec,
+    _props,
+    _rules,
+    parse_sarif,
+)
 from scripts.core.plugin_api import (
     AdapterPlugin,
     Finding,
@@ -24,15 +29,17 @@ _LEVEL = {"CRITICAL": "HIGH", "HIGH": "HIGH", "MEDIUM": "MEDIUM"}
 def _rule_cwes(path: Path) -> dict[str, str]:
     """Rule id -> the CWE the runner writes as that rule's `cwe` property.
     SARIF has no CWE field, and `parse_sarif` hands a binding the result, not
-    its rule."""
+    its rule. Walked with `sarif_common`'s own helpers, so a shape it reads
+    past (a run that is not an object, a `tool` that is not one) is read past
+    here too."""
     data = safe_load_json_file(path, default=None)
     runs = data.get("runs") if isinstance(data, dict) else None
     cwes: dict[str, str] = {}
     for run in runs if isinstance(runs, list) else []:
-        driver = ((run or {}).get("tool") or {}).get("driver") or {}
-        for rule in driver.get("rules") or []:
-            props = rule.get("properties") if isinstance(rule, dict) else None
-            cwe = props.get("cwe") if isinstance(props, dict) else None
+        if not isinstance(run, dict):
+            continue
+        for rule in _rules(run):
+            cwe = _props(rule).get("cwe") if isinstance(rule, dict) else None
             if isinstance(cwe, str) and cwe:
                 cwes[str(rule.get("id"))] = cwe
     return cwes

@@ -165,12 +165,23 @@ class ProvenanceGenerator:
 
         try:
             # Lazy load the tool registry
-            if self._tool_registry is None:
-                from scripts.core.tool_registry import ToolRegistry
+            from scripts.core.tool_registry import BUILTIN_TOOLS, ToolRegistry
 
+            if self._tool_registry is None:
                 self._tool_registry = ToolRegistry()
 
             for tool_name in tools:
+                if tool_name in BUILTIN_TOOLS:
+                    # Ships inside JMo (jmo-native), so it has no registry
+                    # entry: its version is the one this attestation's JMo is.
+                    resolved_deps.append(
+                        {
+                            "name": tool_name,
+                            "uri": f"urn:jmo:tool:{tool_name}",
+                            "annotations": {"version": self.jmo_version},
+                        }
+                    )
+                    continue
                 tool_info = self._tool_registry.get_tool(tool_name)
                 if tool_info:
                     # Create SLSA ResourceDescriptor for each tool

@@ -86,23 +86,9 @@ def _compliance(finding: dict) -> dict:
     return enrich_finding_with_compliance(finding).get("compliance", {})
 
 
-_CWE_540_UNMAPPED = pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "compliance_mapper has no row for CWE-540 in any CWE-keyed table "
-        "(OWASP 2021 lists it under A01), so the lift changes nothing for "
-        "this rule yet. Strict: it fails the day the table gains the row."
-    ),
-)
-
-
 @pytest.mark.parametrize(
     "rule",
-    [
-        pytest.param(rule, marks=_CWE_540_UNMAPPED) if meta.cwe == "CWE-540" else rule
-        for rule, meta in sorted(native_checks.RULES.items())
-        if meta.cwe is not None
-    ],
+    [rule for rule, meta in sorted(native_checks.RULES.items()) if meta.cwe],
 )
 def test_enrichment_maps_the_lifted_cwe(tmp_path, rule):
     """The point of the lift: the same finding without `risk.cwe` maps to
@@ -117,6 +103,48 @@ def test_enrichment_maps_the_lifted_cwe(tmp_path, rule):
 
     assert _compliance(finding) != _compliance(without), rule
     assert "owaspTop10_2021" in _compliance(finding), rule
+
+
+def test_a_public_env_secret_is_broken_access_control(tmp_path):
+    """Ruling 75: OWASP Top 10 2021 maps CWE-540 (Inclusion of Sensitive
+    Information in Source Code) to A01, and the public-env rule is how a
+    server secret ends up in the browser bundle."""
+    finding = next(
+        f
+        for f in JmoNativeAdapter().parse(_document(tmp_path))
+        if f.ruleId == native_checks.RULE_PUBLIC_ENV
+    ).to_dict()
+
+    assert finding["risk"]["cwe"] == ["CWE-540"]
+    assert _compliance(finding)["owaspTop10_2021"] == ["A01:2021"]
+
+
+def _with_a_bad_run_first(tmp_path: Path, bad: object) -> Path:
+    path = _document(tmp_path)
+    document = json.loads(path.read_bytes())
+    document["runs"].insert(0, bad)
+    path.write_bytes(json.dumps(document).encode("utf-8"))
+    return path
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        pytest.param("junk", id="a-run-that-is-not-an-object"),
+        pytest.param({"tool": "jmo-native", "results": []}, id="tool-is-a-string"),
+    ],
+)
+def test_a_shape_parse_sarif_tolerates_still_gets_its_cwes(tmp_path, bad):
+    """Review Minor 1: both shapes raised AttributeError in the lift, while
+    `parse_sarif` reads past them. The lift walks the document the way
+    `parse_sarif` does, so it reads past them too."""
+    findings = JmoNativeAdapter().parse(_with_a_bad_run_first(tmp_path, bad))
+
+    assert len(findings) == len(native_checks.RULES)
+    for f in findings:
+        cwe = native_checks.RULES[f.ruleId].cwe
+        assert f.risk is not None
+        assert f.risk.get("cwe") == ([cwe] if cwe else None), f.ruleId
 
 
 def test_the_rule_without_a_cwe_goes_through_enrichment(tmp_path):
