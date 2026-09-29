@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -266,6 +267,88 @@ def image_tool_matrix(image: str) -> tuple[list[str], str]:
     return matrix, engine
 
 
+def container_find(
+    image: str, mount_dir: Path, name_pattern: str, timeout: int = 60
+) -> tuple[list[str], str]:
+    """List paths under ``mount_dir`` (mounted at ``/scan``) matching
+    ``name_pattern``, run AS THE IMAGE'S OWN USER rather than the host's.
+
+    `scan_orchestrator.setup_results_directories` (and each scan job's own
+    `out_dir.mkdir`) creates every `individual-*` results directory with
+    `mode=0o700` -- raw scanner output can hold secrets, so this is
+    deliberate product behaviour, not a bug to route around by loosening it.
+    The container runs as `jmo` (uid 1000); a CI runner is a *different* uid
+    (1001). A host-side `Path.rglob`/`glob` against that tree cannot even
+    traverse it, and `pathlib` swallows the resulting `PermissionError` and
+    returns `[]` SILENTLY -- indistinguishable from "nothing was written"
+    (measured: `Path('/scan/results').rglob(...)` inside the image finds 0
+    matches at `--user 1001` and 1 at `--user 1000`, same directory). Doing
+    the search inside a container sidesteps the mismatch: it always runs as
+    the user that wrote the file, whatever uid the host happens to be.
+
+    Returns the matching paths (absolute, as seen inside the container) and
+    the container's stderr.
+    """
+    result = subprocess.run(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "-v",
+            f"{mount_dir}:/scan",
+            "--entrypoint",
+            "sh",
+            image,
+            "-c",
+            f"find /scan -name {shlex.quote(name_pattern)} | sort",
+        ],
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+    )
+    paths = [p.strip() for p in (result.stdout or "").splitlines() if p.strip()]
+    return paths, result.stderr or ""
+
+
+def read_file_via_container(
+    image: str, mount_dir: Path, filename: str, timeout: int = 60
+) -> tuple[list[str], bytes | None, str]:
+    """Find and read the first ``filename`` match under ``mount_dir`` back
+    THROUGH THE CONTAINER, as the image's own user. See `container_find` for
+    why a host-side glob is unsafe against a 0o700 `individual-*` directory.
+
+    Returns the matching paths (for diagnostics), the first match's raw
+    bytes (``None`` if nothing matched or the read failed), and combined
+    stderr from both container runs.
+    """
+    paths, find_stderr = container_find(image, mount_dir, filename, timeout=timeout)
+    if not paths:
+        return paths, None, find_stderr
+
+    result = subprocess.run(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "-v",
+            f"{mount_dir}:/scan",
+            "--entrypoint",
+            "cat",
+            image,
+            paths[0],
+        ],
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+    )
+    stderr = find_stderr + (result.stderr or "")
+    if result.returncode != 0:
+        return paths, None, stderr
+    return paths, result.stdout.encode("utf-8"), stderr
+
+
 @pytest.mark.docker
 @pytest.mark.e2e
 @pytest.mark.slow
@@ -451,7 +534,13 @@ const query = "SELECT * FROM users WHERE id = " + userId;
         container without a persistent `~/.jmo` volume.
 
         Read from `scan-timings.json`, the way `test_cli_scan_ci.py` reads
-        rows, rather than parsing human log output.
+        rows, rather than parsing human log output. The row is read back
+        THROUGH A SECOND CONTAINER (`read_file_via_container`) rather than
+        with a host-side glob: `results/individual-repos/<target>/` is 0o700
+        by design, so a host running as a uid other than the container's
+        `jmo` (CI is 1001, the container is 1000) cannot even list it, and a
+        host-side `Path.rglob` would silently return `[]` -- indistinguishable
+        from the file never having been written.
         """
         image = f"{DOCKER_REGISTRY}:latest"
         ensure_image(image)
@@ -491,13 +580,16 @@ const query = "SELECT * FROM users WHERE id = " + userId;
             timeout=300,
         )
 
-        results_dir = tmp_path / "results"
-        timing_files = list(results_dir.rglob("scan-timings.json"))
-        assert timing_files, (
-            f"no scan-timings.json written (rc={result.returncode}): "
-            f"stdout={result.stdout[-500:]} stderr={result.stderr[-500:]}"
+        paths, content, container_stderr = read_file_via_container(
+            image, tmp_path, "scan-timings.json"
         )
-        rows = {r["tool"]: r for r in json.loads(timing_files[0].read_bytes())["tools"]}
+        assert content is not None, (
+            f"no scan-timings.json read back through the container "
+            f"(scan rc={result.returncode}): scan stdout={result.stdout[-500:]!r} "
+            f"scan stderr={result.stderr[-500:]!r}; container find matched "
+            f"{paths!r}, container stderr={container_stderr[-500:]!r}"
+        )
+        rows = {r["tool"]: r for r in json.loads(content)["tools"]}
         row = rows.get("osv-scanner")
         assert row is not None, f"no osv-scanner row in {rows}"
         assert row["state"] == "failed", row
@@ -609,8 +701,12 @@ class TestDockerVolumeMount:
 
         # ...and the scan's own layout must survive the mount, not merely some
         # file. `findings.json` is what every downstream consumer reads.
+        # The diagnostic listing below reads through the container (see
+        # `container_find`): `individual-repos/` under `results_dir` is
+        # 0o700, so a plain `results_dir.rglob("*")` here would silently omit
+        # it for a host uid other than the container's own.
         assert (results_dir / "summaries" / "findings.json").is_file(), sorted(
-            p.name for p in results_dir.rglob("*")
+            container_find(image, results_dir, "*")[0]
         )
 
     def test_history_db_mount(self, tmp_path: Path):
@@ -1435,11 +1531,15 @@ class TestDockerCLIWorkflows:
         # permanently False is invisible to a passing run, so the escape hatch
         # goes too. Phase 10 (#1077) could not have caught this one, because
         # the assertion *can* fail -- it just never had.
+        # The diagnostic listing below reads through the container (see
+        # `container_find`): `individual-repos/` under `results_dir` is
+        # 0o700, so a plain `results_dir.rglob("*")` here would silently omit
+        # it for a host uid other than the container's own.
         findings = results_dir / "summaries" / "findings.json"
         assert findings.is_file(), (
             f"Docker test {test_id} (exit {result.returncode}) wrote no "
             f"summaries/findings.json through the volume mount; results tree: "
-            f"{sorted(str(p.relative_to(results_dir)) for p in results_dir.rglob('*'))}"
+            f"{sorted(container_find(f'{DOCKER_REGISTRY}:latest', results_dir, '*')[0])}"
         )
 
 
