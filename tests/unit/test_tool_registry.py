@@ -17,7 +17,7 @@ from unittest.mock import patch
 
 import pytest
 
-from scripts.core.tool_registry import POLICY_ENGINE, TOOL_MATRIX
+from scripts.core.tool_registry import BUILTIN_TOOLS, POLICY_ENGINE, TOOL_MATRIX
 
 # ========== Category 1: The tool matrix and name-keyed tables ==========
 
@@ -40,12 +40,14 @@ V2_PHASE_2_MATRIX = {
     "zizmor",
     # Phase 4, PR O: lockfiles, against an offline database.
     "osv-scanner",
+    # Phase 4, PR N: JMo's own Next.js/Supabase/Firebase check pack.
+    "jmo-native",
 }
 
 
 def test_tool_matrix_is_the_phase_2_set():
     """TOOL_MATRIX is the v2.0.0 Phase 2 scanner set plus Phase 3's gitleaks
-    and Phase 4's zizmor and osv-scanner, with no duplicates."""
+    and Phase 4's zizmor, osv-scanner and jmo-native, with no duplicates."""
     assert set(TOOL_MATRIX) == V2_PHASE_2_MATRIX
     assert len(TOOL_MATRIX) == len(set(TOOL_MATRIX))
 
@@ -247,12 +249,17 @@ def test_toolregistry_registers_every_tool_jmo_installs():
     `jmo tools install` reads each tool's version and package from the
     registry and answers "Unknown tool" for anything missing, so this is the
     set that has to be there -- derived from TOOL_MATRIX, not a count.
+
+    The one exemption is a built-in tool (jmo-native): it ships inside JMo,
+    so it has no pin to read, and `install_tool` answers for it before the
+    registry is consulted. It must then be absent, not merely excused.
     """
-    from scripts.core.tool_registry import ToolRegistry
+    from scripts.core.tool_registry import BUILTIN_TOOLS, ToolRegistry
 
     registered = {t.name for t in ToolRegistry().get_all_tools()}
 
-    assert sorted({*TOOL_MATRIX, POLICY_ENGINE} - registered) == []
+    assert sorted({*TOOL_MATRIX, POLICY_ENGINE} - BUILTIN_TOOLS - registered) == []
+    assert BUILTIN_TOOLS and BUILTIN_TOOLS.isdisjoint(registered)
 
 
 def test_toolregistry_handles_missing_versions_file():
@@ -561,8 +568,13 @@ def _install_routes(tool: str, platform: str, monkeypatch, tmp_path) -> list[str
     return routes
 
 
+# A built-in tool (jmo-native) has nothing to install on any platform, and
+# `install_tool` says so without choosing a route
+# (tests/unit/test_jmo_native_wiring.py).
 @pytest.mark.parametrize("platform", _PLATFORMS)
-@pytest.mark.parametrize("tool", [*TOOL_MATRIX, POLICY_ENGINE])
+@pytest.mark.parametrize(
+    "tool", [*(t for t in TOOL_MATRIX if t not in BUILTIN_TOOLS), POLICY_ENGINE]
+)
 def test_every_installed_tool_has_an_install_route_on_every_platform(
     tool, platform, monkeypatch, tmp_path
 ):

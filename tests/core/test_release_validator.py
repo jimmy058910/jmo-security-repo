@@ -509,6 +509,18 @@ class TestToolVersionChecks:
         assert dropped in result.message
 
     @patch("scripts.core.validators.release_validator._read_text")
+    def test_matrix_versions_need_no_pin_for_a_built_in_tool(self, mock_read):
+        """jmo-native ships inside JMo at JMo's version: versions.yaml never
+        lists it, and `jmo validate` must not warn that it is unpinned."""
+        from scripts.core.tool_registry import BUILTIN_TOOLS, POLICY_ENGINE, TOOL_MATRIX
+
+        assert BUILTIN_TOOLS
+        pinned = [t for t in (*TOOL_MATRIX, POLICY_ENGINE) if t not in BUILTIN_TOOLS]
+        mock_read.return_value = self._versions_yaml(pinned)
+
+        assert _check_matrix_versions() is None
+
+    @patch("scripts.core.validators.release_validator._read_text")
     def test_matrix_versions_requires_the_policy_engine(self, mock_read):
         """opa is not a scanner but is installed and baked in, so it is pinned too."""
         from scripts.core.tool_registry import POLICY_ENGINE, TOOL_MATRIX

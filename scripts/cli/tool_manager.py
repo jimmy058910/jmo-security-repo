@@ -20,6 +20,7 @@ from pathlib import Path
 
 from scripts.core.tool_descriptors import DESCRIPTORS, VersionProbe
 from scripts.core.tool_registry import (
+    BUILTIN_TOOLS,
     TOOL_EXECUTION_COMMANDS,
     TOOL_MATRIX,
     ToolRegistry,
@@ -479,6 +480,10 @@ class ToolManager:
 
         # Determine if outdated
         expected_version = tool_info.version if tool_info else None
+        if tool_name in BUILTIN_TOOLS:
+            # It ships inside JMo, so the version it reports is the one this
+            # JMo carries: never outdated, and nothing in versions.yaml.
+            expected_version = installed_version
         is_outdated = False
         if installed and installed_version and expected_version:
             is_outdated = self._is_version_outdated(installed_version, expected_version)

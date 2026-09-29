@@ -267,6 +267,35 @@ def image_tool_matrix(image: str) -> tuple[list[str], str]:
     return matrix, engine
 
 
+# The image's built-in tools (jmo-native): they ship inside JMo and run as
+# `python3 -m ...`, so they have no command of their own on PATH. An image
+# built before they existed has no BUILTIN_TOOLS and so none.
+_BUILTIN_PROBE = (
+    "import json, scripts.core.tool_registry as r; "
+    "print(json.dumps(sorted(getattr(r, 'BUILTIN_TOOLS', ()))))"
+)
+
+
+def image_builtin_tools(image: str) -> set[str]:
+    """The BUILTIN_TOOLS the IMAGE was built with (see image_tool_matrix)."""
+    result = _docker(
+        "run",
+        "--rm",
+        "--entrypoint",
+        "python3",
+        image,
+        "-c",
+        _BUILTIN_PROBE,
+        timeout=120,
+    )
+    if result.returncode != 0:
+        pytest.fail(
+            f"could not read BUILTIN_TOOLS from {image} (rc={result.returncode}): "
+            f"{result.stderr.strip()[:500]}"
+        )
+    return set(json.loads(result.stdout))
+
+
 def container_find(
     image: str, mount_dir: Path, name_pattern: str, timeout: int = 60
 ) -> tuple[list[str], str]:
@@ -1347,15 +1376,18 @@ class TestDockerNamedToolPresence:
         image_tool_matrix for why not the checkout's), so a tool entering or
         leaving the matrix changes what this checks with no edit here. Each
         tool's name is also its command in the image; zap's is the
-        /usr/local/bin/zap symlink to /opt/zaproxy/zap.sh.
+        /usr/local/bin/zap symlink to /opt/zaproxy/zap.sh. The one exception
+        is a built-in (jmo-native), which has no command: test_docker_image_tools
+        checks that it runs.
         """
         image = f"{DOCKER_REGISTRY}:latest"
 
         ensure_image(image)
         matrix, policy_engine = image_tool_matrix(image)
+        builtin = image_builtin_tools(image)
 
         missing = []
-        for tool in (*matrix, policy_engine):
+        for tool in (*(t for t in matrix if t not in builtin), policy_engine):
             result = subprocess.run(
                 [
                     "docker",

@@ -16,6 +16,7 @@ import sys
 from pathlib import Path
 
 from scripts.core.paths import get_isolated_tool_path
+from scripts.core.tool_registry import BUILTIN_TOOLS
 
 # Module-level warning tracker for deduplication (Fix 1.3 - Issue #3)
 _warned_tools: set[str] = set()
@@ -92,6 +93,11 @@ def find_tool(tool_name: str) -> str | None:
     Returns:
         Full path to the tool binary if found, None otherwise
     """
+    # A tool that ships inside JMo runs on this interpreter, wherever it
+    # lives: there is no executable of its own to look for.
+    if tool_name in BUILTIN_TOOLS:
+        return sys.executable
+
     # JMo-managed isolated venvs win over everything, PATH included (#1101).
     #
     # Delegate rather than reimplement. This function used to carry a narrower

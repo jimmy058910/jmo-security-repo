@@ -19,7 +19,12 @@ from scripts.cli.tool_manager import (
     print_tool_status_table,
 )
 from scripts.core.paths import clean_isolated_venvs
-from scripts.core.tool_registry import POLICY_ENGINE, TOOL_MATRIX, ToolRegistry
+from scripts.core.tool_registry import (
+    BUILTIN_TOOLS,
+    POLICY_ENGINE,
+    TOOL_MATRIX,
+    ToolRegistry,
+)
 
 if TYPE_CHECKING:
     pass
@@ -309,6 +314,9 @@ def cmd_tools_debug(args: argparse.Namespace) -> int:
         if tool_info:
             binary_name = tool_info.get_binary_name()
             print(f"Expected version: {tool_info.version}")
+        elif tool_name in BUILTIN_TOOLS:
+            binary_name = tool_name
+            print("Expected version: JMo's own (built into JMo)")
         else:
             binary_name = tool_name
             print(f"Warning: Tool '{tool_name}' not found in registry")
@@ -476,6 +484,10 @@ def cmd_tools_install(args: argparse.Namespace) -> int:
         # Specific tools requested
         missing = []
         for t in tools_arg:
+            if t in BUILTIN_TOOLS:
+                # --force included: there is nothing of it to download.
+                print(f"{t}: built into JMo, nothing to install")
+                continue
             status = manager.check_tool(t)
             if force or not status.installed:
                 missing.append(status)
@@ -642,6 +654,9 @@ def cmd_tools_update(args: argparse.Namespace) -> int:
     if tools_arg:
         outdated = []
         for t in tools_arg:
+            if t in BUILTIN_TOOLS:
+                print(f"{t}: built into JMo, updated with JMo itself")
+                continue
             status = manager.check_tool(t)
             if status.installed and status.is_outdated:
                 outdated.append(status)

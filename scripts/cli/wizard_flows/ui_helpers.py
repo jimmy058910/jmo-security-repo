@@ -44,6 +44,8 @@ TOOL_TIME_ESTIMATES: dict[str, int] = {
     "hadolint": 5,
     "shellcheck": 10,
     "zizmor": 5,
+    # A walk and six regex checks: 0.3-1.8 s on three real applications.
+    "jmo-native": 5,
     # Loading the npm database is most of it (11.7 s on NodeGoat, 2.6.0).
     "osv-scanner": 15,
     # Medium tools (30s - 2min)
