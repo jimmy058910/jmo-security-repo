@@ -397,6 +397,21 @@ both required here and they cannot share a window. If a run comes back with
 errors whose named tests cannot reach the guarded state, check what else on the
 machine touched `~/.jmo/` before touching the tests.
 
+**Temporary `--history-db` and `--results-dir` do not isolate it.** The counter
+lives at `Path.home() / ".jmo" / "config.yml"` (`scripts/cli/jmo.py:2511`,
+inside `_show_kofi_reminder`, `def` at `:2505`), a path neither flag touches, so
+a gate run with both pointed at tmp still writes the real file. The flags
+protect the history database and the results tree, not the config.
+
+**Recurrence, 2026-09-28:** a gate `jmo scan` run beside the suite produced 2
+false teardown errors in `test_load_4_store_1000_scans` (the long test that
+happened to be open). Same mechanism, same fix: sequence them.
+
+**For a test that runs `jmo scan` itself:**
+`tests/unit/test_jmo_native_wiring.py`'s `scan` fixture patches `Path.home`
+(`:319`), which is what actually isolates it — `HOME` alone does not work on
+Windows, per the neighbour guard above.
+
 ## Counting tests: compare like with like
 
 A terminal summary's `skipped` count includes **collection-level** skips, which
