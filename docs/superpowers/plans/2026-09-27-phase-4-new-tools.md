@@ -260,7 +260,9 @@ PR O's execution measured past what the list above assumed, without changing any
 - `conan.lock` is dropped from the accepted names above: OSV publishes no ConanCenter
   vulnerability database (a 404, and it is absent from OSV's own `ecosystems.txt`), so a
   `conan.lock`-only repository can only ever fail. The offline database set is decision 6's
-  ten ecosystems plus CRAN (`renv.lock`): eleven.
+  ten ecosystems plus CRAN (`renv.lock`): eleven. Jimmy ratified this change to decision 6
+  on 2026-09-28, and the first real fetch (`jmo tools install osv-scanner`, the same day)
+  brought all eleven, about 290 MB.
 - Lockfile names are matched case-sensitively. Windows' own glob is case-insensitive, and so
   was the ecosystem lookup, so a `Requirements.txt` beside a `package-lock.json` reached
   osv-scanner, which picks its extractor by the exact name and aborted the whole run with no
@@ -287,7 +289,7 @@ touch the ~25 documents that state it.
 | **Z** | zizmor's row, installer, image; checkov hands Actions over (trigger and `--framework`); checkov's exclusions | #1313 |
 | **O** | osv-scanner's row, installer, image and offline database; trivy's dependency flags; one identity per dependency finding, so two scanners' reports of one vulnerability cluster; a consensus finding merges its members (#1355, first); CVSS v4.0; a code comment's private-repository name (#1366) | #1346 #1355 #1356 #1366 |
 | **N** | the `jmo-native` row, its runner and its tracked fixture | — |
-| **G** | gosec removed (#1310); GitLab targets scan the images they reference (#1311); every tool's short output flags, new rows included; zizmor's invalid-input edges (#1362) and its unannounced repository config (#1363); a GitLab project named `results` (#1364) | #1310 #1311 #1335 #1362 #1363 #1364 |
+| **G** | gosec removed (#1310); GitLab targets scan the images they reference (#1311); every tool's short output flags, new rows included; zizmor's invalid-input edges (#1362) and its unannounced repository config (#1363); a GitLab project named `results` (#1364); a failed row that still contributed findings reads as none (#1369) | #1310 #1311 #1335 #1362 #1363 #1364 #1369 |
 | **API** | zap's OpenAPI import: a new invocation with its own target rules, on its own PR as PR T was | #1331 #1347 #1348 |
 
 A precedes Z because the corrections change Z's gate. Z precedes O only for review
