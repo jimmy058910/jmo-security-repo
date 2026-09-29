@@ -1,0 +1,9 @@
+rules_version = '2';
+// expected: 0 findings (read and write both require authentication)
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

@@ -25,8 +25,10 @@ samples/
 │   └── config.py         # Fake AWS keys, tokens, passwords
 ├── shell-issues/          # Shell script issues (ShellCheck)
 │   └── vulnerable_script.sh  # Quoting, word splitting, unsafe patterns
-└── github-actions/        # GitHub Actions flaws (zizmor)
-    └── .github/workflows/ci.yml  # Template injection, unpinned action, pull_request_target
+├── github-actions/        # GitHub Actions flaws (zizmor)
+│   └── .github/workflows/ci.yml  # Template injection, unpinned action, pull_request_target
+└── native/                # JMo's own check pack (jmo-native), see its own README.md
+    └── ...                # Next.js/Supabase/Firebase placeholder findings + 4 negatives
 ```
 
 ## Security Warning
@@ -45,6 +47,7 @@ All code in this directory contains deliberate security vulnerabilities, misconf
 | credential-patterns/ | TruffleHog, Trivy (secrets) |
 | shell-issues/ | ShellCheck |
 | github-actions/ | zizmor |
+| native/ | jmo-native (JMo's own check pack; see `native/README.md`) |
 
 ## Usage
 
