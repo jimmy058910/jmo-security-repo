@@ -305,6 +305,72 @@ class TestPriorityCalculator:
         assert len(cves) == 1
         assert "CVE-2024-1234" in cves
 
+    # Measured on CPython 3.12: a set of these two ids iterates
+    # CVE-2026-4800 first under seeds 4, 6 and 7, and CVE-2021-23337 first
+    # under seed 0.
+    @pytest.mark.parametrize("hash_seed", ["0", "4", "6", "7"])
+    def test_extract_cves_keeps_first_seen_order_under_any_hash_seed(self, hash_seed):
+        """EPSS is read from `cves[0]`, so the order is the finding's EPSS
+        source. osv-scanner's message names every alias of the advisory
+        (this one is NodeGoat's lodash finding from the osv-scanner golden),
+        and a set-based de-duplication made `cves[0]` follow the process's
+        hash seed: the same raw output could get a different EPSS and
+        priority on the next `jmo report`.
+
+        A fixed seed per subprocess makes this deterministic: set iteration
+        order is a pure function of the seed, so a set-based version fails
+        here on every run, not one run in two."""
+        import json
+        import os
+        import subprocess
+        import sys
+        from pathlib import Path
+
+        finding = {
+            "id": "osv-lodash",
+            "severity": "HIGH",
+            "ruleId": "CVE-2021-23337",
+            "message": (
+                "Package 'lodash@4.17.20' is vulnerable to 'CVE-2021-23337' "
+                "(also known as 'CVE-2026-4800', 'GHSA-35jh-r3h4-6jhm', "
+                "'GHSA-r5fr-rjxr-66jc')."
+            ),
+        }
+        probe = (
+            "import json, sys\n"
+            "from scripts.core.priority_calculator import PriorityCalculator\n"
+            "calc = PriorityCalculator.__new__(PriorityCalculator)\n"
+            "print(json.dumps(calc._extract_cves(json.loads(sys.argv[1]))))\n"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", probe, json.dumps(finding)],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            cwd=Path(__file__).resolve().parents[2],
+            env={**os.environ, "PYTHONHASHSEED": hash_seed},
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert json.loads(result.stdout) == ["CVE-2021-23337", "CVE-2026-4800"]
+
+    def test_extract_cves_puts_the_findings_own_id_first_not_the_lowest(
+        self, priority_calculator
+    ):
+        """First-seen, not sorted: the finding's own id (ruleId here) wins
+        over a lower-numbered alias its message mentions later."""
+        finding = {
+            "id": "test-order",
+            "severity": "HIGH",
+            "ruleId": "CVE-2024-9999",
+            "message": "CVE-2024-9999 (also known as CVE-2024-0001)",
+        }
+
+        assert priority_calculator._extract_cves(finding) == [
+            "CVE-2024-9999",
+            "CVE-2024-0001",
+        ]
+
     def test_extract_cves_no_cves(self, priority_calculator):
         """Test CVE extraction when no CVEs present."""
         finding = {
