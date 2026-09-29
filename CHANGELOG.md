@@ -87,10 +87,12 @@ All notable changes to JMo Security will be documented in this file.
   publishes no ConanCenter database, so a Conan-only repository reads `skipped:no lockfile`
   ([Known limitations](docs/KNOWN_LIMITATIONS.md#osv-scanner-reads-pomxml-and-requirementstxt-for-direct-dependencies-only)).
 - **`jmo tools update` fills osv-scanner's offline vulnerability databases.** Installing
-  osv-scanner, or running `jmo tools update` with it already installed, fetches all eleven
-  ecosystems' databases from OSV's own hosted zips into `~/.jmo/osv-db`, about 280 MB, one
-  ecosystem at a time so one failure does not stop the rest. A scan never downloads. The
-  image carries none of them; `jmo tools check` lists which ecosystems are still missing.
+  osv-scanner, or running `jmo tools update` (or `jmo tools update osv-scanner`) with it
+  already installed, fetches all eleven ecosystems' databases from OSV's own hosted zips
+  into `~/.jmo/osv-db`, about 280 MB, one ecosystem at a time so one failure does not stop
+  the rest; `jmo tools update` names each ecosystem that failed and exits 1. A scan never
+  downloads. The image carries none of them; `jmo tools check` lists which ecosystems are
+  still missing.
 - **CVSS v4.0 is recorded, in one preference order for every adapter and the consensus.**
   trivy and grype normalize a `cvss_v4.0` entry the way they already did v3.x and v2.0, and
   both defer to one helper, `preferred_cvss` (`common_finding.py`): a v3.x score still

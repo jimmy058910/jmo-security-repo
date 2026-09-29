@@ -115,3 +115,28 @@ def test_the_guard_forwards_args_and_kwargs_to_the_delegate() -> None:
     guarded_get("http://127.0.0.1:9/npm/all.zip", stream=True, timeout=300)
 
     assert seen == [((), {"stream": True, "timeout": 300})]
+
+
+def test_the_autouse_guard_stops_a_real_fetch_ecosystem_call(
+    monkeypatch, tmp_path
+) -> None:
+    """The WIRING, end to end: the tests above prove the builder, not that
+    this conftest's autouse fixture puts it in `fetch_ecosystem`'s path. A
+    renamed patch target, or `fetch_ecosystem` calling `requests.get`
+    directly, would let every test through while the helpers stay green.
+
+    `fetch_ecosystem` is called as a careless test would call it: no
+    `base_url=`, so its URL is the real OSV host. `requests.get` is replaced
+    first, so a broken guard fails here with "guard bypassed" and never
+    reaches the network."""
+    import requests
+
+    from scripts.core import osv_database
+
+    def _bypassed(url, *args, **kwargs):
+        raise AssertionError(f"guard bypassed: {url} reached requests.get")
+
+    monkeypatch.setattr(requests, "get", _bypassed)
+
+    with pytest.raises(pytest.fail.Exception, match="requires_tools"):
+        osv_database.fetch_ecosystem("npm", cache=tmp_path)

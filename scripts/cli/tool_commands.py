@@ -589,13 +589,16 @@ def cmd_tools_install(args: argparse.Namespace) -> int:
         return 1
 
 
-def _refresh_osv_databases() -> None:
+def _refresh_osv_databases() -> bool:
     """Fill osv-scanner's offline vulnerability databases (Task O2, decision 6).
 
     OSV publishes each ecosystem's zip independently (the eleven ecosystems
     JMo fetches), so one HTTP error or a corrupt zip does not stop the rest -- a
     machine that already has some of the eleven keeps the ones a refresh fails on;
     `fetch_ecosystem`'s atomic replace never trades a good file for a bad one.
+
+    Returns True only when every ecosystem refreshed, so the caller's exit
+    code can say a refresh failed.
     """
     from scripts.core import osv_database
 
@@ -618,6 +621,7 @@ def _refresh_osv_databases() -> None:
         print(
             colorize(f"osv-scanner databases: {ok}/{len(results)} refreshed", "green")
         )
+    return not failed
 
 
 def cmd_tools_update(args: argparse.Namespace) -> int:
@@ -654,20 +658,23 @@ def cmd_tools_update(args: argparse.Namespace) -> int:
     # (decision 6), independent of the pinned binary version in versions.yaml,
     # so a bare `jmo tools update` (no specific tool names -- the "refresh
     # everything" invocation) refreshes them even when osv-scanner itself is
-    # already current and so never appears in `outdated`. A targeted `jmo
-    # tools update <other-tool>` leaves osv-scanner alone, same as it leaves
-    # every other tool not named. When osv-scanner DOES get reinstalled below,
+    # already current and so never appears in `outdated`, and so does
+    # `jmo tools update osv-scanner`. A targeted `jmo tools update
+    # <other-tool>` leaves osv-scanner alone, same as it leaves every other
+    # tool not named. When osv-scanner DOES get reinstalled below,
     # `ToolInstaller._post_install` already covers the refresh; skip it here
     # in that case so the ~280 MB set is not fetched twice in one run.
     refresh_osv_now = (
-        not tools_arg
+        (not tools_arg or "osv-scanner" in tools_arg)
         and manager.check_tool("osv-scanner").installed
         and not any(s.name == "osv-scanner" for s in outdated)
     )
 
     if not outdated:
-        if refresh_osv_now:
-            _refresh_osv_databases()
+        # The refresh is this run's only work, so its failure is the
+        # command's: no all-clear, and a nonzero exit a script can see.
+        if refresh_osv_now and not _refresh_osv_databases():
+            return 1
         print(colorize("All tools are up to date!", "green"))
         return 0
 
@@ -716,14 +723,13 @@ def cmd_tools_update(args: argparse.Namespace) -> int:
         result = installer.install_tool(status.name, force=True)
         progress.add_result(result)
 
-    if refresh_osv_now:
-        _refresh_osv_databases()
+    databases_ok = _refresh_osv_databases() if refresh_osv_now else True
 
     # Print results
     print_install_progress(progress, colorize)
 
     # Summary
-    if progress.failed == 0:
+    if progress.failed == 0 and databases_ok:
         print(
             colorize(
                 f"\nAll {progress.successful} tool(s) updated successfully!", "green"
@@ -736,6 +742,13 @@ def cmd_tools_update(args: argparse.Namespace) -> int:
                 f"\n{progress.successful} updated, {progress.failed} failed", "yellow"
             )
         )
+        if not databases_ok:
+            print(
+                colorize(
+                    "osv-scanner's database refresh failed (see its summary above)",
+                    "yellow",
+                )
+            )
         return 1
 
 

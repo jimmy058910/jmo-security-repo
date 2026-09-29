@@ -2619,6 +2619,141 @@ class TestCmdToolsUpdateOsvDatabaseRefresh:
         refresh.assert_called_once_with()
         assert result == 0
 
+    def test_naming_osv_scanner_refreshes_its_databases_when_the_binary_is_current(
+        self,
+    ):
+        """`jmo tools update osv-scanner` is what a user types after a scan
+        row said "no offline database for npm ...: run `jmo tools update`".
+        With the binary already current it used to print "already up to
+        date" and fetch nothing."""
+        from scripts.cli.tool_commands import cmd_tools_update
+
+        osv_status = MagicMock()
+        osv_status.installed = True
+        osv_status.is_outdated = False
+        osv_status.installed_version = "2.6.0"
+        mock_manager = MagicMock()
+        mock_manager.check_tool.return_value = osv_status
+        refresh = MagicMock(return_value=True)
+
+        args = argparse.Namespace(
+            tools=["osv-scanner"], critical_only=False, yes=True, dry_run=False
+        )
+
+        with (
+            patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager),
+            patch("scripts.cli.tool_commands._refresh_osv_databases", refresh),
+            patch("builtins.print"),
+        ):
+            result = cmd_tools_update(args)
+
+        refresh.assert_called_once_with()
+        assert result == 0
+
+    @staticmethod
+    def _failed_fetch():
+        from scripts.core.osv_database import FetchResult
+
+        return [
+            FetchResult("npm", True, "fetched"),
+            FetchResult(
+                "PyPI",
+                False,
+                "filesystem error: [Errno 13] Permission denied: "
+                "'/home/jmo/.jmo/osv-db'",
+            ),
+        ]
+
+    def test_a_failed_refresh_with_nothing_outdated_exits_1_without_the_all_clear(
+        self, capsys
+    ):
+        """When nothing is outdated the refresh is the command's only work,
+        so its failure is the command's failure: a script, a CI step or the
+        Docker one-time setup must be able to see it from the exit code."""
+        from scripts.cli.tool_commands import cmd_tools_update
+
+        mock_manager = self._manager(outdated=[], osv_installed=True)
+        args = argparse.Namespace(tools=None, critical_only=False, yes=True)
+
+        with (
+            patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager),
+            patch(
+                "scripts.core.osv_database.fetch_all",
+                return_value=self._failed_fetch(),
+            ),
+        ):
+            result = cmd_tools_update(args)
+
+        out = capsys.readouterr().out
+        assert result == 1
+        assert "All tools are up to date!" not in out
+        assert "1/2 refreshed, 1 failed" in out
+        assert "PyPI: filesystem error" in out
+
+    def test_a_successful_refresh_with_nothing_outdated_still_gives_the_all_clear(
+        self, capsys
+    ):
+        from scripts.cli.tool_commands import cmd_tools_update
+        from scripts.core.osv_database import FetchResult
+
+        mock_manager = self._manager(outdated=[], osv_installed=True)
+        args = argparse.Namespace(tools=None, critical_only=False, yes=True)
+
+        with (
+            patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager),
+            patch(
+                "scripts.core.osv_database.fetch_all",
+                return_value=[FetchResult("npm", True, "fetched")],
+            ),
+        ):
+            result = cmd_tools_update(args)
+
+        out = capsys.readouterr().out
+        assert result == 0
+        assert "All tools are up to date!" in out
+
+    def test_a_failed_refresh_after_a_successful_tool_update_exits_1(self, capsys):
+        """The rc is aggregate: every tool updating does not cover a
+        database refresh that failed, and the green all-clear must not
+        print."""
+        from scripts.cli.installers.models import InstallResult
+        from scripts.cli.tool_commands import cmd_tools_update
+
+        trivy_status = MagicMock()
+        trivy_status.name = "trivy"
+        trivy_status.installed = True
+        trivy_status.installed_version = "0.40.0"
+        trivy_status.expected_version = "0.50.0"
+        trivy_status.is_outdated = True
+        trivy_status.is_critical = False
+
+        mock_manager = self._manager(outdated=[trivy_status], osv_installed=True)
+        mock_installer = MagicMock()
+        mock_installer.install_tool.return_value = InstallResult(
+            tool_name="trivy", success=True, method="binary", version_installed="0.50.0"
+        )
+
+        args = argparse.Namespace(tools=None, critical_only=False, yes=True)
+
+        with (
+            patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager),
+            patch(
+                "scripts.core.osv_database.fetch_all",
+                return_value=self._failed_fetch(),
+            ),
+            patch(
+                "scripts.cli.tool_installer.ToolInstaller",
+                return_value=mock_installer,
+            ),
+        ):
+            result = cmd_tools_update(args)
+
+        out = capsys.readouterr().out
+        assert result == 1
+        assert "updated successfully!" not in out
+        assert "1/2 refreshed, 1 failed" in out
+        assert "PyPI: filesystem error" in out
+
 
 def test_refresh_osv_databases_prints_a_summary_and_names_each_failure(capsys):
     from scripts.cli.tool_commands import _refresh_osv_databases
@@ -2630,9 +2765,10 @@ def test_refresh_osv_databases_prints_a_summary_and_names_each_failure(capsys):
     ]
 
     with patch("scripts.core.osv_database.fetch_all", return_value=results):
-        _refresh_osv_databases()
+        all_ok = _refresh_osv_databases()
 
     out = capsys.readouterr().out
+    assert all_ok is False
     assert "1/2 refreshed, 1 failed" in out
     assert "CRAN" in out
     assert "download failed: 503 Service Unavailable" in out
@@ -2651,9 +2787,10 @@ def test_refresh_osv_databases_prints_a_clean_summary_when_everything_succeeds(
     ]
 
     with patch("scripts.core.osv_database.fetch_all", return_value=results):
-        _refresh_osv_databases()
+        all_ok = _refresh_osv_databases()
 
     out = capsys.readouterr().out
+    assert all_ok is True
     assert "2/2 refreshed" in out
     assert "failed" not in out
 
