@@ -844,6 +844,7 @@ class TestServerModules:
             ("src/app/webhooks/route.js", b""),
             ("app/actions.ts", b'"use server";\n'),
             ("src/lib/save.ts", b"// Server actions.\n\n'use server'\n"),
+            ("src/lib/bom.ts", b'\xef\xbb\xbf"use server";\n'),
             ("src/middleware.ts", b""),
         ],
     )

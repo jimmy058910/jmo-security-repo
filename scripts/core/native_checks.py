@@ -132,7 +132,7 @@ MIDDLEWARE_FILES = (
     "src/middleware.js",
 )
 SERVER_ONLY_IMPORT = re.compile(r"""\bimport\s*(["'])server-only\1""")
-USE_SERVER_DIRECTIVE = re.compile(r"""﻿?\s*(["'])use server\1""")
+USE_SERVER_DIRECTIVE = re.compile(r"""\ufeff?\s*(["'])use server\1""")
 # Firestore and Storage rules. The Realtime Database's are JSON
 # (`database.rules.json`), which FIREBASE_OPEN's syntax can never match.
 RULES_FILE_NAMES = ("firestore.rules", "storage.rules")
