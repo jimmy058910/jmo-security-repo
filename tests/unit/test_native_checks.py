@@ -713,8 +713,8 @@ class TestExitCodes:
     def test_an_unexpected_exception_exits_2_and_says_why(
         self, tmp_path, monkeypatch, capsys
     ):
-        """Final review M3: an uncaught exception exited 1, which the row
-        accepts as "findings". 2 is "did not scan"."""
+        """An uncaught exception exited 1, which the row accepts as
+        "findings". 2 is "did not scan"."""
 
         def crash(path, root):
             raise RuntimeError("planted failure")
@@ -889,7 +889,7 @@ class TestServerModules:
 
 class TestLineNumbers:
     def test_only_a_newline_ends_a_line(self, tmp_path):
-        """Final review M1: `str.splitlines()` also splits on a form feed and
+        """`str.splitlines()` also splits on a form feed and
         on U+2028, so a finding after one was reported lines late. Editors,
         SARIF viewers and this runner's SQL path count newlines only."""
         target = tmp_path / "t"
@@ -923,7 +923,7 @@ def _firestore(rule: bytes) -> bytes:
 
 
 class TestFirebaseRules:
-    """Final review M2: every Firestore/Storage verb, the `;` optional."""
+    """Every Firestore/Storage verb, the `;` optional."""
 
     @pytest.mark.parametrize(
         "rule",
