@@ -272,14 +272,16 @@ All notable changes to JMo Security will be documented in this file.
   version the way it already folds in a commit's.
 - **Breaking. A consensus finding is the merge of its members, and no longer depends on
   which tool's output loaded first.** Its lists (CWEs, compliance mappings, references)
-  are the union of every member's, its CVSS and priority are the most severe seen, and its
-  lead (whose id, tool, location and raw survive as the consensus's own) is chosen by
-  severity, then tool name, then id, rather than by which thread finished first. On
-  juice-shop (trivy, TruffleHog, gitleaks), the same raw outputs in all six load orders
-  used to produce 160 or 163 findings and three distinct sets of consensus ids; they now
-  produce a byte-identical report every time (#1355). Every built-in policy that used to
-  read a consensus finding's `tool` now also reads its `detected_by` array, so a policy
-  keyed on one tool sees a finding any member tool reported, whichever led the merge.
+  are the union of every member's, its CVSS is the preferred one across members (v3.x over
+  v4.0 over v2.0, then the higher score), its priority keeps the most urgent of each value
+  (score, EPSS, KEV listing, due date), and its lead (whose id, tool, location and raw
+  survive as the consensus's own) is chosen by severity, then tool name, then id, rather
+  than by which thread finished first. On juice-shop (trivy, TruffleHog, gitleaks), the
+  same raw outputs in all six load orders used to produce 160 or 163 findings and three
+  distinct sets of consensus ids; they now produce a byte-identical report every time
+  (#1355). Every built-in policy that used to read a consensus finding's `tool` now also
+  reads its `detected_by` array, so a policy keyed on one tool sees a finding any member
+  tool reported, whichever led the merge.
 
 ### Fixed
 
