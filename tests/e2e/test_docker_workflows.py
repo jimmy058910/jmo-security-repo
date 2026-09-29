@@ -18,6 +18,7 @@ import os
 import shutil
 import subprocess
 import sys
+import uuid
 from pathlib import Path
 
 import pytest
@@ -774,6 +775,42 @@ class TestDockerNonRootExecution:
         # Should not have permission errors
         combined = result.stdout.lower() + result.stderr.lower()
         assert "permission denied" not in combined or result.returncode == 0
+
+    def test_a_fresh_named_volume_on_the_jmo_home_is_writable(self):
+        """DOCKER_README's one-time osv-scanner setup mounts a named volume on
+        `/home/jmo/.jmo` and runs `tools update`. Docker gives an empty named
+        volume the ownership of the image directory it covers; a directory
+        the image never created comes up root:root 755, and every ecosystem
+        then failed with "Permission denied" for the container user. Checked
+        with `mkdir` of the database directory, so nothing is downloaded."""
+        image = f"{DOCKER_REGISTRY}:latest"
+
+        ensure_image(image)
+
+        volume = f"jmo-home-e2e-{uuid.uuid4().hex[:12]}"
+        created = _docker("volume", "create", volume, timeout=60)
+        assert created.returncode == 0, created.stderr
+        try:
+            result = _docker(
+                "run",
+                "--rm",
+                "-v",
+                f"{volume}:/home/jmo/.jmo",
+                "--entrypoint",
+                "sh",
+                image,
+                "-c",
+                "mkdir -p /home/jmo/.jmo/osv-db && stat -c %U /home/jmo/.jmo",
+                timeout=120,
+            )
+        finally:
+            _docker("volume", "rm", "-f", volume, timeout=60)
+
+        assert result.returncode == 0, (
+            "the container user cannot write a fresh named volume on "
+            f"/home/jmo/.jmo: {result.stderr.strip()}"
+        )
+        assert result.stdout.strip() == "jmo", result.stdout
 
     @skip_on_windows
     def test_run_with_uid_mapping(self, tmp_path: Path):

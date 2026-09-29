@@ -302,9 +302,12 @@ RUN echo "=== Verifying tools ===" && \
 
 # Create non-root user and set ownership (Security best practice)
 # Note: Ubuntu 24.04 pre-creates 'ubuntu' user with UID 1000, must remove first
+# /home/jmo/.jmo must exist, owned by jmo: an empty named volume mounted there
+# (DOCKER_README's osv-scanner database setup) takes this directory's
+# ownership, and without it comes up root:root and unwritable.
 RUN userdel -r ubuntu 2>/dev/null || true && \
     useradd -m -u 1000 -s /bin/bash jmo && \
-    mkdir -p /root/.local /home/jmo/.cache /home/jmo/.local && \
+    mkdir -p /root/.local /home/jmo/.cache /home/jmo/.jmo /home/jmo/.local && \
     chown -R jmo:jmo /opt/jmo-security /scan /root/.cache /root/.local /home/jmo && \
     chmod -R 755 /opt/jmo-security
 
