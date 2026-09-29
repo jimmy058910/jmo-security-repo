@@ -89,8 +89,8 @@ These guidelines help AI coding agents work effectively in this repository. Focu
 
 ### Tool selection in `jmo.yml`
 
-- There are no scan profiles. The scanner list resolves `--tools`, then the top-level `tools:` list in `jmo.yml`, then `TOOL_MATRIX` in `scripts/core/tool_registry.py` (the 15 scanners). `--skip-tools` removes names from whichever list applies.
-- A listed tool is only eligible: the target's content decides whether it runs (hadolint needs Dockerfiles, shellcheck shell scripts, zizmor GitHub Actions workflows, osv-scanner lockfiles, gosec Go sources; zap and nuclei run only on `--url` targets).
+- There are no scan profiles. The scanner list resolves `--tools`, then the top-level `tools:` list in `jmo.yml`, then `TOOL_MATRIX` in `scripts/core/tool_registry.py` (the 16 scanners). `--skip-tools` removes names from whichever list applies.
+- A listed tool is only eligible: the target's content decides whether it runs (hadolint needs Dockerfiles, shellcheck shell scripts, zizmor GitHub Actions workflows, osv-scanner lockfiles, gosec Go sources, jmo-native JS/TS source, `.env` files, Firebase rules or Supabase migrations; zap and nuclei run only on `--url` targets).
 - Tuning lives at the top level: `threads`, `timeout`, `retries`, and `per_tool`, e.g.
   - semgrep.flags: ["--exclude", "node_modules", "--exclude", ".git"]
   - trivy.flags: ["--no-progress"]

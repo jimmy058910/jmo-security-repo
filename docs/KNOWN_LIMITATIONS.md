@@ -301,6 +301,35 @@ Kubernetes manifest given directly is still checked in full.
 `--framework <name>` outside JMo. See
 [When each tool runs](TOOLS.md#when-each-tool-runs).
 
+### jmo-native reads one application, at the repository root
+
+jmo-native decides what it reads by path from the scanned root
+([TOOLS.md](TOOLS.md#jmo-native)), and four things follow from that.
+
+- **A nested application is not seen as one.** Client code is a file under the
+  root's `app/`, `src/`, `components/`, `pages/` or `lib/`, and the migrations are
+  the root's `supabase/migrations/`. In a monorepo, `apps/web/src/...` is not client
+  code, so the `service_role` check never runs on it, and
+  `packages/db/supabase/migrations/` is not read, so no table is checked. The
+  public-env, browser-LLM and Firebase checks still read every file.
+- **Only `public`-schema tables are checked.** A table in another schema
+  (`private.notes`) is skipped, since Supabase's API serves `public` by default. A
+  schema exposed to the API by configuration is not checked.
+- **Row Level Security set outside the migrations is invisible.** RLS enabled, or a
+  policy created, in the Supabase dashboard or by a script outside
+  `supabase/migrations/` is not read, so that table still reads as
+  `table-without-rls` or `rls-without-policy`.
+- **The public-env check reads names, not values.** It reports a public-prefixed
+  variable whose name looks like a server secret (`NEXT_PUBLIC_STRIPE_SECRET_KEY`).
+  A secret under an innocuous name (`NEXT_PUBLIC_CONFIG`) is not reported, and a
+  harmless value under a secret-looking name is. TruffleHog and Gitleaks read the
+  values.
+
+**What to do:** in a monorepo, scan each application as a target of its own
+(`jmo scan --repo apps/web`), and the package holding the migrations as another. For
+Row Level Security managed outside the migrations, check the table's policies in the
+Supabase dashboard.
+
 ---
 
 ## Deduplication
