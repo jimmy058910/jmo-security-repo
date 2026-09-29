@@ -140,6 +140,9 @@ NOT_READ = [
     ("lib.py", _LLM),
     ("README.md", _ENV),
     ("firebase.json", _RULES),
+    # Realtime Database rules are JSON, `database.rules.json`: no Firebase
+    # file has this name, and the pack does not read it.
+    ("database.rules", _RULES),
     ("db/schema.sql", _SQL),
     # A nested app's migrations: the runner reads the root's only
     # (docs/KNOWN_LIMITATIONS.md).

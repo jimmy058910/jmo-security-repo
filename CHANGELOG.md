@@ -110,10 +110,11 @@ All notable changes to JMo Security will be documented in this file.
   with `dangerouslyAllowBrowser: true` (`jmo.ai.llm-api-key-in-browser-code`, HIGH,
   CWE-798); a `public`-schema table Row Level Security is never enabled on
   (`jmo.supabase.table-without-rls`, HIGH, CWE-862) or enabled with no policy
-  (`jmo.supabase.rls-without-policy`, LOW, no CWE), both read from
-  `supabase/migrations/*.sql` together, in filename order; and a Firebase rule that
-  allows read or write unconditionally, in `firestore.rules`, `storage.rules` or
-  `database.rules` (`jmo.firebase.rules-open`, HIGH, CWE-862). A repository with none of
+  (`jmo.supabase.rls-without-policy`, LOW, no CWE), both the final state of
+  `supabase/migrations/*.sql` applied in order, so a later migration that disables Row
+  Level Security, drops a policy or drops the table counts; and a Firebase rule that
+  allows any access unconditionally, in `firestore.rules` or `storage.rules`
+  (`jmo.firebase.rules-open`, HIGH, CWE-862). A repository with none of
   that is `skipped:no JS/TS, .env, Firebase rules or Supabase migrations`. Its tracked
   fixture (`tests/fixtures/samples/native/`, with a README) is placeholder values only
   and produces exactly its documented 8 findings and 4 negatives. Measured on three

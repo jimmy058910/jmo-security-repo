@@ -84,6 +84,12 @@ def _triples(results: list[dict]) -> list[tuple[str, str, int]]:
     )
 
 
+def _plant(target: Path, rel: str, body: bytes) -> None:
+    path = target / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(body)
+
+
 class TestFixtureContract:
     """The tracked fixture is the gate: 8 of 8, and the 4 negatives silent."""
 
@@ -211,6 +217,96 @@ class TestCommentStripping:
         assert rc == 1
         assert native_checks.RULE_SERVICE_ROLE in [r["ruleId"] for r in _results(out)]
 
+    @pytest.mark.parametrize("newline", ["\n", "\r\n"])
+    def test_an_apostrophe_in_jsx_text_does_not_keep_a_later_comment(
+        self, tmp_path, newline
+    ):
+        """Final review I1. A `'` or `"` string ends at its line's end, since
+        JS forbids a raw newline in one, so `Don't` in JSX text costs one line.
+        It used to open a "string" that ran on to the next quote in the file,
+        and a later comment naming service_role read as code."""
+        target = tmp_path / "t"
+        lines = [
+            '"use client";',
+            "export default function Page() {",
+            "  return <p>Don't have an account?</p>;",
+            "}",
+            "// never put the service_role key here",
+            "const x = 1;",
+            "",
+        ]
+        _plant(target, "app/login/page.tsx", newline.join(lines).encode())
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 0, _triples(_results(out))
+
+    def test_the_url_then_key_line_after_an_apostrophe_is_still_caught(self, tmp_path):
+        """The other half of I1: after `You're`, the idiomatic one-line
+        createClient call was read as the inside of a string, and missed."""
+        target = tmp_path / "t"
+        _plant(
+            target,
+            "components/Admin.tsx",
+            b"export function Admin() {\n"
+            b"  return <p>You're signed in</p>;\n"
+            b"}\n"
+            b"const admin = createClient('https://x.supabase.co', "
+            b"process.env.SUPABASE_SERVICE_ROLE_KEY);\n",
+        )
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_SERVICE_ROLE, "components/Admin.tsx", 4)
+        ]
+
+    @pytest.mark.parametrize(
+        "replace",
+        [b"s.replace(/'/g, '');\n", b's.replace(/"/g, "");\n'],
+    )
+    def test_a_regex_literal_holding_a_quote_does_not_keep_a_later_comment(
+        self, tmp_path, replace
+    ):
+        target = tmp_path / "t"
+        _plant(
+            target,
+            "src/b.ts",
+            b"const clean = "
+            + replace
+            + b"// service_role is only used on the server\n"
+            b"const x = 2;\n",
+        )
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 0, _triples(_results(out))
+
+    def test_a_quoted_string_ends_at_its_line_and_columns_are_kept(self):
+        text = "x = <p>Don't</p>;\n// a comment\nconst b = 1;\n"
+
+        stripped = native_checks.strip_code_comments(text)
+
+        assert len(stripped) == len(text)
+        assert stripped.split("\n") == [
+            "x = <p>Don't</p>;",
+            " " * 12,
+            "const b = 1;",
+            "",
+        ]
+
+    def test_a_template_literal_may_span_lines(self):
+        text = "const t = `one\n// not a comment\n`;\n// a comment\n"
+
+        stripped = native_checks.strip_code_comments(text)
+
+        assert stripped.split("\n")[1] == "// not a comment"
+        assert stripped.split("\n")[3] == " " * 12
+
     def test_commented_out_firestore_rule_is_not_caught(self, tmp_path):
         target = tmp_path / "t"
         target.mkdir()
@@ -296,9 +392,9 @@ class TestMigrationRules:
     ):
         """A table secured in an EARLIER file, by a LATER file that does not
         repeat the enable/policy statements, must still read as secured: the
-        final state is the accumulation over the whole set, not whatever the
-        last file alone says. (A per-file-reset bug would forget the earlier
-        RLS state as soon as it saw the second, unrelated file.)"""
+        final state is the whole set applied in order, not whatever the last
+        file alone says. (A per-file-reset bug would forget the earlier RLS
+        state as soon as it saw the second, unrelated file.)"""
         target = self._migrations(tmp_path)
         (target / "supabase" / "migrations" / "1_init.sql").write_bytes(
             b"create table public.orders (id int);\n"
@@ -315,6 +411,156 @@ class TestMigrationRules:
         rc = _run(target, out)
 
         assert rc == 0
+
+    def test_rls_disabled_by_a_later_migration_is_a_finding(self, tmp_path):
+        """Final review I3: the "RLS was blocking me, so I turned it off"
+        migration. State only accumulated, so this read as secured."""
+        target = self._migrations(tmp_path)
+        mig = target / "supabase" / "migrations"
+        (mig / "1_init.sql").write_bytes(
+            b"create table public.orders (id int);\n"
+            b"alter table public.orders enable row level security;\n"
+            b"create policy p on public.orders for select using (true);\n"
+        )
+        (mig / "2_debug.sql").write_bytes(
+            b"alter table public.orders disable row level security;\n"
+        )
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_TABLE_NO_RLS, "supabase/migrations/1_init.sql", 1)
+        ]
+
+    @pytest.mark.parametrize(
+        ("created", "dropped"),
+        [
+            (b"create table public.todos (id int);\n", b"drop table public.todos;\n"),
+            (
+                b"create table public.todos (id int);\ncreate table other (id int);\n",
+                b"drop table if exists other, public.todos cascade;\n",
+            ),
+        ],
+    )
+    def test_a_dropped_table_is_not_reported(self, tmp_path, created, dropped):
+        target = self._migrations(tmp_path)
+        mig = target / "supabase" / "migrations"
+        (mig / "1_init.sql").write_bytes(created)
+        (mig / "2_drop.sql").write_bytes(dropped)
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 0, _triples(_results(out))
+
+    def test_dropping_the_only_policy_leaves_rls_without_policy(self, tmp_path):
+        target = self._migrations(tmp_path)
+        mig = target / "supabase" / "migrations"
+        (mig / "1_init.sql").write_bytes(
+            b"create table public.orders (id int);\n"
+            b"alter table public.orders enable row level security;\n"
+            b'create policy "own" on public.orders for select using (true);\n'
+        )
+        (mig / "2_drop.sql").write_bytes(
+            b'drop policy if exists "own" on public.orders;\n'
+        )
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_RLS_NO_POLICY, "supabase/migrations/1_init.sql", 1)
+        ]
+
+    def test_another_schemas_table_does_not_stand_in_for_the_public_one(self, tmp_path):
+        """Tables were keyed by bare name, so `private.orders`' RLS and policy
+        hid a `public.orders` that has neither."""
+        target = self._migrations(tmp_path)
+        (target / "supabase" / "migrations" / "1.sql").write_bytes(
+            b"create table public.orders (id int);\n"
+            b"create table private.orders (id int);\n"
+            b"alter table private.orders enable row level security;\n"
+            b"create policy p on private.orders for select using (true);\n"
+        )
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_TABLE_NO_RLS, "supabase/migrations/1.sql", 1)
+        ]
+
+    def test_a_table_recreated_after_a_drop_is_located_at_the_new_create(
+        self, tmp_path
+    ):
+        """The rebuilt table starts with no RLS and no policy, whatever the
+        dropped one had."""
+        target = self._migrations(tmp_path)
+        mig = target / "supabase" / "migrations"
+        (mig / "1_init.sql").write_bytes(
+            b"create table public.orders (id int);\n"
+            b"alter table public.orders enable row level security;\n"
+            b"create policy p on public.orders for select using (true);\n"
+        )
+        (mig / "2_rebuild.sql").write_bytes(
+            b"\n"
+            b"drop table public.orders;\n"
+            b"create table public.orders (id int, total int);\n"
+        )
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_TABLE_NO_RLS, "supabase/migrations/2_rebuild.sql", 3)
+        ]
+
+    def test_a_plain_create_of_an_existing_table_starts_a_new_one(self, tmp_path):
+        """Postgres lets a plain create succeed only on a table that does not
+        exist, so the table was dropped by something this reader does not
+        parse (a `drop` inside a `do` block, say): read it as new."""
+        target = self._migrations(tmp_path)
+        mig = target / "supabase" / "migrations"
+        (mig / "1_init.sql").write_bytes(
+            b"create table public.orders (id int);\n"
+            b"alter table public.orders enable row level security;\n"
+            b"create policy p on public.orders for select using (true);\n"
+        )
+        (mig / "2_rebuild.sql").write_bytes(
+            b"create table public.orders (id int, total int);\n"
+        )
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_TABLE_NO_RLS, "supabase/migrations/2_rebuild.sql", 1)
+        ]
+
+    def test_create_if_not_exists_on_an_existing_table_changes_nothing(self, tmp_path):
+        """Postgres skips it, so an idempotent migration that repeats the
+        create must not wipe the RLS and policy the table already has."""
+        target = self._migrations(tmp_path)
+        mig = target / "supabase" / "migrations"
+        (mig / "1_init.sql").write_bytes(
+            b"create table public.orders (id int);\n"
+            b"alter table public.orders enable row level security;\n"
+            b"create policy p on public.orders for select using (true);\n"
+        )
+        (mig / "2_again.sql").write_bytes(
+            b"create table if not exists public.orders (id int);\n"
+        )
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 0, _triples(_results(out))
 
     def test_finding_is_located_at_the_create_table_line_not_line_zero(self, tmp_path):
         target = self._migrations(tmp_path)
@@ -463,6 +709,46 @@ class TestExitCodes:
 
         assert rc == 2
 
+    def test_an_unexpected_exception_exits_2_and_says_why(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        """Final review M3: an uncaught exception exited 1, which the row
+        accepts as "findings". 2 is "did not scan"."""
+
+        def crash(path, root):
+            raise RuntimeError("planted failure")
+
+        monkeypatch.setattr(native_checks, "scan_file", crash)
+        target = tmp_path / "t"
+        _plant(target, "x.ts", b"export const x = 1;\n")
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 2
+        assert not out.exists()
+        err = capsys.readouterr().err
+        assert "RuntimeError: planted failure" in err
+        assert "Traceback" in err
+
+    def test_a_stale_output_is_gone_after_a_crashed_run(self, tmp_path, monkeypatch):
+        """Else a crash on a re-used results directory reads as the previous
+        scan's findings."""
+
+        def crash(root):
+            raise PermissionError("planted failure")
+
+        monkeypatch.setattr(native_checks, "scan_migrations", crash)
+        target = tmp_path / "t"
+        target.mkdir()
+        out = tmp_path / "o.sarif"
+        out.write_bytes(b'{"stale": true}')
+
+        rc = _run(target, out)
+
+        assert rc == 2
+        assert not out.exists()
+
 
 class TestEnvCommentSkip:
     def test_a_commented_out_env_line_is_not_a_finding(self, tmp_path):
@@ -476,6 +762,214 @@ class TestEnvCommentSkip:
         rc = _run(target, out)
 
         assert rc == 0
+
+
+class TestPublicEnvName:
+    """Final review I2 (Ruling 81). Next.js, Vite, CRA and Expo inline only the
+    exact upper-case prefixes, and a `.env` line's value is never read."""
+
+    def test_a_prefix_inside_a_longer_name_is_not_a_finding(self, tmp_path):
+        """`INVITE_SECRET` was reported as `VITE_SECRET`."""
+        target = tmp_path / "t"
+        _plant(target, ".env", b"INVITE_SECRET=x\nINVITE_ACCESS_TOKEN_TTL=3600\n")
+        _plant(
+            target,
+            "lib/invites.ts",
+            b"export const s = process.env.INVITE_SECRET;\n",
+        )
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 0, _triples(_results(out))
+
+    def test_a_lower_case_prefix_is_not_a_finding(self, tmp_path):
+        target = tmp_path / "t"
+        _plant(target, ".env", b"next_public_secret=x\n")
+        _plant(target, "lib/invites.ts", b"const vite_private_link = true;\n")
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 0, _triples(_results(out))
+
+    def test_no_part_of_a_value_is_read_or_reaches_the_output(self, tmp_path):
+        """A value holding a public-prefixed, secret-looking token put that
+        token, and whatever followed it, into the finding's message."""
+        target = tmp_path / "t"
+        _plant(
+            target,
+            ".env.local",
+            b"CALLBACK_URL=https://app.example.com/join/NEXT_PUBLIC_X_SECRET_SENTINEL\n",
+        )
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 0, _triples(_results(out))
+        assert "SENTINEL" not in out.read_text(encoding="utf-8")
+
+    def test_an_exported_name_is_still_read(self, tmp_path):
+        target = tmp_path / "t"
+        _plant(target, ".env", b"export NEXT_PUBLIC_X_SECRET=placeholder\n")
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        [result] = _results(out)
+        assert result["message"]["text"].startswith("NEXT_PUBLIC_X_SECRET is ")
+        assert result["locations"][0]["physicalLocation"]["region"] == {
+            "startLine": 1,
+            "startColumn": 8,
+        }
+
+
+_SERVICE_ROLE_LINE = (
+    b"const admin = createClient(url, process.env.SUPABASE_SERVICE_ROLE_KEY);\n"
+)
+
+
+class TestServerModules:
+    """Final review I4 (Ruling 83). Four markers Next.js itself enforces make a
+    module under a client directory server code, so none can hide a real
+    client reference."""
+
+    @pytest.mark.parametrize(
+        ("rel", "head"),
+        [
+            ("lib/supabase/admin.ts", b'import "server-only";\n'),
+            ("lib/supabase/admin.js", b"import 'server-only';\n"),
+            ("app/auth/callback/route.ts", b""),
+            ("src/app/webhooks/route.js", b""),
+            ("app/actions.ts", b'"use server";\n'),
+            ("src/lib/save.ts", b"// Server actions.\n\n'use server'\n"),
+            ("src/middleware.ts", b""),
+        ],
+    )
+    def test_a_server_module_under_a_client_directory_is_not_client_code(
+        self, tmp_path, rel, head
+    ):
+        target = tmp_path / "t"
+        _plant(target, rel, head + _SERVICE_ROLE_LINE)
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 0, _triples(_results(out))
+
+    @pytest.mark.parametrize(
+        ("rel", "head"),
+        [
+            ("lib/admin.ts", b""),
+            ("lib/admin.ts", b'// import "server-only";\n'),
+            ("lib/admin.ts", b'import x from "y";\n"use server";\n'),
+            ("lib/route.ts", b""),
+            ("src/lib/middleware.ts", b""),
+        ],
+    )
+    def test_the_same_reference_elsewhere_is_still_client_code(
+        self, tmp_path, rel, head
+    ):
+        """The negative controls: a plain module, and each marker in a shape
+        Next.js does not honour (commented out, not the first statement, a
+        `route` outside `app/`, a `middleware` below the root or `src/`)."""
+        target = tmp_path / "t"
+        _plant(target, rel, head + _SERVICE_ROLE_LINE)
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        line = head.count(b"\n") + 1
+        assert _triples(_results(out)) == [(native_checks.RULE_SERVICE_ROLE, rel, line)]
+
+
+class TestLineNumbers:
+    def test_only_a_newline_ends_a_line(self, tmp_path):
+        """Final review M1: `str.splitlines()` also splits on a form feed and
+        on U+2028, so a finding after one was reported lines late. Editors,
+        SARIF viewers and this runner's SQL path count newlines only."""
+        target = tmp_path / "t"
+        _plant(
+            target,
+            "src/a.ts",
+            b"const a = 1;\x0c\n"
+            b"const s = '\xe2\x80\xa8';\n"
+            b"const c = new OpenAI({ dangerouslyAllowBrowser: true });\n",
+        )
+        out = tmp_path / "o.sarif"
+
+        _run(target, out)
+
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_BROWSER_LLM, "src/a.ts", 3)
+        ]
+
+
+def _firestore(rule: bytes) -> bytes:
+    return (
+        b"rules_version = '2';\n"
+        b"service cloud.firestore {\n"
+        b"  match /databases/{database}/documents {\n"
+        b"    match /x/{id} {\n"
+        b"      " + rule + b"\n"
+        b"    }\n"
+        b"  }\n"
+        b"}\n"
+    )
+
+
+class TestFirebaseRules:
+    """Final review M2: every Firestore/Storage verb, the `;` optional."""
+
+    @pytest.mark.parametrize(
+        "rule",
+        [
+            b"allow create: if true;",
+            b"allow get, list: if true",
+            b"allow update, delete: if true }",
+        ],
+    )
+    def test_any_verb_granted_unconditionally_is_a_finding(self, tmp_path, rule):
+        target = tmp_path / "t"
+        _plant(target, "firestore.rules", _firestore(rule))
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 1
+        assert _triples(_results(out)) == [
+            (native_checks.RULE_FIREBASE_OPEN, "firestore.rules", 5)
+        ]
+
+    @pytest.mark.parametrize(
+        "rule",
+        [
+            b"allow read: if request.auth != null;",
+            b"allow read: if true && request.auth != null;",
+        ],
+    )
+    def test_a_conditional_rule_is_not_a_finding(self, tmp_path, rule):
+        target = tmp_path / "t"
+        _plant(target, "firestore.rules", _firestore(rule))
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 0, _triples(_results(out))
+
+    def test_a_file_named_database_rules_is_not_read(self, tmp_path):
+        """Realtime Database rules are JSON (`database.rules.json`), which the
+        rules-language pattern can never match; no Firebase file is named
+        `database.rules`."""
+        target = tmp_path / "t"
+        _plant(target, "database.rules", b"allow read, write: if true;\n")
+        out = tmp_path / "o.sarif"
+
+        rc = _run(target, out)
+
+        assert rc == 0, _triples(_results(out))
 
 
 class TestVersionFlag:

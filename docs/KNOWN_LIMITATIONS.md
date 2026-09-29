@@ -306,14 +306,14 @@ Kubernetes manifest given directly is still checked in full.
 jmo-native decides what it reads by path from the scanned root
 ([TOOLS.md](TOOLS.md#jmo-native)), and four things follow from that.
 
-- **A nested application is not seen as one.** Client code is a file under the
-  root's `app/`, `src/`, `components/`, `pages/` or `lib/`, and the migrations are
-  the root's `supabase/migrations/`. In a monorepo, `apps/web/src/...` is not client
-  code, so the `service_role` check never runs on it, and
+- **A nested application is not seen as one.** Client code is looked for only
+  under the root's `app/`, `src/`, `components/`, `pages/` or `lib/`, and the
+  migrations are the root's `supabase/migrations/`. In a monorepo, `apps/web/src/...`
+  is not client code, so the `service_role` check never runs on it, and
   `packages/db/supabase/migrations/` is not read, so no table is checked. The
   other checks still read their files wherever they sit: JS/TS source and `.env`
   files for the public-env check, JS/TS source for the browser-LLM check, and
-  `firestore.rules`, `storage.rules` and `database.rules` for the Firebase check.
+  `firestore.rules` and `storage.rules` for the Firebase check.
 - **Only `public`-schema tables are checked.** A table in another schema
   (`private.notes`) is skipped, since Supabase's API serves `public` by default. A
   schema exposed to the API by configuration is not checked.
