@@ -121,6 +121,8 @@ SARIF_SCHEMA = (
 PRUNE_DIRS: frozenset[str] = frozenset(VENDORED_DIRS) | {".next"}
 
 CODE_SUFFIXES = (".ts", ".tsx", ".js", ".jsx", ".mjs")
+# TODO(issue-#1381): root-relative, so a monorepo's nested app
+# (`apps/web/src/...`) is never client code.
 CLIENT_DIRS = ("app/", "src/", "components/", "pages/", "lib/")
 SERVER_MARKERS = (".server.", "/api/", "/server/", "/actions/", "supabase/functions/")
 # Server-only by Next.js's own rules, wherever they sit, so none
@@ -128,6 +130,8 @@ SERVER_MARKERS = (".server.", "/api/", "/server/", "/actions/", "supabase/functi
 # or `src/`'s middleware, a module importing `server-only` (the build fails
 # if a client module does), and one whose first statement is "use server".
 ROUTE_HANDLER_DIRS = ("app/", "src/app/")
+# TODO(issue-#1380): Next.js 16 renamed middleware to `proxy.ts`, which is
+# not here yet, so a service-role reference in `src/proxy.ts` reads as client.
 MIDDLEWARE_FILES = (
     "middleware.ts",
     "middleware.js",
@@ -524,6 +528,8 @@ def _line_col(text: str, offset: int) -> tuple[int, int]:
     return line, offset - last_newline
 
 
+# TODO(issue-#1381): the root's only; `packages/db/supabase/migrations` is
+# never read.
 MIGRATIONS_DIR = Path("supabase", "migrations")
 
 

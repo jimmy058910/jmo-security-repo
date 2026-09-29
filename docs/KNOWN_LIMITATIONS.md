@@ -313,7 +313,9 @@ jmo-native decides what it reads by path from the scanned root
   `packages/db/supabase/migrations/` is not read, so no table is checked. The
   other checks still read their files wherever they sit: JS/TS source and `.env`
   files for the public-env check, JS/TS source for the browser-LLM check, and
-  `firestore.rules` and `storage.rules` for the Firebase check.
+  `firestore.rules` and `storage.rules` for the Firebase check. Reading each
+  application from its own root is
+  [#1381](https://github.com/jimmy058910/jmo-security-repo/issues/1381).
 - **Only `public`-schema tables are checked.** A table in another schema
   (`private.notes`) is skipped, since Supabase's API serves `public` by default. A
   schema exposed to the API by configuration is not checked.

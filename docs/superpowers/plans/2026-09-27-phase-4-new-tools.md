@@ -289,7 +289,7 @@ touch the ~25 documents that state it.
 | **Z** | zizmor's row, installer, image; checkov hands Actions over (trigger and `--framework`); checkov's exclusions | #1313 |
 | **O** | osv-scanner's row, installer, image and offline database; trivy's dependency flags; one identity per dependency finding, so two scanners' reports of one vulnerability cluster; a consensus finding merges its members (#1355, first); CVSS v4.0; a code comment's private-repository name (#1366) | #1346 #1355 #1356 #1366 |
 | **N** | the `jmo-native` row, its runner and its tracked fixture | — |
-| **G** | gosec removed (#1310); GitLab targets scan the images they reference (#1311); every tool's short output flags, new rows included; zizmor's invalid-input edges (#1362) and its unannounced repository config (#1363); a GitLab project named `results` (#1364); a failed row that still contributed findings reads as none (#1369) | #1310 #1311 #1335 #1362 #1363 #1364 #1369 |
+| **G** | gosec removed (#1310); GitLab targets scan the images they reference (#1311); every tool's short output flags, new rows included; zizmor's invalid-input edges (#1362) and its unannounced repository config (#1363); a GitLab project named `results` (#1364); a failed row that still contributed findings reads as none (#1369); yara_runner's crash exits 1, read as findings, over a stale output (#1382; G edits its parser for #1335 anyway) | #1310 #1311 #1335 #1362 #1363 #1364 #1369 #1382 |
 | **API** | zap's OpenAPI import: a new invocation with its own target rules, on its own PR as PR T was | #1331 #1347 #1348 |
 
 A precedes Z because the corrections change Z's gate. Z precedes O only for review
