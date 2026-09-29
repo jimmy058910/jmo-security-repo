@@ -119,7 +119,7 @@ All notable changes to JMo Security will be documented in this file.
   fixture (`tests/fixtures/samples/native/`, with a README) is placeholder values only
   and produces exactly its documented 8 findings and 4 negatives. Measured on three
   private applications: 0 findings on each, and 1 on a copy of one with a planted
-  `NEXT_PUBLIC_STRIPE_SECRET_KEY`; the row runs in 0.2-1.5 s once a target's files are
+  `NEXT_PUBLIC_STRIPE_SECRET_KEY`; the row runs in under 2 s once a target's files are
   already read from disk. It reads one application, at the repository root, and only
   `public`-schema tables
   ([Known limitations](docs/KNOWN_LIMITATIONS.md#jmo-native-reads-one-application-at-the-repository-root)).

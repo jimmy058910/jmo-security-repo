@@ -408,9 +408,10 @@ false teardown errors in `test_load_4_store_1000_scans` (the long test that
 happened to be open). Same mechanism, same fix: sequence them.
 
 **For a test that runs `jmo scan` itself:**
-`tests/unit/test_jmo_native_wiring.py`'s `scan` fixture patches `Path.home`
-(`:319`), which is what actually isolates it — `HOME` alone does not work on
-Windows, per the neighbour guard above.
+`tests/unit/test_jmo_native_wiring.py`'s `scan` fixture patches `Path.home`,
+which is what actually isolates it — `HOME` alone does not work on Windows,
+because `Path.home()` there does not read it (the failure message of
+`_guard_real_jmo_install` in `tests/conftest.py` says so).
 
 ## Counting tests: compare like with like
 
