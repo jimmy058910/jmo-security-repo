@@ -1354,7 +1354,8 @@ jobs:
   # push. Between tags the subject under test is therefore a CONSTANT: running
   # them on every PR re-measures an unchanging artifact for real CI minutes and
   # no new information. The answer can only move when the Dockerfile, the test
-  # file, or the tool registry driving the expected-tool count changes.
+  # file, or the tool registry and descriptor table driving the expected-tool
+  # count change.
   #
   # And why it BUILDS rather than pulls: a Dockerfile change does not alter what
   # is published, so testing the published image would not test the change. The
@@ -1382,6 +1383,9 @@ jobs:
               - 'Dockerfile'
               - 'tests/e2e/test_docker_workflows.py'
               - 'scripts/core/tool_registry.py'
+              # TOOL_MATRIX is `tuple(DESCRIPTORS)` here since Phase 3, so a
+              # new row changes the image's matrix without touching the above.
+              - 'scripts/core/tool_descriptors.py'
 
       - name: Set up uv
         if: steps.changes.outputs.docker == 'true'
@@ -1431,7 +1435,7 @@ jobs:
       - name: Skip note (no Docker-affecting changes)
         if: steps.changes.outputs.docker != 'true'
         run: |
-          echo "No Dockerfile, test_docker_workflows.py or tool_registry.py changes."
+          echo "No Dockerfile, test_docker_workflows.py, tool_registry.py or tool_descriptors.py changes."
           echo "These tests audit the last RELEASED image, which only a v* tag rebuilds,"
           echo "so nothing in this PR can change their answer. Full sweep runs weekly."
 
