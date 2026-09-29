@@ -4,10 +4,11 @@ Invoked as a subprocess, exactly like every other scanner::
 
     python -m scripts.core.native_checks --target <dir> --output <file>
 
-The runner is engine-free Python (Decision 3, `.superpowers/sdd/2026-09-27-
-phase-4-new-tools/task-N1a-brief.md`): six checks over Next.js/Supabase/
-Firebase code, reproducing three archived opengrep rules, an RLS-migration
-check, and a Firebase-rules check, with no rule-engine dependency.
+The runner is engine-free Python (Decision 3,
+`docs/superpowers/plans/2026-09-27-phase-4-new-tools.md`): six checks over
+Next.js/Supabase/Firebase code, reproducing three archived opengrep rules,
+an RLS-migration check, and a Firebase-rules check, with no rule-engine
+dependency.
 
 Every fixture text below is placeholder-only, matching
 `tests/fixtures/samples/native/README.md`'s policy: nothing shaped like a real

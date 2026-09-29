@@ -12,7 +12,8 @@ unprototyped Firebase rule -- four different invocations for one conceptual
 check pack, one of them requiring an engine JMo does not otherwise depend on.
 A plain-Python runner, on the model of `yara_runner.py`, reproduces all six
 checks with zero engine dependency: 8 of 8 on the tracked fixture with no
-false positive (Decision 3, `.superpowers/sdd/2026-09-27-phase-4-new-tools/`).
+false positive (Decision 3,
+`docs/superpowers/plans/2026-09-27-phase-4-new-tools.md`).
 
 The six rules, exactly:
 
