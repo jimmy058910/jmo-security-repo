@@ -311,6 +311,13 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Fixed
 
+- **Transitive dependency CVEs failing the `quick-checks` pip-audit gate.** pyjwt
+  2.13.0 gained advisories on 2026-09-30 (fixed in 2.14.0, one in 2.15.0), and urllib3
+  2.7.0 and virtualenv 21.7.0 had theirs by the same day. Because pip-audit reads the
+  whole lock, not a PR's changes, every CI run went red. The lock now holds pyjwt 2.15.1
+  (via `mcp` and `sigstore`), urllib3 2.8.0 (via `requests` and `tuf`) and virtualenv
+  21.14.1 (via `pre-commit`), with python-discovery 1.6.1 following; nothing else moved.
+  ([#1384](https://github.com/jimmy058910/jmo-security-repo/issues/1384))
 - **A consensus finding no longer misreports what it is a consensus of.** Building it as a
   copy of one member, rather than a merge, meant the load order that happened to put a
   non-CWE-798 secret finding in the lead could inflate `owasp-top-10`'s count with an entry

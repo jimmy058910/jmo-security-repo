@@ -19,7 +19,7 @@
 #     maintainer ("key length is chosen by the application that uses the
 #     library"). No fix version exists, so there is nothing to upgrade to.
 #     pyjwt is a transitive dev-only dep via `mcp`, not used in production
-#     paths. Not currently firing at pyjwt 2.13.0, but kept because the ignore
+#     paths. Not currently firing at pyjwt 2.15.1, but kept because the ignore
 #     remains the only available lever if a future resolve lands on a version
 #     the advisory covers.
 #     https://api.osv.dev/v1/vulns/PYSEC-2025-183
