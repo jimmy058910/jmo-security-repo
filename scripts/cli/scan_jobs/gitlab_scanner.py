@@ -26,7 +26,7 @@ import re
 import subprocess
 import threading
 import time
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 import yaml
@@ -64,23 +64,26 @@ class DiscoveredImages:
     A reference is scanned once in a scan, as an image listed twice is
     (#1312): two targets with one name would put two rows per tool under it,
     and history keeps one of them. The first job to claim one scans it, and
-    `found_in` hands its rows to the orchestrator. Jobs run concurrently, so
-    both go through a lock.
+    `found_in` hands its rows to the orchestrator. It is not retried if that
+    scan fails: its one image target says so. Jobs run concurrently, so every
+    method goes through a lock.
     """
 
-    def __init__(self, scanned: Iterable[str] = ()) -> None:
-        """`scanned`: the references this scan already scans as image targets."""
+    def __init__(self, scanned: Mapping[str, str] | None = None) -> None:
+        """`scanned`: each reference this scan already scans as an image
+        target, and the target it is scanned for (`--image`, a GitLab path)."""
         self._lock = threading.Lock()
-        self._claimed = set(scanned)
+        self._claimed: dict[str, str] = dict(scanned or {})
         self._found: dict[str, list[tuple[str, TargetRows]]] = {}
 
-    def claim(self, image: str) -> bool:
-        """True for the first caller naming `image`, which then scans it."""
+    def claim(self, image: str, by: str) -> str | None:
+        """None when `by` is the first to name `image`, which it then scans;
+        otherwise the target it is already scanned for."""
         with self._lock:
             if image in self._claimed:
-                return False
-            self._claimed.add(image)
-            return True
+                return self._claimed[image]
+            self._claimed[image] = by
+            return None
 
     def add(self, found_in: str, image: str, rows: TargetRows) -> None:
         """Record the rows of an image the GitLab target `found_in` named."""
@@ -306,7 +309,8 @@ def scan_gitlab_repo(
         write_stub_func: Optional function to write stub files (for testing)
         images: The scan's discovered images: this job claims each one it
             names and records its rows there, for the orchestrator to report
-            as an image target (#1311). Without one, each is still scanned.
+            as an image target (#1311); one another target already claimed is
+            not scanned again. Without one, each is still scanned.
 
     Returns:
         (full_path, rows by tool) for the repository
@@ -427,14 +431,19 @@ def scan_gitlab_repo(
             # already scans (an `--image`, another GitLab target) is not
             # scanned twice.
             discovered = images if images is not None else DiscoveredImages()
-            named = sorted(_discover_container_images(clone_path))
-            mine = [image for image in named if discovered.claim(image)]
-            for image in sorted(set(named) - set(mine)):
-                logger.info(
-                    "%s names %s, which this scan already scans as an image target",
-                    full_path,
-                    image,
-                )
+            mine: list[str] = []
+            for image in sorted(_discover_container_images(clone_path)):
+                covering = discovered.claim(image, full_path)
+                if covering is None:
+                    mine.append(image)
+                else:
+                    logger.info(
+                        "%s names %s, which this scan already scans for %s: "
+                        "not scanned again",
+                        full_path,
+                        image,
+                        covering,
+                    )
             # `<root>/individual-images`: this job is handed
             # `<root>/individual-gitlab`, guarded as repository_scanner guards
             # it. Each folder is unique in the scan: its GitLab target's
@@ -449,15 +458,16 @@ def scan_gitlab_repo(
                 [f"{safe_name}__{_sanitize_path_component(i)}" for i in mine]
             )
             images_dir = root / "individual-images"
-            if mine:
-                # Created before scan_image resolves it. The orchestrator makes
-                # it up front only for `--image` targets, and on Windows a
-                # directory another job creates during `resolve()` can come
-                # back `\\?\`-prefixed, which scan_image's traversal check
-                # refuses (measured: 823 of 1500 racing resolves disagreed).
-                images_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
             for image, folder in zip(mine, folders, strict=True):
                 try:
+                    # Created before scan_image resolves it. The orchestrator
+                    # makes it up front only for `--image` targets, and on
+                    # Windows a directory another job creates during
+                    # `resolve()` can come back `\\?\`-prefixed, which
+                    # scan_image's traversal check refuses (measured: 823 of
+                    # 1500 racing resolves disagreed). Inside the `try`: an
+                    # image this job claimed gets its rows whatever fails.
+                    images_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
                     _image, image_rows = scan_image(
                         image=image,
                         results_dir=images_dir,

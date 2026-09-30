@@ -864,6 +864,47 @@ spec:
 
         assert seen == [(tmp_path / "individual-images", True)]
 
+    def test_a_claimed_image_whose_folder_cannot_be_made_still_has_rows(self, tmp_path):
+        """A claim keeps every other target from scanning the image, so the
+        claimer must record rows whatever fails: here a file stands where the
+        images folder goes. The repository's own rows are untouched."""
+        (tmp_path / "individual-images").write_bytes(b"not a directory")
+        images = DiscoveredImages()
+
+        with (
+            patch(
+                "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+                return_value=MagicMock(returncode=0),
+            ),
+            patch(
+                "scripts.cli.scan_jobs.gitlab_scanner.scan_repository",
+                return_value=("app", _rows(trivy=True)),
+            ),
+            patch(
+                "scripts.cli.scan_jobs.gitlab_scanner._discover_container_images",
+                return_value={"alpine:3.19"},
+            ),
+        ):
+            _full_path, statuses = scan_gitlab_repo(
+                gitlab_info={
+                    "full_path": "group/app",
+                    "url": "https://gitlab.com",
+                    "token": "t",
+                },
+                results_dir=tmp_path / "individual-gitlab",
+                tools=["trivy"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+                images=images,
+            )
+
+        assert statuses == _rows(trivy=True)
+        ((image, rows),) = images.found_in("group/app")
+        assert image == "alpine:3.19"
+        assert rows["trivy"].label == "failed:scanner error"
+
 
 class TestAbandonedGitlabTargetsStillGetTimings:
     """#824: gitlab was the only target type that never wrote scan-timings.json.

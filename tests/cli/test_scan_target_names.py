@@ -25,6 +25,7 @@ name the test chose.
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 import subprocess
 import sys
@@ -603,6 +604,16 @@ GITLAB = ["--gitlab-repo", "group/app", "--gitlab-token", "t"] + [
     "--gitlab-url",
     "https://gitlab.example.com",
 ]
+GITLAB_LOGGER = "scripts.cli.scan_jobs.gitlab_scanner"
+
+
+def _not_again(caplog) -> list[str]:
+    """The lines a GitLab job logs for an image another target already scans."""
+    return [
+        r.getMessage()
+        for r in caplog.records
+        if r.name == GITLAB_LOGGER and "not scanned again" in r.getMessage()
+    ]
 
 
 class TestAGitLabTargetScansTheImagesItNames:
@@ -783,25 +794,122 @@ class TestAGitLabTargetScansTheImagesItNames:
             output = env.results / folder / "trivy.json"
             assert image in json.loads(output.read_bytes())["command"]
 
-    def test_an_image_the_scan_already_scans_is_scanned_once(self, env, monkeypatch):
+    def test_an_image_the_scan_already_scans_is_scanned_once(
+        self, env, monkeypatch, caplog
+    ):
         """Two targets with one name put two rows per tool under it (#1312):
-        the reconciler fails the scan and history keeps one of them."""
+        the reconciler fails the scan and history keeps one of them. The
+        `--image` target is the one, and the GitLab target says so."""
         monkeypatch.setattr(
             "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
             _clone_holding({"Dockerfile": b"FROM alpine:3.19\n"}),
         )
 
-        assert env.run(*GITLAB, "--image", "alpine:3.19", "--tools", "trivy") == 0
+        with caplog.at_level(logging.INFO, logger=GITLAB_LOGGER):
+            rc = env.run(*GITLAB, "--image", "alpine:3.19", "--tools", "trivy")
 
-        assert _tool_runs(env.results) == [
-            ("gitlab", "group/app", "trivy"),
-            ("image", "alpine:3.19", "trivy"),
-        ]
+        assert rc == 0
+        expected = [("gitlab", "group/app", "trivy"), ("image", "alpine:3.19", "trivy")]
+        assert _tool_runs(env.results) == expected
+        assert _history(env.db) == expected
         assert sorted(_timings(env.results)) == [
             "individual-gitlab/group_app",
             "individual-images/alpine_3.19",
         ]
         assert reconcile(env.results).ok
+        assert _not_again(caplog) == [
+            "group/app names alpine:3.19, which this scan already scans for "
+            "--image: not scanned again"
+        ]
+
+    def test_two_gitlab_targets_naming_one_image_scan_it_once(
+        self, env, monkeypatch, caplog
+    ):
+        """Whichever job claims it first scans it, into its own folder; the
+        other names that target and scans nothing more."""
+        monkeypatch.setattr(
+            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+            _clone_holding({"Dockerfile": b"FROM alpine:3.19\n"}),
+        )
+        # The CLI takes one `--gitlab-repo`; discovery is what hands the scan
+        # two GitLab targets.
+        monkeypatch.setattr(
+            "scripts.cli.scan_orchestrator.ScanOrchestrator._discover_gitlab_repos",
+            lambda self, args: [
+                _gitlab_target("group/app"),
+                _gitlab_target("group/web"),
+            ],
+        )
+
+        with caplog.at_level(logging.INFO, logger=GITLAB_LOGGER):
+            assert env.run(*GITLAB, "--tools", "trivy") == 0
+
+        expected = [
+            ("gitlab", "group/app", "trivy"),
+            ("gitlab", "group/web", "trivy"),
+            ("image", "alpine:3.19", "trivy"),
+        ]
+        assert _tool_runs(env.results) == expected
+        assert _history(env.db) == expected
+        assert reconcile(env.results).ok
+        (folder,) = [
+            f for f in _timings(env.results) if f.startswith("individual-images/")
+        ]
+        scanned_for = {
+            "individual-images/group_app__alpine_3.19": "group/app",
+            "individual-images/group_web__alpine_3.19": "group/web",
+        }[folder]
+        other = ({"group/app", "group/web"} - {scanned_for}).pop()
+        assert _not_again(caplog) == [
+            f"{other} names alpine:3.19, which this scan already scans for "
+            f"{scanned_for}: not scanned again"
+        ]
+
+    def test_a_covering_target_that_fails_is_not_retried(
+        self, env, monkeypatch, caplog
+    ):
+        """The one scan of a reference speaks for it, failed or not: the
+        GitLab target does not try again what the `--image` target could not
+        pull, and the reference has one failed target, not two."""
+        missing = "registry.example.invalid/private/app:1.0"
+        invocations: list[str] = []
+
+        class _NoSuchImage(_WritingRunner):
+            def run_all_parallel(self) -> list[ToolResult]:
+                invocations.extend(d.name for d in self._definitions)
+                return [
+                    ToolResult(
+                        tool=d.name,
+                        status="error",
+                        returncode=1,
+                        failure="crash",
+                        output_file=d.output_file,
+                        error_message=f"unable to find the specified image {missing}",
+                    )
+                    for d in self._definitions
+                ]
+
+        monkeypatch.setattr(
+            "scripts.cli.scan_jobs.image_scanner.ToolRunner", _NoSuchImage
+        )
+        monkeypatch.setattr(
+            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
+            _clone_holding({"Dockerfile": f"FROM {missing}\n".encode()}),
+        )
+
+        with caplog.at_level(logging.INFO, logger=GITLAB_LOGGER):
+            rc = env.run(*GITLAB, "--image", missing, "--tools", "trivy,syft")
+
+        assert rc == 1
+        assert sorted(invocations) == ["syft", "trivy"], "the image was scanned twice"
+        meta = json.loads((env.results / ".scan_metadata.json").read_bytes())
+        image_rows = [r for r in meta["tool_runs"] if r["target_type"] == "image"]
+        assert sorted((r["target"], r["tool"], r["state"]) for r in image_rows) == [
+            (missing, "syft", "failed"),
+            (missing, "trivy", "failed"),
+        ]
+        assert reconcile(env.results).ok
+        assert len(_not_again(caplog)) == 1
 
 
 def _gitlab_target(full_path: str) -> dict[str, str]:
@@ -822,34 +930,6 @@ class TestTheScanRecordsAndResumesTheImagesItFound:
     found mid-scan, so no target list and no session registration knows it
     beforehand. It must still be one target in the results, checkpointed,
     and reported, not rescanned, by a resumed scan."""
-
-    def test_two_gitlab_targets_naming_one_image_scan_it_once(self, env, monkeypatch):
-        from scripts.cli.scan_orchestrator import (
-            ScanConfig,
-            ScanOrchestrator,
-            ScanTargets,
-        )
-
-        monkeypatch.setattr(
-            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run",
-            _clone_holding({"Dockerfile": b"FROM alpine:3.19\n"}),
-        )
-        orchestrator = ScanOrchestrator(
-            ScanConfig(results_dir=env.results, tools=["trivy"])
-        )
-        targets = ScanTargets(
-            gitlab_repos=[_gitlab_target("group/app"), _gitlab_target("group/web")]
-        )
-        orchestrator.setup_results_directories(targets)
-
-        results = orchestrator.scan_all(targets, {})
-
-        assert sorted((t, name) for t, name, _rows in results) == [
-            ("gitlab", "group/app"),
-            ("gitlab", "group/web"),
-            ("image", "alpine:3.19"),
-        ]
-        assert len(list(env.results.glob("individual-images/*"))) == 1
 
     def test_a_found_image_is_checkpointed_and_a_resume_reports_it(
         self, env, monkeypatch

@@ -175,14 +175,15 @@ class ScanSession:
                 target.tools[tool_name].status = status[row.state]
                 target.tools[tool_name].error = row.label if row.reason else ""
 
-    def found_images(self) -> list[str]:
-        """The completed images a GitLab target named (#1311): a resumed scan
-        reports and does not rescan them, and no target list names them."""
-        return [
-            tid
+    def found_images(self) -> dict[str, str]:
+        """Each completed image a GitLab target named (#1311), and that
+        target: a resumed scan reports and does not rescan them, and no target
+        list names them."""
+        return {
+            tid: t.found_in
             for tid, t in self.targets.items()
             if t.found_in and t.completed and t.target_type == "image"
-        ]
+        }
 
     def is_target_completed(self, target_id: str) -> bool:
         """Check if a specific target has been completed."""

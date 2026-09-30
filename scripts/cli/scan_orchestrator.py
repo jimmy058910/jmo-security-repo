@@ -1117,12 +1117,15 @@ class ScanOrchestrator:
 
         # The images a GitLab target names are image targets of their own
         # (#1311), each scanned once in the scan: never one it already scans
-        # with `--image`, nor one a scan it resumes has scanned. They are found
-        # mid-scan, so the session learns them as they come back, each
-        # checkpointed before the target that named it: a resumed scan that
-        # skips that target still has them.
-        found_earlier = session.found_images() if session is not None else []
-        discovered = DiscoveredImages([*targets.images, *found_earlier])
+        # with `--image`, nor one a scan it resumes has scanned, and not again
+        # when the one scan of it fails. They are found mid-scan, so the
+        # session learns them as they come back, each checkpointed before the
+        # target that named it: a resumed scan that skips that target still
+        # has them.
+        found_earlier = session.found_images() if session is not None else {}
+        discovered = DiscoveredImages(
+            {**dict.fromkeys(targets.images, "--image"), **found_earlier}
+        )
 
         def _record_found(gitlab_id: str) -> None:
             for image, image_rows in discovered.found_in(gitlab_id):

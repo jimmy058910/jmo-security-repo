@@ -189,7 +189,7 @@ class TestScanSession:
 
         restored = ScanSession.from_dict(session.to_dict())
 
-        assert restored.found_images() == ["alpine:3.19"]
+        assert restored.found_images() == {"alpine:3.19": "group/app"}
         assert restored.targets["alpine:3.19"].found_in == "group/app"
         assert restored.targets["nginx:latest"].found_in == ""
 
