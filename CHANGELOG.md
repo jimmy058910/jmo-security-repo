@@ -153,6 +153,12 @@ All notable changes to JMo Security will be documented in this file.
   `:balanced --help`, which validated the frozen image, and it now checks `:latest`.
   Built locally the image is 1,220.6 MiB, against 2,033 MiB for v1.0.8's published
   `:latest`.
+- **Breaking. gosec leaves the matrix; a scan runs 15 scanners.** It loads Go packages
+  through the go command, which neither the Docker image nor `jmo tools install` provides,
+  so it examined 0 files on every run and no scan ever got a finding from it. Naming it in
+  `--tools`, `--skip-tools` or `tools:` is now a usage error (exit 2) that says it was
+  removed in v2.0.0; Semgrep covers Go code. The Docker image no longer carries its binary
+  (#1310).
 
 ### Changed
 
@@ -308,6 +314,23 @@ All notable changes to JMo Security will be documented in this file.
   (#1355). Every built-in policy that used to read a consensus finding's `tool` now also
   reads its `detected_by` array, so a policy keyed on one tool sees a finding any member
   tool reported, whichever led the merge.
+- **Breaking. Each tool's own flag grammar decides what `per_tool.<tool>.flags` may
+  set.** The shared reserved list is gone. Each tool now declares the flags JMo owns and
+  the parser that reads them, and a flag is dropped, with a WARNING naming it and why, when
+  it is an output or format flag in any spelling the tool reads (attached, clustered or
+  `=`: trivy's `-qftable`, grype's `-otable` and gitleaks' `-vrREPORT.sarif`, which wrote
+  the unredacted secrets report into the scanned repository); a flag JMo already passes to
+  a parser that refuses a repeat (zizmor's `--offline` and `-o`, TruffleHog's
+  `--no-verification` and `--exclude-paths`); or an exit-code flag (grype's `-f high`: use
+  JMo's own `--fail-on`). On Windows a flag holding a cmd.exe metacharacter (`& | ^ < > %`)
+  bound for a `.cmd` or `.bat` launcher is dropped too (Checkov: write `A,B`, not `A|B`).
+  shellcheck's `-o` (`--enable`), which the old list refused wrongly, is now allowed.
+  What a user loses: a tool's own exit gating, and their own TruffleHog exclusions, since JMo
+  passes `--exclude-paths` itself and TruffleHog failed every run that repeated it (#1335).
+- **hadolint no longer lints a documentation file named `Dockerfile.<doc extension>`.**
+  `Dockerfile.md`, `.txt`, `.rst`, `.adoc` and `.html` are prose, and hadolint reported a
+  false DL1000 on them. hadolint and GitLab image discovery now share one definition of a
+  Dockerfile, which also ignores case, so `dockerfile.py` is not one (#1311).
 
 ### Fixed
 
@@ -484,6 +507,36 @@ All notable changes to JMo Security will be documented in this file.
   delegates to `common_finding.fingerprint` instead of carrying a copy that rendered a
   missing line and a padded message differently. **Behaviour change:** ids for those three
   tools' findings with no line number or a padded message differ from v1.1.1 (#1010).
+- **GitLab targets scan the container images their repository names.** Each image a
+  Dockerfile (`FROM`), docker-compose file or Kubernetes manifest names is pulled and
+  scanned as an image target of its own, exactly as `--image` would scan it, into
+  `individual-images/<group>_<repo>__<image>/`; until now none was scanned. One target per
+  reference per scan: a reference another target already covers (an `--image`, or an image
+  a second project names) is logged at INFO naming the target that scans it. Build
+  arguments (`FROM $BASE`), build stages and `scratch` are skipped. A reference the
+  validator refuses, or that cannot be pulled (a private registry, an unknown tag), is a
+  `failed` image row, so the scan exits 1, as `--image` does (#1311).
+- **A GitLab project named `results` is no longer scanned together with its own output.**
+  The clone's scan results went to a folder inside the clone when the project shared that
+  name; they now go straight to the target's folder in the results directory (#1364).
+- **zizmor no longer hides what it could not read.** Each workflow or `action.yml` it
+  drops as invalid is named at WARNING, and the row records it while staying `ran`. A
+  repository whose only matching file is invalid (an `action.yml` that belongs to another
+  framework) is `skipped`, reason `no workflow zizmor could read`, not `failed` on every
+  scan (#1362). A scan also says, at INFO, when it reads the repository's own `zizmor.yml`
+  or `.github/zizmor.yml`, which can switch audits off (#1363).
+- **yara_runner's crash exits 2, and never leaves an earlier run's output behind.** It
+  exited 1, which is also "matches found", so a crash read as findings over the previous
+  scan's file. It now removes that file first and exits 2 (#1382).
+- **A scanner whose run partly failed no longer makes its target read as having found
+  nothing.** When OSV-Scanner cannot read one lockfile or has no offline database for one
+  ecosystem, or TruffleHog or gitleaks reads the working tree but fails on git history,
+  the findings from what worked are kept and counted: the target is `partial`, the log
+  names what failed and how many findings were kept, and history stores the scan with that
+  tool's row failed. **Behaviour change:** such a scan exits 0, where it exited 1. A
+  partial target exits 0 and says what is missing, as it already did when another tool on
+  the target ran; a target that contributed nothing at all still exits 1.
+  `scan-timings.json` is schema 4, with a `kept_findings` count on each row (#1369).
 
 ## [1.1.1] - 2026-09-11
 
