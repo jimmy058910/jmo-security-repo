@@ -134,15 +134,18 @@ class TestReservedFlagsAreRefused:
 # Each spelling was run against the tool itself (trivy 0.74.0, grype
 # 0.118.0, syft 1.51.1, gitleaks 8.30.1, trufflehog 3.97.1, semgrep 1.175.0,
 # checkov 3.3.16, hadolint 2.15.1, shellcheck 0.11.0, zizmor 1.30.1,
-# osv-scanner 2.6.0, nuclei 3.11.1) and judged by what it wrote, except a few
-# output flags taken from the tool's own help: osv-scanner's `--serve`, zap's
-# `-quickout`, semgrep's `--json` and `--gitlab-*`. A refused
-# spelling lost the findings or moved the report: trivy `-ftable` took 42
-# findings to 0 with rc 0, grype `-otable` 7 to 0, and gitleaks `-vr<path>`
-# wrote its unredacted report into the scanned repository. A kept one is a
-# real flag of that tool (grype's `-f` is `--fail-on`, shellcheck's `-o` is
-# `--enable`, zizmor's `-o` is `--offline`), or a spelling the tool itself
-# rejects out loud (osv-scanner `-ftable`: "flag provided but not defined").
+# osv-scanner 2.6.0, nuclei 3.11.1) and judged by what it did, except the
+# flags taken from the tool's own help: osv-scanner's `--serve`, zap's
+# `-quickout`, semgrep's `--gitlab-*`, and the exit-code flags. A refused
+# spelling lost the findings or moved the report (trivy `-ftable` took 42
+# findings to 0 with rc 0, grype `-otable` 7 to 0, gitleaks `-vr<path>` wrote
+# its unredacted report into the scanned repository), repeats a flag JMo
+# passes to a parser that refuses a repeat (zizmor `-o` is its `--offline`:
+# rc 2, "cannot be used multiple times"), or sets an exit code the row does
+# not accept (grype `-f high`: rc 2 on a HIGH match). A kept one is a real flag
+# of that tool (semgrep's `-f` is `--config`, shellcheck's `-o` is
+# `--enable`), or a spelling the tool itself rejects out loud (osv-scanner
+# `-ftable`: "flag provided but not defined").
 # Spelled out rather than derived from the descriptors: a guard reading its
 # expectation from what it guards cannot fail when that changes.
 
@@ -164,6 +167,11 @@ REFUSED = [
     ("trivy", "-o table.txt"),
     ("trivy", "-o=table.txt"),
     ("trivy", "--output=table.txt"),
+    # `-format` is `-f ormat` to pflag, and `table` would be left a bare word.
+    ("trivy", "-format table"),
+    ("trivy", "-format=table"),
+    ("trivy", "--exit-code 1"),
+    ("trivy", "--exit-code=5"),
     # grype and syft: `-o` appends an output, so even `-ojson` breaks them;
     # `--file` redirects it and leaves stdout empty.
     ("grype", "-ojson"),
@@ -177,6 +185,11 @@ REFUSED = [
     ("grype", "-qo table"),
     ("grype", "--file x.json"),
     ("grype", "--file=x.json"),
+    # Exit code: rc 2 on a match at that severity, which the row does not accept.
+    ("grype", "-f high"),
+    ("grype", "-fhigh"),
+    ("grype", "--fail-on high"),
+    ("grype", "-qf high"),
     ("syft", "-ojson"),
     ("syft", "-otable"),
     ("syft", "-o table"),
@@ -202,6 +215,7 @@ REFUSED = [
     ("gitleaks", "--redact"),
     ("gitleaks", "--redact=50"),
     ("gitleaks", "--exit-code=1"),
+    ("gitleaks", "-report-format json"),
     # kingpin: what JMo already passes cannot be given twice ("flag 'json'
     # cannot be repeated", no output), and `--no-X` is X given again.
     ("trufflehog", "--no-verification"),
@@ -214,6 +228,15 @@ REFUSED = [
     ("trufflehog", "--json-legacy"),
     ("trufflehog", "--sarif"),
     ("trufflehog", "--github-actions"),
+    # JMo always passes its own exclusions file ("flag 'exclude-paths'
+    # cannot be repeated"), and `-jx` is `-j -x`, whose value goes too.
+    ("trufflehog", "--exclude-paths mine.txt"),
+    ("trufflehog", "--exclude-paths=mine.txt"),
+    ("trufflehog", "-x mine.txt"),
+    ("trufflehog", "-jx mine.txt"),
+    ("trufflehog", "--fail"),
+    ("trufflehog", "--no-fail"),
+    ("trufflehog", "--fail-on-scan-errors"),
     # Cmdliner: rc 2 and no output file, or a text report in JMo's JSON file.
     ("semgrep", "-oother.json"),
     ("semgrep", "-o other.json"),
@@ -228,6 +251,8 @@ REFUSED = [
     ("semgrep", "--junit-xml"),
     ("semgrep", "--gitlab-sast"),
     ("semgrep", "--gitlab-secrets"),
+    ("semgrep", "--error"),
+    ("semgrep", "--strict"),
     # argparse (configargparse): chains, and reads a long option's prefix.
     ("checkov", "-ocli"),
     ("checkov", "-o cli"),
@@ -239,6 +264,14 @@ REFUSED = [
     ("checkov", "-so cli"),
     ("checkov", "--outp cli"),
     ("checkov", "--outpu=cli"),
+    ("checkov", "-s"),
+    ("checkov", "--soft-fail"),
+    ("checkov", "--soft-fail-on CKV_AWS_1"),
+    ("checkov", "--hard-fail-on HIGH"),
+    ("checkov", "--no-fail-on-crash"),
+    # A reserved no-value flag chained before a value-taking one: its value
+    # is the next token, and it goes too.
+    ("checkov", "-sc CKV_AWS_1"),
     # optparse-applicative: a second `-f json` prints the report twice.
     ("hadolint", "-fjson"),
     ("hadolint", "-ftty"),
@@ -249,6 +282,10 @@ REFUSED = [
     ("hadolint", "-fsarif"),
     ("hadolint", "-Vftty"),
     ("hadolint", "-Vf tty"),
+    ("hadolint", "--no-fail"),
+    ("hadolint", "-tnone"),
+    ("hadolint", "-t none"),
+    ("hadolint", "--failure-threshold=none"),
     # Haskell's GetOpt: chains, and reads any unique prefix (`--fo=tty`).
     ("shellcheck", "-ftty"),
     ("shellcheck", "-f tty"),
@@ -264,6 +301,13 @@ REFUSED = [
     ("zizmor", "--format=plain"),
     ("zizmor", "--format plain"),
     ("zizmor", "--format=json"),
+    # clap: JMo passes `--offline` (`-o`) and `--no-exit-codes`, and any of
+    # them again is rc 2 (measured against JMo's own command line).
+    ("zizmor", "-o"),
+    ("zizmor", "-qo"),
+    ("zizmor", "--offline"),
+    ("zizmor", "--no-exit-codes"),
+    ("zizmor", "--strict-collection"),
     # Go's flag package: one dash or two, never chained.
     ("osv-scanner", "-f table"),
     ("osv-scanner", "-f=table"),
@@ -301,18 +345,15 @@ REFUSED = [
 ]
 
 KEPT = [
-    # Real flags a shared `-o`/`-f` refused.
-    ("grype", "-f high"),
-    ("grype", "-fhigh"),
-    ("grype", "--fail-on high"),
+    # Real flags a shared `-o`/`-f` refused. semgrep's `--config` is a list:
+    # a second one adds rules (measured beside JMo's own `--config`).
     ("semgrep", "-f rules.yaml"),
     ("semgrep", "-frules.yaml"),
     ("semgrep", "--config rules.yaml"),
+    ("semgrep", "--exclude tests"),
     ("checkov", "-f main.tf"),
     ("shellcheck", "-o all"),
     ("shellcheck", "-oall"),
-    ("zizmor", "-o"),
-    ("zizmor", "-qo"),
     # A value-taking or unknown letter ends the walk: the rest is its value.
     ("trivy", "-sHIGH"),
     ("trivy", "-sCRITICAL,HIGH -q"),
@@ -330,18 +371,14 @@ KEPT = [
     ("gitleaks", "-v"),
     ("gitleaks", "--max-target-megabytes 5"),
     ("checkov", "-cCKV_AWS_1"),
-    ("checkov", "-s"),
     ("checkov", "-qocli"),
     ("checkov", "--compact"),
     ("checkov", "--quiet"),
-    ("checkov", "--soft-fail"),
     # Longer than `--output`, so not a prefix of it: another option.
     ("checkov", "--output-file-path ofp"),
     ("checkov", "--output-f=ofp"),
     ("hadolint", "-cfoo.yaml"),
-    ("hadolint", "-tnone"),
-    ("hadolint", "-t none"),
-    ("hadolint", "--no-fail"),
+    ("hadolint", "--ignore DL3007"),
     ("shellcheck", "-Sstyle"),
     ("shellcheck", "--color=always"),
     # A tool that takes no prefix rejects this itself, out loud.
@@ -353,10 +390,10 @@ KEPT = [
     ("trufflehog", "--results=unverified"),
     ("trufflehog", "--results=verified,unverified,unknown"),
     ("trufflehog", "--no-color"),
-    ("zizmor", "--offline"),
+    ("trufflehog", "--concurrency=2"),
+    # zizmor 1.30.1 with JMo's own command line: rc 0.
     ("zizmor", "-q"),
     ("zizmor", "-p"),
-    ("zizmor", "--no-exit-codes"),
     ("zizmor", "--persona=auditor"),
     ("zizmor", "--min-severity=high"),
     # Go's flag package rejects an attached value itself (rc 127).
@@ -421,7 +458,9 @@ class TestEachToolsOwnGrammar:
         `-ftable` and reads `-format` as `--format`; checkov takes
         `--output-f=` for `--output-file-path` and shellcheck `--fo=` for
         `--format=`, where semgrep, hadolint and zizmor reject `--outp` and
-        `--form`; kingpin reads `--no-json` as `--json` given again."""
+        `--form`; kingpin reads `--no-json` as `--json` given again. A flag
+        given twice is rc 2 or 1 for trufflehog, zizmor and semgrep, and rc 0
+        for zap (`-cmd -cmd`), hadolint and the pflag tools."""
         assert {g for g in FlagGrammar if g.clusters} == {
             FlagGrammar.PFLAG,
             FlagGrammar.KINGPIN,
@@ -437,15 +476,137 @@ class TestEachToolsOwnGrammar:
         }
         assert {g for g in FlagGrammar if g.either_dash} == {FlagGrammar.GO_FLAG}
         assert {g for g in FlagGrammar if g.negates} == {FlagGrammar.KINGPIN}
+        assert {g for g in FlagGrammar if g.refuses_repeats} == {
+            FlagGrammar.KINGPIN,
+            FlagGrammar.CLAP,
+            FlagGrammar.CMDLINER,
+        }
 
     def test_no_row_reserves_a_flag_only_another_tool_has(self):
-        """The shared set's defect: one list for every tool refused grype's
-        `--fail-on` as `-f`. Each row's own list is its own spellings."""
-        assert "-f" not in DESCRIPTORS["grype"].reserved_flags
+        """The shared set's defect: one list for every tool refused semgrep's
+        `--config` as `-f`. Each row's own list is its own spellings."""
         assert "-f" not in DESCRIPTORS["semgrep"].reserved_flags
         assert "-f" not in DESCRIPTORS["checkov"].reserved_flags
         assert "-o" not in DESCRIPTORS["shellcheck"].reserved_flags
-        assert "-o" not in DESCRIPTORS["zizmor"].reserved_flags
+
+
+# Flags JMo passes that the parser takes more than once: a list option.
+# Measured beside JMo's own (semgrep 1.175.0, rc 0): a second `--config` adds
+# rules, a second `--exclude` adds exclusions.
+REPEATABLE = {("semgrep", "--config"), ("semgrep", "--exclude")}
+
+
+def _passed_flags(name: str, tmp_path: Path) -> set[str]:
+    """Every flag the row's builders put on the command line, and its
+    exclusion flag, which the scan loop adds on a repository."""
+    d = DESCRIPTORS[name]
+    repo = tmp_path / name
+    repo.mkdir()
+    passed = {d.exclusion_flag} if d.exclusion_flag else set()
+    for key, build in d.invocations.items():
+        ctx = ScanContext(
+            tool=name,
+            target_type=key,
+            target=repo,
+            out_dir=tmp_path,
+            binary=name,
+            history=True,
+            files=(str(repo / "input"),),
+        )
+        for invocation in build(ctx):
+            passed |= {
+                token.partition("=")[0]
+                for token in invocation.command[1:]
+                if token.startswith("-")
+            }
+    return passed
+
+
+class TestAFlagJmoPassesIsNotGivenTwice:
+    """A parser that refuses a flag given twice fails the run when a user's
+    flags repeat one JMo passes: zizmor's `-o` is its `--offline`, which JMo
+    passes, and was rc 2 ("the argument '--offline' cannot be used multiple
+    times"). So every flag JMo passes such a row is that row's."""
+
+    def test_every_flag_jmo_passes_a_parser_that_refuses_a_repeat_is_reserved(
+        self, tmp_path
+    ):
+        checked = {}
+        for name, d in DESCRIPTORS.items():
+            if d.flag_grammar.refuses_repeats:
+                checked[name] = _passed_flags(name, tmp_path)
+        # The derivation found what it has to: an empty set passes anything.
+        assert set(checked) == {"trufflehog", "semgrep", "zizmor"}
+        assert {"--json", "--no-verification", "--exclude-paths"} <= checked[
+            "trufflehog"
+        ]
+        assert {"--format", "--offline", "--no-exit-codes"} <= checked["zizmor"]
+
+        unreserved = sorted(
+            f"{name} {flag}"
+            for name, passed in checked.items()
+            for flag in passed
+            if DESCRIPTORS[name].reserved_spelling(flag) is None
+            and (name, flag) not in REPEATABLE
+        )
+        assert not unreserved, unreserved
+
+    def test_zizmor_is_handed_its_offline_flag_once(self, tmp_path):
+        repo = tmp_path / "repo"
+        workflow = repo / ".github" / "workflows" / "ci.yml"
+        workflow.parent.mkdir(parents=True)
+        workflow.write_bytes(b"on: push\njobs: {}\n")
+        out = tmp_path / "out"
+        out.mkdir()
+        commands: list[list[str]] = []
+
+        class Recorder:
+            def __init__(self, tools, progress_callback=None):
+                commands.extend(t.command for t in tools)
+
+            def run_all_parallel(self):
+                return []
+
+        tool_loop.run_tools(
+            tools=["zizmor"],
+            target_type="repo",
+            target=repo,
+            target_label="t",
+            out_dir=out,
+            timeout=60,
+            retries=0,
+            per_tool_config={"zizmor": {"flags": ["-o", "-qo", "-p"]}},
+            allow_missing_tools=False,
+            runner_cls=Recorder,
+            find_tool_func=lambda name: "/bin/zizmor",
+            repo_root=repo,
+        )
+
+        (command,) = commands
+        assert command.count("--offline") == 1, command
+        assert "-o" not in command and "-qo" not in command, command
+        # A flag JMo does not pass still reaches it.
+        assert "-p" in command, command
+
+
+class TestEachRefusalSaysWhy:
+    @pytest.mark.parametrize(
+        ("tool", "flags", "why"),
+        [
+            ("trivy", "-ftable", "where the tool writes"),
+            ("zizmor", "-o", "JMo already passes it"),
+            ("grype", "-f high", "--fail-on"),
+            ("yara", "--target elsewhere", "another target"),
+            ("trufflehog", "--no-verification", "per_tool.trufflehog.verify: true"),
+            ("osv-scanner", "--download-offline-databases", "jmo tools update"),
+        ],
+        ids=["output", "passed", "exit code", "target", "verify", "download"],
+    )
+    def test_the_warning_gives_the_reason_for_its_class(self, caplog, tool, flags, why):
+        with caplog.at_level(logging.WARNING, logger="scripts.cli.scan_utils"):
+            assert tool_flags({tool: {"flags": flags.split()}}, tool) == []
+        (message,) = [r.getMessage() for r in caplog.records]
+        assert why in message, message
 
 
 class TestTheClusterWalk:
@@ -466,6 +627,18 @@ class TestTheClusterWalk:
     def test_a_reserved_letter_ending_the_token_takes_the_next_one(self):
         cfg = {"trivy": {"flags": ["-qf", "table", "--no-progress"]}}
         assert tool_flags(cfg, "trivy") == ["--no-progress"]
+
+    def test_a_single_dash_long_name_takes_its_value(self):
+        """pflag reads `-format` as `-f ormat`, and would take `table` as a
+        scan target: refused as `--format`, so its value goes with it."""
+        cfg = {"trivy": {"flags": ["-format", "table", "--no-progress"]}}
+        assert tool_flags(cfg, "trivy") == ["--no-progress"]
+        cfg = {"gitleaks": {"flags": ["-report-format", "json"]}}
+        assert tool_flags(cfg, "gitleaks") == []
+
+    def test_a_reserved_no_value_flag_takes_no_value(self):
+        # zizmor's `-o` is `--offline`: what follows it is not its value.
+        assert tool_flags({"zizmor": {"flags": ["-o", "stays"]}}, "zizmor") == ["stays"]
 
     def test_a_parser_that_does_not_chain_gets_no_walk(self):
         """nuclei's `-or` is `-omit-raw`, not `-o r`: the walk would refuse
@@ -608,6 +781,58 @@ class TestALauncherGetsNoCmdMetacharacter:
         )
 
         assert seen == [flags]
+
+    @pytest.mark.parametrize(
+        ("resolved", "history_flags"),
+        [
+            ("C:/x/trufflehog.cmd", ("--branch", "main")),
+            (
+                "/usr/local/bin/trufflehog",
+                ("--since-commit", "a|b", "--branch", "main"),
+            ),
+        ],
+        ids=["cmd", "posix"],
+    )
+    def test_the_history_run_gets_the_same_check(
+        self, tmp_path, monkeypatch, resolved, history_flags
+    ):
+        """`history_flags` are filtered by their own call: both must be
+        handed the executable."""
+        seen: list[tuple[str, ...]] = []
+
+        def recording_builder(ctx: ScanContext) -> list:
+            seen.append(ctx.history_flags)
+            return []
+
+        monkeypatch.setitem(
+            DESCRIPTORS["trufflehog"].invocations, "repo", recording_builder
+        )
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / "a.py").write_bytes(b"x = 1\n")
+        out = tmp_path / "out"
+        out.mkdir()
+
+        tool_loop.run_tools(
+            tools=["trufflehog"],
+            target_type="repo",
+            target=repo,
+            target_label="t",
+            out_dir=out,
+            timeout=60,
+            retries=0,
+            per_tool_config={
+                "trufflehog": {
+                    "history_flags": ["--since-commit", "a|b", "--branch", "main"]
+                }
+            },
+            allow_missing_tools=False,
+            runner_cls=lambda **kw: type("R", (), {"run_all_parallel": lambda s: []})(),
+            find_tool_func=lambda name: resolved,
+            repo_root=repo,
+        )
+
+        assert seen == [history_flags]
 
 
 class TestTimeoutFloorReachesEveryTargetType:

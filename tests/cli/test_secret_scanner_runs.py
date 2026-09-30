@@ -388,17 +388,34 @@ class TestGitleaksOutputFlagsAreJmos:
 
 class TestTrufflehogFlagsJmoPassesAreJmos:
     """#1335: trufflehog's parser (kingpin) refuses any flag given twice, and
-    JMo passes `--json`, `--no-update` and `--no-verification` to both runs.
-    Measured through `jmo scan` on a fixture: `--no-verification` in its
-    flags made it exit 1 with "flag 'no-verification' cannot be repeated"
-    and no output. `--no-json` is `--json` given again."""
+    JMo passes `--json`, `--no-update`, `--no-verification` and its own
+    `--exclude-paths` file to both runs. Measured through `jmo scan` on a
+    fixture: `--no-verification` in its flags made it exit 1 with "flag
+    'no-verification' cannot be repeated" and no output; `--exclude-paths`
+    and `-x` fail the same way. `--no-json` is `--json` given again."""
 
     # How many times JMo passes each itself, in each run.
-    OWN = {"--json": 1, "--no-update": 1, "--no-verification": 1}
+    OWN = {
+        "--json": 1,
+        "--no-update": 1,
+        "--no-verification": 1,
+        "--exclude-paths": 1,
+    }
 
     @pytest.mark.parametrize("key", ["flags", "history_flags"])
     @pytest.mark.parametrize(
-        "flag", ["--no-verification", "--no-update", "--json", "-j", "--no-json"]
+        "flag",
+        [
+            "--no-verification",
+            "--no-update",
+            "--json",
+            "-j",
+            "--no-json",
+            "--exclude-paths",
+            "-x",
+            # Exits 183 on a find, which the row does not accept.
+            "--fail",
+        ],
     )
     def test_a_flag_it_would_refuse_twice_is_dropped(
         self, scan, monkeypatch, flag, key

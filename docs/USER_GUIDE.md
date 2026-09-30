@@ -1171,16 +1171,24 @@ This reverts to Phase 1 deduplication only (same tool, same location).
 - log_level: DEBUG|INFO|WARN|ERROR (defaults to INFO)
 - retries: global retry count for flaky tool invocations (0 by default)
 - per_tool: per‑tool overrides (`flags`, `timeout`, and tool-specific keys)
-  - A flag that decides where a tool writes or in what format is JMo's, and is dropped with a
-    warning naming it. Which flags those are is each tool's own: trivy's and hadolint's `-f`,
-    grype's and syft's `-o` and `--file`, semgrep's `-o`, `--text` and `--sarif`, nuclei's
-    `-jsonl`, Gitleaks' `--report-format`, `--report-path`/`-r`, `--report-template`,
-    `--exit-code`, `--redact` and `--config`/`-c` (a repository's own `.gitleaks.toml` is read
-    instead; see
-    [Known limitations](KNOWN_LIMITATIONS.md#gitleaks-extends-a-repositorys-own-gitleakstoml)),
-    and TruffleHog's `--json`, `--no-update` and `--no-verification`, which JMo already passes
-    it (`verify: true` turns verification on). A flag another tool spells the same way is left
-    alone: grype's `-f` is `--fail-on`, semgrep's `-f` is `--config`
+  - A flag JMo must control is dropped with a warning that names it and says why. Which flags
+    those are is each tool's own (every one is listed in its row's `reserved_flags`, in
+    `scripts/core/tool_descriptors.py`). They come in four kinds, for example:
+    - Where it writes or in what format: trivy's and hadolint's `-f`, grype's and syft's `-o`
+      and `--file`, semgrep's `-o`, `--text` and `--sarif`, nuclei's `-jsonl`, Gitleaks'
+      `--report-format`, `--report-path`/`-r` and `--redact`
+    - A flag JMo already passes to a tool that refuses one given twice, or whose second one
+      would replace JMo's: zizmor's `--offline` (`-o`), TruffleHog's `--no-verification`
+      (`verify: true` turns verification on) and `--exclude-paths`, and Gitleaks'
+      `--config`/`-c` (a repository's own `.gitleaks.toml` is read instead; see
+      [Known limitations](KNOWN_LIMITATIONS.md#gitleaks-extends-a-repositorys-own-gitleakstoml))
+    - Its exit code, since a code the tool's row does not accept fails a run that worked:
+      grype's `-f`/`--fail-on`, trivy's and Gitleaks' `--exit-code`, TruffleHog's `--fail`,
+      Checkov's `--soft-fail`. JMo's own `--fail-on` (`jmo ci`, `jmo report`) sets the
+      failure threshold
+    - Where JMo's own runners scan: yara's and jmo-native's `--target`
+  - A flag another tool spells the same way is left alone: semgrep's `-f` is `--config`, and
+    shellcheck's `-o` is `--enable`
   - Each is dropped in every spelling the tool's own parser reads: a value attached (`-ftable`),
     after other short flags (`-qftable` is trivy's `-q -f table`), one dash or two for nuclei and
     OSV-Scanner (`-format table`), and an abbreviation for Checkov and ShellCheck (`--outp`)

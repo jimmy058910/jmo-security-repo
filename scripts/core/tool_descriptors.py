@@ -142,7 +142,9 @@ class FlagGrammar(StrEnum):
     OPTPARSE_APPLICATIVE = "optparse-applicative"  # hadolint
     ARGPARSE = "argparse"  # checkov (configargparse), JMo's own runners
     CLAP = "clap"  # zizmor
-    GO_FLAG = "go-flag"  # Go's flag package: nuclei (goflags), osv-scanner (urfave/cli)
+    # Go's flag package and what reads alike: nuclei (goflags), osv-scanner
+    # (urfave/cli, measured to read `-format` and reject `-ftable` the same way).
+    GO_FLAG = "go-flag"
     ZAP = "zap"  # zap's own: single-dash names, each a whole token
 
     @property
@@ -170,6 +172,44 @@ class FlagGrammar(StrEnum):
         """`--no-X` sets X, so it repeats a flag JMo passes (`--no-json`:
         "flag 'json' cannot be repeated")."""
         return self is FlagGrammar.KINGPIN
+
+    @property
+    def refuses_repeats(self) -> bool:
+        """A flag given twice is an error, so every flag JMo passes is the
+        row's: trufflehog "flag 'exclude-paths' cannot be repeated", zizmor
+        "the argument '--offline' cannot be used multiple times" (rc 2),
+        semgrep "option '--json' cannot be repeated". A list option (semgrep's
+        `--config`, `--exclude`) is the exception. The others take a repeat:
+        zap ran `-cmd -cmd`, hadolint printed a second `-f json` report."""
+        return self in (FlagGrammar.KINGPIN, FlagGrammar.CLAP, FlagGrammar.CMDLINER)
+
+
+class Reserved(StrEnum):
+    """Why a flag is JMo's and not the user's: what its refusal says (#1335)."""
+
+    OUTPUT = (
+        "it decides where the tool writes or what it writes, which the report "
+        "phase reads"
+    )
+    # JMo passes it, and the parser refuses it twice or the user's replaces it.
+    PASSED = "JMo already passes it, and a second one fails the run or replaces JMo's"
+    EXIT_CODE = (
+        "it sets the tool's exit code, and a code the row does not accept fails "
+        "a run that worked. JMo's own --fail-on (jmo ci, jmo report) sets the "
+        "failure threshold"
+    )
+    TARGET = "it would point the scan at another target"
+    VERIFY = (
+        "JMo already passes it, and trufflehog refuses it twice. Set "
+        "per_tool.trufflehog.verify: true to verify secrets"
+    )
+    DOWNLOAD = "it downloads during the scan. `jmo tools update` fetches the databases"
+
+
+def _reserve(**why: Iterable[str]) -> dict[str, Reserved]:
+    """A row's `reserved_flags`, grouped by the `Reserved` member named:
+    `_reserve(OUTPUT=("-f", "--format"), EXIT_CODE=("--exit-code",))`."""
+    return {flag: Reserved[name] for name, flags in why.items() for flag in flags}
 
 
 @dataclass(frozen=True)
@@ -365,12 +405,13 @@ class ToolDescriptor:
     # reserved flag reach it (`reserved_spelling`).
     flag_grammar: FlagGrammar
     exclusion_flag: str | None = None
-    # Flags a user's `per_tool` flags may not set: this tool's own spellings
-    # of what decides where and how it writes, and of what JMo passes that its
-    # parser refuses to take twice (#1325, #1335). Per tool, since one tool's
-    # output flag is another's option (grype's `-f` is `--fail-on`, gitleaks'
-    # `-r` nuclei's `-resolvers`).
-    reserved_flags: frozenset[str] = frozenset()
+    # Flags a user's `per_tool` flags may not set, each with why (`Reserved`):
+    # this tool's own spellings of what decides where and how it writes, of
+    # its exit code, and of what JMo passes when its parser refuses a repeat
+    # (#1325, #1335). Per tool, since one tool's reserved flag is another's
+    # option (semgrep's `-f` is `--config`, and gitleaks' `-r` is nuclei's
+    # `-resolvers`).
+    reserved_flags: Mapping[str, Reserved] = field(default_factory=dict)
     # Its short flags that take no value. A clustering parser chains them, so
     # a reserved short flag can follow one: `-qftable` is trivy's `-q -f table`.
     short_switches: frozenset[str] = frozenset()
@@ -421,9 +462,10 @@ class ToolDescriptor:
         for a token that sets none of them.
 
         A chained short flag is found by walking the letters after the dash:
-        a no-value flag goes on to the next letter, a reserved one is the
-        answer, and anything else takes the rest of the token as its value
-        (`-sqf` is trivy's severity `qf`).
+        a no-value flag goes on to the next letter, and the first letter that
+        takes a value ends the walk, taking the rest of the token, or the next
+        token when nothing follows it (`-sqf` is trivy's severity `qf`). The
+        token is refused when a letter on the way is reserved.
         """
         if not token.startswith("-"):
             return None
@@ -431,7 +473,8 @@ class ToolDescriptor:
         name, equals, _ = token.partition("=")
         inline = bool(equals)
         if name in reserved:
-            return name, inline
+            # A no-value short flag leaves the next token alone.
+            return name, inline or name in self.short_switches
         if grammar.either_dash:
             bare = name.lstrip("-")
             found = sorted(r for r in reserved if r.lstrip("-") == bare)
@@ -447,12 +490,21 @@ class ToolDescriptor:
                     return longer[0], inline
             return None
         if grammar.clusters:
+            # `-format` is `-f ormat` to a chaining parser, and its value
+            # would be left a bare word: taken as `--format`, it goes too.
+            if len(name) > 2 and "-" + name in reserved:
+                return "-" + name, inline
+            switch: str | None = None  # a reserved no-value flag passed over
             for at, letter in enumerate(token[1:], start=2):
                 short = "-" + letter
+                if short in self.short_switches:
+                    if switch is None and short in reserved:
+                        switch = short
+                    continue
                 if short in reserved:
                     return short, at < len(token)
-                if short not in self.short_switches:
-                    return None
+                return (switch, at < len(token)) if switch else None
+            return (switch, True) if switch else None
         return None
 
 
@@ -1169,21 +1221,16 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             exclusion_style=ExclusionStyle.PATTERN_FILE,
             exclusion_flag="--exclude-paths",
             flag_grammar=FlagGrammar.KINGPIN,
-            # JMo passes `--json` (`-j`), `--no-update` and `--no-verification`,
-            # and kingpin refuses a flag given twice: `--no-verification` in the
-            # user's flags was rc 1, "flag 'no-verification' cannot be
-            # repeated", no output (measured, 3.97.1). The rest are its other
-            # output formats.
-            reserved_flags=frozenset(
-                {
-                    "-j",
-                    "--json",
-                    "--no-update",
-                    "--no-verification",
-                    "--json-legacy",
-                    "--sarif",
-                    "--github-actions",
-                }
+            # kingpin refuses a flag given twice, and JMo passes `--json`,
+            # `--no-update`, `--no-verification` and `--exclude-paths`: a
+            # user's `--no-verification` was rc 1, "flag 'no-verification'
+            # cannot be repeated", no output (measured, 3.97.1), and
+            # `--exclude-paths` or `-x` the same. `--fail` exits 183 on a find.
+            reserved_flags=_reserve(
+                OUTPUT=("-j", "--json", "--json-legacy", "--sarif", "--github-actions"),
+                PASSED=("--no-update", "--exclude-paths", "-x"),
+                VERIFY=("--no-verification",),
+                EXIT_CODE=("--fail", "--fail-on-scan-errors"),
             ),
             short_switches=frozenset({"-h", "-j"}),
             stub=[],
@@ -1208,18 +1255,17 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             # repository's own `.gitleaks.toml` is extended instead (#1327).
             # Chained, `-vrREPORT.sarif` (`-v -r`) wrote the unredacted report
             # into the repository, which gitleaks runs from (#1335, measured).
-            reserved_flags=frozenset(
-                {
+            reserved_flags=_reserve(
+                OUTPUT=(
                     "-f",
                     "--report-format",
                     "-r",
                     "--report-path",
                     "--report-template",
-                    "--exit-code",
                     "--redact",
-                    "-c",
-                    "--config",
-                }
+                ),
+                PASSED=("-c", "--config"),
+                EXIT_CODE=("--exit-code",),
             ),
             short_switches=frozenset({"-h", "-v"}),
             stub={"version": "2.1.0", "runs": []},
@@ -1233,11 +1279,12 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             exclusion_flag="--exclude",
             flag_grammar=FlagGrammar.CMDLINER,
             # A second output or format is rc 2 with no output file ("options
-            # '--output' and '-o' cannot be present at the same time", and
-            # "Mutually exclusive options" for `--sarif`), measured 1.175.0.
-            # Its `-f` is `--config`, which adds rules.
-            reserved_flags=frozenset(
-                {
+            # '--output' and '-o' cannot be present at the same time", "option
+            # '--json' cannot be repeated", and "Mutually exclusive options"
+            # for `--sarif`), measured 1.175.0. Its `-f` is `--config`, which
+            # adds rules, as a repeated `--exclude` adds exclusions.
+            reserved_flags=_reserve(
+                OUTPUT=(
                     "-o",
                     "--output",
                     "--json",
@@ -1248,7 +1295,8 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
                     "--junit-xml",
                     "--gitlab-sast",
                     "--gitlab-secrets",
-                }
+                ),
+                EXIT_CODE=("--error", "--strict"),
             ),
             short_switches=frozenset({"-a", "-d", "-q", "-v"}),
             # Its cost is its rule count, not the tree: 409.8 s and 583 s for
@@ -1267,7 +1315,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             # `-o` adds an output rather than replacing JMo's, so even `-ojson`
             # leaves two documents on stdout; `--file` moves it and leaves
             # stdout empty (measured, 1.51.1).
-            reserved_flags=frozenset({"-o", "--output", "--file"}),
+            reserved_flags=_reserve(OUTPUT=("-o", "--output", "--file")),
             short_switches=frozenset({"-h", "-q", "-v"}),
             # An SBOM inventories exactly those trees (#1205).
             excluded_vendored=(),
@@ -1304,8 +1352,11 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             exclusion_flag="--skip-dirs",
             flag_grammar=FlagGrammar.PFLAG,
             # `-ftable` took 42 findings to 0, rc 0, the row `ran` (#822,
-            # measured 0.74.0).
-            reserved_flags=frozenset({"-f", "--format", "-o", "--output"}),
+            # measured 0.74.0). `--exit-code` sets the code for any finding.
+            reserved_flags=_reserve(
+                OUTPUT=("-f", "--format", "-o", "--output"),
+                EXIT_CODE=("--exit-code",),
+            ),
             short_switches=frozenset({"-d", "-h", "-q", "-v"}),
             stub={"Results": []},
         ),
@@ -1325,8 +1376,18 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             exclusion_flag="--skip-path",
             flag_grammar=FlagGrammar.ARGPARSE,
             # `-ocli` put the table where JMo reads JSON: 33 findings to 0
-            # (measured, 3.3.16). Its `-f` is `--file`.
-            reserved_flags=frozenset({"-o", "--output"}),
+            # (measured, 3.3.16). Its `-f` is `--file`. `--no-fail-on-crash`
+            # would turn a crash (rc 2) into rc 0.
+            reserved_flags=_reserve(
+                OUTPUT=("-o", "--output"),
+                EXIT_CODE=(
+                    "-s",
+                    "--soft-fail",
+                    "--soft-fail-on",
+                    "--hard-fail-on",
+                    "--no-fail-on-crash",
+                ),
+            ),
             short_switches=frozenset({"-h", "-l", "-s", "-v"}),
             trigger=_iac_trigger,
             stub={"results": {"failed_checks": []}},
@@ -1341,7 +1402,10 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             flag_grammar=FlagGrammar.OPTPARSE_APPLICATIVE,
             # A second `-f json` prints the report twice, which no JSON parser
             # reads (measured, 2.15.1).
-            reserved_flags=frozenset({"-f", "--format"}),
+            reserved_flags=_reserve(
+                OUTPUT=("-f", "--format"),
+                EXIT_CODE=("--no-fail", "-t", "--failure-threshold"),
+            ),
             short_switches=frozenset({"-h", "-v", "-V"}),
             file_patterns=DOCKERFILE_PATTERNS,
             accepts_name=is_dockerfile,
@@ -1359,7 +1423,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             # JMo's `--format=json` comes first and wins today: `-ftty` changed
             # nothing (measured, 0.11.0). Refused anyway, since which one wins
             # is its parser's to decide. Its `-o` is `--enable`.
-            reserved_flags=frozenset({"-f", "--format"}),
+            reserved_flags=_reserve(OUTPUT=("-f", "--format")),
             short_switches=frozenset({"-a", "-V", "-x"}),
             file_patterns=("**/*.sh", "**/*.bash", "**/*.ksh"),
             no_files_reason=Reason.NO_SHELL_SCRIPTS,
@@ -1371,9 +1435,15 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             version_probe=VersionProbe(re.compile(r"zizmor\s+v?(\d+\.\d+\.\d+)")),
             exclusion_style=ExclusionStyle.WALK,
             flag_grammar=FlagGrammar.CLAP,
-            # A second `--format` is rc 2, no output (measured, 1.30.1). Its
-            # `-o` is `--offline`.
-            reserved_flags=frozenset({"--format"}),
+            # clap refuses a flag given twice, and JMo passes `--format`,
+            # `--offline` (its `-o`) and `--no-exit-codes`: any of them again
+            # is rc 2, "cannot be used multiple times" (measured, 1.30.1).
+            # `--strict-collection` fails the run on an input it cannot read.
+            reserved_flags=_reserve(
+                OUTPUT=("--format",),
+                PASSED=("-o", "--offline", "--no-exit-codes"),
+                EXIT_CODE=("--strict-collection",),
+            ),
             short_switches=frozenset({"-h", "-o", "-p", "-q", "-v", "-V"}),
             # The workflows GitHub runs (the root's, flat), every composite
             # action, and Dependabot's config, which has audits of its own
@@ -1423,7 +1493,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             flag_grammar=FlagGrammar.ARGPARSE,
             # argparse is last-one-wins: a second --target re-points the scan
             # and a second --output moves the report.
-            reserved_flags=frozenset({"--target", "--output"}),
+            reserved_flags=_reserve(OUTPUT=("--output",), TARGET=("--target",)),
             short_switches=frozenset({"-h"}),
             trigger=_native_trigger,
             builtin=True,
@@ -1442,7 +1512,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             exclusion_flag="--exclude-dir",
             flag_grammar=FlagGrammar.ARGPARSE,
             # As jmo-native's.
-            reserved_flags=frozenset({"--target", "--output"}),
+            reserved_flags=_reserve(OUTPUT=("--output",), TARGET=("--target",)),
             short_switches=frozenset({"-h"}),
         ),
         ToolDescriptor(
@@ -1453,8 +1523,12 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             exclusion_flag="--exclude",
             flag_grammar=FlagGrammar.PFLAG,
             # As syft's: `-otable` took 7 findings to 0 (measured, 0.118.0).
-            # Its `-f` is `--fail-on`.
-            reserved_flags=frozenset({"-o", "--output", "--file"}),
+            # Its `-f` is `--fail-on`: rc 2 on a match at that severity, which
+            # the row does not accept (measured).
+            reserved_flags=_reserve(
+                OUTPUT=("-o", "--output", "--file"),
+                EXIT_CODE=("-f", "--fail-on"),
+            ),
             short_switches=frozenset({"-h", "-q", "-v"}),
             # Reads vendored trees (#1205) except a virtualenv: 104 findings on
             # this repository were the dev machine's CPython (decided 2026-09-11).
@@ -1486,15 +1560,9 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             # (measured, 2.6.0). `--output` is `--output-file`'s deprecated
             # name; `--serve` serves the report as HTML instead. The download
             # flag would fetch mid-scan (measured: 207 -> 252 MB).
-            reserved_flags=frozenset(
-                {
-                    "-f",
-                    "--format",
-                    "--output-file",
-                    "--output",
-                    "--serve",
-                    "--download-offline-databases",
-                }
+            reserved_flags=_reserve(
+                OUTPUT=("-f", "--format", "--output-file", "--output", "--serve"),
+                DOWNLOAD=("--download-offline-databases",),
             ),
             stub={"version": "2.1.0", "runs": []},
         ),
@@ -1519,7 +1587,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             exclusion_style=ExclusionStyle.NOT_FILESYSTEM,
             flag_grammar=FlagGrammar.ZAP,
             # Where it writes; the file's extension picks the format.
-            reserved_flags=frozenset({"-quickout"}),
+            reserved_flags=_reserve(OUTPUT=("-quickout",)),
             excluded_vendored=(),
             off_target_reason=Reason.NEEDS_URL,
             timeout_floor=900,
@@ -1536,7 +1604,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             # `-jsonl=false` wrote text where JMo reads JSONL: 1 finding to 0
             # (measured, 3.11.1). Its other `-o...` and `-j...` flags are
             # names of their own (`-omit-raw`, `-je`), never `-o` chained.
-            reserved_flags=frozenset({"-o", "-output", "-j", "-jsonl"}),
+            reserved_flags=_reserve(OUTPUT=("-o", "-output", "-j", "-jsonl")),
             excluded_vendored=(),
             off_target_reason=Reason.NEEDS_URL,
             execution_commands=("nuclei",),

@@ -369,7 +369,7 @@ def tool_flags(
     while i < len(flags):
         token = flags[i]
         spelled = descriptor.reserved_spelling(token) if descriptor else None
-        if spelled is None:
+        if descriptor is None or spelled is None:
             kept.append(token)
             i += 1
             continue
@@ -378,12 +378,12 @@ def tool_flags(
         if not inline and _value_follows(flags, i):
             end += 1
         logger.warning(
-            "Ignoring `%s` in %s: %s reads it as `%s`, which JMo controls - it "
-            "decides the output the report phase reads",
+            "Ignoring `%s` in %s: %s reads it as `%s`: %s",
             " ".join(flags[i:end]),
             where,
             tool,
             flag,
+            descriptor.reserved_flags[flag],
         )
         i = end
 
@@ -403,7 +403,12 @@ def _without_cmd_metacharacters(
     """`flags` minus any holding one of `_CMD_METACHARS`, each with its flag
     or value: `--skip-check` without its `A|B` would read the next token as
     its value. The launcher's argv is re-parsed by cmd.exe, where no quoting
-    survives (see `_CMD_METACHARS`)."""
+    survives (see `_CMD_METACHARS`).
+
+    A bare token is paired with the flag before it, which cannot be told from
+    a no-value flag followed by a positional: `["--quiet", "A|B"]` drops both.
+    Accepted, since a per_tool entry is flags and their values, and the
+    WARNING names every token it drops."""
     kept: list[str] = []
     i = 0
     while i < len(flags):
