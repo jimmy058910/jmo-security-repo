@@ -369,3 +369,123 @@ class TestAdapterContract:
         assert findings[0].ruleId == "JMo_Test_Webshell"
         assert findings[0].severity == "HIGH"
         assert "app.php" in findings[0].location["path"]
+
+
+class _Rules:
+    """A compiled rule set whose match raises what libyara does not: nothing in
+    `(yara.Error, OSError)`, so the per-file handler does not catch it."""
+
+    def match(self, filepath, timeout):
+        raise RuntimeError("planted failure")
+
+
+class _StubYara:
+    class Error(Exception):
+        pass
+
+    @staticmethod
+    def compile(**_kwargs):
+        return _Rules()
+
+
+class TestCrash:
+    """An exception the runner did not anticipate exited 1, which the yara row
+    accepts as "matches found" (`ok_return_codes=(0, 1)`), over whatever
+    `--output` already held (#1382). 2 is "did not scan"."""
+
+    def _args(self, tmp_path: Path, out: Path) -> list[str]:
+        rules = _rules_dir(tmp_path, hit=RULE_HIT)
+        target = _target_dir(tmp_path, **{"a.txt": b"hello"})
+        return ["--rules", str(rules), "--target", str(target), "--output", str(out)]
+
+    def test_an_unexpected_exception_exits_2_and_says_why(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        monkeypatch.setattr(yara_runner, "_import_yara", lambda: _StubYara)
+        out = tmp_path / "yara.json"
+
+        rc = yara_runner.main(self._args(tmp_path, out))
+
+        assert rc == yara_runner.EXIT_ERROR
+        assert not out.exists()
+        err = capsys.readouterr().err
+        assert "RuntimeError: planted failure" in err
+        assert "nothing was scanned" in err
+
+    def test_a_stale_output_is_gone_after_a_crashed_run(self, tmp_path, monkeypatch):
+        """Else a crash on a re-used results directory reads as the previous
+        scan's matches."""
+        monkeypatch.setattr(yara_runner, "_import_yara", lambda: _StubYara)
+        out = tmp_path / "yara.json"
+        out.write_bytes(b'[{"rule": "stale"}]')
+
+        rc = yara_runner.main(self._args(tmp_path, out))
+
+        assert rc == yara_runner.EXIT_ERROR
+        assert not out.exists()
+
+    def test_a_stale_output_is_gone_when_the_scan_stops_early(self, tmp_path):
+        """The runner's anticipated failures left it too: a missing target
+        exited 2 over the previous scan's file."""
+        rules = _rules_dir(tmp_path, hit=RULE_HIT)
+        out = tmp_path / "yara.json"
+        out.write_bytes(b'[{"rule": "stale"}]')
+
+        rc = yara_runner.main(
+            [
+                "--rules",
+                str(rules),
+                "--target",
+                str(tmp_path / "no-such-repo"),
+                "--output",
+                str(out),
+            ]
+        )
+
+        assert rc == yara_runner.EXIT_ERROR
+        assert not out.exists()
+
+    def test_an_output_that_cannot_be_removed_is_an_error(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        """A directory where the file should be: nothing is scanned over it."""
+        out = tmp_path / "yara.json"
+        out.mkdir()
+
+        rc = yara_runner.main(self._args(tmp_path, out))
+
+        assert rc == yara_runner.EXIT_ERROR
+        assert "could not remove" in capsys.readouterr().err
+
+    def test_a_real_process_crash_exits_2_and_removes_the_stale_output(self, tmp_path):
+        """A real subprocess, nothing patched. An `--timeout` no C long holds
+        makes libyara's binding raise OverflowError on the first file, which
+        is not `yara.Error` or `OSError`: it escaped and Python exited 1
+        (measured, Windows, before the fix)."""
+        import subprocess
+        import sys
+
+        pytest.importorskip("yara")
+        out = tmp_path / "yara.json"
+        out.write_bytes(b'[{"rule": "stale"}]')
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "scripts.core.yara_runner",
+                *self._args(tmp_path, out),
+                "--timeout",
+                str(2**70),
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=120,
+            cwd=Path(__file__).resolve().parents[2],
+        )
+
+        assert result.returncode == yara_runner.EXIT_ERROR, result.stderr
+        assert not out.exists()
+        assert "OverflowError" in result.stderr
