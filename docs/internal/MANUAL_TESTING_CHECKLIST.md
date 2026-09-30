@@ -13,7 +13,7 @@
 > #959 named were audited; the rest were left as they stand rather than
 > re-ticked without running them, which is the failure this note exists to stop.
 >
-> **v2.0.0 removed scan profiles, the per-profile Docker images and 16 tools**
+> **v2.0.0 removed scan profiles, the per-profile Docker images and 17 tools**
 > (see [TOOLS.md](../TOOLS.md#removed-in-v200)). A tick below that names a
 > profile, a variant image or a removed tool is a v1.0 record of what was
 > observed then, and is left as written. Items for features that no longer exist

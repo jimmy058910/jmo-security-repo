@@ -42,7 +42,6 @@ OLD_REPO_TOOLS = {
     "checkov",
     "hadolint",
     "shellcheck",
-    "gosec",
     "yara",
     "grype",
     "zap",
@@ -59,7 +58,6 @@ OLD_TOOL_BINARY_NAMES = {"zap": "zap.sh"}
 OLD_TOOL_EXECUTION_COMMANDS = {
     "zap": ["zap.sh", "java"],
     "nuclei": ["nuclei"],
-    "gosec": ["gosec"],
 }
 OLD_VENDOR_NOISE_TOOLS = {"semgrep", "trivy", "checkov"}
 OLD_TOOL_EXCLUSION_FLAG = {
@@ -87,7 +85,6 @@ OLD_VERSION_PATTERNS = {
     "nuclei": (r"Version:\s*v?(\d+\.\d+\.\d+)", 0),
     "trufflehog": (r"trufflehog\s+v?(\d+\.\d+\.\d+)", 0),
     "shellcheck": (r"(?:version:?\s*)?(\d+\.\d+\.\d+)", re.IGNORECASE),
-    "gosec": (r"Version:\s*v?(\d+\.\d+\.\d+)", 0),
     "hadolint": (r"Haskell Dockerfile Linter\s+v?(\d+\.\d+\.\d+)", 0),
     "checkov": (r"(?:checkov\s+)?(\d+\.\d+\.\d+)", re.IGNORECASE),
     "semgrep": (r"^(\d+\.\d+\.\d+)$", re.MULTILINE),
@@ -144,17 +141,13 @@ def test_osv_scanner_joined_beside_the_other_dependency_scanner() -> None:
     assert names[names.index("grype") + 1] == "osv-scanner"
 
 
-def test_jmo_native_joined_between_gosec_and_yara() -> None:
-    """Phase 4, PR N: jmo-native, JMo's own check pack, so the matrix is 16.
-    Listed after gosec, the other content-triggered code checker, and before
-    yara, the other runner JMo drives on its own interpreter."""
-    assert len(DESCRIPTORS) == 16
+def test_jmo_native_joined_before_yara() -> None:
+    """Phase 4, PR N: jmo-native, JMo's own check pack. Listed before yara, the
+    other runner JMo drives on its own interpreter. PR G removed gosec (#1310),
+    so the matrix is 15."""
+    assert len(DESCRIPTORS) == 15
     names = list(DESCRIPTORS)
-    assert names[names.index("gosec") : names.index("gosec") + 3] == [
-        "gosec",
-        "jmo-native",
-        "yara",
-    ]
+    assert names[names.index("jmo-native") + 1] == "yara"
 
 
 def test_target_types_differ_from_the_old_literal_only_by_the_url_tools() -> None:
@@ -180,7 +173,7 @@ def test_timeout_floors_are_derived_unchanged() -> None:
 
 
 def test_stub_shapes_are_derived_unchanged_plus_the_three_empty_ones() -> None:
-    """shellcheck, gosec and yara had no entry and fell back to `{}`; they are
+    """shellcheck and yara had no entry and fell back to `{}`; they are
     declared now, with the value they already got. gitleaks (PR C), zizmor
     (PR Z), osv-scanner (PR O) and jmo-native (PR N) write SARIF, so their
     empty result is an empty SARIF document."""
@@ -188,7 +181,6 @@ def test_stub_shapes_are_derived_unchanged_plus_the_three_empty_ones() -> None:
     assert derived == {
         **OLD_STUBS,
         "shellcheck": {},
-        "gosec": {},
         "yara": {},
         "gitleaks": {"version": "2.1.0", "runs": []},
         "zizmor": {"version": "2.1.0", "runs": []},
@@ -243,7 +235,7 @@ def test_the_gitleaks_probe_reads_what_gitleaks_version_prints() -> None:
 
 
 def test_exclusions_old_flags_survive_and_the_new_tools_gain_one() -> None:
-    """#1235: syft, grype and gosec had no exclusion at all. trivy's style keeps
+    """#1235: syft and grype had no exclusion at all. trivy's style keeps
     its old name; syft and grype share it, measured (bare names are fatal)."""
     assert {
         k: v
@@ -252,8 +244,6 @@ def test_exclusions_old_flags_survive_and_the_new_tools_gain_one() -> None:
     } == OLD_TOOL_EXCLUSION_FLAG
     assert scan_utils.TOOL_EXCLUSION_FLAG["syft"] == ("--exclude", "separate")
     assert scan_utils.TOOL_EXCLUSION_FLAG["grype"] == ("--exclude", "separate")
-    # A regex, bounded to whole segments: a bare `.git` also dropped `.github`.
-    assert scan_utils.TOOL_EXCLUSION_FLAG["gosec"] == ("-exclude-dir", "inline_regex")
 
 
 def test_vendored_tier_is_the_old_set_plus_the_readers_that_walked_anyway() -> None:
@@ -267,7 +257,6 @@ def test_vendored_tier_is_the_old_set_plus_the_readers_that_walked_anyway() -> N
             "trufflehog",
             "hadolint",
             "shellcheck",
-            "gosec",
             "yara",
             # PR C: the second secret scanner, for the same reason as the first.
             "gitleaks",
@@ -340,10 +329,10 @@ class TestToolNames:
         assert f"{name}" in str(exc.value)
         assert "removed in v2.0.0" in str(exc.value)
 
-    def test_sixteen_were_removed(self) -> None:
-        """docs/TOOLS.md "Removed in v2.0.0" lists sixteen; falco's companion
+    def test_seventeen_were_removed(self) -> None:
+        """docs/TOOLS.md "Removed in v2.0.0" lists seventeen; falco's companion
         falcoctl is accepted as a spelling of the same removal."""
-        assert len(REMOVED_TOOLS - {"falcoctl"}) == 16
+        assert len(REMOVED_TOOLS - {"falcoctl"}) == 17
         assert not REMOVED_TOOLS & set(DESCRIPTORS)
 
 

@@ -19,7 +19,6 @@ import pytest
 
 # Import all adapters for comprehensive testing
 from scripts.core.adapters.checkov_adapter import CheckovAdapter
-from scripts.core.adapters.gosec_adapter import GosecAdapter
 from scripts.core.adapters.grype_adapter import GrypeAdapter
 from scripts.core.adapters.hadolint_adapter import HadolintAdapter
 from scripts.core.adapters.nuclei_adapter import NucleiAdapter
@@ -37,7 +36,6 @@ from scripts.core.adapters.zap_adapter import ZapAdapter
 
 ALL_ADAPTERS = [
     ("checkov", CheckovAdapter),
-    ("gosec", GosecAdapter),
     ("grype", GrypeAdapter),
     ("hadolint", HadolintAdapter),
     ("nuclei", NucleiAdapter),

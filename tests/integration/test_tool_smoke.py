@@ -231,19 +231,6 @@ SMOKE_TEST_CONFIGS: dict[str, ToolSmokeConfig] = {
         output_format="stdout",  # Checkov outputs to stdout, CLI captures it
         description="IaC scanner",
     ),
-    "gosec": ToolSmokeConfig(
-        name="gosec",
-        timeout=120,
-        min_findings=0,  # No Go code in fixture
-        command_template=[
-            "gosec",
-            "-fmt=json",
-            "-out={output}",
-            "{target}/...",
-        ],
-        description="Go security scanner",
-        skip_reason="No Go code in juice-shop fixture",
-    ),
     "zap": ToolSmokeConfig(
         name="zap",
         timeout=240,

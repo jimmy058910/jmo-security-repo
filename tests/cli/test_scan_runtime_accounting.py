@@ -829,7 +829,7 @@ class TestToolApplicableToNoTargetType:
 
 
 class TestTheSkipReasonsReadDifferently:
-    """#1081: `not installed` is a gap the user can close; `no Go sources` is a
+    """#1081: `not installed` is a gap the user can close; `no Dockerfiles` is a
     correct decision about this target. The end-of-scan WARN is for the first
     only, and must keep firing for it."""
 
@@ -838,7 +838,7 @@ class TestTheSkipReasonsReadDifferently:
             rows(
                 semgrep="ran",
                 trivy="skipped:not installed",
-                gosec="skipped:no Go sources",
+                hadolint="skipped:no Dockerfiles",
                 zap="skipped:needs --url",
                 grype="failed:timed out",
             )
@@ -848,7 +848,7 @@ class TestTheSkipReasonsReadDifferently:
         assert summary.failed == ["grype"]
         # In-scope skips only: a tool that reads no target of this kind is not
         # news on a line about why this target produced nothing.
-        assert summary.skipped == ["gosec (no Go sources)", "trivy (not installed)"]
+        assert summary.skipped == ["hadolint (no Dockerfiles)", "trivy (not installed)"]
         assert summary.outcome == TARGET_PARTIAL
 
     @staticmethod
@@ -878,7 +878,7 @@ class TestTheSkipReasonsReadDifferently:
         self, scan_env, tmp_path, monkeypatch, capsys
     ):
         err = self._scan_with(
-            scan_env, tmp_path, monkeypatch, capsys, "gosec", resolves=True
+            scan_env, tmp_path, monkeypatch, capsys, "hadolint", resolves=True
         )
 
         assert "were STUBBED, not executed" not in err, err
@@ -886,7 +886,7 @@ class TestTheSkipReasonsReadDifferently:
             ln for ln in err.splitlines() if "SKIPPED with nothing to scan" in ln
         ]
         assert len(skipped) == 1, f"expected one skipped line: {err}"
-        assert "gosec (no Go sources)" in skipped[0]
+        assert "hadolint (no Dockerfiles)" in skipped[0]
         assert '"level": "INFO"' in skipped[0], "a benign outcome was raised to WARN"
 
     def test_a_tool_that_reads_no_repository_is_not_listed(
@@ -897,11 +897,11 @@ class TestTheSkipReasonsReadDifferently:
         default repository scan said zap and nuclei had nothing to scan."""
         cfg = tmp_path / "jmo.yml"
         cfg.write_text(
-            yaml.safe_dump({"tools": ["gosec", "zap"], "outputs": ["json"]}),
+            yaml.safe_dump({"tools": ["hadolint", "zap"], "outputs": ["json"]}),
             encoding="utf-8",
         )
         scan_env.config = str(cfg)
-        scan_env.tools = ["gosec", "zap"]
+        scan_env.tools = ["hadolint", "zap"]
         monkeypatch.setattr(
             "scripts.cli.scan_jobs.tool_loop.find_tool",
             lambda name, *a, **k: "/usr/bin/" + name,
@@ -914,7 +914,7 @@ class TestTheSkipReasonsReadDifferently:
             ln for ln in err.splitlines() if "SKIPPED with nothing to scan" in ln
         ]
         assert len(skipped) == 1, err
-        assert "gosec (no Go sources)" in skipped[0]
+        assert "hadolint (no Dockerfiles)" in skipped[0]
         assert "zap" not in skipped[0], skipped[0]
 
     def test_a_missing_binary_is_still_reported_as_a_stub(
@@ -922,12 +922,12 @@ class TestTheSkipReasonsReadDifferently:
     ):
         """The other half: a fix that simply stopped warning would pass above."""
         err = self._scan_with(
-            scan_env, tmp_path, monkeypatch, capsys, "gosec", resolves=False
+            scan_env, tmp_path, monkeypatch, capsys, "hadolint", resolves=False
         )
 
         stubbed = [ln for ln in err.splitlines() if "were STUBBED, not executed" in ln]
         assert len(stubbed) == 1, f"the true warning was lost with the false one: {err}"
-        assert "gosec" in stubbed[0]
+        assert "hadolint" in stubbed[0]
         assert '"level": "WARN"' in stubbed[0]
         assert "SKIPPED with nothing to scan" not in err
 
@@ -938,19 +938,19 @@ class TestThePerTargetLineOnlyWarnsAboutRealGaps:
     end of the run."""
 
     @staticmethod
-    def _scan(scan_env, tmp_path, monkeypatch, capsys, *, gosec_resolves):
+    def _scan(scan_env, tmp_path, monkeypatch, capsys, *, hadolint_resolves):
         from scripts.core.tool_runner import ToolResult
 
         cfg = tmp_path / "jmo.yml"
         cfg.write_text(
-            yaml.safe_dump({"tools": ["trufflehog", "gosec"], "outputs": ["json"]}),
+            yaml.safe_dump({"tools": ["trufflehog", "hadolint"], "outputs": ["json"]}),
             encoding="utf-8",
         )
         scan_env.config = str(cfg)
-        scan_env.tools = ["trufflehog", "gosec"]
+        scan_env.tools = ["trufflehog", "hadolint"]
         scan_env.allow_missing_tools = True
 
-        resolvable = {"trufflehog", "gosec"} if gosec_resolves else {"trufflehog"}
+        resolvable = {"trufflehog", "hadolint"} if hadolint_resolves else {"trufflehog"}
         monkeypatch.setattr(
             "scripts.cli.scan_jobs.tool_loop.find_tool",
             lambda name, *a, **k: ("/usr/bin/" + name) if name in resolvable else None,
@@ -975,22 +975,26 @@ class TestThePerTargetLineOnlyWarnsAboutRealGaps:
     def test_a_tool_with_nothing_to_scan_does_not_warn_on_the_target_line(
         self, scan_env, tmp_path, monkeypatch, capsys
     ):
-        err = self._scan(scan_env, tmp_path, monkeypatch, capsys, gosec_resolves=True)
+        err = self._scan(
+            scan_env, tmp_path, monkeypatch, capsys, hadolint_resolves=True
+        )
         line = self._progress_line(err)
 
         assert "were stubbed and did NOT run" not in line, line
         assert '"level": "INFO"' in line, "a clean target was raised to WARN: " + line
         assert "SKIPPED with nothing to scan" in err
-        assert "gosec" in err
+        assert "hadolint" in err
 
     def test_a_missing_tool_still_warns_on_the_target_line(
         self, scan_env, tmp_path, monkeypatch, capsys
     ):
-        err = self._scan(scan_env, tmp_path, monkeypatch, capsys, gosec_resolves=False)
+        err = self._scan(
+            scan_env, tmp_path, monkeypatch, capsys, hadolint_resolves=False
+        )
         line = self._progress_line(err)
 
         assert "1 tool(s) were stubbed and did NOT run" in line, line
-        assert "gosec" in line
+        assert "hadolint" in line
         assert '"level": "WARN"' in line
 
     def test_a_target_with_nothing_for_its_only_tool_is_not_a_warning(

@@ -1,6 +1,6 @@
 # JMo Security Audit Tool Suite
 
-A terminal-first, cross-platform security audit toolkit that orchestrates 16 scanners (secrets, SAST, SBOM, SCA, IaC, Dockerfile, DAST, Kubernetes) with a unified Python CLI, normalized outputs, and an HTML dashboard.
+A terminal-first, cross-platform security audit toolkit that orchestrates 15 scanners (secrets, SAST, SBOM, SCA, IaC, Dockerfile, DAST, Kubernetes) with a unified Python CLI, normalized outputs, and an HTML dashboard.
 
 ## Quick Start
 
@@ -19,22 +19,22 @@ open results/summaries/dashboard.html
 
 ## Image Tags
 
-There is one image. `latest` tracks the newest release and `X.Y.Z` pins a specific one. Both carry the 16 scanners plus OPA, the policy engine.
+There is one image. `latest` tracks the newest release and `X.Y.Z` pins a specific one. Both carry the 15 scanners plus OPA, the policy engine.
 
 Docker Hub is a replica; the primary registry is GHCR (`ghcr.io/jimmy058910/jmo-security`), and the same tags are also on ECR Public (`public.ecr.aws/m2d8u2k1/jmo-security`).
 
 ## Features
 
 - 🎯 **Multi-Target Scanning**: Repos, containers, IaC, URLs, Kubernetes, GitLab
-- 🔐 **16 Security Scanners**: Secrets (TruffleHog, Gitleaks), SAST (Semgrep, Gosec), SBOM/SCA (Syft, Trivy, Grype, OSV-Scanner), IaC (Checkov, Trivy), GitHub Actions (zizmor), Kubernetes (Trivy), DAST (OWASP ZAP, Nuclei), Next.js, Supabase and Firebase (jmo-native, JMo's own checks), plus Hadolint, ShellCheck and YARA. The target's content decides which of them run. OPA ships alongside them as the policy engine.
+- 🔐 **15 Security Scanners**: Secrets (TruffleHog, Gitleaks), SAST (Semgrep), SBOM/SCA (Syft, Trivy, Grype, OSV-Scanner), IaC (Checkov, Trivy), GitHub Actions (zizmor), Kubernetes (Trivy), DAST (OWASP ZAP, Nuclei), Next.js, Supabase and Firebase (jmo-native, JMo's own checks), plus Hadolint, ShellCheck and YARA. The target's content decides which of them run. OPA ships alongside them as the policy engine.
 - 📊 **Unified Reporting**: JSON, Markdown, HTML dashboard, SARIF, YAML, CSV, compliance reports
 - ⚡ **Parallel Execution**: Scan multiple targets simultaneously with auto-detected CPU threads
 - 📈 **Real-Time Progress**: Live scan progress with ETA estimation
 
 ## What's New in v2.0.0
 
-- **No more scan profiles.** `fast`, `slim`, `balanced` and `deep` are gone. `jmo scan` considers all 16 scanners and the target's content decides which run; narrow the list with `--tools` or `--skip-tools`.
-- **16 tools removed**, among them kubescape, prowler, bandit (as a scanner), noseyparker and falco. Kubernetes scanning is Trivy's.
+- **No more scan profiles.** `fast`, `slim`, `balanced` and `deep` are gone. `jmo scan` considers all 15 scanners and the target's content decides which run; narrow the list with `--tools` or `--skip-tools`.
+- **17 tools removed**, among them kubescape, prowler, bandit (as a scanner), noseyparker and falco. Kubernetes scanning is Trivy's.
 - **One image.** `latest` and version tags; the `fast`, `slim`, `balanced`, `deep` and `full` tags are no longer built.
 
 Upgrading from v1.x: [UPGRADE.md](https://github.com/jimmy058910/jmo-security-repo/blob/main/UPGRADE.md). Full list: [CHANGELOG.md](https://github.com/jimmy058910/jmo-security-repo/blob/main/CHANGELOG.md)

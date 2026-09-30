@@ -541,7 +541,7 @@ class TestOneBadFindingDoesNotDiscardTheScan:
             [
                 {"id": "a", "tool": {"name": "semgrep"}},
                 {"tool": {"name": "trivy"}},
-                {"id": "a", "tool": {"name": "gosec"}},
+                {"id": "a", "tool": {"name": "hadolint"}},
                 {"id": "b", "tool": {"name": "trivy"}},
             ],
         )
@@ -556,7 +556,7 @@ class TestOneBadFindingDoesNotDiscardTheScan:
             [
                 {"id": "a", "tool": {"name": "semgrep"}},
                 {"id": "b", "tool": {"name": "trivy"}},
-                {"id": "c", "tool": {"name": "gosec"}},
+                {"id": "c", "tool": {"name": "hadolint"}},
             ],
         )
         store_scan(results, ["semgrep"], db_path=tmp_path / "h.db")
@@ -577,7 +577,7 @@ class TestOneBadFindingDoesNotDiscardTheScan:
             [
                 {"id": "a", "tool": {"name": "semgrep"}},
                 {"tool": {"name": "trivy"}},
-                {"id": "a", "tool": {"name": "gosec"}},
+                {"id": "a", "tool": {"name": "hadolint"}},
             ],
         )
         with caplog.at_level(logging.WARNING, logger="scripts.core.history_db"):
@@ -593,7 +593,7 @@ class TestOneBadFindingDoesNotDiscardTheScan:
         # Attribution, not just a count: a number nobody can act on is not a
         # report. The two causes must name their own tool, not each other's.
         assert "trivy=1" in no_id[0]
-        assert "gosec=1" in dup[0]
+        assert "hadolint=1" in dup[0]
 
     def test_a_clean_scan_reports_nothing(self, tmp_path, caplog):
         """Negative control for the reporter, so it cannot fire unconditionally."""

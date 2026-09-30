@@ -2861,7 +2861,7 @@ class ProgressTracker:
                 #
                 # Only a tool that is not installed: one that had nothing to
                 # scan is reported once at the end of the run, at INFO. Gating
-                # gosec on content (#1081) would otherwise put this WARN on every
+                # hadolint on content (#1081) would otherwise put this WARN on every
                 # target of every Node, Python, Java, Ruby and PHP scan.
                 _log(
                     self.args,
@@ -3415,8 +3415,8 @@ def cmd_scan(args) -> int:
     # policy passes on a run where no secret scanner executed. The run still
     # exits on findings alone: `--allow-missing-tools` bought that.
     #
-    # Only `not installed`. A tool the target had nothing for (gosec on a
-    # repository with no Go) produced an empty file that is simply correct, and
+    # Only `not installed`. A tool the target had nothing for (hadolint on a
+    # repository with no Dockerfile) produced an empty file that is simply correct, and
     # warning about it in these words would fire on most repositories (#1081).
     stubbed_by_target = {
         str(name): missing
@@ -3445,7 +3445,7 @@ def cmd_scan(args) -> int:
         )
 
     # Benign, so INFO rather than WARN - but still said out loud, because "why
-    # is there no gosec output?" is a question a user will ask and the answer
+    # is there no hadolint output?" is a question a user will ask and the answer
     # should not require reading scan-timings.json. A tool that reads no target
     # of this type at all is left out: every image target would list ten.
     skipped_by_target = {

@@ -30,7 +30,7 @@ from scripts.core.plugin_api import (
 
 # The fingerprint helper is a module-level function, not a method. Most
 # shipped adapters import it from here - see
-# scripts/core/adapters/gosec_adapter.py:33.
+# scripts/core/adapters/hadolint_adapter.py:58.
 from scripts.core.common_finding import fingerprint
 
 logger = logging.getLogger(__name__)
@@ -120,7 +120,7 @@ class {Tool}Adapter(AdapterPlugin):
                     # and returns 16 lowercase hex characters
                     # (common_finding.py:17, FINGERPRINT_LENGTH = 16).
                     # Most shipped adapters do this - see
-                    # scripts/core/adapters/gosec_adapter.py:166.
+                    # scripts/core/adapters/hadolint_adapter.py:157.
                     id=fingerprint(
                         self.metadata.tool_name,
                         vuln.get("id", "UNKNOWN"),

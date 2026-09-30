@@ -241,7 +241,7 @@ a closed set otherwise (`Reason` in `scan_timings.py`):
 > **Only `timed out` is a budget question.** `no output` is an accepted exit
 > code with an empty artifact, a tool that appeared to work and did not.
 > `examined 0 files` is a tool whose own output says it read nothing (semgrep's
-> `paths.scanned`, gosec's `Stats.files`). Both belong in a bug report, not in
+> `paths.scanned`, the next scanner's own file count). Both belong in a bug report, not in
 > `jmo.yml`.
 >
 > `attempts` counts every try. `timed out` with `attempts: 4` is a tool that is

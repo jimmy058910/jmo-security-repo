@@ -21,7 +21,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 
 from scripts.cli.scan_jobs.repository_scanner import scan_repository
 from scripts.cli.scan_jobs.tool_loop import collect_files, iter_repo_files
-from scripts.cli.scan_utils import tool_exclusion_flags
 from scripts.core.scan_timings import Reason, State
 from scripts.core.tool_descriptors import DESCRIPTORS, ExclusionStyle
 from scripts.core.tool_registry import TOOL_MATRIX, TOOL_SCAN_TYPES
@@ -381,9 +380,6 @@ class TestContentDecidesWhoRuns:
         [
             ("hadolint", Reason.NO_DOCKERFILES, {"Dockerfile": "FROM alpine\n"}),
             ("shellcheck", Reason.NO_SHELL_SCRIPTS, {"run.sh": "#!/bin/sh\n"}),
-            ("gosec", Reason.NO_GO_SOURCES, {"main.go": "package main\n"}),
-            # A module whose sources are generated at build time (#1081).
-            ("gosec", Reason.NO_GO_SOURCES, {"go.mod": "module example.com/x\n"}),
             ("checkov", Reason.NO_IAC, {"main.tf": 'resource "x" "y" {}\n'}),
             ("zizmor", Reason.NO_WORKFLOWS, {".github/workflows/ci.yml": "on: push\n"}),
             ("zizmor", Reason.NO_WORKFLOWS, {"action.yml": "runs: {}\n"}),
@@ -473,31 +469,19 @@ class TestContentDecidesWhoRuns:
         assert rows["zizmor"].state is State.RAN
 
     def test_a_missing_binary_is_reported_before_content_is_looked_at(self, tmp_path):
-        """A repository with Go and no gosec is an environment gap, not a
-        content skip: the reasons must stay distinct (#1081)."""
-        repo = _repo(tmp_path, files={"main.go": "package main\n"})
+        """A repository with a Dockerfile and no hadolint is an environment
+        gap, not a content skip: the reasons must stay distinct (#1081)."""
+        repo = _repo(tmp_path, files={"Dockerfile": "FROM alpine\n"})
 
         _, rows, _ = _scan(
             repo,
             tmp_path / "out",
-            ["gosec"],
+            ["hadolint"],
             find=lambda t: None,
             allow_missing_tools=True,
         )
 
-        assert rows["gosec"].label == "skipped:not installed"
-
-    def test_go_inside_a_vendored_tree_does_not_trigger_gosec(self, tmp_path):
-        """pre-commit ships `resources/empty_template_main.go`; counting .venv
-        would trigger gosec on every Python repository with a virtualenv."""
-        repo = _repo(
-            tmp_path,
-            files={"node_modules/pkg/helper.go": "package main\n", "index.js": "1\n"},
-        )
-
-        _, rows, _ = _scan(repo, tmp_path / "out", ["gosec"])
-
-        assert rows["gosec"].label == "skipped:no Go sources"
+        assert rows["hadolint"].label == "skipped:not installed"
 
     def test_zap_and_nuclei_read_urls_not_repositories(self, tmp_path, caplog):
         """#1159: zap's repository mode never worked (`-t` takes a URL). Both
@@ -577,47 +561,6 @@ class TestNothingExaminedIsFailed:
             )
 
         assert rows["semgrep"].label == label
-
-    def test_gosec_without_a_go_toolchain_is_failed(self, tmp_path):
-        """Measured on Windows and in the image: without `go`, gosec cannot
-        load a package, reports `Stats.files` 0, exits 1, and was graded
-        success on every Go repository."""
-        repo = _repo(tmp_path, files={"main.go": "package main\n"})
-        out = tmp_path / "out" / "repo" / "gosec.json"
-
-        def runner_writes(tools, **_kwargs):
-            out.parent.mkdir(parents=True, exist_ok=True)
-            out.write_text(
-                json.dumps(
-                    {"Issues": [], "Stats": {"files": 0}, "Golang errors": {"x": []}}
-                ),
-                encoding="utf-8",
-            )
-            runner = MagicMock()
-            runner.run_all_parallel.return_value = [
-                ToolResult(
-                    tool="gosec", status="success", returncode=1, output_file=out
-                )
-            ]
-            return runner
-
-        with patch(
-            "scripts.cli.scan_jobs.repository_scanner.ToolRunner",
-            side_effect=runner_writes,
-        ):
-            _, rows = scan_repository(
-                repo,
-                tmp_path / "out",
-                ["gosec"],
-                600,
-                0,
-                {},
-                False,
-                find_tool_func=_found,
-            )
-
-        assert rows["gosec"].label == "failed:examined 0 files"
-        assert rows["gosec"].exit_code == 1
 
     def test_an_unreadable_count_is_not_a_zero(self, tmp_path):
         """No output to read: the count is unknown, not 0, so the row is
@@ -880,7 +823,7 @@ class TestExclusions:
                 inside = os.sep.join([command[2], "results", "individual-repos", "x"])
                 assert any(re.search(p, inside) for p in patterns), patterns
             else:
-                # A bare name, a `**/` glob, or gosec's segment regex.
+                # A bare name or a `**/` glob.
                 assert any("results" in arg for arg in command), (tool, command)
 
     def test_yara_is_told_to_skip_the_results_directory(self, tmp_path):
@@ -984,11 +927,11 @@ class TestTheInTreeResultsDirectoryIsKeptOutOfTheScan:
         assert "results" not in skipped, skipped
 
     def test_the_content_walk_ignores_a_previous_scans_output(self, tmp_path):
-        """A `.go` file inside `results/` is not the repository's code."""
+        """A Dockerfile inside `results/` is not the repository's code."""
         repo = _repo(
             tmp_path,
             files={
-                "results/individual-repos/vendored.go": "package main\n",
+                "results/individual-repos/Dockerfile": "FROM alpine\n",
                 "app.js": "1\n",
             },
         )
@@ -996,10 +939,10 @@ class TestTheInTreeResultsDirectoryIsKeptOutOfTheScan:
         found = {p.name for p in iter_repo_files(repo)}
         pruned = {p.name for p in iter_repo_files(repo, (repo / "results").resolve())}
 
-        assert "vendored.go" in found, "control: found without the skip"
-        assert "vendored.go" not in pruned
-        _, rows, _ = _scan(repo, repo / "results" / "individual-repos", ["gosec"])
-        assert rows["gosec"].label == "skipped:no Go sources"
+        assert "Dockerfile" in found, "control: found without the skip"
+        assert "Dockerfile" not in pruned
+        _, rows, _ = _scan(repo, repo / "results" / "individual-repos", ["hadolint"])
+        assert rows["hadolint"].label == "skipped:no Dockerfiles"
 
     def test_the_file_walk_skips_by_PATH_not_by_name(self, tmp_path):
         """A user directory that merely shares the results directory's name
@@ -1058,27 +1001,6 @@ class TestARepositorysOwnPathIsNeverExcluded:
         assert excluded("node_modules", "pkg", "a.js"), "a vendored tree is read"
         assert excluded("sub", "vendor", "lib", "b.go")
         assert excluded(".git", "config")
-
-    def test_gosec_names_are_whole_segments_not_regex_substrings(self):
-        r"""gosec wraps each -exclude-dir value as `([\\/])?VALUE([\\/])?` and
-        matches paths relative to the scan root (measured 2026-09-25, 2.28.0,
-        from its `Import directory` log): `-exclude-dir=.git` also dropped
-        `.github/x`, the dot being a regex wildcard."""
-        flags = tool_exclusion_flags("gosec", results_dir_name="results")
-        wrapped = [re.compile(rf"([\\/])?{f.split('=', 1)[1]}([\\/])?") for f in flags]
-
-        def excluded(*parts):
-            return any(w.search(os.sep.join(parts)) for w in wrapped)
-
-        for parts in (
-            (".git",),
-            ("results",),
-            ("sub", "results"),
-            ("a", "vendor", "b"),
-        ):
-            assert excluded(*parts), parts
-        for parts in ((".github", "x"), ("resultsets",), ("vendorclient",), ("sub",)):
-            assert not excluded(*parts), parts
 
     def test_file_fed_tools_find_content_in_a_repository_under_vendor(self, tmp_path):
         repo = _repo(tmp_path / "vendor", "app", {"Dockerfile": "FROM alpine\n"})

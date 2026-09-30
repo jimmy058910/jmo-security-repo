@@ -103,7 +103,7 @@ def test_trufflehog_basic(tmp_path: Path):
     assert out[0]["location"]["path"] == "config.yaml"
 
 
-# SAST tool (semgrep, gosec)
+# SAST tool (semgrep)
 def test_semgrep_basic(tmp_path: Path):
     sample = {
         "results": [

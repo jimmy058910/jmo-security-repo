@@ -102,7 +102,7 @@ class ExclusionStyle(StrEnum):
     `vendor/` directory scans nothing at all (#1313). checkov's value is
     rendered `[\\/]NAME$`, the name escaped, by `checkov_skip_path_pattern`
     (`scripts/cli/scan_utils.py`) - see that function for why it is not the
-    `(^|[\\/])NAME([\\/]|$)` shape gosec and trufflehog use. `**` does not
+    `(^|[\\/])NAME([\\/]|$)` shape trufflehog uses. `**` does not
     compile as a regex at all and is dropped without a word either way. syft
     and grype reject a bare name outright (rc 1: "must start with one of:
     './', '*/', or '**/'"), and `./results` covers only the root copy
@@ -110,12 +110,6 @@ class ExclusionStyle(StrEnum):
     """
 
     INLINE = "inline"  # one `--flag=NAME` per directory
-    # One `--flag=REGEX` per directory, the name escaped and bounded to whole
-    # path segments. gosec wraps the value as `([\\/])?VALUE([\\/])?` and
-    # matches it against root-relative paths, so a bare `.git` also dropped
-    # `.github/x` (measured 2026-09-25, gosec 2.28.0, its `Import directory`
-    # log, which it writes with or without a Go toolchain).
-    INLINE_REGEX = "inline_regex"
     SEPARATE = "separate"  # one `--flag **/NAME` pair per directory
     # One `--flag PATTERN` pair per directory: checkov only. The pattern is
     # `[\\/]NAME$`, the name escaped (`checkov_skip_path_pattern`) - not a
@@ -343,18 +337,6 @@ class ToolDescriptor:
 # --- content triggers ---------------------------------------------------------
 
 
-def _is_go(path: Path) -> bool:
-    return path.suffix == ".go" or path.name == "go.mod"
-
-
-def _go_trigger(ctx: ScanContext) -> Reason | None:
-    """gosec loads Go packages. `go.mod` alone counts: a module whose sources
-    are generated at build time still carries one, and over-triggering costs a
-    fast run that finds nothing while under-triggering drops a scanner from a
-    real Go repository (#1081)."""
-    return None if ctx.any_file(_is_go) else Reason.NO_GO_SOURCES
-
-
 _CFN_SUFFIXES = frozenset({".yaml", ".yml", ".json", ".template"})
 _CFN_MARKERS = (b"AWSTemplateFormatVersion", b"AWS::")
 _CFN_HEAD_BYTES = 8192
@@ -439,16 +421,6 @@ def _semgrep_scanned(path: Path) -> int | None:
         return None
     scanned = (data.get("paths") or {}).get("scanned")
     return len(scanned) if isinstance(scanned, list) else None
-
-
-def _gosec_scanned(path: Path) -> int | None:
-    """`Stats.files`: 0 whenever gosec cannot load a package, which is every
-    run without a Go toolchain (measured on Windows and in the image)."""
-    data = _load(path)
-    if not isinstance(data, dict):
-        return None
-    files = (data.get("Stats") or {}).get("files")
-    return files if isinstance(files, int) else None
 
 
 # --- command lines ------------------------------------------------------------
@@ -886,24 +858,6 @@ def _osv_databases(ctx: ScanContext) -> Shortfall | None:
     )
 
 
-def _gosec_repo(ctx: ScanContext) -> list[Invocation]:
-    return [
-        Invocation(
-            command=(
-                ctx.binary,
-                "-fmt=json",
-                f"-out={ctx.output}",
-                *ctx.exclusion_args,
-                *ctx.flags,
-                str(Path(ctx.target) / "..."),
-            ),
-            output_file=ctx.output,
-            capture_stdout=False,
-            ok_return_codes=(0, 1),
-        )
-    ]
-
-
 def _yara_repo(ctx: ScanContext) -> list[Invocation]:
     # yara is libyara bindings, not a CLI: the binary is this interpreter and
     # scripts/core/yara_runner.py supplies the command line and the walk.
@@ -1183,17 +1137,6 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             stub={"version": "2.1.0", "runs": []},
         ),
         ToolDescriptor(
-            name="gosec",
-            invocations={"repo": _gosec_repo},
-            version_probe=VersionProbe(_VERSION),
-            exclusion_style=ExclusionStyle.INLINE_REGEX,
-            # A regex at any depth; `**/results` exits 2 (measured, 2.29.0).
-            exclusion_flag="-exclude-dir",
-            trigger=_go_trigger,
-            execution_commands=("gosec",),
-            scanned_count=_gosec_scanned,
-        ),
-        ToolDescriptor(
             name="jmo-native",
             invocations={"repo": _native_repo},
             # `--version` prints `jmo-native <JMo's version>`.
@@ -1302,7 +1245,7 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
 }
 
 
-# The sixteen tools v2.0.0 removed (docs/TOOLS.md), and falco's companion.
+# The seventeen tools v2.0.0 removed (docs/TOOLS.md), and falco's companion.
 REMOVED_TOOLS: frozenset[str] = frozenset(
     {
         "kubescape",
@@ -1322,6 +1265,7 @@ REMOVED_TOOLS: frozenset[str] = frozenset(
         "afl++",
         "mobsf",
         "lynis",
+        "gosec",
     }
 )
 

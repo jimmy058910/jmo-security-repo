@@ -21,7 +21,7 @@ Optional but recommended to install dev tools and Python deps:
 make dev-deps
 ```
 
-Install external scanners as needed (TruffleHog, Semgrep, Syft, Trivy, Checkov, Hadolint, ShellCheck, Gosec, YARA, Grype, ZAP, Nuclei):
+Install external scanners as needed (TruffleHog, Semgrep, Syft, Trivy, Checkov, Hadolint, ShellCheck, YARA, Grype, ZAP, Nuclei):
 
 ```bash
 # Check tool status and install missing tools

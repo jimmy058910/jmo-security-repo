@@ -26,14 +26,13 @@ from scripts.core.validators import (
 logger = logging.getLogger(__name__)
 
 # Every adapter module under scripts/core/adapters/, by stem: one per matrix
-# scanner, the 16. `opa` is the report-phase policy engine and emits no tool
+# scanner, the 15. `opa` is the report-phase policy engine and emits no tool
 # output, so it has none.
 # tests/core/test_scan_validator.py holds this equal to the files on disk.
 EXPECTED_ADAPTERS = sorted(
     [
         "checkov",
         "gitleaks",
-        "gosec",
         "grype",
         "hadolint",
         "jmo_native",

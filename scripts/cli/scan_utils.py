@@ -291,7 +291,6 @@ TOOL_EXCLUSION_FLAG: dict[str, tuple[str, str]] = {
     and d.exclusion_style
     in (
         ExclusionStyle.INLINE,
-        ExclusionStyle.INLINE_REGEX,
         ExclusionStyle.SEPARATE,
         ExclusionStyle.REGEX,
     )
@@ -804,8 +803,6 @@ def tool_exclusion_flags(
     dirs = excluded_dirs_for(tool, results_dir_name=results_dir_name)
     if style == ExclusionStyle.INLINE:
         return [f"{flag}={d}" for d in dirs]
-    if style == ExclusionStyle.INLINE_REGEX:
-        return [f"{flag}={segment_regex(d)}" for d in dirs]
     if style == ExclusionStyle.REGEX:
         # checkov: `re.search` against the absolute path, so a bare name is
         # a substring match anywhere in it (#1313) - end-anchored to one

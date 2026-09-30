@@ -193,7 +193,7 @@ def find_tool(tool_name: str) -> str | None:
     if direct_binary.exists() and direct_binary.is_file():
         return str(direct_binary)
 
-    # Windows: Check for .exe extension (tools like hadolint.exe, gosec.exe)
+    # Windows: Check for .exe extension (tools like hadolint.exe, shellcheck.exe)
     if os.name == "nt":
         exe_binary = jmo_bin / f"{tool_name}.exe"
         if exe_binary.exists() and exe_binary.is_file():

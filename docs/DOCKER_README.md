@@ -284,7 +284,7 @@ JMo Security publishes **one Docker image**. It carries every scanner in the [to
 
 `:latest` follows the newest release. In CI, pin a version tag such as `:2.0.0` instead. The image is built from the repository's `Dockerfile`.
 
-Carrying every scanner does not mean every scanner runs. The target's content decides: hadolint runs only when the repository has Dockerfiles, shellcheck only when it has shell scripts, gosec only when it has Go sources, and the DAST tools (ZAP, Nuclei) only on `--url` targets. See [When each tool runs](TOOLS.md#when-each-tool-runs). To narrow the list yourself, pass `--tools` or `--skip-tools`.
+Carrying every scanner does not mean every scanner runs. The target's content decides: hadolint runs only when the repository has Dockerfiles, shellcheck only when it has shell scripts, and the DAST tools (ZAP, Nuclei) only on `--url` targets. See [When each tool runs](TOOLS.md#when-each-tool-runs). To narrow the list yourself, pass `--tools` or `--skip-tools`.
 
 **Tags from earlier releases:** until v2.0.0 the image came in four variants, tagged `:fast`, `:slim`, `:balanced` and `:deep` (with `:full` as an old alias) plus version-suffixed forms. Those tags are no longer built. Images already published under them are not deleted, but they receive no updates. Use `:latest` or a version tag.
 

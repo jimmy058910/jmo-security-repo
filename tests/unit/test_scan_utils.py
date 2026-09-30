@@ -316,17 +316,12 @@ class TestToolExclusionFlags:
 
         `trufflehog` takes an exclude *file*; hadolint is handed its
         Dockerfiles as arguments and never walks the tree; zap reads a URL.
-        gosec has a flag now, measured (`-exclude-dir=REGEX`, any depth).
         """
-        from scripts.cli.scan_utils import segment_regex, tool_exclusion_flags
+        from scripts.cli.scan_utils import tool_exclusion_flags
 
         assert tool_exclusion_flags("trufflehog", results_dir_name="results") == []
         assert tool_exclusion_flags("hadolint", results_dir_name="results") == []
         assert tool_exclusion_flags("zap", results_dir_name="results") == []
-        # gosec's is a flag: an escaped, segment-bounded regex (INLINE_REGEX).
-        assert f"-exclude-dir={segment_regex('results')}" in tool_exclusion_flags(
-            "gosec", results_dir_name="results"
-        )
 
     def test_checkov_must_not_be_given_the_trivy_spelling(self):
         """`--skip-path` is a REGEX. `**/x` is not one, and fails in silence.
@@ -821,7 +816,7 @@ class TestTheResultsDirectoryIsExcludedWhenItIsInsideTheTree:
 
 
 class TestRe2Escape:
-    r"""trufflehog's and gosec's patterns are Go (RE2) regexes; a scan root is a
+    r"""trufflehog's patterns are Go (RE2) regexes; a scan root is a
     literal inside them. Python's `re.escape` writes a space as `\ `, which is
     not an RE2 escape."""
 

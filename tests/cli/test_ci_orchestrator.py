@@ -620,8 +620,8 @@ class TestStrictVersions:
         ("cfg_body", "tools", "skip_tools", "expected"),
         [
             (None, None, None, list(TOOL_MATRIX)),
-            ("tools: [trivy, gosec]\n", None, None, ["trivy", "gosec"]),
-            ("tools: [gosec]\n", ["trivy", "semgrep"], ["semgrep"], ["trivy"]),
+            ("tools: [trivy, hadolint]\n", None, None, ["trivy", "hadolint"]),
+            ("tools: [hadolint]\n", ["trivy", "semgrep"], ["semgrep"], ["trivy"]),
         ],
         ids=["matrix-by-default", "config-tools", "cli-tools-minus-skipped"],
     )

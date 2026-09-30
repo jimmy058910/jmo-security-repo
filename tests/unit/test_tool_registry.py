@@ -29,7 +29,6 @@ V2_PHASE_2_MATRIX = {
     "checkov",
     "hadolint",
     "shellcheck",
-    "gosec",
     "yara",
     "grype",
     "zap",

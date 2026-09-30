@@ -131,16 +131,6 @@ brew install semgrep
 pip install semgrep
 ```
 
-**Gosec** (Go security analyzer):
-
-```bash
-# macOS
-brew install gosec
-
-# Linux/Windows (Go)
-go install github.com/securego/gosec/v2/cmd/gosec@latest
-```
-
 #### Vulnerabilities + SBOM
 
 **Trivy** (Comprehensive vulnerability scanner):
@@ -291,7 +281,6 @@ java -version
 | Checkov | ✅ | ✅ | ✅ | ✅ |
 | Hadolint | ✅ | ✅ | ✅ | ✅ |
 | ShellCheck | ✅ | ✅ | ✅ | ✅ |
-| Gosec | ✅ | ✅ | ✅ | ✅ |
 | Grype | ✅ | ✅ | ✅ | ✅ |
 | YARA | ✅ | ✅ | ✅ | ✅ |
 | Nuclei | ✅ | ✅ | ✅ | ✅ |

@@ -183,18 +183,21 @@ class TestScanSession:
             started_at=0.0,
             pid=1,
         )
-        session.register_target("repo", "myrepo", ["trivy", "gosec"])
+        session.register_target("repo", "myrepo", ["trivy", "hadolint"])
         session.mark_target_complete(
             "myrepo",
             {
                 **_rows(trivy=True),
-                "gosec": ToolRun("gosec", State.SKIPPED, Reason.NO_GO_SOURCES),
+                "hadolint": ToolRun("hadolint", State.SKIPPED, Reason.NO_DOCKERFILES),
             },
         )
         assert session.targets["myrepo"].completed is True
         assert session.targets["myrepo"].tools["trivy"].status == "completed"
-        assert session.targets["myrepo"].tools["gosec"].status == "skipped"
-        assert session.targets["myrepo"].tools["gosec"].error == "skipped:no Go sources"
+        assert session.targets["myrepo"].tools["hadolint"].status == "skipped"
+        assert (
+            session.targets["myrepo"].tools["hadolint"].error
+            == "skipped:no Dockerfiles"
+        )
 
     def test_mark_nonexistent_target(self):
         session = ScanSession(

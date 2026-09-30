@@ -302,7 +302,7 @@ jmo scan --targets repos.txt --threads 8
 
 ### 10. Skip Tools Based on Target Type
 
-Not all tools are relevant for all targets, and JMo already skips the ones that are not: hadolint runs only when Dockerfiles are present, shellcheck only with shell scripts, zizmor only with GitHub Actions workflows or actions, or a Dependabot config, osv-scanner only with dependency lockfiles, gosec only with Go sources, jmo-native only with JS/TS source, `.env` files, Firebase rules or Supabase migrations, checkov only with Terraform or CloudFormation, and zap and nuclei only on `--url` targets. To narrow further, name the tools:
+Not all tools are relevant for all targets, and JMo already skips the ones that are not: hadolint runs only when Dockerfiles are present, shellcheck only with shell scripts, zizmor only with GitHub Actions workflows or actions, or a Dependabot config, osv-scanner only with dependency lockfiles, jmo-native only with JS/TS source, `.env` files, Firebase rules or Supabase migrations, checkov only with Terraform or CloudFormation, and zap and nuclei only on `--url` targets. To narrow further, name the tools:
 
 ```bash
 # Python project: secrets, SAST, dependencies, IaC

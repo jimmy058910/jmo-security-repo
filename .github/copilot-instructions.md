@@ -6,7 +6,7 @@ These guidelines help AI coding agents work effectively in this repository. Focu
 
 - Terminal-first security audit toolkit with a Python CLI (`scripts/cli/jmo.py`) and supporting modules under `scripts/core/`.
 - Two main phases:
-  1) scan: invoke external scanners (trufflehog, semgrep, syft, trivy, checkov, hadolint, shellcheck, gosec, yara, grype, zap, nuclei) and write raw JSON per repo under `results/individual-repos/<repo>/`.
+  1) scan: invoke external scanners (trufflehog, semgrep, syft, trivy, checkov, hadolint, shellcheck, yara, grype, zap, nuclei) and write raw JSON per repo under `results/individual-repos/<repo>/`.
   2) report: normalize + dedupe into a CommonFinding shape and emit summaries (`findings.json`, `SUMMARY.md`, `dashboard.html`, optional SARIF) under `results/summaries/`.
 
 - Goals: unified outputs, stable fingerprints for dedupe, resilient to missing tools, and fast local iteration.
@@ -62,7 +62,7 @@ These guidelines help AI coding agents work effectively in this repository. Focu
 
 ## External tools & integration
 
-- Tools invoked via subprocess without shell: trufflehog, semgrep, syft, trivy, checkov, hadolint, shellcheck, gosec, yara, grype, zap, nuclei.
+- Tools invoked via subprocess without shell: trufflehog, semgrep, syft, trivy, checkov, hadolint, shellcheck, yara, grype, zap, nuclei.
 - Respect tool-specific return codes: semgrep (0/1/2), trivy (0/1), checkov (0/1). The CLI treats these as success when outputs are produced.
 
 ## Safe change checklist for agents
@@ -89,8 +89,8 @@ These guidelines help AI coding agents work effectively in this repository. Focu
 
 ### Tool selection in `jmo.yml`
 
-- There are no scan profiles. The scanner list resolves `--tools`, then the top-level `tools:` list in `jmo.yml`, then `TOOL_MATRIX` in `scripts/core/tool_registry.py` (the 16 scanners). `--skip-tools` removes names from whichever list applies.
-- A listed tool is only eligible: the target's content decides whether it runs (hadolint needs Dockerfiles, shellcheck shell scripts, zizmor GitHub Actions workflows, osv-scanner lockfiles, gosec Go sources, jmo-native JS/TS source, `.env` files, Firebase rules or Supabase migrations; zap and nuclei run only on `--url` targets).
+- There are no scan profiles. The scanner list resolves `--tools`, then the top-level `tools:` list in `jmo.yml`, then `TOOL_MATRIX` in `scripts/core/tool_registry.py` (the 15 scanners). `--skip-tools` removes names from whichever list applies.
+- A listed tool is only eligible: the target's content decides whether it runs (hadolint needs Dockerfiles, shellcheck shell scripts, zizmor GitHub Actions workflows, osv-scanner lockfiles, jmo-native JS/TS source, `.env` files, Firebase rules or Supabase migrations; zap and nuclei run only on `--url` targets).
 - Tuning lives at the top level: `threads`, `timeout`, `retries`, and `per_tool`, e.g.
   - semgrep.flags: ["--exclude", "node_modules", "--exclude", ".git"]
   - trivy.flags: ["--no-progress"]

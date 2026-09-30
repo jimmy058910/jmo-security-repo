@@ -227,8 +227,8 @@ class TestConfiguredToolListIsHonoured:
         assert tools == list(TOOL_MATRIX)
 
     def test_the_cli_flag_still_outranks_the_config(self, tmp_path: Path):
-        tools = self._tools(tmp_path, "tools:\n- trufflehog\n", tools=["gosec"])
-        assert tools == ["gosec"]
+        tools = self._tools(tmp_path, "tools:\n- trufflehog\n", tools=["hadolint"])
+        assert tools == ["hadolint"]
 
 
 def test_per_tool_top_level_block_reaches_the_scan_settings_whole(tmp_path: Path):

@@ -238,31 +238,31 @@ class TestCheckToolsForMatrix:
         mock_fallbacks.return_value = {"✅": "[OK]", "⚠": "[!]", "~": "~"}
         mock_print_step.return_value = lambda s, t, m: None
         mock_get_remediation.return_value = {
-            "commands": ["go install github.com/securego/gosec/v2/cmd/gosec@latest"],
+            "commands": ["brew install hadolint"],
             "manual": None,
-            "jmo_install": "jmo tools install gosec",
+            "jmo_install": "jmo tools install hadolint",
         }
 
         # Create status with one missing tool
-        gosec_status = MockToolStatus(
-            "gosec",
+        hadolint_status = MockToolStatus(
+            "hadolint",
             installed=False,
             execution_ready=False,
         )
-        gosec_status.status_type = ToolStatusType.MISSING
+        hadolint_status.status_type = ToolStatusType.MISSING
 
         manager_instance = MagicMock()
         manager_instance.check_matrix.return_value = {
             "trivy": MockToolStatus("trivy", installed=True, execution_ready=True),
             "semgrep": MockToolStatus("semgrep", installed=True, execution_ready=True),
-            "gosec": gosec_status,
+            "hadolint": hadolint_status,
         }
         # Mock get_tool_summary to return proper summary object with missing tool
         manager_instance.get_tool_summary.return_value = MockToolStatusSummary(
             total=3,
             installed=2,
             execution_ready=2,
-            not_installed=["gosec"],
+            not_installed=["hadolint"],
         )
         mock_tool_manager.return_value = manager_instance
 
@@ -276,10 +276,10 @@ class TestCheckToolsForMatrix:
         # Only ready tools should be in available list
         assert "trivy" in available
         assert "semgrep" in available
-        assert "gosec" not in available
+        assert "hadolint" not in available
         # The tool that is not ready is named, not silently dropped
         printed = " ".join(str(c) for c in mock_print.call_args_list)
-        assert "Skipping: gosec" in printed
+        assert "Skipping: hadolint" in printed
 
     @patch("scripts.cli.wizard_flows.tool_checker._auto_fix_tools")
     @patch("scripts.cli.wizard_flows.tool_checker._get_print_step")
@@ -899,7 +899,7 @@ class TestCollectMissingDependencies:
                 "missing_deps": ["java"],
             },
             {
-                "name": "gosec",
+                "name": "hadolint",
                 "issue": "Missing runtime",
                 "missing_deps": ["go"],
             },
@@ -1532,7 +1532,7 @@ class TestAutoFixToolsDependencies:
                 },
             },
             {
-                "name": "gosec",
+                "name": "hadolint",
                 "issue": "Missing",
                 "missing_deps": ["go"],
                 "remediation": {

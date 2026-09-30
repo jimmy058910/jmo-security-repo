@@ -67,7 +67,6 @@ class Reason(StrEnum):
     # skipped: the target has nothing of the kind this tool reads
     NO_DOCKERFILES = "no Dockerfiles"
     NO_SHELL_SCRIPTS = "no shell scripts"
-    NO_GO_SOURCES = "no Go sources"
     NO_IAC = "no IaC files"
     NO_WORKFLOWS = "no GitHub Actions workflows"
     NO_LOCKFILE = "no lockfile"
@@ -96,7 +95,6 @@ SKIP_REASONS: frozenset[Reason] = frozenset(
         Reason.NOT_FOR_TARGET,
         Reason.NO_DOCKERFILES,
         Reason.NO_SHELL_SCRIPTS,
-        Reason.NO_GO_SOURCES,
         Reason.NO_IAC,
         Reason.NO_WORKFLOWS,
         Reason.NO_LOCKFILE,

@@ -87,7 +87,7 @@ If the problem persists, rename `.jmo/history.db` to `.jmo/history.db.old` and r
 
 **Causes:**
 
-1. **Narrowed tool list:** `--tools`, `--skip-tools` or a `tools:` list in `jmo.yml` may leave out the scanner that covers your code. Drop the narrowing and re-run. Some tools also run only when their content is present (gosec needs Go sources, hadolint needs a Dockerfile); see [When each tool runs](TOOLS.md#when-each-tool-runs).
+1. **Narrowed tool list:** `--tools`, `--skip-tools` or a `tools:` list in `jmo.yml` may leave out the scanner that covers your code. Drop the narrowing and re-run. Some tools also run only when their content is present (hadolint needs a Dockerfile, shellcheck needs shell scripts); see [When each tool runs](TOOLS.md#when-each-tool-runs).
 2. **Target misidentified:** If JMo treats your directory as non-scannable, check `jmo scan --repo . --human-logs` for detection output.
 3. **Suppression rules:** Check `jmo.suppress.yml` at your repo root for accidental over-suppression.
 
