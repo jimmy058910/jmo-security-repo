@@ -64,7 +64,7 @@ Every requested tool leaves one row per target, in `scan-timings.json`, in `.sca
 | Row | Meaning |
 |-----|---------|
 | `ran` | It ran and its output is beside the row. |
-| `skipped:<reason>` | It did not apply: `needs --url`, `not for this target type`, `no Dockerfiles`, `no shell scripts`, `no GitHub Actions workflows`, `no lockfile`, `no Go sources`, `no IaC files`, `no JS/TS, .env, Firebase rules or Supabase migrations`, or `not installed` under `--allow-missing-tools`. |
+| `skipped:<reason>` | It did not apply: `needs --url`, `not for this target type`, `no Dockerfiles`, `no shell scripts`, `no GitHub Actions workflows`, `no lockfile`, `no IaC files`, `no JS/TS, .env, Firebase rules or Supabase migrations`, or `not installed` under `--allow-missing-tools`. |
 | `failed:<reason>` | It applied and produced nothing you can trust: `not installed`, `timed out`, `no files to scan`, `examined 0 files`, `offline database missing`, `unaccepted exit code`, `no output`, and a few rarer ones. |
 
 `failed:no files to scan` means the repository had no file outside the excluded directories, so no tool ran against it. `failed:examined 0 files` means the tool's own output reports that it read nothing. Semgrep reports that count, and it is how a run that scanned nothing stops passing for a clean one.

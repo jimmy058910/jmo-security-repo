@@ -2862,7 +2862,7 @@ class ProgressTracker:
                 # Only a tool that is not installed: one that had nothing to
                 # scan is reported once at the end of the run, at INFO. Gating
                 # hadolint on content (#1081) would otherwise put this WARN on every
-                # target of every Node, Python, Java, Ruby and PHP scan.
+                # target without a Dockerfile, which is most of them.
                 _log(
                     self.args,
                     "WARN",

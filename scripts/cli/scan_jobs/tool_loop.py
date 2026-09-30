@@ -11,7 +11,7 @@ exactly one `ToolRun`, in this order:
 2. **binary**: not found is `failed:not installed`, or `skipped:not installed`
    under `--allow-missing-tools` (#825's semantics).
 3. **content**: a tool that needs files of a kind the target lacks is
-   `skipped` with that reason (no Dockerfiles, no Go sources, no IaC). A
+   `skipped` with that reason (no Dockerfiles, no IaC files). A
    tool's `precheck` then fails the row for what of that content it cannot
    read (osv-scanner: a lockfile with no offline database), and it runs on
    the rest, or not at all.
