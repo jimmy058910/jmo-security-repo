@@ -20,7 +20,7 @@ JMo Security supports 6 target types. This directory provides safe, ethical test
 ### Goals
 
 1. **No public app exposure** - All tests use public/local resources
-2. **Comprehensive coverage** - Test all 6 target types and all 15 scanners
+2. **Comprehensive coverage** - Test all 6 target types and all 16 scanners
 3. **Reproducible** - Anyone can run the same benchmarks
 4. **Ethical** - Only scan resources we own or have permission to test
 
@@ -291,7 +291,7 @@ cat results/summaries/timings.json
 
 | Target Type | Tools Used | Expected Findings |
 |-------------|------------|-------------------|
-| Repositories | trufflehog, semgrep, syft, trivy, checkov, yara, grype; hadolint, shellcheck and gosec when Dockerfiles, shell scripts or Go sources are present | Secrets, SAST issues, dependencies |
+| Repositories | trufflehog, gitleaks, semgrep, syft, trivy, yara, grype; hadolint, shellcheck, zizmor, osv-scanner, gosec, jmo-native and checkov when their content is present | Secrets, SAST issues, dependencies |
 | Container Images | trivy, syft | CVEs, outdated packages, SBOM |
 | IaC Files | checkov, trivy | Misconfigurations, hardcoded secrets |
 | Web URLs | zap, nuclei | XSS, SQLi, CSRF, API issues |

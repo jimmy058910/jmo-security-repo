@@ -71,6 +71,9 @@ class Reason(StrEnum):
     NO_IAC = "no IaC files"
     NO_WORKFLOWS = "no GitHub Actions workflows"
     NO_LOCKFILE = "no lockfile"
+    # jmo-native's: everything its checks read, since the label is all a
+    # skipped row prints.
+    NO_WEB_APP_FILES = "no JS/TS, .env, Firebase rules or Supabase migrations"
     # failed
     NO_FILES_TO_SCAN = "no files to scan"
     # A lockfile's ecosystem has no database in JMo's cache, so osv-scanner
@@ -97,6 +100,7 @@ SKIP_REASONS: frozenset[Reason] = frozenset(
         Reason.NO_IAC,
         Reason.NO_WORKFLOWS,
         Reason.NO_LOCKFILE,
+        Reason.NO_WEB_APP_FILES,
     }
 )
 # The target is not one this tool reads: the row says so, and says nothing

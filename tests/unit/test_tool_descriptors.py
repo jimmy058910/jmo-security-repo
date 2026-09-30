@@ -140,19 +140,31 @@ def test_zizmor_joined_beside_the_other_walk_fed_linters() -> None:
 def test_osv_scanner_joined_beside_the_other_dependency_scanner() -> None:
     """Phase 4, PR O: osv-scanner reads lockfiles offline, so the matrix is
     15. Listed after grype, the other scanner of dependencies only."""
-    assert len(DESCRIPTORS) == 15
     names = list(DESCRIPTORS)
     assert names[names.index("grype") + 1] == "osv-scanner"
+
+
+def test_jmo_native_joined_between_gosec_and_yara() -> None:
+    """Phase 4, PR N: jmo-native, JMo's own check pack, so the matrix is 16.
+    Listed after gosec, the other content-triggered code checker, and before
+    yara, the other runner JMo drives on its own interpreter."""
+    assert len(DESCRIPTORS) == 16
+    names = list(DESCRIPTORS)
+    assert names[names.index("gosec") : names.index("gosec") + 3] == [
+        "gosec",
+        "jmo-native",
+        "yara",
+    ]
 
 
 def test_target_types_differ_from_the_old_literal_only_by_the_url_tools() -> None:
     """zap left `repo` and nuclei left `gitlab`: both are URL-only (Phase 3
     decision: "zap and nuclei on a non-URL target are skipped:needs --url").
-    gitleaks (PR C), zizmor (PR Z) and osv-scanner (PR O) read a repository,
-    and so a GitLab clone."""
+    gitleaks (PR C), zizmor (PR Z), osv-scanner (PR O) and jmo-native (PR N)
+    read a repository, and so a GitLab clone."""
     expected = {k: set(v) for k, v in OLD_TOOL_SCAN_TYPES.items()}
     expected["repo"].discard("zap")
-    expected["repo"] |= {"gitleaks", "zizmor", "osv-scanner"}
+    expected["repo"] |= {"gitleaks", "zizmor", "osv-scanner", "jmo-native"}
     expected["gitlab"] = set(expected["repo"])
 
     assert expected == tool_registry.TOOL_SCAN_TYPES
@@ -170,8 +182,8 @@ def test_timeout_floors_are_derived_unchanged() -> None:
 def test_stub_shapes_are_derived_unchanged_plus_the_three_empty_ones() -> None:
     """shellcheck, gosec and yara had no entry and fell back to `{}`; they are
     declared now, with the value they already got. gitleaks (PR C), zizmor
-    (PR Z) and osv-scanner (PR O) write SARIF, so their empty result is an
-    empty SARIF document."""
+    (PR Z), osv-scanner (PR O) and jmo-native (PR N) write SARIF, so their
+    empty result is an empty SARIF document."""
     derived = {name: d.stub for name, d in DESCRIPTORS.items()}
     assert derived == {
         **OLD_STUBS,
@@ -181,6 +193,7 @@ def test_stub_shapes_are_derived_unchanged_plus_the_three_empty_ones() -> None:
         "gitleaks": {"version": "2.1.0", "runs": []},
         "zizmor": {"version": "2.1.0", "runs": []},
         "osv-scanner": {"version": "2.1.0", "runs": []},
+        "jmo-native": {"version": "2.1.0", "runs": []},
     }
 
 
@@ -188,13 +201,18 @@ def test_stub_shapes_are_derived_unchanged_plus_the_three_empty_ones() -> None:
 # (measured, the release's windows_x64 binary). zizmor (PR Z): `zizmor
 # --version` prints `zizmor 1.30.1`, so it needs no command of its own.
 # osv-scanner (PR O): `osv-scanner --version` prints `osv-scanner version:
-# 2.6.0`, then its library's version on the next line.
+# 2.6.0`, then its library's version on the next line. jmo-native (PR N): a
+# module of this interpreter, like yara's probe, printing `jmo-native 1.1.1`.
 NEW_VERSION_PATTERNS = {
     "gitleaks": (r"^v?(\d+\.\d+\.\d+)$", re.MULTILINE),
     "zizmor": (r"zizmor\s+v?(\d+\.\d+\.\d+)", 0),
     "osv-scanner": (r"osv-scanner version:\s*v?(\d+\.\d+\.\d+)", 0),
+    "jmo-native": (r"jmo-native\s+v?(\d+\.\d+\.\d+)", 0),
 }
-NEW_VERSION_COMMANDS = {"gitleaks": ["gitleaks", "version"]}
+NEW_VERSION_COMMANDS = {
+    "gitleaks": ["gitleaks", "version"],
+    "jmo-native": [sys.executable, "-m", "scripts.core.native_checks", "--version"],
+}
 
 
 @pytest.mark.parametrize(
@@ -259,6 +277,8 @@ def test_vendored_tier_is_the_old_set_plus_the_readers_that_walked_anyway() -> N
             # PR O: walk-fed; an installed package's own lockfile is not the
             # repository's dependency set.
             "osv-scanner",
+            # PR N: JMo's own runner, which prunes them itself, as yara's does.
+            "jmo-native",
         }
         == scan_utils.VENDOR_NOISE_TOOLS
     )

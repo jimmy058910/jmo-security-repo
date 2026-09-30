@@ -20,7 +20,7 @@ from typing import Any
 
 import yaml
 
-from scripts.core.tool_registry import POLICY_ENGINE, TOOL_MATRIX
+from scripts.core.tool_registry import BUILTIN_TOOLS, POLICY_ENGINE, TOOL_MATRIX
 from scripts.core.validators import (
     CategoryResult,
     CheckResult,
@@ -350,7 +350,8 @@ def _check_matrix_versions() -> CheckResult:
     in v2.0.0. The matrix plus the policy engine is what `jmo tools install`
     installs and the image carries, so it is the set that must be pinned. The
     registry import is not guarded: a failed import used to leave an empty tool
-    list, and an empty list has no missing entries.
+    list, and an empty list has no missing entries. A built-in (jmo-native)
+    ships inside JMo at JMo's version, so it has nothing to pin.
     """
     try:
         text = _read_text("versions.yaml")
@@ -379,7 +380,7 @@ def _check_matrix_versions() -> CheckResult:
     missing = [
         tool
         for tool in (*TOOL_MATRIX, POLICY_ENGINE)
-        if normalize(tool) not in normalized_versions
+        if tool not in BUILTIN_TOOLS and normalize(tool) not in normalized_versions
     ]
 
     if missing:

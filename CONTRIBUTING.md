@@ -380,7 +380,7 @@ make samples-verify
 
 Before publishing Docker images to GHCR, test them locally to validate changes.
 
-There is one image, built from the repository's single `Dockerfile`. It carries the 15 scanners plus OPA, the policy engine.
+There is one image, built from the repository's single `Dockerfile`. It carries the 16 scanners plus OPA, the policy engine.
 
 ### Build local images
 
@@ -1031,7 +1031,7 @@ gh pr create --title "Hotfix: bypass CI" --label "hotfix"
 
 ## Adding Tool Adapters (Plugin System)
 
-JMo Security uses a plugin-based architecture for all 15 adapters. This enables hot-reload during development, independent updates, and community-contributed integrations.
+JMo Security uses a plugin-based architecture for all 16 adapters. This enables hot-reload during development, independent updates, and community-contributed integrations.
 
 ### Plugin Architecture Overview
 
@@ -1041,7 +1041,7 @@ JMo Security uses a plugin-based architecture for all 15 adapters. This enables 
 - **Fast Development** - 4 hours → 1 hour per adapter (75% reduction)
 - **Independent Updates** - Ship adapter improvements without core releases
 - **Low-Risk Testing** - Test new tools in `~/.jmo/adapters/` without modifying core
-- **Performance** - <100ms plugin loading overhead for all 15 adapters
+- **Performance** - <100ms plugin loading overhead for all 16 adapters
 
 **Core Components:**
 

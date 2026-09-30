@@ -79,9 +79,9 @@ and the broken one has none.
 
 ## SARIF tools: one binding file over `sarif_common.py`
 
-zizmor, gitleaks and osv-scanner are each a ~34-line `<tool>_adapter.py` holding one
-`SarifToolSpec` and delegating `parse()` to `sarif_common.parse_sarif`. A fourth SARIF
-tool is another file of that shape and **no change to `sarif_common.py`**;
+zizmor, gitleaks, osv-scanner and jmo-native are each a small `<tool>_adapter.py`
+holding one `SarifToolSpec` and delegating `parse()` to `sarif_common.parse_sarif`. Another
+SARIF tool is another file of that shape and **no change to `sarif_common.py`**;
 `tests/adapters/test_sarif_common.py::test_a_fourth_sarif_tool_is_one_small_file` proves
 it through the real loader. `CONTRIBUTING.md` has the template.
 
@@ -112,6 +112,11 @@ it through the real loader. `CONTRIBUTING.md` has the template.
   carries no CWE, and compliance enrichment reads `risk.cwe` and nowhere else. The
   golden was re-derived the same way when that landed, so its `risk` is that dict on
   all 69 findings; the golden test compares ids only and would not have noticed.
+- **jmo-native's binding lifts a CWE the same way.** Its runner
+  (`scripts/core/native_checks.py`) writes each rule's CWE as the rule's `cwe` property;
+  the binding reads the rules with `sarif_common`'s own `_rules`/`_props` (so it walks
+  past what `parse_sarif` walks past) and sets `risk` to that CWE, confidence MEDIUM, and
+  likelihood and impact from the severity.
 
 ## Secret scanners and git history (G1)
 

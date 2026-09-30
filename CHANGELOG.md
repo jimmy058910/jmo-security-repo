@@ -99,6 +99,32 @@ All notable changes to JMo Security will be documented in this file.
   outranks everything, and a v4.0 score now outranks v2.0 instead of being dropped or read
   as unversioned. osv-scanner's SARIF carries no structured CVSS version, so its score stays
   versionless (#1356).
+- **jmo-native joins the matrix as its 16th tool.** JMo's own offline check pack for
+  Next.js, Supabase and Firebase applications (`scripts/core/native_checks.py`): plain
+  Python with no rule engine, so it needs nothing installed, runs offline, and its
+  version is JMo's own. Six rules: a browser-public variable whose name looks like a
+  server secret, read from `.env*` files and all JS/TS source
+  (`jmo.nextjs.public-env-holds-server-secret`, HIGH, CWE-540); the Supabase
+  `service_role` key referenced from client code
+  (`jmo.supabase.service-role-key-in-client-code`, HIGH, CWE-284); an LLM client built
+  with `dangerouslyAllowBrowser: true` (`jmo.ai.llm-api-key-in-browser-code`, HIGH,
+  CWE-798); a `public`-schema table Row Level Security is never enabled on
+  (`jmo.supabase.table-without-rls`, HIGH, CWE-862) or enabled with no policy
+  (`jmo.supabase.rls-without-policy`, LOW, no CWE), both the final state of
+  `supabase/migrations/*.sql` applied in order, so a later migration that disables Row
+  Level Security, drops a policy or drops the table counts; and a Firebase rule that
+  allows any access unconditionally, in `firestore.rules` or `storage.rules`
+  (`jmo.firebase.rules-open`, HIGH, CWE-862). A repository with none of
+  that is `skipped:no JS/TS, .env, Firebase rules or Supabase migrations`. Its tracked
+  fixture (`tests/fixtures/samples/native/`, with a README) is placeholder values only
+  and produces exactly its documented 8 findings and 4 negatives. Measured on three
+  private applications: 0 findings on each, and 1 on a copy of one with a planted
+  `NEXT_PUBLIC_STRIPE_SECRET_KEY`; the row runs in under 2 s once a target's files are
+  already read from disk. It reads one application, at the repository root, and only
+  `public`-schema tables
+  ([Known limitations](docs/KNOWN_LIMITATIONS.md#jmo-native-reads-one-application-at-the-repository-root)).
+  CI's docker-smoke job now also builds and checks its image when
+  `scripts/core/tool_descriptors.py` changes, not only the Dockerfile or the registry.
 
 ### Removed
 

@@ -105,6 +105,7 @@ results/
 │       ├── gitleaks.json
 │       ├── gitleaks.git.json
 │       ├── zizmor.json           # GitHub Actions audit
+│       ├── jmo-native.json       # JMo's own Next.js, Supabase and Firebase checks
 │       ├── osv-scanner.json      # Dependency vulnerabilities, from lockfiles
 │       ├── osv-scanner.part1.json  # one per lockfile, when one could not be read
 │       └── ...

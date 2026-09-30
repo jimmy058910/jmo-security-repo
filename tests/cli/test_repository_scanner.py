@@ -177,6 +177,7 @@ class TestRepositoryScanner:
                 "main.tf": 'resource "aws_s3_bucket" "b" {}\n',
                 ".github/workflows/ci.yml": "on: push\n",
                 "package-lock.json": "{}\n",
+                "app/page.tsx": "export default function Page() {}\n",
             },
         )
 
@@ -393,6 +394,14 @@ class TestContentDecidesWhoRuns:
             ),
             ("osv-scanner", Reason.NO_LOCKFILE, {"package-lock.json": "{}\n"}),
             ("osv-scanner", Reason.NO_LOCKFILE, {"api/requirements.txt": "a==1\n"}),
+            ("jmo-native", Reason.NO_WEB_APP_FILES, {"app/page.tsx": "export {}\n"}),
+            ("jmo-native", Reason.NO_WEB_APP_FILES, {".env.example": "A=b\n"}),
+            ("jmo-native", Reason.NO_WEB_APP_FILES, {"firestore.rules": "x\n"}),
+            (
+                "jmo-native",
+                Reason.NO_WEB_APP_FILES,
+                {"supabase/migrations/1.sql": "select 1;\n"},
+            ),
         ],
     )
     def test_skipped_without_content_and_run_with_it(
@@ -830,6 +839,7 @@ class TestExclusions:
                 "main.tf": "x\n",
                 ".github/workflows/ci.yml": "on: push\n",
                 "package-lock.json": "{}\n",
+                "app/page.tsx": "export default function Page() {}\n",
                 "results/individual-repos/old/Dockerfile": "FROM alpine\n",
                 "results/individual-repos/old/old.sh": "#!/bin/sh\n",
                 "results/individual-repos/old/action.yml": "runs: {}\n",

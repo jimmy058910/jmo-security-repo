@@ -322,6 +322,9 @@ class ToolDescriptor:
     off_target_reason: Reason = Reason.NOT_FOR_TARGET
     timeout_floor: int = 0
     binary: str | None = None  # executable name, where it differs from `name`
+    # Ships inside JMo and runs on its interpreter: nothing to install, pin or
+    # update, and its version is JMo's own.
+    builtin: bool = False
     # Reads a repository's git history too, when `read_history` allows (G1).
     reads_history: bool = False
     execution_commands: tuple[str, ...] = ()  # what must exist to execute it
@@ -386,6 +389,36 @@ def _is_iac(path: Path) -> bool:
 
 def _iac_trigger(ctx: ScanContext) -> Reason | None:
     return None if ctx.any_file(_is_iac) else Reason.NO_IAC
+
+
+def _native_trigger(ctx: ScanContext) -> Reason | None:
+    """jmo-native reads JS/TS source, `.env` files, Firebase rules files and
+    the root's `supabase/migrations/*.sql`, and nothing under the directories
+    it prunes. Decided with the runner's own constants and functions, so the
+    two cannot disagree about what it reads, letter case included."""
+    # Imported here: the runner imports VENDORED_DIRS from this module.
+    from scripts.core import native_checks
+
+    root = Path(ctx.target)
+    try:
+        if native_checks.migration_files(root):
+            return None
+    except OSError:
+        # The runner cannot read them either: run it, so the row fails and
+        # says so rather than reading as a skip.
+        return None
+
+    def reads(path: Path) -> bool:
+        parts = path.relative_to(root).parts
+        if set(parts[:-1]) & native_checks.PRUNE_DIRS:
+            return False
+        return (
+            path.suffix in native_checks.CODE_SUFFIXES
+            or native_checks.is_env_file(path.name)
+            or path.name in native_checks.RULES_FILE_NAMES
+        )
+
+    return None if ctx.any_file(reads) else Reason.NO_WEB_APP_FILES
 
 
 # --- examined-files readers (G2, #1231) -----------------------------------------
@@ -901,6 +934,30 @@ def _yara_repo(ctx: ScanContext) -> list[Invocation]:
     ]
 
 
+def _native_repo(ctx: ScanContext) -> list[Invocation]:
+    # JMo's own check pack (scripts/core/native_checks.py), run as yara_runner
+    # is: the binary is this interpreter.
+    return [
+        Invocation(
+            command=(
+                ctx.binary,
+                "-m",
+                "scripts.core.native_checks",
+                "--target",
+                str(ctx.target),
+                "--output",
+                str(ctx.output),
+                *ctx.exclusion_args,
+                *ctx.flags,
+            ),
+            output_file=ctx.output,
+            # The runner writes --output itself; 2 means "did not scan".
+            capture_stdout=False,
+            ok_return_codes=(0, 1),
+        )
+    ]
+
+
 def _grype_repo(ctx: ScanContext) -> list[Invocation]:
     return [
         Invocation(
@@ -1135,6 +1192,27 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
             trigger=_go_trigger,
             execution_commands=("gosec",),
             scanned_count=_gosec_scanned,
+        ),
+        ToolDescriptor(
+            name="jmo-native",
+            invocations={"repo": _native_repo},
+            # `--version` prints `jmo-native <JMo's version>`.
+            version_probe=VersionProbe(
+                re.compile(r"jmo-native\s+v?(\d+\.\d+\.\d+)"),
+                command=[
+                    sys.executable,
+                    "-m",
+                    "scripts.core.native_checks",
+                    "--version",
+                ],
+            ),
+            # As yara's: the runner prunes VENDORED_DIRS itself and takes the
+            # results directory as --exclude-dir.
+            exclusion_style=ExclusionStyle.INLINE,
+            exclusion_flag="--exclude-dir",
+            trigger=_native_trigger,
+            builtin=True,
+            stub={"version": "2.1.0", "runs": []},
         ),
         ToolDescriptor(
             name="yara",

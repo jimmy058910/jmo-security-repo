@@ -64,6 +64,7 @@ from scripts.core.paths import (
 )
 from scripts.core.secure_temp import secure_temp_dir
 from scripts.core.tool_registry import (
+    BUILTIN_TOOLS,
     ToolInfo,
     ToolRegistry,
     detect_platform,
@@ -395,6 +396,16 @@ class ToolInstaller:
                 success=False,
                 message=f"Invalid tool name format: '{tool_name}'",
                 duration_seconds=time.time() - start_time,
+            )
+
+        # Ships inside JMo: nothing to download, even under `force`, and no
+        # versions.yaml entry to read (it would fail `Unknown tool` below).
+        if tool_name in BUILTIN_TOOLS:
+            return InstallResult(
+                tool_name=tool_name,
+                success=True,
+                method="builtin",
+                message="Built into JMo, nothing to install",
             )
 
         # Check if already installed

@@ -186,6 +186,7 @@ Not every tool produces findings for every project. JMo uses content-triggered e
 | **zizmor** | Audits GitHub Actions workflows — only fires if the repo has `.github/workflows`, an `action.yml` or a Dependabot config |
 | **OSV-Scanner** | Checks the dependencies its lockfiles pin against an offline OSV database — only fires if the repo has a lockfile |
 | **Gosec** | Skipped unless the repo contains Go code |
+| **jmo-native** | JMo's own Next.js, Supabase and Firebase checks — skipped unless the repo has JS/TS source, a `.env` file, Firebase rules or Supabase migrations |
 | **ZAP, Nuclei** | Skipped for local repos (they test a running application at a URL) |
 
 Tools with nothing to scan are skipped for that repository, and reporting works the same either way. See [When each tool runs](TOOLS.md#when-each-tool-runs) for the full matrix. OPA, the policy engine, is not a scanner: it evaluates policies against the findings during the report phase.
@@ -552,7 +553,7 @@ https://staging.example.com
 - `--gitlab-group GROUP`: Scan all repositories in a group
 - `--gitlab-repo REPO`: Single GitLab repository (format: `group/repo`)
 
-**Tools used:** Full repository scanner (TruffleHog, Gitleaks, Semgrep, Syft, Trivy, YARA, Grype, plus Hadolint, ShellCheck, zizmor, OSV-Scanner, Gosec and Checkov when their content is present)
+**Tools used:** Full repository scanner (TruffleHog, Gitleaks, Semgrep, Syft, Trivy, YARA, Grype, plus Hadolint, ShellCheck, zizmor, OSV-Scanner, Gosec, jmo-native and Checkov when their content is present)
 
 **Architecture:** GitLab repos are cloned temporarily and scanned using the same repository scanner as local repos, providing comprehensive coverage instead of secrets-only scanning
 

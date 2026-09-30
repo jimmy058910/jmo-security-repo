@@ -122,6 +122,7 @@ CWE_TO_OWASP_TOP10_2021 = {
     "CWE-352": ["A01:2021"],  # CSRF
     "CWE-359": ["A01:2021"],  # Exposure of Private Information
     "CWE-434": ["A01:2021"],  # Unrestricted File Upload
+    "CWE-540": ["A01:2021"],  # Inclusion of Sensitive Information in Source Code
     "CWE-639": ["A01:2021"],  # Authorization Bypass
     "CWE-706": ["A01:2021"],  # Incorrect Object-Level Authorization
     "CWE-862": ["A01:2021"],  # Missing Authorization

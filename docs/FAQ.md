@@ -23,7 +23,7 @@ You can mix — use `pip` locally for development and Docker in CI. See [docs/DO
 - **Docker:** 24.0+ recommended (for the Docker image)
 - **Disk:** ~200 MB for `pip install jmo-security`; a few GB for the Docker image
 - **OS:** Linux (primary), macOS, Windows 10/11 (tested)
-- **Tools (pip install only):** `jmo tools install` fetches the 15 scanners and the OPA policy engine on demand
+- **Tools (pip install only):** `jmo tools install` fetches the scanners and the OPA policy engine on demand (jmo-native needs nothing: it is part of JMo)
 
 ### Is JMo Security available on Homebrew or WinGet?
 
@@ -41,9 +41,9 @@ The tool installer uses isolated virtualenvs for pip-based tools (avoids conflic
 
 Docker users skip this step — all scanners are pre-installed in the image.
 
-### Do I need all 15 scanners?
+### Do I need all 16 scanners?
 
-No, and you rarely run them all. `jmo scan` considers every scanner, but the target's content decides which ones run: hadolint needs Dockerfiles, shellcheck needs shell scripts, zizmor needs GitHub Actions workflows or actions, or a Dependabot config, osv-scanner needs a dependency lockfile, gosec needs Go sources, checkov needs Terraform or CloudFormation, and zap and nuclei only run on `--url` targets. To narrow the list yourself, use `--tools` (for example `jmo scan --repo . --tools trufflehog semgrep trivy`), `--skip-tools`, or a top-level `tools:` list in `jmo.yml`.
+No, and you rarely run them all. `jmo scan` considers every scanner, but the target's content decides which ones run: hadolint needs Dockerfiles, shellcheck needs shell scripts, zizmor needs GitHub Actions workflows or actions, or a Dependabot config, osv-scanner needs a dependency lockfile, gosec needs Go sources, jmo-native needs JS/TS source, `.env` files, Firebase rules or Supabase migrations, checkov needs Terraform or CloudFormation, and zap and nuclei only run on `--url` targets. To narrow the list yourself, use `--tools` (for example `jmo scan --repo . --tools trufflehog semgrep trivy`), `--skip-tools`, or a top-level `tools:` list in `jmo.yml`.
 
 See [docs/TOOLS.md](TOOLS.md) for the full tool list and when each tool runs.
 

@@ -24,17 +24,18 @@ To narrow the list:
 | ShellCheck | Shell script bugs (unquoted expansions, unguarded `cd`) | Repository, GitLab | Shell scripts are present | Release binary |
 | zizmor | GitHub Actions flaws: template injection, unpinned actions, dangerous triggers, credential persistence | Repository, GitLab | Workflows, composite actions or a Dependabot config are present | Release binary |
 | Gosec | Go security issues | Repository, GitLab | Go sources or a `go.mod` are present | Release binary |
+| jmo-native | Next.js, Supabase and Firebase mistakes: a server secret behind a public env prefix, the Supabase `service_role` key or an LLM key in browser code, tables without Row Level Security, open Firebase rules ([details](#jmo-native)) | Repository, GitLab | JS/TS source, `.env` files, Firebase rules or Supabase migrations are present | Nothing: it is part of JMo |
 | YARA | Malware patterns: web shells, backdoors, cryptominers | Repository, GitLab | Always | `yara-python` via pip, plus a rule bundle |
 | Grype | Vulnerable dependencies (Anchore database) | Repository, GitLab | Always | Release binary or install script |
 | OSV-Scanner | Vulnerable dependencies, read from lockfiles against an offline OSV database | Repository, GitLab | A lockfile is present | Release binary |
 | ZAP | Web application vulnerabilities (DAST) | URL | Never: URL targets only | Extracted application, needs Java 17+ |
 | Nuclei | Template-based vulnerability probes (DAST) | URL | Never: URL targets only | Release binary |
 
-Versions are pinned in [`versions.yaml`](../versions.yaml). OPA is installed alongside these tools but is not one of them: see [Policy engine (OPA)](#policy-engine-opa).
+Versions are pinned in [`versions.yaml`](../versions.yaml), except jmo-native's, which is JMo's own. OPA is installed alongside these tools but is not one of them: see [Policy engine (OPA)](#policy-engine-opa).
 
 ## When each tool runs
 
-Being in the matrix makes a tool eligible. Two things then decide whether it runs on a given target: the target type (next section) and, for six tools on a repository, the target's content.
+Being in the matrix makes a tool eligible. Two things then decide whether it runs on a given target: the target type (next section) and, for seven tools on a repository, the target's content.
 
 | Tool | Content it needs | Files it looks for |
 |------|------------------|--------------------|
@@ -43,6 +44,7 @@ Being in the matrix makes a tool eligible. Two things then decide whether it run
 | zizmor | GitHub Actions | `.github/workflows/*.yml` and `*.yaml` (the repository's own, not a subdirectory's), `action.yml` or `action.yaml` anywhere, `.github/dependabot.yml` or `.yaml` |
 | OSV-Scanner | Lockfiles | anywhere: `package-lock.json`, `npm-shrinkwrap.json`, `yarn.lock`, `pnpm-lock.yaml`, `bun.lock`, `requirements*.txt`, `poetry.lock`, `Pipfile.lock`, `pdm.lock`, `uv.lock`, `pylock.toml`, `go.mod`, `Cargo.lock`, `composer.lock`, `Gemfile.lock`, `gradle.lockfile`, `pom.xml`, `packages.lock.json`, `packages.config`, `pubspec.lock`, `mix.lock`, `renv.lock` |
 | Gosec | Go code | any `.go` file, or a `go.mod` |
+| jmo-native | Web application code and config | anywhere: `*.ts`, `*.tsx`, `*.js`, `*.jsx`, `*.mjs`, a `.env*`, `*.env` or `*.env.example` file, `firestore.rules`, `storage.rules`; at the repository root only: `supabase/migrations/*.sql` |
 | Checkov | Infrastructure as code | `*.tf`, `*.tf.json`, or a YAML, JSON or `.template` file whose first 8 KB name `AWSTemplateFormatVersion` or an `AWS::` type (CloudFormation) |
 
 When the content is absent, the tool is skipped for that target and contributes no findings. It is not an error. An IaC file target (`--terraform-state`, `--cloudformation`, `--k8s-manifest`) is itself the content, so Checkov always reads it.
@@ -64,7 +66,7 @@ Every requested tool leaves one row per target, in `scan-timings.json`, in `.sca
 | Row | Meaning |
 |-----|---------|
 | `ran` | It ran and its output is beside the row. |
-| `skipped:<reason>` | It did not apply: `needs --url`, `not for this target type`, `no Dockerfiles`, `no shell scripts`, `no GitHub Actions workflows`, `no lockfile`, `no Go sources`, `no IaC files`, or `not installed` under `--allow-missing-tools`. |
+| `skipped:<reason>` | It did not apply: `needs --url`, `not for this target type`, `no Dockerfiles`, `no shell scripts`, `no GitHub Actions workflows`, `no lockfile`, `no Go sources`, `no IaC files`, `no JS/TS, .env, Firebase rules or Supabase migrations`, or `not installed` under `--allow-missing-tools`. |
 | `failed:<reason>` | It applied and produced nothing you can trust: `not installed`, `timed out`, `no files to scan`, `examined 0 files`, `offline database missing`, `unaccepted exit code`, `no output`, and a few rarer ones. |
 
 `failed:no files to scan` means the repository had no file outside the excluded directories, so no tool ran against it. `failed:examined 0 files` means the tool's own output reports that it read nothing. Semgrep and Gosec report that count, and it is how a run that scanned nothing stops passing for a clean one.
@@ -79,11 +81,35 @@ The remaining repository tools (TruffleHog, Gitleaks, Semgrep, Syft, Trivy, YARA
 
 Trivy's repository scan reads vulnerabilities (dev dependencies included, and offline: it never calls out to a package registry) and misconfigurations; its secret pass runs only on an image scan. A repository's secrets come from TruffleHog and Gitleaks, not Trivy.
 
+## jmo-native
+
+jmo-native is JMo's own check pack for Next.js, Supabase and Firebase applications (`scripts/core/native_checks.py`). It is plain Python with no rule engine, so it needs nothing installed, runs offline, and its version is JMo's own. It writes SARIF, and each finding carries its rule's CWE, which is what the compliance mappings read.
+
+| Rule | Severity | CWE | What it reports | Files it reads |
+|------|----------|-----|-----------------|----------------|
+| `jmo.nextjs.public-env-holds-server-secret` | HIGH | CWE-540 | A variable with a browser-public prefix (`NEXT_PUBLIC_`, `VITE_`, `REACT_APP_`, `EXPO_PUBLIC_`) whose name looks like a server secret (`SECRET`, `SERVICE_ROLE`, `PRIVATE`, `ACCESS_TOKEN`, `_SK_`, `OPENAI`, `ANTHROPIC`, `STRIPE_SECRET`, `DATABASE_URL`, `SMTP_PASS`). A public variable is inlined into the browser bundle. Matched as the frameworks match it: upper case, and never inside a longer name (`INVITE_SECRET` is not `VITE_SECRET`) | `.env*`, `*.env` and `*.env.example` files, and all JS/TS source |
+| `jmo.supabase.service-role-key-in-client-code` | HIGH | CWE-284 | The Supabase `service_role` key, or `process.env.SUPABASE_SERVICE_ROLE_KEY`, referenced from client code. That key bypasses Row Level Security | JS/TS source in client code (below) |
+| `jmo.ai.llm-api-key-in-browser-code` | HIGH | CWE-798 | An LLM client constructed with `dangerouslyAllowBrowser: true`, which ships its API key to every visitor | all JS/TS source |
+| `jmo.supabase.table-without-rls` | HIGH | CWE-862 | A `public`-schema table that Row Level Security is never enabled on, so Supabase's API serves every row to anyone holding the anon key | `supabase/migrations/*.sql` |
+| `jmo.supabase.rls-without-policy` | LOW | none | Row Level Security enabled with no policy, which locks the table to every caller, the application included: often a mistake, sometimes intended | `supabase/migrations/*.sql` |
+| `jmo.firebase.rules-open` | HIGH | CWE-862 | A Firebase security rule that allows any access unconditionally (`allow <verbs>: if true`, for any of `read`, `write`, `get`, `list`, `create`, `update`, `delete`, the `;` optional) | `firestore.rules`, `storage.rules` |
+
+How it reads them:
+
+- **Client or server, by path from the scanned root.** A JS/TS file is client code when its path relative to the root starts with `app/`, `src/`, `components/`, `pages/` or `lib/` and contains none of `.server.`, `/api/`, `/server/`, `/actions/` or `supabase/functions/`. So `app/api/admin/route.ts` is server code, where the `service_role` key belongs, and a monorepo's `apps/web/src/...` is neither ([Known limitations](KNOWN_LIMITATIONS.md#jmo-native-reads-one-application-at-the-repository-root)).
+- **Modules Next.js keeps off the browser are server code wherever they sit.** Next.js enforces each of these, so none can hide a real client reference: an App Router route handler (`route.ts`, `.tsx`, `.js`, `.jsx` or `.mjs` under `app/` or `src/app/`), `middleware.ts` or `middleware.js` at the root or in `src/`, a module that imports `server-only` (the build fails if client code does), and a module whose first statement is a `"use server"` directive. Any other module under those directories is client code, a server-side `src/` of a backend-only repository included.
+- **Comments are not code.** `//` and `/* */` comments in JS/TS and in Firebase rules, `--` and `/* */` comments in SQL, and `.env` lines starting with `#` report nothing, so a comment naming `service_role` is not a finding. A `//` inside a string, such as a URL, is not a comment. A `'...'` or `"..."` string ends at its line's end, as JavaScript requires, so a stray quote (`Don't` in JSX text) affects one line, not the rest of the file.
+- **A table's final state.** The migrations are applied in order, files by filename and statements as they appear: `create table`, `alter table ... enable` or `disable row level security`, `drop table`, `create policy` and `drop policy`. What is left at the end decides. A table secured in a later migration reports nothing; one whose Row Level Security a later migration disables reports, and so does one whose last policy is dropped; a dropped table does not. A finding points at the `create table` line that made the table, the latest one after a drop. Only `public`-schema tables are checked: an unqualified name is `public`, `private.notes` or `auth.users` is skipped, and each table is its schema and name, so `private.orders` never stands in for `public.orders`.
+- **What it skips.** The vendored trees every tool skips (`.git`, `node_modules`, `vendor`, `.venv`, `venv`), Next.js's build cache `.next`, and the results directory.
+- **No secret reaches a finding.** The public-env rule reads only a `.env` line's name, left of its first `=`, and reports that name, never any part of the value.
+
+Each check is a pattern over source or config, not a proof, so its findings carry confidence MEDIUM.
+
 ## Target types
 
 | Target | Flags | Tools that run |
 |--------|-------|----------------|
-| Repository | `--repo`, `--repos-dir`, `--targets`, `--tsv` | TruffleHog, Gitleaks, Semgrep, Syft, Trivy, YARA, Grype; Hadolint, ShellCheck, zizmor, OSV-Scanner, Gosec and Checkov when their content is present |
+| Repository | `--repo`, `--repos-dir`, `--targets`, `--tsv` | TruffleHog, Gitleaks, Semgrep, Syft, Trivy, YARA, Grype; Hadolint, ShellCheck, zizmor, OSV-Scanner, Gosec, jmo-native and Checkov when their content is present |
 | Container image | `--image`, `--images-file` | Trivy, Syft |
 | IaC file | `--terraform-state`, `--cloudformation`, `--k8s-manifest` | Trivy (`trivy config`), Checkov |
 | URL | `--url`, `--urls-file` | ZAP, Nuclei |
@@ -108,6 +134,7 @@ jmo tools check     # what is installed, at which version, and what is missing
 | Semgrep, Checkov | Pinned PyPI package in a virtual environment of its own, so their dependencies cannot conflict with JMo's or each other's | `~/.jmo/tools/venvs/<tool>/` |
 | YARA | Pinned `yara-python` package, installed into the Python environment JMo runs from, plus a pinned rule bundle (reversinglabs-yara-rules, MIT) | rules in `~/.jmo/yara-rules/` |
 | ZAP | Pinned cross-platform release archive, extracted | `~/.jmo/bin/zap/` |
+| jmo-native | Nothing to install: it is part of JMo and runs on JMo's own Python. `jmo tools check` lists it at JMo's version; `jmo tools install jmo-native` and `jmo tools update jmo-native` say it is built in | inside JMo |
 | OPA | Pinned release binary | `~/.jmo/bin/` |
 
 Platform differences:

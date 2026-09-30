@@ -258,6 +258,8 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # TODO(issue-#1382): an exception not caught below escapes and exits 1,
+    # which the row accepts as matches, over whatever --output already holds.
     args = _parse_args(argv)
 
     yara = _import_yara()

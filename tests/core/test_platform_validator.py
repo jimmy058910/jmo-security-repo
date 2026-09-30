@@ -948,6 +948,7 @@ class TestToolExistsConsistencyHasTeeth:
         import yaml
 
         from scripts.core.tool_registry import (
+            BUILTIN_TOOLS,
             POLICY_ENGINE,
             TOOL_BINARY_NAMES,
             TOOL_MATRIX,
@@ -964,7 +965,9 @@ class TestToolExistsConsistencyHasTeeth:
         }
         binaries = set(TOOL_BINARY_NAMES) | set(TOOL_BINARY_NAMES.values())
         assert known == declared | binaries, f"registry lookup looks wrong: {known}"
-        assert {*TOOL_MATRIX, POLICY_ENGINE} <= known
+        # A built-in (jmo-native) has no versions.yaml entry: it ships inside
+        # JMo and `find_tool` answers for it with this interpreter.
+        assert {*TOOL_MATRIX, POLICY_ENGINE} - BUILTIN_TOOLS <= known
         for tool in ("trivy", "semgrep", "trufflehog", "syft"):
             assert tool in known
         for host_dep in ("uv", "node", "java", "bash", "docker"):

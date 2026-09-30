@@ -45,6 +45,12 @@ TOOL_BINARY_NAMES: dict[str, str] = {
     name: d.binary for name, d in DESCRIPTORS.items() if d.binary
 }
 
+#: The tools that ship inside JMo (jmo-native): they run on JMo's interpreter,
+#: have no versions.yaml pin, and `jmo tools install`/`update` leave them be.
+BUILTIN_TOOLS: frozenset[str] = frozenset(
+    name for name, d in DESCRIPTORS.items() if d.builtin
+)
+
 #: Tool name -> the commands that must exist for it to execute (a launcher
 #: script and the runtime it starts, for zap).
 TOOL_EXECUTION_COMMANDS: dict[str, list[str]] = {
