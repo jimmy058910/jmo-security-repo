@@ -21,6 +21,7 @@ Measured before any of this was written (the Phase 4 plan, "Measured: zizmor"):
 from __future__ import annotations
 
 import json
+import logging
 import os
 import shutil
 import sys
@@ -36,6 +37,7 @@ from scripts.cli.tool_manager import ToolManager
 from scripts.core.scan_timings import SKIP_REASONS, Reason, State
 from scripts.core.tool_descriptors import DESCRIPTORS, VENDORED_DIRS, ExclusionStyle
 from scripts.core.tool_registry import ToolInfo
+from scripts.core.tool_runner import ToolResult
 
 # zizmor v1.30.1's release assets, listed with `gh api
 # repos/zizmorcore/zizmor/releases/tags/v1.30.1 --jq '.assets[].name'` on
@@ -433,3 +435,304 @@ def test_real_zizmor_exits_nonzero_when_it_cannot_audit(tmp_path) -> None:
         env={**os.environ},
     )
     assert result.returncode != 0
+
+
+# --- what zizmor says about the inputs it was handed ---------------------------
+
+# 1.30.1's own stderr, copied from runs through JMo's command line. A YAML file
+# that does not parse is not named in its warning; one that parses but is not
+# the kind of file its name says (`action.yml` of another framework) is. Each
+# input that was audited gets a `completed` line.
+PARSE_WARNING = (
+    " WARN collect_inputs: zizmor::registry::input: failed to parse input: "
+    "did not find expected ',' or ']' at line 2 column 3, while parsing a "
+    "flow sequence at line 1 column 7\n"
+)
+ACTION_WARNING = (
+    " WARN collect_inputs: zizmor::registry::input: failed to validate "
+    "file://sub/action.yml as action: input does not match expected "
+    "validation schema\n"
+)
+NO_INPUTS = (
+    "fatal: no audit was performed\nerror: no inputs collected\n  |\n"
+    "  = help: collection yielded no auditable inputs\n"
+)
+EMPTY_SARIF = json.dumps({"version": "2.1.0", "runs": []})
+
+
+def _completed(*files: str) -> str:
+    return "".join(f" INFO audit: zizmor: \U0001f308 completed {f}\n" for f in files)
+
+
+def _run_with(repo: Path, out: Path, result):
+    """The scan loop over `repo`, with `result(definition)` as zizmor's run."""
+
+    class Runner:
+        def __init__(self, tools, progress_callback=None):
+            self.tools = tools
+
+        def run_all_parallel(self):
+            return [result(t) for t in self.tools]
+
+    return tool_loop.run_tools(
+        tools=["zizmor"],
+        target_type="repo",
+        target=repo,
+        target_label="t",
+        out_dir=out,
+        timeout=60,
+        retries=0,
+        per_tool_config={},
+        allow_missing_tools=False,
+        runner_cls=Runner,
+        find_tool_func=lambda name: "/bin/zizmor" if name == "zizmor" else None,
+        repo_root=repo,
+    )
+
+
+def _repo_and_out(tmp_path: Path, files: dict[str, bytes]):
+    repo = tmp_path / "repo"
+    for rel, data in files.items():
+        (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+        (repo / rel).write_bytes(data)
+    out = tmp_path / "out"
+    out.mkdir()
+    return repo, out
+
+
+def _success(stderr: str):
+    def result(definition):
+        return ToolResult(
+            tool="zizmor",
+            status="success",
+            returncode=0,
+            stdout=EMPTY_SARIF,
+            stderr=stderr,
+            output_file=definition.output_file,
+            capture_stdout=True,
+        )
+
+    return result
+
+
+def _crash(stderr: str):
+    def result(definition):
+        return ToolResult(
+            tool="zizmor",
+            status="error",
+            returncode=3,
+            stderr=stderr,
+            output_file=definition.output_file,
+            capture_stdout=True,
+            failure="crash",
+            error_message="Return code 3 not in (0,)",
+        )
+
+    return result
+
+
+def test_every_input_invalid_is_a_skip_naming_the_files_not_a_failure(
+    tmp_path, caplog
+) -> None:
+    """rc 3, "no inputs collected" (measured, 1.30.1): the only `action.yml`
+    of a repository is another framework's file of that name. It read
+    `failed:unaccepted exit code` on every scan, and the only remedy was
+    `--skip-tools zizmor`. Nothing failed: there was nothing to audit."""
+    repo, out = _repo_and_out(tmp_path, {"sub/action.yml": b"name: x\nfoo: bar\n"})
+
+    with caplog.at_level(logging.INFO):
+        rows = _run_with(repo, out, _crash(ACTION_WARNING + NO_INPUTS))
+
+    row = rows["zizmor"]
+    assert row.state is State.SKIPPED, row
+    assert row.reason is Reason.NO_READABLE_WORKFLOWS
+    assert row.reason in SKIP_REASONS
+    assert row.label == "skipped:no workflow zizmor could read"
+    # The reason is a closed-set label; the files are in the detail and the log.
+    assert "sub/action.yml" in (row.detail or "")
+    warned = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+    assert any("sub/action.yml" in m for m in warned), warned
+    assert not [r for r in caplog.records if r.levelname == "ERROR"]
+    # The row's output is the empty SARIF document, so the report reads it.
+    assert json.loads((out / "zizmor.json").read_bytes())["runs"] == []
+
+
+def test_an_rc_3_that_is_not_no_inputs_is_still_a_failure(tmp_path) -> None:
+    """The skip is for zizmor's own words, not for the return code alone."""
+    repo, out = _repo_and_out(tmp_path, {".github/workflows/ci.yml": WORKFLOW})
+
+    rows = _run_with(repo, out, _crash("error: something else\n"))
+
+    assert rows["zizmor"].state is State.FAILED
+    assert rows["zizmor"].reason is Reason.EXIT_CODE
+
+
+def test_an_invalid_file_among_valid_ones_is_named_and_the_row_still_ran(
+    tmp_path, caplog
+) -> None:
+    """One invalid input beside valid ones: zizmor exits 0 with the others'
+    findings and writes only a WARN, which does not name a file that did not
+    parse. The row implied `bad.yml` was audited; it was not."""
+    repo, out = _repo_and_out(
+        tmp_path,
+        {
+            ".github/workflows/good.yml": WORKFLOW,
+            ".github/workflows/bad.yml": b"name: [unclosed\n  : :\n",
+        },
+    )
+    stderr = PARSE_WARNING + _completed(".github\\workflows\\good.yml")
+
+    with caplog.at_level(logging.INFO):
+        rows = _run_with(repo, out, _success(stderr))
+
+    assert rows["zizmor"].state is State.RAN, rows["zizmor"]
+    warned = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warned) == 1, warned
+    assert ".github/workflows/bad.yml" in warned[0]
+    assert "good.yml" not in warned[0]
+    assert "did not find expected" in warned[0]
+    assert ".github/workflows/bad.yml" in (rows["zizmor"].detail or "")
+
+
+def test_a_named_warning_names_its_own_file(tmp_path, caplog) -> None:
+    repo, out = _repo_and_out(
+        tmp_path,
+        {
+            ".github/workflows/good.yml": WORKFLOW,
+            "sub/action.yml": b"name: x\nfoo: bar\n",
+        },
+    )
+    stderr = ACTION_WARNING + _completed(".github\\workflows\\good.yml")
+
+    with caplog.at_level(logging.WARNING):
+        _run_with(repo, out, _success(stderr))
+
+    warned = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warned) == 1 and "sub/action.yml" in warned[0], warned
+    assert "does not match expected validation schema" in warned[0]
+
+
+def test_a_clean_run_says_nothing_about_inputs(tmp_path, caplog) -> None:
+    repo, out = _repo_and_out(tmp_path, {".github/workflows/ci.yml": WORKFLOW})
+
+    with caplog.at_level(logging.INFO):
+        rows = _run_with(repo, out, _success(_completed(".github\\workflows\\ci.yml")))
+
+    assert rows["zizmor"].state is State.RAN
+    assert rows["zizmor"].detail is None
+    assert not [r for r in caplog.records if r.levelname in ("WARNING", "ERROR")]
+
+
+@pytest.mark.parametrize(
+    "config", ["zizmor.yml", "zizmor.yaml", ".github/zizmor.yml", ".github/zizmor.yaml"]
+)
+def test_a_repository_config_zizmor_reads_is_announced_naming_it(
+    tmp_path, caplog, config
+) -> None:
+    """zizmor obeys the scanned repository's own config, and a `.github/zizmor.yml`
+    disabling `artipacked` and `unpinned-uses` took a sample from 3 rule ids to 1
+    with nothing said (measured, 1.30.1, which reads the `.yaml` spellings too).
+    As for gitleaks' `.gitleaks.toml`: honoured, and said."""
+    repo, out = _repo_and_out(
+        tmp_path,
+        {".github/workflows/ci.yml": WORKFLOW, config: b"rules:\n  artipacked:\n"},
+    )
+
+    with caplog.at_level(logging.INFO):
+        _run_with(repo, out, _success(_completed(".github\\workflows\\ci.yml")))
+
+    said = [r.getMessage() for r in caplog.records if r.levelname == "INFO"]
+    assert any(config in m and "zizmor" in m for m in said), said
+
+
+def test_a_repository_without_a_zizmor_config_announces_nothing(
+    tmp_path, caplog
+) -> None:
+    repo, out = _repo_and_out(tmp_path, {".github/workflows/ci.yml": WORKFLOW})
+
+    with caplog.at_level(logging.INFO):
+        _run_with(repo, out, _success(_completed(".github\\workflows\\ci.yml")))
+
+    assert not [r for r in caplog.records if "zizmor.y" in r.getMessage()]
+
+
+def test_a_config_is_not_announced_for_a_scan_that_skips(tmp_path, caplog) -> None:
+    """No workflow to read: zizmor does not run, so the config shapes nothing."""
+    repo, out = _repo_and_out(
+        tmp_path, {"lib.py": b"x = 1\n", ".github/zizmor.yml": b"rules: {}\n"}
+    )
+
+    with caplog.at_level(logging.INFO):
+        rows = _run_with(repo, out, lambda d: None)
+
+    assert rows["zizmor"].state is State.SKIPPED
+    assert not [r for r in caplog.records if "zizmor.yml" in r.getMessage()]
+
+
+@pytest.mark.requires_tools
+def test_real_zizmor_edges_through_the_scan_loop(tmp_path, caplog) -> None:
+    """Against the binary, through the scan loop: the two edges measured on
+    1.30.1 (#1362), and the config announcement (#1363)."""
+    from scripts.core.tool_runner import ToolRunner
+
+    if shutil.which("zizmor") is None:
+        pytest.skip("zizmor is not on PATH")
+
+    def scan(files: dict[str, bytes], name: str):
+        repo = tmp_path / name
+        for rel, data in files.items():
+            (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+            (repo / rel).write_bytes(data)
+        out = tmp_path / f"out-{name}"
+        out.mkdir()
+        rows = tool_loop.run_tools(
+            tools=["zizmor"],
+            target_type="repo",
+            target=repo,
+            target_label=name,
+            out_dir=out,
+            timeout=120,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=False,
+            runner_cls=ToolRunner,
+            repo_root=repo,
+        )
+        return rows["zizmor"], out
+
+    with caplog.at_level(logging.INFO):
+        # (a) every matched file invalid: a skip, where it was a failure.
+        row, out = scan({"sub/action.yml": b"name: x\nfoo: bar\n"}, "a")
+        assert row.state is State.SKIPPED, row
+        assert row.reason is Reason.NO_READABLE_WORKFLOWS
+        assert "sub/action.yml" in (row.detail or "")
+        assert json.loads((out / "zizmor.json").read_bytes())["runs"] == []
+
+        # (b) one invalid file beside a valid one: ran, and the invalid one named.
+        caplog.clear()
+        row, out = scan(
+            {
+                ".github/workflows/good.yml": WORKFLOW,
+                ".github/workflows/bad.yml": b"name: [unclosed\n  : :\n",
+            },
+            "b",
+        )
+        assert row.state is State.RAN, row
+        warned = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+        assert any(".github/workflows/bad.yml" in m for m in warned), warned
+        assert not any("good.yml" in m for m in warned), warned
+
+        # (c) the repository's own config: honoured, and said.
+        caplog.clear()
+        row, out = scan(
+            {
+                ".github/workflows/ci.yml": WORKFLOW,
+                ".github/zizmor.yml": b"rules:\n  unpinned-uses:\n    disable: true\n",
+            },
+            "c",
+        )
+        assert row.state is State.RAN, row
+        results = json.loads((out / "zizmor.json").read_bytes())["runs"][0]["results"]
+        assert "zizmor/unpinned-uses" not in {r["ruleId"] for r in results}
+        said = [r.getMessage() for r in caplog.records if r.levelname == "INFO"]
+        assert any(".github/zizmor.yml" in m for m in said), said

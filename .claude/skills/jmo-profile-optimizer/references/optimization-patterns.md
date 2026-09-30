@@ -231,7 +231,7 @@ a closed set otherwise (`Reason` in `scan_timings.py`):
 
 - **skipped:** `needs --url`, `not for this target type`, `not installed` (only
   under `--allow-missing-tools`), `no Dockerfiles`, `no shell scripts`,
-  `no IaC files`, `no GitHub Actions workflows`, `no lockfile`,
+  `no IaC files`, `no GitHub Actions workflows`, `no workflow zizmor could read`, `no lockfile`,
   `no JS/TS, .env, Firebase rules or Supabase migrations`
 - **failed:** `not installed`, `timed out`, `no files to scan`,
   `offline database missing`, `examined 0 files`, `unaccepted exit code`, `no output`,

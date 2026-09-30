@@ -29,7 +29,7 @@ from __future__ import annotations
 import logging
 import os
 import time
-from collections.abc import Callable, Iterable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -238,6 +238,25 @@ def _repository_gitleaks_config(root: Path) -> Path | None:
         return None
 
 
+def _announce_own_config(d: ToolDescriptor, root: Path) -> None:
+    """Say which of the repository's own files `d` reads as its configuration.
+
+    The repository then decides part of its own audit (zizmor: a
+    `.github/zizmor.yml` disabling two audits took a sample from 3 rule ids to
+    1, unannounced, #1363), so the scan says so at INFO, as it does for
+    gitleaks' `.gitleaks.toml` (#1327). Python 3.12 raises from a probe where
+    3.11 returned False (#1163), hence the guard."""
+    for name in d.own_config:
+        try:
+            if not (root / name).is_file():
+                continue
+        except OSError:
+            continue
+        logger.info(
+            "%s: %s reads its %s (its audit settings apply)", root.name, d.name, name
+        )
+
+
 def _exclusions(
     d: ToolDescriptor, out_dir: Path, results_name: str | None, target: Any
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
@@ -326,6 +345,7 @@ def _row_from_results(
     out_dir: Path,
     stub: Callable[[str, Path], None],
     labels: Mapping[Path, str] | None = None,
+    handed: Sequence[str] = (),
 ) -> ToolRun:
     tool = d.name
     if not results:
@@ -338,6 +358,32 @@ def _row_from_results(
         )
     seconds = sum(r.duration for r in results)
     attempts = sum(r.attempts for r in results)
+    unread: dict[str, str] = {}
+    if d.unread_inputs is not None:
+        unread = d.unread_inputs("\n".join(r.stderr or "" for r in results), handed)
+    nothing = d.nothing_read
+    if nothing is not None and all(
+        r.status != "success"
+        and r.returncode == nothing.returncode
+        and nothing.stderr_marker in (r.stderr or "")
+        for r in results
+    ):
+        # Handed files, read none: nothing was there to audit, and the tool's
+        # own exit code for it is not a failure of the tool. The files are
+        # named, since the row's reason is a closed-set label.
+        stub(tool, out_dir / f"{tool}.json")
+        named = unread or dict.fromkeys(handed, "it was not read")
+        _warn_unread(tool, named)
+        return ToolRun(
+            tool,
+            State.SKIPPED,
+            nothing.reason,
+            seconds=seconds,
+            exit_code=results[0].returncode,
+            attempts=attempts,
+            invocations=invocations,
+            detail=f"it read none of the files handed to it: {', '.join(named)}",
+        )
     for r in results:
         # Tools told where to write wrote their own file; the rest printed it.
         # Before any failure is graded: a failed history run must not throw
@@ -402,6 +448,9 @@ def _row_from_results(
                 invocations=invocations,
                 detail="its output reports 0 files examined",
             )
+    # The others were read and the row is `ran`; the log and the record name
+    # what was dropped (a file the row implies was audited, and was not).
+    _warn_unread(tool, unread)
     return ToolRun(
         tool,
         State.RAN,
@@ -409,7 +458,19 @@ def _row_from_results(
         exit_code=exit_code,
         attempts=attempts,
         invocations=invocations,
+        detail=f"not audited: {', '.join(unread)}" if unread else None,
     )
+
+
+def _warn_unread(tool: str, unread: Mapping[str, str]) -> None:
+    for name, why in unread.items():
+        logger.warning(
+            "%s: %s was NOT audited: %s - its findings, if any, are MISSING "
+            "from this scan",
+            tool,
+            name,
+            why,
+        )
 
 
 def _unlink(path: Path) -> None:
@@ -642,6 +703,8 @@ def run_tools(
                 ctx = replace(ctx, files=shortfall.files)
                 shortfalls[tool] = shortfall
 
+        if key == "repo":
+            _announce_own_config(d, Path(scan_root(target)))
         invocations = builder(ctx)
         planned[tool] = (d, invocations)
         definitions.extend(definition(tool, inv) for inv in invocations)
@@ -684,7 +747,13 @@ def run_tools(
         # Each failed invocation is named by its label, in the builder's order.
         labels = {inv.output_file: inv.label for inv in invocations}
         row = _row_from_results(
-            d, by_tool.get(tool, []), len(invocations), out_dir, stub, labels
+            d,
+            by_tool.get(tool, []),
+            len(invocations),
+            out_dir,
+            stub,
+            labels,
+            tuple(f for inv in invocations for f in inv.inputs),
         )
         if tool in fallen:
             # What the replaced run cost is part of what the row cost.

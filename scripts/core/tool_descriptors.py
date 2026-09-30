@@ -287,6 +287,9 @@ class Invocation:
     env: Mapping[str, str] | None = None
     # What to run instead when this invocation fails in one known way.
     fallback: Fallback | None = None
+    # The files it was handed, `/`-separated and relative to `cwd`, for a row
+    # to name the ones the tool could not read (`ToolDescriptor.unread_inputs`).
+    inputs: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -329,6 +332,22 @@ class VersionProbe:
     timeout: int | None = None
 
 
+@dataclass(frozen=True)
+class NothingRead:
+    """How a tool says it was handed inputs and read none of them: a run that
+    exited with `returncode` and wrote `stderr_marker` to stderr is `skipped`
+    with `reason`, not `failed` (zizmor: rc 3, "no inputs collected")."""
+
+    returncode: int
+    stderr_marker: str
+    reason: Reason
+
+
+# `(stderr, the files it was handed)` -> each file the tool did not read, with
+# why. A tool that drops an invalid input and audits the others exits 0 and
+# says so only on stderr.
+UnreadInputs = Callable[[str, Sequence[str]], dict[str, str]]
+
 Builder = Callable[[ScanContext], list[Invocation]]
 Trigger = Callable[[ScanContext], Reason | None]
 Precheck = Callable[[ScanContext], Shortfall | None]
@@ -368,6 +387,14 @@ class ToolDescriptor:
     # Run once the content is known to be there: what the tool cannot read
     # of it fails the row before it runs (a trigger can only skip).
     precheck: Precheck | None = None
+    # The tool was handed files and read none of them: a skip, not a failure.
+    nothing_read: NothingRead | None = None
+    # Which of the files it was handed it did not read, from its stderr.
+    unread_inputs: UnreadInputs | None = None
+    # Files in the scanned repository's root that the tool reads as its own
+    # configuration. The repository then decides part of its own audit, so the
+    # scan says so (#1363, as for gitleaks' `.gitleaks.toml`).
+    own_config: tuple[str, ...] = ()
     off_target_reason: Reason = Reason.NOT_FOR_TARGET
     timeout_floor: int = 0
     binary: str | None = None  # executable name, where it differs from `name`
@@ -823,6 +850,43 @@ def _relative_to_target(ctx: ScanContext) -> tuple[Path, list[str]]:
     return root, [Path(f).absolute().relative_to(target).as_posix() for f in ctx.files]
 
 
+_ZIZMOR_WARNING = re.compile(
+    r"^\s*WARN collect_inputs: [\w:]+: (?P<message>.+?)\s*$", re.MULTILINE
+)
+# A warning that names its file (a YAML file of the wrong kind); one for a file
+# that does not parse does not.
+_ZIZMOR_NAMED = re.compile(
+    r"failed to (?:parse|validate) file://(?P<file>\S+?)(?: as \w+)?: (?P<why>.+)"
+)
+# One line per input it audited, the path as the platform spells it.
+_ZIZMOR_DONE = re.compile(
+    r"^\s*INFO audit: .*? completed (?P<file>.+?)\s*$", re.MULTILINE
+)
+
+
+def _zizmor_unread(stderr: str, inputs: Sequence[str]) -> dict[str, str]:
+    """The inputs zizmor 1.30.1 dropped and why: each `WARN collect_inputs`
+    line, matched to a file by its own text or, for a file that does not parse
+    (the warning carries no name), by the absence of a `completed` line."""
+    warnings = _ZIZMOR_WARNING.findall(stderr)
+    if not warnings:
+        return {}
+    unread: dict[str, str] = {}
+    unnamed: list[str] = []
+    for message in warnings:
+        named = _ZIZMOR_NAMED.search(message)
+        if named:
+            unread[named.group("file")] = named.group("why")
+        else:
+            unnamed.append(message)
+    audited = {m.replace("\\", "/") for m in _ZIZMOR_DONE.findall(stderr)}
+    why = unnamed[0] if len(unnamed) == 1 else "it did not parse"
+    for name in inputs:
+        if name not in audited and name not in unread:
+            unread[name] = why
+    return unread
+
+
 def _zizmor_repo(ctx: ScanContext) -> list[Invocation]:
     # Walk-fed and repository-relative, run from the root: zizmor has no
     # exclude flag and reads vendored workflows (a planted node_modules
@@ -846,6 +910,7 @@ def _zizmor_repo(ctx: ScanContext) -> list[Invocation]:
             capture_stdout=True,
             ok_return_codes=(0,),
             cwd=root,
+            inputs=tuple(inputs),
         )
     ]
 
@@ -1322,6 +1387,20 @@ DESCRIPTORS: dict[str, ToolDescriptor] = {
                 ".github/dependabot.yaml",
             ),
             no_files_reason=Reason.NO_WORKFLOWS,
+            # rc 3 with "no inputs collected": every file handed over was
+            # invalid (measured, 1.30.1). Not a failure of zizmor.
+            nothing_read=NothingRead(
+                3, "no inputs collected", Reason.NO_READABLE_WORKFLOWS
+            ),
+            unread_inputs=_zizmor_unread,
+            # Read from the root (measured, 1.30.1: a `zizmor.yml` in a
+            # subdirectory is not).
+            own_config=(
+                "zizmor.yml",
+                "zizmor.yaml",
+                ".github/zizmor.yml",
+                ".github/zizmor.yaml",
+            ),
             stub={"version": "2.1.0", "runs": []},
         ),
         ToolDescriptor(

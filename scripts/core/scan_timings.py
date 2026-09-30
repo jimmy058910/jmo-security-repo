@@ -69,6 +69,9 @@ class Reason(StrEnum):
     NO_SHELL_SCRIPTS = "no shell scripts"
     NO_IAC = "no IaC files"
     NO_WORKFLOWS = "no GitHub Actions workflows"
+    # zizmor was handed files and read none of them (an `action.yml` of
+    # another framework, a YAML file that does not parse).
+    NO_READABLE_WORKFLOWS = "no workflow zizmor could read"
     NO_LOCKFILE = "no lockfile"
     # jmo-native's: everything its checks read, since the label is all a
     # skipped row prints.
@@ -97,6 +100,7 @@ SKIP_REASONS: frozenset[Reason] = frozenset(
         Reason.NO_SHELL_SCRIPTS,
         Reason.NO_IAC,
         Reason.NO_WORKFLOWS,
+        Reason.NO_READABLE_WORKFLOWS,
         Reason.NO_LOCKFILE,
         Reason.NO_WEB_APP_FILES,
     }
